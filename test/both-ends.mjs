@@ -1513,4 +1513,50 @@ export function run(test) {
     assert.match(saver, /await saveInDemo\(preset\?\.number\)/)
     assert.doesNotMatch(read('src/lib/demoMemory.js'), /\blocalStorage\.(get|set)Item/, 'the demo reaches for a localStorage the phone does not have')
   })
+
+  /*
+   * "Can you make it so I can copy and paste off of this page? Or that I can
+   * click on it to give them access from that screen?"
+   */
+  test('a person on Everyone with an account can be copied and given access from the list, at both ends', async () => {
+    const { accountSections, accountChoices } = await import('../shared/admin.mjs')
+    const answer = {
+      ok: true,
+      total: 4,
+      accounts: [
+        { email: 'new@x.com', signed_up: Date.now(), confirmed: true, last_sign_in: Date.now(), unlocked: false },
+        { email: 'paid@x.com', signed_up: Date.now(), confirmed: true, last_sign_in: Date.now(), unlocked: true },
+        { email: 'me@x.com', signed_up: Date.now(), confirmed: true, last_sign_in: Date.now(), unlocked: true, source: 'owner' }
+      ],
+      waiting: [{ email: 'soon@x.com', added: Date.now() }]
+    }
+    const [people, waiting] = accountSections(answer)
+    const row = (email) => people.rows.concat(waiting.rows).find((r) => r.email === email)
+    assert.equal(row('new@x.com').email, 'new@x.com', 'a row does not say whose it is')
+    assert.match(row('new@x.com').value, /^new@x\.com\n/, 'the list reads differently than it did')
+    assert.deepEqual(accountChoices(row('new@x.com')), { give: true, takeBack: false })
+    assert.deepEqual(accountChoices(row('paid@x.com')), { give: false, takeBack: true })
+    assert.deepEqual(accountChoices(row('me@x.com')), { give: false, takeBack: false }, 'the owner can take his own access away')
+    assert.deepEqual(accountChoices(row('soon@x.com')), { give: false, takeBack: true })
+    assert.deepEqual(accountChoices({ label: '', value: 'Nobody has made an account yet.' }), { give: false, takeBack: false })
+
+    /* The phone: a tap opens the person in a sheet; the words can be held and copied. */
+    const facts = read('mobile/src/components/Facts.js')
+    assert.match(facts, /onPress: \(\) => onRow\(row\)/, 'a person on the phone cannot be tapped')
+    assert.match(facts, /<Text selectable/, 'the phone’s facts cannot be copied')
+    const phone = read('mobile/src/components/AccountsTool.js')
+    assert.match(phone, /onRow=\{pick\}/)
+    assert.match(phone, /Clipboard\.setStringAsync\(open\.email\)/, 'the phone has no Copy email')
+    assert.match(phone, /act\('grant'\)/, 'the phone cannot give access from the list')
+    assert.match(phone, /act\('revoke'\)/)
+    assert.match(phone, /accountChoices\(open\)/)
+
+    /* The browser: a click opens the row in place, with the same three. */
+    const web = read('src/components/AccountsTool.jsx')
+    assert.match(web, /onRow=\{pick\} detail=\{detail\}/, 'a person in the browser cannot be clicked')
+    assert.match(web, /navigator\.clipboard\.writeText\(open\.email\)/, 'the browser has no Copy email')
+    assert.match(web, /act\('grant'\)/)
+    assert.match(web, /accountChoices\(open\)/)
+    assert.match(read('src/styles.css'), /\.facts-pick \{[\s\S]*?user-select: text;/, 'a clickable email can no longer be selected in the browser')
+  })
 }

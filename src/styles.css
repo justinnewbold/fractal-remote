@@ -7023,6 +7023,28 @@ button.gig-block:disabled {
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
+/* Everyone with an account: a person is a button that opens their row. The
+   words stay selectable, so an email can still be copied by hand. */
+.facts-pick {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: pre-line;
+  cursor: pointer;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.facts-open {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
 
 .save-error {
   display: flex;
