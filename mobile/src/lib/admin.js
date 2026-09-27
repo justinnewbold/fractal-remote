@@ -270,17 +270,41 @@ export function accountSections(answer, filter = '', now = Date.now()) {
   const sections = [
     {
       title: want ? `Accounts matching "${want}" (${people.length})` : `Everyone with an account (${total})`,
-      rows: people.length ? people.map((a) => ({ label: '', value: `${a.email}\n${line(a)}` })) : [{ label: '', value: want ? 'Nobody with an account matches that.' : 'Nobody has made an account yet.' }]
+      rows: people.length
+        ? people.map((a) => ({ label: '', value: `${a.email}\n${line(a)}`, email: a.email, line: line(a), unlocked: !!a.unlocked, owner: a.source === 'owner' }))
+        : [{ label: '', value: want ? 'Nobody with an account matches that.' : 'Nobody has made an account yet.' }]
     }
   ]
   if (waiting.length) {
     sections.push({
       title: `Waiting for them to sign up (${waiting.length})`,
-      rows: waiting.map((w) => ({ label: '', value: `${w.email}\nGiven access ${ago(w.added, now)}. Unlocked the first time they sign in.` }))
+      rows: waiting.map((w) => {
+        const said = `Given access ${ago(w.added, now)}. Unlocked the first time they sign in.`
+        return { label: '', value: `${w.email}\n${said}`, email: w.email, line: said, unlocked: false, waiting: true }
+      })
     })
   }
   if (!want && total > people.length) {
     sections.push({ title: 'Note', rows: [{ label: '', value: `Only the newest ${people.length} of ${total} accounts are shown.` }] })
   }
   return sections
+}
+
+/**
+ * WHAT A TAP ON SOMEBODY IN THE LIST OFFERS.
+ *
+ * "Can you make it so I can copy and paste off of this page? Or that I can
+ * click on it to give them access from that screen?" Both: a tap opens the
+ * person, with their email to copy and the one change that makes sense for
+ * them — Give access when they are not unlocked, Take it back when they are
+ * (or are waiting). The same server as Give someone access does the work;
+ * it refuses to take back an unlock somebody paid for, and says so.
+ *
+ * The owner's own account offers neither: it is unlocked by being his.
+ */
+export function accountChoices(row) {
+  if (!row?.email) return { give: false, takeBack: false }
+  if (row.owner) return { give: false, takeBack: false }
+  if (row.waiting) return { give: false, takeBack: true }
+  return { give: !row.unlocked, takeBack: !!row.unlocked }
 }
