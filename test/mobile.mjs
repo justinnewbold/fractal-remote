@@ -730,21 +730,25 @@ export function run(test) {
     assert.match(flat, /Nothing matches that among the names known so far/, 'a miss on an incomplete list looks the same as a miss on a complete one')
   })
 
-  test('adding a song offers the whole list, a page at a time, and says how much is hidden', () => {
+  test('adding a song offers the whole list, with nothing cut off', () => {
     /*
      * "It stopped at number 41 here, and I couldn't scroll anymore to find
      * more songs." The list was cut at forty rows with nothing on screen to
      * say the rest existed. A cut has to be visible and undoable.
      */
+    /*
+     * And then: "can we make it easier to add songs to a setlist… where it
+     * pulls up all of the presets and they can just go through and select a
+     * bunch?" So adding is no longer a page of search results at all: it is
+     * every slot on the unit in one scrolling list, the way Presets is, with
+     * nothing cut off to be paged through.
+     */
     const flat = read('mobile/src/screens/Setlists.js').replace(/\s+/g, ' ')
-    assert.match(flat, /const ADD_PAGE = 40/)
     assert.ok(!/\.slice\(0, 40\)/.test(flat), 'the list is still cut at a bare forty')
-    assert.match(flat, /const candidates = offered\.slice\(0, ADD_PAGE \* pages\)/, 'the list does not page')
-    assert.match(flat, /const hidden = offered\.length - candidates\.length/)
-    assert.match(flat, /label=\{`Show \$\{Math\.min\(ADD_PAGE, hidden\)\} more`\}/, 'there is no way to see the next page')
-    assert.match(flat, /sub=\{`\$\{candidates\.length\} of \$\{offered\.length\} shown — or type a name to narrow it`\}/, 'nothing says how many are hidden')
-    /* Typing narrows the whole list and starts again from the first page. */
-    assert.match(flat, /useEffect\(\(\) => setPages\(1\), \[q, adding\]\)/, 'a new search keeps an old page count')
+    assert.match(flat, /<SongPicker open=\{adding\}/, 'adding is not the full picker')
+    const picker = read('mobile/src/components/SongPicker.js').replace(/\s+/g, ' ')
+    assert.match(picker, /const rows = Array\.from\(\{ length: slots \|\| 0 \}, \(_, i\) => i\)/, 'the picker does not list every slot')
+    assert.ok(!/\.slice\(0, /.test(picker), 'the picker cuts the list short')
   })
 
   test('a tempo the phone just set is not overwritten by a stale re-read', () => {

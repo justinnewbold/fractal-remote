@@ -200,6 +200,38 @@ export function addTo(presets, n) {
   return [...now, n]
 }
 
+/**
+ * PICKING SONGS, SEVERAL AT A TIME.
+ *
+ * "Can we make it easier to add songs to a setlist, kind of like how they go
+ * through and hit favorites where it pulls up all of the presets and they can
+ * just go through and select a bunch and then select done?" Adding was a
+ * search box and one song per tap, over only the slots whose names had
+ * already been read — so on a phone away from the rig, typing "350" found
+ * nothing at all. The picker lists every slot, ticks as many as wanted, and
+ * adds them in the order they were ticked.
+ */
+
+/** Tick or untick `n`, keeping the order things were ticked in. */
+export const togglePick = (picked, n) =>
+  picked.includes(n) ? picked.filter((x) => x !== n) : [...picked, n]
+
+/** Everything ticked, added to the end of the list in the order it was ticked. */
+export const addAll = (presets, picked) => (picked || []).reduce((list, n) => addTo(list, n), cleanSlots(presets))
+
+/**
+ * Whether a slot answers what was typed: its name, its number as the list
+ * prints it ("350", "042", "A01"), or the plain number. A slot whose name has
+ * not been read yet still answers to its number.
+ */
+export function pickMatches(query, n, name, label) {
+  const q = String(query || '').trim().toLowerCase()
+  if (!q) return true
+  if (typeof name === 'string' && name.toLowerCase().includes(q)) return true
+  if (String(label || '').toLowerCase().includes(q)) return true
+  return String(n).includes(q)
+}
+
 /** Drop one slot. */
 export const removeFrom = (presets, n) => cleanSlots(presets).filter((x) => x !== n)
 

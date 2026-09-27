@@ -6703,6 +6703,35 @@ button.setlist-found-row {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Add songs: every slot, in a box of its own so the sheet's buttons stay in
+   reach, with the tick showing the order each will go in. */
+.setlist-pick {
+  max-height: 50vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.setlist-pick button.setlist-found-row {
+  align-items: center;
+}
+button.setlist-found-row.picked {
+  border-color: var(--signal);
+}
+.setlist-tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  border-radius: var(--r-3);
+  border: 1px solid var(--rule);
+  font-weight: 700;
+  align-self: center;
+}
+button.setlist-found-row.picked .setlist-tick {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--chassis);
+}
 
 button.chip.setlist-delete.armed {
   color: var(--signal);

@@ -361,7 +361,7 @@ export const AREAS = [
     /* CloudPresets.jsx and Recent.jsx were here too. Both held the library of
        tones the AI had made, and went with it. */
     web: ['src/components/Setlists.jsx'],
-    phone: ['mobile/src/screens/Setlists.js', 'mobile/src/screens/Presets.js'],
+    phone: ['mobile/src/screens/Setlists.js', 'mobile/src/screens/Presets.js', 'mobile/src/components/SongPicker.js'],
     notButtons: {
       Empty: 'what an empty slot is called in the list — the chain editor’s Empty IS a button, which is why this is per area'
     },
@@ -404,8 +404,17 @@ export const AREAS = [
         does: 'close the setlist sheet',
         web: null,
         phone: 'Done',
-        also: ['Done adding'],
         why: 'setlists are a page in the browser, with nothing to close'
+      },
+      {
+        does: 'open every preset to tick songs into the setlist',
+        web: 'Add songs…',
+        phone: 'Add songs…'
+      },
+      {
+        does: 'stop adding songs without adding the ones ticked',
+        web: 'Cancel',
+        phone: 'Cancel'
       }
     ]
   },
@@ -1558,5 +1567,43 @@ export function run(test) {
     assert.match(web, /act\('grant'\)/)
     assert.match(web, /accountChoices\(open\)/)
     assert.match(read('src/styles.css'), /\.facts-pick \{[\s\S]*?user-select: text;/, 'a clickable email can no longer be selected in the browser')
+  })
+
+  /*
+   * "Can we make it easier to add songs to a setlist, kind of like how they
+   * go through and hit favorites where it pulls up all of the presets and
+   * they can just go through and select a bunch and then select done?"
+   */
+  test('songs are added to a setlist by ticking several from every preset, at both ends', async () => {
+    const { addAll, togglePick, pickMatches } = await import('../src/lib/setlists.js')
+    /* Ticked in an order, and untick takes one out without reshuffling. */
+    let picked = []
+    for (const n of [12, 3, 40]) picked = togglePick(picked, n)
+    assert.deepEqual(picked, [12, 3, 40])
+    assert.deepEqual(togglePick(picked, 3), [12, 40])
+    /* Added at the end, in that order, and never twice. */
+    assert.deepEqual(addAll([7, 3], [12, 3, 40]), [7, 3, 12, 40])
+    assert.deepEqual(addAll([], []), [])
+    /* "350" finds slot 350 whether or not its name has been read. */
+    assert.ok(pickMatches('350', 350, undefined, '350'), 'a slot with no name read cannot be found by its number')
+    assert.ok(pickMatches('master', 5, 'Master of Puppets', '005'))
+    assert.ok(pickMatches('a01', 0, '', '000 A01'), 'a bank letter does not find its slot')
+    assert.ok(!pickMatches('zzz', 5, 'Master of Puppets', '005'))
+    assert.ok(pickMatches('', 5, undefined, '005'), 'an empty box hides slots')
+
+    /* The phone: a full-screen list of every slot, tick in order, one Add. */
+    const picker = read('mobile/src/components/SongPicker.js')
+    assert.match(picker, /setPicked\(\(was\) => togglePick\(was, n\)\)/, 'a tap on the phone does not tick')
+    assert.match(picker, /onAdd\?\.\(picked\)/)
+    assert.match(picker, /`Add \$\{count\} song\$\{count === 1 \? '' : 's'\}`/, 'the phone’s button does not say how many')
+    assert.ok(!/loadPreset/.test(picker), 'ticking a song on the phone changes what the amp plays')
+    assert.match(read('mobile/src/screens/Setlists.js'), /onAdd=\{\(picked\) => setPresets\(addAll\(chosen\.presets, picked\)\)\}/)
+
+    /* The browser: the same, in the sheet. */
+    const web = read('src/components/Setlists.jsx')
+    assert.match(web, /onClick=\{\(\) => setPicked\(\(was\) => togglePick\(was, s\.number\)\)\}/, 'a click in the browser does not tick')
+    assert.match(web, /setPresets\(addAll\(chosen\.presets, picked\)\)/)
+    assert.match(web, /`Add \$\{picked\.length\} song\$\{picked\.length === 1 \? '' : 's'\}`/)
+    assert.ok(!/\.slice\(0, 40\)/.test(web), 'the browser still cuts the list at forty')
   })
 }

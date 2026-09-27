@@ -6,6 +6,9 @@ import {
   ALL,
   STARRED,
   addTo,
+  addAll,
+  pickMatches,
+  togglePick,
   removeFrom,
   moveIn,
   createList,
@@ -121,13 +124,16 @@ export default function Setlists({
   }
   const starred = Number.isInteger(current) && favourites.includes(current)
   /*
-   * Adding a song that is not the one playing needs a way to find it: a
-   * filter box over the picker's list. Closed until asked for — the sheet is
-   * mostly used to pick a source and glance at an order, and a search box on
-   * top of that is a search box in the way.
+   * ADD SONGS: every slot, ticked as many at a time as wanted, then one
+   * button to add them in the order they were ticked. "Can we make it easier
+   * to add songs to a setlist… where it pulls up all of the presets and they
+   * can just go through and select a bunch and then select done?" It was a
+   * search box over the names already read and one song per tap. The phone's
+   * is mobile/src/components/SongPicker.js; the rules are in lib/setlists.
    */
   const [adding, setAdding] = useState(false)
   const [needle, setNeedle] = useState('')
+  const [picked, setPicked] = useState([])
   /* Delete asks twice. One tap on a sheet you are scrolling is one tap. */
   const [armed, setArmed] = useState(false)
   /*
@@ -157,6 +163,7 @@ export default function Setlists({
     setArmed(false)
     setAdding(false)
     setNeedle('')
+    setPicked([])
     setDraft(null)
   }, [source])
 
@@ -245,18 +252,24 @@ export default function Setlists({
     setArmed(false)
   }
 
-  /*
-   * What "Add another…" offers: the named slots, filtered by what is typed —
-   * and never the ones already in the list, which would be a row whose + does
-   * nothing. Capped, because the sheet is scrolled with a thumb and a 512-row
-   * list under a search box is the picker, which this is not.
-   */
-  const q = needle.trim().toLowerCase()
-  const named = adding ? (slots || []).filter((s) => (s.name || '').trim()) : []
-  const candidates = named
-    .filter((s) => !(chosen?.presets || []).includes(s.number))
-    .filter((s) => !q || (s.name || '').toLowerCase().includes(q) || String(s.number) === q)
-    .slice(0, 40)
+  /* Every slot on the unit, narrowed by what is typed — a name, or the number
+     as the list prints it. Slots whose names have not been read still answer
+     to their number. */
+  const candidates = adding
+    ? (slots || []).filter((s) => pickMatches(needle, s.number, s.name, slotLabel(s.number, addressing)))
+    : []
+  const stopAdding = () => {
+    setAdding(false)
+    setNeedle('')
+    setPicked([])
+  }
+  const addPicked = () => {
+    if (chosen && picked.length) {
+      haptic()
+      setPresets(addAll(chosen.presets, picked))
+    }
+    stopAdding()
+  }
 
   const here = Number.isInteger(current)
     ? `${slotLabel(current, addressing)} ${presetLabel(preset)}`.trim()
@@ -390,43 +403,61 @@ export default function Setlists({
 
           {adding ? (
             <div className="setlist-find">
+              <p className="hint">Tick each preset you want. They go in the order you tick them.</p>
               <input
                 type="text"
                 className="setlist-filter"
                 value={needle}
-                placeholder="Find a preset"
+                placeholder="Find by name or number"
                 onChange={(e) => setNeedle(e.target.value)}
                 aria-label="Find a preset to add"
-                autoFocus
               />
               {candidates.length ? (
-                <div className="setlist-found">
-                  {candidates.map((s) => (
-                    <button
-                      type="button"
-                      key={s.number}
-                      className="setlist-found-row"
-                      onClick={() => add(s.number)}
-                    >
-                      <span className="mono setlist-song-slot">{slotLabel(s.number, addressing)}</span>
-                      <span className="setlist-found-name">{s.name}</span>
-                      <span aria-hidden="true">+</span>
-                    </button>
-                  ))}
+                <div className="setlist-found setlist-pick" role="group" aria-label="Presets to add">
+                  {candidates.map((s) => {
+                    const inList = chosen.presets.includes(s.number)
+                    const at = picked.indexOf(s.number)
+                    return (
+                      <button
+                        type="button"
+                        key={s.number}
+                        className={`setlist-found-row${at >= 0 ? ' picked' : ''}`}
+                        role="checkbox"
+                        aria-checked={at >= 0}
+                        disabled={inList}
+                        onClick={() => setPicked((was) => togglePick(was, s.number))}
+                      >
+                        <span className="mono setlist-song-slot">{slotLabel(s.number, addressing)}</span>
+                        <span className="setlist-found-name">
+                          {(s.name || '').trim() || 'Empty'}
+                          {inList ? <span className="hint"> · already in this setlist</span> : null}
+                        </span>
+                        <span className="setlist-tick" aria-hidden="true">
+                          {inList ? '✓' : at >= 0 ? at + 1 : ''}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               ) : (
                 <p className="hint">
-                  {q
-                    ? `Nothing named like “${needle}”.`
-                    : named.length
-                      ? 'Every named preset is already in this setlist.'
-                      : 'No preset names read yet — open the preset list and press ⟳ to read them off the unit.'}
+                  {needle.trim()
+                    ? `Nothing matches “${needle}”.`
+                    : 'The list of presets appears once the app has reached your unit, or in the demo.'}
                 </p>
               )}
+              <div className="history-actions">
+                <button type="button" className="primary" disabled={!picked.length} onClick={addPicked}>
+                  {picked.length ? `Add ${picked.length} song${picked.length === 1 ? '' : 's'}` : 'Tick presets to add them'}
+                </button>
+                <button type="button" className="chip" onClick={stopAdding}>
+                  Cancel
+                </button>
+              </div>
             </div>
           ) : (
             <button type="button" className="chip" onClick={() => setAdding(true)}>
-              Add another…
+              Add songs…
             </button>
           )}
 
