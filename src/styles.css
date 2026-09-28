@@ -6306,9 +6306,19 @@ button.gig-block {
   -webkit-touch-callout: none;
   user-select: none;
   -webkit-user-select: none;
+  /*
+   * The AM4's layout: the picture on top, the name under it, both in the
+   * middle of the tile — and On/Off and the channel up in the two top
+   * corners, which is why the tile is the box they are placed against.
+   * "Let's make them look exactly like the AM4 and the VP4… for the on off
+   * just put those up in the top left and then for the channel number put
+   * that at the top right."
+   */
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: var(--s-1);
   min-height: var(--gig-tile, 62px);
   /*
@@ -6327,10 +6337,11 @@ button.gig-block {
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
   background: var(--panel);
-  text-align: left;
+  text-align: center;
 }
 
 .gig-block-name {
+  display: block;
   font-family: var(--display);
   font-size: var(--f-4);
   font-weight: 600;
@@ -6344,10 +6355,21 @@ button.gig-block {
 }
 
 .gig-block-state {
+  /* In the top corners rather than a line under the name: On or Off at the
+     left, the channel pushed to the right by its own margin. Out of the flow,
+     so it costs the tile no height — the fit arithmetic budgets the picture
+     and the name, and nothing else. */
+  position: absolute;
+  top: var(--s-1);
+  left: var(--s-2);
+  right: var(--s-2);
+  pointer-events: none;
   font-family: var(--mono);
   font-size: var(--f-2);
   line-height: 1.15;
-  letter-spacing: 0.08em;
+  /* Tighter than the 0.08em the line under the name had: in a corner of a
+     ninety-pixel tile, "Off" spaced out runs into the picture. */
+  letter-spacing: 0.02em;
   color: var(--silk-faint);
   display: flex;
   align-items: baseline;
@@ -6778,14 +6800,13 @@ button.gig-block:disabled {
   display: none;
 }
 
-/* The effect's picture before its name: the phone's white file used as a
-   mask, so it takes the name's own colour, on or off. */
+/* The effect's picture above its name: the phone's white file used as a
+   mask, so it takes the name's own colour when the effect is on. */
 .gig-block-icon {
-  display: inline-block;
-  width: 1.05em;
-  height: 1.05em;
-  margin-right: 0.35em;
-  vertical-align: -0.15em;
+  display: block;
+  width: 1.4em;
+  height: 1.4em;
+  margin: 0 auto 2px;
   background-color: currentColor;
   -webkit-mask-size: contain;
   mask-size: contain;
@@ -7363,6 +7384,13 @@ button.gig-block.on .gig-block-state {
   color: var(--block-ink, var(--signal));
 }
 
+/* The channel letter on a lit tile is in the tile's own lettering, like the
+   On across from it — grey on red read as a smudge. */
+button.gig-block.on .gig-block-channel {
+  color: var(--block-ink, var(--silk));
+  border-color: color-mix(in srgb, var(--block-ink, var(--silk)) 45%, transparent);
+}
+
 /*
  * Off carries the family colour ALL THE WAY ROUND, not as a sliver on the
  * leading edge.
@@ -7383,6 +7411,14 @@ button.gig-block.on .gig-block-state {
  */
 button.gig-block.off {
   border: 2px solid var(--block-fill, var(--rule));
+}
+
+/* And when it is off, its picture is its own colour, lit less — not the grey
+   of the letters. "When the effects were off they turned to white instead of
+   just being lighter colored." Mixed toward the lettering colour, which is
+   light on the dark stage and dark on the cream theme, so it reads on both. */
+button.gig-block.off .gig-block-icon {
+  background-color: color-mix(in srgb, var(--block-fill, currentColor) 65%, var(--silk));
 }
 
 /* The read-only chain diagram carries the family colour as an edge rather than
@@ -10287,6 +10323,11 @@ button.view-tab {
 
 /* One line for a block. "REVERB 1" and "MULTITAP DELAY 2" have to cost the
    same height or the grid goes ragged and the last row falls off the screen. */
+.gig[data-compact] .gig-block-icon {
+  width: 1.15em;
+  height: 1.15em;
+}
+
 .gig[data-compact] .gig-block-name {
   max-width: 100%;
   overflow: hidden;

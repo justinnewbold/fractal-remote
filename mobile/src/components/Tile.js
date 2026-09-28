@@ -1,7 +1,7 @@
 import { Image, Platform, Pressable, Text, View } from 'react-native'
 
-import { color, font, radius, space, TAP } from '../lib/theme'
-import { at, vivid } from '../lib/vivid'
+import { color, font, isDark, radius, space, TAP } from '../lib/theme'
+import { at, inkOn, lighter, vivid } from '../lib/vivid'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
 
@@ -34,6 +34,16 @@ export default function Tile({
   label,
   sub,
   caption,
+  /*
+   * THE TWO CORNERS: On or Off at the top left, the channel at the top right.
+   *
+   * "For the on off just put those up in the top left and then for the
+   * channel number put that at the top right." They used to share a line
+   * under the name, which cost the tile a line of height it did not have
+   * once the picture went on top. In the corners they cost none.
+   */
+  topLeft,
+  topRight,
   /*
    * The picture above the letters, cut from Justin's mockup of this screen.
    * White in the file and tinted here, so one copy serves every hue — see
@@ -70,7 +80,32 @@ export default function Tile({
    */
   const hue = vivid(fill)
   const background = on ? hue : at(hue, 0.14)
-  const foreground = on ? ink : color.silk
+  /*
+   * BLACK LETTERS ON A LIGHT TILE, WHITE ON A DARK ONE — FROM THE COLOUR
+   * ACTUALLY DRAWN.
+   *
+   * "Fix the text so when it's on lighter icons, it's black and when it's on
+   * darker icons, it's white like we already had set up." The palette's ink
+   * was chosen for the palette's colour, and `vivid` above draws a brighter
+   * one: a grey gate and an orange EQ came out light enough that their white
+   * letters stopped reading. `inkOn` picks whichever of the two has more
+   * contrast against the colour on the screen. The palette's ink is only the
+   * answer for a colour it cannot read.
+   */
+  const lit = inkOn(hue, ink)
+  const foreground = on ? lit : color.silk
+  /*
+   * AN UNLIT PICTURE IS ITS OWN COLOUR, LIT LESS.
+   *
+   * "When the effects were off they turned to white instead of just being
+   * lighter colored." White said nothing about which effect it was. The
+   * effect's own hue, lifted toward white on the dark stage, keeps the
+   * picture naming the block while plainly not being lit. On the light
+   * theme lifting it toward white would wash it into the page, so there it
+   * is the hue as it is.
+   */
+  const unlitPicture = isDark() ? lighter(hue, 0.35) : hue
+  const pictureTint = on ? lit : unlitPicture
   /*
    * The glow, and it is iOS only by nature rather than by choice: Android has
    * no coloured shadow, only `elevation`, which is grey. Rather than fake a
@@ -79,27 +114,18 @@ export default function Tile({
    * only one of them glows.
    */
   /*
-   * How big the picture can be, and whether there is room for one at all.
+   * THE PICTURE GOES ON TOP, AT EVERY HEIGHT — THE AM4'S LAYOUT.
    *
-   * Fit-to-screen squeezes these tiles down to 44pt on a small phone with a
-   * long chain, and at that height the icon and the three letters are fighting
-   * over the same space — the letters win, because they are the part you read.
-   * Above that it takes a quarter of the tile, which is where the mockup has
-   * it, and stops growing at 28 so a short chain's roomy tiles don't turn into
-   * a row of billboards.
+   * "Let's make them look exactly like the AM4 and the VP4." A short chain's
+   * tall tiles had the picture above the letters; a long chain squeezed to
+   * fit put it beside them, which is the look he did not like. Now it is
+   * above them everywhere and only its size moves: a third of the tile,
+   * never under 14 so it is still a picture, never over 28 so a roomy tile
+   * does not turn into a billboard. With On/Off and the channel moved up
+   * into the corners, the 44pt tile of a squeezed chain has room for both.
    */
-  const picture = icon && height >= 66 ? Math.min(28, Math.round(height * 0.26)) : 0
-  /*
-   * AND BESIDE THE LETTERS WHEN THERE IS NO ROOM ABOVE THEM.
-   *
-   * "It looks like chain glyphs/icons that we made are only rendering on the
-   * AM4 and VP4." They were rendering on anything with a short chain: an FM3
-   * preset with eight scenes and eight effects fits to screen below the
-   * height above, and every picture was dropped. Beside the three letters it
-   * costs width, which a tile has plenty of, and no height, which the fit is
-   * budgeting — so a short tile keeps its picture, smaller.
-   */
-  const inline = icon && !picture ? Math.max(14, Math.min(18, Math.round(height * 0.3))) : 0
+  const picture = icon ? Math.max(14, Math.min(28, Math.round(height * 0.32))) : 0
+  const cornered = !!(topLeft || topRight)
 
   const glow = on
     ? Platform.select({
@@ -117,16 +143,16 @@ export default function Tile({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: on }}
-      accessibilityLabel={[label, sub, caption].filter(Boolean).join(', ')}
+      accessibilityLabel={[label, topLeft, topRight, sub, caption].filter(Boolean).join(', ')}
       onPress={() => {
         haptic?.()
-        fire(`press ${said(label, sub)}`, onPress)
+        fire(`press ${said(label, sub || topLeft)}`, onPress)
       }}
       onLongPress={
         onLongPress
           ? () => {
               haptic?.()
-              fire(`hold ${said(label, sub)}`, onLongPress)
+              fire(`hold ${said(label, sub || topLeft)}`, onLongPress)
             }
           : undefined
       }
@@ -137,7 +163,9 @@ export default function Tile({
           alignItems: 'center',
           justifyContent: 'center',
           paddingHorizontal: space.sm,
-          paddingVertical: space.sm,
+          /* A tile with corners has them sitting in its top edge, so the
+             middle can use the height the padding would have taken. */
+          paddingVertical: cornered ? space.xs : space.sm,
           borderRadius: radius.md,
           /* Two pixels, because the edge is doing real work when the tile is
              off — it is the only thing still naming the block. */
@@ -176,6 +204,26 @@ export default function Tile({
           }}
         />
       ) : null}
+      {cornered ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: 5,
+            right: 5,
+            top: 3,
+            flexDirection: 'row',
+            justifyContent: 'space-between'
+          }}
+        >
+          <Text numberOfLines={1} style={{ color: on ? lit : color.silkDim, fontSize: font.micro, fontWeight: '600' }}>
+            {topLeft || ''}
+          </Text>
+          <Text numberOfLines={1} style={{ color: on ? lit : color.silkDim, fontSize: font.micro, fontWeight: '700' }}>
+            {topRight || ''}
+          </Text>
+        </View>
+      ) : null}
       <View style={{ alignItems: 'center' }}>
         {picture ? (
           <Image
@@ -184,44 +232,34 @@ export default function Tile({
                state, and a second announcement for the picture of it would
                make every tile read itself out twice. */
             accessible={false}
-            style={{ width: picture, height: picture, marginBottom: 3, tintColor: foreground }}
+            style={{ width: picture, height: picture, marginBottom: 2, tintColor: pictureTint }}
             resizeMode="contain"
           />
         ) : null}
         {caption ? (
           <Text
             numberOfLines={1}
-            style={{ color: on ? ink : color.silkDim, fontSize: font.micro, marginBottom: 1 }}
+            style={{ color: on ? lit : color.silkDim, fontSize: font.micro, marginBottom: 1 }}
           >
             {caption}
           </Text>
         ) : null}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-          {inline ? (
-            <Image
-              source={icon}
-              accessible={false}
-              style={{ width: inline, height: inline, tintColor: foreground }}
-              resizeMode="contain"
-            />
-          ) : null}
-          <Text
-            numberOfLines={1}
-            style={{
-              color: foreground,
-              fontSize: font.body,
-              fontWeight: '700',
-              letterSpacing: 0.5,
-              textAlign: 'center'
-            }}
-          >
-            {label}
-          </Text>
-        </View>
+        <Text
+          numberOfLines={1}
+          style={{
+            color: foreground,
+            fontSize: font.body,
+            fontWeight: '700',
+            letterSpacing: 0.5,
+            textAlign: 'center'
+          }}
+        >
+          {label}
+        </Text>
         {sub ? (
           <Text
             numberOfLines={1}
-            style={{ color: on ? ink : color.silkDim, fontSize: font.micro, marginTop: 2 }}
+            style={{ color: on ? lit : color.silkDim, fontSize: font.micro, marginTop: 2 }}
           >
             {sub}
           </Text>
@@ -251,7 +289,7 @@ export default function Tile({
               width: '52%',
               height: 3,
               borderRadius: 2,
-              backgroundColor: on ? at(ink, 0.8) : hue
+              backgroundColor: on ? at(lit, 0.8) : hue
             }}
           />
         ) : null}

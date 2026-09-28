@@ -125,3 +125,48 @@ export function at(value, alpha) {
   if (!rgb) return value
   return `${toHex(toHsl(rgb))}${hex2(Math.max(0, Math.min(1, alpha)) * 255)}`
 }
+
+/*
+ * WHICH INK READS ON A COLOUR, worked out from the colour actually drawn.
+ *
+ * "Fix the text so when it's on lighter tiles it's black and when it's on
+ * darker tiles it's white, like we already had set up." The palette names an
+ * ink per family, but it names it for the palette's own colour — and the
+ * phone draws a brighter one (`vivid`, above). A grey gate or an orange EQ
+ * brightened past the point where white still reads kept its white letters.
+ * So the ink is chosen here from the colour on the screen: whichever of the
+ * two has the higher contrast against it, by the WCAG luminance formula.
+ */
+const DARK_INK = '#15181d'
+const LIGHT_INK = '#ffffff'
+
+const lin = (c) => {
+  const v = c / 255
+  return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+}
+
+export function luminance(value) {
+  const rgb = readHex(value)
+  if (!rgb) return null
+  return 0.2126 * lin(rgb.r) + 0.7152 * lin(rgb.g) + 0.0722 * lin(rgb.b)
+}
+
+export function inkOn(value, fallback = LIGHT_INK) {
+  const L = luminance(value)
+  if (L === null) return fallback
+  const onWhite = 1.05 / (L + 0.05)
+  const onDark = (L + 0.05) / (luminance(DARK_INK) + 0.05)
+  return onDark > onWhite ? DARK_INK : LIGHT_INK
+}
+
+/**
+ * The same colour, lighter: mixed toward white by `amount` (0 to 1). What an
+ * effect that is OFF draws its picture in — its own colour, lit less, rather
+ * than plain white.
+ */
+export function lighter(value, amount = 0.45) {
+  const rgb = readHex(value)
+  if (!rgb) return value
+  const k = Math.max(0, Math.min(1, amount))
+  return `#${hex2(rgb.r + (255 - rgb.r) * k)}${hex2(rgb.g + (255 - rgb.g) * k)}${hex2(rgb.b + (255 - rgb.b) * k)}`
+}

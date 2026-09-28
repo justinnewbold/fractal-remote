@@ -4239,9 +4239,59 @@ export function run(test) {
     assert.match(read('src/components/Gig.jsx'), /icon=\{icons \? blockIcon\(block\.slug\) : null\}/, 'the browser’s chain tiles are drawn without their pictures')
   })
 
-  test('a short tile keeps its picture beside the letters, and the pictures can be turned off', async () => {
+  test('an effect tile is the AM4’s: picture on top, On/Off top left, channel top right', async () => {
+    /*
+     * "Let's make them look exactly like the AM4 and the VP4… for the on off
+     * just put those up in the top left and then for the channel number put
+     * that at the top right." A squeezed chain had put the picture beside the
+     * letters; now it is above them at every height and only its size moves.
+     */
     const tile = read('mobile/src/components/Tile.js')
-    assert.match(tile, /const inline = icon && !picture \?/, 'a short tile drops its picture again')
+    assert.ok(!/const inline =/.test(tile), 'a short tile puts its picture beside the letters again')
+    assert.match(tile, /const picture = icon \? Math\.max\(14, /, 'a short tile drops its picture again')
+    assert.match(tile, /topLeft \|\| ''[\s\S]{0,200}topRight \|\| ''/, 'the corners are gone from the tile')
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /topLeft=\{state\}\s*\n\s*topRight=\{block\.channel \|\| undefined\}/, 'On/Off and the channel went back under the name')
+    assert.ok(!/sub=\{block\.channel/.test(stage), 'the chain tiles still say On and the channel under the name')
+
+    /* The browser: the same corners, from the stylesheet. */
+    const css = read('src/styles.css')
+    const rule = (sel) => css.slice(css.indexOf(sel + ' {'), css.indexOf('}', css.indexOf(sel + ' {')))
+    assert.match(rule('button.gig-block'), /position: relative/)
+    assert.match(rule('.gig-block-state'), /position: absolute[\s\S]*top: [\s\S]*left: /, 'the browser’s On/Off is not in the corner')
+    assert.match(rule('.gig-block-channel'), /margin-left: auto/, 'the browser’s channel is not across in the other corner')
+    assert.match(rule('.gig-block-icon'), /display: block/, 'the browser’s picture is beside the name again')
+  })
+
+  test('the letters on a lit tile are black on a light colour and white on a dark one, from the colour drawn', async () => {
+    /*
+     * "Fix the text so when it's on lighter icons, it's black and when it's
+     * on darker icons, it's white." The phone draws the palette's colour
+     * brighter (vivid), so the palette's ink is no longer the answer — the
+     * grey gate and the orange EQ kept white letters on a light tile.
+     */
+    const { vivid, inkOn, lighter, readHex } = await import('../mobile/src/lib/vivid.js')
+    const { blockColor } = await import('../src/lib/blockColors.js')
+    const dark = '#15181d'
+    for (const slug of ['gate', 'peq', 'amp']) assert.equal(inkOn(vivid(blockColor(slug).fill)), dark, `${slug} has white letters on a light tile`)
+    for (const slug of ['delay', 'reverb']) assert.equal(inkOn(vivid(blockColor(slug).fill)), '#ffffff', `${slug} has black letters on a dark tile`)
+    assert.equal(inkOn('var(--x)', '#abcdef'), '#abcdef', 'a colour it cannot read loses the palette’s ink')
+    assert.match(read('mobile/src/components/Tile.js'), /const lit = inkOn\(hue, ink\)/, 'the tile takes its letters from the palette again')
+
+    /*
+     * "When the effects were off they turned to white instead of just being
+     * lighter colored." Off is the effect's own hue, lifted — not white.
+     */
+    const delay = vivid(blockColor('delay').fill)
+    const pale = readHex(lighter(delay, 0.35))
+    const base = readHex(delay)
+    assert.ok(pale.r >= base.r && pale.g >= base.g && pale.b >= base.b && pale.r + pale.g + pale.b > base.r + base.g + base.b, 'lighter did not lighten')
+    assert.ok(!(pale.r === 255 && pale.g === 255 && pale.b === 255), 'an unlit picture is white again')
+    assert.match(read('mobile/src/components/Tile.js'), /const pictureTint = on \? lit : unlitPicture/, 'an unlit picture is drawn in the letters’ colour again')
+    assert.match(read('src/styles.css'), /button\.gig-block\.off \.gig-block-icon \{\s*background-color: color-mix\(in srgb, var\(--block-fill/, 'the browser’s unlit picture is grey again')
+  })
+
+  test('the pictures can be turned off', async () => {
     const { loadIcons, saveIcons } = await import('../src/lib/gigSize.js')
     const box = new Map()
     const store = { getItem: (k) => (box.has(k) ? box.get(k) : null), setItem: (k, v) => box.set(k, String(v)) }
@@ -4471,7 +4521,7 @@ export function run(test) {
      */
     const tile = read('mobile/src/components/Tile.js')
     assert.match(tile, /\{bar \? \(/, 'the tile cannot draw the rule under the name')
-    assert.match(tile, /backgroundColor: on \? at\(ink, 0\.8\) : hue/, 'the rule is not the tile’s own colour')
+    assert.match(tile, /backgroundColor: on \? at\(lit, 0\.8\) : hue/, 'the rule is not the tile’s own colour')
 
     const stage = read('mobile/src/screens/Stage.js')
     const scenes = stage.slice(stage.indexOf('<Label>Scenes</Label>'), stage.indexOf('blocks.map'))
