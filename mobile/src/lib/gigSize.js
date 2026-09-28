@@ -142,14 +142,16 @@ export function saveSize(n, storage) {
  */
 const FIT_KEY = 'fractal.gigFit'
 
+/** The most effects a row ever holds — see the last paragraph below. */
+export const FX_MAX = 4
+
 /**
  * How tall a tile can be for every scene and every block to be on screen at
  * once, and how many blocks to a row that takes.
  *
  * `available` is the height left for the two grids together. Blocks start at
  * `fxCols` to a row and may go wider when the tile would otherwise drop under
- * the tap floor — five or six small tiles a row is still a rig you can see
- * whole, and a tile under 44px is one you cannot hit. When no width gets the
+ * the tap floor, but never past four — see FX_MAX. When no width gets the
  * tile over the floor, the floor wins: a preset that big scrolls, which is
  * what it did before.
  *
@@ -168,8 +170,17 @@ const FIT_KEY = 'fractal.gigFit'
  * And a tile has to stay wide enough for what is drawn on it: the picture,
  * three letters, On/Off in one corner and the channel in the other. `width`
  * is the row it has to fit in; `minWidth` is the narrowest tile that still
- * holds all of that. On a small phone that stops it at five across; a larger
- * one can still go to six.
+ * holds all of that.
+ *
+ * AND NEVER MORE THAN FOUR ACROSS.
+ *
+ * "Make this so on the effects pedals, there's only a max of four across
+ * that can go on the screen. Because it looks good on the iPhone. And looks
+ * terrible on the Android phone." Side by side, the same FM3 preset: four
+ * across on the iPhone, every name whole; six on the Android, every name
+ * "C…", "A…", "P…". Five and six were the old answer to a long chain not
+ * fitting, and they bought the rows back by making every tile unreadable. A
+ * chain that does not fit at four scrolls instead.
  */
 export function fitTiles({
   available,
@@ -185,9 +196,9 @@ export function fitTiles({
 } = {}) {
   const room = Math.max(0, Number(available) || 0)
   const sceneRows = Math.ceil(Math.max(0, scenes) / Math.max(1, sceneCols))
-  const first = Math.max(1, fxCols)
-  const across = Number(width) > 0 ? Math.floor((Number(width) + gap) / (minWidth + gap)) : 6
-  const last = Math.max(first, Math.min(6, across))
+  const first = Math.max(1, Math.min(FX_MAX, fxCols))
+  const across = Number(width) > 0 ? Math.floor((Number(width) + gap) / (minWidth + gap)) : FX_MAX
+  const last = Math.max(first, Math.min(FX_MAX, across))
   const count = Math.max(0, blocks)
   let best = null
   for (let cols = first; cols <= last; cols++) {
