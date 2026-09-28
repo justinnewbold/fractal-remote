@@ -1606,4 +1606,19 @@ export function run(test) {
     assert.match(web, /`Add \$\{picked\.length\} song\$\{picked\.length === 1 \? '' : 's'\}`/)
     assert.ok(!/\.slice\(0, 40\)/.test(web), 'the browser still cuts the list at forty')
   })
+
+  /*
+   * "Where it says chain above the pedals, also put hold to switch channels.
+   * So users know that they can just hold the things to switch between
+   * channels, A B C and D."
+   */
+  test('the chain says a block can be held to switch channels, at both ends', () => {
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /export const HOLD_FOR_CHANNELS = 'Hold to switch channels'/)
+    assert.match(stage, /\{channels\?\.length > 1 && blocks\.length \? \(\s*<Text[^>]*>\s*\{HOLD_FOR_CHANNELS\}/, 'the words are not beside CHAIN, or show on a unit with no channels')
+    /* The same condition as the hold itself, so the words never promise a hold that does nothing. */
+    assert.match(stage, /onLongPress=\{\s*channels\?\.length > 1/)
+    const gig = read('src/components/Gig.jsx')
+    assert.match(gig, /title=\{has \? 'Tap to switch on or off\. Hold, or right-click, to switch channels\.' : undefined\}/, 'the browser’s tiles do not say they can be held')
+  })
 }

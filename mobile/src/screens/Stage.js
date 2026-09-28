@@ -549,9 +549,23 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
 
       {/* ---------------------------------------------------------- blocks */}
       <View style={{ gap: space.sm }}>
-        <Label icon={chainIcon}>
-          {chain === 'reading' ? 'Reading the chain…' : chain === 'failed' ? 'Chain — out of date' : 'Chain'}
-        </Label>
+        {/*
+          "Where it says chain above the pedals, also put hold to switch
+          channels. So users know that they can just hold the things to switch
+          between channels, A B C and D." Beside the heading, in the heading's
+          own size, the way Refresh names sits beside Scenes. Only when a hold
+          does something: a unit with no channels has nothing to switch.
+        */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Label icon={chainIcon}>
+            {chain === 'reading' ? 'Reading the chain…' : chain === 'failed' ? 'Chain — out of date' : 'Chain'}
+          </Label>
+          {channels?.length > 1 && blocks.length ? (
+            <Text style={{ color: color.silkDim, fontSize: font.micro, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+              {HOLD_FOR_CHANNELS}
+            </Text>
+          ) : null}
+        </View>
 
         {chain === 'failed' ? (
           <Note tone="warn">
@@ -861,6 +875,9 @@ function ChannelSheet({ block, channels, onClose, onPick }) {
     </Sheet>
   )
 }
+
+/** Beside CHAIN: what holding a block does. */
+export const HOLD_FOR_CHANNELS = 'Hold to switch channels'
 
 /** What the Refresh names link says, before and after a press. */
 export const REFRESH_NAMES = {
