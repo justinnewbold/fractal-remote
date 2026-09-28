@@ -825,7 +825,16 @@ export function run(test) {
       return step(r, 'font-size') * lh
     }
 
-    const lines = height(name, 'name') + step(tile, 'gap') + height(state, 'state')
+    /*
+     * The picture and the name, stacked — the AM4's layout. On/Off and the
+     * channel sit in the top corners, out of the flow, so they take no
+     * height; if they ever come back into it, the arithmetic has to count
+     * them again, and this says so.
+     */
+    assert.match(state, /position: absolute/, 'On/Off and the channel are back in a line of their own under the name')
+    const em = (r) => Number(r.match(/height: ([0-9.]+)em/)?.[1])
+    const picture = (r) => em(r) * step(name, 'font-size') + Number(rule('.gig-block-icon').match(/margin: 0 auto (\d+)px/)[1])
+    const lines = picture(rule('.gig-block-icon')) + height(name, 'name')
     /* 2px, because an effect that is off is ringed rather than filled and the
        ring is the wider of the two borders. */
     const border = 2 * 2
@@ -837,7 +846,8 @@ export function run(test) {
     const small = rule('.gig[data-compact] button.gig-block')
     // Fit hands the height to the screen; the stated size is the fallback.
     const stated = Number(small.match(/height: (?:var\(--gig-fit-tile, )?(\d+)px/)[1])
-    const tight = lines + 2 * step(small, 'padding') + border
+    const squeezed = picture(rule('.gig[data-compact] .gig-block-icon')) + height(name, 'name')
+    const tight = squeezed + 2 * step(small, 'padding') + border
     assert.ok(tight <= stated, `at the smallest size an effect tile holds ${tight}px of content in ${stated}px`)
   })
 

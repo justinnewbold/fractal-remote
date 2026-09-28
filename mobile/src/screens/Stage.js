@@ -632,7 +632,8 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
                 key={idOf(block)}
                 label={shortBlock(block)}
                 icon={showIcons ? blockIcon(block.slug) : undefined}
-                sub={block.channel ? `${state}  ${block.channel}` : state}
+                topLeft={state}
+                topRight={block.channel || undefined}
                 fill={hue.fill}
                 ink={hue.ink}
                 on={engaged}

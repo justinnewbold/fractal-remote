@@ -1151,10 +1151,9 @@ function BlockTile({ block, channels, busy, onToggle, onHold, icon }) {
         */}
         <span className="gig-block-name" title={block.name || block.slug}>
           {/*
-            The picture, beside the name rather than above it: beside costs
-            width, which a tile has, and no height, which fit-to-screen is
-            budgeting. The phone draws it above when its tile is tall enough.
-            The same file at both ends — see shared/block-icons.mjs.
+            The picture, above the name, the way the AM4 draws it — and the
+            phone too, at every size. The same file at both ends — see
+            shared/block-icons.mjs.
           */}
           {icon ? (
             <span
@@ -1171,7 +1170,8 @@ function BlockTile({ block, channels, busy, onToggle, onHold, icon }) {
         <span className="gig-block-state">
           {block.bypassed ? 'Off' : 'On'}
           {/*
-            The channel, beside the on/off.
+            The channel, in the top right corner, across from the on/off in
+            the top left.
 
             A scene remembers a channel per block, and each channel holds its
             own models and values — so which one a block is on is half of what
