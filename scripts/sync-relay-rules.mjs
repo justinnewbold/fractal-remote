@@ -90,6 +90,8 @@ export const FILES = [
    * and the phone — so both ends say the same thing about the same chain.
    */
   { source: '../shared/link-chain.mjs', target: '../mobile/src/lib/link-chain.js' },
+  /* Which picture each kind of effect wears on Play, so the two ends agree. */
+  { source: '../shared/block-icons.mjs', target: '../mobile/src/lib/block-icons.js' },
   /*
    * The troubleshooting guide, so a fix reads the same wherever somebody
    * standing in front of a dead rig happens to look it up.

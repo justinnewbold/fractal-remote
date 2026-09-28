@@ -15,6 +15,7 @@ import { keepTaps, tappedBpm, tempoSender, TAP_REREAD_MS } from '../../shared/te
 import { remoteActive } from '../lib/remote'
 import { STAGE_HIDDEN } from '../lib/guardrails'
 import { blockColor } from '../lib/blockColors'
+import { blockIcon } from '../lib/blockIcons'
 import { sceneColor } from '../lib/sceneColors'
 import { shortBlock } from '../lib/shortName'
 import { presetLabel } from '../lib/presetName'
@@ -74,6 +75,8 @@ export default function Gig({
    * footer. See fitTiles in lib/gigSize.
    */
   fit = false,
+  /* The effect pictures on the chain tiles, unless turned off in Settings. */
+  icons = true,
   onError,
   onChanged,
   onPickPreset,
@@ -939,6 +942,7 @@ export default function Gig({
               busy={toggling === block.effectId}
               onToggle={() => toggle(block)}
               onHold={() => setChanEid(block.effectId)}
+              icon={icons ? blockIcon(block.slug) : null}
             />
           ))}
         </div>
@@ -1107,7 +1111,7 @@ export default function Gig({
  * The hold is answered by Gig, which owns the one channel sheet; the tile
  * only says it was held.
  */
-function BlockTile({ block, channels, busy, onToggle, onHold }) {
+function BlockTile({ block, channels, busy, onToggle, onHold, icon }) {
   /* Only where there is something to choose. Not every block is channelled,
      and a menu with one entry in it is a menu that wasted a gesture. */
   const has = (channels?.length || 0) > 1
@@ -1146,6 +1150,19 @@ function BlockTile({ block, channels, busy, onToggle, onHold }) {
           a character count in JavaScript.
         */}
         <span className="gig-block-name" title={block.name || block.slug}>
+          {/*
+            The picture, beside the name rather than above it: beside costs
+            width, which a tile has, and no height, which fit-to-screen is
+            budgeting. The phone draws it above when its tile is tall enough.
+            The same file at both ends — see shared/block-icons.mjs.
+          */}
+          {icon ? (
+            <span
+              className="gig-block-icon"
+              aria-hidden="true"
+              style={{ WebkitMaskImage: `url(${icon})`, maskImage: `url(${icon})` }}
+            />
+          ) : null}
           <span className="gig-block-full">{block.name || block.slug}</span>
           <span className="gig-block-abbr mono" aria-hidden="true">
             {shortBlock(block)}

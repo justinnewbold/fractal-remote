@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native'
+import { Image, PixelRatio, Pressable, RefreshControl, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { useKeepAwake } from 'expo-keep-awake'
 
 import { color, font, space, TAP } from '../lib/theme'
+import { tileWidth as tileWidthIn } from '../lib/tileGrid'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
 import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot } from '../lib/device'
 import {
@@ -15,7 +16,7 @@ import {
   stepTarget
 } from '../lib/lists'
 import { sync, useStored } from '../lib/store'
-import { SIZES, fitTiles, loadFit, loadSize } from '../lib/gigSize'
+import { SIZES, fitTiles, loadFit, loadIcons, loadSize } from '../lib/gigSize'
 import {
   clearError,
   loadPreset,
@@ -149,6 +150,8 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
    * re-renders this screen on every write to storage.
    */
   const size = SIZES[loadSize(sync)] || SIZES[1]
+  /* The effect pictures, unless they were turned off in Settings. */
+  const showIcons = loadIcons(sync)
   /*
    * SMALLEST MEANS IT FITS. "On the smallest setting, if we could make it so
    * the screen won't scroll and everything fits on the screen — it's barely
@@ -628,7 +631,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
               <Tile
                 key={idOf(block)}
                 label={shortBlock(block)}
-                icon={blockIcon(block.slug)}
+                icon={showIcons ? blockIcon(block.slug) : undefined}
                 sub={block.channel ? `${state}  ${block.channel}` : state}
                 fill={hue.fill}
                 ink={hue.ink}
@@ -831,13 +834,10 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
  *
  * The browser gets both for free from a CSS grid, which has real columns. This
  * is a wrapped row, so the arithmetic is done here: the row less its gaps,
- * divided by the tiles in it.
+ * divided by the tiles in it, and rounded down to the screen's pixels — see
+ * lib/tileGrid for the tablet that wrapped every row without it.
  */
-const tileWidth = (width, n) => {
-  const cols = Math.max(1, n)
-  if (!width) return undefined
-  return (width - space.sm * (cols - 1)) / cols
-}
+const tileWidth = (width, n) => tileWidthIn(width, n, space.sm, PixelRatio.get())
 
 /**
  * Which channel a block is on.
