@@ -1130,6 +1130,10 @@ function BlockTile({ block, channels, busy, onToggle, onHold }) {
         onClick={onToggle}
         disabled={busy}
         aria-pressed={!block.bypassed}
+        /* The phone says "Hold to switch channels" beside CHAIN; this screen
+           has no heading there to carry it, so the tile says it when a mouse
+           rests on it. */
+        title={has ? 'Tap to switch on or off. Hold, or right-click, to switch channels.' : undefined}
         {...hold}
       >
         {/*

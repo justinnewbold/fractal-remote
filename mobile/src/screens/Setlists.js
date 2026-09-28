@@ -7,6 +7,7 @@ import { presetLabel, slotLabel } from '../lib/device'
 import {
   ALL,
   STARRED,
+  addAll,
   addTo,
   createList,
   deleteList,
@@ -19,7 +20,7 @@ import {
   toggleFavourite,
   updateList
 } from '../lib/lists'
-import { nameOf, namedSlots, useNames } from '../lib/presetNames'
+import { nameOf, useNames } from '../lib/presetNames'
 import { useStored } from '../lib/store'
 import { loadPreset, useRig } from '../lib/rig'
 import { tick } from '../lib/feedback'
@@ -28,9 +29,7 @@ import Grip from '../components/Grip'
 import SwipeAway from '../components/SwipeAway'
 import Press from '../components/Press'
 import { landingIndex } from '../lib/laneOrder'
-
-/** How many presets "Add another" shows at a time. */
-const ADD_PAGE = 40
+import SongPicker from '../components/SongPicker'
 
 const face = Platform.select(mono)
 
@@ -89,13 +88,12 @@ export default function Setlists({ onBack }) {
   const inList = here && !!chosen && chosen.presets.includes(current)
 
   /*
-   * Adding a song that is not the one playing needs a way to find it: a filter
-   * box over the names already read. Closed until asked for — this screen is
-   * mostly used to pick a source and glance at an order, and a search box on
-   * top of that is a search box in the way.
+   * Adding songs opens every preset, to tick as many as wanted — see
+   * SongPicker. It used to be a search box over the names already read and
+   * one song per tap: "right now it looks like the only way is to search for
+   * them."
    */
   const [adding, setAdding] = useState(false)
-  const [needle, setNeedle] = useState('')
   /* Delete asks twice. One tap on a screen you are scrolling is one tap. */
   const [armed, setArmed] = useState(false)
   /*
@@ -133,7 +131,6 @@ export default function Setlists({ onBack }) {
   useEffect(() => {
     setArmed(false)
     setAdding(false)
-    setNeedle('')
     setDraft(null)
   }, [source])
 
@@ -205,19 +202,6 @@ export default function Setlists({ onBack }) {
   }
 
   /*
-   * What "Add another" offers: the slots whose names have been read, filtered
-   * by what is typed — and never the ones already in the list, which would be a
-   * row whose + does nothing.
-   *
-   * A page at a time, and it SAYS SO. It was cut at forty rows with nothing
-   * on screen to say the rest existed: "It stopped at number 41 here, and I
-   * couldn't scroll anymore to find more songs." Forty is still the right
-   * first page — this is scrolled with a thumb, and a 512-row list under a
-   * search box is the preset picker, which this is not — but a cut has to be
-   * visible and undoable: how many are hidden, and a button for the next
-   * forty. Typing narrows the whole list, not the page.
-   */
-  /*
    * A song being dragged: which row, how far the finger has gone, and where
    * that lands it. Row heights are measured, and the page is locked against
    * scrolling for as long as the grip is held — the chain editor's rules.
@@ -251,27 +235,7 @@ export default function Setlists({ onBack }) {
     return 0
   }
 
-  const q = needle.trim().toLowerCase()
-  const [pages, setPages] = useState(1)
-  useEffect(() => setPages(1), [q, adding])
-  const offered = adding
-    ? namedSlots()
-        .filter((s) => !(chosen?.presets || []).includes(s.number))
-        .filter((s) => !q || s.name.toLowerCase().includes(q) || String(s.number) === q)
-    : []
-  const candidates = offered.slice(0, ADD_PAGE * pages)
-  const hidden = offered.length - candidates.length
 
-  const box = {
-    minHeight: TAP,
-    paddingHorizontal: space.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: color.rule,
-    backgroundColor: color.panel,
-    color: color.silk,
-    fontSize: font.body
-  }
 
   return (
     /*
@@ -395,50 +359,14 @@ export default function Setlists({ onBack }) {
               <Note>No songs yet. Next goes to the first song, and after the last one it starts over.</Note>
             )}
 
-            {adding ? (
-              <View style={{ gap: space.sm }}>
-                <TextInput
-                  autoFocus
-                  value={needle}
-                  onChangeText={setNeedle}
-                  placeholder="Find a preset by name or number"
-                  placeholderTextColor={color.silkFaint}
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                  accessibilityLabel="Find a preset to add"
-                  style={box}
-                />
-                {candidates.length ? (
-                  candidates.map((s) => (
-                    <Press
-                      key={s.number}
-                      label={s.name}
-                      sub={`${slotLabel(s.number, addressing)}   +`}
-                      onPress={() => setPresets(addTo(chosen.presets, s.number))}
-                    />
-                  ))
-                ) : (
-                  <Note>
-                    {q
-                      ? `Nothing named like “${needle}”.`
-                      : namedSlots().length
-                        ? 'Every preset whose name is known is already in this setlist.'
-                        : 'No preset names known yet. Open Presets once and they will be.'}
-                  </Note>
-                )}
-                {hidden > 0 ? (
-                  <Press
-                    label={`Show ${Math.min(ADD_PAGE, hidden)} more`}
-                    sub={`${candidates.length} of ${offered.length} shown — or type a name to narrow it`}
-                    height={TAP}
-                    onPress={() => setPages((n) => n + 1)}
-                  />
-                ) : null}
-                <Press label="Done adding" height={40} onPress={() => setAdding(false)} />
-              </View>
-            ) : (
-              <Press label="Find another song…" onPress={() => setAdding(true)} />
-            )}
+            <Press label="Add songs…" sub="Pick from every preset, as many as you like" onPress={() => setAdding(true)} />
+            <SongPicker
+              open={adding}
+              listName={chosen.name}
+              already={chosen.presets}
+              onAdd={(picked) => setPresets(addAll(chosen.presets, picked))}
+              onClose={() => setAdding(false)}
+            />
 
             <Press
               label={armed ? 'Tap again to delete this setlist' : 'Delete this setlist'}
