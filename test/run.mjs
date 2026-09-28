@@ -2474,6 +2474,23 @@ test('the stage screen is sized by whoever is holding it', () => {
   const wide = fitTiles({ available: 340, scenes: 8, blocks: 12 })
   assert.ok(wide.fxCols > 4 && wide.tile >= 44, `a tight rig should go wider before going under the floor — got ${JSON.stringify(wide)}`)
   assert.deepEqual(fitTiles({ available: 500, scenes: 0, blocks: 0 }), { tile: 96, fxCols: 4 }, 'an empty preset should not divide by zero')
+
+  /*
+   * "On smaller phones, it looks like the tiles are too small to see the
+   * glyphs… it looks like having six across might be too many."
+   *
+   * His FM3: eight scenes, eight blocks, a screen with too little room for
+   * 44px at four across. Eight blocks are two rows at four, five or six, so
+   * going wider saved nothing and cost the pictures their room. It stays at
+   * four.
+   */
+  assert.equal(fitTiles({ available: 300, scenes: 8, blocks: 8 }).fxCols, 4, 'a wider row that saves no row was taken anyway')
+  /* A small phone's row (323pt) holds five tiles wide enough for a picture;
+     a bigger one's (380pt) holds six. */
+  assert.equal(fitTiles({ available: 300, scenes: 8, blocks: 18, width: 323 }).fxCols, 5, 'a small phone went six across')
+  assert.equal(fitTiles({ available: 300, scenes: 8, blocks: 18, width: 380 }).fxCols, 6, 'a bigger phone lost its sixth column')
+  /* Never narrower than the size he chose, whatever the width says. */
+  assert.equal(fitTiles({ available: 300, scenes: 8, blocks: 18, fxCols: 4, width: 200 }).fxCols, 4)
   {
     const mem = new Map()
     const store = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) }

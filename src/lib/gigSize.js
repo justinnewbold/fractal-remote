@@ -143,11 +143,29 @@ const FIT_KEY = 'fractal.gigFit'
  * once, and how many blocks to a row that takes.
  *
  * `available` is the height left for the two grids together. Blocks start at
- * `fxCols` to a row and go one wider each time the tile would otherwise drop
- * under the tap floor — five or six small tiles a row is still a rig you can
- * see whole, and a tile under 44px is one you cannot hit. Past six across it
- * stops widening and the floor wins: a preset that big scrolls, which is what
- * it did before.
+ * `fxCols` to a row and may go wider when the tile would otherwise drop under
+ * the tap floor — five or six small tiles a row is still a rig you can see
+ * whole, and a tile under 44px is one you cannot hit. When no width gets the
+ * tile over the floor, the floor wins: a preset that big scrolls, which is
+ * what it did before.
+ *
+ * TWO LIMITS ON GOING WIDER, both from an FM3 on a small phone:
+ *
+ * "On smaller phones, it looks like the tiles are too small to see the
+ * glyphs… it looks like having six across might be too many."
+ *
+ * Eight scenes and eight blocks went six across, and the six-across row was
+ * no shorter than four across would have been: eight blocks are two rows at
+ * four, five or six. So the tiles got narrower for nothing — the picture
+ * landed on top of the On and the names became "C…" and "TR…". A wider row
+ * is only worth taking when it saves a row, and when two widths save the
+ * same, the narrower one wins.
+ *
+ * And a tile has to stay wide enough for what is drawn on it: the picture,
+ * three letters, On/Off in one corner and the channel in the other. `width`
+ * is the row it has to fit in; `minWidth` is the narrowest tile that still
+ * holds all of that. On a small phone that stops it at five across; a larger
+ * one can still go to six.
  */
 export function fitTiles({
   available,
@@ -157,18 +175,28 @@ export function fitTiles({
   fxCols = 4,
   gap = 8,
   min = 44,
-  max = 96
+  max = 96,
+  width = 0,
+  minWidth = 56
 } = {}) {
   const room = Math.max(0, Number(available) || 0)
   const sceneRows = Math.ceil(Math.max(0, scenes) / Math.max(1, sceneCols))
-  let cols = Math.max(1, fxCols)
-  for (;;) {
-    const rows = sceneRows + Math.ceil(Math.max(0, blocks) / cols)
+  const first = Math.max(1, fxCols)
+  const across = Number(width) > 0 ? Math.floor((Number(width) + gap) / (minWidth + gap)) : 6
+  const last = Math.max(first, Math.min(6, across))
+  const count = Math.max(0, blocks)
+  let best = null
+  for (let cols = first; cols <= last; cols++) {
+    const rows = sceneRows + Math.ceil(count / cols)
     if (!rows) return { tile: max, fxCols: cols }
+    /* The same number of rows as a narrower grid: nothing gained, so the
+       narrower one stands. */
+    if (best && rows >= best.rows) continue
     const tile = Math.floor((room - gap * (rows - 1)) / rows)
-    if (tile >= min || cols >= 6) return { tile: Math.max(min, Math.min(max, tile)), fxCols: cols }
-    cols += 1
+    best = { rows, tile, cols }
+    if (tile >= min) break
   }
+  return { tile: Math.max(min, Math.min(max, best.tile)), fxCols: best.cols }
 }
 
 /**
