@@ -2925,7 +2925,7 @@ export function run(test) {
     assert.match(qr, /not the\s+Fractal Remote app/, 'the page does not say the code opens in the browser rather than the app')
     assert.match(src.replace(/\s+/g, ' '), /\{inDesktopApp\(\) \? \( <Section key="no-internet"/, 'the code is drawn somewhere that does not know the address')
     const phone = readFileSync(new URL('../mobile/src/screens/Settings.js', import.meta.url), 'utf8')
-    assert.match(phone, /point\s+the phone&rsquo;s camera at the code there/, 'the phone never tells anyone the code is there')
+    assert.match(phone, /point\s+the phone(&rsquo;|’)s camera at the code there/i, 'the phone never tells anyone the code is there')
   })
 
   test('a channel is written where the scene that plays it can keep it', () => {

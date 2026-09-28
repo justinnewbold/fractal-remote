@@ -39,6 +39,9 @@ import { linkChain } from '../lib/link-chain'
 import playIcon from '../../assets/icons/play.png'
 import laptopIcon from '../../assets/icons/laptop.png'
 import mailIcon from '../../assets/icons/mail.png'
+import phoneIcon from '../../assets/icons/phone.png'
+import sendIcon from '../../assets/icons/send.png'
+import setupIcon from '../../assets/icons/setup.png'
 import Note from '../components/Note'
 import PasswordBox from '../components/PasswordBox'
 import Press from '../components/Press'
@@ -214,9 +217,10 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { trouble: 'about' }
+  const PARENT = { trouble: 'about', offline: 'link' }
+  const UP_LABEL = { about: '‹ About', link: '‹ Phone & computer' }
   const upFrom = (p) => PARENT[p] || null
-  const upLabel = (p) => (PARENT[p] === 'about' ? '‹ About' : '‹ Settings')
+  const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
 
   const head = (title, onDone) =>
     onDone === 'back' ? (
@@ -745,26 +749,20 @@ export default function Settings({
               yes when the store could not be reached, and a person whose signal
               is bad is exactly the person who needs to read this.
             */}
+            {/*
+              A card of its own, like Connect a computer, opening a page of its
+              own. "Let's make the how to connect without internet its own
+              button… the text on it right now is extremely small and hard to
+              read, so it would be nice to have it bigger and everything on its
+              own page." The words are the same; they are on page 'offline'.
+            */}
             {mayDrive(purchase) ? (
-              <View style={{ gap: space.sm }}>
-                <Section>Playing with no internet</Section>
-                <Text style={{ color: color.silkDim, fontSize: font.small }}>
-                  This app reaches your computer over the internet, so it needs a signal. For a room
-                  that has none, there is another way round and it does not use this app.
-                </Text>
-                <Text style={{ color: color.silkDim, fontSize: font.small }}>
-                  Put the phone on the same wifi as the computer. On the computer, open the Fractal
-                  app&rsquo;s Settings &rarr; Phone &amp; computer &rarr; Playing with no internet, and point
-                  the phone&rsquo;s camera at the code there &mdash; it opens in the phone&rsquo;s web browser. The same address is
-                  in the computer&rsquo;s menu bar (the system tray on Windows), next to the Fractal
-                  icon, to type instead. You get the same screens, and no part of it goes near the
-                  internet.
-                </Text>
-                <Note>
-                  What you change there is kept by that browser rather than in your account, so it
-                  does not follow you to this app or to another phone.
-                </Note>
-              </View>
+              <TipCard
+                icon={phoneIcon}
+                label="PLAYING WITH NO INTERNET"
+                body="How do I play with no internet?"
+                onPress={() => setPage('offline')}
+              />
             ) : null}
 
             {/*
@@ -922,6 +920,55 @@ export default function Settings({
       ) : null}
 
       {/* ----------------------------------------------------------- about */}
+      {/* -------------------------------------------------------- offline */}
+      {/*
+        PLAYING WITH NO INTERNET, on a page of its own, one step to a card and
+        at a size that can be read — see the card on Phone & computer.
+
+        AND IT IS NOT THIS APP THAT DOES IT, which is the part that has to be
+        said plainly rather than implied. Everything here goes through the
+        relay, which is on the internet; there is no code in this app that
+        speaks to a computer over wifi. What works is the phone's WEB BROWSER
+        on the computer's own page, so that is what the steps say to open.
+
+        Behind `mayDrive` like the card, because it is told to the people who
+        paid — see the note that used to sit on the link page.
+      */}
+      {page === 'offline' && mayDrive(purchase) ? (
+        <>
+          {head('Playing with no internet', 'back')}
+          <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>
+            This app reaches your computer over the internet, so it needs a signal. For a room that
+            has none, there is another way round and it does not use this app.
+          </Text>
+          <View style={{ gap: space.md }}>
+            <TipCard icon={sendIcon} label="1  SAME WIFI" body="Put the phone on the same wifi as the computer." />
+            <TipCard
+              icon={laptopIcon}
+              label="2  OPEN THE CODE"
+              body="On the computer, open the Fractal app’s Settings → Phone & computer → Playing with no internet."
+            />
+            <TipCard
+              icon={phoneIcon}
+              label="3  POINT THE CAMERA"
+              body="Point the phone’s camera at the code there — it opens in the phone’s web browser."
+            />
+            <TipCard
+              icon={setupIcon}
+              label="OR TYPE THE ADDRESS"
+              body="The same address is in the computer’s menu bar (the system tray on Windows), next to the Fractal icon, to type instead."
+            />
+          </View>
+          <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>
+            You get the same screens, and no part of it goes near the internet.
+          </Text>
+          <Note size={font.body}>
+            What you change there is kept by that browser rather than in your account, so it does not
+            follow you to this app or to another phone.
+          </Note>
+        </>
+      ) : null}
+
       {page === 'about' ? (
         <>
           {head('About', 'back')}

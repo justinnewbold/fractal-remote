@@ -7719,7 +7719,7 @@ export function run(test) {
       /onPress=\{\(\) => setPage\(upFrom\(page\)\)\}/,
       'the Back button and the swipe can disagree about where one step up is'
     )
-    assert.match(set, /const PARENT = \{ trouble: 'about' \}/, 'Troubleshooting is not inside About')
+    assert.match(set, /const PARENT = \{ trouble: 'about'[,} ]/, 'Troubleshooting is not inside About')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')
