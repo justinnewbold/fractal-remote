@@ -4195,47 +4195,63 @@ export function run(test) {
     assert.deepEqual(missing, [], `a screen imports a picture that is not there: ${missing.join(', ')}`)
   })
 
-  test('the blocks he drew wear his drawings, and the rest wear none', () => {
+  test('every kind of effect wears a picture, and only its own family’s', async () => {
     /*
-     * Nine families are in the mockup and nine are mapped. The point of the
-     * check is the SECOND half: a family he did not draw gets nothing rather
-     * than the nearest-looking picture of a different effect, because a delay
-     * wearing the flanger's swirl is worse than a delay wearing nothing.
+     * Nine families were in his mockup. Then: "It looks like chain
+     * glyphs/icons that we made are only rendering on the AM4 and VP4. Looks
+     * like we still need to add those to all the other ones." So every kind
+     * of block on the unit has one now, drawn to match.
      *
-     * Read rather than imported, and that is not laziness: the module's whole
-     * job is to import PNGs, which node refuses and Metro resolves. Every
-     * other check in this file that touches a screen does the same.
+     * The rule this used to guard still stands, narrowed: a block never
+     * borrows a picture from a DIFFERENT effect — a delay wearing the
+     * flanger's swirl is worse than a delay wearing nothing. Sharing happens
+     * only inside one family (the delays, the compressors, the gates).
      */
-    const src = read('mobile/src/lib/blockIcons.js')
-
-    /* What the map actually holds, taken from the object literal rather than
-       from the file as a whole, so a name in a comment proves nothing. */
-    const table = src.slice(src.indexOf('const ICONS = {'), src.indexOf('}', src.indexOf('const ICONS = {')))
-    const keys = [...table.matchAll(/^ {2}(\w+)\s*(?::|,|$)/gm)].map((m) => m[1])
-
-    for (const slug of ['amp', 'cab', 'comp', 'delay', 'drive', 'flanger', 'phaser', 'reverb', 'wah']) {
-      assert.ok(keys.includes(slug), `${slug} is in the mockup and has no picture`)
-      assert.ok(src.includes(`assets/icons/${slug}.png`), `${slug}'s picture is not the file of that name`)
+    const { BLOCK_ICON, blockIconName } = await import('../shared/block-icons.mjs')
+    const blocks = JSON.parse(read('src/data/blocks.json'))
+    const families = [...new Set(blocks.map((b) => b.family))].filter((f) => !['input', 'output'].includes(f))
+    for (const family of families) {
+      const name = blockIconName(family)
+      assert.ok(name, `${family} has no picture`)
+      assert.ok(existsSync(new URL(`../mobile/assets/icons/${name}.png`, import.meta.url)), `${family}'s picture ${name}.png is not there`)
     }
+    /* The nine he drew still wear the files of their own names. */
+    for (const slug of ['amp', 'cab', 'comp', 'delay', 'drive', 'flanger', 'phaser', 'reverb', 'wah']) {
+      assert.equal(BLOCK_ICON[slug], slug, `${slug} lost its drawing`)
+    }
+    /* Borrowing only within a family. */
+    const FAMILY = { delay: ['multitap', 'megatap', 'tentap', 'plex'], comp: ['compressor', 'multicomp'], gate: ['ingate'], volpan: ['volume'] }
+    for (const [slug, name] of Object.entries(BLOCK_ICON)) {
+      if (slug === name || name === `${slug}fx`) continue
+      assert.ok((FAMILY[name] || []).includes(slug), `${slug} wears ${name}, which is a different effect`)
+    }
+    /* A suffix and a display name reach the same picture the colours do. */
+    assert.equal(blockIconName('delay2'), 'delay')
+    assert.equal(blockIconName('Ring Mod'), 'ringmod')
+    assert.equal(blockIconName(''), null)
 
-    /* Nothing else. The nine he drew and the one alias for the long spelling
-       of the first of them — anything beyond that is a picture of some other
-       effect being lent to a family, which is the failure this exists for. */
-    assert.deepEqual(
-      keys.filter((k) => !['amp', 'cab', 'comp', 'delay', 'drive', 'flanger', 'phaser', 'reverb', 'wah'].includes(k)),
-      ['compressor'],
-      'a family he did not draw was given somebody else’s picture'
-    )
+    /* Both ends look pictures up through the one list. */
+    assert.match(read('mobile/src/lib/blockIcons.js'), /import \{ blockIconName \} from '\.\/block-icons'/, 'the phone keeps its own list')
+    assert.match(read('src/lib/blockIcons.js'), /import \{ blockIconName \} from '\.\.\/\.\.\/shared\/block-icons\.mjs'/, 'the browser keeps its own list')
 
-    /* A suffix and a display name reach the same picture the colours do —
-       blockColors normalises the same three ways, and the two maps have to
-       agree or a tile comes out red with the delay's dots on it. */
-    assert.match(src, /key\.replace\(\/\\d\+\$\/, ''\)/, 'a second drive loses its picture')
-    assert.match(src, /replace\(\/\[\^a-z\]\/g, ''\)/, 'a spelled-out name loses its picture')
-    assert.match(src, /if \(!slug\) return null/, 'a block with no slug is not handled')
+    /* And the stage asks for them, unless they were turned off. */
+    assert.match(read('mobile/src/screens/Stage.js'), /icon=\{showIcons \? blockIcon\(block\.slug\) : undefined\}/, 'the chain tiles are drawn without their pictures')
+    assert.match(read('src/components/Gig.jsx'), /icon=\{icons \? blockIcon\(block\.slug\) : null\}/, 'the browser’s chain tiles are drawn without their pictures')
+  })
 
-    /* And the stage actually asks for them. */
-    assert.match(read('mobile/src/screens/Stage.js'), /icon=\{blockIcon\(block\.slug\)\}/, 'the chain tiles are drawn without their pictures')
+  test('a short tile keeps its picture beside the letters, and the pictures can be turned off', async () => {
+    const tile = read('mobile/src/components/Tile.js')
+    assert.match(tile, /const inline = icon && !picture \?/, 'a short tile drops its picture again')
+    const { loadIcons, saveIcons } = await import('../src/lib/gigSize.js')
+    const box = new Map()
+    const store = { getItem: (k) => (box.has(k) ? box.get(k) : null), setItem: (k, v) => box.set(k, String(v)) }
+    assert.equal(loadIcons(store), true, 'the pictures start off')
+    saveIcons(false, store)
+    assert.equal(loadIcons(store), false, 'turning them off does not stick')
+    saveIcons(true, store)
+    assert.equal(loadIcons(store), true)
+    assert.match(read('mobile/src/screens/Settings.js'), /label="Show effect pictures"[\s\S]{0,300}onPress=\{\(\) => saveIcons\(!icons, sync\)\}/, 'the phone has no way to turn them off')
+    assert.match(read('src/App.jsx'), /Show effect pictures/, 'the browser has no way to turn them off')
   })
 
   test('the paywall sells the unlock, not whichever package came first', async () => {

@@ -89,6 +89,17 @@ export default function Tile({
    * a row of billboards.
    */
   const picture = icon && height >= 66 ? Math.min(28, Math.round(height * 0.26)) : 0
+  /*
+   * AND BESIDE THE LETTERS WHEN THERE IS NO ROOM ABOVE THEM.
+   *
+   * "It looks like chain glyphs/icons that we made are only rendering on the
+   * AM4 and VP4." They were rendering on anything with a short chain: an FM3
+   * preset with eight scenes and eight effects fits to screen below the
+   * height above, and every picture was dropped. Beside the three letters it
+   * costs width, which a tile has plenty of, and no height, which the fit is
+   * budgeting — so a short tile keeps its picture, smaller.
+   */
+  const inline = icon && !picture ? Math.max(14, Math.min(18, Math.round(height * 0.3))) : 0
 
   const glow = on
     ? Platform.select({
@@ -185,18 +196,28 @@ export default function Tile({
             {caption}
           </Text>
         ) : null}
-        <Text
-          numberOfLines={1}
-          style={{
-            color: foreground,
-            fontSize: font.body,
-            fontWeight: '700',
-            letterSpacing: 0.5,
-            textAlign: 'center'
-          }}
-        >
-          {label}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          {inline ? (
+            <Image
+              source={icon}
+              accessible={false}
+              style={{ width: inline, height: inline, tintColor: foreground }}
+              resizeMode="contain"
+            />
+          ) : null}
+          <Text
+            numberOfLines={1}
+            style={{
+              color: foreground,
+              fontSize: font.body,
+              fontWeight: '700',
+              letterSpacing: 0.5,
+              textAlign: 'center'
+            }}
+          >
+            {label}
+          </Text>
+        </View>
         {sub ? (
           <Text
             numberOfLines={1}

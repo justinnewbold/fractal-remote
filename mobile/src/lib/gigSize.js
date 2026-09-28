@@ -221,3 +221,31 @@ export function saveFit(on, storage) {
     return false
   }
 }
+
+/*
+ * THE EFFECT PICTURES, ON OR OFF.
+ *
+ * "Is it something that could be turned on and off?" Yes: some players read
+ * the letters and want nothing else on a tile. On unless somebody turns them
+ * off, at both ends, kept per device like the tile size.
+ */
+const ICONS_KEY = 'fractal.gigIcons'
+
+export function loadIcons(storage) {
+  try {
+    const store = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null)
+    return store?.getItem(ICONS_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+export function saveIcons(on, storage) {
+  try {
+    const store = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null)
+    store?.setItem(ICONS_KEY, on ? '1' : '0')
+    return true
+  } catch {
+    return false
+  }
+}

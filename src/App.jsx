@@ -59,7 +59,7 @@ import { createNameScan } from './lib/nameScan'
 import { Chain, PresetList, BlockPanel, Tuner } from './components/Console'
 import Screens, { viewsFor } from './components/Screens'
 import { useAsks } from './lib/asks'
-import { SIZES, loadSize, saveSize, clampSize, loadFit, saveFit } from './lib/gigSize'
+import { SIZES, loadSize, saveSize, clampSize, loadFit, saveFit, loadIcons, saveIcons } from './lib/gigSize'
 import { editButtonShows } from './lib/playMode'
 import { FIXES, FIRMWARE_NOTE, fixById, fixFor, versionsInSync } from '../shared/troubleshooting.mjs'
 import { osGuess, waysFor, waysWord } from '../shared/ways-in.mjs'
@@ -1132,6 +1132,7 @@ export default function App() {
   const [size, setSize] = useState(loadSize)
   /* Whether Play sizes its tiles from the screen instead of the step. */
   const [fit, setFit] = useState(loadFit)
+  const [icons, setIcons] = useState(loadIcons)
   /* Which page of Setup is open; null is the list of rows. */
   /* Which computer this browser is on, read once. The guide's routes are
      sorted by it; see shared/ways-in.mjs for why only this end sorts them. */
@@ -3643,6 +3644,7 @@ export default function App() {
           capabilities={device?.capabilities}
           size={size}
           fit={fit}
+          icons={icons}
           onError={setError}
           onChanged={read}
           onPickPreset={() => setPresetMenu(true)}
@@ -4440,6 +4442,26 @@ export default function App() {
                       Sizes the scenes and effects so the whole rig is on screen at once, with no
                       scrolling. Bigger presets get smaller buttons, never under a thumb&rsquo;s
                       width. Overrides the size above while it is on.
+                    </span>
+                  </span>
+                </label>
+                {/* "Is it something that could be turned on and off?" The phone's
+                    Tile size section has the same box. */}
+                <label className="rename-choice">
+                  <input
+                    type="checkbox"
+                    checked={icons}
+                    onChange={(e) => {
+                      const on = e.target.checked
+                      setIcons(on)
+                      saveIcons(on)
+                    }}
+                  />
+                  <span>
+                    Show effect pictures
+                    <span className="hint">
+                      A small picture on each effect in the chain &mdash; a flame for drive, a wave
+                      for chorus &mdash; beside or above its letters. Off leaves the letters alone.
                     </span>
                   </span>
                 </label>

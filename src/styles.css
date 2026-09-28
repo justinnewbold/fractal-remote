@@ -6778,6 +6778,23 @@ button.gig-block:disabled {
   display: none;
 }
 
+/* The effect's picture before its name: the phone's white file used as a
+   mask, so it takes the name's own colour, on or off. */
+.gig-block-icon {
+  display: inline-block;
+  width: 1.05em;
+  height: 1.05em;
+  margin-right: 0.35em;
+  vertical-align: -0.15em;
+  background-color: currentColor;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
 @media (max-width: 620px) {
   .gig[data-fx-abbr] .gig-block-full {
     display: none;

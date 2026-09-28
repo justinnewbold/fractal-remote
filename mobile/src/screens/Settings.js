@@ -22,7 +22,7 @@ import {
 } from '../lib/relay'
 import { notePresetName, noteSceneName, useRig } from '../lib/rig'
 import { dropReadCache, sceneShape, setPresetName, setSceneName } from '../lib/device'
-import { SIZES, clampSize, loadFit, loadSize, saveFit, saveSize } from '../lib/gigSize'
+import { SIZES, clampSize, loadFit, loadIcons, loadSize, saveFit, saveIcons, saveSize } from '../lib/gigSize'
 import { REPLAY } from '../lib/onboarding'
 import { sync, useStored } from '../lib/store'
 import { isPairAccount } from '../lib/pairing'
@@ -1320,6 +1320,7 @@ function TileSize() {
   useStored()
   const now = loadSize(sync)
   const fit = loadFit(sync, true)
+  const icons = loadIcons(sync)
   const step = (by) => saveSize(clampSize(now + by), sync)
   return (
     <View style={{ gap: space.md }}>
@@ -1361,6 +1362,13 @@ function TileSize() {
         label="Fit everything on one screen"
         sub="Sizes the scenes and effects so the whole rig is on screen at once, with no scrolling. Bigger presets get smaller buttons, never under a thumb’s width. Overrides the size above while it is on."
         onPress={() => saveFit(!fit, sync)}
+      />
+      {/* "Is it something that could be turned on and off?" */}
+      <Choice
+        on={icons}
+        label="Show effect pictures"
+        sub="A small picture on each effect in the chain — a flame for drive, a wave for chorus — beside or above its letters. Off leaves the letters alone."
+        onPress={() => saveIcons(!icons, sync)}
       />
     </View>
   )
