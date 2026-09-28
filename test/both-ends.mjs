@@ -1621,4 +1621,31 @@ export function run(test) {
     const gig = read('src/components/Gig.jsx')
     assert.match(gig, /title=\{has \? 'Tap to switch on or off\. Hold, or right-click, to switch channels\.' : undefined\}/, 'the browser’s tiles do not say they can be held')
   })
+
+  /*
+   * "On a tablet it's showing everything on the left side… it shows
+   * everything in one line straight down as far as the scenes go instead of
+   * putting them up on the side of each other."
+   */
+  test('a row of tiles never adds up to more than the row, on any screen density', async () => {
+    const { tileWidth } = await import('../mobile/src/lib/tileGrid.js')
+    const gap = 8
+    /* A tablet's 1.33 is the one that wrapped; the rest are common phones. */
+    for (const scale of [1, 1.33125, 1.5, 1.75, 2, 2.625, 2.75, 3, 3.5]) {
+      for (let width = 280; width <= 1400; width += 7.3) {
+        for (const n of [1, 2, 3, 4, 5, 6]) {
+          const w = tileWidth(width, n, gap, scale)
+          /* What the phone draws: each tile rounded UP to its own pixels. */
+          const drawn = Math.ceil(w * scale) / scale
+          const total = drawn * n + gap * (n - 1)
+          assert.ok(total <= width + 1e-9, `${n} across ${width.toFixed(1)}pt at ${scale}x comes to ${total.toFixed(2)}pt, so the last one wraps`)
+          /* And it is not visibly short either: within two pixels of the exact share. */
+          const exact = (width - gap * (n - 1)) / n
+          assert.ok(exact - w <= 2 / scale + 1e-9, `${n} across is ${(exact - w).toFixed(2)}pt narrower than it should be`)
+        }
+      }
+    }
+    assert.equal(tileWidth(0, 4, gap, 2), undefined)
+    assert.match(read('mobile/src/screens/Stage.js'), /const tileWidth = \(width, n\) => tileWidthIn\(width, n, space\.sm, PixelRatio\.get\(\)\)/, 'the Play screen does not round its tiles to the screen')
+  })
 }

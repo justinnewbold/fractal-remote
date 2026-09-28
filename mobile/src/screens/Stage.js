@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native'
+import { Image, PixelRatio, Pressable, RefreshControl, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { useKeepAwake } from 'expo-keep-awake'
 
 import { color, font, space, TAP } from '../lib/theme'
+import { tileWidth as tileWidthIn } from '../lib/tileGrid'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
 import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot } from '../lib/device'
 import {
@@ -831,13 +832,10 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
  *
  * The browser gets both for free from a CSS grid, which has real columns. This
  * is a wrapped row, so the arithmetic is done here: the row less its gaps,
- * divided by the tiles in it.
+ * divided by the tiles in it, and rounded down to the screen's pixels — see
+ * lib/tileGrid for the tablet that wrapped every row without it.
  */
-const tileWidth = (width, n) => {
-  const cols = Math.max(1, n)
-  if (!width) return undefined
-  return (width - space.sm * (cols - 1)) / cols
-}
+const tileWidth = (width, n) => tileWidthIn(width, n, space.sm, PixelRatio.get())
 
 /**
  * Which channel a block is on.
