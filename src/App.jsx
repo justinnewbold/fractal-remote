@@ -4577,8 +4577,8 @@ export default function App() {
                   <div className="scene-arrange-box">
                     <p className="silk-label setup-open-title">Arrange scenes</p>
                     <p className="hint">
-                      Hold a scene and drag it onto another to swap them. This order is used for
-                      every preset.
+                      Tap a scene, then tap the one to swap it with. Or drag one onto another.
+                      This order is used for every preset.
                     </p>
                     <SceneArrange
                       order={sceneOrder}

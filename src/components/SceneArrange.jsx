@@ -19,6 +19,9 @@ import { swapScenes } from '../lib/gigSize'
  */
 export default function SceneArrange({ order, onChange }) {
   const [drag, setDrag] = useState(null)
+  /* Tap one, then tap the one to swap it with — the phone's rule too, for a
+     drag that does not take. */
+  const [picked, setPicked] = useState(null)
   const places = useRef([])
   const held = useRef(null)
   const show = (d) => {
@@ -46,14 +49,24 @@ export default function SceneArrange({ order, onChange }) {
   const up = (dropped) => () => {
     const d = held.current
     show(null)
-    if (dropped && d && d.over !== null && d.over !== d.from) onChange(swapScenes(order, d.from, d.over))
+    if (!dropped || !d) return
+    if (Math.abs(d.dx) < 6 && Math.abs(d.dy) < 6) {
+      if (picked === null) setPicked(d.from)
+      else {
+        setPicked(null)
+        if (picked !== d.from) onChange(swapScenes(order, picked, d.from))
+      }
+      return
+    }
+    setPicked(null)
+    if (d.over !== null && d.over !== d.from) onChange(swapScenes(order, d.from, d.over))
   }
 
   return (
     <div className="scene-arrange" role="group" aria-label="Arrange scenes">
       {order.map((scene, k) => {
         const carried = drag?.from === k
-        const target = !!drag && !carried && drag.over === k
+        const target = (!!drag && !carried && drag.over === k) || picked === k
         return (
           <div
             key={scene}

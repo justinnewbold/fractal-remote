@@ -1427,7 +1427,7 @@ function ArrangeScenes({ onScrollLock }) {
   return (
     <View style={{ gap: space.md }}>
       <Section>Arrange scenes</Section>
-      <Note>Hold a scene and drag it onto another to swap them. This order is used for every preset.</Note>
+      <Note>Tap a scene, then tap the one to swap it with. Or drag one onto another. This order is used for every preset.</Note>
       <SceneArrange order={order} onChange={(next) => saveSceneOrder(next, sync)} onScrollLock={onScrollLock} />
       <Press label="Put them back in order" onPress={() => saveSceneOrder([0, 1, 2, 3, 4, 5, 6, 7], sync)} />
     </View>
