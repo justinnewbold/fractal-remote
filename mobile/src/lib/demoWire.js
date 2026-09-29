@@ -59,7 +59,9 @@ export async function demoRequest(mock, path, options = {}) {
     if (path === '/preset/blocks') return mock.presetBlocks()
     if (path === '/preset/scene-state')
       return mock.presetBlocks().map((b) => ({ effectId: b.effectId, bypassed: b.bypassed ?? null, channel: b.channel ?? null }))
-    if (path === '/preset/grid') return mock.grid()
+    /* With the name and scene names the host's copy of the preset carries:
+       the simulated unit keeps its names with the scene. */
+    if (path === '/preset/grid') return { ...mock.grid(), name: mock.preset()?.name ?? '', scenes: mock.getScene()?.names || [] }
     if (path === '/scene') return mock.getScene()
     if (path === '/tempo') return mock.tempo()
     if (path === '/mod/model') return mock.modModel()

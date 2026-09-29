@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { selectPreset, clearDeviceCache, liveMeters, setChannel, setMetersWanted, setTempo } from '../lib/forgefx'
+import { liveMeters, setChannel, setMetersWanted, setTempo } from '../lib/forgefx'
 import {
   useDevice,
   refreshBlocks as reReadChain,
   confirmedChain,
+  chainIsCurrent,
+  chainFollowed,
+  loadPreset,
+  presetReadPending,
   refreshScene,
-  refreshSceneNames,
+  refreshSceneState,
+  refreshLoadedSceneNames,
   writeScene,
   writeBypass,
   writeTuner,
@@ -81,6 +86,8 @@ export default function Gig({
   scenesFour = false,
   onError,
   onChanged,
+  /* A preset stepped to here has been loaded and read, for what App keeps. */
+  onPresetLoaded,
   onPickPreset,
   /*
    * The way to the chain and its knobs.
@@ -180,6 +187,7 @@ export default function Gig({
       remote: remoteActive()
     })
     setChain(list ? 'ok' : 'failed')
+    return list
   }
 
   /*
@@ -213,21 +221,47 @@ export default function Gig({
      the same list the block sheet on Edit has always used. */
   const channels = capabilities?.channelNames
 
+  /*
+   * What this screen reads when it appears, or when the preset changes.
+   *
+   * Keyed on the slot, not on the preset object, which every read replaces:
+   * this used to read the chain and dump the slot for its scene names each
+   * time App re-read the preset — straight after a preset change, on top of
+   * the reads that change was already making, while the unit was loading.
+   * A preset change that is still being read is waited for, and a chain read
+   * for this slot a moment ago is not read again.
+   */
   useEffect(() => {
     let stop = false
     ;(async () => {
+      const pending = presetReadPending()
+      if (pending) {
+        setChain('reading')
+        const list = await pending
+        if (!stop) setChain(Array.isArray(list) ? 'ok' : 'failed')
+        return
+      }
+      /* Read a moment ago, or followed since: the store listens whichever
+         screen is up, so Play appearing a minute later is no reason to dump
+         the preset. See deviceState.chainFollowed. */
+      if (chainIsCurrent() || chainFollowed()) {
+        setChain('ok')
+        return
+      }
       await refreshScene()
+      const list = stop ? null : await refreshBlocks()
       // Names aren't in the scene query on either device family — they live in
       // the preset body. On stage the name is the whole point of the button:
       // "Lead" is findable at a glance, "3" means remembering what 3 was.
-      await refreshSceneNames(preset?.number)
-      if (!stop) await refreshBlocks()
+      // Asked after the chain, whose read already carries them — and not after
+      // one that failed, when asking is one more dump at a unit still loading.
+      if (!stop && Array.isArray(list)) await refreshLoadedSceneNames(preset?.number)
     })()
     return () => {
       stop = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preset])
+  }, [preset?.number])
 
   /*
    * The signal bar, at a cadence the connection can afford — and asking for
@@ -351,10 +385,10 @@ export default function Gig({
     haptic()
     try {
       // Optimistic inside the store: the footswitch feel matters more than the
-      // round trip, and a refusal puts the old scene back.
+      // round trip, and a refusal puts the old scene back. The new scene's
+      // on/off states come with it, from the small status read the store
+      // makes — not the chain, which is the whole preset dumped mid-switch.
       await writeScene(index)
-      // The new scene brings its own on/off states with it.
-      await refreshBlocks()
     } catch (err) {
       onError(err)
     }
@@ -363,9 +397,10 @@ export default function Gig({
   /**
    * Turn one block on or off.
    *
-   * Optimistic, then confirmed. On a stage the tap has to look like it worked
-   * immediately; the read that follows is what makes sure it actually did, and
-   * puts the button back if it didn't.
+   * Optimistic, and read back only when it fails. On a stage the tap has to
+   * look like it worked immediately. It used to read the whole chain after
+   * every tap to confirm it, which is a preset dump on a unit that is
+   * switching an effect — the drop "the sound should never cut out" is about.
    */
   const toggle = async (block) => {
     haptic()
@@ -374,13 +409,13 @@ export default function Gig({
     setToggling(eid)
     try {
       await writeBypass(eid, wanted)
-      await refreshBlocks()
     } catch (err) {
       // The error itself: the app reads `unitGone` off it to tell a refused
       // write from a Mac that has lost the unit altogether, and a flattened
       // message cannot carry that.
       onError(err)
-      await refreshBlocks()
+      // What the unit actually has on: the status read, not the chain.
+      if (!err?.unitGone) await refreshSceneState()
     } finally {
       setToggling(null)
     }
@@ -558,13 +593,12 @@ export default function Gig({
     if (next === null) return
     setWorking(true)
     try {
-      await selectPreset(next)
-      /* The computer holds its copy of "what preset is loaded" for fifteen
-         seconds, so a read straight after this one describes the preset just
-         left. See the note in mobile/src/lib/rig.js — the phone showed the old
-         preset's name, scenes and chain for the length of that window. */
-      await clearDeviceCache().catch(() => {})
-      onChanged()
+      /* The select, which preset, which scene, and one chain read once the
+         unit has settled — the store's, shared with the preset list. A whole
+         re-read here was the chain and a dump of the slot while the unit was
+         still loading it. */
+      await loadPreset(next)
+      onPresetLoaded?.()
     } catch (err) {
       onError(err.message)
     } finally {
@@ -960,7 +994,9 @@ export default function Gig({
         channels={channels}
         onClose={() => setChanEid(null)}
         onError={onError}
-        onChanged={onChanged}
+        /* A channel is a switch like a scene: the status read says what it
+           changed, where a whole re-read would dump the preset. */
+        onChanged={() => refreshSceneState()}
       />
 
       <Setlists

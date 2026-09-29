@@ -83,6 +83,169 @@ function* walk(dir) {
   }
 }
 
+/**
+ * THE PHONE'S RIG STORE, RUN RATHER THAN READ.
+ *
+ * rig.js and device.js are copied, as they are, into a folder beside stand-ins
+ * for what drags React Native in: the relay (which here is a pretend computer
+ * that writes down every request), the phone's disk, the demo switch. Their
+ * clock is swapped for one the test turns by hand, so "a second and a half
+ * later" costs nothing to run.
+ *
+ * What is under test is what the unit is asked, and when — the requests are
+ * the real ones device.js builds, so a count of GET /preset/blocks here is a
+ * count of preset dumps on a rig.
+ */
+async function rigOnTheBench(over = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'rig-'))
+  const lib = (f) => read(`mobile/src/lib/${f}`)
+  /* Node wants the extension that Metro does without. */
+  const esm = (src) =>
+    src
+      .replace(/from 'react'/g, "from './react.js'")
+      .replace(/from '\.\/([\w.-]+)'/g, (whole, name) => (/\.m?js$/.test(name) ? whole : `from './${name}.js'`))
+  const clocked = (src) =>
+    "import * as __clock from './clock.js'\n" +
+    src
+      .replace(/\bDate\.now\(\)/g, '__clock.now()')
+      .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
+      .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
+  const files = {
+    'package.json': '{ "type": "module" }',
+    'clock.js': `
+      let t = 1000000
+      let seq = 0
+      const timers = new Map()
+      export const now = () => t
+      export function setTimeout(fn, ms = 0, ...args) {
+        const id = ++seq
+        timers.set(id, { id, at: t + Math.max(0, Number(ms) || 0), fn, args })
+        return id
+      }
+      export function clearTimeout(id) { timers.delete(id) }
+      const flush = async () => { for (let i = 0; i < 12; i++) await new Promise((r) => globalThis.setImmediate(r)) }
+      export async function advance(ms) {
+        const end = t + ms
+        await flush()
+        for (;;) {
+          let next = null
+          for (const x of timers.values()) if (x.at <= end && (!next || x.at < next.at || (x.at === next.at && x.id < next.id))) next = x
+          if (!next) break
+          timers.delete(next.id)
+          t = next.at
+          next.fn(...next.args)
+          await flush()
+        }
+        t = end
+        await flush()
+      }
+    `,
+    'react.js': 'export const useSyncExternalStore = () => null\n',
+    'relay.js': `
+      export const wire = []
+      let serve = null
+      export const __serve = (fn) => { serve = fn }
+      export async function remoteRequest(path, options = {}) {
+        const method = String(options.method || 'GET').toUpperCase()
+        wire.push(method + ' ' + path)
+        await null
+        return serve(method, path, options.body ? JSON.parse(options.body) : null)
+      }
+      export const subscribeRemoteEvents = () => () => {}
+      /* The relay's link, which the store listens to for gaps in what it heard. */
+      const watchers = new Set()
+      export const subscribeRemoteState = (fn) => (watchers.add(fn), () => watchers.delete(fn))
+      export const subscribeHostSeen = () => () => {}
+      export const __drop = () => watchers.forEach((fn) => fn(false))
+    `,
+    'demo.js': "export const isDemo = () => false\nexport const demoDevice = () => null\nexport const demoUnit = () => 'fm3'\n",
+    'demoWire.js': "export const demoRequest = () => { throw new Error('no demo on the bench') }\n",
+    'debugLog.js': 'export const logDebug = () => {}\n',
+    'lineage.js': 'export const withLineage = (x) => x\n',
+    'presetNames.js': 'export const adopt = async () => 0\nexport const forget = () => {}\nexport const learn = () => {}\nexport const nameOf = () => undefined\n',
+    'paramIndex.js': 'export const forget = () => {}\n',
+    'sceneNameCache.js': 'export const forgetSceneNames = () => true\nexport const recallSceneNames = async () => []\nexport const rememberSceneNames = () => true\n'
+  }
+  for (const f of ['own-echo.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs']) {
+    files[f] = esm(lib(f))
+  }
+  files['device.js'] = clocked(esm(lib('device.js')))
+  files['rig.js'] = clocked(esm(lib('rig.js')))
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+
+  /* An FM3 on slot 12, scene 1, with a drive and an amp. Scene names are in
+     its edit buffer, which is what GET /preset/grid answers out of.
+     `status`, `copy` and `hold` stand in for a status read, the computer's
+     copy of the preset and a write that has not been answered yet. */
+  const unit = {
+    number: 12,
+    scene: 0,
+    scenes: ['VERSE', 'CHORUS', '', '', '', '', '', ''],
+    /* An AM4-shaped answer: the chain read carries no names. */
+    namesInChain: true,
+    blocks: [
+      { slug: 'drive', name: 'Drive 1', effectId: 133, bypassed: true, channel: 'A' },
+      { slug: 'amp', name: 'Amp 1', effectId: 58, bypassed: false, channel: 'A' }
+    ],
+    ...over
+  }
+  const nameOf = (n) => `SONG ${n}`
+  const at = (f) => pathToFileURL(join(dir, f)).href
+  try {
+    const relay = await import(at('relay.js'))
+    const clock = await import(at('clock.js'))
+    const rig = await import(at('rig.js'))
+    relay.__serve((method, path, body) => {
+      if (method === 'GET') {
+        if (path === '/device/detect')
+          return { connected: true, name: 'FM3', short: 'FM3', capabilities: unit.capabilities ?? { scenes: 8, meters: { outputLevels: true } } }
+        if (path === '/device') return {}
+        if (path === '/preset') {
+          if (unit.which) return unit.which()
+          return { number: unit.number, name: unit.presetName ?? nameOf(unit.number) }
+        }
+        if (path === '/scene') return { index: unit.scene }
+        if (path === '/tempo') return { bpm: unit.bpm ?? 120 }
+        if (path === '/preset/blocks') {
+          if (unit.chainFails) throw Object.assign(new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78'), { status: 503 })
+          return unit.blocks.map((b) => ({ ...b }))
+        }
+        if (path === '/preset/scene-state')
+          return unit.status ? unit.status() : unit.blocks.map((b) => ({ effectId: b.effectId, bypassed: b.bypassed, channel: b.channel }))
+        if (path === '/preset/grid')
+          return unit.copy
+            ? unit.copy()
+            : { name: unit.presetName ?? nameOf(unit.number), scenes: unit.namesInChain ? unit.scenes : [], cells: [] }
+        const summary = path.match(/^\/presets\/(-?\d+)\/summary$/)
+        if (summary) return { number: Number(summary[1]), scenes: unit.scenes }
+        const slot = path.match(/^\/presets\/(-?\d+)\/scenes$/)
+        if (slot) return { number: Number(slot[1]), names: unit.scenes }
+        if (path.startsWith('/store/config/')) return null
+      }
+      if (method === 'PUT' && path.startsWith('/store/config/')) return { ok: true }
+      if (method === 'POST' && path === '/preset/select') {
+        if (unit.refuseSelect) throw Object.assign(new Error('The unit refused that preset.'), { status: 409 })
+        unit.number = body.number
+        return { ok: true }
+      }
+      if (method === 'POST' && path === '/scene') {
+        unit.scene = body.index
+        return unit.hold ? unit.hold() : { ok: true }
+      }
+      if (method === 'POST' && /^\/preset\/blocks\/\d+\/bypass$/.test(path)) return unit.hold ? unit.hold() : { ok: true }
+      if (method === 'DELETE' && path === '/device/cache') return { ok: true, deleted: true }
+      throw new Error(`the bench unit has no ${method} ${path}`)
+    })
+    /* Connected, read once, and the log cleared: what follows is what a tap costs. */
+    await rig.refreshAll()
+    relay.wire.length = 0
+    const asked = (line) => relay.wire.filter((l) => (line instanceof RegExp ? line.test(l) : l === line)).length
+    return { rig, clock, unit, wire: relay.wire, asked, nameOf, relay }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 export function run(test) {
   /**
    * A unit that answers like an FM3 and never touches a port.
@@ -917,7 +1080,11 @@ export function run(test) {
     assert.ok(!/const nudge = async/.test(vol), 'a press waits on its own read-back')
 
     const rig = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
-    assert.match(rig, /if \(event\.type === 'scene' \|\| event\.type === 'changed'\) \{ if \(chainWrites\) chainAsked = true else refreshBlocks\(\{ quiet: true \}\) \}/, 'the chain is re-read on every announcement during a chain write')
+    /* Every announcement that is not this phone's own echo is held while the
+       chain is being written, whatever it would otherwise have read. */
+    assert.match(rig, /if \(ownEcho\(kind, kind === 'scene' \? event\.index : undefined\)\) return if \(chainWrites\) \{ chainAsked = true return \} if \(kind === 'scene'\) followScene\(\) else if \(kind === 'preset'\) followPresetNews\(\) else followGridNews\(\)/, 'the chain is re-read on every announcement during a chain write')
+    /* And the chain read another client's change waits for is held the same way. */
+    assert.match(rig, /gridTimer = null if \(presetBusy\(\)\) return if \(chainWrites\) \{ chainAsked = true return \} read\(\)/, 'a chain read owed to another client lands in the middle of a chain write')
     assert.match(rig, /export function endChainWrite\(\{ refresh = true \} = \{\}\) \{ if \(!chainWrites\) return chainWrites -= 1 if \(chainWrites\) return const asked = chainAsked chainAsked = false if \(asked && refresh\) refreshBlocks\(\{ quiet: true \}\) \}/, 'announcements held during a write are lost, or read twice')
 
     const edit = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
@@ -1116,43 +1283,31 @@ export function run(test) {
     assert.match(edit, /onPress=\{\(\) => setOpenEid\(open \? null : idOf\(b\)\)\}/, 'a tap on the bench no longer opens the block')
   })
 
-  test('changing preset drops the computer’s copy before reading the new one back', () => {
+  test('changing preset does not take the old preset back from an early answer, and deletes nothing', () => {
     /*
      * "I clicked a preset name, in this case it was Drop D Chug, then it went
      * to the preset screen, shows Drop D Chug for a split second, and then goes
      * to Metallica." On an iPhone and an Android, and Refresh put it right on
      * each of them separately.
      *
-     * Both halves are the same thing. The split second is the name this app
-     * already knew, shown at once so the screen is not blank. What replaced it
-     * was the answer to "what preset is loaded" — and the computer holds that
-     * answer for fifteen seconds, so a read inside the window describes the
-     * preset just LEFT. The stage settled on the old name, the old scene names
-     * and the old chain, all agreeing with each other and with nothing on the
-     * unit. Two phones asking one computer got one stale answer, which is why
-     * refreshing on one did nothing for the other.
-     *
-     * The preset list stayed right the whole time, because it is drawn from
-     * names read off the unit rather than from that copy.
+     * The split second is the name this app already knew, shown at once. What
+     * replaced it was an answer to "which preset is loaded" describing the one
+     * just LEFT. This used to be put down to a fifteen-second copy on the
+     * computer, and "fixed" by sending DELETE /device/cache first — but the
+     * device server keeps no such copy (its preset read goes to the unit every
+     * time), and that DELETE deletes the saved profile of the unit. What can
+     * answer with the old preset is the unit itself, asked while it is still
+     * loading. So an answer that disagrees with the slot just chosen is not
+     * put on screen; it is asked again with the chain, once the unit has
+     * settled. Run on the bench: see "a unit that answers early".
      */
     const rig = read('mobile/src/lib/rig.js')
-    /* Where each happens, rather than one regex spanning all three: a comment
-       between them should not be able to break this, and the only thing it is
-       really saying is the ORDER. */
-    const chose = rig.indexOf('await device.selectPreset(number)')
-    const dropped = rig.indexOf('await device.dropReadCache()', chose)
-    const readBack = rig.indexOf('await refreshPreset()', chose)
-    assert.ok(chose > 0, 'nothing selects a preset any more')
-    assert.ok(readBack > chose, 'nothing reads the preset back after choosing one')
-    assert.ok(dropped > chose && dropped < readBack, 'the preset is read back through a copy taken before it was loaded')
-
-    /*
-     * The chain editor has dropped this copy after a write since the day it
-     * was written. Changing which preset is loaded is the larger change of the
-     * two, and was the one not doing it — so both are held here, together,
-     * rather than one of them quietly losing it again.
-     */
-    assert.match(read('mobile/src/screens/Edit.js').replace(/\s+/g, ' '), /await dropReadCache\(\)/, 'a chain write no longer drops the computer’s copy')
+    const load = rig.slice(rig.indexOf('export async function loadPreset'))
+    const code = withoutComments(load)
+    assert.ok(load.indexOf('await device.selectPreset(number)') > 0, 'nothing selects a preset any more')
+    assert.ok(!/dropReadCache/.test(code), 'a preset change deletes the computer’s profile of the unit again')
+    assert.match(code.replace(/\s+/g, ' '), /if \(!\(Number\.isInteger\(fresh\?\.number\) && fresh\.number === number\)\) again = true else if \(run === presetRun\) takePreset\(fresh\) \} catch \{ again = true \}/, 'an early answer for the preset being left is put on screen')
+    assert.match(code.replace(/\s+/g, ' '), /if \(also\.preset\) await settledPreset\(\)/, 'the preset is not asked again once the unit has settled')
   })
 
   test('the speaker and the slider ask the same question about the Output block', () => {
@@ -1203,7 +1358,8 @@ export function run(test) {
     const rig = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
     assert.match(rig, /await device\.setScene\(index\) .*? await refreshSceneState\(\) \}\)/, 'a scene change still dumps the whole preset')
     assert.match(rig, /export async function refreshSceneState\(\)/)
-    assert.match(rig, /if \(!states\.length\) return refreshBlocks\(\{ quiet: true \}\)/, 'an older Mac that cannot answer gets no chain at all')
+    assert.match(rig, /if \(states === null\) return refreshBlocks\(\{ quiet: true \}\)/, 'an older Mac that cannot answer gets no chain at all')
+    assert.match(rig, /if \(!states\.length\) \{ sceneStateSoon\(\) return false \}/, 'a status read the unit was too busy to answer turns into a dump of the whole preset, or is never asked again')
     assert.match(read('mobile/src/lib/device.js'), /remoteRequest\('\/preset\/scene-state'\)/)
     assert.match(read('mobile/src/lib/demoWire.js'), /path === '\/preset\/scene-state'/, 'the demo cannot change scene')
   })
@@ -1800,12 +1956,17 @@ export function run(test) {
     const rules = await import('../shared/relay-rules.mjs')
     assert.equal(rules.forbiddenRemotely('GET', '/presets/99/summary'), null)
 
-    /* Asked for when a preset arrives, both ways in. */
-    assert.equal(
-      (rig.match(/await refreshSceneNames\(\)/g) || []).length,
-      2,
-      'scene names are read on one path in and not the other'
-    )
+    /*
+     * Asked for when a preset arrives, both ways in — through the one read of
+     * a preset, which the first read of the unit and every preset change share.
+     * And for the loaded slot out of the chain's own read first; the summary
+     * dumps the slot again, and only goes when that had nothing.
+     */
+    assert.equal((rig.match(/await refreshSceneNames\(/g) || []).length, 1, 'scene names are read somewhere other than the one read of a preset')
+    /* The first read, a preset change, and the one read again after the computer answered with another preset's copy. */
+    assert.equal((rig.match(/await readChainAndNames\(/g) || []).length, 3, 'scene names are read on one path in and not the other')
+    assert.match(rig, /const here = copy === undefined \? await loadedCopy\(\) : copy[\s\S]*?if \(here === 'stale'\)[\s\S]*?if \(here\?\.length\) return here[\s\S]*?await device\.sceneNames\(number\)/, 'the loaded slot is dumped again for names its chain read carried')
+    assert.match(device, /remoteRequest\('\/preset\/grid'\)/, 'the phone does not ask for the loaded preset’s names out of the chain read')
 
     /*
      * And thrown away when the preset changes. Carrying them across would put
@@ -2438,8 +2599,10 @@ export function run(test) {
      * names first left the tiles saying "reading" for a slow read nobody was
      * waiting on.
      */
+    const once = rig.slice(rig.indexOf('async function readChainAndNames'))
+    assert.match(load, /await readPresetSoon\(OWN_SETTLE_MS\)/, 'a preset load no longer reads its chain through the one shared read')
     assert.ok(
-      load.indexOf('await refreshBlocks()') < load.indexOf('await refreshSceneNames()'),
+      once.indexOf('await refreshBlocks()') > 0 && once.indexOf('await refreshBlocks()') < once.indexOf('await refreshSceneNames(copy)'),
       'the chain waits behind a slow read of the scene names'
     )
 
@@ -2625,7 +2788,9 @@ export function run(test) {
      * the phone looked once, straight away, and never again.
      */
     const rigSrc = read('mobile/src/lib/rig.js')
-    assert.equal((rigSrc.match(/followComputerNames\(\)\n/g) || []).length, 2, 'a preset load does not go back for the names the computer is still reading')
+    /* Once, in the one read of a preset that the first read and every preset change share. */
+    assert.equal((rigSrc.match(/followComputerNames\(\)\n/g) || []).length, 1, 'a preset load does not go back for the names the computer is still reading')
+    assert.match(rigSrc, /async function readChainAndNames\(\{ names = true \} = \{\}\) \{[\s\S]*?followComputerNames\(\)\n  await refreshTempo\(\)\n  return read\n\}/, 'the one read of a preset does not go back for the names the computer is still reading')
     assert.match(rigSrc, /export const COMPUTER_NAMES_AFTER_MS = \[4000, 9000, 18000\]/)
     assert.match(rigSrc, /if \(state\.preset\?\.number !== number \|\| named\(\)\) return/, 'a late answer lands on the wrong preset, or over names already there')
 
@@ -2638,12 +2803,12 @@ export function run(test) {
      */
     assert.match(device, /export async function unitSceneNames\(number\) \{[\s\S]*?remoteRequest\(`\/presets\/\$\{number\}\/scenes`\)/, 'the phone has no way to read an AM4\'s scene names itself')
     assert.match(device, /if \(Number\.isInteger\(res\?\.number\) && res\.number !== number\) return null/, 'an answer for another slot is believed')
-    assert.match(rigSrc, /if \(!names\.length && state\.preset\?\.number === number\) names = \(await device\.unitSceneNames\(number\)\) \|\| \[\]/, 'a preset with nothing kept does not ask the unit')
+    assert.match(rigSrc, /if \(summary\.length \|\| state\.preset\?\.number !== number\) return summary\n  return device\.unitSceneNames\(number\)/, 'a preset with nothing kept does not ask the unit')
     assert.match(rigSrc, /export async function rereadSceneNames\(\)/)
-    assert.match(rigSrc, /if \(fromUnit === null\) return 'failed'[\s\S]*?if \(!names\.length\) return 'none'/, 'Refresh names cannot tell unnamed scenes from a failed read')
+    assert.match(rigSrc, /if \(names === null \|\| state\.preset\?\.number !== number\) return 'failed'\n  if \(!names\.some\(\(n\) => n\)\) return 'none'/, 'Refresh names cannot tell unnamed scenes from a failed read')
     const stage = read('mobile/src/screens/Stage.js')
     assert.match(stage, /<Label>Scenes<\/Label>\s*<RefreshNames \/>/, 'Refresh names is not beside the Scenes heading')
-    assert.match(stage, /await refreshAll\(\)\s*\/\*[^*]*\*\/\s*await rereadSceneNames\(\)/, 'pulling down does not read the scene names fresh')
+    assert.match(stage, /await refreshAll\(\)\s*\/\*[^*]*\*\/\s*if \(!arriving\) await rereadSceneNames\(\)/, 'pulling down does not read the scene names fresh')
     assert.match(stage, /none: 'No names on the unit'/)
     assert.match(stage, /failed: "Couldn't read them"/)
     const web = read('src/lib/forgefx.js')
@@ -6066,14 +6231,19 @@ export function run(test) {
     const flat = rig.replace(/\s+/g, ' ')
     /* Quick names before the chain, the dump only when they were missing — on
        a preset load and on the first read of the unit alike. */
-    assert.equal((flat.match(/const quick = await quickSceneNames\(\) /g) || []).length, 2, 'the quick read is not taken on both a preset load and the first read')
-    assert.equal((flat.match(/await refreshBlocks\(\) if \(!quick\) await refreshSceneNames\(\)/g) || []).length, 2, 'the slow read still runs when the names were already there, or before the chain')
+    /* Both ways in share the one read of a preset, and a preset load takes
+       the quick names before it waits for the unit to settle. */
+    assert.equal((flat.match(/const quick = names \? await quickSceneNames\(\) : true /g) || []).length, 1, 'the quick read is not taken in the one read of a preset')
+    const once = withoutComments(rig.slice(rig.indexOf('async function readChainAndNames'), rig.indexOf('let staleTimer'))).replace(/\s+/g, ' ')
+    assert.match(once, /const read = await refreshBlocks\(\) if \(names && read && state\.preset\?\.number === number\) \{ .*?if \(!quick\) await refreshSceneNames\(copy\)/, 'the slow read still runs when the names were already there, or before the chain, or after a chain read that failed')
+    const loading = withoutComments(rig.slice(rig.indexOf('export async function loadPreset'))).replace(/\s+/g, ' ')
+    assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 \} await readPresetSoon\(OWN_SETTLE_MS\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
     assert.match(rig, /const kept = await recallSceneNames\(owner, number\)/, 'the disk is not read first')
     assert.match(rig, /held = await device\.storedSceneNames\(slug, number\)/, 'the computer’s copy is never asked for')
     /* Read the slow way, they are kept everywhere. */
     assert.match(flat, /set\(\{ sceneNames: names \}\) [^]*?rememberSceneNames\(device\.nameOwner\(slug\), number, names\) device\.keepSceneNames\(slug, number, names\)/, 'a slow read is not written to disk and given to the computer')
     /* And never for the wrong slot: a slow read landing after the next tap. */
-    assert.match(rig, /if \(!names\.length \|\| state\.preset\?\.number !== number\) return/, 'a slow read that lands after the next preset puts the last song’s names on this one')
+    assert.match(rig, /if \(!names\?\.some\(\(n\) => n\) \|\| state\.preset\?\.number !== number\) return/, 'a slow read that lands after the next preset puts the last song’s names on this one')
 
     const dev = read('mobile/src/lib/device.js')
     assert.match(dev, /encodeURIComponent\(`scene-names-\$\{slug\}:\$\{number\}`\)/, 'the phone asks for a document the browser does not write')
@@ -7197,7 +7367,7 @@ export function run(test) {
        plugged in is not a difference between them; it is one of them lying. */
     const rig = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
     assert.match(rig, /export function watchUnit\(\)/, 'the phone never asks')
-    assert.match(rig, /probeSays\(\{ preset: await device\.currentPreset\(\) \}\)/, 'the phone asks something a write could fake')
+    assert.match(rig, /heard = await device\.currentPreset\(\) said = probeSays\(\{ preset: heard \}\)/, 'the phone asks something a write could fake')
     assert.match(rig, /if \(unitGone\(quiet\)\) \{/, 'the phone believes one quiet answer')
     const link = read('mobile/src/lib/link.js').replace(/\s+/g, ' ')
     assert.match(link, /watchUnit\(\)/, 'nothing starts the phone asking')
@@ -7206,7 +7376,9 @@ export function run(test) {
 
     const app = read('src/App.jsx').replace(/\s+/g, ' ')
     assert.match(app, /if \(status !== 'live'\) return undefined/, 'the browser asks about a unit it never had')
-    assert.match(app, /said = probeSays\(\{ preset: await currentPreset\(\) \}\)/, 'the browser asks something a write could fake')
+    assert.match(app, /heard = await currentPreset\(\) said = probeSays\(\{ preset: heard \}\)/, 'the browser asks something a write could fake')
+    /* And uses the answer: a front-panel preset change on the same scene is announced by nothing else. */
+    assert.match(app, /if \(said === 'answering'\) presetHeard\(heard\)/, 'the browser throws away which preset the unit is on')
     assert.match(app, /if \(unitGone\(quiet\)\) \{/, 'the browser believes one quiet answer')
     assert.match(app, /document\.visibilityState === 'hidden'/, 'a tab nobody is looking at keeps asking')
     assert.match(app, /await read\(\)/, 'the browser never confirms what the check found')
@@ -7558,8 +7730,15 @@ export function run(test) {
     assert.match(stage, /const demoIs = useDemoUnit\(\)/, 'the stage screen does not watch which unit the demo is')
     assert.match(
       stage,
-      /useEffect\(\(\) => \{\s*reload\(\)\s*\}, \[reload, demoIs\]\)/,
+      /useEffect\(\(\) => \{\s*reload\(\{ arriving: true \}\)\s*\}, \[reload, demoIs\]\)/,
       'the stage screen reads once on mount again, so a new demo unit keeps the old one’s presets'
+    )
+    /* Arriving skips the read only when what is held is for this same unit:
+       a different demo unit is never "current". */
+    assert.match(
+      read('mobile/src/lib/rig.js'),
+      /const chainKey = \(\) => `\$\{isDemo\(\) \? `demo:\$\{demoUnit\(\)\}` : 'rig'\}:\$\{state\.deviceSlug\}:\$\{state\.preset\?\.number\}`/,
+      'a new demo unit is taken for the one whose chain was just read'
     )
 
     /* Three: the name in the corner goes to the units in the demo, and to the
@@ -9107,4 +9286,668 @@ export function run(test) {
     assert.match(block, /canPay = true/, 'the unknown case does not default to "can pay"')
   })
 
+
+  /*
+   * THE SOUND CUTTING OUT AFTER A SWITCH, and what a tap is allowed to cost.
+   *
+   * "The Fractals are set up to have gapless switching of scenes and effects
+   * ... the sound should never cut out." And a tester: "the preset changes
+   * almost immediately on the unit, but after that there is drop in sound,
+   * until the android app loads the new page."
+   *
+   * The switch commands were right all along. What followed them was not:
+   * the computer announces every write back, this phone's own included, and
+   * every announcement made the phone ask for the chain — a whole preset dump
+   * landing on a unit still in the middle of the switch. These run the real
+   * rig against a pretend computer and count what reaches it.
+   */
+  const CHAIN = 'GET /preset/blocks'
+  const SUMMARY = /^GET \/presets\/\d+\/summary$/
+  const STATE = 'GET /preset/scene-state'
+  const WHICH = 'GET /preset'
+
+  test('a scene tapped on the phone costs one small read and no preset dump', async () => {
+    const { rig, clock, asked } = await rigOnTheBench()
+    /* The computer's announcement lands before the tap's own answer, as it can. */
+    const tap = rig.writeScene(2)
+    rig.handleEvent({ type: 'scene', index: 2 })
+    assert.equal(await tap, true)
+    await clock.advance(rig.OWN_ECHO_MS - 100)
+    assert.equal(asked(CHAIN), 0, 'a scene tap still makes the unit dump the whole preset')
+    assert.equal(asked(SUMMARY), 0, 'a scene tap reads a stored slot')
+    assert.equal(asked(STATE), 1, 'a scene tap should cost exactly the one status read')
+    assert.equal(asked(WHICH), 0, 'the phone asked which preset is loaded after its own scene tap')
+    assert.equal(rig.getState().sceneIndex, 2)
+
+    /* A slow answer: the announcement arrives after it, and is still this tap. */
+    await rig.writeScene(3)
+    await clock.advance(1000)
+    rig.handleEvent({ type: 'scene', index: 3 })
+    await clock.advance(100)
+    assert.equal(asked(STATE), 2)
+    assert.equal(asked(WHICH), 0, 'an announcement arriving after a slow answer was taken for news')
+
+    /* The same scene said AGAIN is somebody else — a footswitch — and is followed. */
+    rig.handleEvent({ type: 'scene', index: 3 })
+    await clock.advance(100)
+    assert.equal(asked(STATE), 3, 'one announcement paid off two taps')
+    assert.equal(asked(CHAIN), 0)
+  })
+
+  test('an effect tapped on the phone makes no chain read at all', async () => {
+    const { rig, clock, asked } = await rigOnTheBench()
+    const drive = rig.getState().allBlocks.find((b) => b.slug === 'drive')
+    assert.equal(await rig.writeBypass(drive.effectId, false), true)
+    /* The computer calls a bypass a change to the chain. It is this tap. */
+    rig.handleEvent({ type: 'changed', scope: 'grid' })
+    await clock.advance(3000)
+    assert.equal(asked(CHAIN), 0, 'an effect tap makes the unit dump the whole preset')
+    assert.ok(asked(STATE) <= 1, `an effect tap cost ${asked(STATE)} status reads`)
+    assert.equal(rig.getState().blocks.find((b) => b.slug === 'drive').bypassed, false, 'the tile did not keep what was sent')
+
+    /* A tap the computer never announced does not swallow a real change for good. */
+    await rig.writeBypass(drive.effectId, true)
+    await clock.advance(rig.OWN_ECHO_MS + 100)
+    rig.handleEvent({ type: 'changed', scope: 'grid' })
+    await clock.advance(rig.PRESET_SETTLE_MS + 100)
+    assert.equal(asked(CHAIN), 1, 'a stale expectation hid a change made by somebody else')
+  })
+
+  test('a block moved by another client still reads the chain', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    unit.blocks = [...unit.blocks, { slug: 'delay', name: 'Delay 1', effectId: 70, bypassed: false, channel: 'A' }]
+    rig.handleEvent({ type: 'changed', scope: 'grid' })
+    await clock.advance(100)
+    assert.equal(asked(CHAIN), 0, 'the chain was read in the same moment the unit changed')
+    await clock.advance(rig.PRESET_SETTLE_MS)
+    assert.equal(asked(CHAIN), 1, 'a structural change from another client no longer reaches the phone')
+    assert.ok(rig.getState().blocks.some((b) => b.slug === 'delay'), 'the new block is not on screen')
+  })
+
+  test('a footswitch scene reads the scene state and which preset, never the chain', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    unit.scene = 3
+    unit.blocks = unit.blocks.map((b) => (b.slug === 'drive' ? { ...b, bypassed: false } : b))
+    rig.handleEvent({ type: 'scene', index: 3 })
+    await clock.advance(20000)
+    assert.equal(rig.getState().sceneIndex, 3)
+    assert.equal(asked(STATE), 1, 'the lit blocks were not re-read for the new scene')
+    assert.equal(asked(WHICH), 1, 'nothing checked whether the preset changed with the scene')
+    assert.equal(asked(CHAIN), 0, 'a footswitch scene makes the unit dump the whole preset')
+    assert.equal(rig.getState().blocks.find((b) => b.slug === 'drive').bypassed, false, 'the scene’s bypass states are not on screen')
+  })
+
+  test('a preset changed at the front panel is named at once and its chain read once, later', async () => {
+    const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
+    /* Well after the last read, so the computer's own copy has run out. */
+    await clock.advance(20000)
+    unit.number = 40
+    unit.scene = 1
+    unit.scenes = ['INTRO', 'SOLO', '', '', '', '', '', '']
+    rig.handleEvent({ type: 'scene', index: 1 })
+    await clock.advance(10)
+    assert.equal(rig.getState().preset.number, 40, 'the preset changed on the unit and the phone did not notice')
+    assert.equal(rig.getState().preset.name, nameOf(40), 'the old song’s name is still on screen')
+    assert.equal(asked(CHAIN), 0, 'the chain was read while the unit was still loading')
+    await clock.advance(rig.PRESET_SETTLE_MS - 200)
+    assert.equal(asked(CHAIN), 0, 'the chain read did not wait for the unit to settle')
+    await clock.advance(400)
+    assert.equal(asked(CHAIN), 1, 'the new preset’s chain was never read')
+    await clock.advance(30000)
+    assert.equal(asked(CHAIN), 1, `a front-panel preset change cost ${asked(CHAIN)} chain reads`)
+    assert.equal(asked(SUMMARY), 0, 'the loaded slot was dumped a second time for its scene names')
+    assert.deepEqual(rig.getState().sceneNames.slice(0, 2), ['INTRO', 'SOLO'], 'the new preset’s scene names are not on the tiles')
+
+    /*
+     * And inside the computer's own copy: a front-panel change reaches the
+     * computer by nobody, so its copy of the chain is the preset just left
+     * until it runs out. The one read waits for that rather than putting the
+     * last song's blocks under this song's name.
+     */
+    await rig.refreshBlocks()
+    const before = asked(CHAIN)
+    unit.number = 41
+    unit.scene = 2
+    rig.handleEvent({ type: 'scene', index: 2 })
+    await clock.advance(rig.CHAIN_FRESH_MS - 1000)
+    assert.equal(rig.getState().preset.number, 41)
+    assert.equal(asked(CHAIN), before, 'the chain was read out of the computer’s copy of the last preset')
+    await clock.advance(2000)
+    assert.equal(asked(CHAIN), before + 1)
+  })
+
+  test('a preset changed at the front panel with no scene change is caught by the timed check', async () => {
+    const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
+    rig.watchUnit()
+    try {
+      unit.number = 77
+      await clock.advance(30000 + 50)
+      assert.equal(rig.getState().preset.number, 77, 'the timed check threw away which preset the unit is on')
+      assert.equal(rig.getState().preset.name, nameOf(77))
+      await clock.advance(rig.PRESET_SETTLE_MS + 100)
+      assert.equal(asked(CHAIN), 1, 'the new preset’s chain was not read once')
+      await clock.advance(30000 + 50)
+      assert.equal(asked(CHAIN), 1, 'the timed check reads the chain when nothing changed')
+    } finally {
+      rig.stopWatching()
+    }
+  })
+
+  test('another client choosing a preset is followed with one chain read', async () => {
+    const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
+    unit.number = 60
+    rig.handleEvent({ type: 'changed', scope: 'preset' })
+    await clock.advance(10)
+    assert.equal(rig.getState().preset.name, nameOf(60))
+    assert.equal(asked(CHAIN), 0)
+    await clock.advance(rig.PRESET_SETTLE_MS + 100)
+    assert.equal(asked(CHAIN), 1)
+    /* The computer threw its copy away when it chose, so there is nothing to wait out. */
+    await clock.advance(30000)
+    assert.equal(asked(CHAIN), 1)
+  })
+
+  test('presses of Next in a row read the chain once, for where they landed', async () => {
+    const { rig, clock, asked, wire } = await rigOnTheBench()
+    const taps = [rig.loadPreset(13), rig.loadPreset(14), rig.loadPreset(15)]
+    for (let i = 0; i < 3; i++) rig.handleEvent({ type: 'changed', scope: 'preset' })
+    /* The unit opening the new preset on another scene, noticed by the computer. */
+    rig.handleEvent({ type: 'scene', index: 4 })
+    await clock.advance(3000)
+    await Promise.all(taps)
+    assert.equal(rig.getState().preset.number, 15)
+    assert.equal(asked(CHAIN), 1, `three quick presses cost ${asked(CHAIN)} chain reads`)
+    assert.equal(asked('POST /preset/select'), 3, 'a press was not sent')
+    assert.equal(asked(SUMMARY), 0)
+    assert.equal(asked('DELETE /device/cache'), 0, 'a preset change deletes the computer’s profile of the unit')
+    assert.equal(asked(STATE), 0, 'the scene the new preset opened on was read on its own, mid-load')
+
+    /* Spaced out, the way a thumb does it. */
+    wire.length = 0
+    rig.loadPreset(16)
+    await clock.advance(300)
+    rig.loadPreset(17)
+    await clock.advance(300)
+    rig.loadPreset(18)
+    await clock.advance(3000)
+    assert.equal(rig.getState().preset.number, 18)
+    assert.equal(asked(CHAIN), 1, `three presses 300ms apart cost ${asked(CHAIN)} chain reads`)
+  })
+
+  test('a preset chosen on the phone costs one chain read, and the stage screen coming back adds nothing', async () => {
+    const { rig, clock, asked, wire } = await rigOnTheBench()
+    /* What Stage does when it is shown again. See Stage.js reload. */
+    const arrive = async () => {
+      if (!rig.chainIsCurrent()) await rig.refreshAll()
+    }
+    const load = rig.loadPreset(20)
+    rig.handleEvent({ type: 'changed', scope: 'preset' })
+    await arrive()
+    await clock.advance(rig.OWN_SETTLE_MS - 100)
+    assert.equal(asked(CHAIN), 0, 'the chain was read before the unit had settled')
+    await arrive()
+    await clock.advance(3000)
+    await load
+    await arrive()
+    assert.equal(asked(CHAIN), 1, `a preset change cost ${asked(CHAIN)} chain reads`)
+    assert.ok(asked(SUMMARY) <= 1)
+    assert.equal(asked(SUMMARY), 0, 'the loaded slot was dumped again for names its chain read already carried')
+    assert.deepEqual(
+      wire.filter((l) => l.startsWith('GET /preset') || l.startsWith('POST') || l === 'GET /scene'),
+      ['POST /preset/select', WHICH, 'GET /scene', CHAIN, 'GET /preset/grid'],
+      'a preset change is not the select, which preset, which scene and one chain read'
+    )
+    /* Long after, coming back does read — the copy is not current any more. */
+    await clock.advance(rig.CHAIN_FRESH_MS + 1000)
+    assert.equal(rig.chainIsCurrent(), false)
+  })
+
+  test('when only the summary has the names, it is asked once and after the chain', async () => {
+    const { rig, clock, asked, wire } = await rigOnTheBench({ namesInChain: false })
+    rig.loadPreset(21)
+    rig.handleEvent({ type: 'changed', scope: 'preset' })
+    await clock.advance(3000)
+    assert.equal(asked(CHAIN), 1)
+    assert.equal(asked(SUMMARY), 1, `the summary was asked ${asked(SUMMARY)} times`)
+    assert.ok(wire.indexOf(CHAIN) < wire.findIndex((l) => SUMMARY.test(l)), 'the summary dump went out alongside the chain dump')
+    assert.equal(rig.getState().sceneNames[0], 'VERSE')
+  })
+
+  test('a unit that answers early with the preset it is leaving is asked again, not believed', async () => {
+    const { rig, clock, unit, nameOf } = await rigOnTheBench()
+    /* The first "which preset" after the select still says 12. */
+    let early = true
+    const was = unit.number
+    const select = rig.loadPreset(30)
+    Object.defineProperty(unit, 'number', {
+      configurable: true,
+      get: () => (early ? was : 30),
+      set: () => {}
+    })
+    await clock.advance(10)
+    assert.equal(rig.getState().preset.number, 30, 'the unit’s early answer put the old preset back on screen')
+    early = false
+    await clock.advance(3000)
+    await select
+    assert.equal(rig.getState().preset.number, 30)
+    assert.equal(rig.getState().preset.name, nameOf(30), 'the preset was not asked for again once the unit settled')
+  })
+
+  /* A write the computer has not answered yet, released by hand. */
+  const holding = (unit) => {
+    let release = null
+    unit.hold = () => new Promise((done) => (release = () => done({ ok: true })))
+    return () => {
+      unit.hold = null
+      release()
+    }
+  }
+
+  test('an effect switched on the Mac costs the phone the status read, not the chain', async () => {
+    /*
+     * The computer announces an effect switched anywhere as "the chain
+     * changed", and says nothing about who switched it. So the Mac's taps made
+     * the phone dump the whole preset, the way the phone's made the Mac do it.
+     */
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    unit.blocks = unit.blocks.map((b) => (b.slug === 'drive' ? { ...b, bypassed: false } : b))
+    rig.handleEvent({ type: 'changed', scope: 'grid' })
+    await clock.advance(rig.PRESET_SETTLE_MS + 500)
+    assert.equal(asked(CHAIN), 0, 'an effect switched on another client made the unit dump the whole preset')
+    assert.equal(asked(STATE), 1)
+    assert.equal(rig.getState().blocks.find((b) => b.slug === 'drive').bypassed, false, 'the switch made elsewhere is not on the tile')
+
+    /* Two in a moment, and each a switch: still no chain. */
+    unit.blocks = unit.blocks.map((b) => (b.slug === 'amp' ? { ...b, bypassed: true } : b))
+    rig.handleEvent({ type: 'changed', scope: 'grid' })
+    unit.blocks = unit.blocks.map((b) => (b.slug === 'drive' ? { ...b, bypassed: true } : b))
+    rig.handleEvent({ type: 'changed', scope: 'grid' })
+    await clock.advance(rig.PRESET_SETTLE_MS + 500)
+    assert.equal(asked(CHAIN), 0, `two switches made elsewhere cost ${asked(CHAIN)} chain reads`)
+
+    /* A block the status read lists and nobody has seen is a block added: one chain read, a moment later. */
+    unit.blocks = [...unit.blocks, { slug: 'delay', name: 'Delay 1', effectId: 70, bypassed: false, channel: 'A' }]
+    rig.handleEvent({ type: 'changed', scope: 'grid' })
+    rig.handleEvent({ type: 'changed', scope: 'grid' })
+    await clock.advance(rig.PRESET_SETTLE_MS + 500)
+    assert.equal(asked(CHAIN), 1, `a block added elsewhere cost ${asked(CHAIN)} chain reads`)
+    assert.ok(rig.getState().blocks.some((b) => b.slug === 'delay'))
+  })
+
+  test('a status read the unit was too busy to answer is not turned into a dump', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    /* The computer's own status read timed out: it answers an empty list. */
+    unit.status = () => []
+    const tap = rig.writeScene(2)
+    rig.handleEvent({ type: 'scene', index: 2 })
+    await tap
+    await clock.advance(rig.OWN_ECHO_MS + 100)
+    assert.equal(asked(CHAIN), 0, 'a scene tap whose status read timed out dumped the whole preset')
+    unit.scene = 4
+    rig.handleEvent({ type: 'scene', index: 4 })
+    await clock.advance(3000)
+    assert.equal(asked(CHAIN), 0, 'a footswitch scene whose status read timed out dumped the whole preset')
+
+    /* An older computer answers the route with its web page: that one still gets the chain. */
+    unit.status = () => '<!doctype html>'
+    await rig.writeScene(1)
+    await clock.advance(100)
+    assert.equal(asked(CHAIN), 1, 'an older computer that cannot answer the status read gets no chain at all')
+  })
+
+  test('a tap whose announcement comes before its slow answer is still this tap', async () => {
+    /*
+     * The computer announces a write before it answers it, and the write can
+     * wait seconds behind a dump in its queue or for the relay to rejoin. An
+     * expectation that ran out while the write was still in the air made the
+     * phone take its own tap for somebody else's, and read the chain over it.
+     */
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    let release = holding(unit)
+    const drive = rig.getState().allBlocks.find((b) => b.slug === 'drive')
+    const bypass = rig.writeBypass(drive.effectId, false)
+    await clock.advance(1900)
+    rig.handleEvent({ type: 'changed', scope: 'grid' })
+    await clock.advance(100)
+    release()
+    assert.equal(await bypass, true)
+    await clock.advance(3000)
+    assert.equal(asked(CHAIN), 0, 'a slow effect tap was read as a change from another client')
+    assert.equal(asked(STATE), 0)
+
+    release = holding(unit)
+    const scene = rig.writeScene(3)
+    await clock.advance(1900)
+    rig.handleEvent({ type: 'scene', index: 3 })
+    await clock.advance(100)
+    release()
+    await scene
+    await clock.advance(3000)
+    assert.equal(asked(WHICH), 0, 'a slow scene tap was followed as a scene from the front panel')
+    assert.equal(asked(STATE), 1)
+  })
+
+  test('a chain that could not be read after a preset change is not followed by more dumps', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    unit.chainFails = true
+    rig.loadPreset(21)
+    rig.handleEvent({ type: 'changed', scope: 'preset' })
+    await clock.advance(rig.OWN_SETTLE_MS + 100)
+    assert.equal(asked(CHAIN), 1)
+    /* One more a moment later, and that is all: nothing else would ever read it. */
+    await clock.advance(30000)
+    assert.equal(asked(CHAIN), 2, `a chain that failed after a preset change was asked ${asked(CHAIN)} times`)
+    assert.equal(asked('GET /preset/grid'), 0, 'the names were asked out of a copy the failed read never left')
+    assert.equal(asked(SUMMARY), 0, 'the slot was dumped for its names after the chain read failed')
+  })
+
+  test('scene names out of the computer’s copy of another preset are neither shown nor kept', async () => {
+    /*
+     * The computer's copy of the preset carries no number. A dump of the
+     * preset just left can land in it after the next was chosen, and names
+     * kept once are what every later load puts on the tiles.
+     */
+    const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
+    unit.copy = () => ({ name: nameOf(12), scenes: ['VERSE', 'CHORUS', '', '', '', '', '', ''], cells: [] })
+    rig.loadPreset(40)
+    rig.handleEvent({ type: 'changed', scope: 'preset' })
+    await clock.advance(3000)
+    assert.equal(asked(CHAIN), 1)
+    assert.equal(asked(/^PUT \/store\/config\/scene-names/), 0, 'the last song’s scene names were kept under this one')
+    assert.ok(!rig.getState().sceneNames.some((n) => n), 'the last song’s scene names are on this song’s tiles')
+    assert.equal(rig.chainIsCurrent(), false, 'a chain out of another preset’s copy counts as current')
+    assert.equal(asked(SUMMARY), 0)
+
+    /* Once that copy has certainly run out, read once more; the unit is on 40 by then. */
+    unit.copy = null
+    unit.scenes = ['INTRO', 'SOLO', '', '', '', '', '', '']
+    await clock.advance(rig.CHAIN_FRESH_MS + 300)
+    assert.equal(asked(CHAIN), 2, `the chain was re-read ${asked(CHAIN) - 1} times after a stale copy`)
+    assert.deepEqual(rig.getState().sceneNames.slice(0, 2), ['INTRO', 'SOLO'])
+    await clock.advance(30000)
+    assert.equal(asked(CHAIN), 2)
+  })
+
+  test('a preset settled on elsewhere drops the names on screen, and its tempo is read', async () => {
+    const { rig, clock, unit, nameOf } = await rigOnTheBench()
+    /* Another client moves to 60; the first "which preset" still says 12. */
+    let asks = 0
+    Object.defineProperty(unit, 'number', { configurable: true, get: () => (asks++ ? 60 : 12), set: () => {} })
+    unit.scenes = ['INTRO', 'SOLO', '', '', '', '', '', '']
+    unit.bpm = 96
+    rig.handleEvent({ type: 'changed', scope: 'preset' })
+    await clock.advance(rig.PRESET_SETTLE_MS + 500)
+    assert.equal(rig.getState().preset.number, 60)
+    assert.equal(rig.getState().preset.name, nameOf(60))
+    assert.equal(rig.getState().sceneNames[0], 'INTRO', 'the last preset’s scene names stayed on this one’s tiles')
+    assert.equal(rig.getState().bpm, 96, 'the tempo on screen is the last preset’s')
+  })
+
+  test('a scene heard while a preset’s read is finishing still gets its status read', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    /* The names are the last thing the read waits for. */
+    let release = null
+    unit.copy = () => new Promise((done) => (release = () => done({ name: `SONG 22`, scenes: unit.scenes, cells: [] })))
+    rig.loadPreset(22)
+    rig.handleEvent({ type: 'changed', scope: 'preset' })
+    await clock.advance(rig.OWN_SETTLE_MS + 100)
+    assert.equal(asked(CHAIN), 1)
+    unit.scene = 5
+    rig.handleEvent({ type: 'scene', index: 5 })
+    await clock.advance(100)
+    assert.equal(asked(STATE), 0, 'the scene was read in the middle of the preset’s read')
+    unit.copy = null
+    release()
+    await clock.advance(1000)
+    assert.equal(asked(STATE), 1, 'a footswitch scene during the end of a preset read was dropped')
+    assert.equal(asked(CHAIN), 1)
+    assert.equal(asked(SUMMARY), 0)
+  })
+
+  test('a reset leaves no preset read waiting to land on the next rig', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    await clock.advance(20000)
+    unit.number = 40
+    rig.handleEvent({ type: 'scene', index: 1 })
+    await clock.advance(10)
+    rig.reset()
+    assert.equal(rig.chainIsCurrent(), false, 'a store that has read nothing says its chain is current')
+    await clock.advance(30000)
+    assert.equal(asked(CHAIN), 0, 'a read queued before the reset went out after it')
+  })
+
+  test('the stage screen reads on arrival only when nothing current is held, and pull-down always', () => {
+    const stage = read('mobile/src/screens/Stage.js').replace(/\s+/g, ' ')
+    assert.match(stage, /const reload = useCallback\(async \(\{ arriving = false \} = \{\}\) => \{ if \(arriving && \(await arrivedCurrent\(\)\)\) return/, 'the stage screen reads the whole rig every time it is shown')
+    assert.match(stage, /if \(!arriving\) await rereadSceneNames\(\)/, 'coming back to the stage screen dumps the slot for its scene names')
+    assert.match(stage, /useEffect\(\(\) => \{ reload\(\{ arriving: true \}\) \}, \[reload, demoIs\]\)/)
+    assert.match(stage, /onRefresh=\{\(\) => reload\(\)\}/, 'pulling down no longer reads everything')
+  })
+
+  test('the volume reads the Output block when its sheet opens, not when the screen is drawn', () => {
+    /*
+     * Reading a block's knobs tells the computer somebody is editing it, and
+     * it then re-reads that block every two seconds while the app is open —
+     * at a unit making sound, for a sheet opened twice a night.
+     */
+    const vol = read('mobile/src/components/Volume.js').replace(/\s+/g, ' ')
+    assert.match(vol, /if \(!open \|\| !Number\.isInteger\(eid\)\) return undefined/, 'the Output block is read with the sheet closed')
+    assert.match(vol, /\}, \[open, eid, onError\]\)/, 'opening the sheet does not read the level the unit has now')
+    assert.match(vol, /<Note>Reading the level…<\/Note>/, 'the sheet says the unit has no level while it is still being read')
+    /* Every open: a press worked out from last time's level, or an answer landing after one, puts the wrong level on the unit. */
+    assert.match(vol, /\{Number\.isInteger\(eid\) && reading \? \(/, 'the controls work on a re-open before the level has been read')
+    assert.match(vol, /if \(!settle\.current\.timer && !settle\.current\.landing\) setValue\(found \? found\.value : null\)/, 'a level read before a press lands over it')
+  })
+
+  test('the phone never turns the computer’s meters or telemetry on or off', () => {
+    /*
+     * Both are one setting on the computer for everybody, and the last client
+     * to set it wins. The Mac window's Play screen draws meters; a phone
+     * switching them off would take them away from it.
+     */
+    for (const file of walk(new URL('../mobile/src/', import.meta.url))) {
+      const code = withoutComments(readFileSync(file, 'utf8'))
+      if (file.endsWith('/relay-rules.js')) continue
+      assert.ok(!/\/telemetry\/(meters|config)/.test(code), `${file.split('/mobile/')[1]} sends a telemetry setting`)
+    }
+  })
+
+  /* What the unit is holding for each block, as its status read answers it. */
+  const statusOf = (unit) => unit.blocks.map((b) => ({ effectId: b.effectId, bypassed: b.bypassed, channel: b.channel }))
+  const timedOut = () => Object.assign(new Error('The unit did not answer in time.'), { status: 503 })
+
+  test('a status read the unit missed after a scene is asked once more, and the tiles follow the scene', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    rig.listen()
+    await rig.refreshBlocks()
+    const chains = asked(CHAIN)
+    /* The new scene has the drive on; the first status read misses its window. */
+    unit.blocks = unit.blocks.map((b) => (b.slug === 'drive' ? { ...b, bypassed: false } : b))
+    let asks = 0
+    unit.status = () => (asks++ ? statusOf(unit) : [])
+    const tap = rig.writeScene(2)
+    rig.handleEvent({ type: 'scene', index: 2 })
+    await tap
+    await clock.advance(rig.SCENE_RETRY_MS + 100)
+    assert.equal(asked(STATE), 2, 'a status read that missed was never asked again')
+    assert.equal(rig.getState().blocks.find((b) => b.slug === 'drive').bypassed, false, 'the tiles kept the last scene’s on and off')
+    assert.equal(asked(CHAIN), chains, 'a missed status read turned into a dump of the whole preset')
+
+    /* A footswitch whose status read timed out, the same. */
+    asks = 0
+    unit.status = () => {
+      if (!asks++) throw timedOut()
+      return statusOf(unit)
+    }
+    unit.blocks = unit.blocks.map((b) => (b.slug === 'amp' ? { ...b, bypassed: true } : b))
+    unit.scene = 4
+    rig.handleEvent({ type: 'scene', index: 4 })
+    await clock.advance(rig.SCENE_RETRY_MS + 100)
+    assert.equal(rig.getState().blocks.find((b) => b.slug === 'amp').bypassed, true, 'a footswitch whose status read timed out left the last scene on the tiles')
+    assert.equal(asked(CHAIN), chains)
+
+    /* Missed twice: nothing more now, but the chain no longer counts as followed. */
+    assert.equal(rig.chainFollowed(), true)
+    unit.status = () => []
+    rig.handleEvent({ type: 'scene', index: 5 })
+    await clock.advance(rig.SCENE_RETRY_MS + 100)
+    await clock.advance(5000)
+    assert.equal(asked(CHAIN), chains, 'a status read that missed twice dumped the preset')
+    assert.equal(rig.chainFollowed(), false, 'tiles the status read never confirmed count as followed')
+    rig.stopListening()
+  })
+
+  test('a chain that failed after a preset change is read once more, and a footswitch never lays its states over the last song', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    unit.chainFails = true
+    rig.loadPreset(21)
+    await clock.advance(rig.OWN_SETTLE_MS + 100)
+    assert.equal(asked(CHAIN), 1)
+    assert.equal(rig.getState().chain, 'failed')
+    await clock.advance(rig.PRESET_SETTLE_MS + 100)
+    assert.equal(asked(CHAIN), 2, 'a chain that could not be read after a preset change was never asked for again')
+
+    /* Still the last song's tiles. The new song has a delay where the drive was. */
+    unit.chainFails = false
+    unit.blocks = [{ slug: 'delay', name: 'Delay 1', effectId: 70, bypassed: false, channel: 'B' }, unit.blocks[1]]
+    unit.scene = 3
+    rig.handleEvent({ type: 'scene', index: 3 })
+    await clock.advance(100)
+    assert.equal(asked(STATE), 0, 'the new preset’s states were laid over the last song’s tiles')
+    await clock.advance(rig.PRESET_SETTLE_MS + 100)
+    assert.equal(asked(CHAIN), 3, 'the tiles stayed on the last song after a footswitch')
+    assert.ok(rig.getState().blocks.some((b) => b.slug === 'delay'))
+    assert.equal(rig.getState().chain, 'ok')
+
+    /* This song's tiles now: a footswitch is the status read again. */
+    rig.handleEvent({ type: 'scene', index: 4 })
+    await clock.advance(rig.PRESET_SETTLE_MS + 100)
+    assert.equal(asked(STATE), 1)
+    assert.equal(asked(CHAIN), 3, 'a footswitch reads the chain although it is this preset’s')
+  })
+
+  test('a preset tap the unit refuses does not call off the read a stale copy was owed', async () => {
+    const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
+    /* Another client moves to 60, and the computer's copy is still 12's. */
+    unit.copy = () => ({ name: nameOf(12), scenes: ['VERSE', 'CHORUS', '', '', '', '', '', ''], cells: [] })
+    unit.number = 60
+    rig.handleEvent({ type: 'changed', scope: 'preset' })
+    await clock.advance(rig.PRESET_SETTLE_MS + 500)
+    assert.equal(asked(CHAIN), 1)
+    assert.equal(rig.getState().chain, 'reading')
+    unit.refuseSelect = true
+    assert.equal(await rig.loadPreset(61), false)
+    assert.equal(rig.getState().preset.number, 60)
+    assert.equal(rig.getState().chain, 'reading', 'the last song’s chain is labelled current after a refused tap')
+    unit.copy = null
+    await clock.advance(rig.CHAIN_FRESH_MS + 500)
+    assert.equal(asked(CHAIN), 2, 'a refused tap called off the read the stale copy was owed')
+    assert.equal(rig.getState().chain, 'ok')
+  })
+
+  test('a unit too busy to say which preset right after a tap is asked again, not shown as not answering', async () => {
+    const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
+    let first = true
+    unit.which = () => {
+      if (!first) return { number: unit.number, name: nameOf(unit.number) }
+      first = false
+      return { number: -1, name: '' }
+    }
+    const load = rig.loadPreset(30)
+    await clock.advance(10)
+    assert.notEqual(rig.getState().unit, 'silent', 'a busy unit was said to be not answering')
+    assert.equal(rig.getState().preset.number, 30, 'slot -1 is on screen')
+    await clock.advance(3000)
+    await load
+    assert.equal(rig.getState().preset.name, nameOf(30), 'the preset was not asked for again once the unit settled')
+    assert.equal(rig.getState().unit, 'present')
+    assert.equal(asked(/^GET \/presets\/-1\//), 0, 'slot -1 was dumped for its scene names')
+  })
+
+  test('a failed "which preset" after a tap is asked again once the unit settles, with no fault on screen', async () => {
+    const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
+    let first = true
+    unit.which = () => {
+      if (!first) return { number: unit.number, name: nameOf(unit.number) }
+      first = false
+      throw timedOut()
+    }
+    const load = rig.loadPreset(30)
+    await clock.advance(3000)
+    await load
+    assert.equal(asked(WHICH), 2, 'the preset was not asked for again once the unit settled')
+    assert.equal(rig.getState().preset.name, nameOf(30))
+    assert.ok(!rig.getState().preset.pending)
+    assert.equal(rig.getState().error, null, 'a read the settled pass answered left a fault on screen')
+    assert.equal(asked(SUMMARY), 0, 'the slot was dumped for its names because its own name was not known')
+  })
+
+  test('an empty slot is not dumped for scene names it does not have', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench({ presetName: '', scenes: ['', '', '', '', '', '', '', ''] })
+    rig.loadPreset(200)
+    await clock.advance(3000)
+    assert.equal(asked(CHAIN), 1)
+    assert.equal(asked(SUMMARY), 0, 'an empty slot was dumped for its scene names')
+    assert.equal(asked(/^GET \/presets\/\d+\/scenes$/), 0)
+    /* Pulling down, as somebody building in it does. */
+    assert.equal(await rig.rereadSceneNames(), 'none')
+    assert.equal(asked(SUMMARY), 0, 'pulling down on an empty slot dumps it')
+    void unit
+  })
+
+  test('coming back to the stage screen long after its read costs one small read, unless the relay dropped', async () => {
+    const { rig, clock, asked, relay } = await rigOnTheBench()
+    rig.listen()
+    await rig.refreshBlocks()
+    const chains = asked(CHAIN)
+    /* Settings, a setlist: more than the computer's copy lasts. */
+    await clock.advance(rig.CHAIN_FRESH_MS + 30000)
+    assert.equal(rig.chainIsCurrent(), false)
+    const whiches = asked(WHICH)
+    assert.equal(await rig.arrivedCurrent(), true, 'a chain followed all along was read again for being old')
+    assert.equal(asked(CHAIN), chains)
+    assert.equal(asked(WHICH), whiches + 1, 'coming back did not check which preset the unit is on')
+    /* The relay dropped meanwhile: whatever was announced then is lost. */
+    relay.__drop()
+    assert.equal(await rig.arrivedCurrent(), false, 'a chain read before a gap in the relay counts as followed')
+    rig.stopListening()
+    assert.equal(rig.chainFollowed(), false, 'a store that is not listening says it has followed the unit')
+  })
+
+  test('on an Axe-Fx II the phone never asks for the computer’s copy of the preset', async () => {
+    /* There GET /preset/grid is a whole second read of the preset, with no names in it. */
+    const { rig, clock, asked } = await rigOnTheBench({ capabilities: { scenes: 8, meters: { outputLevels: false } }, namesInChain: false })
+    rig.loadPreset(21)
+    await clock.advance(3000)
+    await rig.rereadSceneNames()
+    assert.equal(asked('GET /preset/grid'), 0, 'an Axe-Fx II was asked for a second full read of the preset')
+  })
+
+  test('an AM4 saying its own preset was edited reads the chain, not the scene names off its stored slot', async () => {
+    /* The AM4's edit watch announces a knob, a channel or a rename as "the preset changed". */
+    const { rig, clock, asked } = await rigOnTheBench({
+      capabilities: { scenes: 4, meters: { outputLevels: false } },
+      namesInChain: false,
+      scenes: ['', '', '', '']
+    })
+    for (let i = 0; i < 3; i++) {
+      rig.handleEvent({ type: 'changed', scope: 'preset' })
+      await clock.advance(rig.PRESET_SETTLE_MS + 500)
+    }
+    assert.equal(asked(CHAIN), 3)
+    assert.equal(asked(SUMMARY), 0, 'an edit of the preset on screen dumped the stored slot for scene names')
+    assert.equal(asked(/^GET \/presets\/\d+\/scenes$/), 0, 'an edit of the preset on screen read the stored slot’s scene names')
+  })
+
+  test('where the computer keeps no long copy, a front-panel preset change is read after the usual moment', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench({ capabilities: { scenes: 4, meters: { outputLevels: false } } })
+    await rig.refreshBlocks()
+    const chains = asked(CHAIN)
+    unit.number = 40
+    unit.scene = 1
+    rig.handleEvent({ type: 'scene', index: 1 })
+    await clock.advance(rig.PRESET_SETTLE_MS + 300)
+    assert.equal(rig.getState().preset.number, 40)
+    assert.equal(asked(CHAIN), chains + 1, 'a quarter of a minute was waited out for a copy this unit’s computer does not keep')
+  })
 }

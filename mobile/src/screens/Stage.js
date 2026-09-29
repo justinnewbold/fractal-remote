@@ -18,6 +18,7 @@ import {
 import { sync, useStored } from '../lib/store'
 import { SIZES, fitTiles, loadFit, loadIcons, loadScenesFour, loadSize, sceneColsFor } from '../lib/gigSize'
 import {
+  arrivedCurrent,
   clearError,
   loadPreset,
   refreshAll,
@@ -301,12 +302,22 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
     if (picking && coach) closeCoach()
   }, [picking, coach, closeCoach])
 
-  const reload = useCallback(async () => {
+  /*
+   * `arriving` is the screen being shown again rather than pulled down, and
+   * then it reads only when the rig has nothing current: coming back from
+   * the preset list, the preset just chosen is already being read, and doing
+   * it all again here was two more preset dumps landing on a unit that was
+   * still loading — the sound dropping "until the android app loads the new
+   * page". Nor when the store has followed the unit since its last read,
+   * however long ago: it listens on every screen. See rig.arrivedCurrent.
+   */
+  const reload = useCallback(async ({ arriving = false } = {}) => {
+    if (arriving && (await arrivedCurrent())) return
     setRefreshing(true)
     try {
       await refreshAll()
       /* Pulling down reads the scene names fresh too, past anything kept. */
-      await rereadSceneNames()
+      if (!arriving) await rereadSceneNames()
     } catch {
       // refreshAll puts what it learned in the store, including the failure.
       // Nothing to add here that the screen is not already showing.
@@ -330,7 +341,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   const demoIs = useDemoUnit()
 
   useEffect(() => {
-    reload()
+    reload({ arriving: true })
   }, [reload, demoIs])
 
   /*
@@ -393,7 +404,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
         paddingBottom: tight ? space.lg : space.xxl
       }}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={reload} tintColor={color.silkDim} />
+        <RefreshControl refreshing={refreshing} onRefresh={() => reload()} tintColor={color.silkDim} />
       }
     >
       {/* Above the faults, because a fault is about right now and this is

@@ -61,6 +61,13 @@ export const FILES = [
   { source: '../shared/tone-steps.mjs', target: '../mobile/src/lib/tone-steps.js' },
   { source: '../shared/play-mode.mjs', target: '../mobile/src/lib/play-mode.js' },
   /*
+   * Which announcements from the computer are this app's own writes coming
+   * back, and how long a preset change waits before its chain is read. The
+   * Mac window reading the chain after a phone tap is the same dump on the
+   * same unit as the phone doing it, so the two ends keep one rule.
+   */
+  { source: '../shared/own-echo.mjs', target: '../mobile/src/lib/own-echo.js' },
+  /*
    * When a garbled preset dump is asked for again rather than shown.
    *
    * The browser has had this since the day the message first appeared. The

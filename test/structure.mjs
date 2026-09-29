@@ -920,9 +920,11 @@ export function run(test) {
     const toggle = src.slice(src.indexOf('const toggleBlock'), src.indexOf('const toggleBlock') + 2200)
     assert.ok(!/setError\(err\.message\)/.test(toggle), 'the chain toggle flattens the error and loses why it failed')
     assert.match(toggle, /setError\(err\)/)
+    /* Asked with the status read, which says what is on — not the chain,
+       which is the whole preset dumped while the unit is switching. */
     assert.match(
       toggle,
-      /if \(!err\?\.unitGone\) refreshBlocks\(\)/,
+      /if \(!err\?\.unitGone\) refreshSceneState\(\)/,
       'a refused toggle trusts its own roll-back instead of asking the unit'
     )
 
