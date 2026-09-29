@@ -34,6 +34,20 @@ export default function SceneArrange({ order, onChange, onScrollLock }) {
   const [width, setWidth] = useState(0)
   /* Which place is being carried, and which place it is over. */
   const [drag, setDrag] = useState(null)
+  /*
+   * AND A TAP DOES IT TOO: tap one scene, then the one to swap it with.
+   *
+   * "The one for the drag and drop scenes isn't working." A drag on a phone
+   * is a fight with the page's own scroll, and a fight can be lost; two taps
+   * cannot. So both work, and whichever the finger does first is the one it
+   * gets.
+   */
+  const [picked, setPicked] = useState(null)
+  const pickedRef = useRef(null)
+  const pick = (k) => {
+    pickedRef.current = k
+    setPicked(k)
+  }
   const offset = useRef(new Animated.ValueXY()).current
   const tileW = width > 0 ? (width - space.sm) / 2 : 0
   const rows = Math.ceil(order.length / 2)
@@ -52,6 +66,8 @@ export default function SceneArrange({ order, onChange, onScrollLock }) {
   /* The newest of everything, for the responders made once below. */
   const live = useRef({})
   live.current = { order, onChange, onScrollLock, spot, placeAt, tileW }
+  /* A page left locked by a finger that never lifted would never scroll again. */
+  useEffect(() => () => live.current.onScrollLock?.(false), [])
 
   /* Kept in a ref as well as in state: the drop reads the ref, so it swaps
      exactly once whatever React does with the render. */
@@ -63,22 +79,39 @@ export default function SceneArrange({ order, onChange, onScrollLock }) {
   const start = (k) => {
     offset.setValue({ x: 0, y: 0 })
     live.current.onScrollLock?.(true)
-    thud()
-    show({ from: k, over: k })
+    show({ from: k, over: k, moved: false })
   }
   const move = (k, dx, dy) => {
+    /* Under a thumb's wobble it is still a tap, not a drag. */
+    if (!held.current?.moved && Math.abs(dx) < 8 && Math.abs(dy) < 8) return
+    if (!held.current?.moved) thud()
     offset.setValue({ x: dx, y: dy })
     const { spot: at, placeAt: under, tileW: w } = live.current
     const from = at(k)
     const over = under(from.left + w / 2 + dx, from.top + HEIGHT / 2 + dy)
-    if (held.current?.over !== over) show({ from: k, over })
+    if (held.current?.over !== over || !held.current?.moved) show({ from: k, over, moved: true })
   }
   const end = (k, dropped) => {
     live.current.onScrollLock?.(false)
     offset.setValue({ x: 0, y: 0 })
     const over = held.current?.over
+    const moved = held.current?.moved
     show(null)
-    if (dropped && over !== null && over !== undefined && over !== k) {
+    if (!dropped) return
+    if (!moved) {
+      /* A tap: the first one picks, the second swaps, the same one again lets go. */
+      const was = pickedRef.current
+      if (was === null) {
+        thud()
+        pick(k)
+      } else {
+        pick(null)
+        if (was !== k) live.current.onChange?.(swapScenes(live.current.order, was, k))
+      }
+      return
+    }
+    pick(null)
+    if (over !== null && over !== undefined && over !== k) {
       live.current.onChange?.(swapScenes(live.current.order, k, over))
     }
   }
@@ -96,12 +129,13 @@ export default function SceneArrange({ order, onChange, onScrollLock }) {
               scene={scene}
               width={tileW}
               at={spot(k)}
-              carried={drag?.from === k}
-              target={!!drag && drag.from !== k && drag.over === k}
+              carried={!!drag?.moved && drag.from === k}
+              target={(!!drag?.moved && drag.from !== k && drag.over === k) || picked === k}
               offset={offset}
               onStart={start}
               onMove={move}
               onEnd={end}
+              onLock={() => live.current.onScrollLock?.(true)}
             />
           ))
         : null}
@@ -109,14 +143,20 @@ export default function SceneArrange({ order, onChange, onScrollLock }) {
   )
 }
 
-function Place({ place, scene, width, at, carried, target, offset, onStart, onMove, onEnd }) {
-  const live = useRef({ place, onStart, onMove, onEnd })
+function Place({ place, scene, width, at, carried, target, offset, onStart, onMove, onEnd, onLock }) {
+  const live = useRef({ place, onStart, onMove, onEnd, onLock })
   useEffect(() => {
-    live.current = { place, onStart, onMove, onEnd }
+    live.current = { place, onStart, onMove, onEnd, onLock }
   })
   const pan = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponderCapture: () => true,
+      /* The page's scroll locked HERE, on touch-down, before the scroll view
+         has decided this is a scroll — the lesson the knobs learned. Locking
+         at the grant was one hop late, and the page kept the finger. */
+      onStartShouldSetPanResponderCapture: () => {
+        live.current.onLock?.()
+        return true
+      },
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderTerminationRequest: () => false,
@@ -134,7 +174,7 @@ function Place({ place, scene, width, at, carried, target, offset, onStart, onMo
       pointerEvents="box-only"
       accessibilityRole="button"
       accessibilityLabel={`Scene ${scene + 1}, place ${place + 1}`}
-      accessibilityHint="Hold and drag onto another scene to swap them"
+      accessibilityHint="Tap, then tap another scene to swap them, or drag it onto one"
       style={{
         position: 'absolute',
         left: at.left,
