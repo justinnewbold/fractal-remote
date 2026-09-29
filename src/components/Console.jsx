@@ -45,7 +45,31 @@ const shortName = (slug) => SHORT[slug] || (slug || '??').slice(0, 3).toUpperCas
  */
 const colorFor = (slug) => blockColor(slug).fill
 import Knob from './Knob'
-import { blockParams, blockTypes, setParamConfirmed, setType, setBypass, setChannel } from '../lib/forgefx'
+import {
+  blockParams,
+  blockTypes,
+  cabState,
+  setEnum,
+  setParamConfirmed,
+  setType,
+  setBypass,
+  setChannel
+} from '../lib/forgefx'
+import {
+  CAB_REFUSED,
+  CAB_UNDO_LOST,
+  MODEL_REFUSED,
+  cabAfter,
+  cabBackTo,
+  cabHidden,
+  cabShowing,
+  cabShows,
+  cabWas,
+  pickCab,
+  readCab,
+  restoreCab,
+  taken
+} from '../../shared/cab-pick.mjs'
 import { isSilencingParam } from '../lib/guardrails'
 import { editPages, pageFor, pageHolding } from '../lib/editPages'
 import { bringIntoView } from '../lib/feedback'
@@ -742,6 +766,15 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   // `block.typeName` this used to match against was permanently undefined and
   // the picker permanently read "N models…" instead of naming the model.
   const [type, setTypeState] = useState(null)
+  /*
+   * What a cab block is really playing, from the host's cab state — null for
+   * every other block, and for a unit that has none to give.
+   *
+   * A cab has no model for the picker to read or write: the list it offers is
+   * the DynaCab list, and the "type" a model change reached was the Preamp
+   * Type. See shared/cab-pick.mjs.
+   */
+  const [cab, setCab] = useState(null)
   const [tab, setTab] = useState('main')
   // The model this block was on before the last swap, for the eight seconds
   // during which taking it back is one tap.
@@ -771,6 +804,13 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    */
   const scene = useDevice((s) => s.sceneIndex)
   const readKey = `${block?.effectId ?? ''}:${block?.channel ?? ''}:${scene}`
+  /* Which block, channel and scene the panel is on NOW, for a pick still
+     waiting on the unit. This panel is not rebuilt when another block is
+     opened, so a cab pick that finishes after the amp has been clicked would
+     otherwise hand the amp the cab's state — and the amp's next model pick
+     would go to the cab's mode and DynaCab numbers on the amp. */
+  const liveKey = useRef(readKey)
+  liveKey.current = readKey
 
   useEffect(() => {
     if (!block) return
@@ -783,11 +823,16 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
           blockParams(block.effectId),
           blockTypes(block.slug).catch(() => [])
         ])
+        /* After the params rather than beside them: both are a read of the
+           whole block down one port, and a cab state that cannot be had is
+           the panel as it always was, not an error. */
+        const c = block.slug === 'cab' ? await readCab(() => cabState(block.effectId), p) : null
         if (stop) return
         setParams(p?.named || [])
         setLayout(p?.layout || null)
         setModels(t || [])
         setTypeState(p?.type ?? null)
+        setCab(c)
       } catch (err) {
         if (!stop) onError(err.message)
       } finally {
@@ -801,8 +846,10 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   }, [readKey, onError])
 
   // The offer belongs to the block it was made on, and dies with the panel.
+  // So does a cab state: another block's would pick its cab through this one.
   useEffect(() => {
     setUndo(null)
+    setCab(null)
     return () => clearTimeout(undoTimer.current)
   }, [block?.effectId])
 
@@ -814,7 +861,10 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    * dead zone — and it throws before the panel draws anything, so the sheet
    * opens empty. React needs the early return after the hooks in any case.
    */
-  const editable = params.filter((p) => !isSilencingParam(p.name))
+  /* And a cab's IR numbers and banks, which are choices out of a list and not
+     knobs — by the ids the cab state names. Without one, nothing extra goes. */
+  const offDeck = cabHidden(cab)
+  const editable = params.filter((p) => !isSilencingParam(p.name)).filter((p) => !offDeck.has(p.id))
   const level = params.find((p) => /^.*\bLevel$/i.test(p.name) && !/boost|input/i.test(p.name))
 
   // Split into the pages Fractal's editor uses, where the unit says what they
@@ -869,9 +919,15 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     )
   }
 
+  /* What the picker says the block is on. A cab with cab state says what the
+     cab state says, and one playing an IR marks nothing in the list. */
+  const cabNow = cabShowing(cab, models)
+  const current = cabNow ? { value: cabNow.value, name: cabNow.name } : type
+
   // What the chosen model is modelled on, for the line under the picker.
-  const chosenValue =
-    type && models.some((m) => m.value === type.value)
+  const chosenValue = cabNow
+    ? (cabNow.value ?? '')
+    : type && models.some((m) => m.value === type.value)
       ? type.value
       : (models.find((m) => m.name === type?.name)?.value ?? '')
   const chosen = models.find((m) => m.value === chosenValue)
@@ -1039,19 +1095,80 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    * previous value is already in hand; nothing has to be read to undo it.
    */
   const applyModel = async (value, { undoable = true } = {}) => {
+    if (cab && block.slug === 'cab') return applyCab(value, { undoable })
+    const key = readKey
     const was = type
-    await setType(block.effectId, Number(value))
+    const sent = await setType(block.effectId, Number(value))
     const fresh = await blockParams(block.effectId)
+    // Another block (or channel, or scene) came up while this one was busy.
+    if (liveKey.current !== key) return
     setParams(fresh?.named || [])
     // A new model can bring different pages with it.
     setLayout(fresh?.layout || null)
     setTypeState(fresh?.type ?? null)
     setLocal({})
+    /* A refusal was dropped here, and the swap logged as done. Said now —
+       unless the read just taken shows the model on the block anyway, in
+       which case it is on the block. */
+    if (sent?.ok === false && fresh?.type?.value !== Number(value)) {
+      setUndo(null)
+      onError(MODEL_REFUSED)
+      return
+    }
     const name = models.find((m) => m.value === Number(value))?.name
     onChanged(`${block.name} → ${name}`)
     clearTimeout(undoTimer.current)
     if (undoable && was && was.value !== Number(value)) {
       setUndo(was)
+      undoTimer.current = setTimeout(() => setUndo(null), 8000)
+    } else {
+      setUndo(null)
+    }
+  }
+
+  /**
+   * Picking a cab, which is not a model change.
+   *
+   * The mode goes to DynaCab if the block is playing an IR, then slot 1 gets
+   * the cabinet — both as plain numbers, never through setType. Then the block
+   * is read again, cab state and knobs both, because a change of mode changes
+   * which controls the block has. The undo holds the mode AND the cab, so
+   * taking back a switch out of an IR puts the IR back on.
+   */
+  const applyCab = async (value, { undoable = true, back = null } = {}) => {
+    const key = readKey
+    const before = cab
+    const write = (paramId, ordinal) => setEnum(block.effectId, paramId, ordinal)
+    const res = back ? await restoreCab(before, back, write) : await pickCab(before, value, write)
+    const name = back ? back.name : models.find((m) => m.value === Number(value))?.name
+    const fresh = await blockParams(block.effectId)
+    const now = await readCab(() => cabState(block.effectId), fresh)
+    /* The panel moved on while this was out. The write went to the right
+       block; what it read back belongs to that block, not the one on show. */
+    if (liveKey.current !== key) {
+      if (res.ok) onChanged(`${block.name} → ${name}`)
+      return
+    }
+    /* A read that failed, or one that disagrees with the params read, is not
+       an answer: what the writes left is. Anything else would drop the block
+       back onto the model change for the next pick. */
+    const read = now && !now.unsure ? now : null
+    setParams(fresh?.named || [])
+    setLayout(fresh?.layout || null)
+    setTypeState(fresh?.type ?? null)
+    setCab(read || cabAfter(before, taken(res)))
+    setLocal({})
+    clearTimeout(undoTimer.current)
+    const landed = back ? cabBackTo(read, back) : cabShows(read, value)
+    if (!res.ok && !landed) {
+      setUndo(null)
+      onError(CAB_REFUSED)
+      return
+    }
+    onChanged(`${block.name} → ${name}${read ? '' : " (sent — couldn't read it back to check)"}`)
+    const was = cabWas(before, models)
+    if (undoable && !back && was && !cabShows(before, value)) {
+      setUndo({ name: was.name, cab: was })
       undoTimer.current = setTimeout(() => setUndo(null), 8000)
     } else {
       setUndo(null)
@@ -1071,7 +1188,10 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     if (!back) return
     setUndo(null)
     try {
-      await applyModel(back.value, { undoable: false })
+      if (back.cab) {
+        if (!cab || block.slug !== 'cab') return onError(CAB_UNDO_LOST)
+        await applyCab(null, { undoable: false, back: back.cab })
+      } else await applyModel(back.value, { undoable: false })
     } catch (err) {
       onError(err.message)
     }
@@ -1151,7 +1271,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
                 based on is the line underneath, in full, with no width to run
                 out of — which is what the truncation was ever about. */}
             <span className="type-open-name">
-              {type?.name || `${models.length} models…`}
+              {current?.name || `${models.length} models…`}
             </span>
             <span className="type-open-caret" aria-hidden="true">
               ⌄
@@ -1190,6 +1310,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
           ) : null}
         </div>
       ) : null}
+      {models.length && cabNow?.hint ? <p className="hint pad cab-mode-hint">{cabNow.hint}</p> : null}
       {models.length && gear ? <p className="hint pad based-on">{gear}</p> : null}
       {/*
         A photograph of the amp the model is named after.

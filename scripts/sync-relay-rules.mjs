@@ -93,6 +93,12 @@ export const FILES = [
   /* Which picture each kind of effect wears on Play, so the two ends agree. */
   { source: '../shared/block-icons.mjs', target: '../mobile/src/lib/block-icons.js' },
   /*
+   * How a cab is picked: which selector to write, in what order, and what to
+   * take off the knob deck. A cab chosen on the phone has to land where the
+   * same cab chosen at the computer lands.
+   */
+  { source: '../shared/cab-pick.mjs', target: '../mobile/src/lib/cab-pick.js' },
+  /*
    * The troubleshooting guide, so a fix reads the same wherever somebody
    * standing in front of a dead rig happens to look it up.
    *

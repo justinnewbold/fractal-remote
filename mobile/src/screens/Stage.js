@@ -16,7 +16,7 @@ import {
   stepTarget
 } from '../lib/lists'
 import { sync, useStored } from '../lib/store'
-import { SIZES, fitTiles, loadFit, loadIcons, loadSize } from '../lib/gigSize'
+import { SIZES, fitTiles, loadFit, loadIcons, loadScenesFour, loadSize, sceneColsFor } from '../lib/gigSize'
 import {
   clearError,
   loadPreset,
@@ -152,6 +152,8 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   const size = SIZES[loadSize(sync)] || SIZES[1]
   /* The effect pictures, unless they were turned off in Settings. */
   const showIcons = loadIcons(sync)
+  /* 1 2 3 4 over 5 6 7 8, the way the unit draws them — see gigSize. */
+  const sceneCols = sceneColsFor(size, loadScenesFour(sync))
   /*
    * SMALLEST MEANS IT FITS. "On the smallest setting, if we could make it so
    * the screen won't scroll and everything fits on the screen — it's barely
@@ -217,7 +219,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
    * changes.
    */
   const [trim, setTrim] = useState(0)
-  const fitKey = `${viewport}:${scenes.hasScenes ? scenes.count : 0}:${blocks.length}:${fitOn}`
+  const fitKey = `${viewport}:${scenes.hasScenes ? scenes.count : 0}:${blocks.length}:${fitOn}:${sceneCols}`
   const lastKey = useRef(fitKey)
   if (lastKey.current !== fitKey) {
     lastKey.current = fitKey
@@ -238,7 +240,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
           available: viewport - chrome - trim,
           scenes: scenes.hasScenes ? scenes.count : 0,
           blocks: blocks.length,
-          sceneCols: size.scenes,
+          sceneCols,
           fxCols: size.fx,
           gap: space.sm,
           /* The row the blocks sit in, so a small phone is not sent six
@@ -545,7 +547,8 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
                   height={tileH}
                   haptic={thud}
                   onPress={() => writeScene(i)}
-                  style={{ width: tileWidth(row, size.scenes) }}
+                  narrow={sceneCols >= 4}
+                  style={{ width: tileWidth(row, sceneCols) }}
                 />
               )
             })}

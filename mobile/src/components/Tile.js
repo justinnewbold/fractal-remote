@@ -56,6 +56,12 @@ export default function Tile({
    * blocks do not — see the note where it is drawn.
    */
   bar = false,
+  /*
+   * A tile a quarter of a phone wide. Scenes four across leave room for five
+   * letters of a name at the usual size, so the name goes a size down and may
+   * take a second line: "Crunch Bot UP" rather than "Cru…".
+   */
+  narrow = false,
   fill,
   ink,
   on = false,
@@ -245,10 +251,10 @@ export default function Tile({
           </Text>
         ) : null}
         <Text
-          numberOfLines={1}
+          numberOfLines={narrow ? 2 : 1}
           style={{
             color: foreground,
-            fontSize: font.body,
+            fontSize: narrow ? font.small : font.body,
             fontWeight: '700',
             letterSpacing: 0.5,
             textAlign: 'center'

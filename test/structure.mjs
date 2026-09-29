@@ -387,7 +387,7 @@ export function run(test) {
     assert.match(gig, /const chrome = el\.scrollHeight - grids/, 'the chrome is not measured as the screen less its grids')
     assert.match(gig, /fitTiles\(\{\s*\n\s*available: viewport - top - chrome/, 'the grids are not handed what the screen has left')
     assert.match(gig, /'--gig-fit-tile': `\$\{fitVars\.tile\}px`, '--gig-fx-cols': String\(fitVars\.fxCols\)/, 'the measured height does not reach the tiles')
-    assert.match(gig, /\}, \[fit, hasScenes, sceneCount, blocks\.length\]\)/, 'the measure does not follow the rig')
+    assert.match(gig, /\}, \[fit, hasScenes, sceneCount, blocks\.length, scenesFour\]\)/, 'the measure does not follow the rig')
     assert.match(src, /fit=\{fit\}/, 'Play is not told about Fit')
     assert.match(src, /Fit everything on one screen/, 'Setup has no Fit switch')
     assert.match(src, /disabled=\{fit \|\| size <= 0\}/, 'the size steps still move while Fit is on')

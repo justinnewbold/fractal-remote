@@ -8,15 +8,32 @@ import {
   blockCatalog,
   blockParams,
   blockTypes,
+  cabState,
   clearCell,
   dropReadCache,
   idOf,
   modifierModel,
   placeBlock,
   sameBlock,
+  setEnum,
   setParamConfirmed,
   setType
 } from '../lib/device'
+import {
+  CAB_REFUSED,
+  CAB_UNDO_LOST,
+  MODEL_REFUSED,
+  cabAfter,
+  cabBackTo,
+  cabHidden,
+  cabShowing,
+  cabShows,
+  cabWas,
+  pickCab,
+  readCab,
+  restoreCab,
+  taken
+} from '../lib/cab-pick'
 import { colLabel, doubtfulWrite, gridShape, isSplitChain, laneItems, lanesShown, rowLabel } from '../lib/grid-plan'
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
 import { isSilencingParam } from '../lib/guardrails'
@@ -390,6 +407,11 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
   /* Which model this block is on. It comes back on the params read and nowhere
      else — /preset/blocks has never carried one. */
   const [type, setType_] = useState(null)
+  /* What a cab block is really playing, from the host's cab state. A cab has
+     no model for the picker to write — see lib/cab-pick.js — so for a cab this
+     is what the picker reads and writes through. Null for every other block,
+     and for a unit with no cab state to give. */
+  const [cab, setCab] = useState(null)
   const [tab, setTab] = useState('main')
   const [picking, setPicking] = useState(false)
   /* What is typed into the model find box. */
@@ -412,11 +434,16 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
           blockParams(eid),
           blockTypes(block.slug).catch(() => [])
         ])
+        /* After the params, not beside them: both are a read of the whole
+           block down one relay. And a cab state that cannot be had is the
+           panel as it always was, not an error on screen. */
+        const c = block.slug === 'cab' ? await readCab(() => cabState(eid), p) : null
         if (stop) return
         setParams(p?.named || [])
         setLayout(p?.layout || null)
         setModels(t || [])
         setType_(p?.type ?? null)
+        setCab(c)
       } catch (err) {
         if (!stop) onError(err.message)
       } finally {
@@ -439,7 +466,10 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
    * staging is still something you need to be able to READ, so the level sits
    * under the deck as a number.
    */
-  const editable = params.filter((p) => !isSilencingParam(p.name))
+  /* And a cab's IR numbers and banks, which are choices out of a list rather
+     than knobs — found by the ids the cab state names. */
+  const offDeck = cabHidden(cab)
+  const editable = params.filter((p) => !isSilencingParam(p.name)).filter((p) => !offDeck.has(p.id))
   const level = params.find((p) => /^.*\bLevel$/i.test(p.name) && !/boost|input/i.test(p.name))
 
   /* Split into the pages Fractal's editor uses, where the unit says what
@@ -516,8 +546,9 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
    * back for eight seconds.
    */
   const applyModel = async (value, { undoable = true } = {}) => {
+    if (cab && block.slug === 'cab') return applyCab(value, { undoable })
     const was = type
-    await setType(eid, Number(value))
+    const sent = await setType(eid, Number(value))
     noteEdited()
     const fresh = await blockParams(eid)
     /* The answer is what the unit shows afterwards, not what it said. */
@@ -532,8 +563,68 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
     setType_(fresh?.type ?? null)
     setLocal({})
     clearTimeout(undoTimer.current)
+    /* A refusal went in the log and nowhere else. Said on screen now, unless
+       the read just taken shows the model on the block anyway. */
+    if (sent?.ok === false && fresh?.type?.value !== Number(value)) {
+      setUndo(null)
+      onError(MODEL_REFUSED)
+      return
+    }
     if (undoable && was && was.value !== Number(value)) {
       setUndo(was)
+      undoTimer.current = setTimeout(() => setUndo(null), 8000)
+    } else {
+      setUndo(null)
+    }
+  }
+
+  /**
+   * Picking a cab, which is not a model change.
+   *
+   * The browser's, step for step: the mode to DynaCab if the block is playing
+   * an IR, then slot 1's cabinet, both as plain numbers and never through
+   * setType. Then the block is read again — cab state and knobs, because a
+   * change of mode changes which controls there are — and the log says what
+   * the CAB STATE shows. It used to compare against the model read back,
+   * which on a cab is the Preamp Type, and so it said "unit shows it" about a
+   * cab that had never been sent.
+   */
+  const applyCab = async (value, { undoable = true, back = null } = {}) => {
+    const before = cab
+    const write = (paramId, ordinal) => setEnum(eid, paramId, ordinal)
+    const res = back ? await restoreCab(before, back, write) : await pickCab(before, value, write)
+    noteEdited()
+    const fresh = await blockParams(eid)
+    const now = await readCab(() => cabState(eid), fresh)
+    /* A read that failed, or one the params read contradicts, is not an
+       answer — what the writes left is. Dropping the cab state instead would
+       put the next pick back on the model change, to the Preamp Type. */
+    const read = now && !now.unsure ? now : null
+    const landed = back ? cabBackTo(read, back) : cabShows(read, value)
+    const shows = cabShowing(read, models)
+    logDebug(
+      'write',
+      `block ${eid} model after the change`,
+      landed
+        ? 'unit shows it'
+        : read
+          ? `unit shows ${shows?.name ?? 'nothing'}, asked ${back ? back.name : Number(value)}`
+          : "sent, couldn't read the cab back to check"
+    )
+    setParams(fresh?.named || [])
+    setLayout(fresh?.layout || null)
+    setType_(fresh?.type ?? null)
+    setCab(read || cabAfter(before, taken(res)))
+    setLocal({})
+    clearTimeout(undoTimer.current)
+    if (!res.ok && !landed) {
+      setUndo(null)
+      onError(CAB_REFUSED)
+      return
+    }
+    const was = cabWas(before, models)
+    if (undoable && !back && was && !cabShows(before, value)) {
+      setUndo({ name: was.name, cab: was })
       undoTimer.current = setTimeout(() => setUndo(null), 8000)
     } else {
       setUndo(null)
@@ -550,8 +641,27 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
     }
   }
 
+  /* The undo is a cab put back where it was, mode and all, or a model. */
+  const takeBack = async () => {
+    const back = undo
+    if (!back) return
+    if (!back.cab) return swap(back.value)
+    setUndo(null)
+    if (!cab || block.slug !== 'cab') return onError(CAB_UNDO_LOST)
+    try {
+      await applyCab(null, { undoable: false, back: back.cab })
+    } catch (err) {
+      onError(err.message)
+    }
+  }
+
   const engaged = !block.bypassed
   const hue = blockColor(block.slug)
+
+  /* What the picker says the block is on: for a cab with cab state, what the
+     cab state says — and one playing an IR marks nothing in the list. */
+  const cabNow = cabShowing(cab, models)
+  const current = cabNow ? { value: cabNow.value, name: cabNow.name } : type
 
   /*
    * The models worth drawing. Capped rather than paged: the list is scrolled
@@ -624,8 +734,8 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
         <View style={{ gap: space.sm }}>
           <Press
             caption="Model"
-            label={type?.name || `${models.length} to choose from`}
-            sub={picking ? 'Close' : modelNote(type?.name) || 'Tap to change'}
+            label={current?.name || `${models.length} to choose from`}
+            sub={picking ? 'Close' : modelNote(current?.name) || 'Tap to change'}
             onPress={() => setPicking((v) => !v)}
           />
           {/*
@@ -638,6 +748,7 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
           {!picking && gearLine(type) ? (
             <Text style={{ color: color.silkDim, fontSize: font.small }}>{gearLine(type)}</Text>
           ) : null}
+          {cabNow?.hint ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{cabNow.hint}</Text> : null}
           {picking ? (
             <View style={{ gap: space.sm }}>
               {/*
@@ -676,7 +787,7 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
                      all of them and tell nobody which one is the Rectifier. */
                   sub={m.basedOn || modelNote(m.name) || undefined}
                   tone="signal"
-                  on={m.value === type?.value}
+                  on={m.value === current?.value}
                   onPress={() => swap(m.value)}
                 />
               ))}
@@ -696,7 +807,7 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
           <Text style={{ color: color.silkDim, fontSize: font.small, flex: 1 }}>
             {`Was ${undo.name}`}
           </Text>
-          <Press label="Undo" height={44} onPress={() => swap(undo.value)} />
+          <Press label="Undo" height={44} onPress={takeBack} />
         </View>
       ) : null}
 

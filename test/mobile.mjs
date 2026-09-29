@@ -1677,7 +1677,7 @@ export function run(test) {
        cannot pay for the gaps, and the last tile of a short row stretched the
        width of the screen. The rule being checked is the same: how many go
        across comes from the setting. */
-    assert.match(stage, /width: tileWidth\(row, size\.scenes\)/, 'the scenes are a fixed number across whatever the setting says')
+    assert.match(stage, /width: tileWidth\(row, sceneCols\)/, 'the scenes are a fixed number across whatever the setting says')
     /* Blocks take their column count from `fxCols`, which is the setting's
        own `fx` until fit is measuring — fit widens the rows rather than let a
        tile drop under a thumb. Either way it comes from the setting. */
@@ -4300,6 +4300,41 @@ export function run(test) {
     assert.match(read('src/App.jsx'), /Show effect pictures/, 'the browser has no way to turn them off')
   })
 
+  test('the scenes can sit in rows of four, like the unit', async () => {
+    /*
+     * "I prefer arrangement of the scenes - first row 1234, second row 5678
+     * as it is in the screen of my unit." A choice, off by default: two
+     * across is the layout Justin chose.
+     */
+    const { loadScenesFour, saveScenesFour, sceneColsFor, SIZES, fitTiles } = await import('../src/lib/gigSize.js')
+    const box = new Map()
+    const store = { getItem: (k) => (box.has(k) ? box.get(k) : null), setItem: (k, v) => box.set(k, String(v)) }
+    assert.equal(loadScenesFour(store), false, 'the default moved off two across')
+    saveScenesFour(true, store)
+    assert.equal(loadScenesFour(store), true, 'turning it on does not stick')
+    saveScenesFour(false, store)
+    assert.equal(loadScenesFour(store), false)
+    assert.equal(loadScenesFour({ getItem: () => { throw new Error('blocked') } }), false, 'blocked storage broke the screen')
+    for (const step of SIZES) {
+      assert.equal(sceneColsFor(step, true), 4, `${step.name} is not four across when asked`)
+      assert.equal(sceneColsFor(step, false), step.scenes, `${step.name} lost its own column count`)
+    }
+    /* Eight scenes are two rows at four, four rows at two — Fit has to know. */
+    const four = fitTiles({ available: 600, scenes: 8, blocks: 8, sceneCols: 4, fxCols: 4 })
+    const two = fitTiles({ available: 600, scenes: 8, blocks: 8, sceneCols: 2, fxCols: 4 })
+    assert.ok(four.tile > two.tile, 'Fit did not give the saved rows back to the tiles')
+
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /const sceneCols = sceneColsFor\(size, loadScenesFour\(sync\)\)/, 'the phone ignores the choice')
+    assert.match(stage, /tileWidth\(row, sceneCols\)/, 'the phone draws scenes at the size step\u2019s width regardless')
+    assert.match(stage, /\n\s+sceneCols,\n/, 'Fit on the phone still counts two across')
+    assert.match(read('mobile/src/screens/Settings.js'), /label="Scenes in rows of four, like the unit"[\s\S]{0,300}onPress=\{\(\) => saveScenesFour\(!four, sync\)\}/, 'the phone has no way to choose it')
+    assert.match(read('src/App.jsx'), /scenesFour=\{scenesFour\}/, 'the browser never hands the choice to Play')
+    assert.match(read('src/App.jsx'), /Scenes in rows of four, like the unit/, 'the browser has no way to choose it')
+    assert.match(read('src/components/Gig.jsx'), /data-scenes-four=\{scenesFour \? 'yes' : undefined\}/, 'the browser grid is never told')
+    assert.match(read('src/styles.css'), /\.gig\[data-scenes-four\] \.gig-scenes,[\s\S]{0,120}grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/, 'the browser grid is not four across')
+  })
+
   test('the paywall sells the unlock, not whichever package came first', async () => {
     /*
      * FOUND IN THE LIVE ACCOUNT, not imagined.
@@ -6533,8 +6568,116 @@ export function run(test) {
        block's flat type is called that on the unit; it reads as an error. */
     const flat = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
     assert.match(flat, /const modelNote = \(name\) => typeof name === 'string' && name\.trim\(\)\.toLowerCase\(\) === 'null' \? 'Flat: the sound passes through unchanged\. For a level or pan control\.' : null/, 'Null is not explained')
-    assert.match(flat, /sub=\{picking \? 'Close' : modelNote\(type\?\.name\) \|\| 'Tap to change'\}/, 'the model button does not carry the note')
+    /* `current` rather than `type`: for a cab it is what the cab state says. */
+    assert.match(flat, /sub=\{picking \? 'Close' : modelNote\(current\?\.name\) \|\| 'Tap to change'\}/, 'the model button does not carry the note')
     assert.match(flat, /sub=\{m\.basedOn \|\| modelNote\(m\.name\) \|\| undefined\}/, 'the model list does not carry the note')
+  })
+
+  /*
+   * The phone had the cab bug the browser had, and one more: its read-back
+   * compared against the model the unit reported, which on a cab block is the
+   * Preamp Type — so the log said "unit shows it" about a cab that had never
+   * been sent. These hold the phone to the same cab state the browser uses.
+   */
+  test('the phone reads a cab’s state and writes its selectors as whole numbers', () => {
+    const dev = read('mobile/src/lib/device.js').replace(/\s+/g, ' ')
+    assert.match(dev, /export const cabState = \(eid\) => remoteRequest\(`\/preset\/blocks\/\$\{eid\}\/cab`\)/, 'the phone cannot read cab state')
+    assert.match(
+      dev,
+      /export const setEnum = \(eid, paramId, ordinal\) => told\(`[^`]+`, put\(`\/preset\/blocks\/\$\{eid\}\/params\/\$\{paramId\}`, \{ value: ordinal, continuous: false \}\)\)/,
+      'a discrete write from the phone is normalised, or leaves no line in the log'
+    )
+    /* The route is one the computer lets a phone use, read and write. */
+    return import('../shared/relay-rules.mjs').then(({ hostAllows }) => {
+      assert.ok(hostAllows('GET', '/preset/blocks/62/cab'))
+      assert.ok(hostAllows('PUT', '/preset/blocks/62/params/85'))
+    })
+  })
+
+  test('the phone picks a cab through the cab state, and never as a model change', () => {
+    const edit = read('mobile/src/screens/Edit.js')
+    const flat = edit.replace(/\s+/g, ' ')
+    const apply = edit.slice(edit.indexOf('const applyModel = async'), edit.indexOf('const applyCab = async'))
+    const cabWrite = edit.slice(edit.indexOf('const applyCab = async'), edit.indexOf('const swap = async'))
+    assert.ok(apply.length > 100 && cabWrite.length > 100, 'the model swap moved; this check reads it')
+    assert.match(apply, /if \(cab && block\.slug === 'cab'\) return applyCab\(value, \{ undoable \}\)/, 'a cab with cab state still goes through setType')
+    assert.match(apply.replace(/\s+/g, ' '), /const sent = await setType\(eid, Number\(value\)\) noteEdited\(\)/, 'an amp no longer swaps its model')
+    assert.match(apply, /onError\(MODEL_REFUSED\)/, 'a refused model change is only in the log')
+    assert.ok(!/setType\(/.test(cabWrite), 'the phone’s cab pick calls setType')
+    assert.match(cabWrite, /setEnum\(eid, paramId, ordinal\)/, 'the phone’s cab pick is not on the discrete path')
+    assert.match(cabWrite, /const now = await readCab\(\(\) => cabState\(eid\), fresh\)/, 'the cab is not read again after a pick')
+    /* The read-back line is about the cab state, not the Preamp Type. */
+    assert.match(cabWrite, /const landed = back \? cabBackTo\(read, back\) : cabShows\(read, value\)/)
+    /* A re-read that fails keeps the block on the cab path, as the writes left it. */
+    assert.match(cabWrite, /setCab\(read \|\| cabAfter\(before, taken\(res\)\)\)/, 'a failed re-read drops the phone back onto setType')
+    assert.ok(!/setCab\(null\)/.test(cabWrite), 'a cab pick can still forget the cab state')
+    assert.match(cabWrite.replace(/\s+/g, ' '), /`block \$\{eid\} model after the change`, landed \? 'unit shows it'/, 'the log still believes the Preamp Type')
+    assert.match(cabWrite, /onError\(CAB_REFUSED\)/, 'a refused cab is not said on screen')
+    assert.match(flat, /<Press label="Undo" height=\{44\} onPress=\{takeBack\} \/>/, 'undo does not know about cabs')
+    assert.match(flat, /await applyCab\(null, \{ undoable: false, back: back\.cab \}\)/, 'undo does not put the mode and cab back')
+    assert.match(flat, /\.filter\(\(p\) => !offDeck\.has\(p\.id\)\)/, 'the IR numbers are still knobs on the phone')
+    assert.match(flat, /block\.slug === 'cab' \? await readCab\(\(\) => cabState\(eid\), p\) : null/, 'a failed cab read is not the old panel')
+    assert.match(flat, /if \(!cab \|\| block\.slug !== 'cab'\) return onError\(CAB_UNDO_LOST\)/, 'an undo with no cab state does nothing and says nothing')
+    assert.match(edit, /from '\.\.\/lib\/cab-pick'/, 'the phone has its own idea of how a cab is picked')
+  })
+
+  test('on the phone, a cab re-read that fails or reads as zeros never sends the next pick to the Preamp Type', async () => {
+    const { readCab, pickCab, restoreCab, cabAfter, cabWas, cabShows, taken } = await import('../mobile/src/lib/cab-pick.js')
+    const cab = (mode, dyna) => ({
+      modeParam: 31,
+      mode: { value: mode, label: '' },
+      slots: [
+        { slot: 1, bankParam: 0, irParam: 4, dynaParam: 85, irIndex: 0, irName: '#0', dyna: { value: dyna, label: '' } },
+        { slot: 2, bankParam: 1, irParam: 5, dynaParam: 86, irIndex: 0, irName: '#0', dyna: { value: 0, label: '' } }
+      ]
+    })
+    /* Loaded on an IR; picked; the relay drops on the re-read. */
+    const before = await readCab(async () => cab(0, 3), { enums: [] })
+    const was = cabWas(before)
+    const writes = []
+    const write = async (id, v) => (writes.push([id, v]), { ok: true })
+    const res = await pickCab(before, 11, write)
+    const now = await readCab(async () => { throw new Error('relay dropped') }, { enums: [] })
+    assert.equal(now, null)
+    const kept = now || cabAfter(before, taken(res))
+    assert.ok(cabShows(kept, 11), 'the phone forgot the cab it had just written')
+    await pickCab(kept, 20, write)
+    await restoreCab(kept, was, write)
+    assert.deepEqual(writes, [[31, 1], [85, 11], [85, 20], [85, 3], [31, 0]], 'the undo after a failed re-read wrote nothing, or the mode first')
+
+    /* A zeroed read beside a params read saying DynaCab 7: no "Playing an IR", no undo to Legacy. */
+    const zeroed = await readCab(async () => cab(0, 0), { enums: [{ id: 31, value: 1 }, { id: 85, value: 7 }] })
+    assert.equal(zeroed.unsure, true)
+    assert.equal(cabWas(zeroed), null, 'an undo to Legacy was offered from a read that failed')
+  })
+
+  test('the demo answers the cab picker the way the unit does, down the phone’s wire', async () => {
+    const { demoRequest } = await import('../mobile/src/lib/demoWire.js')
+    const { createMockDevice } = await import('../src/lib/mockDevice.js')
+    const { pickCab, restoreCab, cabWas, cabShows, cabBackTo } = await import('../mobile/src/lib/cab-pick.js')
+    const unit = createMockDevice('fm3')
+    const send = (path, method = 'GET', body) =>
+      demoRequest(unit, path, { method, body: body === undefined ? null : JSON.stringify(body) })
+    const cabBlock = (await send('/preset/blocks')).find((b) => b.slug === 'cab')
+    const eid = cabBlock.effectId
+    /* Exactly what device.setEnum puts on the wire. */
+    const write = (paramId, ordinal) => send(`/preset/blocks/${eid}/params/${paramId}`, 'PUT', { value: ordinal, continuous: false })
+
+    await write(31, 0)
+    const legacy = await send(`/preset/blocks/${eid}/cab`)
+    assert.equal(legacy.mode.value, 0, 'a discrete write of the mode did not land as a whole number')
+    const was = cabWas(legacy)
+    await pickCab(legacy, 11, write)
+    const picked = await send(`/preset/blocks/${eid}/cab`)
+    assert.ok(cabShows(picked, 11), 'the demo does not show the cab the phone picked')
+    await restoreCab(picked, was, write)
+    assert.ok(cabBackTo(await send(`/preset/blocks/${eid}/cab`), was), 'the phone’s undo left the demo on DynaCab')
+
+    /* A knob sent on the discrete path is still a position, as it was. */
+    const knob = (await send(`/preset/blocks/${eid}/params`)).named.find((p) => p.min < 0 && p.max === 0)
+    await send(`/preset/blocks/${eid}/params/${knob.id}`, 'PUT', { value: 0.5, continuous: false })
+    const after = (await send(`/preset/blocks/${eid}/params`)).named.find((p) => p.id === knob.id)
+    assert.ok(Math.abs(after.value - (knob.min + knob.max) / 2) < 0.01, `a knob's discrete retry landed as ${after.value}`)
   })
 
   test('a knob that did not take says what the unit is holding, and why when it is the tempo', () => {
@@ -7894,7 +8037,7 @@ export function run(test) {
        inherits the trim from a bigger one and draws tiny tiles. */
     assert.match(
       stage,
-      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{blocks\.length\}:\$\{fitOn\}`/,
+      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{blocks\.length\}:\$\{fitOn\}:\$\{sceneCols\}`/,
       'the trim is not thrown away when the rig or the screen changes'
     )
     assert.match(stage, /if \(trim !== 0\) setTrim\(0\)/, 'the trim survives a change of preset, so a smaller rig gets a smaller tile')
