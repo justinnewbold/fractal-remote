@@ -7641,6 +7641,245 @@ test('the web chain editor draws, and moves a block the way the phone does', asy
 })
 
 
+console.log('\ncab picker')
+
+/*
+ * A cab is not a model change.
+ *
+ * On an FM3 the list the cab picker offers is the DynaCab list, and the model
+ * change it sent reached the block's Preamp Type — the only thing on a cab
+ * block with TYPE in its name. A tester picked "1x12 G12T-100", nothing
+ * changed, and the picker read the Preamp Type back and named his cab. These
+ * hold the picker to the cab state the host serves instead.
+ */
+const cabFixture = (mode, dyna = 3) => ({
+  modeParam: 31,
+  mode: { value: mode, label: mode === 1 ? 'DYNA-CAB' : 'LEGACY' },
+  slots: [
+    { slot: 1, bankParam: 0, irParam: 4, dynaParam: 85, bank: { value: 0, label: 'FACTORY 1' }, irIndex: 12, irName: '4x12 Recto', dyna: { value: dyna, label: `Cab ${dyna}` } },
+    { slot: 2, bankParam: 1, irParam: 5, dynaParam: 86, bank: { value: 0, label: 'FACTORY 1' }, irIndex: 34, irName: '2x12 Blue', dyna: { value: 0, label: 'Cab 0' } }
+  ]
+})
+
+test('picking a cab on an IR writes the mode, then slot 1’s DynaCab, as whole numbers', async () => {
+  const { pickCab } = await import('../shared/cab-pick.mjs')
+  const sent = []
+  const res = await pickCab(cabFixture(0), 11, async (id, v) => (sent.push([id, v]), { ok: true }))
+  assert.equal(res.ok, true)
+  assert.deepEqual(sent, [[31, 1], [85, 11]], 'the mode has to go first, or the cab is stored and not heard')
+  for (const [, v] of sent) assert.ok(Number.isInteger(v), `${v} is a position, not an ordinal`)
+
+  /* Already on DynaCab: the cab alone. */
+  sent.length = 0
+  await pickCab(cabFixture(1), 7, async (id, v) => (sent.push([id, v]), { ok: true }))
+  assert.deepEqual(sent, [[85, 7]], 'a block already on DynaCab had its mode written again')
+
+  /* A refused mode stops there, rather than leaving a cab half-changed. */
+  sent.length = 0
+  const no = await pickCab(cabFixture(0), 11, async (id, v) => (sent.push([id, v]), { ok: id !== 31 }))
+  assert.equal(no.ok, false, 'a refusal was reported as done')
+  assert.deepEqual(sent, [[31, 1]], 'the cab went out after the mode was refused')
+})
+
+test('undoing a cab pick puts back the cab AND the mode, so an IR plays again', async () => {
+  const { pickCab, restoreCab, cabWas } = await import('../shared/cab-pick.mjs')
+  const before = cabFixture(0, 3)
+  const was = cabWas(before)
+  assert.deepEqual([was.mode, was.dyna, was.name], [0, 3, '4x12 Recto'])
+  await pickCab(before, 11, async () => ({ ok: true }))
+  const sent = []
+  const res = await restoreCab(cabFixture(1, 11), was, async (id, v) => (sent.push([id, v]), { ok: true }))
+  assert.equal(res.ok, true)
+  assert.deepEqual(sent, [[85, 3], [31, 0]], 'the undo left the block on DynaCab, or lost the cab it had')
+})
+
+test('the cab’s IR numbers and banks are off the knob deck, found by the ids the host names', async () => {
+  const { cabHidden, cabReady, cabShowing } = await import('../shared/cab-pick.mjs')
+  assert.deepEqual([...cabHidden(cabFixture(1))].sort((a, b) => a - b), [0, 1, 4, 5])
+  /* No cab state, no change: every knob that was there stays. */
+  for (const none of [null, { error: 'unsupported' }, { slots: [] }, {}]) {
+    assert.equal(cabReady(none), false, `${JSON.stringify(none)} was taken for a cab state`)
+    assert.equal(cabHidden(none).size, 0, 'a unit without cab state lost knobs')
+    assert.equal(cabShowing(none, []), null)
+  }
+  /* What the picker says: the DynaCab by the roster's name, or the IR with a word on what a pick does. */
+  const dyna = cabShowing(cabFixture(1, 11), [{ value: 11, name: '1x12 G12T-100' }])
+  assert.deepEqual([dyna.value, dyna.name, dyna.legacy], [11, '1x12 G12T-100', false])
+  const ir = cabShowing(cabFixture(0), [{ value: 3, name: 'x' }])
+  assert.equal(ir.value, null, 'a cab in the list was marked while the block plays an IR')
+  assert.equal(ir.name, '4x12 Recto')
+  assert.match(ir.hint, /switches this block to DynaCab/)
+})
+
+/* A cab state that read as all zeros because the read failed, beside a params read that did not. */
+const zeroedCab = () => {
+  const c = cabFixture(0, 0)
+  c.slots = c.slots.map((s) => ({ ...s, irIndex: 0, irName: '#0' }))
+  return c
+}
+
+test('a cab state the params read contradicts is read again, and kept as unsure rather than trusted', async () => {
+  const { cabAgrees, readCab, cabWas, cabShowing, pickCab } = await import('../shared/cab-pick.mjs')
+  const params = { enums: [{ id: 31, value: 1 }, { id: 85, value: 7 }] }
+  assert.equal(cabAgrees(zeroedCab(), params), false, 'a zeroed read was taken for the block on DynaCab 7')
+  assert.equal(cabAgrees(cabFixture(1, 7), params), true)
+  /* Nothing to check against: the cab state stands, so a demo still picks through it. */
+  for (const none of [{ enums: [] }, {}, null]) assert.equal(cabAgrees(zeroedCab(), none), true)
+
+  let reads = 0
+  const bad = await readCab(async () => (reads++, zeroedCab()), params)
+  assert.equal(reads, 2, 'a disagreeing cab state was not read a second time')
+  assert.equal(bad.unsure, true, 'a cab state that disagreed twice was trusted')
+  assert.equal(cabWas(bad), null, 'an undo was offered from numbers that were never read')
+  const says = cabShowing(bad, [{ value: 0, name: 'Cab 0' }])
+  assert.deepEqual([says.name, says.hint, says.value], [null, null, null], 'an unsure read named a cab or said "Playing an IR"')
+  /* And its mode is written rather than believed, so the pick is heard. */
+  const sent = []
+  await pickCab({ ...cabFixture(1, 7), unsure: true }, 11, async (id, v) => (sent.push([id, v]), { ok: true }))
+  assert.deepEqual(sent, [[31, 1], [85, 11]])
+
+  reads = 0
+  const good = await readCab(async () => (reads++, reads === 1 ? zeroedCab() : cabFixture(1, 7)), params)
+  assert.equal(good.unsure, undefined, 'a second read that agreed was still marked unsure')
+  assert.equal(await readCab(async () => { throw new Error('gone') }, params), null, 'a failed read is not the old panel')
+})
+
+test('a cab re-read that fails keeps the block on the cab path, as the writes left it, and the undo still works', async () => {
+  const { pickCab, restoreCab, cabAfter, cabWas, cabShows, cabHidden, taken } = await import('../shared/cab-pick.mjs')
+  const before = cabFixture(0, 3)
+  const was = cabWas(before)
+  const res = await pickCab(before, 11, async () => ({ ok: true }))
+  const after = cabAfter(before, taken(res))
+  assert.ok(cabShows(after, 11), 'the state kept after a failed re-read does not show the pick')
+  assert.deepEqual([...cabHidden(after)].sort((a, b) => a - b), [0, 1, 4, 5], 'the IR numbers came back onto the deck')
+  /* The next pick is a cab write, not a model change. */
+  const next = []
+  await pickCab(after, 20, async (id, v) => (next.push([id, v]), { ok: true }))
+  assert.deepEqual(next, [[85, 20]])
+  const back = []
+  await restoreCab(after, was, async (id, v) => (back.push([id, v]), { ok: true }))
+  assert.deepEqual(back, [[85, 3], [31, 0]], 'the undo sent nothing after a failed re-read')
+  /* A refusal: only what got through counts. */
+  const half = await pickCab(before, 11, async (id) => ({ ok: id !== 85 }))
+  const left = cabAfter(before, taken(half))
+  assert.equal(left.mode.value, 1)
+  assert.equal(left.slots[0].dyna.value, 3, 'a refused cab was counted as on the block')
+})
+
+test('an undo writes the cab and the mode even when a bad read says they are already there', async () => {
+  const { restoreCab } = await import('../shared/cab-pick.mjs')
+  const sent = []
+  const res = await restoreCab(zeroedCab(), { mode: 0, dyna: 0 }, async (id, v) => (sent.push([id, v]), { ok: true }))
+  assert.equal(res.ok, true)
+  assert.deepEqual(sent, [[85, 0], [31, 0]], 'an undo skipped its writes on the word of a zeroed read')
+})
+
+test('the browser writes a cab on the discrete path and never posts a model change for it', async () => {
+  const store = { 'forgefx.host': 'http://unit.test' }
+  globalThis.localStorage = {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => {
+      store[k] = String(v)
+    },
+    removeItem: (k) => {
+      delete store[k]
+    }
+  }
+  const seen = []
+  globalThis.fetch = async (url, options = {}) => {
+    const method = options.method || 'GET'
+    const path = String(url).replace('http://unit.test', '')
+    seen.push({ method, path, body: options.body ? JSON.parse(options.body) : null })
+    const answer = path.endsWith('/cab') ? cabFixture(0) : { ok: true }
+    return { ok: true, status: 200, statusText: 'OK', text: async () => JSON.stringify(answer) }
+  }
+  try {
+    const fx = await import('../src/lib/forgefx.js')
+    const { pickCab } = await import('../shared/cab-pick.mjs')
+    const cab = await fx.cabState(62)
+    assert.equal(seen[0].path, '/preset/blocks/62/cab')
+    await pickCab(cab, 11, (id, v) => fx.setEnum(62, id, v))
+    const writes = seen.filter((c) => c.method !== 'GET')
+    assert.deepEqual(
+      writes.map((c) => [c.method, c.path, c.body]),
+      [
+        ['PUT', '/preset/blocks/62/params/31', { value: 1, continuous: false }],
+        ['PUT', '/preset/blocks/62/params/85', { value: 11, continuous: false }]
+      ]
+    )
+    assert.ok(!seen.some((c) => c.path.endsWith('/type')), 'a cab pick posted a model change')
+  } finally {
+    delete globalThis.fetch
+    delete globalThis.localStorage
+  }
+})
+
+test('the cab panel picks through the cab state, and every other block still swaps its model', () => {
+  const src = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+  const panel = src.slice(src.indexOf('export function BlockPanel'), src.indexOf('function fmt('))
+  const apply = panel.slice(panel.indexOf('const applyModel = async'), panel.indexOf('const applyCab = async'))
+  const cabWrite = panel.slice(panel.indexOf('const applyCab = async'), panel.indexOf('const swapModel = async'))
+  assert.ok(apply.length > 100 && cabWrite.length > 100, 'the model swap moved; this check reads it')
+  assert.match(apply, /if \(cab && block\.slug === 'cab'\) return applyCab\(value, \{ undoable \}\)/, 'a cab block with cab state still goes through setType')
+  assert.match(apply, /const sent = await setType\(block\.effectId, Number\(value\)\)/, 'an amp or a drive no longer swaps its model')
+  assert.match(apply, /onError\(MODEL_REFUSED\)/, 'a refused model change is still dropped')
+  assert.ok(!/setType\(/.test(cabWrite), 'the cab pick calls setType')
+  assert.match(cabWrite, /setEnum\(block\.effectId, paramId, ordinal\)/, 'the cab pick does not write on the discrete path')
+  assert.match(cabWrite, /const now = await readCab\(\(\) => cabState\(block\.effectId\), fresh\)/, 'the cab is not read again after a pick')
+  /* A re-read that fails keeps the block on the cab path, as the writes left it. */
+  assert.match(cabWrite, /setCab\(read \|\| cabAfter\(before, taken\(res\)\)\)/, 'a failed re-read drops the block back onto setType')
+  assert.ok(!/setCab\(null\)/.test(cabWrite), 'a cab pick can still forget the cab state')
+  /* A pick that finishes after another block came up leaves that block alone. */
+  assert.match(panel, /liveKey\.current = readKey/)
+  for (const [name, body] of [['cab pick', cabWrite], ['model swap', apply]]) {
+    const guard = body.indexOf('if (liveKey.current !== key)')
+    assert.ok(guard > 0, `a ${name} that finishes late lands on whatever block is open`)
+    assert.ok(guard < body.indexOf('setParams('), `the ${name} sets the panel before checking it is still the same block`)
+  }
+  assert.match(cabWrite, /onError\(CAB_REFUSED\)/, 'a refused cab is not said')
+  assert.match(cabWrite, /setUndo\(\{ name: was\.name, cab: was \}\)/, 'the undo does not hold the mode and the cab')
+  assert.match(panel, /applyCab\(null, \{ undoable: false, back: back\.cab \}\)/, 'undo does not put the cab back')
+  assert.match(panel, /\.filter\(\(p\) => !offDeck\.has\(p\.id\)\)/, 'the IR numbers are still on the knob deck')
+  assert.match(panel, /block\.slug === 'cab' \? await readCab\(\(\) => cabState\(block\.effectId\), p\) : null/, 'a failed cab read is not the old panel')
+  assert.match(panel, /if \(!cab \|\| block\.slug !== 'cab'\) return onError\(CAB_UNDO_LOST\)/, 'an undo with no cab state does nothing and says nothing')
+})
+
+test('the demo FM3’s cab state is shaped and numbered like the unit’s, and the cab picker moves it', async () => {
+  const { createMockDevice } = await import('../src/lib/mockDevice.js')
+  const { pickCab, restoreCab, cabWas, cabShows, cabBackTo } = await import('../shared/cab-pick.mjs')
+  const unit = createMockDevice('fm3')
+  const blocks = await unit.presetBlocks()
+  const cabBlock = blocks.find((b) => b.slug === 'cab')
+  const amp = blocks.find((b) => b.slug === 'amp')
+  assert.ok(cabBlock, 'the demo FM3 has no cab')
+  assert.deepEqual(unit.cabState(amp.effectId), { error: 'not a cab block' }, 'an amp answered with cab state')
+
+  const cab = unit.cabState(cabBlock.effectId)
+  assert.equal(cab.modeParam, 31)
+  assert.deepEqual(cab.modeOptions.map((o) => o.label), ['LEGACY', 'DYNA-CAB'])
+  assert.deepEqual(
+    cab.slots.map((s) => [s.bankParam, s.irParam, s.dynaParam]),
+    [[0, 4], [1, 5]].map(([b, i], n) => [b, i, 85 + n]),
+    'the demo numbers the cab’s selectors differently from an FM3'
+  )
+  assert.equal(cab.dynaOptions.length, (await unit.blockTypes('cab')).length, 'the DynaCab list is not the cab list')
+
+  /* Put it on an IR, then pick a cab the way the panel does. */
+  unit.setEnum(cabBlock.effectId, 31, 0)
+  const legacy = unit.cabState(cabBlock.effectId)
+  assert.equal(legacy.mode.value, 0)
+  const was = cabWas(legacy)
+  await pickCab(legacy, 11, (id, v) => unit.setEnum(cabBlock.effectId, id, v))
+  const picked = unit.cabState(cabBlock.effectId)
+  assert.ok(cabShows(picked, 11), 'the demo does not show the cab that was picked')
+  assert.equal(picked.slots[0].dyna.label, '1x12 G12T-100')
+  await restoreCab(picked, was, (id, v) => unit.setEnum(cabBlock.effectId, id, v))
+  assert.ok(cabBackTo(unit.cabState(cabBlock.effectId), was), 'the undo did not put the demo back on its IR')
+  /* And none of it reached the knob list. */
+  assert.ok(!(await unit.blockParams(cabBlock.effectId)).named.some((p) => [31, 85, 86].includes(p.id)))
+})
+
+
 await settle()
 /*
  * The tally has to say when it is red.

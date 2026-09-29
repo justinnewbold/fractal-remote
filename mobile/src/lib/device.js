@@ -461,6 +461,26 @@ export const demoTuner = () => demoDevice()?.tunerStream?.() || null
 export const setType = (eid, value) => told(`block ${eid} model ${value}`, post(`/preset/blocks/${eid}/type`, { value }))
 
 /**
+ * A cab block as the host sees it: which mode it is in (an IR, or DynaCab),
+ * which DynaCab and which IR each slot holds, and which parameter holds each.
+ *
+ * The browser's `cabState`, on the same route. A cab has no "type" for the
+ * model change above to write — see lib/cab-pick.js — so this is where the
+ * cab picker reads what the block is really playing.
+ */
+export const cabState = (eid) => remoteRequest(`/preset/blocks/${eid}/cab`)
+
+/**
+ * Set a discrete selector — a cab's mode, a slot's DynaCab — to an ordinal.
+ *
+ * Not a knob, so not normalised: option 11 of 45 is the eleventh cab, not a
+ * quarter of the way along. It goes out on the discrete path with the number
+ * intact, the way the browser's `setEnum` sends it.
+ */
+export const setEnum = (eid, paramId, ordinal) =>
+  told(`block ${eid} param ${paramId} → ${ordinal}`, put(`/preset/blocks/${eid}/params/${paramId}`, { value: ordinal, continuous: false }))
+
+/**
  * Every model a block family offers, with what each one is modelled on.
  *
  * The lineage is put on here rather than asked for: an FM3 reading from its own

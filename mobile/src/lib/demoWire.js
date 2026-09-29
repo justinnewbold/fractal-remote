@@ -90,6 +90,10 @@ export async function demoRequest(mock, path, options = {}) {
     if (part[0] === 'preset' && part[1] === 'blocks' && part[3] === 'params') {
       return mock.blockParams(num(2))
     }
+    /* /preset/blocks/{eid}/cab — what the cab picker reads and then writes through. */
+    if (part[0] === 'preset' && part[1] === 'blocks' && part[3] === 'cab') {
+      return mock.cabState(num(2))
+    }
     /* /blocks/{slug}/types */
     if (part[0] === 'blocks' && part[2] === 'types') return mock.blockTypes(part[1])
   }
@@ -130,6 +134,15 @@ export async function demoRequest(mock, path, options = {}) {
       const eid = num(2)
       const id = num(4)
       if (typeof body?.ordinal === 'number') return mock.setEnum(eid, id, body.ordinal)
+      /*
+       * A discrete write to a selector that is not a knob — a cab's mode or
+       * DynaCab — carries a whole number, not a position, exactly as the
+       * unit takes it. A knob sent on the discrete path is still a position
+       * here, which is what the confirmed write's retry sends.
+       */
+      if (body?.continuous === false && !mock.blockParams(eid).named.some((p) => p.id === id)) {
+        return mock.setEnum(eid, id, body?.value)
+      }
       return mock.setParam(eid, id, body?.value)
     }
   }

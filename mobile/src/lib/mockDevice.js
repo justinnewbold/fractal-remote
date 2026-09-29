@@ -487,6 +487,20 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
   }
 
   /*
+   * A block's other selectors — a cab's mode, bank and DynaCab — kept in the
+   * same per-channel map as its model, under the parameter's own number, so a
+   * save carries them and a channel nobody has visited starts from the one
+   * the block was placed on.
+   */
+  const selectorKey = (eid, paramId) => `${eid}:${chan(eid)}#${paramId}`
+  const selectorOf = (eid, paramId, fallback) => {
+    const key = selectorKey(eid, paramId)
+    if (state.models.has(key)) return state.models.get(key)
+    const block = state.blocks.find((b) => b.effectId === eid)
+    return state.models.get(`${eid}:${block?.channel || 'A'}#${paramId}`) ?? fallback
+  }
+
+  /*
    * The editor's pages for a demo block, in the shape a real unit sends them,
    * so EDIT splits a demo Drive into Basic, Tone, Graphic EQ and Advanced as
    * it does a real one. The amp's file carries the whole layout as read; the
@@ -718,10 +732,19 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
       return { ok: true, slot, kept }
     },
 
+    /*
+     * A discrete write: an ordinal, stored as it came.
+     *
+     * A selector that is also on the knob list (a cab's IR number is both)
+     * lands on the knob. One that is not — a cab's mode, bank and DynaCab —
+     * is kept beside the block's model, per channel like everything else on
+     * the block, and goes into a save with it.
+     */
     setEnum: (eid, paramId, ordinal) => {
       const list = paramsOf(eid)
       const param = list?.find((p) => p.id === paramId)
       if (param) param.value = ordinal
+      else if (state.blocks.some((b) => b.effectId === eid)) state.models.set(selectorKey(eid, paramId), ordinal)
       return { ok: true }
     },
 
@@ -734,42 +757,47 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
      * the IR as irIndex/irName. The panel therefore handed React an object as a
      * child and threw, on hardware only. A mock that invents its own shapes is
      * worse than no mock: it makes the broken path the only one anyone tests.
+     *
+     * And it is READ, not typed in, because the cab picker now writes through
+     * it. The numbers are an FM3's: the mode is parameter 31 (LEGACY or
+     * DYNA-CAB), the banks 0 and 1, the IR numbers 4 and 5, the DynaCabs 85
+     * and 86. This said the banks were 1 and 2 and the mode was "Stereo" —
+     * which on a real unit are the second bank and nothing at all. A cab that
+     * has never been touched plays the DynaCab its preset was built with.
      */
     cabState: (eid) => {
+      const block = state.blocks.find((b) => b.effectId === eid)
+      if (block?.slug !== 'cab') return { error: 'not a cab block' }
       const banks = Object.keys(IR_BANKS)
-      const names = IR_BANKS[banks[0]] || []
+      const knobs = paramsOf(eid)
+      const MODES = ['LEGACY', 'DYNA-CAB']
+      const mode = selectorOf(eid, 31, 1)
+      const slot = (n) => {
+        const bankParam = n - 1
+        const irParam = 4 + (n - 1)
+        const dynaParam = 85 + (n - 1)
+        const bank = selectorOf(eid, bankParam, 0)
+        const names = IR_BANKS[banks[bank]] || []
+        const irIndex = Math.round(knobs?.find((p) => p.id === irParam)?.value ?? 0)
+        const dyna = selectorOf(eid, dynaParam, n === 1 ? typeOf(eid) : 0)
+        return {
+          slot: n,
+          bankParam,
+          irParam,
+          dynaParam,
+          bank: { value: bank, label: banks[bank] ?? String(bank) },
+          irIndex,
+          irName: names[irIndex] ?? `#${irIndex}`,
+          dyna: { value: dyna, label: cabTypes.find((c) => c.value === dyna)?.name ?? String(dyna) }
+        }
+      }
       return {
         modeParam: 31,
-        mode: { value: 1, label: 'Stereo' },
-        modeOptions: [
-          { value: 0, label: 'Mono' },
-          { value: 1, label: 'Stereo' }
-        ],
+        mode: { value: mode, label: MODES[mode] ?? '' },
+        modeOptions: MODES.map((label, value) => ({ value, label })),
         bankOptions: banks,
-        dynaOptions: [{ value: 0, label: 'None' }],
-        slots: [
-          {
-            slot: 1,
-            bankParam: 1,
-            irParam: 4,
-            dynaParam: 85,
-            bank: { value: 0, label: banks[0] },
-            irIndex: 12,
-            irName: names[12] || '#12',
-            dyna: { value: 0, label: 'None' }
-          },
-          {
-            slot: 2,
-            bankParam: 2,
-            irParam: 5,
-            dynaParam: 86,
-            bank: { value: 0, label: banks[0] },
-            irIndex: 34,
-            irName: names[34] || '#34',
-            dyna: { value: 0, label: 'None' }
-          }
-        ],
-        eid
+        dynaOptions: cabTypes.map((c) => ({ value: c.value, label: c.name })),
+        slots: [slot(1), slot(2)]
       }
     },
 
