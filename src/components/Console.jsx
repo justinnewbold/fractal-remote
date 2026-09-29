@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useDevice } from '../lib/deviceState'
+import { useDevice, writeBypass, refreshSceneState } from '../lib/deviceState'
 import { blockColor } from '../lib/blockColors'
 import { useDismiss } from '../lib/dismiss'
 import { marksFor, toggleFavourite } from '../lib/presetMarks'
@@ -52,7 +52,6 @@ import {
   setEnum,
   setParamConfirmed,
   setType,
-  setBypass,
   setChannel
 } from '../lib/forgefx'
 import {
@@ -1218,7 +1217,10 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
                 onClick={async () => {
                   try {
                     await setChannel(block.effectId, ch)
-                    onChanged(`${block.name} → channel ${ch}`)
+                    /* A channel is a switch: the status read says what it
+                       changed, where a whole re-read dumps the preset. */
+                    await refreshSceneState()
+                    onChanged(`${block.name} → channel ${ch}`, undefined, { chain: false })
                   } catch (err) {
                     onError(err.message)
                   }
@@ -1236,11 +1238,17 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
         <button
           className={`bypass-btn ${block.bypassed ? 'off' : ''}`}
           onClick={async () => {
+            const wanted = !block.bypassed
             try {
-              await setBypass(block.effectId, !block.bypassed)
-              onChanged(`${block.name} ${!block.bypassed ? 'bypassed' : 'engaged'}`)
+              /* Through the store, so the computer's announcement of this
+                 write is known as this tap's and costs no chain read — and no
+                 re-read after it either: an effect switched is not a chain
+                 changed, and a dump then lands on a unit that is switching. */
+              await writeBypass(block.effectId, wanted)
+              onChanged(`${block.name} ${wanted ? 'bypassed' : 'engaged'}`, undefined, { chain: false })
             } catch (err) {
               onError(err.message)
+              if (!err?.unitGone) refreshSceneState()
             }
           }}
           disabled={busy}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { setSceneName, setChannel, noteSceneName } from '../lib/forgefx'
-import { useDevice, refreshScene, writeScene } from '../lib/deviceState'
+import { useDevice, refreshScene, refreshSceneState, writeScene } from '../lib/deviceState'
 
 /**
  * Scenes and per-block channels.
@@ -51,8 +51,10 @@ export default function Scenes({
 
   const jump = async (index) => {
     try {
+      /* The store reads what a scene switched, which is the small status
+         read; a whole re-read after it would dump the preset mid-switch. */
       await writeScene(index)
-      onChanged(`Switched to scene ${index + 1}`)
+      onChanged(`Switched to scene ${index + 1}`, { reread: false })
     } catch (err) {
       onError(err.message)
     }
@@ -94,7 +96,8 @@ export default function Scenes({
   const channel = async (block, ch) => {
     try {
       await setChannel(block.effectId, ch)
-      onChanged(`${block.name} → channel ${ch}`)
+      onChanged(`${block.name} → channel ${ch}`, { reread: false })
+      await refreshSceneState()
     } catch (err) {
       onError(err.message)
     }

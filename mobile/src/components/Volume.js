@@ -138,24 +138,48 @@ export default function Volume({ blocks, open, onClose, onError }) {
     })
   }
 
+  /*
+   * READ WHEN THE SHEET OPENS, NOT WHEN THE BAR IS DRAWN.
+   *
+   * This read the Output block's knobs the moment the stage screen appeared,
+   * and again at every preset change, for a sheet opened twice a night. A
+   * block's knobs read that way also tell the computer somebody is editing
+   * that block, and it then re-reads it every two seconds for as long as the
+   * app is open — reads at a unit that is making sound, for a slider nobody
+   * was touching. Opening the sheet is when the level is wanted, and reading
+   * then also means it shows the level the unit has now, not the one it had
+   * when the screen was drawn.
+   */
+  const [reading, setReading] = useState(false)
+  /* Another preset's Output block is another level: not shown as this one's
+     while this one is read. */
   useEffect(() => {
-    if (!Number.isInteger(eid)) return undefined
+    setParamState(null)
+    setValue(null)
+  }, [eid])
+  useEffect(() => {
+    if (!open || !Number.isInteger(eid)) return undefined
     let stop = false
+    setReading(true)
     ;(async () => {
       try {
         const res = await blockParams(eid)
         if (stop) return
         const found = outputLevelParam(res?.named)
         setParamState(found)
-        setValue(found ? found.value : null)
+        /* A press still settling from before a quick close and open is newer
+           than this answer, which was asked before it landed. */
+        if (!settle.current.timer && !settle.current.landing) setValue(found ? found.value : null)
       } catch (err) {
         if (!stop) onError?.(err.message)
+      } finally {
+        if (!stop) setReading(false)
       }
     })()
     return () => {
       stop = true
     }
-  }, [eid, onError])
+  }, [open, eid, onError])
 
   /** Where the thumb was when the finger landed, as a value. */
   const from = useRef(0)
@@ -244,6 +268,7 @@ export default function Volume({ blocks, open, onClose, onError }) {
       settle.current.again = true
       return
     }
+    settle.current.timer = null
     settle.current.landing = true
     try {
       await land()
@@ -322,7 +347,13 @@ export default function Volume({ blocks, open, onClose, onError }) {
             {/* No slider at all on a unit whose output block has no level this
                 app can move — a control that can only disappoint is worse than
                 none. The panel still opens and says so. */}
-            {!Number.isInteger(eid) || !param ? (
+            {/* Every open, not only the first: the level on screen from last
+                time may be another preset's, and a press worked out from it —
+                or an answer landing after one — would put the wrong level on
+                the unit. */}
+            {Number.isInteger(eid) && reading ? (
+              <Note>Reading the level…</Note>
+            ) : !Number.isInteger(eid) || !param ? (
               <Note tone="warn">
                 This unit’s output block has no level this app can move. Use the knob on the unit.
               </Note>

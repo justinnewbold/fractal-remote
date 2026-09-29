@@ -16,8 +16,19 @@ import {
   stepTarget
 } from '../lib/lists'
 import { sync, useStored } from '../lib/store'
-import { SIZES, fitTiles, loadFit, loadIcons, loadScenesFour, loadSize, sceneColsFor } from '../lib/gigSize'
 import {
+  SIZES,
+  fitTiles,
+  loadFit,
+  loadIcons,
+  loadSceneLayout,
+  loadSceneOrder,
+  loadSize,
+  sceneColsFor,
+  sceneOrderFor
+} from '../lib/gigSize'
+import {
+  arrivedCurrent,
   clearError,
   loadPreset,
   refreshAll,
@@ -152,8 +163,10 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   const size = SIZES[loadSize(sync)] || SIZES[1]
   /* The effect pictures, unless they were turned off in Settings. */
   const showIcons = loadIcons(sync)
-  /* 1 2 3 4 over 5 6 7 8, the way the unit draws them — see gigSize. */
-  const sceneCols = sceneColsFor(size, loadScenesFour(sync))
+  /* Across, down the two sides, like the unit, or in his own order — chosen
+     on the Appearance page and only there. See gigSize. */
+  const sceneLayout = loadSceneLayout(sync)
+  const sceneCols = sceneColsFor(size, sceneLayout)
   /*
    * SMALLEST MEANS IT FITS. "On the smallest setting, if we could make it so
    * the screen won't scroll and everything fits on the screen — it's barely
@@ -301,12 +314,22 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
     if (picking && coach) closeCoach()
   }, [picking, coach, closeCoach])
 
-  const reload = useCallback(async () => {
+  /*
+   * `arriving` is the screen being shown again rather than pulled down, and
+   * then it reads only when the rig has nothing current: coming back from
+   * the preset list, the preset just chosen is already being read, and doing
+   * it all again here was two more preset dumps landing on a unit that was
+   * still loading — the sound dropping "until the android app loads the new
+   * page". Nor when the store has followed the unit since its last read,
+   * however long ago: it listens on every screen. See rig.arrivedCurrent.
+   */
+  const reload = useCallback(async ({ arriving = false } = {}) => {
+    if (arriving && (await arrivedCurrent())) return
     setRefreshing(true)
     try {
       await refreshAll()
       /* Pulling down reads the scene names fresh too, past anything kept. */
-      await rereadSceneNames()
+      if (!arriving) await rereadSceneNames()
     } catch {
       // refreshAll puts what it learned in the store, including the failure.
       // Nothing to add here that the screen is not already showing.
@@ -330,7 +353,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   const demoIs = useDemoUnit()
 
   useEffect(() => {
-    reload()
+    reload({ arriving: true })
   }, [reload, demoIs])
 
   /*
@@ -393,7 +416,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
         paddingBottom: tight ? space.lg : space.xxl
       }}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={reload} tintColor={color.silkDim} />
+        <RefreshControl refreshing={refreshing} onRefresh={() => reload()} tintColor={color.silkDim} />
       }
     >
       {/* Above the faults, because a fault is about right now and this is
@@ -530,7 +553,9 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             }}
             style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}
           >
-            {Array.from({ length: scenes.count }, (_, i) => {
+            {/* Drawn in the layout's order, but each tile is still its own
+                scene: "5" says 5, wears 5's colour and selects scene 5. */}
+            {sceneOrderFor(sceneLayout, scenes.count, loadSceneOrder(sync)).map((i) => {
               const hue = sceneColor(i)
               return (
                 <Tile

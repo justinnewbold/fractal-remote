@@ -290,41 +290,159 @@ export function saveIcons(on, storage) {
 }
 
 /*
- * THE SCENES IN THE UNIT'S OWN ORDER: ONE TO FOUR, THEN FIVE TO EIGHT.
+ * WHERE THE SCENES SIT: ACROSS, DOWN, LIKE THE UNIT, OR WHEREVER YOU PUT THEM.
  *
  * "I prefer arrangement of the scenes - first row 1234, second row 5678 as it
- * is in the screen of my unit." Two across reads 1 2 / 3 4 / 5 6 / 7 8, which
- * is the layout Justin chose and stays the default — but it puts scene 5
- * under scene 3, where nobody who learned the rig on the FM3's own screen
- * looks for it. So it is a choice, kept per device like the tile size.
+ * is in the screen of my unit." That was a yes-or-no box, rows of four or not.
+ * Then Justin: "Make an option in settings to select on the left side one,
+ * two, three, four for the scenes, and on the right side five, six, seven,
+ * eight, instead of them just going across like a snake. And actually, can
+ * you make it so you can grab and drop the scenes wherever you want them on
+ * the screen?"
  *
- * Four across at every size and at every width, phone or computer: the point
- * is that the rows match the unit, and a row that re-flowed to fit the window
- * would stop matching it.
+ * So one choice with four answers, kept per device like the tile size:
+ *
+ *   across — 1 2 / 3 4 / 5 6 / 7 8, the layout Justin chose and the default.
+ *            On a wide browser window the grid still fills the row as before.
+ *   down   — 1 2 3 4 down the left, 5 6 7 8 down the right. Two columns at
+ *            every width; with an odd count the left column holds the extra.
+ *   four   — 1 2 3 4 over 5 6 7 8, the unit's own screen. Four across at every
+ *            width, because a row that re-flowed to fit the window would stop
+ *            matching the unit.
+ *   mine   — two columns, in an order the player dragged them into on the
+ *            Appearance page. Arranged there and never on Play: a mis-drag in
+ *            the middle of a song must not be possible.
+ *
+ * Whatever the layout, a tile is still its own scene. Tile "5" says 5, wears
+ * scene 5's colour and selects scene 5 wherever it is drawn — only the place
+ * it is drawn moves.
  */
+const SCENE_LAYOUT_KEY = 'fractal.sceneLayout'
+/* Where the old box kept its answer. Read, never written, so a phone that had
+   rows of four turned on still has them after the box became a choice. */
 const SCENE_ROWS_KEY = 'fractal.gigScenesFour'
+const SCENE_ORDER_KEY = 'fractal.sceneOrder'
 
 /** How many scenes a row holds when they are laid out like the unit. */
 export const SCENES_LIKE_UNIT = 4
 
-export function loadScenesFour(storage) {
+/** The four answers, in the order the Appearance page offers them. */
+export const SCENE_LAYOUTS = [
+  { id: 'across', name: 'Across', sub: '1 2 on the top row, 3 4 under them, and so on down.' },
+  {
+    id: 'down',
+    name: 'Down, in two columns',
+    sub: '1 2 3 4 down the left side and 5 6 7 8 down the right.'
+  },
+  {
+    id: 'four',
+    name: 'Rows of four, like the unit',
+    sub: "1 2 3 4 on top and 5 6 7 8 underneath, the way the unit's own screen shows them."
+  },
+  { id: 'mine', name: 'My own order', sub: 'Two columns, in whatever order you drag them into.' }
+]
+
+const LAYOUT_IDS = SCENE_LAYOUTS.map((l) => l.id)
+
+const storeOf = (storage) => storage ?? (typeof localStorage !== 'undefined' ? localStorage : null)
+
+export function loadSceneLayout(storage) {
   try {
-    const store = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null)
-    return store?.getItem(SCENE_ROWS_KEY) === '1'
+    const store = storeOf(storage)
+    const kept = store?.getItem(SCENE_LAYOUT_KEY)
+    if (LAYOUT_IDS.includes(kept)) return kept
+    return store?.getItem(SCENE_ROWS_KEY) === '1' ? 'four' : 'across'
   } catch {
-    return false
+    return 'across'
   }
 }
 
-export function saveScenesFour(on, storage) {
+export function saveSceneLayout(layout, storage) {
   try {
-    const store = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null)
-    store?.setItem(SCENE_ROWS_KEY, on ? '1' : '0')
+    storeOf(storage)?.setItem(SCENE_LAYOUT_KEY, LAYOUT_IDS.includes(layout) ? layout : 'across')
     return true
   } catch {
     return false
   }
 }
 
-/** Scenes to a row: the unit's four when asked for, the size step's otherwise. */
-export const sceneColsFor = (step, four) => (four ? SCENES_LIKE_UNIT : step?.scenes ?? 2)
+/** Scenes to a row: four like the unit, two for down or your own order, the size step's otherwise. */
+export function sceneColsFor(step, layout) {
+  if (layout === 'four') return SCENES_LIKE_UNIT
+  if (layout === 'down' || layout === 'mine') return 2
+  return step?.scenes ?? 2
+}
+
+/*
+ * YOUR OWN ORDER, MENDED TO FIT THE PRESET IN FRONT OF YOU.
+ *
+ * Kept as a list of scene numbers (from 0) in the order they are drawn, left
+ * to right and top to bottom, two to a row. One order for every preset, which
+ * means it can meet a unit or a preset with fewer scenes than it was arranged
+ * for — so anything past the count is dropped and anything missing goes on the
+ * end. Every scene shows exactly once, whatever was stored.
+ */
+export function repairSceneOrder(order, count) {
+  const n = Math.max(0, Math.floor(Number(count) || 0))
+  const seen = new Set()
+  const out = []
+  for (const v of Array.isArray(order) ? order : []) {
+    if (Number.isInteger(v) && v >= 0 && v < n && !seen.has(v)) {
+      seen.add(v)
+      out.push(v)
+    }
+  }
+  for (let i = 0; i < n; i++) if (!seen.has(i)) out.push(i)
+  return out
+}
+
+/** How many tiles the Arrange grid shows: the unit's eight. */
+export const ARRANGE_COUNT = 8
+
+export function loadSceneOrder(storage) {
+  try {
+    const raw = storeOf(storage)?.getItem(SCENE_ORDER_KEY)
+    return repairSceneOrder(raw ? JSON.parse(raw) : null, ARRANGE_COUNT)
+  } catch {
+    return repairSceneOrder(null, ARRANGE_COUNT)
+  }
+}
+
+export function saveSceneOrder(order, storage) {
+  try {
+    storeOf(storage)?.setItem(SCENE_ORDER_KEY, JSON.stringify(repairSceneOrder(order, ARRANGE_COUNT)))
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** The order with the scenes at two places swapped — what one drag does. */
+export function swapScenes(order, a, b) {
+  const out = [...order]
+  if (a === b || a < 0 || b < 0 || a >= out.length || b >= out.length) return out
+  const kept = out[a]
+  out[a] = out[b]
+  out[b] = kept
+  return out
+}
+
+/*
+ * The scenes in the order they are DRAWN — left to right, then down — for a
+ * grid that fills rows. "Down" is the one that has to be worked out: with two
+ * columns, the left column is the first half (the bigger half when the count
+ * is odd), so row r holds scene r on the left and scene r + half on the right.
+ */
+export function sceneOrderFor(layout, count, customOrder) {
+  const n = Math.max(0, Math.floor(Number(count) || 0))
+  if (layout === 'mine') return repairSceneOrder(customOrder, n)
+  const plain = Array.from({ length: n }, (_, i) => i)
+  if (layout !== 'down') return plain
+  const half = Math.ceil(n / 2)
+  const out = []
+  for (let r = 0; r < half; r++) {
+    out.push(r)
+    if (r + half < n) out.push(r + half)
+  }
+  return out
+}

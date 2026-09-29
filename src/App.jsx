@@ -36,10 +36,13 @@ import {
   put as putDevice,
   getSnapshot as deviceSnapshot,
   macSilent,
-  refreshBlocks,
   refreshScene,
-  refreshSceneNames,
+  refreshSceneState,
+  refreshLoadedSceneNames,
   refreshTempo,
+  chainWasRead,
+  loadPreset as loadPresetInStore,
+  presetHeard,
   tapBeat,
   writeScene,
   writeTempo,
@@ -58,6 +61,7 @@ import { inDesktopApp } from './lib/desktop'
 import { createNameScan } from './lib/nameScan'
 import { Chain, PresetList, BlockPanel, Tuner } from './components/Console'
 import Screens, { viewsFor } from './components/Screens'
+import SceneArrange from './components/SceneArrange'
 import { useAsks } from './lib/asks'
 import {
   SIZES,
@@ -68,8 +72,11 @@ import {
   saveFit,
   loadIcons,
   saveIcons,
-  loadScenesFour,
-  saveScenesFour
+  loadSceneLayout,
+  saveSceneLayout,
+  loadSceneOrder,
+  saveSceneOrder,
+  SCENE_LAYOUTS
 } from './lib/gigSize'
 import { editButtonShows } from './lib/playMode'
 import { FIXES, FIRMWARE_NOTE, fixById, fixFor, versionsInSync } from '../shared/troubleshooting.mjs'
@@ -106,6 +113,10 @@ import {
   notePresetName,
   noteSceneNames,
   readSceneNames,
+  presetCopy,
+  hostKeepsCopy,
+  keepSceneNames,
+  rememberedSceneNames,
   currentDeviceSlug,
   setTelemetryMode,
   placeableBlocks
@@ -124,10 +135,10 @@ import {
   verifyChanges,
   storePreset,
   selectPreset,
-  clearDeviceCache,
   getScene,
   setScene,
   sceneChannels,
+  sceneState,
   setPresetName,
   setChannel,
   revertPreset,
@@ -210,6 +221,9 @@ const UNLOCK_NEXT = 'fractal.unlockNext'
 attachDriver({
   subscribeEvents,
   presetBlocks,
+  sceneState,
+  currentPreset,
+  selectPreset,
   getScene,
   setScene,
   getTempo,
@@ -217,7 +231,12 @@ attachDriver({
   tapTempo,
   setBypass,
   setTuner,
-  readSceneNames
+  readSceneNames,
+  presetCopy,
+  hostKeepsCopy,
+  keepSceneNames,
+  rememberedSceneNames,
+  isRemote: () => remoteActive()
 })
 
 /* Hoisted so each is one function for the life of the module: a selector
@@ -1145,8 +1164,10 @@ export default function App() {
   /* Whether Play sizes its tiles from the screen instead of the step. */
   const [fit, setFit] = useState(loadFit)
   const [icons, setIcons] = useState(loadIcons)
-  /* Scenes 1 2 3 4 over 5 6 7 8, the way the unit's screen draws them. */
-  const [scenesFour, setScenesFour] = useState(loadScenesFour)
+  /* Where the scenes sit on Play — across, down the two sides, like the
+     unit, or in his own dragged order. See gigSize. */
+  const [sceneLayout, setSceneLayout] = useState(loadSceneLayout)
+  const [sceneOrder, setSceneOrder] = useState(loadSceneOrder)
   /* Which page of Setup is open; null is the list of rows. */
   /* Which computer this browser is on, read once. The guide's routes are
      sorted by it; see shared/ways-in.mjs for why only this end sorts them. */
@@ -1311,7 +1332,8 @@ export default function App() {
       setError(err)
       /*
        * And ask the unit what it actually has, rather than trusting the way
-       * the store put it back.
+       * the store put it back. The status read, which says which blocks are
+       * on: not the chain, which is the whole preset.
        *
        * A write that came back as a failure may still have landed — the frame
        * goes out and the answer is what got lost — and then the strip is
@@ -1320,7 +1342,7 @@ export default function App() {
        * always re-read after a refused toggle; this one never did. Skipped
        * when the unit is gone, because there is nobody to ask.
        */
-      if (!err?.unitGone) refreshBlocks()
+      if (!err?.unitGone) refreshSceneState()
     }
   }
 
@@ -1430,6 +1452,8 @@ export default function App() {
       if (!dirtyRef.current) noteLoadedName(p)
       const list = Array.isArray(b) ? b : []
       setBlocks(list)
+      /* So a screen that appears next does not read the same chain again. */
+      chainWasRead(p?.number)
       setFaultReason(null)
       setStatus('live')
       // The unit answered, so whatever was lost is back.
@@ -1453,7 +1477,8 @@ export default function App() {
       refreshScene()
 
       if (typeof p?.number === 'number') {
-        refreshSceneNames(p.number)
+        /* Out of the chain just read, rather than a second dump of the slot. */
+        refreshLoadedSceneNames(p.number)
 
         /*
          * A name a phone couldn't write, written now.
@@ -1589,9 +1614,13 @@ export default function App() {
    * unit is there, so this asks for one — which preset is loaded, the first
    * thing a unit that has gone stops being able to say.
    *
-   * It does not touch the screen when the answer is good. A poll that also
-   * applied what it read would fight whoever is working at the Mac, and the
-   * question here is only whether anybody is home. When the answer is bad
+   * A good answer changes the screen in one case only: when it names a
+   * different preset from the one shown, which means it was changed at the
+   * front panel. Then presetHeard puts the new name up and reads the chain
+   * once, a moment later. Nothing else it reads is applied, and it never acts
+   * while this window is loading a preset (the tick is skipped while busy,
+   * and the store ignores it while a preset change is settling) — anything
+   * more would fight whoever is working at the Mac. When the answer is bad
    * twice running it hands over to read(), which confirms it properly and
    * puts up the notice that says what to check.
    *
@@ -1613,12 +1642,19 @@ export default function App() {
         return
       }
       let said = 'quiet'
+      let heard = null
       try {
-        said = probeSays({ preset: await currentPreset() })
+        heard = await currentPreset()
+        said = probeSays({ preset: heard })
       } catch {
         said = probeSays({ failed: true })
       }
       if (!live) return
+      /* And which preset it is, which this read always knew and threw away:
+         a preset changed on the front panel that opens on the same scene is
+         announced by nothing else. The store puts the name up and reads the
+         chain once. */
+      if (said === 'answering') presetHeard(heard)
       quiet = countQuiet(quiet, said)
       if (unitGone(quiet)) {
         logDebug('unit', 'the unit stopped answering the timed check', `${quiet} quiet answers`)
@@ -2246,6 +2282,10 @@ export default function App() {
        *
        * One read settles it. It costs a round trip and happens only when there
        * is actually a request parked, which is rare.
+       *
+       * The store follows a preset changed elsewhere now, from small reads —
+       * but a front-panel change that opens on the same scene is announced by
+       * nothing, and waits for the timed check. This cannot wait for that.
        */
       let loaded = preset?.number ?? null
       try {
@@ -2689,31 +2729,59 @@ export default function App() {
     }
   }
 
+  /*
+   * What App keeps about a preset that the store has just loaded and read:
+   * the name in the list, and a block selection that still exists. `fresh`
+   * is a preset loaded from the list, whose buffer is clean by definition.
+   */
+  const presetLanded = ({ fresh = false } = {}) => {
+    const { preset: p, blocks: list } = deviceSnapshot()
+    if (p) {
+      followUnitName(p)
+      if (fresh || !dirtyRef.current) noteLoadedName(p)
+    }
+    setSelectedBlock((current) => {
+      if (current && list.some((x) => x.effectId === current)) return current
+      return list.find((x) => x.slug === 'amp')?.effectId ?? list[0]?.effectId ?? null
+    })
+  }
+
   const jumpTo = async (number) => {
     setBusy(true)
     setError(null)
     // A different preset means different blocks, values and ranges.
     resetSchemaCache()
+    /*
+     * The select, which preset, which scene, and one chain read a moment
+     * later — and nothing else, in the store. This used to be a whole read():
+     * a presence check, the chain straight away and a dump of the slot for
+     * its names, while the unit was still loading the preset. "The preset
+     * changes almost immediately on the unit, but after that there is drop
+     * in sound." The chain read waits for the unit; see loadPreset.
+     *
+     * No cache drop either. It sent DELETE /device/cache to make the
+     * computer forget "which preset is loaded", and the computer keeps no
+     * such copy: that route deletes its saved profile of the unit.
+     */
     try {
-      await selectPreset(number)
-      /* Before anything is read back: the computer answers "what is loaded"
-         from a fifteen-second copy, and inside that window it names the preset
-         you just left. */
-      await clearDeviceCache().catch(() => {})
-      record('select', `Loaded slot ${number}`)
-      /*
-       * Recorded after the unit took it, not when it was asked for: a slot the
-       * device refuses is not one you were recently on. Every route counts —
-       * the list, Previous and Next, a footswitch — because "recent" is about
-       * where you have been, not how you got there.
-       */
-      rememberPreset(currentDeviceSlug(), number)
-      setDirty(false)
-      setSavedAt(null)
-      setSafety(null)
-      setResult(null)
-      setApplied(null)
-      await read()
+      await loadPresetInStore(number, {
+        selected: () => {
+          record('select', `Loaded slot ${number}`)
+          /*
+           * Recorded after the unit took it, not when it was asked for: a slot
+           * the device refuses is not one you were recently on. Every route
+           * counts — the list, Previous and Next, a footswitch — because
+           * "recent" is about where you have been, not how you got there.
+           */
+          rememberPreset(currentDeviceSlug(), number)
+          setDirty(false)
+          setSavedAt(null)
+          setSafety(null)
+          setResult(null)
+          setApplied(null)
+        }
+      })
+      presetLanded({ fresh: true })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -3659,9 +3727,13 @@ export default function App() {
           size={size}
           fit={fit}
           icons={icons}
-          scenesFour={scenesFour}
+          sceneLayout={sceneLayout}
+          sceneOrder={sceneOrder}
           onError={setError}
-          onChanged={read}
+          /* Only the typed tempo calls this now: logged, not a re-read of the
+             whole rig, which was a chain dump straight after the tempo write. */
+          onChanged={(summary) => record('tempo', summary)}
+          onPresetLoaded={() => presetLanded()}
           onPickPreset={() => setPresetMenu(true)}
           /*
            * On a phone this opens the chain in a sheet, because the Edit
@@ -4173,9 +4245,11 @@ export default function App() {
           channelNames={device?.capabilities?.channelNames}
           hasScenes={hasScenes}
           busy={busy}
-          onChanged={(summary) => {
+          onChanged={(summary, { reread = true } = {}) => {
             record('scene', summary)
-            read()
+            /* A scene or a channel switched here has read what it changed
+               already, and a whole read() is a dump of the preset. */
+            if (reread) read()
           }}
           onError={setError}
         />
@@ -4475,26 +4549,57 @@ export default function App() {
                     </span>
                   </span>
                 </label>
-                {/* "First row 1234, second row 5678, as it is in the screen of my
-                    unit." The phone's Appearance page has the same box. */}
-                <label className="rename-choice">
-                  <input
-                    type="checkbox"
-                    checked={scenesFour}
-                    onChange={(e) => {
-                      const on = e.target.checked
-                      setScenesFour(on)
-                      saveScenesFour(on)
-                    }}
-                  />
-                  <span>
-                    Scenes in rows of four, like the unit
-                    <span className="hint">
-                      1 2 3 4 on top and 5 6 7 8 underneath, the way the unit&rsquo;s own screen
-                      shows them. Off puts two on a row on a phone, with bigger names.
+                {/* "Make an option in settings to select on the left side one, two,
+                    three, four for the scenes, and on the right side five, six,
+                    seven, eight, instead of them just going across like a snake."
+                    One choice of four. The phone's Appearance page has the same. */}
+                <p className="silk-label setup-open-title">Scene layout</p>
+                {SCENE_LAYOUTS.map((l) => (
+                  <label key={l.id} className="rename-choice">
+                    <input
+                      type="radio"
+                      name="scene-layout"
+                      checked={sceneLayout === l.id}
+                      onChange={() => {
+                        setSceneLayout(l.id)
+                        saveSceneLayout(l.id)
+                      }}
+                    />
+                    <span>
+                      {l.name}
+                      <span className="hint">{l.sub}</span>
                     </span>
-                  </span>
-                </label>
+                  </label>
+                ))}
+                {/* "Can you make it so you can grab and drop the scenes wherever
+                    you want them on the screen?" Here, not on Play. */}
+                {sceneLayout === 'mine' ? (
+                  <div className="scene-arrange-box">
+                    <p className="silk-label setup-open-title">Arrange scenes</p>
+                    <p className="hint">
+                      Hold a scene and drag it onto another to swap them. This order is used for
+                      every preset.
+                    </p>
+                    <SceneArrange
+                      order={sceneOrder}
+                      onChange={(next) => {
+                        setSceneOrder(next)
+                        saveSceneOrder(next)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="chip scene-arrange-reset"
+                      onClick={() => {
+                        const back = [0, 1, 2, 3, 4, 5, 6, 7]
+                        setSceneOrder(back)
+                        saveSceneOrder(back)
+                      }}
+                    >
+                      Put them back in order
+                    </button>
+                  </div>
+                ) : null}
               </div>
               <div className="setup-open">
                 <p className="silk-label setup-open-title">Light or dark</p>

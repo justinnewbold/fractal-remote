@@ -20,7 +20,7 @@ import { DEFAULT_SLUG, deviceSlug } from '../../shared/device-slug.mjs'
 import { firmwareOf } from '../../shared/firmware.mjs'
 import { toNormalized } from './scale.js'
 import { withLineage } from './lineage.js'
-import { remoteActive, remoteRequest, subscribeRemoteEvents } from './remote.js'
+import { remoteActive, remoteRequest, subscribeHostSeen, subscribeRemoteEvents, subscribeRemoteState } from './remote.js'
 import {
   rosterCache,
   helpTextCache,
@@ -1860,16 +1860,32 @@ export const revertPreset = (number) => selectPreset(number)
  *
  * Returns an unsubscribe function.
  */
-export function subscribeEvents(onEvent) {
+export function subscribeEvents(onEvent, { onGap } = {}) {
   if (mock) {
     const tuner = mock.tunerStream()
     const id = setInterval(() => onEvent(tuner.next()), 400)
     return () => clearInterval(id)
   }
 
+  /*
+   * `onGap` is told whenever events may have been lost — the stream dropped,
+   * the relay went down or came back, the Mac went quiet — so the store knows
+   * a chain it has been following is not followed any more.
+   */
+  const gap = () => onGap?.()
+
   // Over the relay the host bridges the same events onto the channel, so there
   // is no EventSource to open — localhost isn't reachable from the phone.
-  if (remoteActive()) return subscribeRemoteEvents(onEvent)
+  if (remoteActive()) {
+    const offs = [
+      subscribeRemoteEvents(onEvent),
+      subscribeRemoteState(gap),
+      subscribeHostSeen((up) => {
+        if (!up) gap()
+      })
+    ]
+    return () => offs.forEach((off) => off())
+  }
 
   let source
   try {
@@ -1887,7 +1903,9 @@ export function subscribeEvents(onEvent) {
   }
   source.onerror = () => {
     // EventSource reconnects on its own. Failing loudly here would mean an
-    // error toast every time the server restarts.
+    // error toast every time the server restarts. Quietly, though, whatever
+    // was announced while it was down is lost.
+    gap()
   }
 
   return () => source.close()
@@ -2365,6 +2383,53 @@ export async function readSceneNames(number) {
 
   return local
 }
+
+/**
+ * The computer's copy of the LOADED preset: its name and its scene names.
+ *
+ * GET /preset/grid answers from the same copy /preset/blocks was built from,
+ * which the computer keeps for fifteen seconds, so asked straight after the
+ * chain it costs the unit nothing — where readSceneNames' summary makes the
+ * unit dump the whole slot again. The name is what says whether the copy is
+ * of the preset on screen at all; the store checks it (judgeCopy) before any
+ * name out of it is shown or kept.
+ *
+ * null when there is no answer (an older computer, a failed read). An AM4's
+ * scene list is always empty: its chain carries no names.
+ */
+export async function presetCopy() {
+  if (mock) {
+    await tick()
+    return { name: cleanPresetName(mock.preset()?.name || ''), scenes: mock.getScene().names || [] }
+  }
+  let res = null
+  try {
+    res = await request('/preset/grid')
+  } catch {
+    return null
+  }
+  if (!Array.isArray(res?.scenes)) return null
+  return {
+    name: typeof res.name === 'string' ? cleanPresetName(res.name) : null,
+    scenes: res.scenes.map((n) => (typeof n === 'string' ? n.trim() : ''))
+  }
+}
+
+/**
+ * Whether the computer keeps a copy of the loaded preset that reading it
+ * again costs the unit nothing: a gen-3 (FM3, FM9, Axe-Fx III), whose copy
+ * lasts a quarter of a minute — the one family that reports output meters,
+ * which is how its report tells them apart. On an Axe-Fx II the copy lasts
+ * half a second and GET /preset/grid is a whole second read of the preset;
+ * a gen-1 keeps none. null before the unit has said what it is.
+ */
+export const hostKeepsCopy = () => (mock ? true : lastCaps ? lastCaps.meters?.outputLevels === true : null)
+
+/** Scene names read for the loaded slot and checked: kept here and on the computer. */
+export const keepSceneNames = (number, names) => rememberSceneNames(number, names)
+
+/** What this browser already knows a slot's scenes are called. Asks nobody. */
+export const rememberedSceneNames = (number) => recallSceneNames(number)
 
 /**
  * Write down a name we just set, rather than forgetting we ever knew it.

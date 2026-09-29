@@ -27,12 +27,15 @@ import {
   clampSize,
   loadFit,
   loadIcons,
-  loadScenesFour,
+  loadSceneLayout,
+  loadSceneOrder,
   loadSize,
   saveFit,
   saveIcons,
-  saveScenesFour,
-  saveSize
+  saveSceneLayout,
+  saveSceneOrder,
+  saveSize,
+  SCENE_LAYOUTS
 } from '../lib/gigSize'
 import { REPLAY } from '../lib/onboarding'
 import { sync, useStored } from '../lib/store'
@@ -56,6 +59,7 @@ import setupIcon from '../../assets/icons/setup.png'
 import Note from '../components/Note'
 import PasswordBox from '../components/PasswordBox'
 import Press from '../components/Press'
+import SceneArrange from '../components/SceneArrange'
 import { SaveButton, SaveNotes, useSaveToSlot } from '../components/SaveToSlot'
 import EdgeBack from '../components/EdgeBack'
 import Sheet from '../components/Sheet'
@@ -123,6 +127,9 @@ export default function Settings({
    * everyone who came to change the tile size.
    */
   const [accountMenu, setAccountMenu] = useState(false)
+  /* A scene being dragged on the Appearance page holds the page still — see
+     components/SceneArrange. */
+  const [held, setHeld] = useState(false)
   /* The account's email, when there is a real one: a pairing code's account
      is not somebody's email and is not called one. */
   const signedInAs = account?.email && !isPairAccount(account.email) ? account.email : null
@@ -273,6 +280,7 @@ export default function Settings({
       style={{ flex: 1 }}
       contentContainerStyle={{ padding: space.lg, gap: space.xl, paddingBottom: space.xxl }}
       keyboardShouldPersistTaps="handled"
+      scrollEnabled={!held}
     >
       {page === null ? (
         <>
@@ -464,7 +472,7 @@ export default function Settings({
           {head('Appearance', 'back')}
           <View style={{ gap: space.md }}>
             <Section>Stage tiles</Section>
-            <TileSize />
+            <TileSize onScrollLock={setHeld} />
           </View>
           {/*
             Light, dark, or whatever the phone is set to.
@@ -1328,12 +1336,12 @@ function NameField({ label, value, onDone }) {
  * On out of the box. It is the right answer for everybody who has not got an
  * opinion yet, which is everybody on the first launch.
  */
-function TileSize() {
+function TileSize({ onScrollLock }) {
   useStored()
   const now = loadSize(sync)
   const fit = loadFit(sync, true)
   const icons = loadIcons(sync)
-  const four = loadScenesFour(sync)
+  const layout = loadSceneLayout(sync)
   const step = (by) => saveSize(clampSize(now + by), sync)
   return (
     <View style={{ gap: space.md }}>
@@ -1383,13 +1391,45 @@ function TileSize() {
         sub="A small picture on each effect in the chain — a flame for drive, a wave for chorus — above its letters. Off leaves the letters alone."
         onPress={() => saveIcons(!icons, sync)}
       />
-      {/* "First row 1234, second row 5678, as it is in the screen of my unit." */}
-      <Choice
-        on={four}
-        label="Scenes in rows of four, like the unit"
-        sub="1 2 3 4 on top and 5 6 7 8 underneath, the way the unit's own screen shows them. Off puts two on a row, with bigger names."
-        onPress={() => saveScenesFour(!four, sync)}
-      />
+      {/*
+        WHERE THE SCENES SIT. "Make an option in settings to select on the left
+        side one, two, three, four for the scenes, and on the right side five,
+        six, seven, eight, instead of them just going across like a snake."
+        One choice of four, not four boxes: only one of them can be true.
+      */}
+      <Section>Scene layout</Section>
+      {SCENE_LAYOUTS.map((l) => (
+        <Choice
+          key={l.id}
+          role="radio"
+          on={layout === l.id}
+          label={l.name}
+          sub={l.sub}
+          onPress={() => saveSceneLayout(l.id, sync)}
+        />
+      ))}
+      {layout === 'mine' ? <ArrangeScenes onScrollLock={onScrollLock} /> : null}
+    </View>
+  )
+}
+
+/**
+ * ARRANGE SCENES, for "My own order".
+ *
+ * "And actually, can you make it so you can grab and drop the scenes wherever
+ * you want them on the screen? Because that would be cool." Here rather than
+ * on Play, so a mis-drag mid-song cannot happen. One order for every preset;
+ * a preset with fewer scenes keeps the ones it has in the same order, and
+ * gigSize mends the rest.
+ */
+function ArrangeScenes({ onScrollLock }) {
+  const order = loadSceneOrder(sync)
+  return (
+    <View style={{ gap: space.md }}>
+      <Section>Arrange scenes</Section>
+      <Note>Hold a scene and drag it onto another to swap them. This order is used for every preset.</Note>
+      <SceneArrange order={order} onChange={(next) => saveSceneOrder(next, sync)} onScrollLock={onScrollLock} />
+      <Press label="Put them back in order" onPress={() => saveSceneOrder([0, 1, 2, 3, 4, 5, 6, 7], sync)} />
     </View>
   )
 }
@@ -1402,10 +1442,10 @@ function TileSize() {
  * `accessibilityRole` is checkbox rather than button, because that is what it
  * is — a screen reader should say "checked", not "selected".
  */
-function Choice({ on, label, sub, onPress }) {
+function Choice({ on, label, sub, onPress, role = 'checkbox' }) {
   return (
     <Pressable
-      accessibilityRole="checkbox"
+      accessibilityRole={role}
       accessibilityState={{ checked: !!on }}
       accessibilityLabel={label}
       onPress={() => {

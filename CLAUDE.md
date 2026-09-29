@@ -93,6 +93,18 @@ So: say what the build is for and wait. It is not covered by "he said keep
 going" earlier in a session, because the cost is per build rather than per
 task.
 
+**And say so BEFORE a change that would need a build instead of an update.**
+
+> "You're supposed to let me know if anything you do would make it so that
+> we have to do a new expo build versus an expo update before you make the
+> changes."
+
+`npm run fingerprint` is the test: "Unchanged" is an update, anything else
+is a build. Run it before pushing, and if a change would move it — a new
+package, a plugin, an Expo package version — stop and tell him before
+making it, in plain words, with what it costs (an iOS slot) and what it
+buys. Android APKs from apk.yml are free; iOS slots are not.
+
 **And while the phone is being brought up to the browser, the answer is no.**
 
 > "You can do it in passes but don't push to expo until it's all done."

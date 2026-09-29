@@ -387,7 +387,7 @@ export function run(test) {
     assert.match(gig, /const chrome = el\.scrollHeight - grids/, 'the chrome is not measured as the screen less its grids')
     assert.match(gig, /fitTiles\(\{\s*\n\s*available: viewport - top - chrome/, 'the grids are not handed what the screen has left')
     assert.match(gig, /'--gig-fit-tile': `\$\{fitVars\.tile\}px`, '--gig-fx-cols': String\(fitVars\.fxCols\)/, 'the measured height does not reach the tiles')
-    assert.match(gig, /\}, \[fit, hasScenes, sceneCount, blocks\.length, scenesFour\]\)/, 'the measure does not follow the rig')
+    assert.match(gig, /\}, \[fit, hasScenes, sceneCount, blocks\.length, sceneLayout\]\)/, 'the measure does not follow the rig')
     assert.match(src, /fit=\{fit\}/, 'Play is not told about Fit')
     assert.match(src, /Fit everything on one screen/, 'Setup has no Fit switch')
     assert.match(src, /disabled=\{fit \|\| size <= 0\}/, 'the size steps still move while Fit is on')
@@ -920,9 +920,11 @@ export function run(test) {
     const toggle = src.slice(src.indexOf('const toggleBlock'), src.indexOf('const toggleBlock') + 2200)
     assert.ok(!/setError\(err\.message\)/.test(toggle), 'the chain toggle flattens the error and loses why it failed')
     assert.match(toggle, /setError\(err\)/)
+    /* Asked with the status read, which says what is on — not the chain,
+       which is the whole preset dumped while the unit is switching. */
     assert.match(
       toggle,
-      /if \(!err\?\.unitGone\) refreshBlocks\(\)/,
+      /if \(!err\?\.unitGone\) refreshSceneState\(\)/,
       'a refused toggle trusts its own roll-back instead of asking the unit'
     )
 

@@ -150,12 +150,17 @@ export async function presetBlocks() {
  * lands while the unit is still rebuilding and comes back without its header:
  * "PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78", four times
  * in a row in one log, each one leaving the chain "out of date" on screen.
- * This is one small status read instead. Empty when the computer is too old
- * to answer it, and the caller falls back to the full read.
+ * This is one small status read instead.
+ *
+ * null when the computer is too old to answer it (it hands back its web page
+ * for a route it does not have), and the caller falls back to the full read.
+ * An empty list is different: the route is there and the unit did not answer
+ * in time, which is most likely while it is busy switching — the worst moment
+ * to dump the preset over it.
  */
 export async function sceneState() {
   const list = await remoteRequest('/preset/scene-state')
-  return Array.isArray(list) ? list : []
+  return Array.isArray(list) ? list : null
 }
 
 /** The ones that belong on a stage: everything but the three you never kick. The gate is one you do. */
@@ -205,6 +210,31 @@ export async function sceneNames(number) {
     return clean.some((n) => n) ? clean : []
   } catch {
     return []
+  }
+}
+
+/**
+ * The computer's copy of the LOADED preset: its name and its scene names.
+ *
+ * GET /preset/grid answers from the same copy of the preset /preset/blocks
+ * was built from, which the computer keeps for fifteen seconds — so asked just
+ * after the chain it costs the unit nothing, where the summary above makes the
+ * unit dump the whole slot again. The name is what says whether the copy is of
+ * the preset on screen at all; see judgeCopy in own-echo.
+ *
+ * null when there is no answer (an older computer, a read that failed). An
+ * AM4's scene list is always empty — its chain read carries no names.
+ */
+export async function presetCopy() {
+  try {
+    const res = await remoteRequest('/preset/grid')
+    if (!Array.isArray(res?.scenes)) return null
+    return {
+      name: typeof res.name === 'string' ? cleanPresetName(res.name) : null,
+      scenes: res.scenes.map((n) => (typeof n === 'string' ? n.trim() : ''))
+    }
+  } catch {
+    return null
   }
 }
 
