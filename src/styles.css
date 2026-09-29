@@ -8524,7 +8524,8 @@ button.topbar-preset.open .topbar-caret {
   gap: var(--s-1);
 }
 
-.rename-choice input[type='checkbox'] {
+.rename-choice input[type='checkbox'],
+.rename-choice input[type='radio'] {
   flex: 0 0 auto;
   width: 20px;
   height: 20px;
@@ -12124,22 +12125,37 @@ button.walk-foot-row {
 }
 
 /*
- * Scenes in rows of four, like the unit: 1 2 3 4 over 5 6 7 8.
+ * Where the scenes sit, chosen on the Appearance page — see gigSize.
  *
- * At every width, not just on a phone — the point is that the rows match the
- * unit's screen, and a grid that re-flowed to fill a wide window would put
- * five on the first row and stop matching it. Specific enough to win over the
- * phone's two-across rule and the rail's auto-fit, which both sit above this.
+ * Rows of four, like the unit: 1 2 3 4 over 5 6 7 8, at every width, not just
+ * on a phone — the point is that the rows match the unit's screen, and a grid
+ * that re-flowed to fill a wide window would put five on the first row and
+ * stop matching it.
+ *
+ * Down, in two columns, and My own order: two columns at every width, for the
+ * same reason. "On the left side one, two, three, four … on the right side
+ * five, six, seven, eight" is only true while there are exactly two sides.
+ * Play hands the tiles over in the right order; this holds the columns to two.
+ *
+ * Specific enough to win over the phone's two-across rule and the rail's
+ * auto-fit, which both sit above this. Across is left alone, auto-fit and all.
  */
-.gig[data-scenes-four] .gig-scenes,
-html[data-rail='on'] .gig[data-scenes-four] .gig-scenes {
+.gig[data-scene-layout='four'] .gig-scenes,
+html[data-rail='on'] .gig[data-scene-layout='four'] .gig-scenes {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.gig[data-scene-layout='down'] .gig-scenes,
+.gig[data-scene-layout='mine'] .gig-scenes,
+html[data-rail='on'] .gig[data-scene-layout='down'] .gig-scenes,
+html[data-rail='on'] .gig[data-scene-layout='mine'] .gig-scenes {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 /* A quarter of a phone holds five letters at the usual size: a size down,
    two lines, so "Crunch Bot UP" reads as that rather than "CRU…". */
 @media (max-width: 620px) {
-  .gig[data-scenes-four] button.gig-scene.named .gig-scene-name {
+  .gig[data-scene-layout='four'] button.gig-scene.named .gig-scene-name {
     font-size: var(--f-2);
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -12148,4 +12164,69 @@ html[data-rail='on'] .gig[data-scenes-four] .gig-scenes {
     min-width: 0;
     word-break: break-word;
   }
+}
+
+/*
+ * Arrange scenes, on the Appearance page: two columns of the Play tiles'
+ * colours, dragged onto each other to swap. `touch-action: none` so a finger
+ * on a touch screen drags the tile instead of scrolling the page.
+ */
+.scene-arrange-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+}
+
+.scene-arrange {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+  max-width: 420px;
+}
+
+.scene-arrange-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  border-radius: var(--r-2, 8px);
+  border: 2px solid color-mix(in srgb, var(--scene-fill) 55%, transparent);
+  background: color-mix(in srgb, var(--scene-fill) 14%, var(--panel));
+  color: var(--silk);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.scene-arrange-tile.carried {
+  z-index: 2;
+  cursor: grabbing;
+  background: var(--scene-fill);
+  color: var(--scene-ink);
+  box-shadow: var(--e-2);
+}
+
+.scene-arrange-tile.target {
+  background: color-mix(in srgb, var(--scene-fill) 45%, var(--panel));
+  outline: 2px dashed var(--scene-fill);
+  outline-offset: 2px;
+}
+
+.scene-arrange-word {
+  font-size: var(--f-1);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.scene-arrange-num {
+  font-size: var(--f-4);
+  font-weight: 700;
+}
+
+.scene-arrange-reset {
+  align-self: flex-start;
 }

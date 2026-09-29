@@ -42,7 +42,7 @@ import { useDismiss } from '../lib/dismiss'
 import { Tuner } from './Console'
 import BpmBox from './BpmBox'
 import Sheet from './Sheet'
-import { sizeVars, SIZES, fitTiles, SCENES_LIKE_UNIT } from '../lib/gigSize'
+import { sizeVars, SIZES, fitTiles, sceneColsFor, sceneOrderFor } from '../lib/gigSize'
 
 /**
  * The stand, not the bench.
@@ -82,8 +82,10 @@ export default function Gig({
   fit = false,
   /* The effect pictures on the chain tiles, unless turned off in Settings. */
   icons = true,
-  /* Scenes four to a row, 1-4 over 5-8, as the unit draws them. See gigSize. */
-  scenesFour = false,
+  /* Where the scenes sit — across, down the two sides, four to a row like
+     the unit, or his own order — and that order. See gigSize. */
+  sceneLayout = 'across',
+  sceneOrder = null,
   onError,
   onChanged,
   /* A preset stepped to here has been loaded and read, for what App keeps. */
@@ -657,7 +659,7 @@ export default function Gig({
         available: viewport - top - chrome,
         scenes: hasScenes ? sceneCount : 0,
         blocks: blocks.length,
-        sceneCols: scenesFour ? SCENES_LIKE_UNIT : 2,
+        sceneCols: sceneColsFor(null, sceneLayout),
         /* How wide the effects row is, so a phone's browser is not sent six
            across with tiles too narrow for a picture — see fitTiles. */
         width: blocksRef.current?.clientWidth || 0
@@ -700,7 +702,7 @@ export default function Gig({
       window.visualViewport?.removeEventListener('resize', schedule)
       watch?.disconnect()
     }
-  }, [fit, hasScenes, sceneCount, blocks.length, scenesFour])
+  }, [fit, hasScenes, sceneCount, blocks.length, sceneLayout])
 
   return (
     /*
@@ -716,7 +718,7 @@ export default function Gig({
       className="gig"
       data-compact={compact ? 'yes' : undefined}
       data-fit={fit ? 'yes' : undefined}
-      data-scenes-four={scenesFour ? 'yes' : undefined}
+      data-scene-layout={sceneLayout !== 'across' ? sceneLayout : undefined}
       /* Three effects to a row still fits a name; four does not. The switch to
          three letters rides the column count rather than a width guess. */
       data-fx-abbr={(fitVars?.fxCols ?? SIZES[fit ? 0 : size].fx) >= 4 ? 'yes' : undefined}
@@ -897,7 +899,9 @@ export default function Gig({
            read aloud it was eight buttons called "1" through "8", between two
            other grids of buttons, with nothing saying what any of them do. */
         <div className="gig-scenes" role="group" aria-label="Scenes" ref={scenesRef}>
-          {Array.from({ length: sceneCount }, (_, i) => (
+          {/* Drawn in the layout's order; each tile is still its own scene —
+              "5" says 5, wears 5's colour and picks scene 5 wherever it sits. */}
+          {sceneOrderFor(sceneLayout, sceneCount, sceneOrder).map((i) => (
             <button
               key={i}
               className={`gig-scene ${i === scene ? 'current' : ''} ${

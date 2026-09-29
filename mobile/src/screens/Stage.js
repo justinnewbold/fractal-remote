@@ -16,7 +16,17 @@ import {
   stepTarget
 } from '../lib/lists'
 import { sync, useStored } from '../lib/store'
-import { SIZES, fitTiles, loadFit, loadIcons, loadScenesFour, loadSize, sceneColsFor } from '../lib/gigSize'
+import {
+  SIZES,
+  fitTiles,
+  loadFit,
+  loadIcons,
+  loadSceneLayout,
+  loadSceneOrder,
+  loadSize,
+  sceneColsFor,
+  sceneOrderFor
+} from '../lib/gigSize'
 import {
   arrivedCurrent,
   clearError,
@@ -153,8 +163,10 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   const size = SIZES[loadSize(sync)] || SIZES[1]
   /* The effect pictures, unless they were turned off in Settings. */
   const showIcons = loadIcons(sync)
-  /* 1 2 3 4 over 5 6 7 8, the way the unit draws them — see gigSize. */
-  const sceneCols = sceneColsFor(size, loadScenesFour(sync))
+  /* Across, down the two sides, like the unit, or in his own order — chosen
+     on the Appearance page and only there. See gigSize. */
+  const sceneLayout = loadSceneLayout(sync)
+  const sceneCols = sceneColsFor(size, sceneLayout)
   /*
    * SMALLEST MEANS IT FITS. "On the smallest setting, if we could make it so
    * the screen won't scroll and everything fits on the screen — it's barely
@@ -541,7 +553,9 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             }}
             style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}
           >
-            {Array.from({ length: scenes.count }, (_, i) => {
+            {/* Drawn in the layout's order, but each tile is still its own
+                scene: "5" says 5, wears 5's colour and selects scene 5. */}
+            {sceneOrderFor(sceneLayout, scenes.count, loadSceneOrder(sync)).map((i) => {
               const hue = sceneColor(i)
               return (
                 <Tile

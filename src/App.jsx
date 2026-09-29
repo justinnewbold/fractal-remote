@@ -61,6 +61,7 @@ import { inDesktopApp } from './lib/desktop'
 import { createNameScan } from './lib/nameScan'
 import { Chain, PresetList, BlockPanel, Tuner } from './components/Console'
 import Screens, { viewsFor } from './components/Screens'
+import SceneArrange from './components/SceneArrange'
 import { useAsks } from './lib/asks'
 import {
   SIZES,
@@ -71,8 +72,11 @@ import {
   saveFit,
   loadIcons,
   saveIcons,
-  loadScenesFour,
-  saveScenesFour
+  loadSceneLayout,
+  saveSceneLayout,
+  loadSceneOrder,
+  saveSceneOrder,
+  SCENE_LAYOUTS
 } from './lib/gigSize'
 import { editButtonShows } from './lib/playMode'
 import { FIXES, FIRMWARE_NOTE, fixById, fixFor, versionsInSync } from '../shared/troubleshooting.mjs'
@@ -1160,8 +1164,10 @@ export default function App() {
   /* Whether Play sizes its tiles from the screen instead of the step. */
   const [fit, setFit] = useState(loadFit)
   const [icons, setIcons] = useState(loadIcons)
-  /* Scenes 1 2 3 4 over 5 6 7 8, the way the unit's screen draws them. */
-  const [scenesFour, setScenesFour] = useState(loadScenesFour)
+  /* Where the scenes sit on Play — across, down the two sides, like the
+     unit, or in his own dragged order. See gigSize. */
+  const [sceneLayout, setSceneLayout] = useState(loadSceneLayout)
+  const [sceneOrder, setSceneOrder] = useState(loadSceneOrder)
   /* Which page of Setup is open; null is the list of rows. */
   /* Which computer this browser is on, read once. The guide's routes are
      sorted by it; see shared/ways-in.mjs for why only this end sorts them. */
@@ -3721,7 +3727,8 @@ export default function App() {
           size={size}
           fit={fit}
           icons={icons}
-          scenesFour={scenesFour}
+          sceneLayout={sceneLayout}
+          sceneOrder={sceneOrder}
           onError={setError}
           /* Only the typed tempo calls this now: logged, not a re-read of the
              whole rig, which was a chain dump straight after the tempo write. */
@@ -4542,26 +4549,57 @@ export default function App() {
                     </span>
                   </span>
                 </label>
-                {/* "First row 1234, second row 5678, as it is in the screen of my
-                    unit." The phone's Appearance page has the same box. */}
-                <label className="rename-choice">
-                  <input
-                    type="checkbox"
-                    checked={scenesFour}
-                    onChange={(e) => {
-                      const on = e.target.checked
-                      setScenesFour(on)
-                      saveScenesFour(on)
-                    }}
-                  />
-                  <span>
-                    Scenes in rows of four, like the unit
-                    <span className="hint">
-                      1 2 3 4 on top and 5 6 7 8 underneath, the way the unit&rsquo;s own screen
-                      shows them. Off puts two on a row on a phone, with bigger names.
+                {/* "Make an option in settings to select on the left side one, two,
+                    three, four for the scenes, and on the right side five, six,
+                    seven, eight, instead of them just going across like a snake."
+                    One choice of four. The phone's Appearance page has the same. */}
+                <p className="silk-label setup-open-title">Scene layout</p>
+                {SCENE_LAYOUTS.map((l) => (
+                  <label key={l.id} className="rename-choice">
+                    <input
+                      type="radio"
+                      name="scene-layout"
+                      checked={sceneLayout === l.id}
+                      onChange={() => {
+                        setSceneLayout(l.id)
+                        saveSceneLayout(l.id)
+                      }}
+                    />
+                    <span>
+                      {l.name}
+                      <span className="hint">{l.sub}</span>
                     </span>
-                  </span>
-                </label>
+                  </label>
+                ))}
+                {/* "Can you make it so you can grab and drop the scenes wherever
+                    you want them on the screen?" Here, not on Play. */}
+                {sceneLayout === 'mine' ? (
+                  <div className="scene-arrange-box">
+                    <p className="silk-label setup-open-title">Arrange scenes</p>
+                    <p className="hint">
+                      Hold a scene and drag it onto another to swap them. This order is used for
+                      every preset.
+                    </p>
+                    <SceneArrange
+                      order={sceneOrder}
+                      onChange={(next) => {
+                        setSceneOrder(next)
+                        saveSceneOrder(next)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="chip scene-arrange-reset"
+                      onClick={() => {
+                        const back = [0, 1, 2, 3, 4, 5, 6, 7]
+                        setSceneOrder(back)
+                        saveSceneOrder(back)
+                      }}
+                    >
+                      Put them back in order
+                    </button>
+                  </div>
+                ) : null}
               </div>
               <div className="setup-open">
                 <p className="silk-label setup-open-title">Light or dark</p>

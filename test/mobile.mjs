@@ -2118,7 +2118,7 @@ export function run(test) {
     const looks = settings.slice(settings.indexOf("{page === 'appearance' ?"), settings.indexOf("{page === 'unit' ?"))
     assert.ok(looks.length > 100, 'the Appearance page is gone')
     assert.match(looks, /head\('Appearance', 'back'\)/, 'the Appearance page has no title or way back')
-    assert.match(looks, /<TileSize \/>/, 'the tile size buttons are not on the Appearance page')
+    assert.match(looks, /<TileSize onScrollLock=\{setHeld\} \/>/, 'the tile size buttons are not on the Appearance page')
     assert.match(looks, /<Appearance \/>/, 'the light and dark buttons are not on the Appearance page')
 
     const unit = settings.slice(settings.indexOf("{page === 'unit' ?"), settings.indexOf("{page === 'trouble' ?"))
@@ -4465,39 +4465,152 @@ export function run(test) {
     assert.match(read('src/App.jsx'), /Show effect pictures/, 'the browser has no way to turn them off')
   })
 
-  test('the scenes can sit in rows of four, like the unit', async () => {
+  test('the scenes sit across, down the two sides, like the unit, or in your own order', async () => {
     /*
-     * "I prefer arrangement of the scenes - first row 1234, second row 5678
-     * as it is in the screen of my unit." A choice, off by default: two
-     * across is the layout Justin chose.
+     * "Make an option in settings to select on the left side one, two, three,
+     * four for the scenes, and on the right side five, six, seven, eight,
+     * instead of them just going across like a snake." And rows of four, from
+     * "first row 1234, second row 5678 as it is in the screen of my unit",
+     * which used to be a box of its own. One choice now, across by default.
      */
-    const { loadScenesFour, saveScenesFour, sceneColsFor, SIZES, fitTiles } = await import('../src/lib/gigSize.js')
+    const { loadSceneLayout, saveSceneLayout, sceneColsFor, sceneOrderFor, SCENE_LAYOUTS, SIZES, fitTiles } =
+      await import('../src/lib/gigSize.js')
     const box = new Map()
     const store = { getItem: (k) => (box.has(k) ? box.get(k) : null), setItem: (k, v) => box.set(k, String(v)) }
-    assert.equal(loadScenesFour(store), false, 'the default moved off two across')
-    saveScenesFour(true, store)
-    assert.equal(loadScenesFour(store), true, 'turning it on does not stick')
-    saveScenesFour(false, store)
-    assert.equal(loadScenesFour(store), false)
-    assert.equal(loadScenesFour({ getItem: () => { throw new Error('blocked') } }), false, 'blocked storage broke the screen')
-    for (const step of SIZES) {
-      assert.equal(sceneColsFor(step, true), 4, `${step.name} is not four across when asked`)
-      assert.equal(sceneColsFor(step, false), step.scenes, `${step.name} lost its own column count`)
+    assert.deepEqual(
+      SCENE_LAYOUTS.map((l) => l.name),
+      ['Across', 'Down, in two columns', 'Rows of four, like the unit', 'My own order'],
+      'the four answers are not the four he was offered'
+    )
+    assert.equal(loadSceneLayout(store), 'across', 'the default moved off two across')
+    for (const id of ['down', 'four', 'mine', 'across']) {
+      saveSceneLayout(id, store)
+      assert.equal(loadSceneLayout(store), id, `${id} does not stick`)
     }
+    saveSceneLayout('sideways', store)
+    assert.equal(loadSceneLayout(store), 'across', 'a nonsense answer was kept')
+    box.set('fractal.sceneLayout', 'garbage')
+    assert.equal(loadSceneLayout(store), 'across', 'a mangled answer is not read as the default')
+    assert.equal(loadSceneLayout({ getItem: () => { throw new Error('blocked') } }), 'across', 'blocked storage broke the screen')
+    assert.equal(saveSceneLayout('down', { setItem: () => { throw new Error('full') } }), false, 'a full store threw')
+
+    /* The old box, turned on, is still rows of four after the upgrade. */
+    const old = new Map([['fractal.gigScenesFour', '1']])
+    const was = { getItem: (k) => (old.has(k) ? old.get(k) : null), setItem: (k, v) => old.set(k, String(v)) }
+    assert.equal(loadSceneLayout(was), 'four', 'rows of four were lost on the way to the new choice')
+    old.set('fractal.gigScenesFour', '0')
+    assert.equal(loadSceneLayout(was), 'across', 'the old box turned off came back as something else')
+    old.set('fractal.gigScenesFour', '1')
+    saveSceneLayout('down', was)
+    assert.equal(loadSceneLayout(was), 'down', 'the old box outvotes the new choice')
+
+    for (const step of SIZES) {
+      assert.equal(sceneColsFor(step, 'four'), 4, `${step.name} is not four across when asked`)
+      assert.equal(sceneColsFor(step, 'down'), 2, `${step.name} is not two sides when asked`)
+      assert.equal(sceneColsFor(step, 'mine'), 2, `${step.name} is not two columns in your own order`)
+      assert.equal(sceneColsFor(step, 'across'), step.scenes, `${step.name} lost its own column count`)
+    }
+
+    /* The order they are drawn in — left to right, then down. */
+    assert.deepEqual(sceneOrderFor('across', 8), [0, 1, 2, 3, 4, 5, 6, 7], 'across is not 1 2 / 3 4')
+    assert.deepEqual(sceneOrderFor('four', 8), [0, 1, 2, 3, 4, 5, 6, 7], 'four is not 1 2 3 4 / 5 6 7 8')
+    assert.deepEqual(sceneOrderFor('down', 8), [0, 4, 1, 5, 2, 6, 3, 7], '1 2 3 4 are not down the left and 5 6 7 8 down the right')
+    assert.deepEqual(sceneOrderFor('down', 6), [0, 3, 1, 4, 2, 5], 'six scenes are not three a side')
+    assert.deepEqual(sceneOrderFor('down', 5), [0, 3, 1, 4, 2], 'five scenes do not put the extra one on the left')
+    assert.deepEqual(sceneOrderFor('across', 5), [0, 1, 2, 3, 4])
+    assert.deepEqual(sceneOrderFor('down', 0), [], 'no scenes drew something')
+    assert.deepEqual(sceneOrderFor('mine', 8, [7, 6, 5, 4, 3, 2, 1, 0]), [7, 6, 5, 4, 3, 2, 1, 0], 'your own order was not used')
+    assert.deepEqual(sceneOrderFor('mine', 6, [7, 6, 5, 4, 3, 2, 1, 0]), [5, 4, 3, 2, 1, 0], 'a six-scene preset showed scenes it does not have')
+    assert.deepEqual(sceneOrderFor('mine', 5, [4, 0, 7]), [4, 0, 1, 2, 3], 'the scenes the order forgot are not on the end')
+    for (const layout of ['across', 'down', 'four', 'mine']) {
+      for (const n of [8, 6, 5]) {
+        const drawn = sceneOrderFor(layout, n, [3, 3, 9, -1, 'x', 1])
+        assert.deepEqual([...drawn].sort((a, b) => a - b), Array.from({ length: n }, (_, i) => i), `${layout} with ${n} did not show every scene once`)
+      }
+    }
+
     /* Eight scenes are two rows at four, four rows at two — Fit has to know. */
-    const four = fitTiles({ available: 600, scenes: 8, blocks: 8, sceneCols: 4, fxCols: 4 })
-    const two = fitTiles({ available: 600, scenes: 8, blocks: 8, sceneCols: 2, fxCols: 4 })
+    const four = fitTiles({ available: 600, scenes: 8, blocks: 8, sceneCols: sceneColsFor(SIZES[1], 'four'), fxCols: 4 })
+    const two = fitTiles({ available: 600, scenes: 8, blocks: 8, sceneCols: sceneColsFor(SIZES[1], 'down'), fxCols: 4 })
     assert.ok(four.tile > two.tile, 'Fit did not give the saved rows back to the tiles')
 
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(stage, /const sceneCols = sceneColsFor\(size, loadScenesFour\(sync\)\)/, 'the phone ignores the choice')
-    assert.match(stage, /tileWidth\(row, sceneCols\)/, 'the phone draws scenes at the size step\u2019s width regardless')
+    assert.match(stage, /const sceneLayout = loadSceneLayout\(sync\)\n\s+const sceneCols = sceneColsFor\(size, sceneLayout\)/, 'the phone ignores the choice')
+    assert.match(stage, /sceneOrderFor\(sceneLayout, scenes\.count, loadSceneOrder\(sync\)\)\.map\(\(i\) => \{/, 'the phone draws the scenes in their own order whatever was chosen')
+    assert.match(stage, /caption=\{String\(i \+ 1\)\}[\s\S]{0,600}onPress=\{\(\) => writeScene\(i\)\}/, 'a moved tile no longer picks its own scene')
+    assert.match(stage, /tileWidth\(row, sceneCols\)/, 'the phone draws scenes at the size step’s width regardless')
     assert.match(stage, /\n\s+sceneCols,\n/, 'Fit on the phone still counts two across')
-    assert.match(read('mobile/src/screens/Settings.js'), /label="Scenes in rows of four, like the unit"[\s\S]{0,300}onPress=\{\(\) => saveScenesFour\(!four, sync\)\}/, 'the phone has no way to choose it')
-    assert.match(read('src/App.jsx'), /scenesFour=\{scenesFour\}/, 'the browser never hands the choice to Play')
-    assert.match(read('src/App.jsx'), /Scenes in rows of four, like the unit/, 'the browser has no way to choose it')
-    assert.match(read('src/components/Gig.jsx'), /data-scenes-four=\{scenesFour \? 'yes' : undefined\}/, 'the browser grid is never told')
-    assert.match(read('src/styles.css'), /\.gig\[data-scenes-four\] \.gig-scenes,[\s\S]{0,120}grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/, 'the browser grid is not four across')
+    const settings = read('mobile/src/screens/Settings.js')
+    assert.match(settings, /<Section>Scene layout<\/Section>\s*\{SCENE_LAYOUTS\.map\(\(l\) => \([\s\S]{0,200}role="radio"[\s\S]{0,200}onPress=\{\(\) => saveSceneLayout\(l\.id, sync\)\}/, 'the phone has no way to choose it')
+    assert.doesNotMatch(settings, /ScenesFour/, 'the old box is still on the phone')
+    const gig = read('src/components/Gig.jsx')
+    assert.match(read('src/App.jsx'), /sceneLayout=\{sceneLayout\}\n\s+sceneOrder=\{sceneOrder\}/, 'the browser never hands the choice to Play')
+    assert.match(read('src/App.jsx'), /type="radio"\n\s+name="scene-layout"\n\s+checked=\{sceneLayout === l\.id\}/, 'the browser has no way to choose it')
+    assert.match(gig, /data-scene-layout=\{sceneLayout !== 'across' \? sceneLayout : undefined\}/, 'the browser grid is never told')
+    assert.match(gig, /sceneCols: sceneColsFor\(null, sceneLayout\)/, 'Fit in the browser still counts two across')
+    assert.match(gig, /sceneOrderFor\(sceneLayout, sceneCount, sceneOrder\)\.map\(\(i\) => \(/, 'the browser draws the scenes in their own order')
+    assert.match(gig, /onClick=\{\(\) => pickScene\(i\)\}/, 'a moved tile in the browser no longer picks its own scene')
+    const css = read('src/styles.css')
+    assert.match(css, /\.gig\[data-scene-layout='four'\] \.gig-scenes,\nhtml\[data-rail='on'\] \.gig\[data-scene-layout='four'\] \.gig-scenes \{\n\s+grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/, 'the browser grid is not four across at every width')
+    assert.match(css, /\.gig\[data-scene-layout='down'\] \.gig-scenes,\n\.gig\[data-scene-layout='mine'\] \.gig-scenes,\nhtml\[data-rail='on'\] \.gig\[data-scene-layout='down'\] \.gig-scenes,\nhtml\[data-rail='on'\] \.gig\[data-scene-layout='mine'\] \.gig-scenes \{\n\s+grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/, 'down and your own order are not two columns at every width')
+    assert.doesNotMatch(css, /data-scenes-four/, 'the old box is still styled')
+  })
+
+  test('your own scene order is arranged by dragging, on Appearance and never on Play', async () => {
+    /*
+     * "And actually, can you make it so you can grab and drop the scenes
+     * wherever you want them on the screen? Because that would be cool." On
+     * the Appearance page, so a slip mid-song cannot move a scene. One order
+     * for every preset, mended to fit whichever preset is in front of you.
+     */
+    const { loadSceneOrder, saveSceneOrder, repairSceneOrder, swapScenes, ARRANGE_COUNT } = await import('../src/lib/gigSize.js')
+    const box = new Map()
+    const store = { getItem: (k) => (box.has(k) ? box.get(k) : null), setItem: (k, v) => box.set(k, String(v)) }
+    assert.equal(ARRANGE_COUNT, 8)
+    assert.deepEqual(loadSceneOrder(store), [0, 1, 2, 3, 4, 5, 6, 7], 'a fresh phone is not in order')
+    const swapped = swapScenes([0, 1, 2, 3, 4, 5, 6, 7], 0, 7)
+    assert.deepEqual(swapped, [7, 1, 2, 3, 4, 5, 6, 0], 'a drop does not swap the two places')
+    assert.deepEqual(swapScenes(swapped, 3, 3), swapped, 'a drop on itself moved something')
+    assert.deepEqual(swapScenes(swapped, 3, 12), swapped, 'a drop off the grid moved something')
+    saveSceneOrder(swapped, store)
+    assert.deepEqual(loadSceneOrder(store), swapped, 'the order does not stick')
+    box.set('fractal.sceneOrder', '{not json')
+    assert.deepEqual(loadSceneOrder(store), [0, 1, 2, 3, 4, 5, 6, 7], 'a mangled order broke the screen')
+    box.set('fractal.sceneOrder', JSON.stringify([5, 5, 2, 11, 'x', -3]))
+    assert.deepEqual(loadSceneOrder(store), [5, 2, 0, 1, 3, 4, 6, 7], 'a mangled order was not mended')
+    assert.deepEqual(loadSceneOrder({ getItem: () => { throw new Error('blocked') } }), [0, 1, 2, 3, 4, 5, 6, 7], 'blocked storage broke the screen')
+    assert.equal(saveSceneOrder(swapped, { setItem: () => { throw new Error('full') } }), false, 'a full store threw')
+    assert.deepEqual(repairSceneOrder([7, 6, 5, 4, 3, 2, 1, 0], 4), [3, 2, 1, 0], 'a four-scene unit shows scenes it does not have')
+    assert.deepEqual(repairSceneOrder(null, 3), [0, 1, 2])
+
+    /* The phone: its own grid, PanResponder and Animated, nothing native. */
+    const arrange = read('mobile/src/components/SceneArrange.js')
+    assert.match(arrange, /import \{ Animated, PanResponder, View \} from 'react-native'/, 'the phone grid reached for something outside React Native')
+    assert.match(arrange, /onStartShouldSetPanResponderCapture: \(\) => true/, 'the page takes the drag back on iOS')
+    assert.match(arrange, /onPanResponderTerminationRequest: \(\) => false/, 'the drag is handed to the page mid-way')
+    assert.match(arrange, /live\.current\.onChange\?\.\(swapScenes\(live\.current\.order, k, over\)\)/, 'a drop does not swap')
+    assert.match(arrange, /sceneColor\(scene\)/, 'the tiles are not in the colours Play gives them')
+    const settings = read('mobile/src/screens/Settings.js')
+    assert.match(settings, /\{layout === 'mine' \? <ArrangeScenes onScrollLock=\{onScrollLock\} \/> : null\}/, 'the grid is not offered with your own order')
+    assert.match(settings, /Hold a scene and drag it onto another to swap them\. This order is used for every preset\./, 'the phone does not say how')
+    assert.match(settings, /label="Put them back in order" onPress=\{\(\) => saveSceneOrder\(\[0, 1, 2, 3, 4, 5, 6, 7\], sync\)\}/, 'the phone cannot put them back')
+    assert.match(settings, /scrollEnabled=\{!held\}/, 'the page scrolls under a dragged scene')
+    assert.match(settings, /<TileSize onScrollLock=\{setHeld\} \/>/, 'the page is never told a scene is held')
+    /* Play only reads the order. Nothing on it can drag. */
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.doesNotMatch(stage, /SceneArrange|PanResponder|saveSceneOrder/, 'a scene can be moved from Play')
+
+    /* The browser: the same grid on its Appearance page, pointer events. */
+    const web = read('src/components/SceneArrange.jsx')
+    assert.match(web, /onPointerDown=\{down\(k\)\}/, 'the browser grid cannot be picked up')
+    assert.match(web, /onPointerUp=\{up\(true\)\}/, 'the browser grid cannot be dropped')
+    assert.match(web, /onChange\(swapScenes\(order, d\.from, d\.over\)\)/, 'a browser drop does not swap')
+    const app = read('src/App.jsx')
+    assert.match(app, /\{sceneLayout === 'mine' \? \([\s\S]{0,600}<SceneArrange\n\s+order=\{sceneOrder\}/, 'the browser does not offer the grid with your own order')
+    assert.match(app, /Hold a scene and drag it onto another to swap them\. This order is used for\s+every preset\./, 'the browser does not say how')
+    assert.match(app, /Put them back in order/, 'the browser cannot put them back')
+    assert.doesNotMatch(read('src/components/Gig.jsx'), /SceneArrange|onPointerDown/, 'a scene can be moved from Play in the browser')
+    assert.match(read('src/styles.css'), /\.scene-arrange-tile \{[\s\S]{0,500}touch-action: none;/, 'a finger scrolls the page instead of dragging')
   })
 
   test('the paywall sells the unlock, not whichever package came first', async () => {
@@ -8233,7 +8346,7 @@ export function run(test) {
      * +/- buttons instead of the tab buttons."
      */
     const set = read('mobile/src/screens/Settings.js')
-    const tile = set.slice(set.indexOf('function TileSize()'), set.indexOf('function Choice('))
+    const tile = set.slice(set.indexOf('function TileSize('), set.indexOf('function Choice('))
     assert.ok(tile.length > 400, 'the tile size control moved; this check reads it')
 
     assert.match(tile, /label="−"/, 'there is no way to step the tiles down')
@@ -8254,7 +8367,8 @@ export function run(test) {
     assert.match(tile, /label="Fit everything on one screen"/, 'there is no way to ask for a screen that fits')
     assert.match(tile, /on=\{fit\}/, 'the tick box never shows that it is on')
     assert.match(tile, /onPress=\{\(\) => saveFit\(!fit, sync\)\}/, 'the tick box does not toggle')
-    assert.match(set, /accessibilityRole="checkbox"/, 'the tick box announces itself as a button rather than a checkbox')
+    /* A checkbox unless it is one of a set, like the scene layout, where it is a radio. */
+    assert.match(set, /function Choice\(\{ on, label, sub, onPress, role = 'checkbox' \}\)[\s\S]{0,80}accessibilityRole=\{role\}/, 'the tick box announces itself as a button rather than a checkbox')
 
     /* And the stepper's own buttons say something other than their shapes. */
     assert.match(tile, /accessibilityLabel="Smaller tiles"/, 'the minus button reads out as a shape')
