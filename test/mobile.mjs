@@ -1922,8 +1922,8 @@ export function run(test) {
     for (const row of [
       'Phone & computer',
       'Rename presets and scenes',
-      /* No 'Play screen'. Stage tiles and Appearance are open at the bottom of
-         this list now rather than behind a door. Asserted below. */
+      /* Stage tiles, the pictures and light or dark, behind one row. */
+      'Appearance',
       'Troubleshooting',
       'About'
     ]) {
@@ -1940,29 +1940,25 @@ export function run(test) {
      * Checked by position: what is drawn for `page === null` must not contain
      * them.
      */
-    const root = settings.slice(settings.indexOf('{page === null ? ('), settings.indexOf("{page === 'unit' ?"))
+    const root = settings.slice(settings.indexOf('{page === null ? ('), settings.indexOf("{page === 'appearance' ?"))
     assert.ok(root.length > 200, 'the Setup root moved; this check reads it')
     assert.ok(!/UnitBits/.test(root), 'the scene-name boxes are back on the front page of Setup')
     /*
-     * AND THE TWO THAT ARE NOT DOORS ARE ON IT, at the bottom.
+     * AND HOW PLAY LOOKS IS BEHIND ITS OWN ROW.
      *
-     * "Move this to the settings screen at the bottom below all the other
-     * drop-down menus — we want it quickly available just by clicking
-     * settings. Don't have it via a drop-down, have it always visible."
-     *
-     * This assertion used to say the opposite — that TileSize must NOT be on
-     * the front page — because these were behind a row called Play screen.
-     * Both are things you change and then LOOK at, and a door meant judging
-     * the result with the result off screen.
+     * "Move this to its own sub menu called Appearance." It had been open at
+     * the foot of this page — "don't have it via a drop-down, have it always
+     * visible" — and that was his call, reversed now by him. The front page
+     * holds the door; the page behind it holds all three.
      */
-    assert.match(root, /<TileSize \/>/, 'the tile size buttons are not on the front page of Settings')
-    assert.match(root, /<Appearance \/>/, 'the light and dark buttons are not on the front page of Settings')
-    /* Below the rows, not above: the rows are what somebody opens Settings
-       for, these are what they want in one tap once they are there. */
-    assert.ok(
-      root.indexOf('<SetupRow') < root.indexOf('<TileSize />'),
-      'the tile size buttons sit above the list of rows'
-    )
+    assert.ok(!/<TileSize \/>/.test(root), 'the tile size buttons are back on the front page of Settings')
+    assert.ok(!/<Appearance \/>/.test(root), 'the light and dark buttons are back on the front page of Settings')
+    assert.match(root, /title="Appearance"[\s\S]{0,120}setPage\('appearance'\)/, 'Settings has no Appearance row')
+    const looks = settings.slice(settings.indexOf("{page === 'appearance' ?"), settings.indexOf("{page === 'unit' ?"))
+    assert.ok(looks.length > 100, 'the Appearance page is gone')
+    assert.match(looks, /head\('Appearance', 'back'\)/, 'the Appearance page has no title or way back')
+    assert.match(looks, /<TileSize \/>/, 'the tile size buttons are not on the Appearance page')
+    assert.match(looks, /<Appearance \/>/, 'the light and dark buttons are not on the Appearance page')
 
     const unit = settings.slice(settings.indexOf("{page === 'unit' ?"), settings.indexOf("{page === 'trouble' ?"))
     assert.match(unit, /<UnitBits \/>/, 'renaming is not on the rename page')
@@ -4724,7 +4720,7 @@ export function run(test) {
     /* Only the rows on the front page, not the ones inside the pages it opens. */
     const front = settings.slice(
       settings.indexOf("{page === null ? ("),
-      settings.indexOf('THE TWO THAT ARE NOT DOORS')
+      settings.indexOf("{page === 'appearance' ?")
     )
     const order = [...front.matchAll(/title=(?:"([^"]+)"|\{(?:purchase\.unlocked \? 'Full version' : '([^']+)'|(REPLAY))\})/g)]
       .map((m) => m[1] || m[2] || m[3])
@@ -4733,6 +4729,7 @@ export function run(test) {
       'Amp & pedal names',
       'Phone & computer',
       'Rename presets and scenes',
+      'Appearance',
       'Unlock the full version',
       'About',
       /* Last, and drawn only on his own account — shared/admin.mjs. */
@@ -7266,10 +7263,10 @@ export function run(test) {
        them, which is the one thing a palette swap cannot reach. */
     assert.match(app, /<StatusBar style=\{isDark\(\) \? 'light' : 'dark'\} \/>/, 'the status bar is light ink on a light screen')
 
-    /* And it is reachable: on Setup, beside the other setting about how the
-       thing on the stand looks. */
+    /* And it is reachable: on the Appearance page, beside the other settings
+       about how the thing on the stand looks. */
     const settings = read('mobile/src/screens/Settings.js')
-    assert.match(settings, /<Section>Appearance<\/Section>/, 'there is nowhere to choose a theme')
+    assert.match(settings, /<Section>Light or dark<\/Section>/, 'there is nowhere to choose a theme')
     assert.match(settings, /setMode\(m, sync\)/, 'choosing a theme does not remember it')
 
     theme.setMode('auto')

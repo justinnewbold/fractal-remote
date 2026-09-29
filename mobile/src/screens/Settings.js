@@ -374,6 +374,20 @@ export default function Settings({
               onPress={() => setPage('unit')}
             />
             {/*
+              HOW PLAY LOOKS, behind its own row.
+
+              "Move this to its own sub menu called Appearance." Tile size,
+              the pictures and light or dark sat open at the foot of this
+              list — asked for once so they were one tap away, and asked out
+              again now the list is long enough that they pushed it off the
+              screen. One row, one page, all three on it.
+            */}
+            <SetupRow
+              title="Appearance"
+              status="Tile size, effect pictures, light or dark"
+              onPress={() => setPage('appearance')}
+            />
+            {/*
               * THE FULL VERSION, AND THE WAY BACK TO ONE ALREADY PAID FOR.
               *
               * The top bar carries an Unlock button while the demo is on,
@@ -430,30 +444,17 @@ export default function Settings({
             ) : null}
           </View>
 
-          {/*
-            * THE TWO THAT ARE NOT DOORS, and they are here rather than behind one.
-            *
-            * "Move this to the settings screen at the bottom below all the
-            * other drop-down menus — we want it quickly available just by
-            * clicking settings. Don't have it via a drop-down, have it always
-            * visible."
-            *
-            * Every row above opens something and then you come back. These two
-            * are not errands: they are how the screen you play off LOOKS, and
-            * the way anybody uses them is to change one and look at the result.
-            * Behind a row called Play screen that is four taps a go — open
-            * Settings, open the row, change it, come back out to see — and the
-            * thing you are judging is not even on screen while you are judging
-            * it.
-            *
-            * At the bottom because the rows above are what somebody opens
-            * Settings FOR. These want to be reachable in one tap, not first.
-            */}
+        </>
+      ) : null}
+
+      {/* ------------------------------------------------------ appearance */}
+      {page === 'appearance' ? (
+        <>
+          {head('Appearance', 'back')}
           <View style={{ gap: space.md }}>
             <Section>Stage tiles</Section>
             <TileSize />
           </View>
-
           {/*
             Light, dark, or whatever the phone is set to.
 
@@ -463,7 +464,7 @@ export default function Settings({
             wrong answer in a lit room.
           */}
           <View style={{ gap: space.md }}>
-            <Section>Appearance</Section>
+            <Section>Light or dark</Section>
             <Appearance />
           </View>
         </>
@@ -1367,7 +1368,7 @@ function TileSize() {
       <Choice
         on={icons}
         label="Show effect pictures"
-        sub="A small picture on each effect in the chain — a flame for drive, a wave for chorus — beside or above its letters. Off leaves the letters alone."
+        sub="A small picture on each effect in the chain — a flame for drive, a wave for chorus — above its letters. Off leaves the letters alone."
         onPress={() => saveIcons(!icons, sync)}
       />
     </View>

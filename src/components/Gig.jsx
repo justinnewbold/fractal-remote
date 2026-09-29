@@ -620,7 +620,10 @@ export default function Gig({
       const next = fitTiles({
         available: viewport - top - chrome,
         scenes: hasScenes ? sceneCount : 0,
-        blocks: blocks.length
+        blocks: blocks.length,
+        /* How wide the effects row is, so a phone's browser is not sent six
+           across with tiles too narrow for a picture — see fitTiles. */
+        width: blocksRef.current?.clientWidth || 0
       })
       setFitVars((was) => (was && was.tile === next.tile && was.fxCols === next.fxCols ? was : next))
     }

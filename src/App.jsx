@@ -387,6 +387,7 @@ const SETUP_PAGES = {
   phone: 'Get it on your phone',
   demo: 'Demo Unit',
   rename: 'Rename presets and scenes',
+  appearance: 'Appearance',
   help: 'Troubleshooting',
   updates: 'Updates',
   about: 'About',
@@ -4315,6 +4316,10 @@ export default function App() {
                 opens it in one press.
               */}
               <SetupRow key="rename" title="Rename presets and scenes" status={status === 'live' ? 'Give them names you will know on a dark stage' : 'Connect a unit first'} onClick={() => setSetupPage('rename')} />
+              {/* "Move this to its own sub menu called Appearance." Tile size,
+                  the pictures and light or dark, behind one row — the phone's
+                  shape, in the phone's place. */}
+              <SetupRow key="appearance" title="Appearance" status="Tile size, effect pictures, light or dark" onClick={() => setSetupPage('appearance')} />
               {/*
                 THE SAME ROW THE PHONE HAS, in the same place: after renaming,
                 before About. "Unlock the full version" over the price, the
@@ -4369,24 +4374,15 @@ export default function App() {
                 <SetupRow key="accounts" title="Everyone with an account" status="Who has signed up" onClick={() => setSetupPage('accounts')} />
               ) : null}
             </div>
-            {/*
-              THE TWO THAT ARE NOT DOORS, and they are here rather than behind one.
+          </>
+        ) : null}
 
-              "Move this to the settings screen at the bottom below all the
-              other drop-down menus — we want it quickly available just by
-              clicking settings. Don't have it via a drop-down, have it always
-              visible."
-
-              Every row above opens something and then you come back. These
-              two are not errands: they are how the screen you play off LOOKS,
-              and the only way to judge either is to change it and look. Behind
-              a row called Play screen that was four moves a go — open
-              Settings, open the row, change it, come back out to see — and the
-              thing being judged was not on screen while you judged it.
-
-              Below the rows, because the rows are what somebody opens Settings
-              FOR. These want to be one click away, not first.
-            */}
+        {setupPage === 'appearance' ? (
+          <div className="setup-page">
+            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
+              ‹ Settings
+            </button>
+            <p className="setup-page-title">{SETUP_PAGES.appearance}</p>
             <div className="setup-loose">
               {/*
                 Not <Section>. That is a <details> that starts CLOSED, which is
@@ -4461,17 +4457,17 @@ export default function App() {
                     Show effect pictures
                     <span className="hint">
                       A small picture on each effect in the chain &mdash; a flame for drive, a wave
-                      for chorus &mdash; beside or above its letters. Off leaves the letters alone.
+                      for chorus &mdash; above its letters. Off leaves the letters alone.
                     </span>
                   </span>
                 </label>
               </div>
               <div className="setup-open">
-                <p className="silk-label setup-open-title">Appearance</p>
+                <p className="silk-label setup-open-title">Light or dark</p>
                 <Theme />
               </div>
             </div>
-          </>
+          </div>
         ) : null}
 
         {setupPage === 'phone' ? <PhoneApp /> : null}

@@ -2465,15 +2465,35 @@ test('the stage screen is sized by whoever is holding it', () => {
   /*
    * Fit: the screen decides the height. Eight scenes two across and nine
    * blocks four across are seven rows; 560px of room less six 8px gaps is
-   * 512px, so 73px a tile. A rig too big for four across goes five, then six,
-   * before the tap floor is allowed to win and the page to scroll.
+   * 512px, so 73px a tile. A rig too big for four across stays four across
+   * and scrolls: five and six made every name unreadable on an Android phone.
    */
   assert.deepEqual(fitTiles({ available: 560, scenes: 8, blocks: 9 }), { tile: 73, fxCols: 4 })
   assert.deepEqual(fitTiles({ available: 900, scenes: 2, blocks: 4 }), { tile: 96, fxCols: 4 }, 'a small rig grows past the biggest step')
-  assert.deepEqual(fitTiles({ available: 300, scenes: 8, blocks: 16 }), { tile: 44, fxCols: 6 }, 'a rig that cannot fit does not drop under the tap floor')
-  const wide = fitTiles({ available: 340, scenes: 8, blocks: 12 })
-  assert.ok(wide.fxCols > 4 && wide.tile >= 44, `a tight rig should go wider before going under the floor — got ${JSON.stringify(wide)}`)
+  assert.deepEqual(fitTiles({ available: 300, scenes: 8, blocks: 16 }), { tile: 44, fxCols: 4 }, 'a rig that cannot fit does not drop under the tap floor')
+  /* "Only a max of four across." A tight rig that used to go five or six
+     stays at four, and at the tap floor. */
+  for (const blocks of [9, 12, 16, 24]) {
+    assert.equal(fitTiles({ available: 340, scenes: 8, blocks, width: 500 }).fxCols, 4, `${blocks} effects went more than four across`)
+  }
+  /* A size that starts narrower can still widen, up to four, to fit. */
+  assert.equal(fitTiles({ available: 340, scenes: 8, blocks: 12, fxCols: 2 }).fxCols, 4)
   assert.deepEqual(fitTiles({ available: 500, scenes: 0, blocks: 0 }), { tile: 96, fxCols: 4 }, 'an empty preset should not divide by zero')
+
+  /*
+   * "On smaller phones, it looks like the tiles are too small to see the
+   * glyphs… it looks like having six across might be too many."
+   *
+   * His FM3: eight scenes, eight blocks, a screen with too little room for
+   * 44px at four across. Eight blocks are two rows at four, five or six, so
+   * going wider saved nothing and cost the pictures their room. It stays at
+   * four.
+   */
+  assert.equal(fitTiles({ available: 300, scenes: 8, blocks: 8 }).fxCols, 4, 'a wider row that saves no row was taken anyway')
+  /* And a row too narrow for four tiles with a picture stops short of four. */
+  assert.equal(fitTiles({ available: 300, scenes: 8, blocks: 18, fxCols: 2, width: 190 }).fxCols, 3, 'a very narrow row was sent four across')
+  /* Never narrower than the size he chose, whatever the width says. */
+  assert.equal(fitTiles({ available: 300, scenes: 8, blocks: 18, fxCols: 4, width: 200 }).fxCols, 4)
   {
     const mem = new Map()
     const store = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, v), removeItem: (k) => mem.delete(k) }

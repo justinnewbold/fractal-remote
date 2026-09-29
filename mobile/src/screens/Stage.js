@@ -240,7 +240,10 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
           blocks: blocks.length,
           sceneCols: size.scenes,
           fxCols: size.fx,
-          gap: space.sm
+          gap: space.sm,
+          /* The row the blocks sit in, so a small phone is not sent six
+             across with tiles too narrow for a picture — see fitTiles. */
+          width: row
         })
       : null
   /** The two numbers the tiles are actually drawn with. */

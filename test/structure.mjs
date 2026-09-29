@@ -1422,6 +1422,9 @@ export function run(test) {
         'Amp & pedal names',
         'Phone & computer',
         'Rename presets and scenes',
+        /* "Move this to its own sub menu called Appearance." Tile size, the
+           pictures and light or dark, behind one row — the phone's too. */
+        'Appearance',
         /*
          * The same row the phone has, in the same place. It used to be the
          * one the browser could not have, because a browser has no App Store;
@@ -1437,9 +1440,7 @@ export function run(test) {
          * buyer there is." A phone needs no way to get itself onto a phone.
          */
         'Get it on your phone',
-        /* No 'Play screen'. Stage tiles and Appearance are not doors any more;
-           they are open at the bottom of this list. Asserted below.
-           No 'Demo Unit' either — it is inside Phone & computer, where the
+        /* No 'Play screen'. No 'Demo Unit' either — it is inside Phone & computer, where the
            phone keeps it. No 'Troubleshooting' and no walkthrough — inside
            About, where Justin put the phone's. */
         'About',
@@ -1469,22 +1470,18 @@ export function run(test) {
     assert.ok(!setup.includes('<Group'), 'the doors are back')
 
     /*
-     * AND THE TWO THAT ARE NOT DOORS ARE OPEN, below the ones that are.
+     * AND HOW PLAY LOOKS IS BEHIND THE APPEARANCE ROW, open once you are there.
      *
-     * "Move this to the settings screen at the bottom below all the other
-     * drop-down menus — we want it quickly available just by clicking
-     * settings. Don't have it via a drop-down, have it always visible."
-     *
-     * The trap this guards is precise, and it is one I walked into while
-     * making the change: moving a <Section> from the Play screen page onto
-     * this list would look done and would not BE done, because <Section> is a
-     * <details> that starts closed. That is the same drop-down, one page to
-     * the left. So the check is not "are these on the list" but "are these on
-     * the list WITHOUT a fold around them".
+     * "Move this to its own sub menu called Appearance." They had been open
+     * at the foot of the list; now they are a page of their own. On that page
+     * they are still not folded: <Section> is a <details> that starts closed,
+     * and a page of three closed folds is a door behind a door.
      */
     const at = setup.indexOf('className="setup-loose"')
     const loose = setup.slice(at, setup.indexOf('setupPage ===', at))
     assert.ok(loose.length > 200, 'the open panels moved; this check reads them')
+    const looksAt = setup.indexOf("setupPage === 'appearance' ? (")
+    assert.ok(looksAt !== -1 && looksAt < at, 'tile size and light or dark are not on the Appearance page')
     /*
      * Comments stripped first, and that is not a detail. The block carries a
      * comment SAYING not to use <Section> here, and the first version of this
@@ -1494,14 +1491,8 @@ export function run(test) {
      */
     const noProse = loose.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, ' ')
     assert.ok(!/<Section/.test(noProse), 'Stage tiles and Appearance are folded away again')
-    assert.match(loose, />Stage tiles</, 'the tile size control is not on the Settings list')
-    assert.match(loose, /<Theme \/>/, 'the light and dark buttons are not on the Settings list')
-    /* Below the rows, not above them: the rows are what somebody opens
-       Settings for, these are the thing they want in one click once there. */
-    assert.ok(
-      setup.indexOf('className="setup-rows"') < setup.indexOf('className="setup-loose"'),
-      'the always-open settings sit above the list of rows'
-    )
+    assert.match(loose, />Stage tiles</, 'the tile size control is not on the Appearance page')
+    assert.match(loose, /<Theme \/>/, 'the light and dark buttons are not on the Appearance page')
 
     const behind = (key) => {
       const at = setup.indexOf(`setupPage === '${key}' ? (`)
