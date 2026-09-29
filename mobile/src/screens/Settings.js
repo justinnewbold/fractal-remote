@@ -22,7 +22,18 @@ import {
 } from '../lib/relay'
 import { notePresetName, noteSceneName, useRig } from '../lib/rig'
 import { dropReadCache, sceneShape, setPresetName, setSceneName } from '../lib/device'
-import { SIZES, clampSize, loadFit, loadIcons, loadSize, saveFit, saveIcons, saveSize } from '../lib/gigSize'
+import {
+  SIZES,
+  clampSize,
+  loadFit,
+  loadIcons,
+  loadScenesFour,
+  loadSize,
+  saveFit,
+  saveIcons,
+  saveScenesFour,
+  saveSize
+} from '../lib/gigSize'
 import { REPLAY } from '../lib/onboarding'
 import { sync, useStored } from '../lib/store'
 import { isPairAccount } from '../lib/pairing'
@@ -1322,6 +1333,7 @@ function TileSize() {
   const now = loadSize(sync)
   const fit = loadFit(sync, true)
   const icons = loadIcons(sync)
+  const four = loadScenesFour(sync)
   const step = (by) => saveSize(clampSize(now + by), sync)
   return (
     <View style={{ gap: space.md }}>
@@ -1370,6 +1382,13 @@ function TileSize() {
         label="Show effect pictures"
         sub="A small picture on each effect in the chain — a flame for drive, a wave for chorus — above its letters. Off leaves the letters alone."
         onPress={() => saveIcons(!icons, sync)}
+      />
+      {/* "First row 1234, second row 5678, as it is in the screen of my unit." */}
+      <Choice
+        on={four}
+        label="Scenes in rows of four, like the unit"
+        sub="1 2 3 4 on top and 5 6 7 8 underneath, the way the unit's own screen shows them. Off puts two on a row, with bigger names."
+        onPress={() => saveScenesFour(!four, sync)}
       />
     </View>
   )

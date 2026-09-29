@@ -59,7 +59,18 @@ import { createNameScan } from './lib/nameScan'
 import { Chain, PresetList, BlockPanel, Tuner } from './components/Console'
 import Screens, { viewsFor } from './components/Screens'
 import { useAsks } from './lib/asks'
-import { SIZES, loadSize, saveSize, clampSize, loadFit, saveFit, loadIcons, saveIcons } from './lib/gigSize'
+import {
+  SIZES,
+  loadSize,
+  saveSize,
+  clampSize,
+  loadFit,
+  saveFit,
+  loadIcons,
+  saveIcons,
+  loadScenesFour,
+  saveScenesFour
+} from './lib/gigSize'
 import { editButtonShows } from './lib/playMode'
 import { FIXES, FIRMWARE_NOTE, fixById, fixFor, versionsInSync } from '../shared/troubleshooting.mjs'
 import { osGuess, waysFor, waysWord } from '../shared/ways-in.mjs'
@@ -1134,6 +1145,8 @@ export default function App() {
   /* Whether Play sizes its tiles from the screen instead of the step. */
   const [fit, setFit] = useState(loadFit)
   const [icons, setIcons] = useState(loadIcons)
+  /* Scenes 1 2 3 4 over 5 6 7 8, the way the unit's screen draws them. */
+  const [scenesFour, setScenesFour] = useState(loadScenesFour)
   /* Which page of Setup is open; null is the list of rows. */
   /* Which computer this browser is on, read once. The guide's routes are
      sorted by it; see shared/ways-in.mjs for why only this end sorts them. */
@@ -3646,6 +3659,7 @@ export default function App() {
           size={size}
           fit={fit}
           icons={icons}
+          scenesFour={scenesFour}
           onError={setError}
           onChanged={read}
           onPickPreset={() => setPresetMenu(true)}
@@ -4458,6 +4472,26 @@ export default function App() {
                     <span className="hint">
                       A small picture on each effect in the chain &mdash; a flame for drive, a wave
                       for chorus &mdash; above its letters. Off leaves the letters alone.
+                    </span>
+                  </span>
+                </label>
+                {/* "First row 1234, second row 5678, as it is in the screen of my
+                    unit." The phone's Appearance page has the same box. */}
+                <label className="rename-choice">
+                  <input
+                    type="checkbox"
+                    checked={scenesFour}
+                    onChange={(e) => {
+                      const on = e.target.checked
+                      setScenesFour(on)
+                      saveScenesFour(on)
+                    }}
+                  />
+                  <span>
+                    Scenes in rows of four, like the unit
+                    <span className="hint">
+                      1 2 3 4 on top and 5 6 7 8 underneath, the way the unit&rsquo;s own screen
+                      shows them. Off puts two on a row on a phone, with bigger names.
                     </span>
                   </span>
                 </label>

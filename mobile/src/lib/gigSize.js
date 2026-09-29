@@ -288,3 +288,43 @@ export function saveIcons(on, storage) {
     return false
   }
 }
+
+/*
+ * THE SCENES IN THE UNIT'S OWN ORDER: ONE TO FOUR, THEN FIVE TO EIGHT.
+ *
+ * "I prefer arrangement of the scenes - first row 1234, second row 5678 as it
+ * is in the screen of my unit." Two across reads 1 2 / 3 4 / 5 6 / 7 8, which
+ * is the layout Justin chose and stays the default — but it puts scene 5
+ * under scene 3, where nobody who learned the rig on the FM3's own screen
+ * looks for it. So it is a choice, kept per device like the tile size.
+ *
+ * Four across at every size and at every width, phone or computer: the point
+ * is that the rows match the unit, and a row that re-flowed to fit the window
+ * would stop matching it.
+ */
+const SCENE_ROWS_KEY = 'fractal.gigScenesFour'
+
+/** How many scenes a row holds when they are laid out like the unit. */
+export const SCENES_LIKE_UNIT = 4
+
+export function loadScenesFour(storage) {
+  try {
+    const store = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null)
+    return store?.getItem(SCENE_ROWS_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function saveScenesFour(on, storage) {
+  try {
+    const store = storage ?? (typeof localStorage !== 'undefined' ? localStorage : null)
+    store?.setItem(SCENE_ROWS_KEY, on ? '1' : '0')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Scenes to a row: the unit's four when asked for, the size step's otherwise. */
+export const sceneColsFor = (step, four) => (four ? SCENES_LIKE_UNIT : step?.scenes ?? 2)

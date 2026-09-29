@@ -37,7 +37,7 @@ import { useDismiss } from '../lib/dismiss'
 import { Tuner } from './Console'
 import BpmBox from './BpmBox'
 import Sheet from './Sheet'
-import { sizeVars, SIZES, fitTiles } from '../lib/gigSize'
+import { sizeVars, SIZES, fitTiles, SCENES_LIKE_UNIT } from '../lib/gigSize'
 
 /**
  * The stand, not the bench.
@@ -77,6 +77,8 @@ export default function Gig({
   fit = false,
   /* The effect pictures on the chain tiles, unless turned off in Settings. */
   icons = true,
+  /* Scenes four to a row, 1-4 over 5-8, as the unit draws them. See gigSize. */
+  scenesFour = false,
   onError,
   onChanged,
   onPickPreset,
@@ -621,6 +623,7 @@ export default function Gig({
         available: viewport - top - chrome,
         scenes: hasScenes ? sceneCount : 0,
         blocks: blocks.length,
+        sceneCols: scenesFour ? SCENES_LIKE_UNIT : 2,
         /* How wide the effects row is, so a phone's browser is not sent six
            across with tiles too narrow for a picture — see fitTiles. */
         width: blocksRef.current?.clientWidth || 0
@@ -663,7 +666,7 @@ export default function Gig({
       window.visualViewport?.removeEventListener('resize', schedule)
       watch?.disconnect()
     }
-  }, [fit, hasScenes, sceneCount, blocks.length])
+  }, [fit, hasScenes, sceneCount, blocks.length, scenesFour])
 
   return (
     /*
@@ -679,6 +682,7 @@ export default function Gig({
       className="gig"
       data-compact={compact ? 'yes' : undefined}
       data-fit={fit ? 'yes' : undefined}
+      data-scenes-four={scenesFour ? 'yes' : undefined}
       /* Three effects to a row still fits a name; four does not. The switch to
          three letters rides the column count rather than a width guess. */
       data-fx-abbr={(fitVars?.fxCols ?? SIZES[fit ? 0 : size].fx) >= 4 ? 'yes' : undefined}

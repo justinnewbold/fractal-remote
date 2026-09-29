@@ -1677,7 +1677,7 @@ export function run(test) {
        cannot pay for the gaps, and the last tile of a short row stretched the
        width of the screen. The rule being checked is the same: how many go
        across comes from the setting. */
-    assert.match(stage, /width: tileWidth\(row, size\.scenes\)/, 'the scenes are a fixed number across whatever the setting says')
+    assert.match(stage, /width: tileWidth\(row, sceneCols\)/, 'the scenes are a fixed number across whatever the setting says')
     /* Blocks take their column count from `fxCols`, which is the setting's
        own `fx` until fit is measuring — fit widens the rows rather than let a
        tile drop under a thumb. Either way it comes from the setting. */
@@ -4298,6 +4298,41 @@ export function run(test) {
     assert.equal(loadIcons(store), true)
     assert.match(read('mobile/src/screens/Settings.js'), /label="Show effect pictures"[\s\S]{0,300}onPress=\{\(\) => saveIcons\(!icons, sync\)\}/, 'the phone has no way to turn them off')
     assert.match(read('src/App.jsx'), /Show effect pictures/, 'the browser has no way to turn them off')
+  })
+
+  test('the scenes can sit in rows of four, like the unit', async () => {
+    /*
+     * "I prefer arrangement of the scenes - first row 1234, second row 5678
+     * as it is in the screen of my unit." A choice, off by default: two
+     * across is the layout Justin chose.
+     */
+    const { loadScenesFour, saveScenesFour, sceneColsFor, SIZES, fitTiles } = await import('../src/lib/gigSize.js')
+    const box = new Map()
+    const store = { getItem: (k) => (box.has(k) ? box.get(k) : null), setItem: (k, v) => box.set(k, String(v)) }
+    assert.equal(loadScenesFour(store), false, 'the default moved off two across')
+    saveScenesFour(true, store)
+    assert.equal(loadScenesFour(store), true, 'turning it on does not stick')
+    saveScenesFour(false, store)
+    assert.equal(loadScenesFour(store), false)
+    assert.equal(loadScenesFour({ getItem: () => { throw new Error('blocked') } }), false, 'blocked storage broke the screen')
+    for (const step of SIZES) {
+      assert.equal(sceneColsFor(step, true), 4, `${step.name} is not four across when asked`)
+      assert.equal(sceneColsFor(step, false), step.scenes, `${step.name} lost its own column count`)
+    }
+    /* Eight scenes are two rows at four, four rows at two — Fit has to know. */
+    const four = fitTiles({ available: 600, scenes: 8, blocks: 8, sceneCols: 4, fxCols: 4 })
+    const two = fitTiles({ available: 600, scenes: 8, blocks: 8, sceneCols: 2, fxCols: 4 })
+    assert.ok(four.tile > two.tile, 'Fit did not give the saved rows back to the tiles')
+
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /const sceneCols = sceneColsFor\(size, loadScenesFour\(sync\)\)/, 'the phone ignores the choice')
+    assert.match(stage, /tileWidth\(row, sceneCols\)/, 'the phone draws scenes at the size step\u2019s width regardless')
+    assert.match(stage, /\n\s+sceneCols,\n/, 'Fit on the phone still counts two across')
+    assert.match(read('mobile/src/screens/Settings.js'), /label="Scenes in rows of four, like the unit"[\s\S]{0,300}onPress=\{\(\) => saveScenesFour\(!four, sync\)\}/, 'the phone has no way to choose it')
+    assert.match(read('src/App.jsx'), /scenesFour=\{scenesFour\}/, 'the browser never hands the choice to Play')
+    assert.match(read('src/App.jsx'), /Scenes in rows of four, like the unit/, 'the browser has no way to choose it')
+    assert.match(read('src/components/Gig.jsx'), /data-scenes-four=\{scenesFour \? 'yes' : undefined\}/, 'the browser grid is never told')
+    assert.match(read('src/styles.css'), /\.gig\[data-scenes-four\] \.gig-scenes,[\s\S]{0,120}grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/, 'the browser grid is not four across')
   })
 
   test('the paywall sells the unlock, not whichever package came first', async () => {
@@ -7894,7 +7929,7 @@ export function run(test) {
        inherits the trim from a bigger one and draws tiny tiles. */
     assert.match(
       stage,
-      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{blocks\.length\}:\$\{fitOn\}`/,
+      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{blocks\.length\}:\$\{fitOn\}:\$\{sceneCols\}`/,
       'the trim is not thrown away when the rig or the screen changes'
     )
     assert.match(stage, /if \(trim !== 0\) setTrim\(0\)/, 'the trim survives a change of preset, so a smaller rig gets a smaller tile')
