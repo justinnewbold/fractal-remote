@@ -109,8 +109,24 @@ jobs:
         working-directory: mobile
         run: npm ci
 
+      # Without the "newest patch of every Expo package" part, on purpose.
+      #
+      # That part compares mobile/package.json against whatever Expo published
+      # most recently, so it goes red the day Expo ships a patch, with no change
+      # here at all. It did: expo 57.0.26 and expo-updates 57.0.24 came out, this
+      # step failed on the 1.86.17 merge, the update job behind it never ran,
+      # and the phones sat on 1.86.16 with nothing saying so.
+      #
+      # And what it asks for is the one thing an update must never do: moving
+      # expo-updates changes the fingerprint, and a changed fingerprint means no
+      # update reaches any phone until a build is spent. So the version part
+      # runs in the build job below, before a slot is spent, which is when
+      # lining the packages up belongs. Everything else expo-doctor checks still
+      # blocks here.
       - name: The config is one the installed SDK understands
         working-directory: mobile
+        env:
+          EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK: '1'
         run: npx expo-doctor
 
       # WHETHER THIS CHANGE COSTS A BUILD, ANSWERED BEFORE IT MERGES.
@@ -213,6 +229,12 @@ jobs:
       - name: Install the app's own dependencies
         working-directory: mobile
         run: npm ci
+
+      # The full check, package versions included, before a build slot is
+      # spent. See the same step in `check` for why only here.
+      - name: The packages are the ones this SDK expects
+        working-directory: mobile
+        run: npx expo-doctor
 
       # The app has to exist on Expo's side before anything can be built for
       # it, and until now it never has: app.json carried an empty `extra.eas`,
