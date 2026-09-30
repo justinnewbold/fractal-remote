@@ -2581,6 +2581,8 @@ export default function App() {
     dirtyRef.current = unsaved
     setDirty(unsaved)
     setSavedAt(null)
+    /* A whole new buffer: the knobs turned before it are not on the unit. */
+    edits.current = []
   }
   const [queuedRestore, setQueuedRestore] = useState(null)
   const restoreWait = useRef(null)
@@ -2596,7 +2598,10 @@ export default function App() {
           )
           afterRestore(done.mode)
           record('version', done.said)
-          read()
+          /* Same slot, block, channel and scene, every value changed: an
+             open editor has to be told, as a Revert tells it. */
+          await read()
+          bufferReloaded()
           return done
         } finally {
           setBusy(false)
@@ -2637,7 +2642,8 @@ export default function App() {
       if (said.ok) {
         afterRestore(said.mode || mode)
         record('version', said.said || 'The computer put the snapshot back')
-        read()
+        await read()
+        bufferReloaded()
       } else if (said.cancelled) {
         record('version', said.error)
       } else {
@@ -2687,7 +2693,8 @@ export default function App() {
         if (out.ok) {
           afterRestoreLater.current(out.mode)
           recordLater.current('version', `${out.said} Asked for from the phone.`)
-          readLater.current()
+          await readLater.current()
+          bufferReloaded()
         } else if (!out.cancelled) {
           recordLater.current('version', `The phone asked for a snapshot, and it wasn’t done: ${out.error}`)
         }

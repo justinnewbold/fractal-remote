@@ -4603,6 +4603,12 @@ input.type-search {
   padding: var(--s-4) var(--s-4);
 }
 
+/* Held still while an Undo puts the block's settings back. */
+.knob-deck.busy {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .knob-cell {
   display: flex;
   flex-direction: column;

@@ -2967,7 +2967,9 @@ export function run(test) {
     assert.match(act, /change\?\.\(v\)\s*swipes\.current\.push\(v\)/, 'a swipe does not hand its own value to the write')
     assert.ok(!/commit\?\.\(\)/.test(act), 'a swipe asks for the write in the same instant again, which reads the value from before it')
     assert.match(knob, /useEffect\(\(\) => \(\) => swipes\.current\.flush\(\), \[\]\)/, 'closing the editor leaves the last swipe unsent')
-    assert.match(knob, /live\.current\.onCommit\?\.\(v\)/, 'a drag does not hand over the value it reached')
+    assert.match(knob, /const release = \(\) => \{\s*const v = dragged\.current\s*dragged\.current = undefined\s*live\.current\.onCommit\?\.\(v\)/, 'a drag does not hand over the value it reached')
+    assert.match(knob, /dragged\.current = v\s*change\?\.\(v\)/, 'a drag does not keep the value it reached')
+    assert.match(act, /const from = waiting !== undefined \?/, 'a fast run of swipes starts each one from the screen, a step behind')
 
     const edit = read('mobile/src/screens/Edit.js')
     assert.match(edit, /onCommit=\{\(v\) => commit\(p, v\)\}/, 'the knob’s value is read back out of state a render behind')
@@ -7237,7 +7239,9 @@ export function run(test) {
     assert.match(back, /progress: onRestoring/, 'the phone’s Undo shows nothing while it runs')
     /* Every write lands on whichever channel is live: another one, another
        scene or the preset loading again stops it before the next write. */
-    assert.match(back.replace(/\s+/g, ' '), /stillHere: \(\) => \{ const s = getState\(\) return liveChannel\(\) === ch0 && s\.sceneIndex === at\.sceneIndex && s\.bufferRev === at\.bufferRev \}/, 'the phone’s Undo goes on writing after the channel changed')
+    assert.match(back.replace(/\s+/g, ' '), /stillHere: \(\) => \{ const s = getState\(\) return liveChannel\(\) === ch0 && s\.sceneIndex === at\.sceneIndex && s\.bufferRev === at\.bufferRev && s\.preset\?\.number === n0 \}/, 'the phone’s Undo goes on writing after the channel changed')
+    assert.match(back, /const n0 = at\.preset\?\.number/, 'the phone’s Undo writes the old song’s settings onto the next preset while its chain is read')
+    assert.match(apply, /getState\(\)\.preset\?\.number !== n0/, 'a model pick lands on the next preset while its chain is read')
     /* The pre-pick read is a round trip: a block that moved in it is not the one tapped. */
     const movedAt = apply.indexOf('if (moved()) return')
     assert.ok(movedAt > snapAt && movedAt < apply.indexOf('const sent = await setType(eid'), 'the phone sends the model to a channel or preset that came up during the read')
@@ -8752,7 +8756,7 @@ export function run(test) {
        inherits the trim from a bigger one and draws tiny tiles. */
     assert.match(
       stage,
-      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{blocks\.length\}:\$\{fitOn\}:\$\{sceneCols\}`/,
+      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{blocks\.length\}:\$\{fitOn\}:\$\{sceneCols\}:\$\{chainNow\.elsewhere\}:\$\{chainNow\.late\}`/,
       'the trim is not thrown away when the rig or the screen changes'
     )
     assert.match(stage, /if \(trim !== 0\) setTrim\(0\)/, 'the trim survives a change of preset, so a smaller rig gets a smaller tile')
@@ -10543,6 +10547,18 @@ export function run(test) {
     rig.handleEvent({ type: 'changed', scope: 'preset' })
     await clock.advance(rig.PRESET_SETTLE_MS + 500)
     assert.equal(rig.getState().bufferRev, start + 2, 'the editor kept the last preset’s values when the unit moved on')
+  })
+
+  /* A Revert at the Mac reaches the phone as news of the same preset. */
+  test('the same slot loaded again from the other device tells the open editor too, at no extra chain read', async () => {
+    const { rig, clock, asked } = await rigOnTheBench()
+    await clock.advance(rig.CHAIN_FRESH_MS + 1000)
+    const start = rig.getState().bufferRev
+    const chains = asked(CHAIN)
+    rig.handleEvent({ type: 'changed', scope: 'preset' })
+    await clock.advance(rig.PRESET_SETTLE_MS + 500)
+    assert.equal(rig.getState().bufferRev, start + 1, 'a Revert at the Mac left the phone’s open editor on the old values')
+    assert.equal(asked(CHAIN), chains + 1, 'following a reload from elsewhere cost more than one chain read')
   })
 
   /* The panel is keyed on the block's channel and bufferRev: set apart, a

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useDevice, writeBypass, refreshSceneState } from '../lib/deviceState'
+import { useDevice, writeBypass, refreshSceneState, getSnapshot } from '../lib/deviceState'
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import { blockColor } from '../lib/blockColors'
 import { useDismiss } from '../lib/dismiss'
@@ -1191,6 +1191,10 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    * THAT value, so a knob still being turned does not flick back to the read.
    */
   const commit = (p, override) => {
+    /* For the length of an Undo the deck shows the new model's values, which
+       the unit no longer holds, and a turn there would be pulled back or
+       named as a miss. */
+    if (restoringHere) return
     const next = override !== undefined ? override : local[p.id]
     if (next === undefined) return
     // Equal to what the unit last said, and nothing on its way: nothing to do.
@@ -1243,7 +1247,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
         {
           block: name,
           slug,
-          param: p.name,
+          param: called,
           from: p.value,
           to: next,
           min: p.min,
@@ -1309,6 +1313,13 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
         modelSnapshot({ named: params, type: was }, { channel: block.channel ?? null })
       /* Already on it, as far as the unit is concerned: nothing to go back to. */
       if (before?.type.value === Number(value)) before = null
+      /* Named as the knobs are drawn, so a setting that didn't go back can be
+         found on screen by the name the Undo gives it. */
+      if (before) {
+        const drawnAs = new Map()
+        for (const pg of pages) for (const q of pg.params) if (!drawnAs.has(q.id)) drawnAs.set(q.id, q.label)
+        before = { ...before, knobs: before.knobs.map((k) => ({ ...k, name: drawnAs.get(k.id) || k.name })) }
+      }
       /* The read took a round trip. A preset, a Revert, a scene or a channel
          that came up in it is not the block that was tapped: the model would
          land there, on settings no Undo could reach. */
@@ -1438,7 +1449,9 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     }
     const key = readKey
     const eid = block.effectId
-    const here = () => liveKey.current === key
+    /* A preset loaded from this window, a Revert included, reloads the buffer
+       before editRev says so; chainGoing is set the moment it is tapped. */
+    const here = () => liveKey.current === key && getSnapshot().chainGoing == null
     const load = liveLoad.current
     const onThis = () => liveLoad.current === load
     setPicking(false)
@@ -1473,7 +1486,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
            next pick, so the names in it can be found and turned by hand. */
         if (!said.bad) saidTimer.current = setTimeout(() => setUndoSaid(null), 10000)
       }
-      if (!r.refused || r.refused === 'unread') onChanged(`${block.name} → ${back.type.name} (Undo)`)
+      if (!r.refused || (r.refused === 'unread' && r.modelSent)) onChanged(`${block.name} → ${back.type.name} (Undo)`)
     } catch (err) {
       onError(err.message)
     } finally {
@@ -1708,7 +1721,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
       {/* Hidden says why its settings are there, once, above them. */}
       {onPage?.note ? <p className="hint pad">{onPage.note}</p> : null}
 
-      <div className="knob-deck">
+      <div className={`knob-deck${restoringHere ? ' busy' : ''}`}>
         {/*
           The knobs stay up while they are being read again.
           Swapping a deck of six knobs for one line of text takes about 200px
@@ -1726,13 +1739,16 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
                 param={p}
                 label={p.label || p.name}
                 value={valueOf(p)}
-                onChange={(v) => setLocal((prev) => ({ ...prev, [p.id]: v }))}
+                onChange={(v) => {
+                  if (!restoringHere) setLocal((prev) => ({ ...prev, [p.id]: v }))
+                }}
                 onCommit={(v) => commit(p, v)}
               />
               <ValueBox
                 param={p}
                 value={valueOf(p)}
                 onCommit={(v) => {
+                  if (restoringHere) return
                   setLocal((prev) => ({ ...prev, [p.id]: v }))
                   commit(p, v)
                 }}

@@ -631,6 +631,10 @@ function BlockPanel({
    * value on the knob let go only once the unit has caught up with it.
    */
   const commit = (p, override) => {
+    /* For the length of an Undo the knobs show the new model's values, which
+       the unit no longer holds, and a turn there would be pulled back or
+       named as a miss. */
+    if (restoring) return
     const next = override !== undefined ? override : local[p.id]
     if (next === undefined) return
     if (next === p.value && !writes.current.busy(p.id)) return
@@ -684,7 +688,10 @@ function BlockPanel({
        while the read below is on the wire is not the block that was tapped. */
     const rev0 = getState().bufferRev
     const ch0 = liveChannel()
-    const moved = () => getState().bufferRev !== rev0 || liveChannel() !== ch0
+    /* The preset number moves the moment another preset is picked; the
+       buffer's revision only once its chain has been read. */
+    const n0 = getState().preset?.number
+    const moved = () => getState().bufferRev !== rev0 || getState().preset?.number !== n0 || liveChannel() !== ch0
     /* Fresh, not what is on show: the switches are never kept here, and a
        read that fails falls back to the knobs on screen rather than to no
        Undo at all. */
@@ -698,6 +705,13 @@ function BlockPanel({
         modelSnapshot(now, { channel: block.channel ?? null }) ||
         modelSnapshot({ named: params, type: was }, { channel: block.channel ?? null })
       if (before?.type.value === Number(value)) before = null
+      /* Named as the knobs are drawn, so a setting that didn't go back can be
+         found on screen by the name the Undo gives it. */
+      if (before) {
+        const drawnAs = new Map()
+        for (const pg of pages) for (const q of pg.params) if (!drawnAs.has(q.id)) drawnAs.set(q.id, q.label)
+        before = { ...before, knobs: before.knobs.map((k) => ({ ...k, name: drawnAs.get(k.id) || k.name })) }
+      }
       /* The model would land there, on settings no Undo could reach. */
       if (moved()) return
     }
@@ -844,6 +858,10 @@ function BlockPanel({
        one, rather than sending the rest of A's settings to B. */
     const at = getState()
     const ch0 = liveChannel()
+    /* Another preset puts its number up at once, but its chain — and so the
+       buffer's revision and the channel read from it — only seconds later.
+       Without this the rest of the old song's settings land on the new one. */
+    const n0 = at.preset?.number
     try {
       const r = await restoreModel(back, {
         channel: block.channel ?? null,
@@ -855,10 +873,10 @@ function BlockPanel({
         progress: onRestoring,
         stillHere: () => {
           const s = getState()
-          return liveChannel() === ch0 && s.sceneIndex === at.sceneIndex && s.bufferRev === at.bufferRev
+          return liveChannel() === ch0 && s.sceneIndex === at.sceneIndex && s.bufferRev === at.bufferRev && s.preset?.number === n0
         }
       })
-      if (!r.refused || r.refused === 'unread') noteEdited()
+      if (!r.refused || (r.refused === 'unread' && r.modelSent)) noteEdited()
       if (r.last) {
         setParams(r.last.named || [])
         setLayout(r.last.layout || null)
@@ -1110,7 +1128,9 @@ function BlockPanel({
                 param={p}
                 label={p.label || p.name}
                 value={valueOf(p)}
-                onChange={(v) => setLocal((prev) => ({ ...prev, [p.id]: v }))}
+                onChange={(v) => {
+                  if (!restoring) setLocal((prev) => ({ ...prev, [p.id]: v }))
+                }}
                 onCommit={(v) => commit(p, v)}
                 onScrollLock={onScrollLock}
               />

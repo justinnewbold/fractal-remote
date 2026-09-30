@@ -6805,6 +6805,25 @@ onTheBench('a preset changed at the unit moves the edit buffer too; a scene does
   assert.equal(ds.getSnapshot().editRev, start + 1, 'the editor kept the last preset’s values when the unit moved on')
 })
 
+/* A Revert on the phone reaches this window as news of the same preset. */
+onTheBench('the same slot loaded again from the other device tells an open editor too, at no extra chain read', async () => {
+  const { clock, unit, asked } = windowOnTheBench()
+  await clock.advance(ds.CHAIN_FRESH_MS + 1000)
+  const start = ds.getSnapshot().editRev
+  const chains = asked(CHAIN)
+  ds.handleEvent({ type: 'changed', scope: 'preset' })
+  await clock.advance(ds.PRESET_SETTLE_MS + 500)
+  assert.equal(ds.getSnapshot().editRev, start + 1, 'a Revert from the other device left the open editor on the old values')
+  assert.equal(asked(CHAIN), chains + 1, 'following a reload from elsewhere cost more than one chain read')
+  /* An AM4's news is its own edit watch, and says nothing was reloaded. */
+  unit.keepsCopy = false
+  await clock.advance(ds.CHAIN_FRESH_MS + 1000)
+  const later = ds.getSnapshot().editRev
+  ds.handleEvent({ type: 'changed', scope: 'preset' })
+  await clock.advance(ds.PRESET_SETTLE_MS + 500)
+  assert.equal(ds.getSnapshot().editRev, later, 'an AM4 knob turned at the unit was taken as the preset loaded again')
+})
+
 /*
  * The editor's read key is the block, its channel, the scene and editRev. A
  * load that moved the amp to another channel changed the channel in one set
@@ -6928,6 +6947,10 @@ test('a Revert is only called done once the knobs read back where they were', as
   check = await rc.checkRevert({ edits: [{ ...gain, channel: 'B' }], readBlock: live(7.5, 6), channelOf: onA, channelBefore: onA })
   assert.equal(check.state, 'unknown')
   assert.equal(rc.revertTook(check), false, "Save and Revert went away when the only knob turned was on a channel the unit isn't showing")
+  /* The unit ignored it and is showing A, where Gain happens to sit where B's started: A's value says nothing about B. */
+  check = await rc.checkRevert({ edits: [{ ...gain, channel: 'B' }], readBlock: live(5, 4), readSaved: slot(5, 4), channelOf: onA, channelBefore: onA })
+  assert.equal(check.state, 'unknown', 'a knob turned on channel B was read off channel A')
+  assert.equal(rc.revertTook(check), false)
   /* Tapped over to B before the Revert, and back on A after it: that is the buffer loaded again. */
   check = await rc.checkRevert({ edits: [{ ...gain, channel: 'B' }], readBlock: live(7.5, 6), channelOf: onA, channelBefore: () => 'B' })
   assert.equal(check.state, 'back', 'a Revert that moved the amp back to its saved channel could not be called done')
@@ -8998,7 +9021,9 @@ test('the browser’s knob writes what a press reached, once the keys stop', () 
   assert.ok(!/onCommit/.test(nudge), 'a press asks for the write in the same instant again, which reads the value from before it')
   assert.match(knob, /onBlur=\{\(\) => keys\.current\.flush\(\)\}/, 'tabbing away leaves the last press unsent')
   assert.match(knob, /useEffect\(\(\) => \(\) => keys\.current\.flush\(\), \[\]\)/, 'closing the editor leaves the last press unsent')
-  assert.match(knob, /live\.current\.onCommit\?\.\(v\)/, 'a drag does not hand over the value it reached')
+  assert.match(knob, /const release = useCallback\(\(\) => \{\s*const v = dragged\.current\s*dragged\.current = undefined\s*live\.current\.onCommit\?\.\(v\)/, 'a drag does not hand over the value it reached')
+  assert.match(knob, /dragged\.current = v\s*change\(v\)/, 'a drag does not keep the value it reached')
+  assert.match(nudge, /const from = waiting !== undefined \?/, 'a fast run of presses starts each one from the screen, a step behind')
 
   const con = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
   assert.match(con, /onCommit=\{\(v\) => commit\(p, v\)\}/, 'the knob’s value is read back out of state a render behind')
@@ -9203,7 +9228,7 @@ test('the cab panel picks through the cab state, and every other block still swa
   /* A pick that finishes after another block came up leaves that block alone. */
   assert.match(panel, /liveKey\.current = readKey/)
   for (const [name, body] of [['cab pick', cabWrite], ['model swap', apply]]) {
-    const guard = body.indexOf('if (liveKey.current !== key)')
+    const guard = body.indexOf('if (liveKey.current !== key)', Math.max(0, body.indexOf('const sent = await setType(')))
     assert.ok(guard > 0, `a ${name} that finishes late lands on whatever block is open`)
     assert.ok(guard < body.indexOf('setParams('), `the ${name} sets the panel before checking it is still the same block`)
   }
@@ -9713,6 +9738,116 @@ test('an Undo whose every write threw says nothing was sent, and keeps the way b
   assert.equal(r.last.named.find((k) => k.id === 2).value, 2, 'the panel shows settings that never went')
 })
 
+test('an Undo where some writes threw and the check could not be read says so, and keeps the way back', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const bench = modelBench({ knobs: 4, enums: 0, blindAfter: 2 })
+  for (let i = 0; i < 4; i++) bench.knob(i, 8)
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  const io = bench.io('A')
+  let n = 0
+  const write = io.write
+  /* A relay that times out on every other write. */
+  io.write = async (p, v) => {
+    if (n++ % 2) throw new Error("Your computer didn't answer.")
+    return write(p, v)
+  }
+  const r = await restoreModel(snap, io)
+  assert.equal(r.unchecked, true)
+  assert.equal(r.partial, true, 'writes that threw were counted as sent')
+  assert.deepEqual(bench.unit.named.map((k) => k.value), [8, 2, 8, 2])
+  const said = undoResult(r, snap)
+  assert.doesNotMatch(said.text, /sent your settings/, 'settings that never went were called sent')
+  assert.match(said.text, /Try Undo again/)
+  assert.equal(said.keep, true, 'the only record of his old settings was thrown away with half of them not sent')
+})
+
+test('an Undo whose every setting write threw, though the reads came back, keeps the way back', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const bench = modelBench({ knobs: 4, enums: 1 })
+  for (let i = 0; i < 4; i++) bench.knob(i, 8)
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  const cut = () => {
+    throw new Error("Your computer didn't answer.")
+  }
+  const r = await restoreModel(snap, { ...bench.io('A'), write: cut, writeChecked: cut, writeEnum: cut })
+  assert.equal(r.unchecked, false)
+  assert.equal(r.retry, true)
+  const said = undoResult(r, snap)
+  assert.equal(said.keep, true, 'an Undo that sent nothing threw its snapshot away')
+  assert.match(said.text, /Try Undo again/)
+})
+
+test('a model write that threw is not said to have been sent', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const bench = modelBench()
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  const blind = () => {
+    throw new Error('timeout')
+  }
+  const r = await restoreModel(snap, {
+    ...bench.io('A'),
+    setType: () => {
+      throw new Error("Can't reach the Fractal app")
+    },
+    read: blind
+  })
+  assert.equal(r.refused, 'unread')
+  assert.equal(r.modelSent, false, 'a model write that threw was counted as sent')
+  const said = undoResult(r, snap)
+  assert.doesNotMatch(said.text, /was sent/)
+  assert.equal(said.keep, true)
+  /* And one that went, with the read after it lost, is said to have gone. */
+  const r2 = await restoreModel(snap, { ...bench.io('A'), read: blind })
+  assert.equal(r2.refused, 'unread')
+  assert.equal(r2.modelSent, true)
+  assert.match(undoResult(r2, snap).text, /was sent/)
+})
+
+test('a knob with no known range is not taken as put back because its position reads 0 at both ends', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  /* The Axe-Fx II reports a position of 0 for a knob the catalog gives no range. */
+  const unit = { model: 0, sag: 30000, bass: 0.7 }
+  const read = async () => ({
+    type: { value: unit.model, name: unit.model ? 'Plexi' : 'USA Clean' },
+    named: [
+      { id: 1, name: 'Bass', value: unit.bass * 10, norm: unit.bass, min: 0, max: 10 },
+      { id: 2, name: 'Supply Sag', value: unit.sag, norm: 0 }
+    ],
+    enums: []
+  })
+  const snap = modelSnapshot(await read(), { channel: 'A' })
+  unit.model = 1
+  unit.sag = 12000
+  unit.bass = 0.5
+  const noRange = () => {
+    throw new Error('No range known')
+  }
+  const r = await restoreModel(snap, {
+    channel: 'A',
+    setType: async (v) => {
+      unit.model = v
+      return { ok: true }
+    },
+    read,
+    write: async (p, v) => {
+      if (p.id !== 1) return noRange()
+      unit.bass = v / 10
+      return { ok: true }
+    },
+    writeChecked: async (p, v) => {
+      if (p.id !== 1) return noRange()
+      unit.bass = v / 10
+      return { ok: true }
+    },
+    writeEnum: async () => ({ ok: true })
+  })
+  assert.deepEqual(r.missed, ['Supply Sag'], 'a knob still off was counted as back')
+  assert.doesNotMatch(undoResult(r, snap).text, /Put back all/)
+})
+
 test('an Undo stops the moment the block changes channel or preset, and sends nothing after', async () => {
   const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
   const bench = modelBench()
@@ -9905,6 +10040,8 @@ test('a save from away is answered the moment the computer writes, not on the ne
 
 test('a save from away that nobody picks up says so, then gives up and writes over the request', async () => {
   const b = waitBench()
+  /* The Mac leaves the last save's note in place: that one is not this one. */
+  b.docs.progress = { id: 'r0', picked: true }
   const states = []
   const w = saveWait.startSaveWait(b.opts({ onState: (s) => states.push({ ...s }) }))
   let said = null
@@ -9935,6 +10072,7 @@ test('a computer that has picked the save up gets longer, and its answer after a
   b.announce('fractal.saveProgress.fm3', b.docs.progress)
   await b.turn(saveWait.SAVE_WAIT_MS + 1000)
   assert.equal(said, null, 'a computer part-way through a save is given up on at the same moment as one that never answered')
+  assert.equal(b.written.length, 0, 'a computer part-way through a save had its request written over at two minutes')
   assert.notEqual(saveWait.saveProgressDoc('fm3'), saveWait.saveResultDoc('fm3'))
   /* Cancel while it is writing, and it answers in the next moment. */
   w.cancel()

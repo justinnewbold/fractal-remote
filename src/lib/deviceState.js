@@ -1376,8 +1376,12 @@ async function followPresetNews() {
    * watch — a knob at the front panel, a channel, a save, a rename — and its
    * names come out of a dump of the STORED slot, one more each time, carrying
    * the old names over a rename not yet saved.
+   *
+   * On a gen-3 unit this news only ever comes from a select, so the same
+   * number is the buffer loaded again — a Revert from the other device — and
+   * an open editor has to be told. The AM4's is its edit watch, left alone.
    */
-  readPresetSoon(PRESET_SETTLE_MS, { preset: true, names: false })
+  readPresetSoon(PRESET_SETTLE_MS, { preset: true, names: false, reloaded: !!driver?.presetCopy && hostKeepsCopy() === true })
 }
 
 async function askUnitsPreset(run, how) {

@@ -451,8 +451,13 @@ async function followPresetNews() {
    * again and again while a knob moves; the names there come out of a dump
    * of the STORED slot, which is one more dump each time, and the old names
    * over a rename that has not been saved.
+   *
+   * On a unit whose computer keeps a copy of the preset (a gen-3) this news
+   * only ever comes from a select, so the same number is the buffer loaded
+   * again — a Revert from the other device — and an open editor has to be
+   * told. The AM4's is its edit watch, left alone.
    */
-  readPresetSoon(PRESET_SETTLE_MS, { preset: true, names: false })
+  readPresetSoon(PRESET_SETTLE_MS, { preset: true, names: false, reloaded: hostKeepsCopy() === true })
 }
 
 /*

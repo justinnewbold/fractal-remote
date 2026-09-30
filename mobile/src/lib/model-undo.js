@@ -54,6 +54,10 @@ const TRAVEL_SLACK = 0.005
 
 const finite = (n) => typeof n === 'number' && Number.isFinite(n)
 
+/* A knob whose two ends are known. Without them a unit can report a position
+   of 0 for every value (the Axe-Fx II does), and two zeros agree about nothing. */
+const ranged = (p) => !!p && finite(p.min) && finite(p.max) && p.min !== p.max
+
 /**
  * What to put back, from a read of the block taken just before the model
  * write. `read` is what the params read answers: `named` (the knobs), `enums`
@@ -96,7 +100,7 @@ export const settingsIn = (snap) => (snap ? snap.knobs.length + snap.enums.lengt
  */
 export function knobAgrees(want, now) {
   if (!now) return false
-  if (finite(want.norm) && finite(now.norm)) return Math.abs(want.norm - now.norm) <= TRAVEL_SLACK
+  if (ranged(want) && finite(want.norm) && finite(now.norm)) return Math.abs(want.norm - now.norm) <= TRAVEL_SLACK
   if (!finite(now.value)) return false
   const span = finite(want.min) && finite(want.max) ? Math.abs(want.max - want.min) : 0
   const slack = span ? span * TRAVEL_SLACK : Math.max(0.05, Math.abs(want.value) * 0.02)
@@ -172,7 +176,9 @@ function laidOver(read, snap, ids) {
  * the unit would not go back to the old model), `{ stopped }` when stillHere
  * said no partway, or `{ total, missed, unchecked, last }` — `missed` naming
  * the settings that did not go back, `last` the final read for the panel to
- * show (`unsent` too when the check could not be read and no setting went).
+ * show (`unsent` too when the check could not be read and no setting went,
+ * `partial` when it could not be read and some of the writes threw, and
+ * `retry` when settings are still off and some of the second try's writes threw).
  */
 export async function restoreModel(snap, io) {
   const say = (p) => {
@@ -200,24 +206,30 @@ export async function restoreModel(snap, io) {
   const sent = await tryWrite(() => io.setType(snap.type.value))
   if (moved()) return stopped
   let read = await tryRead(io.read)
-  if (!read) return { refused: 'unread', modelSent: sent?.ok !== false }
+  if (!read) return { refused: 'unread', modelSent: sent !== FAILED && sent?.ok !== false }
   if (read.type?.value !== snap.type.value) return { refused: 'model', last: read }
 
   /* The plain write first, for everything the new model moved. Most settings
      take it; a checked write per knob would be a read per knob down a relay. */
   const first = stillOff(snap, read)
   const sent1 = new Set()
+  let threw1 = 0
+  let threw2 = 0
   let done = 0
   say({ step: 'settings', done, total: first.count })
   for (const k of first.knobs) {
     if (moved()) return stopped
     const now = first.named.get(k.id)
-    if (now && (await tryWrite(() => io.write({ ...k, ...now }, k.value))) !== FAILED) sent1.add(k.id)
+    if (now) {
+      if ((await tryWrite(() => io.write({ ...k, ...now }, k.value))) === FAILED) threw1++
+      else sent1.add(k.id)
+    }
     say({ step: 'settings', done: ++done, total: first.count })
   }
   for (const e of first.enums) {
     if (moved()) return stopped
-    if ((await tryWrite(() => io.writeEnum(e.id, e.value))) !== FAILED) sent1.add(e.id)
+    if ((await tryWrite(() => io.writeEnum(e.id, e.value))) === FAILED) threw1++
+    else sent1.add(e.id)
     say({ step: 'settings', done: ++done, total: first.count })
   }
 
@@ -227,7 +239,7 @@ export async function restoreModel(snap, io) {
     const again = await tryRead(io.read)
     if (!again)
       return sent1.size
-        ? { total, missed: [], unchecked: true, last: laidOver(read, snap, sent1) }
+        ? { total, missed: [], unchecked: true, partial: threw1 > 0, last: laidOver(read, snap, sent1) }
         : { total, missed: [], unchecked: true, unsent: true, last: read }
     read = again
     const second = stillOff(snap, read)
@@ -237,22 +249,27 @@ export async function restoreModel(snap, io) {
       for (const k of second.knobs) {
         if (moved()) return stopped
         const now = second.named.get(k.id)
-        if (now && (await tryWrite(() => io.writeChecked({ ...k, ...now }, k.value))) !== FAILED) sent2.add(k.id)
+        if (!now) continue
+        if ((await tryWrite(() => io.writeChecked({ ...k, ...now }, k.value))) === FAILED) threw2++
+        else sent2.add(k.id)
       }
       for (const e of second.enums) {
         if (moved()) return stopped
-        if ((await tryWrite(() => io.writeEnum(e.id, e.value))) !== FAILED) sent2.add(e.id)
+        if ((await tryWrite(() => io.writeEnum(e.id, e.value))) === FAILED) threw2++
+        else sent2.add(e.id)
       }
       if (moved()) return stopped
       const last = await tryRead(io.read)
-      if (!last) return { total, missed: [], unchecked: true, last: laidOver(read, snap, sent2) }
+      if (!last) return { total, missed: [], unchecked: true, partial: threw2 > 0, last: laidOver(read, snap, sent2) }
       read = last
     }
   }
 
   const off = stillOff(snap, read)
   const missed = [...off.knobs, ...off.enums].map((s) => s.name || `#${s.id}`)
-  return { total, missed, unchecked: false, last: read }
+  /* A write that threw and still reads off is worth another go; one the unit
+     took and put somewhere else is not. */
+  return { total, missed, unchecked: false, retry: threw2 > 0 && missed.length > 0, last: read }
 }
 
 /* "Bass", "Bass and Bright", "Bass, Mid and Bright", "Bass, Mid, Treble and 3 more". */
@@ -289,7 +306,7 @@ export function undoResult(r, snap) {
   if (r?.stopped)
     return {
       text: snap?.channel
-        ? `Stopped partway — the channel or preset changed. Go back to channel ${snap.channel} and tap Undo to finish.`
+        ? `Stopped partway — the scene or channel changed. With the block on channel ${snap.channel}, tap Undo to finish.`
         : 'Stopped partway — the block changed. Tap Undo to finish.',
       bad: true,
       keep: true
@@ -301,6 +318,8 @@ export function undoResult(r, snap) {
       keep: true
     }
   if (r?.refused === 'model') return { text: `The unit didn't go back to ${name}. Nothing else was changed.`, bad: true, keep: true }
+  if (r?.refused === 'unread' && r.modelSent === false)
+    return { text: `Couldn't reach the unit to put ${name} back. Try Undo again.`, bad: true, keep: true }
   if (r?.refused === 'unread')
     return {
       text: `${name} was sent, but the app couldn't read the block to put your settings back. Try Undo again.`,
@@ -315,6 +334,8 @@ export function undoResult(r, snap) {
       bad: true,
       keep: true
     }
+  if (r?.unchecked && r.partial)
+    return { text: `Put ${name} back, but some of your settings couldn't be sent. Try Undo again.`, bad: true, keep: true }
   if (r?.unchecked)
     return {
       text: `Put ${name} back and sent your settings, but couldn't read them back to check.`,
@@ -326,8 +347,8 @@ export function undoResult(r, snap) {
   if (!missed.length)
     return { text: `Put back all ${total} setting${total === 1 ? '' : 's'} the app can see.`, bad: false, keep: false }
   return {
-    text: `Put back ${total - missed.length} of ${total} — ${listed(missed)} didn't take.`,
+    text: `Put back ${total - missed.length} of ${total} — ${listed(missed)} didn't take.${r.retry ? ' Try Undo again.' : ''}`,
     bad: true,
-    keep: false
+    keep: !!r.retry
   }
 }

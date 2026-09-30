@@ -244,7 +244,9 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
    * changes.
    */
   const [trim, setTrim] = useState(0)
-  const fitKey = `${viewport}:${scenes.hasScenes ? scenes.count : 0}:${blocks.length}:${fitOn}:${sceneCols}`
+  /* The grey cards and the "Updating…" line stand in for a moment and go:
+     a trim measured over them is not the grid's, and is dropped with them. */
+  const fitKey = `${viewport}:${scenes.hasScenes ? scenes.count : 0}:${blocks.length}:${fitOn}:${sceneCols}:${chainNow.elsewhere}:${chainNow.late}`
   const lastKey = useRef(fitKey)
   if (lastKey.current !== fitKey) {
     lastKey.current = fitKey
