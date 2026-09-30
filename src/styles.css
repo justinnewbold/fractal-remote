@@ -3164,6 +3164,55 @@ button.gig-scene.named.current .gig-scene-name {
   margin-top: 12px;
 }
 
+/* The three switches under a player's feet, side by side where they fit. */
+.fc-switches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--s-2);
+  margin-top: 10px;
+}
+
+.fc-switch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-2) var(--s-3);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  min-width: 0;
+}
+
+.fc-line {
+  font-size: var(--f-2);
+  overflow-wrap: anywhere;
+}
+
+.fc-when {
+  color: var(--silk-faint);
+  margin-right: 4px;
+}
+
+.fc-label {
+  color: var(--live);
+}
+
+.fc-light-line {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--f-1);
+  color: var(--silk-faint);
+}
+
+.fc-light {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--rule);
+  flex: none;
+}
+
 table.matrix {
   border-collapse: collapse;
   margin-top: 10px;

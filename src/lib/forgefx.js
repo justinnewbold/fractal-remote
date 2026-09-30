@@ -1598,6 +1598,23 @@ export const decodePresetFile = (bytes) =>
 export const modifierModel = () => (mock ? tick().then(() => mock.modModel()) : request('/mod/model'))
 
 /**
+ * The footswitch dictionary: the words for each kind of action, each function
+ * inside it and each LED colour. Only words — what a switch is set to is
+ * fcSwitch, one switch at a time. See shared/footswitches.mjs.
+ */
+export const fcModel = () => (mock ? tick().then(() => mock.fcModel()) : request('/fc/model'))
+
+/**
+ * One footswitch's settings, by its path from fcStatePath. About twenty-nine
+ * questions to the unit, so only ever called from readView, which paces them.
+ */
+export const fcSwitch = (path) => {
+  if (!mock) return request(path)
+  const q = new URLSearchParams(String(path).split('?')[1] || '')
+  return tick().then(() => mock.fcState(Number(q.get('layout')), Number(q.get('view')), Number(q.get('switch'))))
+}
+
+/**
  * Attach a modifier source to a parameter.
  *
  * This is what makes a preset respond rather than sit still — an envelope

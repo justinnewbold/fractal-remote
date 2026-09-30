@@ -137,7 +137,14 @@ const SLOW_READS = [
   /^\/preset\/grid$/,
   /^\/presets\/\d+(\/|$)/,
   /^\/preset\/locations$/,
-  /^\/device\/cache/
+  /^\/device\/cache/,
+  /*
+   * One footswitch. About twenty-nine questions to the unit in a row, each
+   * allowed 800ms by the host before it gives up on that one (gen3.ts
+   * fcReadState) — so a unit slow to answer can take longer than twenty
+   * seconds and still come back right. See shared/footswitches.mjs.
+   */
+  /^\/fc\/state$/
 ]
 
 export function timeoutFor(method, path) {

@@ -617,6 +617,9 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
         presets: { count: unit.slots, canScanNames: false },
         /* No cab block on a VP4, so no impulse responses to offer either. */
         cabIrs: unit.amps,
+        /* The host's own answer per unit: the FM3's switches can be read, an
+           FM9's and a III's only described, and an AM4 or VP4 has neither. */
+        fc: { model: ['fm3', 'fm9', 'axefx3'].includes(unit.key), liveState: unit.key === 'fm3' },
         tuner: true,
         supportsSave: false
       },
@@ -1005,6 +1008,69 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
     }),
 
     bindModifier: () => ({ ok: true }),
+
+    /*
+     * GET /fc/model and GET /fc/state, in the pinned host's shapes: the
+     * dictionary keyed by the wire's own numbers, and one switch as `fields`
+     * of raw ordinals plus its two labels. Only the FM3 says it can be read
+     * (see detect's `fc`), which is what a real FM9 and III say too.
+     *
+     * The settings are the demo's own, not a factory layout — enough of each
+     * kind that every line the panel can draw is drawn somewhere.
+     */
+    fcModel: () => ({
+      effectId: 199,
+      liveState: unit.key === 'fm3',
+      layouts: 9,
+      views: 4,
+      switches: 3,
+      labelLen: 11,
+      categories: { 0: 'Unassigned', 2: 'Preset', 3: 'Scene', 4: 'Effect', 5: 'Utility', 6: 'Layout', 8: 'Looper' },
+      functions: {
+        2: [{ ord: 1, name: 'Select in Bank' }],
+        3: [{ ord: 0, name: 'Select' }],
+        4: [{ ord: 0, name: 'Bypass' }, { ord: 2, name: 'Channel Toggle' }],
+        5: [{ ord: 0, name: 'Tuner' }, { ord: 1, name: 'Tap Tempo' }],
+        6: [{ ord: 0, name: 'Select' }],
+        8: [{ ord: 0, name: 'Record' }, { ord: 1, name: 'Play/Stop' }, { ord: 4, name: 'Undo/Erase' }]
+      },
+      colors: {
+        1: { name: 'Red', hex: '#e23b3b' },
+        2: { name: 'Orange', hex: '#f5871f' },
+        4: { name: 'Green', hex: '#33c46b' },
+        5: { name: 'Blue', hex: '#2f6bd0' },
+        6: { name: 'Cyan', hex: '#35c9d6' },
+        7: { name: 'Purple', hex: '#9b59f5' },
+        8: { name: 'White', hex: '#ffffff' },
+        12: { name: 'Off', hex: '#3a3a44' }
+      }
+    }),
+
+    fcState: (layout, view, sw) => {
+      const set = (tap, hold, color, tapLabel = '', holdLabel = '') => ({
+        effectId: 199,
+        layout,
+        view,
+        switch: sw,
+        config: layout * 12 + view * 3 + sw,
+        fields: {
+          tapCategory: tap[0],
+          tapFunction: tap[1],
+          tapDisplay: 0,
+          holdCategory: hold[0],
+          holdFunction: hold[1],
+          holdDisplay: 0,
+          color
+        },
+        tapLabel,
+        holdLabel
+      })
+      if (layout === 8) return set([6, 0], [0, 0], 8)
+      if (view === 1) return set([2, 1], [0, 0], 2)
+      if (view === 2) return set([4, 0], [4, 2], 6, ['DRIVE', 'DELAY', 'VERB'][sw] || '')
+      if (view === 3) return set([8, [0, 1, 4][sw] ?? 0], [0, 0], [1, 4, 12][sw] ?? 12)
+      return set([3, 0], [[4, 0], [5, 1], [5, 0]][sw] || [0, 0], [4, 5, 1][sw] ?? 12, '', sw === 0 ? 'BOOST' : '')
+    },
 
     /* The same store the chain is drawn from, so the scene map and Play agree. */
     sceneStateNow: () =>

@@ -10944,6 +10944,191 @@ test('Play says where the looper went, and still never draws one', async () => {
   assert.match(gig, /allBlocks\.filter\(\(b\) => b\.slug && !STAGE_HIDDEN\.includes\(b\.slug\)\)/, 'Play draws a tile for the looper, input or output')
 })
 
+console.log('\nwhat the footswitches do')
+
+test('the footswitch panel is only for a unit that says its switches can be read', async () => {
+  /*
+   * "See what the footswitches do." The host serves the words for an FM9's
+   * and a III's switches but cannot read one (liveState false), and an AM4
+   * has none — so a panel drawn on any of those would open onto a refusal.
+   */
+  const { fcReadable } = await import('../shared/footswitches.mjs')
+  assert.equal(fcReadable({ fc: { model: true, liveState: true } }), true)
+  assert.equal(fcReadable({ fc: { model: true, liveState: false } }), false, 'an FM9 is offered a read it cannot answer')
+  assert.equal(fcReadable({ fc: { model: false, liveState: false } }), false)
+  assert.equal(fcReadable({}), false)
+  assert.equal(fcReadable(null), false)
+  assert.equal(fcReadable({ fc: { liveState: 'yes' } }), false, 'only the host’s own true opens it')
+
+  const { createMockDevice } = await import('../src/lib/mockDevice.js')
+  assert.equal(fcReadable(createMockDevice('fm3').detect().capabilities), true, 'the demo FM3 has no footswitch panel')
+  for (const key of ['fm9', 'axefx3', 'am4', 'vp4']) {
+    assert.equal(fcReadable(createMockDevice(key).detect().capabilities), false, `the demo ${key} offers a switch read the real one refuses`)
+  }
+})
+
+test('a switch is said in words: tap, hold, a typed label, and the light', async () => {
+  const { describeSwitch, lightWords, FC_BUSY_WARNING } = await import('../shared/footswitches.mjs')
+  assert.match(FC_BUSY_WARNING, /between songs/, 'the panel no longer says when to read the switches')
+  const model = {
+    categories: { 0: 'Unassigned', 3: 'Scene', 4: 'Effect', 5: 'Utility', 9: 'Per-Preset' },
+    functions: { 3: [{ ord: 0, name: 'Select' }], 4: [{ ord: 0, name: 'Bypass' }], 5: [{ ord: 1, name: 'Tap Tempo' }], 9: [{ ord: 0, name: 'Placeholder' }] },
+    colors: { 1: { name: 'Red', hex: '#e23b3b' }, 12: { name: 'Off', hex: '#3a3a44' } }
+  }
+  const at = (fields, extra = {}) => describeSwitch({ switch: 1, fields, tapLabel: '', holdLabel: '', ...extra }, model)
+
+  const one = at({ tapCategory: 3, tapFunction: 0, holdCategory: 5, holdFunction: 1, color: 1 }, { tapLabel: 'CLEAN      ' })
+  assert.equal(one.number, 2, 'switches are counted from 1 on screen')
+  assert.equal(one.tap.action, 'Scene · Select')
+  assert.equal(one.tap.label, 'CLEAN', 'a stored label is shown, without its padding')
+  assert.equal(one.hold.action, 'Tap Tempo', '“Utility · Tap Tempo” is two words for one thing')
+  assert.equal(one.hold.label, null, 'an empty label is drawn as a label')
+  assert.deepEqual(one.light, { name: 'Red', hex: '#e23b3b' })
+  assert.equal(lightWords(one.light), 'Red light')
+  assert.equal(one.unread, false)
+
+  /* The label-mode number is not trusted, so a label shows whatever it says. */
+  assert.equal(at({ tapCategory: 4, tapFunction: 0, tapDisplay: 0, holdCategory: 0, color: 12 }, { tapLabel: 'DRIVE' }).tap.label, 'DRIVE')
+
+  const empty = at({ tapCategory: 0, tapFunction: 0, holdCategory: 0, holdFunction: 0, color: 12 })
+  assert.equal(empty.tap.action, 'Nothing')
+  assert.equal(lightWords(empty.light), 'Light off', '“Off” is a colour the unit has, not a missing one')
+
+  /* A question the unit did not answer is not "nothing on this switch". */
+  const gap = at({ tapCategory: null, tapFunction: null, holdCategory: 4, holdFunction: 0, color: null })
+  assert.equal(gap.tap.action, 'Couldn’t read')
+  assert.equal(gap.hold.action, 'Effect · Bypass')
+  assert.equal(gap.light, null)
+  assert.equal(lightWords(gap.light), 'Light: couldn’t read')
+  assert.equal(at({ tapCategory: null, holdCategory: null, color: null }).unread, true)
+
+  assert.equal(at({ tapCategory: 9, tapFunction: 0, holdCategory: 0, color: 1 }).tap.action, 'Per-Preset', '“Per-Preset · Placeholder” says nothing')
+  assert.equal(at({ tapCategory: 4, tapFunction: 7, holdCategory: 0, color: 1 }).tap.action, 'Effect', 'a function this app has no word for hides the kind it does know')
+  assert.equal(at({ tapCategory: 42, holdCategory: 0, color: 1 }).tap.action, 'Something this app can’t name yet')
+
+  /* The FM3's colour list starts at 1, so a 0 is an answer with no name, not a failed read. */
+  const odd = at({ tapCategory: 3, tapFunction: 0, holdCategory: 0, color: 0 })
+  assert.deepEqual(odd.light, { name: null, hex: null }, 'a colour the unit did report is not a failed read')
+  assert.equal(lightWords(odd.light), 'Light: a colour this app can’t name yet')
+})
+
+test('the demo FM3 answers a switch in the host’s shape', async () => {
+  const { createMockDevice } = await import('../src/lib/mockDevice.js')
+  const { describeSwitch, fcGeometry } = await import('../shared/footswitches.mjs')
+  const unit = createMockDevice('fm3')
+  const model = unit.fcModel()
+  assert.deepEqual(fcGeometry(model), { layouts: 9, views: 4, switches: 3 })
+  const state = unit.fcState(0, 0, 0)
+  for (const k of ['tapCategory', 'tapFunction', 'holdCategory', 'holdFunction', 'color']) {
+    assert.ok(k in state.fields, `the demo’s switch has no ${k}, which the host always sends`)
+  }
+  const sw = describeSwitch(state, model)
+  assert.equal(sw.tap.action, 'Scene · Select')
+  assert.equal(sw.hold.label, 'BOOST')
+  assert.ok(sw.light?.name, 'the demo’s light has no colour the dictionary knows')
+  /* Every view reads as words, never as "can’t name". */
+  for (let view = 0; view < 4; view++) {
+    for (let s = 0; s < 3; s++) {
+      const said = describeSwitch(unit.fcState(0, view, s), model)
+      assert.ok(!/can’t name|Couldn’t/.test(said.tap.action + said.hold.action), `view ${view + 1} switch ${s + 1}: ${said.tap.action} / ${said.hold.action}`)
+    }
+  }
+})
+
+test('one view is read one switch at a time, with a breath between, and stops when asked', async () => {
+  /*
+   * About twenty-nine questions to the unit per switch. Three at once would
+   * be eighty-odd questions landing on a unit that is also making sound.
+   */
+  const { readView, fcStatePath, FC_PAUSE_MS } = await import('../shared/footswitches.mjs')
+  assert.equal(fcStatePath(2, 1, 0), '/fc/state?layout=2&view=1&switch=0')
+
+  const log = []
+  let inFlight = 0
+  let most = 0
+  const get = async (path) => {
+    inFlight++
+    most = Math.max(most, inFlight)
+    log.push(path)
+    await Promise.resolve()
+    inFlight--
+    return { switch: Number(path.split('switch=')[1]), fields: {} }
+  }
+  const waits = []
+  const wait = async (ms) => {
+    waits.push(ms)
+    log.push(`wait ${ms}`)
+  }
+  const landed = []
+  const done = await readView(get, { layout: 0, view: 3, wait, onSwitch: (i) => landed.push(i) })
+  assert.equal(done.error, null)
+  assert.equal(done.states.length, 3)
+  assert.deepEqual(landed, [0, 1, 2])
+  assert.equal(most, 1, 'two switches were asked for at once')
+  assert.deepEqual(log, [
+    '/fc/state?layout=0&view=3&switch=0',
+    `wait ${FC_PAUSE_MS}`,
+    '/fc/state?layout=0&view=3&switch=1',
+    `wait ${FC_PAUSE_MS}`,
+    '/fc/state?layout=0&view=3&switch=2'
+  ])
+  assert.ok(FC_PAUSE_MS >= 200, 'no breath between switches')
+
+  /* Closing the panel stops the next question. */
+  let asked = 0
+  let shut = false
+  const closed = await readView(async () => {
+    asked++
+    shut = true
+    return { fields: {} }
+  }, { layout: 0, view: 0, wait: async () => {}, stopped: () => shut })
+  assert.equal(asked, 1, 'the unit was asked again after the panel closed')
+  assert.equal(closed.stopped, true)
+
+  /* The first refusal ends it: the next switch would be refused for the same reason. */
+  let tries = 0
+  const refused = await readView(async () => {
+    tries++
+    throw new Error('The Fractal app on your computer has lost its connection to the unit')
+  }, { layout: 0, view: 0, wait: async () => {} })
+  assert.equal(tries, 1, 'a failed read went on asking')
+  assert.match(refused.error, /lost its connection/)
+  const said = await readView(async () => ({ error: 'fcLiveRead not supported' }), { layout: 0, view: 0, wait: async () => {} })
+  assert.equal(said.states.length, 0)
+  assert.match(said.error, /not supported/)
+})
+
+test('a footswitch read travels the relay and is given the long wait', () => {
+  /* GET is the host's rule for both; the read is twenty-nine answers long. */
+  assert.equal(forbiddenRemotely('GET', '/fc/model'), null)
+  assert.equal(forbiddenRemotely('GET', '/fc/state?layout=0&view=0&switch=0'), null)
+  assert.equal(timeoutFor('GET', '/fc/state?layout=0&view=0&switch=2'), 45000, 'a slow unit’s switch read is cut off at twenty seconds')
+  assert.equal(timeoutFor('GET', '/fc/model'), 20000, 'the dictionary is one answer, not a slow read')
+})
+
+test('the Footswitches fold reads only while it is open, and never on a timer', () => {
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  assert.match(app, /const switchesReadable = fcReadable\(device\?\.capabilities\)/, 'the panel is not gated on the unit saying it can be read')
+  assert.match(
+    app,
+    /\{switchesReadable \? \(\s*<Section key="footswitches" title="Footswitches"[^>]*>\s*<Footswitches \/>/,
+    'the Footswitches fold is gone from Edit, or drawn for a unit that cannot answer it'
+  )
+  const panel = bare(readSrc(new URL('../src/components/Footswitches.jsx', import.meta.url), 'utf8'))
+  assert.match(panel, /closest\('details'\)/, 'the panel no longer knows whether its fold is open')
+  assert.match(panel, /addEventListener\('toggle'/, 'the panel does not hear its fold open or close')
+  assert.match(panel, /if \(!open\) return undefined/, 'the panel reads while folded away')
+  assert.match(panel, /stopped: \(\) => stop/, 'closing the fold does not stop the read')
+  assert.match(panel, /readView\(fcSwitch,/, 'the switches are not read through the paced reader')
+  assert.ok(!/setInterval|setTimeout/.test(panel), 'the footswitch panel polls the unit')
+  assert.match(panel, /\{FC_BUSY_WARNING\}/, 'the panel does not say reading is best done between songs')
+  /* Opening the fold starts the read, so the warning has to be seen while it is still shut. */
+  assert.match(app, /<Section key="footswitches" title="Footswitches" note="[^"]*between songs[^"]*"/, 'the warning is only seen once the fold is open, when the unit is already being asked')
+  /* A picker change stops the old read on its own; locking them made reaching View 4 read View 1 first. */
+  assert.ok(!/<select[^>]*\bdisabled=/.test(panel), 'the Layout and View pickers are locked for a whole view, so reaching View 4 of a layout reads View 1 first')
+})
+
 await settle()
 /*
  * The tally has to say when it is red.

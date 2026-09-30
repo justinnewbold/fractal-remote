@@ -39,6 +39,8 @@ import { ALREADY_UNLOCKED, REPLAY } from '../shared/onboarding.mjs'
 import { FULL, BUILT_AT, VERSION } from './lib/version'
 import Theme from './components/Theme'
 import Section from './components/Section'
+import Footswitches from './components/Footswitches'
+import { fcReadable } from '../shared/footswitches.mjs'
 import Sheet from './components/Sheet'
 import DeviceDetail from './components/DeviceDetail'
 import {
@@ -3383,6 +3385,9 @@ export default function App() {
   
     
   const hasScenes = device?.capabilities?.hasScenes !== false
+  /* Only a unit that says its switches can be read gets the panel — the FM3,
+     today. An FM9 or a III describes them but cannot answer for one. */
+  const switchesReadable = fcReadable(device?.capabilities)
 
   /*
    * Every slot the unit has, whether or not its name has been read.
@@ -4347,6 +4352,17 @@ export default function App() {
               onChanged={(summary) => record('modifier', `Modifier bound: ${summary}`)}
             />
           </Section>
+
+          {/*
+            "See what the footswitches do." Read-only, and read only while
+            this fold is open — see Footswitches for how, and
+            shared/footswitches.mjs for why it is that careful.
+          */}
+          {switchesReadable ? (
+            <Section key="footswitches" title="Footswitches" note="What each switch does. Best opened between songs: reading them keeps the unit busy">
+              <Footswitches />
+            </Section>
+          ) : null}
 
         </>
       ) : null}
