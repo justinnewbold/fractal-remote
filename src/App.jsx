@@ -3458,7 +3458,13 @@ export default function App() {
   const saveCheck = overwriteCheck({
     target: saveTarget,
     loaded: preset?.number,
-    loadedName: loadedAs.current?.number === preset?.number ? loadedAs.current.name : null,
+    /* Only a preset actually loaded can answer: with none loaded yet, both
+       numbers are undefined, "match", and .name was read off null — which
+       took the whole web app down before a unit was even connected. */
+    loadedName:
+      loadedAs.current && Number.isInteger(preset?.number) && loadedAs.current.number === preset.number
+        ? loadedAs.current.name
+        : null,
     holds: slotHolds,
     saveAs: saveName.trim().slice(0, 31) || preset?.name || ''
   })
