@@ -9,6 +9,7 @@ import { installCrashCapture, logDebug, getDebugLog } from './lib/debugLog'
 import Scenes from './components/Scenes'
 import { CabPicker, Backup } from './components/Hardware'
 import Gig from './components/Gig'
+import TapTempo from './components/TapTempo'
 import SaveBar, { SaveLate } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
 import { overwriteCheck } from './lib/overwrite'
@@ -1065,11 +1066,10 @@ export default function App() {
   useEffect(() => {
     if (!dirty) edits.current = []
   }, [dirty])
-  /* A different preset is a different buffer. A footswitch, the phone, or
-     Play's Previous and Next move the preset without clearing `dirty`, and a
-     knob turned on the last one is not on this one: checked against the new
-     preset, its "before" cost a dump of the slot, or read as a Revert that
-     couldn't be checked. */
+  /* A different preset is a different buffer. A footswitch or the phone
+     move the preset without clearing `dirty`, and a knob turned on the last
+     one is not on this one: checked against the new preset, its "before"
+     cost a dump of the slot, or read as a Revert that couldn't be checked. */
   useEffect(() => {
     edits.current = []
   }, [preset?.number])
@@ -3999,10 +3999,20 @@ export default function App() {
           sceneLayout={sceneLayout}
           sceneOrder={sceneOrder}
           onError={setError}
-          /* Only the typed tempo calls this now: logged, not a re-read of the
-             whole rig, which was a chain dump straight after the tempo write. */
+          /* A typed tempo, or a burst of taps once it settles and if the
+             unit took it on this same preset: logged, and the preset left
+             unsaved — not a re-read of the whole rig, which was a chain dump
+             straight after the tempo write. */
           onChanged={(summary) => record('tempo', summary)}
-          onPresetLoaded={() => presetLanded()}
+          onPresetLoaded={() => {
+            /* Next and Previous land on the slot as it is stored: the unit
+               throws its edit buffer away on a preset change, so a tempo
+               tapped on the last song is not unsaved on this one. As jumpTo
+               does. `fresh`, because dirtyRef still says true this tick. */
+            setDirty(false)
+            setSavedAt(null)
+            presetLanded({ fresh: true })
+          }}
           onPickPreset={() => setPresetMenu(true)}
           /*
            * On a phone this opens the chain in a sheet, because the Edit
@@ -4052,6 +4062,8 @@ export default function App() {
               className={`chip ${hasScenes ? 'scene-now' : ''}`}
               onClick={() => setSheet('scenes')}
               disabled={!hasScenes}
+              /* The whole name, for one longer than two lines of chip. */
+              title={hasScenes ? sceneNames[scene] || undefined : undefined}
             >
               {hasScenes ? (
                 <>
@@ -4062,6 +4074,16 @@ export default function App() {
                 'Scenes'
               )}
             </button>
+            {/*
+              Tap tempo, beside the scene.
+
+              "There's no tempo control on the Edit screen." It went when Home
+              and Controls merged, as "a second tempo" — but Edit is where the
+              delay time is set, and that is exactly when you want to tap one
+              in. Play's own button, not a second one: see TapTempo. A tempo
+              set here leaves the preset unsaved, typed or tapped.
+            */}
+            <TapTempo where="row" onError={setError} onChanged={(summary) => record('tempo', summary)} />
             <button className="chip" onClick={() => setSheet('presets')}>
               Presets and backups
             </button>

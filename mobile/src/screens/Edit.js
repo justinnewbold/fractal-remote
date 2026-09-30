@@ -289,7 +289,9 @@ export default function Edit({ onBack }) {
             {preset?.pending && !preset?.name ? '…' : presetLabel(preset)}
           </Text>
           {caps?.hasScenes === false ? null : (
-            <Text numberOfLines={1} style={{ color: color.silkDim, fontSize: font.small }}>
+            /* Two lines for the scene: "Scene names cut short." The name
+               is the only part of this line that identifies anything. */
+            <Text numberOfLines={2} style={{ color: color.silkDim, fontSize: font.small }}>
               {`Scene ${scene + 1}${sceneNames[scene] ? ` — ${sceneNames[scene]}` : ''}`}
             </Text>
           )}

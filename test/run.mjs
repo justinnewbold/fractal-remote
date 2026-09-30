@@ -7961,10 +7961,16 @@ test('an impossible tempo is refused in words, never clamped', () => {
 })
 
 test('the Tap button opens the tempo box on a hold or a right-click, at both ends', () => {
-  const gig = readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
+  /* The button is TapTempo's now — Play and Edit both draw it — so that is where its hold is read. */
+  const gig = readSrc(new URL('../src/components/TapTempo.jsx', import.meta.url), 'utf8')
   assert.match(gig, /const holdTap = useLongPress\(/, 'Tap cannot be held')
-  assert.match(gig, /className="gig-bar-btn gig-tap"[^>]*\{\.\.\.holdTap\}/, 'the hold is not on the Tap button')
-  assert.match(gig, /clearTimeout\(reread\.current\)\s*\n\s*setTyping\(true\)/, 'a hold leaves the tap’s re-read pending under the box')
+  assert.match(gig, /className=\{`\$\{where === 'row' \? 'chip' : 'gig-bar-btn'\} gig-tap`\}[^>]*\{\.\.\.holdTap\}/, 'the hold is not on the Tap button')
+  /* The hold leaves the tap's read-back running: that read is what takes the
+     tapped figure off the button. Cancelled, the figure stayed there over a
+     tempo typed straight after, and looked like the typing had not taken. */
+  const hold = gig.slice(gig.indexOf('const holdTap = useLongPress'), gig.indexOf('useDismiss(tapCell'))
+  assert.match(hold, /setTyping\(true\)/, 'a hold does not open the box')
+  assert.ok(!/clearTimeout\(reread\.current\)/.test(hold), 'a hold throws away the read-back, so the tapped number stays on the button over a typed tempo')
   assert.match(gig, /<BpmBox bpm=\{bpm\} autoFocus onSet=\{typeTempo\}/, 'the box does not open with the tempo selected')
   assert.match(gig, /await setTempo\(n\)\s*\n\s*await refreshTempo\(\)/, 'a typed tempo is sent but the number on the button is not re-read')
   assert.match(gig, /useDismiss\(tapCell, \(\) => setTyping\(false\), \{ open: typing \}\)/, 'nothing closes the box on a tap elsewhere or Escape')
@@ -10198,6 +10204,132 @@ test('the Mac hears a request the moment it is left, looks once at a time, and h
   assert.match(app, /onCancel=\{cancelQueuedSave\}/)
   const fx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
   assert.match(fx, /export const cancelParkedSave = \(id\) => parkSave\(cancelledSave\(id\)\)/, 'a cancel from a phone is a DELETE, which never arrives')
+})
+
+test('Edit has the same Tap as Play, beside the scene, and a tapped tempo leaves the preset unsaved', async () => {
+  /*
+   * "There's no tempo control on the Edit screen." It went when Home and
+   * Controls merged, and Edit is where a delay's time is set — exactly when
+   * you want to tap one in. It came back as Play's own button rather than a
+   * second one, because the one on Play is what four rounds of "the number
+   * lags", "it sends back a different one" were about, and a copy would have
+   * to learn all of it again.
+   */
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+  const app = bare(readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8'))
+  const gig = bare(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8'))
+  const tap = bare(readSrc(new URL('../src/components/TapTempo.jsx', import.meta.url), 'utf8'))
+  /* Edit's box opens downward off the row: the cell carries tap-row, which test/styles.mjs holds the rule for. */
+  assert.match(tap, /className=\{`gig-tap-cell \$\{where === 'row' \? 'tap-row' : ''\}`\}/, 'Edit’s Tap box opens upward over the chain — the cell never gets tap-row')
+
+  const row = app.slice(app.indexOf('className="shape-row"'), app.indexOf('Presets and backups'))
+  assert.ok(row.length > 0, 'Edit’s row beside the scene is gone')
+  assert.ok(row.indexOf('scene-now') !== -1 && row.indexOf('scene-now') < row.indexOf('<TapTempo'), 'Tap is not beside the scene on Edit')
+  assert.match(row, /<TapTempo where="row" onError=\{setError\} onChanged=\{\(summary\) => record\('tempo', summary\)\} \/>/, 'a tempo set on Edit is not logged as a change to the preset')
+  assert.match(gig, /<TapTempo onError=\{onError\} onChanged=\{onChanged\} \/>/, 'Play draws a Tap of its own again, or stops reporting it')
+  for (const [where, text] of [['App.jsx', app], ['Gig.jsx', gig]]) {
+    assert.ok(!/tappedBpm\(|tempoSender\(/.test(text), `${where} works out a tapped tempo on its own again — there are two taps now`)
+  }
+  /* A tempo is a change to the preset, and Save shows for it. */
+  assert.match(app, /const UNSAVES_PRESET = new Set\(\[[^\]]*'tempo'/, 'a tempo change does not leave the preset unsaved')
+  /*
+   * And the next song is not unsaved because of it. Tapping on Play is the
+   * everyday thing, and Previous and Next never cleared Unsaved: tap on song
+   * one, press Next, and song two carried Save and Revert, song after song,
+   * with its name never noted for the save sheet. The unit throws its edit
+   * buffer away on a preset change, as the phone has always known.
+   */
+  const landed = app.slice(app.indexOf('onPresetLoaded={'), app.indexOf('onPickPreset={'))
+  assert.ok(landed.length > 0, 'Play no longer says when it has moved the preset')
+  assert.match(landed, /setDirty\(false\)/, 'a tempo tapped on the last song leaves the next one showing Save')
+  assert.match(landed, /presetLanded\(\{ fresh: true \}\)/, 'the preset Next lands on is never noted, because Unsaved was still true this tick')
+
+  /*
+   * TAPPED as well as typed. Only a typed tempo reported itself, so a tempo
+   * tapped in left Save hidden and the new tempo was gone at the next preset.
+   * The phone has always counted a tap. Once per burst, not per tap — the
+   * history is for what was done, and tapping 120 in is one thing done.
+   */
+  const tapFn = tap.slice(tap.indexOf('const tap = async'), tap.indexOf('const tapSettled'))
+  assert.match(tapFn, /sender\.current\.push\(guess\)\s*burst\.current = guess/, 'a tap that sent a tempo is not remembered as a change')
+  assert.ok(!/said\.current|onChanged/.test(tapFn), 'every single tap is reported, so tapping 120 in is eight lines')
+  const settled = tap.slice(tap.indexOf('const tapSettled'), tap.indexOf('useEffect(() => () => clearTimeout'))
+  assert.match(settled, /reportBurst\(\)/, 'a burst of taps that settled is never reported, so Save stays hidden')
+  const report = tap.slice(tap.indexOf('const reportBurst'), tap.indexOf('const tap = async'))
+  assert.match(report, /if \(burst\.current == null\) return/, 'a burst is reported twice, or with nothing tapped')
+  assert.match(report, /dropBurst\(\)/, 'the same burst is reported again at the next chance')
+  const drop = tap.slice(tap.indexOf('const dropBurst'), tap.indexOf('const sender'))
+  assert.match(drop, /burst\.current = null/, 'the same burst is reported again at the next chance')
+  /*
+   * Only what the unit took. A write it refused (port shut, unit gone) showed
+   * the banner and then, a second later, logged the tempo anyway and lit Save
+   * for a change that never happened. The typed tempo only reports once the
+   * write has worked; so does a tapped one.
+   */
+  assert.match(tap, /await setTempo\(bpm\)\s*landed\.current = bpm/, 'a tempo the unit refused still counts as tapped in')
+  assert.match(report, /const got = landed\.current/, 'the report names the number tapped rather than the one the unit took')
+  assert.match(report, /if \(got == null\) return/, 'a burst that reached nothing is still reported, and lights Save')
+  /* Closed with the last write still on its way: reported when it lands, not guessed at. */
+  assert.match(report, /if \(!sender\.current\.idle\) \{\s*closing\.current = true\s*return/, 'a burst closed mid-write is reported before anyone knows it landed')
+  assert.match(tap, /finally \{[^}]*if \(closing\.current\) setTimeout\(\(\) => reportBurst\(\), 0\)/, 'a burst closed mid-write is never reported once it lands')
+  /*
+   * On the preset it was tapped on. Tap, then pick the next song inside the
+   * second before the read-back, and the report landed on the NEW song: a
+   * hand edit logged against a preset nobody touched, and Save lit on it.
+   * Keyed on chainNumberOf, which moves the moment a switch starts —
+   * preset.number moves only after jumpTo has already cleared Unsaved.
+   */
+  assert.match(tapFn, /if \(burst\.current == null\) \{[^}]*burstOn\.current = chainNumberOf\(getSnapshot\(\)\)/, 'a burst does not remember which preset it was tapped on')
+  assert.match(report, /if \(chainNumberOf\(getSnapshot\(\)\) !== on\) return/, 'taps on the last song are reported against the one just picked, and mark it unsaved')
+  assert.ok(report.indexOf('!== on) return') < report.indexOf('said.current'), 'the preset is checked after the report has gone')
+  assert.match(tap, /const going = useDevice\(chainNumberOf\)/, 'a preset change is not seen by the Tap button')
+  assert.match(tap, /useEffect\(\(\) => \{\s*dropBurst\(\)\s*setTapped\(null\)\s*\}, \[going\]\)/, 'a burst tapped on the last song survives the switch to the next')
+  assert.ok(!/preset\?\.number/.test(tap), 'the Tap button waits on preset.number, which moves after Unsaved was already cleared')
+  assert.match(report, /said\.current\?\.\(`Tempo → \$\{n\} BPM \(tapped\)`\)/, 'the tapped tempo does not reach the screen that logs it')
+  /* A screen switched away from inside the second after the last tap still owes the report. */
+  assert.match(tap, /useEffect\(\(\) => \(\) => reportBurst\(\), \[\]\)/, 'taps on Edit followed by a swipe to Play are never counted')
+  assert.match(tap, /said\.current = onChanged/, 'a report after the screen changed goes to the first render’s idea of who logs it')
+  const hold = tap.slice(tap.indexOf('const holdTap = useLongPress'), tap.indexOf('useDismiss(tapCell'))
+  assert.match(hold, /reportBurst\(\)/, 'a hold drops the read-back and the report of the taps before it with it')
+})
+
+test('scene names show whole, and nothing on Play waits for a hold to show one', () => {
+  /*
+   * "Scene names cut short." Edit's chip wraps to two lines and carries the
+   * whole name on a hover, and Play's tiles carry it too. NOT a long press:
+   * on Play a scene tile is a footswitch, and a hold that does not switch the
+   * scene is the wrong surprise mid-song.
+   */
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+  const app = bare(readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8'))
+  const gig = bare(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8'))
+  const chip = app.slice(app.indexOf("className={`chip ${hasScenes ? 'scene-now' : ''}`}"), app.indexOf('</button>', app.indexOf('scene-now')))
+  assert.match(chip, /title=\{hasScenes \? sceneNames\[scene\] \|\| undefined : undefined\}/, 'the scene chip on Edit has no hover with the whole name')
+  const tile = gig.slice(gig.indexOf('className={`gig-scene '), gig.indexOf('</button>', gig.indexOf('className={`gig-scene ')))
+  assert.ok(tile.length > 0, 'Play’s scene tiles are not where this test reads them')
+  assert.match(tile, /title=\{names\[i\] \|\| undefined\}/, 'Play’s scene tiles have no hover with the whole name')
+  assert.ok(!/\{\.\.\.hold|onContextMenu|useLongPress/.test(tile), 'a scene tile on Play does something on a hold, which is a footswitch that does not switch')
+})
+
+test('Play says where the looper went, and still never draws one', async () => {
+  /*
+   * "PLAY leaves out the Looper." On purpose — input, output and the looper
+   * are never stage tiles, because an on/off switch under a thumb can mute
+   * the rig mid-song and on/off is not what a looper wants. But thirteen
+   * blocks drawn as ten reads as three gone missing, so Play says where it is.
+   */
+  const { STAGE_HIDDEN, hasLooper, LOOPER_ON_EDIT } = await import('../src/lib/guardrails.js')
+  for (const slug of ['input', 'output', 'looper']) assert.ok(STAGE_HIDDEN.includes(slug), `${slug} is a tile on Play now`)
+  assert.equal(hasLooper([{ slug: 'amp' }, { slug: 'looper' }]), true)
+  assert.equal(hasLooper([{ slug: 'amp' }, { slug: 'delay' }]), false, 'a preset with no looper is told where its looper is')
+  assert.equal(hasLooper(null), false)
+  assert.equal(LOOPER_ON_EDIT, 'Looper is on the Edit screen.')
+
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+  const gig = bare(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8'))
+  /* From every block, not the tiles: the tiles are exactly what leaves it out. */
+  assert.match(gig, /\{!shown\.elsewhere && onChain && hasLooper\(allBlocks\) \? \(\s*<p className="gig-note">\{LOOPER_ON_EDIT\}<\/p>/, 'Play does not say where the looper is, or asks the tiles, which never hold one')
+  assert.match(gig, /allBlocks\.filter\(\(b\) => b\.slug && !STAGE_HIDDEN\.includes\(b\.slug\)\)/, 'Play draws a tile for the looper, input or output')
 })
 
 await settle()

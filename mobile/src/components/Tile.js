@@ -57,11 +57,13 @@ export default function Tile({
    */
   bar = false,
   /*
-   * A tile a quarter of a phone wide. Scenes four across leave room for five
-   * letters of a name at the usual size, so the name goes a size down and may
-   * take a second line: "Crunch Bot UP" rather than "Cru…".
+   * A name that may take a second line, a size down: "Crunch Bot UP" rather
+   * than "Cru…". It began as the four-across scene tile's, which leaves room
+   * for five letters at the usual size — and then the tester, at two across:
+   * "Scene names cut short." A scene name is the thing a player thinks in, so
+   * every scene tile wraps now, at every width.
    */
-  narrow = false,
+  wrap = false,
   fill,
   ink,
   on = false,
@@ -251,10 +253,10 @@ export default function Tile({
           </Text>
         ) : null}
         <Text
-          numberOfLines={narrow ? 2 : 1}
+          numberOfLines={wrap ? 2 : 1}
           style={{
             color: foreground,
-            fontSize: narrow ? font.small : font.body,
+            fontSize: wrap ? font.small : font.body,
             fontWeight: '700',
             letterSpacing: 0.5,
             textAlign: 'center'

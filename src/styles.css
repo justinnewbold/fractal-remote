@@ -6070,12 +6070,18 @@ button.view-tab.gig-tab::after {
   flex: 0 0 auto;
 }
 
+/*
+ * Wraps rather than clips: "Help text cut off mid-sentence." In the 380px
+ * side panel a one-line note was half a sentence — "Let a pedal or the volume
+ * knob move a…" right under the chain editor — and half of a sentence that
+ * explains a control explains nothing. The title keeps its line; the note
+ * takes as many as it needs beside it.
+ */
 .section-note {
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  line-height: 1.35;
   font-size: var(--f-2);
   color: var(--silk-faint);
 }
@@ -7598,6 +7604,20 @@ button.gig-tap {
   margin: 0;
 }
 
+/*
+ * The same Tap on Edit, beside the scene chip (see TapTempo).
+ *
+ * Near the top of a page that scrolls, so its box opens downward rather than
+ * up over the chain, and is sized for a field rather than for a chip — the
+ * chip is narrower than anything anybody could type a tempo into.
+ */
+.gig-tap-cell.tap-row .gig-tempo {
+  top: calc(100% + var(--s-2));
+  bottom: auto;
+  right: auto;
+  width: 200px;
+}
+
 /* The modifier just attached, in the colour of a thing that worked. */
 .mod-said {
   margin: var(--s-2) 0 0;
@@ -8050,12 +8070,14 @@ button.gig-bar-btn:disabled {
   text-overflow: ellipsis;
 }
 
+/* The line under a sheet's title wraps, for the same reason Edit's section
+   notes do: a block or chain sheet's subtitle is often the scene it edits,
+   and "Scene names cut short" was this line, clipped at the sheet's edge. */
 .sheet-note {
   font-size: var(--f-1);
+  line-height: 1.35;
   color: var(--silk-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: break-word;
 }
 
 button.sheet-close {
@@ -8473,11 +8495,22 @@ button.chip.scene-now {
   border-radius: var(--r-1);
 }
 
+/*
+ * Two lines, not an ellipsis at fourteen letters: "Scene names cut short."
+ * The name is the part of this chip that says which scene an edit lands in,
+ * and a clipped one could be either of two scenes that start the same way.
+ * The whole of it is on the chip's title too, for the rare one longer still.
+ */
 .scene-now-name {
-  max-width: 14ch;
+  max-width: 20ch;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  line-height: 1.2;
+  text-align: left;
 }
 
 /* ---------- the preset menu ----------
@@ -10899,10 +10932,10 @@ button.setup-row:first-child {
  */
 .setup-row-status {
   font-size: var(--f-2);
+  line-height: 1.35;
   color: var(--ok);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Wraps: the live answer a row is named for, cut short, is no answer. */
+  overflow-wrap: break-word;
 }
 
 .setup-row-chevron {

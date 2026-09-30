@@ -108,7 +108,7 @@ export default function Press({
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
         {icon ? <Picture source={icon} tint={ink} flip={flip} /> : null}
-        <View style={{ alignItems: 'center' }}>
+        <View style={{ alignItems: 'center', flexShrink: 1 }}>
           {/*
             A word ABOVE the label, for the one button whose name does not say
             what it is. "All" between Previous and Next reads as a caption; the
@@ -139,13 +139,19 @@ export default function Press({
           >
             {label}
           </Text>
+          {/*
+            Two lines, not one: "Help text cut off mid-sentence." The line
+            under a button is the one that says what it will do, and cut at
+            the width of the button it said half of that.
+          */}
           {sub ? (
             <Text
-              numberOfLines={1}
+              numberOfLines={2}
               style={{
                 color: on ? color.onSignal : color.silkDim,
                 fontSize: font.micro,
-                marginTop: 2
+                marginTop: 2,
+                textAlign: 'center'
               }}
             >
               {sub}

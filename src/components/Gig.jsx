@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { liveMeters, setChannel, setMetersWanted, setTempo } from '../lib/forgefx'
+import { liveMeters, setChannel, setMetersWanted } from '../lib/forgefx'
 import {
   useDevice,
   refreshBlocks as reReadChain,
@@ -14,13 +14,11 @@ import {
   writeScene,
   writeBypass,
   writeTuner,
-  refreshTempo,
   retryChain
 } from '../lib/deviceState'
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
-import { keepTaps, tappedBpm, tempoSender, TAP_REREAD_MS } from '../../shared/tempo.mjs'
 import { remoteActive } from '../lib/remote'
-import { STAGE_HIDDEN } from '../lib/guardrails'
+import { STAGE_HIDDEN, hasLooper, LOOPER_ON_EDIT } from '../lib/guardrails'
 import { blockColor } from '../lib/blockColors'
 import { blockIcon } from '../lib/blockIcons'
 import { sceneColor } from '../lib/sceneColors'
@@ -40,9 +38,8 @@ import {
 import Setlists from './Setlists'
 import { tick as haptic } from '../lib/feedback'
 import { useLongPress } from '../lib/longPress'
-import { useDismiss } from '../lib/dismiss'
 import { Tuner } from './Console'
-import BpmBox from './BpmBox'
+import TapTempo from './TapTempo'
 import Sheet from './Sheet'
 import { sizeVars, SIZES, fitTiles, sceneColsFor, sceneOrderFor } from '../lib/gigSize'
 
@@ -63,7 +60,6 @@ const ofSceneNames = (s) => s.sceneNames
 const ofBlocks = (s) => s.blocks
 const ofTunerOn = (s) => s.tunerOn
 const ofTuning = (s) => s.tuning
-const ofBpm = (s) => s.bpm
 
 export default function Gig({
   preset,
@@ -128,7 +124,6 @@ export default function Gig({
   const allBlocks = useDevice(ofBlocks)
   const tunerOn = useDevice(ofTunerOn)
   const tuning = useDevice(ofTuning)
-  const bpm = useDevice(ofBpm)
   /*
    * Whose blocks these are. The name of a new preset is up the moment it is
    * picked and its blocks a moment later, and in between the tiles here were
@@ -443,112 +438,6 @@ export default function Gig({
   }
 
   /*
-   * Tap tempo, which had no button anywhere.
-   *
-   * forgefx.js has carried tapTempo() the whole time and nothing called it —
-   * so the one control on this screen a player uses WHILE PLAYING, in time,
-   * was the one control that did not exist. It sits in the bar at the bottom
-   * next to the tuner: the two things you reach for between songs rather than
-   * inside one, and the two that were competing with the scenes for the
-   * middle of the screen.
-   */
-  const reread = useRef(null)
-  const taps = useRef([])
-  /*
-   * What the taps mean, shown while they are still happening.
-   *
-   * "It should change the tempo based on the tap and change the number
-   * immediately and then read the device and then change it if it needs to
-   * after that … right now it takes a few seconds after doing the tap, so you
-   * can't even tell the tempo you're tapping at."
-   *
-   * The number used to come only from the unit, and the unit can only be asked
-   * once tapping stops — see TAP_REREAD_MS — so it lagged the last press by
-   * nearly a second. That defeats what tapping is FOR: you tap to find a
-   * tempo, and a tempo you cannot see while tapping is one you cannot aim.
-   *
-   * So this is shown the instant it can be worked out, and the unit's own
-   * answer replaces it when it arrives. Cleared there rather than on a timer,
-   * so the two never both hold a figure.
-   */
-  const [tapped, setTapped] = useState(null)
-  /*
-   * The number goes to the unit; the taps never leave this machine.
-   *
-   * "Right now after I tap it a few times slowly, it'll send a number and
-   * then I'm done tapping and it sends back a different one."
-   *
-   * Because the taps themselves were being forwarded, one POST per press, and
-   * the unit worked the tempo out from the spacing between them AS THEY
-   * ARRIVED — which is the thumb's spacing plus whatever the wifi, the relay
-   * and the computer's queue added to each one, differently each time. The
-   * unit then reported, correctly, the tempo of what it had actually heard.
-   * See the note at the top of shared/tempo.mjs.
-   *
-   * Nothing at the far end could fix that: the timing is destroyed on the
-   * way. So the gaps are measured here and what crosses the network is the
-   * NUMBER — the same call a typed tempo makes.
-   */
-  const sender = useRef(null)
-  if (!sender.current) sender.current = tempoSender((bpm) => setTempo(bpm), (err) => onError(err.message))
-  const tap = async () => {
-    /*
-     * The number goes NOW; the read-back waits for the burst to end.
-     *
-     * The read still cannot follow each press — it would answer about the
-     * number sent one tap ago — but it can no longer surprise anybody, which
-     * was the complaint. The unit is told 132 rather than asked to work
-     * something out, so 132 is what it says.
-     */
-    clearTimeout(reread.current)
-    haptic()
-    taps.current = keepTaps(taps.current, Date.now())
-    const guess = tappedBpm(taps.current)
-    if (guess != null) {
-      setTapped(guess)
-      sender.current.push(guess)
-    }
-    reread.current = setTimeout(async () => {
-      /* Never read over a write still in the air: that read answers with the
-         tempo from before it. */
-      if (!sender.current.idle) {
-        reread.current = setTimeout(() => tapSettled(), TAP_REREAD_MS)
-        return
-      }
-      await tapSettled()
-    }, TAP_REREAD_MS)
-  }
-
-  /** Confirm what the unit ended up on, and stop showing our own arithmetic. */
-  const tapSettled = async () => {
-    await refreshTempo()
-    setTapped(null)
-  }
-
-  /* A pending read on a screen that has gone is a write into nothing. */
-  useEffect(() => () => clearTimeout(reread.current), [])
-
-  /* Read aloud, the face is "Tap 120" — which is a tempo, not an instruction.
-     The label says what the button does and what the number means. */
-  const tapLabel = Number.isFinite(bpm)
-    ? `Tap tempo — currently ${Math.round(bpm)} BPM. Hold to type a tempo.`
-    : 'Tap tempo. Hold to type a tempo.'
-
-  /*
-   * Hold Tap, or right-click it, to type the tempo.
-   *
-   * "On the tap button, let's do where they hold the tap button they can
-   * manually enter in the beats per minute they want. On the Mac let them
-   * right click to pull up the text box to enter the BPM."
-   *
-   * Tapping gets you close; a song chart says 132. The same hold-or-right-click
-   * the block tiles use opens a box over the button with the current tempo
-   * selected, so typing replaces it; Enter sets it, Escape or a tap elsewhere
-   * leaves it alone. The tap that would have followed the hold is swallowed by
-   * useLongPress, so holding never sends a stray beat.
-   */
-  const [typing, setTyping] = useState(false)
-  /*
    * Which block's channels are up, as a sheet.
    *
    * "It's tiny right now. Maybe pull up a slide-up menu when you hold the
@@ -566,22 +455,6 @@ export default function Gig({
   useEffect(() => {
     if (shown.elsewhere) setChanEid(null)
   }, [shown.elsewhere])
-  const tapCell = useRef(null)
-  const holdTap = useLongPress(() => {
-    haptic()
-    clearTimeout(reread.current)
-    setTyping(true)
-  })
-  useDismiss(tapCell, () => setTyping(false), { open: typing })
-  const typeTempo = async (n) => {
-    try {
-      await setTempo(n)
-      await refreshTempo()
-      onChanged?.(`Tempo → ${n} BPM`)
-    } catch (err) {
-      onError(err.message)
-    }
-  }
 
   /*
    * What Previous and Next step through.
@@ -939,6 +812,11 @@ export default function Gig({
                  off the face, for the same reason the group is named: a bare
                  "3" is not a control anyone can identify. */
               aria-label={`Scene ${i + 1}${names[i] ? ` — ${names[i]}` : ''}`}
+              /* The whole name on a hover, for one too long for the tile.
+                 "Scene names cut short" — and a hold here is NOT the answer:
+                 on Play a scene tile is a footswitch, and a long press that
+                 does not switch the scene is the wrong surprise mid-song. */
+              title={names[i] || undefined}
               aria-pressed={i === scene}
               onClick={() => pickScene(i)}
             >
@@ -1020,6 +898,20 @@ export default function Gig({
             />
           ))}
         </div>
+      ) : null}
+
+      {/*
+        Where the looper went.
+
+        "PLAY leaves out the Looper." On purpose: input, output and the looper
+        are never tiles here — see STAGE_HIDDEN — because an on/off switch is
+        not what a looper wants on a stage. It wants Record and Play, and
+        until those exist the honest thing is to say where it is, so a preset
+        with thirteen blocks and ten tiles doesn't look like three went
+        missing.
+      */}
+      {!shown.elsewhere && onChain && hasLooper(allBlocks) ? (
+        <p className="gig-note">{LOOPER_ON_EDIT}</p>
       ) : null}
 
       <ChannelSheet
@@ -1113,32 +1005,10 @@ export default function Gig({
           </button>
         ) : null}
         {/*
-          The tempo lives on the button that sets it.
-
-          A tap button with no readout is a control you have to trust: you tap
-          four times and find out whether it took by listening to the delay. The
-          figure is what the unit currently holds, so it is also the answer to
-          "what is this preset at" without opening anything.
-
-          Absent until the unit has said — a dash would read as zero, and a
-          unit whose driver has no tempo at all should not be shown one.
+          Tap, and the tempo on it. The same button Edit has beside its scene —
+          see TapTempo, which says why there is one of them and not two.
         */}
-        <div className="gig-tap-cell" ref={tapCell}>
-          <button className="gig-bar-btn gig-tap" onClick={tap} aria-label={tapLabel} {...holdTap}>
-            {/* "Change the label on the tap tempo button to just say Tap." */}
-            <span>Tap</span>
-            {Number.isFinite(tapped ?? bpm) ? (
-              <span className="gig-tap-bpm mono">{Math.round(tapped ?? bpm)}</span>
-            ) : null}
-          </button>
-          {typing ? (
-            <div className="gig-tempo" role="group" aria-label="Type a tempo">
-              <span className="silk-label">Tempo</span>
-              <BpmBox bpm={bpm} autoFocus onSet={typeTempo} onError={onError} onDone={() => setTyping(false)} />
-              <span className="hint">Enter sets it</span>
-            </div>
-          ) : null}
-        </div>
+        <TapTempo onError={onError} onChanged={onChanged} />
         {/*
           And what is actually in the preset, which until now a phone could not
           see at all.

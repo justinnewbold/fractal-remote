@@ -2230,8 +2230,8 @@ export function run(test) {
       'a tap waits on the network before it returns, which makes the next tap late and the rhythm wrong'
     )
 
-    /* Both apps do it the same way. */
-    const webGig = read('src/components/Gig.jsx')
+    /* Both apps do it the same way. The browser's Tap is its own file, drawn on Play and Edit. */
+    const webGig = read('src/components/TapTempo.jsx')
     assert.match(webGig, /refreshTempo\(\)/, 'the browser never re-reads the tempo after a tap')
     assert.match(webGig, /TAP_REREAD_MS/, 'the browser no longer shares the delay with the phone')
     assert.match(webGig, /tappedBpm\(/, 'the browser no longer works out what the taps mean')
@@ -7954,6 +7954,7 @@ export function run(test) {
     const bad = tempoSender(() => Promise.reject(new Error('port not open')), (err) => said.push(err.message))
     await bad.push(120)
     assert.deepEqual(said, ['port not open'], 'a refused tempo says nothing')
+    assert.equal(bad.sent, null, 'a refused tempo counts as reaching the unit')
     assert.equal(bad.idle, true, 'one refusal stops the button working for good')
   })
 
@@ -10671,5 +10672,43 @@ export function run(test) {
     await clock.advance(rig.PRESET_SETTLE_MS + 300)
     assert.equal(rig.getState().preset.number, 40)
     assert.equal(asked(CHAIN), chains + 1, 'a quarter of a minute was waited out for a copy this unit’s computer does not keep')
+  })
+
+  test('scene names and the lines under buttons get two lines on the phone, and the looper is accounted for', () => {
+    /*
+     * "Scene names cut short" and "Help text cut off mid-sentence." A scene
+     * tile at two across held its name to one line at the body size, the
+     * Edit header held the scene to one line beside Save, and the small line
+     * under a button stopped at the button's edge. Two lines, a size down,
+     * at every width — and no hold on a scene tile to show a name: on the
+     * stage a scene tile is a footswitch.
+     */
+    const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+    const tile = bare(read('mobile/src/components/Tile.js'))
+    assert.match(tile, /numberOfLines=\{wrap \? 2 : 1\}/, 'a tile’s name cannot take a second line')
+    assert.match(tile, /fontSize: wrap \? font\.small : font\.body/, 'a two-line name is drawn at the size that only fits one')
+
+    const stage = bare(read('mobile/src/screens/Stage.js'))
+    const scene = stage.slice(stage.indexOf('caption={String(i + 1)}'), stage.indexOf('/>', stage.indexOf('caption={String(i + 1)}')))
+    assert.ok(scene.length > 0, 'the scene tiles are not where this test reads them')
+    assert.match(scene, /\n\s*wrap\n/, 'scene names are held to one line again, or only at four across')
+    assert.ok(!/onLongPress/.test(scene), 'a scene tile does something on a hold, which is a footswitch that does not switch')
+
+    const edit = bare(read('mobile/src/screens/Edit.js'))
+    assert.match(edit, /<Text numberOfLines=\{2\} style=\{\{ color: color\.silkDim, fontSize: font\.small \}\}>\s*\{`Scene \$\{scene \+ 1\}/, 'the scene in the Edit header is cut to one line')
+
+    const press = bare(read('mobile/src/components/Press.js'))
+    const sub = press.slice(press.indexOf('{sub ? ('), press.indexOf('{sub}'))
+    assert.match(sub, /numberOfLines=\{2\}/, 'the line under a button stops at the button’s edge again')
+    assert.match(sub, /textAlign: 'center'/, 'a second line under a button hangs off to one side')
+
+    /*
+     * "PLAY leaves out the Looper." It still does — see STAGE_HIDDEN — and
+     * says where it went, in the browser's words, from the generated copy of
+     * the browser's own rule.
+     */
+    assert.match(stage, /import \{ hasLooper, LOOPER_ON_EDIT \} from '\.\.\/lib\/guardrails'/, 'the phone has its own idea of the looper line')
+    assert.match(stage, /\{onOpenEdit && !chainNow\.elsewhere && hasLooper\(allBlocks\) \? <Note>\{LOOPER_ON_EDIT\}<\/Note> : null\}/, 'the stage points to an Edit button it has not drawn, does not say where the looper is, or asks the tiles, which never hold one')
+    assert.match(stage, /const ofAllBlocks = \(s\) => s\.allBlocks/, 'the looper line reads the stage tiles, which leave the looper out')
   })
 }

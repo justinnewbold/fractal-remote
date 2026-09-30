@@ -296,7 +296,8 @@ export const AREAS = [
   },
   {
     area: 'the play screen',
-    web: ['src/components/Gig.jsx'],
+    /* Tap lives in its own file now, because Edit draws the same button. */
+    web: ['src/components/Gig.jsx', 'src/components/TapTempo.jsx'],
     phone: ['mobile/src/screens/Stage.js'],
     buttons: [
       { does: 'open the block editor', web: 'Edit', phone: 'Edit' },

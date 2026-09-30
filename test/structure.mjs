@@ -3637,20 +3637,22 @@ export function run(test) {
     const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
     const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
     const g = bare(gig)
+    /* Tap is its own component now — Play's bar and Edit's scene row both draw it. */
+    const t = bare(readFileSync(new URL('../src/components/TapTempo.jsx', import.meta.url), 'utf8'))
 
     // The bar, and both things in it.
     const bar = g.slice(g.indexOf('className="gig-bar"'), g.indexOf('className="gig-bar"') + 900)
     assert.ok(bar.length > 0, 'the tuner and tap bar is gone')
     assert.match(bar, /Tuner/, 'the tuner left the bar')
-    assert.match(bar, /Tap/, 'tap tempo left the bar')
+    assert.match(bar, /<TapTempo\b/, 'tap tempo left the bar')
     assert.ok(!/className="gig-modes"/.test(g), 'the tuner is back in a row of its own mid-screen')
     /*
      * The button sends a NUMBER, not a tap. Forwarding the presses let the
      * network decide the rhythm — see shared/tempo.mjs — so what goes over
      * is the tempo this end worked out.
      */
-    assert.match(g, /sender\.current\.push\(guess\)/, 'nothing taps, so the button does nothing')
-    assert.ok(!/tapBeat\(\)/.test(g), 'the taps are being forwarded again, so the wifi decides the tempo')
+    assert.match(t, /sender\.current\.push\(guess\)/, 'nothing taps, so the button does nothing')
+    assert.ok(!/tapBeat\(\)/.test(t) && !/tapBeat\(\)/.test(g), 'the taps are being forwarded again, so the wifi decides the tempo')
 
     /*
      * And the tempo is ON the button that sets it.
@@ -3664,11 +3666,12 @@ export function run(test) {
      * BEFORE this one, so it waits for the burst to end. If that timer ever
      * collapses into the tap itself, the number on the button starts lying.
      */
-    assert.match(bar, /gig-tap-bpm/, 'the tap button lost its tempo readout')
+    assert.match(t, /className="gig-tap-bpm mono"/, 'the tap button lost its tempo readout')
     /* The HANDLER only. Sliced to `const step` it ran on past the unmount
        cleanup, which clears the same timer — so deleting the debounce from the
        handler still found a clearTimeout and the test passed. It does not now. */
-    const tapFn = g.slice(g.indexOf('const tap = async'), g.indexOf('useEffect(() => () => clearTimeout'))
+    const tapFn = t.slice(t.indexOf('const tap = async'), t.indexOf('useEffect(() => () => clearTimeout'))
+    assert.ok(tapFn.length > 0, 'the tap handler is not where this test reads it')
     assert.match(tapFn, /clearTimeout\(reread\.current\)/, 'a second tap no longer cancels the pending read')
     assert.match(tapFn, /refreshTempo\(\)/, 'the tempo is never re-read, so the number goes stale')
     assert.ok(

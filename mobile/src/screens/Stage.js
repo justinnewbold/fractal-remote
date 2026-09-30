@@ -59,6 +59,7 @@ import tempoIcon from '../../assets/icons/tempo.png'
 import tunerIcon from '../../assets/icons/tuner.png'
 import { sceneColor } from '../lib/sceneColors'
 import { shortBlock } from '../lib/shortName'
+import { hasLooper, LOOPER_ON_EDIT } from '../lib/guardrails'
 import UnlockOffer from '../components/UnlockOffer'
 import Note from '../components/Note'
 import { fixById, fixFor } from '../lib/troubleshooting'
@@ -73,6 +74,7 @@ import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 /* Hoisted: a selector rebuilt each render re-reads the store on every notify. */
 const ofPreset = (s) => s.preset
 const ofBlocks = (s) => s.blocks
+const ofAllBlocks = (s) => s.allBlocks
 const ofScene = (s) => s.sceneIndex
 const ofSceneNames = (s) => s.sceneNames
 const ofCaps = (s) => s.capabilities
@@ -103,6 +105,8 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
 
   const preset = useRig(ofPreset)
   const blocks = useRig(ofBlocks)
+  /* Every block, the three the stage leaves out included — for the looper line. */
+  const allBlocks = useRig(ofAllBlocks)
   const scene = useRig(ofScene)
   const sceneNames = useRig(ofSceneNames)
   const caps = useRig(ofCaps)
@@ -585,7 +589,10 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
                   height={tileH}
                   haptic={thud}
                   onPress={() => writeScene(i)}
-                  narrow={sceneCols >= 4}
+                  /* Two lines, a size down, at every width: "Scene names
+                     cut short." Wrapping fixes it for everyone — a hold to
+                     show the name would be a footswitch that doesn't switch. */
+                  wrap
                   style={{ width: tileWidth(row, sceneCols) }}
                 />
               )
@@ -699,6 +706,16 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             )
           })}
         </View>
+
+        {/*
+          Where the looper went. "PLAY leaves out the Looper" — on purpose,
+          see STAGE_HIDDEN: an on/off tile is not what a looper wants on a
+          stage, it wants Record and Play. Until those exist, say where it is,
+          so ten tiles for a thirteen-block preset don't read as three lost.
+          The browser's Play says the same words — and, like it, only when
+          there is an Edit button to press.
+        */}
+        {onOpenEdit && !chainNow.elsewhere && hasLooper(allBlocks) ? <Note>{LOOPER_ON_EDIT}</Note> : null}
 
       </View>
 
