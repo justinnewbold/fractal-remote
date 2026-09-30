@@ -1096,7 +1096,8 @@ export default function Gig({
         */}
         <div className="gig-tap-cell" ref={tapCell}>
           <button className="gig-bar-btn gig-tap" onClick={tap} aria-label={tapLabel} {...holdTap}>
-            <span>Tap Tempo</span>
+            {/* "Change the label on the tap tempo button to just say Tap." */}
+            <span>Tap</span>
             {Number.isFinite(tapped ?? bpm) ? (
               <span className="gig-tap-bpm mono">{Math.round(tapped ?? bpm)}</span>
             ) : null}

@@ -2343,7 +2343,7 @@ export function run(test) {
      * one pressed mid-song, so it gets the easy reach.
      */
     assert.ok(
-      stageSrc.indexOf('label="Edit"') < stageSrc.indexOf('label="Tap Tempo"'),
+      stageSrc.indexOf('label="Edit"') < stageSrc.indexOf('label="Tap"'),
       'Tap Tempo is no longer on the right, where the thumb is'
     )
   })
