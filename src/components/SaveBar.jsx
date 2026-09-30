@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { remoteActive } from '../lib/remote'
+import { saidSaved, whenSavedGoes } from '../lib/savedFor'
+import { SAVE_LATE_WORDS } from '../../shared/save-wait.mjs'
 
 /**
  * Where saving lives now: the top right of the screen, in the masthead.
@@ -21,16 +23,7 @@ import { remoteActive } from '../lib/remote'
  * the write is still two taps from anywhere, but the second tap is on a button
  * that names the slot, next to the list of what is in it.
  */
-/**
- * How long "Saved" stays up before the button gets out of the way.
- *
- * Was four seconds. A save asked for from a phone is carried out by the page
- * at the Mac and reported back on a poll, so the word can arrive several
- * seconds after the press — and the press was very likely made from across a
- * room. Long enough to still be there when you look back at the phone; short
- * enough that walking away leaves a clean bar.
- */
-const SAVED_FOR_MS = 10000
+/* How long "Saved" stays up: see lib/savedFor. */
 
 export default function SaveBar({
   preset,
@@ -93,20 +86,18 @@ export default function SaveBar({
 
   /*
    * "Saved" is the one state with no work behind it, so it is the one that has
-   * to expire. Four seconds is long enough to be read by somebody watching for
-   * it and short enough that walking away leaves a clean bar.
+   * to expire — after SAVED_FOR_MS (lib/savedFor).
    *
    * The timer only exists to re-render when the window closes; the answer is
    * computed from the clock, so a component that mounts long after a save is
-   * already past it and says nothing.
+   * already past it and says nothing. A timer that fires early sets another
+   * for what is left; see whenSavedGoes.
    */
   const [, redraw] = useState(0)
-  const justSaved = !!savedAt && Date.now() - savedAt < SAVED_FOR_MS
+  const justSaved = saidSaved(savedAt)
   useEffect(() => {
     if (!justSaved) return undefined
-    const left = SAVED_FOR_MS - (Date.now() - savedAt)
-    const timer = setTimeout(() => redraw((n) => n + 1), Math.max(left, 0))
-    return () => clearTimeout(timer)
+    return whenSavedGoes(savedAt, () => redraw((n) => n + 1))
   }, [justSaved, savedAt])
 
   // Nothing to save, nothing being saved, nothing just saved: no button.
@@ -116,6 +107,28 @@ export default function SaveBar({
      is being saved and the answer has not come back yet. */
   const working = !!queued || !!saving
 
+  /*
+   * "✓ SAVED" IS A WORD, NOT A BUTTON.
+   *
+   * "'✓ Saved' never goes away." It did go, after its ten seconds — but it
+   * was drawn as the Save button, and the button is disabled while the app
+   * is busy, which after a save it used to be for the whole re-read of the
+   * unit. A greyed-out button that says Saved and cannot be pressed reads as
+   * a screen that has stuck. Nothing is left to do, so there is nothing to
+   * press: it says so and goes.
+   */
+  if (!working && !dirty && justSaved) {
+    return (
+      <div className="save-cluster" data-dirty="no" data-working="no">
+        <div className="save-cluster-row">
+          <span className="save-done" role="status">
+            ✓ Saved
+          </span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="save-cluster" data-dirty={dirty ? 'yes' : 'no'} data-working={working ? 'yes' : 'no'}>
       <div className="save-cluster-row">
@@ -124,10 +137,12 @@ export default function SaveBar({
             Unsaved — Save to keep
           </span>
         ) : null}
+        {/* Pressable while a save is out from here: the sheet it opens is
+            where that save can be cancelled. */}
         <button
           className="save-now"
           onClick={onOpenSave}
-          disabled={busy || !!queued}
+          disabled={busy && !queued}
           title={remote ? 'The page at your computer does the writing' : undefined}
         >
           {/* `saving`, not `busy`: busy is true for every long operation in the
@@ -159,9 +174,29 @@ export default function SaveBar({
             there. The button saves. That the computer performs the write is
             true and is not the presser's problem.
           */}
-          {working ? 'Saving…' : !dirty && justSaved ? '✓ Saved' : 'Save'}
+          {working ? 'Saving…' : 'Save'}
         </button>
       </div>
+    </div>
+  )
+}
+
+/**
+ * A save from here that the computer has not answered in a while.
+ *
+ * "Saving… then ✓ Saved" is all a save says while it goes to plan, which it
+ * does inside a second or two now that the computer hears the request the
+ * moment it is left. This is for when it does not: a line under the bar, in
+ * plain words, with the one thing worth doing about it. Under the bar rather
+ * than in it, because on a phone the bar has no room left for a sentence.
+ */
+export function SaveLate({ onCancel }) {
+  return (
+    <div className="save-late" role="status">
+      <span>{SAVE_LATE_WORDS}</span>
+      <button className="chip" onClick={onCancel}>
+        Cancel
+      </button>
     </div>
   )
 }

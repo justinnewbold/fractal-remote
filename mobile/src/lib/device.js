@@ -426,6 +426,15 @@ export async function readSaveResult(slug) {
   return data && typeof data === 'object' ? data : null
 }
 
+/* Whether the computer has picked a request up: its own document, because
+   phone builds already out there take any answer as the last word. */
+export async function readSaveProgress(slug) {
+  if (!slug) return null
+  const doc = await remoteRequest(`/store/config/${encodeURIComponent(`fractal.saveProgress.${slug}`)}`)
+  const data = doc && typeof doc === 'object' && 'data' in doc ? doc.data : doc
+  return data && typeof data === 'object' ? data : null
+}
+
 /**
  * Whose names these are, on disk. The demo's are kept apart from the real
  * unit's — the browser does the same — so a look around the demo never leaves

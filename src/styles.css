@@ -7017,6 +7017,46 @@ button.gig-block:disabled {
   color: var(--ok);
 }
 
+/*
+ * "✓ Saved", as a word rather than a button. It used to be the Save button
+ * greyed out, which read as a screen that had stuck. The same size and ink
+ * as the quiet button it replaces, so nothing in the bar moves when it goes.
+ */
+.save-done {
+  display: inline-flex;
+  align-items: center;
+  min-height: 46px;
+  padding: var(--s-2) var(--s-2);
+  font-family: var(--display);
+  font-size: var(--f-3);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--ok);
+}
+
+/* A save from away that the computer has not answered: one line under the
+   bar, and Cancel. Full width, because on a phone the bar has no room. */
+.save-late {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin: var(--s-2) 0;
+  padding: var(--s-2) var(--s-3);
+  border-left: 2px solid var(--signal);
+  background: var(--panel);
+  color: var(--silk);
+  font-size: var(--f-2);
+}
+
+.save-queued {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
 .save-cluster button.save-options {
   min-height: 46px;
   padding: var(--s-2) var(--s-3);

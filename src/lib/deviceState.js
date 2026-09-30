@@ -178,6 +178,23 @@ export function attachDriver(next) {
 
 export const attachedDriver = () => driver
 
+/*
+ * A document in the computer's store changed.
+ *
+ * The computer announces every write to its store on the same stream as a
+ * footswitch, and this window used to drop the announcement on the floor. A
+ * save asked for from a phone is exactly such a write — the request, then the
+ * answer — so the Mac window hears a request the moment it is left rather than
+ * on its next six-second look, which a hidden window stretches to a minute.
+ * Matched on the document's name, never on who wrote it: both ends write as
+ * the same app.
+ */
+const configWatchers = new Set()
+export function onConfigDoc(fn) {
+  configWatchers.add(fn)
+  return () => configWatchers.delete(fn)
+}
+
 /**
  * Inbound device events, from the one subscription.
  *
@@ -186,6 +203,17 @@ export const attachedDriver = () => driver
  */
 export function handleEvent(event) {
   if (!event) return
+
+  if (event.type === 'config' && typeof event.id === 'string') {
+    for (const fn of [...configWatchers]) {
+      try {
+        fn(event.id, event.data)
+      } catch {
+        // One listener's fault is not the others' news.
+      }
+    }
+    return
+  }
 
   if (event.type === 'scene' && typeof event.index === 'number') {
     if (!isEcho('sceneIndex', event.index)) set({ sceneIndex: event.index })
@@ -1012,6 +1040,54 @@ function enterPreset(fresh) {
 function rememberedNames(number) {
   const known = driver?.rememberedSceneNames?.(number)
   return Array.isArray(known) && known.some((n) => (n || '').trim()) ? known : NO_NAMES
+}
+
+/**
+ * A save has just landed: the buffer on screen is slot `number` now.
+ *
+ * "Save takes 60-90 s and locks the page." Part of the lock was what came
+ * after the write — a full read of the unit, presence check and chain dump
+ * and all, with the whole page busy — to learn two things the save had just
+ * settled: which slot the unit is on, and what it is called. The buffer did
+ * not change. The chain on screen is the chain that was saved, so it is not
+ * read again; it belongs to the new slot now, and the bookkeeping says so,
+ * or a screen opened next would take it for another preset's chain.
+ *
+ * So the answer goes up at once, and then one small quiet question confirms
+ * it, asked again a few times while the unit is still writing to flash.
+ * Nothing waits on it. A preset changed somewhere else in the meantime wins:
+ * that change has its own read.
+ */
+export async function presetSaved(number, name) {
+  if (!Number.isInteger(number) || number < 0) return
+  const run = presetRun
+  const was = state.preset
+  const kept = typeof name === 'string' ? name.trim() : ''
+  /* The chain belongs to whichever number the buffer is under now. */
+  const carry = (to) => {
+    if (chainRead && chainRead.number === state.preset?.number && to !== chainRead.number) chainRead = { ...chainRead, number: to }
+  }
+  carry(number)
+  set({ preset: { ...(was || {}), number, ...(kept ? { name: kept, empty: false } : {}) } })
+  if (!driver?.currentPreset) return
+  for (let i = 0; i < SETTLING_TRIES; i++) {
+    await new Promise((go) => clock.setTimeout(go, SETTLING_MS))
+    if (run !== presetRun || presetBusy()) return
+    let fresh = null
+    try {
+      fresh = await driver.currentPreset()
+    } catch {
+      continue
+    }
+    if (run !== presetRun || presetBusy()) return
+    if (!Number.isInteger(fresh?.number) || fresh.number < 0) continue
+    if (fresh.number === number || fresh.number === was?.number) {
+      /* Same buffer either way; only the number and the name can move. */
+      carry(fresh.number)
+      set({ preset: fresh })
+    } else presetMovedAtUnit(fresh, presetRun)
+    return
+  }
 }
 
 /** What a select the unit answered with {ok:false} says. */

@@ -157,6 +157,13 @@ export const FILES = [
    */
   { source: '../shared/report-rules.mjs', target: '../mobile/src/lib/report-rules.js' },
   /*
+   * How long a save asked for from away waits for the computer, what it says
+   * while it waits, and how it is cancelled. The browser on a phone and the
+   * phone app were each doing their own waiting, and one of them waited for
+   * ever. See shared/save-wait.mjs.
+   */
+  { source: '../shared/save-wait.mjs', target: '../mobile/src/lib/save-wait.js' },
+  /*
    * Whose app this is and whose it is not. One sentence, four places it has to
    * appear, and the version that matters is whichever one somebody's lawyer
    * reads — so it is generated rather than typed twice.

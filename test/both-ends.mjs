@@ -1452,7 +1452,7 @@ export function run(test) {
 
     /* Save in the phone's bar, only with something to save, asked first. */
     const bar = read('mobile/src/components/TopBar.js')
-    assert.match(bar, /const canSave = saveHere && !!unsaved && unsaved\.number === preset\?\.number && saveTo\.can/, 'the phone’s bar has no Save for changes made on Play')
+    assert.match(bar, /const canSave = saveHere && \(saveTo\.saving \|\| \(!!unsaved && unsaved\.number === preset\?\.number && saveTo\.can\)\)/, 'the phone’s bar has no Save for changes made on Play')
     assert.match(bar, /Alert\.alert\('Save preset\?', 'This will overwrite the current preset\.'/, 'the bar saves without asking')
     assert.match(read('mobile/App.js'), /saveHere=\{screen !== 'edit'\}/, 'Edit shows two Save buttons')
     /* The browser has had one in its bar all along. */
@@ -1528,7 +1528,7 @@ export function run(test) {
     assert.match(demo, /useDemoStorage\(sync\)/, 'the phone demo keeps its saves nowhere')
     assert.ok(demo.indexOf('await hydrate()') > -1 && demo.indexOf('await hydrate()') < demo.indexOf('mock = createMockDevice(unit)\n      announce()'), 'the demo opens before its saves are read')
     const saver = read('mobile/src/components/SaveToSlot.js')
-    assert.ok(saver.indexOf('if (isDemo())') > -1 && saver.indexOf('if (isDemo())') < saver.indexOf('askComputerToSave({'), 'the demo still asks a computer that is not there')
+    assert.ok(saver.indexOf('if (isDemo())') > -1 && saver.indexOf('if (isDemo())') < saver.indexOf('startComputerSave({'), 'the demo still asks a computer that is not there')
     assert.match(saver, /await saveInDemo\(preset\?\.number\)/)
     assert.doesNotMatch(read('src/lib/demoMemory.js'), /\blocalStorage\.(get|set)Item/, 'the demo reaches for a localStorage the phone does not have')
   })

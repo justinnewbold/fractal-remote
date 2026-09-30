@@ -18,6 +18,7 @@ import { zeroBasedChain, wrongSlot } from './slots.js'
 import { cableColumns, toWireCable, toWireCell } from '../../shared/grid-plan.mjs'
 import { DEFAULT_SLUG, deviceSlug } from '../../shared/device-slug.mjs'
 import { firmwareOf } from '../../shared/firmware.mjs'
+import { cancelledSave, pendingSaveDoc, saveProgressDoc, saveResultDoc } from '../../shared/save-wait.mjs'
 import { toNormalized } from './scale.js'
 import { withLineage } from './lineage.js'
 import { remoteActive, remoteRequest, subscribeHostSeen, subscribeRemoteEvents, subscribeRemoteState } from './remote.js'
@@ -522,15 +523,23 @@ export const clearParkedPresetName = (slot) => deleteHostDoc(pendingNameKey(slot
  * since moved on from", and an id, so the phone can be told what became of it
  * rather than being left to wonder.
  */
-const pendingSaveKey = () => `fractal.pendingSave.${unitSlug}`
-const saveResultKey = () => `fractal.saveResult.${unitSlug}`
+/* The names are shared with the phone app, which uses the same documents. */
+export const pendingSaveKey = () => pendingSaveDoc(unitSlug)
+export const saveResultKey = () => saveResultDoc(unitSlug)
+export const saveProgressKey = () => saveProgressDoc(unitSlug)
 
 export const parkSave = (request) => writeHostDoc(pendingSaveKey(), { ...request, at: Date.now() })
 export const takeParkedSave = () => readHostDoc(pendingSaveKey())
 export const clearParkedSave = () => deleteHostDoc(pendingSaveKey())
+/* Written over rather than deleted: a phone's DELETE never reaches the store. */
+export const cancelParkedSave = (id) => parkSave(cancelledSave(id))
 
 export const reportSave = (result) => writeHostDoc(saveResultKey(), { ...result, at: Date.now() })
 export const readSaveResult = () => readHostDoc(saveResultKey())
+
+/* The computer has the request and is writing it. See shared/save-wait.mjs. */
+export const reportSavePicked = (id) => writeHostDoc(saveProgressKey(), { id, picked: true, at: Date.now() })
+export const readSaveProgress = () => readHostDoc(saveProgressKey())
 
 /** The preset currently loaded on the unit. */
 /**
@@ -2127,6 +2136,29 @@ export async function rememberedName(number) {
     persistNames()
   }
   return name
+}
+
+/**
+ * One slot's name, and whether it is actually known — for the save sheet,
+ * which has to tell "slot 12 is empty" from "slot 12 could not be read".
+ *
+ * rememberedName answers '' for both, and the sheet used to take every slot
+ * it had not read for an empty one: "Replaces an empty slot" over a preset
+ * that had simply never been asked about. Over the relay that is most of them.
+ */
+export async function lookUpName(number) {
+  restoreNames()
+  if (nameCache.has(number)) return { name: nameCache.get(number), known: true }
+  try {
+    const { name, known } = await storedName(number)
+    if (known) {
+      nameCache.set(number, name)
+      persistNames()
+    }
+    return { name: known ? name : '', known }
+  } catch {
+    return { name: '', known: false }
+  }
 }
 
 

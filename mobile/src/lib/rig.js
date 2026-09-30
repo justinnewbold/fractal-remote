@@ -254,6 +254,21 @@ function isEcho(field, value) {
   return true
 }
 
+/*
+ * A document in the computer's store changed, as the computer announces it.
+ *
+ * The computer tells every screen the moment something is written to its
+ * store, and until now the phone threw that away. A save asked for from here
+ * waits on exactly such a write — the computer's answer — so the answer is
+ * heard as it lands instead of on the next three-second look. Matched on the
+ * document's name, never on who wrote it: both ends write as the same app.
+ */
+const configWatchers = new Set()
+export function onConfigDoc(fn) {
+  configWatchers.add(fn)
+  return () => configWatchers.delete(fn)
+}
+
 /**
  * Everything the unit says while nobody asked.
  *
@@ -263,6 +278,17 @@ function isEcho(field, value) {
  */
 export function handleEvent(event) {
   if (!event) return
+
+  if (event.type === 'config' && typeof event.id === 'string') {
+    for (const fn of [...configWatchers]) {
+      try {
+        fn(event.id, event.data)
+      } catch {
+        // One screen's listener cannot stop the others hearing it.
+      }
+    }
+    return
+  }
 
   if (event.type === 'scene' && typeof event.index === 'number') {
     if (!isEcho('sceneIndex', event.index)) set({ sceneIndex: event.index })

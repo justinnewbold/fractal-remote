@@ -459,6 +459,12 @@ export function run(test) {
       'UpdateNotice',
       'UpdateReadyNotice',
       /*
+       * A save from here that the computer has not answered. Nothing at all
+       * unless one is out and late, and then under the bar is the point: the
+       * bar on a phone has no room left for the sentence, or for Cancel.
+       */
+      'SaveLate',
+      /*
        * Inside the No unit found notice, which is one of the states that mean
        * the app can't work yet: which account this is, and whether a computer
        * on this wifi is on another one. It draws nothing on a working rig.
@@ -2310,8 +2316,17 @@ export function run(test) {
      */
     assert.match(
       save,
-      /: !dirty && justSaved\s*\n?\s*\? '✓ Saved'/,
-      'the button says "Saved" about a preset that has never been saved'
+      /if \(!working && !dirty && justSaved\) \{[\s\S]{0,300}?<span className="save-done" role="status">\s*✓ Saved/,
+      'the bar says "Saved" about a preset that has never been saved'
+    )
+    /*
+     * And it is a word, not a button. "'✓ Saved' never goes away" was the
+     * Save button greyed out while the app re-read the unit after the save —
+     * a disabled button saying Saved reads as a screen that has stuck.
+     */
+    assert.ok(
+      !/'✓ Saved'/.test(save.replace(/\/\*[\s\S]*?\*\//g, ' ')),
+      '"✓ Saved" is drawn on the Save button again, where a busy app greys it out'
     )
     /*
      * And a save in flight says SAVING, with something that moves.
@@ -2348,7 +2363,10 @@ export function run(test) {
      * has to expire — and from a clock rather than a flag, or a component that
      * mounts an hour later starts its own timer and says it again.
      */
-    assert.match(save, /Date\.now\(\) - savedAt < SAVED_FOR_MS/, '"Saved" never stops being said')
+    const savedFor = read('../lib/savedFor.js')
+    assert.match(savedFor, /now - savedAt < SAVED_FOR_MS/, '"Saved" never stops being said')
+    assert.match(save, /const justSaved = saidSaved\(savedAt\)/, 'the bar decides "Saved" from something other than the clock')
+    assert.match(save, /return whenSavedGoes\(savedAt, /, 'the bar arms its own timer again, the one that could fire early and stop')
     /*
      * Hiding it took away the only door to the save sheet, which is also how a
      * preset is put in a DIFFERENT slot with nothing edited. That door moved

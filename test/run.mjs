@@ -7413,14 +7413,17 @@ test('a unit that really is gone is still reported after a save', async () => {
   assert.equal(n, ds.SETTLING_TRIES)
 })
 
-test('every read after a save asks with the longer patience', () => {
+test('a save ends with the number and the name, not a whole read of the unit', () => {
   /*
-   * Three places re-read the moment a save lands — the Mac from its own
-   * write, the Mac carrying out a save the phone asked for, and the phone
-   * hearing back that it landed — and any one of them left on the short
-   * budget is the same red screen on a different route.
+   * "Save takes 60-90 s and locks the page." Three places used to read the
+   * whole unit the moment a save landed — the Mac from its own write, the Mac
+   * carrying out a save the phone asked for, and the phone hearing back that
+   * it landed — with the page busy throughout, to learn which slot the unit
+   * is on and what it is called. The save had just settled both. Each of the
+   * three now hands the store the answer and a quiet check follows it.
    */
   const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  /* The patience is still there for the reads that need it. */
   assert.match(app, /const settling = opts\?\.settling === true/, 'read() has no settling read again')
   assert.match(
     app,
@@ -7429,14 +7432,14 @@ test('every read after a save asks with the longer patience', () => {
   )
   assert.equal(
     (app.match(/read\(\{ settling: true \}\)/g) || []).length,
-    3,
-    'one of the three reads that follow a save is back on the short budget'
+    0,
+    'a save is followed by a whole read of the unit again, which is what locked the page'
   )
   // Each of the three sits under the record() line for the save it follows.
   for (const after of [
-    /Saved "\$\{name \|\| preset\?\.name\}" to slot \$\{req\.slot\}[\s\S]{0,200}?read\(\{ settling: true \}\)/,
-    /The computer saved it to slot \$\{res\.slot\}[\s\S]{0,200}?read\(\{ settling: true \}\)/,
-    /Saved "\$\{name \|\| preset\?\.name\}" to slot \$\{number\}[\s\S]{0,300}?read\(\{ settling: true \}\)/
+    /Saved "\$\{name \|\| preset\?\.name\}" to slot \$\{req\.slot\}[\s\S]{0,400}?presetSaved\(req\.slot, name \|\| preset\?\.name\)/,
+    /The computer saved it to slot \$\{res\.slot\}[\s\S]{0,400}?presetSaved\(res\.slot, queuedSave\.name\)/,
+    /Saved "\$\{name \|\| preset\?\.name\}" to slot \$\{number\}[\s\S]{0,700}?presetSaved\(number, name \|\| preset\?\.name\)/
   ]) {
     assert.match(app, after)
   }
@@ -9388,6 +9391,416 @@ test('the browser snapshots the block before a model pick, and its Undo puts the
   }
   /* A Revert or another preset puts other settings on the block: the offer goes. */
   assert.match(panel, /\}, \[block\?\.effectId, rev\]\)/, 'an Undo outlives the preset loading again')
+})
+
+console.log('\nsaving from away')
+
+const saveWait = await import('../shared/save-wait.mjs')
+
+/* A hand-turned clock for the wait: `sleep` never resolves on its own, so
+   only an announcement or the test turning the clock moves anything. */
+function waitBench() {
+  let t = 5000
+  const naps = []
+  const sleep = (ms) =>
+    new Promise((go) => {
+      naps.push({ at: t + ms, go })
+    })
+  const turn = async (ms) => {
+    const end = t + ms
+    for (;;) {
+      naps.sort((a, b) => a.at - b.at)
+      const next = naps[0]
+      if (!next || next.at > end) break
+      naps.shift()
+      t = next.at
+      next.go()
+      for (let i = 0; i < 20; i++) await null
+    }
+    t = end
+    for (let i = 0; i < 20; i++) await null
+  }
+  const docs = { result: null, progress: null }
+  const heard = new Set()
+  const listen = (fn) => (heard.add(fn), () => heard.delete(fn))
+  const announce = (id, data) => heard.forEach((fn) => fn(id, data))
+  const written = []
+  return {
+    now: () => t,
+    sleep,
+    turn,
+    docs,
+    heard,
+    announce,
+    written,
+    opts: (over = {}) => ({
+      id: 'r1',
+      resultDoc: 'fractal.saveResult.fm3',
+      progressDoc: 'fractal.saveProgress.fm3',
+      readResult: async () => docs.result,
+      readProgress: async () => docs.progress,
+      cancelRequest: async () => written.push(saveWait.cancelledSave('r1')),
+      listen,
+      sleep,
+      now: () => t,
+      ...over
+    })
+  }
+}
+
+test('a save from away is answered the moment the computer writes, not on the next look', async () => {
+  /*
+   * "Save takes 60-90 s." The write is one message to the unit; the minute was
+   * the looking. The computer announces every write to its store, and the
+   * wait now hears its answer in that announcement. Here the timed look never
+   * comes at all — the clock does not move — so only the announcement can
+   * have ended it.
+   */
+  const b = waitBench()
+  const w = saveWait.startSaveWait(b.opts())
+  let said = null
+  w.done.then((x) => (said = x))
+  for (let i = 0; i < 20; i++) await null
+  assert.equal(said, null)
+  /* Somebody else's answer, and another document: neither is this one. */
+  b.announce('fractal.saveResult.fm3', { id: 'other', ok: true, slot: 3 })
+  b.announce('scene-names-fm3:12', { id: 'r1', ok: true })
+  for (let i = 0; i < 20; i++) await null
+  assert.equal(said, null, 'an answer to another request, or another document, ended this wait')
+  b.announce('fractal.saveResult.fm3', { id: 'r1', ok: true, slot: 12 })
+  for (let i = 0; i < 20; i++) await null
+  assert.deepEqual(said, { ok: true, slot: 12 }, 'the announced answer was not taken')
+  assert.equal(b.heard.size, 0, 'the wait keeps listening after it has its answer')
+})
+
+test('a save from away that nobody picks up says so, then gives up and writes over the request', async () => {
+  const b = waitBench()
+  const states = []
+  const w = saveWait.startSaveWait(b.opts({ onState: (s) => states.push({ ...s }) }))
+  let said = null
+  w.done.then((x) => (said = x))
+  await b.turn(saveWait.SAVE_LATE_MS - 1000)
+  assert.deepEqual(states.filter((s) => s.late), [], 'it spoke up before it was late')
+  await b.turn(2000 + saveWait.SAVE_POLL_MS)
+  assert.ok(states.some((s) => s.late && !s.picked), 'a late save says nothing about it')
+  assert.equal(said, null)
+  await b.turn(saveWait.SAVE_WAIT_MS)
+  assert.ok(said, 'the wait goes on for ever')
+  assert.equal(said.ok, false)
+  assert.equal(said.timedOut, true)
+  assert.equal(said.error, saveWait.SAVE_TIMED_OUT)
+  /* Written over, since a phone cannot delete: an old or a sleeping computer
+     that wakes later passes over a request with no slot in it. */
+  assert.deepEqual(b.written, [{ id: 'r1', cancelled: true }], 'the request is left for a computer to carry out later')
+  assert.ok(!('slot' in saveWait.cancelledSave('r1')))
+})
+
+test('a computer that has picked the save up gets longer, and its answer after a cancel is believed', async () => {
+  const b = waitBench()
+  const w = saveWait.startSaveWait(b.opts())
+  let said = null
+  w.done.then((x) => (said = x))
+  /* In its own document: phones already out there take any answer as final. */
+  b.docs.progress = { id: 'r1', picked: true }
+  b.announce('fractal.saveProgress.fm3', b.docs.progress)
+  await b.turn(saveWait.SAVE_WAIT_MS + 1000)
+  assert.equal(said, null, 'a computer part-way through a save is given up on at the same moment as one that never answered')
+  assert.notEqual(saveWait.saveProgressDoc('fm3'), saveWait.saveResultDoc('fm3'))
+  /* Cancel while it is writing, and it answers in the next moment. */
+  w.cancel()
+  for (let i = 0; i < 20; i++) await null
+  b.docs.result = { id: 'r1', ok: true, slot: 40 }
+  await b.turn(2000)
+  assert.deepEqual(said, { ok: true, slot: 40 }, 'a save that happened was reported as cancelled')
+  assert.equal(b.written.length, 1, 'the cancel was not written over the request')
+})
+
+test('a Cancel the computer may be too late for waits to hear what it did', async () => {
+  /*
+   * The computer checks the request one last time, then stores. A cancel that
+   * lands just after that check cannot stop it, and "Nothing was saved" over a
+   * slot that was just written is the one answer that loses a preset.
+   */
+  const b = waitBench()
+  const w = saveWait.startSaveWait(b.opts())
+  let said = null
+  w.done.then((x) => (said = x))
+  b.docs.progress = { id: 'r1', picked: true }
+  b.announce('fractal.saveProgress.fm3', b.docs.progress)
+  await b.turn(700)
+  w.cancel()
+  for (let i = 0; i < 40; i++) await null
+  await b.turn(2000)
+  for (let i = 0; i < 200; i++) await null
+  assert.equal(said, null, 'a slow answer after a cancel was taken for nothing saved')
+  b.docs.result = { id: 'r1', ok: true, slot: 40 }
+  b.announce('fractal.saveResult.fm3', b.docs.result)
+  for (let i = 0; i < 40; i++) await null
+  assert.deepEqual(said, { ok: true, slot: 40 }, 'a save that happened was reported as cancelled')
+
+  /* Picked up only as the cancel lands, and heard of only by looking. The
+     computer that obeyed says so, and that is what is said. */
+  const b2 = waitBench()
+  const w2 = saveWait.startSaveWait(
+    b2.opts({ cancelRequest: async () => { b2.docs.progress = { id: 'r1', picked: true } } })
+  )
+  let said2 = null
+  w2.done.then((x) => (said2 = x))
+  await b2.turn(500)
+  w2.cancel()
+  for (let i = 0; i < 40; i++) await null
+  assert.equal(said2, null, 'a pickup seen only after the cancel was not looked for')
+  b2.docs.result = { id: 'r1', ok: false, cancelled: true, error: saveWait.SAVE_CANCELLED }
+  await b2.turn(2000)
+  assert.deepEqual(said2, { ok: false, error: saveWait.SAVE_CANCELLED, cancelled: true }, 'the computer’s own cancel reads as a failure')
+
+  /* And one that never answers is not said to have saved nothing. */
+  const b3 = waitBench()
+  const w3 = saveWait.startSaveWait(b3.opts())
+  let said3 = null
+  w3.done.then((x) => (said3 = x))
+  b3.docs.progress = { id: 'r1', picked: true }
+  b3.announce('fractal.saveProgress.fm3', b3.docs.progress)
+  await b3.turn(700)
+  w3.cancel()
+  for (let i = 0; i < 40; i++) await null
+  await b3.turn(saveWait.SAVE_WORKING_MS + 2000)
+  assert.ok(said3, 'a cancel after pickup waits for ever')
+  assert.equal(said3.error, saveWait.SAVE_UNSURE)
+  assert.ok(!said3.cancelled, 'a save that may have happened is shown as a quiet cancel')
+})
+
+test('a computer that took the save and then went quiet is not said to have saved nothing', async () => {
+  const b = waitBench()
+  const w = saveWait.startSaveWait(b.opts())
+  let said = null
+  w.done.then((x) => (said = x))
+  b.docs.progress = { id: 'r1', picked: true }
+  b.announce('fractal.saveProgress.fm3', b.docs.progress)
+  for (let i = 0; i < 20; i++) await null
+  await b.turn(saveWait.SAVE_WAIT_MS + saveWait.SAVE_WORKING_MS + saveWait.SAVE_POLL_MS + 2000)
+  assert.ok(said, 'the wait goes on for ever')
+  assert.equal(said.ok, false)
+  assert.equal(said.timedOut, true)
+  assert.equal(said.error, saveWait.SAVE_UNSURE, 'a computer that had the save is said to have saved nothing')
+  assert.deepEqual(b.written, [{ id: 'r1', cancelled: true }])
+})
+
+test('a cancel that could not reach the computer does not promise nothing was saved', async () => {
+  const failing = { cancelRequest: async () => { throw new Error('relay') } }
+  const b = waitBench()
+  const w = saveWait.startSaveWait(b.opts(failing))
+  let said = null
+  w.done.then((x) => (said = x))
+  await b.turn(saveWait.SAVE_POLL_MS)
+  w.cancel()
+  for (let i = 0; i < 40; i++) await null
+  assert.equal(said.error, saveWait.SAVE_UNSENT)
+  assert.ok(!said.cancelled, 'a request still parked on the computer is shown as a quiet cancel')
+  assert.ok(!/Nothing was saved/i.test(said.error))
+  /* The same when it gives up on its own. */
+  const b2 = waitBench()
+  const w2 = saveWait.startSaveWait(b2.opts(failing))
+  let said2 = null
+  w2.done.then((x) => (said2 = x))
+  await b2.turn(saveWait.SAVE_WAIT_MS + 1000)
+  assert.equal(said2.error, saveWait.SAVE_UNSENT, 'a timeout whose overwrite failed says nothing was saved')
+  assert.equal(said2.timedOut, true)
+  /* And an answer that turns up on the last look is still what happened. */
+  const b3 = waitBench()
+  const w3 = saveWait.startSaveWait(
+    b3.opts({ cancelRequest: async () => { b3.docs.result = { id: 'r1', ok: true, slot: 9 }; throw new Error('relay') } })
+  )
+  let said3 = null
+  w3.done.then((x) => (said3 = x))
+  await b3.turn(saveWait.SAVE_POLL_MS)
+  w3.cancel()
+  for (let i = 0; i < 40; i++) await null
+  assert.deepEqual(said3, { ok: true, slot: 9 })
+})
+
+test('Cancel ends the wait at once and says nothing was saved', async () => {
+  const b = waitBench()
+  const w = saveWait.startSaveWait(b.opts())
+  let said = null
+  w.done.then((x) => (said = x))
+  await b.turn(saveWait.SAVE_POLL_MS * 2)
+  w.cancel()
+  for (let i = 0; i < 40; i++) await null
+  assert.deepEqual(said, { ok: false, error: saveWait.SAVE_CANCELLED, cancelled: true })
+  assert.deepEqual(b.written, [{ id: 'r1', cancelled: true }])
+  /* And a screen going away is not a cancel: nothing is written. */
+  const b2 = waitBench()
+  const w2 = saveWait.startSaveWait(b2.opts())
+  let said2 = null
+  w2.done.then((x) => (said2 = x))
+  w2.stop()
+  for (let i = 0; i < 40; i++) await null
+  assert.equal(said2.stopped, true)
+  assert.deepEqual(b2.written, [])
+})
+
+test('"✓ Saved" goes after its ten seconds even when the timer fires early', async () => {
+  /*
+   * "'✓ Saved' never goes away." The one real way: a browser may fire a timer
+   * a hair early, the word was still due, it was drawn again — and nothing set
+   * another timer, because nothing the bar watches had changed.
+   */
+  const { SAVED_FOR_MS, saidSaved, whenSavedGoes } = await import('../src/lib/savedFor.js')
+  assert.equal(SAVED_FOR_MS, 10000)
+  let t = 100000
+  const timers = []
+  const setTimer = (fn, ms) => (timers.push({ fn, ms }), timers.length)
+  const savedAt = t
+  let gone = 0
+  whenSavedGoes(savedAt, () => gone++, { now: () => t, setTimer, clearTimer: () => {} })
+  assert.equal(timers.length, 1)
+  assert.equal(timers[0].ms, SAVED_FOR_MS)
+  /* It fires 3 ms early. */
+  t += SAVED_FOR_MS - 3
+  timers[0].fn()
+  assert.equal(gone, 0, 'the word went before its time')
+  assert.ok(saidSaved(savedAt, t), 'the word is not still due at that moment')
+  assert.equal(timers.length, 2, 'a timer that fired early set no other — "✓ Saved" stays for ever')
+  assert.equal(timers[1].ms, 3)
+  t += 3
+  timers[1].fn()
+  assert.equal(gone, 1)
+  assert.ok(!saidSaved(savedAt, t))
+  /* A bar that goes away first cancels it. */
+  const cancel = whenSavedGoes(t, () => gone++, { now: () => t, setTimer, clearTimer: () => {} })
+  cancel()
+  t += SAVED_FOR_MS
+  timers[timers.length - 1].fn()
+  assert.equal(gone, 1, 'a cancelled timer still fired')
+})
+
+test('a slot nobody has read is not an empty slot, and a different name takes a second tap', async () => {
+  /*
+   * "Save has no overwrite guard." Worse than reported: every slot counted as
+   * holding something whether or not its name had been read, so an unread one
+   * was "an empty slot" — over the relay, most of them — and saving over the
+   * loaded slot under a new name said nothing. Both wrote on the first tap.
+   */
+  const { overwriteCheck, overwriteAsk } = await import('../src/lib/overwrite.js')
+  const at = (holds, over = {}) => overwriteCheck({ target: 40, loaded: 12, loadedName: 'SONG 12', holds, saveAs: 'My Lead', ...over })
+  assert.equal(at(null).need, 'checking', 'a slot still being asked about saves on one tap')
+  assert.equal(at({ number: 39, name: '', known: true }).need, 'checking', 'the answer about another slot was taken for this one')
+  assert.equal(at({ number: 40, name: '', known: false }).need, 'unknown', 'a slot that could not be read is taken for empty')
+  assert.equal(at({ number: 40, name: '', known: true }).need, 'none', 'an empty slot asks twice')
+  assert.deepEqual(at({ number: 40, name: 'Tool Rhythm', known: true }), { need: 'confirm', name: 'Tool Rhythm' })
+  assert.equal(at({ number: 40, name: 'my lead', known: true }).need, 'none', 'the same preset saved again asks twice')
+  /* The loaded slot holds what it was loaded as, whatever the buffer is called now. */
+  assert.deepEqual(at(null, { target: 12, saveAs: 'Renamed' }), { need: 'confirm', name: 'SONG 12' }, 'a rename writes over the loaded preset on one tap')
+  assert.equal(at(null, { target: 12, saveAs: 'SONG 12' }).need, 'none', 'saving the loaded preset over itself asks twice')
+  assert.equal(at({ number: 12, name: '', known: false }, { target: 12, loadedName: null, saveAs: 'SONG 12' }).need, 'unknown')
+  assert.equal(overwriteAsk({ need: 'confirm', name: 'Tool Rhythm' }, 40), 'Overwrite “Tool Rhythm”?')
+  assert.equal(overwriteAsk({ need: 'unknown', name: '' }, 40), 'Overwrite slot 40?')
+
+  /* And the sheet uses it: the button asks before it writes. */
+  const sheet = readSrc(new URL('../src/components/SaveSheet.jsx', import.meta.url), 'utf8')
+  const foot = sheet.slice(sheet.indexOf('export function SaveFooter'), sheet.indexOf('export default function SaveSheet'))
+  assert.match(foot, /if \(guard\.need !== 'none' && !armed\) \{\s*setArmed\(true\)\s*return/, 'the footer writes on the first tap')
+  assert.match(foot, /onClick=\{press\}/)
+  assert.match(foot, /armed \? overwriteAsk\(guard, targetLabel\)/, 'the second tap does not name what goes')
+  assert.ok(!/occupant \? 'an empty slot'/.test(sheet), 'a slot that exists is still called empty because it exists')
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  assert.match(app, /lookUpName\(saveTarget\)/, 'the slot is never looked up')
+  assert.match(app, /loadedName: loadedAs\.current\?\.number === preset\?\.number \? loadedAs\.current\.name : null/)
+  /* And it is written: at the load, and at each of the three saves. Without
+     these loadedName is always null and the loaded-slot rule never runs. */
+  assert.match(app, /const noteLoadedAs = \(p\) => \{\s*if \(Number\.isInteger\(p\?\.number\) && typeof p\?\.name === 'string'\) loadedAs\.current = \{ number: p\.number, name: p\.name\.trim\(\) \}/, 'the loaded slot’s name is never kept')
+  assert.match(app, /if \(!dirtyRef\.current\) noteLoadedName\(p\)\s*if \(!dirtyRef\.current\) noteLoadedAs\(p\)/, 'a read no longer keeps the loaded slot’s name')
+  assert.match(app, /if \(fresh \|\| !dirtyRef\.current\) \{\s*noteLoadedName\(p\)\s*noteLoadedAs\(p\)/, 'a preset loaded from the list no longer keeps its name')
+  assert.match(app, /loadedAs\.current = \{ number: req\.slot, name: [^\n]*\}\s*presetSaved\(req\.slot/, 'a save the phone asked for leaves the old name')
+  assert.match(app, /loadedAs\.current = \{ number: res\.slot, name: [^\n]*\}\s*presetSaved\(res\.slot/, 'a save from away leaves the old name')
+  assert.match(app, /loadedAs\.current = \{ number, name: [^\n]*\}\s*presetSaved\(number, /, 'a save at the computer leaves the old name')
+  assert.match(app, /<SaveFooter[\s\S]*?check=\{saveCheck\}/, 'the footer is not told what the slot holds')
+  /* "Couldn't read it" is kept apart from empty where names are looked up. */
+  const fx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
+  const look = fx.slice(fx.indexOf('export async function lookUpName'))
+  assert.match(look.slice(0, 600), /return \{ name: known \? name : '', known \}/)
+})
+
+onTheBench('the computer announcing a document is not news about the unit, and reaches whoever listens for it', async () => {
+  const { clock, wire } = windowOnTheBench()
+  const heard = []
+  const off = ds.onConfigDoc((id, data) => heard.push([id, data]))
+  ds.handleEvent({ type: 'config', id: 'fractal.pendingSave.fm3', data: { id: 'p1', slot: 4 }, origin: 'fractal' })
+  await clock.advance(3000)
+  off()
+  ds.handleEvent({ type: 'config', id: 'fractal.pendingSave.fm3', data: { id: 'p2' } })
+  /* Matched on the document, not on who wrote it: origin is not looked at. */
+  assert.deepEqual(heard, [['fractal.pendingSave.fm3', { id: 'p1', slot: 4 }]])
+  assert.deepEqual(wire, [], 'a store write made the Mac window read the unit')
+})
+
+onTheBench('after a save the number and the name go up at once, and the chain is not read again', async () => {
+  /*
+   * The lock after a save was a whole read of the unit to learn two things the
+   * save had just settled. The chain on screen is the chain that was saved; it
+   * belongs to the new slot now, so a screen opened next must not take it for
+   * another preset's and read it.
+   */
+  const { clock, unit, asked } = windowOnTheBench()
+  unit.number = 40
+  unit.presetName = 'My Lead'
+  const done = ds.presetSaved(40, 'My Lead')
+  assert.equal(ds.getSnapshot().preset.number, 40, 'the slot saved to is not what the screen says')
+  assert.equal(ds.getSnapshot().preset.name, 'My Lead')
+  assert.ok(ds.chainIsCurrent(), 'the chain that was saved is taken for another preset’s')
+  await clock.advance(ds.SETTLING_MS * ds.SETTLING_TRIES + 1000)
+  await done
+  assert.equal(asked(CHAIN), 0, 'a save dumped the preset again')
+  assert.equal(asked(SUMMARY), 0)
+  assert.equal(asked(WHICH), 1, 'the quiet check did not ask which preset, or asked more than once')
+  assert.equal(ds.getSnapshot().blocks.length, 2)
+})
+
+onTheBench('a unit still writing to flash is asked again, quietly, and a preset changed meanwhile wins', async () => {
+  const { clock, unit, asked } = windowOnTheBench()
+  let busy = 2
+  unit.which = () => {
+    if (busy-- > 0) throw new Error('no answer')
+    return { number: 40, name: 'My Lead' }
+  }
+  const done = ds.presetSaved(40, 'My Lead')
+  await clock.advance(ds.SETTLING_MS * ds.SETTLING_TRIES + 1000)
+  await done
+  assert.equal(asked(WHICH), 3)
+  assert.equal(ds.getSnapshot().preset.number, 40)
+})
+
+test('the Mac hears a request the moment it is left, looks once at a time, and honours a cancel', () => {
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const watcher = app.slice(app.indexOf('const req = await takeParkedSave()'))
+  const scope = watcher.slice(0, watcher.indexOf('}, [status, remote, preset?.number, carryOutSave])'))
+  assert.match(scope, /onConfigDoc\(\(id\) => \{\s*if \(id === pendingSaveKey\(\)\) look\(\)/, 'the Mac window still waits for its next look')
+  assert.match(scope, /const timer = setInterval\(look, 6000\)/, 'the timed look went, and a lost announcement is a lost save')
+  assert.match(scope, /offAsk\(\)/, 'the announcement listener outlives the window')
+  assert.match(scope, /if \(looking\) \{\s*again = true\s*return/, 'two looks at one request can both carry it out')
+  assert.match(scope, /Date\.now\(\) - \(req\.at \|\| 0\) < SAVE_FRESH_MS/, 'a request nobody is waiting for any more can still be written')
+  assert.ok(saveWait.SAVE_FRESH_MS >= saveWait.SAVE_WAIT_MS + saveWait.SAVE_WORKING_MS, 'the computer drops a request somebody is still waiting on')
+  assert.ok(saveWait.SAVE_FRESH_MS <= 5 * 60 * 1000, 'a save can land long after the phone said nothing was saved')
+  const carry = app.slice(app.indexOf('const carryOutSave'), app.indexOf('At the Mac: anything the phone has asked for'))
+  assert.ok(carry.indexOf('await reportSavePicked(req.id)') > -1, 'the phone is never told the computer has it')
+  assert.ok(carry.indexOf('await reportSavePicked(req.id)') < carry.indexOf('await storePreset(req.slot)'))
+  assert.match(carry, /const still = await takeParkedSave\(\)\s*if \(still && \(still\.id !== req\.id \|\| still\.cancelled\)\)/, 'a cancelled request is still written')
+  /* And says it passed it over: the phone saw "picked up" and is waiting. */
+  const skip = carry.slice(carry.indexOf('const still = await takeParkedSave()'), carry.indexOf('await storePreset(req.slot)'))
+  assert.match(skip, /await reportSave\(\{ id: req\.id, ok: false, cancelled: true[^\n]*\}\)[^\n]*\s*return/, 'a phone whose cancel was obeyed is left waiting')
+  assert.ok(carry.indexOf('const still = await takeParkedSave()') < carry.indexOf('await storePreset(req.slot)'))
+  /* The browser on a phone waits with the phone app's rule, and can stop. */
+  assert.match(app, /const wait = startSaveWait\(\{/)
+  assert.match(app, /cancelRequest: async \(\) => \{\s*if \(!\(await cancelParkedSave\(queuedSave\.id\)\)\) throw/, 'a cancel that never landed says nothing was saved')
+  assert.match(app, /listen: onConfigDoc/)
+  assert.match(app, /onState: \(\{ late, picked \}\) => live && setSaveLate\(late && !picked\)/, 'the late line and Cancel stay up after the computer has the save')
+  assert.match(app, /const parked = await parkSave\([\s\S]{0,300}?if \(!parked\) throw/, 'a request that never reached the computer is waited on for two minutes')
+  assert.match(app, /setSaveError\(said\.error\)\s*setError\(said\.error\)/, 'a save that failed from away says so only inside a closed sheet')
+  assert.match(app, /\{queuedSave && saveLate \? <SaveLate onCancel=\{cancelQueuedSave\} \/> : null\}/, 'a late save has nothing to say and nothing to press')
+  assert.match(app, /onCancel=\{cancelQueuedSave\}/)
+  const fx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
+  assert.match(fx, /export const cancelParkedSave = \(id\) => parkSave\(cancelledSave\(id\)\)/, 'a cancel from a phone is a DELETE, which never arrives')
 })
 
 await settle()

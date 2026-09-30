@@ -6735,7 +6735,7 @@ export function run(test) {
       slot: 48, id: 'p2', sleep: tick, now, pollMs: 10, waitMs: 50
     })
     assert.equal(late.ok, false)
-    assert.match(late.error, /has not picked this up/, 'a computer that never answered is not said to have')
+    assert.match(late.error, /didn’t answer, so nothing was saved/, 'a computer that never answered is not said to have')
 
     /* The computer refuses, in its own words. */
     const refused = await askComputerToSave({
@@ -6747,7 +6747,8 @@ export function run(test) {
     /* Nothing loaded, nothing parked. */
     const none = await askComputerToSave({ park: async () => { throw new Error('should not park') }, readResult: async () => null, slot: null })
     assert.equal(none.ok, false)
-    assert.equal(SAVE_WAIT_MS, 3 * 60 * 1000)
+    /* Two minutes, then it says so — the same wait as the browser's. */
+    assert.equal(SAVE_WAIT_MS, 2 * 60 * 1000)
 
     /* And the button: Save, then Confirm changes with the warning, then the ask. */
     const saver = read('mobile/src/components/SaveToSlot.js').replace(/\s+/g, ' ')
@@ -6824,7 +6825,7 @@ export function run(test) {
       /<SaveButton[^/]*waiting=\{pending\}/,
       'the rename screen never lights its Save button'
     )
-    assert.match(saver, /const res = await askComputerToSave\(\{ park: \(req\) => parkSave\(slug, req\), readResult: \(\) => readSaveResult\(slug\), slot: preset\?\.number, name: preset\?\.name \|\| ''/, 'the button does not ask the computer, or sends no name')
+    assert.match(saver, /const run = startComputerSave\(\{ park: \(req\) => parkSave\(slug, req\), readResult: \(\) => readSaveResult\(slug\), slot: preset\?\.number, name: preset\?\.name \|\| ''/, 'the button does not ask the computer, or sends no name')
     /* On both screens where something gets changed. */
     for (const screen of ['mobile/src/screens/Edit.js', 'mobile/src/screens/Settings.js']) {
       const flat = read(screen).replace(/\s+/g, ' ')
@@ -6835,6 +6836,87 @@ export function run(test) {
     const dev = read('mobile/src/lib/device.js')
     assert.match(dev, /encodeURIComponent\(`fractal\.pendingSave\.\$\{slug\}`\)/)
     assert.match(dev, /encodeURIComponent\(`fractal\.saveResult\.\$\{slug\}`\)/)
+  })
+
+  test('the phone hears the computer’s answer as it is written, and a save can be cancelled', async () => {
+    /*
+     * "Save takes 60-90 s." The computer announces every write to its store,
+     * and the phone threw the announcement away; its answer waited for the
+     * next three-second look. Now the store's announcement reaches whoever is
+     * waiting for that document, and costs the unit nothing.
+     */
+    const { rig, asked, wire } = await rigOnTheBench()
+    const heard = []
+    const off = rig.onConfigDoc((id, data) => heard.push([id, data]))
+    rig.handleEvent({ type: 'config', id: 'fractal.saveResult.fm3', data: { id: 'p1', ok: true, slot: 12 }, origin: 'fractal' })
+    off()
+    rig.handleEvent({ type: 'config', id: 'fractal.saveResult.fm3', data: { id: 'p2' } })
+    assert.deepEqual(heard, [['fractal.saveResult.fm3', { id: 'p1', ok: true, slot: 12 }]], 'the announcement never reached the save that was waiting on it')
+    assert.equal(wire.length, 0, 'a store write made the phone read the unit')
+    assert.equal(asked('GET /preset/blocks'), 0)
+
+    /* Cancelling writes over the request — a phone's DELETE never arrives. */
+    const { startComputerSave } = await import('../mobile/src/lib/saveViaComputer.js')
+    const parked = []
+    const clock = 1000
+    const run = startComputerSave({
+      park: async (req) => parked.push(req),
+      readResult: async () => null,
+      slug: 'fm3',
+      slot: 48,
+      name: 'Carol Ann OD-2',
+      id: 'p9',
+      /* A look that never comes on its own: only the Cancel can end this. */
+      sleep: () => new Promise(() => {}),
+      now: () => clock,
+      pollMs: 10,
+      waitMs: 100000
+    })
+    await new Promise((go) => setImmediate(go))
+    run.cancel()
+    const res = await run.done
+    assert.equal(res.ok, false)
+    assert.equal(res.cancelled, true)
+    assert.match(res.error, /Nothing was saved/)
+    assert.deepEqual(parked.at(-1), { id: 'p9', cancelled: true }, 'a cancelled save is still waiting at the computer')
+    assert.equal(parked[0].slot, 48)
+
+    /* The screen: Saving… on its own, words and Cancel only once it is late. */
+    const saver = read('mobile/src/components/SaveToSlot.js')
+    const flat = saver.replace(/\s+/g, ' ')
+    assert.ok(!/setSaid\(\{ tone: 'hint', text: 'Asked the computer/.test(saver), 'every save opens with a sentence about the computer again')
+    assert.match(flat, /listen: onConfigDoc/, 'the phone still waits for its next look')
+    assert.match(flat, /onState: \(now\) => setLate\(now\.late && !now\.picked\)/)
+    assert.match(flat, /\{s\.saving && s\.late \? \( <> <Note tone="hint">\{SAVE_LATE_WORDS\}<\/Note> <Press label="Cancel" height=\{40\} onPress=\{s\.cancel\} \/>/, 'a late save has nothing to say and nothing to press')
+    assert.match(flat, /cancel: \(\) => job\.current\?\.cancel\(\)/)
+  })
+
+  test('"Saved to slot 12." goes after ten seconds, and a problem stays', () => {
+    /* It stayed until tapped, so a save from an hour ago still said so. */
+    const saver = read('mobile/src/components/SaveToSlot.js')
+    const flat = saver.replace(/\s+/g, ' ')
+    assert.match(saver, /export const SAID_FOR_MS = 10000/)
+    assert.match(
+      flat,
+      /useEffect\(\(\) => \{ if \(!said\?\.done\) return undefined const timer = setTimeout\(\(\) => setSaid\(\(now\) => \(now === said \? null : now\)\), SAID_FOR_MS\) return \(\) => clearTimeout\(timer\) \}, \[said\]\)/,
+      '"Saved to slot N." never goes away on its own'
+    )
+    assert.match(flat, /\? \{ tone: 'hint', text: `Saved to slot \$\{res\.slot\}\.`, done: true \}/, 'the saved note is not marked to go')
+    assert.match(flat, /: \{ tone: res\.cancelled \? 'hint' : 'warn', text: res\.error \}/, 'a failure is marked to go on its own')
+    assert.match(flat, /text: `Saved to slot \$\{slot\} on this phone\.`, done: true/)
+  })
+
+  test('a save from the bar on Play says when it runs late, and can be cancelled there', () => {
+    /*
+     * The late line and Cancel lived only under Edit's and Settings' buttons,
+     * and the bar's Save on Play went quiet for up to three minutes: the pill
+     * vanished while it saved, and nothing said a word.
+     */
+    const bar = read('mobile/src/components/TopBar.js').replace(/\s+/g, ' ')
+    assert.match(bar, /import \{ SAVE_LATE_WORDS \} from '\.\.\/lib\/save-wait'/)
+    assert.match(bar, /const canSave = saveHere && \(saveTo\.saving \|\|/, 'the pill goes while it saves, and with it any sign of the save')
+    assert.match(bar, /\{saveHere && saveTo\.saving && saveTo\.late \? <Late onCancel=\{saveTo\.cancel\} \/> : null\}/, 'a late save on Play has nothing to say and nothing to press')
+    assert.match(bar, /function Late\(\{ onCancel \}\)[\s\S]*?\{SAVE_LATE_WORDS\}[\s\S]*?onCancel\(\)/)
   })
 
   test('the log says when the phone went to sleep and came back', () => {

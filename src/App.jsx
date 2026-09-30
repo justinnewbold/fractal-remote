@@ -9,8 +9,10 @@ import { installCrashCapture, logDebug, getDebugLog } from './lib/debugLog'
 import Scenes from './components/Scenes'
 import { CabPicker, Backup } from './components/Hardware'
 import Gig from './components/Gig'
-import SaveBar from './components/SaveBar'
+import SaveBar, { SaveLate } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
+import { overwriteCheck } from './lib/overwrite'
+import { SAVE_CANCELLED, SAVE_FRESH_MS, startSaveWait } from '../shared/save-wait.mjs'
 import { getMode } from './lib/theme'
 import { Modifiers, SceneMatrix } from './components/Modifiers'
 import Feedback from './components/Feedback'
@@ -52,13 +54,15 @@ import {
   SETTLING_TRIES,
   SETTLING_MS,
   writeBypass,
-  writeTuner
+  writeTuner,
+  onConfigDoc,
+  presetSaved
 } from './lib/deviceState'
 import ParamSearch from './components/ParamSearch'
 import UpdateNotice from './components/UpdateNotice'
 import Updates, { UpdateReadyNotice } from './components/Updates'
 import RenamePreset from './components/RenamePreset'
-import { countFromRefusal, slotCount, slotOutside, slotsForChat, timeLeft } from './lib/slots'
+import { countFromRefusal, slotCount, slotOutside, slotProblem, slotsForChat, timeLeft } from './lib/slots'
 import { checkRevert, noteEdit, revertSaid, revertTook, stuckLines } from './lib/revertCheck'
 import { inDesktopApp } from './lib/desktop'
 import { createNameScan } from './lib/nameScan'
@@ -109,8 +113,15 @@ import {
   parkSave,
   takeParkedSave,
   clearParkedSave,
+  cancelParkedSave,
   reportSave,
   readSaveResult,
+  reportSavePicked,
+  readSaveProgress,
+  pendingSaveKey,
+  saveResultKey,
+  saveProgressKey,
+  lookUpName,
   forgetPresetName,
   forgetAllPresetNames,
   notePresetName,
@@ -723,6 +734,19 @@ export default function App() {
     unitName.current = now
     if (now === null || was === null || now === was) return
     setSaveName((field) => (field.trim() === was ? now : field))
+  }
+  /*
+   * What the loaded slot was called when it was loaded.
+   *
+   * The buffer came out of that slot, so until a save lands this is what the
+   * slot still holds — whatever the buffer has been renamed to since. The
+   * save sheet compares against it: saving the loaded slot under a new name
+   * writes over the preset that was there, and used to do it on one tap with
+   * nothing said. Only taken from a buffer nobody has changed yet.
+   */
+  const loadedAs = useRef(null)
+  const noteLoadedAs = (p) => {
+    if (Number.isInteger(p?.number) && typeof p?.name === 'string') loadedAs.current = { number: p.number, name: p.name.trim() }
   }
   // A failed save is shown on the save bar as well as in the banner — the bar is
   // where the tap happened, and on a phone the banner is off-screen above it.
@@ -1472,6 +1496,7 @@ export default function App() {
        * still reading 098 TIGHT MODERN, for days.
        */
       if (!dirtyRef.current) noteLoadedName(p)
+      if (!dirtyRef.current) noteLoadedAs(p)
       const list = Array.isArray(b) ? b : []
       setBlocks(list)
       /* So a screen that appears next does not read the same chain again. */
@@ -2161,6 +2186,13 @@ export default function App() {
       setBusy(true)
       try {
         /*
+         * Picked up, said at once and in its own document: the phone waiting
+         * on this gives a computer that has it longer than one that has not
+         * answered at all. Not in the answer — phones already out there take
+         * any answer as the last word.
+         */
+        await reportSavePicked(req.id)
+        /*
          * A slot this unit does not have is refused here, not by the unit.
          *
          * A save is parked on one machine and carried out on another, and the
@@ -2175,6 +2207,18 @@ export default function App() {
           throw new Error(
             `Slot ${req.slot} isn't on this unit — it holds ${has}, numbered 0 to ${has - 1}. Nothing was saved.`
           )
+        }
+        /*
+         * Still wanted? A phone that gave up or pressed Cancel wrote over the
+         * request, since it cannot delete it. Asked once more here, just
+         * before the one step that cannot be taken back.
+         */
+        const still = await takeParkedSave()
+        if (still && (still.id !== req.id || still.cancelled)) {
+          record('save', `The phone cancelled its save to slot ${req.slot}; nothing was written`)
+          /* Said, too: the phone saw "picked up" and is waiting to hear. */
+          await reportSave({ id: req.id, ok: false, cancelled: true, slot: req.slot, error: SAVE_CANCELLED }).catch(() => {})
+          return
         }
         const name = (req.name || '').trim()
         if (name && name !== preset?.name?.trim()) await setPresetName(name)
@@ -2191,8 +2235,10 @@ export default function App() {
         setDirty(false)
         setSavedAt(Date.now())
         record('save', `Saved "${name || preset?.name}" to slot ${req.slot}, asked for from the phone`)
-        // And here, where the Mac carries out the phone's save.
-        await read({ settling: true })
+        // And here, where the Mac carries out the phone's save: the number
+        // and the name, quietly, and not the whole unit again. See presetSaved.
+        loadedAs.current = { number: req.slot, name: (name || preset?.name || '').trim() }
+        presetSaved(req.slot, name || preset?.name)
       } catch (err) {
         /*
          * The unit's own complaint often states its size — "must be integer
@@ -2235,7 +2281,7 @@ export default function App() {
         setBusy(false)
       }
     },
-    [preset?.name, sceneNames, read, record, device?.capabilities, markHandled]
+    [preset?.name, sceneNames, record, device?.capabilities, markHandled]
   )
 
   /*
@@ -2269,11 +2315,13 @@ export default function App() {
   useEffect(() => {
     if (status !== 'live' || remote || isDemo()) return
     let stop = false
-    const look = async () => {
+    const lookOnce = async () => {
       const req = await takeParkedSave()
+      /* A cancelled request has no slot, so it is passed over here too. */
       if (stop || !req?.id || !Number.isInteger(req.slot)) return
       if (handledSaves.current.includes(req.id)) return
-      const fresh = Date.now() - (req.at || 0) < 15 * 60 * 1000
+      /* Fresh for as long as anybody could still be waiting on it; see SAVE_FRESH_MS. */
+      const fresh = Date.now() - (req.at || 0) < SAVE_FRESH_MS
 
       /*
        * Ask the unit what is loaded. Do not ask the screen.
@@ -2334,34 +2382,98 @@ export default function App() {
         ok: false,
         slot: req.slot,
         error: sameBuffer
-          ? 'The computer did not pick this up within fifteen minutes, so it was dropped rather than written to a preset that has moved on. Nothing was saved — ask again with the computer awake.'
+          ? 'The computer did not pick this up in time, so it was dropped rather than written to a preset that may have moved on. Nothing was saved — ask again with Fractal Remote open on the computer.'
           : `The computer had moved to slot ${loaded ?? 'another preset'} by the time it saw this, so the sound you edited was no longer loaded. Nothing was saved.`
       }).catch(() => {})
     }
+    /*
+     * One look at a time. The announcement and the timed look can land
+     * together, and two looks at one request both found it before either had
+     * marked it — the same save, written twice.
+     */
+    let looking = null
+    let again = false
+    const look = async () => {
+      if (looking) {
+        again = true
+        return
+      }
+      looking = lookOnce().catch(() => {})
+      await looking
+      looking = null
+      if (again && !stop) {
+        again = false
+        look()
+      }
+    }
+    /*
+     * The moment it is left, not on the next look.
+     *
+     * "Save takes 60-90 s." The write is one message to the unit; the wait
+     * was this window only looking every six seconds, which macOS stretches
+     * to about once a minute when the window is behind others. The computer
+     * announces every write to its store the moment it lands, on the stream
+     * this window already listens to, and a hidden window still hears it.
+     * The timed look stays, for an announcement lost on the way.
+     */
+    const offAsk = onConfigDoc((id) => {
+      if (id === pendingSaveKey()) look()
+    })
     look()
     const timer = setInterval(look, 6000)
     return () => {
       stop = true
+      offAsk()
       clearInterval(timer)
     }
   }, [status, remote, preset?.number, carryOutSave])
 
-  /* On the phone: what became of it. */
+  /*
+   * On the phone: what became of it.
+   *
+   * Heard the moment the computer writes its answer, rather than on the next
+   * three-second look; the look stays as the fallback. And no longer for
+   * ever: the browser waited on a computer that was off until the page was
+   * closed, with Saving… on the button the whole time and nothing to press.
+   * Now it says so after a while, can be cancelled, and gives up after two
+   * minutes — writing over the request as it does, so a computer woken later
+   * does not save what this said was not saved. The waiting is the phone
+   * app's too; see shared/save-wait.mjs.
+   *
+   * Taken once. Two ticks could be in flight over a slow relay, and both came
+   * back with the same answer before the state change had torn the interval
+   * down — so "The Mac saved it to slot 499" landed in the conversation
+   * twice. The wait answers once.
+   */
+  const [saveLate, setSaveLate] = useState(false)
+  const queuedWait = useRef(null)
   useEffect(() => {
-    if (!queuedSave) return
-    let stop = false
-    const timer = setInterval(async () => {
-      const res = await readSaveResult()
-      if (stop || res?.id !== queuedSave.id) return
-      /*
-       * Taken once. Two ticks can be in flight over a slow relay, and both
-       * came back with the same answer before the state change below had
-       * torn this interval down — so "The Mac saved it to slot 499" landed
-       * in the conversation twice.
-       */
-      stop = true
+    if (!queuedSave) return undefined
+    let live = true
+    setSaveLate(false)
+    const wait = startSaveWait({
+      id: queuedSave.id,
+      resultDoc: saveResultKey(),
+      progressDoc: saveProgressKey(),
+      readResult: readSaveResult,
+      readProgress: readSaveProgress,
+      /* A cancel that did not land must not read as "nothing was saved". */
+      cancelRequest: async () => {
+        if (!(await cancelParkedSave(queuedSave.id))) throw new Error('not written')
+      },
+      listen: onConfigDoc,
+      onState: ({ late, picked }) => live && setSaveLate(late && !picked),
+      startedAt: queuedSave.at
+    })
+    queuedWait.current = wait
+    wait.done.then((said) => {
+      if (!live || said.stopped) return
+      live = false
+      queuedWait.current = null
       setQueuedSave(null)
-      if (res.ok) {
+      setSaveLate(false)
+      if (said.ok) {
+        const res = { ...said, slot: Number.isInteger(said.slot) ? said.slot : queuedSave.slot }
         setDirty(false)
         setSavedAt(Date.now())
         /*
@@ -2372,17 +2484,26 @@ export default function App() {
         keepSavedScenes(res.slot, queuedSave.scenes)
         setSlots(cachedPresetNames())
         record('save', `The computer saved it to slot ${res.slot}`)
-        // The unit is still writing that preset to flash. See SETTLING_TRIES.
-        read({ settling: true })
+        /* The number and the name, quietly: the chain here is the one that
+           was saved, and a full read locked the page to learn nothing new. */
+        loadedAs.current = { number: res.slot, name: (queuedSave.name || '').trim() }
+        presetSaved(res.slot, queuedSave.name)
+      } else if (said.cancelled) {
+        record('save', `Cancelled the save to slot ${queuedSave.slot}; nothing was saved`)
       } else {
-        setSaveError(res.error || 'The computer could not save it.')
+        /* On the bar's page as well as in the sheet: the sheet closed when
+           the save was asked for, and a failure only inside it said nothing. */
+        setSaveError(said.error)
+        setError(said.error)
       }
-    }, 3000)
+    })
     return () => {
-      stop = true
-      clearInterval(timer)
+      live = false
+      queuedWait.current = null
+      wait.stop()
     }
-  }, [queuedSave, read, record])
+  }, [queuedSave, record])
+  const cancelQueuedSave = useCallback(() => queuedWait.current?.cancel(), [])
 
   /*
    * The unit, once it is known which end this is.
@@ -2677,13 +2798,15 @@ export default function App() {
        */
       if (remoteActive()) {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-        await parkSave({
+        const parked = await parkSave({
           id,
           slot: number,
           name: saveName.trim(),
           fromSlot: preset?.number ?? null,
           fromName: preset?.name ?? null
         })
+        /* A request that never reached the computer is not one to wait on. */
+        if (!parked) throw new Error('Couldn’t reach the computer to ask it to save. Nothing was saved.')
         /*
          * What the slot will be called, and what its scenes are, carried with
          * the request rather than read back later: an AM4 will not dump a
@@ -2692,6 +2815,7 @@ export default function App() {
          */
         setQueuedSave({
           id,
+          at: Date.now(),
           slot: number,
           name: saveName.trim().slice(0, 31) || preset?.name || '',
           scenes: Array.isArray(sceneNames) ? [...sceneNames] : []
@@ -2727,8 +2851,14 @@ export default function App() {
       record('save', `Saved "${name || preset?.name}" to slot ${number}`)
       setDirty(false)
       setSavedAt(Date.now())
-      // Same here: the write has been taken, and the unit is still doing it.
-      await read({ settling: true })
+      /*
+       * And not a whole read of the unit after it. That read was most of the
+       * wait and all of the lock — "Save takes 60-90 s and locks the page" —
+       * to learn which slot the unit is on and what it is called, which the
+       * save had just settled. See presetSaved.
+       */
+      loadedAs.current = { number, name: (name || preset?.name || '').trim() }
+      presetSaved(number, name || preset?.name)
     } catch (err) {
       // Shown on the save bar itself as well as the banner. A refusal that
       // appears only at the top of a page you aren't looking at reads as a
@@ -2750,7 +2880,10 @@ export default function App() {
     const { preset: p, blocks: list } = deviceSnapshot()
     if (p) {
       followUnitName(p)
-      if (fresh || !dirtyRef.current) noteLoadedName(p)
+      if (fresh || !dirtyRef.current) {
+        noteLoadedName(p)
+        noteLoadedAs(p)
+      }
     }
     setSelectedBlock((current) => {
       if (current && list.some((x) => x.effectId === current)) return current
@@ -3049,6 +3182,51 @@ export default function App() {
    * behind as they are learned.
    */
   const knownSlots = slots.length ? slots : cachedPresetNames()
+  /*
+   * What the save is about to write over, asked for when it is not known.
+   *
+   * The slot a save targets, as the sheet works it out, and what that slot
+   * holds: from the names already learned when it is there, from the unit
+   * when it is not — and "couldn't read it" kept apart from "empty", which
+   * the sheet used to run together. Only while the sheet is open, and a
+   * moment after the slot stops changing, so typing 1-2-3 is one question.
+   */
+  const saveTarget = slotProblem(slot, device?.capabilities?.presets?.count)
+    ? NaN
+    : slot === ''
+      ? preset?.number
+      : Number(slot)
+  const [slotHolds, setSlotHolds] = useState(null)
+  useEffect(() => {
+    /* Forgotten when the sheet closes: a save may have changed it since. */
+    if (sheet !== 'save') {
+      setSlotHolds(null)
+      return undefined
+    }
+    if (!Number.isInteger(saveTarget)) return undefined
+    let live = true
+    const timer = setTimeout(
+      () => {
+        lookUpName(saveTarget).then((r) => {
+          if (live) setSlotHolds({ number: saveTarget, ...r })
+        })
+      },
+      /* A name already learned costs nothing to look at. */
+      knowsName(saveTarget) ? 0 : 350
+    )
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [sheet, saveTarget])
+  const saveCheck = overwriteCheck({
+    target: saveTarget,
+    loaded: preset?.number,
+    loadedName: loadedAs.current?.number === preset?.number ? loadedAs.current.name : null,
+    holds: slotHolds,
+    saveAs: saveName.trim().slice(0, 31) || preset?.name || ''
+  })
+
   const allSlots = useMemo(() => {
     const count = device?.capabilities?.presets?.count
     if (!count) return knownSlots
@@ -3456,6 +3634,8 @@ export default function App() {
           />
         ) : null}
       </TopBar>
+
+      {queuedSave && saveLate ? <SaveLate onCancel={cancelQueuedSave} /> : null}
 
       {/* First on the page, under the bar: a stale tab makes every other thing
           on this screen a possible lie about what the code does. */}
@@ -4183,12 +4363,14 @@ export default function App() {
               await save()
               setSheet(null)
             }}
+            onCancel={cancelQueuedSave}
             busy={busy}
             saving={saving}
             remote={remote}
             queued={queuedSave}
             slots={allSlots}
             deviceSlots={device?.capabilities?.presets?.count}
+            check={saveCheck}
           />
         }
       >
@@ -4210,6 +4392,8 @@ export default function App() {
           dirty={dirty}
           remote={remote}
           queued={queuedSave}
+          late={saveLate}
+          check={saveCheck}
           error={saveError}
           onDismissError={() => setSaveError(null)}
           slots={allSlots}

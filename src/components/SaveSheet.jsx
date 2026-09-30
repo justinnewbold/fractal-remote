@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { PresetList } from './Console'
 import { slotProblem } from '../lib/slots'
+import { overwriteAsk } from '../lib/overwrite'
 
 /**
  * Where a preset goes, chosen rather than typed.
@@ -24,31 +26,76 @@ import { slotProblem } from '../lib/slots'
  * up. The footer does not scroll, so the button is under your thumb wherever
  * the list is, and it names the slot you just picked.
  */
-export function SaveFooter({ preset, slot, onSave, busy, saving, remote, queued, slots, deviceSlots }) {
+/**
+ * What the slot holds, in the words the footer and the sheet both use.
+ *
+ * Unknown is not empty. A slot whose name was never read used to be called
+ * "an empty slot", which over the relay was most of them — and the one word
+ * that makes an overwrite a decision was a guess.
+ */
+export const holdsWords = (check, target) =>
+  check.need === 'checking'
+    ? `whatever is in slot ${target} (checking…)`
+    : check.need === 'unknown'
+      ? `whatever is in slot ${target} — it couldn’t be read`
+      : check.name || 'an empty slot'
+
+export function SaveFooter({ preset, slot, onSave, onCancel, busy, saving, remote, queued, slots, deviceSlots, check }) {
   const problem = slotProblem(slot, deviceSlots)
   const target = problem ? NaN : slot === '' ? preset?.number : Number(slot)
   const targetLabel = Number.isInteger(target) ? target : '--'
   const elsewhere = Number.isInteger(target) && target !== preset?.number
-  const occupant = slots?.find((s) => s.number === target)
-  const holds = occupant?.name?.trim()
+  const guard = check || { need: 'none', name: '' }
+  /* Said whenever it is somebody else's slot, and on the loaded slot when the
+     save would put another name over the one it was loaded under. */
+  const tell = Number.isInteger(target) && (elsewhere || guard.need !== 'none')
+
+  /*
+   * THE SECOND TAP.
+   *
+   * Asked for whenever the slot holds a preset under another name, or holds
+   * something that could not be read. The first tap turns the button into the
+   * question, naming what goes; the second answers it. Picking another slot
+   * or typing another name puts the question away, because it was about the
+   * last one.
+   */
+  const [armed, setArmed] = useState(false)
+  useEffect(() => {
+    setArmed(false)
+  }, [target, guard.need, guard.name])
+  const press = () => {
+    if (guard.need !== 'none' && !armed) {
+      setArmed(true)
+      return
+    }
+    setArmed(false)
+    onSave()
+  }
 
   return (
     <div className="save-foot">
       {queued ? (
-        <p className="hint">
-          Slot {queued.slot} is queued &mdash; the computer writes it and this says so the moment it lands.
-        </p>
-      ) : elsewhere ? (
-        <p className="hint">
-          Replaces <strong>{holds || (occupant ? 'an empty slot' : 'what is in slot ' + targetLabel)}</strong>.
+        <div className="save-queued">
+          <p className="hint">
+            Slot {queued.slot} is queued &mdash; the computer writes it and this says so the moment it lands.
+          </p>
+          {onCancel ? (
+            <button className="chip" onClick={onCancel}>
+              Cancel
+            </button>
+          ) : null}
+        </div>
+      ) : tell ? (
+        <p className={armed ? 'hint save-target-warn' : 'hint'}>
+          Replaces <strong>{holdsWords(guard, targetLabel)}</strong>.
         </p>
       ) : null}
       {/* The same words from a phone as from the Mac. "Ask the Mac to save to
           slot 478" said who holds the pen, which is this app's business and
           not the player's; the queued line above says so once it is in
           flight. */}
-      <button className="primary save-confirm" onClick={onSave} disabled={busy || !!queued || !!problem}>
-        {saving ? 'Saving…' : `Save to slot ${targetLabel}`}
+      <button className="primary save-confirm" onClick={press} disabled={busy || !!queued || !!problem}>
+        {saving ? 'Saving…' : armed ? overwriteAsk(guard, targetLabel) : `Save to slot ${targetLabel}`}
       </button>
     </div>
   )
@@ -77,20 +124,31 @@ export default function SaveSheet({
   scanning,
   progress,
   onScan,
-  onStopScan
+  onStopScan,
+  check,
+  late
 }) {
   const problem = slotProblem(slot, deviceSlots)
   const target = problem ? NaN : slot === '' ? preset?.number : Number(slot)
   const targetLabel = Number.isInteger(target) ? target : '--'
   const elsewhere = Number.isInteger(target) && target !== preset?.number
-  const occupant = slots?.find((s) => s.number === target)
+  const guard = check || { need: 'none', name: '' }
 
   return (
     <div className="save-sheet">
       {queued ? (
         <p className="hint">
-          Slot {queued.slot} is queued. The page at your computer writes it &mdash; open there if it
-          isn&rsquo;t, and this says so the moment it lands.
+          {late ? (
+            <>
+              Slot {queued.slot} isn&rsquo;t saved yet. The computer hasn&rsquo;t answered &mdash; check
+              Fractal Remote is open on it, or cancel.
+            </>
+          ) : (
+            <>
+              Slot {queued.slot} is queued. The page at your computer writes it &mdash; open there if it
+              isn&rsquo;t, and this says so the moment it lands.
+            </>
+          )}
         </p>
       ) : null}
 
@@ -140,11 +198,19 @@ export default function SaveSheet({
         not the slot already loaded — saying "this will replace the preset you
         are editing" about the preset you are editing is noise.
       */}
-      {elsewhere ? (
+      {Number.isInteger(target) && (elsewhere || guard.need !== 'none') ? (
         <p className="hint save-target-warn">
-          Slot {targetLabel} currently holds{' '}
-          <strong>{occupant?.name?.trim() || (occupant ? 'an empty slot' : 'something not yet read')}</strong>. Saving
-          replaces it.
+          {guard.need === 'checking' ? (
+            <>Checking what is in slot {targetLabel}&hellip;</>
+          ) : guard.need === 'unknown' ? (
+            <>
+              Couldn&rsquo;t read what is in slot {targetLabel}. Saving replaces <strong>whatever is there</strong>.
+            </>
+          ) : (
+            <>
+              Slot {targetLabel} currently holds <strong>{holdsWords(guard, targetLabel)}</strong>. Saving replaces it.
+            </>
+          )}
         </p>
       ) : null}
 
