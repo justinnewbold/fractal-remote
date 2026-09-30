@@ -514,7 +514,7 @@ test('a step says what it is doing in words both apps will use', () => {
   const [, , param] = steps.stepsFor(
     oneBlock({ channel: 2, params: [{ id: 1, name: 'Gain', to: 6, unit: 'dB' }] })
   )
-  assert.equal(param.label, 'Amp 1 · Gain → 6dB')
+  assert.equal(param.label, 'Amp 1 · Gain → 6 dB', 'a number and its unit run together')
 })
 
 test('rubbish in the plan is skipped rather than written somewhere', () => {
@@ -1095,7 +1095,10 @@ test('the picker keeps what the native menu did for free', () => {
   for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End']) {
     assert.ok(src.includes(`e.key === '${key}'`), `${key} does nothing in the model list`)
   }
-  assert.match(src, /pickAt\(\(i - 1 \+ models\.length\) % models\.length\)/, 'arrowing up off the top does not wrap')
+  // Over the rows the search left, not the whole list behind them: wrapping
+  // round three hundred names while five are on show lands on one you cannot see.
+  assert.match(src, /pickAt\(\(i - 1 \+ listed\.length\) % listed\.length\)/, 'arrowing up off the top does not wrap')
+  assert.match(src, /pickAt\(listed\.length - 1\)/, 'End goes to the end of the whole list, past what the search shows')
 
   // Announced as what it is, so it is a listbox to a screen reader too.
   assert.match(src, /aria-haspopup="listbox"/)
@@ -1121,6 +1124,97 @@ test('the picker keeps what the native menu did for free', () => {
    * inside the clip does.
    */
   assert.ok(!/position: absolute/.test(rule('.type-list {')), 'the list floats again, so the sheet can clip it')
+})
+
+test('the model picker has a search box above its list', async () => {
+  /*
+   * "Model pickers have no search." Three hundred and thirty-one amps is a
+   * list you scroll for a minute to find the one Plexi you meant, and the
+   * phone has had a find box over its list all along.
+   */
+  const src = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+
+  // The box, and above the list rather than under three hundred rows.
+  const box = src.indexOf('className="type-search"')
+  assert.ok(box > 0, 'the model list has no search box')
+  assert.ok(box < src.indexOf('role="listbox" aria-label="Model"'), 'the search box is under the list')
+  assert.match(src, /aria-label="Search models"/)
+
+  // The rows drawn are the ones the search left.
+  assert.match(src, /\{listed\.map\(\(m, i\) => \(/, 'the list still draws every model whatever is typed')
+  assert.ok(!/\{models\.map\(\(m, i\) => \(/.test(src), 'the list still draws every model whatever is typed')
+  /*
+   * Word by word, on the name or the amp it is based on, through the same
+   * match as the gear sheet in Settings so the two cannot disagree. `gear` is
+   * the lineage alone: the maker would put all forty Mesas under "mesa".
+   */
+  assert.match(src, /import \{ searchGear \} from '\.\.\/lib\/gearCatalog'/)
+  assert.match(src, /searchGear\(models\.map\(\(m\) => \(\{ \.\.\.m, gear: m\.basedOn \}\)\), hunt\)/)
+
+  const { GEAR_GROUPS, searchGear } = await import('../src/lib/gearCatalog.js')
+  const amps = GEAR_GROUPS.find((g) => g.key === 'amp').entries.map((e, value) => ({
+    value,
+    name: e.name,
+    basedOn: e.basedOn,
+    manufacturer: e.manufacturer
+  }))
+  const search = (q) => searchGear(amps.map((m) => ({ ...m, gear: m.basedOn })), q)
+  const plexi = search('marshall plexi')
+  assert.ok(plexi.length, 'the real amp’s name finds nothing')
+  assert.ok(plexi.every((m) => /marshall/i.test(`${m.name} ${m.basedOn}`)))
+  assert.equal(search('plexi marshall').length, plexi.length, 'the order the words were typed in matters')
+  assert.ok(search('brit 800').length, 'the model’s own name finds nothing')
+  assert.equal(search('  ').length, amps.length, 'an empty box hides models')
+  assert.equal(search('zzzz nothing').length, 0)
+  // Rows keep what they are, so a pick still sends the model's own number.
+  assert.ok(plexi.every((m) => Number.isInteger(m.value)))
+
+  // And an empty answer says so, in the same words the phone uses.
+  assert.match(src, /\{picking && !listed\.length \? <p className="hint type-none">Nothing named like that\.<\/p> : null\}/)
+
+  // Every opening starts from the whole list.
+  assert.match(src, /if \(!picking\) setHunt\(''\)/)
+
+  /*
+   * The box takes the typing only when a mouse opened the list. A focused box
+   * on a phone brings the keyboard up over the list you opened to look at.
+   */
+  assert.match(src, /onPointerDown=\{\(e\) => \{\s*openedWith\.current = e\.pointerType/)
+  assert.match(src, /if \(how === 'mouse'\) huntRef\.current\?\.focus\(\{ preventScroll: true \}\)\s*else here\?\.focus/)
+
+  // Enter in the box picks nothing: a model change is a sound change.
+  const keys = src.slice(src.indexOf('const onHuntKey = '), src.indexOf('const valueOf = '))
+  assert.ok(keys.includes("e.key === 'Enter'"), 'Enter in the box is not handled')
+  assert.ok(!/swapModel|applyModel|setPicking/.test(keys), 'Enter in the search box picks a model on its own')
+  assert.match(src, /onKeyDown=\{onHuntKey\}/)
+  // Down from an empty box goes to the model you are on, not row 1 of 331.
+  assert.match(keys, /hunt\.trim\(\) \? -1 : listed\.findIndex\(\(m\) => m\.value === chosenValue\)/, 'Down from the box goes to the top of the list instead of the model you are on')
+  assert.ok(!/'ArrowDown'\) \{\s*e\.preventDefault\(\)\s*pickAt\(0\)/.test(keys), 'Down from the box always goes to the top of the list')
+
+  // Wide enough for a phone: the bare field rule's 230px is wider than the panel.
+  const css = readSrc(new URL('../src/styles.css', import.meta.url), 'utf8')
+  const rule = css.slice(css.indexOf('input.type-search {'), css.indexOf('}', css.indexOf('input.type-search {')))
+  assert.match(rule, /min-width: 0/)
+  assert.match(rule, /width: 100%/)
+})
+
+test('the block panel calls every hook before it can return early', () => {
+  /*
+   * The picker's hooks sat below `if (!block) return`, which is one number of
+   * hooks on a render with no block and another on the render one arrives.
+   * React throws on that and the editor goes blank.
+   */
+  const src = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+  const start = src.indexOf('export function BlockPanel(')
+  const rest = src.slice(start + 1)
+  const body = src.slice(start, start + 1 + rest.search(/\n(?:export )?function /))
+  const early = body.indexOf('  if (!block) {')
+  assert.ok(early > 0, 'the empty panel’s early return has moved; point this test at it')
+  const after = [...body.slice(early).matchAll(/\buse[A-Z]\w*\(/g)].map((m) => m[0])
+  assert.deepEqual(after, [], 'a hook is called after the panel can return early')
+  for (const hook of ['const [picking, setPicking] = useState(false)', "const [hunt, setHunt] = useState('')", 'useDismiss(picker,']) {
+    assert.ok(body.indexOf(hook) > 0 && body.indexOf(hook) < early, `${hook} is below the early return`)
+  }
 })
 
 test('a family names the amp behind a whole run of models', async () => {
@@ -2427,6 +2521,48 @@ test('leaves distinct parameter names alone', () => {
   assert.equal(out[0].subBlockId, null)
 })
 
+test('Presence Frequency is kHz, and the catalog’s other wrong units are put right where a read lands', async () => {
+  /*
+   * "Presence Frequency — 1 Hz." The number was right and the word was not:
+   * the catalog guesses Hz for a 0.1 to 10 control that is kHz. Keyed by
+   * block and setting number, and checked against what it expects to find.
+   */
+  const { fixRead, withUnit, UNIT_FIXES } = await import('../shared/param-fixes.mjs')
+  const amp = fixRead(JSON.parse(readSrc(new URL('../src/data/amp-params.json', import.meta.url), 'utf8')))
+  const by = (id) => amp.named.find((p) => p.id === id)
+  assert.equal(by(28).unit, 'kHz', 'Presence Frequency still says Hz')
+  assert.equal(by(31).unit, 'Hz', 'Depth Frequency, which is in hertz, was moved')
+  assert.equal(by(91).unit, 'Hz', 'the amp’s Tremolo Frequency still says dB')
+  for (const id of [119, 120, 121, 122, 123, 132]) assert.equal(by(id).unit, undefined, `a 0-to-1 amp setting (${id}) still says dB`)
+  assert.equal(by(97).name, 'Dynamic Damping', 'DYNIMP is still called DYNIMP')
+  assert.ok(UNIT_FIXES.every((f) => f.slug && Number.isInteger(f.id)), 'a unit fix is keyed by name instead of by setting')
+
+  /* Only what it expects: another block's 28, or a 28 already right, is left alone. */
+  const other = { slug: 'drive', named: [{ id: 28, name: 'Tone', unit: 'Hz', min: 0.1, max: 10 }] }
+  assert.equal(fixRead(other), other, 'a block with nothing to correct was copied or changed')
+  const right = fixRead({ slug: 'amp', named: [{ id: 28, name: 'Presence Frequency', unit: 'kHz', min: 0.1, max: 10 }] })
+  assert.equal(right.named[0].unit, 'kHz')
+  const elsewhere = fixRead({ slug: 'amp', named: [{ id: 28, name: 'Something', unit: 'Hz', min: 20, max: 20000 }] })
+  assert.equal(elsewhere.named[0].unit, 'Hz', 'a setting 28 with another range was corrected as if it were Presence Frequency')
+  assert.equal(fixRead(null), null)
+
+  /* Every read goes through it, at both ends. */
+  assert.match(readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8'), /export const blockParams = async \(eid\) =>\s*fixRead\(/, 'the browser shows the catalog’s units')
+  assert.match(readSrc(new URL('../mobile/src/lib/device.js', import.meta.url), 'utf8'), /export const blockParams = async \(eid\) => fixRead\(await remoteRequest/, 'the phone shows the catalog’s units')
+  assert.match(readSrc(new URL('../scripts/sync-relay-rules.mjs', import.meta.url), 'utf8'), /source: '\.\.\/shared\/param-fixes\.mjs'/, 'the phone has no copy of the fixes')
+
+  /* And a space between a number and its unit, everywhere. */
+  assert.equal(withUnit(1, 'kHz'), '1 kHz')
+  assert.equal(withUnit(4, ''), '4')
+  const { disambiguate } = await import('../src/lib/encoding.js')
+  assert.match(disambiguate([{ id: 1, name: 'Cut', min: 0, max: 10, unit: 'Hz' }, { id: 2, name: 'Cut', min: 0, max: 20, unit: 'Hz' }])[0].name, /0-10 Hz\)$/)
+  const search = readSrc(new URL('../src/components/ParamSearch.jsx', import.meta.url), 'utf8')
+  assert.match(search, /withUnit\(Math\.round\(param\.value \* 100\) \/ 100, param\.unit\)/, 'the browser’s search runs a number into its unit')
+  const phone = readSrc(new URL('../mobile/src/screens/Edit.js', import.meta.url), 'utf8')
+  assert.match(phone, /sub=\{withUnit\(fmt\(param\.value\), param\.unit\)\}/, 'the phone’s search runs a number into its unit')
+  assert.match(readSrc(new URL('../src/lib/presetReport.js', import.meta.url), 'utf8'), /return `\$\{rounded\}\$\{param\.unit \? ` \$\{param\.unit\}` : ''\}`/, 'the report runs a number into its unit')
+})
+
 test('separates a sub-block parameter that collides by name', () => {
   // The AM4 amp page carries its integrated cab, so both report a "High Cut".
   const out = disambiguate([
@@ -3496,13 +3632,14 @@ test('a write nobody could check is not written again on a guess', async () => {
    *
    * The retry is for one fault — the device silently ignoring an encoding it
    * does not take — and the evidence for it is a read that came back wrong. A
-   * read that could not be MADE is not that evidence. Clearing the unit's
-   * cache is a local-only route, so from a phone every check goes stale, and
-   * every write was being followed by a second write to the hardware chosen on
-   * the strength of nothing at all.
+   * read that could not be MADE is not that evidence, and a second write to
+   * the hardware chosen on the strength of nothing is not a check.
    *
-   * Three things are asserted, and each one was costing a round trip over the
-   * relay on every parameter of every send.
+   * And no check deletes anything first. Every checked write used to send
+   * DELETE /device/cache to "clear the parameter cache"; on the pinned device
+   * server a block's values are read off the unit every time, and that route
+   * deletes the computer's saved profile of the FM3, which is only missed at
+   * the next reconnect.
    */
   const store = { 'forgefx.host': 'http://unit.test' }
   globalThis.localStorage = {
@@ -3515,25 +3652,28 @@ test('a write nobody could check is not written again on a guess', async () => {
     }
   }
   const seen = []
+  let readable = false
   globalThis.fetch = async (url, options = {}) => {
     const method = options.method || 'GET'
     const path = String(url).replace('http://unit.test', '')
     seen.push(method + ' ' + path)
-    // What a phone gets: the cache clear refused, everything else fine.
-    if (path === '/device/cache') {
-      return {
-        ok: false,
-        status: 403,
-        statusText: 'Forbidden',
-        text: async () => JSON.stringify({ error: "You can't do that from a distance" })
+    // The read-back: the block will not answer, or answers with what was sent.
+    if (method === 'GET' && path.endsWith('/params')) {
+      if (!readable) {
+        return {
+          ok: false,
+          status: 500,
+          statusText: 'Internal Server Error',
+          text: async () => JSON.stringify({ error: 'bulk read timed out' })
+        }
       }
+      return { ok: true, status: 200, statusText: 'OK', text: async () => JSON.stringify({ named: [{ id: 3, name: 'Tone', value: 5 }] }) }
     }
     return { ok: true, status: 200, statusText: 'OK', text: async () => JSON.stringify({ ok: true }) }
   }
 
   try {
     const fx = await import('../src/lib/forgefx.js')
-    fx.resetCacheClear()
     const res = await fx.setParamConfirmed(9, 3, 5, { name: 'Tone', min: 0, max: 10 })
 
     assert.equal(res.ok, false, 'a check that proved nothing was reported as a success')
@@ -3542,41 +3682,19 @@ test('a write nobody could check is not written again on a guess', async () => {
 
     const writes = seen.filter((c) => c.startsWith('PUT '))
     assert.equal(writes.length, 1, 'the value went to the hardware ' + writes.length + ' times')
+    assert.deepEqual(seen.filter((c) => c.includes('/device/cache')), [], 'a checked write deletes the computer’s profile of the unit')
 
-    const reads = seen.filter((c) => c.startsWith('GET ') && c.includes('/params'))
-    assert.deepEqual(reads, [], 'a read whose answer may not be believed still cost a round trip')
-
-    /*
-     * And a Mac that refuses it is asked once, not once per write.
-     *
-     * The clear travels the relay now — the pinned fork allows it — but a Mac
-     * that has not taken that update refuses every time, and this runs before
-     * every verified write. One iPhone log carried thirty copies of the same
-     * refusal with six real errors from the unit buried among them. So the
-     * answer is learned and kept until the link changes.
-     */
-    const askedFirst = seen.filter((c) => c === 'DELETE /device/cache').length
-    assert.equal(askedFirst, 1, 'the first write asked ' + askedFirst + ' times')
+    /* A read that answers is believed, and still costs no delete. */
+    readable = true
     seen.length = 0
-    await fx.setParamConfirmed(9, 4, 5, { name: 'Level', min: 0, max: 10 })
+    const good = await fx.setParamConfirmed(9, 3, 5, { name: 'Tone', min: 0, max: 10 })
+    assert.equal(good.ok, true, 'a value read back as sent was not believed')
     assert.deepEqual(
-      seen.filter((c) => c === 'DELETE /device/cache'),
-      [],
-      'a refusal it had already been given was asked for again'
-    )
-
-    // Until the link changes, which is the one thing that can change the answer.
-    fx.resetCacheClear()
-    seen.length = 0
-    await fx.setParamConfirmed(9, 5, 5, { name: 'Mix', min: 0, max: 100 })
-    assert.equal(
-      seen.filter((c) => c === 'DELETE /device/cache').length,
-      1,
-      'reconnecting to a computer that may have been updated still never asks it'
+      seen.filter((c) => !c.startsWith('POST /telemetry')),
+      ['PUT /preset/blocks/9/params/3', 'GET /preset/blocks/9/params'],
+      'a checked write is more than the write and one read'
     )
   } finally {
-    const fx = await import('../src/lib/forgefx.js')
-    fx.resetCacheClear()
     delete globalThis.fetch
     delete globalThis.localStorage
   }
@@ -3867,7 +3985,11 @@ test('the save guard asks the unit which preset is loaded, not the screen', () =
 
   // The screen was wrong too, so it is corrected rather than left disagreeing
   // with the decision just made from it.
-  assert.match(scope, /if \(now\.number !== preset\?\.number\) setPreset\(now\)/)
+  /* Handed to the store's follow, so the chain is read once for it: moved on
+     its own, the number left the chain the last preset's and the screen said
+     a read had failed that was never tried. */
+  assert.match(scope, /if \(now\.number !== preset\?\.number && !presetHeard\(now\)\) setPreset\(now\)/)
+  assert.doesNotMatch(scope, /if \(now\.number !== preset\?\.number\) setPreset\(now\)/, 'the save look moves the number alone, and the chain says it could not be read')
   // A unit that will not answer falls back to what the page has, which is what
   // this used for everything before.
   assert.match(scope, /let loaded = preset\?\.number \?\? null/)
@@ -6652,6 +6774,340 @@ onTheBench('where the computer keeps no long copy, the Mac window reads a front-
   assert.equal(asked(CHAIN), 2, 'a quarter of a minute was waited out for a copy this unit’s computer does not keep')
 })
 
+/*
+ * A Gain turned to 25 still read 25 after Revert on the play test. The open
+ * editor re-reads on its block, channel and scene; a Revert is the same slot
+ * loaded again and moves none of them. editRev is what does move.
+ */
+onTheBench('loading the same slot again tells an open editor its values are stale, once, after the unit settles', async () => {
+  const { clock } = windowOnTheBench()
+  const start = ds.getSnapshot().editRev
+  const load = ds.loadPreset(12)
+  await clock.advance(ds.OWN_SETTLE_MS - 100)
+  assert.equal(ds.getSnapshot().editRev, start, 'the editor was told to re-read while the unit was still loading')
+  await clock.advance(3000)
+  await load
+  assert.equal(ds.getSnapshot().editRev, start + 1, 'the same slot loaded again leaves the open editor on the old values')
+  await clock.advance(30000)
+  assert.equal(ds.getSnapshot().editRev, start + 1, 'one load moved the edit buffer more than once')
+})
+
+onTheBench('a preset changed at the unit moves the edit buffer too; a scene does not', async () => {
+  const { clock, unit, nameOf } = windowOnTheBench()
+  const start = ds.getSnapshot().editRev
+  await ds.writeScene(3)
+  await clock.advance(5000)
+  assert.equal(ds.getSnapshot().editRev, start, 'a scene tap made the editor read again as if the preset had been reloaded')
+  await clock.advance(20000)
+  unit.number = 77
+  assert.equal(ds.presetHeard({ number: 77, name: nameOf(77) }), true)
+  await clock.advance(ds.PRESET_SETTLE_MS + 100)
+  assert.equal(ds.getSnapshot().editRev, start + 1, 'the editor kept the last preset’s values when the unit moved on')
+})
+
+/* A Revert on the phone reaches this window as news of the same preset. */
+onTheBench('the same slot loaded again from the other device tells an open editor too, at no extra chain read', async () => {
+  const { clock, unit, asked } = windowOnTheBench()
+  await clock.advance(ds.CHAIN_FRESH_MS + 1000)
+  const start = ds.getSnapshot().editRev
+  const chains = asked(CHAIN)
+  ds.handleEvent({ type: 'changed', scope: 'preset' })
+  await clock.advance(ds.PRESET_SETTLE_MS + 500)
+  assert.equal(ds.getSnapshot().editRev, start + 1, 'a Revert from the other device left the open editor on the old values')
+  assert.equal(asked(CHAIN), chains + 1, 'following a reload from elsewhere cost more than one chain read')
+  /* An AM4's news is its own edit watch, and says nothing was reloaded. */
+  unit.keepsCopy = false
+  await clock.advance(ds.CHAIN_FRESH_MS + 1000)
+  const later = ds.getSnapshot().editRev
+  ds.handleEvent({ type: 'changed', scope: 'preset' })
+  await clock.advance(ds.PRESET_SETTLE_MS + 500)
+  assert.equal(ds.getSnapshot().editRev, later, 'an AM4 knob turned at the unit was taken as the preset loaded again')
+})
+
+/*
+ * The editor's read key is the block, its channel, the scene and editRev. A
+ * load that moved the amp to another channel changed the channel in one set
+ * and editRev in another, and the editor read its block twice at a unit
+ * that had just loaded — the first answer thrown away.
+ */
+onTheBench('a load that moves the open block to another channel makes the editor read once', async () => {
+  const { clock, unit } = windowOnTheBench()
+  const keyNow = () => {
+    const s = ds.getSnapshot()
+    const b = s.blocks.find((x) => x.effectId === 58)
+    return `${b?.channel}:${s.sceneIndex}:${s.editRev}`
+  }
+  const seen = []
+  let last = keyNow()
+  const off = ds.subscribe(() => {
+    const k = keyNow()
+    if (k !== last) seen.push((last = k))
+  })
+  try {
+    unit.blocks = unit.blocks.map((b) => (b.effectId === 58 ? { ...b, channel: 'C' } : b))
+    const load = ds.loadPreset(20)
+    await clock.advance(5000)
+    await load
+    assert.equal(seen.length, 1, `the editor read its block more than once for one load: ${seen.join(' then ')}`)
+    assert.match(seen[0], /^C:/)
+    /* A chain that could not be read still tells the editor, on its own. */
+    seen.length = 0
+    unit.chain = () => {
+      throw new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78')
+    }
+    const again = ds.loadPreset(20)
+    await clock.advance(5000)
+    await again
+    assert.equal(seen.length, 1, 'a load whose chain read failed told the editor nothing, or told it twice')
+  } finally {
+    off()
+  }
+})
+
+onTheBench('a select the unit answers with {ok:false} is a refusal, not a load', async () => {
+  const { clock, unit } = windowOnTheBench()
+  const start = ds.getSnapshot().editRev
+  const said = []
+  unit.refuseSelect = false
+  ds.attachDriver({
+    ...ds.attachedDriver(),
+    selectPreset: async () => ({ ok: false, number: 12 })
+  })
+  /* Settled by hand rather than awaited: a load taken for a yes waits on the clock. */
+  const outcome = ds.loadPreset(12, { selected: () => said.push('taken') }).then(() => 'loaded', (err) => err.message)
+  await clock.advance(5000)
+  assert.equal(await outcome, ds.SELECT_REFUSED, 'a select the unit answered {ok:false} was taken for a load')
+  assert.deepEqual(said, [], 'a select the unit refused was taken for one it loaded')
+  assert.equal(ds.getSnapshot().editRev, start, 'a refused load told the editor its values were stale')
+})
+
+test('the knobs turned since the save are kept as a list, one entry per control and channel', async () => {
+  const rc = await import('../src/lib/revertCheck.js')
+  let list = []
+  list = rc.noteEdit(list, { eid: 58, paramId: 1, channel: 'A', block: 'Amp 1', param: 'Gain', from: 5, fromNorm: 0.5, to: 7, min: 0, max: 10 })
+  list = rc.noteEdit(list, { eid: 58, paramId: 1, channel: 'A', block: 'Amp 1', param: 'Gain', from: 7, fromNorm: 0.7, to: 9, min: 0, max: 10 })
+  list = rc.noteEdit(list, { eid: 58, paramId: 1, channel: 'B', block: 'Amp 1', param: 'Gain', from: 3, to: 4, min: 0, max: 10 })
+  assert.equal(list.length, 2, 'a second turn of one knob became a second knob, or channel B was folded into A')
+  assert.equal(list[0].from, 5, 'the second turn forgot where the knob was before the first')
+  assert.equal(list[0].fromNorm, 0.5)
+  assert.equal(list[0].to, 9)
+  /* A sentence with no control behind it is not something to read back. */
+  assert.equal(rc.noteEdit(list, { block: 'Amp 1', param: 'Gain', from: 1, to: 2 }), list)
+  assert.equal(rc.noteEdit(list, undefined), list)
+})
+
+test('a Revert is only called done once the knobs read back where they were', async () => {
+  const rc = await import('../src/lib/revertCheck.js')
+  const gain = { eid: 58, paramId: 1, channel: 'A', block: 'Amp 1', param: 'Gain', from: 5, fromNorm: 0.5, to: 7.5, min: 0, max: 10 }
+  const bass = { eid: 58, paramId: 2, channel: 'A', block: 'Amp 1', param: 'Bass', from: 4, fromNorm: 0.4, to: 6, min: 0, max: 10 }
+  const live = (g, b) => async () => ({ named: [{ id: 1, name: 'Gain', value: g, norm: g / 10 }, { id: 2, name: 'Bass', value: b, norm: b / 10 }] })
+  let dumps = 0
+  const slot = (g, b) => async () => {
+    dumps += 1
+    return { blocks: [{ effectId: 58, channel: 0, params: [{ paramId: 1, raw: Math.round((g / 10) * 65534), value: g }, { paramId: 2, raw: Math.round((b / 10) * 65534), value: b }] }] }
+  }
+  const onA = () => 'A'
+
+  /* The reload took, on a preset that was clean before the first turn. */
+  let check = await rc.checkRevert({ edits: [gain, bass], readBlock: live(5, 4), readSaved: slot(5, 4), channelOf: onA })
+  assert.equal(check.state, 'back')
+  assert.equal(rc.revertTook(check), true)
+  assert.equal(dumps, 0, 'the whole slot was dumped when every knob was already back where it started')
+
+  /* The unit answered yes and loaded nothing: the knobs are where they were turned. */
+  check = await rc.checkRevert({ edits: [gain, bass], readBlock: live(7.5, 6), readSaved: slot(5, 4), channelOf: onA })
+  assert.equal(check.state, 'stuck', 'a Revert that left every knob where it was turned was called done')
+  assert.equal(rc.revertTook(check), false)
+  assert.deepEqual(rc.stuckLines(check), ['Amp 1 · Gain is still 7.5', 'Amp 1 · Bass is still 6'])
+  assert.equal(dumps, 1, 'the slot was read more than once for one check')
+
+  /* Turned on top of something never saved: "before" is not the saved value, the slot is. */
+  dumps = 0
+  const onTop = { ...gain, from: 8, fromNorm: 0.8 }
+  check = await rc.checkRevert({ edits: [onTop], readBlock: live(5, 4), readSaved: slot(5, 4), channelOf: onA })
+  assert.equal(check.state, 'back', 'a Revert back to the saved slot was called stuck because the knob started somewhere unsaved')
+  assert.equal(dumps, 1)
+  /* And with no slot to ask, a knob that moved but not to anything known is not a failure it can name. */
+  check = await rc.checkRevert({ edits: [onTop], readBlock: live(5, 4), readSaved: async () => { throw new Error('404') }, channelOf: onA })
+  assert.equal(check.state, 'unknown')
+  assert.equal(rc.revertTook(check), false, 'Save and Revert went away on a Revert nothing could confirm')
+
+  /* Nothing could be read back at all. */
+  check = await rc.checkRevert({ edits: [gain], readBlock: async () => { throw new Error('timed out') }, readSaved: slot(5, 4), channelOf: onA })
+  assert.equal(check.state, 'unknown')
+  assert.equal(rc.revertTook(check), false)
+
+  /* No knob turned, or turned and turned back: the unit's own answer is the check. */
+  assert.equal((await rc.checkRevert({ edits: [], readBlock: live(0, 0), channelOf: onA })).state, 'nothing')
+  check = await rc.checkRevert({ edits: [{ ...gain, to: 5 }], readBlock: live(9, 9), channelOf: onA })
+  assert.equal(check.state, 'nothing')
+  assert.equal(rc.revertTook(check), true)
+
+  /* A knob on a channel the block is not showing now is not read by switching to it — and not a yes either. */
+  check = await rc.checkRevert({ edits: [{ ...gain, channel: 'B' }], readBlock: live(7.5, 6), channelOf: onA, channelBefore: onA })
+  assert.equal(check.state, 'unknown')
+  assert.equal(rc.revertTook(check), false, "Save and Revert went away when the only knob turned was on a channel the unit isn't showing")
+  /* The unit ignored it and is showing A, where Gain happens to sit where B's started: A's value says nothing about B. */
+  check = await rc.checkRevert({ edits: [{ ...gain, channel: 'B' }], readBlock: live(5, 4), readSaved: slot(5, 4), channelOf: onA, channelBefore: onA })
+  assert.equal(check.state, 'unknown', 'a knob turned on channel B was read off channel A')
+  assert.equal(rc.revertTook(check), false)
+  /* Tapped over to B before the Revert, and back on A after it: that is the buffer loaded again. */
+  check = await rc.checkRevert({ edits: [{ ...gain, channel: 'B' }], readBlock: live(7.5, 6), channelOf: onA, channelBefore: () => 'B' })
+  assert.equal(check.state, 'back', 'a Revert that moved the amp back to its saved channel could not be called done')
+  assert.equal(rc.revertTook(check), true)
+  /* One off-channel knob beside one that read back: the one that read back decides. */
+  check = await rc.checkRevert({ edits: [{ ...bass, channel: 'B' }, gain], readBlock: live(5, 6), readSaved: slot(5, 4), channelOf: onA })
+  assert.equal(check.state, 'back')
+  /* A control the read did not carry is not known. */
+  check = await rc.checkRevert({ edits: [{ ...gain, paramId: 99 }], readBlock: live(7.5, 6), channelOf: onA })
+  assert.equal(check.state, 'unknown', 'a knob missing from the read was left out, and the Revert called done')
+
+  /* Turned from somewhere unsaved back onto the saved value, with no slot to ask: nothing says the change is still on it. */
+  check = await rc.checkRevert({ edits: [{ ...gain, from: 8, fromNorm: 0.8, to: 5 }], readBlock: live(5, 4), readSaved: async () => { throw new Error('501') }, channelOf: onA })
+  assert.equal(check.state, 'unknown', 'a knob turned onto the saved value was called stuck with no slot to say so')
+  assert.equal(rc.revertTook(check), false)
+})
+
+test('a read the unit never answered, every knob at zero, is not a Revert seen done', async () => {
+  const rc = await import('../src/lib/revertCheck.js')
+  const low = { eid: 58, paramId: 3, channel: 'A', block: 'Amp 1', param: 'Low Cut', from: 20, fromNorm: 0, to: 120, min: 20, max: 2000 }
+  const gain = { eid: 58, paramId: 1, channel: 'A', block: 'Amp 1', param: 'Gain', from: 5, fromNorm: 0.5, to: 7.5, min: 0, max: 10 }
+  /* What the server hands back when its bulk read timed out: gen3.ts blockParams' catch. */
+  const zeroed = async () => ({ named: [{ id: 1, name: 'Gain', value: 0, norm: 0 }, { id: 3, name: 'Low Cut', value: 0, norm: 0 }], enums: [], type: null })
+  const slot = async () => ({ blocks: [{ effectId: 58, channel: 0, params: [{ paramId: 1, raw: 32767, value: 5 }, { paramId: 3, raw: 0, value: 20 }] }] })
+  const onA = () => 'A'
+  let check = await rc.checkRevert({ edits: [low, gain], readBlock: zeroed, readSaved: slot, channelOf: onA })
+  assert.equal(check.state, 'unknown', 'a knob that started at its minimum matched a read of nothing, and the Revert was called done')
+  assert.equal(rc.revertTook(check), false)
+  check = await rc.checkRevert({ edits: [{ ...gain, to: 0 }], readBlock: zeroed, readSaved: slot, channelOf: onA })
+  assert.equal(check.state, 'unknown', 'a read of nothing said a knob turned to zero was still there')
+  /* A real read, with the block's type on it, and Low Cut really at its minimum. */
+  const real = async () => ({ named: [{ id: 1, name: 'Gain', value: 5, norm: 0.5 }, { id: 3, name: 'Low Cut', value: 20, norm: 0 }], enums: [], type: { value: 3, name: 'x' } })
+  check = await rc.checkRevert({ edits: [low], readBlock: real, readSaved: slot, channelOf: onA })
+  assert.equal(check.state, 'back')
+})
+
+test('in the demo, the preset chosen again goes back to what was saved, and walking away keeps an edit', async () => {
+  /*
+   * The demo kept each preset's working copy for good, the one it was on
+   * included — so a Revert there put nothing back, and once Revert read the
+   * knobs to check, every Revert in the demo said the FM3 hadn't gone back.
+   */
+  const store = {}
+  globalThis.localStorage = {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => {
+      store[k] = String(v)
+    },
+    removeItem: (k) => {
+      delete store[k]
+    }
+  }
+  const fx = await import('../src/lib/forgefx.js')
+  const rc = await import('../src/lib/revertCheck.js')
+  fx.setDemo(true)
+  try {
+    const number = (await fx.currentPreset()).number
+    const amp = (await fx.presetBlocks()).find((b) => b.slug === 'amp')
+    assert.ok(amp, 'the demo has no amp to dial')
+    const gainNow = async () => ((await fx.blockParams(amp.effectId))?.named || []).find((p) => /gain/i.test(p.name))
+    const gain = await gainNow()
+    assert.ok(gain, 'the demo amp has no gain control')
+    const to = gain.value > (gain.min + gain.max) / 2 ? gain.min : gain.max
+    const near = (a, b) => Math.abs(a - b) <= Math.abs(gain.max - gain.min) * 0.01
+    await fx.setParam(amp.effectId, gain.id, to, gain)
+    assert.ok(near((await gainNow()).value, to), 'the demo did not take the turn')
+    const edits = rc.noteEdit([], { eid: amp.effectId, paramId: gain.id, channel: amp.channel ?? null, block: amp.name, param: gain.name, from: gain.value, fromNorm: gain.norm, to, min: gain.min, max: gain.max })
+
+    await fx.selectPreset(number)
+    assert.ok(near((await gainNow()).value, gain.value), 'the same slot chosen again kept the knob where it was turned')
+    const check = await rc.checkRevert({
+      edits,
+      readBlock: fx.blockParams,
+      readSaved: () => fx.presetParams(number),
+      channelOf: () => amp.channel ?? null
+    })
+    assert.equal(check.state, 'back', `a Revert in the demo was said not to have taken: ${JSON.stringify(check)}`)
+    assert.equal(rc.revertTook(check), true)
+
+    /* Another preset and back is not a reload: the edit is still there. */
+    await fx.setParam(amp.effectId, gain.id, to, gain)
+    await fx.selectPreset(number + 1)
+    await fx.selectPreset(number)
+    assert.ok(near((await gainNow()).value, to), 'the demo forgot an edit as soon as another preset was visited')
+  } finally {
+    fx.setDemo(false)
+    delete globalThis.localStorage
+  }
+})
+
+test('the saved slot is read per channel, and never on a guess about which channel it is', async () => {
+  const { savedParam } = await import('../src/lib/revertCheck.js')
+  const amp = [0, 1, 2, 3].map((channel) => ({ effectId: 58, channel, params: [{ paramId: 1, raw: channel * 100, value: channel }] }))
+  const drive = [{ effectId: 133, params: [{ paramId: 1, raw: 9, value: 9 }] }]
+  assert.equal(savedParam(amp, 58, 'C', 1).value, 2, 'channel C read channel A’s value')
+  assert.equal(savedParam(amp, 58, null, 1).value, 0)
+  assert.equal(savedParam(drive, 133, 'A', 1).value, 9)
+  assert.equal(savedParam(drive, 133, 'B', 1), null, 'one unmarked copy of a block was taken as channel B’s')
+  assert.equal(savedParam(drive, 999, 'A', 1), null)
+  assert.equal(savedParam(null, 58, 'A', 1), null)
+})
+
+test('a Revert that did not take says so in plain words', async () => {
+  const { revertSaid } = await import('../src/lib/revertCheck.js')
+  assert.equal(revertSaid('stuck', 'FM3'), "The FM3 didn't go back to the saved preset — your changes are still on it.")
+  assert.match(revertSaid('stuck', null), /^The unit didn't go back/)
+  assert.match(revertSaid('unknown', 'FM3'), /couldn't read the FM3 back/)
+  assert.match(revertSaid('unknown', 'FM3'), /Save and Revert are still here/)
+})
+
+test('Revert reloads through the store and keeps Save and Revert until the knobs read back', () => {
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+  const app = bare(readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8'))
+  const revert = app.slice(app.indexOf('const revert = async'), app.indexOf('const restoreSafety = async'))
+  assert.ok(revert.length > 200, 'Revert moved; this check reads it')
+  assert.match(revert, /await loadPresetInStore\(number\)/, 'Revert does not go through the store, so a refusal is a yes again and no editor re-reads')
+  assert.ok(!/revertPreset|await read\(\)/.test(revert), 'Revert went back to asking and not looking')
+  const check = revert.indexOf('await checkRevert(')
+  const clean = revert.indexOf('setDirty(false)')
+  assert.ok(check > 0 && clean > check, 'Save and Revert go away before anything was read back')
+  assert.ok(revert.indexOf('if (!took) return refused(') > check && revert.indexOf('if (!took) return refused(') < clean, 'a Revert that did not take still puts Save and Revert away')
+  assert.match(revert, /readSaved: \(\) => presetParams\(number\)/, 'the slot is not what a knob turned on an unsaved buffer is checked against')
+  assert.match(revert, /if \(err\?\.message === SELECT_REFUSED\) return refused\(revertSaid\('stuck', unit\), \[err\.message\]\)/, "only the unit's refusal is said as a definite didn't-go-back")
+  assert.equal((revert.match(/revertSaid\('stuck'/g) || []).length, 1, "a timeout or a Mac that couldn't be reached is told the FM3 didn't go back")
+  assert.match(revert, /if \(macSilent\(err\) && !err\.linkDown\) \{ bufferReloaded\(\) return refused\(revertSaid\('unknown', unit\), \[err\.message\]\) \}/, 'a Revert whose answer never came back is told as a certain no, or leaves the editor on the old knobs')
+  assert.match(revert, /return refused\(err\.message, \[err\.message\]\)/, 'a Mac that could not be reached no longer says why')
+  assert.match(app, /loadPreset as loadPresetInStore, SELECT_REFUSED,/)
+  /* The list handed to the check is the one the knobs filled, read against the channels the unit shows. */
+  assert.match(revert, /const turned = edits\.current/, 'Revert no longer checks the knobs that were turned')
+  assert.ok(revert.indexOf('const turned = edits.current') < revert.indexOf('await loadPresetInStore(number)'), 'the turned knobs are taken after the reload')
+  assert.match(revert, /edits: turned,/, 'Revert checks an empty list, so it always passes')
+  assert.match(revert, /channelOf: \(eid\) => deviceSnapshot\(\)\.blocks\.find\(\(b\) => b\.effectId === eid\)\?\.channel/, 'every knob is skipped as being on another channel')
+  assert.match(revert, /channelBefore: \(eid\) => chanBefore\.get\(eid\) \?\? null/, 'a block that came back on another channel is not taken as the reload')
+  assert.ok(revert.indexOf('const chanBefore = new Map(deviceSnapshot().blocks') > 0 && revert.indexOf('const chanBefore') < revert.indexOf('await loadPresetInStore(number)'), 'the channels "before" are read after the reload')
+  /* The slot's name is written down only once the Revert is shown to have taken. */
+  assert.ok(!/presetLanded\(\{ fresh: true \}\)/.test(revert), 'a Revert that did not take writes the edited name into the preset list')
+  assert.match(revert, /const took = revertTook\(check\) presetLanded\(\{ fresh: took \}\) if \(!took\) return refused\(/, 'the slot’s name is written down before the Revert is known to have taken')
+  assert.match(revert, /setSaveError\(msg\)/, 'the save sheet Revert was pressed on does not say it failed')
+  assert.ok(!/clearDeviceCache|\/device\/cache/.test(revert), 'Revert deletes the computer’s profile of the unit')
+  /* The list it checks is the one the knobs fill, and it empties with the preset. */
+  assert.match(app, /record\('edit', summary\) edits\.current = noteEdit\(edits\.current, change\)/, 'a knob turn is only a sentence in the log again')
+  assert.match(app, /useEffect\(\(\) => \{ if \(!dirty\) edits\.current = \[\] \}, \[dirty\]\)/, 'the list outlives the save or load that made it clean')
+  assert.match(app, /useEffect\(\(\) => \{ edits\.current = \[\] \}, \[preset\?\.number\]\)/, 'the knobs turned on one preset are checked against the next one')
+  const restore = app.slice(app.indexOf('const restoreSafety = async'), app.indexOf('finally', app.indexOf('const restoreSafety = async')))
+  assert.match(restore, /edits\.current = \[\] await read\(\) bufferReloaded\(\)/, 'the pre-edit copy leaves an open editor on the values it replaced')
+})
+
+test('the block editor hands over which knob it turned, on which channel, and where it stood', () => {
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+  const con = bare(readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8'))
+  const panel = con.slice(con.indexOf('export function BlockPanel('))
+  const write = panel.slice(panel.indexOf('writeOne.current = async'), panel.indexOf('const applyModel = async'))
+  assert.match(write, /writeOne\.current = async \(\{ p, next, key, eid, name, slug, channel \}\)/)
+  assert.match(write, /eid, paramId: p\.id, channel, fromNorm: p\.norm \}/, 'a knob turn reaches App without the control, the channel or the unit’s own scale')
+  assert.match(panel, /channel: block\.channel \?\? null \}\)/, 'the channel the knob was turned on is not the one it was on when it was turned')
+})
+
 test('the Mac window switches, steps and appears through the store, with no read of its own', () => {
   const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
   const gig = bare(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8'))
@@ -7120,14 +7576,17 @@ test('a unit that really is gone is still reported after a save', async () => {
   assert.equal(n, ds.SETTLING_TRIES)
 })
 
-test('every read after a save asks with the longer patience', () => {
+test('a save ends with the number and the name, not a whole read of the unit', () => {
   /*
-   * Three places re-read the moment a save lands — the Mac from its own
-   * write, the Mac carrying out a save the phone asked for, and the phone
-   * hearing back that it landed — and any one of them left on the short
-   * budget is the same red screen on a different route.
+   * "Save takes 60-90 s and locks the page." Three places used to read the
+   * whole unit the moment a save landed — the Mac from its own write, the Mac
+   * carrying out a save the phone asked for, and the phone hearing back that
+   * it landed — with the page busy throughout, to learn which slot the unit
+   * is on and what it is called. The save had just settled both. Each of the
+   * three now hands the store the answer and a quiet check follows it.
    */
   const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  /* The patience is still there for the reads that need it. */
   assert.match(app, /const settling = opts\?\.settling === true/, 'read() has no settling read again')
   assert.match(
     app,
@@ -7136,14 +7595,14 @@ test('every read after a save asks with the longer patience', () => {
   )
   assert.equal(
     (app.match(/read\(\{ settling: true \}\)/g) || []).length,
-    3,
-    'one of the three reads that follow a save is back on the short budget'
+    0,
+    'a save is followed by a whole read of the unit again, which is what locked the page'
   )
   // Each of the three sits under the record() line for the save it follows.
   for (const after of [
-    /Saved "\$\{name \|\| preset\?\.name\}" to slot \$\{req\.slot\}[\s\S]{0,200}?read\(\{ settling: true \}\)/,
-    /The computer saved it to slot \$\{res\.slot\}[\s\S]{0,200}?read\(\{ settling: true \}\)/,
-    /Saved "\$\{name \|\| preset\?\.name\}" to slot \$\{number\}[\s\S]{0,300}?read\(\{ settling: true \}\)/
+    /Saved "\$\{name \|\| preset\?\.name\}" to slot \$\{req\.slot\}[\s\S]{0,400}?presetSaved\(req\.slot, name \|\| preset\?\.name\)/,
+    /The computer saved it to slot \$\{res\.slot\}[\s\S]{0,400}?presetSaved\(res\.slot, queuedSave\.name\)/,
+    /Saved "\$\{name \|\| preset\?\.name\}" to slot \$\{number\}[\s\S]{0,700}?presetSaved\(number, name \|\| preset\?\.name\)/
   ]) {
     assert.match(app, after)
   }
@@ -7525,10 +7984,16 @@ test('an impossible tempo is refused in words, never clamped', () => {
 })
 
 test('the Tap button opens the tempo box on a hold or a right-click, at both ends', () => {
-  const gig = readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
+  /* The button is TapTempo's now — Play and Edit both draw it — so that is where its hold is read. */
+  const gig = readSrc(new URL('../src/components/TapTempo.jsx', import.meta.url), 'utf8')
   assert.match(gig, /const holdTap = useLongPress\(/, 'Tap cannot be held')
-  assert.match(gig, /className="gig-bar-btn gig-tap"[^>]*\{\.\.\.holdTap\}/, 'the hold is not on the Tap button')
-  assert.match(gig, /clearTimeout\(reread\.current\)\s*\n\s*setTyping\(true\)/, 'a hold leaves the tap’s re-read pending under the box')
+  assert.match(gig, /className=\{`\$\{where === 'row' \? 'chip' : 'gig-bar-btn'\} gig-tap`\}[^>]*\{\.\.\.holdTap\}/, 'the hold is not on the Tap button')
+  /* The hold leaves the tap's read-back running: that read is what takes the
+     tapped figure off the button. Cancelled, the figure stayed there over a
+     tempo typed straight after, and looked like the typing had not taken. */
+  const hold = gig.slice(gig.indexOf('const holdTap = useLongPress'), gig.indexOf('useDismiss(tapCell'))
+  assert.match(hold, /setTyping\(true\)/, 'a hold does not open the box')
+  assert.ok(!/clearTimeout\(reread\.current\)/.test(hold), 'a hold throws away the read-back, so the tapped number stays on the button over a typed tempo')
   assert.match(gig, /<BpmBox bpm=\{bpm\} autoFocus onSet=\{typeTempo\}/, 'the box does not open with the tempo selected')
   assert.match(gig, /await setTempo\(n\)\s*\n\s*await refreshTempo\(\)/, 'a typed tempo is sent but the number on the button is not re-read')
   assert.match(gig, /useDismiss\(tapCell, \(\) => setTyping\(false\), \{ open: typing \}\)/, 'nothing closes the box on a tap elsewhere or Escape')
@@ -7945,7 +8410,7 @@ test('the report names what would keep a preset quiet, in a player\'s words', as
     }
   })
   assert.equal(down.length, 1, 'a gain at zero is not silence and a level at -80 is')
-  assert.match(down[0], /Out 1 — Level is all the way down at -80dB/)
+  assert.match(down[0], /Out 1 — Level is all the way down at -80 dB\./)
 
   assert.equal(atMinimum({ value: -80, min: -80, max: 20 }), true)
   assert.equal(atMinimum({ value: -79, min: -80, max: 20 }), false)
@@ -8374,6 +8839,204 @@ test('the web chain editor draws, and moves a block the way the phone does', asy
 })
 
 
+test('removing a block asks on the page, and a block the unit kept is said out loud', () => {
+  /*
+   * "CHAIN Remove does nothing." The write was there and allowed over the
+   * relay. What vanished was the question in front of it: the browser's own
+   * pop-up, which a blocked pop-up answers "no" without ever showing. And
+   * whatever the unit did, the panel closed and the history said "Cleared".
+   */
+  const src = readSrc(new URL('../src/components/GridEditor.jsx', import.meta.url), 'utf8')
+  assert.ok(!/window\.confirm\(/.test(src), 'Remove still asks in a pop-up a blocked pop-up answers “no” to')
+  const remove = src.slice(src.indexOf('const remove = async (row, col, name) => {'), src.indexOf('const buildStarter = async'))
+  assert.ok(remove.length > 200, 'the remove moved; retarget this test')
+  assert.match(remove, /const r = await clearCell\(row, col\)[\s\S]*?const now = await presetBlocks\(\)\.catch\(\(\) => null\)/, 'the chain is not read back after a remove')
+  assert.match(remove, /now\.find\(\(b\) => b\.row === row && b\.col === col\)/, 'the read-back does not look in the cell that was cleared')
+  assert.match(remove, /The unit did not remove it: /, 'a block the unit kept is silent')
+  /* A block still there is not recorded as cleared, and the panel stays open to say so. */
+  const kept = remove.slice(remove.indexOf('if (still) {'), remove.indexOf('const cleared'))
+  assert.match(kept, /setIssue\([\s\S]*?\)\s*return\s*\}/, 'a remove the unit did not take still closes the panel as done')
+  assert.ok(!/onChanged\(/.test(kept), 'a remove the unit did not take is recorded as cleared')
+  /* And no DELETE /device/cache on the way: it deletes the computer's saved
+     profile of the FM3, and the phone's copy of this never needed one. */
+  assert.ok(!/clearDeviceCache/.test(src), 'the chain editor deletes the computer’s profile of the unit again')
+})
+
+test('one arrow press is one write, of the value it reached', async () => {
+  /*
+   * "Knobs ignore the keyboard." The arrow moved the knob and asked for the
+   * write in the same instant, and the write read the value from before the
+   * move: every other press missed, the knob flicked back, and the last press
+   * was never sent. The rules are in shared/knob-keys.mjs, one copy for both
+   * apps; these drive them with a clock the test holds.
+   */
+  const { keyTarget, settleWrites, oneWriteAtATime, KEY_SETTLE_MS } = await import('../shared/knob-keys.mjs')
+  assert.equal(KEY_SETTLE_MS, 250)
+
+  /* Where each key goes, from a knob at 0.5 of its range. */
+  const near = (a, b) => Math.abs(a - b) < 1e-9
+  assert.ok(near(keyTarget('ArrowRight', 0.5), 0.51) && near(keyTarget('ArrowUp', 0.5), 0.51))
+  assert.ok(near(keyTarget('ArrowLeft', 0.5), 0.49) && near(keyTarget('ArrowDown', 0.5), 0.49))
+  assert.ok(near(keyTarget('ArrowRight', 0.5, { fine: true }), 0.502), 'Shift is no longer the fine step')
+  assert.ok(near(keyTarget('PageUp', 0.5), 0.6) && near(keyTarget('PageDown', 0.5), 0.4), 'Page Up and Down do not take a tenth of the range')
+  assert.equal(keyTarget('Home', 0.5), 0, 'Home does not go to the bottom')
+  assert.equal(keyTarget('End', 0.5), 1, 'End does not go to the top')
+  assert.equal(keyTarget('PageUp', 0.95), 1, 'a step runs past the end of the range')
+  assert.equal(keyTarget('Tab', 0.5), null, 'a key that is not for knobs turns the knob')
+  assert.ok(near(keyTarget('increment', 0.5), 0.51) && near(keyTarget('decrement', 0.5), 0.49), 'VoiceOver’s swipes are not the arrows')
+
+  /* A clock the test turns by hand. */
+  let now = 0
+  const timers = []
+  const later = (fn, ms) => {
+    const t = { fn, at: now + ms, live: true }
+    timers.push(t)
+    return t
+  }
+  const cancel = (t) => {
+    if (t) t.live = false
+  }
+  const advance = (ms) => {
+    now += ms
+    for (const t of timers) if (t.live && t.at <= now) {
+      t.live = false
+      t.fn()
+    }
+  }
+
+  /* One press: nothing on the wire until the keys are still, then exactly one
+     write, of the value the press reached. */
+  const sent = []
+  const keys = settleWrites((v) => sent.push(v), { later, cancel })
+  keys.push(5.1)
+  assert.deepEqual(sent, [], 'a press is written before the keys have stopped')
+  assert.equal(keys.held(), 5.1, 'the next press cannot start from where this one reached')
+  advance(KEY_SETTLE_MS)
+  assert.deepEqual(sent, [5.1], 'one ArrowRight did not produce exactly one write of its own value')
+  advance(KEY_SETTLE_MS * 4)
+  assert.deepEqual(sent, [5.1], 'one press was written twice')
+
+  /* Five quick presses are one write, of the last. */
+  sent.length = 0
+  for (const v of [5.2, 5.3, 5.4, 5.5, 5.6]) {
+    keys.push(v)
+    advance(100)
+  }
+  assert.deepEqual(sent, [], 'a run of presses is written press by press')
+  advance(KEY_SETTLE_MS)
+  assert.deepEqual(sent, [5.6], 'a run of presses did not end in one write of where it got to')
+
+  /* Leaving the knob, or the editor closing, sends what is waiting at once. */
+  sent.length = 0
+  keys.push(6)
+  keys.flush()
+  assert.deepEqual(sent, [6], 'tabbing away leaves the last press unsent')
+  advance(KEY_SETTLE_MS)
+  assert.deepEqual(sent, [6], 'a flushed press is written again when its timer fires')
+  keys.flush()
+  assert.deepEqual(sent, [6], 'a flush with nothing waiting writes something')
+
+  /* One checked write per control: values that arrive while one is out
+     wait, and only the newest of them goes next. */
+  const wire = []
+  const gates = []
+  const lanes = oneWriteAtATime(async (v) => {
+    wire.push(v)
+    await new Promise((r) => gates.push(r))
+  })
+  const done = lanes.send('amp:3', 1)
+  assert.equal(lanes.busy('amp:3'), true)
+  assert.equal(lanes.busy('amp:4'), false, 'one control’s write holds up another’s')
+  lanes.send('amp:3', 2)
+  lanes.send('amp:3', 3)
+  await Promise.resolve()
+  assert.deepEqual(wire, [1], 'a second write to the same control went out while the first was still being checked')
+  gates.shift()()
+  await new Promise((r) => setTimeout(r, 0))
+  assert.deepEqual(wire, [1, 3], 'the newest waiting value was not the one written next')
+  gates.shift()()
+  await done
+  assert.deepEqual(wire, [1, 3], 'a superseded value was written after all')
+  assert.equal(lanes.busy('amp:3'), false, 'the lane never empties')
+
+  /* A write that throws does not strand what was waiting behind it. */
+  const after = []
+  let first = true
+  const shaky = oneWriteAtATime(async (v) => {
+    after.push(v)
+    if (first) {
+      first = false
+      await Promise.resolve()
+      throw new Error('port not open')
+    }
+  })
+  const going = shaky.send('x', 'a')
+  shaky.send('x', 'b')
+  await going
+  assert.deepEqual(after, ['a', 'b'], 'a failed write strands the value waiting behind it')
+
+  /* Both apps send a fresh job per turn, so the skip-if-same needs its own
+     test of sameness: a tap on a knob with no movement, while its last
+     value is still out, must not write that value a second time. */
+  const jobs = []
+  const jobGates = []
+  const byJob = oneWriteAtATime(
+    async (job) => {
+      jobs.push(job)
+      await new Promise((r) => jobGates.push(r))
+    },
+    { same: (a, b) => a.next === b.next && a.key === b.key }
+  )
+  const tick = () => new Promise((r) => setTimeout(r, 0))
+  const drain = async () => {
+    while (jobGates.length) {
+      jobGates.shift()()
+      await tick()
+    }
+  }
+  byJob.send('amp:3', { next: 5.1, key: 'k' })
+  byJob.send('amp:3', { next: 5.1, key: 'k' })
+  await drain()
+  assert.equal(jobs.length, 1, 'a waiting job equal to the one just written was written again')
+  byJob.send('amp:3', { next: 5.1, key: 'k' })
+  byJob.send('amp:3', { next: 5.1, key: 'k2' })
+  await drain()
+  assert.equal(byJob.busy('amp:3'), false, 'the lane never empties')
+  assert.deepEqual(jobs.map((j) => j.key), ['k', 'k', 'k2'], 'the same number after a scene or channel change was dropped')
+
+  const conSrc = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+  const editSrc = readSrc(new URL('../mobile/src/screens/Edit.js', import.meta.url), 'utf8')
+  assert.match(conSrc, /oneWriteAtATime\([^]*?\{\s*same: \(a, b\) => a\.next === b\.next && a\.key === b\.key\s*\}\)/, 'the browser’s knob writes lost their test of sameness')
+  assert.match(editSrc, /oneWriteAtATime\([^]*?\{\s*same: \(a, b\) => Object\.is\(a\.next, b\.next\)\s*\}\)/, 'the phone’s knob writes lost their test of sameness')
+})
+
+test('the browser’s knob writes what a press reached, once the keys stop', () => {
+  /* The knob and its editor, held to the rules above. */
+  const knob = readSrc(new URL('../src/components/Knob.jsx', import.meta.url), 'utf8')
+  assert.match(knob, /from '\.\.\/\.\.\/shared\/knob-keys\.mjs'/, 'the knob keeps its own copy of the key rules')
+  const nudge = knob.slice(knob.indexOf('const nudge = (event) => {'), knob.indexOf('const r = size / 2 - 4'))
+  assert.ok(nudge.length > 100, 'the key handler moved; retarget this test')
+  assert.match(nudge, /keyTarget\(event\.key, from, \{ fine: event\.shiftKey \}\)/, 'the keys do not go through the shared steps')
+  assert.match(nudge, /onChange\(v\)\s*keys\.current\.push\(v\)/, 'a press does not hand its own value to the write')
+  assert.ok(!/onCommit/.test(nudge), 'a press asks for the write in the same instant again, which reads the value from before it')
+  assert.match(knob, /onBlur=\{\(\) => keys\.current\.flush\(\)\}/, 'tabbing away leaves the last press unsent')
+  assert.match(knob, /useEffect\(\(\) => \(\) => keys\.current\.flush\(\), \[\]\)/, 'closing the editor leaves the last press unsent')
+  assert.match(knob, /const release = useCallback\(\(\) => \{\s*const v = dragged\.current\s*dragged\.current = undefined\s*live\.current\.onCommit\?\.\(v\)/, 'a drag does not hand over the value it reached')
+  assert.match(knob, /dragged\.current = v\s*change\(v\)/, 'a drag does not keep the value it reached')
+  assert.match(nudge, /const from = waiting !== undefined \?/, 'a fast run of presses starts each one from the screen, a step behind')
+
+  const con = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+  assert.match(con, /onCommit=\{\(v\) => commit\(p, v\)\}/, 'the knob’s value is read back out of state a render behind')
+  const commit = con.slice(con.indexOf('const commit = (p, override) => {'), con.indexOf('Swapping the model, and being able to take it back'))
+  assert.ok(commit.length > 200, 'the commit moved; retarget this test')
+  assert.match(commit, /if \(next === p\.value && !writes\.current\.busy\(lane\)\) return/, 'turning a knob back to where it was, while a write is out, never reaches the unit')
+  assert.match(commit, /writes\.current\.send\(lane, /, 'two checked writes to one control can race again')
+  assert.match(commit, /if \(prev\[p\.id\] !== next\) return prev/, 'a knob still being turned flicks back to an older read')
+  assert.match(commit, /if \(liveKey\.current === key\) \{/, 'a write that finishes after another block opened hands that block its values')
+  assert.match(commit, /res\.unverified\s*\?\s*`\$\{called\} was sent, but the app couldn't read it back to check\.`\s*:\s*`\$\{called\} didn't take\.`/, 'a knob nobody could read back is announced as one the unit refused')
+  assert.match(commit, /const called = p\.label \|\| p\.name/, 'a knob that did not take is named by the catalog, not by what the knob says')
+})
+
 console.log('\ncab picker')
 
 /*
@@ -8565,7 +9228,7 @@ test('the cab panel picks through the cab state, and every other block still swa
   /* A pick that finishes after another block came up leaves that block alone. */
   assert.match(panel, /liveKey\.current = readKey/)
   for (const [name, body] of [['cab pick', cabWrite], ['model swap', apply]]) {
-    const guard = body.indexOf('if (liveKey.current !== key)')
+    const guard = body.indexOf('if (liveKey.current !== key)', Math.max(0, body.indexOf('const sent = await setType(')))
     assert.ok(guard > 0, `a ${name} that finishes late lands on whatever block is open`)
     assert.ok(guard < body.indexOf('setParams('), `the ${name} sets the panel before checking it is still the same block`)
   }
@@ -8612,6 +9275,1997 @@ test('the demo FM3’s cab state is shaped and numbered like the unit’s, and t
   assert.ok(!(await unit.blockParams(cabBlock.effectId)).named.some((p) => [31, 85, 86].includes(p.id)))
 })
 
+/*
+ * "Pick a cab IR by name."
+ *
+ * Neither app could put an IR on a cab: the IR number and the bank are off
+ * the knobs, and nothing took their place. These hold the IR picker to the
+ * unit's own bank order, the order of the writes, and an Undo that puts back
+ * all three of bank, IR and mode.
+ */
+const FM3_BANKS = ['FACTORY 1', 'FACTORY 2', 'USER', 'LEGACY', 'SCRATCHPAD']
+const fm3Irs = () => ({
+  'FACTORY 1': ['1x4 Pig 57', '1x4 Pig 121', '4x12 Recto'],
+  'FACTORY 2': ['2x12 Double Verb', 'TOTALLY-FLAT'],
+  LEGACY: ['1x6 OVAL', '1x8 TWEED', '4x12 G12H CREAMBACK MIX (CEL)'],
+  SCRATCHPAD: ['OH 412 MES V30 CHUNK', '<EMPTY>']
+})
+const irCab = (mode, bank = 0, ir = 2) => {
+  const c = cabFixture(mode, 3)
+  c.modeOptions = [{ value: 0, label: 'LEGACY' }, { value: 1, label: 'DYNA-CAB' }]
+  c.bankOptions = FM3_BANKS
+  c.slots[0] = { ...c.slots[0], bank: { value: bank, label: FM3_BANKS[bank] }, irIndex: ir, irName: bank === 2 ? `#${ir}` : 'x' }
+  return c
+}
+const irKnobs = { named: [{ id: 4, name: 'Type 1', value: 2, min: 0, max: 1023 }] }
+
+test('the IR banks are the unit’s, in the unit’s order, and USER is offered by number', async () => {
+  const { irBanks, irNow, cabShowing, slotIr } = await import('../shared/cab-pick.mjs')
+  const banks = irBanks(irCab(0), fm3Irs(), irKnobs)
+  /* /cab/irs has no USER: counting down its keys made Legacy bank 2, which is USER. */
+  assert.deepEqual(
+    banks.map((b) => [b.value, b.name]),
+    [[0, 'Factory 1'], [1, 'Factory 2'], [2, 'User'], [3, 'Legacy'], [4, 'Scratchpad']],
+    'the banks were numbered by the order of /cab/irs'
+  )
+  const legacy = banks.find((b) => b.name === 'Legacy')
+  assert.equal(legacy.names[0], '1x6 OVAL', 'the Legacy bank carries another bank’s names')
+  const user = banks.find((b) => b.user)
+  assert.equal(user.count, 1024, 'his own IRs are not offered as many as the IR control holds')
+  /* The host's "#5" is not a name; counted from one, as a person counts. */
+  assert.deepEqual(irNow(irCab(0, 2, 5), banks), { bank: 2, ir: 5, name: 'IR 6', bankName: 'User', playing: true })
+  assert.equal(irNow(irCab(0, 3, 1), banks).name, '1x8 TWEED')
+  assert.equal(irNow(irCab(1, 0, 2), banks).playing, false, 'a block on DynaCab was said to be playing its IR')
+  assert.equal(irNow({ ...irCab(0), unsure: true }, banks), null, 'an unsure read named an IR')
+  /* Scratchpad is his own bank. The FM3's list names it out of another unit's
+     IRs (the codec: "the donor unit's own IR library"), so it is by number. */
+  const scratch = banks.find((b) => b.value === 4)
+  assert.deepEqual([scratch.names, scratch.user, scratch.count], [[], true, 2], 'Scratchpad showed another unit’s IR names')
+  const donor = irCab(0, 4, 0)
+  donor.slots[0].irName = 'OH 412 MES V30 CHUNK'
+  assert.equal(irNow(donor, banks).name, 'IR 1', 'the IR control named a Scratchpad slot with another unit’s IR')
+  assert.equal(irNow(donor, []).name, 'IR 1', 'with no bank list, the host’s Scratchpad name came through')
+  assert.equal(cabShowing(donor).name, 'IR 1', 'the cab picker named a Scratchpad slot with another unit’s IR')
+  assert.equal(slotIr(donor.slots[0]), 'IR 1')
+  /* A firmware bank's name is still the host's. */
+  const legacySlot = irCab(0, 3, 1)
+  legacySlot.slots[0].irName = '1x8 TWEED'
+  assert.equal(cabShowing(legacySlot).name, '1x8 TWEED')
+  assert.equal(irNow(legacySlot, []).name, '1x8 TWEED')
+  /* No IR list, no names: the named banks drop out rather than showing as numbers. */
+  assert.deepEqual(irBanks(irCab(0), null, irKnobs).map((b) => b.name), ['User'])
+  assert.deepEqual(irBanks(null, fm3Irs(), irKnobs), [])
+})
+
+test('the IR search finds by name or number across the banks, and counts what it does not draw', async () => {
+  const { irBanks, findIrs, irLabel } = await import('../shared/cab-pick.mjs')
+  const banks = irBanks(irCab(0), fm3Irs(), irKnobs)
+  const browse = findIrs(banks, '', 3, 40)
+  assert.deepEqual(browse.rows.map((r) => r.name), ['1x6 OVAL', '1x8 TWEED', '4x12 G12H CREAMBACK MIX (CEL)'])
+  assert.equal(browse.more, 0)
+  const recto = findIrs(banks, '4x12 recto', 0, 40).rows
+  assert.deepEqual(recto.map((r) => [r.bank, r.ir, r.name, r.bankName]), [[0, 2, '4x12 Recto', 'Factory 1']])
+  const four = findIrs(banks, '4x12', 0, 40).rows.map((r) => r.bankName)
+  assert.deepEqual(four, ['Factory 1', 'Legacy'], 'a search stayed in one bank')
+  assert.deepEqual(findIrs(banks, 'user 700', 0, 40).rows.map((r) => [r.bank, r.ir, r.name]), [[2, 699, 'IR 700']])
+  /* A number on his own bank: his IR, not the factory names with "12" in them. */
+  const twelve = findIrs(banks, '12', 2, 40).rows[0]
+  assert.deepEqual([twelve.bank, twelve.ir, twelve.name], [2, 11, 'IR 12'], 'a number typed on his own bank found factory names first')
+  assert.deepEqual(findIrs(banks, 'oh 412', null, 40).rows, [], 'the search found another unit’s Scratchpad IRs')
+  const user = findIrs(banks, '', 2, 40)
+  assert.equal(user.rows.length, 40)
+  assert.equal(user.more, 1024 - 40, 'the rows not drawn were not counted')
+  assert.equal(irLabel('<EMPTY>', 1), 'IR 2 (empty)')
+  assert.equal(irLabel('#12', 12), 'IR 13')
+  assert.equal(irLabel('', undefined), 'IR —')
+})
+
+test('picking an IR writes the bank, then the IR, then the mode last, all as whole numbers', async () => {
+  const { pickCab, pickIr } = await import('../shared/cab-pick.mjs')
+  const sent = []
+  const write = async (id, v) => (sent.push([id, v]), { ok: true })
+  const res = await pickCab(irCab(1, 0, 2), { bank: 3, ir: 1, name: '1x8 TWEED' }, write)
+  assert.equal(res.ok, true)
+  assert.deepEqual(sent, [[0, 3], [4, 1], [31, 0]], 'the mode has to go last, once the IR it switches to is there')
+  for (const [, v] of sent) assert.ok(Number.isInteger(v), `${v} is a position, not an ordinal`)
+  assert.ok(!sent.some(([id]) => id === 85), 'an IR pick touched the DynaCab')
+
+  /* Already on the bank, and already playing an IR: the number alone. */
+  sent.length = 0
+  await pickIr(irCab(0, 3, 0), { bank: 3, ir: 2 }, write)
+  assert.deepEqual(sent, [[4, 2]])
+  /* An unsure state is trusted for nothing. */
+  sent.length = 0
+  await pickIr({ ...irCab(0, 3, 0), unsure: true }, { bank: 3, ir: 2 }, write)
+  assert.deepEqual(sent, [[0, 3], [4, 2], [31, 0]])
+
+  /* A refused bank stops there. */
+  sent.length = 0
+  const noBank = await pickIr(irCab(1, 0, 2), { bank: 3, ir: 1 }, async (id, v) => (sent.push([id, v]), { ok: id !== 0 }))
+  assert.equal(noBank.ok, false)
+  assert.deepEqual(sent, [[0, 3]], 'the IR went out after the bank was refused')
+  /* A refused IR puts the bank back, rather than leaving the old number in a new bank. */
+  sent.length = 0
+  const noIr = await pickIr(irCab(0, 0, 2), { bank: 3, ir: 1 }, async (id, v) => (sent.push([id, v]), { ok: id !== 4 }))
+  assert.equal(noIr.ok, false)
+  assert.deepEqual(sent, [[0, 3], [4, 1], [0, 0]], 'the bank was not put back after the IR was refused')
+  assert.ok(!sent.some(([id]) => id === 31), 'the mode went out after the IR was refused')
+})
+
+test('undoing an IR pick puts back the bank and the IR, the mode first back to a DynaCab and last back to an IR', async () => {
+  const { pickCab, restoreCab, cabWas, cabShows, cabBackTo, cabAfter, taken } = await import('../shared/cab-pick.mjs')
+  const pick = { bank: 2, ir: 9, name: 'IR 10' }
+  const before = irCab(1, 0, 2)
+  const was = cabWas(before, [{ value: 3, name: '1x12 Blue' }], pick)
+  assert.deepEqual([was.kind, was.bank, was.ir, was.mode, was.name], ['ir', 0, 2, 1, '1x12 Blue'])
+  /* A DynaCab pick's undo is what it always was. */
+  assert.equal(cabWas(before, [], 11).kind, undefined)
+
+  const res = await pickCab(before, pick, async () => ({ ok: true }))
+  /* A read-back that failed: what the writes left, which shows the pick. */
+  const after = cabAfter(before, taken(res))
+  assert.ok(cabShows(after, pick), 'the state kept after a failed re-read does not show the IR')
+  assert.deepEqual([after.slots[0].bank.label, after.slots[0].irIndex, after.mode.value], ['USER', 9, 0])
+  assert.equal(cabShows(after, 11), false, 'an IR was taken for a DynaCab')
+
+  const sent = []
+  const back = await restoreCab(after, was, async (id, v) => (sent.push([id, v]), { ok: true }))
+  assert.equal(back.ok, true)
+  assert.deepEqual(sent, [[31, 1], [0, 0], [4, 2]], 'undoing back to a DynaCab played the IRs on the way')
+  /* Back to an IR, the mode stays last, as in a pick. */
+  const fromIr = irCab(0, 0, 2)
+  const wasIr = cabWas(fromIr, [], pick)
+  const onIr = []
+  await restoreCab(cabAfter(fromIr, taken(await pickCab(fromIr, pick, async () => ({ ok: true })))), wasIr, async (id, v) => (onIr.push([id, v]), { ok: true }))
+  assert.deepEqual(onIr, [[0, 0], [4, 2], [31, 0]], 'the undo left the old number in the new bank, or switched before the IR was back')
+  assert.ok(cabBackTo(before, was))
+  assert.equal(cabBackTo(irCab(1, 2, 2), was), false, 'a block in another bank was taken as put back')
+  /* A refused IR pick counts only the bank it put back. */
+  const half = await pickCab(irCab(0, 0, 2), pick, async (id) => ({ ok: id !== 4 }))
+  assert.equal(cabAfter(irCab(0, 0, 2), taken(half)).slots[0].bank.value, 0)
+})
+
+test('the browser picks an IR on the discrete path, and every route it uses travels from a phone', async () => {
+  const store = { 'forgefx.host': 'http://unit.test' }
+  globalThis.localStorage = {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => {
+      store[k] = String(v)
+    },
+    removeItem: (k) => {
+      delete store[k]
+    }
+  }
+  const seen = []
+  globalThis.fetch = async (url, options = {}) => {
+    const method = options.method || 'GET'
+    const path = String(url).replace('http://unit.test', '')
+    seen.push({ method, path, body: options.body ? JSON.parse(options.body) : null })
+    const answer = path.endsWith('/cab') ? irCab(1, 0, 2) : path === '/cab/irs' ? fm3Irs() : { ok: true }
+    return { ok: true, status: 200, statusText: 'OK', text: async () => JSON.stringify(answer) }
+  }
+  try {
+    const fx = await import('../src/lib/forgefx.js')
+    const { pickCab, irBanks, findIrs } = await import('../shared/cab-pick.mjs')
+    const cab = await fx.cabState(62)
+    const banks = irBanks(cab, await fx.listIrBanks(), irKnobs)
+    const row = findIrs(banks, 'tweed', null, 40).rows[0]
+    await pickCab(cab, row, (id, v) => fx.setEnum(62, id, v))
+    const writes = seen.filter((c) => c.method !== 'GET')
+    assert.deepEqual(
+      writes.map((c) => [c.method, c.path, c.body]),
+      [
+        ['PUT', '/preset/blocks/62/params/0', { value: 3, continuous: false }],
+        ['PUT', '/preset/blocks/62/params/4', { value: 1, continuous: false }],
+        ['PUT', '/preset/blocks/62/params/31', { value: 0, continuous: false }]
+      ]
+    )
+    assert.ok(!seen.some((c) => c.path.endsWith('/type')), 'an IR pick posted a model change')
+    for (const c of seen) assert.equal(forbiddenRemotely(c.method, c.path), null, `${c.method} ${c.path} is refused over the relay`)
+  } finally {
+    delete globalThis.fetch
+    delete globalThis.localStorage
+  }
+})
+
+test('the cab editor offers the IR picker and picks through the cab pick, with an undo that knows it', () => {
+  const src = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+  const panel = src.slice(src.indexOf('export function BlockPanel'), src.indexOf('function fmt('))
+  const cabWrite = panel.slice(panel.indexOf('const applyCab = async'), panel.indexOf('const swapModel = async'))
+  /* Taken, and the cab reads as something else: said on screen, after the
+     change line, whose read clears the error line. */
+  const elsewhere = cabWrite.search(/if \(read && !landed\) onError\(cabElsewhere\(read, models\)\)/)
+  assert.ok(elsewhere > 0, 'a cab the unit did not keep is reported as done')
+  assert.ok(elsewhere > cabWrite.indexOf('onChanged(`${block.name} → ${name}${read'), 'the word that the cab did not land is cleared by the change line after it')
+  /* The DynaCab's name, words and photo stay together; the IR control after them. */
+  assert.ok(panel.indexOf('<IrPicker ') > panel.indexOf('className="gear-photo"'), 'the IR picker sits between the DynaCab picker and the DynaCab’s own description and photo')
+  assert.match(panel, /listIrBanks\(\)/, 'the cab editor never reads the IR names')
+  assert.match(panel, /irBanks\(cab, irs, \{ named: params \}\)/, 'the IR banks are not built from the cab state')
+  assert.match(panel, /<IrPicker banks=\{irList\} now=\{irHere\} onPick=\{swapIr\}/, 'the cab editor has no IR picker')
+  assert.match(panel.replace(/\s+/g, ' '), /const swapIr = async \(pick\) => \{ try \{ await applyCab\(pick\)/, 'an IR pick does not go through the cab pick')
+  assert.match(cabWrite, /const was = cabWas\(before, models, value\)/, 'the undo is not told an IR was picked, so it cannot put the bank back')
+  const picker = readSrc(new URL('../src/components/IrPicker.jsx', import.meta.url), 'utf8')
+  assert.match(picker, /findIrs\(banks, hunt, onBank, SHOWN\)/, 'the IR list has no search')
+  assert.match(picker, /onPick\(\{ bank: r\.bank, ir: r\.ir, name: r\.name \}\)/)
+  assert.match(picker, /USER_IRS_NOTE/, 'nothing says why his own IRs are numbers')
+})
+
+test('the demo FM3 has the unit’s bank gap, and an IR picked in it lands and comes back', async () => {
+  const { createMockDevice } = await import('../src/lib/mockDevice.js')
+  const { pickCab, restoreCab, cabWas, cabShows, cabBackTo, irBanks, irNow, findIrs } = await import('../shared/cab-pick.mjs')
+  const unit = createMockDevice('fm3')
+  const cabBlock = (await unit.presetBlocks()).find((b) => b.slug === 'cab')
+  const eid = cabBlock.effectId
+  const write = (id, v) => unit.setEnum(eid, id, v)
+  const cab = unit.cabState(eid)
+  assert.equal(cab.bankOptions[2], 'USER', 'the demo has no USER bank where an FM3 has one')
+  assert.ok(!('USER' in unit.irs()), 'the demo names his own IRs, which the unit does not')
+  const banks = irBanks(cab, unit.irs(), await unit.blockParams(eid))
+  const legacy = banks.find((b) => b.name === 'Legacy')
+  assert.equal(legacy.value, 3)
+  const row = findIrs(banks, '', legacy.value, 40).rows[1]
+  const was = cabWas(cab, [], row)
+  await pickCab(cab, row, write)
+  const picked = unit.cabState(eid)
+  assert.ok(cabShows(picked, row), 'the demo does not show the IR that was picked')
+  assert.equal(irNow(picked, banks).name, row.name)
+  assert.equal(picked.slots[0].irName, row.name, 'the demo named the IR out of another bank')
+  await restoreCab(picked, was, write)
+  assert.ok(cabBackTo(unit.cabState(eid), was), 'the undo did not put the demo back on its DynaCab')
+  /* A User IR has no name, and says its number. */
+  await pickCab(unit.cabState(eid), { bank: 2, ir: 4 }, write)
+  assert.equal(irNow(unit.cabState(eid), banks).name, 'IR 5')
+})
+
+test('an IR pick the unit took but did not keep says what the unit is on', async () => {
+  const { createMockDevice } = await import('../src/lib/mockDevice.js')
+  const { pickCab, cabShows, cabShowing, cabElsewhere, irBanks, findIrs, CAB_REFUSED } = await import('../shared/cab-pick.mjs')
+  const unit = createMockDevice('fm3')
+  const eid = (await unit.presetBlocks()).find((b) => b.slug === 'cab').effectId
+  const cab = unit.cabState(eid)
+  const irParam = cab.slots[0].irParam
+  const banks = irBanks(cab, unit.irs(), await unit.blockParams(eid))
+  const pick = findIrs(banks, '', banks.find((b) => b.name === 'Legacy').value, 40).rows[1]
+  /* Every write answered ok, and the unit stores the next IR along. */
+  const res = await pickCab(cab, pick, (id, v) => unit.setEnum(eid, id, id === irParam ? v + 1 : v))
+  const read = unit.cabState(eid)
+  assert.equal(res.ok, true)
+  assert.equal(cabShows(read, pick), false, 'the demo kept the IR it was meant to miss')
+  const shown = cabShowing(read).name
+  assert.notEqual(shown, pick.name)
+  assert.equal(cabElsewhere(read, []), `The unit shows ${shown} instead.`)
+  assert.equal(cabElsewhere(null), CAB_REFUSED)
+})
+
+test('after a write throws part way through an IR pick, the next pick writes the bank again', async () => {
+  const { pickCab, cabLost } = await import('../shared/cab-pick.mjs')
+  const before = irCab(0, 0, 5)
+  const thrown = await pickCab(before, { bank: 1, ir: 10 }, async (id) => {
+    if (id === 4) throw new Error("Your computer didn't answer.")
+    return { ok: true }
+  }).catch((e) => e)
+  assert.ok(thrown instanceof Error)
+  /* The re-read failed too: the old numbers are kept, but not trusted. */
+  const held = cabLost(before, null)
+  assert.equal(held.unsure, true, 'the panel still trusts the bank the unit moved off')
+  const sent = []
+  await pickCab(held, { bank: 0, ir: 7 }, async (id, v) => (sent.push([id, v]), { ok: true }))
+  assert.deepEqual(sent, [[0, 0], [4, 7], [31, 0]], 'the next pick into the old bank skipped the bank write')
+  /* A good re-read is the answer. */
+  const fresh = irCab(0, 1, 5)
+  assert.equal(cabLost(before, fresh), fresh)
+  assert.equal(cabLost(before, { ...fresh, unsure: true }).slots[0].bank.value, 0)
+  assert.equal(cabLost(null, null), null)
+})
+
+
+
+/*
+ * "Amp model change resets the tone; Undo only restores the model."
+ *
+ * The FM3 loads a new model's own settings when the model changes, and the
+ * Undo remembered the model's number and nothing else. These drive the shared
+ * rule against a unit that does what the FM3 does: a model write puts every
+ * setting on the block back to that model's own.
+ */
+function modelBench({ knobs = 6, enums = 2, deaf = [], stubborn = [], refuseModel = false, blindAfter = Infinity } = {}) {
+  const own = (model) => ({
+    named: Array.from({ length: knobs }, (_, i) => ({
+      id: i,
+      name: ['Gain', 'Bass', 'Mid', 'Treble', 'Presence', 'Master', 'Bright', 'Depth'][i] || `Knob ${i}`,
+      value: model === 0 ? 2 : 5,
+      norm: model === 0 ? 0.2 : 0.5,
+      min: 0,
+      max: 10
+    })),
+    enums: Array.from({ length: enums }, (_, i) => ({ id: 100 + i, name: `Switch ${i}`, value: model === 0 ? 0 : 1, options: [] }))
+  })
+  const unit = { model: 0, ...own(0) }
+  const log = []
+  let reads = 0
+  const read = async () => {
+    reads++
+    if (reads > blindAfter) throw new Error('timeout')
+    return JSON.parse(JSON.stringify({ named: unit.named, enums: unit.enums, type: { value: unit.model, name: unit.model ? 'Plexi' : 'USA Clean' } }))
+  }
+  const knob = (id, v) => {
+    const k = unit.named.find((p) => p.id === id)
+    k.value = v
+    k.norm = v / 10
+  }
+  const io = (channel = 'A') => ({
+    channel,
+    setType: async (v) => {
+      log.push(['type', v])
+      if (refuseModel) return { ok: false }
+      unit.model = v
+      Object.assign(unit, own(v))
+      return { ok: true }
+    },
+    read,
+    write: async (p, v) => {
+      log.push(['knob', p.id, v])
+      /* A deaf knob ignores the plain write; the checked one reaches it. */
+      if (!deaf.includes(p.id) && !stubborn.includes(p.id)) knob(p.id, v)
+      return { ok: true }
+    },
+    writeChecked: async (p, v) => {
+      log.push(['checked', p.id, v])
+      if (!stubborn.includes(p.id)) knob(p.id, v)
+      return { ok: !stubborn.includes(p.id) }
+    },
+    writeEnum: async (id, v) => {
+      log.push(['enum', id, v])
+      unit.enums.find((e) => e.id === id).value = v
+      return { ok: true }
+    },
+    progress: (p) => log.push(['said', p.step, p.done, p.total])
+  })
+  return { unit, log, read, knob, io, reads: () => reads }
+}
+
+test('Undo after a model change puts back the model, every knob and every switch', async () => {
+  const { modelSnapshot, restoreModel, undoResult, undoOffer, settingsIn } = await import('../shared/model-undo.mjs')
+  const bench = modelBench()
+  /* His own tone on the old model: not the model's settings. */
+  bench.knob(1, 7.5)
+  bench.knob(4, 3.1)
+  bench.unit.enums[1].value = 3
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  assert.equal(settingsIn(snap), 8, 'the switches were left out of the snapshot')
+  assert.match(undoOffer(snap), /^Was USA Clean — Undo puts back the model and the 8 settings the app can see\.$/)
+
+  /* The pick: the unit loads the new model's own settings. */
+  await bench.io().setType(1)
+  assert.equal(bench.unit.named[1].value, 5, 'the bench does not do what the FM3 does')
+
+  bench.log.length = 0
+  const r = await restoreModel(snap, bench.io('A'))
+  assert.equal(bench.unit.model, 0, 'the old model did not go back')
+  assert.deepEqual(bench.unit.named.map((k) => k.value), [2, 7.5, 2, 2, 3.1, 2], 'the knobs are still the new model’s')
+  assert.deepEqual(bench.unit.enums.map((e) => e.value), [0, 3], 'the switches are still the new model’s')
+  assert.deepEqual(r.missed, [])
+  assert.equal(undoResult(r, snap).text, 'Put back all 8 settings the app can see.')
+  assert.equal(undoResult(r, snap).bad, false)
+  /* The model first, then only what the model write moved — and no checked
+     writes, because nothing missed. */
+  assert.deepEqual(bench.log[1], ['type', 0], 'the settings went out before the model')
+  const writes = bench.log.filter(([k]) => k === 'knob' || k === 'enum' || k === 'checked')
+  assert.deepEqual(
+    writes.map(([k, id]) => `${k}:${id}`),
+    ['knob:1', 'knob:4', 'enum:101'],
+    'settings the model write left alone were written again'
+  )
+  assert.ok(bench.log.some(([k, step]) => k === 'said' && step === 'settings'), 'nothing was said while it ran')
+})
+
+test('a setting that ignores the plain write gets the checked one; one that ignores both is named', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  /* Twenty-three settings, the way an amp has them. */
+  const bench = modelBench({ knobs: 8, enums: 15, deaf: [0], stubborn: [1, 6] })
+  for (let i = 0; i < 8; i++) bench.knob(i, 8)
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  bench.log.length = 0
+  const r = await restoreModel(snap, bench.io('A'))
+  const checked = bench.log.filter(([k]) => k === 'checked').map(([, id]) => id)
+  assert.deepEqual(checked, [0, 1, 6], 'only the misses get the checked write, and every miss gets it')
+  assert.equal(bench.unit.named[0].value, 8, 'the checked write did not reach the deaf knob')
+  assert.deepEqual(r.missed, ['Bass', 'Bright'])
+  const said = undoResult(r, snap)
+  assert.equal(said.text, "Put back 21 of 23 — Bass and Bright didn't take.")
+  assert.equal(said.bad, true)
+  assert.equal(said.keep, false, 'an Undo that ran is offered again')
+})
+
+test('Undo refuses on another channel, and says so without writing anything', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const bench = modelBench()
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  bench.log.length = 0
+  const r = await restoreModel(snap, bench.io('B'))
+  assert.equal(r.refused, 'channel')
+  assert.deepEqual(bench.log, [], 'channel A’s tone was written onto channel B')
+  const said = undoResult(r, snap)
+  assert.equal(said.keep, true, 'the offer went, so switching back to A cannot use it')
+  assert.match(said.text, /channel A/)
+})
+
+test('a model the unit will not go back to leaves every setting alone, and an unreadable finish says so', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const refused = modelBench({ refuseModel: true })
+  const snap = modelSnapshot(await refused.read(), { channel: 'A' })
+  refused.unit.model = 1
+  refused.log.length = 0
+  const r = await restoreModel(snap, refused.io('A'))
+  assert.equal(r.refused, 'model')
+  assert.ok(!refused.log.some(([k]) => k === 'knob' || k === 'enum'), 'settings were written onto the wrong model')
+  assert.equal(undoResult(r, snap).keep, true)
+
+  /* The settings went out, and the read that would check them never came back. */
+  const blind = modelBench({ blindAfter: 2 })
+  blind.knob(2, 9)
+  const snap2 = modelSnapshot(await blind.read(), { channel: 'A' })
+  await blind.io().setType(1)
+  const r2 = await restoreModel(snap2, blind.io('A'))
+  assert.equal(r2.unchecked, true)
+  assert.match(undoResult(r2, snap2).text, /couldn't read them back to check/)
+  assert.doesNotMatch(undoResult(r2, snap2).text, /Put back all/, 'an unchecked Undo was called done')
+  /* The panel is drawn from what the writes left, not from the read taken
+     before them — a knob drawn at the new model's 5 would be dragged from 5. */
+  assert.equal(blind.unit.named[2].value, 9)
+  assert.equal(r2.last.named.find((k) => k.id === 2).value, 9, 'the panel shows the new model’s settings after they were put back')
+})
+
+test('an Undo whose every write threw says nothing was sent, and keeps the way back', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const bench = modelBench({ blindAfter: 2 })
+  bench.knob(2, 9)
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  const cut = () => {
+    throw new Error("Can't reach the Fractal app")
+  }
+  const r = await restoreModel(snap, { ...bench.io('A'), write: cut, writeChecked: cut, writeEnum: cut })
+  assert.equal(r.unsent, true, 'writes that all threw were counted as sent')
+  const said = undoResult(r, snap)
+  assert.equal(said.keep, true, 'the snapshot of his tone was thrown away with nothing put back')
+  assert.doesNotMatch(said.text, /sent your settings/)
+  assert.match(said.text, /Try Undo again/)
+  /* The unit has the old model's own 2 on it, and so does the panel. */
+  assert.equal(bench.unit.named[2].value, 2)
+  assert.equal(r.last.named.find((k) => k.id === 2).value, 2, 'the panel shows settings that never went')
+})
+
+test('an Undo where some writes threw and the check could not be read says so, and keeps the way back', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const bench = modelBench({ knobs: 4, enums: 0, blindAfter: 2 })
+  for (let i = 0; i < 4; i++) bench.knob(i, 8)
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  const io = bench.io('A')
+  let n = 0
+  const write = io.write
+  /* A relay that times out on every other write. */
+  io.write = async (p, v) => {
+    if (n++ % 2) throw new Error("Your computer didn't answer.")
+    return write(p, v)
+  }
+  const r = await restoreModel(snap, io)
+  assert.equal(r.unchecked, true)
+  assert.equal(r.partial, true, 'writes that threw were counted as sent')
+  assert.deepEqual(bench.unit.named.map((k) => k.value), [8, 2, 8, 2])
+  const said = undoResult(r, snap)
+  assert.doesNotMatch(said.text, /sent your settings/, 'settings that never went were called sent')
+  assert.match(said.text, /Try Undo again/)
+  assert.equal(said.keep, true, 'the only record of his old settings was thrown away with half of them not sent')
+})
+
+test('an Undo whose every setting write threw, though the reads came back, keeps the way back', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const bench = modelBench({ knobs: 4, enums: 1 })
+  for (let i = 0; i < 4; i++) bench.knob(i, 8)
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  const cut = () => {
+    throw new Error("Your computer didn't answer.")
+  }
+  const r = await restoreModel(snap, { ...bench.io('A'), write: cut, writeChecked: cut, writeEnum: cut })
+  assert.equal(r.unchecked, false)
+  assert.equal(r.retry, true)
+  const said = undoResult(r, snap)
+  assert.equal(said.keep, true, 'an Undo that sent nothing threw its snapshot away')
+  assert.match(said.text, /Try Undo again/)
+})
+
+test('a model write that threw is not said to have been sent', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const bench = modelBench()
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  const blind = () => {
+    throw new Error('timeout')
+  }
+  const r = await restoreModel(snap, {
+    ...bench.io('A'),
+    setType: () => {
+      throw new Error("Can't reach the Fractal app")
+    },
+    read: blind
+  })
+  assert.equal(r.refused, 'unread')
+  assert.equal(r.modelSent, false, 'a model write that threw was counted as sent')
+  const said = undoResult(r, snap)
+  assert.doesNotMatch(said.text, /was sent/)
+  assert.equal(said.keep, true)
+  /* And one that went, with the read after it lost, is said to have gone. */
+  const r2 = await restoreModel(snap, { ...bench.io('A'), read: blind })
+  assert.equal(r2.refused, 'unread')
+  assert.equal(r2.modelSent, true)
+  assert.match(undoResult(r2, snap).text, /was sent/)
+})
+
+test('a knob with no known range is not taken as put back because its position reads 0 at both ends', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  /* The Axe-Fx II reports a position of 0 for a knob the catalog gives no range. */
+  const unit = { model: 0, sag: 30000, bass: 0.7 }
+  const read = async () => ({
+    type: { value: unit.model, name: unit.model ? 'Plexi' : 'USA Clean' },
+    named: [
+      { id: 1, name: 'Bass', value: unit.bass * 10, norm: unit.bass, min: 0, max: 10 },
+      { id: 2, name: 'Supply Sag', value: unit.sag, norm: 0 }
+    ],
+    enums: []
+  })
+  const snap = modelSnapshot(await read(), { channel: 'A' })
+  unit.model = 1
+  unit.sag = 12000
+  unit.bass = 0.5
+  const noRange = () => {
+    throw new Error('No range known')
+  }
+  const r = await restoreModel(snap, {
+    channel: 'A',
+    setType: async (v) => {
+      unit.model = v
+      return { ok: true }
+    },
+    read,
+    write: async (p, v) => {
+      if (p.id !== 1) return noRange()
+      unit.bass = v / 10
+      return { ok: true }
+    },
+    writeChecked: async (p, v) => {
+      if (p.id !== 1) return noRange()
+      unit.bass = v / 10
+      return { ok: true }
+    },
+    writeEnum: async () => ({ ok: true })
+  })
+  assert.deepEqual(r.missed, ['Supply Sag'], 'a knob still off was counted as back')
+  assert.doesNotMatch(undoResult(r, snap).text, /Put back all/)
+})
+
+test('an Undo stops the moment the block changes channel or preset, and sends nothing after', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const bench = modelBench()
+  for (let i = 0; i < 6; i++) bench.knob(i, 8)
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  bench.log.length = 0
+  /* A footswitch on the floor after the second setting went back. */
+  let here = true
+  let readsAtFlip = null
+  const io = bench.io('A')
+  const write = io.write
+  let writes = 0
+  io.write = async (p, v) => {
+    const r = await write(p, v)
+    if (++writes === 2) {
+      here = false
+      readsAtFlip = bench.reads()
+    }
+    return r
+  }
+  const r = await restoreModel(snap, { ...io, stillHere: () => here })
+  const after = bench.log.filter(([k]) => k === 'knob' || k === 'enum' || k === 'checked')
+  assert.equal(after.length, 2, 'channel A’s settings went on landing after the channel changed')
+  assert.equal(bench.reads(), readsAtFlip, 'the block was read again after it changed')
+  assert.equal(r.stopped, true)
+  const said = undoResult(r, snap)
+  assert.equal(said.keep, true, 'the way back went, with half of it undone')
+  assert.match(said.text, /channel A/)
+  /* And one that has changed before the first write sends nothing at all. */
+  bench.log.length = 0
+  const r0 = await restoreModel(snap, { ...bench.io('A'), stillHere: () => false })
+  assert.equal(r0.stopped, true)
+  assert.deepEqual(bench.log.filter(([k]) => k !== 'said'), [], 'the model went out onto a block that had moved')
+})
+
+test('the demo FM3 loses its knobs on a model change, and Undo puts them back', async () => {
+  const { createMockDevice } = await import('../src/lib/mockDevice.js')
+  const { modelSnapshot, restoreModel } = await import('../shared/model-undo.mjs')
+  const unit = createMockDevice('fm3')
+  const amp = (await unit.presetBlocks()).find((b) => b.slug === 'amp')
+  const eid = amp.effectId
+  const first = await unit.blockParams(eid)
+  const turned = first.named.find((p) => !p.log && p.max > p.min)
+  const want = turned.min + (turned.max - turned.min) * 0.83
+  await unit.setParam(eid, turned.id, toNormalized(want, turned))
+  const snap = modelSnapshot(await unit.blockParams(eid), { channel: amp.channel ?? null })
+  const other = (await unit.blockTypes('amp')).find((m) => m.value !== snap.type.value)
+  await unit.setType(eid, other.value)
+  const moved = (await unit.blockParams(eid)).named.find((p) => p.id === turned.id)
+  assert.ok(Math.abs(moved.value - want) > 0.01, 'the demo keeps a knob across a model change, which the FM3 does not')
+  const r = await restoreModel(snap, {
+    channel: amp.channel ?? null,
+    setType: (v) => unit.setType(eid, v),
+    read: () => unit.blockParams(eid),
+    write: (p, v) => unit.setParam(eid, p.id, toNormalized(v, p)),
+    writeChecked: (p, v) => unit.setParam(eid, p.id, toNormalized(v, p)),
+    writeEnum: (id, v) => unit.setEnum(eid, id, v)
+  })
+  assert.deepEqual(r.missed, [])
+  const back = await unit.blockParams(eid)
+  assert.equal(back.type.value, snap.type.value)
+  assert.ok(Math.abs(back.named.find((p) => p.id === turned.id).value - want) < 0.05, 'the turned knob did not come back')
+})
+
+test('the browser snapshots the block before a model pick, and its Undo puts the settings back', () => {
+  const src = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+  const panel = src.slice(src.indexOf('export function BlockPanel'), src.indexOf('function fmt('))
+  const apply = panel.slice(panel.indexOf('const applyModel = async'), panel.indexOf('const applyCab = async'))
+  const undo = panel.slice(panel.indexOf('const undoModel = async'), panel.indexOf('return (\n    <div className="block-panel">'))
+  assert.ok(apply.length > 100 && undo.length > 100, 'the model swap moved; this check reads it')
+  /* The snapshot is a fresh read, taken before the write that loses it. */
+  const snapAt = apply.indexOf('modelSnapshot(')
+  assert.ok(snapAt > 0, 'a model pick keeps no snapshot of the settings')
+  assert.ok(apply.indexOf('await blockParams(block.effectId)') < snapAt, 'the snapshot is not a fresh read')
+  assert.ok(snapAt < apply.indexOf('await setType(block.effectId'), 'the snapshot is taken after the model write')
+  assert.match(apply, /channel: block\.channel \?\? null/, 'the snapshot does not know which channel it is for')
+  /* No eight seconds: it stays until the next pick or the editor closing. */
+  assert.doesNotMatch(apply, /setTimeout/, 'a model Undo still runs out on a timer')
+  assert.match(apply, /if \(before\) setUndo\(before\)/)
+  /* Undo is the restore, not a fresh pick of the old model. */
+  assert.match(undo, /await restoreModel\(back, \{/)
+  assert.doesNotMatch(undo, /applyModel\(/, 'Undo is a pick of the old model again, settings and all lost')
+  assert.match(undo, /writeChecked: \(p, v\) => setParamConfirmed\(eid, p\.id, v, p\)/, 'the misses are not retried with the checked write')
+  assert.match(undo, /channel: block\.channel \?\? null/, 'Undo cannot tell the channel has moved')
+  assert.match(undo, /progress: \(p\) => setRestoring\(\{ eid, \.\.\.p \}\)/, 'Undo shows nothing while it runs')
+  /* Every write lands on whichever channel is live: another one stops it. */
+  assert.match(undo, /stillHere: here\b/, 'an Undo goes on writing channel A’s settings after the channel changed')
+  /* The pre-pick read is a round trip; a block that moved in it is not the one tapped. */
+  const recheck = apply.indexOf('if (liveKey.current !== key) return')
+  assert.ok(recheck > snapAt && recheck < apply.indexOf('await setType(block.effectId'), 'the model goes to a channel or preset that came up during the read')
+  /* Said to the block it happened to, and locking only that block. */
+  const flatUndo = undo.replace(/\s+/g, ' ')
+  assert.match(flatUndo, /if \(onThis\(\)\) \{ if \(!said\.keep\) setUndo\(null\) setUndoSaid\(said\)/, 'an Undo’s answer shows up under another block')
+  assert.match(panel, /const restoringHere = restoring && block && restoring\.eid === block\.effectId \? restoring : null/)
+  assert.doesNotMatch(panel, /disabled=\{[^}]*!!restoring\}/, 'another block’s picker is locked by this one’s Undo')
+  assert.match(panel, /disabled=\{busy \|\| !!restoringHere\}\s*>\s*\{ch\}/, 'a channel can be changed under a running Undo')
+  /* And it says so on screen: the offer, the progress, the outcome, the hint. */
+  assert.match(panel, /restoringHere \? undoProgress\(restoringHere, undo\) : undoOffer\(undo\)/)
+  assert.match(panel, /\{undoSaid\.text\}/)
+  assert.match(panel, /\{MODEL_HINT\}/, 'the hint under the picker is gone')
+  /* Its state is kept above the early return, or the first empty panel crashes. */
+  const early = panel.indexOf('if (!block) {')
+  for (const hook of ['const [restoring, setRestoring] = useState', 'const [undoSaid, setUndoSaid] = useState']) {
+    assert.ok(panel.indexOf(hook) > 0 && panel.indexOf(hook) < early, `${hook} is below the early return`)
+  }
+  /* A Revert or another preset puts other settings on the block: the offer goes. */
+  assert.match(panel, /\}, \[block\?\.effectId, rev\]\)/, 'an Undo outlives the preset loading again')
+})
+
+console.log('\nsaving from away')
+
+const saveWait = await import('../shared/save-wait.mjs')
+
+/* A hand-turned clock for the wait: `sleep` never resolves on its own, so
+   only an announcement or the test turning the clock moves anything. */
+function waitBench() {
+  let t = 5000
+  const naps = []
+  const sleep = (ms) =>
+    new Promise((go) => {
+      naps.push({ at: t + ms, go })
+    })
+  const turn = async (ms) => {
+    const end = t + ms
+    for (;;) {
+      naps.sort((a, b) => a.at - b.at)
+      const next = naps[0]
+      if (!next || next.at > end) break
+      naps.shift()
+      t = next.at
+      next.go()
+      for (let i = 0; i < 20; i++) await null
+    }
+    t = end
+    for (let i = 0; i < 20; i++) await null
+  }
+  const docs = { result: null, progress: null }
+  const heard = new Set()
+  const listen = (fn) => (heard.add(fn), () => heard.delete(fn))
+  const announce = (id, data) => heard.forEach((fn) => fn(id, data))
+  const written = []
+  return {
+    now: () => t,
+    sleep,
+    turn,
+    docs,
+    heard,
+    announce,
+    written,
+    opts: (over = {}) => ({
+      id: 'r1',
+      resultDoc: 'fractal.saveResult.fm3',
+      progressDoc: 'fractal.saveProgress.fm3',
+      readResult: async () => docs.result,
+      readProgress: async () => docs.progress,
+      cancelRequest: async () => written.push(saveWait.cancelledSave('r1')),
+      listen,
+      sleep,
+      now: () => t,
+      ...over
+    })
+  }
+}
+
+test('a save from away is answered the moment the computer writes, not on the next look', async () => {
+  /*
+   * "Save takes 60-90 s." The write is one message to the unit; the minute was
+   * the looking. The computer announces every write to its store, and the
+   * wait now hears its answer in that announcement. Here the timed look never
+   * comes at all — the clock does not move — so only the announcement can
+   * have ended it.
+   */
+  const b = waitBench()
+  const w = saveWait.startSaveWait(b.opts())
+  let said = null
+  w.done.then((x) => (said = x))
+  for (let i = 0; i < 20; i++) await null
+  assert.equal(said, null)
+  /* Somebody else's answer, and another document: neither is this one. */
+  b.announce('fractal.saveResult.fm3', { id: 'other', ok: true, slot: 3 })
+  b.announce('scene-names-fm3:12', { id: 'r1', ok: true })
+  for (let i = 0; i < 20; i++) await null
+  assert.equal(said, null, 'an answer to another request, or another document, ended this wait')
+  b.announce('fractal.saveResult.fm3', { id: 'r1', ok: true, slot: 12 })
+  for (let i = 0; i < 20; i++) await null
+  assert.deepEqual(said, { ok: true, slot: 12 }, 'the announced answer was not taken')
+  assert.equal(b.heard.size, 0, 'the wait keeps listening after it has its answer')
+})
+
+test('a save from away that nobody picks up says so, then gives up and writes over the request', async () => {
+  const b = waitBench()
+  /* The Mac leaves the last save's note in place: that one is not this one. */
+  b.docs.progress = { id: 'r0', picked: true }
+  const states = []
+  const w = saveWait.startSaveWait(b.opts({ onState: (s) => states.push({ ...s }) }))
+  let said = null
+  w.done.then((x) => (said = x))
+  await b.turn(saveWait.SAVE_LATE_MS - 1000)
+  assert.deepEqual(states.filter((s) => s.late), [], 'it spoke up before it was late')
+  await b.turn(2000 + saveWait.SAVE_POLL_MS)
+  assert.ok(states.some((s) => s.late && !s.picked), 'a late save says nothing about it')
+  assert.equal(said, null)
+  await b.turn(saveWait.SAVE_WAIT_MS)
+  assert.ok(said, 'the wait goes on for ever')
+  assert.equal(said.ok, false)
+  assert.equal(said.timedOut, true)
+  assert.equal(said.error, saveWait.SAVE_TIMED_OUT)
+  /* Written over, since a phone cannot delete: an old or a sleeping computer
+     that wakes later passes over a request with no slot in it. */
+  assert.deepEqual(b.written, [{ id: 'r1', cancelled: true }], 'the request is left for a computer to carry out later')
+  assert.ok(!('slot' in saveWait.cancelledSave('r1')))
+})
+
+test('a computer that has picked the save up gets longer, and its answer after a cancel is believed', async () => {
+  const b = waitBench()
+  const w = saveWait.startSaveWait(b.opts())
+  let said = null
+  w.done.then((x) => (said = x))
+  /* In its own document: phones already out there take any answer as final. */
+  b.docs.progress = { id: 'r1', picked: true }
+  b.announce('fractal.saveProgress.fm3', b.docs.progress)
+  await b.turn(saveWait.SAVE_WAIT_MS + 1000)
+  assert.equal(said, null, 'a computer part-way through a save is given up on at the same moment as one that never answered')
+  assert.equal(b.written.length, 0, 'a computer part-way through a save had its request written over at two minutes')
+  assert.notEqual(saveWait.saveProgressDoc('fm3'), saveWait.saveResultDoc('fm3'))
+  /* Cancel while it is writing, and it answers in the next moment. */
+  w.cancel()
+  for (let i = 0; i < 20; i++) await null
+  b.docs.result = { id: 'r1', ok: true, slot: 40 }
+  await b.turn(2000)
+  assert.deepEqual(said, { ok: true, slot: 40 }, 'a save that happened was reported as cancelled')
+  assert.equal(b.written.length, 1, 'the cancel was not written over the request')
+})
+
+test('a Cancel the computer may be too late for waits to hear what it did', async () => {
+  /*
+   * The computer checks the request one last time, then stores. A cancel that
+   * lands just after that check cannot stop it, and "Nothing was saved" over a
+   * slot that was just written is the one answer that loses a preset.
+   */
+  const b = waitBench()
+  const w = saveWait.startSaveWait(b.opts())
+  let said = null
+  w.done.then((x) => (said = x))
+  b.docs.progress = { id: 'r1', picked: true }
+  b.announce('fractal.saveProgress.fm3', b.docs.progress)
+  await b.turn(700)
+  w.cancel()
+  for (let i = 0; i < 40; i++) await null
+  await b.turn(2000)
+  for (let i = 0; i < 200; i++) await null
+  assert.equal(said, null, 'a slow answer after a cancel was taken for nothing saved')
+  b.docs.result = { id: 'r1', ok: true, slot: 40 }
+  b.announce('fractal.saveResult.fm3', b.docs.result)
+  for (let i = 0; i < 40; i++) await null
+  assert.deepEqual(said, { ok: true, slot: 40 }, 'a save that happened was reported as cancelled')
+
+  /* Picked up only as the cancel lands, and heard of only by looking. The
+     computer that obeyed says so, and that is what is said. */
+  const b2 = waitBench()
+  const w2 = saveWait.startSaveWait(
+    b2.opts({ cancelRequest: async () => { b2.docs.progress = { id: 'r1', picked: true } } })
+  )
+  let said2 = null
+  w2.done.then((x) => (said2 = x))
+  await b2.turn(500)
+  w2.cancel()
+  for (let i = 0; i < 40; i++) await null
+  assert.equal(said2, null, 'a pickup seen only after the cancel was not looked for')
+  b2.docs.result = { id: 'r1', ok: false, cancelled: true, error: saveWait.SAVE_CANCELLED }
+  await b2.turn(2000)
+  assert.deepEqual(said2, { ok: false, error: saveWait.SAVE_CANCELLED, cancelled: true }, 'the computer’s own cancel reads as a failure')
+
+  /* And one that never answers is not said to have saved nothing. */
+  const b3 = waitBench()
+  const w3 = saveWait.startSaveWait(b3.opts())
+  let said3 = null
+  w3.done.then((x) => (said3 = x))
+  b3.docs.progress = { id: 'r1', picked: true }
+  b3.announce('fractal.saveProgress.fm3', b3.docs.progress)
+  await b3.turn(700)
+  w3.cancel()
+  for (let i = 0; i < 40; i++) await null
+  await b3.turn(saveWait.SAVE_WORKING_MS + 2000)
+  assert.ok(said3, 'a cancel after pickup waits for ever')
+  assert.equal(said3.error, saveWait.SAVE_UNSURE)
+  assert.ok(!said3.cancelled, 'a save that may have happened is shown as a quiet cancel')
+})
+
+test('a computer that took the save and then went quiet is not said to have saved nothing', async () => {
+  const b = waitBench()
+  const w = saveWait.startSaveWait(b.opts())
+  let said = null
+  w.done.then((x) => (said = x))
+  b.docs.progress = { id: 'r1', picked: true }
+  b.announce('fractal.saveProgress.fm3', b.docs.progress)
+  for (let i = 0; i < 20; i++) await null
+  await b.turn(saveWait.SAVE_WAIT_MS + saveWait.SAVE_WORKING_MS + saveWait.SAVE_POLL_MS + 2000)
+  assert.ok(said, 'the wait goes on for ever')
+  assert.equal(said.ok, false)
+  assert.equal(said.timedOut, true)
+  assert.equal(said.error, saveWait.SAVE_UNSURE, 'a computer that had the save is said to have saved nothing')
+  assert.deepEqual(b.written, [{ id: 'r1', cancelled: true }])
+})
+
+test('a cancel that could not reach the computer does not promise nothing was saved', async () => {
+  const failing = { cancelRequest: async () => { throw new Error('relay') } }
+  const b = waitBench()
+  const w = saveWait.startSaveWait(b.opts(failing))
+  let said = null
+  w.done.then((x) => (said = x))
+  await b.turn(saveWait.SAVE_POLL_MS)
+  w.cancel()
+  for (let i = 0; i < 40; i++) await null
+  assert.equal(said.error, saveWait.SAVE_UNSENT)
+  assert.ok(!said.cancelled, 'a request still parked on the computer is shown as a quiet cancel')
+  assert.ok(!/Nothing was saved/i.test(said.error))
+  /* The same when it gives up on its own. */
+  const b2 = waitBench()
+  const w2 = saveWait.startSaveWait(b2.opts(failing))
+  let said2 = null
+  w2.done.then((x) => (said2 = x))
+  await b2.turn(saveWait.SAVE_WAIT_MS + 1000)
+  assert.equal(said2.error, saveWait.SAVE_UNSENT, 'a timeout whose overwrite failed says nothing was saved')
+  assert.equal(said2.timedOut, true)
+  /* And an answer that turns up on the last look is still what happened. */
+  const b3 = waitBench()
+  const w3 = saveWait.startSaveWait(
+    b3.opts({ cancelRequest: async () => { b3.docs.result = { id: 'r1', ok: true, slot: 9 }; throw new Error('relay') } })
+  )
+  let said3 = null
+  w3.done.then((x) => (said3 = x))
+  await b3.turn(saveWait.SAVE_POLL_MS)
+  w3.cancel()
+  for (let i = 0; i < 40; i++) await null
+  assert.deepEqual(said3, { ok: true, slot: 9 })
+})
+
+test('Cancel ends the wait at once and says nothing was saved', async () => {
+  const b = waitBench()
+  const w = saveWait.startSaveWait(b.opts())
+  let said = null
+  w.done.then((x) => (said = x))
+  await b.turn(saveWait.SAVE_POLL_MS * 2)
+  w.cancel()
+  for (let i = 0; i < 40; i++) await null
+  assert.deepEqual(said, { ok: false, error: saveWait.SAVE_CANCELLED, cancelled: true })
+  assert.deepEqual(b.written, [{ id: 'r1', cancelled: true }])
+  /* And a screen going away is not a cancel: nothing is written. */
+  const b2 = waitBench()
+  const w2 = saveWait.startSaveWait(b2.opts())
+  let said2 = null
+  w2.done.then((x) => (said2 = x))
+  w2.stop()
+  for (let i = 0; i < 40; i++) await null
+  assert.equal(said2.stopped, true)
+  assert.deepEqual(b2.written, [])
+})
+
+/*
+ * "Put back" and "Play it" from the phone, or the website on one.
+ *
+ * Both went to the unit as /version/…, which the relay refuses — so from away
+ * both buttons failed. Now the phone leaves a request in the computer's store
+ * and the Mac window carries it out, as it does a save. And the panel's
+ * promise that a copy is taken before a slot is overwritten is kept: a Put
+ * back snapshots the slot first, or does not write it.
+ */
+const restoreMod = await import('../src/lib/restoreViaComputer.js')
+
+function restoreBench({ versions, snapshot, bytes = [0xf0, 1, 2, 0xf7], slug = 'fm3', outside = () => false, slotName } = {}) {
+  const calls = []
+  const api = {
+    listVersions: async () => {
+      calls.push('list')
+      return { versions: versions ?? [{ id: 'v1', location: 12, model: 'FM3', name: 'Clean' }] }
+    },
+    versionBytes: async (id) => {
+      calls.push(`bytes ${id}`)
+      return bytes
+    },
+    snapshotSlot: async (n) => {
+      calls.push(`snapshot ${n}`)
+      if (snapshot) return snapshot(n)
+      return { version: { id: 'kept', location: n } }
+    },
+    loadPresetBytes: async (b) => {
+      calls.push(`load ${b.length}`)
+      return { ok: true }
+    },
+    storePreset: async (n) => {
+      calls.push(`store ${n}`)
+      return { ok: true }
+    },
+    slotName: async (n) => {
+      calls.push(`name ${n}`)
+      return slotName ? slotName(n) : 'Clean'
+    },
+    unitSlug: () => slug,
+    slotOutside: outside
+  }
+  return { api, calls }
+}
+
+test('Put back reads the snapshot, keeps a copy of the slot, then writes it — in that order', async () => {
+  const { api, calls } = restoreBench()
+  const done = await restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12, model: 'FM3' }, api)
+  /*
+   * The bytes before the copy: the computer keeps thirty snapshots a slot and
+   * the copy is a thirty-first, so putting back the oldest would push out the
+   * very snapshot being put back.
+   */
+  assert.deepEqual(calls, ['list', 'bytes v1', 'snapshot 12', 'load 4', 'store 12'])
+  assert.equal(done.ok, true)
+  assert.equal(done.kept, true)
+  assert.equal(done.slot, 12)
+  assert.match(done.said, /kept as a snapshot/)
+})
+
+const unprocessable = () => {
+  const err = new Error('empty/invalid preset')
+  err.status = 422
+  throw err
+}
+
+test('an empty slot has nothing to keep, and any other failure to keep a copy writes nothing', async () => {
+  /* The unit's own word for an empty slot, with the old name's tail on it. */
+  const empty = restoreBench({ snapshot: unprocessable, slotName: () => '<EMPTY>k Album Chug' })
+  const done = await restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, empty.api)
+  assert.equal(done.kept, false)
+  assert.deepEqual(empty.calls.slice(-2), ['load 4', 'store 12'], 'an empty slot stopped the Put back')
+  assert.match(done.said, /empty, so there was nothing to keep/)
+
+  const broken = restoreBench({
+    snapshot: () => {
+      const err = new Error('unit busy')
+      err.status = 503
+      throw err
+    }
+  })
+  await assert.rejects(
+    restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, broken.api),
+    /Couldn’t keep a copy of what’s in slot 12 first, so nothing was changed/
+  )
+  assert.ok(!broken.calls.some((c) => c.startsWith('load') || c.startsWith('store')), 'a slot was written over with no copy kept')
+})
+
+test('a 422 on a slot with a preset in it is a copy that failed, not an empty slot', async () => {
+  /*
+   * The computer answers 422 for "empty/invalid preset" — and a real preset
+   * whose dump came back failing its checksum is the invalid half. A name, a
+   * blank name (what an unread name comes back as), or no name at all: none
+   * is the unit saying the slot is empty, so nothing is written.
+   */
+  for (const slotName of [() => 'Clean Lead', () => '', () => { throw new Error('no answer') }]) {
+    const bench = restoreBench({ snapshot: unprocessable, slotName })
+    await assert.rejects(
+      restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, bench.api),
+      /Couldn’t keep a copy of what’s in slot 12 first, so nothing was changed/
+    )
+    assert.ok(!bench.calls.some((c) => /^(load|store)/.test(c)), 'a real preset was written over with no copy kept')
+  }
+
+  /* A damaged dump is usually a one-off: asked for once more, and kept. */
+  let tries = 0
+  const again = restoreBench({
+    slotName: () => 'Clean Lead',
+    snapshot: (n) => (++tries === 1 ? unprocessable() : { version: { id: 'kept', location: n } })
+  })
+  const done = await restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, again.api)
+  assert.equal(done.kept, true)
+  assert.deepEqual(again.calls.filter((c) => !/^(list|bytes|name)/.test(c)), ['snapshot 12', 'snapshot 12', 'load 4', 'store 12'])
+  assert.ok(!/empty/.test(done.said))
+})
+
+test('a restore leaves Play it unsaved and Put back saved, wherever it was carried out', () => {
+  assert.equal(restoreMod.dirtyAfterRestore('play'), true, 'Play it says "save it to keep it" with no Save button to do it')
+  assert.equal(restoreMod.dirtyAfterRestore('put'), false, 'Put back still shows edits it just wrote over as unsaved')
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  assert.match(app, /const afterRestore = \(mode\) => \{\s*const unsaved = dirtyAfterRestore\(mode\)\s*dirtyRef\.current = unsaved\s*setDirty\(unsaved\)/)
+  const ask = app.slice(app.indexOf('const restoreFromVersion'), app.indexOf('const cancelQueuedRestore'))
+  assert.match(ask, /const done = await restoreNow\([\s\S]*?\)\s*afterRestore\(done\.mode\)/, 'at the Mac')
+  assert.match(ask, /if \(said\.ok\) \{\s*afterRestore\(said\.mode \|\| mode\)/, 'from the phone')
+  const mac = app.slice(app.indexOf('const handledRestores'), app.indexOf('}, [status, remote, restoreApi])'))
+  assert.match(mac, /if \(out\.ok\) \{\s*afterRestoreLater\.current\(out\.mode\)/, 'at the Mac, for the phone')
+})
+
+test('a snapshot that has gone, moved, or belongs to another unit is refused before anything is written', async () => {
+  const writes = (calls) => calls.filter((c) => /^(snapshot|load|store)/.test(c))
+  const gone = restoreBench({ versions: [] })
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, gone.api), { message: restoreMod.RESTORE_GONE })
+  assert.deepEqual(writes(gone.calls), [])
+  /* A list that could not be read is not a snapshot that has gone. */
+  const unread = restoreBench()
+  unread.api.listVersions = async () => {
+    unread.calls.push('list')
+    throw new Error('Can’t reach the Fractal app on your computer.')
+  }
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, unread.api), { message: restoreMod.RESTORE_NO_LIST })
+  assert.notEqual(restoreMod.RESTORE_NO_LIST, restoreMod.RESTORE_GONE)
+  assert.ok(!unread.calls.some((c) => /^(bytes|snapshot|load|store)/.test(c)))
+
+  const moved = restoreBench()
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 13 }, moved.api), { message: restoreMod.RESTORE_MOVED })
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'play', slot: 12, model: 'FM9' }, moved.api), { message: restoreMod.RESTORE_MOVED })
+  assert.deepEqual(writes(moved.calls), [])
+
+  const other = restoreBench({ slug: 'axefxiii' })
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'play', slot: 12 }, other.api), /from an FM3/)
+  assert.deepEqual(writes(other.calls), [])
+  /* A unit nobody has named yet, or a model the computer could not place, is not evidence. */
+  const unnamed = restoreBench({ slug: 'device', versions: [{ id: 'v1', location: 12, model: 'model_0x99' }] })
+  assert.equal((await restoreMod.restoreNow({ versionId: 'v1', mode: 'play', slot: 12 }, unnamed.api)).ok, true)
+
+  const outside = restoreBench({ outside: (n) => n > 3 })
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, outside.api), /isn’t on this unit/)
+  assert.deepEqual(writes(outside.calls), [])
+
+  const unreadable = restoreBench({ bytes: null })
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, unreadable.api), { message: restoreMod.RESTORE_UNREADABLE })
+  assert.deepEqual(writes(unreadable.calls), [], 'a copy was taken of a slot whose Put back was never going to happen')
+})
+
+test('Play it loads the snapshot and writes no slot', async () => {
+  const { api, calls } = restoreBench()
+  const done = await restoreMod.restoreNow({ versionId: 'v1', mode: 'play', slot: 12 }, api)
+  assert.deepEqual(calls, ['list', 'bytes v1', 'load 4'])
+  assert.equal(done.mode, 'play')
+  assert.match(done.said, /isn’t saved to a slot/)
+})
+
+function macBench(parked, over = {}) {
+  const { api, calls } = restoreBench(over)
+  const told = []
+  let doc = parked
+  Object.assign(api, {
+    take: async () => doc,
+    clear: async () => {
+      calls.push('clear')
+      doc = null
+      return true
+    },
+    picked: async (id) => calls.push(`picked ${id}`),
+    report: async (r) => told.push(r)
+  })
+  return { api, calls, told, set: (d) => (doc = d) }
+}
+
+test('the Mac carries out a parked Put back once, says it has it first, and tells the phone how it went', async () => {
+  const req = { id: 'r1', mode: 'put', versionId: 'v1', slot: 12, model: 'FM3', at: 1000 }
+  const m = macBench(req)
+  const handled = new Set()
+  const out = await restoreMod.carryOutRestore(req, m.api, { handled, now: () => 2000 })
+  assert.ok(handled.has('r1'))
+  assert.ok(m.calls.indexOf('picked r1') > -1 && m.calls.indexOf('picked r1') < m.calls.indexOf('store 12'), 'the phone is not told the computer has it before the write')
+  assert.equal(out.ok, true)
+  assert.equal(m.told.length, 1)
+  assert.equal(m.told[0].id, 'r1')
+  assert.match(m.told[0].said, /slot 12/)
+  assert.ok(m.calls.includes('clear'))
+  /* Looked at again after it ran: not done twice. */
+  assert.equal(await restoreMod.carryOutRestore(req, m.api, { handled, now: () => 2000 }), null)
+  assert.equal(m.calls.filter((c) => c === 'store 12').length, 1)
+  /* Looked at again while it is still running (an effect run again partway through): the mark comes before the first wait, so only one carries it out. */
+  const both = macBench(req)
+  const twice = new Set()
+  const [a, b] = await Promise.all([
+    restoreMod.carryOutRestore(req, both.api, { handled: twice, now: () => 2000 }),
+    restoreMod.carryOutRestore(req, both.api, { handled: twice, now: () => 2000 })
+  ])
+  assert.equal([a, b].filter((x) => x === null).length, 1, 'a second look partway through carried it out as well')
+  assert.equal(both.calls.filter((c) => c === 'store 12').length, 1)
+  assert.equal(both.told.length, 1)
+})
+
+test('the Mac passes over a cancelled, stale or failed restore and says so every time', async () => {
+  /* Cancelled: the phone wrote over it with no version in it. */
+  assert.equal(await restoreMod.carryOutRestore(restoreMod.cancelledRestore('r1'), macBench(null).api, { handled: new Set() }), null)
+
+  const req = { id: 'r1', mode: 'put', versionId: 'v1', slot: 12, at: 1000 }
+  const stale = macBench(req)
+  const out = await restoreMod.carryOutRestore(req, stale.api, { handled: new Set(), now: () => 1000 + restoreMod.RESTORE_FRESH_MS })
+  assert.deepEqual([out.ok, out.error], [false, restoreMod.RESTORE_STALE])
+  assert.ok(!stale.calls.some((c) => /^(bytes|snapshot|load|store)/.test(c)))
+
+  /* Called off after the Mac first saw it: asked once more, before writing. */
+  const late = macBench(restoreMod.cancelledRestore('r1'))
+  const off = await restoreMod.carryOutRestore(req, late.api, { handled: new Set(), now: () => 2000 })
+  assert.equal(off.cancelled, true)
+  assert.equal(late.told[0].error, restoreMod.RESTORE_CANCELLED)
+  assert.ok(!late.calls.some((c) => /^(snapshot|load|store)/.test(c)), 'a cancelled Put back was written')
+
+  const gone = macBench(req, { versions: [] })
+  const refused = await restoreMod.carryOutRestore(req, gone.api, { handled: new Set(), now: () => 2000 })
+  assert.equal(refused.ok, false)
+  assert.equal(gone.told[0].error, restoreMod.RESTORE_GONE, 'the phone is left waiting on a request the computer refused')
+})
+
+test('the phone waits for a restore with the save’s rules and its own words', async () => {
+  const b = waitBench()
+  const w = restoreMod.startRestoreWait({ ...b.opts(), slug: 'fm3' })
+  let said = null
+  w.done.then((x) => (said = x))
+  /* An old Mac window never answers. The phone says so, sooner than a save does. */
+  await b.turn(restoreMod.RESTORE_WAIT_MS + 1000)
+  assert.ok(restoreMod.RESTORE_WAIT_MS < saveWait.SAVE_WAIT_MS)
+  assert.equal(said?.error, restoreMod.RESTORE_TIMED_OUT)
+  assert.match(restoreMod.RESTORE_TIMED_OUT, /may need updating/)
+  assert.deepEqual(b.written, [{ id: 'r1', cancelled: true }], 'a Mac woken later can still carry out what the phone gave up on')
+
+  /* And the computer's own words for what it did come through. */
+  const b2 = waitBench()
+  const w2 = restoreMod.startRestoreWait({ ...b2.opts(), slug: 'fm3' })
+  let said2 = null
+  w2.done.then((x) => (said2 = x))
+  b2.announce('fractal.saveResult.fm3', { id: 'r1', ok: true, slot: 1 })
+  for (let i = 0; i < 20; i++) await null
+  assert.equal(said2, null, 'a save’s answer ended a restore’s wait')
+  b2.announce(restoreMod.restoreResultDoc('fm3'), { id: 'r1', ok: true, slot: 12, said: 'Put it back.' })
+  for (let i = 0; i < 20; i++) await null
+  assert.deepEqual(said2, { ok: true, slot: 12, said: 'Put it back.' })
+  assert.ok(restoreMod.RESTORE_FRESH_MS >= restoreMod.RESTORE_WAIT_MS + restoreMod.RESTORE_WORKING_MS)
+})
+
+test('a restore travels the store, and the relay still refuses /version itself', () => {
+  assert.equal(forbiddenRemotely('PUT', `/store/config/${restoreMod.pendingRestoreDoc('fm3')}`), null)
+  assert.equal(forbiddenRemotely('GET', `/store/config/${restoreMod.restoreResultDoc('fm3')}`), null)
+  assert.equal(forbiddenRemotely('GET', `/store/config/${restoreMod.restoreProgressDoc('fm3')}`), null)
+  assert.ok(forbiddenRemotely('POST', '/version/v1/restore'), 'the relay was opened to /version')
+  assert.ok(forbiddenRemotely('POST', '/version/v1/load'))
+  assert.notEqual(restoreMod.pendingRestoreDoc('fm3'), saveWait.pendingSaveDoc('fm3'))
+
+  const panel = readSrc(new URL('../src/components/Versions.jsx', import.meta.url), 'utf8')
+  const versions = panel.slice(0, panel.indexOf('export function DeviceBackup'))
+  assert.ok(!/restoreVersion|loadVersion/.test(versions), 'the panel reaches the unit itself again, which fails from a phone')
+  assert.ok(!/One is taken before a slot is overwritten/.test(versions), 'the panel promises a copy nothing takes')
+  assert.match(versions, /const play = \(version\) => \(dirty \? setConfirming\(\{ id: version\.id, mode: 'play' \}\) : run\(version, 'play'\)\)/, 'Play it drops unsaved changes without a word')
+  assert.match(versions, /Your unsaved changes to the sound you’re on will be lost/)
+  assert.match(versions, /so you can put it back\.\{lost\}/, 'Put back writes over unsaved edits without a word')
+  assert.match(versions, /formatWhen\(version\.at \?\? version\.capturedAt\)/, 'snapshots from the computer show Invalid Date')
+  /* The phone cannot back up every slot — the relay refuses it — so the hint does not send it to the button that says no. */
+  assert.match(versions, /export function Versions\(\{[^}]*\bremote\b/)
+  const hint = versions.slice(versions.indexOf('{remote'), versions.indexOf('</p>', versions.indexOf('{remote')))
+  assert.match(hint, /^\{remote\s*\?\s*'No snapshots yet\. Back up all slots at the computer/, 'the phone is sent to a backup it cannot do')
+
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const ask = app.slice(app.indexOf('const restoreFromVersion'), app.indexOf('const cancelQueuedRestore'))
+  assert.match(ask, /if \(!remoteActive\(\)\) \{[\s\S]*?await restoreNow\(/, 'at the Mac, Put back skips the copy')
+  assert.match(ask, /if \(!\(await parkRestore\(req\)\)\) throw new Error\(RESTORE_UNREACHED\)/, 'a request that never reached the computer is waited on')
+  assert.ok(ask.indexOf('parkRestore(req)') < ask.indexOf('startRestoreWait('))
+  const mac = app.slice(app.indexOf('const handledRestores'), app.indexOf('}, [status, remote, restoreApi])'))
+  assert.match(mac, /if \(status !== 'live' \|\| remote \|\| isDemo\(\)\) return/)
+  assert.match(mac, /onConfigDoc\(\(id\) => \{\s*if \(id === pendingRestoreKey\(\)\) look\(\)/, 'the Mac only finds a restore on its next look')
+  assert.match(mac, /const timer = setInterval\(look, 6000\)/)
+  assert.match(mac, /await carryOutRestore\(req, api, \{ handled: handledRestores\.current \}\)/)
+  assert.match(app, /onRestore=\{restoreFromVersion\}/)
+  assert.match(app, /waiting=\{queuedRestore\}/)
+  assert.match(app, /<Versions[^>]*\bremote=\{remote\}/, 'the panel cannot tell it is on a phone')
+
+  /* The copy before a Put back, at the route the computer serves, and handed to restoreNow. */
+  const fx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
+  assert.match(fx, /export const snapshotSlot = \(n\) =>[\s\S]{0,160}request\(`\/backup\/preset\/\$\{n\}`, \{ method: 'POST'/, 'a Put back asks the computer for its copy at a route it does not serve')
+  const handed = app.slice(app.indexOf('const restoreApi'), app.indexOf('const [queuedRestore'))
+  assert.match(handed, /\bsnapshotSlot,/, 'a Put back is handed nothing to keep a copy with, so every one is refused')
+  assert.match(handed, /slotName: \(n\) => storedSlotName\(n\)\.then\(\(r\) => r\?\.name\)/, 'a 422 can never be shown to be an empty slot')
+  assert.match(fx, /\/\^\\\/backup\\\/preset\\\/\\d\+\$\/\.test\(path\) && err\?\.status === 422/)
+
+  /*
+   * The wrappers App calls, not only the names they are built from. The block
+   * is a copy of the save's, and a restore left in the save's document is
+   * carried out as a save: whatever is loaded goes over the slot, no copy kept,
+   * and the phone is told nothing was changed.
+   */
+  const wires = fx.slice(fx.indexOf('export const pendingRestoreKey'), fx.indexOf('\n', fx.indexOf('export const readRestoreProgress')))
+  assert.match(fx, /export const pendingRestoreKey = \(\) => pendingRestoreDoc\(unitSlug\)/)
+  assert.match(fx, /export const restoreResultKey = \(\) => restoreResultDoc\(unitSlug\)/)
+  assert.match(fx, /export const restoreProgressKey = \(\) => restoreProgressDoc\(unitSlug\)/)
+  assert.match(fx, /export const parkRestore = \(request\) => writeHostDoc\(pendingRestoreKey\(\)/, 'a restore is left where the Mac looks for a save')
+  assert.match(fx, /export const takeParkedRestore = \(\) => readHostDoc\(pendingRestoreKey\(\)\)/)
+  assert.match(fx, /export const clearParkedRestore = \(\) => deleteHostDoc\(pendingRestoreKey\(\)\)/)
+  assert.match(fx, /export const cancelParkedRestore = \(id\) => parkRestore\(cancelledRestore\(id\)\)/, 'a cancel from a phone is a DELETE, which never arrives')
+  assert.match(fx, /export const reportRestore = \(result\) => writeHostDoc\(restoreResultKey\(\)/)
+  assert.match(fx, /export const readRestoreResult = \(\) => readHostDoc\(restoreResultKey\(\)\)/)
+  assert.match(fx, /export const reportRestorePicked = \(id\) => writeHostDoc\(restoreProgressKey\(\)/)
+  assert.match(fx, /export const readRestoreProgress = \(\) => readHostDoc\(restoreProgressKey\(\)\)/)
+  assert.ok(!/pendingSave|saveResult|saveProgress|Save\(/.test(wires), 'a restore wrapper reads or writes a save’s document')
+})
+
+test('"✓ Saved" goes after its ten seconds even when the timer fires early', async () => {
+  /*
+   * "'✓ Saved' never goes away." The one real way: a browser may fire a timer
+   * a hair early, the word was still due, it was drawn again — and nothing set
+   * another timer, because nothing the bar watches had changed.
+   */
+  const { SAVED_FOR_MS, saidSaved, whenSavedGoes } = await import('../src/lib/savedFor.js')
+  assert.equal(SAVED_FOR_MS, 10000)
+  let t = 100000
+  const timers = []
+  const setTimer = (fn, ms) => (timers.push({ fn, ms }), timers.length)
+  const savedAt = t
+  let gone = 0
+  whenSavedGoes(savedAt, () => gone++, { now: () => t, setTimer, clearTimer: () => {} })
+  assert.equal(timers.length, 1)
+  assert.equal(timers[0].ms, SAVED_FOR_MS)
+  /* It fires 3 ms early. */
+  t += SAVED_FOR_MS - 3
+  timers[0].fn()
+  assert.equal(gone, 0, 'the word went before its time')
+  assert.ok(saidSaved(savedAt, t), 'the word is not still due at that moment')
+  assert.equal(timers.length, 2, 'a timer that fired early set no other — "✓ Saved" stays for ever')
+  assert.equal(timers[1].ms, 3)
+  t += 3
+  timers[1].fn()
+  assert.equal(gone, 1)
+  assert.ok(!saidSaved(savedAt, t))
+  /* A bar that goes away first cancels it. */
+  const cancel = whenSavedGoes(t, () => gone++, { now: () => t, setTimer, clearTimer: () => {} })
+  cancel()
+  t += SAVED_FOR_MS
+  timers[timers.length - 1].fn()
+  assert.equal(gone, 1, 'a cancelled timer still fired')
+})
+
+test('a slot nobody has read is not an empty slot, and a different name takes a second tap', async () => {
+  /*
+   * "Save has no overwrite guard." Worse than reported: every slot counted as
+   * holding something whether or not its name had been read, so an unread one
+   * was "an empty slot" — over the relay, most of them — and saving over the
+   * loaded slot under a new name said nothing. Both wrote on the first tap.
+   */
+  const { overwriteCheck, overwriteAsk } = await import('../src/lib/overwrite.js')
+  const at = (holds, over = {}) => overwriteCheck({ target: 40, loaded: 12, loadedName: 'SONG 12', holds, saveAs: 'My Lead', ...over })
+  assert.equal(at(null).need, 'checking', 'a slot still being asked about saves on one tap')
+  assert.equal(at({ number: 39, name: '', known: true }).need, 'checking', 'the answer about another slot was taken for this one')
+  assert.equal(at({ number: 40, name: '', known: false }).need, 'unknown', 'a slot that could not be read is taken for empty')
+  assert.equal(at({ number: 40, name: '', known: true }).need, 'none', 'an empty slot asks twice')
+  assert.deepEqual(at({ number: 40, name: 'Tool Rhythm', known: true }), { need: 'confirm', name: 'Tool Rhythm' })
+  assert.equal(at({ number: 40, name: 'my lead', known: true }).need, 'none', 'the same preset saved again asks twice')
+  /* The loaded slot holds what it was loaded as, whatever the buffer is called now. */
+  assert.deepEqual(at(null, { target: 12, saveAs: 'Renamed' }), { need: 'confirm', name: 'SONG 12' }, 'a rename writes over the loaded preset on one tap')
+  assert.equal(at(null, { target: 12, saveAs: 'SONG 12' }).need, 'none', 'saving the loaded preset over itself asks twice')
+  assert.equal(at({ number: 12, name: '', known: false }, { target: 12, loadedName: null, saveAs: 'SONG 12' }).need, 'unknown')
+  assert.equal(overwriteAsk({ need: 'confirm', name: 'Tool Rhythm' }, 40), 'Overwrite “Tool Rhythm”?')
+  assert.equal(overwriteAsk({ need: 'unknown', name: '' }, 40), 'Overwrite slot 40?')
+
+  /* And the sheet uses it: the button asks before it writes. */
+  const sheet = readSrc(new URL('../src/components/SaveSheet.jsx', import.meta.url), 'utf8')
+  const foot = sheet.slice(sheet.indexOf('export function SaveFooter'), sheet.indexOf('export default function SaveSheet'))
+  assert.match(foot, /if \(guard\.need !== 'none' && !armed\) \{\s*setArmed\(true\)\s*return/, 'the footer writes on the first tap')
+  assert.match(foot, /onClick=\{press\}/)
+  assert.match(foot, /armed \? overwriteAsk\(guard, targetLabel\)/, 'the second tap does not name what goes')
+  assert.ok(!/occupant \? 'an empty slot'/.test(sheet), 'a slot that exists is still called empty because it exists')
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  assert.match(app, /lookUpName\(saveTarget\)/, 'the slot is never looked up')
+  assert.match(app, /loadedName: loadedAs\.current\?\.number === preset\?\.number \? loadedAs\.current\.name : null/)
+  /* And it is written: at the load, and at each of the three saves. Without
+     these loadedName is always null and the loaded-slot rule never runs. */
+  assert.match(app, /const noteLoadedAs = \(p\) => \{\s*if \(Number\.isInteger\(p\?\.number\) && typeof p\?\.name === 'string'\) loadedAs\.current = \{ number: p\.number, name: p\.name\.trim\(\) \}/, 'the loaded slot’s name is never kept')
+  assert.match(app, /if \(!dirtyRef\.current\) noteLoadedName\(p\)\s*if \(!dirtyRef\.current\) noteLoadedAs\(p\)/, 'a read no longer keeps the loaded slot’s name')
+  assert.match(app, /if \(fresh \|\| !dirtyRef\.current\) \{\s*noteLoadedName\(p\)\s*noteLoadedAs\(p\)/, 'a preset loaded from the list no longer keeps its name')
+  assert.match(app, /loadedAs\.current = \{ number: req\.slot, name: [^\n]*\}\s*presetSaved\(req\.slot/, 'a save the phone asked for leaves the old name')
+  assert.match(app, /loadedAs\.current = \{ number: res\.slot, name: [^\n]*\}\s*presetSaved\(res\.slot/, 'a save from away leaves the old name')
+  assert.match(app, /loadedAs\.current = \{ number, name: [^\n]*\}\s*presetSaved\(number, /, 'a save at the computer leaves the old name')
+  assert.match(app, /<SaveFooter[\s\S]*?check=\{saveCheck\}/, 'the footer is not told what the slot holds')
+  /* "Couldn't read it" is kept apart from empty where names are looked up. */
+  const fx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
+  const look = fx.slice(fx.indexOf('export async function lookUpName'))
+  assert.match(look.slice(0, 600), /return \{ name: known \? name : '', known \}/)
+})
+
+onTheBench('the computer announcing a document is not news about the unit, and reaches whoever listens for it', async () => {
+  const { clock, wire } = windowOnTheBench()
+  const heard = []
+  const off = ds.onConfigDoc((id, data) => heard.push([id, data]))
+  ds.handleEvent({ type: 'config', id: 'fractal.pendingSave.fm3', data: { id: 'p1', slot: 4 }, origin: 'fractal' })
+  await clock.advance(3000)
+  off()
+  ds.handleEvent({ type: 'config', id: 'fractal.pendingSave.fm3', data: { id: 'p2' } })
+  /* Matched on the document, not on who wrote it: origin is not looked at. */
+  assert.deepEqual(heard, [['fractal.pendingSave.fm3', { id: 'p1', slot: 4 }]])
+  assert.deepEqual(wire, [], 'a store write made the Mac window read the unit')
+})
+
+onTheBench('after a save the number and the name go up at once, and the chain is not read again', async () => {
+  /*
+   * The lock after a save was a whole read of the unit to learn two things the
+   * save had just settled. The chain on screen is the chain that was saved; it
+   * belongs to the new slot now, so a screen opened next must not take it for
+   * another preset's and read it.
+   */
+  const { clock, unit, asked } = windowOnTheBench()
+  unit.number = 40
+  unit.presetName = 'My Lead'
+  const done = ds.presetSaved(40, 'My Lead')
+  assert.equal(ds.getSnapshot().preset.number, 40, 'the slot saved to is not what the screen says')
+  assert.equal(ds.getSnapshot().preset.name, 'My Lead')
+  assert.ok(ds.chainIsCurrent(), 'the chain that was saved is taken for another preset’s')
+  await clock.advance(ds.SETTLING_MS * ds.SETTLING_TRIES + 1000)
+  await done
+  assert.equal(asked(CHAIN), 0, 'a save dumped the preset again')
+  assert.equal(asked(SUMMARY), 0)
+  assert.equal(asked(WHICH), 1, 'the quiet check did not ask which preset, or asked more than once')
+  assert.equal(ds.getSnapshot().blocks.length, 2)
+})
+
+onTheBench('a unit still writing to flash is asked again, quietly, and a preset changed meanwhile wins', async () => {
+  const { clock, unit, asked } = windowOnTheBench()
+  let busy = 2
+  unit.which = () => {
+    if (busy-- > 0) throw new Error('no answer')
+    return { number: 40, name: 'My Lead' }
+  }
+  const done = ds.presetSaved(40, 'My Lead')
+  await clock.advance(ds.SETTLING_MS * ds.SETTLING_TRIES + 1000)
+  await done
+  assert.equal(asked(WHICH), 3)
+  assert.equal(ds.getSnapshot().preset.number, 40)
+})
+
+/*
+ * WHOSE CHAIN IS ON SCREEN. On the play test the new preset's name went up at
+ * once and the last preset's blocks stayed under it, live: a double-tap on an
+ * old tile switched a block on the new preset, found by its number. The chain
+ * is still read once, a moment after the switch — that is the sound-dropout
+ * fix — so what changes is only what the screens are told about the wait.
+ */
+const chainOnScreen = () => ds.chainViewOf(ds.getSnapshot())
+
+onTheBench('a preset chosen in the Mac window is not drawn with the last song’s chain, and its tiles cannot switch it', async () => {
+  const { clock, asked } = windowOnTheBench()
+  assert.equal(chainOnScreen(), 'ready')
+  const load = ds.loadPreset(503)
+  /* From the tap, before the unit has answered anything. */
+  assert.equal(chainOnScreen(), 'loading', 'the last song’s chain is drawn while the select is in the air')
+  assert.equal(ds.chainNumberOf(ds.getSnapshot()), 503, 'the wait is not for the preset asked for')
+  /* The second half of a double-tap on a tile drawn before the switch. */
+  await assert.rejects(() => ds.writeBypass(133, false), (err) => err.notThisChain === true, 'a tile drawn for the last preset switched a block on this one')
+  assert.equal(asked('POST /preset/blocks/133/bypass'), 0, 'the refused tap still reached the unit')
+  assert.equal(ds.getSnapshot().blocks.find((b) => b.effectId === 133).bypassed, true, 'the refused tap still moved a tile')
+  await clock.advance(10)
+  assert.equal(ds.getSnapshot().preset.number, 503)
+  assert.equal(chainOnScreen(), 'loading', 'the name went up and the old chain was taken for this one')
+  await clock.advance(ds.OWN_SETTLE_MS + 100)
+  await load
+  assert.equal(chainOnScreen(), 'ready')
+  assert.equal(ds.getSnapshot().chainFor, 503)
+  assert.equal(ds.getSnapshot().chainGoing, null)
+  /* And it cost what it cost before: one chain read, a moment later. */
+  assert.equal(asked(CHAIN), 1, `the wait cost ${asked(CHAIN)} chain reads`)
+  await ds.writeBypass(133, false)
+  assert.equal(asked('POST /preset/blocks/133/bypass'), 1, 'this preset’s own chain cannot be switched once it is read')
+})
+
+onTheBench('a new preset whose chain could not be read says so, and Try again reads it', async () => {
+  const { clock, unit, asked } = windowOnTheBench()
+  unit.chain = () => {
+    throw new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78')
+  }
+  const load = ds.loadPreset(7)
+  await clock.advance(ds.OWN_SETTLE_MS + 100)
+  /* Between the asks a failed chain read makes, it is still on its way. */
+  assert.equal(chainOnScreen(), 'loading', 'the chain said it could not be read before it had finished asking')
+  await clock.advance(ds.SETTLE_MS * ds.SETTLE_TRIES + 1000)
+  await load
+  assert.equal(chainOnScreen(), 'failed', 'a chain that never came is drawn as this preset’s, or waited on for ever')
+  await assert.rejects(() => ds.writeBypass(58, true), (err) => err.notThisChain === true)
+  unit.chain = null
+  const reads = asked(CHAIN)
+  const again = ds.retryChain()
+  assert.equal(chainOnScreen(), 'loading', 'Try again says nothing while it reads')
+  await clock.advance(10)
+  assert.ok(Array.isArray(await again))
+  assert.equal(asked(CHAIN), reads + 1, 'Try again is not one read of the chain')
+  assert.equal(chainOnScreen(), 'ready')
+})
+
+onTheBench('the same preset read again keeps its chain on screen, marked as updating', async () => {
+  const { clock, unit } = windowOnTheBench()
+  /* App's own read after an Add or a Remove. */
+  const done = ds.beginChainRead()
+  assert.equal(chainOnScreen(), 'updating', 'a re-read of this preset’s chain hides it, or does not say so')
+  done()
+  done()
+  assert.equal(chainOnScreen(), 'ready', 'a read marked over twice, or never unmarked')
+  /* A Revert: the same slot loaded again is not another song. */
+  const load = ds.loadPreset(12)
+  assert.equal(chainOnScreen(), 'updating', 'Revert took this preset’s chain for another one’s')
+  await clock.advance(ds.OWN_SETTLE_MS + 500)
+  await load
+  assert.equal(chainOnScreen(), 'ready')
+  /* A save to another slot moves the chain with the number, in one change. */
+  unit.number = 40
+  unit.presetName = 'My Lead'
+  const seen = []
+  const off = ds.subscribe(() => seen.push(chainOnScreen()))
+  const saved = ds.presetSaved(40, 'My Lead')
+  assert.deepEqual(seen, ['ready'], 'a save made the chain on screen another preset’s, even for a moment')
+  off()
+  await clock.advance(ds.SETTLING_MS * ds.SETTLING_TRIES + 1000)
+  await saved
+  assert.equal(ds.getSnapshot().chainFor, 40)
+})
+
+onTheBench('a chain that turns out to be the computer’s copy of the last song is not drawn under this one', async () => {
+  const { clock, unit, nameOf } = windowOnTheBench()
+  /* The computer answers out of its copy of the preset just left. */
+  unit.copy = () => ({ name: nameOf(12), scenes: ['VERSE', '', '', '', '', '', '', ''] })
+  const load = ds.loadPreset(30)
+  await clock.advance(ds.OWN_SETTLE_MS + 500)
+  await load
+  assert.equal(chainOnScreen(), 'loading', 'the last song’s chain, read out of the computer’s copy, is drawn as this one’s')
+  unit.copy = null
+  await clock.advance(ds.CHAIN_FRESH_MS + 1000)
+  assert.equal(chainOnScreen(), 'ready')
+  assert.equal(ds.getSnapshot().chainFor, 30)
+})
+
+onTheBench('the last song’s chain out of the computer’s copy is never drawn live under this one, not even while the copy is asked', async () => {
+  const { clock, unit, nameOf, asked } = windowOnTheBench()
+  /* The copy answers when the test says, so the moment between the chain
+     landing and the copy being judged can be looked at. */
+  let answerCopy
+  const copyAsked = new Promise((go) => (answerCopy = go))
+  unit.copy = () => copyAsked.then(() => ({ name: nameOf(12), scenes: ['VERSE', '', '', '', '', '', '', ''] }))
+  const seen = []
+  const off = ds.subscribe(() => seen.push(`${chainOnScreen()}/${ds.getSnapshot().chainFor}`))
+  const load = ds.loadPreset(30)
+  await clock.advance(ds.OWN_SETTLE_MS + 500)
+  assert.equal(asked(CHAIN), 1)
+  assert.equal(asked('GET /preset/grid'), 1, 'the copy was never asked, so this is not the moment in question')
+  assert.equal(chainOnScreen(), 'loading', 'the last song’s tiles are up, live, while the copy is asked')
+  await assert.rejects(() => ds.writeBypass(133, false), (err) => err.notThisChain === true, 'a tap on the last song’s tile switched this song’s block')
+  assert.equal(asked('POST /preset/blocks/133/bypass'), 0)
+  answerCopy()
+  await clock.advance(10)
+  await load
+  assert.equal(chainOnScreen(), 'loading')
+  const before = seen.length
+  unit.copy = null
+  await clock.advance(ds.CHAIN_FRESH_MS + 1000)
+  off()
+  const early = seen.slice(0, before).filter((v) => /^(ready|updating)\//.test(v))
+  assert.deepEqual(early, [], `the last song’s chain was drawn as this one’s on the way: ${seen.slice(0, before)}`)
+  assert.equal(chainOnScreen(), 'ready')
+  assert.equal(ds.getSnapshot().chainFor, 30)
+})
+
+onTheBench('a copy that still carries another name after the wait is this preset’s, renamed, and its chain goes up', async () => {
+  const { clock, unit, nameOf, asked } = windowOnTheBench()
+  unit.copy = () => ({ name: nameOf(12), scenes: ['VERSE', '', '', '', '', '', '', ''] })
+  const load = ds.loadPreset(30)
+  await clock.advance(ds.OWN_SETTLE_MS + 500)
+  await load
+  assert.equal(chainOnScreen(), 'loading')
+  await clock.advance(ds.CHAIN_FRESH_MS + 1000)
+  assert.equal(asked(CHAIN), 2)
+  assert.equal(chainOnScreen(), 'ready', 'a second mismatch left the chain waiting for ever')
+  assert.equal(ds.getSnapshot().chainFor, 30)
+})
+
+onTheBench('a preset renamed keeps its chain up and live while the computer’s copy still has the old name', async () => {
+  const { clock, unit, nameOf, asked } = windowOnTheBench()
+  /* What App's rename() does: the unit has the new name, the computer's copy
+     of the chain the old one, for up to a quarter of a minute. */
+  unit.presetName = 'NEW NAME'
+  unit.copy = () => ({ name: nameOf(12), scenes: ['VERSE', 'CHORUS', '', '', '', '', '', ''] })
+  ds.put({ preset: { number: 12, name: 'NEW NAME' } })
+  ds.chainWasRead(12)
+  await ds.refreshLoadedSceneNames(12)
+  assert.equal(chainOnScreen(), 'ready', 'a rename greyed this preset’s own chain')
+  /* Longer than a re-read goes unmentioned: still nothing on its way. */
+  await clock.advance(1000)
+  assert.equal(chainOnScreen(), 'ready', 'a rename said “Updating…” for a quarter of a minute')
+  await ds.writeBypass(133, false)
+  assert.equal(asked('POST /preset/blocks/133/bypass'), 1, 'a tap after a rename was refused')
+  const reads = asked(CHAIN)
+  await clock.advance(ds.CHAIN_FRESH_MS + 250 + 100)
+  assert.equal(asked(CHAIN), reads + 1, `the copy with the old name cost ${asked(CHAIN) - reads} more reads`)
+  await clock.advance(30000)
+  assert.equal(asked(CHAIN), reads + 1)
+  assert.equal(chainOnScreen(), 'ready')
+})
+
+onTheBench('a Try again that has to ask twice does not say it failed between the asks', async () => {
+  /* No long copy, so nothing but the read itself holds the chain on its way. */
+  const { clock, unit } = windowOnTheBench({ keepsCopy: false })
+  unit.chain = () => {
+    throw new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78')
+  }
+  const load = ds.loadPreset(7)
+  await clock.advance(ds.OWN_SETTLE_MS + ds.SETTLE_MS * ds.SETTLE_TRIES + 2000)
+  await load
+  assert.equal(chainOnScreen(), 'failed')
+  const again = ds.retryChain()
+  await clock.advance(10)
+  assert.equal(chainOnScreen(), 'loading', 'Try again said it failed between its asks')
+  unit.chain = null
+  await clock.advance(ds.SETTLE_MS * ds.SETTLE_TRIES + 1000)
+  assert.ok(Array.isArray(await again))
+  assert.equal(chainOnScreen(), 'ready')
+})
+
+onTheBench('a chain read from before a reset neither holds the chain busy nor ends a later one', async () => {
+  windowOnTheBench()
+  const busy = () => ds.getSnapshot().chainBusy
+  const d1 = ds.beginChainRead()
+  ds.reset()
+  const d2 = ds.beginChainRead()
+  assert.equal(busy(), true)
+  d2()
+  assert.equal(busy(), false, 'a read from before the reset holds the chain busy for ever')
+  const d3 = ds.beginChainRead()
+  d1()
+  assert.equal(busy(), true, 'a read from before the reset ended a later one')
+  d3()
+  assert.equal(busy(), false)
+})
+
+test('the words for a chain that is on its way are one set, and the stores draw them from the same rule', async () => {
+  const view = await import('../shared/chain-view.mjs')
+  const { chainView, chainActs, chainElsewhere, CHAIN_WORDS } = view
+  assert.equal(chainView({ want: 503, chainFor: 12, busy: true }), 'loading')
+  assert.equal(chainView({ want: 503, chainFor: 12, busy: false }), 'failed')
+  assert.equal(chainView({ want: 503, chainFor: null, busy: false }), 'failed')
+  assert.equal(chainView({ want: 12, chainFor: 12, busy: true }), 'updating')
+  assert.equal(chainView({ want: 12, chainFor: 12, busy: false }), 'ready')
+  /* A unit too busy to name its preset, or none known yet: nothing to hold them to. */
+  assert.equal(chainView({ want: -1, chainFor: 12, busy: false }), 'ready')
+  assert.equal(chainView({ want: undefined, chainFor: null, busy: false }), 'ready')
+  assert.ok(chainActs('ready') && chainActs('updating') && !chainActs('loading') && !chainActs('failed'))
+  assert.ok(chainElsewhere('loading') && chainElsewhere('failed') && !chainElsewhere('updating'))
+  assert.equal(CHAIN_WORDS.loading(503), 'Loading preset 503’s chain…')
+  assert.equal(CHAIN_WORDS.failed, 'Couldn’t read this preset’s chain')
+  assert.equal(CHAIN_WORDS.retry, 'Try again')
+  assert.equal(CHAIN_WORDS.updating, 'Updating…')
+  /* Only after long enough to notice; before that the chain just stays. */
+  assert.ok(view.UPDATING_AFTER_MS >= 250 && view.UPDATING_AFTER_MS <= 1000)
+  assert.match(readSrc(new URL('../mobile/src/lib/chain-view.js', import.meta.url), 'utf8'), /Generated from shared\/chain-view\.mjs/, 'the phone keeps its own copy of the rule')
+})
+
+test('every browser panel that draws the chain draws another preset’s as a wait, not as tiles', () => {
+  const src = (f) => readSrc(new URL(`../src/${f}`, import.meta.url), 'utf8')
+  const con = src('components/Console.jsx')
+  const chain = con.slice(con.indexOf('export function Chain('), con.indexOf('export function PresetList('))
+  assert.match(chain, /const shown = useChain\(\)[\s\S]*?if \(shown\.elsewhere\) \{\s*return \(\s*<div className="fx-panel">\s*<ChainWait chain=\{shown\} \/>/, 'the chain strip draws the last song’s tiles under this song’s name')
+  assert.ok(chain.indexOf('if (shown.elsewhere)') < chain.indexOf('chain.map((block)'), 'the tiles are drawn before the check')
+  assert.match(chain, /lastTap\.current\.of === shown\.number/, 'a tap on the last song and one on this pair up as a double-tap')
+  const grid = src('components/GridEditor.jsx')
+  assert.match(grid, /if \(chainNow\.elsewhere\) \{\s*return \([\s\S]*?<ChainWait chain=\{chainNow\}/, 'the chain editor offers Remove on the last song’s blocks')
+  const gig = src('components/Gig.jsx')
+  assert.match(gig, /\{shown\.elsewhere \? \(\s*<ChainWait chain=\{shown\}/, 'Play says nothing about a chain on its way')
+  assert.match(gig, /\{!shown\.elsewhere && blocks\.length \? \(\s*<div className=\{`gig-blocks/, 'Play draws the last song’s tiles under this song’s name')
+  assert.match(gig, /if \(err\?\.notThisChain\) return/, 'a refused tap on Play reads the unit back or says it failed')
+  const app = src('App.jsx')
+  assert.match(app, /const openBlock = selectedBlock && !chainNow\.elsewhere \?/, 'the last song’s block stays open over this one')
+  assert.match(app, /doneReading = beginChainRead\(\)\s*const \[p, b\] = await Promise\.all\(\[currentPreset\(\), presetBlocks\(\)\]\)/, 'App’s own read of the chain is not marked while it is in the air')
+  assert.match(app, /doneReading\?\.\(\)\s*setBusy\(false\)/, 'App’s read is marked for ever')
+  /* Both places the chain sheet and Edit draw from are the one strip. */
+  assert.equal((app.match(/<Chain\s/g) || []).length, 2)
+  assert.match(gig, /<ChainWait chain=\{shown\} className="gig-chain-wait" onRetry=\{retryHere\} \/>/, 'a Try again that worked on Play still says it could not read the chain')
+  assert.match(gig, /const retryHere = async \(\) => \{\s*const list = await retryChain\(\)\s*setChain\(Array\.isArray\(list\) \? 'ok' : 'failed'\)/)
+  assert.match(gig, /const chanBlock = chanEid === null \|\| shown\.elsewhere \? null :/, 'the last song’s channel sheet stays up, switching this song’s block by its number')
+  assert.match(gig, /useEffect\(\(\) => \{\s*if \(shown\.elsewhere\) setChanEid\(null\)/, 'the channel sheet comes back by itself over the new song’s tiles')
+  /* The strip above the editor says it; the editor only holds the space. */
+  assert.match(grid, /<ChainWait chain=\{chainNow\}[^>]*\squiet\b/, 'the Edit screen says the chain is loading twice')
+  assert.doesNotMatch(grid, /<ChainUpdating/, '“Updating…” shows twice on the Edit screen')
+  const scenes = app.slice(app.indexOf('<SceneMatrix'), app.indexOf('/>', app.indexOf('<SceneMatrix')))
+  assert.match(scenes, /key=\{chainNow\.number/, 'the scene map read for the last song switches this song’s blocks by number')
+  assert.match(scenes, /busy=\{[^}]*chainNow\.elsewhere/, 'the scene map can be read or tapped while the chain is another preset’s')
+  const wait = src('components/ChainWait.jsx')
+  assert.match(wait, /quiet \? null : \(\s*<p className="hint chain-wait-words">/, 'a quiet wait still speaks')
+  assert.match(wait, /from '\.\.\/\.\.\/shared\/chain-view\.mjs'/, 'the browser words its own wait')
+  assert.match(wait, /setTimeout\(\(\) => setLate\(true\), UPDATING_AFTER_MS\)/, '“Updating…” flickers up on every Add')
+})
+
+test('the Mac hears a request the moment it is left, looks once at a time, and honours a cancel', () => {
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const watcher = app.slice(app.indexOf('const req = await takeParkedSave()'))
+  const scope = watcher.slice(0, watcher.indexOf('}, [status, remote, preset?.number, carryOutSave])'))
+  assert.match(scope, /onConfigDoc\(\(id\) => \{\s*if \(id === pendingSaveKey\(\)\) look\(\)/, 'the Mac window still waits for its next look')
+  assert.match(scope, /const timer = setInterval\(look, 6000\)/, 'the timed look went, and a lost announcement is a lost save')
+  assert.match(scope, /offAsk\(\)/, 'the announcement listener outlives the window')
+  assert.match(scope, /if \(looking\) \{\s*again = true\s*return/, 'two looks at one request can both carry it out')
+  assert.match(scope, /Date\.now\(\) - \(req\.at \|\| 0\) < SAVE_FRESH_MS/, 'a request nobody is waiting for any more can still be written')
+  assert.ok(saveWait.SAVE_FRESH_MS >= saveWait.SAVE_WAIT_MS + saveWait.SAVE_WORKING_MS, 'the computer drops a request somebody is still waiting on')
+  assert.ok(saveWait.SAVE_FRESH_MS <= 5 * 60 * 1000, 'a save can land long after the phone said nothing was saved')
+  const carry = app.slice(app.indexOf('const carryOutSave'), app.indexOf('At the Mac: anything the phone has asked for'))
+  assert.ok(carry.indexOf('await reportSavePicked(req.id)') > -1, 'the phone is never told the computer has it')
+  assert.ok(carry.indexOf('await reportSavePicked(req.id)') < carry.indexOf('await storePreset(req.slot)'))
+  assert.match(carry, /const still = await takeParkedSave\(\)\s*if \(still && \(still\.id !== req\.id \|\| still\.cancelled\)\)/, 'a cancelled request is still written')
+  /* And says it passed it over: the phone saw "picked up" and is waiting. */
+  const skip = carry.slice(carry.indexOf('const still = await takeParkedSave()'), carry.indexOf('await storePreset(req.slot)'))
+  assert.match(skip, /await reportSave\(\{ id: req\.id, ok: false, cancelled: true[^\n]*\}\)[^\n]*\s*return/, 'a phone whose cancel was obeyed is left waiting')
+  assert.ok(carry.indexOf('const still = await takeParkedSave()') < carry.indexOf('await storePreset(req.slot)'))
+  /* The browser on a phone waits with the phone app's rule, and can stop. */
+  assert.match(app, /const wait = startSaveWait\(\{/)
+  assert.match(app, /cancelRequest: async \(\) => \{\s*if \(!\(await cancelParkedSave\(queuedSave\.id\)\)\) throw/, 'a cancel that never landed says nothing was saved')
+  assert.match(app, /listen: onConfigDoc/)
+  assert.match(app, /onState: \(\{ late, picked \}\) => live && setSaveLate\(late && !picked\)/, 'the late line and Cancel stay up after the computer has the save')
+  assert.match(app, /const parked = await parkSave\([\s\S]{0,300}?if \(!parked\) throw/, 'a request that never reached the computer is waited on for two minutes')
+  assert.match(app, /setSaveError\(said\.error\)\s*setError\(said\.error\)/, 'a save that failed from away says so only inside a closed sheet')
+  assert.match(app, /\{queuedSave && saveLate \? <SaveLate onCancel=\{cancelQueuedSave\} \/> : null\}/, 'a late save has nothing to say and nothing to press')
+  assert.match(app, /onCancel=\{cancelQueuedSave\}/)
+  const fx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
+  assert.match(fx, /export const cancelParkedSave = \(id\) => parkSave\(cancelledSave\(id\)\)/, 'a cancel from a phone is a DELETE, which never arrives')
+})
+
+test('Edit has the same Tap as Play, beside the scene, and a tapped tempo leaves the preset unsaved', async () => {
+  /*
+   * "There's no tempo control on the Edit screen." It went when Home and
+   * Controls merged, and Edit is where a delay's time is set — exactly when
+   * you want to tap one in. It came back as Play's own button rather than a
+   * second one, because the one on Play is what four rounds of "the number
+   * lags", "it sends back a different one" were about, and a copy would have
+   * to learn all of it again.
+   */
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+  const app = bare(readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8'))
+  const gig = bare(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8'))
+  const tap = bare(readSrc(new URL('../src/components/TapTempo.jsx', import.meta.url), 'utf8'))
+  /* Edit's box opens downward off the row: the cell carries tap-row, which test/styles.mjs holds the rule for. */
+  assert.match(tap, /className=\{`gig-tap-cell \$\{where === 'row' \? 'tap-row' : ''\}`\}/, 'Edit’s Tap box opens upward over the chain — the cell never gets tap-row')
+
+  const row = app.slice(app.indexOf('className="shape-row"'), app.indexOf('Presets and backups'))
+  assert.ok(row.length > 0, 'Edit’s row beside the scene is gone')
+  assert.ok(row.indexOf('scene-now') !== -1 && row.indexOf('scene-now') < row.indexOf('<TapTempo'), 'Tap is not beside the scene on Edit')
+  assert.match(row, /<TapTempo where="row" onError=\{setError\} onChanged=\{\(summary\) => record\('tempo', summary\)\} \/>/, 'a tempo set on Edit is not logged as a change to the preset')
+  assert.match(gig, /<TapTempo onError=\{onError\} onChanged=\{onChanged\} \/>/, 'Play draws a Tap of its own again, or stops reporting it')
+  for (const [where, text] of [['App.jsx', app], ['Gig.jsx', gig]]) {
+    assert.ok(!/tappedBpm\(|tempoSender\(/.test(text), `${where} works out a tapped tempo on its own again — there are two taps now`)
+  }
+  /* A tempo is a change to the preset, and Save shows for it. */
+  assert.match(app, /const UNSAVES_PRESET = new Set\(\[[^\]]*'tempo'/, 'a tempo change does not leave the preset unsaved')
+  /*
+   * And the next song is not unsaved because of it. Tapping on Play is the
+   * everyday thing, and Previous and Next never cleared Unsaved: tap on song
+   * one, press Next, and song two carried Save and Revert, song after song,
+   * with its name never noted for the save sheet. The unit throws its edit
+   * buffer away on a preset change, as the phone has always known.
+   */
+  const landed = app.slice(app.indexOf('onPresetLoaded={'), app.indexOf('onPickPreset={'))
+  assert.ok(landed.length > 0, 'Play no longer says when it has moved the preset')
+  assert.match(landed, /setDirty\(false\)/, 'a tempo tapped on the last song leaves the next one showing Save')
+  assert.match(landed, /presetLanded\(\{ fresh: true \}\)/, 'the preset Next lands on is never noted, because Unsaved was still true this tick')
+
+  /*
+   * TAPPED as well as typed. Only a typed tempo reported itself, so a tempo
+   * tapped in left Save hidden and the new tempo was gone at the next preset.
+   * The phone has always counted a tap. Once per burst, not per tap — the
+   * history is for what was done, and tapping 120 in is one thing done.
+   */
+  const tapFn = tap.slice(tap.indexOf('const tap = async'), tap.indexOf('const tapSettled'))
+  assert.match(tapFn, /sender\.current\.push\(guess\)\s*burst\.current = guess/, 'a tap that sent a tempo is not remembered as a change')
+  assert.ok(!/said\.current|onChanged/.test(tapFn), 'every single tap is reported, so tapping 120 in is eight lines')
+  const settled = tap.slice(tap.indexOf('const tapSettled'), tap.indexOf('useEffect(() => () => clearTimeout'))
+  assert.match(settled, /reportBurst\(\)/, 'a burst of taps that settled is never reported, so Save stays hidden')
+  const report = tap.slice(tap.indexOf('const reportBurst'), tap.indexOf('const tap = async'))
+  assert.match(report, /if \(burst\.current == null\) return/, 'a burst is reported twice, or with nothing tapped')
+  assert.match(report, /dropBurst\(\)/, 'the same burst is reported again at the next chance')
+  const drop = tap.slice(tap.indexOf('const dropBurst'), tap.indexOf('const sender'))
+  assert.match(drop, /burst\.current = null/, 'the same burst is reported again at the next chance')
+  /*
+   * Only what the unit took. A write it refused (port shut, unit gone) showed
+   * the banner and then, a second later, logged the tempo anyway and lit Save
+   * for a change that never happened. The typed tempo only reports once the
+   * write has worked; so does a tapped one.
+   */
+  assert.match(tap, /await setTempo\(bpm\)\s*landed\.current = bpm/, 'a tempo the unit refused still counts as tapped in')
+  assert.match(report, /const got = landed\.current/, 'the report names the number tapped rather than the one the unit took')
+  assert.match(report, /if \(got == null\) return/, 'a burst that reached nothing is still reported, and lights Save')
+  /* Closed with the last write still on its way: reported when it lands, not guessed at. */
+  assert.match(report, /if \(!sender\.current\.idle\) \{\s*closing\.current = true\s*return/, 'a burst closed mid-write is reported before anyone knows it landed')
+  assert.match(tap, /finally \{[^}]*if \(closing\.current\) setTimeout\(\(\) => reportBurst\(\), 0\)/, 'a burst closed mid-write is never reported once it lands')
+  /*
+   * On the preset it was tapped on. Tap, then pick the next song inside the
+   * second before the read-back, and the report landed on the NEW song: a
+   * hand edit logged against a preset nobody touched, and Save lit on it.
+   * Keyed on chainNumberOf, which moves the moment a switch starts —
+   * preset.number moves only after jumpTo has already cleared Unsaved.
+   */
+  assert.match(tapFn, /if \(burst\.current == null\) \{[^}]*burstOn\.current = chainNumberOf\(getSnapshot\(\)\)/, 'a burst does not remember which preset it was tapped on')
+  assert.match(report, /if \(chainNumberOf\(getSnapshot\(\)\) !== on\) return/, 'taps on the last song are reported against the one just picked, and mark it unsaved')
+  assert.ok(report.indexOf('!== on) return') < report.indexOf('said.current'), 'the preset is checked after the report has gone')
+  assert.match(tap, /const going = useDevice\(chainNumberOf\)/, 'a preset change is not seen by the Tap button')
+  assert.match(tap, /useEffect\(\(\) => \{\s*dropBurst\(\)\s*setTapped\(null\)\s*\}, \[going\]\)/, 'a burst tapped on the last song survives the switch to the next')
+  assert.ok(!/preset\?\.number/.test(tap), 'the Tap button waits on preset.number, which moves after Unsaved was already cleared')
+  assert.match(report, /said\.current\?\.\(`Tempo → \$\{n\} BPM \(tapped\)`\)/, 'the tapped tempo does not reach the screen that logs it')
+  /* A screen switched away from inside the second after the last tap still owes the report. */
+  assert.match(tap, /useEffect\(\(\) => \(\) => reportBurst\(\), \[\]\)/, 'taps on Edit followed by a swipe to Play are never counted')
+  assert.match(tap, /said\.current = onChanged/, 'a report after the screen changed goes to the first render’s idea of who logs it')
+  const hold = tap.slice(tap.indexOf('const holdTap = useLongPress'), tap.indexOf('useDismiss(tapCell'))
+  assert.match(hold, /reportBurst\(\)/, 'a hold drops the read-back and the report of the taps before it with it')
+})
+
+test('scene names show whole, and nothing on Play waits for a hold to show one', () => {
+  /*
+   * "Scene names cut short." Edit's chip wraps to two lines and carries the
+   * whole name on a hover, and Play's tiles carry it too. NOT a long press:
+   * on Play a scene tile is a footswitch, and a hold that does not switch the
+   * scene is the wrong surprise mid-song.
+   */
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+  const app = bare(readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8'))
+  const gig = bare(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8'))
+  const chip = app.slice(app.indexOf("className={`chip ${hasScenes ? 'scene-now' : ''}`}"), app.indexOf('</button>', app.indexOf('scene-now')))
+  assert.match(chip, /title=\{hasScenes \? sceneNames\[scene\] \|\| undefined : undefined\}/, 'the scene chip on Edit has no hover with the whole name')
+  const tile = gig.slice(gig.indexOf('className={`gig-scene '), gig.indexOf('</button>', gig.indexOf('className={`gig-scene ')))
+  assert.ok(tile.length > 0, 'Play’s scene tiles are not where this test reads them')
+  assert.match(tile, /title=\{names\[i\] \|\| undefined\}/, 'Play’s scene tiles have no hover with the whole name')
+  assert.ok(!/\{\.\.\.hold|onContextMenu|useLongPress/.test(tile), 'a scene tile on Play does something on a hold, which is a footswitch that does not switch')
+})
+
+test('Play says where the looper went, and still never draws one', async () => {
+  /*
+   * "PLAY leaves out the Looper." On purpose — input, output and the looper
+   * are never stage tiles, because an on/off switch under a thumb can mute
+   * the rig mid-song and on/off is not what a looper wants. But thirteen
+   * blocks drawn as ten reads as three gone missing, so Play says where it is.
+   */
+  const { STAGE_HIDDEN, hasLooper, LOOPER_ON_EDIT } = await import('../src/lib/guardrails.js')
+  for (const slug of ['input', 'output', 'looper']) assert.ok(STAGE_HIDDEN.includes(slug), `${slug} is a tile on Play now`)
+  assert.equal(hasLooper([{ slug: 'amp' }, { slug: 'looper' }]), true)
+  assert.equal(hasLooper([{ slug: 'amp' }, { slug: 'delay' }]), false, 'a preset with no looper is told where its looper is')
+  assert.equal(hasLooper(null), false)
+  assert.equal(LOOPER_ON_EDIT, 'Looper is on the Edit screen.')
+
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+  const gig = bare(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8'))
+  /* From every block, not the tiles: the tiles are exactly what leaves it out. */
+  assert.match(gig, /\{!shown\.elsewhere && onChain && hasLooper\(allBlocks\) \? \(\s*<p className="gig-note">\{LOOPER_ON_EDIT\}<\/p>/, 'Play does not say where the looper is, or asks the tiles, which never hold one')
+  assert.match(gig, /allBlocks\.filter\(\(b\) => b\.slug && !STAGE_HIDDEN\.includes\(b\.slug\)\)/, 'Play draws a tile for the looper, input or output')
+})
+
+console.log('\nwhat the footswitches do')
+
+test('the footswitch panel is only for a unit that says its switches can be read', async () => {
+  /*
+   * "See what the footswitches do." The host serves the words for an FM9's
+   * and a III's switches but cannot read one (liveState false), and an AM4
+   * has none — so a panel drawn on any of those would open onto a refusal.
+   */
+  const { fcReadable } = await import('../shared/footswitches.mjs')
+  assert.equal(fcReadable({ fc: { model: true, liveState: true } }), true)
+  assert.equal(fcReadable({ fc: { model: true, liveState: false } }), false, 'an FM9 is offered a read it cannot answer')
+  assert.equal(fcReadable({ fc: { model: false, liveState: false } }), false)
+  assert.equal(fcReadable({}), false)
+  assert.equal(fcReadable(null), false)
+  assert.equal(fcReadable({ fc: { liveState: 'yes' } }), false, 'only the host’s own true opens it')
+
+  const { createMockDevice } = await import('../src/lib/mockDevice.js')
+  assert.equal(fcReadable(createMockDevice('fm3').detect().capabilities), true, 'the demo FM3 has no footswitch panel')
+  for (const key of ['fm9', 'axefx3', 'am4', 'vp4']) {
+    assert.equal(fcReadable(createMockDevice(key).detect().capabilities), false, `the demo ${key} offers a switch read the real one refuses`)
+  }
+})
+
+test('a switch is said in words: tap, hold, a typed label, and the light', async () => {
+  const { describeSwitch, lightWords, FC_BUSY_WARNING } = await import('../shared/footswitches.mjs')
+  assert.match(FC_BUSY_WARNING, /between songs/, 'the panel no longer says when to read the switches')
+  const model = {
+    categories: { 0: 'Unassigned', 3: 'Scene', 4: 'Effect', 5: 'Utility', 9: 'Per-Preset' },
+    functions: { 3: [{ ord: 0, name: 'Select' }], 4: [{ ord: 0, name: 'Bypass' }], 5: [{ ord: 1, name: 'Tap Tempo' }], 9: [{ ord: 0, name: 'Placeholder' }] },
+    colors: { 1: { name: 'Red', hex: '#e23b3b' }, 12: { name: 'Off', hex: '#3a3a44' } }
+  }
+  const at = (fields, extra = {}) => describeSwitch({ switch: 1, fields, tapLabel: '', holdLabel: '', ...extra }, model)
+
+  const one = at({ tapCategory: 3, tapFunction: 0, holdCategory: 5, holdFunction: 1, color: 1 }, { tapLabel: 'CLEAN      ' })
+  assert.equal(one.number, 2, 'switches are counted from 1 on screen')
+  assert.equal(one.tap.action, 'Scene · Select')
+  assert.equal(one.tap.label, 'CLEAN', 'a stored label is shown, without its padding')
+  assert.equal(one.hold.action, 'Tap Tempo', '“Utility · Tap Tempo” is two words for one thing')
+  assert.equal(one.hold.label, null, 'an empty label is drawn as a label')
+  assert.deepEqual(one.light, { name: 'Red', hex: '#e23b3b' })
+  assert.equal(lightWords(one.light), 'Red light')
+  assert.equal(one.unread, false)
+
+  /* The label-mode number is not trusted, so a label shows whatever it says. */
+  assert.equal(at({ tapCategory: 4, tapFunction: 0, tapDisplay: 0, holdCategory: 0, color: 12 }, { tapLabel: 'DRIVE' }).tap.label, 'DRIVE')
+
+  const empty = at({ tapCategory: 0, tapFunction: 0, holdCategory: 0, holdFunction: 0, color: 12 })
+  assert.equal(empty.tap.action, 'Nothing')
+  assert.equal(lightWords(empty.light), 'Light off', '“Off” is a colour the unit has, not a missing one')
+
+  /* A question the unit did not answer is not "nothing on this switch". */
+  const gap = at({ tapCategory: null, tapFunction: null, holdCategory: 4, holdFunction: 0, color: null })
+  assert.equal(gap.tap.action, 'Couldn’t read')
+  assert.equal(gap.hold.action, 'Effect · Bypass')
+  assert.equal(gap.light, null)
+  assert.equal(lightWords(gap.light), 'Light: couldn’t read')
+  assert.equal(at({ tapCategory: null, holdCategory: null, color: null }).unread, true)
+
+  assert.equal(at({ tapCategory: 9, tapFunction: 0, holdCategory: 0, color: 1 }).tap.action, 'Per-Preset', '“Per-Preset · Placeholder” says nothing')
+  assert.equal(at({ tapCategory: 4, tapFunction: 7, holdCategory: 0, color: 1 }).tap.action, 'Effect', 'a function this app has no word for hides the kind it does know')
+  assert.equal(at({ tapCategory: 42, holdCategory: 0, color: 1 }).tap.action, 'Something this app can’t name yet')
+
+  /* The FM3's colour list starts at 1, so a 0 is an answer with no name, not a failed read. */
+  const odd = at({ tapCategory: 3, tapFunction: 0, holdCategory: 0, color: 0 })
+  assert.deepEqual(odd.light, { name: null, hex: null }, 'a colour the unit did report is not a failed read')
+  assert.equal(lightWords(odd.light), 'Light: a colour this app can’t name yet')
+})
+
+test('the demo FM3 answers a switch in the host’s shape', async () => {
+  const { createMockDevice } = await import('../src/lib/mockDevice.js')
+  const { describeSwitch, fcGeometry } = await import('../shared/footswitches.mjs')
+  const unit = createMockDevice('fm3')
+  const model = unit.fcModel()
+  assert.deepEqual(fcGeometry(model), { layouts: 9, views: 4, switches: 3 })
+  const state = unit.fcState(0, 0, 0)
+  for (const k of ['tapCategory', 'tapFunction', 'holdCategory', 'holdFunction', 'color']) {
+    assert.ok(k in state.fields, `the demo’s switch has no ${k}, which the host always sends`)
+  }
+  const sw = describeSwitch(state, model)
+  assert.equal(sw.tap.action, 'Scene · Select')
+  assert.equal(sw.hold.label, 'BOOST')
+  assert.ok(sw.light?.name, 'the demo’s light has no colour the dictionary knows')
+  /* Every view reads as words, never as "can’t name". */
+  for (let view = 0; view < 4; view++) {
+    for (let s = 0; s < 3; s++) {
+      const said = describeSwitch(unit.fcState(0, view, s), model)
+      assert.ok(!/can’t name|Couldn’t/.test(said.tap.action + said.hold.action), `view ${view + 1} switch ${s + 1}: ${said.tap.action} / ${said.hold.action}`)
+    }
+  }
+})
+
+test('one view is read one switch at a time, with a breath between, and stops when asked', async () => {
+  /*
+   * About twenty-nine questions to the unit per switch. Three at once would
+   * be eighty-odd questions landing on a unit that is also making sound.
+   */
+  const { readView, fcStatePath, FC_PAUSE_MS } = await import('../shared/footswitches.mjs')
+  assert.equal(fcStatePath(2, 1, 0), '/fc/state?layout=2&view=1&switch=0')
+
+  const log = []
+  let inFlight = 0
+  let most = 0
+  const get = async (path) => {
+    inFlight++
+    most = Math.max(most, inFlight)
+    log.push(path)
+    await Promise.resolve()
+    inFlight--
+    return { switch: Number(path.split('switch=')[1]), fields: {} }
+  }
+  const waits = []
+  const wait = async (ms) => {
+    waits.push(ms)
+    log.push(`wait ${ms}`)
+  }
+  const landed = []
+  const done = await readView(get, { layout: 0, view: 3, wait, onSwitch: (i) => landed.push(i) })
+  assert.equal(done.error, null)
+  assert.equal(done.states.length, 3)
+  assert.deepEqual(landed, [0, 1, 2])
+  assert.equal(most, 1, 'two switches were asked for at once')
+  assert.deepEqual(log, [
+    '/fc/state?layout=0&view=3&switch=0',
+    `wait ${FC_PAUSE_MS}`,
+    '/fc/state?layout=0&view=3&switch=1',
+    `wait ${FC_PAUSE_MS}`,
+    '/fc/state?layout=0&view=3&switch=2'
+  ])
+  assert.ok(FC_PAUSE_MS >= 200, 'no breath between switches')
+
+  /* Closing the panel stops the next question. */
+  let asked = 0
+  let shut = false
+  const closed = await readView(async () => {
+    asked++
+    shut = true
+    return { fields: {} }
+  }, { layout: 0, view: 0, wait: async () => {}, stopped: () => shut })
+  assert.equal(asked, 1, 'the unit was asked again after the panel closed')
+  assert.equal(closed.stopped, true)
+
+  /* The first refusal ends it: the next switch would be refused for the same reason. */
+  let tries = 0
+  const refused = await readView(async () => {
+    tries++
+    throw new Error('The Fractal app on your computer has lost its connection to the unit')
+  }, { layout: 0, view: 0, wait: async () => {} })
+  assert.equal(tries, 1, 'a failed read went on asking')
+  assert.match(refused.error, /lost its connection/)
+  const said = await readView(async () => ({ error: 'fcLiveRead not supported' }), { layout: 0, view: 0, wait: async () => {} })
+  assert.equal(said.states.length, 0)
+  assert.match(said.error, /not supported/)
+})
+
+test('a footswitch read travels the relay and is given the long wait', () => {
+  /* GET is the host's rule for both; the read is twenty-nine answers long. */
+  assert.equal(forbiddenRemotely('GET', '/fc/model'), null)
+  assert.equal(forbiddenRemotely('GET', '/fc/state?layout=0&view=0&switch=0'), null)
+  assert.equal(timeoutFor('GET', '/fc/state?layout=0&view=0&switch=2'), 45000, 'a slow unit’s switch read is cut off at twenty seconds')
+  assert.equal(timeoutFor('GET', '/fc/model'), 20000, 'the dictionary is one answer, not a slow read')
+})
+
+test('the Footswitches fold reads only while it is open, and never on a timer', () => {
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  assert.match(app, /const switchesReadable = fcReadable\(device\?\.capabilities\)/, 'the panel is not gated on the unit saying it can be read')
+  assert.match(
+    app,
+    /\{switchesReadable \? \(\s*<Section key="footswitches" title="Footswitches"[^>]*>\s*<Footswitches \/>/,
+    'the Footswitches fold is gone from Edit, or drawn for a unit that cannot answer it'
+  )
+  const panel = bare(readSrc(new URL('../src/components/Footswitches.jsx', import.meta.url), 'utf8'))
+  assert.match(panel, /closest\('details'\)/, 'the panel no longer knows whether its fold is open')
+  assert.match(panel, /addEventListener\('toggle'/, 'the panel does not hear its fold open or close')
+  assert.match(panel, /if \(!open\) return undefined/, 'the panel reads while folded away')
+  assert.match(panel, /stopped: \(\) => stop/, 'closing the fold does not stop the read')
+  assert.match(panel, /readView\(fcSwitch,/, 'the switches are not read through the paced reader')
+  assert.ok(!/setInterval|setTimeout/.test(panel), 'the footswitch panel polls the unit')
+  assert.match(panel, /\{FC_BUSY_WARNING\}/, 'the panel does not say reading is best done between songs')
+  /* Opening the fold starts the read, so the warning has to be seen while it is still shut. */
+  assert.match(app, /<Section key="footswitches" title="Footswitches" note="[^"]*between songs[^"]*"/, 'the warning is only seen once the fold is open, when the unit is already being asked')
+  /* A picker change stops the old read on its own; locking them made reaching View 4 read View 1 first. */
+  assert.ok(!/<select[^>]*\bdisabled=/.test(panel), 'the Layout and View pickers are locked for a whole view, so reaching View 4 of a layout reads View 1 first')
+})
 
 await settle()
 /*

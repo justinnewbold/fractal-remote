@@ -214,6 +214,12 @@ export const AREAS = [
       },
       { does: 'take a block out of the chain', web: 'Remove', phone: 'Remove' },
       {
+        does: 'change your mind after pressing Remove, before anything is sent',
+        web: 'Keep it',
+        phone: null,
+        why: 'the phone asks in the system’s own alert, whose Cancel is drawn by iOS and Android rather than written in the screen — the question and its words are the same at both ends'
+      },
+      {
         does: 'the empty slot you press to put something in it',
         web: 'Empty — tap to add',
         phone: 'Empty'
@@ -290,7 +296,8 @@ export const AREAS = [
   },
   {
     area: 'the play screen',
-    web: ['src/components/Gig.jsx'],
+    /* Tap lives in its own file now, because Edit draws the same button. */
+    web: ['src/components/Gig.jsx', 'src/components/TapTempo.jsx'],
     phone: ['mobile/src/screens/Stage.js'],
     buttons: [
       { does: 'open the block editor', web: 'Edit', phone: 'Edit' },
@@ -1416,7 +1423,11 @@ export function run(test) {
     const phone = read('mobile/src/screens/Edit.js')
     const web = read('src/components/GridEditor.jsx')
     assert.match(phone, /onRemove=\{\(\) => confirmRemove\(/, 'the phone removes a block with no question')
-    assert.match(web, /window\.confirm\(/, 'the browser removes a block with no question')
+    /* In the page, not a browser pop-up: a blocked pop-up answers "no"
+       without showing itself, and Remove did nothing and said nothing. */
+    assert.match(web, /onClick=\{\(\) => setAsking\(at\)\}/, 'the browser removes a block with no question')
+    assert.match(web, /\{asking === at \? \([\s\S]*?role="alertdialog"[\s\S]*?remove\(lane\.row, item\.col, b\.name\)/, 'the browser’s question does not lead to the remove')
+    assert.ok(!/window\.confirm\(/.test(web), 'the browser asks in a pop-up that a blocked pop-up answers “no” to unseen')
     for (const src of [phone, web]) {
       assert.ok(src.includes('Its settings go with it. Adding it again brings it back with every knob at its default.'), 'the two ends word the question differently')
     }
@@ -1442,7 +1453,7 @@ export function run(test) {
 
     /* Save in the phone's bar, only with something to save, asked first. */
     const bar = read('mobile/src/components/TopBar.js')
-    assert.match(bar, /const canSave = saveHere && !!unsaved && unsaved\.number === preset\?\.number && saveTo\.can/, 'the phone’s bar has no Save for changes made on Play')
+    assert.match(bar, /const canSave = saveHere && \(saveTo\.saving \|\| \(!!unsaved && unsaved\.number === preset\?\.number && saveTo\.can\)\)/, 'the phone’s bar has no Save for changes made on Play')
     assert.match(bar, /Alert\.alert\('Save preset\?', 'This will overwrite the current preset\.'/, 'the bar saves without asking')
     assert.match(read('mobile/App.js'), /saveHere=\{screen !== 'edit'\}/, 'Edit shows two Save buttons')
     /* The browser has had one in its bar all along. */
@@ -1518,7 +1529,7 @@ export function run(test) {
     assert.match(demo, /useDemoStorage\(sync\)/, 'the phone demo keeps its saves nowhere')
     assert.ok(demo.indexOf('await hydrate()') > -1 && demo.indexOf('await hydrate()') < demo.indexOf('mock = createMockDevice(unit)\n      announce()'), 'the demo opens before its saves are read')
     const saver = read('mobile/src/components/SaveToSlot.js')
-    assert.ok(saver.indexOf('if (isDemo())') > -1 && saver.indexOf('if (isDemo())') < saver.indexOf('askComputerToSave({'), 'the demo still asks a computer that is not there')
+    assert.ok(saver.indexOf('if (isDemo())') > -1 && saver.indexOf('if (isDemo())') < saver.indexOf('startComputerSave({'), 'the demo still asks a computer that is not there')
     assert.match(saver, /await saveInDemo\(preset\?\.number\)/)
     assert.doesNotMatch(read('src/lib/demoMemory.js'), /\blocalStorage\.(get|set)Item/, 'the demo reaches for a localStorage the phone does not have')
   })

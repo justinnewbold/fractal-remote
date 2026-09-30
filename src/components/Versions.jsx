@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { listVersions, loadVersion, restoreVersion, backupDevice } from '../lib/forgefx'
+import { useEffect, useRef, useState } from 'react'
+import { listVersions, backupDevice } from '../lib/forgefx'
 import { formatWhen } from '../lib/when'
+import { RESTORE_LATE_WORDS } from '../lib/restoreViaComputer'
 
 /**
  * Undo, for the hardware.
@@ -11,17 +12,32 @@ import { formatWhen } from '../lib/when'
  * when the question is "do that again", and the second when it's "put it back
  * how it was". Only the second can answer that, because only the second knows
  * what "it was" actually contained.
+ *
+ * The two buttons do not reach the unit from here. `onRestore` does — at the
+ * Mac straight away, and from a phone by asking the Mac, which is the only
+ * place a snapshot may be written from. `waiting` is that ask, while it is
+ * out. See lib/restoreViaComputer.js.
  */
-export function Versions({ preset, onError, onChanged, busy, deviceSlots }) {
+export function Versions({ preset, onError, onRestore, busy, dirty, remote, waiting, onCancelWait, deviceSlots }) {
   const [versions, setVersions] = useState(null)
   const [scope, setScope] = useState('slot')
+  /* `{ id, mode }`: which button is asking "are you sure". */
   const [confirming, setConfirming] = useState(null)
+  const [working, setWorking] = useState(null)
+  const live = useRef(true)
+  useEffect(
+    () => () => {
+      live.current = false
+    },
+    []
+  )
 
   const load = async () => {
     try {
       const res = await listVersions(scope === 'slot' ? preset?.number : undefined)
-      setVersions(res?.versions || [])
+      if (live.current) setVersions(res?.versions || [])
     } catch (err) {
+      if (!live.current) return
       setVersions([])
       onError(err.message)
     }
@@ -32,26 +48,32 @@ export function Versions({ preset, onError, onChanged, busy, deviceSlots }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, preset?.number])
 
-  const play = async (version) => {
+  const run = async (version, mode) => {
+    setConfirming(null)
+    setWorking({ id: version.id, mode })
     try {
-      await loadVersion(version.id)
-      onChanged(`Loaded snapshot into the edit buffer — not saved to a slot yet`)
+      const said = await onRestore(version, mode)
+      /* A Put back keeps what it replaced as a snapshot, so the list has grown. */
+      if (said?.ok && live.current) load()
     } catch (err) {
       onError(err.message)
+    } finally {
+      if (live.current) setWorking(null)
     }
   }
 
-  const put = async (version) => {
-    setConfirming(null)
-    try {
-      await restoreVersion(version.id)
-      onChanged(`Restored slot ${version.location} from a snapshot`)
-    } catch (err) {
-      onError(err.message)
-    }
-  }
+  /*
+   * "Play it" replaces the sound that is loaded, and so does "Put back" — it
+   * goes through the edit buffer on its way to the slot. With unsaved edits
+   * on the unit that is ten minutes of work gone, so it is said here, before
+   * anything is asked of the computer rather than after.
+   */
+  const play = (version) => (dirty ? setConfirming({ id: version.id, mode: 'play' }) : run(version, 'play'))
 
   if (!versions) return null
+
+  const out = waiting || working
+  const lost = dirty ? ' Your unsaved changes to the sound you’re on will be lost.' : ''
 
   return (
     <section className="versions">
@@ -74,58 +96,100 @@ export function Versions({ preset, onError, onChanged, busy, deviceSlots }) {
       </div>
 
       {versions.length === 0 ? (
+        /*
+         * It used to say one is taken before a slot is overwritten. Nothing
+         * took one, so a Put back could not be undone. Put back does now; a
+         * save still does not, and this does not claim it.
+         *
+         * And not "below" on a phone: backing up every slot is one of the
+         * things the relay refuses from away ("back up the device"), so the
+         * button there only says no.
+         */
         <p className="hint">
-          No snapshots yet. One is taken before a slot is overwritten, so they appear as you
-          work.
+          {remote
+            ? 'No snapshots yet. Back up all slots at the computer to take one of each, and Put back keeps a copy of whatever it replaces.'
+            : 'No snapshots yet. Back up every slot below to take one of each, and Put back keeps a copy of whatever it replaces.'}
         </p>
       ) : (
         <div className="history-list">
-          {versions.map((version) => (
-            <div className="history-entry" key={version.id}>
-              <div className="history-row">
-                <div className="version-info">
-                  <span className="history-name">{version.name || `Slot ${version.location}`}</span>
-                  <span className="history-when mono">
-                    slot {version.location} · {formatWhen(version.at)}
-                    {version.label ? ` · ${version.label}` : ''}
-                  </span>
-                </div>
-                <div className="history-actions">
-                  <button className="chip" onClick={() => play(version)} disabled={busy}>
-                    Play it
-                  </button>
-                  <button
-                    className="chip"
-                    onClick={() => setConfirming(version.id)}
-                    disabled={busy}
-                  >
-                    Put back
-                  </button>
-                </div>
-              </div>
-
-              {confirming === version.id ? (
-                <div className="notice" data-kind="fault">
-                  <p>
-                    This overwrites slot {version.location} with the snapshot. Whatever is there now
-                    is gone.
-                  </p>
+          {versions.map((version) => {
+            const mine = out?.id === version.id || out?.versionId === version.id
+            return (
+              <div className="history-entry" key={version.id}>
+                <div className="history-row">
+                  <div className="version-info">
+                    <span className="history-name">{version.name || `Slot ${version.location}`}</span>
+                    <span className="history-when mono">
+                      slot {version.location} · {formatWhen(version.at ?? version.capturedAt)}
+                      {version.label ? ` · ${version.label}` : ''}
+                    </span>
+                  </div>
                   <div className="history-actions">
-                    <button className="primary" onClick={() => put(version)}>
-                      Overwrite slot {version.location}
+                    <button className="chip" onClick={() => play(version)} disabled={busy || !!out}>
+                      Play it
                     </button>
-                    <button onClick={() => setConfirming(null)}>Cancel</button>
+                    <button
+                      className="chip"
+                      onClick={() => setConfirming({ id: version.id, mode: 'put' })}
+                      disabled={busy || !!out}
+                    >
+                      Put back
+                    </button>
                   </div>
                 </div>
-              ) : null}
-            </div>
-          ))}
+
+                {mine ? (
+                  <div className="notice" role="status">
+                    <p>
+                      {waiting?.late
+                        ? RESTORE_LATE_WORDS
+                        : (waiting || working)?.mode === 'play'
+                          ? 'Loading the snapshot…'
+                          : `Putting it back in slot ${version.location}…`}
+                    </p>
+                    {waiting && onCancelWait ? (
+                      <div className="history-actions">
+                        <button onClick={onCancelWait}>Cancel</button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {confirming?.id === version.id && confirming.mode === 'put' ? (
+                  <div className="notice" data-kind="fault">
+                    <p>
+                      This writes the snapshot over slot {version.location}. What’s there now is kept
+                      as a snapshot first, so you can put it back.{lost}
+                    </p>
+                    <div className="history-actions">
+                      <button className="primary" onClick={() => run(version, 'put')}>
+                        Put back in slot {version.location}
+                      </button>
+                      <button onClick={() => setConfirming(null)}>Cancel</button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {confirming?.id === version.id && confirming.mode === 'play' ? (
+                  <div className="notice" data-kind="fault">
+                    <p>This loads the snapshot in place of the sound you’re on.{lost}</p>
+                    <div className="history-actions">
+                      <button className="primary" onClick={() => run(version, 'play')}>
+                        Play it
+                      </button>
+                      <button onClick={() => setConfirming(null)}>Cancel</button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
         </div>
       )}
 
       <p className="hint history-note">
-        <strong>Play it</strong> loads a snapshot into the edit buffer so you can hear it without
-        occupying a slot. <strong>Put back</strong> writes it to the slot it came from.
+        <strong>Play it</strong> loads a snapshot so you can hear it without saving it to a slot.{' '}
+        <strong>Put back</strong> writes it to the slot it came from, and keeps what was there.
       </p>
     </section>
   )

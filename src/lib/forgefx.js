@@ -18,6 +18,9 @@ import { zeroBasedChain, wrongSlot } from './slots.js'
 import { cableColumns, toWireCable, toWireCell } from '../../shared/grid-plan.mjs'
 import { DEFAULT_SLUG, deviceSlug } from '../../shared/device-slug.mjs'
 import { firmwareOf } from '../../shared/firmware.mjs'
+import { fixRead } from '../../shared/param-fixes.mjs'
+import { cancelledSave, pendingSaveDoc, saveProgressDoc, saveResultDoc } from '../../shared/save-wait.mjs'
+import { cancelledRestore, pendingRestoreDoc, restoreProgressDoc, restoreResultDoc } from './restoreViaComputer.js'
 import { toNormalized } from './scale.js'
 import { withLineage } from './lineage.js'
 import { remoteActive, remoteRequest, subscribeHostSeen, subscribeRemoteEvents, subscribeRemoteState } from './remote.js'
@@ -238,7 +241,9 @@ const whyItFailed = (err) =>
  */
 const routine = (path, options, err) =>
   !!err?.remoteBlocked ||
-  ((options.method || 'GET') === 'GET' && /^\/store\/config\//.test(path) && err?.status === 404)
+  ((options.method || 'GET') === 'GET' && /^\/store\/config\//.test(path) && err?.status === 404) ||
+  /* An empty slot, asked for its copy before a Put back: nothing to keep. See snapshotSlot. */
+  (/^\/backup\/preset\/\d+$/.test(path) && err?.status === 422)
 
 async function request(path, options = {}) {
   /*
@@ -522,15 +527,42 @@ export const clearParkedPresetName = (slot) => deleteHostDoc(pendingNameKey(slot
  * since moved on from", and an id, so the phone can be told what became of it
  * rather than being left to wonder.
  */
-const pendingSaveKey = () => `fractal.pendingSave.${unitSlug}`
-const saveResultKey = () => `fractal.saveResult.${unitSlug}`
+/* The names are shared with the phone app, which uses the same documents. */
+export const pendingSaveKey = () => pendingSaveDoc(unitSlug)
+export const saveResultKey = () => saveResultDoc(unitSlug)
+export const saveProgressKey = () => saveProgressDoc(unitSlug)
 
 export const parkSave = (request) => writeHostDoc(pendingSaveKey(), { ...request, at: Date.now() })
 export const takeParkedSave = () => readHostDoc(pendingSaveKey())
 export const clearParkedSave = () => deleteHostDoc(pendingSaveKey())
+/* Written over rather than deleted: a phone's DELETE never reaches the store. */
+export const cancelParkedSave = (id) => parkSave(cancelledSave(id))
 
 export const reportSave = (result) => writeHostDoc(saveResultKey(), { ...result, at: Date.now() })
 export const readSaveResult = () => readHostDoc(saveResultKey())
+
+/* The computer has the request and is writing it. See shared/save-wait.mjs. */
+export const reportSavePicked = (id) => writeHostDoc(saveProgressKey(), { id, picked: true, at: Date.now() })
+export const readSaveProgress = () => readHostDoc(saveProgressKey())
+
+/**
+ * A snapshot put back, or played, asked for from the phone and carried out at
+ * the Mac — the same road as a save, for the same reason: every /version
+ * route is refused over the relay, and should be. See lib/restoreViaComputer.js.
+ */
+export const pendingRestoreKey = () => pendingRestoreDoc(unitSlug)
+export const restoreResultKey = () => restoreResultDoc(unitSlug)
+export const restoreProgressKey = () => restoreProgressDoc(unitSlug)
+
+export const parkRestore = (request) => writeHostDoc(pendingRestoreKey(), { ...request, at: Date.now() })
+export const takeParkedRestore = () => readHostDoc(pendingRestoreKey())
+export const clearParkedRestore = () => deleteHostDoc(pendingRestoreKey())
+/* Written over rather than deleted, as a save's is: a phone's DELETE never arrives. */
+export const cancelParkedRestore = (id) => parkRestore(cancelledRestore(id))
+export const reportRestore = (result) => writeHostDoc(restoreResultKey(), { ...result, at: Date.now() })
+export const readRestoreResult = () => readHostDoc(restoreResultKey())
+export const reportRestorePicked = (id) => writeHostDoc(restoreProgressKey(), { id, picked: true, at: Date.now() })
+export const readRestoreProgress = () => readHostDoc(restoreProgressKey())
 
 /** The preset currently loaded on the unit. */
 /**
@@ -561,9 +593,15 @@ export const presetBlocks = async () => {
   return zeroBasedChain(list, lastCaps)
 }
 
-/** Named parameters for one placed block. `eid` is the effect id from presetBlocks(). */
+/**
+ * Named parameters for one placed block. `eid` is the effect id from presetBlocks().
+ *
+ * With the catalog's known mistakes put right on the way in (Presence
+ * Frequency is kHz, not Hz) — see shared/param-fixes.mjs — so the knob, the
+ * search and the report all start from the same words.
+ */
 export const blockParams = async (eid) =>
-  mock ? (await tick(), mock.blockParams(eid)) : request(`/preset/blocks/${eid}/params`)
+  fixRead(mock ? (await tick(), mock.blockParams(eid)) : await request(`/preset/blocks/${eid}/params`))
 
 /** ForgeFX's own reference material for a block family. */
 export const blockHelp = (slug) =>
@@ -725,6 +763,9 @@ export const liveMeters = (effectId) =>
     : request(`/preset/monitors/live${Number.isInteger(effectId) ? `?eid=${effectId}` : ''}`)
 
 
+/** What is said about a write whose value could not be read back. */
+const UNREAD = 'the app couldn’t read it back to check'
+
 /** Read one parameter's current value, for confirming a write landed. */
 async function readParamValue(eid, paramId) {
   const res = await blockParams(eid)
@@ -795,12 +836,12 @@ export async function setParamConfirmed(eid, paramId, value, param) {
   }
 
   /*
-   * Neither read agreed — but say WHY, because from a phone the likeliest
-   * answer is that neither read could see the hardware. A check that could not
-   * clear the unit's cache proves nothing about the write, and calling that a
-   * write the device ignored is how a working preset gets reported as broken.
+   * Neither read agreed — but say WHY. The first read came back wrong, which
+   * is what the retry is for; if the second could not be made at all, the
+   * retry proves nothing either way, and calling that a write the device
+   * ignored is how a working preset gets reported as broken.
    */
-  return { ok: false, continuous: null, retried: true, unverified: checkA.stale && checkB.stale }
+  return { ok: false, continuous: null, retried: true, unverified: checkB.stale }
 }
 
 /**
@@ -815,44 +856,32 @@ export async function setParamConfirmed(eid, paramId, value, param) {
  */
 async function landed(eid, paramId, wanted) {
   /*
-   * Whether the read that follows can be believed at all.
+   * Whether the read that follows could be made at all.
    *
-   * Clearing the cache is a local-only route: from a phone ForgeFX answers it
-   * with a refusal, and the read then comes back out of a cache that is one
-   * write behind. That is not a theory — a log from an iPhone has five
-   * parameters in a row reported as not landing, each one reading back the
-   * value of the write BEFORE it, scaled into its own range: Tone read back
-   * the drive's 7, Level read back the tone's 4, Mix read back the level's 6
-   * as 60 out of 100. Every one of them had landed.
+   * This used to send DELETE /device/cache first, to "clear the parameter
+   * cache" so the read could not hand back the value just sent. On the
+   * pinned device server there is no such cache: a block's values are read
+   * off the unit every time they are asked for (gen3.ts blockParams), and
+   * that route deletes the computer's saved profile of the FM3 — its names,
+   * ranges and model lists — which is only missed at the next reconnect. So
+   * every checked knob was throwing the profile away and freshening nothing.
    *
-   * So a check that could not clear the cache is reported as unchecked rather
-   * than as a failure. Saying "did not land" about a write that did is worse
-   * than saying nothing: it sends a player hunting a fault that isn't there,
-   * in the one screen he has to trust.
+   * What is left to know is whether the read came back. A read that could
+   * not be MADE — a timeout over the relay, a block that answered with no
+   * such control — is reported as unchecked rather than as a failure, for
+   * the reason it always was: saying "did not land" about a write that did
+   * sends a player hunting a fault that isn't there, in the one screen he
+   * has to trust.
    */
-  let stale = false
   try {
-    // Without this the read can return the value we just sent from cache,
-    // confirming a write that never reached the hardware.
-    await clearDeviceCache().catch(() => {
-      stale = true
-    })
-    /*
-     * And if it could not be cleared, don't read at all.
-     *
-     * The read was still being made and its answer still thrown away, which
-     * cost a round trip over the relay on every single write — the slowest
-     * thing in the loop, for a number that is not allowed to mean anything.
-     * Worse, it put that meaningless number in the log next to the value
-     * asked for, where it reads exactly like a write that came back wrong.
-     */
-    if (stale) return { ok: false, actual: null, stale }
     const actual = await readParamValue(eid, paramId)
-    if (typeof actual !== 'number') return { ok: false, actual: null, stale }
+    if (typeof actual !== 'number') return { ok: false, actual: null, stale: true }
     const tolerance = Math.max(0.05, Math.abs(wanted) * 0.02)
-    return { ok: Math.abs(actual - wanted) <= tolerance, actual, stale }
-  } catch {
-    return { ok: false, actual: null, stale }
+    return { ok: Math.abs(actual - wanted) <= tolerance, actual, stale: false }
+  } catch (err) {
+    /* A dropped relay is not a check that came back empty: it stops a send. */
+    if (err?.linkDown) throw err
+    return { ok: false, actual: null, stale: true }
   }
 }
 
@@ -887,7 +916,7 @@ function recordCheck(entry) {
     entry.stale
       ? /* No read was made, so there is no number to report — say that, rather
            than printing one the reader is then told to ignore. */
-        `${entry.name || '#' + entry.paramId} wanted ${entry.wanted} NOT CHECKED — ${CACHE_IS_LOCAL}, so a read from here would prove nothing`
+        `${entry.name || '#' + entry.paramId} wanted ${entry.wanted} NOT CHECKED — ${UNREAD}`
       : `${entry.name || '#' + entry.paramId} wanted ${entry.wanted} read back ${
           entry.readBack === null ? 'unreadable' : entry.readBack
         } ${entry.landed ? 'landed' : 'DID NOT LAND'}${
@@ -972,21 +1001,14 @@ function relayGone(err, done, total, what) {
  * transport is a single serial port and parallel reads collide.
  */
 export async function readSchema(blocks, onProgress, { force = false } = {}) {
+  /*
+   * The generation about to happen is computed against these ranges, so the
+   * only copy that can go stale is this app's own, and `force` drops it. The
+   * device server's reads of a block are off the unit every time; the
+   * DELETE /device/cache this used to send first deleted the computer's saved
+   * profile of the FM3 rather than freshening anything.
+   */
   if (force) paramCache.clear()
-
-  // The generation about to happen is computed against these ranges, so a stale
-  // read here produces values that are wrong from the start. Only worth the
-  // round trip when something is actually going to be read.
-  const needsRead = blocks.some(
-    (b) => !EXCLUDED_BLOCKS.includes(b.slug) && !paramCache.has(b.effectId)
-  )
-  if (needsRead) {
-    try {
-      await clearDeviceCache()
-    } catch {
-      // Older builds may not expose it; a stale read is better than no schema.
-    }
-  }
 
   const editable = blocks.filter((b) => !EXCLUDED_BLOCKS.includes(b.slug))
   const typeCache = rosterCache
@@ -1186,7 +1208,7 @@ export async function applyChanges(changes, onProgress) {
     }
     for (const param of change.params) {
       const range = fresh?.get(param.id) ?? param.range
-      advance(`${change.name} · ${param.name} → ${param.to}${param.unit}`)
+      advance(`${change.name} · ${param.name} → ${param.to}${param.unit ? ` ${param.unit}` : ''}`)
       try {
         const res = await setParamConfirmed(change.eid, param.id, param.to, {
           ...range,
@@ -1210,7 +1232,7 @@ export async function applyChanges(changes, onProgress) {
           }
           failures.push(
             res.unverified
-              ? `${change.name} · ${param.name} — sent, but it couldn't be checked from your phone: ${CACHE_IS_LOCAL}, so nothing here can confirm it. Check it at the computer if it matters.`
+              ? `${change.name} · ${param.name} — sent, but ${UNREAD}, so nothing here can confirm it. Check it on the unit if it matters.`
               : `${change.name} · ${param.name} — device ignored both write encodings${where}`
           )
         }
@@ -1410,11 +1432,9 @@ export async function presetRange(start, count, onProgress) {
 /**
  * Read back what was just written and report anything that didn't stick.
  *
- * Worth the extra traffic. ForgeFX caches block parameters and has no
- * invalidation hook, so a read can report a value the hardware doesn't hold —
- * which once sent us chasing a silent preset that was never broken. A write
- * that silently didn't land looks identical to one that did, unless something
- * checks.
+ * Worth the extra traffic. The unit accepts a write it then ignores and says
+ * ok either way, so a write that silently didn't land looks identical to one
+ * that did, unless something checks.
  */
 export async function verifyChanges(changes, onProgress) {
   const mismatches = []
@@ -1543,55 +1563,6 @@ export const getCab = (eid) => request(`/preset/blocks/${eid}/cab`)
 export const listIrs = () => request('/cab/irs')
 
 
-/** Why a read after a write cannot be trusted from a phone. */
-const CACHE_IS_LOCAL = 'the unit only clears its cache at the computer'
-
-/**
- * Clear ForgeFX's parameter cache.
- *
- * There is an invalidation hook after all. ForgeFX caches block parameters, and
- * after a busy session a read can report a value the hardware doesn't hold —
- * which once had us chasing a preset that read Amp1 Level = -80 and was actually
- * at -8, with a server restart the only known cure. This is the supported cure.
- *
- * Called before any read whose accuracy decides something: verifying a write,
- * or building the schema a generation will be computed against.
- */
-/*
- * Whether this Mac's device server will take the clear at all.
- *
- * It travels the relay now — the pinned fork gives remoteAllowed() a DELETE
- * branch for exactly this path — but a Mac that has not taken the update yet
- * refuses it, every time, and this is called before every verified write. One
- * iPhone log carried thirty copies of that refusal with six real errors from
- * the unit buried among them.
- *
- * So the answer is learned once and kept: asked on the first write of a
- * session, and if that Mac says no, not asked again until the app is pointed
- * at a different one. The cost of being wrong in either direction is one round
- * trip, and the alternative — assuming the answer from the app's own version —
- * would be wrong on exactly the pairing that matters, a new phone driving an
- * old Mac.
- */
-let cacheClearRefused = false
-
-/** A different Mac answers differently. Called wherever the link changes. */
-export function resetCacheClear() {
-  cacheClearRefused = false
-}
-
-export const clearDeviceCache = () => {
-  if (mock) return tick().then(() => ({ ok: true }))
-  if (cacheClearRefused) return Promise.reject(new ForgeError(CACHE_IS_LOCAL))
-  return request('/device/cache', { method: 'DELETE' }).catch((err) => {
-    /* A refusal is about this host and will not change while it is the host.
-       Anything else — a timeout, a dropped relay — is about this moment, and
-       asking again next write is right. */
-    if (err?.status === 403 || err?.remoteBlocked) cacheClearRefused = true
-    throw err
-  })
-}
-
 /**
  * One stored version's exact bytes, as a plain array.
  *
@@ -1625,6 +1596,23 @@ export const decodePresetFile = (bytes) =>
 
 /** Modifier slots and the sources that can drive them. */
 export const modifierModel = () => (mock ? tick().then(() => mock.modModel()) : request('/mod/model'))
+
+/**
+ * The footswitch dictionary: the words for each kind of action, each function
+ * inside it and each LED colour. Only words — what a switch is set to is
+ * fcSwitch, one switch at a time. See shared/footswitches.mjs.
+ */
+export const fcModel = () => (mock ? tick().then(() => mock.fcModel()) : request('/fc/model'))
+
+/**
+ * One footswitch's settings, by its path from fcStatePath. About twenty-nine
+ * questions to the unit, so only ever called from readView, which paces them.
+ */
+export const fcSwitch = (path) => {
+  if (!mock) return request(path)
+  const q = new URLSearchParams(String(path).split('?')[1] || '')
+  return tick().then(() => mock.fcState(Number(q.get('layout')), Number(q.get('view')), Number(q.get('switch'))))
+}
 
 /**
  * Attach a modifier source to a parameter.
@@ -1685,11 +1673,30 @@ export const loadVersion = (id) =>
 export const restoreVersion = (id) =>
   mock ? tick().then(() => ({ ok: true })) : request(`/version/${id}/restore`, { method: 'POST' })
 
+/**
+ * Keep what slot `n` holds as a snapshot, now. `{ version }`, or a 422 for a
+ * slot with nothing in it. Taken before a Put back writes over the slot — see
+ * lib/restoreViaComputer.js.
+ */
+export const snapshotSlot = (n) =>
+  mock
+    ? tick().then(() => ({ version: { id: `demo-${n}-${Date.now()}`, location: n } }))
+    : request(`/backup/preset/${n}`, { method: 'POST', body: '{}' })
+
 /** Read a stored preset without loading it onto the unit. */
 export const presetSummary = (n, full) =>
   mock
     ? tick().then(() => mock.presetSummary(n))
     : request(`/presets/${n}/summary${full ? '?full=1' : ''}`)
+
+/**
+ * What a stored slot holds, block by block and value by value, without
+ * loading it: `{ blocks: [{ effectId, channel?, params: [{ paramId, raw, value }] }] }`.
+ * A whole dump of the slot, so it is asked for only when something needs
+ * the slot itself as the answer — see lib/revertCheck.js. The demo has no
+ * dump to give, and says so with null.
+ */
+export const presetParams = (n) => (mock ? tick().then(() => null) : request(`/presets/${n}/params`))
 
 /** Every stored backup ForgeFX holds. */
 export const listBackups = () =>
@@ -1839,15 +1846,6 @@ export const blockCatalog = () =>
 export const placeableBlocks = () =>
   paletteFor(currentDeviceSlug(), blockCatalog).then((r) => r.list)
 
-
-/**
- * Throw away unsaved edits and reload the preset from flash.
- *
- * Everything this app writes lands in the edit buffer; /preset/store is the only
- * thing that makes it permanent. Reselecting the same slot reloads it from
- * flash, so the edit buffer is discarded — which is the whole of revert.
- */
-export const revertPreset = (number) => selectPreset(number)
 
 
 /**
@@ -2194,6 +2192,29 @@ export async function rememberedName(number) {
     persistNames()
   }
   return name
+}
+
+/**
+ * One slot's name, and whether it is actually known — for the save sheet,
+ * which has to tell "slot 12 is empty" from "slot 12 could not be read".
+ *
+ * rememberedName answers '' for both, and the sheet used to take every slot
+ * it had not read for an empty one: "Replaces an empty slot" over a preset
+ * that had simply never been asked about. Over the relay that is most of them.
+ */
+export async function lookUpName(number) {
+  restoreNames()
+  if (nameCache.has(number)) return { name: nameCache.get(number), known: true }
+  try {
+    const { name, known } = await storedName(number)
+    if (known) {
+      nameCache.set(number, name)
+      persistNames()
+    }
+    return { name: known ? name : '', known }
+  } catch {
+    return { name: '', known: false }
+  }
 }
 
 

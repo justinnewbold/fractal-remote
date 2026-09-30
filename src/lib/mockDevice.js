@@ -156,12 +156,20 @@ function sceneStateOf(seed, blocks) {
 /*
  * GET /cab/irs, as the device serves it: bank name → a plain list of IR names.
  * Not objects, and not wrapped in anything.
+ *
+ * And with an FM3's gap in it. The unit's banks are the five below, in that
+ * order, and /cab/irs has no USER — the host cannot read the names of his own
+ * IRs — so a picker that counted down these keys for its bank numbers put
+ * Legacy on bank 2, which is USER. The demo has the same gap so it goes wrong
+ * in the demo too, rather than only on the unit.
  */
 const IR_BANKS = {
-  'Factory 1': cabTypes.map((c) => c.name),
-  'Factory 2': cabTypes.slice(0, 40).map((c) => c.name),
-  Scratchpad: []
+  'FACTORY 1': cabTypes.map((c) => c.name),
+  'FACTORY 2': cabTypes.slice(0, 40).map((c) => c.name),
+  LEGACY: cabTypes.slice(0, 12).map((c) => `${c.name} (LEGACY)`),
+  SCRATCHPAD: []
 }
+const CAB_BANKS = ['FACTORY 1', 'FACTORY 2', 'USER', 'LEGACY', 'SCRATCHPAD']
 
 /*
  * Only what every Fractal block has, for a block whose real list was never
@@ -318,6 +326,10 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
    * state.blocks and its neighbours POINT AT the rig rather than copying it,
    * so every existing write in this file — a bypass, a model swap, a knob —
    * lands on the preset it was made on and is still there on the way back.
+   *
+   * Except the slot already loaded, chosen again: that is the unit reloading
+   * it from what was saved, and it is the whole of a Revert. Kept, every
+   * Revert in the demo left the knobs where they were turned and said so.
    */
   const rigs = new Map()
 
@@ -502,14 +514,26 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
    * it does a real one. The amp's file carries the whole layout as read; the
    * others carry only what the pages need (data/block-params.json).
    */
+  /*
+   * The file keeps only each page's parameter rows, so the mixer row every
+   * real page carries — Mix, Level, Balance, Input Gain, Spread — is put back
+   * from the names. Without it a demo Drive's Mix landed on Hidden, under a
+   * line saying Fractal's editor does not show it, which is not true.
+   */
+  const MIXER = /^(Mix|Level|Balance|Input Gain|Spread)( \d+)?$/
   function layoutOf(slug) {
     if (slug === 'amp') return ampParams.layout ? clone(ampParams.layout) : null
-    const pages = blockParams.blocks[slug]?.pages
+    const real = blockParams.blocks[slug]
+    const pages = real?.pages
     if (!pages?.length) return null
+    const mixer = (real.named || []).filter((p) => MIXER.test(p.name)).map((p) => ({ paramId: p.id }))
     return {
       pages: pages.map((pg) => ({
         name: pg.name,
-        rows: [{ section: 'parameters', controls: pg.ids.map((paramId) => ({ paramId })) }]
+        rows: [
+          { section: 'parameters', controls: pg.ids.map((paramId) => ({ paramId })) },
+          { section: 'mixer', controls: mixer }
+        ]
       }))
     }
   }
@@ -589,6 +613,9 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
         presets: { count: unit.slots, canScanNames: false },
         /* No cab block on a VP4, so no impulse responses to offer either. */
         cabIrs: unit.amps,
+        /* The host's own answer per unit: the FM3's switches can be read, an
+           FM9's and a III's only described, and an AM4 or VP4 has neither. */
+        fc: { model: ['fm3', 'fm9', 'axefx3'].includes(unit.key), liveState: unit.key === 'fm3' },
         tuner: true,
         supportsSave: false
       },
@@ -666,6 +693,8 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
     },
 
     selectPreset: (number) => {
+      /* The same slot again throws its edits away; see `rigs`. */
+      if (number === state.presetNumber) rigs.delete(number)
       state.presetNumber = number
       state.presetName = state.stored.get(number) || ''
       loadRig(number)
@@ -764,7 +793,7 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
     cabState: (eid) => {
       const block = state.blocks.find((b) => b.effectId === eid)
       if (block?.slug !== 'cab') return { error: 'not a cab block' }
-      const banks = Object.keys(IR_BANKS)
+      const banks = CAB_BANKS
       const knobs = paramsOf(eid)
       const MODES = ['LEGACY', 'DYNA-CAB']
       const mode = selectorOf(eid, 31, 1)
@@ -975,6 +1004,69 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
     }),
 
     bindModifier: () => ({ ok: true }),
+
+    /*
+     * GET /fc/model and GET /fc/state, in the pinned host's shapes: the
+     * dictionary keyed by the wire's own numbers, and one switch as `fields`
+     * of raw ordinals plus its two labels. Only the FM3 says it can be read
+     * (see detect's `fc`), which is what a real FM9 and III say too.
+     *
+     * The settings are the demo's own, not a factory layout — enough of each
+     * kind that every line the panel can draw is drawn somewhere.
+     */
+    fcModel: () => ({
+      effectId: 199,
+      liveState: unit.key === 'fm3',
+      layouts: 9,
+      views: 4,
+      switches: 3,
+      labelLen: 11,
+      categories: { 0: 'Unassigned', 2: 'Preset', 3: 'Scene', 4: 'Effect', 5: 'Utility', 6: 'Layout', 8: 'Looper' },
+      functions: {
+        2: [{ ord: 1, name: 'Select in Bank' }],
+        3: [{ ord: 0, name: 'Select' }],
+        4: [{ ord: 0, name: 'Bypass' }, { ord: 2, name: 'Channel Toggle' }],
+        5: [{ ord: 0, name: 'Tuner' }, { ord: 1, name: 'Tap Tempo' }],
+        6: [{ ord: 0, name: 'Select' }],
+        8: [{ ord: 0, name: 'Record' }, { ord: 1, name: 'Play/Stop' }, { ord: 4, name: 'Undo/Erase' }]
+      },
+      colors: {
+        1: { name: 'Red', hex: '#e23b3b' },
+        2: { name: 'Orange', hex: '#f5871f' },
+        4: { name: 'Green', hex: '#33c46b' },
+        5: { name: 'Blue', hex: '#2f6bd0' },
+        6: { name: 'Cyan', hex: '#35c9d6' },
+        7: { name: 'Purple', hex: '#9b59f5' },
+        8: { name: 'White', hex: '#ffffff' },
+        12: { name: 'Off', hex: '#3a3a44' }
+      }
+    }),
+
+    fcState: (layout, view, sw) => {
+      const set = (tap, hold, color, tapLabel = '', holdLabel = '') => ({
+        effectId: 199,
+        layout,
+        view,
+        switch: sw,
+        config: layout * 12 + view * 3 + sw,
+        fields: {
+          tapCategory: tap[0],
+          tapFunction: tap[1],
+          tapDisplay: 0,
+          holdCategory: hold[0],
+          holdFunction: hold[1],
+          holdDisplay: 0,
+          color
+        },
+        tapLabel,
+        holdLabel
+      })
+      if (layout === 8) return set([6, 0], [0, 0], 8)
+      if (view === 1) return set([2, 1], [0, 0], 2)
+      if (view === 2) return set([4, 0], [4, 2], 6, ['DRIVE', 'DELAY', 'VERB'][sw] || '')
+      if (view === 3) return set([8, [0, 1, 4][sw] ?? 0], [0, 0], [1, 4, 12][sw] ?? 12)
+      return set([3, 0], [[4, 0], [5, 1], [5, 0]][sw] || [0, 0], [4, 5, 1][sw] ?? 12, '', sw === 0 ? 'BOOST' : '')
+    },
 
     /* The same store the chain is drawn from, so the scene map and Play agree. */
     sceneStateNow: () =>

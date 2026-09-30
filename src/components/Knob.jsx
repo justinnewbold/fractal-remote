@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toNormalized, fromNormalized } from '../lib/scale'
+import { keyTarget, settleWrites } from '../../shared/knob-keys.mjs'
 
 /**
  * A rotary control.
@@ -63,6 +64,10 @@ export default function Knob({ param, value, onChange, onCommit, size = 58, labe
     live.current = { norm, param, onChange, onCommit }
   })
 
+  /* Where this drag has got to, handed to the commit so it writes the value
+     the hand reached and not one read out of state a render behind. */
+  const dragged = useRef(undefined)
+
   const apply = useCallback((y, { shift = false, coarse = false } = {}) => {
     const { param: p, onChange: change } = live.current
     const delta = origin.current.y - y
@@ -70,8 +75,30 @@ export default function Knob({ param, value, onChange, onCommit, size = 58, labe
     // precise and a phone screen is shorter, so touch gets a longer throw.
     const scale = shift ? 600 : coarse ? 260 : 180
     const next = clamp01(origin.current.norm + delta / scale)
-    change(round3(fromNormalized(next, p)))
+    const v = round3(fromNormalized(next, p))
+    dragged.current = v
+    change(v)
   }, [])
+
+  const release = useCallback(() => {
+    const v = dragged.current
+    dragged.current = undefined
+    live.current.onCommit?.(v)
+  }, [])
+
+  /*
+   * The keys, written once they stop — see shared/knob-keys.mjs.
+   *
+   * An arrow press used to ask for the write in the same instant it moved the
+   * knob, and the write read the value from before the move: every other
+   * press missed, the knob flicked back, and the last press was never sent.
+   * Now the value a press reaches is the value written, a run of presses is
+   * one write a quarter of a second after the last, and leaving the knob — or
+   * the editor closing under it — sends what is waiting at once.
+   */
+  const keys = useRef(null)
+  if (!keys.current) keys.current = settleWrites((v) => live.current.onCommit?.(v))
+  useEffect(() => () => keys.current.flush(), [])
 
   useEffect(() => {
     const el = knob.current
@@ -83,7 +110,7 @@ export default function Knob({ param, value, onChange, onCommit, size = 58, labe
       window.removeEventListener('touchmove', move)
       window.removeEventListener('touchend', end)
       window.removeEventListener('touchcancel', end)
-      live.current.onCommit?.()
+      release()
     }
 
     const move = (e) => {
@@ -125,7 +152,7 @@ export default function Knob({ param, value, onChange, onCommit, size = 58, labe
       window.removeEventListener('touchend', end)
       window.removeEventListener('touchcancel', end)
     }
-  }, [apply])
+  }, [apply, release])
 
   // The mouse keeps React's handlers: nothing about a mouse drag is contested,
   // and mousemove on the window has always been delivered in full.
@@ -135,7 +162,7 @@ export default function Knob({ param, value, onChange, onCommit, size = 58, labe
     const stop = () => {
       drag.current = null
       setDragging(null)
-      live.current.onCommit?.()
+      release()
     }
     window.addEventListener('mousemove', move)
     window.addEventListener('mouseup', stop)
@@ -143,7 +170,7 @@ export default function Knob({ param, value, onChange, onCommit, size = 58, labe
       window.removeEventListener('mousemove', move)
       window.removeEventListener('mouseup', stop)
     }
-  }, [dragging, apply])
+  }, [dragging, apply, release])
 
   const beginMouse = (event) => {
     if (event.button !== 0 || drag.current) return
@@ -152,17 +179,18 @@ export default function Knob({ param, value, onChange, onCommit, size = 58, labe
     setDragging('mouse')
   }
 
+  /* Arrows step, Shift steps finely, Page Up and Down take a tenth of the
+     range, Home and End go to the ends. Each step starts from the value the
+     last one reached, even before the screen has caught up with it. */
   const nudge = (event) => {
-    const step = event.shiftKey ? 0.002 : 0.01
-    if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
-      event.preventDefault()
-      onChange(round3(fromNormalized(clamp01(norm + step), param)))
-      onCommit?.()
-    } else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
-      event.preventDefault()
-      onChange(round3(fromNormalized(clamp01(norm - step), param)))
-      onCommit?.()
-    }
+    const waiting = keys.current.held()
+    const from = waiting !== undefined ? clamp01(toNormalized(waiting, param) ?? norm) : norm
+    const to = keyTarget(event.key, from, { fine: event.shiftKey })
+    if (to === null) return
+    event.preventDefault()
+    const v = round3(fromNormalized(to, param))
+    onChange(v)
+    keys.current.push(v)
   }
 
   const r = size / 2 - 4
@@ -180,6 +208,7 @@ export default function Knob({ param, value, onChange, onCommit, size = 58, labe
         style={{ width: size, height: size }}
         onMouseDown={beginMouse}
         onKeyDown={nudge}
+        onBlur={() => keys.current.flush()}
         role="slider"
         tabIndex={0}
         aria-label={label || param?.name}

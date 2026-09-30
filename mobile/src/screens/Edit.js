@@ -10,12 +10,13 @@ import {
   blockTypes,
   cabState,
   clearCell,
-  dropReadCache,
   idOf,
+  listIrBanks,
   modifierModel,
   placeBlock,
   sameBlock,
   setEnum,
+  setParam,
   setParamConfirmed,
   setType
 } from '../lib/device'
@@ -25,23 +26,30 @@ import {
   MODEL_REFUSED,
   cabAfter,
   cabBackTo,
+  cabElsewhere,
   cabHidden,
+  cabLost,
   cabShowing,
   cabShows,
   cabWas,
+  irBanks,
+  irNow,
   pickCab,
   readCab,
   restoreCab,
   taken
 } from '../lib/cab-pick'
+import { MODEL_HINT, modelSnapshot, restoreModel, undoOffer, undoProgress, undoResult } from '../lib/model-undo'
 import { colLabel, doubtfulWrite, gridShape, isSplitChain, laneItems, lanesShown, rowLabel } from '../lib/grid-plan'
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
 import { isSilencingParam } from '../lib/guardrails'
 import { editPages, pageFor, pageHolding } from '../lib/editPages'
-import { buildParamIndex, findControls, indexFor } from '../lib/paramIndex'
+import { withUnit } from '../lib/param-fixes'
+import { asOnPages, buildParamIndex, findControls, indexFor } from '../lib/paramIndex'
 import { beginChainWrite, endChainWrite, getState, noteEdited, refreshBlocks, useRig, writeBypass, writeChannel } from '../lib/rig'
 import { useKeepAwake } from 'expo-keep-awake'
 import { logDebug } from '../lib/debugLog'
+import { oneWriteAtATime } from '../lib/knob-keys'
 import { blockColor } from '../lib/blockColors'
 import { presetLabel } from '../lib/presetName'
 import { shortBlock } from '../lib/shortName'
@@ -49,14 +57,17 @@ import { thud } from '../lib/feedback'
 import Knob, { fmt } from '../components/Knob'
 import Note from '../components/Note'
 import Grip from '../components/Grip'
+import IrPicker from '../components/IrPicker'
 import Press from '../components/Press'
 import { SaveButton, SaveNotes, useSaveToSlot } from '../components/SaveToSlot'
 import Tile from '../components/Tile'
+import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 
 const face = Platform.select(mono)
 
 const ofBlocks = (s) => s.allBlocks
 const ofScene = (s) => s.sceneIndex
+const ofBufferRev = (s) => s.bufferRev
 const ofSceneNames = (s) => s.sceneNames
 const ofCaps = (s) => s.capabilities
 const ofChain = (s) => s.chain
@@ -79,10 +90,12 @@ const didNotTake = (p, actual, params) => {
   const held = typeof actual === 'number' ? ` The unit is holding it at ${fmt(actual)}${p.unit ? ` ${p.unit}` : ''}.` : ''
   const tempo = (params || []).find((q) => /^tempo$/i.test(q?.name || ''))
   const lowest = typeof tempo?.min === 'number' ? tempo.min : 0
+  /* By the name on the knob, not the catalog's. */
+  const called = p.label || p.name
   if (/time/i.test(p.name || '') && tempo && typeof tempo.value === 'number' && tempo.value > lowest) {
-    return `${p.name} didn’t take.${held} This block’s Tempo is set to a note value, so its time follows the song tempo. Set Tempo to None to set the time by hand.`
+    return `${called} didn’t take.${held} This block’s Tempo is set to a note value, so its time follows the song tempo. Set Tempo to None to set the time by hand.`
   }
-  return `${p.name} didn’t take.${held}`
+  return `${called} didn’t take.${held}`
 }
 
 /**
@@ -140,9 +153,18 @@ export default function Edit({ onBack }) {
   useKeepAwake()
   const blocks = useRig(ofBlocks)
   const scene = useRig(ofScene)
+  /* The preset loaded again: same block, channel and scene, other values. */
+  const bufferRev = useRig(ofBufferRev)
   const sceneNames = useRig(ofSceneNames)
   const caps = useRig(ofCaps)
   const chain = useRig(ofChain)
+  /*
+   * Whose blocks these are. Between a preset change and its chain arriving
+   * they were the last song's, and a tile opened the last song's amp with
+   * its knobs writing to this song's, found by the same number. They are not
+   * drawn then, and neither is anything opened from them. See lib/chain-view.
+   */
+  const chainNow = useChain()
   /* Unsaved work on THIS slot, for the Save button's fill. Same flag the
      rename screen uses: a moved knob is lost at the next preset change
      exactly as a typed name is. */
@@ -162,6 +184,33 @@ export default function Edit({ onBack }) {
    * write behind it.
    */
   const [focus, setFocus] = useState(null)
+  /*
+   * The way back from the last model pick, held here rather than in the panel.
+   *
+   * The panel is rebuilt whenever the block's channel or the scene changes —
+   * a footswitch on the floor is enough — and an Undo kept inside it vanished
+   * with it, halfway through somebody auditioning amps. Here it lasts until
+   * another model is picked, another block is opened, the preset loads again
+   * (a Revert, or another preset, has put other settings on the block), or
+   * the editor closes. And a pick still on the wire when the preset loaded
+   * again made its offer for the preset just left, so the offer carries the
+   * load it was made under and is only shown under that one.
+   */
+  const [modelUndo, setModelUndo] = useState(null)
+  useEffect(() => setModelUndo(null), [openEid, bufferRev])
+  /* The Undo under way, per block, and what the last one came to — up here
+     for the same reason. The channel or scene change that stops an Undo also
+     rebuilds the panel, and a new panel with the button live again would
+     start a second Undo on top of the first. */
+  const [restoring, setRestoring] = useState({})
+  const [undoSaid, setUndoSaid] = useState(null)
+  /* A good one says its piece and goes; one that missed stays, so the names
+     in it can be found and turned by hand. */
+  useEffect(() => {
+    if (!undoSaid || undoSaid.bad) return undefined
+    const t = setTimeout(() => setUndoSaid(null), 10000)
+    return () => clearTimeout(t)
+  }, [undoSaid])
 
   /*
    * The warning cannot outlive the button that raised it. Arming, then
@@ -173,7 +222,7 @@ export default function Edit({ onBack }) {
     if (!pending && saveTo.armed) saveTo.disarm()
   }, [pending, saveTo])
 
-  const block = blocks.find((b) => sameBlock(b, openEid)) || null
+  const block = chainNow.elsewhere ? null : blocks.find((b) => sameBlock(b, openEid)) || null
 
   /*
    * And brings the page to it. The block's knobs are drawn under the search
@@ -246,7 +295,9 @@ export default function Edit({ onBack }) {
             {preset?.pending && !preset?.name ? '…' : presetLabel(preset)}
           </Text>
           {caps?.hasScenes === false ? null : (
-            <Text numberOfLines={1} style={{ color: color.silkDim, fontSize: font.small }}>
+            /* Two lines for the scene: "Scene names cut short." The name
+               is the only part of this line that identifies anything. */
+            <Text numberOfLines={2} style={{ color: color.silkDim, fontSize: font.small }}>
               {`Scene ${scene + 1}${sceneNames[scene] ? ` — ${sceneNames[scene]}` : ''}`}
             </Text>
           )}
@@ -286,16 +337,16 @@ export default function Edit({ onBack }) {
         </Note>
       ) : null}
 
-      {chain === 'reading' && !blocks.length ? (
+      {chain === 'reading' && !blocks.length && !chainNow.elsewhere ? (
         <Note>Reading what’s in this preset…</Note>
       ) : null}
-      {chain === 'failed' ? (
+      {chain === 'failed' && !chainNow.elsewhere ? (
         <Note tone="warn">
           The unit didn’t answer when we asked what’s in this preset, so these are whatever it last
           told us.
         </Note>
       ) : null}
-      {!blocks.length && chain === 'ok' ? <Note>This preset is empty.</Note> : null}
+      {!blocks.length && chain === 'ok' && !chainNow.elsewhere ? <Note>This preset is empty.</Note> : null}
 
       <FindControl
         blocks={blocks}
@@ -329,9 +380,12 @@ export default function Edit({ onBack }) {
         browser lifts them out of the strip; here they are part of it, and
         scrolling is what makes that affordable.
       */}
+      <ChainUpdating chain={chainNow} />
+      {chainNow.elsewhere ? <ChainWait chain={chainNow} height={TAP} /> : null}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={{ display: chainNow.elsewhere ? 'none' : 'flex', opacity: chainNow.late ? 0.55 : 1 }}
         /* The chain is wider than the phone by design now, so the last tile
            needs somewhere to end that is not flush against the bezel. */
         contentContainerStyle={{ flexDirection: 'row', gap: space.sm, paddingRight: space.lg }}
@@ -368,19 +422,36 @@ export default function Edit({ onBack }) {
       {block ? (
         <View onLayout={panelLaid}>
           <BlockPanel
-            key={`${idOf(block)}:${block.channel || ''}:${scene}`}
+            key={`${idOf(block)}:${block.channel || ''}:${scene}:${bufferRev}`}
             block={block}
             channels={caps?.channelNames}
             focus={focus}
             onError={setError}
             onScrollLock={setHeld}
+            modelUndo={modelUndo && sameBlock(block, modelUndo.eid) && modelUndo.rev === bufferRev ? modelUndo.snap : null}
+            /* A finished Undo takes back its own block's offer, not one
+               picked on another block while it ran. */
+            onModelUndo={(snap) =>
+              setModelUndo((u) => (snap ? { eid: idOf(block), rev: bufferRev, snap } : u && sameBlock(block, u.eid) ? null : u))
+            }
+            restoring={restoring[idOf(block)] || null}
+            onRestoring={(p) =>
+              setRestoring((all) => {
+                const next = { ...all }
+                if (p) next[idOf(block)] = p
+                else delete next[idOf(block)]
+                return next
+              })
+            }
+            undoSaid={undoSaid && sameBlock(block, undoSaid.eid) && undoSaid.rev === bufferRev ? undoSaid : null}
+            onUndoSaid={(said) => setUndoSaid(said ? { ...said, eid: idOf(block), rev: bufferRev } : null)}
           />
         </View>
-      ) : blocks.length ? (
+      ) : blocks.length && !chainNow.elsewhere ? (
         <Note>Tap a block to open its controls.</Note>
       ) : null}
 
-      <ChainEditor blocks={blocks} caps={caps} onError={setError} onScrollLock={setHeld} />
+      {chainNow.elsewhere ? null : <ChainEditor blocks={blocks} caps={caps} onError={setError} onScrollLock={setHeld} />}
 
       <Modifiers blocks={blocks} onError={setError} />
     </ScrollView>
@@ -391,12 +462,25 @@ export default function Edit({ onBack }) {
  * One block's controls.
  *
  * Keyed from above on the block, its channel and the scene — the three things
- * that genuinely change what a knob here MEANS. Not on the block object: every
+ * that genuinely change what a knob here MEANS — and on the preset being
+ * loaded again, which changes every value under all three (bufferRev). Not on the block object: every
  * commit ends in a re-read that hands this an identical block under a new
  * identity, and keying on that threw the knobs away and read them again for
  * nothing, once per knob.
  */
-function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
+function BlockPanel({
+  block,
+  channels,
+  focus,
+  onError,
+  onScrollLock,
+  modelUndo,
+  onModelUndo,
+  restoring,
+  onRestoring,
+  undoSaid,
+  onUndoSaid
+}) {
   /* Read once and used everywhere below: see unit.mjs on why this is not
      `block.eid`, and what it cost to find out. */
   const eid = idOf(block)
@@ -412,6 +496,11 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
      is what the picker reads and writes through. Null for every other block,
      and for a unit with no cab state to give. */
   const [cab, setCab] = useState(null)
+  /* The unit's IR names by bank, for the IR picker: asked for once, when a
+     cab with cab state first opens here. They are the unit's, not the
+     preset's, and some three thousand names down a relay. */
+  const [irs, setIrs] = useState(null)
+  const irsAsked = useRef(false)
   const [tab, setTab] = useState('main')
   const [picking, setPicking] = useState(false)
   /* What is typed into the model find box. */
@@ -419,10 +508,24 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
   const [loading, setLoading] = useState(false)
   /* Values a finger has moved but the unit has not confirmed yet. */
   const [local, setLocal] = useState({})
-  /* The model this block was on before the last swap, for the eight seconds
-     during which taking it back is one tap. */
+  /* One checked write per control at a time — see commit. */
+  const writes = useRef(null)
+  const writeOne = useRef(null)
+  if (!writes.current)
+    writes.current = oneWriteAtATime((job) => writeOne.current?.(job), {
+      same: (a, b) => Object.is(a.next, b.next)
+    })
+  /* The cab this block was on before the last pick, for the eight seconds
+     during which taking it back is one tap. A model's way back is held a
+     level up — see modelUndo in Edit — because it has to outlive this panel. */
   const [undo, setUndo] = useState(null)
   const undoTimer = useRef(null)
+  /* A model Undo under way (restoring, for the line beside the button) and
+     what the last one came to (undoSaid) are held in Edit too. Twenty
+     settings down a relay take seconds, and the panel can be rebuilt in them. */
+  /* The channel this block is on now, from the store rather than the render
+     this panel was drawn in: a pick or an Undo outlives the render. */
+  const liveChannel = () => (getState().allBlocks || []).find((b) => sameBlock(b, eid))?.channel ?? null
 
   useEffect(() => {
     let stop = false
@@ -456,6 +559,17 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
   }, [eid, block.slug, onError])
 
   useEffect(() => () => clearTimeout(undoTimer.current), [])
+
+  useEffect(() => {
+    if (!cab || irsAsked.current) return
+    irsAsked.current = true
+    listIrBanks()
+      .then((b) => setIrs(b && typeof b === 'object' && !b.error ? b : null))
+      .catch(() => {
+        // Asked again the next time, rather than never.
+        irsAsked.current = false
+      })
+  }, [cab])
 
   /*
    * Levels are read, never turned.
@@ -508,9 +622,26 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
 
   const valueOf = (p) => (local[p.id] !== undefined ? local[p.id] : p.value)
 
-  const commit = async (p, override) => {
+  /*
+   * A knob's value to the unit, checked — the browser's rule, for the same
+   * bug. The value is handed in by whatever moved it, because reading it out
+   * of `local` here read the value from before the move: a VoiceOver swipe
+   * sent the swipe before it, and the last one never went at all. And one
+   * write per control at a time, the newest waiting value next, with the
+   * value on the knob let go only once the unit has caught up with it.
+   */
+  const commit = (p, override) => {
+    /* For the length of an Undo the knobs show the new model's values, which
+       the unit no longer holds, and a turn there would be pulled back or
+       named as a miss. */
+    if (restoring) return
     const next = override !== undefined ? override : local[p.id]
-    if (next === undefined || next === p.value) return
+    if (next === undefined) return
+    if (next === p.value && !writes.current.busy(p.id)) return
+    return writes.current.send(p.id, { p, next })
+  }
+
+  writeOne.current = async ({ p, next }) => {
     try {
       const res = await setParamConfirmed(eid, p.id, next, p)
       /* Before the read-back, not after: the write is out and the unit is
@@ -520,6 +651,7 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
       setParams(fresh?.named || [])
       if (!res.ok) onError(didNotTake(p, res.actual, fresh?.named || []))
       setLocal((prev) => {
+        if (prev[p.id] !== next) return prev
         const copy = { ...prev }
         delete copy[p.id]
         return copy
@@ -543,11 +675,46 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
    * a dialog in front of a tone control is the ceremony that sends people back
    * to the hardware editor, and the one thing you want after hearing a wrong
    * amp is to be somewhere else, quickly. So it writes now and offers the way
-   * back for eight seconds.
+   * back — the whole block as it was read just before the pick, because the
+   * unit loads a new model's own settings and an Undo that only put the model
+   * back gave you the old amp with the new amp's settings. See
+   * lib/model-undo.js, shared with the browser.
    */
   const applyModel = async (value, { undoable = true } = {}) => {
     if (cab && block.slug === 'cab') return applyCab(value, { undoable })
     const was = type
+    onUndoSaid(null)
+    /* Where the pick was made. A preset loaded again, or a channel changed,
+       while the read below is on the wire is not the block that was tapped. */
+    const rev0 = getState().bufferRev
+    const ch0 = liveChannel()
+    /* The preset number moves the moment another preset is picked; the
+       buffer's revision only once its chain has been read. */
+    const n0 = getState().preset?.number
+    const moved = () => getState().bufferRev !== rev0 || getState().preset?.number !== n0 || liveChannel() !== ch0
+    /* Fresh, not what is on show: the switches are never kept here, and a
+       read that fails falls back to the knobs on screen rather than to no
+       Undo at all. */
+    let before = null
+    if (undoable && was && was.value !== Number(value)) {
+      const now = await blockParams(eid).catch((err) => {
+        if (err?.linkDown) throw err
+        return null
+      })
+      before =
+        modelSnapshot(now, { channel: block.channel ?? null }) ||
+        modelSnapshot({ named: params, type: was }, { channel: block.channel ?? null })
+      if (before?.type.value === Number(value)) before = null
+      /* Named as the knobs are drawn, so a setting that didn't go back can be
+         found on screen by the name the Undo gives it. */
+      if (before) {
+        const drawnAs = new Map()
+        for (const pg of pages) for (const q of pg.params) if (!drawnAs.has(q.id)) drawnAs.set(q.id, q.label)
+        before = { ...before, knobs: before.knobs.map((k) => ({ ...k, name: drawnAs.get(k.id) || k.name })) }
+      }
+      /* The model would land there, on settings no Undo could reach. */
+      if (moved()) return
+    }
     const sent = await setType(eid, Number(value))
     noteEdited()
     const fresh = await blockParams(eid)
@@ -562,20 +729,17 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
     setLayout(fresh?.layout || null)
     setType_(fresh?.type ?? null)
     setLocal({})
-    clearTimeout(undoTimer.current)
     /* A refusal went in the log and nowhere else. Said on screen now, unless
-       the read just taken shows the model on the block anyway. */
+       the read just taken shows the model on the block anyway. The block is
+       still on the model it was on, so an offer already made stays. */
     if (sent?.ok === false && fresh?.type?.value !== Number(value)) {
-      setUndo(null)
       onError(MODEL_REFUSED)
       return
     }
-    if (undoable && was && was.value !== Number(value)) {
-      setUndo(was)
-      undoTimer.current = setTimeout(() => setUndo(null), 8000)
-    } else {
-      setUndo(null)
-    }
+    /* No timer: eight seconds is not long enough to hear an amp and decide.
+       And none for a preset loaded again since: Edit has cleared the offer
+       for that, and a late one would offer the last preset's amp to this. */
+    if (before && getState().bufferRev === rev0) onModelUndo(before)
   }
 
   /**
@@ -592,7 +756,16 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
   const applyCab = async (value, { undoable = true, back = null } = {}) => {
     const before = cab
     const write = (paramId, ordinal) => setEnum(eid, paramId, ordinal)
-    const res = back ? await restoreCab(before, back, write) : await pickCab(before, value, write)
+    let res
+    try {
+      res = back ? await restoreCab(before, back, write) : await pickCab(before, value, write)
+    } catch (err) {
+      /* The browser's: a write that timed out may have landed, so the panel
+         reads again, or stops trusting the numbers it held. */
+      const p = await blockParams(eid).catch(() => null)
+      setCab(cabLost(before, await readCab(() => cabState(eid), p)))
+      throw err
+    }
     noteEdited()
     const fresh = await blockParams(eid)
     const now = await readCab(() => cabState(eid), fresh)
@@ -608,7 +781,7 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
       landed
         ? 'unit shows it'
         : read
-          ? `unit shows ${shows?.name ?? 'nothing'}, asked ${back ? back.name : Number(value)}`
+          ? `unit shows ${shows?.name ?? 'nothing'}, asked ${back ? back.name : (value?.name ?? Number(value))}`
           : "sent, couldn't read the cab back to check"
     )
     setParams(fresh?.named || [])
@@ -622,7 +795,10 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
       onError(CAB_REFUSED)
       return
     }
-    const was = cabWas(before, models)
+    /* Taken, and the unit reads as something else: said, not only logged. */
+    if (read && !landed) onError(cabElsewhere(read, models))
+    /* Told which pick this was: an IR's undo holds the bank and the IR too. */
+    const was = cabWas(before, models, value)
     if (undoable && !back && was && !cabShows(before, value)) {
       setUndo({ name: was.name, cab: was })
       undoTimer.current = setTimeout(() => setUndo(null), 8000)
@@ -641,17 +817,79 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
     }
   }
 
-  /* The undo is a cab put back where it was, mode and all, or a model. */
+  /* An IR out of the IR picker: {bank, ir, name}, through the cab pick. */
+  const swapIr = async (pick) => {
+    try {
+      await applyCab(pick)
+    } catch (err) {
+      onError(err.message)
+    }
+  }
+
+  /* The undo is a cab put back where it was, mode and all. */
   const takeBack = async () => {
     const back = undo
     if (!back) return
-    if (!back.cab) return swap(back.value)
     setUndo(null)
     if (!cab || block.slug !== 'cab') return onError(CAB_UNDO_LOST)
     try {
       await applyCab(null, { undoable: false, back: back.cab })
     } catch (err) {
       onError(err.message)
+    }
+  }
+
+  /*
+   * Or a model put back, with every setting the app could see on it.
+   *
+   * This used to be `swap(back.value)` — a fresh pick of the old model, which
+   * offered an Undo of its own, so taking a pick back offered to take the
+   * taking back back. It is its own path now, and it offers nothing after.
+   */
+  const takeModelBack = async () => {
+    const back = modelUndo
+    if (!back || restoring) return
+    setPicking(false)
+    setHunt('')
+    onUndoSaid(null)
+    onRestoring({ step: 'model' })
+    /* Every write lands on whichever channel is live. A footswitch, a channel
+       tap or another preset in the seconds this runs stops it before the next
+       one, rather than sending the rest of A's settings to B. */
+    const at = getState()
+    const ch0 = liveChannel()
+    /* Another preset puts its number up at once, but its chain — and so the
+       buffer's revision and the channel read from it — only seconds later.
+       Without this the rest of the old song's settings land on the new one. */
+    const n0 = at.preset?.number
+    try {
+      const r = await restoreModel(back, {
+        channel: block.channel ?? null,
+        setType: (v) => setType(eid, v),
+        read: () => blockParams(eid),
+        write: (p, v) => setParam(eid, p.id, v, p),
+        writeEnum: (id, v) => setEnum(eid, id, v),
+        writeChecked: (p, v) => setParamConfirmed(eid, p.id, v, p),
+        progress: onRestoring,
+        stillHere: () => {
+          const s = getState()
+          return liveChannel() === ch0 && s.sceneIndex === at.sceneIndex && s.bufferRev === at.bufferRev && s.preset?.number === n0
+        }
+      })
+      if (!r.refused || (r.refused === 'unread' && r.modelSent)) noteEdited()
+      if (r.last) {
+        setParams(r.last.named || [])
+        setLayout(r.last.layout || null)
+        setType_(r.last.type ?? null)
+        setLocal({})
+      }
+      const said = undoResult(r, back)
+      if (!said.keep) onModelUndo(null)
+      onUndoSaid(said)
+    } catch (err) {
+      onError(err.message)
+    } finally {
+      onRestoring(null)
     }
   }
 
@@ -662,6 +900,9 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
      cab state says — and one playing an IR marks nothing in the list. */
   const cabNow = cabShowing(cab, models)
   const current = cabNow ? { value: cabNow.value, name: cabNow.name } : type
+  /* And which IR it holds, out of the unit's banks in the unit's order. */
+  const irList = cab && block.slug === 'cab' && irs ? irBanks(cab, irs, { named: params }) : []
+  const irHere = irNow(cab, irList)
 
   /*
    * The models worth drawing. Capped rather than paged: the list is scrolled
@@ -703,6 +944,9 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
               label={ch}
               tone="signal"
               on={block.channel === ch}
+              /* Not while an Undo is putting this channel's settings back:
+                 the rest of them would land on the channel tapped. */
+              disabled={!!restoring}
               onPress={async () => {
                 try {
                   await writeChannel(eid, ch)
@@ -736,7 +980,9 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
             caption="Model"
             label={current?.name || `${models.length} to choose from`}
             sub={picking ? 'Close' : modelNote(current?.name) || 'Tap to change'}
-            onPress={() => setPicking((v) => !v)}
+            onPress={() => {
+              if (!restoring) setPicking((v) => !v)
+            }}
           />
           {/*
             What a model is based on, under the control and in every row of the
@@ -749,6 +995,12 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
             <Text style={{ color: color.silkDim, fontSize: font.small }}>{gearLine(type)}</Text>
           ) : null}
           {cabNow?.hint ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{cabNow.hint}</Text> : null}
+          {/* Instead of a question on every pick: auditioning is many picks
+              in a row. Not for a cab, which changes the cabinet and nothing
+              else. */}
+          {picking && !(cab && block.slug === 'cab') ? (
+            <Text style={{ color: color.silkDim, fontSize: font.small }}>{MODEL_HINT}</Text>
+          ) : null}
           {picking ? (
             <View style={{ gap: space.sm }}>
               {/*
@@ -802,6 +1054,11 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
         </View>
       ) : null}
 
+      {/* ------------------------------------------------------------ IR */}
+      {irHere && irList.length ? (
+        <IrPicker banks={irList} now={irHere} onPick={swapIr} disabled={!!restoring} />
+      ) : null}
+
       {undo ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
           <Text style={{ color: color.silkDim, fontSize: font.small, flex: 1 }}>
@@ -809,7 +1066,15 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
           </Text>
           <Press label="Undo" height={44} onPress={takeBack} />
         </View>
+      ) : modelUndo ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+          <Text accessibilityLiveRegion="polite" style={{ color: color.silkDim, fontSize: font.small, flex: 1 }}>
+            {restoring ? undoProgress(restoring, modelUndo) : undoOffer(modelUndo)}
+          </Text>
+          <Press label="Undo" height={44} disabled={!!restoring} onPress={takeModelBack} />
+        </View>
       ) : null}
+      {undoSaid ? <Note tone={undoSaid.bad ? 'warn' : undefined}>{undoSaid.text}</Note> : null}
 
       {/* ------------------------------------------------------------ knobs */}
       {/*
@@ -837,6 +1102,9 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
         tall as its contents, so it lurches down and back up — for a read that
         is usually over in a second, on values that are usually the same ones.
       */}
+      {/* Hidden says why its settings are there, once, above them. */}
+      {onPage?.note ? <Note>{onPage.note}</Note> : null}
+
       {loading && !shown.length ? (
         <Note>{`Reading ${block.name}…`}</Note>
       ) : (
@@ -858,10 +1126,12 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
             >
               <Knob
                 param={p}
-                label={p.name}
+                label={p.label || p.name}
                 value={valueOf(p)}
-                onChange={(v) => setLocal((prev) => ({ ...prev, [p.id]: v }))}
-                onCommit={() => commit(p)}
+                onChange={(v) => {
+                  if (!restoring) setLocal((prev) => ({ ...prev, [p.id]: v }))
+                }}
+                onCommit={(v) => commit(p, v)}
                 onScrollLock={onScrollLock}
               />
               <ValueBox param={p} value={valueOf(p)} onCommit={(v) => commit(p, v)} />
@@ -968,14 +1238,15 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
   /* A write is done when the unit has been asked AND the chain re-read. */
   const after = async (res) => {
     /*
-     * A structure write, then a read that must not come out of the computer's
-     * fifteen-second copy of the preset — a copy taken before the write, so
-     * a read out of it shows the chain as it was: "When I rearranged with the
-     * slider and moved it up, it didn't take, it just put it right back where
-     * it was." The copy is dropped first, so the read is off the unit.
+     * A structure write, then a read of the chain off the unit: "When I
+     * rearranged with the slider and moved it up, it didn't take, it just put
+     * it right back where it was." The computer keeps a fifteen-second copy
+     * of the preset's layout, and every placement and clear drops it itself.
+     * This used to send DELETE /device/cache first to drop it again, and that
+     * route never touched the copy — it deleted the computer's saved profile
+     * of the FM3.
      */
     endChainWrite({ refresh: false })
-    await dropReadCache()
     await refreshBlocks({ quiet: true })
     setIssue(doubtfulWrite(res))
     if (!doubtfulWrite(res)) setActing(null)
@@ -1501,7 +1772,7 @@ function Modifiers({ blocks, onError }) {
       setLoading(true)
       try {
         const res = await blockParams(eid)
-        if (!stop) setParams((res?.named || []).filter((p) => !isSilencingParam(p.name)))
+        if (!stop) setParams(asOnPages(res))
       } catch (err) {
         if (!stop) onError(err.message)
       } finally {
@@ -1752,7 +2023,7 @@ function FindControl({ blocks, onPick, onError }) {
                 key={`${idOf(block)}-${param.id}`}
                 caption={block.name}
                 label={param.name}
-                sub={`${fmt(param.value)}${param.unit || ''}`}
+                sub={withUnit(fmt(param.value), param.unit)}
                 onPress={() => pick(idOf(block), param.id)}
               />
             ))}
@@ -1812,7 +2083,7 @@ function ValueBox({ param, value, onCommit }) {
       selectTextOnFocus
       keyboardType="numbers-and-punctuation"
       returnKeyType="done"
-      accessibilityLabel={`${param?.name} value`}
+      accessibilityLabel={`${param?.label || param?.name} value`}
       style={{
         width: '100%',
         minHeight: 32,

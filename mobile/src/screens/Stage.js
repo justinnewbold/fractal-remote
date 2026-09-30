@@ -59,6 +59,7 @@ import tempoIcon from '../../assets/icons/tempo.png'
 import tunerIcon from '../../assets/icons/tuner.png'
 import { sceneColor } from '../lib/sceneColors'
 import { shortBlock } from '../lib/shortName'
+import { hasLooper, LOOPER_ON_EDIT } from '../lib/guardrails'
 import UnlockOffer from '../components/UnlockOffer'
 import Note from '../components/Note'
 import { fixById, fixFor } from '../lib/troubleshooting'
@@ -68,10 +69,12 @@ import Coach from '../components/Coach'
 import Sheet from '../components/Sheet'
 import TempoBox from '../components/TempoBox'
 import Tuner from '../components/Tuner'
+import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 
 /* Hoisted: a selector rebuilt each render re-reads the store on every notify. */
 const ofPreset = (s) => s.preset
 const ofBlocks = (s) => s.blocks
+const ofAllBlocks = (s) => s.allBlocks
 const ofScene = (s) => s.sceneIndex
 const ofSceneNames = (s) => s.sceneNames
 const ofCaps = (s) => s.capabilities
@@ -102,10 +105,19 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
 
   const preset = useRig(ofPreset)
   const blocks = useRig(ofBlocks)
+  /* Every block, the three the stage leaves out included — for the looper line. */
+  const allBlocks = useRig(ofAllBlocks)
   const scene = useRig(ofScene)
   const sceneNames = useRig(ofSceneNames)
   const caps = useRig(ofCaps)
   const chain = useRig(ofChain)
+  /*
+   * Whose tiles these are. A preset picked here goes up by name on the tap
+   * and its chain a moment later; in between the tiles were the last song's,
+   * live, and a tap switched whatever the new preset has under the same
+   * number. Now grey cards stand in for them. See lib/chain-view.
+   */
+  const chainNow = useChain()
   const tunerOn = useRig(ofTunerOn)
   const tuning = useRig(ofTuning)
   const bpm = useRig(ofBpm)
@@ -232,7 +244,9 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
    * changes.
    */
   const [trim, setTrim] = useState(0)
-  const fitKey = `${viewport}:${scenes.hasScenes ? scenes.count : 0}:${blocks.length}:${fitOn}:${sceneCols}`
+  /* The grey cards and the "Updating…" line stand in for a moment and go:
+     a trim measured over them is not the grid's, and is dropped with them. */
+  const fitKey = `${viewport}:${scenes.hasScenes ? scenes.count : 0}:${blocks.length}:${fitOn}:${sceneCols}:${chainNow.elsewhere}:${chainNow.late}`
   const lastKey = useRef(fitKey)
   if (lastKey.current !== fitKey) {
     lastKey.current = fitKey
@@ -266,6 +280,11 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   const fxCols = fitted ? fitted.fxCols : size.fx
   /** Which block's channel picker is open, by effect id. */
   const [picking, setPicking] = useState(null)
+  /* Closed, not only hidden: kept, the sheet came back over the new song's
+     tiles the moment its chain landed, and a tap changed its block. */
+  useEffect(() => {
+    if (chainNow.elsewhere) setPicking(null)
+  }, [chainNow.elsewhere])
 
   const channels = caps?.channelNames
   const slots = slotCount(caps)
@@ -285,7 +304,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
    * blocks it knew on screen, and a tip over stale tiles is a tip about a
    * preset that may not be loaded.
    */
-  const holdDoesSomething = chain === 'ok' && blocks.length > 0 && channels?.length > 1
+  const holdDoesSomething = chain === 'ok' && blocks.length > 0 && channels?.length > 1 && !chainNow.elsewhere
   const [coach, setCoach] = useState(false)
 
   useEffect(() => {
@@ -572,7 +591,10 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
                   height={tileH}
                   haptic={thud}
                   onPress={() => writeScene(i)}
-                  narrow={sceneCols >= 4}
+                  /* Two lines, a size down, at every width: "Scene names
+                     cut short." Wrapping fixes it for everyone — a hold to
+                     show the name would be a footswitch that doesn't switch. */
+                  wrap
                   style={{ width: tileWidth(row, sceneCols) }}
                 />
               )
@@ -601,14 +623,16 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
           ) : null}
         </View>
 
-        {chain === 'failed' ? (
+        {chain === 'failed' && !chainNow.elsewhere ? (
           <Note tone="warn">
             The unit didn’t answer when we asked what’s in this preset, so these buttons are
             whatever it last told us. Pull down to ask again.
           </Note>
         ) : null}
 
-        {blocks.length === 0 && chain === 'ok' ? (
+        <ChainUpdating chain={chainNow} />
+
+        {blocks.length === 0 && chain === 'ok' && !chainNow.elsewhere ? (
           <Note>Nothing in this preset but input and output.</Note>
         ) : null}
 
@@ -649,9 +673,13 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             setGrid(e.nativeEvent.layout.width)
             setBlockGrid(e.nativeEvent.layout.height)
           }}
-          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}
+          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, opacity: chainNow.late ? 0.55 : 1 }}
         >
-          {blocks.map((block) => {
+          {chainNow.elsewhere ? (
+            <View style={{ width: '100%' }}>
+              <ChainWait chain={chainNow} height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)} />
+            </View>
+          ) : blocks.map((block) => {
             const hue = blockColor(block.slug)
             /* Named here rather than inline: the word the unit uses for this is
                not a word anybody says out loud, and it has no business sitting
@@ -680,6 +708,16 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             )
           })}
         </View>
+
+        {/*
+          Where the looper went. "PLAY leaves out the Looper" — on purpose,
+          see STAGE_HIDDEN: an on/off tile is not what a looper wants on a
+          stage, it wants Record and Play. Until those exist, say where it is,
+          so ten tiles for a thirteen-block preset don't read as three lost.
+          The browser's Play says the same words — and, like it, only when
+          there is an Edit button to press.
+        */}
+        {onOpenEdit && !chainNow.elsewhere && hasLooper(allBlocks) ? <Note>{LOOPER_ON_EDIT}</Note> : null}
 
       </View>
 
@@ -833,7 +871,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
       />
 
       <ChannelSheet
-        block={blocks.find((b) => sameBlock(b, picking)) || null}
+        block={chainNow.elsewhere ? null : blocks.find((b) => sameBlock(b, picking)) || null}
         channels={channels}
         onClose={() => setPicking(null)}
         onPick={(ch) => {

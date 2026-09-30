@@ -106,6 +106,33 @@ export const FILES = [
    */
   { source: '../shared/cab-pick.mjs', target: '../mobile/src/lib/cab-pick.js' },
   /*
+   * How an Undo after a model change puts the settings back: the snapshot,
+   * the order of the writes, and what is said about the ones that missed. The
+   * FM3 loads a new model's own settings either way, so both ends need the
+   * same way back to yours.
+   */
+  { source: '../shared/model-undo.mjs', target: '../mobile/src/lib/model-undo.js' },
+  /*
+   * The settings the unit's catalog names or measures wrongly — Presence
+   * Frequency in Hz when it is kHz — put right where a block's read lands. A
+   * phone saying 1 Hz beside a browser saying 1 kHz is one of them wrong.
+   */
+  { source: '../shared/param-fixes.mjs', target: '../mobile/src/lib/param-fixes.js' },
+  /*
+   * Whose chain is on screen after a preset change: another preset's, being
+   * read, or this one's. A phone that let the last song's tiles switch blocks
+   * on this one, where the browser did not, would be one of them lying.
+   */
+  { source: '../shared/chain-view.mjs', target: '../mobile/src/lib/chain-view.js' },
+  /*
+   * How a knob steps from the keyboard or VoiceOver, and how those steps reach
+   * the unit: the value written is the one the step reached, a run of steps is
+   * one write, and one write per control is out at a time. Both ends had the
+   * same bug — the write read the value from before the step — so both ends
+   * keep the one fix.
+   */
+  { source: '../shared/knob-keys.mjs', target: '../mobile/src/lib/knob-keys.js' },
+  /*
    * The troubleshooting guide, so a fix reads the same wherever somebody
    * standing in front of a dead rig happens to look it up.
    *
@@ -141,6 +168,13 @@ export const FILES = [
    * something a reader cannot compare with anything else.
    */
   { source: '../shared/report-rules.mjs', target: '../mobile/src/lib/report-rules.js' },
+  /*
+   * How long a save asked for from away waits for the computer, what it says
+   * while it waits, and how it is cancelled. The browser on a phone and the
+   * phone app were each doing their own waiting, and one of them waited for
+   * ever. See shared/save-wait.mjs.
+   */
+  { source: '../shared/save-wait.mjs', target: '../mobile/src/lib/save-wait.js' },
   /*
    * Whose app this is and whose it is not. One sentence, four places it has to
    * appear, and the version that matters is whichever one somebody's lawyer

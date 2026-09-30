@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useDevice, writeBypass, refreshSceneState } from '../lib/deviceState'
+import { useDevice, writeBypass, refreshSceneState, getSnapshot } from '../lib/deviceState'
+import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import { blockColor } from '../lib/blockColors'
 import { useDismiss } from '../lib/dismiss'
 import { marksFor, toggleFavourite } from '../lib/presetMarks'
@@ -7,6 +8,7 @@ import { jumpsFor } from '../lib/presetJumps'
 import { logDebug } from '../lib/debugLog'
 import { photoFor } from '../lib/gearPhotos'
 import { descriptionFor } from '../lib/lineage'
+import { searchGear } from '../lib/gearCatalog'
 
 const SHORT = {
   wah: 'WAH',
@@ -49,7 +51,9 @@ import {
   blockParams,
   blockTypes,
   cabState,
+  listIrBanks,
   setEnum,
+  setParam,
   setParamConfirmed,
   setType,
   setChannel
@@ -60,20 +64,34 @@ import {
   MODEL_REFUSED,
   cabAfter,
   cabBackTo,
+  cabElsewhere,
   cabHidden,
+  cabLost,
   cabShowing,
   cabShows,
   cabWas,
+  irBanks,
+  irNow,
   pickCab,
   readCab,
   restoreCab,
   taken
 } from '../../shared/cab-pick.mjs'
+import IrPicker from './IrPicker'
+import {
+  MODEL_HINT,
+  modelSnapshot,
+  restoreModel,
+  undoOffer,
+  undoProgress,
+  undoResult
+} from '../../shared/model-undo.mjs'
 import { isSilencingParam } from '../lib/guardrails'
 import { editPages, pageFor, pageHolding } from '../lib/editPages'
 import { bringIntoView } from '../lib/feedback'
 import { useOverflow } from '../lib/overflow'
 import { slotLabel, startsBank } from '../lib/slots'
+import { oneWriteAtATime } from '../../shared/knob-keys.mjs'
 
 /**
  * Block colours, matched to how Fractal's own editors code them.
@@ -119,7 +137,7 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
   const ends = (slug) => blocks.find((b) => b.slug === slug) || null
   const input = ends('input')
   const output = ends('output')
-  const lastTap = useRef({ id: null, at: 0 })
+  const lastTap = useRef({ id: null, at: 0, of: null })
   const strip = useRef(null)
 
   /*
@@ -131,7 +149,21 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
    */
   /* The two ends count: a preset that gains an output block is a strip one
      tile wider, and the fade that says there is more to the right has to know. */
-  useOverflow(strip, [chain.length, !!input, !!output])
+  /*
+   * The last preset's tiles are not drawn under this one's name. They were:
+   * the name changed on the tap and the blocks a moment later, and in that
+   * moment a double-tap on an old tile switched a block on the NEW preset.
+   * See shared/chain-view.mjs. The strip coming back is a new strip to watch.
+   */
+  const shown = useChain()
+  useOverflow(strip, [chain.length, !!input, !!output, shown.elsewhere])
+  if (shown.elsewhere) {
+    return (
+      <div className="fx-panel">
+        <ChainWait chain={shown} />
+      </div>
+    )
+  }
 
   /**
    * One end of the signal path: the block if the preset has one, the arrow it
@@ -165,19 +197,23 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
     )
   }
 
+  /* A double-tap is two taps on one block of one preset's chain: a first
+     tap on the song just left does not pair with a second on this one. */
   const tap = (block) => {
     const now = Date.now()
-    if (onToggle && lastTap.current.id === block.effectId && now - lastTap.current.at < 350) {
-      lastTap.current = { id: null, at: 0 }
+    const same = lastTap.current.id === block.effectId && lastTap.current.of === shown.number
+    if (onToggle && same && now - lastTap.current.at < 350) {
+      lastTap.current = { id: null, at: 0, of: null }
       onToggle(block)
       return
     }
-    lastTap.current = { id: block.effectId, at: now }
+    lastTap.current = { id: block.effectId, at: now, of: shown.number }
     onSelect(block.effectId)
   }
 
   return (
-    <div className="fx-panel">
+    <div className={`fx-panel ${shown.late ? 'chain-updating' : ''}`}>
+      <ChainUpdating chain={shown} />
       {/* No heading. A row of coloured, three-letter tiles running from IN to
           OUT is not something anyone needs told is the effects chain, and on a
           phone that word cost more vertical space than a tile. */}
@@ -774,13 +810,36 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    * Type. See shared/cab-pick.mjs.
    */
   const [cab, setCab] = useState(null)
+  /* The unit's IR names by bank (GET /cab/irs), for the IR picker. Asked for
+     once, the first time a cab with cab state is open: the list is the unit's
+     and not the preset's, and it is some three thousand names. */
+  const [irs, setIrs] = useState(null)
+  const irsAsked = useRef(false)
   const [tab, setTab] = useState('main')
-  // The model this block was on before the last swap, for the eight seconds
-  // during which taking it back is one tap.
+  /* The way back from the last pick. For a model it is the whole block as it
+     was read just before the pick, and it stays until another model is picked
+     or the editor closes — see shared/model-undo.mjs. For a cab it is the cab
+     it was on, for eight seconds, as it always was. */
   const [undo, setUndo] = useState(null)
   const undoTimer = useRef(null)
+  /* An Undo under way (what it is doing, for the strip), and what the last
+     one came to. Putting twenty settings back over the relay takes seconds,
+     and a strip that sat still for all of them would read as stuck. */
+  const [restoring, setRestoring] = useState(null)
+  const [undoSaid, setUndoSaid] = useState(null)
+  const saidTimer = useRef(null)
   const [loading, setLoading] = useState(false)
   const [local, setLocal] = useState({})
+  /* One checked write per control at a time — see commit. A ref, and above
+     the early return, because it has to outlive every render in between. */
+  const writes = useRef(null)
+  const writeOne = useRef(null)
+  // The same number on the same key is the same write; after a scene or
+  // channel change it is not, and has to go out again.
+  if (!writes.current)
+    writes.current = oneWriteAtATime((job) => writeOne.current?.(job), {
+      same: (a, b) => a.next === b.next && a.key === b.key
+    })
 
   /*
    * What makes these parameters a different set of parameters.
@@ -802,7 +861,11 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    * identity is exactly the thing that was lying.
    */
   const scene = useDevice((s) => s.sceneIndex)
-  const readKey = `${block?.effectId ?? ''}:${block?.channel ?? ''}:${scene}`
+  /* And a fourth, which changes every value without changing any of those
+     three: the buffer loaded again. A Revert is the same block on the same
+     channel and scene, with every knob put back. See editRev. */
+  const rev = useDevice((s) => s.editRev)
+  const readKey = `${block?.effectId ?? ''}:${block?.channel ?? ''}:${scene}:${rev}`
   /* Which block, channel and scene the panel is on NOW, for a pick still
      waiting on the unit. This panel is not rebuilt when another block is
      opened, so a cab pick that finishes after the amp has been clicked would
@@ -810,6 +873,14 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
      would go to the cab's mode and DynaCab numbers on the amp. */
   const liveKey = useRef(readKey)
   liveKey.current = readKey
+  /* Which block, on which load of the preset, without the channel and scene:
+     an Undo stopped by a channel change still has something to say to this
+     block ("go back to channel A"), and nothing to say to another one. */
+  const liveLoad = useRef('')
+  liveLoad.current = `${block?.effectId ?? ''}:${rev}`
+  /* An Undo under way belongs to the block it was tapped on. Opened on
+     another block, that one's picker and Undo are its own and stay live. */
+  const restoringHere = restoring && block && restoring.eid === block.effectId ? restoring : null
 
   useEffect(() => {
     if (!block) return
@@ -844,13 +915,31 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readKey, onError])
 
+  useEffect(() => {
+    if (!cab || irsAsked.current) return
+    irsAsked.current = true
+    listIrBanks()
+      .then((b) => setIrs(b && typeof b === 'object' && !b.error ? b : null))
+      .catch(() => {
+        // Asked again next time a cab opens, rather than never.
+        irsAsked.current = false
+      })
+  }, [cab])
+
   // The offer belongs to the block it was made on, and dies with the panel.
   // So does a cab state: another block's would pick its cab through this one.
+  /* And with the buffer loading again: a Revert or another preset has put
+     other settings on the block, and an Undo would write the old ones over
+     them. */
   useEffect(() => {
     setUndo(null)
+    setUndoSaid(null)
     setCab(null)
-    return () => clearTimeout(undoTimer.current)
-  }, [block?.effectId])
+    return () => {
+      clearTimeout(undoTimer.current)
+      clearTimeout(saidTimer.current)
+    }
+  }, [block?.effectId, rev])
 
   /*
    * Derived above the effects that read them, and above the early return.
@@ -910,6 +999,41 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     return () => clearTimeout(clear)
   }, [loading, shown, block])
 
+  /* The model picker's, which is described at "A list of our own" below. */
+  const [picking, setPicking] = useState(false)
+  /*
+   * What is typed in the picker's search box.
+   *
+   * "Model pickers have no search." Three hundred and thirty-one amps is a
+   * list you scroll for a minute to find the one Plexi you meant, and the
+   * phone has had a find box above its list all along.
+   */
+  const [hunt, setHunt] = useState('')
+  const picker = useRef(null)
+  const listRef = useRef(null)
+  const huntRef = useRef(null)
+  // Which kind of pointer pressed the button that opened it, if any.
+  const openedWith = useRef(null)
+  useDismiss(picker, () => setPicking(false), { open: picking, ignore: '.type-open' })
+
+  // Open where you already are. A native menu does this and a list that starts
+  // at the top of three hundred names would be a step backwards without it.
+  useEffect(() => {
+    const how = openedWith.current
+    openedWith.current = null
+    if (!picking) return
+    const here = listRef.current?.querySelector('[aria-selected="true"]')
+    here?.scrollIntoView({ block: 'center' })
+    /*
+     * The search box takes the typing only when a mouse opened the list. A
+     * focused box on a phone or tablet brings the keyboard up over the very
+     * list you opened to look at, and a keyboard press lands on the current
+     * row so the arrows go on working as they did.
+     */
+    if (how === 'mouse') huntRef.current?.focus({ preventScroll: true })
+    else here?.focus?.({ preventScroll: true })
+  }, [picking])
+
   if (!block) {
     return (
       <div className="block-panel empty">
@@ -922,6 +1046,10 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
      cab state says, and one playing an IR marks nothing in the list. */
   const cabNow = cabShowing(cab, models)
   const current = cabNow ? { value: cabNow.value, name: cabNow.name } : type
+  /* And which IR it holds, out of the unit's banks in the unit's order — see
+     irBanks on why that is not the order of /cab/irs. */
+  const irList = cab && block.slug === 'cab' && irs ? irBanks(cab, irs, { named: params }) : []
+  const irHere = irNow(cab, irList)
 
   // What the chosen model is modelled on, for the line under the picker.
   const chosenValue = cabNow
@@ -993,19 +1121,18 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    * handled below. And the row stays one tall tap target rather than two lines
    * of small print.
    */
-  const [picking, setPicking] = useState(false)
-  const picker = useRef(null)
-  const listRef = useRef(null)
-  useDismiss(picker, () => setPicking(false), { open: picking, ignore: '.type-open' })
+  /* Its state and hooks are up with the panel's others, above the empty
+     panel's early return. Down here they were one number of hooks on the
+     render with no block and another on the render a block arrived, and
+     React throws on that rather than guessing. */
 
-  // Open where you already are. A native menu does this and a list that starts
-  // at the top of three hundred names would be a step backwards without it.
-  useEffect(() => {
-    if (!picking) return
-    const here = listRef.current?.querySelector('[aria-selected="true"]')
-    here?.scrollIntoView({ block: 'center' })
-    here?.focus?.({ preventScroll: true })
-  }, [picking])
+  /*
+   * The rows the search leaves, word by word on the model's name or the amp
+   * it is based on — the same match the gear sheet in Settings uses, so
+   * "marshall plexi" finds the same models in both places. Only worked out
+   * while the list is open: the panel redraws on every knob turn.
+   */
+  const listed = picking ? searchGear(models.map((m) => ({ ...m, gear: m.basedOn })), hunt) : models
 
   const pickAt = (i) => {
     const row = listRef.current?.querySelectorAll('.type-row')[i]
@@ -1016,34 +1143,96 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   const onPickKey = (e, i) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      pickAt((i + 1) % models.length)
+      pickAt((i + 1) % listed.length)
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      pickAt((i - 1 + models.length) % models.length)
+      pickAt((i - 1 + listed.length) % listed.length)
     } else if (e.key === 'Home') {
       e.preventDefault()
       pickAt(0)
     } else if (e.key === 'End') {
       e.preventDefault()
-      pickAt(models.length - 1)
+      pickAt(listed.length - 1)
+    }
+  }
+
+  /*
+   * Down from the box goes into the list. Enter does nothing: a model change
+   * is a sound change, and "the first thing that happened to match" is not a
+   * choice anybody made — the pick is a row you press.
+   */
+  const onHuntKey = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      // An empty box is the whole list, opened centred on the model you are on:
+      // Down goes on from there, as the native menu did. Once something is
+      // typed the list has jumped to its top, and the first match is where
+      // you are looking.
+      const here = hunt.trim() ? -1 : listed.findIndex((m) => m.value === chosenValue)
+      pickAt(here >= 0 ? here : 0)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
     }
   }
 
   const valueOf = (p) => (local[p.id] !== undefined ? local[p.id] : p.value)
 
-  const commit = async (p, override) => {
+  /*
+   * A knob's value to the unit, checked.
+   *
+   * The value is handed in by whatever moved it — the knob's drag, its keys,
+   * the typed box — because reading it back out of `local` here read the
+   * value from a render before the move: an arrow press sent the press
+   * before it, and the last one was never sent at all.
+   *
+   * And one write per control at a time. A value that arrives while the last
+   * is still being checked waits, and only the newest waiting one goes next;
+   * the value on the knob is only let go once the unit has caught up with
+   * THAT value, so a knob still being turned does not flick back to the read.
+   */
+  const commit = (p, override) => {
+    /* For the length of an Undo the deck shows the new model's values, which
+       the unit no longer holds, and a turn there would be pulled back or
+       named as a miss. */
+    if (restoringHere) return
     const next = override !== undefined ? override : local[p.id]
-    if (next === undefined || next === p.value) return
+    if (next === undefined) return
+    // Equal to what the unit last said, and nothing on its way: nothing to do.
+    // With a write out, "back to where it was" is a change and has to go.
+    const lane = `${block.effectId}:${p.id}`
+    if (next === p.value && !writes.current.busy(lane)) return
+    return writes.current.send(lane, {
+      p,
+      next,
+      key: readKey,
+      eid: block.effectId,
+      name: block.name,
+      slug: block.slug,
+      channel: block.channel ?? null
+    })
+  }
+
+  writeOne.current = async ({ p, next, key, eid, name, slug, channel }) => {
     try {
-      const res = await setParamConfirmed(block.effectId, p.id, next, p)
-      if (!res.ok) onError(`${p.name} didn't take.`)
-      const fresh = await blockParams(block.effectId)
-      setParams(fresh?.named || [])
-      setLocal((prev) => {
-        const copy = { ...prev }
-        delete copy[p.id]
-        return copy
-      })
+      const res = await setParamConfirmed(eid, p.id, next, p)
+      /* By the name on the knob, not the catalog's. */
+      const called = p.label || p.name
+      if (!res.ok)
+        onError(
+          res.unverified ? `${called} was sent, but the app couldn't read it back to check.` : `${called} didn't take.`
+        )
+      const fresh = await blockParams(eid)
+      /* Another block, channel or scene came up while this was out: its
+         values are not this read's to replace. */
+      if (liveKey.current === key) {
+        setParams(fresh?.named || [])
+        setLocal((prev) => {
+          if (prev[p.id] !== next) return prev
+          const copy = { ...prev }
+          delete copy[p.id]
+          return copy
+        })
+      }
       /*
        * The numbers as well as the sentence.
        *
@@ -1054,15 +1243,22 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
        * The summary line stays exactly as it was, for the log a person reads.
        */
       onChanged(
-        `${block.name} · ${p.name} → ${next}`,
+        `${name} · ${called} → ${next}`,
         {
-          block: block.name,
-          slug: block.slug,
-          param: p.name,
+          block: name,
+          slug,
+          param: called,
           from: p.value,
           to: next,
           min: p.min,
-          max: p.max
+          max: p.max,
+          /* Which control on which channel, and where it stood on the unit's
+             own scale, so a Revert can read this knob back and say whether
+             it really went. See lib/revertCheck.js. */
+          eid,
+          paramId: p.id,
+          channel,
+          fromNorm: p.norm
         },
         /*
          * And nothing about the CHAIN has changed, so nothing needs re-reading.
@@ -1090,13 +1286,45 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    * sends people back to the hardware editor, and the one thing you want after
    * hearing a wrong amp is to be somewhere else, quickly.
    *
-   * So it writes immediately and offers the way back for eight seconds. The
-   * previous value is already in hand; nothing has to be read to undo it.
+   * So it writes immediately and offers the way back. But the way back is not
+   * the old model's number: the FM3 loads a new model's own settings the
+   * moment it changes, so "Undo only restores the model" — the old amp came
+   * back wearing the new amp's settings. The block is read fresh just before
+   * the write, knobs and switches and channel, and Undo puts all of that back.
+   * See shared/model-undo.mjs.
    */
   const applyModel = async (value, { undoable = true } = {}) => {
     if (cab && block.slug === 'cab') return applyCab(value, { undoable })
     const key = readKey
     const was = type
+    clearTimeout(saidTimer.current)
+    setUndoSaid(null)
+    /* Fresh, not what the panel is showing: the switches are never kept on
+       it, and a knob a moment ago may not be what the unit holds now. A read
+       that fails falls back to what IS on show rather than to no Undo. */
+    let before = null
+    if (undoable && was && was.value !== Number(value)) {
+      const now = await blockParams(block.effectId).catch((err) => {
+        if (err?.linkDown) throw err
+        return null
+      })
+      before =
+        modelSnapshot(now, { channel: block.channel ?? null }) ||
+        modelSnapshot({ named: params, type: was }, { channel: block.channel ?? null })
+      /* Already on it, as far as the unit is concerned: nothing to go back to. */
+      if (before?.type.value === Number(value)) before = null
+      /* Named as the knobs are drawn, so a setting that didn't go back can be
+         found on screen by the name the Undo gives it. */
+      if (before) {
+        const drawnAs = new Map()
+        for (const pg of pages) for (const q of pg.params) if (!drawnAs.has(q.id)) drawnAs.set(q.id, q.label)
+        before = { ...before, knobs: before.knobs.map((k) => ({ ...k, name: drawnAs.get(k.id) || k.name })) }
+      }
+      /* The read took a round trip. A preset, a Revert, a scene or a channel
+         that came up in it is not the block that was tapped: the model would
+         land there, on settings no Undo could reach. */
+      if (liveKey.current !== key) return
+    }
     const sent = await setType(block.effectId, Number(value))
     const fresh = await blockParams(block.effectId)
     // Another block (or channel, or scene) came up while this one was busy.
@@ -1108,21 +1336,19 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     setLocal({})
     /* A refusal was dropped here, and the swap logged as done. Said now —
        unless the read just taken shows the model on the block anyway, in
-       which case it is on the block. */
+       which case it is on the block. The block is still on the model it was
+       on, so an Undo already offered still describes it and stays. */
     if (sent?.ok === false && fresh?.type?.value !== Number(value)) {
-      setUndo(null)
       onError(MODEL_REFUSED)
       return
     }
     const name = models.find((m) => m.value === Number(value))?.name
     onChanged(`${block.name} → ${name}`)
     clearTimeout(undoTimer.current)
-    if (undoable && was && was.value !== Number(value)) {
-      setUndo(was)
-      undoTimer.current = setTimeout(() => setUndo(null), 8000)
-    } else {
-      setUndo(null)
-    }
+    /* No timer. Eight seconds was enough to take back a model; it is not
+       enough to hear one, decide, and want your settings back. A pick of the
+       model it is already on takes nothing back, and leaves an offer standing. */
+    if (before) setUndo(before)
   }
 
   /**
@@ -1138,8 +1364,20 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     const key = readKey
     const before = cab
     const write = (paramId, ordinal) => setEnum(block.effectId, paramId, ordinal)
-    const res = back ? await restoreCab(before, back, write) : await pickCab(before, value, write)
-    const name = back ? back.name : models.find((m) => m.value === Number(value))?.name
+    let res
+    try {
+      res = back ? await restoreCab(before, back, write) : await pickCab(before, value, write)
+    } catch (err) {
+      /* A write that threw rather than said no may have landed, and the ones
+         before it did. Holding the old numbers, the next pick into the old
+         bank skipped the bank write and played that number in the new one. */
+      const p = await blockParams(block.effectId).catch(() => null)
+      const now = await readCab(() => cabState(block.effectId), p)
+      if (liveKey.current === key) setCab(cabLost(before, now))
+      throw err
+    }
+    /* A DynaCab is a number out of the model list; an IR pick carries its name. */
+    const name = back ? back.name : (value?.name ?? models.find((m) => m.value === Number(value))?.name)
     const fresh = await blockParams(block.effectId)
     const now = await readCab(() => cabState(block.effectId), fresh)
     /* The panel moved on while this was out. The write went to the right
@@ -1165,7 +1403,12 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
       return
     }
     onChanged(`${block.name} → ${name}${read ? '' : " (sent — couldn't read it back to check)"}`)
-    const was = cabWas(before, models)
+    /* Every write taken, and the unit reads as something else: the 1.86.18
+       bug ("done", and the cab never moved). After onChanged, whose read
+       clears the error line. The Undo stays: the writes may have moved it. */
+    if (read && !landed) onError(cabElsewhere(read, models))
+    /* Told which pick this was: an IR's undo holds the bank and the IR too. */
+    const was = cabWas(before, models, value)
     if (undoable && !back && was && !cabShows(before, value)) {
       setUndo({ name: was.name, cab: was })
       undoTimer.current = setTimeout(() => setUndo(null), 8000)
@@ -1182,17 +1425,72 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     }
   }
 
-  const undoModel = async () => {
-    const back = undo
-    if (!back) return
-    setUndo(null)
+  /* An IR out of the IR picker: {bank, ir, name}, through the cab pick. */
+  const swapIr = async (pick) => {
     try {
-      if (back.cab) {
-        if (!cab || block.slug !== 'cab') return onError(CAB_UNDO_LOST)
-        await applyCab(null, { undoable: false, back: back.cab })
-      } else await applyModel(back.value, { undoable: false })
+      await applyCab(pick)
     } catch (err) {
       onError(err.message)
+    }
+  }
+
+  const undoModel = async () => {
+    const back = undo
+    if (!back || restoringHere) return
+    if (back.cab) {
+      setUndo(null)
+      try {
+        if (!cab || block.slug !== 'cab') return onError(CAB_UNDO_LOST)
+        await applyCab(null, { undoable: false, back: back.cab })
+      } catch (err) {
+        onError(err.message)
+      }
+      return
+    }
+    const key = readKey
+    const eid = block.effectId
+    /* A preset loaded from this window, a Revert included, reloads the buffer
+       before editRev says so; chainGoing is set the moment it is tapped. */
+    const here = () => liveKey.current === key && getSnapshot().chainGoing == null
+    const load = liveLoad.current
+    const onThis = () => liveLoad.current === load
+    setPicking(false)
+    clearTimeout(saidTimer.current)
+    setUndoSaid(null)
+    setRestoring({ eid, step: 'model' })
+    try {
+      const r = await restoreModel(back, {
+        channel: block.channel ?? null,
+        setType: (v) => setType(eid, v),
+        read: () => blockParams(eid),
+        write: (p, v) => setParam(eid, p.id, v, p),
+        writeEnum: (id, v) => setEnum(eid, id, v),
+        writeChecked: (p, v) => setParamConfirmed(eid, p.id, v, p),
+        progress: (p) => setRestoring({ eid, ...p }),
+        /* Every write lands on whichever channel is live. Another one, or
+           another scene or preset, stops the Undo before the next. */
+        stillHere: here
+      })
+      if (r.last && here()) {
+        setParams(r.last.named || [])
+        setLayout(r.last.layout || null)
+        setTypeState(r.last.type ?? null)
+        setLocal({})
+      }
+      const said = undoResult(r, back)
+      /* Said to the block it happened to, not to one opened since. */
+      if (onThis()) {
+        if (!said.keep) setUndo(null)
+        setUndoSaid(said)
+        /* A good one says its piece and goes; one that missed stays until the
+           next pick, so the names in it can be found and turned by hand. */
+        if (!said.bad) saidTimer.current = setTimeout(() => setUndoSaid(null), 10000)
+      }
+      if (!r.refused || (r.refused === 'unread' && r.modelSent)) onChanged(`${block.name} → ${back.type.name} (Undo)`)
+    } catch (err) {
+      onError(err.message)
+    } finally {
+      setRestoring((now) => (now?.eid === eid ? null : now))
     }
   }
 
@@ -1225,7 +1523,9 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
                     onError(err.message)
                   }
                 }}
-                disabled={busy}
+                /* Not while an Undo is putting this channel's settings back:
+                   the rest of them would land on the channel tapped. */
+                disabled={busy || !!restoringHere}
               >
                 {ch}
               </button>
@@ -1259,11 +1559,22 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
 
       {undo ? (
         <div className="undo-strip" role="status">
-          <span>Was {undo.name}</span>
-          <button className="chip" onClick={undoModel} disabled={busy}>
+          {/* A model's offer says what Undo can reach, and wraps to say it;
+              a cab's is the one line it always was. */}
+          {undo.cab ? (
+            <span>Was {undo.name}</span>
+          ) : (
+            <span className="undo-words">{restoringHere ? undoProgress(restoringHere, undo) : undoOffer(undo)}</span>
+          )}
+          <button className="chip" onClick={undoModel} disabled={busy || !!restoringHere}>
             Undo
           </button>
         </div>
+      ) : null}
+      {undoSaid ? (
+        <p className={`hint pad undo-said ${undoSaid.bad ? 'warn' : ''}`} role="status">
+          {undoSaid.text}
+        </p>
       ) : null}
 
       {models.length ? (
@@ -1273,7 +1584,15 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
             className="type-open"
             aria-haspopup="listbox"
             aria-expanded={picking}
-            onClick={() => setPicking((v) => !v)}
+            onPointerDown={(e) => {
+              openedWith.current = e.pointerType
+            }}
+            onClick={() => {
+              // Every opening starts from the whole list.
+              if (!picking) setHunt('')
+              setPicking(!picking)
+            }}
+            disabled={!!restoringHere}
           >
             {/* The closed control names the model and nothing else. What it is
                 based on is the line underneath, in full, with no width to run
@@ -1286,9 +1605,34 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
             </span>
           </button>
 
+          {/* Where the choosing happens, instead of a question on every pick:
+              auditioning models is many picks in a row. Not for a cab, whose
+              pick changes the cabinet and nothing else. */}
+          {picking && !(cab && block.slug === 'cab') ? <p className="hint model-hint">{MODEL_HINT}</p> : null}
           {picking ? (
+            <input
+              type="text"
+              className="type-search"
+              ref={huntRef}
+              value={hunt}
+              placeholder="Search models"
+              aria-label="Search models"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              onChange={(e) => {
+                setHunt(e.target.value)
+                // A narrower list starts at its top, not wherever the long one was scrolled.
+                if (listRef.current) listRef.current.scrollTop = 0
+              }}
+              onKeyDown={onHuntKey}
+            />
+          ) : null}
+          {picking && !listed.length ? <p className="hint type-none">Nothing named like that.</p> : null}
+          {picking && listed.length ? (
             <div className="type-list" role="listbox" aria-label="Model" ref={listRef}>
-              {models.map((m, i) => (
+              {listed.map((m, i) => (
                 <button
                   type="button"
                   key={m.value}
@@ -1352,6 +1696,11 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
           </figcaption>
         </figure>
       ) : null}
+      {/* Under the DynaCab and what it is — its name, its words and its photo
+          stay together — and then the other half of what a cab block plays. */}
+      {irHere && irList.length ? (
+        <IrPicker banks={irList} now={irHere} onPick={swapIr} disabled={busy || !!restoringHere} />
+      ) : null}
 
       {pages.length > 1 ? (
         <div className="block-tabs" role="tablist">
@@ -1369,7 +1718,10 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
         </div>
       ) : null}
 
-      <div className="knob-deck">
+      {/* Hidden says why its settings are there, once, above them. */}
+      {onPage?.note ? <p className="hint pad">{onPage.note}</p> : null}
+
+      <div className={`knob-deck${restoringHere ? ' busy' : ''}`}>
         {/*
           The knobs stay up while they are being read again.
           Swapping a deck of six knobs for one line of text takes about 200px
@@ -1385,15 +1737,18 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
             <div className="knob-cell" key={p.id} id={`p-${p.id}`}>
               <Knob
                 param={p}
-                label={p.name}
+                label={p.label || p.name}
                 value={valueOf(p)}
-                onChange={(v) => setLocal((prev) => ({ ...prev, [p.id]: v }))}
-                onCommit={() => commit(p)}
+                onChange={(v) => {
+                  if (!restoringHere) setLocal((prev) => ({ ...prev, [p.id]: v }))
+                }}
+                onCommit={(v) => commit(p, v)}
               />
               <ValueBox
                 param={p}
                 value={valueOf(p)}
                 onCommit={(v) => {
+                  if (restoringHere) return
                   setLocal((prev) => ({ ...prev, [p.id]: v }))
                   commit(p, v)
                 }}
@@ -1476,7 +1831,7 @@ function ValueBox({ param, value, onCommit }) {
           e.currentTarget.blur()
         }
       }}
-      aria-label={`${param?.name} value`}
+      aria-label={`${param?.label || param?.name} value`}
     />
   )
 }

@@ -9,8 +9,20 @@ import { installCrashCapture, logDebug, getDebugLog } from './lib/debugLog'
 import Scenes from './components/Scenes'
 import { CabPicker, Backup } from './components/Hardware'
 import Gig from './components/Gig'
-import SaveBar from './components/SaveBar'
+import TapTempo from './components/TapTempo'
+import SaveBar, { SaveLate } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
+import { overwriteCheck } from './lib/overwrite'
+import { SAVE_CANCELLED, SAVE_FRESH_MS, startSaveWait } from '../shared/save-wait.mjs'
+import {
+  carryOutRestore,
+  dirtyAfterRestore,
+  restoreNow,
+  restoreRequest,
+  startRestoreWait,
+  RESTORE_LATE_WORDS,
+  RESTORE_UNREACHED
+} from './lib/restoreViaComputer'
 import { getMode } from './lib/theme'
 import { Modifiers, SceneMatrix } from './components/Modifiers'
 import Feedback from './components/Feedback'
@@ -27,6 +39,8 @@ import { ALREADY_UNLOCKED, REPLAY } from '../shared/onboarding.mjs'
 import { FULL, BUILT_AT, VERSION } from './lib/version'
 import Theme from './components/Theme'
 import Section from './components/Section'
+import Footswitches from './components/Footswitches'
+import { fcReadable } from '../shared/footswitches.mjs'
 import Sheet from './components/Sheet'
 import DeviceDetail from './components/DeviceDetail'
 import {
@@ -41,7 +55,10 @@ import {
   refreshLoadedSceneNames,
   refreshTempo,
   chainWasRead,
+  beginChainRead,
   loadPreset as loadPresetInStore,
+  SELECT_REFUSED,
+  bufferReloaded,
   presetHeard,
   tapBeat,
   writeScene,
@@ -50,16 +67,20 @@ import {
   SETTLING_TRIES,
   SETTLING_MS,
   writeBypass,
-  writeTuner
+  writeTuner,
+  onConfigDoc,
+  presetSaved
 } from './lib/deviceState'
 import ParamSearch from './components/ParamSearch'
 import UpdateNotice from './components/UpdateNotice'
 import Updates, { UpdateReadyNotice } from './components/Updates'
 import RenamePreset from './components/RenamePreset'
-import { countFromRefusal, slotCount, slotOutside, slotsForChat, timeLeft } from './lib/slots'
+import { countFromRefusal, slotCount, slotOutside, slotProblem, slotsForChat, timeLeft } from './lib/slots'
+import { checkRevert, noteEdit, revertSaid, revertTook, stuckLines } from './lib/revertCheck'
 import { inDesktopApp } from './lib/desktop'
 import { createNameScan } from './lib/nameScan'
 import { Chain, PresetList, BlockPanel, Tuner } from './components/Console'
+import { useChain } from './components/ChainWait'
 import Screens, { viewsFor } from './components/Screens'
 import SceneArrange from './components/SceneArrange'
 import { useAsks } from './lib/asks'
@@ -106,8 +127,29 @@ import {
   parkSave,
   takeParkedSave,
   clearParkedSave,
+  cancelParkedSave,
   reportSave,
   readSaveResult,
+  reportSavePicked,
+  readSaveProgress,
+  pendingSaveKey,
+  saveResultKey,
+  saveProgressKey,
+  parkRestore,
+  takeParkedRestore,
+  clearParkedRestore,
+  cancelParkedRestore,
+  reportRestore,
+  readRestoreResult,
+  reportRestorePicked,
+  readRestoreProgress,
+  pendingRestoreKey,
+  listVersions,
+  versionBytes,
+  snapshotSlot,
+  presetName as storedSlotName,
+  loadPresetBytes,
+  lookUpName,
   forgetPresetName,
   forgetAllPresetNames,
   notePresetName,
@@ -121,7 +163,7 @@ import {
   setTelemetryMode,
   placeableBlocks
 } from './lib/forgefx'
-import { isDemo, setDemo, resetCacheClear, demoUnit, setDemoUnit } from './lib/forgefx'
+import { isDemo, setDemo, demoUnit, setDemoUnit } from './lib/forgefx'
 import { UNITS as DEMO_UNITS, demoSentence, unitByKey } from './lib/demoUnits'
 import { buyOnWeb, checkUnlocked, webPrice } from './lib/webPurchase'
 import {
@@ -141,7 +183,8 @@ import {
   sceneState,
   setPresetName,
   setChannel,
-  revertPreset,
+  blockParams,
+  presetParams,
   backupPreset,
   parkPresetName,
   takeParkedPresetName,
@@ -720,6 +763,19 @@ export default function App() {
     if (now === null || was === null || now === was) return
     setSaveName((field) => (field.trim() === was ? now : field))
   }
+  /*
+   * What the loaded slot was called when it was loaded.
+   *
+   * The buffer came out of that slot, so until a save lands this is what the
+   * slot still holds — whatever the buffer has been renamed to since. The
+   * save sheet compares against it: saving the loaded slot under a new name
+   * writes over the preset that was there, and used to do it on one tap with
+   * nothing said. Only taken from a buffer nobody has changed yet.
+   */
+  const loadedAs = useRef(null)
+  const noteLoadedAs = (p) => {
+    if (Number.isInteger(p?.number) && typeof p?.name === 'string') loadedAs.current = { number: p.number, name: p.name.trim() }
+  }
   // A failed save is shown on the save bar as well as in the banner — the bar is
   // where the tap happened, and on a phone the banner is off-screen above it.
   const [saveError, setSaveError] = useState(null)
@@ -1025,6 +1081,23 @@ export default function App() {
     useEffect(() => {
     if (!dirty) setAskedUnsaved(false)
   }, [dirty])
+  /*
+   * The knobs turned by hand since the preset was last clean — which control,
+   * on which channel, from what to what. The log keeps these as sentences;
+   * a Revert needs them as something it can read back and compare. See
+   * lib/revertCheck.js. A ref: nothing draws from it.
+   */
+  const edits = useRef([])
+  useEffect(() => {
+    if (!dirty) edits.current = []
+  }, [dirty])
+  /* A different preset is a different buffer. A footswitch or the phone
+     move the preset without clearing `dirty`, and a knob turned on the last
+     one is not on this one: checked against the new preset, its "before"
+     cost a dump of the slot, or read as a Revert that couldn't be checked. */
+  useEffect(() => {
+    edits.current = []
+  }, [preset?.number])
   // Read inside read(), which is built once and never sees state change.
   const dirtyRef = useRef(false)
   dirtyRef.current = dirty
@@ -1319,6 +1392,8 @@ export default function App() {
       await writeBypass(block.effectId, wanted)
       record('edit', `${block.name || block.slug} ${wanted ? 'bypassed' : 'engaged'}`)
     } catch (err) {
+      /* A tile drawn for the preset just left: the store sent nothing. */
+      if (err?.notThisChain) return
       /*
        * Whole, not flattened to its sentence.
        *
@@ -1386,6 +1461,9 @@ export default function App() {
     // Whether the unit answered this pass, which decides what a later failure
     // means: a read that lost a race, or a unit that has gone.
     let answered = false
+    /* Marked while the chain is being read, so the panels drawing it can say
+       so — greyed, "Updating…", after an Add or a Remove. See ChainWait. */
+    let doneReading = null
     try {
       /*
        * A channel with nothing answering on it is the worst case: every call
@@ -1437,6 +1515,7 @@ export default function App() {
        * reported without tearing down a working screen. See the catch.
        */
       answered = true
+      doneReading = beginChainRead()
       const [p, b] = await Promise.all([currentPreset(), presetBlocks()])
       setPreset(p)
       followUnitName(p)
@@ -1450,6 +1529,7 @@ export default function App() {
        * still reading 098 TIGHT MODERN, for days.
        */
       if (!dirtyRef.current) noteLoadedName(p)
+      if (!dirtyRef.current) noteLoadedAs(p)
       const list = Array.isArray(b) ? b : []
       setBlocks(list)
       /* So a screen that appears next does not read the same chain again. */
@@ -1550,6 +1630,7 @@ export default function App() {
         setError(err)
       }
     } finally {
+      doneReading?.()
       setBusy(false)
     }
     return fresh
@@ -1687,16 +1768,6 @@ export default function App() {
   const reconnect = useCallback(async () => {
     setBusy(true)
     setError(null)
-    /*
-     * Ask this Mac again whether it takes a cache clear.
-     *
-     * Whether a write can be verified from a phone depends on the device
-     * server at the OTHER end, which is the one thing a reconnect can change —
-     * a Mac that refused it an hour ago may have taken the update since. The
-     * answer is remembered per session precisely so it is not asked before
-     * every write, and this is the moment it is worth asking again.
-     */
-    resetCacheClear()
     try {
       /*
        * The rejoin is AWAITED, which is the whole difference between this
@@ -2149,6 +2220,13 @@ export default function App() {
       setBusy(true)
       try {
         /*
+         * Picked up, said at once and in its own document: the phone waiting
+         * on this gives a computer that has it longer than one that has not
+         * answered at all. Not in the answer — phones already out there take
+         * any answer as the last word.
+         */
+        await reportSavePicked(req.id)
+        /*
          * A slot this unit does not have is refused here, not by the unit.
          *
          * A save is parked on one machine and carried out on another, and the
@@ -2163,6 +2241,18 @@ export default function App() {
           throw new Error(
             `Slot ${req.slot} isn't on this unit — it holds ${has}, numbered 0 to ${has - 1}. Nothing was saved.`
           )
+        }
+        /*
+         * Still wanted? A phone that gave up or pressed Cancel wrote over the
+         * request, since it cannot delete it. Asked once more here, just
+         * before the one step that cannot be taken back.
+         */
+        const still = await takeParkedSave()
+        if (still && (still.id !== req.id || still.cancelled)) {
+          record('save', `The phone cancelled its save to slot ${req.slot}; nothing was written`)
+          /* Said, too: the phone saw "picked up" and is waiting to hear. */
+          await reportSave({ id: req.id, ok: false, cancelled: true, slot: req.slot, error: SAVE_CANCELLED }).catch(() => {})
+          return
         }
         const name = (req.name || '').trim()
         if (name && name !== preset?.name?.trim()) await setPresetName(name)
@@ -2179,8 +2269,10 @@ export default function App() {
         setDirty(false)
         setSavedAt(Date.now())
         record('save', `Saved "${name || preset?.name}" to slot ${req.slot}, asked for from the phone`)
-        // And here, where the Mac carries out the phone's save.
-        await read({ settling: true })
+        // And here, where the Mac carries out the phone's save: the number
+        // and the name, quietly, and not the whole unit again. See presetSaved.
+        loadedAs.current = { number: req.slot, name: (name || preset?.name || '').trim() }
+        presetSaved(req.slot, name || preset?.name)
       } catch (err) {
         /*
          * The unit's own complaint often states its size — "must be integer
@@ -2223,7 +2315,7 @@ export default function App() {
         setBusy(false)
       }
     },
-    [preset?.name, sceneNames, read, record, device?.capabilities, markHandled]
+    [preset?.name, sceneNames, record, device?.capabilities, markHandled]
   )
 
   /*
@@ -2257,11 +2349,13 @@ export default function App() {
   useEffect(() => {
     if (status !== 'live' || remote || isDemo()) return
     let stop = false
-    const look = async () => {
+    const lookOnce = async () => {
       const req = await takeParkedSave()
+      /* A cancelled request has no slot, so it is passed over here too. */
       if (stop || !req?.id || !Number.isInteger(req.slot)) return
       if (handledSaves.current.includes(req.id)) return
-      const fresh = Date.now() - (req.at || 0) < 15 * 60 * 1000
+      /* Fresh for as long as anybody could still be waiting on it; see SAVE_FRESH_MS. */
+      const fresh = Date.now() - (req.at || 0) < SAVE_FRESH_MS
 
       /*
        * Ask the unit what is loaded. Do not ask the screen.
@@ -2294,11 +2388,14 @@ export default function App() {
           loaded = now.number
           /*
            * And the screen was wrong too, so it is corrected here rather than
-           * left to say one thing while the decision was made on another. The
-           * preset alone: a full re-read from a six-second poll would fight
-           * whoever is working at the Mac, and the number is what was lying.
+           * left to say one thing while the decision was made on another.
+           * Handed to the store's own follow, not App's full read(), which
+           * from a six-second poll would fight whoever is working at the Mac:
+           * one chain read after the settle, as any preset change gets. The
+           * number moved on its own left the chain the last preset's, and the
+           * screen said the read had failed when none was tried.
            */
-          if (now.number !== preset?.number) setPreset(now)
+          if (now.number !== preset?.number && !presetHeard(now)) setPreset(now)
         }
       } catch {
         // The unit would not answer. What the screen has is all there is, and
@@ -2322,34 +2419,98 @@ export default function App() {
         ok: false,
         slot: req.slot,
         error: sameBuffer
-          ? 'The computer did not pick this up within fifteen minutes, so it was dropped rather than written to a preset that has moved on. Nothing was saved — ask again with the computer awake.'
+          ? 'The computer did not pick this up in time, so it was dropped rather than written to a preset that may have moved on. Nothing was saved — ask again with Fractal Remote open on the computer.'
           : `The computer had moved to slot ${loaded ?? 'another preset'} by the time it saw this, so the sound you edited was no longer loaded. Nothing was saved.`
       }).catch(() => {})
     }
+    /*
+     * One look at a time. The announcement and the timed look can land
+     * together, and two looks at one request both found it before either had
+     * marked it — the same save, written twice.
+     */
+    let looking = null
+    let again = false
+    const look = async () => {
+      if (looking) {
+        again = true
+        return
+      }
+      looking = lookOnce().catch(() => {})
+      await looking
+      looking = null
+      if (again && !stop) {
+        again = false
+        look()
+      }
+    }
+    /*
+     * The moment it is left, not on the next look.
+     *
+     * "Save takes 60-90 s." The write is one message to the unit; the wait
+     * was this window only looking every six seconds, which macOS stretches
+     * to about once a minute when the window is behind others. The computer
+     * announces every write to its store the moment it lands, on the stream
+     * this window already listens to, and a hidden window still hears it.
+     * The timed look stays, for an announcement lost on the way.
+     */
+    const offAsk = onConfigDoc((id) => {
+      if (id === pendingSaveKey()) look()
+    })
     look()
     const timer = setInterval(look, 6000)
     return () => {
       stop = true
+      offAsk()
       clearInterval(timer)
     }
   }, [status, remote, preset?.number, carryOutSave])
 
-  /* On the phone: what became of it. */
+  /*
+   * On the phone: what became of it.
+   *
+   * Heard the moment the computer writes its answer, rather than on the next
+   * three-second look; the look stays as the fallback. And no longer for
+   * ever: the browser waited on a computer that was off until the page was
+   * closed, with Saving… on the button the whole time and nothing to press.
+   * Now it says so after a while, can be cancelled, and gives up after two
+   * minutes — writing over the request as it does, so a computer woken later
+   * does not save what this said was not saved. The waiting is the phone
+   * app's too; see shared/save-wait.mjs.
+   *
+   * Taken once. Two ticks could be in flight over a slow relay, and both came
+   * back with the same answer before the state change had torn the interval
+   * down — so "The Mac saved it to slot 499" landed in the conversation
+   * twice. The wait answers once.
+   */
+  const [saveLate, setSaveLate] = useState(false)
+  const queuedWait = useRef(null)
   useEffect(() => {
-    if (!queuedSave) return
-    let stop = false
-    const timer = setInterval(async () => {
-      const res = await readSaveResult()
-      if (stop || res?.id !== queuedSave.id) return
-      /*
-       * Taken once. Two ticks can be in flight over a slow relay, and both
-       * came back with the same answer before the state change below had
-       * torn this interval down — so "The Mac saved it to slot 499" landed
-       * in the conversation twice.
-       */
-      stop = true
+    if (!queuedSave) return undefined
+    let live = true
+    setSaveLate(false)
+    const wait = startSaveWait({
+      id: queuedSave.id,
+      resultDoc: saveResultKey(),
+      progressDoc: saveProgressKey(),
+      readResult: readSaveResult,
+      readProgress: readSaveProgress,
+      /* A cancel that did not land must not read as "nothing was saved". */
+      cancelRequest: async () => {
+        if (!(await cancelParkedSave(queuedSave.id))) throw new Error('not written')
+      },
+      listen: onConfigDoc,
+      onState: ({ late, picked }) => live && setSaveLate(late && !picked),
+      startedAt: queuedSave.at
+    })
+    queuedWait.current = wait
+    wait.done.then((said) => {
+      if (!live || said.stopped) return
+      live = false
+      queuedWait.current = null
       setQueuedSave(null)
-      if (res.ok) {
+      setSaveLate(false)
+      if (said.ok) {
+        const res = { ...said, slot: Number.isInteger(said.slot) ? said.slot : queuedSave.slot }
         setDirty(false)
         setSavedAt(Date.now())
         /*
@@ -2360,17 +2521,213 @@ export default function App() {
         keepSavedScenes(res.slot, queuedSave.scenes)
         setSlots(cachedPresetNames())
         record('save', `The computer saved it to slot ${res.slot}`)
-        // The unit is still writing that preset to flash. See SETTLING_TRIES.
-        read({ settling: true })
+        /* The number and the name, quietly: the chain here is the one that
+           was saved, and a full read locked the page to learn nothing new. */
+        loadedAs.current = { number: res.slot, name: (queuedSave.name || '').trim() }
+        presetSaved(res.slot, queuedSave.name)
+      } else if (said.cancelled) {
+        record('save', `Cancelled the save to slot ${queuedSave.slot}; nothing was saved`)
       } else {
-        setSaveError(res.error || 'The computer could not save it.')
+        /* On the bar's page as well as in the sheet: the sheet closed when
+           the save was asked for, and a failure only inside it said nothing. */
+        setSaveError(said.error)
+        setError(said.error)
       }
-    }, 3000)
+    })
+    return () => {
+      live = false
+      queuedWait.current = null
+      wait.stop()
+    }
+  }, [queuedSave, record])
+  const cancelQueuedSave = useCallback(() => queuedWait.current?.cancel(), [])
+
+  /*
+   * Snapshots: "Put back" and "Play it", at the Mac or from away.
+   *
+   * Both buttons went to the unit as /version/…, and the relay refuses every
+   * one of those — so on a phone they failed with "You can't load or restore
+   * a version from your phone". The refusal stays; what travels instead is a
+   * request left in the computer's store, carried out below by the Mac window,
+   * exactly as a save from the phone is. The waiting is held here rather than
+   * in the panel, so closing the Presets sheet does not lose the answer.
+   *
+   * At the Mac it is done at once, by the same restoreNow the Mac uses for a
+   * phone — so a Put back keeps a copy of the slot first wherever it was
+   * pressed. See lib/restoreViaComputer.js.
+   */
+  const restoreApi = useCallback(
+    () => ({
+      listVersions: () => listVersions(),
+      versionBytes,
+      snapshotSlot,
+      /* Raw, `<EMPTY>` and all: the one proof a 422 means an empty slot. */
+      slotName: (n) => storedSlotName(n).then((r) => r?.name),
+      loadPresetBytes,
+      storePreset,
+      unitSlug: currentDeviceSlug,
+      slotOutside: (n) => slotOutside(n, device?.capabilities),
+      demo: isDemo()
+    }),
+    [device?.capabilities]
+  )
+  /*
+   * What a finished restore leaves unsaved — see dirtyAfterRestore. The ref
+   * too, because read() in this same pass checks it before taking the
+   * loaded name as the slot's.
+   */
+  const afterRestore = (mode) => {
+    const unsaved = dirtyAfterRestore(mode)
+    dirtyRef.current = unsaved
+    setDirty(unsaved)
+    setSavedAt(null)
+    /* A whole new buffer: the knobs turned before it are not on the unit. */
+    edits.current = []
+  }
+  const [queuedRestore, setQueuedRestore] = useState(null)
+  const restoreWait = useRef(null)
+  useEffect(() => () => restoreWait.current?.stop(), [])
+  const restoreFromVersion = useCallback(
+    async (version, mode) => {
+      if (!remoteActive()) {
+        setBusy(true)
+        try {
+          const done = await restoreNow(
+            { versionId: version.id, mode, slot: version.location, model: version.model },
+            restoreApi()
+          )
+          afterRestore(done.mode)
+          record('version', done.said)
+          /* Same slot, block, channel and scene, every value changed: an
+             open editor has to be told, as a Revert tells it. */
+          await read()
+          bufferReloaded()
+          return done
+        } finally {
+          setBusy(false)
+        }
+      }
+      /*
+       * From away. The unsaved-changes warning has already been given, by the
+       * panel, before this: once it is parked the computer may act on it.
+       */
+      const req = restoreRequest(version, mode)
+      if (!(await parkRestore(req))) throw new Error(RESTORE_UNREACHED)
+      setQueuedRestore({ versionId: version.id, mode, late: false })
+      const wait = startRestoreWait({
+        id: req.id,
+        slug: currentDeviceSlug(),
+        readResult: readRestoreResult,
+        readProgress: readRestoreProgress,
+        /* A cancel that did not land must not read as "nothing was changed". */
+        cancelRequest: async () => {
+          if (!(await cancelParkedRestore(req.id))) throw new Error('not written')
+        },
+        listen: onConfigDoc,
+        onState: ({ late, picked }) =>
+          setQueuedRestore((q) => (q && q.versionId === version.id ? { ...q, late: late && !picked } : q)),
+        startedAt: Date.now()
+      })
+      restoreWait.current = wait
+      record(
+        'version',
+        mode === 'put'
+          ? `Asked the computer to put back slot ${version.location}`
+          : `Asked the computer to play a snapshot of slot ${version.location}`
+      )
+      const said = await wait.done
+      if (restoreWait.current === wait) restoreWait.current = null
+      if (said.stopped) return said
+      setQueuedRestore(null)
+      if (said.ok) {
+        afterRestore(said.mode || mode)
+        record('version', said.said || 'The computer put the snapshot back')
+        await read()
+        bufferReloaded()
+      } else if (said.cancelled) {
+        record('version', said.error)
+      } else {
+        setError(said.error)
+      }
+      return said
+    },
+    [record, read, restoreApi]
+  )
+  const cancelQueuedRestore = useCallback(() => restoreWait.current?.cancel(), [])
+
+  /*
+   * At the Mac: a snapshot the phone asked for. Looked for the moment it is
+   * left and every six seconds after, one look at a time, as a parked save
+   * is — see the save watcher above for why each of those.
+   *
+   * No question at the Mac, and nothing dropped silently: the phone is told
+   * what happened, whatever happened. The checks — still wanted, still the
+   * same snapshot, the right unit, a copy of the slot kept first — are
+   * carryOutRestore's.
+   */
+  const handledRestores = useRef(new Set())
+  const readLater = useRef(read)
+  readLater.current = read
+  const recordLater = useRef(record)
+  recordLater.current = record
+  const afterRestoreLater = useRef(afterRestore)
+  afterRestoreLater.current = afterRestore
+  useEffect(() => {
+    if (status !== 'live' || remote || isDemo()) return undefined
+    let stop = false
+    const api = {
+      ...restoreApi(),
+      take: takeParkedRestore,
+      clear: clearParkedRestore,
+      picked: reportRestorePicked,
+      report: reportRestore
+    }
+    const lookOnce = async () => {
+      const req = await takeParkedRestore()
+      if (stop || !req?.id || !req.versionId || req.cancelled) return
+      if (handledRestores.current.has(req.id)) return
+      setBusy(true)
+      try {
+        const out = await carryOutRestore(req, api, { handled: handledRestores.current })
+        if (!out) return
+        if (out.ok) {
+          afterRestoreLater.current(out.mode)
+          recordLater.current('version', `${out.said} Asked for from the phone.`)
+          await readLater.current()
+          bufferReloaded()
+        } else if (!out.cancelled) {
+          recordLater.current('version', `The phone asked for a snapshot, and it wasn’t done: ${out.error}`)
+        }
+      } finally {
+        setBusy(false)
+      }
+    }
+    let looking = null
+    let again = false
+    const look = async () => {
+      if (looking) {
+        again = true
+        return
+      }
+      looking = lookOnce().catch(() => {})
+      await looking
+      looking = null
+      if (again && !stop) {
+        again = false
+        look()
+      }
+    }
+    const offAsk = onConfigDoc((id) => {
+      if (id === pendingRestoreKey()) look()
+    })
+    look()
+    const timer = setInterval(look, 6000)
     return () => {
       stop = true
+      offAsk()
       clearInterval(timer)
     }
-  }, [queuedSave, read, record])
+  }, [status, remote, restoreApi])
 
   /*
    * The unit, once it is known which end this is.
@@ -2665,13 +3022,15 @@ export default function App() {
        */
       if (remoteActive()) {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-        await parkSave({
+        const parked = await parkSave({
           id,
           slot: number,
           name: saveName.trim(),
           fromSlot: preset?.number ?? null,
           fromName: preset?.name ?? null
         })
+        /* A request that never reached the computer is not one to wait on. */
+        if (!parked) throw new Error('Couldn’t reach the computer to ask it to save. Nothing was saved.')
         /*
          * What the slot will be called, and what its scenes are, carried with
          * the request rather than read back later: an AM4 will not dump a
@@ -2680,6 +3039,7 @@ export default function App() {
          */
         setQueuedSave({
           id,
+          at: Date.now(),
           slot: number,
           name: saveName.trim().slice(0, 31) || preset?.name || '',
           scenes: Array.isArray(sceneNames) ? [...sceneNames] : []
@@ -2715,8 +3075,14 @@ export default function App() {
       record('save', `Saved "${name || preset?.name}" to slot ${number}`)
       setDirty(false)
       setSavedAt(Date.now())
-      // Same here: the write has been taken, and the unit is still doing it.
-      await read({ settling: true })
+      /*
+       * And not a whole read of the unit after it. That read was most of the
+       * wait and all of the lock — "Save takes 60-90 s and locks the page" —
+       * to learn which slot the unit is on and what it is called, which the
+       * save had just settled. See presetSaved.
+       */
+      loadedAs.current = { number, name: (name || preset?.name || '').trim() }
+      presetSaved(number, name || preset?.name)
     } catch (err) {
       // Shown on the save bar itself as well as the banner. A refusal that
       // appears only at the top of a page you aren't looking at reads as a
@@ -2738,7 +3104,10 @@ export default function App() {
     const { preset: p, blocks: list } = deviceSnapshot()
     if (p) {
       followUnitName(p)
-      if (fresh || !dirtyRef.current) noteLoadedName(p)
+      if (fresh || !dirtyRef.current) {
+        noteLoadedName(p)
+        noteLoadedAs(p)
+      }
     }
     setSelectedBlock((current) => {
       if (current && list.some((x) => x.effectId === current)) return current
@@ -2854,20 +3223,75 @@ export default function App() {
    * model moves one thing instead of redesigning around a new sentence.
    */
   
-  /** Reload the current slot from flash, discarding anything unsaved. */
+  /**
+   * Reload the current slot from flash, discarding anything unsaved — and
+   * only say so once the unit shows it.
+   *
+   * Everything this app writes lands in the edit buffer; a store is the only
+   * thing that makes it permanent, so choosing the same slot again is the
+   * whole of a Revert. What was missing was looking. On the play test a
+   * Gain turned to 25 still read 25 after Revert: Save and Revert went away
+   * on the strength of having asked, a refusal that came back as {ok:false}
+   * was taken for a yes, and the open editor had no reason to read its
+   * knobs again.
+   *
+   * So the reload goes through the store like any other preset load — its
+   * refusals are refusals, and its settled read tells every open editor the
+   * buffer is new (editRev). Then the knobs turned since the last save are
+   * read back, and Save and Revert go only once they are back. When they
+   * are not, it says so and leaves both where they are: the changes are
+   * still on the unit and still worth keeping or throwing away.
+   */
   const revert = async () => {
     resetSchemaCache()
     if (typeof preset?.number !== 'number') return
+    const number = preset.number
+    const unit = device?.short || device?.name || null
+    const turned = edits.current
+    const refused = (msg, detail) => {
+      record('revert', msg, detail)
+      setError(msg)
+      setSaveError(msg)
+    }
     setBusy(true)
     setError(null)
+    setSaveError(null)
     try {
-      await revertPreset(preset.number)
-      record('revert', `Reverted slot ${preset.number} to its saved version`)
+      /* Which channel each block was on before: one that comes back on
+         another is the buffer loaded again, whatever channel the knobs were on. */
+      const chanBefore = new Map(deviceSnapshot().blocks.map((b) => [b.effectId, b.channel ?? null]))
+      try {
+        await loadPresetInStore(number)
+      } catch (err) {
+        /* Only the unit's own no is a certain no. A relay that timed out after
+           sending may still have carried the select, so that is not known, and
+           an open editor reads again rather than keep the old knobs. A Mac
+           that couldn't be reached never sent it: say what went wrong. */
+        if (err?.message === SELECT_REFUSED) return refused(revertSaid('stuck', unit), [err.message])
+        if (macSilent(err) && !err.linkDown) {
+          bufferReloaded()
+          return refused(revertSaid('unknown', unit), [err.message])
+        }
+        return refused(err.message, [err.message])
+      }
+      const check = await checkRevert({
+        edits: turned,
+        readBlock: blockParams,
+        readSaved: () => presetParams(number),
+        channelOf: (eid) => deviceSnapshot().blocks.find((b) => b.effectId === eid)?.channel,
+        channelBefore: (eid) => chanBefore.get(eid) ?? null,
+        channels: device?.capabilities?.channelNames
+      })
+      /* The buffer's name is the slot's only once the reload is shown to have
+         taken: a reload the unit ignored still carries an unsaved rename. */
+      const took = revertTook(check)
+      presetLanded({ fresh: took })
+      if (!took) return refused(revertSaid(check.state, unit), stuckLines(check))
+      record('revert', `Reverted slot ${number} to its saved version`)
       setDirty(false)
       setSavedAt(null)
       setResult(null)
       setApplied(null)
-      await read()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -2886,7 +3310,13 @@ export default function App() {
       await loadPresetBytes(safety.bytes)
       record('restore', `Loaded the pre-edit copy of "${safety.name}" into the edit buffer`)
       setDirty(true)
+      /* A whole new buffer: the knobs turned before it are not on the unit
+         any more, and "before" for them was the copy this just replaced. */
+      edits.current = []
       await read()
+      /* The same slot, block, channel and scene as a moment ago, with every
+         value changed — the same stale editor a Revert had. */
+      bufferReloaded()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -2962,6 +3392,9 @@ export default function App() {
   
     
   const hasScenes = device?.capabilities?.hasScenes !== false
+  /* Only a unit that says its switches can be read gets the panel — the FM3,
+     today. An FM9 or a III describes them but cannot answer for one. */
+  const switchesReadable = fcReadable(device?.capabilities)
 
   /*
    * Every slot the unit has, whether or not its name has been read.
@@ -2976,6 +3409,51 @@ export default function App() {
    * behind as they are learned.
    */
   const knownSlots = slots.length ? slots : cachedPresetNames()
+  /*
+   * What the save is about to write over, asked for when it is not known.
+   *
+   * The slot a save targets, as the sheet works it out, and what that slot
+   * holds: from the names already learned when it is there, from the unit
+   * when it is not — and "couldn't read it" kept apart from "empty", which
+   * the sheet used to run together. Only while the sheet is open, and a
+   * moment after the slot stops changing, so typing 1-2-3 is one question.
+   */
+  const saveTarget = slotProblem(slot, device?.capabilities?.presets?.count)
+    ? NaN
+    : slot === ''
+      ? preset?.number
+      : Number(slot)
+  const [slotHolds, setSlotHolds] = useState(null)
+  useEffect(() => {
+    /* Forgotten when the sheet closes: a save may have changed it since. */
+    if (sheet !== 'save') {
+      setSlotHolds(null)
+      return undefined
+    }
+    if (!Number.isInteger(saveTarget)) return undefined
+    let live = true
+    const timer = setTimeout(
+      () => {
+        lookUpName(saveTarget).then((r) => {
+          if (live) setSlotHolds({ number: saveTarget, ...r })
+        })
+      },
+      /* A name already learned costs nothing to look at. */
+      knowsName(saveTarget) ? 0 : 350
+    )
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [sheet, saveTarget])
+  const saveCheck = overwriteCheck({
+    target: saveTarget,
+    loaded: preset?.number,
+    loadedName: loadedAs.current?.number === preset?.number ? loadedAs.current.name : null,
+    holds: slotHolds,
+    saveAs: saveName.trim().slice(0, 31) || preset?.name || ''
+  })
+
   const allSlots = useMemo(() => {
     const count = device?.capabilities?.presets?.count
     if (!count) return knownSlots
@@ -3199,7 +3677,11 @@ export default function App() {
   // The block the sheet is showing. Resolved once: a selection can outlive the
   // chain it pointed into (a preset change lands before the refresh does), and
   // an id with no block behind it must not open an empty sheet.
-  const openBlock = selectedBlock ? blocks.find((b) => b.effectId === selectedBlock) : null
+  /* And not while the blocks are another preset's: a knob on the last song's
+     amp would be turned on this song's, found by its number. It comes back
+     when this preset's chain lands, read for this preset. */
+  const chainNow = useChain()
+  const openBlock = selectedBlock && !chainNow.elsewhere ? blocks.find((b) => b.effectId === selectedBlock) : null
 
 
 
@@ -3383,6 +3865,23 @@ export default function App() {
           />
         ) : null}
       </TopBar>
+
+      {queuedSave && saveLate ? <SaveLate onCancel={cancelQueuedSave} /> : null}
+      {/* A restore from here still waiting on the computer, with the Presets
+          sheet shut: the panel's own notice and Cancel went with it, and the
+          sound can still change when the computer gets to it. */}
+      {queuedRestore && sheet !== 'presets' ? (
+        <SaveLate
+          onCancel={cancelQueuedRestore}
+          words={
+            queuedRestore.late
+              ? RESTORE_LATE_WORDS
+              : queuedRestore.mode === 'play'
+                ? 'Loading the snapshot…'
+                : 'Putting the snapshot back…'
+          }
+        />
+      ) : null}
 
       {/* First on the page, under the bar: a stale tab makes every other thing
           on this screen a possible lie about what the code does. */}
@@ -3730,10 +4229,20 @@ export default function App() {
           sceneLayout={sceneLayout}
           sceneOrder={sceneOrder}
           onError={setError}
-          /* Only the typed tempo calls this now: logged, not a re-read of the
-             whole rig, which was a chain dump straight after the tempo write. */
+          /* A typed tempo, or a burst of taps once it settles and if the
+             unit took it on this same preset: logged, and the preset left
+             unsaved — not a re-read of the whole rig, which was a chain dump
+             straight after the tempo write. */
           onChanged={(summary) => record('tempo', summary)}
-          onPresetLoaded={() => presetLanded()}
+          onPresetLoaded={() => {
+            /* Next and Previous land on the slot as it is stored: the unit
+               throws its edit buffer away on a preset change, so a tempo
+               tapped on the last song is not unsaved on this one. As jumpTo
+               does. `fresh`, because dirtyRef still says true this tick. */
+            setDirty(false)
+            setSavedAt(null)
+            presetLanded({ fresh: true })
+          }}
           onPickPreset={() => setPresetMenu(true)}
           /*
            * On a phone this opens the chain in a sheet, because the Edit
@@ -3783,6 +4292,8 @@ export default function App() {
               className={`chip ${hasScenes ? 'scene-now' : ''}`}
               onClick={() => setSheet('scenes')}
               disabled={!hasScenes}
+              /* The whole name, for one longer than two lines of chip. */
+              title={hasScenes ? sceneNames[scene] || undefined : undefined}
             >
               {hasScenes ? (
                 <>
@@ -3793,6 +4304,16 @@ export default function App() {
                 'Scenes'
               )}
             </button>
+            {/*
+              Tap tempo, beside the scene.
+
+              "There's no tempo control on the Edit screen." It went when Home
+              and Controls merged, as "a second tempo" — but Edit is where the
+              delay time is set, and that is exactly when you want to tap one
+              in. Play's own button, not a second one: see TapTempo. A tempo
+              set here leaves the preset unsaved, typed or tapped.
+            */}
+            <TapTempo where="row" onError={setError} onChanged={(summary) => record('tempo', summary)} />
             <button className="chip" onClick={() => setSheet('presets')}>
               Presets and backups
             </button>
@@ -3838,6 +4359,17 @@ export default function App() {
               onChanged={(summary) => record('modifier', `Modifier bound: ${summary}`)}
             />
           </Section>
+
+          {/*
+            "See what the footswitches do." Read-only, and read only while
+            this fold is open — see Footswitches for how, and
+            shared/footswitches.mjs for why it is that careful.
+          */}
+          {switchesReadable ? (
+            <Section key="footswitches" title="Footswitches" note="What each switch does. Best opened between songs: reading them keeps the unit busy">
+              <Footswitches />
+            </Section>
+          ) : null}
 
         </>
       ) : null}
@@ -3951,6 +4483,7 @@ export default function App() {
           onError={setError}
           onChanged={(summary, change, { chain = true } = {}) => {
             record('edit', summary)
+            edits.current = noteEdit(edits.current, change)
             /*
              * A knob turned after a generation was written is a correction of
              * it: the model chose one value and the player wanted another.
@@ -4109,12 +4642,14 @@ export default function App() {
               await save()
               setSheet(null)
             }}
+            onCancel={cancelQueuedSave}
             busy={busy}
             saving={saving}
             remote={remote}
             queued={queuedSave}
             slots={allSlots}
             deviceSlots={device?.capabilities?.presets?.count}
+            check={saveCheck}
           />
         }
       >
@@ -4136,6 +4671,8 @@ export default function App() {
           dirty={dirty}
           remote={remote}
           queued={queuedSave}
+          late={saveLate}
+          check={saveCheck}
           error={saveError}
           onDismissError={() => setSaveError(null)}
           slots={allSlots}
@@ -4201,12 +4738,13 @@ export default function App() {
           <Versions
             preset={preset}
             busy={busy}
+            dirty={dirty}
+            remote={remote}
             deviceSlots={device?.capabilities?.presets?.count}
             onError={setError}
-            onChanged={(summary) => {
-              record('version', summary)
-              read()
-            }}
+            onRestore={restoreFromVersion}
+            waiting={queuedRestore}
+            onCancelWait={cancelQueuedRestore}
           />
           <DeviceBackup
             busy={busy}
@@ -4254,11 +4792,14 @@ export default function App() {
           onError={setError}
         />
 
+        {/* A map read for the last song switched this song's blocks by number;
+            it starts again, empty, for each preset. */}
         <SceneMatrix
+          key={chainNow.number ?? 'none'}
           blocks={blocks}
           count={device?.capabilities?.sceneCount || 8}
           names={sceneNames}
-          busy={busy}
+          busy={busy || chainNow.elsewhere}
           onError={setError}
           onChanged={(summary) => {
             record('scene', summary)

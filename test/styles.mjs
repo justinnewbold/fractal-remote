@@ -1261,4 +1261,37 @@ export function run(test) {
     assert.ok(radius, 'the box takes whatever radius it inherits')
     assert.ok(Number(radius[1]) >= 3, `the box is back to a ${radius[0]} corner, which is the panel edge`)
   })
+
+  test('help lines and scene names wrap instead of stopping mid-sentence', () => {
+    /*
+     * "Help text cut off mid-sentence" and "Scene names cut short." What
+     * clipped was the one-line note beside each section title — "Let a pedal
+     * or the volume knob move a…" in the 380px side panel, right under the
+     * chain editor — the line under a sheet's title, the live line under a
+     * Setup row, and the scene on Edit's chip at fourteen letters. Half a
+     * sentence that explains a control explains nothing, and a clipped scene
+     * name could be either of two scenes that start the same way.
+     */
+    const rule = (sel) => {
+      const at = code.indexOf(`${sel} {`)
+      assert.ok(at !== -1, `${sel} has no style at all`)
+      return code.slice(at, code.indexOf('}', at))
+    }
+    for (const sel of ['.section-note', '.sheet-note', '.setup-row-status']) {
+      const r = rule(sel)
+      assert.ok(!/white-space: nowrap/.test(r), `${sel} is held to one line again`)
+      assert.ok(!/text-overflow: ellipsis/.test(r), `${sel} is cut off with an ellipsis again`)
+    }
+    /* The scene chip: two lines, and wider than the fourteen letters it had. */
+    const name = rule('.scene-now-name')
+    assert.ok(!/white-space: nowrap/.test(name), 'the scene on Edit is held to one line again')
+    assert.match(name, /-webkit-line-clamp: 2/, 'the scene on Edit does not get its second line')
+    const wide = Number(name.match(/max-width: (\d+)ch/)?.[1] || 0)
+    assert.ok(wide > 14, `the scene on Edit is ${wide || 'no'}ch wide — the width that cut the names short`)
+
+    /* And Edit's Tap opens its box downward, off a row near the top of the page. */
+    const box = rule('.gig-tap-cell.tap-row .gig-tempo')
+    assert.match(box, /top: calc\(100% \+ var\(--s-2\)\)/, 'Edit’s tempo box opens upward over the chain')
+    assert.match(box, /bottom: auto/, 'Edit’s tempo box is pinned to both edges at once')
+  })
 }

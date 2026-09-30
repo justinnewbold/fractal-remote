@@ -14,7 +14,7 @@ import {
 const ofScene = (s) => s.sceneIndex
 const ofBpm = (s) => s.bpm
 const ofTunerOn = (s) => s.tunerOn
-import { isSilencingParam } from '../lib/guardrails'
+import { asOnPages } from '../lib/paramIndex'
 
 /**
  * Modifiers — what makes a preset respond instead of sit still.
@@ -66,7 +66,7 @@ export function Modifiers({ blocks, onError, onChanged, busy }) {
       setLoading(true)
       try {
         const res = await blockParams(Number(eid))
-        if (!stop) setParams((res?.named || []).filter((p) => !isSilencingParam(p.name)))
+        if (!stop) setParams(asOnPages(res))
       } catch (err) {
         if (!stop) onError(err.message)
       } finally {

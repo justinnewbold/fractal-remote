@@ -140,7 +140,8 @@ async function rigOnTheBench(over = {}) {
         await flush()
       }
     `,
-    'react.js': 'export const useSyncExternalStore = () => null\n',
+    /* The store's subscribe, kept so a test can watch every change the way a screen does. */
+    'react.js': 'export const useSyncExternalStore = (sub) => { globalThis.__rigSub = sub; return null }\n',
     'relay.js': `
       export const wire = []
       let serve = null
@@ -166,7 +167,7 @@ async function rigOnTheBench(over = {}) {
     'paramIndex.js': 'export const forget = () => {}\n',
     'sceneNameCache.js': 'export const forgetSceneNames = () => true\nexport const recallSceneNames = async () => []\nexport const rememberSceneNames = () => true\n'
   }
-  for (const f of ['own-echo.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs']) {
+  for (const f of ['own-echo.js', 'chain-view.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -994,8 +995,10 @@ export function run(test) {
      * scene would be back to meaning nothing.
      */
     for (const [call, what] of [
-      ['export function writeBypass\\(id, bypassed\\) \\{ const was = asWas\\(\\) noteEdited\\(\\)', 'a bypass'],
-      ['export function writeChannel\\(id, channel\\) \\{ const was = asWas\\(\\) noteEdited\\(\\)', 'a channel'],
+      /* After the one refusal that sends nothing: a tile drawn for the preset
+         just left (see lib/chain-view), which has edited nothing. */
+      ['export function writeBypass\\(id, bypassed\\) \\{ if \\(notThisChain\\(\\)\\) return Promise\\.resolve\\(false\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a bypass'],
+      ['export function writeChannel\\(id, channel\\) \\{ if \\(notThisChain\\(\\)\\) return Promise\\.resolve\\(false\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a channel'],
       ['export function beginChainWrite\\(\\) \\{ [^}]*noteEdited\\(\\)', 'a chain move'],
       ['export function writeTempo\\(bpm\\) \\{ const was = state\\.bpm noteEdited\\(\\)', 'a typed tempo']
     ]) {
@@ -1034,7 +1037,11 @@ export function run(test) {
      * it, nothing would have said so.
      */
     const flat = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
-    assert.match(flat, /const after = async \(res\) => \{ .*?await dropReadCache\(\) await refreshBlocks\(\{ quiet: true \}\)/, 'the chain is re-read out of the stale copy after a write')
+    assert.match(flat, /const after = async \(res\) => \{ .*?endChainWrite\(\{ refresh: false \}\) await refreshBlocks\(\{ quiet: true \}\)/, 'the chain is not re-read off the unit after a write')
+    /* And not by deleting anything first. The placement writes drop the
+       computer's copy of the layout themselves; DELETE /device/cache never
+       touched it, and deleted the computer's saved profile of the FM3. */
+    assert.ok(!/dropReadCache|device\/cache'/.test(flat.replace(/\/\*.*?\*\//g, '')), 'a chain write deletes the computer’s profile of the unit again')
     assert.match(flat, /const astray = moves\.filter\(\(m\) => colOf\(m\) !== m\.to\)/, 'a move is not checked against the unit\'s answer')
     assert.match(flat, /logDebug\('chain', `\$\{m\.block\.name\}: column \$\{m\.from\} → \$\{m\.to\}`/, 'a move leaves nothing in the log')
     assert.match(flat, /The unit did not keep the move: /, 'a move the unit dropped is silent')
@@ -1084,11 +1091,11 @@ export function run(test) {
        chain is being written, whatever it would otherwise have read. */
     assert.match(rig, /if \(ownEcho\(kind, kind === 'scene' \? event\.index : undefined\)\) return if \(chainWrites\) \{ chainAsked = true return \} if \(kind === 'scene'\) followScene\(\) else if \(kind === 'preset'\) followPresetNews\(\) else followGridNews\(\)/, 'the chain is re-read on every announcement during a chain write')
     /* And the chain read another client's change waits for is held the same way. */
-    assert.match(rig, /gridTimer = null if \(presetBusy\(\)\) return if \(chainWrites\) \{ chainAsked = true return \} read\(\)/, 'a chain read owed to another client lands in the middle of a chain write')
+    assert.match(rig, /gridTimer = null syncChainBusy\(\) if \(presetBusy\(\)\) return if \(chainWrites\) \{ chainAsked = true return \} read\(\)/, 'a chain read owed to another client lands in the middle of a chain write')
     assert.match(rig, /export function endChainWrite\(\{ refresh = true \} = \{\}\) \{ if \(!chainWrites\) return chainWrites -= 1 if \(chainWrites\) return const asked = chainAsked chainAsked = false if \(asked && refresh\) refreshBlocks\(\{ quiet: true \}\) \}/, 'announcements held during a write are lost, or read twice')
 
     const edit = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
-    assert.match(edit, /const after = async \(res\) => \{ .*?endChainWrite\(\{ refresh: false \}\) await dropReadCache\(\) await refreshBlocks/, 'the write’s own read does not stand in for the held announcements')
+    assert.match(edit, /const after = async \(res\) => \{ .*?endChainWrite\(\{ refresh: false \}\) await refreshBlocks/, 'the write’s own read does not stand in for the held announcements')
     assert.equal((edit.match(/beginChainWrite\(\)/g) || []).length, 3, 'not every chain write (move, add, remove) is bracketed')
     assert.match(edit, /useKeepAwake\(\)/, 'the Edit screen lets the phone lock mid-write')
 
@@ -1963,8 +1970,10 @@ export function run(test) {
      * dumps the slot again, and only goes when that had nothing.
      */
     assert.equal((rig.match(/await refreshSceneNames\(/g) || []).length, 1, 'scene names are read somewhere other than the one read of a preset')
-    /* The first read, a preset change, and the one read again after the computer answered with another preset's copy. */
-    assert.equal((rig.match(/await readChainAndNames\(/g) || []).length, 3, 'scene names are read on one path in and not the other')
+    /* The first read, a preset change, the one read again after the computer
+       answered with another preset's copy, and Try again on a preset whose
+       chain never came (see lib/chain-view). */
+    assert.equal((rig.match(/await readChainAndNames\(/g) || []).length, 4, 'scene names are read on one path in and not the other')
     assert.match(rig, /const here = copy === undefined \? await loadedCopy\(\) : copy[\s\S]*?if \(here === 'stale'\)[\s\S]*?if \(here\?\.length\) return here[\s\S]*?await device\.sceneNames\(number\)/, 'the loaded slot is dumped again for names its chain read carried')
     assert.match(device, /remoteRequest\('\/preset\/grid'\)/, 'the phone does not ask for the loaded preset’s names out of the chain read')
 
@@ -2221,8 +2230,8 @@ export function run(test) {
       'a tap waits on the network before it returns, which makes the next tap late and the rhythm wrong'
     )
 
-    /* Both apps do it the same way. */
-    const webGig = read('src/components/Gig.jsx')
+    /* Both apps do it the same way. The browser's Tap is its own file, drawn on Play and Edit. */
+    const webGig = read('src/components/TapTempo.jsx')
     assert.match(webGig, /refreshTempo\(\)/, 'the browser never re-reads the tempo after a tap')
     assert.match(webGig, /TAP_REREAD_MS/, 'the browser no longer shares the delay with the phone')
     assert.match(webGig, /tappedBpm\(/, 'the browser no longer works out what the taps mean')
@@ -2600,7 +2609,7 @@ export function run(test) {
      * waiting on.
      */
     const once = rig.slice(rig.indexOf('async function readChainAndNames'))
-    assert.match(load, /await readPresetSoon\(OWN_SETTLE_MS\)/, 'a preset load no longer reads its chain through the one shared read')
+    assert.match(load, /await readPresetSoon\(OWN_SETTLE_MS, \{ reloaded: true \}\)/, 'a preset load no longer reads its chain through the one shared read')
     assert.ok(
       once.indexOf('await refreshBlocks()') > 0 && once.indexOf('await refreshBlocks()') < once.indexOf('await refreshSceneNames(copy)'),
       'the chain waits behind a slow read of the scene names'
@@ -2823,7 +2832,7 @@ export function run(test) {
     const rig = read('mobile/src/lib/rig.js')
     assert.match(
       rig,
-      /set\(\{ allBlocks: all, blocks: device\.stageBlocks\(all\), chain: 'ok' \}\)/,
+      /const patch = \{ allBlocks: all, blocks: device\.stageBlocks\(all\), chain: 'ok' \}/,
       'the two lists no longer come from one read'
     )
     assert.match(read('mobile/src/screens/Stage.js'), /const ofBlocks = \(s\) => s\.blocks/)
@@ -2860,7 +2869,7 @@ export function run(test) {
      * what is in the preset. This is about the knob, which changes none of it
      * and already read its own value back two lines earlier.
      */
-    const commit = edit.slice(edit.indexOf('const commit = async'), edit.indexOf('const applyModel'))
+    const commit = edit.slice(edit.indexOf('const commit = (p, override)'), edit.indexOf('const applyModel'))
     assert.ok(commit.length > 100, 'the knob commit moved; this check reads it')
     assert.ok(
       !/refreshAll\(|refreshBlocks\(/.test(commit),
@@ -2940,6 +2949,36 @@ export function run(test) {
        leaves the knob, and small movements near the centre jump. */
     assert.match(knob, /gesture\.dy/, 'the knob no longer turns on a vertical drag')
     assert.ok(!/gesture\.dx/.test(knob), 'the knob turns on horizontal movement, which no hardware editor does')
+  })
+
+  test('a VoiceOver swipe on a knob writes the value it reached, once the swipes stop', () => {
+    /*
+     * The browser's keyboard bug, on the phone: each swipe moved the knob and
+     * asked for the write in the same instant, and the write read the value
+     * from before the swipe. So every other one missed and the last one never
+     * went. Both ends now step through lib/knob-keys, generated from the
+     * browser's shared copy.
+     */
+    const knob = read('mobile/src/components/Knob.js')
+    assert.match(knob, /import \{ keyTarget, settleWrites \} from '\.\.\/lib\/knob-keys'/, 'the phone knob has its own key rules')
+    const act = knob.slice(knob.indexOf('onAccessibilityAction={(e) => {'), knob.indexOf('style={{ width: size, height: size'))
+    assert.ok(act.length > 100, 'the VoiceOver handler moved; retarget this test')
+    assert.match(act, /keyTarget\(e\.nativeEvent\.actionName, from\)/, 'a swipe does not step through the shared rule')
+    assert.match(act, /change\?\.\(v\)\s*swipes\.current\.push\(v\)/, 'a swipe does not hand its own value to the write')
+    assert.ok(!/commit\?\.\(\)/.test(act), 'a swipe asks for the write in the same instant again, which reads the value from before it')
+    assert.match(knob, /useEffect\(\(\) => \(\) => swipes\.current\.flush\(\), \[\]\)/, 'closing the editor leaves the last swipe unsent')
+    assert.match(knob, /const release = \(\) => \{\s*const v = dragged\.current\s*dragged\.current = undefined\s*live\.current\.onCommit\?\.\(v\)/, 'a drag does not hand over the value it reached')
+    assert.match(knob, /dragged\.current = v\s*change\?\.\(v\)/, 'a drag does not keep the value it reached')
+    assert.match(act, /const from = waiting !== undefined \?/, 'a fast run of swipes starts each one from the screen, a step behind')
+
+    const edit = read('mobile/src/screens/Edit.js')
+    assert.match(edit, /onCommit=\{\(v\) => commit\(p, v\)\}/, 'the knob’s value is read back out of state a render behind')
+    const commit = edit.slice(edit.indexOf('const commit = (p, override) => {'), edit.indexOf('Swapping the model, and being able to take it back'))
+    assert.ok(commit.length > 200, 'the commit moved; retarget this test')
+    assert.match(commit, /if \(next === p\.value && !writes\.current\.busy\(p\.id\)\) return/, 'turning a knob back while a write is out never reaches the unit')
+    assert.match(commit, /writes\.current\.send\(p\.id, /, 'two checked writes to one control can race again')
+    assert.match(commit, /if \(prev\[p\.id\] !== next\) return prev/, 'a knob still being turned flicks back to an older read')
+    assert.match(read('mobile/src/lib/knob-keys.js'), /Generated from shared\/knob-keys\.mjs/, 'the phone’s key rules are not generated from the shared copy')
   })
 
   test('which setlist survives a sync is decided in one place, not two', () => {
@@ -3898,7 +3937,7 @@ export function run(test) {
     const pages = editPages(params, layout)
     assert.deepEqual(
       pages.map((p) => [p.name, p.params.map((q) => q.id)]),
-      [['Basic', [1, 2]], ['Tone', [12, 13, 2]], ['More', [4, 99]]],
+      [['Basic', [1, 2]], ['Tone', [12, 13, 2]], ['Mix', [4]], ['Hidden', [99]]],
       'the pages are not the editor’s, or a control the unit sent became unreachable'
     )
     assert.equal(pageHolding(pages, 13).name, 'Tone', 'a search cannot find the page its control is on')
@@ -3918,6 +3957,188 @@ export function run(test) {
     }
   })
 
+  test('a Phaser has Fractal’s three pages, not eight, and no two tabs share a name', async () => {
+    /*
+     * "Phaser has two More tabs." The layout carries pages that only exist on
+     * old firmware whenever no newer page has their name — Phaser, Advanced,
+     * More and LFO beside today's Basic, Expert 1 and Expert 2 — and the app
+     * added its own More after them. Flanger, Filter and MegaTap the same.
+     */
+    const { editPages } = await import('../src/lib/editPages.js')
+    const knob = (id, name) => ({ id, name, value: 0, min: 0, max: 10 })
+    const page = (name, fw, ids, mixer = []) => ({
+      name,
+      ...(fw ? { fw } : {}),
+      rows: [
+        { section: 'parameters', controls: ids.map((paramId) => ({ paramId, label: `K${paramId}`, widget: 'knob' })) },
+        { section: 'mixer', controls: mixer.map((paramId) => ({ paramId, label: 'Mix', widget: 'knob' })) }
+      ]
+    })
+    const params = [1, 2, 3, 4, 5, 6, 7, 8, 30].map((id) => knob(id, `P${id}`))
+    /* What the server hands over for a Phaser on FM3 firmware 12. */
+    const phaser = {
+      pages: [
+        page('Phaser', { lt: '9,02' }, [1, 2, 3], [30]),
+        page('Advanced', { lt: '1,2' }, [4]),
+        page('More', { lt: '9,02' }, [5, 6]),
+        page('LFO', { lt: '9,02' }, [7]),
+        page('Basic', { gtet: '9,02' }, [1, 2], [30]),
+        page('Expert 1', { gtet: '9,02' }, [3, 4, 5], [30]),
+        page('Expert 2', { gtet: '9,02' }, [6, 7], [30])
+      ]
+    }
+    const tabs = editPages(params, phaser).map((p) => p.name)
+    assert.deepEqual(tabs, ['Basic', 'Expert 1', 'Expert 2', 'Mix', 'Hidden'], 'old firmware’s pages are still tabs')
+    assert.equal(new Set(tabs).size, tabs.length, 'two tabs share a name')
+
+    /* A Tremolo on some types has only old pages: the newest of them stay. */
+    const tremolo = { pages: [page('Tremolo', { lt: '1,00' }, [1]), page('Tremolo', { lt: '8,00' }, [1, 2])] }
+    const kept = editPages(params, tremolo).filter((p) => p.key.startsWith('page-'))
+    assert.deepEqual(kept.map((p) => [p.name, p.params.map((q) => q.id)]), [['Tremolo', [1, 2]]], 'a block with only old pages lost them all')
+
+    /* And two pages the layout does name alike are told apart. */
+    const twice = { pages: [page('Basic', null, [1]), page('Basic', null, [2])] }
+    assert.deepEqual(editPages(params, twice).slice(0, 2).map((p) => p.name), ['Basic', 'Basic 2'], 'two tabs are both called Basic')
+
+    /* The phone's copy is the same file. */
+    assert.ok(read('mobile/src/lib/editPages.js').includes(read('src/lib/editPages.js')), 'the phone draws its tabs by another rule')
+  })
+
+  test('a knob says what Fractal’s editor calls it, meters are not knobs, and the unnamed are on Hidden', async () => {
+    /*
+     * Knobs wore the server's name, which where the catalog has none is the
+     * raw internal one numbered across the block: "Gain 3", "HEADROOM",
+     * "GRIDHARDNESS". The layout that comes with every read already has
+     * Fractal's own caption for each control it places.
+     */
+    const { editPages, namedAsOnPages, HIDDEN_NOTE } = await import('../src/lib/editPages.js')
+    const { fixRead } = await import('../shared/param-fixes.mjs')
+    const { isSilencingParam } = await import('../src/lib/guardrails.js')
+    const amp = fixRead(JSON.parse(read('src/data/amp-params.json')))
+    const editable = amp.named.filter((p) => !isSilencingParam(p.name))
+    const pages = editPages(editable, amp.layout)
+    const on = (name) => pages.find((p) => p.name === name)
+    const said = (page) => page.params.map((p) => p.label)
+
+    /* The caption is the editor's, and its line breaks are spaces. */
+    assert.ok(said(on('Pwr Tubes + CF')).includes('Hardness'), 'the knob is still the catalog’s "Hardness 1"')
+    assert.ok(said(on('Authentic')).includes('Input Trim'), 'a two-line caption is not one line')
+    const broken = { pages: [{ name: 'P', rows: [{ section: 'parameters', controls: [{ paramId: 1, label: 'Tube\nHardness', widget: 'knob' }] }] }] }
+    assert.deepEqual(said(editPages([{ id: 1, name: 'TUBEHARD' }], broken)[0]), ['Tube Hardness'], 'a two-line caption is not one line')
+    /* Where one page has one caption twice, both keep the server's names. */
+    const repeats = { pages: [{ name: 'Two', rows: [{ section: 'parameters', controls: [{ paramId: 1, label: 'Depth', widget: 'knob' }, { paramId: 2, label: 'Depth', widget: 'knob' }] }] }] }
+    assert.deepEqual(said(editPages([{ id: 1, name: 'Depth 1' }, { id: 2, name: 'Depth 2' }], repeats)[0]), ['Depth 1', 'Depth 2'], 'two knobs on one page carry one name')
+
+    /* The bare numbers on an EQ page are frequencies, and only there. */
+    assert.deepEqual(said(on('Output EQ')), ['80 Hz', '240 Hz', '750 Hz', '2200 Hz', '6600 Hz'], 'an EQ band is a bare number')
+    const bands = { pages: [
+      { name: 'Graphic EQ', rows: [{ section: 'parameters', controls: [{ paramId: 1, label: '1.6K', widget: 'slider' }, { paramId: 2, label: '16k', widget: 'slider' }] }] },
+      { name: 'Level', rows: [{ section: 'parameters', controls: [{ paramId: 3, label: '1', widget: 'slider' }] }] }
+    ] }
+    const bandPages = editPages([{ id: 1, name: 'a' }, { id: 2, name: 'b' }, { id: 3, name: 'c' }], bands)
+    assert.deepEqual(said(bandPages[0]), ['1.6 kHz', '16 kHz'], 'a kilohertz band is not said as one')
+    assert.deepEqual(said(bandPages[1]), ['1'], 'a Vocoder band number grew a Hz')
+
+    /* The amp's meters are read-outs, and are nowhere to be turned. */
+    const everywhere = pages.flatMap((p) => p.params.map((q) => q.id))
+    for (const meter of [120, 121, 122, 132]) assert.ok(!everywhere.includes(meter), `meter ${meter} is drawn as a knob`)
+
+    /* The unnamed go last, on Hidden, which says why. */
+    const last = pages[pages.length - 1]
+    assert.equal(last.name, 'Hidden')
+    assert.equal(last.note, HIDDEN_NOTE)
+    assert.equal(HIDDEN_NOTE, 'Fractal’s own editor doesn’t show these.')
+    for (const name of ['GRIDHARDNESS', 'TRIODE2EXTIME', 'RESOLUTION']) assert.ok(said(last).includes(name), `${name} is not on Hidden`)
+    assert.ok(said(last).includes('Dynamic Damping') && !said(last).includes('DYNIMP'), 'DYNIMP is still called DYNIMP')
+
+    /* Search goes by the same names, and offers no meter. */
+    const searched = namedAsOnPages(editable, amp.layout)
+    assert.equal(searched.find((p) => p.id === 90).label, 'Hardness', 'search and the knob call it different things')
+    assert.ok(!searched.some((p) => [120, 121, 122, 132].includes(p.id)), 'search offers a meter to turn')
+    for (const file of ['src/lib/paramIndex.js', 'mobile/src/lib/paramIndex.js']) {
+      assert.match(read(file), /namedAsOnPages\(named, res\?\.layout\)\.map\(\(p\) => \(\{ \.\.\.p, name: p\.label \}\)\)/, `${file} searches by the catalog’s names`)
+    }
+    /* Two knobs called "Gain" on different pages are told apart by the page,
+       not by a range in brackets that is on neither knob. */
+    const { disambiguate } = await import('../src/lib/encoding.js')
+    const listed = disambiguate(searched.map((p) => ({ ...p, name: p.label })))
+    const nameOf = (id) => listed.find((p) => p.id === id).name
+    assert.equal(nameOf(7), 'Gain · Authentic', 'search tells the two Gains apart by a range')
+    assert.equal(nameOf(75), 'Gain · Input EQ', 'search tells the two Gains apart by a range')
+    assert.ok(!listed.some((p) => /\(/.test(p.name)), 'search shows a range in brackets')
+    /* And the knobs, and the Hidden line, on both ends. */
+    for (const file of ['src/components/Console.jsx', 'mobile/src/screens/Edit.js']) {
+      const src = read(file)
+      assert.match(src, /label=\{p\.label \|\| p\.name\}/, `${file} labels its knobs with the catalog’s names`)
+      assert.match(src, /onPage\?\.note \?/, `${file} does not say why Hidden’s settings are there`)
+      assert.match(src, /param\?\.label \|\| param\?\.name\} value/, `${file} reads the catalog’s name to a screen reader`)
+    }
+    assert.match(
+      read('mobile/src/screens/Edit.js'),
+      /const called = p\.label \|\| p\.name/,
+      'the phone says a knob that did not take by the catalog’s name, not by what the knob says'
+    )
+  })
+
+  test('a knob turning another block’s setting is never matched by its number', async () => {
+    /*
+     * An FM3 Multitap is handed the Delay block's editor page. Its controls
+     * are DELAY_LEVEL, DELAY_FEED and so on, and their numbers are the Delay
+     * block's — id 1 on a Multitap is "Delay 1". Matched on the number alone,
+     * the knob said "Level" and turning it moved a delay time.
+     */
+    const { editPages, namedAsOnPages } = await import('../src/lib/editPages.js')
+    const multitap = {
+      family: 'MULTITAP',
+      pages: [{ name: 'Time/FB', rows: [
+        { section: 'parameters', controls: [{ paramName: 'DELAY_FEED', paramId: 10, label: 'Feedback' }, { paramName: 'MULTITAP_TIME3', paramId: 3, label: 'Time 3' }] },
+        { section: 'mixer', controls: [{ paramName: 'DELAY_LEVEL', paramId: 1, label: 'Level' }] }
+      ] }]
+    }
+    const named = [{ id: 1, name: 'Delay 1' }, { id: 10, name: 'Level 2' }, { id: 3, name: 'Delay 3' }]
+    const shown = editPages(named, multitap).flatMap((pg) => pg.params)
+    const labelOf = (id) => shown.find((p) => p.id === id)?.label
+    assert.equal(labelOf(1), 'Delay 1', 'a Multitap delay time is called the Delay block’s "Level"')
+    assert.equal(labelOf(10), 'Level 2', 'a Multitap level is called the Delay block’s "Feedback"')
+    assert.equal(labelOf(3), 'Time 3', 'the Multitap’s own control lost its caption')
+    const found = namedAsOnPages(named, multitap)
+    assert.equal(found.find((p) => p.id === 1)?.label, 'Delay 1', 'search does not offer Delay 1 by its own name')
+
+    /* A meter on another block does not hide this block's setting of that number. */
+    const amp = { family: 'DISTORT', pages: [{ name: 'Amp', rows: [{ section: 'parameters', controls: [
+      { widget: 'meter', crossBlock: {}, paramName: 'OUTPUT_VUL', paramId: 22 },
+      { paramName: 'DISTORT_GAIN', paramId: 1, label: 'Gain' }
+    ] }] }] }
+    const all = editPages([{ id: 1, name: 'Gain' }, { id: 22, name: 'XFormer Low Freq' }], amp).flatMap((pg) => pg.params)
+    assert.ok(all.some((p) => p.id === 22), 'another block’s meter hid the amp’s XFormer Low Freq')
+  })
+
+  test('the Modifiers picker names a control as its knob does, and offers no meter', async () => {
+    /*
+     * The knob said "80 Hz" while the picker said "Bass 2", and the picker
+     * still offered "HEADROOM" and "B+" — read-outs a pedal cannot move. It
+     * now takes the search's own list, so the three cannot drift apart.
+     */
+    const { namedAsOnPages } = await import('../src/lib/editPages.js')
+    const { disambiguate } = await import('../src/lib/encoding.js')
+    const { fixRead } = await import('../shared/param-fixes.mjs')
+    const { isSilencingParam } = await import('../src/lib/guardrails.js')
+    const amp = fixRead(JSON.parse(read('src/data/amp-params.json')))
+    /* What asOnPages does; the search test above pins that it does it. */
+    const picked = disambiguate(namedAsOnPages(amp.named.filter((p) => !isSilencingParam(p.name)), amp.layout).map((p) => ({ ...p, name: p.label })))
+    for (const meter of [120, 121, 122, 132]) assert.ok(!picked.some((p) => p.id === meter), `the picker offers meter ${meter}`)
+    assert.equal(picked.find((p) => p.id === 57).name, '80 Hz', 'the picker and the knob call it different things')
+    assert.equal(picked.find((p) => p.id === 90).name, 'Hardness', 'the picker and the knob call it different things')
+    assert.notEqual(picked.find((p) => p.id === 7).name, picked.find((p) => p.id === 75).name, 'the picker shows two Gains alike')
+    for (const file of ['src/lib/paramIndex.js', 'mobile/src/lib/paramIndex.js'])
+      assert.match(read(file), /export const asOnPages = \(res\) =>/, `${file} keeps its list to itself`)
+    for (const file of ['src/components/Modifiers.jsx', 'mobile/src/screens/Edit.js']) {
+      const src = read(file)
+      assert.match(src, /setParams\(asOnPages\(res\)\)/, `${file}’s picker lists the raw names`)
+      assert.ok(!src.includes('setParams((res?.named'), `${file}’s picker lists the raw names`)
+    }
+  })
+
   test('the demo’s blocks have the editor’s pages, and its Compressor the FM3’s own ranges', async () => {
     const { createMockDevice } = await import('../src/lib/mockDevice.js')
     const { editPages } = await import('../src/lib/editPages.js')
@@ -3928,7 +4149,13 @@ export function run(test) {
       const r = await unit.blockParams(b.effectId)
       return editPages(r.named, r.layout).map((p) => p.name)
     }
-    assert.deepEqual(await pagesOf('drive'), ['Basic', 'Tone', 'Graphic EQ', 'Advanced', 'More'], 'the demo Drive is not on its editor pages')
+    assert.deepEqual(await pagesOf('drive'), ['Basic', 'Tone', 'Graphic EQ', 'Advanced', 'Mix', 'Hidden'], 'the demo Drive is not on its editor pages')
+    /* The demo's layouts keep only the parameter rows, so its Mix has to be
+       put back, or it sits on Hidden under a line that is not true of it. */
+    const drive = blocks.find((x) => x.slug === 'drive')
+    const r = await unit.blockParams(drive.effectId)
+    const hidden = editPages(r.named, r.layout).find((p) => p.name === 'Hidden')
+    assert.ok(!hidden.params.some((p) => /^(Mix|Balance)$/.test(p.name)), 'the demo Drive’s Mix is on Hidden, as if Fractal’s editor did not show it')
     assert.deepEqual((await pagesOf('comp')).slice(0, 2), ['Basic', 'Sidechain'], 'the demo Compressor is not on its editor pages')
 
     /* Read off the FM3's tables rather than typed in as typical. */
@@ -6352,9 +6579,9 @@ export function run(test) {
        the quick names before it waits for the unit to settle. */
     assert.equal((flat.match(/const quick = names \? await quickSceneNames\(\) : true /g) || []).length, 1, 'the quick read is not taken in the one read of a preset')
     const once = withoutComments(rig.slice(rig.indexOf('async function readChainAndNames'), rig.indexOf('let staleTimer'))).replace(/\s+/g, ' ')
-    assert.match(once, /const read = await refreshBlocks\(\) if \(names && read && state\.preset\?\.number === number\) \{ .*?if \(!quick\) await refreshSceneNames\(copy\)/, 'the slow read still runs when the names were already there, or before the chain, or after a chain read that failed')
+    assert.match(once, /read = await refreshBlocks\(\) if \(names && read && state\.preset\?\.number === number\) \{ .*?if \(copy !== 'stale' && !quick\) await refreshSceneNames\(copy\)/, 'the slow read still runs when the names were already there, or before the chain, or after a chain read that failed')
     const loading = withoutComments(rig.slice(rig.indexOf('export async function loadPreset'))).replace(/\s+/g, ' ')
-    assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 \} await readPresetSoon\(OWN_SETTLE_MS\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
+    assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 syncChainBusy\(\) \} await readPresetSoon\(OWN_SETTLE_MS, \{ reloaded: true \}\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
     assert.match(rig, /const kept = await recallSceneNames\(owner, number\)/, 'the disk is not read first')
     assert.match(rig, /held = await device\.storedSceneNames\(slug, number\)/, 'the computer’s copy is never asked for')
     /* Read the slow way, they are kept everywhere. */
@@ -6702,7 +6929,7 @@ export function run(test) {
       slot: 48, id: 'p2', sleep: tick, now, pollMs: 10, waitMs: 50
     })
     assert.equal(late.ok, false)
-    assert.match(late.error, /has not picked this up/, 'a computer that never answered is not said to have')
+    assert.match(late.error, /didn’t answer, so nothing was saved/, 'a computer that never answered is not said to have')
 
     /* The computer refuses, in its own words. */
     const refused = await askComputerToSave({
@@ -6714,7 +6941,8 @@ export function run(test) {
     /* Nothing loaded, nothing parked. */
     const none = await askComputerToSave({ park: async () => { throw new Error('should not park') }, readResult: async () => null, slot: null })
     assert.equal(none.ok, false)
-    assert.equal(SAVE_WAIT_MS, 3 * 60 * 1000)
+    /* Two minutes, then it says so — the same wait as the browser's. */
+    assert.equal(SAVE_WAIT_MS, 2 * 60 * 1000)
 
     /* And the button: Save, then Confirm changes with the warning, then the ask. */
     const saver = read('mobile/src/components/SaveToSlot.js').replace(/\s+/g, ' ')
@@ -6791,7 +7019,7 @@ export function run(test) {
       /<SaveButton[^/]*waiting=\{pending\}/,
       'the rename screen never lights its Save button'
     )
-    assert.match(saver, /const res = await askComputerToSave\(\{ park: \(req\) => parkSave\(slug, req\), readResult: \(\) => readSaveResult\(slug\), slot: preset\?\.number, name: preset\?\.name \|\| ''/, 'the button does not ask the computer, or sends no name')
+    assert.match(saver, /const run = startComputerSave\(\{ park: \(req\) => parkSave\(slug, req\), readResult: \(\) => readSaveResult\(slug\), slot: preset\?\.number, name: preset\?\.name \|\| ''/, 'the button does not ask the computer, or sends no name')
     /* On both screens where something gets changed. */
     for (const screen of ['mobile/src/screens/Edit.js', 'mobile/src/screens/Settings.js']) {
       const flat = read(screen).replace(/\s+/g, ' ')
@@ -6802,6 +7030,87 @@ export function run(test) {
     const dev = read('mobile/src/lib/device.js')
     assert.match(dev, /encodeURIComponent\(`fractal\.pendingSave\.\$\{slug\}`\)/)
     assert.match(dev, /encodeURIComponent\(`fractal\.saveResult\.\$\{slug\}`\)/)
+  })
+
+  test('the phone hears the computer’s answer as it is written, and a save can be cancelled', async () => {
+    /*
+     * "Save takes 60-90 s." The computer announces every write to its store,
+     * and the phone threw the announcement away; its answer waited for the
+     * next three-second look. Now the store's announcement reaches whoever is
+     * waiting for that document, and costs the unit nothing.
+     */
+    const { rig, asked, wire } = await rigOnTheBench()
+    const heard = []
+    const off = rig.onConfigDoc((id, data) => heard.push([id, data]))
+    rig.handleEvent({ type: 'config', id: 'fractal.saveResult.fm3', data: { id: 'p1', ok: true, slot: 12 }, origin: 'fractal' })
+    off()
+    rig.handleEvent({ type: 'config', id: 'fractal.saveResult.fm3', data: { id: 'p2' } })
+    assert.deepEqual(heard, [['fractal.saveResult.fm3', { id: 'p1', ok: true, slot: 12 }]], 'the announcement never reached the save that was waiting on it')
+    assert.equal(wire.length, 0, 'a store write made the phone read the unit')
+    assert.equal(asked('GET /preset/blocks'), 0)
+
+    /* Cancelling writes over the request — a phone's DELETE never arrives. */
+    const { startComputerSave } = await import('../mobile/src/lib/saveViaComputer.js')
+    const parked = []
+    const clock = 1000
+    const run = startComputerSave({
+      park: async (req) => parked.push(req),
+      readResult: async () => null,
+      slug: 'fm3',
+      slot: 48,
+      name: 'Carol Ann OD-2',
+      id: 'p9',
+      /* A look that never comes on its own: only the Cancel can end this. */
+      sleep: () => new Promise(() => {}),
+      now: () => clock,
+      pollMs: 10,
+      waitMs: 100000
+    })
+    await new Promise((go) => setImmediate(go))
+    run.cancel()
+    const res = await run.done
+    assert.equal(res.ok, false)
+    assert.equal(res.cancelled, true)
+    assert.match(res.error, /Nothing was saved/)
+    assert.deepEqual(parked.at(-1), { id: 'p9', cancelled: true }, 'a cancelled save is still waiting at the computer')
+    assert.equal(parked[0].slot, 48)
+
+    /* The screen: Saving… on its own, words and Cancel only once it is late. */
+    const saver = read('mobile/src/components/SaveToSlot.js')
+    const flat = saver.replace(/\s+/g, ' ')
+    assert.ok(!/setSaid\(\{ tone: 'hint', text: 'Asked the computer/.test(saver), 'every save opens with a sentence about the computer again')
+    assert.match(flat, /listen: onConfigDoc/, 'the phone still waits for its next look')
+    assert.match(flat, /onState: \(now\) => setLate\(now\.late && !now\.picked\)/)
+    assert.match(flat, /\{s\.saving && s\.late \? \( <> <Note tone="hint">\{SAVE_LATE_WORDS\}<\/Note> <Press label="Cancel" height=\{40\} onPress=\{s\.cancel\} \/>/, 'a late save has nothing to say and nothing to press')
+    assert.match(flat, /cancel: \(\) => job\.current\?\.cancel\(\)/)
+  })
+
+  test('"Saved to slot 12." goes after ten seconds, and a problem stays', () => {
+    /* It stayed until tapped, so a save from an hour ago still said so. */
+    const saver = read('mobile/src/components/SaveToSlot.js')
+    const flat = saver.replace(/\s+/g, ' ')
+    assert.match(saver, /export const SAID_FOR_MS = 10000/)
+    assert.match(
+      flat,
+      /useEffect\(\(\) => \{ if \(!said\?\.done\) return undefined const timer = setTimeout\(\(\) => setSaid\(\(now\) => \(now === said \? null : now\)\), SAID_FOR_MS\) return \(\) => clearTimeout\(timer\) \}, \[said\]\)/,
+      '"Saved to slot N." never goes away on its own'
+    )
+    assert.match(flat, /\? \{ tone: 'hint', text: `Saved to slot \$\{res\.slot\}\.`, done: true \}/, 'the saved note is not marked to go')
+    assert.match(flat, /: \{ tone: res\.cancelled \? 'hint' : 'warn', text: res\.error \}/, 'a failure is marked to go on its own')
+    assert.match(flat, /text: `Saved to slot \$\{slot\} on this phone\.`, done: true/)
+  })
+
+  test('a save from the bar on Play says when it runs late, and can be cancelled there', () => {
+    /*
+     * The late line and Cancel lived only under Edit's and Settings' buttons,
+     * and the bar's Save on Play went quiet for up to three minutes: the pill
+     * vanished while it saved, and nothing said a word.
+     */
+    const bar = read('mobile/src/components/TopBar.js').replace(/\s+/g, ' ')
+    assert.match(bar, /import \{ SAVE_LATE_WORDS \} from '\.\.\/lib\/save-wait'/)
+    assert.match(bar, /const canSave = saveHere && \(saveTo\.saving \|\|/, 'the pill goes while it saves, and with it any sign of the save')
+    assert.match(bar, /\{saveHere && saveTo\.saving && saveTo\.late \? <Late onCancel=\{saveTo\.cancel\} \/> : null\}/, 'a late save on Play has nothing to say and nothing to press')
+    assert.match(bar, /function Late\(\{ onCancel \}\)[\s\S]*?\{SAVE_LATE_WORDS\}[\s\S]*?onCancel\(\)/)
   })
 
   test('the log says when the phone went to sleep and came back', () => {
@@ -6900,12 +7209,78 @@ export function run(test) {
     assert.ok(!/setCab\(null\)/.test(cabWrite), 'a cab pick can still forget the cab state')
     assert.match(cabWrite.replace(/\s+/g, ' '), /`block \$\{eid\} model after the change`, landed \? 'unit shows it'/, 'the log still believes the Preamp Type')
     assert.match(cabWrite, /onError\(CAB_REFUSED\)/, 'a refused cab is not said on screen')
+    /* Taken, and the cab reads as something else: said, not only logged. */
+    assert.match(cabWrite, /if \(read && !landed\) onError\(cabElsewhere\(read, models\)\)/, 'a cab the unit did not keep is only in the log')
     assert.match(flat, /<Press label="Undo" height=\{44\} onPress=\{takeBack\} \/>/, 'undo does not know about cabs')
     assert.match(flat, /await applyCab\(null, \{ undoable: false, back: back\.cab \}\)/, 'undo does not put the mode and cab back')
     assert.match(flat, /\.filter\(\(p\) => !offDeck\.has\(p\.id\)\)/, 'the IR numbers are still knobs on the phone')
     assert.match(flat, /block\.slug === 'cab' \? await readCab\(\(\) => cabState\(eid\), p\) : null/, 'a failed cab read is not the old panel')
     assert.match(flat, /if \(!cab \|\| block\.slug !== 'cab'\) return onError\(CAB_UNDO_LOST\)/, 'an undo with no cab state does nothing and says nothing')
     assert.match(edit, /from '\.\.\/lib\/cab-pick'/, 'the phone has its own idea of how a cab is picked')
+  })
+
+  test('on the phone, Undo after a model change puts the settings back and offers no Undo of its own', () => {
+    const edit = read('mobile/src/screens/Edit.js')
+    const flat = edit.replace(/\s+/g, ' ')
+    const apply = edit.slice(edit.indexOf('const applyModel = async'), edit.indexOf('const applyCab = async'))
+    const back = edit.slice(edit.indexOf('const takeModelBack = async'), edit.indexOf('const engaged = !block.bypassed'))
+    assert.ok(apply.length > 100 && back.length > 100, 'the model swap moved; this check reads it')
+    /* The snapshot is a fresh read, before the write that loses it. */
+    const snapAt = apply.indexOf('modelSnapshot(')
+    assert.ok(snapAt > 0, 'a model pick on the phone keeps no snapshot of the settings')
+    assert.ok(apply.indexOf('await blockParams(eid)') < snapAt, 'the snapshot is not a fresh read')
+    assert.ok(snapAt < apply.indexOf('const sent = await setType(eid'), 'the snapshot is taken after the model write')
+    assert.doesNotMatch(apply, /setTimeout/, 'a model Undo still runs out on a timer')
+    /* "On the phone Undo offers another Undo": it was a fresh pick of the old model. */
+    assert.doesNotMatch(back, /swap\(|applyModel\(/, 'the phone’s Undo is a pick again, and offers another Undo')
+    assert.match(back, /await restoreModel\(back, \{/)
+    assert.match(back, /writeChecked: \(p, v\) => setParamConfirmed\(eid, p\.id, v, p\)/)
+    assert.match(back, /channel: block\.channel \?\? null/, 'the phone’s Undo cannot tell the channel moved')
+    assert.match(back, /progress: onRestoring/, 'the phone’s Undo shows nothing while it runs')
+    /* Every write lands on whichever channel is live: another one, another
+       scene or the preset loading again stops it before the next write. */
+    assert.match(back.replace(/\s+/g, ' '), /stillHere: \(\) => \{ const s = getState\(\) return liveChannel\(\) === ch0 && s\.sceneIndex === at\.sceneIndex && s\.bufferRev === at\.bufferRev && s\.preset\?\.number === n0 \}/, 'the phone’s Undo goes on writing after the channel changed')
+    assert.match(back, /const n0 = at\.preset\?\.number/, 'the phone’s Undo writes the old song’s settings onto the next preset while its chain is read')
+    assert.match(apply, /getState\(\)\.preset\?\.number !== n0/, 'a model pick lands on the next preset while its chain is read')
+    /* The pre-pick read is a round trip: a block that moved in it is not the one tapped. */
+    const movedAt = apply.indexOf('if (moved()) return')
+    assert.ok(movedAt > snapAt && movedAt < apply.indexOf('const sent = await setType(eid'), 'the phone sends the model to a channel or preset that came up during the read')
+    assert.match(apply, /if \(before && getState\(\)\.bufferRev === rev0\) onModelUndo\(before\)/, 'a pick that finished after the preset loaded again offers the old preset’s amp')
+    assert.match(edit, /from '\.\.\/lib\/model-undo'/)
+    /* Held above the panel, which is rebuilt on every channel and scene change. */
+    assert.match(flat, /const \[modelUndo, setModelUndo\] = useState\(null\) useEffect\(\(\) => setModelUndo\(null\), \[openEid, bufferRev\]\)/, 'the offer does not end with the block, or with the preset loading again')
+    assert.match(flat, /modelUndo=\{modelUndo && sameBlock\(block, modelUndo\.eid\) && modelUndo\.rev === bufferRev \? modelUndo\.snap : null\}/, 'an Undo made before the preset loaded again is offered on the new one')
+    assert.match(flat, /setModelUndo\(\(u\) => \(snap \? \{ eid: idOf\(block\), rev: bufferRev, snap \} : u && sameBlock\(block, u\.eid\) \? null : u\)\)/, 'the phone’s Undo does not know which load of the preset it was made on')
+    /* The Undo under way outlives the panel too, or a rebuilt one starts a second on top of it. */
+    assert.match(flat, /restoring=\{restoring\[idOf\(block\)\] \|\| null\}/, 'a rebuilt panel lets a second Undo start over a running one')
+    assert.doesNotMatch(edit, /const \[restoring, setRestoring\] = useState\(null\)/, 'the Undo under way is held in the panel again')
+    assert.match(flat, /disabled=\{!!restoring\} onPress=\{async \(\) => \{ try \{ await writeChannel/, 'a channel can be changed under a running Undo')
+    assert.match(flat, /restoring \? undoProgress\(restoring, modelUndo\) : undoOffer\(modelUndo\)/)
+    assert.match(flat, /<Press label="Undo" height=\{44\} disabled=\{!!restoring\} onPress=\{takeModelBack\} \/>/)
+    assert.match(edit, /\{MODEL_HINT\}/, 'the hint under the phone’s picker is gone')
+    assert.match(read('mobile/src/lib/model-undo.js'), /Generated from shared\/model-undo\.mjs/, 'the phone’s Undo rules are not generated from the shared copy')
+  })
+
+  test('the phone’s copy of the Undo rule puts back what the browser’s does', async () => {
+    const { modelSnapshot, restoreModel, undoResult } = await import('../mobile/src/lib/model-undo.js')
+    const unit = { type: 0, named: [{ id: 3, name: 'Bass', value: 7, norm: 0.7, min: 0, max: 10 }], enums: [{ id: 9, name: 'Bright', value: 1 }] }
+    const now = () => JSON.parse(JSON.stringify({ ...unit, type: { value: unit.type, name: unit.type ? 'Plexi' : 'USA Clean' } }))
+    const snap = modelSnapshot(now(), { channel: 'A' })
+    unit.type = 1
+    unit.named[0] = { ...unit.named[0], value: 5, norm: 0.5 }
+    unit.enums[0].value = 0
+    const r = await restoreModel(snap, {
+      channel: 'A',
+      setType: async (v) => ((unit.type = v), { ok: true }),
+      read: async () => now(),
+      write: async (p, v) => ((unit.named[0] = { ...unit.named[0], value: v, norm: v / 10 }), { ok: true }),
+      writeChecked: async () => ({ ok: true }),
+      writeEnum: async (id, v) => ((unit.enums[0].value = v), { ok: true })
+    })
+    assert.equal(unit.type, 0)
+    assert.equal(unit.named[0].value, 7)
+    assert.equal(unit.enums[0].value, 1)
+    assert.equal(undoResult(r, snap).text, 'Put back all 2 settings the app can see.')
   })
 
   test('on the phone, a cab re-read that fails or reads as zeros never sends the next pick to the Preamp Type', async () => {
@@ -6967,6 +7342,47 @@ export function run(test) {
     assert.ok(Math.abs(after.value - (knob.min + knob.max) / 2) < 0.01, `a knob's discrete retry landed as ${after.value}`)
   })
 
+  test('the phone’s cab block picks an IR by name the way the browser does', () => {
+    const edit = read('mobile/src/screens/Edit.js')
+    const flat = edit.replace(/\s+/g, ' ')
+    const cabWrite = edit.slice(edit.indexOf('const applyCab = async'), edit.indexOf('const swap = async'))
+    assert.match(flat, /listIrBanks\(\)/, 'the phone never reads the IR names')
+    assert.match(flat, /irBanks\(cab, irs, \{ named: params \}\)/, 'the phone’s IR banks are not built from the cab state')
+    assert.match(flat, /<IrPicker banks=\{irList\} now=\{irHere\} onPick=\{swapIr\} disabled=\{!!restoring\} \/>/, 'the phone’s cab has no IR picker')
+    assert.match(flat, /const swapIr = async \(pick\) => \{ try \{ await applyCab\(pick\)/, 'an IR pick on the phone does not go through the cab pick')
+    assert.match(cabWrite, /const was = cabWas\(before, models, value\)/, 'the phone’s undo cannot put the bank back')
+    const picker = read('mobile/src/components/IrPicker.js')
+    assert.match(picker, /from '\.\.\/lib\/cab-pick'/, 'the phone has its own idea of how an IR is found')
+    assert.match(picker, /findIrs\(banks, hunt, onBank, SHOWN\)/)
+    assert.match(picker, /onPick\(\{ bank: r\.bank, ir: r\.ir, name: r\.name \}\)/)
+    assert.match(read('mobile/src/lib/device.js'), /export const listIrBanks = \(\) => remoteRequest\('\/cab\/irs'\)/, 'the phone asks for the IR names somewhere the host does not serve them')
+    assert.match(read('mobile/src/lib/cab-pick.js'), /export async function pickIr\(/, 'the phone’s copy of the cab rules has no IR pick')
+  })
+
+  test('the demo answers the IR picker down the phone’s wire, and the undo puts all three back', async () => {
+    const { demoRequest } = await import('../mobile/src/lib/demoWire.js')
+    const { createMockDevice } = await import('../src/lib/mockDevice.js')
+    const { pickCab, restoreCab, cabWas, cabShows, cabBackTo, irBanks, findIrs } = await import('../mobile/src/lib/cab-pick.js')
+    const unit = createMockDevice('fm3')
+    const send = (path, method = 'GET', body) =>
+      demoRequest(unit, path, { method, body: body === undefined ? null : JSON.stringify(body) })
+    const eid = (await send('/preset/blocks')).find((b) => b.slug === 'cab').effectId
+    const sent = []
+    const write = (paramId, ordinal) => (sent.push([paramId, ordinal]), send(`/preset/blocks/${eid}/params/${paramId}`, 'PUT', { value: ordinal, continuous: false }))
+    const cab = await send(`/preset/blocks/${eid}/cab`)
+    const irs = await send('/cab/irs')
+    const banks = irBanks(cab, irs, await send(`/preset/blocks/${eid}/params`))
+    assert.deepEqual(banks.map((b) => b.name), ['Factory 1', 'Factory 2', 'User', 'Legacy'])
+    const row = findIrs(banks, 'legacy', null, 40).rows[2]
+    assert.equal(row.bank, 3, 'Legacy is not the fourth bank')
+    const was = cabWas(cab, [], row)
+    await pickCab(cab, row, write)
+    assert.deepEqual(sent, [[0, 3], [4, 2], [31, 0]], 'the phone wrote the IR out of order')
+    assert.ok(cabShows(await send(`/preset/blocks/${eid}/cab`), row), 'the demo does not show the IR the phone picked')
+    await restoreCab(await send(`/preset/blocks/${eid}/cab`), was, write)
+    assert.ok(cabBackTo(await send(`/preset/blocks/${eid}/cab`), was), 'the phone’s undo left the demo on the IR')
+  })
+
   test('a knob that did not take says what the unit is holding, and why when it is the tempo', () => {
     /*
      * "Says Time 1 didn't take when I adjusted a preset." On a delay whose
@@ -6984,20 +7400,24 @@ export function run(test) {
   test('a write is read back off the hardware, and twice before it is called a miss', async () => {
     /*
      * "Change the volume again, and it said volume didn't take." The level was
-     * where it had been put; the read that followed the write came back one
-     * write behind, which is a documented habit of the computer's cache. So
-     * the phone now does what the browser does — drops that cache first — and
-     * reads once more after a pause before saying a write did not take.
+     * where it had been put. So the phone reads once more after a pause before
+     * saying a write did not take.
+     *
+     * And it reads straight off the unit, with nothing deleted first. It used
+     * to send DELETE /device/cache before every read, to make the computer
+     * forget "what it last read"; the computer reads a block's values off the
+     * unit every time, and that route deletes its saved profile of the FM3.
      */
     const dev = read('mobile/src/lib/device.js').replace(/\s+/g, ' ')
-    assert.match(dev, /await remoteRequest\('\/device\/cache', \{ method: 'DELETE' \}\)/, 'the phone never drops the computer\'s read cache')
+    const code = dev.replace(/\/\*.*?\*\//g, '')
+    assert.ok(!/device\/cache'|dropReadCache|cacheDropRefused/.test(code), 'a checked write deletes the computer’s profile of the unit again')
     assert.match(dev, /export const READ_BACK_AGAIN_MS = 400/)
     assert.match(dev, /for \(let go = 0; go < 2; go\+\+\) \{ if \(go\) await new Promise\(\(r\) => setTimeout\(r, READ_BACK_AGAIN_MS\)\)/, 'a value that came back wrong is not read a second time')
-    assert.match(dev, /await dropReadCache\(\) actual = await readParamValue\(eid, paramId\)/, 'the read-back does not follow the cache drop')
-    assert.match(dev, /if \(err\?\.status === 403 \|\| err\?\.remoteBlocked\) cacheDropRefused = true/, 'a refused drop is asked for again on every write')
-    /* And the relay lets it through. */
+    assert.match(dev, /try \{ actual = await readParamValue\(eid, paramId\) \} catch \{ actual = null \}/, 'the read-back is not taken off the unit')
+    /* The relay still carries the route, because the host still allows it —
+       the two rules agree even though nothing here sends it. */
     const rules = await import('../shared/relay-rules.mjs')
-    assert.equal(rules.forbiddenRemotely('DELETE', '/device/cache'), null, 'the relay refuses the cache drop')
+    assert.equal(rules.forbiddenRemotely('DELETE', '/device/cache'), null, 'the relay mirror disagrees with the host')
 
     /* The volume says what was asked and what the unit holds, and shows it, like a knob does. */
     const vol = read('mobile/src/components/Volume.js').replace(/\s+/g, ' ')
@@ -7005,11 +7425,10 @@ export function run(test) {
     assert.match(vol, /if \(holding !== null\) setValue\(holding\)/, 'the slider keeps pointing at a number the unit refused')
 
     /* And a miss is written to the log in numbers: what was asked, what each
-       read saw, which encoding went, and whether the cache drop was taken.
-       "The unit is holding it at +0.8 dB" said none of that. */
-    assert.match(dev, /logDebug\( 'set', `\$\{who\}: asked \$\{value\}, read \$\{actual === null \? 'nothing' : actual\}`, `\$\{continuous \? 'continuous' : 'discrete'\}, read \$\{go \+ 1\} of 2, cache drop \$\{dropped \? 'taken' : 'not taken'\}` \)/, 'a missed read-back is not logged in numbers')
+       read saw, and which encoding went. "The unit is holding it at +0.8 dB"
+       said none of that. */
+    assert.match(dev, /logDebug\( 'set', `\$\{who\}: asked \$\{value\}, read \$\{actual === null \? 'nothing' : actual\}`, `\$\{continuous \? 'continuous' : 'discrete'\}, read \$\{go \+ 1\} of 2` \)/, 'a missed read-back is not logged in numbers')
     assert.match(dev, /logDebug\('set', `\$\{who\} did not take`, `asked \$\{value\}, unit holds \$\{actual === null \? 'nothing readable' : actual\}`\)/, 'a write that did not take is not logged')
-    assert.match(dev, /logDebug\('set', 'cache drop failed', err\?\.message \|\| String\(err\)\)/, 'a refused cache drop is silent')
   })
 
   test('a rename is believed, not read back out of a stale cache', () => {
@@ -7025,8 +7444,11 @@ export function run(test) {
      * request says, so a stale one would have undone the rename in the slot.
      */
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
-    assert.match(settings, /await setPresetName\(wanted\) await dropReadCache\(\) notePresetName\(wanted\)/, 'a preset rename is not believed')
-    assert.match(settings, /await setSceneName\(index, wanted\) await dropReadCache\(\) noteSceneName\(index, wanted\)/, 'a scene rename is not believed')
+    assert.match(settings, /await setPresetName\(wanted\) notePresetName\(wanted\)/, 'a preset rename is not believed')
+    assert.match(settings, /await setSceneName\(index, wanted\) noteSceneName\(index, wanted\)/, 'a scene rename is not believed')
+    /* It used to "drop the computer's cache" first. That route deletes the
+       computer's saved profile of the FM3, and left any name where it was. */
+    assert.ok(!/dropReadCache/.test(settings), 'a rename deletes the computer’s profile of the unit again')
     assert.ok(!/await refreshPreset\(\)/.test(settings), 'the preset is re-read after a rename, which is where the old name came from')
     assert.ok(!/await refreshScene\(\)/.test(settings), 'the scene is re-read after a rename, which never carried the names')
 
@@ -7579,6 +8001,7 @@ export function run(test) {
     const bad = tempoSender(() => Promise.reject(new Error('port not open')), (err) => said.push(err.message))
     await bad.push(120)
     assert.deepEqual(said, ['port not open'], 'a refused tempo says nothing')
+    assert.equal(bad.sent, null, 'a refused tempo counts as reaching the unit')
     assert.equal(bad.idle, true, 'one refusal stops the button working for good')
   })
 
@@ -8333,7 +8756,7 @@ export function run(test) {
        inherits the trim from a bigger one and draws tiny tiles. */
     assert.match(
       stage,
-      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{blocks\.length\}:\$\{fitOn\}:\$\{sceneCols\}`/,
+      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{blocks\.length\}:\$\{fitOn\}:\$\{sceneCols\}:\$\{chainNow\.elsewhere\}:\$\{chainNow\.late\}`/,
       'the trim is not thrown away when the rig or the screen changes'
     )
     assert.match(stage, /if \(trim !== 0\) setTrim\(0\)/, 'the trim survives a change of preset, so a smaller rig gets a smaller tile')
@@ -9915,6 +10338,156 @@ export function run(test) {
     rig.stopListening()
   })
 
+  /*
+   * WHOSE TILES THESE ARE. A preset picked on the phone goes up by name on
+   * the tap and its chain a moment later, on purpose — reading it straight
+   * away is the dump the sound-dropout fix took out. In between, the stage
+   * tiles were the last song's and live. See lib/chain-view.
+   */
+  test('a preset picked on the phone is not drawn with the last song’s tiles, and they cannot switch it', async () => {
+    const { rig, clock, asked } = await rigOnTheBench()
+    const view = () => rig.chainViewOf(rig.getState())
+    assert.equal(view(), 'ready')
+    const load = rig.loadPreset(503)
+    assert.equal(rig.getState().preset.number, 503)
+    assert.equal(view(), 'loading', 'the last song’s tiles are drawn under this song’s name')
+    const drive = rig.getState().blocks.find((b) => b.slug === 'drive')
+    assert.equal(await rig.writeBypass(drive.effectId, false), false, 'a tile drawn for the last preset switched a block on this one')
+    assert.equal(await rig.writeChannel(drive.effectId, 'B'), false)
+    assert.equal(asked(/bypass$|channel$/), 0, 'the refused tap still reached the unit')
+    assert.equal(rig.getState().unsaved, null, 'a tap that sent nothing marked the preset as edited')
+    await clock.advance(rig.OWN_SETTLE_MS + 500)
+    await load
+    assert.equal(view(), 'ready')
+    assert.equal(rig.getState().chainFor, 503)
+    assert.equal(asked(CHAIN), 1, `the wait cost ${asked(CHAIN)} chain reads`)
+    assert.equal(await rig.writeBypass(drive.effectId, false), true, 'this preset’s own tiles cannot switch it once it is read')
+  })
+
+  test('a new preset whose chain could not be read on the phone says so, and Try again reads it', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    const view = () => rig.chainViewOf(rig.getState())
+    unit.chainFails = true
+    rig.loadPreset(21)
+    await clock.advance(rig.OWN_SETTLE_MS + 100)
+    /* The one more read a failed one is owed is still coming. */
+    assert.equal(view(), 'loading', 'the phone gave up before its second ask')
+    await clock.advance(rig.PRESET_SETTLE_MS + 500)
+    assert.equal(asked(CHAIN), 2)
+    assert.equal(view(), 'failed', 'a chain that never came is drawn as this preset’s, or waited on for ever')
+    unit.chainFails = false
+    const again = rig.retryChain()
+    assert.equal(view(), 'loading')
+    await clock.advance(100)
+    assert.equal(await again, true)
+    assert.equal(asked(CHAIN), 3, 'Try again is not one read of the chain')
+    assert.equal(view(), 'ready')
+  })
+
+  test('the phone’s own chain read again after an edit stays up, marked as updating', async () => {
+    const { rig, clock } = await rigOnTheBench()
+    const view = () => rig.chainViewOf(rig.getState())
+    const seen = new Set()
+    rig.useRig((s) => s)
+    const off = globalThis.__rigSub(() => seen.add(view()))
+    /* What the chain editor does after an Add or a Remove. */
+    const read = rig.refreshBlocks({ quiet: true })
+    assert.equal(view(), 'updating', 'a re-read of this preset’s chain hides it, or does not say so')
+    await clock.advance(10)
+    await read
+    off()
+    assert.equal(view(), 'ready')
+    assert.ok(!seen.has('loading') && !seen.has('failed'), 'the preset’s own chain was taken for another one’s while it was read')
+  })
+
+  test('the last song’s chain out of the computer’s copy is never drawn live on the phone, not even while the copy is asked', async () => {
+    const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
+    const view = () => rig.chainViewOf(rig.getState())
+    let answerCopy
+    const copyAsked = new Promise((go) => (answerCopy = go))
+    unit.copy = () => copyAsked.then(() => ({ name: nameOf(12), scenes: ['VERSE', '', '', '', '', '', '', ''], cells: [] }))
+    const seen = []
+    rig.useRig((s) => s)
+    const off = globalThis.__rigSub(() => seen.push(`${view()}/${rig.getState().chainFor}`))
+    const drive = rig.getState().blocks.find((b) => b.slug === 'drive')
+    rig.loadPreset(40)
+    await clock.advance(rig.OWN_SETTLE_MS + 500)
+    assert.equal(asked(CHAIN), 1)
+    assert.equal(asked('GET /preset/grid'), 1, 'the copy was never asked, so this is not the moment in question')
+    assert.equal(view(), 'loading', 'the last song’s tiles are up, live, while the copy is asked')
+    assert.equal(await rig.writeBypass(drive.effectId, false), false, 'a tap on the last song’s tile switched this song’s block')
+    assert.equal(asked(/bypass$/), 0)
+    answerCopy()
+    await clock.advance(10)
+    assert.equal(view(), 'loading')
+    const before = seen.length
+    unit.copy = null
+    await clock.advance(rig.CHAIN_FRESH_MS + 300)
+    off()
+    const early = seen.slice(0, before).filter((v) => /^(ready|updating)\//.test(v))
+    assert.deepEqual(early, [], `the last song’s chain was drawn as this one’s on the way: ${seen.slice(0, before)}`)
+    assert.equal(asked(CHAIN), 2)
+    assert.equal(view(), 'ready')
+    assert.equal(rig.getState().chainFor, 40)
+  })
+
+  test('a preset renamed on the phone keeps its tiles up and live while the computer’s copy still has the old name', async () => {
+    const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
+    const view = () => rig.chainViewOf(rig.getState())
+    /* Settings → rename: the unit has the new name, the computer's copy of
+       the chain the old one, for up to a quarter of a minute. */
+    unit.presetName = 'NEW NAME'
+    unit.copy = () => ({ name: nameOf(12), scenes: ['VERSE', 'CHORUS', '', '', '', '', '', ''], cells: [] })
+    rig.notePresetName('NEW NAME')
+    /* And a pull-down on the stage straight after. */
+    await rig.refreshAll()
+    const reads = asked(CHAIN)
+    assert.equal(view(), 'ready', 'a rename greyed this preset’s own tiles')
+    const drive = rig.getState().blocks.find((b) => b.slug === 'drive')
+    assert.equal(await rig.writeBypass(drive.effectId, false), true, 'a tap after a rename was refused')
+    await clock.advance(rig.CHAIN_FRESH_MS + 300)
+    assert.equal(asked(CHAIN), reads + 1, `the copy with the old name cost ${asked(CHAIN) - reads} more reads`)
+    await clock.advance(30000)
+    assert.equal(asked(CHAIN), reads + 1)
+    assert.equal(view(), 'ready')
+  })
+
+  test('connecting to the unit never says the chain could not be read while it is still reading it', async () => {
+    const { rig, clock } = await rigOnTheBench()
+    const view = () => rig.chainViewOf(rig.getState())
+    rig.reset()
+    const seen = []
+    rig.useRig((s) => s)
+    const off = globalThis.__rigSub(() => seen.push(view()))
+    const read = rig.refreshAll()
+    await clock.advance(50)
+    await read
+    off()
+    assert.ok(!seen.includes('failed'), `connecting said the chain could not be read on its way in: ${seen}`)
+    assert.equal(view(), 'ready')
+  })
+
+  test('a reset on the phone drops the chain reads counted before it', () => {
+    const rig = read('mobile/src/lib/rig.js')
+    const body = rig.slice(rig.indexOf('export function reset()'), rig.indexOf('set(initial)', rig.indexOf('export function reset()')))
+    assert.match(body, /chainWork = 0\s*chainEra \+= 1/, 'work from before a reset holds the phone’s chain busy, or ends work after it')
+  })
+
+  test('the phone’s Stage and Edit draw another preset’s chain as a wait, not as tiles', () => {
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /\{chainNow\.elsewhere \? \(\s*<View style=\{\{ width: '100%' \}\}>\s*<ChainWait chain=\{chainNow\}/, 'the stage draws the last song’s tiles under this song’s name')
+    assert.match(stage, /block=\{chainNow\.elsewhere \? null : blocks\.find/, 'a channel sheet opened on the last song stays up over this one')
+    assert.match(stage, /useEffect\(\(\) => \{\s*if \(chainNow\.elsewhere\) setPicking\(null\)/, 'the channel sheet comes back by itself over the new song’s tiles')
+    const edit = read('mobile/src/screens/Edit.js')
+    assert.match(edit, /\{chainNow\.elsewhere \? <ChainWait chain=\{chainNow\} height=\{TAP\} \/> : null\}/, 'the bench says nothing about a chain on its way')
+    assert.match(edit, /display: chainNow\.elsewhere \? 'none' : 'flex'/, 'the bench draws the last song’s tiles under this song’s name')
+    assert.match(edit, /const block = chainNow\.elsewhere \? null : blocks\.find/, 'the last song’s block stays open, its knobs writing to this song')
+    assert.match(edit, /\{chainNow\.elsewhere \? null : <ChainEditor /, 'the chain editor offers Remove on the last song’s blocks')
+    const wait = read('mobile/src/components/ChainWait.js')
+    assert.match(wait, /from '\.\.\/lib\/chain-view'/, 'the phone words its own wait')
+    assert.match(wait, /setTimeout\(\(\) => setLate\(true\), UPDATING_AFTER_MS\)/, '“Updating…” flickers up on every Add')
+  })
+
   test('a chain that failed after a preset change is read once more, and a footswitch never lays its states over the last song', async () => {
     const { rig, clock, unit, asked } = await rigOnTheBench()
     unit.chainFails = true
@@ -9942,6 +10515,97 @@ export function run(test) {
     await clock.advance(rig.PRESET_SETTLE_MS + 100)
     assert.equal(asked(STATE), 1)
     assert.equal(asked(CHAIN), 3, 'a footswitch reads the chain although it is this preset’s')
+  })
+
+  /*
+   * The same gap the browser's Revert showed. The block editor is keyed on
+   * the block, its channel and the scene; the same slot chosen again moves
+   * none of them and puts every value back, so the knobs went on showing
+   * what the unit no longer had.
+   */
+  test('the same slot loaded again moves the edit buffer once, after the unit settles, and nothing else does', async () => {
+    const { rig, clock, unit } = await rigOnTheBench()
+    const start = rig.getState().bufferRev
+    const load = rig.loadPreset(12)
+    await clock.advance(rig.OWN_SETTLE_MS - 100)
+    assert.equal(rig.getState().bufferRev, start, 'the editor was told to re-read while the unit was still loading')
+    await clock.advance(3000)
+    await load
+    assert.equal(rig.getState().bufferRev, start + 1, 'the same slot loaded again leaves the open editor on the old values')
+    await clock.advance(30000)
+    assert.equal(rig.getState().bufferRev, start + 1, 'one load moved the edit buffer more than once')
+
+    unit.refuseSelect = true
+    assert.equal(await rig.loadPreset(12), false)
+    await clock.advance(5000)
+    assert.equal(rig.getState().bufferRev, start + 1, 'a refused tap told the editor its values were stale')
+    unit.refuseSelect = false
+
+    /* Another client moving the unit to another preset is a new buffer too. */
+    await clock.advance(30000)
+    unit.number = 60
+    rig.handleEvent({ type: 'changed', scope: 'preset' })
+    await clock.advance(rig.PRESET_SETTLE_MS + 500)
+    assert.equal(rig.getState().bufferRev, start + 2, 'the editor kept the last preset’s values when the unit moved on')
+  })
+
+  /* A Revert at the Mac reaches the phone as news of the same preset. */
+  test('the same slot loaded again from the other device tells the open editor too, at no extra chain read', async () => {
+    const { rig, clock, asked } = await rigOnTheBench()
+    await clock.advance(rig.CHAIN_FRESH_MS + 1000)
+    const start = rig.getState().bufferRev
+    const chains = asked(CHAIN)
+    rig.handleEvent({ type: 'changed', scope: 'preset' })
+    await clock.advance(rig.PRESET_SETTLE_MS + 500)
+    assert.equal(rig.getState().bufferRev, start + 1, 'a Revert at the Mac left the phone’s open editor on the old values')
+    assert.equal(asked(CHAIN), chains + 1, 'following a reload from elsewhere cost more than one chain read')
+  })
+
+  /* The panel is keyed on the block's channel and bufferRev: set apart, a
+     load that moved the amp's channel remounted it, and read it, twice. */
+  test('a load that moves the open block to another channel remounts the phone’s editor once', async () => {
+    const { rig, clock, unit } = await rigOnTheBench()
+    rig.useRig((s) => s)
+    const sub = globalThis.__rigSub
+    const keyNow = () => {
+      const s = rig.getState()
+      const b = (s.allBlocks || []).find((x) => x.effectId === 58)
+      return `${b?.channel}:${s.sceneIndex}:${s.bufferRev}`
+    }
+    const seen = []
+    let last = keyNow()
+    const off = sub(() => {
+      const k = keyNow()
+      if (k !== last) seen.push((last = k))
+    })
+    try {
+      unit.blocks = unit.blocks.map((b) => (b.effectId === 58 ? { ...b, channel: 'C' } : b))
+      const load = rig.loadPreset(20)
+      await clock.advance(5000)
+      await load
+      assert.equal(seen.length, 1, `the panel remounted more than once for one load: ${seen.join(' then ')}`)
+      assert.match(seen[0], /^C:/)
+      /* A chain that could not be read still tells the panel, on its own. */
+      seen.length = 0
+      unit.chainFails = true
+      const again = rig.loadPreset(20)
+      await clock.advance(5000)
+      await again
+      assert.equal(seen.length, 1, 'a load whose chain read failed told the panel nothing, or told it twice')
+    } finally {
+      off()
+    }
+  })
+
+  test('the phone’s block editor re-reads when the preset is loaded again', () => {
+    const edit = read('mobile/src/screens/Edit.js')
+    assert.match(edit, /const ofBufferRev = \(s\) => s\.bufferRev/)
+    assert.match(edit, /const bufferRev = useRig\(ofBufferRev\)/)
+    assert.match(
+      edit,
+      /<BlockPanel\s+key=\{`\$\{idOf\(block\)\}:\$\{block\.channel \|\| ''\}:\$\{scene\}:\$\{bufferRev\}`\}/,
+      'the same slot loaded again leaves the phone’s knobs on the values it replaced'
+    )
   })
 
   test('a preset tap the unit refuses does not call off the read a stale copy was owed', async () => {
@@ -10067,5 +10731,43 @@ export function run(test) {
     await clock.advance(rig.PRESET_SETTLE_MS + 300)
     assert.equal(rig.getState().preset.number, 40)
     assert.equal(asked(CHAIN), chains + 1, 'a quarter of a minute was waited out for a copy this unit’s computer does not keep')
+  })
+
+  test('scene names and the lines under buttons get two lines on the phone, and the looper is accounted for', () => {
+    /*
+     * "Scene names cut short" and "Help text cut off mid-sentence." A scene
+     * tile at two across held its name to one line at the body size, the
+     * Edit header held the scene to one line beside Save, and the small line
+     * under a button stopped at the button's edge. Two lines, a size down,
+     * at every width — and no hold on a scene tile to show a name: on the
+     * stage a scene tile is a footswitch.
+     */
+    const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+    const tile = bare(read('mobile/src/components/Tile.js'))
+    assert.match(tile, /numberOfLines=\{wrap \? 2 : 1\}/, 'a tile’s name cannot take a second line')
+    assert.match(tile, /fontSize: wrap \? font\.small : font\.body/, 'a two-line name is drawn at the size that only fits one')
+
+    const stage = bare(read('mobile/src/screens/Stage.js'))
+    const scene = stage.slice(stage.indexOf('caption={String(i + 1)}'), stage.indexOf('/>', stage.indexOf('caption={String(i + 1)}')))
+    assert.ok(scene.length > 0, 'the scene tiles are not where this test reads them')
+    assert.match(scene, /\n\s*wrap\n/, 'scene names are held to one line again, or only at four across')
+    assert.ok(!/onLongPress/.test(scene), 'a scene tile does something on a hold, which is a footswitch that does not switch')
+
+    const edit = bare(read('mobile/src/screens/Edit.js'))
+    assert.match(edit, /<Text numberOfLines=\{2\} style=\{\{ color: color\.silkDim, fontSize: font\.small \}\}>\s*\{`Scene \$\{scene \+ 1\}/, 'the scene in the Edit header is cut to one line')
+
+    const press = bare(read('mobile/src/components/Press.js'))
+    const sub = press.slice(press.indexOf('{sub ? ('), press.indexOf('{sub}'))
+    assert.match(sub, /numberOfLines=\{2\}/, 'the line under a button stops at the button’s edge again')
+    assert.match(sub, /textAlign: 'center'/, 'a second line under a button hangs off to one side')
+
+    /*
+     * "PLAY leaves out the Looper." It still does — see STAGE_HIDDEN — and
+     * says where it went, in the browser's words, from the generated copy of
+     * the browser's own rule.
+     */
+    assert.match(stage, /import \{ hasLooper, LOOPER_ON_EDIT \} from '\.\.\/lib\/guardrails'/, 'the phone has its own idea of the looper line')
+    assert.match(stage, /\{onOpenEdit && !chainNow\.elsewhere && hasLooper\(allBlocks\) \? <Note>\{LOOPER_ON_EDIT\}<\/Note> : null\}/, 'the stage points to an Edit button it has not drawn, does not say where the looper is, or asks the tiles, which never hold one')
+    assert.match(stage, /const ofAllBlocks = \(s\) => s\.allBlocks/, 'the looper line reads the stage tiles, which leave the looper out')
   })
 }

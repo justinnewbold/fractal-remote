@@ -8,24 +8,26 @@
  * in relay-rules — and it is right to: a stray tap on a dark stage must not
  * overwrite slot 67. What a phone CAN do is leave a request in the computer's
  * store, and the app at the computer has been carrying those out for weeks:
- * it looks every six seconds, checks the request is fresh and that the unit
- * is still on the preset the phone was editing, writes the slot, and leaves
- * an answer in the store under the request's id. The browser on a phone has
- * used this since the Save sheet said "the computer writes it". The phone app
- * never did; now it does, through the same two documents, so the two ends
- * cannot drift.
+ * it checks the request is fresh and that the unit is still on the preset the
+ * phone was editing, writes the slot, and leaves an answer in the store under
+ * the request's id. The browser on a phone has used this since the Save sheet
+ * said "the computer writes it". The phone app uses the same documents, and
+ * the waiting itself is shared with the browser (lib/save-wait, generated
+ * from shared/save-wait.mjs), so the two ends cannot drift.
  *
  * Pure: the store reads and writes and the clock are handed in.
  */
+import {
+  SAVE_POLL_MS,
+  SAVE_WAIT_MS,
+  cancelledSave,
+  pendingSaveDoc,
+  saveProgressDoc,
+  saveResultDoc,
+  startSaveWait
+} from './save-wait.js'
 
-/** How long to wait for the computer before saying it has not picked it up. */
-export const SAVE_WAIT_MS = 3 * 60 * 1000
-/** How often to look for the answer. */
-export const SAVE_POLL_MS = 3000
-
-/** The documents both ends use, by the unit's slug. */
-export const pendingSaveDoc = (slug) => `fractal.pendingSave.${slug}`
-export const saveResultDoc = (slug) => `fractal.saveResult.${slug}`
+export { SAVE_POLL_MS, SAVE_WAIT_MS, pendingSaveDoc, saveProgressDoc, saveResultDoc }
 
 /** A request id nobody else will produce. */
 export const saveId = (now = Date.now(), random = Math.random) =>
@@ -33,50 +35,79 @@ export const saveId = (now = Date.now(), random = Math.random) =>
 
 /**
  * Ask the computer to save what the unit is playing over `slot`, and wait for
- * its answer.
+ * its answer. Returns `{ done, cancel }`; see startSaveWait.
  *
- * Resolves `{ ok: true, slot }` when the computer says it wrote it, `{ ok:
- * false, error }` when it says it could not or when it has not answered
- * within the wait. Never throws for a slow computer: a save that has not
- * happened yet is a state to say, not a fault.
+ * `done` resolves `{ ok: true, slot }` when the computer says it wrote it,
+ * `{ ok: false, error }` when it says it could not, when it has not answered
+ * in time, or when the person cancelled. Never rejects.
  */
-export async function askComputerToSave({
+export function startComputerSave({
   park,
   readResult,
+  readProgress,
+  listen,
+  onState,
+  slug = '',
   slot,
   name = '',
   id = saveId(),
   waitMs = SAVE_WAIT_MS,
   pollMs = SAVE_POLL_MS,
+  lateMs,
+  workingMs,
   sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   now = Date.now
 }) {
-  if (!Number.isInteger(slot)) return { ok: false, error: 'No preset is loaded to save.' }
-  try {
-    /* `fromSlot` is what lets the computer refuse a save if the unit has moved
-       on to another preset by the time it looks. */
-    await park({ id, slot, name: String(name || '').trim(), fromSlot: slot, fromName: name || null })
-  } catch (err) {
-    return { ok: false, error: `Couldn’t leave the request for the computer: ${err?.message || err}` }
+  if (!Number.isInteger(slot)) {
+    return { done: Promise.resolve({ ok: false, error: 'No preset is loaded to save.' }), cancel: () => {}, stop: () => {} }
   }
-  const until = now() + waitMs
-  while (now() < until) {
-    await sleep(pollMs)
-    let res = null
+  let wait = null
+  let cancelled = false
+  let stopped = false
+  const done = (async () => {
+    const startedAt = now()
     try {
-      res = await readResult()
-    } catch {
-      res = null
+      /* `fromSlot` is what lets the computer refuse a save if the unit has
+         moved on to another preset by the time it looks. */
+      await park({ id, slot, name: String(name || '').trim(), fromSlot: slot, fromName: name || null })
+    } catch (err) {
+      return { ok: false, error: `Couldn’t leave the request for the computer: ${err?.message || err}` }
     }
-    if (res && res.id === id) {
-      return res.ok
-        ? { ok: true, slot: Number.isInteger(res.slot) ? res.slot : slot }
-        : { ok: false, error: res.error || 'The computer could not save it.' }
-    }
-  }
+    wait = startSaveWait({
+      id,
+      resultDoc: saveResultDoc(slug),
+      progressDoc: saveProgressDoc(slug),
+      readResult,
+      readProgress,
+      /* Over the request, since a phone cannot delete it. */
+      cancelRequest: () => park(cancelledSave(id)),
+      listen,
+      onState,
+      startedAt,
+      waitMs,
+      pollMs,
+      ...(lateMs != null ? { lateMs } : {}),
+      ...(workingMs != null ? { workingMs } : {}),
+      sleep,
+      now
+    })
+    if (cancelled) wait.cancel()
+    if (stopped) wait.stop()
+    const res = await wait.done
+    return res.ok ? { ok: true, slot: Number.isInteger(res.slot) ? res.slot : slot } : res
+  })()
   return {
-    ok: false,
-    error:
-      'The computer has not picked this up. It carries out a save only while its app window is open — open it there, and the request is still waiting for it.'
+    done,
+    cancel: () => {
+      cancelled = true
+      wait?.cancel()
+    },
+    stop: () => {
+      stopped = true
+      wait?.stop()
+    }
   }
 }
+
+/** The same, for a caller that only wants the answer. */
+export const askComputerToSave = (opts) => startComputerSave(opts).done

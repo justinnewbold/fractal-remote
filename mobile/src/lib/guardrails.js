@@ -175,6 +175,17 @@ export const EXCLUDED_BLOCKS = ['input', 'output', 'looper', 'gate']
 export const STAGE_HIDDEN = ['input', 'output', 'looper']
 
 /**
+ * Whether a preset holds a looper, which Play leaves out.
+ *
+ * "PLAY leaves out the Looper" — by design, see above, but a stage screen
+ * that silently drops a block reads as one that lost it. So Play says where
+ * it went, in these words — and the phone's stage says the same ones, from its
+ * generated copy of this file.
+ */
+export const hasLooper = (blocks) => (blocks || []).some((b) => b?.slug === 'looper')
+export const LOOPER_ON_EDIT = 'Looper is on the Edit screen.'
+
+/**
  * Strip the parameters the model may never set from a block schema.
  *
  * Levels stay in: it cannot answer "louder for the lead" with a control it

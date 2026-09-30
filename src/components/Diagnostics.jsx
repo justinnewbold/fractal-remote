@@ -126,9 +126,10 @@ export default function Diagnostics() {
                   <span className="diag-name">{c.name || `#${c.paramId}`}</span>
                   <span>{fmt(c.wanted)}</span>
                   <span>{c.readBack === null ? 'unreadable' : fmt(c.readBack)}</span>
-                  {/* A read that could not clear the unit's cache — every read
-                      from a phone — is one write behind, so it is reported as
-                      unchecked rather than as a write that failed. */}
+                  {/* A read after the write that could not be made — a timeout
+                      over the relay, or a block that answered with no such
+                      control — proves nothing either way, so it is reported
+                      as unchecked rather than as a write that failed. */}
                   <span>{c.landed ? 'yes' : c.stale ? 'not checked' : 'NO'}</span>
                   <span className="diag-range">
                     {c.encoding ? 'cont' : 'disc'}
@@ -186,8 +187,9 @@ export default function Diagnostics() {
           </p>
 
           <p className="hint diag-note">
-            Read back is what the device reported after the write, with its cache cleared first —
-            the only trustworthy signal that a value stuck. Device said is the unit&rsquo;s own
+            Read back is what the device reported when the app read the value again after the write —
+            the only trustworthy signal that a value stuck. Not checked means that read couldn&rsquo;t be
+            made, so it isn&rsquo;t counted as a failure. Device said is the unit&rsquo;s own
             verdict, which an AM4 gets wrong: it reports <span className="mono">ok:false</span> on
             continuous writes that landed correctly, because it waits for an acknowledgement the
             unit doesn&rsquo;t send. A row marked <span className="mono">retry</span> means the

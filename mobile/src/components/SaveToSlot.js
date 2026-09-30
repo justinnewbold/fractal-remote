@@ -1,13 +1,21 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { font } from '../lib/theme'
 import { logDebug } from '../lib/debugLog'
-import { parkSave, readSaveResult, saveInDemo } from '../lib/device'
+import { parkSave, readSaveProgress, readSaveResult, saveInDemo } from '../lib/device'
 import { isDemo } from '../lib/demo'
-import { askComputerToSave } from '../lib/saveViaComputer'
-import { savedToSlot, useRig } from '../lib/rig'
+import { startComputerSave } from '../lib/saveViaComputer'
+import { SAVE_LATE_WORDS } from '../lib/save-wait'
+import { onConfigDoc, savedToSlot, useRig } from '../lib/rig'
 import Note from './Note'
 import Press from './Press'
+
+/*
+ * How long "Saved to slot 12." stays up. It stayed until tapped, so a save
+ * made an hour ago still said so over whatever came next. The browser's
+ * "✓ Saved" goes after the same ten seconds.
+ */
+export const SAID_FOR_MS = 10000
 
 const ofPreset = (s) => s.preset
 const ofSlug = (s) => s.deviceSlug
@@ -36,6 +44,17 @@ export function useSaveToSlot() {
   const [armed, setArmed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [said, setSaid] = useState(null)
+  /* The computer has not answered in a while, and has not picked it up. */
+  const [late, setLate] = useState(false)
+  /* The save in flight, so Cancel can reach it. */
+  const job = useRef(null)
+
+  /* A good answer goes on its own; a problem stays until it is put away. */
+  useEffect(() => {
+    if (!said?.done) return undefined
+    const timer = setTimeout(() => setSaid((now) => (now === said ? null : now)), SAID_FOR_MS)
+    return () => clearTimeout(timer)
+  }, [said])
 
   /* The write itself, for a caller that has already asked "are you sure" its
      own way — the top bar asks in a pop-up rather than with a second tap. */
@@ -53,7 +72,7 @@ export function useSaveToSlot() {
       try {
         const slot = await saveInDemo(preset?.number)
         savedToSlot(slot)
-        said = { tone: 'hint', text: `Saved to slot ${slot} on this phone.` }
+        said = { tone: 'hint', text: `Saved to slot ${slot} on this phone.`, done: true }
       } catch (err) {
         said = { tone: 'warn', text: err?.message || String(err) }
       }
@@ -62,17 +81,40 @@ export function useSaveToSlot() {
       setSaid(said)
       return
     }
-    setSaid({ tone: 'hint', text: 'Asked the computer to save it. The computer writes it; this says so the moment it lands.' })
-    const res = await askComputerToSave({
+    /*
+     * "Saving…" on the button, and nothing else unless it runs late.
+     *
+     * It used to open with a sentence about the computer doing the writing,
+     * every time, over a save that usually lands in a second. Plain "Saving…
+     * then Saved" is what was asked for; the computer gets a mention only
+     * when it has been quiet long enough to be worth one, and that is also
+     * when Cancel appears.
+     */
+    setSaid(null)
+    setLate(false)
+    const run = startComputerSave({
       park: (req) => parkSave(slug, req),
       readResult: () => readSaveResult(slug),
       slot: preset?.number,
-      name: preset?.name || ''
+      name: preset?.name || '',
+      slug,
+      readProgress: () => readSaveProgress(slug),
+      /* The computer's store says the moment the answer is written. */
+      listen: onConfigDoc,
+      onState: (now) => setLate(now.late && !now.picked)
     })
+    job.current = run
+    const res = await run.done
+    if (job.current === run) job.current = null
     setSaving(false)
+    setLate(false)
     logDebug('write', `save to slot ${preset?.number}`, res.ok ? 'saved' : `failed — ${res.error}`)
     if (res.ok) savedToSlot(res.slot)
-    setSaid(res.ok ? { tone: 'hint', text: `Saved to slot ${res.slot}.` } : { tone: 'warn', text: res.error })
+    setSaid(
+      res.ok
+        ? { tone: 'hint', text: `Saved to slot ${res.slot}.`, done: true }
+        : { tone: res.cancelled ? 'hint' : 'warn', text: res.error }
+    )
   }
 
   const save = async () => {
@@ -89,8 +131,10 @@ export function useSaveToSlot() {
     armed,
     saving,
     said,
+    late,
     save,
     write,
+    cancel: () => job.current?.cancel(),
     can: !saving && Number.isInteger(preset?.number),
     disarm: () => setArmed(false),
     dismiss: () => setSaid(null)
@@ -151,6 +195,12 @@ export function SaveNotes({ s }) {
         <Note tone="warn" size={font.lead} onDismiss={s.disarm}>
           This will overwrite the current preset
         </Note>
+      ) : null}
+      {s.saving && s.late ? (
+        <>
+          <Note tone="hint">{SAVE_LATE_WORDS}</Note>
+          <Press label="Cancel" height={40} onPress={s.cancel} />
+        </>
       ) : null}
       {s.said ? (
         <Note tone={s.said.tone} onDismiss={s.dismiss}>

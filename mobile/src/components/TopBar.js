@@ -17,6 +17,7 @@ import Lamp from './Lamp'
 import Volume from './Volume'
 import { probeNow } from '../lib/link'
 import { useSaveToSlot } from './SaveToSlot'
+import { SAVE_LATE_WORDS } from '../lib/save-wait'
 
 const face = Platform.select(mono)
 
@@ -66,7 +67,8 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
   const saveTo = useSaveToSlot()
   const preset = useRig(ofPreset)
   const unsaved = useRig(ofUnsaved)
-  const canSave = saveHere && !!unsaved && unsaved.number === preset?.number && saveTo.can
+  /* Up while it saves, too: its "Saving…" is the only sign one is running. */
+  const canSave = saveHere && (saveTo.saving || (!!unsaved && unsaved.number === preset?.number && saveTo.can))
   const askSave = () =>
     Alert.alert('Save preset?', 'This will overwrite the current preset.', [
       { text: 'Cancel', style: 'cancel' },
@@ -531,6 +533,11 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
       {failed ? <Reported said={failed} onClear={() => setFailed(null)} /> : null}
       {saying && !demo ? <Which link={link} onClose={() => setSaying(false)} /> : null}
       {saveTo.said && saveHere ? <Saved said={saveTo.said} onClear={saveTo.dismiss} /> : null}
+      {/*
+        A save from Play runs late the same as one from Edit, and Play has no
+        notes under a button to say so. The same strip, with its Cancel.
+      */}
+      {saveHere && saveTo.saving && saveTo.late ? <Late onCancel={saveTo.cancel} /> : null}
     </BlurView>
   )
 }
@@ -622,6 +629,51 @@ function Saved({ said, onClear }) {
     >
       <Text style={{ color: color.silk, fontSize: font.small }}>{`${said.text}  ✕`}</Text>
     </Pressable>
+  )
+}
+
+/** A save from the bar that the computer has not answered yet, and a way out. */
+function Late({ onCancel }) {
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        left: space.lg,
+        right: space.lg,
+        top: '100%',
+        zIndex: 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.md,
+        borderLeftWidth: 3,
+        borderLeftColor: color.ok,
+        backgroundColor: color.panelHi,
+        paddingVertical: space.sm,
+        paddingHorizontal: space.md
+      }}
+    >
+      <Text style={{ flex: 1, color: color.silk, fontSize: font.small }}>{SAVE_LATE_WORDS}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Cancel the save"
+        hitSlop={8}
+        onPress={() => {
+          tick()
+          onCancel()
+        }}
+        style={({ pressed }) => ({
+          minHeight: 36,
+          justifyContent: 'center',
+          paddingHorizontal: space.md,
+          borderRadius: radius.md,
+          borderWidth: 1,
+          borderColor: color.rule,
+          backgroundColor: pressed ? color.panel : color.chassis
+        })}
+      >
+        <Text style={{ color: color.silk, fontSize: font.small }}>Cancel</Text>
+      </Pressable>
+    </View>
   )
 }
 

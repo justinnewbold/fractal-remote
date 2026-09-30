@@ -459,6 +459,12 @@ export function run(test) {
       'UpdateNotice',
       'UpdateReadyNotice',
       /*
+       * A save from here that the computer has not answered. Nothing at all
+       * unless one is out and late, and then under the bar is the point: the
+       * bar on a phone has no room left for the sentence, or for Cancel.
+       */
+      'SaveLate',
+      /*
        * Inside the No unit found notice, which is one of the states that mean
        * the app can't work yet: which account this is, and whether a computer
        * on this wifi is on another one. It draws nothing on a working rig.
@@ -487,6 +493,20 @@ export function run(test) {
     const gate = before.lastIndexOf("status === 'live'")
     const opened = before.lastIndexOf('{')
     assert.ok(gate < opened, 'the top bar is behind a status check')
+  })
+
+  test('a restore still waiting on the computer can be called off with the Presets sheet shut', () => {
+    /*
+     * The panel's notice and Cancel go when the sheet does, and the computer
+     * can still load the snapshot over whatever is playing when it gets to it.
+     * So the wait is drawn under the bar as a late save is, with its Cancel.
+     */
+    const chrome = src.slice(src.indexOf('<TopBar'), src.indexOf("view === 'play' ? ("))
+    assert.match(
+      chrome,
+      /\{queuedRestore && sheet !== 'presets' \? \(\s*<SaveLate\s+onCancel=\{cancelQueuedRestore\}/,
+      'a restore from the phone is out with nothing on screen to say so, or to stop it'
+    )
   })
 
   test('the unit name is pressed, and goes somewhere different in the demo', () => {
@@ -830,6 +850,17 @@ export function run(test) {
       )
     }
     assert.match(panel, /const scene = useDevice\(/, 'the panel is not watching the live scene')
+    /*
+     * And a fourth that moves none of those three: the buffer loaded again.
+     * A Gain turned to 25 still read 25 after Revert on the play test — the
+     * same slot, block, channel and scene, with every value put back.
+     */
+    assert.match(panel, /const rev = useDevice\(\(s\) => s\.editRev\)/, 'the panel is not watching for the buffer being loaded again')
+    assert.match(
+      panel.slice(panel.indexOf('const readKey = '), panel.indexOf('const readKey = ') + 120),
+      /:\$\{rev\}`/,
+      'a Revert or a reload of the same slot leaves the editor on the values it replaced'
+    )
 
     // A re-read that does happen keeps the knobs up: the line is for a panel
     // with nothing in it yet, which is the only time it costs no height.
@@ -1765,8 +1796,11 @@ export function run(test) {
 
 
     // The cab panel: names and the enum labels, never the enum objects.
-    assert.ok(/slot\.irName/.test(hw), 'the cab panel no longer reads irName')
-    assert.ok(/slot\.irIndex/.test(hw), 'the cab panel no longer reads irIndex')
+    /* Through the shared slotIr, which reads irName and irIndex (pinned in
+       run.mjs): the host's "#12" and "<EMPTY>" are not names, and his own
+       banks' names are another unit's. */
+    assert.ok(/slotIr\(slot\)/.test(hw), 'the cab panel shows the unit\'s "#12" and "<EMPTY>" as if they were IR names again')
+    assert.ok(!/slot\.irName \|\| `IR /.test(hw), 'the cab panel names the IR itself again, past slotIr')
     assert.ok(
       /label\(slot\.bank\)/.test(hw) && /label\(state\.mode\)/.test(hw),
       'the cab panel renders a {value,label} enum straight into JSX again — that throws'
@@ -2299,8 +2333,17 @@ export function run(test) {
      */
     assert.match(
       save,
-      /: !dirty && justSaved\s*\n?\s*\? '✓ Saved'/,
-      'the button says "Saved" about a preset that has never been saved'
+      /if \(!working && !dirty && justSaved\) \{[\s\S]{0,300}?<span className="save-done" role="status">\s*✓ Saved/,
+      'the bar says "Saved" about a preset that has never been saved'
+    )
+    /*
+     * And it is a word, not a button. "'✓ Saved' never goes away" was the
+     * Save button greyed out while the app re-read the unit after the save —
+     * a disabled button saying Saved reads as a screen that has stuck.
+     */
+    assert.ok(
+      !/'✓ Saved'/.test(save.replace(/\/\*[\s\S]*?\*\//g, ' ')),
+      '"✓ Saved" is drawn on the Save button again, where a busy app greys it out'
     )
     /*
      * And a save in flight says SAVING, with something that moves.
@@ -2337,7 +2380,10 @@ export function run(test) {
      * has to expire — and from a clock rather than a flag, or a component that
      * mounts an hour later starts its own timer and says it again.
      */
-    assert.match(save, /Date\.now\(\) - savedAt < SAVED_FOR_MS/, '"Saved" never stops being said')
+    const savedFor = read('../lib/savedFor.js')
+    assert.match(savedFor, /now - savedAt < SAVED_FOR_MS/, '"Saved" never stops being said')
+    assert.match(save, /const justSaved = saidSaved\(savedAt\)/, 'the bar decides "Saved" from something other than the clock')
+    assert.match(save, /return whenSavedGoes\(savedAt, /, 'the bar arms its own timer again, the one that could fire early and stop')
     /*
      * Hiding it took away the only door to the save sheet, which is also how a
      * preset is put in a DIFFERENT slot with nothing edited. That door moved
@@ -2363,10 +2409,11 @@ export function run(test) {
     )
     /* The two ends count too: a preset that gains an output block is a strip
        one tile wider, and the fade that says there is more to the right has to
-       be told. */
+       be told. And a strip drawn again after a preset's chain has arrived
+       is a new strip, which the old observer never saw. */
     assert.match(
       read('Console.jsx'),
-      /useOverflow\(strip, \[chain\.length, !!input, !!output\]\)/,
+      /useOverflow\(strip, \[chain\.length, !!input, !!output, shown\.elsewhere\]\)/,
       'the chain strip keeps a private observer'
     )
   })
@@ -3607,20 +3654,22 @@ export function run(test) {
     const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
     const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
     const g = bare(gig)
+    /* Tap is its own component now — Play's bar and Edit's scene row both draw it. */
+    const t = bare(readFileSync(new URL('../src/components/TapTempo.jsx', import.meta.url), 'utf8'))
 
     // The bar, and both things in it.
     const bar = g.slice(g.indexOf('className="gig-bar"'), g.indexOf('className="gig-bar"') + 900)
     assert.ok(bar.length > 0, 'the tuner and tap bar is gone')
     assert.match(bar, /Tuner/, 'the tuner left the bar')
-    assert.match(bar, /Tap/, 'tap tempo left the bar')
+    assert.match(bar, /<TapTempo\b/, 'tap tempo left the bar')
     assert.ok(!/className="gig-modes"/.test(g), 'the tuner is back in a row of its own mid-screen')
     /*
      * The button sends a NUMBER, not a tap. Forwarding the presses let the
      * network decide the rhythm — see shared/tempo.mjs — so what goes over
      * is the tempo this end worked out.
      */
-    assert.match(g, /sender\.current\.push\(guess\)/, 'nothing taps, so the button does nothing')
-    assert.ok(!/tapBeat\(\)/.test(g), 'the taps are being forwarded again, so the wifi decides the tempo')
+    assert.match(t, /sender\.current\.push\(guess\)/, 'nothing taps, so the button does nothing')
+    assert.ok(!/tapBeat\(\)/.test(t) && !/tapBeat\(\)/.test(g), 'the taps are being forwarded again, so the wifi decides the tempo')
 
     /*
      * And the tempo is ON the button that sets it.
@@ -3634,11 +3683,12 @@ export function run(test) {
      * BEFORE this one, so it waits for the burst to end. If that timer ever
      * collapses into the tap itself, the number on the button starts lying.
      */
-    assert.match(bar, /gig-tap-bpm/, 'the tap button lost its tempo readout')
+    assert.match(t, /className="gig-tap-bpm mono"/, 'the tap button lost its tempo readout')
     /* The HANDLER only. Sliced to `const step` it ran on past the unmount
        cleanup, which clears the same timer — so deleting the debounce from the
        handler still found a clearTimeout and the test passed. It does not now. */
-    const tapFn = g.slice(g.indexOf('const tap = async'), g.indexOf('useEffect(() => () => clearTimeout'))
+    const tapFn = t.slice(t.indexOf('const tap = async'), t.indexOf('useEffect(() => () => clearTimeout'))
+    assert.ok(tapFn.length > 0, 'the tap handler is not where this test reads it')
     assert.match(tapFn, /clearTimeout\(reread\.current\)/, 'a second tap no longer cancels the pending read')
     assert.match(tapFn, /refreshTempo\(\)/, 'the tempo is never re-read, so the number goes stale')
     assert.ok(
@@ -4117,7 +4167,10 @@ export function run(test) {
     assert.match(vol, /latestWriter\(\(v\) => setParam\(eid, param\.id, v, param\)\)/, 'the slider writes without coalescing')
     assert.ok(!/setParamConfirmed/.test(vol), 'every drag value is a confirmed write — three round trips per pixel')
     assert.match(vol, /writer\.send\(v\)/, 'the drag does not go through the writer')
-    assert.match(vol, /await writer\.settled\(\)[\s\S]*?clearDeviceCache\(\)[\s\S]*?blockParams\(eid\)/, 'the release does not read back what the unit holds')
+    assert.match(vol, /await writer\.settled\(\)[\s\S]*?blockParams\(eid\)/, 'the release does not read back what the unit holds')
+    /* And nothing deleted first: DELETE /device/cache clears no copy of the
+       level, it deletes the computer's saved profile of the FM3. */
+    assert.ok(!/clearDeviceCache/.test(vol), 'letting go of the slider deletes the computer’s profile of the unit again')
     assert.match(vol, /outputLevelParam\(res\?\.named\)/, 'the slider does not pick the Level by the shared rule')
     assert.match(vol, /if \(!param\) return null/, 'a unit with no reachable level still gets a slider')
     assert.match(vol, /type="range"/, 'the control is not a slider')
@@ -4312,24 +4365,32 @@ export function run(test) {
     assert.match(after, /slotModel !== 'linear'/, 'a unit whose outputs are not a grid block is accused of missing one')
   })
 
-  test('a read that could not clear the cache is not called a failed write', () => {
+  test('a read that could not be made is not called a failed write, and no check deletes the unit’s profile', () => {
     /*
-     * From a phone, clearing the unit's cache is refused — it only works at
-     * the Mac — and the read that follows comes back one write behind. A log
-     * from an iPhone has five parameters in a row reported as not landing,
-     * each one reading back the PREVIOUS write's value scaled into its own
-     * range: Tone read back the drive's 7, Level read back the tone's 4, Mix
-     * read back the level's 6 as 60 out of 100. Every one of them had landed.
+     * A log from an iPhone has five parameters in a row reported as not
+     * landing, every one of which had. So a check that could not read the
+     * value back says "not checked", never "did not land".
      *
-     * So the app reports what it knows: unchecked, not failed.
+     * And no check sends DELETE /device/cache any more. It went before every
+     * checked write to "clear the parameter cache"; on the pinned device
+     * server a block's values are read off the unit every time, and that
+     * route deletes the computer's saved profile of the FM3 instead.
      */
+    const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
     const fx = readFileSync(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
-    const check = fx.slice(fx.indexOf('async function landed('), fx.indexOf('const wireLog'))
-    assert.match(check, /clearDeviceCache\(\)\.catch\(\(\) => \{\s*stale = true/, 'a refused cache clear is swallowed again')
-    assert.match(check, /return \{ ok: [^}]*stale \}/, 'the check does not report whether it could be believed')
+    const check = code(fx.slice(fx.indexOf('async function landed('), fx.indexOf('const wireLog')))
+    assert.ok(check.length > 100, 'the check moved; retarget this test')
+    assert.ok(!/device\/cache|clearDeviceCache/.test(check), 'a checked write deletes the computer’s profile of the unit again')
+    assert.match(check, /if \(typeof actual !== 'number'\) return \{ ok: false, actual: null, stale: true \}/, 'a read that came back empty is called a failed write')
+    assert.match(check, /if \(err\?\.linkDown\) throw err/, 'a dropped relay is reported as one unchecked value after another instead of stopping')
     assert.match(fx, /NOT CHECKED/, 'the debug log still calls an unverifiable read a write that did not land')
-    assert.match(fx, /unverified: checkA\.stale && checkB\.stale/, 'a write nobody could check is reported as one the device ignored')
-    assert.match(fx, /couldn't be checked from your phone/, 'the failure line still blames the device for a read it could not take')
+    assert.match(fx, /unverified: checkB\.stale/, 'a write nobody could check is reported as one the device ignored')
+    assert.match(fx, /sent, but \$\{UNREAD\}/, 'the failure line still blames the device for a read it could not take')
+    assert.ok(!/clearDeviceCache|resetCacheClear|CACHE_IS_LOCAL|'\/device\/cache'/.test(code(fx)), 'the cache clear is still in the client')
+    for (const f of ['App.jsx', 'components/Volume.jsx', 'components/PresetReport.jsx', 'components/GridEditor.jsx']) {
+      const src = code(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'))
+      assert.ok(!/clearDeviceCache\(|resetCacheClear\(/.test(src), `${f} deletes the computer’s profile of the unit again`)
+    }
 
     const diag = readFileSync(new URL('../src/components/Diagnostics.jsx', import.meta.url), 'utf8')
     assert.equal(
@@ -5361,6 +5422,25 @@ export function run(test) {
    * the grid uses to decide whether to wire the hold at all. Teaching a
    * gesture that is wired to `undefined` is worse than teaching nothing.
    */
+  test('a cab write that throws part way re-reads the cab, in both apps', () => {
+    /* A thrown write is not a no: the bank had moved, and the panel kept the
+       old one, so the next pick into the old bank skipped the bank write. */
+    const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+    const con = strip(readFileSync(new URL('../src/components/Console.jsx', import.meta.url), 'utf8'))
+    const edit = strip(readFileSync(new URL('../mobile/src/screens/Edit.js', import.meta.url), 'utf8'))
+    for (const [where, src, end] of [
+      ['browser', con, 'const swapModel = async'],
+      ['phone', edit, 'const swap = async']
+    ]) {
+      const body = src.slice(src.indexOf('const applyCab = async'), src.indexOf(end))
+      assert.ok(body.length > 100, `the ${where}'s applyCab moved; this check reads it`)
+      const caught = body.slice(body.indexOf('} catch (err) {'), body.indexOf('throw err'))
+      assert.ok(caught.length > 0, `the ${where}'s cab pick has no catch round its writes`)
+      assert.match(caught, /cabLost\(before, /, `the ${where} keeps the old cab numbers after a write threw`)
+      assert.match(caught, /readCab\(\(\) => cabState\(/, `the ${where} does not read the cab again after a write threw`)
+    }
+  })
+
   test('the channel tip waits for a preset where the hold does something', () => {
     const stage = readFileSync(new URL('../mobile/src/screens/Stage.js', import.meta.url), 'utf8')
     const coach = readFileSync(new URL('../mobile/src/components/Coach.js', import.meta.url), 'utf8')
