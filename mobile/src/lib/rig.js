@@ -98,6 +98,13 @@ const initial = {
    */
   chainFor: null,
   chainBusy: false,
+  /*
+   * The preset whose chain is on screen from memory rather than from a read:
+   * the chain it had the last time it was loaded, put up on the tap (see
+   * knownChain). The read after the switch confirms it or replaces it, and
+   * until then it is this preset's chain — drawn, and live. null otherwise.
+   */
+  chainKnown: null,
   error: null,
   /* Whether `error` is a complaint about the link, and so is withdrawn
      when the link comes back. See faultFrom. */
@@ -149,7 +156,7 @@ export function set(patch) {
 export const getState = () => state
 
 /** 'ready', 'updating', 'loading' or 'failed' for the chain on screen; see lib/chain-view. */
-export const chainViewOf = (s) => chainView({ want: s.preset?.number, chainFor: s.chainFor, busy: s.chainBusy })
+export const chainViewOf = (s) => chainView({ want: s.preset?.number, chainFor: s.chainFor, busy: s.chainBusy, known: s.chainKnown })
 /*
  * Back to nothing: on sign-out, and on the way into or out of the demo.
  *
@@ -174,6 +181,9 @@ export function reset() {
   /* A load, a follow or a settled read still in the air stops at its next check. */
   presetRun += 1
   chainRead = null
+  lastRead = null
+  earlyNames = null
+  knownChains.clear()
   clearTimeout(staleTimer)
   staleTimer = null
   staleAgain = null
@@ -614,6 +624,7 @@ export function beginChainWrite() {
   /* Every add, move and remove comes through here, which is why the mark
      goes here rather than on each of them. */
   noteEdited()
+  chainChanged()
   chainWrites += 1
 }
 export function endChainWrite({ refresh = true } = {}) {
@@ -911,6 +922,8 @@ async function readChainAndNames({ names = true } = {}) {
       if (state.preset?.number !== number) return read
       if (copy === 'stale' && copyWasStale(number)) return read
       markJudged(number)
+      /* The chain this preset had, for the next time it is chosen. */
+      keepChain(number)
       if (copy !== 'stale' && !quick) await refreshSceneNames(copy)
     }
   } finally {
@@ -978,7 +991,10 @@ let judging = null
 function markJudged(n) {
   if (judging !== n) return
   judging = null
-  set({ chainFor: n })
+  /* The chain up from memory waited for the read to be judged; this is it. */
+  if (state.chainKnown === n && lastRead?.key === keyFor(n)) {
+    set({ allBlocks: lastRead.all, blocks: device.stageBlocks(lastRead.all), chainFor: n, chainKnown: null })
+  } else set({ chainFor: n })
   syncChainBusy()
 }
 function copyWasStale(number) {
@@ -1029,7 +1045,62 @@ function copyWasStale(number) {
  * asking.
  */
 let chainRead = null
-const chainKey = () => `${isDemo() ? `demo:${demoUnit()}` : 'rig'}:${state.deviceSlug}:${state.preset?.number}`
+/* Which unit, which side of the demo switch, which slot: slot 97 on an AM4 is not slot 97 on an FM3. */
+const keyFor = (number) => `${isDemo() ? `demo:${demoUnit()}` : 'rig'}:${state.deviceSlug}:${number}`
+const chainKey = () => keyFor(state.preset?.number)
+
+/*
+ * THE CHAIN EACH PRESET HAD, the last time it was loaded here.
+ *
+ * "Presets are loading much slower now when switching, taking about 3
+ * seconds to load scene name and pedals." The grey cards stand in for a
+ * chain nobody has read yet — right for a preset never seen, and a wait for
+ * nothing on one played a song ago, whose chain was on screen then. So the
+ * chain read straight after a preset is loaded — the slot as stored, nothing
+ * edited yet — is kept for that slot, and a tap on it puts it up at once as
+ * this preset's (chainKnown). The one read after the switch still goes, at
+ * the same moment it always did, and whatever it finds replaces it.
+ *
+ * Kept for this run of the app only, and not for a chain that was edited:
+ * a read made while this preset has unsaved changes is not kept, a change
+ * this app makes to the chain's structure forgets it (chainChanged), and so
+ * does a save over the slot. Another client's save is not heard of here; the
+ * read after the switch is what puts that right.
+ */
+const KNOWN_CHAINS_MAX = 128
+const knownChains = new Map()
+/* The last chain read: which key it was read for, and what came back. */
+let lastRead = null
+
+function keepChain(number) {
+  if (!Number.isInteger(number) || number < 0) return
+  if (!lastRead || lastRead.key !== keyFor(number)) return
+  if (state.unsaved && state.unsaved.number === number) return
+  knownChains.delete(lastRead.key)
+  knownChains.set(lastRead.key, lastRead.all.map((b) => ({ ...b })))
+  while (knownChains.size > KNOWN_CHAINS_MAX) knownChains.delete(knownChains.keys().next().value)
+}
+
+function knownChain(number) {
+  if (!Number.isInteger(number) || number < 0) return null
+  return knownChains.get(keyFor(number)) || null
+}
+
+function forgetChain(number) {
+  if (!Number.isInteger(number)) return
+  knownChains.delete(keyFor(number))
+  if (state.chainKnown === number) set({ chainKnown: null })
+}
+
+/**
+ * This app has just changed the loaded preset's structure — a block added,
+ * moved or removed, a model changed or put back. The chain kept for it is
+ * the slot as stored; forgotten anyway, so no tap can put up a chain this
+ * app has seen go out of date.
+ */
+export function chainChanged() {
+  forgetChain(state.preset?.number)
+}
 
 export function chainIsCurrent() {
   /* A store that has read nothing — just after a reset — has nothing current. */
@@ -1176,7 +1247,9 @@ function discardUnsaved(unsaved) {
 }
 
 /** A save landed in `slot`: what was pending there is the preset's now. */
+/* What was kept for the slot is what it held before this save: forgotten. */
 export function savedToSlot(slot) {
+  forgetChain(slot)
   const unsaved = state.unsaved
   if (!unsaved || unsaved.number !== slot) return
   const slug = state.deviceSlug
@@ -1365,7 +1438,9 @@ export async function quickSceneNames() {
   if (!Number.isInteger(number)) return false
   /* A unit that handed the names over with the scene has already answered,
      and fresher than any copy: nothing to fetch and no dump to run. */
-  if ((state.sceneNames || []).some((n) => (n || '').trim())) return true
+  /* Not the ones this phone put up on the tap: those are its own copy, and
+     the computer's store is still asked. */
+  if (state.sceneNames !== earlyNames && (state.sceneNames || []).some((n) => (n || '').trim())) return true
   const slug = state.deviceSlug
   const owner = device.nameOwner(slug)
   const kept = await recallSceneNames(owner, number)
@@ -1474,7 +1549,8 @@ let blocksAgain = false
 let bufferOwed = false
 
 async function readBlocks(quiet) {
-  if (!quiet) set({ chain: 'reading' })
+  /* A chain up from memory is this preset's already; the read confirms it quietly. */
+  if (!quiet && state.chainKnown !== state.preset?.number) set({ chain: 'reading' })
   const key = chainKey()
   /* Which preset these are, for the screens: see chainViewOf. */
   const number = state.preset?.number
@@ -1487,11 +1563,28 @@ async function readBlocks(quiet) {
     const gen = followGen
     const all = await device.presetBlocks()
     chainRead = { key, at: Date.now(), gen }
-    const patch = { allBlocks: all, blocks: device.stageBlocks(all), chain: 'ok' }
+    lastRead = { key, all }
     /* Not while the copy they came out of is still to be judged, or is being
        waited out as another preset's: up at once, they were the last song's
        tiles, live, under this song's name for a whole round trip. */
-    if (!(judging === number || (staleTimer !== null && !staleOwn))) patch.chainFor = Number.isInteger(number) ? number : null
+    const held = judging === number || (staleTimer !== null && !staleOwn)
+    /*
+     * And never over a chain up from memory, by a read that may not be its
+     * preset's: one for the preset this phone has since left, or one whose
+     * copy is still to be judged. The known chain stays until a read that is
+     * this preset's replaces it (see markJudged).
+     */
+    const known = state.chainKnown
+    if (Number.isInteger(known) && known === state.preset?.number && state.chainFor === known && (held || number !== known)) {
+      if (number === known) chainForBefore = state.chainFor
+      set({ chain: 'ok' })
+      return true
+    }
+    const patch = { allBlocks: all, blocks: device.stageBlocks(all), chain: 'ok' }
+    if (!held) {
+      patch.chainFor = Number.isInteger(number) ? number : null
+      patch.chainKnown = null
+    }
     if (bufferOwed) {
       bufferOwed = false
       patch.bufferRev = state.bufferRev + 1
@@ -1506,7 +1599,11 @@ async function readBlocks(quiet) {
     /* Said in the log as well as on screen: "Chain — out of date" and the
        note under it used to be the only record that this read failed. */
     logDebug('chain', 'the chain could not be read — buttons kept from the last read', err.message)
-    set({ chain: 'failed', ...faultFrom(err) })
+    /* Not a chain up from memory, though: unconfirmed, it is not kept up as
+       this preset's past a read that could not say so. The cards, and a way
+       to ask again, as for a preset never read. */
+    const unconfirmed = state.chainKnown === number && state.preset?.number === number
+    set({ chain: 'failed', ...faultFrom(err), ...(unconfirmed ? { chainKnown: null, chainFor: null } : {}) })
     return false
   }
 }
@@ -1892,6 +1989,15 @@ export async function loadPreset(number) {
   forgetControls()
   const known = nameOf(number)
   /*
+   * This preset's chain as it was the last time it was loaded, if it has
+   * been: up now, as this preset's, rather than grey cards for as long as the
+   * unit takes to settle and the read to come back. Not for the same slot
+   * chosen again — a Revert — whose chain is on screen already and is being
+   * put back to the stored one. See knownChain.
+   */
+  const recall = number !== was?.number ? knownChain(number) : null
+  const wasChain = { allBlocks: state.allBlocks, blocks: state.blocks, chainFor: state.chainFor, chainKnown: state.chainKnown }
+  /*
    * The scene names go with it too. They belong to the preset being left, so
    * carrying them across would put the last song's names on this song's tiles —
    * which is worse than the numbers, because numbers are never wrong.
@@ -1899,8 +2005,14 @@ export async function loadPreset(number) {
   set({
     error: null,
     errorLink: false,
-    chain: 'reading',
+    chain: recall ? 'ok' : 'reading',
     sceneNames: [],
+    /* The same slot tapped twice keeps whatever it has; another has nothing known unless recalled. */
+    ...(recall
+      ? { allBlocks: recall, blocks: device.stageBlocks(recall), chainFor: number, chainKnown: number }
+      : number === was?.number
+        ? {}
+        : { chainKnown: null }),
     preset: {
       number,
       name: typeof known === 'string' ? known : '',
@@ -1909,6 +2021,7 @@ export async function loadPreset(number) {
     }
   })
   const run = ++presetRun
+  namesAtOnce(number, run)
   presetLoads += 1
   /* A read still waiting to go is for a preset this tap has just left. */
   clearTimeout(settleTimer)
@@ -1920,6 +2033,8 @@ export async function loadPreset(number) {
   sceneRetryTimer = null
   syncChainBusy()
   const token = owe('preset')
+  /* When the unit was asked: the wait before the chain read counts from here. */
+  const sentAt = Date.now()
   try {
     try {
       await device.selectPreset(number)
@@ -1927,6 +2042,8 @@ export async function loadPreset(number) {
       disown(token)
       /* Only the newest tap decides what is on screen. */
       if (run === presetRun) {
+        /* The chain that was up goes back with the preset it belongs to. */
+        if (recall) set(wasChain)
         set({ ...faultFrom(err), chain: 'ok', preset: was })
         /* The preset put back may be one whose read this tap called off —
            the settled read, or the one more read the computer's copy of
@@ -1985,8 +2102,39 @@ export async function loadPreset(number) {
     presetLoads -= 1
     syncChainBusy()
   }
-  await readPresetSoon(OWN_SETTLE_MS, { reloaded: true })
+  await readPresetSoon(settleFrom(sentAt), { reloaded: true })
   return true
+}
+
+/*
+ * THE WAIT BEFORE THE CHAIN READ, COUNTED FROM THE SELECT.
+ *
+ * The unit starts loading when it is asked, not when the phone has finished
+ * asking it which preset and which scene. Counted from the end of those, the
+ * wait was OWN_SETTLE_MS on top of three round trips down the relay — most
+ * of the three seconds on the play test. Counted from the select, the small
+ * reads happen inside it, and the one chain read still lands on a unit that
+ * has had the whole wait to settle.
+ */
+const settleFrom = (sentAt) => Math.max(0, OWN_SETTLE_MS - (Date.now() - sentAt))
+
+/*
+ * The scene names this phone kept for the slot, on the tap — before the
+ * select has gone, let alone been answered. What the computer's store and the
+ * unit say later still goes over them (see quickSceneNames, which knows these
+ * by `earlyNames` and asks anyway).
+ */
+let earlyNames = null
+function namesAtOnce(number, run) {
+  const owner = device.nameOwner(state.deviceSlug)
+  recallSceneNames(owner, number)
+    .then((kept) => {
+      if (run !== presetRun || state.preset?.number !== number || !kept.length) return
+      if ((state.sceneNames || []).some((n) => (n || '').trim())) return
+      earlyNames = kept
+      set({ sceneNames: kept })
+    })
+    .catch(() => {})
 }
 
 /* ---------------------------------------------------------------- */
@@ -2107,7 +2255,7 @@ async function settledPreset() {
   const n = fresh?.number
   if (Number.isInteger(n) && n >= 0 && state.preset && n !== state.preset.number) {
     forgetControls()
-    set({ sceneNames: [] })
+    set({ sceneNames: [], chainKnown: null })
   }
   takePreset(fresh)
 }
@@ -2131,7 +2279,7 @@ function presetMovedAtUnit(fresh, run, { hostForgot = false } = {}) {
   presetRun += 1
   logDebug('preset', `the unit is on preset ${number} now, changed away from this phone`)
   forgetControls()
-  set({ sceneNames: [], chain: 'reading' })
+  set({ sceneNames: [], chain: 'reading', chainKnown: null })
   takePreset(fresh)
   clearTimeout(staleTimer)
   staleTimer = null

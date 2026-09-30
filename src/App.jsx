@@ -69,7 +69,8 @@ import {
   writeBypass,
   writeTuner,
   onConfigDoc,
-  presetSaved
+  presetSaved,
+  chainChanged
 } from './lib/deviceState'
 import ParamSearch from './components/ParamSearch'
 import UpdateNotice from './components/UpdateNotice'
@@ -279,7 +280,9 @@ attachDriver({
   hostKeepsCopy,
   keepSceneNames,
   rememberedSceneNames,
-  isRemote: () => remoteActive()
+  isRemote: () => remoteActive(),
+  /* Which unit a remembered chain belongs to: see deviceState.knownChain. */
+  unitKey: () => `${isDemo() ? `demo:${demoUnit()}` : remoteActive() ? 'away' : 'rig'}:${currentDeviceSlug()}`
 })
 
 /* Hoisted so each is one function for the life of the module: a selector
@@ -398,6 +401,9 @@ function keepSavedScenes(number, names) {
  * tells the assistant something useful but doesn't make the edit buffer dirty.
  */
 const UNSAVES_PRESET = new Set(['edit', 'grid', 'scene', 'cab', 'modifier', 'tempo'])
+/* What changes the loaded preset's chain, and what can land in a stored slot. */
+const CHANGES_CHAIN = new Set(['edit', 'grid', 'revert'])
+const CHANGES_SLOTS = new Set(['save', 'version', 'restore', 'library'])
 
 /**
  * What the chat is told about a design: enough to explain it, not the spec.
@@ -1371,6 +1377,9 @@ export default function App() {
      * decides that case, since a plan containing a save leaves things clean.
      */
     if (!fromAssistant && UNSAVES_PRESET.has(kind)) setDirty(true)
+    /* The chain this window kept for the preset, or for a slot, is out of date. */
+    if (CHANGES_CHAIN.has(kind)) chainChanged()
+    else if (CHANGES_SLOTS.has(kind)) chainChanged({ all: true })
 
     if (fromAssistant || !HAND_EDIT_KINDS.has(kind)) return
     setTurns((prev) => [...prev, { role: 'hand', text: summary }])
@@ -3680,7 +3689,7 @@ export default function App() {
   /* And not while the blocks are another preset's: a knob on the last song's
      amp would be turned on this song's, found by its number. It comes back
      when this preset's chain lands, read for this preset. */
-  const chainNow = useChain()
+  const chainNow = useChain({ editing: true })
   const openBlock = selectedBlock && !chainNow.elsewhere ? blocks.find((b) => b.effectId === selectedBlock) : null
 
 

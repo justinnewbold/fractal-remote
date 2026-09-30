@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useDevice, chainNumberOf, chainViewOf, retryChain } from '../lib/deviceState'
+import { useDevice, chainKnownOf, chainNumberOf, chainViewOf, retryChain } from '../lib/deviceState'
 import { CHAIN_WORDS, UPDATING_AFTER_MS, chainElsewhere } from '../../shared/chain-view.mjs'
 
 /**
@@ -10,10 +10,16 @@ import { CHAIN_WORDS, UPDATING_AFTER_MS, chainElsewhere } from '../../shared/cha
  * before that the chain simply stays as it is, because one that greyed and
  * came back on every Add would flicker. `elsewhere` is a chain that belongs
  * to another preset and is not drawn.
+ *
+ * `known` is this preset's chain up from memory, the read after the switch
+ * still to come. Play plays it; a panel that EDITS the chain passes `editing`
+ * and waits for the read instead — its values are read off the unit's
+ * buffer, and that buffer is still loading.
  */
-export function useChain() {
+export function useChain({ editing = false } = {}) {
   const view = useDevice(chainViewOf)
   const number = useDevice(chainNumberOf)
+  const known = useDevice(chainKnownOf)
   const [late, setLate] = useState(false)
   useEffect(() => {
     if (view !== 'updating') {
@@ -23,7 +29,7 @@ export function useChain() {
     const timer = setTimeout(() => setLate(true), UPDATING_AFTER_MS)
     return () => clearTimeout(timer)
   }, [view])
-  return { view, number, late: view === 'updating' && late, elsewhere: chainElsewhere(view) }
+  return { view, number, known, late: view === 'updating' && late, elsewhere: chainElsewhere(view) || (editing && known) }
 }
 
 /**

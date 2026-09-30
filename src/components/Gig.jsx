@@ -455,6 +455,9 @@ export default function Gig({
   useEffect(() => {
     if (shown.elsewhere) setChanEid(null)
   }, [shown.elsewhere])
+  /* And on any other preset: a chain up from memory is drawn at once, and a
+     sheet left open would be over the new song's block of the same number. */
+  useEffect(() => setChanEid(null), [shown.number])
 
   /*
    * What Previous and Next step through.
