@@ -4861,6 +4861,18 @@ export function run(test) {
     assert.match(read('src/styles.css'), /\.scene-arrange-tile \{[\s\S]{0,500}touch-action: none;/, 'a finger scrolls the page instead of dragging')
   })
 
+  test('Tap wears a green light that flashes at the tempo', () => {
+    /* "Can we add a green light dot to the tap tempo button that flashes at
+       the current tempo." Phone and browser. */
+    const dot = read('mobile/src/components/TempoDot.js')
+    assert.match(dot, /60000 \/ bpm/, 'the light does not keep the tempo')
+    assert.match(dot, /useNativeDriver: true/, 'the light is timed on the JavaScript thread')
+    assert.match(dot, /backgroundColor: color\.ok/, 'the light is not green')
+    assert.match(read('mobile/src/screens/Stage.js'), /badge=\{<TempoDot bpm=\{bpm\} \/>\}/, 'the phone Tap has no light')
+    assert.match(read('src/components/TapTempo.jsx'), /className="tap-dot"[^>]*'--beat': `\$\{60 \/ bpm\}s`/, 'the browser Tap has no light')
+    assert.match(read('src/styles.css'), /\.tap-dot \{[\s\S]{0,300}animation: tap-beat var\(--beat/, 'the browser light does not flash')
+  })
+
   test('a preset search starts at the top of its results', () => {
     /* "Preset search isn't working." The list opened centred on the preset
        being played and kept that scroll when the search shrank it, so the

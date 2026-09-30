@@ -64,6 +64,7 @@ import UnlockOffer from '../components/UnlockOffer'
 import Note from '../components/Note'
 import { fixById, fixFor } from '../lib/troubleshooting'
 import Press from '../components/Press'
+import TempoDot from '../components/TempoDot'
 import Tile from '../components/Tile'
 import Coach from '../components/Coach'
 import Sheet from '../components/Sheet'
@@ -829,6 +830,8 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             height={foot}
             onPress={tapTempo}
             onLongPress={() => setTyping(true)}
+            /* "A green light dot ... that flashes at the current tempo." */
+            badge={<TempoDot bpm={bpm} />}
           />
         </View>
 

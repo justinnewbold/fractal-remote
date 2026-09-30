@@ -261,6 +261,11 @@ export default function TapTempo({ onError, onChanged, where = 'bar' }) {
       >
         {/* "Change the label on the tap tempo button to just say Tap." */}
         <span>Tap</span>
+        {/* "A green light dot ... that flashes at the current tempo." The
+            unit's Tap LED, on the button. Only with a tempo from the unit. */}
+        {Number.isFinite(bpm) && bpm >= 20 && bpm <= 400 ? (
+          <span className="tap-dot" aria-hidden="true" style={{ '--beat': `${60 / bpm}s` }} />
+        ) : null}
         {Number.isFinite(tapped ?? bpm) ? (
           <span className="gig-tap-bpm mono">{Math.round(tapped ?? bpm)}</span>
         ) : null}
