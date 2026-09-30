@@ -9101,6 +9101,295 @@ test('the demo FM3’s cab state is shaped and numbered like the unit’s, and t
 })
 
 
+
+/*
+ * "Amp model change resets the tone; Undo only restores the model."
+ *
+ * The FM3 loads a new model's own settings when the model changes, and the
+ * Undo remembered the model's number and nothing else. These drive the shared
+ * rule against a unit that does what the FM3 does: a model write puts every
+ * setting on the block back to that model's own.
+ */
+function modelBench({ knobs = 6, enums = 2, deaf = [], stubborn = [], refuseModel = false, blindAfter = Infinity } = {}) {
+  const own = (model) => ({
+    named: Array.from({ length: knobs }, (_, i) => ({
+      id: i,
+      name: ['Gain', 'Bass', 'Mid', 'Treble', 'Presence', 'Master', 'Bright', 'Depth'][i] || `Knob ${i}`,
+      value: model === 0 ? 2 : 5,
+      norm: model === 0 ? 0.2 : 0.5,
+      min: 0,
+      max: 10
+    })),
+    enums: Array.from({ length: enums }, (_, i) => ({ id: 100 + i, name: `Switch ${i}`, value: model === 0 ? 0 : 1, options: [] }))
+  })
+  const unit = { model: 0, ...own(0) }
+  const log = []
+  let reads = 0
+  const read = async () => {
+    reads++
+    if (reads > blindAfter) throw new Error('timeout')
+    return JSON.parse(JSON.stringify({ named: unit.named, enums: unit.enums, type: { value: unit.model, name: unit.model ? 'Plexi' : 'USA Clean' } }))
+  }
+  const knob = (id, v) => {
+    const k = unit.named.find((p) => p.id === id)
+    k.value = v
+    k.norm = v / 10
+  }
+  const io = (channel = 'A') => ({
+    channel,
+    setType: async (v) => {
+      log.push(['type', v])
+      if (refuseModel) return { ok: false }
+      unit.model = v
+      Object.assign(unit, own(v))
+      return { ok: true }
+    },
+    read,
+    write: async (p, v) => {
+      log.push(['knob', p.id, v])
+      /* A deaf knob ignores the plain write; the checked one reaches it. */
+      if (!deaf.includes(p.id) && !stubborn.includes(p.id)) knob(p.id, v)
+      return { ok: true }
+    },
+    writeChecked: async (p, v) => {
+      log.push(['checked', p.id, v])
+      if (!stubborn.includes(p.id)) knob(p.id, v)
+      return { ok: !stubborn.includes(p.id) }
+    },
+    writeEnum: async (id, v) => {
+      log.push(['enum', id, v])
+      unit.enums.find((e) => e.id === id).value = v
+      return { ok: true }
+    },
+    progress: (p) => log.push(['said', p.step, p.done, p.total])
+  })
+  return { unit, log, read, knob, io, reads: () => reads }
+}
+
+test('Undo after a model change puts back the model, every knob and every switch', async () => {
+  const { modelSnapshot, restoreModel, undoResult, undoOffer, settingsIn } = await import('../shared/model-undo.mjs')
+  const bench = modelBench()
+  /* His own tone on the old model: not the model's settings. */
+  bench.knob(1, 7.5)
+  bench.knob(4, 3.1)
+  bench.unit.enums[1].value = 3
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  assert.equal(settingsIn(snap), 8, 'the switches were left out of the snapshot')
+  assert.match(undoOffer(snap), /^Was USA Clean — Undo puts back the model and the 8 settings the app can see\.$/)
+
+  /* The pick: the unit loads the new model's own settings. */
+  await bench.io().setType(1)
+  assert.equal(bench.unit.named[1].value, 5, 'the bench does not do what the FM3 does')
+
+  bench.log.length = 0
+  const r = await restoreModel(snap, bench.io('A'))
+  assert.equal(bench.unit.model, 0, 'the old model did not go back')
+  assert.deepEqual(bench.unit.named.map((k) => k.value), [2, 7.5, 2, 2, 3.1, 2], 'the knobs are still the new model’s')
+  assert.deepEqual(bench.unit.enums.map((e) => e.value), [0, 3], 'the switches are still the new model’s')
+  assert.deepEqual(r.missed, [])
+  assert.equal(undoResult(r, snap).text, 'Put back all 8 settings the app can see.')
+  assert.equal(undoResult(r, snap).bad, false)
+  /* The model first, then only what the model write moved — and no checked
+     writes, because nothing missed. */
+  assert.deepEqual(bench.log[1], ['type', 0], 'the settings went out before the model')
+  const writes = bench.log.filter(([k]) => k === 'knob' || k === 'enum' || k === 'checked')
+  assert.deepEqual(
+    writes.map(([k, id]) => `${k}:${id}`),
+    ['knob:1', 'knob:4', 'enum:101'],
+    'settings the model write left alone were written again'
+  )
+  assert.ok(bench.log.some(([k, step]) => k === 'said' && step === 'settings'), 'nothing was said while it ran')
+})
+
+test('a setting that ignores the plain write gets the checked one; one that ignores both is named', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  /* Twenty-three settings, the way an amp has them. */
+  const bench = modelBench({ knobs: 8, enums: 15, deaf: [0], stubborn: [1, 6] })
+  for (let i = 0; i < 8; i++) bench.knob(i, 8)
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  bench.log.length = 0
+  const r = await restoreModel(snap, bench.io('A'))
+  const checked = bench.log.filter(([k]) => k === 'checked').map(([, id]) => id)
+  assert.deepEqual(checked, [0, 1, 6], 'only the misses get the checked write, and every miss gets it')
+  assert.equal(bench.unit.named[0].value, 8, 'the checked write did not reach the deaf knob')
+  assert.deepEqual(r.missed, ['Bass', 'Bright'])
+  const said = undoResult(r, snap)
+  assert.equal(said.text, "Put back 21 of 23 — Bass and Bright didn't take.")
+  assert.equal(said.bad, true)
+  assert.equal(said.keep, false, 'an Undo that ran is offered again')
+})
+
+test('Undo refuses on another channel, and says so without writing anything', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const bench = modelBench()
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  bench.log.length = 0
+  const r = await restoreModel(snap, bench.io('B'))
+  assert.equal(r.refused, 'channel')
+  assert.deepEqual(bench.log, [], 'channel A’s tone was written onto channel B')
+  const said = undoResult(r, snap)
+  assert.equal(said.keep, true, 'the offer went, so switching back to A cannot use it')
+  assert.match(said.text, /channel A/)
+})
+
+test('a model the unit will not go back to leaves every setting alone, and an unreadable finish says so', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const refused = modelBench({ refuseModel: true })
+  const snap = modelSnapshot(await refused.read(), { channel: 'A' })
+  refused.unit.model = 1
+  refused.log.length = 0
+  const r = await restoreModel(snap, refused.io('A'))
+  assert.equal(r.refused, 'model')
+  assert.ok(!refused.log.some(([k]) => k === 'knob' || k === 'enum'), 'settings were written onto the wrong model')
+  assert.equal(undoResult(r, snap).keep, true)
+
+  /* The settings went out, and the read that would check them never came back. */
+  const blind = modelBench({ blindAfter: 2 })
+  blind.knob(2, 9)
+  const snap2 = modelSnapshot(await blind.read(), { channel: 'A' })
+  await blind.io().setType(1)
+  const r2 = await restoreModel(snap2, blind.io('A'))
+  assert.equal(r2.unchecked, true)
+  assert.match(undoResult(r2, snap2).text, /couldn't read them back to check/)
+  assert.doesNotMatch(undoResult(r2, snap2).text, /Put back all/, 'an unchecked Undo was called done')
+  /* The panel is drawn from what the writes left, not from the read taken
+     before them — a knob drawn at the new model's 5 would be dragged from 5. */
+  assert.equal(blind.unit.named[2].value, 9)
+  assert.equal(r2.last.named.find((k) => k.id === 2).value, 9, 'the panel shows the new model’s settings after they were put back')
+})
+
+test('an Undo whose every write threw says nothing was sent, and keeps the way back', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const bench = modelBench({ blindAfter: 2 })
+  bench.knob(2, 9)
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  const cut = () => {
+    throw new Error("Can't reach the Fractal app")
+  }
+  const r = await restoreModel(snap, { ...bench.io('A'), write: cut, writeChecked: cut, writeEnum: cut })
+  assert.equal(r.unsent, true, 'writes that all threw were counted as sent')
+  const said = undoResult(r, snap)
+  assert.equal(said.keep, true, 'the snapshot of his tone was thrown away with nothing put back')
+  assert.doesNotMatch(said.text, /sent your settings/)
+  assert.match(said.text, /Try Undo again/)
+  /* The unit has the old model's own 2 on it, and so does the panel. */
+  assert.equal(bench.unit.named[2].value, 2)
+  assert.equal(r.last.named.find((k) => k.id === 2).value, 2, 'the panel shows settings that never went')
+})
+
+test('an Undo stops the moment the block changes channel or preset, and sends nothing after', async () => {
+  const { modelSnapshot, restoreModel, undoResult } = await import('../shared/model-undo.mjs')
+  const bench = modelBench()
+  for (let i = 0; i < 6; i++) bench.knob(i, 8)
+  const snap = modelSnapshot(await bench.read(), { channel: 'A' })
+  await bench.io().setType(1)
+  bench.log.length = 0
+  /* A footswitch on the floor after the second setting went back. */
+  let here = true
+  let readsAtFlip = null
+  const io = bench.io('A')
+  const write = io.write
+  let writes = 0
+  io.write = async (p, v) => {
+    const r = await write(p, v)
+    if (++writes === 2) {
+      here = false
+      readsAtFlip = bench.reads()
+    }
+    return r
+  }
+  const r = await restoreModel(snap, { ...io, stillHere: () => here })
+  const after = bench.log.filter(([k]) => k === 'knob' || k === 'enum' || k === 'checked')
+  assert.equal(after.length, 2, 'channel A’s settings went on landing after the channel changed')
+  assert.equal(bench.reads(), readsAtFlip, 'the block was read again after it changed')
+  assert.equal(r.stopped, true)
+  const said = undoResult(r, snap)
+  assert.equal(said.keep, true, 'the way back went, with half of it undone')
+  assert.match(said.text, /channel A/)
+  /* And one that has changed before the first write sends nothing at all. */
+  bench.log.length = 0
+  const r0 = await restoreModel(snap, { ...bench.io('A'), stillHere: () => false })
+  assert.equal(r0.stopped, true)
+  assert.deepEqual(bench.log.filter(([k]) => k !== 'said'), [], 'the model went out onto a block that had moved')
+})
+
+test('the demo FM3 loses its knobs on a model change, and Undo puts them back', async () => {
+  const { createMockDevice } = await import('../src/lib/mockDevice.js')
+  const { modelSnapshot, restoreModel } = await import('../shared/model-undo.mjs')
+  const unit = createMockDevice('fm3')
+  const amp = (await unit.presetBlocks()).find((b) => b.slug === 'amp')
+  const eid = amp.effectId
+  const first = await unit.blockParams(eid)
+  const turned = first.named.find((p) => !p.log && p.max > p.min)
+  const want = turned.min + (turned.max - turned.min) * 0.83
+  await unit.setParam(eid, turned.id, toNormalized(want, turned))
+  const snap = modelSnapshot(await unit.blockParams(eid), { channel: amp.channel ?? null })
+  const other = (await unit.blockTypes('amp')).find((m) => m.value !== snap.type.value)
+  await unit.setType(eid, other.value)
+  const moved = (await unit.blockParams(eid)).named.find((p) => p.id === turned.id)
+  assert.ok(Math.abs(moved.value - want) > 0.01, 'the demo keeps a knob across a model change, which the FM3 does not')
+  const r = await restoreModel(snap, {
+    channel: amp.channel ?? null,
+    setType: (v) => unit.setType(eid, v),
+    read: () => unit.blockParams(eid),
+    write: (p, v) => unit.setParam(eid, p.id, toNormalized(v, p)),
+    writeChecked: (p, v) => unit.setParam(eid, p.id, toNormalized(v, p)),
+    writeEnum: (id, v) => unit.setEnum(eid, id, v)
+  })
+  assert.deepEqual(r.missed, [])
+  const back = await unit.blockParams(eid)
+  assert.equal(back.type.value, snap.type.value)
+  assert.ok(Math.abs(back.named.find((p) => p.id === turned.id).value - want) < 0.05, 'the turned knob did not come back')
+})
+
+test('the browser snapshots the block before a model pick, and its Undo puts the settings back', () => {
+  const src = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+  const panel = src.slice(src.indexOf('export function BlockPanel'), src.indexOf('function fmt('))
+  const apply = panel.slice(panel.indexOf('const applyModel = async'), panel.indexOf('const applyCab = async'))
+  const undo = panel.slice(panel.indexOf('const undoModel = async'), panel.indexOf('return (\n    <div className="block-panel">'))
+  assert.ok(apply.length > 100 && undo.length > 100, 'the model swap moved; this check reads it')
+  /* The snapshot is a fresh read, taken before the write that loses it. */
+  const snapAt = apply.indexOf('modelSnapshot(')
+  assert.ok(snapAt > 0, 'a model pick keeps no snapshot of the settings')
+  assert.ok(apply.indexOf('await blockParams(block.effectId)') < snapAt, 'the snapshot is not a fresh read')
+  assert.ok(snapAt < apply.indexOf('await setType(block.effectId'), 'the snapshot is taken after the model write')
+  assert.match(apply, /channel: block\.channel \?\? null/, 'the snapshot does not know which channel it is for')
+  /* No eight seconds: it stays until the next pick or the editor closing. */
+  assert.doesNotMatch(apply, /setTimeout/, 'a model Undo still runs out on a timer')
+  assert.match(apply, /if \(before\) setUndo\(before\)/)
+  /* Undo is the restore, not a fresh pick of the old model. */
+  assert.match(undo, /await restoreModel\(back, \{/)
+  assert.doesNotMatch(undo, /applyModel\(/, 'Undo is a pick of the old model again, settings and all lost')
+  assert.match(undo, /writeChecked: \(p, v\) => setParamConfirmed\(eid, p\.id, v, p\)/, 'the misses are not retried with the checked write')
+  assert.match(undo, /channel: block\.channel \?\? null/, 'Undo cannot tell the channel has moved')
+  assert.match(undo, /progress: \(p\) => setRestoring\(\{ eid, \.\.\.p \}\)/, 'Undo shows nothing while it runs')
+  /* Every write lands on whichever channel is live: another one stops it. */
+  assert.match(undo, /stillHere: here\b/, 'an Undo goes on writing channel A’s settings after the channel changed')
+  /* The pre-pick read is a round trip; a block that moved in it is not the one tapped. */
+  const recheck = apply.indexOf('if (liveKey.current !== key) return')
+  assert.ok(recheck > snapAt && recheck < apply.indexOf('await setType(block.effectId'), 'the model goes to a channel or preset that came up during the read')
+  /* Said to the block it happened to, and locking only that block. */
+  const flatUndo = undo.replace(/\s+/g, ' ')
+  assert.match(flatUndo, /if \(onThis\(\)\) \{ if \(!said\.keep\) setUndo\(null\) setUndoSaid\(said\)/, 'an Undo’s answer shows up under another block')
+  assert.match(panel, /const restoringHere = restoring && block && restoring\.eid === block\.effectId \? restoring : null/)
+  assert.doesNotMatch(panel, /disabled=\{[^}]*!!restoring\}/, 'another block’s picker is locked by this one’s Undo')
+  assert.match(panel, /disabled=\{busy \|\| !!restoringHere\}\s*>\s*\{ch\}/, 'a channel can be changed under a running Undo')
+  /* And it says so on screen: the offer, the progress, the outcome, the hint. */
+  assert.match(panel, /restoringHere \? undoProgress\(restoringHere, undo\) : undoOffer\(undo\)/)
+  assert.match(panel, /\{undoSaid\.text\}/)
+  assert.match(panel, /\{MODEL_HINT\}/, 'the hint under the picker is gone')
+  /* Its state is kept above the early return, or the first empty panel crashes. */
+  const early = panel.indexOf('if (!block) {')
+  for (const hook of ['const [restoring, setRestoring] = useState', 'const [undoSaid, setUndoSaid] = useState']) {
+    assert.ok(panel.indexOf(hook) > 0 && panel.indexOf(hook) < early, `${hook} is below the early return`)
+  }
+  /* A Revert or another preset puts other settings on the block: the offer goes. */
+  assert.match(panel, /\}, \[block\?\.effectId, rev\]\)/, 'an Undo outlives the preset loading again')
+})
+
 await settle()
 /*
  * The tally has to say when it is red.

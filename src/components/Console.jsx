@@ -50,6 +50,7 @@ import {
   blockTypes,
   cabState,
   setEnum,
+  setParam,
   setParamConfirmed,
   setType,
   setChannel
@@ -69,6 +70,14 @@ import {
   restoreCab,
   taken
 } from '../../shared/cab-pick.mjs'
+import {
+  MODEL_HINT,
+  modelSnapshot,
+  restoreModel,
+  undoOffer,
+  undoProgress,
+  undoResult
+} from '../../shared/model-undo.mjs'
 import { isSilencingParam } from '../lib/guardrails'
 import { editPages, pageFor, pageHolding } from '../lib/editPages'
 import { bringIntoView } from '../lib/feedback'
@@ -776,10 +785,18 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    */
   const [cab, setCab] = useState(null)
   const [tab, setTab] = useState('main')
-  // The model this block was on before the last swap, for the eight seconds
-  // during which taking it back is one tap.
+  /* The way back from the last pick. For a model it is the whole block as it
+     was read just before the pick, and it stays until another model is picked
+     or the editor closes — see shared/model-undo.mjs. For a cab it is the cab
+     it was on, for eight seconds, as it always was. */
   const [undo, setUndo] = useState(null)
   const undoTimer = useRef(null)
+  /* An Undo under way (what it is doing, for the strip), and what the last
+     one came to. Putting twenty settings back over the relay takes seconds,
+     and a strip that sat still for all of them would read as stuck. */
+  const [restoring, setRestoring] = useState(null)
+  const [undoSaid, setUndoSaid] = useState(null)
+  const saidTimer = useRef(null)
   const [loading, setLoading] = useState(false)
   const [local, setLocal] = useState({})
   /* One checked write per control at a time — see commit. A ref, and above
@@ -825,6 +842,14 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
      would go to the cab's mode and DynaCab numbers on the amp. */
   const liveKey = useRef(readKey)
   liveKey.current = readKey
+  /* Which block, on which load of the preset, without the channel and scene:
+     an Undo stopped by a channel change still has something to say to this
+     block ("go back to channel A"), and nothing to say to another one. */
+  const liveLoad = useRef('')
+  liveLoad.current = `${block?.effectId ?? ''}:${rev}`
+  /* An Undo under way belongs to the block it was tapped on. Opened on
+     another block, that one's picker and Undo are its own and stay live. */
+  const restoringHere = restoring && block && restoring.eid === block.effectId ? restoring : null
 
   useEffect(() => {
     if (!block) return
@@ -861,11 +886,18 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
 
   // The offer belongs to the block it was made on, and dies with the panel.
   // So does a cab state: another block's would pick its cab through this one.
+  /* And with the buffer loading again: a Revert or another preset has put
+     other settings on the block, and an Undo would write the old ones over
+     them. */
   useEffect(() => {
     setUndo(null)
+    setUndoSaid(null)
     setCab(null)
-    return () => clearTimeout(undoTimer.current)
-  }, [block?.effectId])
+    return () => {
+      clearTimeout(undoTimer.current)
+      clearTimeout(saidTimer.current)
+    }
+  }, [block?.effectId, rev])
 
   /*
    * Derived above the effects that read them, and above the early return.
@@ -1149,13 +1181,38 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    * sends people back to the hardware editor, and the one thing you want after
    * hearing a wrong amp is to be somewhere else, quickly.
    *
-   * So it writes immediately and offers the way back for eight seconds. The
-   * previous value is already in hand; nothing has to be read to undo it.
+   * So it writes immediately and offers the way back. But the way back is not
+   * the old model's number: the FM3 loads a new model's own settings the
+   * moment it changes, so "Undo only restores the model" — the old amp came
+   * back wearing the new amp's settings. The block is read fresh just before
+   * the write, knobs and switches and channel, and Undo puts all of that back.
+   * See shared/model-undo.mjs.
    */
   const applyModel = async (value, { undoable = true } = {}) => {
     if (cab && block.slug === 'cab') return applyCab(value, { undoable })
     const key = readKey
     const was = type
+    clearTimeout(saidTimer.current)
+    setUndoSaid(null)
+    /* Fresh, not what the panel is showing: the switches are never kept on
+       it, and a knob a moment ago may not be what the unit holds now. A read
+       that fails falls back to what IS on show rather than to no Undo. */
+    let before = null
+    if (undoable && was && was.value !== Number(value)) {
+      const now = await blockParams(block.effectId).catch((err) => {
+        if (err?.linkDown) throw err
+        return null
+      })
+      before =
+        modelSnapshot(now, { channel: block.channel ?? null }) ||
+        modelSnapshot({ named: params, type: was }, { channel: block.channel ?? null })
+      /* Already on it, as far as the unit is concerned: nothing to go back to. */
+      if (before?.type.value === Number(value)) before = null
+      /* The read took a round trip. A preset, a Revert, a scene or a channel
+         that came up in it is not the block that was tapped: the model would
+         land there, on settings no Undo could reach. */
+      if (liveKey.current !== key) return
+    }
     const sent = await setType(block.effectId, Number(value))
     const fresh = await blockParams(block.effectId)
     // Another block (or channel, or scene) came up while this one was busy.
@@ -1167,21 +1224,19 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     setLocal({})
     /* A refusal was dropped here, and the swap logged as done. Said now —
        unless the read just taken shows the model on the block anyway, in
-       which case it is on the block. */
+       which case it is on the block. The block is still on the model it was
+       on, so an Undo already offered still describes it and stays. */
     if (sent?.ok === false && fresh?.type?.value !== Number(value)) {
-      setUndo(null)
       onError(MODEL_REFUSED)
       return
     }
     const name = models.find((m) => m.value === Number(value))?.name
     onChanged(`${block.name} → ${name}`)
     clearTimeout(undoTimer.current)
-    if (undoable && was && was.value !== Number(value)) {
-      setUndo(was)
-      undoTimer.current = setTimeout(() => setUndo(null), 8000)
-    } else {
-      setUndo(null)
-    }
+    /* No timer. Eight seconds was enough to take back a model; it is not
+       enough to hear one, decide, and want your settings back. A pick of the
+       model it is already on takes nothing back, and leaves an offer standing. */
+    if (before) setUndo(before)
   }
 
   /**
@@ -1243,15 +1298,59 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
 
   const undoModel = async () => {
     const back = undo
-    if (!back) return
-    setUndo(null)
-    try {
-      if (back.cab) {
+    if (!back || restoringHere) return
+    if (back.cab) {
+      setUndo(null)
+      try {
         if (!cab || block.slug !== 'cab') return onError(CAB_UNDO_LOST)
         await applyCab(null, { undoable: false, back: back.cab })
-      } else await applyModel(back.value, { undoable: false })
+      } catch (err) {
+        onError(err.message)
+      }
+      return
+    }
+    const key = readKey
+    const eid = block.effectId
+    const here = () => liveKey.current === key
+    const load = liveLoad.current
+    const onThis = () => liveLoad.current === load
+    setPicking(false)
+    clearTimeout(saidTimer.current)
+    setUndoSaid(null)
+    setRestoring({ eid, step: 'model' })
+    try {
+      const r = await restoreModel(back, {
+        channel: block.channel ?? null,
+        setType: (v) => setType(eid, v),
+        read: () => blockParams(eid),
+        write: (p, v) => setParam(eid, p.id, v, p),
+        writeEnum: (id, v) => setEnum(eid, id, v),
+        writeChecked: (p, v) => setParamConfirmed(eid, p.id, v, p),
+        progress: (p) => setRestoring({ eid, ...p }),
+        /* Every write lands on whichever channel is live. Another one, or
+           another scene or preset, stops the Undo before the next. */
+        stillHere: here
+      })
+      if (r.last && here()) {
+        setParams(r.last.named || [])
+        setLayout(r.last.layout || null)
+        setTypeState(r.last.type ?? null)
+        setLocal({})
+      }
+      const said = undoResult(r, back)
+      /* Said to the block it happened to, not to one opened since. */
+      if (onThis()) {
+        if (!said.keep) setUndo(null)
+        setUndoSaid(said)
+        /* A good one says its piece and goes; one that missed stays until the
+           next pick, so the names in it can be found and turned by hand. */
+        if (!said.bad) saidTimer.current = setTimeout(() => setUndoSaid(null), 10000)
+      }
+      if (!r.refused || r.refused === 'unread') onChanged(`${block.name} → ${back.type.name} (Undo)`)
     } catch (err) {
       onError(err.message)
+    } finally {
+      setRestoring((now) => (now?.eid === eid ? null : now))
     }
   }
 
@@ -1284,7 +1383,9 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
                     onError(err.message)
                   }
                 }}
-                disabled={busy}
+                /* Not while an Undo is putting this channel's settings back:
+                   the rest of them would land on the channel tapped. */
+                disabled={busy || !!restoringHere}
               >
                 {ch}
               </button>
@@ -1318,11 +1419,22 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
 
       {undo ? (
         <div className="undo-strip" role="status">
-          <span>Was {undo.name}</span>
-          <button className="chip" onClick={undoModel} disabled={busy}>
+          {/* A model's offer says what Undo can reach, and wraps to say it;
+              a cab's is the one line it always was. */}
+          {undo.cab ? (
+            <span>Was {undo.name}</span>
+          ) : (
+            <span className="undo-words">{restoringHere ? undoProgress(restoringHere, undo) : undoOffer(undo)}</span>
+          )}
+          <button className="chip" onClick={undoModel} disabled={busy || !!restoringHere}>
             Undo
           </button>
         </div>
+      ) : null}
+      {undoSaid ? (
+        <p className={`hint pad undo-said ${undoSaid.bad ? 'warn' : ''}`} role="status">
+          {undoSaid.text}
+        </p>
       ) : null}
 
       {models.length ? (
@@ -1333,6 +1445,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
             aria-haspopup="listbox"
             aria-expanded={picking}
             onClick={() => setPicking((v) => !v)}
+            disabled={!!restoringHere}
           >
             {/* The closed control names the model and nothing else. What it is
                 based on is the line underneath, in full, with no width to run
@@ -1345,6 +1458,10 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
             </span>
           </button>
 
+          {/* Where the choosing happens, instead of a question on every pick:
+              auditioning models is many picks in a row. Not for a cab, whose
+              pick changes the cabinet and nothing else. */}
+          {picking && !(cab && block.slug === 'cab') ? <p className="hint model-hint">{MODEL_HINT}</p> : null}
           {picking ? (
             <div className="type-list" role="listbox" aria-label="Model" ref={listRef}>
               {models.map((m, i) => (

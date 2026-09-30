@@ -8254,6 +8254,27 @@ button.sheet-close:active {
   white-space: nowrap;
 }
 
+/* A model's Undo says what it reaches, and that is a sentence: it wraps
+   rather than losing its end to an ellipsis. */
+.undo-strip .undo-words {
+  white-space: normal;
+  overflow: visible;
+}
+
+/* What an Undo came to. A miss names the settings, in the warning colour. */
+.undo-said {
+  margin-top: var(--s-1);
+}
+
+.undo-said.warn {
+  color: var(--warn, var(--live));
+}
+
+/* Under the model button while the list is open. */
+.model-hint {
+  margin: var(--s-1) 0 0;
+}
+
 /* Where a search landed. It fades on its own — a highlight that stays is a
    selection, and nothing here is selected. */
 .knob-cell.found {

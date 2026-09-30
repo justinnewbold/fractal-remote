@@ -106,6 +106,13 @@ export const FILES = [
    */
   { source: '../shared/cab-pick.mjs', target: '../mobile/src/lib/cab-pick.js' },
   /*
+   * How an Undo after a model change puts the settings back: the snapshot,
+   * the order of the writes, and what is said about the ones that missed. The
+   * FM3 loads a new model's own settings either way, so both ends need the
+   * same way back to yours.
+   */
+  { source: '../shared/model-undo.mjs', target: '../mobile/src/lib/model-undo.js' },
+  /*
    * How a knob steps from the keyboard or VoiceOver, and how those steps reach
    * the unit: the value written is the one the step reached, a run of steps is
    * one write, and one write per control is out at a time. Both ends had the

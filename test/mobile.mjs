@@ -6941,6 +6941,68 @@ export function run(test) {
     assert.match(edit, /from '\.\.\/lib\/cab-pick'/, 'the phone has its own idea of how a cab is picked')
   })
 
+  test('on the phone, Undo after a model change puts the settings back and offers no Undo of its own', () => {
+    const edit = read('mobile/src/screens/Edit.js')
+    const flat = edit.replace(/\s+/g, ' ')
+    const apply = edit.slice(edit.indexOf('const applyModel = async'), edit.indexOf('const applyCab = async'))
+    const back = edit.slice(edit.indexOf('const takeModelBack = async'), edit.indexOf('const engaged = !block.bypassed'))
+    assert.ok(apply.length > 100 && back.length > 100, 'the model swap moved; this check reads it')
+    /* The snapshot is a fresh read, before the write that loses it. */
+    const snapAt = apply.indexOf('modelSnapshot(')
+    assert.ok(snapAt > 0, 'a model pick on the phone keeps no snapshot of the settings')
+    assert.ok(apply.indexOf('await blockParams(eid)') < snapAt, 'the snapshot is not a fresh read')
+    assert.ok(snapAt < apply.indexOf('const sent = await setType(eid'), 'the snapshot is taken after the model write')
+    assert.doesNotMatch(apply, /setTimeout/, 'a model Undo still runs out on a timer')
+    /* "On the phone Undo offers another Undo": it was a fresh pick of the old model. */
+    assert.doesNotMatch(back, /swap\(|applyModel\(/, 'the phone’s Undo is a pick again, and offers another Undo')
+    assert.match(back, /await restoreModel\(back, \{/)
+    assert.match(back, /writeChecked: \(p, v\) => setParamConfirmed\(eid, p\.id, v, p\)/)
+    assert.match(back, /channel: block\.channel \?\? null/, 'the phone’s Undo cannot tell the channel moved')
+    assert.match(back, /progress: onRestoring/, 'the phone’s Undo shows nothing while it runs')
+    /* Every write lands on whichever channel is live: another one, another
+       scene or the preset loading again stops it before the next write. */
+    assert.match(back.replace(/\s+/g, ' '), /stillHere: \(\) => \{ const s = getState\(\) return liveChannel\(\) === ch0 && s\.sceneIndex === at\.sceneIndex && s\.bufferRev === at\.bufferRev \}/, 'the phone’s Undo goes on writing after the channel changed')
+    /* The pre-pick read is a round trip: a block that moved in it is not the one tapped. */
+    const movedAt = apply.indexOf('if (moved()) return')
+    assert.ok(movedAt > snapAt && movedAt < apply.indexOf('const sent = await setType(eid'), 'the phone sends the model to a channel or preset that came up during the read')
+    assert.match(apply, /if \(before && getState\(\)\.bufferRev === rev0\) onModelUndo\(before\)/, 'a pick that finished after the preset loaded again offers the old preset’s amp')
+    assert.match(edit, /from '\.\.\/lib\/model-undo'/)
+    /* Held above the panel, which is rebuilt on every channel and scene change. */
+    assert.match(flat, /const \[modelUndo, setModelUndo\] = useState\(null\) useEffect\(\(\) => setModelUndo\(null\), \[openEid, bufferRev\]\)/, 'the offer does not end with the block, or with the preset loading again')
+    assert.match(flat, /modelUndo=\{modelUndo && sameBlock\(block, modelUndo\.eid\) && modelUndo\.rev === bufferRev \? modelUndo\.snap : null\}/, 'an Undo made before the preset loaded again is offered on the new one')
+    assert.match(flat, /setModelUndo\(\(u\) => \(snap \? \{ eid: idOf\(block\), rev: bufferRev, snap \} : u && sameBlock\(block, u\.eid\) \? null : u\)\)/, 'the phone’s Undo does not know which load of the preset it was made on')
+    /* The Undo under way outlives the panel too, or a rebuilt one starts a second on top of it. */
+    assert.match(flat, /restoring=\{restoring\[idOf\(block\)\] \|\| null\}/, 'a rebuilt panel lets a second Undo start over a running one')
+    assert.doesNotMatch(edit, /const \[restoring, setRestoring\] = useState\(null\)/, 'the Undo under way is held in the panel again')
+    assert.match(flat, /disabled=\{!!restoring\} onPress=\{async \(\) => \{ try \{ await writeChannel/, 'a channel can be changed under a running Undo')
+    assert.match(flat, /restoring \? undoProgress\(restoring, modelUndo\) : undoOffer\(modelUndo\)/)
+    assert.match(flat, /<Press label="Undo" height=\{44\} disabled=\{!!restoring\} onPress=\{takeModelBack\} \/>/)
+    assert.match(edit, /\{MODEL_HINT\}/, 'the hint under the phone’s picker is gone')
+    assert.match(read('mobile/src/lib/model-undo.js'), /Generated from shared\/model-undo\.mjs/, 'the phone’s Undo rules are not generated from the shared copy')
+  })
+
+  test('the phone’s copy of the Undo rule puts back what the browser’s does', async () => {
+    const { modelSnapshot, restoreModel, undoResult } = await import('../mobile/src/lib/model-undo.js')
+    const unit = { type: 0, named: [{ id: 3, name: 'Bass', value: 7, norm: 0.7, min: 0, max: 10 }], enums: [{ id: 9, name: 'Bright', value: 1 }] }
+    const now = () => JSON.parse(JSON.stringify({ ...unit, type: { value: unit.type, name: unit.type ? 'Plexi' : 'USA Clean' } }))
+    const snap = modelSnapshot(now(), { channel: 'A' })
+    unit.type = 1
+    unit.named[0] = { ...unit.named[0], value: 5, norm: 0.5 }
+    unit.enums[0].value = 0
+    const r = await restoreModel(snap, {
+      channel: 'A',
+      setType: async (v) => ((unit.type = v), { ok: true }),
+      read: async () => now(),
+      write: async (p, v) => ((unit.named[0] = { ...unit.named[0], value: v, norm: v / 10 }), { ok: true }),
+      writeChecked: async () => ({ ok: true }),
+      writeEnum: async (id, v) => ((unit.enums[0].value = v), { ok: true })
+    })
+    assert.equal(unit.type, 0)
+    assert.equal(unit.named[0].value, 7)
+    assert.equal(unit.enums[0].value, 1)
+    assert.equal(undoResult(r, snap).text, 'Put back all 2 settings the app can see.')
+  })
+
   test('on the phone, a cab re-read that fails or reads as zeros never sends the next pick to the Preamp Type', async () => {
     const { readCab, pickCab, restoreCab, cabAfter, cabWas, cabShows, taken } = await import('../mobile/src/lib/cab-pick.js')
     const cab = (mode, dyna) => ({
