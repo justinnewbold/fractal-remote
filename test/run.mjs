@@ -6180,6 +6180,9 @@ const SUMMARY = /^GET \/presets\/\d+\/summary$/
 const STATE = 'GET /preset/scene-state'
 const WHICH = 'GET /preset'
 
+/* The block catalog App hands the store, whose `page` is each block's effect id. */
+const BLOCK_CATALOG = JSON.parse(readSrc(new URL('../src/data/blocks.json', import.meta.url), 'utf8'))
+
 /** An FM3 on slot 12, scene 1, as App's first read leaves the store. */
 function windowOnTheBench(over = {}) {
   const unit = {
@@ -6244,6 +6247,8 @@ function windowOnTheBench(over = {}) {
     unitKey: () => unit.unitKey ?? 'rig:fm3',
     /* A gen-3 by default: the computer's copy of the preset is free to read again. */
     hostKeepsCopy: () => (unit.keepsCopy === undefined ? true : unit.keepsCopy),
+    /* What a status read's ids are named by ahead of the chain read; none on an AM4. See drawOutline. */
+    outlineCatalog: () => (unit.outlines === false || unit.keepsCopy === false ? null : BLOCK_CATALOG),
     /* The event stream; `unit.gap()` is it dropping. */
     subscribeEvents: (fn, { onGap } = {}) => {
       unit.gap = () => onGap?.()
@@ -6412,7 +6417,8 @@ onTheBench('presses of Next in the Mac window read the chain once, for where the
   assert.equal(asked(CHAIN), 1, `three quick presses cost ${asked(CHAIN)} chain reads`)
   assert.equal(asked('POST /preset/select'), 3, 'a press was not sent')
   assert.equal(asked(SUMMARY), 0)
-  assert.equal(asked(STATE), 0, 'the scene the new preset opened on was read on its own, mid-load')
+  /* One status read: the pedals of where they landed, drawn ahead of the chain. */
+  assert.equal(asked(STATE), 1, 'the scene the new preset opened on was read on its own, mid-load')
 
   /* Spaced out, the way a thumb does it. */
   wire.length = 0
@@ -6448,8 +6454,8 @@ onTheBench('a preset chosen in the Mac window costs one chain read, and Play app
   assert.equal(asked('DELETE /device/cache'), 0)
   assert.deepEqual(
     wire,
-    ['POST /preset/select', WHICH, 'GET /scene', CHAIN, 'GET /preset/grid', 'GET /tempo'],
-    'a preset change is not the select, which preset, which scene and one chain read'
+    ['POST /preset/select', WHICH, 'GET /scene', STATE, CHAIN, 'GET /preset/grid', 'GET /tempo'],
+    'a preset change is not the select, which preset, which scene, the pedals and one chain read'
   )
   assert.equal(ds.getSnapshot().sceneNames[0], 'VERSE')
   /* Long after, appearing does read — the copy is not current any more. */
@@ -6768,14 +6774,16 @@ onTheBench('a scene heard while the Mac window finishes a preset read still gets
   ds.handleEvent({ type: 'changed', scope: 'preset' })
   await clock.advance(ds.OWN_SETTLE_MS + 100)
   assert.equal(asked(CHAIN), 1)
+  /* The one status read so far is the pedals, drawn ahead of the chain. */
+  assert.equal(asked(STATE), 1)
   unit.scene = 5
   ds.handleEvent({ type: 'scene', index: 5 })
   await clock.advance(100)
-  assert.equal(asked(STATE), 0)
+  assert.equal(asked(STATE), 1)
   unit.copy = null
   release()
   await clock.advance(1000)
-  assert.equal(asked(STATE), 1, 'a footswitch scene during the end of a preset read was dropped')
+  assert.equal(asked(STATE), 2, 'a footswitch scene during the end of a preset read was dropped')
   assert.equal(asked(CHAIN), 1)
   assert.equal(asked(SUMMARY), 0)
 })
@@ -6843,17 +6851,20 @@ onTheBench('after a preset read that failed, a footswitch in the Mac window read
   await clock.advance(ds.OWN_SETTLE_MS + ds.SETTLE_MS * 3 + 500)
   const tries = asked(CHAIN)
   assert.ok(tries >= 1)
+  /* The pedals drawn ahead of it were never confirmed, so they went with it. */
+  assert.notEqual(ds.chainViewOf(ds.getSnapshot()), 'outline', 'pedals drawn ahead of a chain read that failed stayed up')
+  const listed = asked(STATE)
   unit.chain = null
   unit.blocks = [{ slug: 'delay', name: 'Delay 1', effectId: 70, bypassed: false, channel: 'B' }, unit.blocks[1]]
   ds.handleEvent({ type: 'scene', index: 3 })
   await clock.advance(100)
-  assert.equal(asked(STATE), 0, 'the new preset’s states were laid over the last song’s tiles')
+  assert.equal(asked(STATE), listed, 'the new preset’s states were laid over the last song’s tiles')
   await clock.advance(ds.PRESET_SETTLE_MS + 100)
   assert.equal(asked(CHAIN), tries + 1, 'the tiles stayed on the last song after a footswitch')
   assert.ok(ds.getSnapshot().blocks.some((b) => b.slug === 'delay'))
   ds.handleEvent({ type: 'scene', index: 4 })
   await clock.advance(ds.PRESET_SETTLE_MS + 100)
-  assert.equal(asked(STATE), 1, 'this preset’s footswitch is not the status read again')
+  assert.equal(asked(STATE), listed + 1, 'this preset’s footswitch is not the status read again')
   assert.equal(asked(CHAIN), tries + 1)
 })
 
@@ -7013,6 +7024,10 @@ onTheBench('a load that moves the open block to another channel makes the editor
   const seen = []
   let last = keyNow()
   const off = ds.subscribe(() => {
+    /* The pedals drawn ahead of the chain: an editor waits through those,
+       so there is none then to read. */
+    const s = ds.getSnapshot()
+    if (s.chainOutline === ds.chainNumberOf(s)) return
     const k = keyNow()
     if (k !== last) seen.push((last = k))
   })
@@ -10880,8 +10895,104 @@ onTheBench('a preset chosen in the Mac window is not drawn with the last song’
   assert.equal(asked('POST /preset/blocks/133/bypass'), 1, 'this preset’s own chain cannot be switched once it is read')
 })
 
-onTheBench('a new preset whose chain could not be read says so, and Try again reads it', async () => {
+/*
+ * "Is there any way to pull like the label in the pedal outline or something
+ * real fast first before it actually pulls the rest of the info from the
+ * device." The Mac window's half of the phone's pedals-first: the status read
+ * a moment after the select, and the one chain read after it, unchanged.
+ */
+const SONG_30 = [
+  { slug: 'input', name: 'Input 1', effectId: 37, bypassed: false, channel: null },
+  { slug: 'reverb', name: 'Reverb 1', effectId: 66, bypassed: true, channel: 'B' },
+  { slug: 'amp', name: 'Amp 1', effectId: 58, bypassed: false, channel: 'C' },
+  { slug: 'drive', name: 'Drive 1', effectId: 118, bypassed: false, channel: 'A' },
+  { slug: 'output', name: 'Output 1', effectId: 42, bypassed: false, channel: null }
+]
+const songs = (unit) => {
+  const chains = { 12: unit.blocks, 30: SONG_30, 31: SONG_30 }
+  Object.defineProperty(unit, 'blocks', { configurable: true, get: () => chains[unit.number] || [], set: (v) => (chains[unit.number] = v) })
+  return chains
+}
+
+onTheBench('a preset never loaded in the Mac window shows its pedals before the chain read answers, and costs one chain read', async () => {
   const { clock, unit, asked } = windowOnTheBench()
+  songs(unit)
+  unit.lag = (line) => (line === CHAIN ? 1500 : 0)
+  const load = ds.loadPreset(30)
+  assert.equal(chainOnScreen(), 'loading')
+  await clock.advance(ds.OUTLINE_AFTER_MS - 50)
+  assert.equal(asked(STATE), 0, 'the pedals were listed before the unit had a moment to take the select')
+  await clock.advance(100)
+  assert.equal(asked(STATE), 1)
+  assert.equal(asked(CHAIN), 0)
+  assert.equal(chainOnScreen(), 'outline', 'the pedals the unit listed are not on screen')
+  assert.deepEqual(ds.getSnapshot().blocks.map((b) => b.slug), ['input', 'drive', 'amp', 'reverb', 'output'])
+  /* Play plays them; an editor waits for the chain. */
+  assert.equal(ds.chainKnownOf(ds.getSnapshot()), true, 'an editor would open on the outline')
+  await clock.advance(ds.OWN_SETTLE_MS + 3000)
+  await load
+  assert.equal(chainOnScreen(), 'ready')
+  assert.equal(ds.getSnapshot().chainOutline, null)
+  assert.deepEqual(ds.getSnapshot().blocks.map((b) => b.slug), ['input', 'reverb', 'amp', 'drive', 'output'], 'the chain read did not replace the outline')
+  await clock.advance(30000)
+  assert.equal(asked(CHAIN), 1, `a preset change with its pedals up first cost ${asked(CHAIN)} chain reads`)
+  assert.equal(asked(STATE), 1)
+  assert.equal(asked(SUMMARY), 0)
+  /* Back to 12 and to 30 again: the remembered chain, and no status read for it. */
+  ds.loadPreset(12)
+  await clock.advance(3000)
+  const listed = asked(STATE)
+  ds.loadPreset(30)
+  assert.equal(chainOnScreen(), 'ready', 'a remembered chain waited behind the pedals')
+  await clock.advance(3000)
+  assert.equal(asked(STATE), listed, 'a preset whose chain is remembered was listed again')
+
+  /* A tap on one of those pedals goes by its effect id; one from the last song's tile does not. */
+  unit.lag = (line) => (line === CHAIN ? 1500 : 0)
+  ds.loadPreset(31)
+  await clock.advance(ds.OUTLINE_AFTER_MS + 50)
+  assert.equal(chainOnScreen(), 'outline')
+  await ds.writeBypass(66, false)
+  assert.equal(asked('POST /preset/blocks/66/bypass'), 1, 'a tap on a pedal drawn ahead of the chain did not reach the unit by its id')
+  assert.equal(ds.getSnapshot().blocks.find((b) => b.effectId === 66).bypassed, false)
+  await assert.rejects(() => ds.writeBypass(133, false), (err) => err.notThisChain === true, 'a tap from the last song’s tile switched a block on this one')
+  assert.equal(asked('POST /preset/blocks/133/bypass'), 0)
+  await clock.advance(5000)
+  assert.equal(chainOnScreen(), 'ready')
+})
+
+onTheBench('in the Mac window a status read with nothing to draw keeps the cards, and an AM4 is never asked', async () => {
+  /* Empty, failed, an AM4 — and slow, answering only after the chain read, which it must not be drawn over. */
+  for (const over of [{ status: () => [] }, { status: () => { throw new Error('timed out') } }, { keepsCopy: false }, { lag: (line) => (line === STATE ? 3000 : 0) }]) {
+    const { clock, unit, asked } = windowOnTheBench(over)
+    songs(unit)
+    const seen = []
+    const off = ds.subscribe(() => seen.push(chainOnScreen()))
+    const load = ds.loadPreset(30)
+    await clock.advance(ds.OUTLINE_AFTER_MS + 50)
+    assert.equal(chainOnScreen(), 'loading', 'a status read with nothing to draw put something up')
+    await clock.advance(ds.OWN_SETTLE_MS + 3000)
+    await load
+    off()
+    assert.ok(!seen.includes('outline'))
+    assert.equal(chainOnScreen(), 'ready')
+    assert.equal(asked(CHAIN), 1)
+    assert.equal(asked(STATE), over.keepsCopy === false ? 0 : 1)
+    ds.reset()
+  }
+})
+
+onTheBench('the Mac window’s Play offers no channel hold on pedals drawn ahead of the chain', () => {
+  const gig = readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
+  assert.match(gig, /const has = \(channels\?\.length \|\| 0\) > 1 && !outline/, 'a pedal drawn ahead of the chain offers its channels')
+  assert.match(gig, /outline=\{shown\.outline\}/)
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  assert.match(app, /blocks=\{chainNow\.outline \? \[\] : blocks\}/, 'the Scenes sheet switches channels on the outline')
+})
+
+onTheBench('a new preset whose chain could not be read says so, and Try again reads it', async () => {
+  /* No pedals ahead of the chain here: this is about the chain read itself. */
+  const { clock, unit, asked } = windowOnTheBench({ outlines: false })
   unit.chain = () => {
     throw new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78')
   }
@@ -10931,7 +11042,8 @@ onTheBench('the same preset read again keeps its chain on screen, marked as upda
 })
 
 onTheBench('a chain that turns out to be the computer’s copy of the last song is not drawn under this one', async () => {
-  const { clock, unit, nameOf } = windowOnTheBench()
+  /* No pedals ahead of the chain here: this is about the chain read itself. */
+  const { clock, unit, nameOf } = windowOnTheBench({ outlines: false })
   /* The computer answers out of its copy of the preset just left. */
   unit.copy = () => ({ name: nameOf(12), scenes: ['VERSE', '', '', '', '', '', '', ''] })
   const load = ds.loadPreset(30)
@@ -10945,7 +11057,8 @@ onTheBench('a chain that turns out to be the computer’s copy of the last song 
 })
 
 onTheBench('the last song’s chain out of the computer’s copy is never drawn live under this one, not even while the copy is asked', async () => {
-  const { clock, unit, nameOf, asked } = windowOnTheBench()
+  /* No pedals ahead of the chain here: this is about the chain read itself. */
+  const { clock, unit, nameOf, asked } = windowOnTheBench({ outlines: false })
   /* The copy answers when the test says, so the moment between the chain
      landing and the copy being judged can be looked at. */
   let answerCopy
@@ -10975,7 +11088,8 @@ onTheBench('the last song’s chain out of the computer’s copy is never drawn 
 })
 
 onTheBench('a copy that still carries another name after the wait is this preset’s, renamed, and its chain goes up', async () => {
-  const { clock, unit, nameOf, asked } = windowOnTheBench()
+  /* No pedals ahead of the chain here: this is about the chain read itself. */
+  const { clock, unit, nameOf, asked } = windowOnTheBench({ outlines: false })
   unit.copy = () => ({ name: nameOf(12), scenes: ['VERSE', '', '', '', '', '', '', ''] })
   const load = ds.loadPreset(30)
   await clock.advance(ds.OWN_SETTLE_MS + 500)
@@ -11045,6 +11159,34 @@ onTheBench('a chain read from before a reset neither holds the chain busy nor en
   assert.equal(busy(), false)
 })
 
+test('the pedals drawn ahead of the chain are named from the catalog, in signal order, and nothing is guessed', async () => {
+  const { outlineChain } = await import('../shared/chain-outline.mjs')
+  const view = await import('../shared/chain-view.mjs')
+  const list = outlineChain(
+    [
+      { effectId: 42, bypassed: false, channel: null },
+      { effectId: 66, bypassed: true, channel: 'B' },
+      { effectId: 9999, bypassed: false, channel: 'A' },
+      { effectId: 58, bypassed: false, channel: 'C' },
+      { effectId: 58, bypassed: true, channel: 'D' },
+      { effectId: 94, bypassed: false, channel: 'A' },
+      { effectId: 37, bypassed: false, channel: null }
+    ],
+    BLOCK_CATALOG
+  )
+  assert.deepEqual(list.map((b) => b.slug), ['input', 'wah', 'amp', 'reverb', 'output'], 'not in the order a chain runs, or an unknown id was guessed at')
+  assert.deepEqual(list.find((b) => b.slug === 'amp'), { slug: 'amp', name: 'Amp', effectId: 58, bypassed: false, channel: 'C' })
+  assert.equal(outlineChain([], BLOCK_CATALOG), null)
+  assert.equal(outlineChain(null, BLOCK_CATALOG), null)
+  assert.equal(outlineChain([{ effectId: 9999 }], BLOCK_CATALOG), null)
+  /* This preset's, drawn; a tap may switch one, nothing else may act. */
+  assert.equal(view.chainView({ want: 30, chainFor: 30, busy: true, known: 30, outline: 30 }), 'outline')
+  assert.equal(view.chainView({ want: 30, chainFor: 30, busy: true, known: null, outline: 30 }), 'updating', 'an outline outlived the chain it stood in for')
+  assert.equal(view.chainSwitches('outline'), true)
+  assert.equal(view.chainActs('outline'), false)
+  assert.equal(view.chainElsewhere('outline'), false)
+})
+
 test('the words for a chain that is on its way are one set, and the stores draw them from the same rule', async () => {
   const view = await import('../shared/chain-view.mjs')
   const { chainView, chainActs, chainElsewhere, CHAIN_WORDS } = view
@@ -11088,7 +11230,7 @@ test('every browser panel that draws the chain draws another preset’s as a wai
   assert.equal((app.match(/<Chain\s/g) || []).length, 2)
   assert.match(gig, /<ChainWait chain=\{shown\} className="gig-chain-wait" onRetry=\{retryHere\} \/>/, 'a Try again that worked on Play still says it could not read the chain')
   assert.match(gig, /const retryHere = async \(\) => \{\s*const list = await retryChain\(\)\s*setChain\(Array\.isArray\(list\) \? 'ok' : 'failed'\)/)
-  assert.match(gig, /const chanBlock = chanEid === null \|\| shown\.elsewhere \? null :/, 'the last song’s channel sheet stays up, switching this song’s block by its number')
+  assert.match(gig, /const chanBlock = chanEid === null \|\| shown\.elsewhere(?: \|\| shown\.outline)? \? null :/, 'the last song’s channel sheet stays up, switching this song’s block by its number')
   assert.match(gig, /useEffect\(\(\) => \{\s*if \(shown\.elsewhere\) setChanEid\(null\)/, 'the channel sheet comes back by itself over the new song’s tiles')
   /* The strip above the editor says it; the editor only holds the space. */
   assert.match(grid, /<ChainWait chain=\{chainNow\}[^>]*\squiet\b/, 'the Edit screen says the chain is loading twice')

@@ -38,7 +38,16 @@ export function useChain({ editing = false } = {}) {
     const timer = setTimeout(() => setLate(true), UPDATING_AFTER_MS)
     return () => clearTimeout(timer)
   }, [view])
-  return { view, number, known, late: view === 'updating' && late, elsewhere: chainElsewhere(view) || (editing && known) }
+  /* `outline` is this preset's pedals from the small status read, before the
+     chain read: drawn dimmed, and a tap switches one on or off, nothing more. */
+  return {
+    view,
+    number,
+    known,
+    outline: view === 'outline',
+    late: view === 'updating' && late,
+    elsewhere: chainElsewhere(view) || (editing && known)
+  }
 }
 
 /**

@@ -21,6 +21,10 @@
  *               a Save or a Revert. It stays up; it greys, and says so, only
  *               once the read has taken long enough to notice.
  *   'ready'     this preset's chain, and nothing is reading it.
+ *   'outline'   this preset's pedals, drawn from the one small status read
+ *               before the chain read has landed (see chain-outline.mjs).
+ *               Drawn a little dimmed; a tap switches a block on or off,
+ *               and nothing else acts until the chain read replaces it.
  *
  * KNOWN_CHAINS. "Presets are loading much slower now when switching, taking
  * about 3 seconds to load scene name and pedals." The grey cards were right
@@ -50,7 +54,7 @@ export const UPDATING_AFTER_MS = 400
  * for, null when nobody knows. `busy` is whether a read of the chain is on
  * its way, a wait before one included.
  */
-export function chainView({ want, chainFor, busy, known = null }) {
+export function chainView({ want, chainFor, busy, known = null, outline = null }) {
   /* No preset yet, or a unit too busy to say which: nothing to hold the
      blocks to, so what there is is drawn. */
   if (!Number.isInteger(want) || want < 0) return 'ready'
@@ -59,12 +63,19 @@ export function chainView({ want, chainFor, busy, known = null }) {
      chosen (see KNOWN_CHAINS): the one read after the switch confirms it or
      replaces it, and until then it is drawn and played like any other. Not
      'updating' — nothing about it is being changed. */
-  if (known === want) return 'ready'
+  if (known === want) return outline === want ? 'outline' : 'ready'
   return busy ? 'updating' : 'ready'
 }
 
 /** Whether a tile drawn from this chain may write to the unit. */
 export const chainActs = (view) => view === 'ready' || view === 'updating'
+
+/*
+ * Whether a tile may switch its block on or off. An outline may: its effect
+ * ids came out of this preset's own status read, and a bypass is sent by
+ * effect id. A channel, a knob or a move waits for the chain read.
+ */
+export const chainSwitches = (view) => chainActs(view) || view === 'outline'
 
 /** Whether the blocks on screen belong to another preset, and are not drawn. */
 export const chainElsewhere = (view) => view === 'loading' || view === 'failed'

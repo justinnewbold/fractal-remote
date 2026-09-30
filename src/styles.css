@@ -9399,6 +9399,14 @@ button.recent-del:focus-visible {
   transition: opacity 0.2s;
 }
 
+/* The pedals drawn from the status read ahead of the chain read: this
+   preset's, still finishing. Dimmed less than a slow re-read, and no words. */
+.chain-outline .chain-strip,
+.gig-blocks.chain-outline {
+  opacity: 0.72;
+  transition: opacity 0.2s;
+}
+
 .chain-updating-word {
   margin: 0;
   color: var(--silk-faint);
@@ -12504,4 +12512,37 @@ html[data-rail='on'] .gig[data-scene-layout='mine'] .gig-scenes {
 
 .scene-arrange-reset {
   align-self: flex-start;
+}
+
+/*
+ * The tempo light on Tap: "a green light dot ... that flashes at the current
+ * tempo." A short flash on each beat, dim between, like the unit's own LED.
+ */
+.gig-tap {
+  position: relative;
+}
+
+.tap-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  pointer-events: none;
+  animation: tap-beat var(--beat, 0.5s) linear infinite;
+}
+
+@keyframes tap-beat {
+  0%,
+  18% {
+    opacity: 1;
+    box-shadow: 0 0 6px var(--ok);
+  }
+  19%,
+  100% {
+    opacity: 0.25;
+    box-shadow: none;
+  }
 }

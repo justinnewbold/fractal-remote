@@ -64,6 +64,7 @@ import UnlockOffer from '../components/UnlockOffer'
 import Note from '../components/Note'
 import { fixById, fixFor } from '../lib/troubleshooting'
 import Press from '../components/Press'
+import TempoDot from '../components/TempoDot'
 import Tile from '../components/Tile'
 import Coach from '../components/Coach'
 import Sheet from '../components/Sheet'
@@ -307,7 +308,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
    * blocks it knew on screen, and a tip over stale tiles is a tip about a
    * preset that may not be loaded.
    */
-  const holdDoesSomething = chain === 'ok' && blocks.length > 0 && channels?.length > 1 && !chainNow.elsewhere
+  const holdDoesSomething = chain === 'ok' && blocks.length > 0 && channels?.length > 1 && !chainNow.elsewhere && !chainNow.outline
   const [coach, setCoach] = useState(false)
 
   useEffect(() => {
@@ -676,7 +677,9 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             setGrid(e.nativeEvent.layout.width)
             setBlockGrid(e.nativeEvent.layout.height)
           }}
-          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, opacity: chainNow.late ? 0.55 : 1 }}
+          /* Dimmed a little while they are only the outline: this preset's
+             pedals, the chain read still finishing behind them. */
+          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, opacity: chainNow.late ? 0.55 : chainNow.outline ? 0.72 : 1 }}
         >
           {chainNow.elsewhere ? (
             <View style={{ width: '100%' }}>
@@ -701,8 +704,9 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
                 on={engaged}
                 height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
                 onPress={() => writeBypass(idOf(block), !block.bypassed)}
+                /* Not on the outline: a channel waits for the chain read. */
                 onLongPress={
-                  channels?.length > 1
+                  channels?.length > 1 && !chainNow.outline
                     ? () => setPicking(picking === idOf(block) ? null : idOf(block))
                     : undefined
                 }
@@ -826,6 +830,8 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             height={foot}
             onPress={tapTempo}
             onLongPress={() => setTyping(true)}
+            /* "A green light dot ... that flashes at the current tempo." */
+            badge={<TempoDot bpm={bpm} />}
           />
         </View>
 
@@ -874,7 +880,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
       />
 
       <ChannelSheet
-        block={chainNow.elsewhere ? null : blocks.find((b) => sameBlock(b, picking)) || null}
+        block={chainNow.elsewhere || chainNow.outline ? null : blocks.find((b) => sameBlock(b, picking)) || null}
         channels={channels}
         onClose={() => setPicking(null)}
         onPick={(ch) => {

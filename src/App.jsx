@@ -166,6 +166,7 @@ import {
 } from './lib/forgefx'
 import { isDemo, setDemo, demoUnit, setDemoUnit } from './lib/forgefx'
 import { UNITS as DEMO_UNITS, demoSentence, unitByKey } from './lib/demoUnits'
+import blockCatalog from './data/blocks.json' with { type: 'json' }
 import { buyOnWeb, checkUnlocked, webPrice } from './lib/webPurchase'
 import {
   detect,
@@ -281,6 +282,13 @@ attachDriver({
   keepSceneNames,
   rememberedSceneNames,
   isRemote: () => remoteActive(),
+  /*
+   * What a status read's effect ids are named by, for the pedals drawn ahead
+   * of the chain read (see deviceState.drawOutline) — only where those ids
+   * are this catalog's: a gen-3 on the desk, or a grid unit in the demo. An
+   * AM4 or a VP4 keeps its grey cards until the chain read, as before.
+   */
+  outlineCatalog: () => (hostKeepsCopy() === true && (!isDemo() || !!unitByKey(demoUnit())?.grid) ? blockCatalog : null),
   /* Which unit a remembered chain belongs to: see deviceState.knownChain. */
   unitKey: () => `${isDemo() ? `demo:${demoUnit()}` : remoteActive() ? 'away' : 'rig'}:${currentDeviceSlug()}`
 })
@@ -4792,7 +4800,8 @@ export default function App() {
             place to be typed. */}
         <RenamePreset preset={preset} busy={busy} onRename={rename} />
         <Scenes
-          blocks={blocks}
+          /* Not the outline drawn ahead of the chain read: a channel waits for it. */
+          blocks={chainNow.outline ? [] : blocks}
           preset={preset}
           count={device?.capabilities?.sceneCount || 8}
           channelNames={device?.capabilities?.channelNames}

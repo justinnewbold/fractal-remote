@@ -170,7 +170,9 @@ async function rigOnTheBench(over = {}) {
       `const kept = ${JSON.stringify(over.keptNames || {})}\n` +
       'export const forgetSceneNames = () => true\nexport const recallSceneNames = async (owner, n) => kept[n] || []\nexport const rememberSceneNames = () => true\n'
   }
-  for (const f of ['own-echo.js', 'chain-view.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js']) {
+  /* The catalog the pedals are named from before the chain is read; see lib/chain-outline. */
+  files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
+  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -1010,7 +1012,7 @@ export function run(test) {
     for (const [call, what] of [
       /* After the one refusal that sends nothing: a tile drawn for the preset
          just left (see lib/chain-view), which has edited nothing. */
-      ['export function writeBypass\\(id, bypassed\\) \\{ if \\(notThisChain\\(\\)\\) return Promise\\.resolve\\(false\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a bypass'],
+      ['export function writeBypass\\(id, bypassed\\) \\{ if \\(notSwitchable\\(id\\)\\) return Promise\\.resolve\\(false\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a bypass'],
       ['export function writeChannel\\(id, channel\\) \\{ if \\(notThisChain\\(\\)\\) return Promise\\.resolve\\(false\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a channel'],
       ['export function beginChainWrite\\(\\) \\{ [^}]*noteEdited\\(\\)', 'a chain move'],
       ['export function writeTempo\\(bpm\\) \\{ const was = state\\.bpm noteEdited\\(\\)', 'a typed tempo']
@@ -4857,6 +4859,27 @@ export function run(test) {
     assert.match(app, /Put them back in order/, 'the browser cannot put them back')
     assert.doesNotMatch(read('src/components/Gig.jsx'), /SceneArrange|onPointerDown/, 'a scene can be moved from Play in the browser')
     assert.match(read('src/styles.css'), /\.scene-arrange-tile \{[\s\S]{0,500}touch-action: none;/, 'a finger scrolls the page instead of dragging')
+  })
+
+  test('Tap wears a green light that flashes at the tempo', () => {
+    /* "Can we add a green light dot to the tap tempo button that flashes at
+       the current tempo." Phone and browser. */
+    const dot = read('mobile/src/components/TempoDot.js')
+    assert.match(dot, /60000 \/ bpm/, 'the light does not keep the tempo')
+    assert.match(dot, /useNativeDriver: true/, 'the light is timed on the JavaScript thread')
+    assert.match(dot, /backgroundColor: color\.ok/, 'the light is not green')
+    assert.match(read('mobile/src/screens/Stage.js'), /badge=\{<TempoDot bpm=\{bpm\} \/>\}/, 'the phone Tap has no light')
+    assert.match(read('src/components/TapTempo.jsx'), /className="tap-dot"[^>]*'--beat': `\$\{60 \/ bpm\}s`/, 'the browser Tap has no light')
+    assert.match(read('src/styles.css'), /\.tap-dot \{[\s\S]{0,300}animation: tap-beat var\(--beat/, 'the browser light does not flash')
+  })
+
+  test('a preset search starts at the top of its results', () => {
+    /* "Preset search isn't working." The list opened centred on the preset
+       being played and kept that scroll when the search shrank it, so the
+       matches sat above the screen. */
+    const src = read('mobile/src/screens/Presets.js')
+    assert.match(src, /if \(hunting\) list\.current\?\.scrollToOffset\(\{ offset: 0, animated: false \}\)/, 'typing a search leaves the list scrolled past its own results')
+    assert.match(src, /\}, \[query\]\)/, 'the list is not moved when the search changes')
   })
 
   test('the paywall sells the unlock, not whichever package came first', async () => {
@@ -10016,7 +10039,8 @@ export function run(test) {
     assert.equal(asked('POST /preset/select'), 3, 'a press was not sent')
     assert.equal(asked(SUMMARY), 0)
     assert.equal(asked('DELETE /device/cache'), 0, 'a preset change deletes the computer’s profile of the unit')
-    assert.equal(asked(STATE), 0, 'the scene the new preset opened on was read on its own, mid-load')
+    /* One status read: the pedals of where they landed, drawn ahead of the chain. */
+    assert.equal(asked(STATE), 1, 'the scene the new preset opened on was read on its own, mid-load')
 
     /* Spaced out, the way a thumb does it. */
     wire.length = 0
@@ -10050,8 +10074,8 @@ export function run(test) {
     assert.equal(asked(SUMMARY), 0, 'the loaded slot was dumped again for names its chain read already carried')
     assert.deepEqual(
       wire.filter((l) => l.startsWith('GET /preset') || l.startsWith('POST') || l === 'GET /scene'),
-      ['POST /preset/select', WHICH, 'GET /scene', CHAIN, 'GET /preset/grid'],
-      'a preset change is not the select, which preset, which scene and one chain read'
+      ['POST /preset/select', WHICH, 'GET /scene', STATE, CHAIN, 'GET /preset/grid'],
+      'a preset change is not the select, which preset, which scene, the pedals and one chain read'
     )
     /* Long after, coming back does read — the copy is not current any more. */
     await clock.advance(rig.CHAIN_FRESH_MS + 1000)
@@ -10123,6 +10147,195 @@ export function run(test) {
     assert.equal(asked(CHAIN), 3)
     assert.deepEqual(idsOf(rig.getState().allBlocks), [66], 'the read after the switch did not replace a chain that had changed')
     assert.equal(asked(SUMMARY), 0)
+  })
+
+  /*
+   * "Is there any way to pull like the label in the pedal outline or something
+   * real fast first before it actually pulls the rest of the info from the
+   * device." A preset never seen gets its pedals from the one small status
+   * read, a moment after the select, and the one chain read still replaces
+   * them when it always did.
+   */
+  const SONG_30 = [
+    { slug: 'input', name: 'Input 1', effectId: 37, bypassed: false, channel: null },
+    { slug: 'reverb', name: 'Reverb 1', effectId: 66, bypassed: true, channel: 'B' },
+    { slug: 'amp', name: 'Amp 1', effectId: 58, bypassed: false, channel: 'C' },
+    { slug: 'drive', name: 'Drive 1', effectId: 118, bypassed: false, channel: 'A' },
+    { slug: 'output', name: 'Output 1', effectId: 42, bypassed: false, channel: null }
+  ]
+  const slugsOf = (list) => list.map((b) => b.slug)
+
+  test('a preset never seen shows its pedals from one small read, before the chain read answers, and still costs one chain read', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    const chains = twoSongs(unit)
+    chains[30] = SONG_30
+    /* The dump is slow; the status read is not. */
+    unit.lag = (line) => (line === CHAIN ? 1500 : 0)
+    const view = () => rig.chainViewOf(rig.getState())
+    rig.loadPreset(30)
+    assert.equal(view(), 'loading')
+    await clock.advance(rig.OUTLINE_AFTER_MS - 50)
+    assert.equal(asked(STATE), 0, 'the pedals were listed before the unit had a moment to take the select')
+    assert.equal(view(), 'loading')
+    await clock.advance(100)
+    assert.equal(asked(STATE), 1, 'the pedals were not listed ahead of the chain')
+    assert.equal(asked(CHAIN), 0)
+    assert.equal(view(), 'outline', 'the pedals the unit listed are not on screen')
+    const s = rig.getState()
+    assert.equal(s.chainOutline, 30)
+    /* In the order a chain runs, the ends and the looper left off the stage as always. */
+    assert.deepEqual(slugsOf(s.blocks), ['drive', 'amp', 'reverb'])
+    assert.deepEqual(slugsOf(s.allBlocks), ['input', 'drive', 'amp', 'reverb', 'output'])
+    assert.equal(s.blocks.find((b) => b.slug === 'amp').channel, 'C')
+    assert.equal(s.blocks.find((b) => b.slug === 'reverb').bypassed, true)
+    /* The chain read is asked when it always was, and the outline stays up while it answers. */
+    await clock.advance(rig.OWN_SETTLE_MS)
+    assert.equal(asked(CHAIN), 1)
+    assert.equal(view(), 'outline')
+    await clock.advance(3000)
+    assert.equal(view(), 'ready')
+    const after = rig.getState()
+    assert.equal(after.chainOutline, null)
+    assert.equal(after.chainKnown, null)
+    /* The unit's own order and names replace the outline's. */
+    assert.deepEqual(slugsOf(after.blocks), ['reverb', 'amp', 'drive'])
+    assert.equal(after.blocks.find((b) => b.slug === 'amp').name, 'Amp 1')
+    await clock.advance(30000)
+    assert.equal(asked(CHAIN), 1, `a preset change with its pedals up first cost ${asked(CHAIN)} chain reads`)
+    assert.equal(asked(STATE), 1)
+    assert.equal(asked(SUMMARY), 0)
+  })
+
+  test('a pedal drawn ahead of the chain switches by its own effect id, and waits for the chain for its channel', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    const chains = twoSongs(unit)
+    chains[30] = SONG_30
+    unit.lag = (line) => (line === CHAIN ? 1500 : 0)
+    const lastSong = rig.getState().allBlocks.find((b) => b.slug === 'drive').effectId
+    rig.loadPreset(30)
+    await clock.advance(rig.OUTLINE_AFTER_MS + 50)
+    assert.equal(rig.chainViewOf(rig.getState()), 'outline')
+    assert.equal(await rig.writeBypass(66, false), true, 'a tap on a pedal drawn ahead of the chain was refused')
+    assert.equal(asked('POST /preset/blocks/66/bypass'), 1, 'the tap did not reach the unit by its effect id')
+    assert.equal(rig.getState().blocks.find((b) => b.effectId === 66).bypassed, false)
+    assert.equal(await rig.writeChannel(58, 'D'), false, 'a channel was changed from the outline')
+    assert.equal(asked(/\/channel$/), 0)
+    /* The second half of a tap on the last song's tile, still on its way. */
+    assert.equal(await rig.writeBypass(lastSong, false), false, 'a tap from the last song’s tile switched a block on this one')
+    assert.equal(asked(`POST /preset/blocks/${lastSong}/bypass`), 0)
+    /* And the channel hold is not offered on those tiles. */
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /channels\?\.length > 1 && !chainNow\.outline\s*\? \(\) => setPicking/, 'the stage offers a channel hold on the outline')
+    assert.match(stage, /block=\{chainNow\.elsewhere \|\| chainNow\.outline \? null/, 'a channel sheet opens over the outline')
+    await clock.advance(3000)
+    assert.equal(rig.chainViewOf(rig.getState()), 'ready')
+    assert.equal(asked(CHAIN), 1)
+  })
+
+  test('a status read that fails or lists nothing keeps the cards until the chain', async () => {
+    for (const status of [() => [], () => [{ effectId: 9999, bypassed: false, channel: 'A' }], () => { throw Object.assign(new Error('timed out'), { status: 504 }) }]) {
+      const { rig, clock, unit, asked } = await rigOnTheBench()
+      const chains = twoSongs(unit)
+      chains[30] = SONG_30
+      unit.status = status
+      rig.loadPreset(30)
+      await clock.advance(rig.OUTLINE_AFTER_MS + 50)
+      assert.equal(asked(STATE), 1)
+      assert.equal(rig.chainViewOf(rig.getState()), 'loading', 'a status read with nothing to draw put something up')
+      await clock.advance(3000)
+      assert.equal(rig.chainViewOf(rig.getState()), 'ready')
+      assert.equal(asked(CHAIN), 1)
+      assert.equal(asked(STATE), 1, 'a failed status read was asked again, or turned into more')
+    }
+  })
+
+  test('the pedals are drawn only for the tap that is still the newest, and a remembered chain wins over them', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    const chains = twoSongs(unit)
+    chains[30] = SONG_30
+    /* Two taps inside the moment: only where they landed is listed. */
+    rig.loadPreset(30)
+    await clock.advance(100)
+    rig.loadPreset(20)
+    await clock.advance(rig.OUTLINE_AFTER_MS + 50)
+    assert.equal(asked(STATE), 1, 'the preset left inside the moment was listed too')
+    assert.equal(rig.getState().chainOutline, 20)
+    assert.deepEqual(idsOf(rig.getState().allBlocks).sort(), idsOf(chains[20]).sort())
+    await clock.advance(3000)
+    assert.equal(asked(CHAIN), 1)
+
+    /* On to 30 and away again before its chain read: its pedals go with it. */
+    unit.lag = (line) => (line === CHAIN ? 1500 : 0)
+    rig.loadPreset(30)
+    await clock.advance(rig.OUTLINE_AFTER_MS + 50)
+    assert.equal(rig.chainViewOf(rig.getState()), 'outline')
+    rig.loadPreset(12)
+    assert.equal(rig.getState().chainOutline, null)
+    assert.equal(await rig.writeBypass(66, false), false, 'a tap on 30’s pedal after leaving it switched a block on 12')
+    assert.equal(asked('POST /preset/blocks/66/bypass'), 0)
+    await clock.advance(5000)
+    unit.lag = null
+
+    /* Back to 20, read before: its remembered chain is up on the tap, and nothing is listed. */
+    const listed = asked(STATE)
+    rig.loadPreset(20)
+    assert.equal(rig.chainViewOf(rig.getState()), 'ready', 'a remembered chain waited behind the pedals')
+    assert.equal(rig.getState().chainKnown, 20)
+    await clock.advance(3000)
+    assert.equal(asked(STATE), listed, 'a preset whose chain is remembered was listed again')
+    assert.equal(rig.getState().chainOutline, null)
+  })
+
+  test('a tap the unit refuses while the pedals are up puts them back as they were, outline and all', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    const chains = twoSongs(unit)
+    chains[30] = SONG_30
+    unit.lag = (line) => (line === CHAIN ? 1500 : 0)
+    rig.loadPreset(30)
+    await clock.advance(rig.OUTLINE_AFTER_MS + 50)
+    assert.equal(rig.chainViewOf(rig.getState()), 'outline')
+    unit.refuseSelect = true
+    assert.equal(await rig.loadPreset(40), false)
+    assert.equal(rig.getState().preset.number, 30)
+    assert.equal(rig.chainViewOf(rig.getState()), 'outline', 'a refused tap left the outline drawn as the confirmed chain')
+    assert.equal(await rig.writeChannel(58, 'D'), false)
+    unit.refuseSelect = false
+    await clock.advance(5000)
+    assert.equal(rig.chainViewOf(rig.getState()), 'ready', 'the chain read the refused tap called off never came back')
+    assert.deepEqual(slugsOf(rig.getState().blocks), ['reverb', 'amp', 'drive'])
+    assert.ok(asked(CHAIN) >= 1)
+  })
+
+  test('a status read that is slow to answer never holds the chain read back, and is not drawn over it', async () => {
+    const { rig, clock, unit, heard } = await rigOnTheBench()
+    const chains = twoSongs(unit)
+    chains[30] = SONG_30
+    unit.lag = (line) => (line === STATE ? 3000 : 0)
+    heard.length = 0
+    rig.loadPreset(30)
+    await clock.advance(6000)
+    const at = (line) => heard.find(([, l]) => l === line)?.[0]
+    const waited = at(CHAIN) - at('POST /preset/select')
+    assert.ok(waited < rig.OWN_SETTLE_MS + 200, `the chain was read ${waited}ms after the select: the status read held it back`)
+    assert.equal(rig.chainViewOf(rig.getState()), 'ready')
+    assert.equal(rig.getState().chainOutline, null, 'the late outline was drawn over the chain it stood in for')
+    assert.deepEqual(slugsOf(rig.getState().blocks), ['reverb', 'amp', 'drive'])
+  })
+
+  test('a unit whose ids the catalog does not name keeps its cards, as before', async () => {
+    /* An AM4-shaped report: no output meters, and no long copy. */
+    const { rig, clock, unit, asked } = await rigOnTheBench({ capabilities: { scenes: 4 } })
+    const chains = twoSongs(unit)
+    chains[30] = SONG_30
+    const seen = []
+    rig.useRig((s) => s)
+    const off = globalThis.__rigSub(() => seen.push(rig.chainViewOf(rig.getState())))
+    rig.loadPreset(30)
+    await clock.advance(5000)
+    off()
+    assert.equal(asked(STATE), 0, 'a unit the outline is not for was asked for its pedals')
+    assert.ok(!seen.includes('outline'))
+    assert.equal(asked(CHAIN), 1)
   })
 
   test('the wait before the chain read is counted from the select, not from the reads after it', async () => {
@@ -10411,14 +10624,16 @@ export function run(test) {
     rig.handleEvent({ type: 'changed', scope: 'preset' })
     await clock.advance(rig.OWN_SETTLE_MS + 100)
     assert.equal(asked(CHAIN), 1)
+    /* The one status read so far is the pedals, drawn ahead of the chain. */
+    assert.equal(asked(STATE), 1)
     unit.scene = 5
     rig.handleEvent({ type: 'scene', index: 5 })
     await clock.advance(100)
-    assert.equal(asked(STATE), 0, 'the scene was read in the middle of the preset’s read')
+    assert.equal(asked(STATE), 1, 'the scene was read in the middle of the preset’s read')
     unit.copy = null
     release()
     await clock.advance(1000)
-    assert.equal(asked(STATE), 1, 'a footswitch scene during the end of a preset read was dropped')
+    assert.equal(asked(STATE), 2, 'a footswitch scene during the end of a preset read was dropped')
     assert.equal(asked(CHAIN), 1)
     assert.equal(asked(SUMMARY), 0)
   })
@@ -10581,6 +10796,9 @@ export function run(test) {
   test('the last song’s chain out of the computer’s copy is never drawn live on the phone, not even while the copy is asked', async () => {
     const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
     const view = () => rig.chainViewOf(rig.getState())
+    /* A unit too busy to list its blocks, so no pedals go up ahead of the
+       chain: what is on screen is the last song's, or nothing. */
+    unit.status = () => []
     let answerCopy
     const copyAsked = new Promise((go) => (answerCopy = go))
     unit.copy = () => copyAsked.then(() => ({ name: nameOf(12), scenes: ['VERSE', '', '', '', '', '', '', ''], cells: [] }))
@@ -10654,7 +10872,7 @@ export function run(test) {
   test('the phone’s Stage and Edit draw another preset’s chain as a wait, not as tiles', () => {
     const stage = read('mobile/src/screens/Stage.js')
     assert.match(stage, /\{chainNow\.elsewhere \? \(\s*<View style=\{\{ width: '100%' \}\}>\s*<ChainWait chain=\{chainNow\}/, 'the stage draws the last song’s tiles under this song’s name')
-    assert.match(stage, /block=\{chainNow\.elsewhere \? null : blocks\.find/, 'a channel sheet opened on the last song stays up over this one')
+    assert.match(stage, /block=\{chainNow\.elsewhere(?: \|\| chainNow\.outline)? \? null : blocks\.find/, 'a channel sheet opened on the last song stays up over this one')
     assert.match(stage, /useEffect\(\(\) => \{\s*if \(chainNow\.elsewhere\) setPicking\(null\)/, 'the channel sheet comes back by itself over the new song’s tiles')
     const edit = read('mobile/src/screens/Edit.js')
     assert.match(edit, /\{chainNow\.elsewhere \? <ChainWait chain=\{chainNow\} height=\{TAP\} \/> : null\}/, 'the bench says nothing about a chain on its way')
@@ -10673,6 +10891,9 @@ export function run(test) {
     await clock.advance(rig.OWN_SETTLE_MS + 100)
     assert.equal(asked(CHAIN), 1)
     assert.equal(rig.getState().chain, 'failed')
+    /* The pedals drawn ahead of it were never confirmed, so they went with it. */
+    assert.notEqual(rig.chainViewOf(rig.getState()), 'outline', 'pedals drawn ahead of a chain read that failed stayed up')
+    const listed = asked(STATE)
     await clock.advance(rig.PRESET_SETTLE_MS + 100)
     assert.equal(asked(CHAIN), 2, 'a chain that could not be read after a preset change was never asked for again')
 
@@ -10682,7 +10903,7 @@ export function run(test) {
     unit.scene = 3
     rig.handleEvent({ type: 'scene', index: 3 })
     await clock.advance(100)
-    assert.equal(asked(STATE), 0, 'the new preset’s states were laid over the last song’s tiles')
+    assert.equal(asked(STATE), listed, 'the new preset’s states were laid over the last song’s tiles')
     await clock.advance(rig.PRESET_SETTLE_MS + 100)
     assert.equal(asked(CHAIN), 3, 'the tiles stayed on the last song after a footswitch')
     assert.ok(rig.getState().blocks.some((b) => b.slug === 'delay'))
@@ -10691,7 +10912,7 @@ export function run(test) {
     /* This song's tiles now: a footswitch is the status read again. */
     rig.handleEvent({ type: 'scene', index: 4 })
     await clock.advance(rig.PRESET_SETTLE_MS + 100)
-    assert.equal(asked(STATE), 1)
+    assert.equal(asked(STATE), listed + 1)
     assert.equal(asked(CHAIN), 3, 'a footswitch reads the chain although it is this preset’s')
   })
 
@@ -10753,6 +10974,10 @@ export function run(test) {
     const seen = []
     let last = keyNow()
     const off = sub(() => {
+      /* The pedals drawn ahead of the chain: the editor waits through
+         those, so there is no panel then to remount. */
+      const s = rig.getState()
+      if (s.chainOutline === s.preset?.number) return
       const k = keyNow()
       if (k !== last) seen.push((last = k))
     })

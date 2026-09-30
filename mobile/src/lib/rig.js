@@ -38,9 +38,13 @@ import {
   createOwnEchoes,
   judgeCopy
 } from './own-echo'
-import { chainActs, chainView } from './chain-view'
+import { chainActs, chainSwitches, chainView } from './chain-view'
+import { OUTLINE_AFTER_MS, outlineChain } from './chain-outline'
+import { blockCatalog } from './blockCatalog'
+import { unitByKey } from './demoUnits'
 
 export { CHAIN_FRESH_MS, OWN_ECHO_MS, OWN_SETTLE_MS, PRESET_SETTLE_MS } from './own-echo'
+export { OUTLINE_AFTER_MS } from './chain-outline'
 
 const initial = {
   /** null until the unit has said what it is. */
@@ -105,6 +109,15 @@ const initial = {
    * until then it is this preset's chain — drawn, and live. null otherwise.
    */
   chainKnown: null,
+  /*
+   * The preset whose chain on screen is only its outline: the pedals the
+   * small status read listed, drawn before the chain read has landed (see
+   * drawOutline). Always also chainKnown — it is this preset's, up before its
+   * read — and gone with it: whatever puts chainKnown to anything else takes
+   * this with it (see set). A tap on one switches it on or off; a channel,
+   * a knob or a move waits for the read.
+   */
+  chainOutline: null,
   error: null,
   /* Whether `error` is a complaint about the link, and so is withdrawn
      when the link comes back. See faultFrom. */
@@ -149,6 +162,10 @@ export function set(patch) {
     patch = { ...patch, unsaved: null }
     discardUnsaved(state.unsaved)
   }
+  /* An outline is a chain up before its read, and goes when that one does. */
+  if ('chainKnown' in patch && !('chainOutline' in patch) && patch.chainKnown !== state.chainOutline) {
+    patch = { ...patch, chainOutline: null }
+  }
   state = { ...state, ...patch }
   emit()
 }
@@ -156,7 +173,8 @@ export function set(patch) {
 export const getState = () => state
 
 /** 'ready', 'updating', 'loading' or 'failed' for the chain on screen; see lib/chain-view. */
-export const chainViewOf = (s) => chainView({ want: s.preset?.number, chainFor: s.chainFor, busy: s.chainBusy, known: s.chainKnown })
+export const chainViewOf = (s) =>
+  chainView({ want: s.preset?.number, chainFor: s.chainFor, busy: s.chainBusy, known: s.chainKnown, outline: s.chainOutline })
 /*
  * Back to nothing: on sign-out, and on the way into or out of the demo.
  *
@@ -993,7 +1011,14 @@ function markJudged(n) {
   judging = null
   /* The chain up from memory waited for the read to be judged; this is it. */
   if (state.chainKnown === n && lastRead?.key === keyFor(n)) {
-    set({ allBlocks: lastRead.all, blocks: device.stageBlocks(lastRead.all), chainFor: n, chainKnown: null })
+    const patch = { allBlocks: lastRead.all, blocks: device.stageBlocks(lastRead.all), chainFor: n, chainKnown: null }
+    /* And the load it carries, in the same change: apart, an open panel
+       remounted for the chain and again for the load. See readBlocks. */
+    if (bufferOwed) {
+      bufferOwed = false
+      patch.bufferRev = state.bufferRev + 1
+    }
+    set(patch)
   } else set({ chainFor: n })
   syncChainBusy()
 }
@@ -1752,9 +1777,17 @@ const asWas = () => ({ blocks: state.blocks, allBlocks: state.allBlocks })
  * sent, and nothing is marked as edited.
  */
 const notThisChain = () => !chainActs(chainViewOf(state))
+/*
+ * A switch on or off may come from an outline's tiles too: their effect ids
+ * are this preset's own, out of its own status read (see drawOutline). Only
+ * an id the chain on screen holds, though, whichever chain that is — a tap
+ * from the last song's tile, still on its way when this song's pedals went
+ * up, is not one of this preset's.
+ */
+const notSwitchable = (id) => !chainSwitches(chainViewOf(state)) || !state.allBlocks.some((b) => sameBlock(b, id))
 
 export function writeBypass(id, bypassed) {
-  if (notThisChain()) return Promise.resolve(false)
+  if (notSwitchable(id)) return Promise.resolve(false)
   const was = asWas()
   noteEdited()
   /*
@@ -1996,7 +2029,13 @@ export async function loadPreset(number) {
    * put back to the stored one. See knownChain.
    */
   const recall = number !== was?.number ? knownChain(number) : null
-  const wasChain = { allBlocks: state.allBlocks, blocks: state.blocks, chainFor: state.chainFor, chainKnown: state.chainKnown }
+  const wasChain = {
+    allBlocks: state.allBlocks,
+    blocks: state.blocks,
+    chainFor: state.chainFor,
+    chainKnown: state.chainKnown,
+    chainOutline: state.chainOutline
+  }
   /*
    * The scene names go with it too. They belong to the preset being left, so
    * carrying them across would put the last song's names on this song's tiles —
@@ -2042,8 +2081,9 @@ export async function loadPreset(number) {
       disown(token)
       /* Only the newest tap decides what is on screen. */
       if (run === presetRun) {
-        /* The chain that was up goes back with the preset it belongs to. */
-        if (recall) set(wasChain)
+        /* The chain that was up goes back with the preset it belongs to —
+           and what it was: up from memory, or only the outline. */
+        set(recall ? wasChain : { chainKnown: wasChain.chainKnown, chainOutline: wasChain.chainOutline })
         set({ ...faultFrom(err), chain: 'ok', preset: was })
         /* The preset put back may be one whose read this tap called off —
            the settled read, or the one more read the computer's copy of
@@ -2095,6 +2135,16 @@ export async function loadPreset(number) {
     if (again) settleAlso.preset = true
     await refreshScene()
     if (run !== presetRun) return true
+    /* The pedals, from one small read, while the chain read waits for the
+       unit. Only for a preset whose chain nothing on screen knows yet, and
+       only once the unit has said it is on it. See drawOutline. */
+    /* Never past the moment the chain read is due: a status read the relay
+       lost holds nothing up, and one that lands late is still drawn if the
+       chain has not beaten it there. */
+    if (!recall && !again && number !== was?.number) {
+      await Promise.race([drawOutline(number, run, sentAt), new Promise((go) => setTimeout(go, settleFrom(sentAt)))])
+    }
+    if (run !== presetRun) return true
     /* What is already known about this slot's scenes, at once — off this
        phone and the computer's store, not the unit. See quickSceneNames. */
     await quickSceneNames()
@@ -2117,6 +2167,50 @@ export async function loadPreset(number) {
  * has had the whole wait to settle.
  */
 const settleFrom = (sentAt) => Math.max(0, OWN_SETTLE_MS - (Date.now() - sentAt))
+
+/*
+ * THE PEDALS FIRST, THE CHAIN AFTER. "Is there any way to pull like the label
+ * in the pedal outline or something real fast first before it actually pulls
+ * the rest of the info from the device."
+ *
+ * A preset never seen here had grey cards until the one chain read — a whole
+ * preset dump, on purpose not asked for until the unit has settled. The status
+ * read is not a dump: every placed block's effect id, bypass and channel,
+ * about forty bytes, the same read a scene tap makes. An id is enough to name
+ * and colour a tile, so the tiles go up from it a moment after the select,
+ * in the order chains usually run (lib/chain-outline), dimmed a little. The
+ * chain read still goes when it always did, and replaces them.
+ *
+ * Only where the ids are the catalog's — a gen-3 on a rig, a grid unit in the
+ * demo — and only for the tap that is still the newest, on the preset the unit
+ * has said it is on. Nothing is put up for a read that failed, came back
+ * empty, or listed nothing a stage draws: the cards stay, as they did.
+ */
+const outlinesHere = () => hostKeepsCopy() === true && (!isDemo() || !!unitByKey(demoUnit())?.grid)
+
+async function drawOutline(number, run, sentAt) {
+  if (!outlinesHere()) return
+  const wait = OUTLINE_AFTER_MS - (Date.now() - sentAt)
+  if (wait > 0) await new Promise((go) => setTimeout(go, wait))
+  /* Whose chain is up may have been settled meanwhile: a newer tap, or a read. */
+  /* And only while the read after the switch is still to come: drawn after
+     it, an outline would be left standing with nothing to replace it. */
+  const stillWanted = () => run === presetRun && presetBusy() && state.preset?.number === number && state.chainFor !== number
+  if (!stillWanted()) return
+  let states = null
+  try {
+    states = await device.sceneState()
+  } catch (err) {
+    logDebug('chain', 'the pedals could not be listed ahead of the chain', err?.message)
+    return
+  }
+  if (!stillWanted()) return
+  const all = outlineChain(states, blockCatalog)
+  const blocks = all ? device.stageBlocks(all) : []
+  if (!blocks.length) return
+  statusIds = new Set(states.map((s) => s?.effectId))
+  set({ allBlocks: all, blocks, chain: 'ok', chainFor: number, chainKnown: number, chainOutline: number })
+}
 
 /*
  * The scene names this phone kept for the slot, on the tap — before the

@@ -154,6 +154,34 @@ export default function Presets({ onBack }) {
   }, [slots, preset?.number, hunting])
 
   /*
+   * A SEARCH STARTS AT THE TOP OF ITS RESULTS.
+   *
+   * "Preset search isn't working." It was finding them. The list opens
+   * centred on the preset being played — row 444, say — and typing shrank it
+   * to a handful of matches without moving it, so it sat scrolled far past
+   * the end of its own results and showed nothing. Every change of the query
+   * goes back to the first match; clearing it goes back to the preset being
+   * played, the way the list opened.
+   */
+  const searchedBefore = useRef(false)
+  useEffect(() => {
+    if (!hunting && !searchedBefore.current) return
+    const id = requestAnimationFrame(() => {
+      try {
+        if (hunting) list.current?.scrollToOffset({ offset: 0, animated: false })
+        else if (slots && Number.isInteger(preset?.number)) {
+          list.current?.scrollToIndex({ index: Math.min(preset.number, slots - 1), viewPosition: 0.5, animated: false })
+        }
+      } catch {
+        /* Still measuring; the next keystroke tries again. */
+      }
+    })
+    searchedBefore.current = hunting
+    return () => cancelAnimationFrame(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
+
+  /*
    * THE JUMPS. "Can we add the 100 200 300 400 500 thing to the mobile apps
    * as well? And obviously on the AM4/VP4 since they have less slots, maybe
    * just make those like 20 40 60 80 100?"

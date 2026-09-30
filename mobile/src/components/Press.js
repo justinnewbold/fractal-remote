@@ -35,6 +35,11 @@ export default function Press({
    */
   after,
   /*
+   * Something small in the top right corner — the tempo light on Tap. Drawn
+   * over the button rather than in the row, so it never moves the label.
+   */
+  badge,
+  /*
    * Mirror the left picture. Previous and Next are the same chevron pointing
    * opposite ways, and one file flipped is better than two files that could
    * drift apart.
@@ -160,6 +165,11 @@ export default function Press({
         </View>
         {after ? <Picture source={after} tint={ink} /> : null}
       </View>
+      {badge ? (
+        <View pointerEvents="none" style={{ position: 'absolute', top: space.sm, right: space.sm }}>
+          {badge}
+        </View>
+      ) : null}
     </Pressable>
   )
 }

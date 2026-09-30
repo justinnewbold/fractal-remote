@@ -449,7 +449,7 @@ export default function Gig({
    */
   const [chanEid, setChanEid] = useState(null)
   /* A channel sheet opened on the last preset's block does not stay up over this one's. */
-  const chanBlock = chanEid === null || shown.elsewhere ? null : blocks.find((b) => b.effectId === chanEid) || null
+  const chanBlock = chanEid === null || shown.elsewhere || shown.outline ? null : blocks.find((b) => b.effectId === chanEid) || null
   /* Closed, not only hidden: kept, it came back over the new song's tiles the
      moment its chain landed — same block number, new preset. */
   useEffect(() => {
@@ -887,14 +887,17 @@ export default function Gig({
 
       {!shown.elsewhere ? <ChainUpdating chain={shown} /> : null}
 
+      {/* Dimmed a little while they are only the outline: this preset's
+          pedals, the chain read still finishing behind them. */}
       {!shown.elsewhere && blocks.length ? (
-        <div className={`gig-blocks ${shown.late ? 'chain-updating' : ''}`} ref={blocksRef}>
+        <div className={`gig-blocks ${shown.late ? 'chain-updating' : shown.outline ? 'chain-outline' : ''}`} ref={blocksRef}>
           {blocks.map((block) => (
             <BlockTile
               key={block.effectId}
               block={block}
               channels={channels}
               busy={toggling === block.effectId}
+              outline={shown.outline}
               onToggle={() => toggle(block)}
               onHold={() => setChanEid(block.effectId)}
               icon={icons ? blockIcon(block.slug) : null}
@@ -1061,10 +1064,11 @@ export default function Gig({
  * The hold is answered by Gig, which owns the one channel sheet; the tile
  * only says it was held.
  */
-function BlockTile({ block, channels, busy, onToggle, onHold, icon }) {
+function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, icon }) {
   /* Only where there is something to choose. Not every block is channelled,
-     and a menu with one entry in it is a menu that wasted a gesture. */
-  const has = (channels?.length || 0) > 1
+     and a menu with one entry in it is a menu that wasted a gesture. And not
+     on the outline drawn ahead of the chain read: a channel waits for it. */
+  const has = (channels?.length || 0) > 1 && !outline
   const hold = useLongPress(
     () => {
       haptic()
