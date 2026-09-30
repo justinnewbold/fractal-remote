@@ -4393,6 +4393,24 @@ button.chan-btn.current {
 }
 
 /*
+ * The search box over the model list. Full width and no floor of its own: the
+ * bare text-field rule gives every field 230px, which is wider than the panel
+ * on a small phone. Its size is left to that same rule, so the touch floor
+ * that stops iOS zooming on a tap reaches it too.
+ */
+input.type-search {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin-top: var(--s-1);
+  font-family: var(--body);
+}
+
+.type-none {
+  margin: var(--s-2) 0 0;
+}
+
+/*
  * In the flow, not floating over it.
  *
  * The obvious build is an absolutely positioned menu, and it was one. The panel

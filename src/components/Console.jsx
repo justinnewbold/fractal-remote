@@ -8,6 +8,7 @@ import { jumpsFor } from '../lib/presetJumps'
 import { logDebug } from '../lib/debugLog'
 import { photoFor } from '../lib/gearPhotos'
 import { descriptionFor } from '../lib/lineage'
+import { searchGear } from '../lib/gearCatalog'
 
 const SHORT = {
   wah: 'WAH',
@@ -976,6 +977,41 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     return () => clearTimeout(clear)
   }, [loading, shown, block])
 
+  /* The model picker's, which is described at "A list of our own" below. */
+  const [picking, setPicking] = useState(false)
+  /*
+   * What is typed in the picker's search box.
+   *
+   * "Model pickers have no search." Three hundred and thirty-one amps is a
+   * list you scroll for a minute to find the one Plexi you meant, and the
+   * phone has had a find box above its list all along.
+   */
+  const [hunt, setHunt] = useState('')
+  const picker = useRef(null)
+  const listRef = useRef(null)
+  const huntRef = useRef(null)
+  // Which kind of pointer pressed the button that opened it, if any.
+  const openedWith = useRef(null)
+  useDismiss(picker, () => setPicking(false), { open: picking, ignore: '.type-open' })
+
+  // Open where you already are. A native menu does this and a list that starts
+  // at the top of three hundred names would be a step backwards without it.
+  useEffect(() => {
+    const how = openedWith.current
+    openedWith.current = null
+    if (!picking) return
+    const here = listRef.current?.querySelector('[aria-selected="true"]')
+    here?.scrollIntoView({ block: 'center' })
+    /*
+     * The search box takes the typing only when a mouse opened the list. A
+     * focused box on a phone or tablet brings the keyboard up over the very
+     * list you opened to look at, and a keyboard press lands on the current
+     * row so the arrows go on working as they did.
+     */
+    if (how === 'mouse') huntRef.current?.focus({ preventScroll: true })
+    else here?.focus?.({ preventScroll: true })
+  }, [picking])
+
   if (!block) {
     return (
       <div className="block-panel empty">
@@ -1059,19 +1095,18 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    * handled below. And the row stays one tall tap target rather than two lines
    * of small print.
    */
-  const [picking, setPicking] = useState(false)
-  const picker = useRef(null)
-  const listRef = useRef(null)
-  useDismiss(picker, () => setPicking(false), { open: picking, ignore: '.type-open' })
+  /* Its state and hooks are up with the panel's others, above the empty
+     panel's early return. Down here they were one number of hooks on the
+     render with no block and another on the render a block arrived, and
+     React throws on that rather than guessing. */
 
-  // Open where you already are. A native menu does this and a list that starts
-  // at the top of three hundred names would be a step backwards without it.
-  useEffect(() => {
-    if (!picking) return
-    const here = listRef.current?.querySelector('[aria-selected="true"]')
-    here?.scrollIntoView({ block: 'center' })
-    here?.focus?.({ preventScroll: true })
-  }, [picking])
+  /*
+   * The rows the search leaves, word by word on the model's name or the amp
+   * it is based on — the same match the gear sheet in Settings uses, so
+   * "marshall plexi" finds the same models in both places. Only worked out
+   * while the list is open: the panel redraws on every knob turn.
+   */
+  const listed = picking ? searchGear(models.map((m) => ({ ...m, gear: m.basedOn })), hunt) : models
 
   const pickAt = (i) => {
     const row = listRef.current?.querySelectorAll('.type-row')[i]
@@ -1082,16 +1117,35 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   const onPickKey = (e, i) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      pickAt((i + 1) % models.length)
+      pickAt((i + 1) % listed.length)
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      pickAt((i - 1 + models.length) % models.length)
+      pickAt((i - 1 + listed.length) % listed.length)
     } else if (e.key === 'Home') {
       e.preventDefault()
       pickAt(0)
     } else if (e.key === 'End') {
       e.preventDefault()
-      pickAt(models.length - 1)
+      pickAt(listed.length - 1)
+    }
+  }
+
+  /*
+   * Down from the box goes into the list. Enter does nothing: a model change
+   * is a sound change, and "the first thing that happened to match" is not a
+   * choice anybody made — the pick is a row you press.
+   */
+  const onHuntKey = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      // An empty box is the whole list, opened centred on the model you are on:
+      // Down goes on from there, as the native menu did. Once something is
+      // typed the list has jumped to its top, and the first match is where
+      // you are looking.
+      const here = hunt.trim() ? -1 : listed.findIndex((m) => m.value === chosenValue)
+      pickAt(here >= 0 ? here : 0)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
     }
   }
 
@@ -1465,7 +1519,14 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
             className="type-open"
             aria-haspopup="listbox"
             aria-expanded={picking}
-            onClick={() => setPicking((v) => !v)}
+            onPointerDown={(e) => {
+              openedWith.current = e.pointerType
+            }}
+            onClick={() => {
+              // Every opening starts from the whole list.
+              if (!picking) setHunt('')
+              setPicking(!picking)
+            }}
             disabled={!!restoringHere}
           >
             {/* The closed control names the model and nothing else. What it is
@@ -1484,8 +1545,29 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
               pick changes the cabinet and nothing else. */}
           {picking && !(cab && block.slug === 'cab') ? <p className="hint model-hint">{MODEL_HINT}</p> : null}
           {picking ? (
+            <input
+              type="text"
+              className="type-search"
+              ref={huntRef}
+              value={hunt}
+              placeholder="Search models"
+              aria-label="Search models"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              onChange={(e) => {
+                setHunt(e.target.value)
+                // A narrower list starts at its top, not wherever the long one was scrolled.
+                if (listRef.current) listRef.current.scrollTop = 0
+              }}
+              onKeyDown={onHuntKey}
+            />
+          ) : null}
+          {picking && !listed.length ? <p className="hint type-none">Nothing named like that.</p> : null}
+          {picking && listed.length ? (
             <div className="type-list" role="listbox" aria-label="Model" ref={listRef}>
-              {models.map((m, i) => (
+              {listed.map((m, i) => (
                 <button
                   type="button"
                   key={m.value}

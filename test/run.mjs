@@ -1095,7 +1095,10 @@ test('the picker keeps what the native menu did for free', () => {
   for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End']) {
     assert.ok(src.includes(`e.key === '${key}'`), `${key} does nothing in the model list`)
   }
-  assert.match(src, /pickAt\(\(i - 1 \+ models\.length\) % models\.length\)/, 'arrowing up off the top does not wrap')
+  // Over the rows the search left, not the whole list behind them: wrapping
+  // round three hundred names while five are on show lands on one you cannot see.
+  assert.match(src, /pickAt\(\(i - 1 \+ listed\.length\) % listed\.length\)/, 'arrowing up off the top does not wrap')
+  assert.match(src, /pickAt\(listed\.length - 1\)/, 'End goes to the end of the whole list, past what the search shows')
 
   // Announced as what it is, so it is a listbox to a screen reader too.
   assert.match(src, /aria-haspopup="listbox"/)
@@ -1121,6 +1124,97 @@ test('the picker keeps what the native menu did for free', () => {
    * inside the clip does.
    */
   assert.ok(!/position: absolute/.test(rule('.type-list {')), 'the list floats again, so the sheet can clip it')
+})
+
+test('the model picker has a search box above its list', async () => {
+  /*
+   * "Model pickers have no search." Three hundred and thirty-one amps is a
+   * list you scroll for a minute to find the one Plexi you meant, and the
+   * phone has had a find box over its list all along.
+   */
+  const src = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+
+  // The box, and above the list rather than under three hundred rows.
+  const box = src.indexOf('className="type-search"')
+  assert.ok(box > 0, 'the model list has no search box')
+  assert.ok(box < src.indexOf('role="listbox" aria-label="Model"'), 'the search box is under the list')
+  assert.match(src, /aria-label="Search models"/)
+
+  // The rows drawn are the ones the search left.
+  assert.match(src, /\{listed\.map\(\(m, i\) => \(/, 'the list still draws every model whatever is typed')
+  assert.ok(!/\{models\.map\(\(m, i\) => \(/.test(src), 'the list still draws every model whatever is typed')
+  /*
+   * Word by word, on the name or the amp it is based on, through the same
+   * match as the gear sheet in Settings so the two cannot disagree. `gear` is
+   * the lineage alone: the maker would put all forty Mesas under "mesa".
+   */
+  assert.match(src, /import \{ searchGear \} from '\.\.\/lib\/gearCatalog'/)
+  assert.match(src, /searchGear\(models\.map\(\(m\) => \(\{ \.\.\.m, gear: m\.basedOn \}\)\), hunt\)/)
+
+  const { GEAR_GROUPS, searchGear } = await import('../src/lib/gearCatalog.js')
+  const amps = GEAR_GROUPS.find((g) => g.key === 'amp').entries.map((e, value) => ({
+    value,
+    name: e.name,
+    basedOn: e.basedOn,
+    manufacturer: e.manufacturer
+  }))
+  const search = (q) => searchGear(amps.map((m) => ({ ...m, gear: m.basedOn })), q)
+  const plexi = search('marshall plexi')
+  assert.ok(plexi.length, 'the real amp’s name finds nothing')
+  assert.ok(plexi.every((m) => /marshall/i.test(`${m.name} ${m.basedOn}`)))
+  assert.equal(search('plexi marshall').length, plexi.length, 'the order the words were typed in matters')
+  assert.ok(search('brit 800').length, 'the model’s own name finds nothing')
+  assert.equal(search('  ').length, amps.length, 'an empty box hides models')
+  assert.equal(search('zzzz nothing').length, 0)
+  // Rows keep what they are, so a pick still sends the model's own number.
+  assert.ok(plexi.every((m) => Number.isInteger(m.value)))
+
+  // And an empty answer says so, in the same words the phone uses.
+  assert.match(src, /\{picking && !listed\.length \? <p className="hint type-none">Nothing named like that\.<\/p> : null\}/)
+
+  // Every opening starts from the whole list.
+  assert.match(src, /if \(!picking\) setHunt\(''\)/)
+
+  /*
+   * The box takes the typing only when a mouse opened the list. A focused box
+   * on a phone brings the keyboard up over the list you opened to look at.
+   */
+  assert.match(src, /onPointerDown=\{\(e\) => \{\s*openedWith\.current = e\.pointerType/)
+  assert.match(src, /if \(how === 'mouse'\) huntRef\.current\?\.focus\(\{ preventScroll: true \}\)\s*else here\?\.focus/)
+
+  // Enter in the box picks nothing: a model change is a sound change.
+  const keys = src.slice(src.indexOf('const onHuntKey = '), src.indexOf('const valueOf = '))
+  assert.ok(keys.includes("e.key === 'Enter'"), 'Enter in the box is not handled')
+  assert.ok(!/swapModel|applyModel|setPicking/.test(keys), 'Enter in the search box picks a model on its own')
+  assert.match(src, /onKeyDown=\{onHuntKey\}/)
+  // Down from an empty box goes to the model you are on, not row 1 of 331.
+  assert.match(keys, /hunt\.trim\(\) \? -1 : listed\.findIndex\(\(m\) => m\.value === chosenValue\)/, 'Down from the box goes to the top of the list instead of the model you are on')
+  assert.ok(!/'ArrowDown'\) \{\s*e\.preventDefault\(\)\s*pickAt\(0\)/.test(keys), 'Down from the box always goes to the top of the list')
+
+  // Wide enough for a phone: the bare field rule's 230px is wider than the panel.
+  const css = readSrc(new URL('../src/styles.css', import.meta.url), 'utf8')
+  const rule = css.slice(css.indexOf('input.type-search {'), css.indexOf('}', css.indexOf('input.type-search {')))
+  assert.match(rule, /min-width: 0/)
+  assert.match(rule, /width: 100%/)
+})
+
+test('the block panel calls every hook before it can return early', () => {
+  /*
+   * The picker's hooks sat below `if (!block) return`, which is one number of
+   * hooks on a render with no block and another on the render one arrives.
+   * React throws on that and the editor goes blank.
+   */
+  const src = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+  const start = src.indexOf('export function BlockPanel(')
+  const rest = src.slice(start + 1)
+  const body = src.slice(start, start + 1 + rest.search(/\n(?:export )?function /))
+  const early = body.indexOf('  if (!block) {')
+  assert.ok(early > 0, 'the empty panel’s early return has moved; point this test at it')
+  const after = [...body.slice(early).matchAll(/\buse[A-Z]\w*\(/g)].map((m) => m[0])
+  assert.deepEqual(after, [], 'a hook is called after the panel can return early')
+  for (const hook of ['const [picking, setPicking] = useState(false)', "const [hunt, setHunt] = useState('')", 'useDismiss(picker,']) {
+    assert.ok(body.indexOf(hook) > 0 && body.indexOf(hook) < early, `${hook} is below the early return`)
+  }
 })
 
 test('a family names the amp behind a whole run of models', async () => {
