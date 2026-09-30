@@ -190,10 +190,10 @@ export default function SaveBar({
  * plain words, with the one thing worth doing about it. Under the bar rather
  * than in it, because on a phone the bar has no room left for a sentence.
  */
-export function SaveLate({ onCancel }) {
+export function SaveLate({ onCancel, words = SAVE_LATE_WORDS }) {
   return (
     <div className="save-late" role="status">
-      <span>{SAVE_LATE_WORDS}</span>
+      <span>{words}</span>
       <button className="chip" onClick={onCancel}>
         Cancel
       </button>

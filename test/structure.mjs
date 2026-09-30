@@ -495,6 +495,20 @@ export function run(test) {
     assert.ok(gate < opened, 'the top bar is behind a status check')
   })
 
+  test('a restore still waiting on the computer can be called off with the Presets sheet shut', () => {
+    /*
+     * The panel's notice and Cancel go when the sheet does, and the computer
+     * can still load the snapshot over whatever is playing when it gets to it.
+     * So the wait is drawn under the bar as a late save is, with its Cancel.
+     */
+    const chrome = src.slice(src.indexOf('<TopBar'), src.indexOf("view === 'play' ? ("))
+    assert.match(
+      chrome,
+      /\{queuedRestore && sheet !== 'presets' \? \(\s*<SaveLate\s+onCancel=\{cancelQueuedRestore\}/,
+      'a restore from the phone is out with nothing on screen to say so, or to stop it'
+    )
+  })
+
   test('the unit name is pressed, and goes somewhere different in the demo', () => {
     /*
      * "Make it so that if you tap the top left button where it shows the

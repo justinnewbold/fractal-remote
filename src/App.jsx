@@ -14,6 +14,15 @@ import SaveBar, { SaveLate } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
 import { overwriteCheck } from './lib/overwrite'
 import { SAVE_CANCELLED, SAVE_FRESH_MS, startSaveWait } from '../shared/save-wait.mjs'
+import {
+  carryOutRestore,
+  dirtyAfterRestore,
+  restoreNow,
+  restoreRequest,
+  startRestoreWait,
+  RESTORE_LATE_WORDS,
+  RESTORE_UNREACHED
+} from './lib/restoreViaComputer'
 import { getMode } from './lib/theme'
 import { Modifiers, SceneMatrix } from './components/Modifiers'
 import Feedback from './components/Feedback'
@@ -124,6 +133,20 @@ import {
   pendingSaveKey,
   saveResultKey,
   saveProgressKey,
+  parkRestore,
+  takeParkedRestore,
+  clearParkedRestore,
+  cancelParkedRestore,
+  reportRestore,
+  readRestoreResult,
+  reportRestorePicked,
+  readRestoreProgress,
+  pendingRestoreKey,
+  listVersions,
+  versionBytes,
+  snapshotSlot,
+  presetName as storedSlotName,
+  loadPresetBytes,
   lookUpName,
   forgetPresetName,
   forgetAllPresetNames,
@@ -2518,6 +2541,186 @@ export default function App() {
   const cancelQueuedSave = useCallback(() => queuedWait.current?.cancel(), [])
 
   /*
+   * Snapshots: "Put back" and "Play it", at the Mac or from away.
+   *
+   * Both buttons went to the unit as /version/…, and the relay refuses every
+   * one of those — so on a phone they failed with "You can't load or restore
+   * a version from your phone". The refusal stays; what travels instead is a
+   * request left in the computer's store, carried out below by the Mac window,
+   * exactly as a save from the phone is. The waiting is held here rather than
+   * in the panel, so closing the Presets sheet does not lose the answer.
+   *
+   * At the Mac it is done at once, by the same restoreNow the Mac uses for a
+   * phone — so a Put back keeps a copy of the slot first wherever it was
+   * pressed. See lib/restoreViaComputer.js.
+   */
+  const restoreApi = useCallback(
+    () => ({
+      listVersions: () => listVersions(),
+      versionBytes,
+      snapshotSlot,
+      /* Raw, `<EMPTY>` and all: the one proof a 422 means an empty slot. */
+      slotName: (n) => storedSlotName(n).then((r) => r?.name),
+      loadPresetBytes,
+      storePreset,
+      unitSlug: currentDeviceSlug,
+      slotOutside: (n) => slotOutside(n, device?.capabilities),
+      demo: isDemo()
+    }),
+    [device?.capabilities]
+  )
+  /*
+   * What a finished restore leaves unsaved — see dirtyAfterRestore. The ref
+   * too, because read() in this same pass checks it before taking the
+   * loaded name as the slot's.
+   */
+  const afterRestore = (mode) => {
+    const unsaved = dirtyAfterRestore(mode)
+    dirtyRef.current = unsaved
+    setDirty(unsaved)
+    setSavedAt(null)
+  }
+  const [queuedRestore, setQueuedRestore] = useState(null)
+  const restoreWait = useRef(null)
+  useEffect(() => () => restoreWait.current?.stop(), [])
+  const restoreFromVersion = useCallback(
+    async (version, mode) => {
+      if (!remoteActive()) {
+        setBusy(true)
+        try {
+          const done = await restoreNow(
+            { versionId: version.id, mode, slot: version.location, model: version.model },
+            restoreApi()
+          )
+          afterRestore(done.mode)
+          record('version', done.said)
+          read()
+          return done
+        } finally {
+          setBusy(false)
+        }
+      }
+      /*
+       * From away. The unsaved-changes warning has already been given, by the
+       * panel, before this: once it is parked the computer may act on it.
+       */
+      const req = restoreRequest(version, mode)
+      if (!(await parkRestore(req))) throw new Error(RESTORE_UNREACHED)
+      setQueuedRestore({ versionId: version.id, mode, late: false })
+      const wait = startRestoreWait({
+        id: req.id,
+        slug: currentDeviceSlug(),
+        readResult: readRestoreResult,
+        readProgress: readRestoreProgress,
+        /* A cancel that did not land must not read as "nothing was changed". */
+        cancelRequest: async () => {
+          if (!(await cancelParkedRestore(req.id))) throw new Error('not written')
+        },
+        listen: onConfigDoc,
+        onState: ({ late, picked }) =>
+          setQueuedRestore((q) => (q && q.versionId === version.id ? { ...q, late: late && !picked } : q)),
+        startedAt: Date.now()
+      })
+      restoreWait.current = wait
+      record(
+        'version',
+        mode === 'put'
+          ? `Asked the computer to put back slot ${version.location}`
+          : `Asked the computer to play a snapshot of slot ${version.location}`
+      )
+      const said = await wait.done
+      if (restoreWait.current === wait) restoreWait.current = null
+      if (said.stopped) return said
+      setQueuedRestore(null)
+      if (said.ok) {
+        afterRestore(said.mode || mode)
+        record('version', said.said || 'The computer put the snapshot back')
+        read()
+      } else if (said.cancelled) {
+        record('version', said.error)
+      } else {
+        setError(said.error)
+      }
+      return said
+    },
+    [record, read, restoreApi]
+  )
+  const cancelQueuedRestore = useCallback(() => restoreWait.current?.cancel(), [])
+
+  /*
+   * At the Mac: a snapshot the phone asked for. Looked for the moment it is
+   * left and every six seconds after, one look at a time, as a parked save
+   * is — see the save watcher above for why each of those.
+   *
+   * No question at the Mac, and nothing dropped silently: the phone is told
+   * what happened, whatever happened. The checks — still wanted, still the
+   * same snapshot, the right unit, a copy of the slot kept first — are
+   * carryOutRestore's.
+   */
+  const handledRestores = useRef(new Set())
+  const readLater = useRef(read)
+  readLater.current = read
+  const recordLater = useRef(record)
+  recordLater.current = record
+  const afterRestoreLater = useRef(afterRestore)
+  afterRestoreLater.current = afterRestore
+  useEffect(() => {
+    if (status !== 'live' || remote || isDemo()) return undefined
+    let stop = false
+    const api = {
+      ...restoreApi(),
+      take: takeParkedRestore,
+      clear: clearParkedRestore,
+      picked: reportRestorePicked,
+      report: reportRestore
+    }
+    const lookOnce = async () => {
+      const req = await takeParkedRestore()
+      if (stop || !req?.id || !req.versionId || req.cancelled) return
+      if (handledRestores.current.has(req.id)) return
+      setBusy(true)
+      try {
+        const out = await carryOutRestore(req, api, { handled: handledRestores.current })
+        if (!out) return
+        if (out.ok) {
+          afterRestoreLater.current(out.mode)
+          recordLater.current('version', `${out.said} Asked for from the phone.`)
+          readLater.current()
+        } else if (!out.cancelled) {
+          recordLater.current('version', `The phone asked for a snapshot, and it wasn’t done: ${out.error}`)
+        }
+      } finally {
+        setBusy(false)
+      }
+    }
+    let looking = null
+    let again = false
+    const look = async () => {
+      if (looking) {
+        again = true
+        return
+      }
+      looking = lookOnce().catch(() => {})
+      await looking
+      looking = null
+      if (again && !stop) {
+        again = false
+        look()
+      }
+    }
+    const offAsk = onConfigDoc((id) => {
+      if (id === pendingRestoreKey()) look()
+    })
+    look()
+    const timer = setInterval(look, 6000)
+    return () => {
+      stop = true
+      offAsk()
+      clearInterval(timer)
+    }
+  }, [status, remote, restoreApi])
+
+  /*
    * The unit, once it is known which end this is.
    *
    * At the Mac and in the demo the role is decided without asking anyone, so
@@ -3652,6 +3855,21 @@ export default function App() {
       </TopBar>
 
       {queuedSave && saveLate ? <SaveLate onCancel={cancelQueuedSave} /> : null}
+      {/* A restore from here still waiting on the computer, with the Presets
+          sheet shut: the panel's own notice and Cancel went with it, and the
+          sound can still change when the computer gets to it. */}
+      {queuedRestore && sheet !== 'presets' ? (
+        <SaveLate
+          onCancel={cancelQueuedRestore}
+          words={
+            queuedRestore.late
+              ? RESTORE_LATE_WORDS
+              : queuedRestore.mode === 'play'
+                ? 'Loading the snapshot…'
+                : 'Putting the snapshot back…'
+          }
+        />
+      ) : null}
 
       {/* First on the page, under the bar: a stale tab makes every other thing
           on this screen a possible lie about what the code does. */}
@@ -4497,12 +4715,13 @@ export default function App() {
           <Versions
             preset={preset}
             busy={busy}
+            dirty={dirty}
+            remote={remote}
             deviceSlots={device?.capabilities?.presets?.count}
             onError={setError}
-            onChanged={(summary) => {
-              record('version', summary)
-              read()
-            }}
+            onRestore={restoreFromVersion}
+            waiting={queuedRestore}
+            onCancelWait={cancelQueuedRestore}
           />
           <DeviceBackup
             busy={busy}

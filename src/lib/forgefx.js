@@ -20,6 +20,7 @@ import { DEFAULT_SLUG, deviceSlug } from '../../shared/device-slug.mjs'
 import { firmwareOf } from '../../shared/firmware.mjs'
 import { fixRead } from '../../shared/param-fixes.mjs'
 import { cancelledSave, pendingSaveDoc, saveProgressDoc, saveResultDoc } from '../../shared/save-wait.mjs'
+import { cancelledRestore, pendingRestoreDoc, restoreProgressDoc, restoreResultDoc } from './restoreViaComputer.js'
 import { toNormalized } from './scale.js'
 import { withLineage } from './lineage.js'
 import { remoteActive, remoteRequest, subscribeHostSeen, subscribeRemoteEvents, subscribeRemoteState } from './remote.js'
@@ -240,7 +241,9 @@ const whyItFailed = (err) =>
  */
 const routine = (path, options, err) =>
   !!err?.remoteBlocked ||
-  ((options.method || 'GET') === 'GET' && /^\/store\/config\//.test(path) && err?.status === 404)
+  ((options.method || 'GET') === 'GET' && /^\/store\/config\//.test(path) && err?.status === 404) ||
+  /* An empty slot, asked for its copy before a Put back: nothing to keep. See snapshotSlot. */
+  (/^\/backup\/preset\/\d+$/.test(path) && err?.status === 422)
 
 async function request(path, options = {}) {
   /*
@@ -541,6 +544,25 @@ export const readSaveResult = () => readHostDoc(saveResultKey())
 /* The computer has the request and is writing it. See shared/save-wait.mjs. */
 export const reportSavePicked = (id) => writeHostDoc(saveProgressKey(), { id, picked: true, at: Date.now() })
 export const readSaveProgress = () => readHostDoc(saveProgressKey())
+
+/**
+ * A snapshot put back, or played, asked for from the phone and carried out at
+ * the Mac — the same road as a save, for the same reason: every /version
+ * route is refused over the relay, and should be. See lib/restoreViaComputer.js.
+ */
+export const pendingRestoreKey = () => pendingRestoreDoc(unitSlug)
+export const restoreResultKey = () => restoreResultDoc(unitSlug)
+export const restoreProgressKey = () => restoreProgressDoc(unitSlug)
+
+export const parkRestore = (request) => writeHostDoc(pendingRestoreKey(), { ...request, at: Date.now() })
+export const takeParkedRestore = () => readHostDoc(pendingRestoreKey())
+export const clearParkedRestore = () => deleteHostDoc(pendingRestoreKey())
+/* Written over rather than deleted, as a save's is: a phone's DELETE never arrives. */
+export const cancelParkedRestore = (id) => parkRestore(cancelledRestore(id))
+export const reportRestore = (result) => writeHostDoc(restoreResultKey(), { ...result, at: Date.now() })
+export const readRestoreResult = () => readHostDoc(restoreResultKey())
+export const reportRestorePicked = (id) => writeHostDoc(restoreProgressKey(), { id, picked: true, at: Date.now() })
+export const readRestoreProgress = () => readHostDoc(restoreProgressKey())
 
 /** The preset currently loaded on the unit. */
 /**
@@ -1633,6 +1655,16 @@ export const loadVersion = (id) =>
 /** Put a snapshot back in the slot it came from. Destructive. */
 export const restoreVersion = (id) =>
   mock ? tick().then(() => ({ ok: true })) : request(`/version/${id}/restore`, { method: 'POST' })
+
+/**
+ * Keep what slot `n` holds as a snapshot, now. `{ version }`, or a 422 for a
+ * slot with nothing in it. Taken before a Put back writes over the slot — see
+ * lib/restoreViaComputer.js.
+ */
+export const snapshotSlot = (n) =>
+  mock
+    ? tick().then(() => ({ version: { id: `demo-${n}-${Date.now()}`, location: n } }))
+    : request(`/backup/preset/${n}`, { method: 'POST', body: '{}' })
 
 /** Read a stored preset without loading it onto the unit. */
 export const presetSummary = (n, full) =>

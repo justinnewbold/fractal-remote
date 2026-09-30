@@ -88,6 +88,11 @@ export const SAVE_UNSENT = 'Couldn’t reach the computer to call the save off, 
  * `listen(fn)` subscribes to the store's announcements, calling
  * `fn(docId, data)`; it returns an unsubscribe. `onState({ late, picked })`
  * is told whenever either changes.
+ *
+ * `words` swaps the sentences for another job that waits the same way —
+ * putting back a snapshot, where "nothing was saved" is the wrong thing to
+ * say. Any left out keep the save's. An answer that carries its own `said`
+ * keeps it, so the computer can say what it did in its own words.
  */
 export function startSaveWait({
   id,
@@ -104,8 +109,17 @@ export function startSaveWait({
   lateMs = SAVE_LATE_MS,
   pollMs = SAVE_POLL_MS,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  now = Date.now
+  now = Date.now,
+  words = {}
 }) {
+  const told = {
+    timedOut: SAVE_TIMED_OUT,
+    cancelled: SAVE_CANCELLED,
+    refused: SAVE_REFUSED,
+    unsure: SAVE_UNSURE,
+    unsent: SAVE_UNSENT,
+    ...words
+  }
   const start = Number.isFinite(startedAt) ? startedAt : now()
   const heard = { result: null, progress: null }
   let wake = null
@@ -150,8 +164,12 @@ export function startSaveWait({
 
   const answer = (res) =>
     res.ok
-      ? { ok: true, slot: Number.isInteger(res.slot) ? res.slot : null }
-      : { ok: false, error: res.error || SAVE_REFUSED, ...(res.cancelled ? { cancelled: true } : {}) }
+      ? {
+          ok: true,
+          slot: Number.isInteger(res.slot) ? res.slot : null,
+          ...(typeof res.said === 'string' && res.said ? { said: res.said } : {})
+        }
+      : { ok: false, error: res.error || told.refused, ...(res.cancelled ? { cancelled: true } : {}) }
 
   const look = async () => {
     if (heard.result) return heard.result
@@ -209,8 +227,8 @@ export function startSaveWait({
     }
     /* Not flagged cancelled, so both ends show these as the warning they are. */
     const why = cancelled ? {} : { timedOut: true }
-    if (took) return { ok: false, error: SAVE_UNSURE, unsure: true, ...why }
-    if (!calledOff) return { ok: false, error: SAVE_UNSENT, unsure: true, ...why }
+    if (took) return { ok: false, error: told.unsure, unsure: true, ...why }
+    if (!calledOff) return { ok: false, error: told.unsent, unsure: true, ...why }
     return { ok: false, error: words, ...(cancelled ? { cancelled: true } : why) }
   }
 
@@ -218,7 +236,7 @@ export function startSaveWait({
     try {
       for (;;) {
         if (stopped) return { ok: false, error: '', stopped: true }
-        if (cancelled) return await giveUp(SAVE_CANCELLED)
+        if (cancelled) return await giveUp(told.cancelled)
         const res = await look()
         if (res) return answer(res)
         if (stopped) return { ok: false, error: '', stopped: true }
@@ -226,7 +244,7 @@ export function startSaveWait({
         const spent = now() - start
         say({ late: spent >= lateMs, picked: isPicked })
         const limit = waitMs + (picked ? workingMs : 0)
-        if (spent >= limit) return await giveUp(SAVE_TIMED_OUT)
+        if (spent >= limit) return await giveUp(told.timedOut)
         if (cancelled) continue
         await nap(Math.max(1, Math.min(pollMs, limit - spent)))
       }

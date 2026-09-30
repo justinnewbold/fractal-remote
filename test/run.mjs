@@ -10070,6 +10070,335 @@ test('Cancel ends the wait at once and says nothing was saved', async () => {
   assert.deepEqual(b2.written, [])
 })
 
+/*
+ * "Put back" and "Play it" from the phone, or the website on one.
+ *
+ * Both went to the unit as /version/…, which the relay refuses — so from away
+ * both buttons failed. Now the phone leaves a request in the computer's store
+ * and the Mac window carries it out, as it does a save. And the panel's
+ * promise that a copy is taken before a slot is overwritten is kept: a Put
+ * back snapshots the slot first, or does not write it.
+ */
+const restoreMod = await import('../src/lib/restoreViaComputer.js')
+
+function restoreBench({ versions, snapshot, bytes = [0xf0, 1, 2, 0xf7], slug = 'fm3', outside = () => false, slotName } = {}) {
+  const calls = []
+  const api = {
+    listVersions: async () => {
+      calls.push('list')
+      return { versions: versions ?? [{ id: 'v1', location: 12, model: 'FM3', name: 'Clean' }] }
+    },
+    versionBytes: async (id) => {
+      calls.push(`bytes ${id}`)
+      return bytes
+    },
+    snapshotSlot: async (n) => {
+      calls.push(`snapshot ${n}`)
+      if (snapshot) return snapshot(n)
+      return { version: { id: 'kept', location: n } }
+    },
+    loadPresetBytes: async (b) => {
+      calls.push(`load ${b.length}`)
+      return { ok: true }
+    },
+    storePreset: async (n) => {
+      calls.push(`store ${n}`)
+      return { ok: true }
+    },
+    slotName: async (n) => {
+      calls.push(`name ${n}`)
+      return slotName ? slotName(n) : 'Clean'
+    },
+    unitSlug: () => slug,
+    slotOutside: outside
+  }
+  return { api, calls }
+}
+
+test('Put back reads the snapshot, keeps a copy of the slot, then writes it — in that order', async () => {
+  const { api, calls } = restoreBench()
+  const done = await restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12, model: 'FM3' }, api)
+  /*
+   * The bytes before the copy: the computer keeps thirty snapshots a slot and
+   * the copy is a thirty-first, so putting back the oldest would push out the
+   * very snapshot being put back.
+   */
+  assert.deepEqual(calls, ['list', 'bytes v1', 'snapshot 12', 'load 4', 'store 12'])
+  assert.equal(done.ok, true)
+  assert.equal(done.kept, true)
+  assert.equal(done.slot, 12)
+  assert.match(done.said, /kept as a snapshot/)
+})
+
+const unprocessable = () => {
+  const err = new Error('empty/invalid preset')
+  err.status = 422
+  throw err
+}
+
+test('an empty slot has nothing to keep, and any other failure to keep a copy writes nothing', async () => {
+  /* The unit's own word for an empty slot, with the old name's tail on it. */
+  const empty = restoreBench({ snapshot: unprocessable, slotName: () => '<EMPTY>k Album Chug' })
+  const done = await restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, empty.api)
+  assert.equal(done.kept, false)
+  assert.deepEqual(empty.calls.slice(-2), ['load 4', 'store 12'], 'an empty slot stopped the Put back')
+  assert.match(done.said, /empty, so there was nothing to keep/)
+
+  const broken = restoreBench({
+    snapshot: () => {
+      const err = new Error('unit busy')
+      err.status = 503
+      throw err
+    }
+  })
+  await assert.rejects(
+    restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, broken.api),
+    /Couldn’t keep a copy of what’s in slot 12 first, so nothing was changed/
+  )
+  assert.ok(!broken.calls.some((c) => c.startsWith('load') || c.startsWith('store')), 'a slot was written over with no copy kept')
+})
+
+test('a 422 on a slot with a preset in it is a copy that failed, not an empty slot', async () => {
+  /*
+   * The computer answers 422 for "empty/invalid preset" — and a real preset
+   * whose dump came back failing its checksum is the invalid half. A name, a
+   * blank name (what an unread name comes back as), or no name at all: none
+   * is the unit saying the slot is empty, so nothing is written.
+   */
+  for (const slotName of [() => 'Clean Lead', () => '', () => { throw new Error('no answer') }]) {
+    const bench = restoreBench({ snapshot: unprocessable, slotName })
+    await assert.rejects(
+      restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, bench.api),
+      /Couldn’t keep a copy of what’s in slot 12 first, so nothing was changed/
+    )
+    assert.ok(!bench.calls.some((c) => /^(load|store)/.test(c)), 'a real preset was written over with no copy kept')
+  }
+
+  /* A damaged dump is usually a one-off: asked for once more, and kept. */
+  let tries = 0
+  const again = restoreBench({
+    slotName: () => 'Clean Lead',
+    snapshot: (n) => (++tries === 1 ? unprocessable() : { version: { id: 'kept', location: n } })
+  })
+  const done = await restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, again.api)
+  assert.equal(done.kept, true)
+  assert.deepEqual(again.calls.filter((c) => !/^(list|bytes|name)/.test(c)), ['snapshot 12', 'snapshot 12', 'load 4', 'store 12'])
+  assert.ok(!/empty/.test(done.said))
+})
+
+test('a restore leaves Play it unsaved and Put back saved, wherever it was carried out', () => {
+  assert.equal(restoreMod.dirtyAfterRestore('play'), true, 'Play it says "save it to keep it" with no Save button to do it')
+  assert.equal(restoreMod.dirtyAfterRestore('put'), false, 'Put back still shows edits it just wrote over as unsaved')
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  assert.match(app, /const afterRestore = \(mode\) => \{\s*const unsaved = dirtyAfterRestore\(mode\)\s*dirtyRef\.current = unsaved\s*setDirty\(unsaved\)/)
+  const ask = app.slice(app.indexOf('const restoreFromVersion'), app.indexOf('const cancelQueuedRestore'))
+  assert.match(ask, /const done = await restoreNow\([\s\S]*?\)\s*afterRestore\(done\.mode\)/, 'at the Mac')
+  assert.match(ask, /if \(said\.ok\) \{\s*afterRestore\(said\.mode \|\| mode\)/, 'from the phone')
+  const mac = app.slice(app.indexOf('const handledRestores'), app.indexOf('}, [status, remote, restoreApi])'))
+  assert.match(mac, /if \(out\.ok\) \{\s*afterRestoreLater\.current\(out\.mode\)/, 'at the Mac, for the phone')
+})
+
+test('a snapshot that has gone, moved, or belongs to another unit is refused before anything is written', async () => {
+  const writes = (calls) => calls.filter((c) => /^(snapshot|load|store)/.test(c))
+  const gone = restoreBench({ versions: [] })
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, gone.api), { message: restoreMod.RESTORE_GONE })
+  assert.deepEqual(writes(gone.calls), [])
+  /* A list that could not be read is not a snapshot that has gone. */
+  const unread = restoreBench()
+  unread.api.listVersions = async () => {
+    unread.calls.push('list')
+    throw new Error('Can’t reach the Fractal app on your computer.')
+  }
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, unread.api), { message: restoreMod.RESTORE_NO_LIST })
+  assert.notEqual(restoreMod.RESTORE_NO_LIST, restoreMod.RESTORE_GONE)
+  assert.ok(!unread.calls.some((c) => /^(bytes|snapshot|load|store)/.test(c)))
+
+  const moved = restoreBench()
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 13 }, moved.api), { message: restoreMod.RESTORE_MOVED })
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'play', slot: 12, model: 'FM9' }, moved.api), { message: restoreMod.RESTORE_MOVED })
+  assert.deepEqual(writes(moved.calls), [])
+
+  const other = restoreBench({ slug: 'axefxiii' })
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'play', slot: 12 }, other.api), /from an FM3/)
+  assert.deepEqual(writes(other.calls), [])
+  /* A unit nobody has named yet, or a model the computer could not place, is not evidence. */
+  const unnamed = restoreBench({ slug: 'device', versions: [{ id: 'v1', location: 12, model: 'model_0x99' }] })
+  assert.equal((await restoreMod.restoreNow({ versionId: 'v1', mode: 'play', slot: 12 }, unnamed.api)).ok, true)
+
+  const outside = restoreBench({ outside: (n) => n > 3 })
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, outside.api), /isn’t on this unit/)
+  assert.deepEqual(writes(outside.calls), [])
+
+  const unreadable = restoreBench({ bytes: null })
+  await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, unreadable.api), { message: restoreMod.RESTORE_UNREADABLE })
+  assert.deepEqual(writes(unreadable.calls), [], 'a copy was taken of a slot whose Put back was never going to happen')
+})
+
+test('Play it loads the snapshot and writes no slot', async () => {
+  const { api, calls } = restoreBench()
+  const done = await restoreMod.restoreNow({ versionId: 'v1', mode: 'play', slot: 12 }, api)
+  assert.deepEqual(calls, ['list', 'bytes v1', 'load 4'])
+  assert.equal(done.mode, 'play')
+  assert.match(done.said, /isn’t saved to a slot/)
+})
+
+function macBench(parked, over = {}) {
+  const { api, calls } = restoreBench(over)
+  const told = []
+  let doc = parked
+  Object.assign(api, {
+    take: async () => doc,
+    clear: async () => {
+      calls.push('clear')
+      doc = null
+      return true
+    },
+    picked: async (id) => calls.push(`picked ${id}`),
+    report: async (r) => told.push(r)
+  })
+  return { api, calls, told, set: (d) => (doc = d) }
+}
+
+test('the Mac carries out a parked Put back once, says it has it first, and tells the phone how it went', async () => {
+  const req = { id: 'r1', mode: 'put', versionId: 'v1', slot: 12, model: 'FM3', at: 1000 }
+  const m = macBench(req)
+  const handled = new Set()
+  const out = await restoreMod.carryOutRestore(req, m.api, { handled, now: () => 2000 })
+  assert.ok(handled.has('r1'))
+  assert.ok(m.calls.indexOf('picked r1') > -1 && m.calls.indexOf('picked r1') < m.calls.indexOf('store 12'), 'the phone is not told the computer has it before the write')
+  assert.equal(out.ok, true)
+  assert.equal(m.told.length, 1)
+  assert.equal(m.told[0].id, 'r1')
+  assert.match(m.told[0].said, /slot 12/)
+  assert.ok(m.calls.includes('clear'))
+  /* Looked at again after it ran: not done twice. */
+  assert.equal(await restoreMod.carryOutRestore(req, m.api, { handled, now: () => 2000 }), null)
+  assert.equal(m.calls.filter((c) => c === 'store 12').length, 1)
+  /* Looked at again while it is still running (an effect run again partway through): the mark comes before the first wait, so only one carries it out. */
+  const both = macBench(req)
+  const twice = new Set()
+  const [a, b] = await Promise.all([
+    restoreMod.carryOutRestore(req, both.api, { handled: twice, now: () => 2000 }),
+    restoreMod.carryOutRestore(req, both.api, { handled: twice, now: () => 2000 })
+  ])
+  assert.equal([a, b].filter((x) => x === null).length, 1, 'a second look partway through carried it out as well')
+  assert.equal(both.calls.filter((c) => c === 'store 12').length, 1)
+  assert.equal(both.told.length, 1)
+})
+
+test('the Mac passes over a cancelled, stale or failed restore and says so every time', async () => {
+  /* Cancelled: the phone wrote over it with no version in it. */
+  assert.equal(await restoreMod.carryOutRestore(restoreMod.cancelledRestore('r1'), macBench(null).api, { handled: new Set() }), null)
+
+  const req = { id: 'r1', mode: 'put', versionId: 'v1', slot: 12, at: 1000 }
+  const stale = macBench(req)
+  const out = await restoreMod.carryOutRestore(req, stale.api, { handled: new Set(), now: () => 1000 + restoreMod.RESTORE_FRESH_MS })
+  assert.deepEqual([out.ok, out.error], [false, restoreMod.RESTORE_STALE])
+  assert.ok(!stale.calls.some((c) => /^(bytes|snapshot|load|store)/.test(c)))
+
+  /* Called off after the Mac first saw it: asked once more, before writing. */
+  const late = macBench(restoreMod.cancelledRestore('r1'))
+  const off = await restoreMod.carryOutRestore(req, late.api, { handled: new Set(), now: () => 2000 })
+  assert.equal(off.cancelled, true)
+  assert.equal(late.told[0].error, restoreMod.RESTORE_CANCELLED)
+  assert.ok(!late.calls.some((c) => /^(snapshot|load|store)/.test(c)), 'a cancelled Put back was written')
+
+  const gone = macBench(req, { versions: [] })
+  const refused = await restoreMod.carryOutRestore(req, gone.api, { handled: new Set(), now: () => 2000 })
+  assert.equal(refused.ok, false)
+  assert.equal(gone.told[0].error, restoreMod.RESTORE_GONE, 'the phone is left waiting on a request the computer refused')
+})
+
+test('the phone waits for a restore with the save’s rules and its own words', async () => {
+  const b = waitBench()
+  const w = restoreMod.startRestoreWait({ ...b.opts(), slug: 'fm3' })
+  let said = null
+  w.done.then((x) => (said = x))
+  /* An old Mac window never answers. The phone says so, sooner than a save does. */
+  await b.turn(restoreMod.RESTORE_WAIT_MS + 1000)
+  assert.ok(restoreMod.RESTORE_WAIT_MS < saveWait.SAVE_WAIT_MS)
+  assert.equal(said?.error, restoreMod.RESTORE_TIMED_OUT)
+  assert.match(restoreMod.RESTORE_TIMED_OUT, /may need updating/)
+  assert.deepEqual(b.written, [{ id: 'r1', cancelled: true }], 'a Mac woken later can still carry out what the phone gave up on')
+
+  /* And the computer's own words for what it did come through. */
+  const b2 = waitBench()
+  const w2 = restoreMod.startRestoreWait({ ...b2.opts(), slug: 'fm3' })
+  let said2 = null
+  w2.done.then((x) => (said2 = x))
+  b2.announce('fractal.saveResult.fm3', { id: 'r1', ok: true, slot: 1 })
+  for (let i = 0; i < 20; i++) await null
+  assert.equal(said2, null, 'a save’s answer ended a restore’s wait')
+  b2.announce(restoreMod.restoreResultDoc('fm3'), { id: 'r1', ok: true, slot: 12, said: 'Put it back.' })
+  for (let i = 0; i < 20; i++) await null
+  assert.deepEqual(said2, { ok: true, slot: 12, said: 'Put it back.' })
+  assert.ok(restoreMod.RESTORE_FRESH_MS >= restoreMod.RESTORE_WAIT_MS + restoreMod.RESTORE_WORKING_MS)
+})
+
+test('a restore travels the store, and the relay still refuses /version itself', () => {
+  assert.equal(forbiddenRemotely('PUT', `/store/config/${restoreMod.pendingRestoreDoc('fm3')}`), null)
+  assert.equal(forbiddenRemotely('GET', `/store/config/${restoreMod.restoreResultDoc('fm3')}`), null)
+  assert.equal(forbiddenRemotely('GET', `/store/config/${restoreMod.restoreProgressDoc('fm3')}`), null)
+  assert.ok(forbiddenRemotely('POST', '/version/v1/restore'), 'the relay was opened to /version')
+  assert.ok(forbiddenRemotely('POST', '/version/v1/load'))
+  assert.notEqual(restoreMod.pendingRestoreDoc('fm3'), saveWait.pendingSaveDoc('fm3'))
+
+  const panel = readSrc(new URL('../src/components/Versions.jsx', import.meta.url), 'utf8')
+  const versions = panel.slice(0, panel.indexOf('export function DeviceBackup'))
+  assert.ok(!/restoreVersion|loadVersion/.test(versions), 'the panel reaches the unit itself again, which fails from a phone')
+  assert.ok(!/One is taken before a slot is overwritten/.test(versions), 'the panel promises a copy nothing takes')
+  assert.match(versions, /const play = \(version\) => \(dirty \? setConfirming\(\{ id: version\.id, mode: 'play' \}\) : run\(version, 'play'\)\)/, 'Play it drops unsaved changes without a word')
+  assert.match(versions, /Your unsaved changes to the sound you’re on will be lost/)
+  assert.match(versions, /so you can put it back\.\{lost\}/, 'Put back writes over unsaved edits without a word')
+  assert.match(versions, /formatWhen\(version\.at \?\? version\.capturedAt\)/, 'snapshots from the computer show Invalid Date')
+  /* The phone cannot back up every slot — the relay refuses it — so the hint does not send it to the button that says no. */
+  assert.match(versions, /export function Versions\(\{[^}]*\bremote\b/)
+  const hint = versions.slice(versions.indexOf('{remote'), versions.indexOf('</p>', versions.indexOf('{remote')))
+  assert.match(hint, /^\{remote\s*\?\s*'No snapshots yet\. Back up all slots at the computer/, 'the phone is sent to a backup it cannot do')
+
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const ask = app.slice(app.indexOf('const restoreFromVersion'), app.indexOf('const cancelQueuedRestore'))
+  assert.match(ask, /if \(!remoteActive\(\)\) \{[\s\S]*?await restoreNow\(/, 'at the Mac, Put back skips the copy')
+  assert.match(ask, /if \(!\(await parkRestore\(req\)\)\) throw new Error\(RESTORE_UNREACHED\)/, 'a request that never reached the computer is waited on')
+  assert.ok(ask.indexOf('parkRestore(req)') < ask.indexOf('startRestoreWait('))
+  const mac = app.slice(app.indexOf('const handledRestores'), app.indexOf('}, [status, remote, restoreApi])'))
+  assert.match(mac, /if \(status !== 'live' \|\| remote \|\| isDemo\(\)\) return/)
+  assert.match(mac, /onConfigDoc\(\(id\) => \{\s*if \(id === pendingRestoreKey\(\)\) look\(\)/, 'the Mac only finds a restore on its next look')
+  assert.match(mac, /const timer = setInterval\(look, 6000\)/)
+  assert.match(mac, /await carryOutRestore\(req, api, \{ handled: handledRestores\.current \}\)/)
+  assert.match(app, /onRestore=\{restoreFromVersion\}/)
+  assert.match(app, /waiting=\{queuedRestore\}/)
+  assert.match(app, /<Versions[^>]*\bremote=\{remote\}/, 'the panel cannot tell it is on a phone')
+
+  /* The copy before a Put back, at the route the computer serves, and handed to restoreNow. */
+  const fx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
+  assert.match(fx, /export const snapshotSlot = \(n\) =>[\s\S]{0,160}request\(`\/backup\/preset\/\$\{n\}`, \{ method: 'POST'/, 'a Put back asks the computer for its copy at a route it does not serve')
+  const handed = app.slice(app.indexOf('const restoreApi'), app.indexOf('const [queuedRestore'))
+  assert.match(handed, /\bsnapshotSlot,/, 'a Put back is handed nothing to keep a copy with, so every one is refused')
+  assert.match(handed, /slotName: \(n\) => storedSlotName\(n\)\.then\(\(r\) => r\?\.name\)/, 'a 422 can never be shown to be an empty slot')
+  assert.match(fx, /\/\^\\\/backup\\\/preset\\\/\\d\+\$\/\.test\(path\) && err\?\.status === 422/)
+
+  /*
+   * The wrappers App calls, not only the names they are built from. The block
+   * is a copy of the save's, and a restore left in the save's document is
+   * carried out as a save: whatever is loaded goes over the slot, no copy kept,
+   * and the phone is told nothing was changed.
+   */
+  const wires = fx.slice(fx.indexOf('export const pendingRestoreKey'), fx.indexOf('\n', fx.indexOf('export const readRestoreProgress')))
+  assert.match(fx, /export const pendingRestoreKey = \(\) => pendingRestoreDoc\(unitSlug\)/)
+  assert.match(fx, /export const restoreResultKey = \(\) => restoreResultDoc\(unitSlug\)/)
+  assert.match(fx, /export const restoreProgressKey = \(\) => restoreProgressDoc\(unitSlug\)/)
+  assert.match(fx, /export const parkRestore = \(request\) => writeHostDoc\(pendingRestoreKey\(\)/, 'a restore is left where the Mac looks for a save')
+  assert.match(fx, /export const takeParkedRestore = \(\) => readHostDoc\(pendingRestoreKey\(\)\)/)
+  assert.match(fx, /export const clearParkedRestore = \(\) => deleteHostDoc\(pendingRestoreKey\(\)\)/)
+  assert.match(fx, /export const cancelParkedRestore = \(id\) => parkRestore\(cancelledRestore\(id\)\)/, 'a cancel from a phone is a DELETE, which never arrives')
+  assert.match(fx, /export const reportRestore = \(result\) => writeHostDoc\(restoreResultKey\(\)/)
+  assert.match(fx, /export const readRestoreResult = \(\) => readHostDoc\(restoreResultKey\(\)\)/)
+  assert.match(fx, /export const reportRestorePicked = \(id\) => writeHostDoc\(restoreProgressKey\(\)/)
+  assert.match(fx, /export const readRestoreProgress = \(\) => readHostDoc\(restoreProgressKey\(\)\)/)
+  assert.ok(!/pendingSave|saveResult|saveProgress|Save\(/.test(wires), 'a restore wrapper reads or writes a save’s document')
+})
+
 test('"✓ Saved" goes after its ten seconds even when the timer fires early', async () => {
   /*
    * "'✓ Saved' never goes away." The one real way: a browser may fire a timer
