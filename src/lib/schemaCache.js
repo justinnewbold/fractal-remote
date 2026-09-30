@@ -32,7 +32,7 @@ export function invalidateSchema(eid) {
 /**
  * Record a value we just wrote and confirmed.
  *
- * The write path already read this back off the device with its cache cleared,
+ * The write path already read this back off the device,
  * so this is not optimism — it's the verified number, and re-reading the block
  * to learn it again would cost a serial round trip per parameter.
  */

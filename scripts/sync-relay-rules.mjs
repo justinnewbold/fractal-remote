@@ -106,6 +106,14 @@ export const FILES = [
    */
   { source: '../shared/cab-pick.mjs', target: '../mobile/src/lib/cab-pick.js' },
   /*
+   * How a knob steps from the keyboard or VoiceOver, and how those steps reach
+   * the unit: the value written is the one the step reached, a run of steps is
+   * one write, and one write per control is out at a time. Both ends had the
+   * same bug — the write read the value from before the step — so both ends
+   * keep the one fix.
+   */
+  { source: '../shared/knob-keys.mjs', target: '../mobile/src/lib/knob-keys.js' },
+  /*
    * The troubleshooting guide, so a fix reads the same wherever somebody
    * standing in front of a dead rig happens to look it up.
    *

@@ -70,14 +70,16 @@ export function hostAllows(method, p) {
       /^\/am4\/(bypass|scene|preset)$/.test(p)
     )
   /*
-   * Dropping the unit's parameter cache. Added to the host on the pinned fork
-   * — see desktop/forgefx.lock.json.
+   * DELETE /device/cache. Added to the host on the pinned fork — see
+   * desktop/forgefx.lock.json — as "dropping the parameter cache", and
+   * mirrored here so the two agree about what the relay carries.
    *
-   * A read-side hint and nothing else: it stores no value, touches no preset
-   * and reaches no slot, it only says "forget what you last read". Its absence
-   * fell on the one client that cannot work around it — verifying a write
-   * means clearing this cache and reading the value back, so with the clear
-   * refused nothing a phone wrote could be confirmed, ever.
+   * It is not that. On the pinned server a block's values are read off the
+   * unit every time (gen3.ts blockParams), and this route deletes the
+   * computer's saved profile of the unit (services/deviceCache.ts
+   * deleteCache) — which touches no preset and reaches no slot, but is missed
+   * at the next reconnect. So neither app sends it any more; the rule stays
+   * only because the host still allows it.
    */
   if (method === 'DELETE') return p === '/device/cache'
   return false

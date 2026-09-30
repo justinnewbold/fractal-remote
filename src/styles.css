@@ -3478,6 +3478,13 @@ button.chain-block.lifting {
   flex-wrap: wrap;
 }
 
+/* Remove's "are you sure", drawn in the card rather than in a browser pop-up,
+   across the whole row under the chips. */
+.chain-actions .chain-ask {
+  flex-basis: 100%;
+  margin-top: 0;
+}
+
 /* Beside the control, in the colour of a thing that went wrong. */
 .chain-issue {
   flex-basis: 100%;

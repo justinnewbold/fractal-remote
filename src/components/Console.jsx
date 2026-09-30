@@ -74,6 +74,7 @@ import { editPages, pageFor, pageHolding } from '../lib/editPages'
 import { bringIntoView } from '../lib/feedback'
 import { useOverflow } from '../lib/overflow'
 import { slotLabel, startsBank } from '../lib/slots'
+import { oneWriteAtATime } from '../../shared/knob-keys.mjs'
 
 /**
  * Block colours, matched to how Fractal's own editors code them.
@@ -781,6 +782,16 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   const undoTimer = useRef(null)
   const [loading, setLoading] = useState(false)
   const [local, setLocal] = useState({})
+  /* One checked write per control at a time — see commit. A ref, and above
+     the early return, because it has to outlive every render in between. */
+  const writes = useRef(null)
+  const writeOne = useRef(null)
+  // The same number on the same key is the same write; after a scene or
+  // channel change it is not, and has to go out again.
+  if (!writes.current)
+    writes.current = oneWriteAtATime((job) => writeOne.current?.(job), {
+      same: (a, b) => a.next === b.next && a.key === b.key
+    })
 
   /*
    * What makes these parameters a different set of parameters.
@@ -1031,19 +1042,48 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
 
   const valueOf = (p) => (local[p.id] !== undefined ? local[p.id] : p.value)
 
-  const commit = async (p, override) => {
+  /*
+   * A knob's value to the unit, checked.
+   *
+   * The value is handed in by whatever moved it — the knob's drag, its keys,
+   * the typed box — because reading it back out of `local` here read the
+   * value from a render before the move: an arrow press sent the press
+   * before it, and the last one was never sent at all.
+   *
+   * And one write per control at a time. A value that arrives while the last
+   * is still being checked waits, and only the newest waiting one goes next;
+   * the value on the knob is only let go once the unit has caught up with
+   * THAT value, so a knob still being turned does not flick back to the read.
+   */
+  const commit = (p, override) => {
     const next = override !== undefined ? override : local[p.id]
-    if (next === undefined || next === p.value) return
+    if (next === undefined) return
+    // Equal to what the unit last said, and nothing on its way: nothing to do.
+    // With a write out, "back to where it was" is a change and has to go.
+    const lane = `${block.effectId}:${p.id}`
+    if (next === p.value && !writes.current.busy(lane)) return
+    return writes.current.send(lane, { p, next, key: readKey, eid: block.effectId, name: block.name, slug: block.slug })
+  }
+
+  writeOne.current = async ({ p, next, key, eid, name, slug }) => {
     try {
-      const res = await setParamConfirmed(block.effectId, p.id, next, p)
-      if (!res.ok) onError(`${p.name} didn't take.`)
-      const fresh = await blockParams(block.effectId)
-      setParams(fresh?.named || [])
-      setLocal((prev) => {
-        const copy = { ...prev }
-        delete copy[p.id]
-        return copy
-      })
+      const res = await setParamConfirmed(eid, p.id, next, p)
+      if (!res.ok)
+        onError(
+          res.unverified ? `${p.name} was sent, but the app couldn't read it back to check.` : `${p.name} didn't take.`
+        )
+      const fresh = await blockParams(eid)
+      /* Another block, channel or scene came up while this was out: its
+         values are not this read's to replace. */
+      if (liveKey.current === key) {
+        setParams(fresh?.named || [])
+        setLocal((prev) => {
+          if (prev[p.id] !== next) return prev
+          const copy = { ...prev }
+          delete copy[p.id]
+          return copy
+        })
+      }
       /*
        * The numbers as well as the sentence.
        *
@@ -1054,10 +1094,10 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
        * The summary line stays exactly as it was, for the log a person reads.
        */
       onChanged(
-        `${block.name} · ${p.name} → ${next}`,
+        `${name} · ${p.name} → ${next}`,
         {
-          block: block.name,
-          slug: block.slug,
+          block: name,
+          slug,
           param: p.name,
           from: p.value,
           to: next,
@@ -1388,7 +1428,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
                 label={p.name}
                 value={valueOf(p)}
                 onChange={(v) => setLocal((prev) => ({ ...prev, [p.id]: v }))}
-                onCommit={() => commit(p)}
+                onCommit={(v) => commit(p, v)}
               />
               <ValueBox
                 param={p}

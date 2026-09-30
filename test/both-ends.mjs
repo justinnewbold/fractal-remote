@@ -214,6 +214,12 @@ export const AREAS = [
       },
       { does: 'take a block out of the chain', web: 'Remove', phone: 'Remove' },
       {
+        does: 'change your mind after pressing Remove, before anything is sent',
+        web: 'Keep it',
+        phone: null,
+        why: 'the phone asks in the system’s own alert, whose Cancel is drawn by iOS and Android rather than written in the screen — the question and its words are the same at both ends'
+      },
+      {
         does: 'the empty slot you press to put something in it',
         web: 'Empty — tap to add',
         phone: 'Empty'
@@ -1416,7 +1422,11 @@ export function run(test) {
     const phone = read('mobile/src/screens/Edit.js')
     const web = read('src/components/GridEditor.jsx')
     assert.match(phone, /onRemove=\{\(\) => confirmRemove\(/, 'the phone removes a block with no question')
-    assert.match(web, /window\.confirm\(/, 'the browser removes a block with no question')
+    /* In the page, not a browser pop-up: a blocked pop-up answers "no"
+       without showing itself, and Remove did nothing and said nothing. */
+    assert.match(web, /onClick=\{\(\) => setAsking\(at\)\}/, 'the browser removes a block with no question')
+    assert.match(web, /\{asking === at \? \([\s\S]*?role="alertdialog"[\s\S]*?remove\(lane\.row, item\.col, b\.name\)/, 'the browser’s question does not lead to the remove')
+    assert.ok(!/window\.confirm\(/.test(web), 'the browser asks in a pop-up that a blocked pop-up answers “no” to unseen')
     for (const src of [phone, web]) {
       assert.ok(src.includes('Its settings go with it. Adding it again brings it back with every knob at its default.'), 'the two ends word the question differently')
     }

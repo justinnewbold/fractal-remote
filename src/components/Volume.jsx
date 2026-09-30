@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { blockParams, clearDeviceCache, setParam } from '../lib/forgefx'
+import { blockParams, setParam } from '../lib/forgefx'
 import {
   latestWriter,
   nudged,
@@ -102,8 +102,10 @@ export default function Volume({ eid, preset, onError }) {
    *
    * The unit accepts a write it then ignores and reports success either way,
    * so the number under the slider is the unit's answer, not the thumb's
-   * position. The cache is cleared first for the same reason setParamConfirmed
-   * clears it: without that the read hands back the value just sent.
+   * position. Straight to the read: the device server reads a block off the
+   * unit every time, and the DELETE /device/cache that used to go first
+   * deleted the computer's saved profile of the FM3 rather than any copy of
+   * this value.
    */
   const release = async () => {
     if (!dragging.current || !writer) return
@@ -111,7 +113,6 @@ export default function Volume({ eid, preset, onError }) {
     dragging.current = false
     if (err) onError?.(err.message)
     try {
-      await clearDeviceCache().catch(() => {})
       const res = await blockParams(eid)
       const fresh = outputLevelParam(res?.named)
       if (fresh) setLevel(fresh)

@@ -3496,13 +3496,14 @@ test('a write nobody could check is not written again on a guess', async () => {
    *
    * The retry is for one fault — the device silently ignoring an encoding it
    * does not take — and the evidence for it is a read that came back wrong. A
-   * read that could not be MADE is not that evidence. Clearing the unit's
-   * cache is a local-only route, so from a phone every check goes stale, and
-   * every write was being followed by a second write to the hardware chosen on
-   * the strength of nothing at all.
+   * read that could not be MADE is not that evidence, and a second write to
+   * the hardware chosen on the strength of nothing is not a check.
    *
-   * Three things are asserted, and each one was costing a round trip over the
-   * relay on every parameter of every send.
+   * And no check deletes anything first. Every checked write used to send
+   * DELETE /device/cache to "clear the parameter cache"; on the pinned device
+   * server a block's values are read off the unit every time, and that route
+   * deletes the computer's saved profile of the FM3, which is only missed at
+   * the next reconnect.
    */
   const store = { 'forgefx.host': 'http://unit.test' }
   globalThis.localStorage = {
@@ -3515,25 +3516,28 @@ test('a write nobody could check is not written again on a guess', async () => {
     }
   }
   const seen = []
+  let readable = false
   globalThis.fetch = async (url, options = {}) => {
     const method = options.method || 'GET'
     const path = String(url).replace('http://unit.test', '')
     seen.push(method + ' ' + path)
-    // What a phone gets: the cache clear refused, everything else fine.
-    if (path === '/device/cache') {
-      return {
-        ok: false,
-        status: 403,
-        statusText: 'Forbidden',
-        text: async () => JSON.stringify({ error: "You can't do that from a distance" })
+    // The read-back: the block will not answer, or answers with what was sent.
+    if (method === 'GET' && path.endsWith('/params')) {
+      if (!readable) {
+        return {
+          ok: false,
+          status: 500,
+          statusText: 'Internal Server Error',
+          text: async () => JSON.stringify({ error: 'bulk read timed out' })
+        }
       }
+      return { ok: true, status: 200, statusText: 'OK', text: async () => JSON.stringify({ named: [{ id: 3, name: 'Tone', value: 5 }] }) }
     }
     return { ok: true, status: 200, statusText: 'OK', text: async () => JSON.stringify({ ok: true }) }
   }
 
   try {
     const fx = await import('../src/lib/forgefx.js')
-    fx.resetCacheClear()
     const res = await fx.setParamConfirmed(9, 3, 5, { name: 'Tone', min: 0, max: 10 })
 
     assert.equal(res.ok, false, 'a check that proved nothing was reported as a success')
@@ -3542,41 +3546,19 @@ test('a write nobody could check is not written again on a guess', async () => {
 
     const writes = seen.filter((c) => c.startsWith('PUT '))
     assert.equal(writes.length, 1, 'the value went to the hardware ' + writes.length + ' times')
+    assert.deepEqual(seen.filter((c) => c.includes('/device/cache')), [], 'a checked write deletes the computer’s profile of the unit')
 
-    const reads = seen.filter((c) => c.startsWith('GET ') && c.includes('/params'))
-    assert.deepEqual(reads, [], 'a read whose answer may not be believed still cost a round trip')
-
-    /*
-     * And a Mac that refuses it is asked once, not once per write.
-     *
-     * The clear travels the relay now — the pinned fork allows it — but a Mac
-     * that has not taken that update refuses every time, and this runs before
-     * every verified write. One iPhone log carried thirty copies of the same
-     * refusal with six real errors from the unit buried among them. So the
-     * answer is learned and kept until the link changes.
-     */
-    const askedFirst = seen.filter((c) => c === 'DELETE /device/cache').length
-    assert.equal(askedFirst, 1, 'the first write asked ' + askedFirst + ' times')
+    /* A read that answers is believed, and still costs no delete. */
+    readable = true
     seen.length = 0
-    await fx.setParamConfirmed(9, 4, 5, { name: 'Level', min: 0, max: 10 })
+    const good = await fx.setParamConfirmed(9, 3, 5, { name: 'Tone', min: 0, max: 10 })
+    assert.equal(good.ok, true, 'a value read back as sent was not believed')
     assert.deepEqual(
-      seen.filter((c) => c === 'DELETE /device/cache'),
-      [],
-      'a refusal it had already been given was asked for again'
-    )
-
-    // Until the link changes, which is the one thing that can change the answer.
-    fx.resetCacheClear()
-    seen.length = 0
-    await fx.setParamConfirmed(9, 5, 5, { name: 'Mix', min: 0, max: 100 })
-    assert.equal(
-      seen.filter((c) => c === 'DELETE /device/cache').length,
-      1,
-      'reconnecting to a computer that may have been updated still never asks it'
+      seen.filter((c) => !c.startsWith('POST /telemetry')),
+      ['PUT /preset/blocks/9/params/3', 'GET /preset/blocks/9/params'],
+      'a checked write is more than the write and one read'
     )
   } finally {
-    const fx = await import('../src/lib/forgefx.js')
-    fx.resetCacheClear()
     delete globalThis.fetch
     delete globalThis.localStorage
   }
@@ -8373,6 +8355,201 @@ test('the web chain editor draws, and moves a block the way the phone does', asy
   assert.match(sync, /source: '\.\.\/shared\/lane-order\.mjs', target: '\.\.\/mobile\/src\/lib\/laneOrder\.js'/, 'the phone copy of the lane maths is not generated')
 })
 
+
+test('removing a block asks on the page, and a block the unit kept is said out loud', () => {
+  /*
+   * "CHAIN Remove does nothing." The write was there and allowed over the
+   * relay. What vanished was the question in front of it: the browser's own
+   * pop-up, which a blocked pop-up answers "no" without ever showing. And
+   * whatever the unit did, the panel closed and the history said "Cleared".
+   */
+  const src = readSrc(new URL('../src/components/GridEditor.jsx', import.meta.url), 'utf8')
+  assert.ok(!/window\.confirm\(/.test(src), 'Remove still asks in a pop-up a blocked pop-up answers “no” to')
+  const remove = src.slice(src.indexOf('const remove = async (row, col, name) => {'), src.indexOf('const buildStarter = async'))
+  assert.ok(remove.length > 200, 'the remove moved; retarget this test')
+  assert.match(remove, /const r = await clearCell\(row, col\)[\s\S]*?const now = await presetBlocks\(\)\.catch\(\(\) => null\)/, 'the chain is not read back after a remove')
+  assert.match(remove, /now\.find\(\(b\) => b\.row === row && b\.col === col\)/, 'the read-back does not look in the cell that was cleared')
+  assert.match(remove, /The unit did not remove it: /, 'a block the unit kept is silent')
+  /* A block still there is not recorded as cleared, and the panel stays open to say so. */
+  const kept = remove.slice(remove.indexOf('if (still) {'), remove.indexOf('const cleared'))
+  assert.match(kept, /setIssue\([\s\S]*?\)\s*return\s*\}/, 'a remove the unit did not take still closes the panel as done')
+  assert.ok(!/onChanged\(/.test(kept), 'a remove the unit did not take is recorded as cleared')
+  /* And no DELETE /device/cache on the way: it deletes the computer's saved
+     profile of the FM3, and the phone's copy of this never needed one. */
+  assert.ok(!/clearDeviceCache/.test(src), 'the chain editor deletes the computer’s profile of the unit again')
+})
+
+test('one arrow press is one write, of the value it reached', async () => {
+  /*
+   * "Knobs ignore the keyboard." The arrow moved the knob and asked for the
+   * write in the same instant, and the write read the value from before the
+   * move: every other press missed, the knob flicked back, and the last press
+   * was never sent. The rules are in shared/knob-keys.mjs, one copy for both
+   * apps; these drive them with a clock the test holds.
+   */
+  const { keyTarget, settleWrites, oneWriteAtATime, KEY_SETTLE_MS } = await import('../shared/knob-keys.mjs')
+  assert.equal(KEY_SETTLE_MS, 250)
+
+  /* Where each key goes, from a knob at 0.5 of its range. */
+  const near = (a, b) => Math.abs(a - b) < 1e-9
+  assert.ok(near(keyTarget('ArrowRight', 0.5), 0.51) && near(keyTarget('ArrowUp', 0.5), 0.51))
+  assert.ok(near(keyTarget('ArrowLeft', 0.5), 0.49) && near(keyTarget('ArrowDown', 0.5), 0.49))
+  assert.ok(near(keyTarget('ArrowRight', 0.5, { fine: true }), 0.502), 'Shift is no longer the fine step')
+  assert.ok(near(keyTarget('PageUp', 0.5), 0.6) && near(keyTarget('PageDown', 0.5), 0.4), 'Page Up and Down do not take a tenth of the range')
+  assert.equal(keyTarget('Home', 0.5), 0, 'Home does not go to the bottom')
+  assert.equal(keyTarget('End', 0.5), 1, 'End does not go to the top')
+  assert.equal(keyTarget('PageUp', 0.95), 1, 'a step runs past the end of the range')
+  assert.equal(keyTarget('Tab', 0.5), null, 'a key that is not for knobs turns the knob')
+  assert.ok(near(keyTarget('increment', 0.5), 0.51) && near(keyTarget('decrement', 0.5), 0.49), 'VoiceOver’s swipes are not the arrows')
+
+  /* A clock the test turns by hand. */
+  let now = 0
+  const timers = []
+  const later = (fn, ms) => {
+    const t = { fn, at: now + ms, live: true }
+    timers.push(t)
+    return t
+  }
+  const cancel = (t) => {
+    if (t) t.live = false
+  }
+  const advance = (ms) => {
+    now += ms
+    for (const t of timers) if (t.live && t.at <= now) {
+      t.live = false
+      t.fn()
+    }
+  }
+
+  /* One press: nothing on the wire until the keys are still, then exactly one
+     write, of the value the press reached. */
+  const sent = []
+  const keys = settleWrites((v) => sent.push(v), { later, cancel })
+  keys.push(5.1)
+  assert.deepEqual(sent, [], 'a press is written before the keys have stopped')
+  assert.equal(keys.held(), 5.1, 'the next press cannot start from where this one reached')
+  advance(KEY_SETTLE_MS)
+  assert.deepEqual(sent, [5.1], 'one ArrowRight did not produce exactly one write of its own value')
+  advance(KEY_SETTLE_MS * 4)
+  assert.deepEqual(sent, [5.1], 'one press was written twice')
+
+  /* Five quick presses are one write, of the last. */
+  sent.length = 0
+  for (const v of [5.2, 5.3, 5.4, 5.5, 5.6]) {
+    keys.push(v)
+    advance(100)
+  }
+  assert.deepEqual(sent, [], 'a run of presses is written press by press')
+  advance(KEY_SETTLE_MS)
+  assert.deepEqual(sent, [5.6], 'a run of presses did not end in one write of where it got to')
+
+  /* Leaving the knob, or the editor closing, sends what is waiting at once. */
+  sent.length = 0
+  keys.push(6)
+  keys.flush()
+  assert.deepEqual(sent, [6], 'tabbing away leaves the last press unsent')
+  advance(KEY_SETTLE_MS)
+  assert.deepEqual(sent, [6], 'a flushed press is written again when its timer fires')
+  keys.flush()
+  assert.deepEqual(sent, [6], 'a flush with nothing waiting writes something')
+
+  /* One checked write per control: values that arrive while one is out
+     wait, and only the newest of them goes next. */
+  const wire = []
+  const gates = []
+  const lanes = oneWriteAtATime(async (v) => {
+    wire.push(v)
+    await new Promise((r) => gates.push(r))
+  })
+  const done = lanes.send('amp:3', 1)
+  assert.equal(lanes.busy('amp:3'), true)
+  assert.equal(lanes.busy('amp:4'), false, 'one control’s write holds up another’s')
+  lanes.send('amp:3', 2)
+  lanes.send('amp:3', 3)
+  await Promise.resolve()
+  assert.deepEqual(wire, [1], 'a second write to the same control went out while the first was still being checked')
+  gates.shift()()
+  await new Promise((r) => setTimeout(r, 0))
+  assert.deepEqual(wire, [1, 3], 'the newest waiting value was not the one written next')
+  gates.shift()()
+  await done
+  assert.deepEqual(wire, [1, 3], 'a superseded value was written after all')
+  assert.equal(lanes.busy('amp:3'), false, 'the lane never empties')
+
+  /* A write that throws does not strand what was waiting behind it. */
+  const after = []
+  let first = true
+  const shaky = oneWriteAtATime(async (v) => {
+    after.push(v)
+    if (first) {
+      first = false
+      await Promise.resolve()
+      throw new Error('port not open')
+    }
+  })
+  const going = shaky.send('x', 'a')
+  shaky.send('x', 'b')
+  await going
+  assert.deepEqual(after, ['a', 'b'], 'a failed write strands the value waiting behind it')
+
+  /* Both apps send a fresh job per turn, so the skip-if-same needs its own
+     test of sameness: a tap on a knob with no movement, while its last
+     value is still out, must not write that value a second time. */
+  const jobs = []
+  const jobGates = []
+  const byJob = oneWriteAtATime(
+    async (job) => {
+      jobs.push(job)
+      await new Promise((r) => jobGates.push(r))
+    },
+    { same: (a, b) => a.next === b.next && a.key === b.key }
+  )
+  const tick = () => new Promise((r) => setTimeout(r, 0))
+  const drain = async () => {
+    while (jobGates.length) {
+      jobGates.shift()()
+      await tick()
+    }
+  }
+  byJob.send('amp:3', { next: 5.1, key: 'k' })
+  byJob.send('amp:3', { next: 5.1, key: 'k' })
+  await drain()
+  assert.equal(jobs.length, 1, 'a waiting job equal to the one just written was written again')
+  byJob.send('amp:3', { next: 5.1, key: 'k' })
+  byJob.send('amp:3', { next: 5.1, key: 'k2' })
+  await drain()
+  assert.equal(byJob.busy('amp:3'), false, 'the lane never empties')
+  assert.deepEqual(jobs.map((j) => j.key), ['k', 'k', 'k2'], 'the same number after a scene or channel change was dropped')
+
+  const conSrc = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+  const editSrc = readSrc(new URL('../mobile/src/screens/Edit.js', import.meta.url), 'utf8')
+  assert.match(conSrc, /oneWriteAtATime\([^]*?\{\s*same: \(a, b\) => a\.next === b\.next && a\.key === b\.key\s*\}\)/, 'the browser’s knob writes lost their test of sameness')
+  assert.match(editSrc, /oneWriteAtATime\([^]*?\{\s*same: \(a, b\) => Object\.is\(a\.next, b\.next\)\s*\}\)/, 'the phone’s knob writes lost their test of sameness')
+})
+
+test('the browser’s knob writes what a press reached, once the keys stop', () => {
+  /* The knob and its editor, held to the rules above. */
+  const knob = readSrc(new URL('../src/components/Knob.jsx', import.meta.url), 'utf8')
+  assert.match(knob, /from '\.\.\/\.\.\/shared\/knob-keys\.mjs'/, 'the knob keeps its own copy of the key rules')
+  const nudge = knob.slice(knob.indexOf('const nudge = (event) => {'), knob.indexOf('const r = size / 2 - 4'))
+  assert.ok(nudge.length > 100, 'the key handler moved; retarget this test')
+  assert.match(nudge, /keyTarget\(event\.key, from, \{ fine: event\.shiftKey \}\)/, 'the keys do not go through the shared steps')
+  assert.match(nudge, /onChange\(v\)\s*keys\.current\.push\(v\)/, 'a press does not hand its own value to the write')
+  assert.ok(!/onCommit/.test(nudge), 'a press asks for the write in the same instant again, which reads the value from before it')
+  assert.match(knob, /onBlur=\{\(\) => keys\.current\.flush\(\)\}/, 'tabbing away leaves the last press unsent')
+  assert.match(knob, /useEffect\(\(\) => \(\) => keys\.current\.flush\(\), \[\]\)/, 'closing the editor leaves the last press unsent')
+  assert.match(knob, /live\.current\.onCommit\?\.\(v\)/, 'a drag does not hand over the value it reached')
+
+  const con = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+  assert.match(con, /onCommit=\{\(v\) => commit\(p, v\)\}/, 'the knob’s value is read back out of state a render behind')
+  const commit = con.slice(con.indexOf('const commit = (p, override) => {'), con.indexOf('Swapping the model, and being able to take it back'))
+  assert.ok(commit.length > 200, 'the commit moved; retarget this test')
+  assert.match(commit, /if \(next === p\.value && !writes\.current\.busy\(lane\)\) return/, 'turning a knob back to where it was, while a write is out, never reaches the unit')
+  assert.match(commit, /writes\.current\.send\(lane, /, 'two checked writes to one control can race again')
+  assert.match(commit, /if \(prev\[p\.id\] !== next\) return prev/, 'a knob still being turned flicks back to an older read')
+  assert.match(commit, /if \(liveKey\.current === key\) \{/, 'a write that finishes after another block opened hands that block its values')
+  assert.match(commit, /res\.unverified\s*\?\s*`\$\{p\.name\} was sent, but the app couldn't read it back to check\.`\s*:\s*`\$\{p\.name\} didn't take\.`/, 'a knob nobody could read back is announced as one the unit refused')
+})
 
 console.log('\ncab picker')
 

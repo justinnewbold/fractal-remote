@@ -21,7 +21,7 @@ import {
   sendPasswordReset
 } from '../lib/relay'
 import { notePresetName, noteSceneName, useRig } from '../lib/rig'
-import { dropReadCache, sceneShape, setPresetName, setSceneName } from '../lib/device'
+import { sceneShape, setPresetName, setSceneName } from '../lib/device'
 import {
   SIZES,
   clampSize,
@@ -1176,9 +1176,11 @@ function SetupRow({ title, status, onPress }) {
  *
  * AND THE WRITE IS BELIEVED. "Renaming a preset doesn't work, just goes right
  * back to the original name." The rename landed; the re-read that followed
- * came back with the old name out of the computer's cache and put it back on
- * screen. So the cache is dropped and the screen is told the name it wrote,
- * rather than asked to read it back. See rig.notePresetName.
+ * came back with the old name and put it back on screen. So the screen is
+ * told the name it wrote, rather than asked to read it back. See
+ * rig.notePresetName. (It also sent DELETE /device/cache, to "drop the
+ * computer's cache" — which deleted the computer's saved profile of the FM3
+ * and left any name where it was, so it is gone.)
  *
  * It lives in Setup rather than on the stage screen, which is the browser's
  * choice and the right one: "move the rename presets and scenes button to the
@@ -1203,7 +1205,6 @@ function UnitBits() {
     setFailed(null)
     try {
       await setPresetName(wanted)
-      await dropReadCache()
       notePresetName(wanted)
       setSaid(`This preset is called ${wanted} now. Tap Save to keep it.`)
     } catch (err) {
@@ -1217,7 +1218,6 @@ function UnitBits() {
     setFailed(null)
     try {
       await setSceneName(index, wanted)
-      await dropReadCache()
       noteSceneName(index, wanted)
       setSaid(`Scene ${index + 1} is called ${wanted} now. Tap Save to keep it.`)
     } catch (err) {

@@ -4117,7 +4117,10 @@ export function run(test) {
     assert.match(vol, /latestWriter\(\(v\) => setParam\(eid, param\.id, v, param\)\)/, 'the slider writes without coalescing')
     assert.ok(!/setParamConfirmed/.test(vol), 'every drag value is a confirmed write — three round trips per pixel')
     assert.match(vol, /writer\.send\(v\)/, 'the drag does not go through the writer')
-    assert.match(vol, /await writer\.settled\(\)[\s\S]*?clearDeviceCache\(\)[\s\S]*?blockParams\(eid\)/, 'the release does not read back what the unit holds')
+    assert.match(vol, /await writer\.settled\(\)[\s\S]*?blockParams\(eid\)/, 'the release does not read back what the unit holds')
+    /* And nothing deleted first: DELETE /device/cache clears no copy of the
+       level, it deletes the computer's saved profile of the FM3. */
+    assert.ok(!/clearDeviceCache/.test(vol), 'letting go of the slider deletes the computer’s profile of the unit again')
     assert.match(vol, /outputLevelParam\(res\?\.named\)/, 'the slider does not pick the Level by the shared rule')
     assert.match(vol, /if \(!param\) return null/, 'a unit with no reachable level still gets a slider')
     assert.match(vol, /type="range"/, 'the control is not a slider')
@@ -4312,24 +4315,32 @@ export function run(test) {
     assert.match(after, /slotModel !== 'linear'/, 'a unit whose outputs are not a grid block is accused of missing one')
   })
 
-  test('a read that could not clear the cache is not called a failed write', () => {
+  test('a read that could not be made is not called a failed write, and no check deletes the unit’s profile', () => {
     /*
-     * From a phone, clearing the unit's cache is refused — it only works at
-     * the Mac — and the read that follows comes back one write behind. A log
-     * from an iPhone has five parameters in a row reported as not landing,
-     * each one reading back the PREVIOUS write's value scaled into its own
-     * range: Tone read back the drive's 7, Level read back the tone's 4, Mix
-     * read back the level's 6 as 60 out of 100. Every one of them had landed.
+     * A log from an iPhone has five parameters in a row reported as not
+     * landing, every one of which had. So a check that could not read the
+     * value back says "not checked", never "did not land".
      *
-     * So the app reports what it knows: unchecked, not failed.
+     * And no check sends DELETE /device/cache any more. It went before every
+     * checked write to "clear the parameter cache"; on the pinned device
+     * server a block's values are read off the unit every time, and that
+     * route deletes the computer's saved profile of the FM3 instead.
      */
+    const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
     const fx = readFileSync(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
-    const check = fx.slice(fx.indexOf('async function landed('), fx.indexOf('const wireLog'))
-    assert.match(check, /clearDeviceCache\(\)\.catch\(\(\) => \{\s*stale = true/, 'a refused cache clear is swallowed again')
-    assert.match(check, /return \{ ok: [^}]*stale \}/, 'the check does not report whether it could be believed')
+    const check = code(fx.slice(fx.indexOf('async function landed('), fx.indexOf('const wireLog')))
+    assert.ok(check.length > 100, 'the check moved; retarget this test')
+    assert.ok(!/device\/cache|clearDeviceCache/.test(check), 'a checked write deletes the computer’s profile of the unit again')
+    assert.match(check, /if \(typeof actual !== 'number'\) return \{ ok: false, actual: null, stale: true \}/, 'a read that came back empty is called a failed write')
+    assert.match(check, /if \(err\?\.linkDown\) throw err/, 'a dropped relay is reported as one unchecked value after another instead of stopping')
     assert.match(fx, /NOT CHECKED/, 'the debug log still calls an unverifiable read a write that did not land')
-    assert.match(fx, /unverified: checkA\.stale && checkB\.stale/, 'a write nobody could check is reported as one the device ignored')
-    assert.match(fx, /couldn't be checked from your phone/, 'the failure line still blames the device for a read it could not take')
+    assert.match(fx, /unverified: checkB\.stale/, 'a write nobody could check is reported as one the device ignored')
+    assert.match(fx, /sent, but \$\{UNREAD\}/, 'the failure line still blames the device for a read it could not take')
+    assert.ok(!/clearDeviceCache|resetCacheClear|CACHE_IS_LOCAL|'\/device\/cache'/.test(code(fx)), 'the cache clear is still in the client')
+    for (const f of ['App.jsx', 'components/Volume.jsx', 'components/PresetReport.jsx', 'components/GridEditor.jsx']) {
+      const src = code(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'))
+      assert.ok(!/clearDeviceCache\(|resetCacheClear\(/.test(src), `${f} deletes the computer’s profile of the unit again`)
+    }
 
     const diag = readFileSync(new URL('../src/components/Diagnostics.jsx', import.meta.url), 'utf8')
     assert.equal(

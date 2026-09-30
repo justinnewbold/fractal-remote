@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react'
 import {
   blockParams,
-  clearDeviceCache,
   currentPreset,
   getScene,
   presetBlocks,
@@ -45,15 +44,10 @@ export default function PresetReport({ device, link }) {
     setIssue(null)
     setFallback('')
     try {
-      /* Values first-hand where the app can have them. At the Mac this clears
-         ForgeFX's parameter cache; from a phone it is refused, and the read is
-         whatever the cache holds — worth knowing, so it is said in the header
-         rather than hidden. */
-      let fresh = true
-      await clearDeviceCache().catch(() => {
-        fresh = false
-      })
-
+      /* Values first-hand: the device server reads each block off the unit
+         when it is asked. This used to send DELETE /device/cache first, which
+         cleared no copy of any value — it deleted the computer's saved
+         profile of the FM3. */
       const preset = await currentPreset().catch(() => null)
       const scene = await getScene().catch(() => null)
       const blocks = await presetBlocks()
@@ -82,9 +76,7 @@ export default function PresetReport({ device, link }) {
             unit: device?.short || device?.name || 'none',
             link: link?.role ? `${link.role} · ${describeLink(link).note || ''}` : undefined,
             platform: platform(),
-            values: fresh
-              ? 'read fresh from the unit'
-              : 'from the unit’s cache — clearing it only works at the computer',
+            values: 'read fresh from the unit',
             at: new Date().toISOString()
           },
           preset,

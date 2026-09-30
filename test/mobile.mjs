@@ -1034,7 +1034,11 @@ export function run(test) {
      * it, nothing would have said so.
      */
     const flat = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
-    assert.match(flat, /const after = async \(res\) => \{ .*?await dropReadCache\(\) await refreshBlocks\(\{ quiet: true \}\)/, 'the chain is re-read out of the stale copy after a write')
+    assert.match(flat, /const after = async \(res\) => \{ .*?endChainWrite\(\{ refresh: false \}\) await refreshBlocks\(\{ quiet: true \}\)/, 'the chain is not re-read off the unit after a write')
+    /* And not by deleting anything first. The placement writes drop the
+       computer's copy of the layout themselves; DELETE /device/cache never
+       touched it, and deleted the computer's saved profile of the FM3. */
+    assert.ok(!/dropReadCache|device\/cache'/.test(flat.replace(/\/\*.*?\*\//g, '')), 'a chain write deletes the computer’s profile of the unit again')
     assert.match(flat, /const astray = moves\.filter\(\(m\) => colOf\(m\) !== m\.to\)/, 'a move is not checked against the unit\'s answer')
     assert.match(flat, /logDebug\('chain', `\$\{m\.block\.name\}: column \$\{m\.from\} → \$\{m\.to\}`/, 'a move leaves nothing in the log')
     assert.match(flat, /The unit did not keep the move: /, 'a move the unit dropped is silent')
@@ -1088,7 +1092,7 @@ export function run(test) {
     assert.match(rig, /export function endChainWrite\(\{ refresh = true \} = \{\}\) \{ if \(!chainWrites\) return chainWrites -= 1 if \(chainWrites\) return const asked = chainAsked chainAsked = false if \(asked && refresh\) refreshBlocks\(\{ quiet: true \}\) \}/, 'announcements held during a write are lost, or read twice')
 
     const edit = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
-    assert.match(edit, /const after = async \(res\) => \{ .*?endChainWrite\(\{ refresh: false \}\) await dropReadCache\(\) await refreshBlocks/, 'the write’s own read does not stand in for the held announcements')
+    assert.match(edit, /const after = async \(res\) => \{ .*?endChainWrite\(\{ refresh: false \}\) await refreshBlocks/, 'the write’s own read does not stand in for the held announcements')
     assert.equal((edit.match(/beginChainWrite\(\)/g) || []).length, 3, 'not every chain write (move, add, remove) is bracketed')
     assert.match(edit, /useKeepAwake\(\)/, 'the Edit screen lets the phone lock mid-write')
 
@@ -2860,7 +2864,7 @@ export function run(test) {
      * what is in the preset. This is about the knob, which changes none of it
      * and already read its own value back two lines earlier.
      */
-    const commit = edit.slice(edit.indexOf('const commit = async'), edit.indexOf('const applyModel'))
+    const commit = edit.slice(edit.indexOf('const commit = (p, override)'), edit.indexOf('const applyModel'))
     assert.ok(commit.length > 100, 'the knob commit moved; this check reads it')
     assert.ok(
       !/refreshAll\(|refreshBlocks\(/.test(commit),
@@ -2940,6 +2944,34 @@ export function run(test) {
        leaves the knob, and small movements near the centre jump. */
     assert.match(knob, /gesture\.dy/, 'the knob no longer turns on a vertical drag')
     assert.ok(!/gesture\.dx/.test(knob), 'the knob turns on horizontal movement, which no hardware editor does')
+  })
+
+  test('a VoiceOver swipe on a knob writes the value it reached, once the swipes stop', () => {
+    /*
+     * The browser's keyboard bug, on the phone: each swipe moved the knob and
+     * asked for the write in the same instant, and the write read the value
+     * from before the swipe. So every other one missed and the last one never
+     * went. Both ends now step through lib/knob-keys, generated from the
+     * browser's shared copy.
+     */
+    const knob = read('mobile/src/components/Knob.js')
+    assert.match(knob, /import \{ keyTarget, settleWrites \} from '\.\.\/lib\/knob-keys'/, 'the phone knob has its own key rules')
+    const act = knob.slice(knob.indexOf('onAccessibilityAction={(e) => {'), knob.indexOf('style={{ width: size, height: size'))
+    assert.ok(act.length > 100, 'the VoiceOver handler moved; retarget this test')
+    assert.match(act, /keyTarget\(e\.nativeEvent\.actionName, from\)/, 'a swipe does not step through the shared rule')
+    assert.match(act, /change\?\.\(v\)\s*swipes\.current\.push\(v\)/, 'a swipe does not hand its own value to the write')
+    assert.ok(!/commit\?\.\(\)/.test(act), 'a swipe asks for the write in the same instant again, which reads the value from before it')
+    assert.match(knob, /useEffect\(\(\) => \(\) => swipes\.current\.flush\(\), \[\]\)/, 'closing the editor leaves the last swipe unsent')
+    assert.match(knob, /live\.current\.onCommit\?\.\(v\)/, 'a drag does not hand over the value it reached')
+
+    const edit = read('mobile/src/screens/Edit.js')
+    assert.match(edit, /onCommit=\{\(v\) => commit\(p, v\)\}/, 'the knob’s value is read back out of state a render behind')
+    const commit = edit.slice(edit.indexOf('const commit = (p, override) => {'), edit.indexOf('Swapping the model, and being able to take it back'))
+    assert.ok(commit.length > 200, 'the commit moved; retarget this test')
+    assert.match(commit, /if \(next === p\.value && !writes\.current\.busy\(p\.id\)\) return/, 'turning a knob back while a write is out never reaches the unit')
+    assert.match(commit, /writes\.current\.send\(p\.id, /, 'two checked writes to one control can race again')
+    assert.match(commit, /if \(prev\[p\.id\] !== next\) return prev/, 'a knob still being turned flicks back to an older read')
+    assert.match(read('mobile/src/lib/knob-keys.js'), /Generated from shared\/knob-keys\.mjs/, 'the phone’s key rules are not generated from the shared copy')
   })
 
   test('which setlist survives a sync is decided in one place, not two', () => {
@@ -6984,20 +7016,24 @@ export function run(test) {
   test('a write is read back off the hardware, and twice before it is called a miss', async () => {
     /*
      * "Change the volume again, and it said volume didn't take." The level was
-     * where it had been put; the read that followed the write came back one
-     * write behind, which is a documented habit of the computer's cache. So
-     * the phone now does what the browser does — drops that cache first — and
-     * reads once more after a pause before saying a write did not take.
+     * where it had been put. So the phone reads once more after a pause before
+     * saying a write did not take.
+     *
+     * And it reads straight off the unit, with nothing deleted first. It used
+     * to send DELETE /device/cache before every read, to make the computer
+     * forget "what it last read"; the computer reads a block's values off the
+     * unit every time, and that route deletes its saved profile of the FM3.
      */
     const dev = read('mobile/src/lib/device.js').replace(/\s+/g, ' ')
-    assert.match(dev, /await remoteRequest\('\/device\/cache', \{ method: 'DELETE' \}\)/, 'the phone never drops the computer\'s read cache')
+    const code = dev.replace(/\/\*.*?\*\//g, '')
+    assert.ok(!/device\/cache'|dropReadCache|cacheDropRefused/.test(code), 'a checked write deletes the computer’s profile of the unit again')
     assert.match(dev, /export const READ_BACK_AGAIN_MS = 400/)
     assert.match(dev, /for \(let go = 0; go < 2; go\+\+\) \{ if \(go\) await new Promise\(\(r\) => setTimeout\(r, READ_BACK_AGAIN_MS\)\)/, 'a value that came back wrong is not read a second time')
-    assert.match(dev, /await dropReadCache\(\) actual = await readParamValue\(eid, paramId\)/, 'the read-back does not follow the cache drop')
-    assert.match(dev, /if \(err\?\.status === 403 \|\| err\?\.remoteBlocked\) cacheDropRefused = true/, 'a refused drop is asked for again on every write')
-    /* And the relay lets it through. */
+    assert.match(dev, /try \{ actual = await readParamValue\(eid, paramId\) \} catch \{ actual = null \}/, 'the read-back is not taken off the unit')
+    /* The relay still carries the route, because the host still allows it —
+       the two rules agree even though nothing here sends it. */
     const rules = await import('../shared/relay-rules.mjs')
-    assert.equal(rules.forbiddenRemotely('DELETE', '/device/cache'), null, 'the relay refuses the cache drop')
+    assert.equal(rules.forbiddenRemotely('DELETE', '/device/cache'), null, 'the relay mirror disagrees with the host')
 
     /* The volume says what was asked and what the unit holds, and shows it, like a knob does. */
     const vol = read('mobile/src/components/Volume.js').replace(/\s+/g, ' ')
@@ -7005,11 +7041,10 @@ export function run(test) {
     assert.match(vol, /if \(holding !== null\) setValue\(holding\)/, 'the slider keeps pointing at a number the unit refused')
 
     /* And a miss is written to the log in numbers: what was asked, what each
-       read saw, which encoding went, and whether the cache drop was taken.
-       "The unit is holding it at +0.8 dB" said none of that. */
-    assert.match(dev, /logDebug\( 'set', `\$\{who\}: asked \$\{value\}, read \$\{actual === null \? 'nothing' : actual\}`, `\$\{continuous \? 'continuous' : 'discrete'\}, read \$\{go \+ 1\} of 2, cache drop \$\{dropped \? 'taken' : 'not taken'\}` \)/, 'a missed read-back is not logged in numbers')
+       read saw, and which encoding went. "The unit is holding it at +0.8 dB"
+       said none of that. */
+    assert.match(dev, /logDebug\( 'set', `\$\{who\}: asked \$\{value\}, read \$\{actual === null \? 'nothing' : actual\}`, `\$\{continuous \? 'continuous' : 'discrete'\}, read \$\{go \+ 1\} of 2` \)/, 'a missed read-back is not logged in numbers')
     assert.match(dev, /logDebug\('set', `\$\{who\} did not take`, `asked \$\{value\}, unit holds \$\{actual === null \? 'nothing readable' : actual\}`\)/, 'a write that did not take is not logged')
-    assert.match(dev, /logDebug\('set', 'cache drop failed', err\?\.message \|\| String\(err\)\)/, 'a refused cache drop is silent')
   })
 
   test('a rename is believed, not read back out of a stale cache', () => {
@@ -7025,8 +7060,11 @@ export function run(test) {
      * request says, so a stale one would have undone the rename in the slot.
      */
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
-    assert.match(settings, /await setPresetName\(wanted\) await dropReadCache\(\) notePresetName\(wanted\)/, 'a preset rename is not believed')
-    assert.match(settings, /await setSceneName\(index, wanted\) await dropReadCache\(\) noteSceneName\(index, wanted\)/, 'a scene rename is not believed')
+    assert.match(settings, /await setPresetName\(wanted\) notePresetName\(wanted\)/, 'a preset rename is not believed')
+    assert.match(settings, /await setSceneName\(index, wanted\) noteSceneName\(index, wanted\)/, 'a scene rename is not believed')
+    /* It used to "drop the computer's cache" first. That route deletes the
+       computer's saved profile of the FM3, and left any name where it was. */
+    assert.ok(!/dropReadCache/.test(settings), 'a rename deletes the computer’s profile of the unit again')
     assert.ok(!/await refreshPreset\(\)/.test(settings), 'the preset is re-read after a rename, which is where the old name came from')
     assert.ok(!/await refreshScene\(\)/.test(settings), 'the scene is re-read after a rename, which never carried the names')
 

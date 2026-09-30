@@ -658,36 +658,21 @@ export function setParam(eid, paramId, value, param, continuous) {
  * corrects it, which is audible. That file is generated from the browser's copy
  * so the two apps cannot drift on it.
  *
- * THE READ-BACK CAN BE ONE WRITE BEHIND, and a check that reads once and
- * believes it calls a write that landed a write that did not. The browser has
- * a log from an iPhone with five knobs in a row "not taking", each one reading
- * back the value of the write BEFORE it; and "The volume didn't take" on a
- * slider whose level was exactly where it had been put. So the check does what
- * the browser does — asks the computer to forget what it last read, which the
- * relay allows since the pinned fork — and then, if the number still does not
- * agree, waits a moment and reads once more before saying so. A miss costs
- * two reads and half a second. A false "didn't take" costs trust in the one
- * screen that has to be believed.
+ * THE READ-BACK IS READ TWICE BEFORE A MISS IS CALLED. "The volume didn't
+ * take" on a slider whose level was exactly where it had been put: a check
+ * that reads once and believes it calls a write that landed a write that did
+ * not. So if the number does not agree, the check waits a moment and reads
+ * once more before saying so. A miss costs two reads and half a second. A
+ * false "didn't take" costs trust in the one screen that has to be believed.
+ *
+ * It used to send DELETE /device/cache before each read, to make the computer
+ * "forget what it last read". The computer keeps no copy of a block's values
+ * to forget — they are read off the unit every time — and that route deletes
+ * its saved profile of the FM3, which is only missed at the next reconnect.
  */
 
 /** How long to give the unit before the second read of a value that came back wrong. */
 export const READ_BACK_AGAIN_MS = 400
-
-/* A computer that refuses the cache drop will keep refusing while it is the
-   computer; a dropped relay is about this moment and is asked again. */
-let cacheDropRefused = false
-/** True when the computer took the drop; false when it refused or could not be reached. */
-export async function dropReadCache() {
-  if (cacheDropRefused) return false
-  try {
-    await remoteRequest('/device/cache', { method: 'DELETE' })
-    return true
-  } catch (err) {
-    if (err?.status === 403 || err?.remoteBlocked) cacheDropRefused = true
-    logDebug('set', 'cache drop failed', err?.message || String(err))
-    return false
-  }
-}
 
 export async function setParamConfirmed(eid, paramId, value, param) {
   const norm = toNormalized(value, param)
@@ -710,16 +695,14 @@ export async function setParamConfirmed(eid, paramId, value, param) {
   /*
    * WRITTEN TO THE LOG WHEN IT MISSES, in numbers. "The volume didn't take.
    * The unit is holding it at +0.8 dB" — and nothing said what had been
-   * asked for, which encoding went, whether the cache drop was accepted, or
-   * what the second read saw. Every miss now leaves that line, so the next
-   * log says which of those it was instead of leaving it to be guessed.
+   * asked for, which encoding went, or what the second read saw. Every miss
+   * now leaves that line, so the next log says which of those it was instead
+   * of leaving it to be guessed.
    */
   const landed = async (continuous) => {
     for (let go = 0; go < 2; go++) {
       if (go) await new Promise((r) => setTimeout(r, READ_BACK_AGAIN_MS))
-      let dropped = false
       try {
-        dropped = await dropReadCache()
         actual = await readParamValue(eid, paramId)
       } catch {
         actual = null
@@ -728,7 +711,7 @@ export async function setParamConfirmed(eid, paramId, value, param) {
       logDebug(
         'set',
         `${who}: asked ${value}, read ${actual === null ? 'nothing' : actual}`,
-        `${continuous ? 'continuous' : 'discrete'}, read ${go + 1} of 2, cache drop ${dropped ? 'taken' : 'not taken'}`
+        `${continuous ? 'continuous' : 'discrete'}, read ${go + 1} of 2`
       )
     }
     return false

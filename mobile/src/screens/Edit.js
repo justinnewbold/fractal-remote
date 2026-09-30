@@ -10,7 +10,6 @@ import {
   blockTypes,
   cabState,
   clearCell,
-  dropReadCache,
   idOf,
   modifierModel,
   placeBlock,
@@ -42,6 +41,7 @@ import { buildParamIndex, findControls, indexFor } from '../lib/paramIndex'
 import { beginChainWrite, endChainWrite, getState, noteEdited, refreshBlocks, useRig, writeBypass, writeChannel } from '../lib/rig'
 import { useKeepAwake } from 'expo-keep-awake'
 import { logDebug } from '../lib/debugLog'
+import { oneWriteAtATime } from '../lib/knob-keys'
 import { blockColor } from '../lib/blockColors'
 import { presetLabel } from '../lib/presetName'
 import { shortBlock } from '../lib/shortName'
@@ -419,6 +419,13 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
   const [loading, setLoading] = useState(false)
   /* Values a finger has moved but the unit has not confirmed yet. */
   const [local, setLocal] = useState({})
+  /* One checked write per control at a time — see commit. */
+  const writes = useRef(null)
+  const writeOne = useRef(null)
+  if (!writes.current)
+    writes.current = oneWriteAtATime((job) => writeOne.current?.(job), {
+      same: (a, b) => Object.is(a.next, b.next)
+    })
   /* The model this block was on before the last swap, for the eight seconds
      during which taking it back is one tap. */
   const [undo, setUndo] = useState(null)
@@ -508,9 +515,22 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
 
   const valueOf = (p) => (local[p.id] !== undefined ? local[p.id] : p.value)
 
-  const commit = async (p, override) => {
+  /*
+   * A knob's value to the unit, checked — the browser's rule, for the same
+   * bug. The value is handed in by whatever moved it, because reading it out
+   * of `local` here read the value from before the move: a VoiceOver swipe
+   * sent the swipe before it, and the last one never went at all. And one
+   * write per control at a time, the newest waiting value next, with the
+   * value on the knob let go only once the unit has caught up with it.
+   */
+  const commit = (p, override) => {
     const next = override !== undefined ? override : local[p.id]
-    if (next === undefined || next === p.value) return
+    if (next === undefined) return
+    if (next === p.value && !writes.current.busy(p.id)) return
+    return writes.current.send(p.id, { p, next })
+  }
+
+  writeOne.current = async ({ p, next }) => {
     try {
       const res = await setParamConfirmed(eid, p.id, next, p)
       /* Before the read-back, not after: the write is out and the unit is
@@ -520,6 +540,7 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
       setParams(fresh?.named || [])
       if (!res.ok) onError(didNotTake(p, res.actual, fresh?.named || []))
       setLocal((prev) => {
+        if (prev[p.id] !== next) return prev
         const copy = { ...prev }
         delete copy[p.id]
         return copy
@@ -861,7 +882,7 @@ function BlockPanel({ block, channels, focus, onError, onScrollLock }) {
                 label={p.name}
                 value={valueOf(p)}
                 onChange={(v) => setLocal((prev) => ({ ...prev, [p.id]: v }))}
-                onCommit={() => commit(p)}
+                onCommit={(v) => commit(p, v)}
                 onScrollLock={onScrollLock}
               />
               <ValueBox param={p} value={valueOf(p)} onCommit={(v) => commit(p, v)} />
@@ -968,14 +989,15 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
   /* A write is done when the unit has been asked AND the chain re-read. */
   const after = async (res) => {
     /*
-     * A structure write, then a read that must not come out of the computer's
-     * fifteen-second copy of the preset — a copy taken before the write, so
-     * a read out of it shows the chain as it was: "When I rearranged with the
-     * slider and moved it up, it didn't take, it just put it right back where
-     * it was." The copy is dropped first, so the read is off the unit.
+     * A structure write, then a read of the chain off the unit: "When I
+     * rearranged with the slider and moved it up, it didn't take, it just put
+     * it right back where it was." The computer keeps a fifteen-second copy
+     * of the preset's layout, and every placement and clear drops it itself.
+     * This used to send DELETE /device/cache first to drop it again, and that
+     * route never touched the copy — it deleted the computer's saved profile
+     * of the FM3.
      */
     endChainWrite({ refresh: false })
-    await dropReadCache()
     await refreshBlocks({ quiet: true })
     setIssue(doubtfulWrite(res))
     if (!doubtfulWrite(res)) setActing(null)

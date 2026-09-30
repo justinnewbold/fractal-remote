@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { placeBlock, clearCell, readGrid, blockCatalog, wireRow, presetBlocks, clearDeviceCache } from '../lib/forgefx'
+import { placeBlock, clearCell, readGrid, blockCatalog, wireRow, presetBlocks } from '../lib/forgefx'
 import { logDebug } from '../lib/debugLog'
 import { blockPositions, landingIndex, reorderPlan } from '../../shared/lane-order.mjs'
 import { chainPlan } from '../lib/actions'
@@ -21,6 +21,11 @@ import {
  * offer is simply skipped.
  */
 const STARTER_ORDER = ['drive', 'amp', 'cab', 'delay', 'reverb']
+
+/* The question Remove asks, in the phone's words — test/both-ends.mjs holds
+   the two ends to the same sentence. */
+const removeQuestion = (name) => `Remove ${name || 'this block'}?`
+const REMOVE_WARNING = 'Its settings go with it. Adding it again brings it back with every knob at its default.'
 
 /**
  * The chain, as a chain.
@@ -54,6 +59,8 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
   // Which card's actions are open, as "row:col". One at a time.
   const [open, setOpen] = useState(null)
   const [moving, setMoving] = useState(null)
+  // Which card's Remove is asking "are you sure", as "row:col".
+  const [asking, setAsking] = useState(null)
   const [choice, setChoice] = useState('')
   const [working, setWorking] = useState(null)
   // Said beside the control that caused it, never at the top of the page.
@@ -152,6 +159,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
 
   const close = () => {
     setOpen(null)
+    setAsking(null)
     setChoice('')
     setIssue(null)
   }
@@ -272,7 +280,9 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
         for (const m of moves) await placeBlock(lane.row, m.from, m.block.effectId).catch(() => {})
         throw err
       }
-      await clearDeviceCache().catch(() => {})
+      /* Straight to the read. The computer's copy of the chain is dropped by
+         the placement writes themselves; the DELETE /device/cache that used to
+         go first deleted its saved profile of the FM3 and freshened nothing. */
       const now = await presetBlocks().catch(() => null)
       if (now) {
         const at = (m) => now.find((b) => b.effectId === m.block.effectId)
@@ -330,12 +340,39 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
     if (to !== index) reorder(lane, index, to)
   }
 
+  /*
+   * Take a block out, then look.
+   *
+   * "Remove does nothing." The write was fine; what failed was everything
+   * around it. The question in front of it was the browser's own pop-up, and a
+   * browser that blocks pop-ups answers it "no" without showing it — so the
+   * tap did nothing and said nothing. And the unit's answer was never looked
+   * at: whatever happened, the panel closed and the history said "Cleared".
+   *
+   * So the chain is read back off the unit afterwards, as the drag does, and
+   * a block still sitting in the cell is said out loud, the way the phone
+   * says it.
+   */
   const remove = async (row, col, name) => {
     setWorking('clearing')
     setIssue(null)
+    const where = linear ? `slot ${label(col)}` : `row ${rowLabel(row)}, column ${label(col)}`
     try {
-      await clearCell(row, col)
-      onChanged(linear ? `Cleared slot ${label(col)}` : `Cleared row ${rowLabel(row)}, column ${label(col)}`)
+      const r = await clearCell(row, col)
+      logDebug('chain', `remove ${name || 'block'} at ${where}`, r?.ok === false ? 'refused' : r?.ok === true ? 'ok' : 'no answer')
+      const now = await presetBlocks().catch(() => null)
+      const still = now ? now.find((b) => b.row === row && b.col === col) : null
+      logDebug('chain', `${where} after the remove`, !now ? 'could not re-read the chain' : still ? `still holds ${still.name}` : 'empty now')
+      if (still) {
+        setIssue(
+          `The unit did not remove it: ${where} still holds ${still.name || 'a block'}${
+            r?.ok === false ? ', and the unit answered “refused”' : ''
+          }.`
+        )
+        return
+      }
+      const cleared = linear ? `Cleared slot ${label(col)}` : `Cleared row ${rowLabel(row)}, column ${label(col)}`
+      onChanged(now ? cleared : `${cleared} — could not re-read the chain to check`)
       close()
     } catch (err) {
       setIssue(err.message)
@@ -511,6 +548,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
                       setIssue(null)
                       setOpen(isOpen ? null : at)
                       setMoving(null)
+                      setAsking(null)
                     }}
                     disabled={!editable || busy || !!working}
                   >
@@ -573,25 +611,42 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
                         )}
                         {picker(() => add(lane.row, item.col), 'Replace', `add:${at}`)}
                         {/* Red, and asked first — the phone does the same. A block
-                            taken out loses its settings and there is no undo. */}
+                            taken out loses its settings and there is no undo.
+                            Asked here on the page rather than in a browser
+                            pop-up, which a blocked pop-up answers "no" to
+                            without ever showing it. */}
                         <button
                           className="chip chip-remove"
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `Remove ${b.name || 'this block'}? Its settings go with it. Adding it again brings it back with every knob at its default.`
-                              )
-                            ) {
-                              remove(lane.row, item.col, b.name)
-                            }
-                          }}
-                          disabled={busy || !!working}
+                          onClick={() => setAsking(at)}
+                          disabled={busy || !!working || asking === at}
                         >
                           {working === 'clearing' ? 'Removing…' : 'Remove'}
                         </button>
                         <button className="chip" onClick={close}>
                           Cancel
                         </button>
+                        {asking === at ? (
+                          <div className="notice chain-ask" data-kind="fault" role="alertdialog" aria-label={removeQuestion(b.name)}>
+                            <p>
+                              <strong>{removeQuestion(b.name)}</strong> {REMOVE_WARNING}
+                            </p>
+                            <div className="history-actions">
+                              <button
+                                className="chip chip-remove"
+                                onClick={() => {
+                                  setAsking(null)
+                                  remove(lane.row, item.col, b.name)
+                                }}
+                                disabled={busy || !!working}
+                              >
+                                Remove
+                              </button>
+                              <button className="chip" onClick={() => setAsking(null)}>
+                                Keep it
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
                       </>
                     )}
                     {issue ? <p className="chain-issue">{issue}</p> : null}

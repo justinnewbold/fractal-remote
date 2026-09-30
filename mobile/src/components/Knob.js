@@ -4,6 +4,7 @@ import { PanResponder, Platform, Text, View } from 'react-native'
 import { color, font, mono } from '../lib/theme'
 import { fromNormalized, toNormalized } from '../lib/scale'
 import { tick } from '../lib/feedback'
+import { keyTarget, settleWrites } from '../lib/knob-keys'
 
 const face = Platform.select(mono)
 
@@ -61,6 +62,28 @@ export default function Knob({ param, value, onChange, onCommit, size = 64, labe
 
   /** Where the value was when the finger landed. */
   const origin = useRef(0)
+  /* Where this drag has got to, handed to the commit so it writes the value
+     the thumb reached and not one read out of state a render behind. */
+  const dragged = useRef(undefined)
+  const release = () => {
+    const v = dragged.current
+    dragged.current = undefined
+    live.current.onCommit?.(v)
+  }
+
+  /*
+   * VoiceOver's swipes, written once they stop — see lib/knob-keys.js.
+   *
+   * Each swipe used to ask for the write in the same instant it moved the
+   * knob, and the write read the value from before the swipe: every other one
+   * missed, the knob flicked back, and the last was never sent. Now the value
+   * a swipe reaches is the value written, a run of swipes is one write a
+   * quarter of a second after the last, and the editor closing sends what is
+   * waiting at once.
+   */
+  const swipes = useRef(null)
+  if (!swipes.current) swipes.current = settleWrites((v) => live.current.onCommit?.(v))
+  useEffect(() => () => swipes.current.flush(), [])
 
   const pan = useRef(
     PanResponder.create({
@@ -105,17 +128,19 @@ export default function Knob({ param, value, onChange, onCommit, size = 64, labe
          * an inch is one nobody can land on 4.00 with.
          */
         const next = clamp01(origin.current - gesture.dy / 260)
-        change?.(round3(fromNormalized(next, p)))
+        const v = round3(fromNormalized(next, p))
+        dragged.current = v
+        change?.(v)
       },
       onPanResponderRelease: () => {
         setDragging(false)
         live.current.onScrollLock?.(false)
-        live.current.onCommit?.()
+        release()
       },
       onPanResponderTerminate: () => {
         setDragging(false)
         live.current.onScrollLock?.(false)
-        live.current.onCommit?.()
+        release()
       }
     })
   ).current
@@ -137,15 +162,21 @@ export default function Knob({ param, value, onChange, onCommit, size = 64, labe
         }}
         /*
          * The whole range in a hundred steps, for anyone driving this with
-         * VoiceOver's rotor rather than a thumb. Each one commits on its own,
-         * because a rotor turn has no "let go" to commit on.
+         * VoiceOver's rotor rather than a thumb. A rotor turn has no "let go"
+         * to commit on, so the pause after the last swipe is the let-go.
+         * Each swipe starts from where the last one reached, even before the
+         * screen has caught up with it.
          */
         accessibilityActions={ROTOR}
         onAccessibilityAction={(e) => {
-          const by = e.nativeEvent.actionName === 'increment' ? 0.01 : -0.01
-          const { param: p, onChange: change, onCommit: commit } = live.current
-          change?.(round3(fromNormalized(clamp01(live.current.norm + by), p)))
-          commit?.()
+          const { param: p, onChange: change } = live.current
+          const waiting = swipes.current.held()
+          const from = waiting !== undefined ? clamp01(toNormalized(waiting, p) ?? live.current.norm) : live.current.norm
+          const to = keyTarget(e.nativeEvent.actionName, from)
+          if (to === null) return
+          const v = round3(fromNormalized(to, p))
+          change?.(v)
+          swipes.current.push(v)
         }}
         style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
       >
