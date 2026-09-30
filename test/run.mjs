@@ -10753,6 +10753,11 @@ test('a slot nobody has read is not an empty slot, and a different name takes a 
    * loaded slot under a new name said nothing. Both wrote on the first tap.
    */
   const { overwriteCheck, overwriteAsk } = await import('../src/lib/overwrite.js')
+  /* "The app couldn't draw — null is not an object (evaluating
+     'z.current.name')": with no preset loaded both numbers were undefined, so
+     the name was read off a null ref and the whole web app went down. */
+  assert.match(readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8'), /loadedAs\.current && Number\.isInteger\(preset\?\.number\) && loadedAs\.current\.number === preset\.number/, 'the Save check reads a name off a preset that was never loaded')
+  assert.doesNotMatch(readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8'), /loadedAs\.current\?\.number === preset\?\.number \? loadedAs\.current\.name/, 'the crash on a web app with no preset loaded is back')
   const at = (holds, over = {}) => overwriteCheck({ target: 40, loaded: 12, loadedName: 'SONG 12', holds, saveAs: 'My Lead', ...over })
   assert.equal(at(null).need, 'checking', 'a slot still being asked about saves on one tap')
   assert.equal(at({ number: 39, name: '', known: true }).need, 'checking', 'the answer about another slot was taken for this one')
@@ -10776,7 +10781,7 @@ test('a slot nobody has read is not an empty slot, and a different name takes a 
   assert.ok(!/occupant \? 'an empty slot'/.test(sheet), 'a slot that exists is still called empty because it exists')
   const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
   assert.match(app, /lookUpName\(saveTarget\)/, 'the slot is never looked up')
-  assert.match(app, /loadedName: loadedAs\.current\?\.number === preset\?\.number \? loadedAs\.current\.name : null/)
+  assert.match(app, /loadedName:\s*loadedAs\.current && Number\.isInteger\(preset\?\.number\) && loadedAs\.current\.number === preset\.number\s*\? loadedAs\.current\.name\s*: null/)
   /* And it is written: at the load, and at each of the three saves. Without
      these loadedName is always null and the loaded-slot rule never runs. */
   assert.match(app, /const noteLoadedAs = \(p\) => \{\s*if \(Number\.isInteger\(p\?\.number\) && typeof p\?\.name === 'string'\) loadedAs\.current = \{ number: p\.number, name: p\.name\.trim\(\) \}/, 'the loaded slot’s name is never kept')
