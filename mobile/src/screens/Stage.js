@@ -776,7 +776,9 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
           */}
           <Press
             grow
-            label="Tap Tempo"
+            /* "Change the label on the tap tempo button to just say Tap." */
+            label="Tap"
+            accessibilityLabel={Number.isFinite(bpm) ? `Tap tempo, ${Math.round(bpm)}` : 'Tap tempo'}
             sub={Number.isFinite(bpm) ? String(Math.round(bpm)) : undefined}
             icon={tempoIcon}
             tone="signal"

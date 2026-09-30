@@ -7541,7 +7541,7 @@ test('the Tap button opens the tempo box on a hold or a right-click, at both end
   const press = readSrc(new URL('../mobile/src/components/Press.js', import.meta.url), 'utf8')
   assert.match(press, /onLongPress=\{\s*onLongPress/, 'the phone’s button cannot be held')
   const stage = readSrc(new URL('../mobile/src/screens/Stage.js', import.meta.url), 'utf8')
-  assert.match(stage, /label="Tap Tempo"[^>]*onLongPress=\{\(\) => setTyping\(true\)\}/, 'holding Tap on the phone does nothing')
+  assert.match(stage, /label="Tap"[^>]*onLongPress=\{\(\) => setTyping\(true\)\}/, 'holding Tap on the phone does nothing')
   /*
    * The box moved out of the stage screen and into an overlay of its own — the
    * keyboard was covering it where it was, at the foot, which is exactly where
