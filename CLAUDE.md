@@ -60,24 +60,20 @@ jargon to make sense, the question is not finished yet.
 Give options as plain choices with the consequence attached, and say which
 one you would pick.
 
-**Give him the Android download link every time he needs one.**
+**He takes Android through the over-the-air updates, not the APK.**
 
-> "Give me the direct download link for the android build. And always give
-> me that link if I have to re-download."
+> "No, I don't install direct on Android. I just use the over-the-air
+> updates that you've been doing."
 
-The APK lands on a GitHub Releases page, and the link to it is a link he
-taps on the handset — that is the whole of the install. So it is not enough
-to say a new APK is ready, or to name the version: paste the URL.
-
-The shape is fixed and the version is the only part that moves:
+So don't paste the APK link after an ordinary merge. It is only for the
+case where an update can't reach the phone — a native change, a fresh
+phone, a build that had to be redone — and then it goes in the reply,
+never left for him to find. The shape is fixed and the version is the only
+part that moves:
 
 ```
 https://github.com/justinnewbold/fractal-remote/releases/download/apk-v<VERSION>/fractal-remote-v<VERSION>.apk
 ```
-
-Anything that ends with him needing to install an APK — a native change, a
-fresh phone, a build that had to be redone — ends with that link in the
-reply. He should never have to go and find it.
 
 **Never start an Expo build without asking him first.**
 
@@ -130,23 +126,21 @@ another one. The workflow has a Submit only box for exactly that: it sends
 the build sitting on Expo's servers rather than making a byte-identical
 replacement. Reach for it before reaching for Build.
 
-**And ask him before every merge.**
+**Merge it yourself once it is fixed and green.**
 
-> "For this project, Remember to ask me before each merge."
+> "Go ahead and always merge after you fix something, and everything is
+> green. Update the notes to state that."
 
-This reverses the standing "merge it the moment you open it" that holds
-everywhere else, and it is his call rather than a technical one, so it needs
-no justifying — but the shape of it matters. It does NOT mean stop working
-and wait. Do the whole job: write it, test it, bundle both platforms, push
-the branch, open the pull request, get CI green. Then say it is ready and
-give him the link.
+This replaces the older "ask me before each merge". The whole job is now
+one run: write it, test it, bundle both platforms, run the fingerprint,
+push, open the pull request, get every check green — then merge it and say
+so, with the link. No waiting on a yes.
 
-The merge is the one step that waits. Everything up to it is the work, and
-the work does not pause for an answer.
-
-Which also means it is now the merge, not the push, that ends a task — so a
-reply that says "shipped" about something still sitting in an open pull
-request is wrong twice over: he has not seen it, and nothing has gone out.
+"Green" means every check on the pull request passed, not most of them,
+and the fingerprint said Unchanged. Anything that would need an Expo build
+still stops for him first (see above): the merge rule does not cover a
+build, and a change that moves the fingerprint is not "green" for this
+purpose.
 
 ## Things that cost real time to learn here
 
