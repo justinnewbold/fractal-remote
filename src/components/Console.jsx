@@ -212,7 +212,7 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
   }
 
   return (
-    <div className={`fx-panel ${shown.late ? 'chain-updating' : ''}`}>
+    <div className={`fx-panel ${shown.late ? 'chain-updating' : shown.outline ? 'chain-outline' : ''}`}>
       <ChainUpdating chain={shown} />
       {/* No heading. A row of coloured, three-letter tiles running from IN to
           OUT is not something anyone needs told is the effects chain, and on a

@@ -9399,6 +9399,14 @@ button.recent-del:focus-visible {
   transition: opacity 0.2s;
 }
 
+/* The pedals drawn from the status read ahead of the chain read: this
+   preset's, still finishing. Dimmed less than a slow re-read, and no words. */
+.chain-outline .chain-strip,
+.gig-blocks.chain-outline {
+  opacity: 0.72;
+  transition: opacity 0.2s;
+}
+
 .chain-updating-word {
   margin: 0;
   color: var(--silk-faint);

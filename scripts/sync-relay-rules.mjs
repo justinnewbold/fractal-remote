@@ -125,6 +125,12 @@ export const FILES = [
    */
   { source: '../shared/chain-view.mjs', target: '../mobile/src/lib/chain-view.js' },
   /*
+   * The pedals drawn from the small status read before the chain has been
+   * read, and the order they go in until it has. The two ends drawing a new
+   * preset's first moment differently would be one of them guessing.
+   */
+  { source: '../shared/chain-outline.mjs', target: '../mobile/src/lib/chain-outline.js' },
+  /*
    * How a knob steps from the keyboard or VoiceOver, and how those steps reach
    * the unit: the value written is the one the step reached, a run of steps is
    * one write, and one write per control is out at a time. Both ends had the
