@@ -165,7 +165,10 @@ async function rigOnTheBench(over = {}) {
     'lineage.js': 'export const withLineage = (x) => x\n',
     'presetNames.js': 'export const adopt = async () => 0\nexport const forget = () => {}\nexport const learn = () => {}\nexport const nameOf = () => undefined\n',
     'paramIndex.js': 'export const forget = () => {}\n',
-    'sceneNameCache.js': 'export const forgetSceneNames = () => true\nexport const recallSceneNames = async () => []\nexport const rememberSceneNames = () => true\n'
+    /* `keptNames` is what this phone's disk holds for a slot, from an earlier visit. */
+    'sceneNameCache.js':
+      `const kept = ${JSON.stringify(over.keptNames || {})}\n` +
+      'export const forgetSceneNames = () => true\nexport const recallSceneNames = async (owner, n) => kept[n] || []\nexport const rememberSceneNames = () => true\n'
   }
   for (const f of ['own-echo.js', 'chain-view.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js']) {
     files[f] = esm(lib(f))
@@ -196,7 +199,17 @@ async function rigOnTheBench(over = {}) {
     const relay = await import(at('relay.js'))
     const clock = await import(at('clock.js'))
     const rig = await import(at('rig.js'))
-    relay.__serve((method, path, body) => {
+    /* `lag` is how long the computer takes over a request, by its line; `heard`
+       is when each one reached it, on the hand-turned clock. */
+    const heard = []
+    let answer = null
+    relay.__serve(async (method, path, body) => {
+      heard.push([clock.now(), method + ' ' + path])
+      const lag = unit.lag?.(method + ' ' + path)
+      if (lag) await new Promise((go) => clock.setTimeout(go, lag))
+      return answer(method, path, body)
+    })
+    answer = (method, path, body) => {
       if (method === 'GET') {
         if (path === '/device/detect')
           return { connected: true, name: 'FM3', short: 'FM3', capabilities: unit.capabilities ?? { scenes: 8, meters: { outputLevels: true } } }
@@ -236,12 +249,12 @@ async function rigOnTheBench(over = {}) {
       if (method === 'POST' && /^\/preset\/blocks\/\d+\/bypass$/.test(path)) return unit.hold ? unit.hold() : { ok: true }
       if (method === 'DELETE' && path === '/device/cache') return { ok: true, deleted: true }
       throw new Error(`the bench unit has no ${method} ${path}`)
-    })
+    }
     /* Connected, read once, and the log cleared: what follows is what a tap costs. */
     await rig.refreshAll()
     relay.wire.length = 0
     const asked = (line) => relay.wire.filter((l) => (line instanceof RegExp ? line.test(l) : l === line)).length
-    return { rig, clock, unit, wire: relay.wire, asked, nameOf, relay }
+    return { rig, clock, unit, wire: relay.wire, asked, nameOf, relay, heard }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -953,7 +966,7 @@ export function run(test) {
        out of the computer's copy from before the rename — and the next Save
        carries whatever name the phone holds. */
     assert.match(rig, /if \(fresh && pending && pending\.number === fresh\.number && typeof pending\.presetName === 'string'\) \{ fresh\.name = state\.preset\?\.name \?\? fresh\.name \}/, 'a re-read can put the old preset name back over a pending rename')
-    assert.match(rig, /export function savedToSlot\(slot\) \{ const unsaved = state\.unsaved if \(!unsaved \|\| unsaved\.number !== slot\) return const slug = state\.deviceSlug if \(slug\) device\.keepSceneNames\(slug, slot, state\.sceneNames\) set\(\{ unsaved: null \}\) \}/, 'a save does not settle the pending names or send them to the computer')
+    assert.match(rig, /export function savedToSlot\(slot\) \{ forgetChain\(slot\) const unsaved = state\.unsaved if \(!unsaved \|\| unsaved\.number !== slot\) return const slug = state\.deviceSlug if \(slug\) device\.keepSceneNames\(slug, slot, state\.sceneNames\) set\(\{ unsaved: null \}\) \}/, 'a save does not settle the pending names or send them to the computer')
     assert.ok(!/noteSceneName[\s\S]*?device\.keepSceneNames\(slug, number, names\)/.test(rig.slice(rig.indexOf('export function noteSceneName'), rig.indexOf('function pendingFor'))), 'an unsaved scene name still goes to the computer\'s store')
     /* The save button settles it, and the names section says it is pending. */
     assert.match(read('mobile/src/components/SaveToSlot.js').replace(/\s+/g, ' '), /if \(res\.ok\) savedToSlot\(res\.slot\)/, 'a save that landed does not settle the names')
@@ -1986,7 +1999,7 @@ export function run(test) {
        breaks when a line reflows is a check nobody can edit around. */
     assert.match(
       rig.replace(/\s+/g, ' '),
-      /chain: 'reading', sceneNames: \[\]/,
+      /chain: recall \? 'ok' : 'reading', sceneNames: \[\]/,
       'the last preset’s scene names stay on the new preset’s tiles'
     )
 
@@ -2609,7 +2622,9 @@ export function run(test) {
      * waiting on.
      */
     const once = rig.slice(rig.indexOf('async function readChainAndNames'))
-    assert.match(load, /await readPresetSoon\(OWN_SETTLE_MS, \{ reloaded: true \}\)/, 'a preset load no longer reads its chain through the one shared read')
+    assert.match(load, /await readPresetSoon\(settleFrom\(sentAt\), \{ reloaded: true \}\)/, 'a preset load no longer reads its chain through the one shared read')
+    /* And the wait is counted from the select, not from the end of the small reads after it. */
+    assert.match(rig, /const settleFrom = \(sentAt\) => Math\.max\(0, OWN_SETTLE_MS - \(Date\.now\(\) - sentAt\)\)/, 'the settle wait is not counted from the select')
     assert.ok(
       once.indexOf('await refreshBlocks()') > 0 && once.indexOf('await refreshBlocks()') < once.indexOf('await refreshSceneNames(copy)'),
       'the chain waits behind a slow read of the scene names'
@@ -6581,7 +6596,7 @@ export function run(test) {
     const once = withoutComments(rig.slice(rig.indexOf('async function readChainAndNames'), rig.indexOf('let staleTimer'))).replace(/\s+/g, ' ')
     assert.match(once, /read = await refreshBlocks\(\) if \(names && read && state\.preset\?\.number === number\) \{ .*?if \(copy !== 'stale' && !quick\) await refreshSceneNames\(copy\)/, 'the slow read still runs when the names were already there, or before the chain, or after a chain read that failed')
     const loading = withoutComments(rig.slice(rig.indexOf('export async function loadPreset'))).replace(/\s+/g, ' ')
-    assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 syncChainBusy\(\) \} await readPresetSoon\(OWN_SETTLE_MS, \{ reloaded: true \}\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
+    assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 syncChainBusy\(\) \} await readPresetSoon\(settleFrom\(sentAt\), \{ reloaded: true \}\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
     assert.match(rig, /const kept = await recallSceneNames\(owner, number\)/, 'the disk is not read first')
     assert.match(rig, /held = await device\.storedSceneNames\(slug, number\)/, 'the computer’s copy is never asked for')
     /* Read the slow way, they are kept everywhere. */
@@ -8277,7 +8292,7 @@ export function run(test) {
        a different demo unit is never "current". */
     assert.match(
       read('mobile/src/lib/rig.js'),
-      /const chainKey = \(\) => `\$\{isDemo\(\) \? `demo:\$\{demoUnit\(\)\}` : 'rig'\}:\$\{state\.deviceSlug\}:\$\{state\.preset\?\.number\}`/,
+      /const keyFor = \(number\) => `\$\{isDemo\(\) \? `demo:\$\{demoUnit\(\)\}` : 'rig'\}:\$\{state\.deviceSlug\}:\$\{number\}`\nconst chainKey = \(\) => keyFor\(state\.preset\?\.number\)/,
       'a new demo unit is taken for the one whose chain was just read'
     )
 
@@ -10041,6 +10056,169 @@ export function run(test) {
     /* Long after, coming back does read — the copy is not current any more. */
     await clock.advance(rig.CHAIN_FRESH_MS + 1000)
     assert.equal(rig.chainIsCurrent(), false)
+  })
+
+  /*
+   * "Presets are loading much slower now when switching, taking about 3
+   * seconds to load scene name and pedals." The one chain read waits for the
+   * unit on purpose; what it should not do is hide what the phone already
+   * knows about a preset while it waits.
+   */
+  const twoSongs = (unit) => {
+    const chains = {
+      12: unit.blocks,
+      20: [
+        { slug: 'comp', name: 'Compressor 1', effectId: 150, bypassed: false, channel: 'A' },
+        { slug: 'delay', name: 'Delay 1', effectId: 70, bypassed: false, channel: 'B' }
+      ]
+    }
+    Object.defineProperty(unit, 'blocks', { configurable: true, get: () => chains[unit.number] || [], set: (v) => (chains[unit.number] = v) })
+    return chains
+  }
+  const idsOf = (list) => list.map((b) => b.effectId)
+
+  test('scene names this phone kept for a slot are on the tiles before the unit has answered anything', async () => {
+    const { rig, clock, wire } = await rigOnTheBench({
+      keptNames: { 20: ['INTRO', 'SOLO', '', '', '', '', '', ''] },
+      lag: (line) => (line === 'POST /preset/select' ? 300 : 0)
+    })
+    rig.loadPreset(20)
+    await clock.advance(0)
+    assert.deepEqual(wire, ['POST /preset/select'], 'something was asked before the select')
+    assert.deepEqual(rig.getState().sceneNames.slice(0, 2), ['INTRO', 'SOLO'], 'the kept names wait for the unit')
+    await clock.advance(3000)
+    /* And the unit's answer, out of the chain read, still goes over them. */
+    assert.deepEqual(rig.getState().sceneNames.slice(0, 2), ['VERSE', 'CHORUS'], 'what the unit says no longer replaces a kept copy')
+  })
+
+  test('a preset played before is back on the tap, chain and all, and still costs exactly one chain read', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    const chains = twoSongs(unit)
+    /* The first time: nothing is known, so the cards, as before. */
+    rig.loadPreset(20)
+    assert.equal(rig.chainViewOf(rig.getState()), 'loading', 'a preset never read showed a chain')
+    await clock.advance(3000)
+    assert.equal(asked(CHAIN), 1)
+    assert.deepEqual(idsOf(rig.getState().allBlocks), [150, 70])
+
+    /* Back to 12, read when the phone connected: its chain is up on the tap. */
+    rig.loadPreset(12)
+    const s12 = rig.getState()
+    assert.equal(rig.chainViewOf(s12), 'ready', 'a preset read a moment ago waits behind the grey cards')
+    assert.deepEqual(idsOf(s12.allBlocks), [133, 58], 'the chain up on the tap is not the one this preset had')
+    assert.equal(s12.chainKnown, 12)
+    assert.equal(s12.chain, 'ok')
+    await clock.advance(rig.OWN_SETTLE_MS - 100)
+    assert.equal(asked(CHAIN), 1, 'the chain put up from memory made the unit dump the preset while it loaded')
+    await clock.advance(3000)
+    assert.equal(asked(CHAIN), 2, `a known preset cost ${asked(CHAIN) - 1} chain reads`)
+    assert.equal(rig.getState().chainKnown, null, 'the read after the switch did not confirm the chain')
+
+    /* And again to 20, where the unit now has another chain: the read replaces it. */
+    chains[20] = [{ slug: 'reverb', name: 'Reverb 1', effectId: 66, bypassed: false, channel: 'A' }]
+    rig.loadPreset(20)
+    assert.deepEqual(idsOf(rig.getState().allBlocks), [150, 70])
+    assert.equal(rig.chainViewOf(rig.getState()), 'ready')
+    await clock.advance(3000)
+    assert.equal(asked(CHAIN), 3)
+    assert.deepEqual(idsOf(rig.getState().allBlocks), [66], 'the read after the switch did not replace a chain that had changed')
+    assert.equal(asked(SUMMARY), 0)
+  })
+
+  test('the wait before the chain read is counted from the select, not from the reads after it', async () => {
+    const { rig, clock, unit, heard } = await rigOnTheBench()
+    /* Slow from here: the bench's own first read is not on the turned clock. */
+    unit.lag = (line) => (line === 'POST /preset/select' || line === WHICH || line === 'GET /scene' ? 200 : 0)
+    heard.length = 0
+    rig.loadPreset(20)
+    await clock.advance(5000)
+    const at = (line) => heard.find(([, l]) => l === line)?.[0]
+    const waited = at(CHAIN) - at('POST /preset/select')
+    /* The select, which preset and which scene are 600ms between them; the wait is 800 from the select. */
+    assert.ok(at('GET /scene') - at('POST /preset/select') >= 400, 'the small reads did not take the time the bench gave them')
+    assert.ok(waited >= rig.OWN_SETTLE_MS, `the chain was read ${waited}ms after the select, before the unit had settled`)
+    assert.ok(waited < rig.OWN_SETTLE_MS + 200, `the chain was read ${waited}ms after the select: the wait began after the small reads`)
+  })
+
+  test('a chain this phone changed, or saved over, is not put up from memory', async () => {
+    const { rig, clock, unit } = await rigOnTheBench()
+    const chains = twoSongs(unit)
+    rig.loadPreset(20)
+    await clock.advance(3000)
+    /* An add, a move or a remove on 20. */
+    rig.beginChainWrite()
+    rig.endChainWrite({ refresh: false })
+    rig.loadPreset(12)
+    await clock.advance(3000)
+    rig.loadPreset(20)
+    assert.equal(rig.chainViewOf(rig.getState()), 'loading', 'a chain edited here was put up from memory')
+    await clock.advance(3000)
+    /* Kept again by that read; a save over the slot forgets it. */
+    rig.loadPreset(12)
+    await clock.advance(3000)
+    rig.savedToSlot(20)
+    rig.loadPreset(20)
+    assert.equal(rig.chainViewOf(rig.getState()), 'loading', 'a chain from before a save over the slot was put up')
+    await clock.advance(3000)
+    /* A read made while the preset has unsaved changes is not kept over the slot's. */
+    const stored = chains[20]
+    rig.noteEdited()
+    chains[20] = [{ slug: 'reverb', name: 'Reverb 1', effectId: 66, bypassed: false, channel: 'A' }]
+    await rig.retryChain()
+    assert.deepEqual(idsOf(rig.getState().allBlocks), [66])
+    /* Leaving drops the edit, on the unit as here. */
+    chains[20] = stored
+    rig.loadPreset(12)
+    await clock.advance(3000)
+    rig.loadPreset(20)
+    assert.deepEqual(idsOf(rig.getState().allBlocks), idsOf(stored), 'a chain read off an edited buffer was kept as the slot’s')
+    await clock.advance(3000)
+  })
+
+  test('a chain up from memory goes when its read fails', async () => {
+    const { rig, clock, unit } = await rigOnTheBench()
+    twoSongs(unit)
+    rig.loadPreset(20)
+    await clock.advance(3000)
+    unit.chainFails = true
+    rig.loadPreset(12)
+    assert.equal(rig.chainViewOf(rig.getState()), 'ready')
+    await clock.advance(rig.OWN_SETTLE_MS + 100)
+    assert.equal(rig.getState().chainKnown, null)
+    assert.notEqual(rig.chainViewOf(rig.getState()), 'ready', 'an unconfirmed chain stayed up as this preset’s after its read failed')
+    unit.chainFails = false
+    await clock.advance(5000)
+    assert.equal(rig.chainViewOf(rig.getState()), 'ready', 'the read asked again did not bring the chain back')
+  })
+
+  test('a chain up from memory is never swapped for another preset’s read', async () => {
+    const { rig, clock, unit, nameOf } = await rigOnTheBench()
+    const chains = twoSongs(unit)
+    rig.loadPreset(20)
+    await clock.advance(3000)
+    rig.loadPreset(12)
+    await clock.advance(3000)
+    /* Back to 20, and the computer answers out of its copy of 12: the last song's blocks. */
+    unit.copy = () => ({ name: nameOf(12), scenes: unit.scenes, cells: [] })
+    const real = chains[20]
+    chains[20] = chains[12]
+    rig.loadPreset(20)
+    await clock.advance(3000)
+    assert.deepEqual(idsOf(rig.getState().allBlocks), idsOf(real), 'the last song’s blocks went up under this song’s name')
+    assert.equal(rig.chainViewOf(rig.getState()), 'ready', 'this preset’s own chain went grey while the copy was waited out')
+    /* Once the copy has run out, the one more read is this preset's. */
+    unit.copy = null
+    chains[20] = real
+    await clock.advance(rig.CHAIN_FRESH_MS + 1000)
+    assert.deepEqual(idsOf(rig.getState().allBlocks), idsOf(real))
+    assert.equal(rig.getState().chainKnown, null)
+
+    /* And a refused select puts back the chain of the preset still loaded. */
+    unit.refuseSelect = true
+    assert.equal(await rig.loadPreset(12), false)
+    assert.equal(rig.getState().preset.number, 20)
+    assert.deepEqual(idsOf(rig.getState().allBlocks), idsOf(real), 'a refused select left the other preset’s chain up')
+    assert.equal(rig.chainViewOf(rig.getState()), 'ready')
   })
 
   test('when only the summary has the names, it is asked once and after the chain', async () => {

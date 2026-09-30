@@ -8,6 +8,8 @@ import Press from './Press'
 
 const ofView = chainViewOf
 const ofNumber = (s) => s.preset?.number
+/* This preset's chain up from memory, not yet read again (see rig.knownChain). */
+const ofKnown = (s) => Number.isInteger(s.chainKnown) && s.chainKnown === s.preset?.number && s.chainFor === s.chainKnown
 
 /**
  * Whose chain is on screen, for a screen that draws it — the browser's
@@ -17,10 +19,16 @@ const ofNumber = (s) => s.preset?.number
  * move) that has gone on long enough to mention; before that the tiles just
  * stay as they are, because a row that greyed on every Add would flicker.
  * `elsewhere` is a chain that belongs to another preset and is not drawn.
+ *
+ * `known` is this preset's chain up from memory, the read after the switch
+ * still to come. The stage plays it; a screen that EDITS the chain passes
+ * `editing` and waits for the read instead — a knob or a move is read off
+ * the unit's buffer, and that buffer is still loading.
  */
-export function useChain() {
+export function useChain({ editing = false } = {}) {
   const view = useRig(ofView)
   const number = useRig(ofNumber)
+  const known = useRig(ofKnown)
   const [late, setLate] = useState(false)
   useEffect(() => {
     if (view !== 'updating') {
@@ -30,7 +38,7 @@ export function useChain() {
     const timer = setTimeout(() => setLate(true), UPDATING_AFTER_MS)
     return () => clearTimeout(timer)
   }, [view])
-  return { view, number, late: view === 'updating' && late, elsewhere: chainElsewhere(view) }
+  return { view, number, known, late: view === 'updating' && late, elsewhere: chainElsewhere(view) || (editing && known) }
 }
 
 /**

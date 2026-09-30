@@ -22,6 +22,16 @@
  *               once the read has taken long enough to notice.
  *   'ready'     this preset's chain, and nothing is reading it.
  *
+ * KNOWN_CHAINS. "Presets are loading much slower now when switching, taking
+ * about 3 seconds to load scene name and pedals." The grey cards were right
+ * for a preset never seen, and a wait for nothing on one played a minute ago:
+ * its chain was on screen then. So each store keeps, per unit and per slot,
+ * the last chain it read straight after loading that slot — the slot as
+ * stored, before any edit — and puts it up on the tap, as that preset's.
+ * `known` says so. It is dropped when this app changes the preset's
+ * structure or saves over the slot, and the read after the switch replaces
+ * it whatever it finds. A slot never read still gets the cards.
+ *
  * Only 'ready' and 'updating' may switch anything. The other two are drawing
  * nothing to switch, and the stores refuse a write made from a tile that was
  * drawn before the preset changed.
@@ -40,11 +50,16 @@ export const UPDATING_AFTER_MS = 400
  * for, null when nobody knows. `busy` is whether a read of the chain is on
  * its way, a wait before one included.
  */
-export function chainView({ want, chainFor, busy }) {
+export function chainView({ want, chainFor, busy, known = null }) {
   /* No preset yet, or a unit too busy to say which: nothing to hold the
      blocks to, so what there is is drawn. */
   if (!Number.isInteger(want) || want < 0) return 'ready'
   if (chainFor !== want) return busy ? 'loading' : 'failed'
+  /* This preset's chain as it was last read, put up the moment it was
+     chosen (see KNOWN_CHAINS): the one read after the switch confirms it or
+     replaces it, and until then it is drawn and played like any other. Not
+     'updating' — nothing about it is being changed. */
+  if (known === want) return 'ready'
   return busy ? 'updating' : 'ready'
 }
 

@@ -75,7 +75,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
 
   /* Whose chain the cards are. Another preset's are not drawn, and cannot be
      removed, moved or added beside: the cells they name are this preset's. */
-  const chainNow = useChain()
+  const chainNow = useChain({ editing: true })
 
   /*
    * DRAG TO REORDER, AS ON THE PHONE. "How does moving the blocks in the chain

@@ -285,6 +285,9 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   useEffect(() => {
     if (chainNow.elsewhere) setPicking(null)
   }, [chainNow.elsewhere])
+  /* And on any other preset: a chain up from memory is drawn at once, and a
+     sheet left open would be over the new song's block of the same number. */
+  useEffect(() => setPicking(null), [chainNow.number])
 
   const channels = caps?.channelNames
   const slots = slotCount(caps)

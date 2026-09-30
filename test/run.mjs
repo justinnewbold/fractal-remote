@@ -6197,8 +6197,13 @@ function windowOnTheBench(over = {}) {
   const wire = []
   /* Scene names this window kept for a slot, for good. */
   const kept = []
+  /* When each request reached the computer, and `unit.lag` how long it took over it. */
+  const heard = []
   const answer = async (line, value) => {
     wire.push(line)
+    heard.push([clock.now(), line])
+    const lag = unit.lag?.(line)
+    if (lag) await new Promise((go) => clock.setTimeout(go, lag))
     await null
     return typeof value === 'function' ? value() : value
   }
@@ -6234,7 +6239,9 @@ function windowOnTheBench(over = {}) {
         unit.copy ? unit.copy() : { name: unit.presetName ?? nameOf(unit.number), scenes: unit.namesInChain ? [...unit.scenes] : [] }
       ),
     keepSceneNames: (n, names) => kept.push([n, [...names]]),
-    rememberedSceneNames: () => [],
+    rememberedSceneNames: (n) => unit.keptNames?.[n] || [],
+    /* Which unit a remembered chain is filed under; see deviceState.knownChain. */
+    unitKey: () => unit.unitKey ?? 'rig:fm3',
     /* A gen-3 by default: the computer's copy of the preset is free to read again. */
     hostKeepsCopy: () => (unit.keepsCopy === undefined ? true : unit.keepsCopy),
     /* The event stream; `unit.gap()` is it dropping. */
@@ -6251,7 +6258,7 @@ function windowOnTheBench(over = {}) {
   })
   ds.chainWasRead(unit.number)
   const asked = (line) => wire.filter((l) => (line instanceof RegExp ? line.test(l) : l === line)).length
-  return { clock, unit, wire, asked, nameOf, kept }
+  return { clock, unit, wire, asked, nameOf, kept, heard }
 }
 
 /* Registered at the top level like every other test; the clock goes back afterwards. */
@@ -6448,6 +6455,172 @@ onTheBench('a preset chosen in the Mac window costs one chain read, and Play app
   /* Long after, appearing does read — the copy is not current any more. */
   await clock.advance(ds.CHAIN_FRESH_MS + 1000)
   assert.equal(ds.chainIsCurrent(), false)
+})
+
+/*
+ * "Presets are loading much slower now when switching, taking about 3 seconds
+ * to load scene name and pedals." The same in this window: a preset loaded
+ * here before goes up on the tap, name, scene names and chain, and the one
+ * chain read after the switch still goes when it did.
+ */
+const windowTwoSongs = (unit) => {
+  const chains = {
+    12: unit.blocks,
+    20: [
+      { slug: 'comp', name: 'Compressor 1', effectId: 150, bypassed: false, channel: 'A' },
+      { slug: 'delay', name: 'Delay 1', effectId: 70, bypassed: false, channel: 'B' }
+    ]
+  }
+  unit.chain = () => (chains[unit.number] || []).map((b) => ({ ...b }))
+  return chains
+}
+const effectIds = (list) => list.map((b) => b.effectId)
+
+onTheBench('a preset loaded in the Mac window before is back on the tap, chain and names, for one chain read', async () => {
+  const { clock, unit, asked, wire, nameOf } = windowOnTheBench({ keptNames: { 20: ['INTRO', 'SOLO', '', '', '', '', '', ''] } })
+  const chains = windowTwoSongs(unit)
+  /* The first time: the cards, and the kept names once the unit has said which preset it is on. */
+  ds.loadPreset(20)
+  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'loading', 'a preset never read showed a chain')
+  await clock.advance(3000)
+  assert.equal(asked(CHAIN), 1)
+  ds.loadPreset(12)
+  await clock.advance(3000)
+  assert.equal(asked(CHAIN), 2)
+
+  /* Back to 20: up on the tap, before the unit has answered anything. */
+  unit.lag = (line) => (line === 'POST /preset/select' ? 300 : 0)
+  wire.length = 0
+  ds.loadPreset(20)
+  await clock.advance(0)
+  const s = ds.getSnapshot()
+  assert.deepEqual(wire, ['POST /preset/select'])
+  assert.equal(s.preset?.number, 20, 'the preset tapped is not on screen until the unit answers')
+  assert.equal(s.preset?.name, nameOf(20))
+  assert.deepEqual(s.sceneNames.slice(0, 2), ['INTRO', 'SOLO'], 'the kept scene names wait for the unit')
+  assert.deepEqual(effectIds(s.blocks), [150, 70], 'the chain up on the tap is not the one this preset had')
+  assert.equal(ds.chainViewOf(s), 'ready', 'a preset read a moment ago waits behind the grey cards')
+  await clock.advance(ds.OWN_SETTLE_MS - 100)
+  assert.equal(asked(CHAIN), 0, 'the chain up from memory made the unit dump the preset while it loaded')
+  await clock.advance(3000)
+  assert.equal(asked(CHAIN), 1, `a known preset cost ${asked(CHAIN)} chain reads`)
+  assert.equal(ds.getSnapshot().chainKnown, null, 'the read after the switch did not confirm the chain')
+  /* The unit's own names, out of the copy, still go over the kept ones. */
+  assert.deepEqual(ds.getSnapshot().sceneNames.slice(0, 2), ['VERSE', 'CHORUS'])
+
+  /* A chain that changed on the unit meanwhile: the read replaces it. */
+  unit.lag = null
+  ds.loadPreset(12)
+  await clock.advance(3000)
+  chains[20] = [{ slug: 'reverb', name: 'Reverb 1', effectId: 66, bypassed: false, channel: 'A' }]
+  ds.loadPreset(20)
+  assert.deepEqual(effectIds(ds.getSnapshot().blocks), [150, 70])
+  await clock.advance(3000)
+  assert.deepEqual(effectIds(ds.getSnapshot().blocks), [66], 'the read after the switch did not replace a chain that had changed')
+})
+
+onTheBench('the Mac window counts the wait before the chain read from the select', async () => {
+  const { clock, unit, heard } = windowOnTheBench()
+  unit.lag = (line) => (line === 'POST /preset/select' || line === WHICH || line === 'GET /scene' ? 200 : 0)
+  ds.loadPreset(20)
+  await clock.advance(5000)
+  const at = (line) => heard.find(([, l]) => l === line)?.[0]
+  const waited = at(CHAIN) - at('POST /preset/select')
+  assert.ok(at('GET /scene') - at('POST /preset/select') >= 400)
+  assert.ok(waited >= ds.OWN_SETTLE_MS, `the chain was read ${waited}ms after the select, before the unit had settled`)
+  assert.ok(waited < ds.OWN_SETTLE_MS + 200, `the chain was read ${waited}ms after the select: the wait began after the small reads`)
+})
+
+onTheBench('the Mac window does not put up a chain it changed, saved over, or that is not this preset’s', async () => {
+  const { clock, unit, nameOf } = windowOnTheBench()
+  const chains = windowTwoSongs(unit)
+  const visit = async (n) => {
+    ds.loadPreset(n)
+    await clock.advance(3000)
+  }
+  await visit(20)
+  await visit(12)
+  /* A block added, moved or removed on 12. */
+  ds.chainChanged()
+  await visit(20)
+  ds.loadPreset(12)
+  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'loading', 'a chain edited here was put up from memory')
+  await clock.advance(3000)
+  /* A save over 20. */
+  ds.presetSaved(20, nameOf(20))
+  await clock.advance(ds.SETTLING_MS * ds.SETTLING_TRIES + 1000)
+  ds.loadPreset(20)
+  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'loading', 'a chain from before a save over the slot was put up')
+  await clock.advance(3000)
+  await visit(12)
+
+  /* The computer answering out of its copy of 12: the known chain stays up, live. */
+  unit.copy = () => ({ name: nameOf(12), scenes: [...unit.scenes] })
+  const real = chains[20]
+  chains[20] = chains[12]
+  ds.loadPreset(20)
+  await clock.advance(3000)
+  assert.deepEqual(effectIds(ds.getSnapshot().blocks), effectIds(real), 'the last song’s blocks went up under this song’s name')
+  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'ready')
+  unit.copy = null
+  chains[20] = real
+  await clock.advance(ds.CHAIN_FRESH_MS + 1000)
+  assert.equal(ds.getSnapshot().chainKnown, null)
+
+  /* A refused select puts back what was up, preset and chain together. */
+  unit.refuseSelect = true
+  await assert.rejects(ds.loadPreset(12))
+  assert.equal(ds.getSnapshot().preset.number, 20)
+  assert.deepEqual(effectIds(ds.getSnapshot().blocks), effectIds(real), 'a refused select left the other preset’s chain up')
+  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'ready')
+})
+
+onTheBench('a remembered chain goes when the read cannot confirm it, or the unit is on another preset', async () => {
+  const { clock, unit, nameOf } = windowOnTheBench()
+  const chains = windowTwoSongs(unit)
+  const visit = async (n) => {
+    ds.loadPreset(n)
+    await clock.advance(3000)
+  }
+  await visit(20)
+  await visit(12)
+  /* The unit never left 12: the chain up for 20 is not put under 12's name. */
+  unit.which = () => ({ number: 12, name: nameOf(12) })
+  unit.presetName = nameOf(12)
+  unit.chain = () => chains[12].map((b) => ({ ...b }))
+  ds.loadPreset(20)
+  assert.equal(ds.getSnapshot().chainKnown, 20)
+  await clock.advance(3000)
+  const s = ds.getSnapshot()
+  assert.equal(s.preset.number, 12)
+  assert.deepEqual(effectIds(s.blocks), effectIds(chains[12]), 'another preset’s chain is on screen under this one’s name')
+  assert.equal(ds.chainViewOf(s), 'ready')
+  unit.which = null
+  unit.presetName = undefined
+  unit.chain = () => (chains[unit.number] || []).map((b) => ({ ...b }))
+  /* A read that fails: the chain up from memory is not left standing as this preset's. */
+  await visit(20)
+  await visit(12)
+  unit.chain = () => null
+  ds.loadPreset(20)
+  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'ready')
+  await clock.advance(ds.OWN_SETTLE_MS + ds.SETTLE_MS * ds.SETTLE_TRIES + 3000)
+  assert.equal(ds.getSnapshot().chainKnown, null)
+  assert.notEqual(ds.chainViewOf(ds.getSnapshot()), 'ready', 'an unconfirmed chain stayed up after its read failed')
+})
+
+onTheBench('a remembered chain belongs to one unit', async () => {
+  const { clock, unit } = windowOnTheBench()
+  windowTwoSongs(unit)
+  ds.loadPreset(20)
+  await clock.advance(3000)
+  ds.loadPreset(12)
+  await clock.advance(3000)
+  /* The same slot on the demo, or on another unit: nothing is known. */
+  unit.unitKey = 'demo:fm3'
+  ds.loadPreset(20)
+  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'loading', 'one unit’s chain was put up on another')
+  await clock.advance(3000)
 })
 
 onTheBench('when only the summary has the names, the Mac window asks it once and after the chain', async () => {

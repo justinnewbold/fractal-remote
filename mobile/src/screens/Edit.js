@@ -46,7 +46,7 @@ import { isSilencingParam } from '../lib/guardrails'
 import { editPages, pageFor, pageHolding } from '../lib/editPages'
 import { withUnit } from '../lib/param-fixes'
 import { asOnPages, buildParamIndex, findControls, indexFor } from '../lib/paramIndex'
-import { beginChainWrite, endChainWrite, getState, noteEdited, refreshBlocks, useRig, writeBypass, writeChannel } from '../lib/rig'
+import { beginChainWrite, chainChanged, endChainWrite, getState, noteEdited, refreshBlocks, useRig, writeBypass, writeChannel } from '../lib/rig'
 import { useKeepAwake } from 'expo-keep-awake'
 import { logDebug } from '../lib/debugLog'
 import { oneWriteAtATime } from '../lib/knob-keys'
@@ -164,7 +164,7 @@ export default function Edit({ onBack }) {
    * its knobs writing to this song's, found by the same number. They are not
    * drawn then, and neither is anything opened from them. See lib/chain-view.
    */
-  const chainNow = useChain()
+  const chainNow = useChain({ editing: true })
   /* Unsaved work on THIS slot, for the Save button's fill. Same flag the
      rename screen uses: a moved knob is lost at the next preset change
      exactly as a typed name is. */
@@ -717,6 +717,8 @@ function BlockPanel({
     }
     const sent = await setType(eid, Number(value))
     noteEdited()
+    /* A new model is a new tile; the chain kept for this preset is not it. */
+    chainChanged()
     const fresh = await blockParams(eid)
     /* The answer is what the unit shows afterwards, not what it said. */
     logDebug(
@@ -876,7 +878,10 @@ function BlockPanel({
           return liveChannel() === ch0 && s.sceneIndex === at.sceneIndex && s.bufferRev === at.bufferRev && s.preset?.number === n0
         }
       })
-      if (!r.refused || (r.refused === 'unread' && r.modelSent)) noteEdited()
+      if (!r.refused || (r.refused === 'unread' && r.modelSent)) {
+        noteEdited()
+        chainChanged()
+      }
       if (r.last) {
         setParams(r.last.named || [])
         setLayout(r.last.layout || null)
