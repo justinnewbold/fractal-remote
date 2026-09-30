@@ -6634,6 +6634,317 @@ onTheBench('where the computer keeps no long copy, the Mac window reads a front-
   assert.equal(asked(CHAIN), 2, 'a quarter of a minute was waited out for a copy this unit’s computer does not keep')
 })
 
+/*
+ * A Gain turned to 25 still read 25 after Revert on the play test. The open
+ * editor re-reads on its block, channel and scene; a Revert is the same slot
+ * loaded again and moves none of them. editRev is what does move.
+ */
+onTheBench('loading the same slot again tells an open editor its values are stale, once, after the unit settles', async () => {
+  const { clock } = windowOnTheBench()
+  const start = ds.getSnapshot().editRev
+  const load = ds.loadPreset(12)
+  await clock.advance(ds.OWN_SETTLE_MS - 100)
+  assert.equal(ds.getSnapshot().editRev, start, 'the editor was told to re-read while the unit was still loading')
+  await clock.advance(3000)
+  await load
+  assert.equal(ds.getSnapshot().editRev, start + 1, 'the same slot loaded again leaves the open editor on the old values')
+  await clock.advance(30000)
+  assert.equal(ds.getSnapshot().editRev, start + 1, 'one load moved the edit buffer more than once')
+})
+
+onTheBench('a preset changed at the unit moves the edit buffer too; a scene does not', async () => {
+  const { clock, unit, nameOf } = windowOnTheBench()
+  const start = ds.getSnapshot().editRev
+  await ds.writeScene(3)
+  await clock.advance(5000)
+  assert.equal(ds.getSnapshot().editRev, start, 'a scene tap made the editor read again as if the preset had been reloaded')
+  await clock.advance(20000)
+  unit.number = 77
+  assert.equal(ds.presetHeard({ number: 77, name: nameOf(77) }), true)
+  await clock.advance(ds.PRESET_SETTLE_MS + 100)
+  assert.equal(ds.getSnapshot().editRev, start + 1, 'the editor kept the last preset’s values when the unit moved on')
+})
+
+/*
+ * The editor's read key is the block, its channel, the scene and editRev. A
+ * load that moved the amp to another channel changed the channel in one set
+ * and editRev in another, and the editor read its block twice at a unit
+ * that had just loaded — the first answer thrown away.
+ */
+onTheBench('a load that moves the open block to another channel makes the editor read once', async () => {
+  const { clock, unit } = windowOnTheBench()
+  const keyNow = () => {
+    const s = ds.getSnapshot()
+    const b = s.blocks.find((x) => x.effectId === 58)
+    return `${b?.channel}:${s.sceneIndex}:${s.editRev}`
+  }
+  const seen = []
+  let last = keyNow()
+  const off = ds.subscribe(() => {
+    const k = keyNow()
+    if (k !== last) seen.push((last = k))
+  })
+  try {
+    unit.blocks = unit.blocks.map((b) => (b.effectId === 58 ? { ...b, channel: 'C' } : b))
+    const load = ds.loadPreset(20)
+    await clock.advance(5000)
+    await load
+    assert.equal(seen.length, 1, `the editor read its block more than once for one load: ${seen.join(' then ')}`)
+    assert.match(seen[0], /^C:/)
+    /* A chain that could not be read still tells the editor, on its own. */
+    seen.length = 0
+    unit.chain = () => {
+      throw new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78')
+    }
+    const again = ds.loadPreset(20)
+    await clock.advance(5000)
+    await again
+    assert.equal(seen.length, 1, 'a load whose chain read failed told the editor nothing, or told it twice')
+  } finally {
+    off()
+  }
+})
+
+onTheBench('a select the unit answers with {ok:false} is a refusal, not a load', async () => {
+  const { clock, unit } = windowOnTheBench()
+  const start = ds.getSnapshot().editRev
+  const said = []
+  unit.refuseSelect = false
+  ds.attachDriver({
+    ...ds.attachedDriver(),
+    selectPreset: async () => ({ ok: false, number: 12 })
+  })
+  /* Settled by hand rather than awaited: a load taken for a yes waits on the clock. */
+  const outcome = ds.loadPreset(12, { selected: () => said.push('taken') }).then(() => 'loaded', (err) => err.message)
+  await clock.advance(5000)
+  assert.equal(await outcome, ds.SELECT_REFUSED, 'a select the unit answered {ok:false} was taken for a load')
+  assert.deepEqual(said, [], 'a select the unit refused was taken for one it loaded')
+  assert.equal(ds.getSnapshot().editRev, start, 'a refused load told the editor its values were stale')
+})
+
+test('the knobs turned since the save are kept as a list, one entry per control and channel', async () => {
+  const rc = await import('../src/lib/revertCheck.js')
+  let list = []
+  list = rc.noteEdit(list, { eid: 58, paramId: 1, channel: 'A', block: 'Amp 1', param: 'Gain', from: 5, fromNorm: 0.5, to: 7, min: 0, max: 10 })
+  list = rc.noteEdit(list, { eid: 58, paramId: 1, channel: 'A', block: 'Amp 1', param: 'Gain', from: 7, fromNorm: 0.7, to: 9, min: 0, max: 10 })
+  list = rc.noteEdit(list, { eid: 58, paramId: 1, channel: 'B', block: 'Amp 1', param: 'Gain', from: 3, to: 4, min: 0, max: 10 })
+  assert.equal(list.length, 2, 'a second turn of one knob became a second knob, or channel B was folded into A')
+  assert.equal(list[0].from, 5, 'the second turn forgot where the knob was before the first')
+  assert.equal(list[0].fromNorm, 0.5)
+  assert.equal(list[0].to, 9)
+  /* A sentence with no control behind it is not something to read back. */
+  assert.equal(rc.noteEdit(list, { block: 'Amp 1', param: 'Gain', from: 1, to: 2 }), list)
+  assert.equal(rc.noteEdit(list, undefined), list)
+})
+
+test('a Revert is only called done once the knobs read back where they were', async () => {
+  const rc = await import('../src/lib/revertCheck.js')
+  const gain = { eid: 58, paramId: 1, channel: 'A', block: 'Amp 1', param: 'Gain', from: 5, fromNorm: 0.5, to: 7.5, min: 0, max: 10 }
+  const bass = { eid: 58, paramId: 2, channel: 'A', block: 'Amp 1', param: 'Bass', from: 4, fromNorm: 0.4, to: 6, min: 0, max: 10 }
+  const live = (g, b) => async () => ({ named: [{ id: 1, name: 'Gain', value: g, norm: g / 10 }, { id: 2, name: 'Bass', value: b, norm: b / 10 }] })
+  let dumps = 0
+  const slot = (g, b) => async () => {
+    dumps += 1
+    return { blocks: [{ effectId: 58, channel: 0, params: [{ paramId: 1, raw: Math.round((g / 10) * 65534), value: g }, { paramId: 2, raw: Math.round((b / 10) * 65534), value: b }] }] }
+  }
+  const onA = () => 'A'
+
+  /* The reload took, on a preset that was clean before the first turn. */
+  let check = await rc.checkRevert({ edits: [gain, bass], readBlock: live(5, 4), readSaved: slot(5, 4), channelOf: onA })
+  assert.equal(check.state, 'back')
+  assert.equal(rc.revertTook(check), true)
+  assert.equal(dumps, 0, 'the whole slot was dumped when every knob was already back where it started')
+
+  /* The unit answered yes and loaded nothing: the knobs are where they were turned. */
+  check = await rc.checkRevert({ edits: [gain, bass], readBlock: live(7.5, 6), readSaved: slot(5, 4), channelOf: onA })
+  assert.equal(check.state, 'stuck', 'a Revert that left every knob where it was turned was called done')
+  assert.equal(rc.revertTook(check), false)
+  assert.deepEqual(rc.stuckLines(check), ['Amp 1 · Gain is still 7.5', 'Amp 1 · Bass is still 6'])
+  assert.equal(dumps, 1, 'the slot was read more than once for one check')
+
+  /* Turned on top of something never saved: "before" is not the saved value, the slot is. */
+  dumps = 0
+  const onTop = { ...gain, from: 8, fromNorm: 0.8 }
+  check = await rc.checkRevert({ edits: [onTop], readBlock: live(5, 4), readSaved: slot(5, 4), channelOf: onA })
+  assert.equal(check.state, 'back', 'a Revert back to the saved slot was called stuck because the knob started somewhere unsaved')
+  assert.equal(dumps, 1)
+  /* And with no slot to ask, a knob that moved but not to anything known is not a failure it can name. */
+  check = await rc.checkRevert({ edits: [onTop], readBlock: live(5, 4), readSaved: async () => { throw new Error('404') }, channelOf: onA })
+  assert.equal(check.state, 'unknown')
+  assert.equal(rc.revertTook(check), false, 'Save and Revert went away on a Revert nothing could confirm')
+
+  /* Nothing could be read back at all. */
+  check = await rc.checkRevert({ edits: [gain], readBlock: async () => { throw new Error('timed out') }, readSaved: slot(5, 4), channelOf: onA })
+  assert.equal(check.state, 'unknown')
+  assert.equal(rc.revertTook(check), false)
+
+  /* No knob turned, or turned and turned back: the unit's own answer is the check. */
+  assert.equal((await rc.checkRevert({ edits: [], readBlock: live(0, 0), channelOf: onA })).state, 'nothing')
+  check = await rc.checkRevert({ edits: [{ ...gain, to: 5 }], readBlock: live(9, 9), channelOf: onA })
+  assert.equal(check.state, 'nothing')
+  assert.equal(rc.revertTook(check), true)
+
+  /* A knob on a channel the block is not showing now is not read by switching to it — and not a yes either. */
+  check = await rc.checkRevert({ edits: [{ ...gain, channel: 'B' }], readBlock: live(7.5, 6), channelOf: onA, channelBefore: onA })
+  assert.equal(check.state, 'unknown')
+  assert.equal(rc.revertTook(check), false, "Save and Revert went away when the only knob turned was on a channel the unit isn't showing")
+  /* Tapped over to B before the Revert, and back on A after it: that is the buffer loaded again. */
+  check = await rc.checkRevert({ edits: [{ ...gain, channel: 'B' }], readBlock: live(7.5, 6), channelOf: onA, channelBefore: () => 'B' })
+  assert.equal(check.state, 'back', 'a Revert that moved the amp back to its saved channel could not be called done')
+  assert.equal(rc.revertTook(check), true)
+  /* One off-channel knob beside one that read back: the one that read back decides. */
+  check = await rc.checkRevert({ edits: [{ ...bass, channel: 'B' }, gain], readBlock: live(5, 6), readSaved: slot(5, 4), channelOf: onA })
+  assert.equal(check.state, 'back')
+  /* A control the read did not carry is not known. */
+  check = await rc.checkRevert({ edits: [{ ...gain, paramId: 99 }], readBlock: live(7.5, 6), channelOf: onA })
+  assert.equal(check.state, 'unknown', 'a knob missing from the read was left out, and the Revert called done')
+
+  /* Turned from somewhere unsaved back onto the saved value, with no slot to ask: nothing says the change is still on it. */
+  check = await rc.checkRevert({ edits: [{ ...gain, from: 8, fromNorm: 0.8, to: 5 }], readBlock: live(5, 4), readSaved: async () => { throw new Error('501') }, channelOf: onA })
+  assert.equal(check.state, 'unknown', 'a knob turned onto the saved value was called stuck with no slot to say so')
+  assert.equal(rc.revertTook(check), false)
+})
+
+test('a read the unit never answered, every knob at zero, is not a Revert seen done', async () => {
+  const rc = await import('../src/lib/revertCheck.js')
+  const low = { eid: 58, paramId: 3, channel: 'A', block: 'Amp 1', param: 'Low Cut', from: 20, fromNorm: 0, to: 120, min: 20, max: 2000 }
+  const gain = { eid: 58, paramId: 1, channel: 'A', block: 'Amp 1', param: 'Gain', from: 5, fromNorm: 0.5, to: 7.5, min: 0, max: 10 }
+  /* What the server hands back when its bulk read timed out: gen3.ts blockParams' catch. */
+  const zeroed = async () => ({ named: [{ id: 1, name: 'Gain', value: 0, norm: 0 }, { id: 3, name: 'Low Cut', value: 0, norm: 0 }], enums: [], type: null })
+  const slot = async () => ({ blocks: [{ effectId: 58, channel: 0, params: [{ paramId: 1, raw: 32767, value: 5 }, { paramId: 3, raw: 0, value: 20 }] }] })
+  const onA = () => 'A'
+  let check = await rc.checkRevert({ edits: [low, gain], readBlock: zeroed, readSaved: slot, channelOf: onA })
+  assert.equal(check.state, 'unknown', 'a knob that started at its minimum matched a read of nothing, and the Revert was called done')
+  assert.equal(rc.revertTook(check), false)
+  check = await rc.checkRevert({ edits: [{ ...gain, to: 0 }], readBlock: zeroed, readSaved: slot, channelOf: onA })
+  assert.equal(check.state, 'unknown', 'a read of nothing said a knob turned to zero was still there')
+  /* A real read, with the block's type on it, and Low Cut really at its minimum. */
+  const real = async () => ({ named: [{ id: 1, name: 'Gain', value: 5, norm: 0.5 }, { id: 3, name: 'Low Cut', value: 20, norm: 0 }], enums: [], type: { value: 3, name: 'x' } })
+  check = await rc.checkRevert({ edits: [low], readBlock: real, readSaved: slot, channelOf: onA })
+  assert.equal(check.state, 'back')
+})
+
+test('in the demo, the preset chosen again goes back to what was saved, and walking away keeps an edit', async () => {
+  /*
+   * The demo kept each preset's working copy for good, the one it was on
+   * included — so a Revert there put nothing back, and once Revert read the
+   * knobs to check, every Revert in the demo said the FM3 hadn't gone back.
+   */
+  const store = {}
+  globalThis.localStorage = {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => {
+      store[k] = String(v)
+    },
+    removeItem: (k) => {
+      delete store[k]
+    }
+  }
+  const fx = await import('../src/lib/forgefx.js')
+  const rc = await import('../src/lib/revertCheck.js')
+  fx.setDemo(true)
+  try {
+    const number = (await fx.currentPreset()).number
+    const amp = (await fx.presetBlocks()).find((b) => b.slug === 'amp')
+    assert.ok(amp, 'the demo has no amp to dial')
+    const gainNow = async () => ((await fx.blockParams(amp.effectId))?.named || []).find((p) => /gain/i.test(p.name))
+    const gain = await gainNow()
+    assert.ok(gain, 'the demo amp has no gain control')
+    const to = gain.value > (gain.min + gain.max) / 2 ? gain.min : gain.max
+    const near = (a, b) => Math.abs(a - b) <= Math.abs(gain.max - gain.min) * 0.01
+    await fx.setParam(amp.effectId, gain.id, to, gain)
+    assert.ok(near((await gainNow()).value, to), 'the demo did not take the turn')
+    const edits = rc.noteEdit([], { eid: amp.effectId, paramId: gain.id, channel: amp.channel ?? null, block: amp.name, param: gain.name, from: gain.value, fromNorm: gain.norm, to, min: gain.min, max: gain.max })
+
+    await fx.selectPreset(number)
+    assert.ok(near((await gainNow()).value, gain.value), 'the same slot chosen again kept the knob where it was turned')
+    const check = await rc.checkRevert({
+      edits,
+      readBlock: fx.blockParams,
+      readSaved: () => fx.presetParams(number),
+      channelOf: () => amp.channel ?? null
+    })
+    assert.equal(check.state, 'back', `a Revert in the demo was said not to have taken: ${JSON.stringify(check)}`)
+    assert.equal(rc.revertTook(check), true)
+
+    /* Another preset and back is not a reload: the edit is still there. */
+    await fx.setParam(amp.effectId, gain.id, to, gain)
+    await fx.selectPreset(number + 1)
+    await fx.selectPreset(number)
+    assert.ok(near((await gainNow()).value, to), 'the demo forgot an edit as soon as another preset was visited')
+  } finally {
+    fx.setDemo(false)
+    delete globalThis.localStorage
+  }
+})
+
+test('the saved slot is read per channel, and never on a guess about which channel it is', async () => {
+  const { savedParam } = await import('../src/lib/revertCheck.js')
+  const amp = [0, 1, 2, 3].map((channel) => ({ effectId: 58, channel, params: [{ paramId: 1, raw: channel * 100, value: channel }] }))
+  const drive = [{ effectId: 133, params: [{ paramId: 1, raw: 9, value: 9 }] }]
+  assert.equal(savedParam(amp, 58, 'C', 1).value, 2, 'channel C read channel A’s value')
+  assert.equal(savedParam(amp, 58, null, 1).value, 0)
+  assert.equal(savedParam(drive, 133, 'A', 1).value, 9)
+  assert.equal(savedParam(drive, 133, 'B', 1), null, 'one unmarked copy of a block was taken as channel B’s')
+  assert.equal(savedParam(drive, 999, 'A', 1), null)
+  assert.equal(savedParam(null, 58, 'A', 1), null)
+})
+
+test('a Revert that did not take says so in plain words', async () => {
+  const { revertSaid } = await import('../src/lib/revertCheck.js')
+  assert.equal(revertSaid('stuck', 'FM3'), "The FM3 didn't go back to the saved preset — your changes are still on it.")
+  assert.match(revertSaid('stuck', null), /^The unit didn't go back/)
+  assert.match(revertSaid('unknown', 'FM3'), /couldn't read the FM3 back/)
+  assert.match(revertSaid('unknown', 'FM3'), /Save and Revert are still here/)
+})
+
+test('Revert reloads through the store and keeps Save and Revert until the knobs read back', () => {
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+  const app = bare(readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8'))
+  const revert = app.slice(app.indexOf('const revert = async'), app.indexOf('const restoreSafety = async'))
+  assert.ok(revert.length > 200, 'Revert moved; this check reads it')
+  assert.match(revert, /await loadPresetInStore\(number\)/, 'Revert does not go through the store, so a refusal is a yes again and no editor re-reads')
+  assert.ok(!/revertPreset|await read\(\)/.test(revert), 'Revert went back to asking and not looking')
+  const check = revert.indexOf('await checkRevert(')
+  const clean = revert.indexOf('setDirty(false)')
+  assert.ok(check > 0 && clean > check, 'Save and Revert go away before anything was read back')
+  assert.ok(revert.indexOf('if (!took) return refused(') > check && revert.indexOf('if (!took) return refused(') < clean, 'a Revert that did not take still puts Save and Revert away')
+  assert.match(revert, /readSaved: \(\) => presetParams\(number\)/, 'the slot is not what a knob turned on an unsaved buffer is checked against')
+  assert.match(revert, /if \(err\?\.message === SELECT_REFUSED\) return refused\(revertSaid\('stuck', unit\), \[err\.message\]\)/, "only the unit's refusal is said as a definite didn't-go-back")
+  assert.equal((revert.match(/revertSaid\('stuck'/g) || []).length, 1, "a timeout or a Mac that couldn't be reached is told the FM3 didn't go back")
+  assert.match(revert, /if \(macSilent\(err\) && !err\.linkDown\) \{ bufferReloaded\(\) return refused\(revertSaid\('unknown', unit\), \[err\.message\]\) \}/, 'a Revert whose answer never came back is told as a certain no, or leaves the editor on the old knobs')
+  assert.match(revert, /return refused\(err\.message, \[err\.message\]\)/, 'a Mac that could not be reached no longer says why')
+  assert.match(app, /loadPreset as loadPresetInStore, SELECT_REFUSED,/)
+  /* The list handed to the check is the one the knobs filled, read against the channels the unit shows. */
+  assert.match(revert, /const turned = edits\.current/, 'Revert no longer checks the knobs that were turned')
+  assert.ok(revert.indexOf('const turned = edits.current') < revert.indexOf('await loadPresetInStore(number)'), 'the turned knobs are taken after the reload')
+  assert.match(revert, /edits: turned,/, 'Revert checks an empty list, so it always passes')
+  assert.match(revert, /channelOf: \(eid\) => deviceSnapshot\(\)\.blocks\.find\(\(b\) => b\.effectId === eid\)\?\.channel/, 'every knob is skipped as being on another channel')
+  assert.match(revert, /channelBefore: \(eid\) => chanBefore\.get\(eid\) \?\? null/, 'a block that came back on another channel is not taken as the reload')
+  assert.ok(revert.indexOf('const chanBefore = new Map(deviceSnapshot().blocks') > 0 && revert.indexOf('const chanBefore') < revert.indexOf('await loadPresetInStore(number)'), 'the channels "before" are read after the reload')
+  /* The slot's name is written down only once the Revert is shown to have taken. */
+  assert.ok(!/presetLanded\(\{ fresh: true \}\)/.test(revert), 'a Revert that did not take writes the edited name into the preset list')
+  assert.match(revert, /const took = revertTook\(check\) presetLanded\(\{ fresh: took \}\) if \(!took\) return refused\(/, 'the slot’s name is written down before the Revert is known to have taken')
+  assert.match(revert, /setSaveError\(msg\)/, 'the save sheet Revert was pressed on does not say it failed')
+  assert.ok(!/clearDeviceCache|\/device\/cache/.test(revert), 'Revert deletes the computer’s profile of the unit')
+  /* The list it checks is the one the knobs fill, and it empties with the preset. */
+  assert.match(app, /record\('edit', summary\) edits\.current = noteEdit\(edits\.current, change\)/, 'a knob turn is only a sentence in the log again')
+  assert.match(app, /useEffect\(\(\) => \{ if \(!dirty\) edits\.current = \[\] \}, \[dirty\]\)/, 'the list outlives the save or load that made it clean')
+  assert.match(app, /useEffect\(\(\) => \{ edits\.current = \[\] \}, \[preset\?\.number\]\)/, 'the knobs turned on one preset are checked against the next one')
+  const restore = app.slice(app.indexOf('const restoreSafety = async'), app.indexOf('finally', app.indexOf('const restoreSafety = async')))
+  assert.match(restore, /edits\.current = \[\] await read\(\) bufferReloaded\(\)/, 'the pre-edit copy leaves an open editor on the values it replaced')
+})
+
+test('the block editor hands over which knob it turned, on which channel, and where it stood', () => {
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+  const con = bare(readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8'))
+  const panel = con.slice(con.indexOf('export function BlockPanel('))
+  const write = panel.slice(panel.indexOf('writeOne.current = async'), panel.indexOf('const applyModel = async'))
+  assert.match(write, /writeOne\.current = async \(\{ p, next, key, eid, name, slug, channel \}\)/)
+  assert.match(write, /eid, paramId: p\.id, channel, fromNorm: p\.norm \}/, 'a knob turn reaches App without the control, the channel or the unit’s own scale')
+  assert.match(panel, /channel: block\.channel \?\? null \}\)/, 'the channel the knob was turned on is not the one it was on when it was turned')
+})
+
 test('the Mac window switches, steps and appears through the store, with no read of its own', () => {
   const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
   const gig = bare(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8'))

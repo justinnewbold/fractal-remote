@@ -53,7 +53,22 @@ const BLANK = {
   sceneNames: NO_NAMES,
   bpm: null,
   tunerOn: false,
-  tuning: null
+  tuning: null,
+  /*
+   * Which load of the edit buffer this is.
+   *
+   * On the play test a Gain turned to 25 still read 25 after Revert. The
+   * open editor re-reads when its block, channel or scene changes — and a
+   * Revert changes none of them: it is the same slot loaded again, the same
+   * amp on the same channel on the same scene, with every value underneath
+   * put back. So the knob went on saying what the unit no longer had.
+   *
+   * A number that moves every time the buffer is loaded again — a preset
+   * chosen here, one changed at the unit, a Revert, a pre-edit copy put back
+   * — is what tells an editor its values are someone else's now. See
+   * bufferReloaded.
+   */
+  editRev: 0
 }
 
 let state = BLANK
@@ -88,6 +103,14 @@ export function set(patch) {
   state = next
   for (const listener of [...listeners]) listener()
   return true
+}
+
+/**
+ * The edit buffer has just been loaded again, so every value read off it
+ * before now is stale. Anything showing values keys its read on `editRev`.
+ */
+export function bufferReloaded() {
+  set({ editRev: state.editRev + 1 })
 }
 
 /**
@@ -516,7 +539,7 @@ let lastReadFailure = null
 
 export const chainReadFailure = () => lastReadFailure
 
-export async function refreshBlocks() {
+export async function refreshBlocks({ reloaded = false } = {}) {
   if (!driver?.presetBlocks) return null
   lastReadFailure = null
   const number = state.preset?.number
@@ -540,7 +563,11 @@ export async function refreshBlocks() {
     for (const b of list) {
       if (before.has(b.effectId) && before.get(b.effectId) !== b.channel) invalidateSchema(b.effectId)
     }
-    set({ blocks: list })
+    /* A preset loaded again moves editRev in the same change that puts its
+       chain up. Apart, an editor whose block changed channel read once for
+       the new chain and again for the new rev — two reads at a unit that has
+       just loaded, the first one thrown away. */
+    set(reloaded ? { blocks: list, editRev: state.editRev + 1 } : { blocks: list })
     return list
   } catch (err) {
     // The last known chain stays on screen: better than emptying it because
@@ -839,7 +866,7 @@ let sceneMissed = false
 /* What else the waiting read has been asked to re-check, kept across
    restarts; `names` is whether it reads the scene names too (see
    followPresetNews). */
-const settleAlso = { preset: false, scene: false, names: false }
+const settleAlso = { preset: false, scene: false, names: false, reloaded: false }
 /* The last chain read, and for which preset. */
 let chainRead = null
 
@@ -892,11 +919,12 @@ export function presetReadPending() {
   return null
 }
 
-function readPresetSoon(wait, { scene = false, preset = false, names = true } = {}) {
+function readPresetSoon(wait, { scene = false, preset = false, names = true, reloaded = false } = {}) {
   clock.clearTimeout(settleTimer)
   if (scene) settleAlso.scene = true
   if (preset) settleAlso.preset = true
   if (names) settleAlso.names = true
+  if (reloaded) settleAlso.reloaded = true
   const done = new Promise((resolve) => settleWaiting.push(resolve))
   settleTimer = clock.setTimeout(() => {
     settleTimer = null
@@ -905,20 +933,27 @@ function readPresetSoon(wait, { scene = false, preset = false, names = true } = 
     settleAlso.preset = false
     settleAlso.scene = false
     settleAlso.names = false
+    settleAlso.reloaded = false
     const reading = (async () => {
       let list = null
+      const was = state.preset?.number
+      const rev = state.editRev
       try {
-        const was = state.preset?.number
         if (also.preset) await refreshPresetOnly()
         if (also.scene) await refreshScene()
         /* A scene heard from here on comes after whatever the chain read carries. */
         sceneMissed = false
         /* A preset the unit turned out to have moved to is read whole. */
-        list = await readChainAndNames({ names: also.names || state.preset?.number !== was })
+        const moved = state.preset?.number !== was
+        list = await readChainAndNames({ names: also.names || moved, reloaded: also.reloaded || moved })
       } catch {
         /* Each read keeps its own failure; this is only so a timer never
            throws where nobody is listening. */
       }
+      /* Once the unit has settled, not the moment it was asked: an editor
+         that re-read mid-load would read the preset being left. Carried by
+         the chain read when that worked; on its own only when it didn't. */
+      if (state.editRev === rev && (also.reloaded || state.preset?.number !== was)) bufferReloaded()
       return list
     })()
     settleReading = reading
@@ -938,10 +973,10 @@ function readPresetSoon(wait, { scene = false, preset = false, names = true } = 
 }
 
 /** The one read of a preset: the chain, then the names out of it, then its tempo. */
-async function readChainAndNames({ names = true } = {}) {
+async function readChainAndNames({ names = true, reloaded = false } = {}) {
   const number = state.preset?.number
   const list = await confirmedChain({
-    read: refreshBlocks,
+    read: () => refreshBlocks({ reloaded }),
     wait: (ms) => new Promise((go) => clock.setTimeout(go, ms)),
     /* A first no means even less from a phone's browser; see RELAY_TRIES. */
     remote: driver?.isRemote?.() === true
@@ -979,6 +1014,9 @@ function rememberedNames(number) {
   return Array.isArray(known) && known.some((n) => (n || '').trim()) ? known : NO_NAMES
 }
 
+/** What a select the unit answered with {ok:false} says. */
+export const SELECT_REFUSED = "The unit didn't load that preset."
+
 /**
  * Load a preset from this window: the select, which preset, which scene, and
  * ONE chain read a moment later. Resolves once that read is done; throws only
@@ -1000,7 +1038,14 @@ export async function loadPreset(number, { selected } = {}) {
   let again = false
   try {
     try {
-      await driver.selectPreset(number)
+      /*
+       * A no is a no whichever way it arrives. The computer answers a select
+       * the unit did not take with {ok:false} and a 200, and that was read as
+       * a yes: the slot was logged as loaded, and a Revert said it had put
+       * the saved preset back with nothing put back at all.
+       */
+      const res = await driver.selectPreset(number)
+      if (res && res.ok === false) throw new Error(SELECT_REFUSED)
     } catch (err) {
       echoes.disown(token)
       /* The preset still loaded may be one whose read this tap called off —
@@ -1041,7 +1086,7 @@ export async function loadPreset(number, { selected } = {}) {
     /* Never below nothing: reset() zeroes it under a load still in the air. */
     presetLoads = Math.max(0, presetLoads - 1)
   }
-  await readPresetSoon(OWN_SETTLE_MS, { preset: again })
+  await readPresetSoon(OWN_SETTLE_MS, { preset: again, reloaded: true })
   return state.preset
 }
 
@@ -1162,7 +1207,7 @@ function presetMovedAtUnit(fresh, run, { hostForgot = false } = {}) {
      couple, and a quarter of a minute there held every footswitch back. */
   const longCopy = hostKeepsCopy() !== false
   const stale = hostForgot || !chainRead || !longCopy ? 0 : chainRead.at + CHAIN_FRESH_MS + 250 - clock.now()
-  readPresetSoon(Math.max(PRESET_SETTLE_MS, stale), { scene: true, preset: true })
+  readPresetSoon(Math.max(PRESET_SETTLE_MS, stale), { scene: true, preset: true, reloaded: true })
   return true
 }
 
@@ -1282,6 +1327,7 @@ export function reset() {
   settleAlso.preset = false
   settleAlso.scene = false
   settleAlso.names = false
+  settleAlso.reloaded = false
   sceneMissed = false
   presetLoads = 0
   presetRun += 1

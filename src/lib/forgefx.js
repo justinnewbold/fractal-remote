@@ -1624,6 +1624,15 @@ export const presetSummary = (n, full) =>
     ? tick().then(() => mock.presetSummary(n))
     : request(`/presets/${n}/summary${full ? '?full=1' : ''}`)
 
+/**
+ * What a stored slot holds, block by block and value by value, without
+ * loading it: `{ blocks: [{ effectId, channel?, params: [{ paramId, raw, value }] }] }`.
+ * A whole dump of the slot, so it is asked for only when something needs
+ * the slot itself as the answer — see lib/revertCheck.js. The demo has no
+ * dump to give, and says so with null.
+ */
+export const presetParams = (n) => (mock ? tick().then(() => null) : request(`/presets/${n}/params`))
+
 /** Every stored backup ForgeFX holds. */
 export const listBackups = () =>
   mock ? tick().then(() => ({ backups: [] })) : request('/backups')
@@ -1772,15 +1781,6 @@ export const blockCatalog = () =>
 export const placeableBlocks = () =>
   paletteFor(currentDeviceSlug(), blockCatalog).then((r) => r.list)
 
-
-/**
- * Throw away unsaved edits and reload the preset from flash.
- *
- * Everything this app writes lands in the edit buffer; /preset/store is the only
- * thing that makes it permanent. Reselecting the same slot reloads it from
- * flash, so the edit buffer is discarded — which is the whole of revert.
- */
-export const revertPreset = (number) => selectPreset(number)
 
 
 /**

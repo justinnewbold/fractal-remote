@@ -97,7 +97,19 @@ const initial = {
    * to this store like the same unit it already had — and the 512 preset
    * names read off the simulation stayed on screen over the real one's slots.
    */
-  simulated: false
+  simulated: false,
+  /*
+   * Which load of the edit buffer this is — moved every time the preset is
+   * loaded again, the same slot included.
+   *
+   * The block editor re-reads when its block, channel or scene changes. The
+   * same slot chosen again changes none of those and puts every value back,
+   * and a different preset with its amp in the same place on the same
+   * channel and scene changes none of them either: the knobs went on showing
+   * the preset that was. The browser's editor had exactly this after a
+   * Revert. See Edit.js, which keys the panel on it.
+   */
+  bufferRev: 0
 }
 
 let state = initial
@@ -140,6 +152,8 @@ export function reset() {
   settleAlso.preset = false
   settleAlso.scene = false
   settleAlso.names = false
+  settleAlso.reloaded = false
+  bufferOwed = false
   sceneMissed = false
   /* A load, a follow or a settled read still in the air stops at its next check. */
   presetRun += 1
@@ -1311,6 +1325,9 @@ export async function refreshBlocks({ quiet = false } = {}) {
 /** Whether a chain read is on the wire, and whether one more is owed after it. */
 let blocksInFlight = null
 let blocksAgain = false
+/* The preset was loaded again, and the next chain that lands carries the new
+   bufferRev with it — one change, so an open panel remounts once, not twice. */
+let bufferOwed = false
 
 async function readBlocks(quiet) {
   if (!quiet) set({ chain: 'reading' })
@@ -1324,7 +1341,12 @@ async function readBlocks(quiet) {
     const gen = followGen
     const all = await device.presetBlocks()
     chainRead = { key, at: Date.now(), gen }
-    set({ allBlocks: all, blocks: device.stageBlocks(all), chain: 'ok' })
+    const patch = { allBlocks: all, blocks: device.stageBlocks(all), chain: 'ok' }
+    if (bufferOwed) {
+      bufferOwed = false
+      patch.bufferRev = state.bufferRev + 1
+    }
+    set(patch)
     return true
   } catch (err) {
     // The last chain stays on screen. It is the best thing anyone knows, and a
@@ -1799,7 +1821,7 @@ export async function loadPreset(number) {
   } finally {
     presetLoads -= 1
   }
-  await readPresetSoon(OWN_SETTLE_MS)
+  await readPresetSoon(OWN_SETTLE_MS, { reloaded: true })
   return true
 }
 
@@ -1840,16 +1862,17 @@ let sceneMissed = false
  * restarts. `names` is whether it reads the scene names too: not for an
  * announcement about the preset already on screen (see followPresetNews).
  */
-const settleAlso = { preset: false, scene: false, names: false }
+const settleAlso = { preset: false, scene: false, names: false, reloaded: false }
 
 /** A preset change whose chain has not been read yet. */
 const presetBusy = () => presetLoads > 0 || settleTimer !== null || settleReads > 0
 
-function readPresetSoon(wait, { scene = false, preset = false, names = true } = {}) {
+function readPresetSoon(wait, { scene = false, preset = false, names = true, reloaded = false } = {}) {
   clearTimeout(settleTimer)
   if (scene) settleAlso.scene = true
   if (preset) settleAlso.preset = true
   if (names) settleAlso.names = true
+  if (reloaded) settleAlso.reloaded = true
   return new Promise((resolve) => {
     settleWaiting.push(resolve)
     settleTimer = setTimeout(async () => {
@@ -1859,14 +1882,17 @@ function readPresetSoon(wait, { scene = false, preset = false, names = true } = 
       settleAlso.preset = false
       settleAlso.scene = false
       settleAlso.names = false
+      settleAlso.reloaded = false
       settleReads += 1
+      const was = state.preset?.number
+      const rev = state.bufferRev
       try {
-        const was = state.preset?.number
         if (also.preset) await settledPreset()
         if (also.scene) await refreshScene()
         /* A scene heard from here on comes after whatever the chain read carries. */
         sceneMissed = false
         const number = state.preset?.number
+        if (also.reloaded || number !== was) bufferOwed = true
         /* A preset the unit turned out to have moved to is read whole. */
         const read = await readChainAndNames({ names: also.names || number !== was })
         /*
@@ -1881,6 +1907,11 @@ function readPresetSoon(wait, { scene = false, preset = false, names = true } = 
            throws where nobody is listening. */
         logDebug('preset', 'the read after a preset change stopped', err?.message || String(err))
       } finally {
+        /* Once the unit has settled, not when it was asked: a panel that
+           re-read mid-load would read the preset being left. Carried by the
+           chain read when that worked; on its own only when it didn't. */
+        bufferOwed = false
+        if (state.bufferRev === rev && (also.reloaded || state.preset?.number !== was)) set({ bufferRev: state.bufferRev + 1 })
         settleReads -= 1
         for (const done of waiting) done()
         if (sceneMissed && !settleReads) {
@@ -1955,6 +1986,6 @@ function presetMovedAtUnit(fresh, run, { hostForgot = false } = {}) {
      taken as the long one. */
   const longCopy = hostKeepsCopy() !== false
   const stale = hostForgot || !chainRead || !longCopy ? 0 : chainRead.at + CHAIN_FRESH_MS + 250 - Date.now()
-  readPresetSoon(Math.max(PRESET_SETTLE_MS, stale), { scene: true, preset: true })
+  readPresetSoon(Math.max(PRESET_SETTLE_MS, stale), { scene: true, preset: true, reloaded: true })
   return true
 }

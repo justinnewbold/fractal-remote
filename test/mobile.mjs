@@ -140,7 +140,8 @@ async function rigOnTheBench(over = {}) {
         await flush()
       }
     `,
-    'react.js': 'export const useSyncExternalStore = () => null\n',
+    /* The store's subscribe, kept so a test can watch every change the way a screen does. */
+    'react.js': 'export const useSyncExternalStore = (sub) => { globalThis.__rigSub = sub; return null }\n',
     'relay.js': `
       export const wire = []
       let serve = null
@@ -2604,7 +2605,7 @@ export function run(test) {
      * waiting on.
      */
     const once = rig.slice(rig.indexOf('async function readChainAndNames'))
-    assert.match(load, /await readPresetSoon\(OWN_SETTLE_MS\)/, 'a preset load no longer reads its chain through the one shared read')
+    assert.match(load, /await readPresetSoon\(OWN_SETTLE_MS, \{ reloaded: true \}\)/, 'a preset load no longer reads its chain through the one shared read')
     assert.ok(
       once.indexOf('await refreshBlocks()') > 0 && once.indexOf('await refreshBlocks()') < once.indexOf('await refreshSceneNames(copy)'),
       'the chain waits behind a slow read of the scene names'
@@ -2827,7 +2828,7 @@ export function run(test) {
     const rig = read('mobile/src/lib/rig.js')
     assert.match(
       rig,
-      /set\(\{ allBlocks: all, blocks: device\.stageBlocks\(all\), chain: 'ok' \}\)/,
+      /const patch = \{ allBlocks: all, blocks: device\.stageBlocks\(all\), chain: 'ok' \}/,
       'the two lists no longer come from one read'
     )
     assert.match(read('mobile/src/screens/Stage.js'), /const ofBlocks = \(s\) => s\.blocks/)
@@ -6386,7 +6387,7 @@ export function run(test) {
     const once = withoutComments(rig.slice(rig.indexOf('async function readChainAndNames'), rig.indexOf('let staleTimer'))).replace(/\s+/g, ' ')
     assert.match(once, /const read = await refreshBlocks\(\) if \(names && read && state\.preset\?\.number === number\) \{ .*?if \(!quick\) await refreshSceneNames\(copy\)/, 'the slow read still runs when the names were already there, or before the chain, or after a chain read that failed')
     const loading = withoutComments(rig.slice(rig.indexOf('export async function loadPreset'))).replace(/\s+/g, ' ')
-    assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 \} await readPresetSoon\(OWN_SETTLE_MS\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
+    assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 \} await readPresetSoon\(OWN_SETTLE_MS, \{ reloaded: true \}\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
     assert.match(rig, /const kept = await recallSceneNames\(owner, number\)/, 'the disk is not read first')
     assert.match(rig, /held = await device\.storedSceneNames\(slug, number\)/, 'the computer’s copy is never asked for')
     /* Read the slow way, they are kept everywhere. */
@@ -9980,6 +9981,85 @@ export function run(test) {
     await clock.advance(rig.PRESET_SETTLE_MS + 100)
     assert.equal(asked(STATE), 1)
     assert.equal(asked(CHAIN), 3, 'a footswitch reads the chain although it is this preset’s')
+  })
+
+  /*
+   * The same gap the browser's Revert showed. The block editor is keyed on
+   * the block, its channel and the scene; the same slot chosen again moves
+   * none of them and puts every value back, so the knobs went on showing
+   * what the unit no longer had.
+   */
+  test('the same slot loaded again moves the edit buffer once, after the unit settles, and nothing else does', async () => {
+    const { rig, clock, unit } = await rigOnTheBench()
+    const start = rig.getState().bufferRev
+    const load = rig.loadPreset(12)
+    await clock.advance(rig.OWN_SETTLE_MS - 100)
+    assert.equal(rig.getState().bufferRev, start, 'the editor was told to re-read while the unit was still loading')
+    await clock.advance(3000)
+    await load
+    assert.equal(rig.getState().bufferRev, start + 1, 'the same slot loaded again leaves the open editor on the old values')
+    await clock.advance(30000)
+    assert.equal(rig.getState().bufferRev, start + 1, 'one load moved the edit buffer more than once')
+
+    unit.refuseSelect = true
+    assert.equal(await rig.loadPreset(12), false)
+    await clock.advance(5000)
+    assert.equal(rig.getState().bufferRev, start + 1, 'a refused tap told the editor its values were stale')
+    unit.refuseSelect = false
+
+    /* Another client moving the unit to another preset is a new buffer too. */
+    await clock.advance(30000)
+    unit.number = 60
+    rig.handleEvent({ type: 'changed', scope: 'preset' })
+    await clock.advance(rig.PRESET_SETTLE_MS + 500)
+    assert.equal(rig.getState().bufferRev, start + 2, 'the editor kept the last preset’s values when the unit moved on')
+  })
+
+  /* The panel is keyed on the block's channel and bufferRev: set apart, a
+     load that moved the amp's channel remounted it, and read it, twice. */
+  test('a load that moves the open block to another channel remounts the phone’s editor once', async () => {
+    const { rig, clock, unit } = await rigOnTheBench()
+    rig.useRig((s) => s)
+    const sub = globalThis.__rigSub
+    const keyNow = () => {
+      const s = rig.getState()
+      const b = (s.allBlocks || []).find((x) => x.effectId === 58)
+      return `${b?.channel}:${s.sceneIndex}:${s.bufferRev}`
+    }
+    const seen = []
+    let last = keyNow()
+    const off = sub(() => {
+      const k = keyNow()
+      if (k !== last) seen.push((last = k))
+    })
+    try {
+      unit.blocks = unit.blocks.map((b) => (b.effectId === 58 ? { ...b, channel: 'C' } : b))
+      const load = rig.loadPreset(20)
+      await clock.advance(5000)
+      await load
+      assert.equal(seen.length, 1, `the panel remounted more than once for one load: ${seen.join(' then ')}`)
+      assert.match(seen[0], /^C:/)
+      /* A chain that could not be read still tells the panel, on its own. */
+      seen.length = 0
+      unit.chainFails = true
+      const again = rig.loadPreset(20)
+      await clock.advance(5000)
+      await again
+      assert.equal(seen.length, 1, 'a load whose chain read failed told the panel nothing, or told it twice')
+    } finally {
+      off()
+    }
+  })
+
+  test('the phone’s block editor re-reads when the preset is loaded again', () => {
+    const edit = read('mobile/src/screens/Edit.js')
+    assert.match(edit, /const ofBufferRev = \(s\) => s\.bufferRev/)
+    assert.match(edit, /const bufferRev = useRig\(ofBufferRev\)/)
+    assert.match(
+      edit,
+      /<BlockPanel\s+key=\{`\$\{idOf\(block\)\}:\$\{block\.channel \|\| ''\}:\$\{scene\}:\$\{bufferRev\}`\}/,
+      'the same slot loaded again leaves the phone’s knobs on the values it replaced'
+    )
   })
 
   test('a preset tap the unit refuses does not call off the read a stale copy was owed', async () => {

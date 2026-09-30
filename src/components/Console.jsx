@@ -813,7 +813,11 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    * identity is exactly the thing that was lying.
    */
   const scene = useDevice((s) => s.sceneIndex)
-  const readKey = `${block?.effectId ?? ''}:${block?.channel ?? ''}:${scene}`
+  /* And a fourth, which changes every value without changing any of those
+     three: the buffer loaded again. A Revert is the same block on the same
+     channel and scene, with every knob put back. See editRev. */
+  const rev = useDevice((s) => s.editRev)
+  const readKey = `${block?.effectId ?? ''}:${block?.channel ?? ''}:${scene}:${rev}`
   /* Which block, channel and scene the panel is on NOW, for a pick still
      waiting on the unit. This panel is not rebuilt when another block is
      opened, so a cab pick that finishes after the amp has been clicked would
@@ -1062,10 +1066,18 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     // With a write out, "back to where it was" is a change and has to go.
     const lane = `${block.effectId}:${p.id}`
     if (next === p.value && !writes.current.busy(lane)) return
-    return writes.current.send(lane, { p, next, key: readKey, eid: block.effectId, name: block.name, slug: block.slug })
+    return writes.current.send(lane, {
+      p,
+      next,
+      key: readKey,
+      eid: block.effectId,
+      name: block.name,
+      slug: block.slug,
+      channel: block.channel ?? null
+    })
   }
 
-  writeOne.current = async ({ p, next, key, eid, name, slug }) => {
+  writeOne.current = async ({ p, next, key, eid, name, slug, channel }) => {
     try {
       const res = await setParamConfirmed(eid, p.id, next, p)
       if (!res.ok)
@@ -1102,7 +1114,14 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
           from: p.value,
           to: next,
           min: p.min,
-          max: p.max
+          max: p.max,
+          /* Which control on which channel, and where it stood on the unit's
+             own scale, so a Revert can read this knob back and say whether
+             it really went. See lib/revertCheck.js. */
+          eid,
+          paramId: p.id,
+          channel,
+          fromNorm: p.norm
         },
         /*
          * And nothing about the CHAIN has changed, so nothing needs re-reading.

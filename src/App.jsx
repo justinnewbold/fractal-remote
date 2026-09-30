@@ -42,6 +42,8 @@ import {
   refreshTempo,
   chainWasRead,
   loadPreset as loadPresetInStore,
+  SELECT_REFUSED,
+  bufferReloaded,
   presetHeard,
   tapBeat,
   writeScene,
@@ -57,6 +59,7 @@ import UpdateNotice from './components/UpdateNotice'
 import Updates, { UpdateReadyNotice } from './components/Updates'
 import RenamePreset from './components/RenamePreset'
 import { countFromRefusal, slotCount, slotOutside, slotsForChat, timeLeft } from './lib/slots'
+import { checkRevert, noteEdit, revertSaid, revertTook, stuckLines } from './lib/revertCheck'
 import { inDesktopApp } from './lib/desktop'
 import { createNameScan } from './lib/nameScan'
 import { Chain, PresetList, BlockPanel, Tuner } from './components/Console'
@@ -141,7 +144,8 @@ import {
   sceneState,
   setPresetName,
   setChannel,
-  revertPreset,
+  blockParams,
+  presetParams,
   backupPreset,
   parkPresetName,
   takeParkedPresetName,
@@ -1025,6 +1029,24 @@ export default function App() {
     useEffect(() => {
     if (!dirty) setAskedUnsaved(false)
   }, [dirty])
+  /*
+   * The knobs turned by hand since the preset was last clean — which control,
+   * on which channel, from what to what. The log keeps these as sentences;
+   * a Revert needs them as something it can read back and compare. See
+   * lib/revertCheck.js. A ref: nothing draws from it.
+   */
+  const edits = useRef([])
+  useEffect(() => {
+    if (!dirty) edits.current = []
+  }, [dirty])
+  /* A different preset is a different buffer. A footswitch, the phone, or
+     Play's Previous and Next move the preset without clearing `dirty`, and a
+     knob turned on the last one is not on this one: checked against the new
+     preset, its "before" cost a dump of the slot, or read as a Revert that
+     couldn't be checked. */
+  useEffect(() => {
+    edits.current = []
+  }, [preset?.number])
   // Read inside read(), which is built once and never sees state change.
   const dirtyRef = useRef(false)
   dirtyRef.current = dirty
@@ -2844,20 +2866,75 @@ export default function App() {
    * model moves one thing instead of redesigning around a new sentence.
    */
   
-  /** Reload the current slot from flash, discarding anything unsaved. */
+  /**
+   * Reload the current slot from flash, discarding anything unsaved — and
+   * only say so once the unit shows it.
+   *
+   * Everything this app writes lands in the edit buffer; a store is the only
+   * thing that makes it permanent, so choosing the same slot again is the
+   * whole of a Revert. What was missing was looking. On the play test a
+   * Gain turned to 25 still read 25 after Revert: Save and Revert went away
+   * on the strength of having asked, a refusal that came back as {ok:false}
+   * was taken for a yes, and the open editor had no reason to read its
+   * knobs again.
+   *
+   * So the reload goes through the store like any other preset load — its
+   * refusals are refusals, and its settled read tells every open editor the
+   * buffer is new (editRev). Then the knobs turned since the last save are
+   * read back, and Save and Revert go only once they are back. When they
+   * are not, it says so and leaves both where they are: the changes are
+   * still on the unit and still worth keeping or throwing away.
+   */
   const revert = async () => {
     resetSchemaCache()
     if (typeof preset?.number !== 'number') return
+    const number = preset.number
+    const unit = device?.short || device?.name || null
+    const turned = edits.current
+    const refused = (msg, detail) => {
+      record('revert', msg, detail)
+      setError(msg)
+      setSaveError(msg)
+    }
     setBusy(true)
     setError(null)
+    setSaveError(null)
     try {
-      await revertPreset(preset.number)
-      record('revert', `Reverted slot ${preset.number} to its saved version`)
+      /* Which channel each block was on before: one that comes back on
+         another is the buffer loaded again, whatever channel the knobs were on. */
+      const chanBefore = new Map(deviceSnapshot().blocks.map((b) => [b.effectId, b.channel ?? null]))
+      try {
+        await loadPresetInStore(number)
+      } catch (err) {
+        /* Only the unit's own no is a certain no. A relay that timed out after
+           sending may still have carried the select, so that is not known, and
+           an open editor reads again rather than keep the old knobs. A Mac
+           that couldn't be reached never sent it: say what went wrong. */
+        if (err?.message === SELECT_REFUSED) return refused(revertSaid('stuck', unit), [err.message])
+        if (macSilent(err) && !err.linkDown) {
+          bufferReloaded()
+          return refused(revertSaid('unknown', unit), [err.message])
+        }
+        return refused(err.message, [err.message])
+      }
+      const check = await checkRevert({
+        edits: turned,
+        readBlock: blockParams,
+        readSaved: () => presetParams(number),
+        channelOf: (eid) => deviceSnapshot().blocks.find((b) => b.effectId === eid)?.channel,
+        channelBefore: (eid) => chanBefore.get(eid) ?? null,
+        channels: device?.capabilities?.channelNames
+      })
+      /* The buffer's name is the slot's only once the reload is shown to have
+         taken: a reload the unit ignored still carries an unsaved rename. */
+      const took = revertTook(check)
+      presetLanded({ fresh: took })
+      if (!took) return refused(revertSaid(check.state, unit), stuckLines(check))
+      record('revert', `Reverted slot ${number} to its saved version`)
       setDirty(false)
       setSavedAt(null)
       setResult(null)
       setApplied(null)
-      await read()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -2876,7 +2953,13 @@ export default function App() {
       await loadPresetBytes(safety.bytes)
       record('restore', `Loaded the pre-edit copy of "${safety.name}" into the edit buffer`)
       setDirty(true)
+      /* A whole new buffer: the knobs turned before it are not on the unit
+         any more, and "before" for them was the copy this just replaced. */
+      edits.current = []
       await read()
+      /* The same slot, block, channel and scene as a moment ago, with every
+         value changed — the same stale editor a Revert had. */
+      bufferReloaded()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -3941,6 +4024,7 @@ export default function App() {
           onError={setError}
           onChanged={(summary, change, { chain = true } = {}) => {
             record('edit', summary)
+            edits.current = noteEdit(edits.current, change)
             /*
              * A knob turned after a generation was written is a correction of
              * it: the model chose one value and the player wanted another.

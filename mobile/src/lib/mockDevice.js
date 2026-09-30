@@ -322,6 +322,10 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
    * state.blocks and its neighbours POINT AT the rig rather than copying it,
    * so every existing write in this file — a bypass, a model swap, a knob —
    * lands on the preset it was made on and is still there on the way back.
+   *
+   * Except the slot already loaded, chosen again: that is the unit reloading
+   * it from what was saved, and it is the whole of a Revert. Kept, every
+   * Revert in the demo left the knobs where they were turned and said so.
    */
   const rigs = new Map()
 
@@ -670,6 +674,8 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
     },
 
     selectPreset: (number) => {
+      /* The same slot again throws its edits away; see `rigs`. */
+      if (number === state.presetNumber) rigs.delete(number)
       state.presetNumber = number
       state.presetName = state.stored.get(number) || ''
       loadRig(number)

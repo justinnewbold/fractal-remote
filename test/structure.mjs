@@ -830,6 +830,17 @@ export function run(test) {
       )
     }
     assert.match(panel, /const scene = useDevice\(/, 'the panel is not watching the live scene')
+    /*
+     * And a fourth that moves none of those three: the buffer loaded again.
+     * A Gain turned to 25 still read 25 after Revert on the play test — the
+     * same slot, block, channel and scene, with every value put back.
+     */
+    assert.match(panel, /const rev = useDevice\(\(s\) => s\.editRev\)/, 'the panel is not watching for the buffer being loaded again')
+    assert.match(
+      panel.slice(panel.indexOf('const readKey = '), panel.indexOf('const readKey = ') + 120),
+      /:\$\{rev\}`/,
+      'a Revert or a reload of the same slot leaves the editor on the values it replaced'
+    )
 
     // A re-read that does happen keeps the knobs up: the line is for a panel
     // with nothing in it yet, which is the only time it costs no height.

@@ -57,6 +57,7 @@ const face = Platform.select(mono)
 
 const ofBlocks = (s) => s.allBlocks
 const ofScene = (s) => s.sceneIndex
+const ofBufferRev = (s) => s.bufferRev
 const ofSceneNames = (s) => s.sceneNames
 const ofCaps = (s) => s.capabilities
 const ofChain = (s) => s.chain
@@ -140,6 +141,8 @@ export default function Edit({ onBack }) {
   useKeepAwake()
   const blocks = useRig(ofBlocks)
   const scene = useRig(ofScene)
+  /* The preset loaded again: same block, channel and scene, other values. */
+  const bufferRev = useRig(ofBufferRev)
   const sceneNames = useRig(ofSceneNames)
   const caps = useRig(ofCaps)
   const chain = useRig(ofChain)
@@ -368,7 +371,7 @@ export default function Edit({ onBack }) {
       {block ? (
         <View onLayout={panelLaid}>
           <BlockPanel
-            key={`${idOf(block)}:${block.channel || ''}:${scene}`}
+            key={`${idOf(block)}:${block.channel || ''}:${scene}:${bufferRev}`}
             block={block}
             channels={caps?.channelNames}
             focus={focus}
@@ -391,7 +394,8 @@ export default function Edit({ onBack }) {
  * One block's controls.
  *
  * Keyed from above on the block, its channel and the scene — the three things
- * that genuinely change what a knob here MEANS. Not on the block object: every
+ * that genuinely change what a knob here MEANS — and on the preset being
+ * loaded again, which changes every value under all three (bufferRev). Not on the block object: every
  * commit ends in a re-read that hands this an identical block under a new
  * identity, and keying on that threw the knobs away and read them again for
  * nothing, once per knob.
