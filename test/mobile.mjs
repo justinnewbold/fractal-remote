@@ -4861,6 +4861,15 @@ export function run(test) {
     assert.match(read('src/styles.css'), /\.scene-arrange-tile \{[\s\S]{0,500}touch-action: none;/, 'a finger scrolls the page instead of dragging')
   })
 
+  test('a preset search starts at the top of its results', () => {
+    /* "Preset search isn't working." The list opened centred on the preset
+       being played and kept that scroll when the search shrank it, so the
+       matches sat above the screen. */
+    const src = read('mobile/src/screens/Presets.js')
+    assert.match(src, /if \(hunting\) list\.current\?\.scrollToOffset\(\{ offset: 0, animated: false \}\)/, 'typing a search leaves the list scrolled past its own results')
+    assert.match(src, /\}, \[query\]\)/, 'the list is not moved when the search changes')
+  })
+
   test('the paywall sells the unlock, not whichever package came first', async () => {
     /*
      * FOUND IN THE LIVE ACCOUNT, not imagined.
