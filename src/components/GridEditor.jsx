@@ -3,6 +3,7 @@ import { placeBlock, clearCell, readGrid, blockCatalog, wireRow, presetBlocks } 
 import { logDebug } from '../lib/debugLog'
 import { blockPositions, landingIndex, reorderPlan } from '../../shared/lane-order.mjs'
 import { chainPlan } from '../lib/actions'
+import ChainWait, { useChain } from './ChainWait'
 import {
   colLabel,
   doubtfulWrite,
@@ -71,6 +72,10 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
   /* rows and cols were read here and never defined, so on a grid unit the
      panel threw "Can't find variable: rows" before it drew a thing. */
   const { linear, rows, cols } = gridShape(capabilities)
+
+  /* Whose chain the cards are. Another preset's are not drawn, and cannot be
+     removed, moved or added beside: the cells they name are this preset's. */
+  const chainNow = useChain()
 
   /*
    * DRAG TO REORDER, AS ON THE PHONE. "How does moving the blocks in the chain
@@ -673,8 +678,20 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
    * their grips; so does this. The caution about structure writes stays, as
    * a sentence at the foot rather than a door at the top.
    */
+  if (chainNow.elsewhere) {
+    return (
+      <section className="grid-editor">
+        <div className="history-head">
+          <p className="silk-label">Edit the chain</p>
+        </div>
+        {/* The chain strip above says it is loading; this only holds the space. */}
+        <ChainWait chain={chainNow} cards={3} className="chain-wait-lanes" quiet />
+      </section>
+    )
+  }
+
   return (
-    <section className="grid-editor">
+    <section className={`grid-editor ${chainNow.late ? 'chain-updating' : ''}`}>
       <div className="history-head">
         <p className="silk-label">Edit the chain</p>
         <div className="history-actions">

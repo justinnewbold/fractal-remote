@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useDevice, writeBypass, refreshSceneState } from '../lib/deviceState'
+import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import { blockColor } from '../lib/blockColors'
 import { useDismiss } from '../lib/dismiss'
 import { marksFor, toggleFavourite } from '../lib/presetMarks'
@@ -129,7 +130,7 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
   const ends = (slug) => blocks.find((b) => b.slug === slug) || null
   const input = ends('input')
   const output = ends('output')
-  const lastTap = useRef({ id: null, at: 0 })
+  const lastTap = useRef({ id: null, at: 0, of: null })
   const strip = useRef(null)
 
   /*
@@ -141,7 +142,21 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
    */
   /* The two ends count: a preset that gains an output block is a strip one
      tile wider, and the fade that says there is more to the right has to know. */
-  useOverflow(strip, [chain.length, !!input, !!output])
+  /*
+   * The last preset's tiles are not drawn under this one's name. They were:
+   * the name changed on the tap and the blocks a moment later, and in that
+   * moment a double-tap on an old tile switched a block on the NEW preset.
+   * See shared/chain-view.mjs. The strip coming back is a new strip to watch.
+   */
+  const shown = useChain()
+  useOverflow(strip, [chain.length, !!input, !!output, shown.elsewhere])
+  if (shown.elsewhere) {
+    return (
+      <div className="fx-panel">
+        <ChainWait chain={shown} />
+      </div>
+    )
+  }
 
   /**
    * One end of the signal path: the block if the preset has one, the arrow it
@@ -175,19 +190,23 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
     )
   }
 
+  /* A double-tap is two taps on one block of one preset's chain: a first
+     tap on the song just left does not pair with a second on this one. */
   const tap = (block) => {
     const now = Date.now()
-    if (onToggle && lastTap.current.id === block.effectId && now - lastTap.current.at < 350) {
-      lastTap.current = { id: null, at: 0 }
+    const same = lastTap.current.id === block.effectId && lastTap.current.of === shown.number
+    if (onToggle && same && now - lastTap.current.at < 350) {
+      lastTap.current = { id: null, at: 0, of: null }
       onToggle(block)
       return
     }
-    lastTap.current = { id: block.effectId, at: now }
+    lastTap.current = { id: block.effectId, at: now, of: shown.number }
     onSelect(block.effectId)
   }
 
   return (
-    <div className="fx-panel">
+    <div className={`fx-panel ${shown.late ? 'chain-updating' : ''}`}>
+      <ChainUpdating chain={shown} />
       {/* No heading. A row of coloured, three-letter tiles running from IN to
           OUT is not something anyone needs told is the effects chain, and on a
           phone that word cost more vertical space than a tile. */}

@@ -54,6 +54,7 @@ import Grip from '../components/Grip'
 import Press from '../components/Press'
 import { SaveButton, SaveNotes, useSaveToSlot } from '../components/SaveToSlot'
 import Tile from '../components/Tile'
+import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 
 const face = Platform.select(mono)
 
@@ -148,6 +149,13 @@ export default function Edit({ onBack }) {
   const sceneNames = useRig(ofSceneNames)
   const caps = useRig(ofCaps)
   const chain = useRig(ofChain)
+  /*
+   * Whose blocks these are. Between a preset change and its chain arriving
+   * they were the last song's, and a tile opened the last song's amp with
+   * its knobs writing to this song's, found by the same number. They are not
+   * drawn then, and neither is anything opened from them. See lib/chain-view.
+   */
+  const chainNow = useChain()
   /* Unsaved work on THIS slot, for the Save button's fill. Same flag the
      rename screen uses: a moved knob is lost at the next preset change
      exactly as a typed name is. */
@@ -205,7 +213,7 @@ export default function Edit({ onBack }) {
     if (!pending && saveTo.armed) saveTo.disarm()
   }, [pending, saveTo])
 
-  const block = blocks.find((b) => sameBlock(b, openEid)) || null
+  const block = chainNow.elsewhere ? null : blocks.find((b) => sameBlock(b, openEid)) || null
 
   /*
    * And brings the page to it. The block's knobs are drawn under the search
@@ -318,16 +326,16 @@ export default function Edit({ onBack }) {
         </Note>
       ) : null}
 
-      {chain === 'reading' && !blocks.length ? (
+      {chain === 'reading' && !blocks.length && !chainNow.elsewhere ? (
         <Note>Reading what’s in this preset…</Note>
       ) : null}
-      {chain === 'failed' ? (
+      {chain === 'failed' && !chainNow.elsewhere ? (
         <Note tone="warn">
           The unit didn’t answer when we asked what’s in this preset, so these are whatever it last
           told us.
         </Note>
       ) : null}
-      {!blocks.length && chain === 'ok' ? <Note>This preset is empty.</Note> : null}
+      {!blocks.length && chain === 'ok' && !chainNow.elsewhere ? <Note>This preset is empty.</Note> : null}
 
       <FindControl
         blocks={blocks}
@@ -361,9 +369,12 @@ export default function Edit({ onBack }) {
         browser lifts them out of the strip; here they are part of it, and
         scrolling is what makes that affordable.
       */}
+      <ChainUpdating chain={chainNow} />
+      {chainNow.elsewhere ? <ChainWait chain={chainNow} height={TAP} /> : null}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={{ display: chainNow.elsewhere ? 'none' : 'flex', opacity: chainNow.late ? 0.55 : 1 }}
         /* The chain is wider than the phone by design now, so the last tile
            needs somewhere to end that is not flush against the bezel. */
         contentContainerStyle={{ flexDirection: 'row', gap: space.sm, paddingRight: space.lg }}
@@ -425,11 +436,11 @@ export default function Edit({ onBack }) {
             onUndoSaid={(said) => setUndoSaid(said ? { ...said, eid: idOf(block), rev: bufferRev } : null)}
           />
         </View>
-      ) : blocks.length ? (
+      ) : blocks.length && !chainNow.elsewhere ? (
         <Note>Tap a block to open its controls.</Note>
       ) : null}
 
-      <ChainEditor blocks={blocks} caps={caps} onError={setError} onScrollLock={setHeld} />
+      {chainNow.elsewhere ? null : <ChainEditor blocks={blocks} caps={caps} onError={setError} onScrollLock={setHeld} />}
 
       <Modifiers blocks={blocks} onError={setError} />
     </ScrollView>

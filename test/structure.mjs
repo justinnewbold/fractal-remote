@@ -2392,10 +2392,11 @@ export function run(test) {
     )
     /* The two ends count too: a preset that gains an output block is a strip
        one tile wider, and the fade that says there is more to the right has to
-       be told. */
+       be told. And a strip drawn again after a preset's chain has arrived
+       is a new strip, which the old observer never saw. */
     assert.match(
       read('Console.jsx'),
-      /useOverflow\(strip, \[chain\.length, !!input, !!output\]\)/,
+      /useOverflow\(strip, \[chain\.length, !!input, !!output, shown\.elsewhere\]\)/,
       'the chain strip keeps a private observer'
     )
   })

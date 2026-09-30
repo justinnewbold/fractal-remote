@@ -167,7 +167,7 @@ async function rigOnTheBench(over = {}) {
     'paramIndex.js': 'export const forget = () => {}\n',
     'sceneNameCache.js': 'export const forgetSceneNames = () => true\nexport const recallSceneNames = async () => []\nexport const rememberSceneNames = () => true\n'
   }
-  for (const f of ['own-echo.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs']) {
+  for (const f of ['own-echo.js', 'chain-view.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -995,8 +995,10 @@ export function run(test) {
      * scene would be back to meaning nothing.
      */
     for (const [call, what] of [
-      ['export function writeBypass\\(id, bypassed\\) \\{ const was = asWas\\(\\) noteEdited\\(\\)', 'a bypass'],
-      ['export function writeChannel\\(id, channel\\) \\{ const was = asWas\\(\\) noteEdited\\(\\)', 'a channel'],
+      /* After the one refusal that sends nothing: a tile drawn for the preset
+         just left (see lib/chain-view), which has edited nothing. */
+      ['export function writeBypass\\(id, bypassed\\) \\{ if \\(notThisChain\\(\\)\\) return Promise\\.resolve\\(false\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a bypass'],
+      ['export function writeChannel\\(id, channel\\) \\{ if \\(notThisChain\\(\\)\\) return Promise\\.resolve\\(false\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a channel'],
       ['export function beginChainWrite\\(\\) \\{ [^}]*noteEdited\\(\\)', 'a chain move'],
       ['export function writeTempo\\(bpm\\) \\{ const was = state\\.bpm noteEdited\\(\\)', 'a typed tempo']
     ]) {
@@ -1089,7 +1091,7 @@ export function run(test) {
        chain is being written, whatever it would otherwise have read. */
     assert.match(rig, /if \(ownEcho\(kind, kind === 'scene' \? event\.index : undefined\)\) return if \(chainWrites\) \{ chainAsked = true return \} if \(kind === 'scene'\) followScene\(\) else if \(kind === 'preset'\) followPresetNews\(\) else followGridNews\(\)/, 'the chain is re-read on every announcement during a chain write')
     /* And the chain read another client's change waits for is held the same way. */
-    assert.match(rig, /gridTimer = null if \(presetBusy\(\)\) return if \(chainWrites\) \{ chainAsked = true return \} read\(\)/, 'a chain read owed to another client lands in the middle of a chain write')
+    assert.match(rig, /gridTimer = null syncChainBusy\(\) if \(presetBusy\(\)\) return if \(chainWrites\) \{ chainAsked = true return \} read\(\)/, 'a chain read owed to another client lands in the middle of a chain write')
     assert.match(rig, /export function endChainWrite\(\{ refresh = true \} = \{\}\) \{ if \(!chainWrites\) return chainWrites -= 1 if \(chainWrites\) return const asked = chainAsked chainAsked = false if \(asked && refresh\) refreshBlocks\(\{ quiet: true \}\) \}/, 'announcements held during a write are lost, or read twice')
 
     const edit = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
@@ -1968,8 +1970,10 @@ export function run(test) {
      * dumps the slot again, and only goes when that had nothing.
      */
     assert.equal((rig.match(/await refreshSceneNames\(/g) || []).length, 1, 'scene names are read somewhere other than the one read of a preset')
-    /* The first read, a preset change, and the one read again after the computer answered with another preset's copy. */
-    assert.equal((rig.match(/await readChainAndNames\(/g) || []).length, 3, 'scene names are read on one path in and not the other')
+    /* The first read, a preset change, the one read again after the computer
+       answered with another preset's copy, and Try again on a preset whose
+       chain never came (see lib/chain-view). */
+    assert.equal((rig.match(/await readChainAndNames\(/g) || []).length, 4, 'scene names are read on one path in and not the other')
     assert.match(rig, /const here = copy === undefined \? await loadedCopy\(\) : copy[\s\S]*?if \(here === 'stale'\)[\s\S]*?if \(here\?\.length\) return here[\s\S]*?await device\.sceneNames\(number\)/, 'the loaded slot is dumped again for names its chain read carried')
     assert.match(device, /remoteRequest\('\/preset\/grid'\)/, 'the phone does not ask for the loaded preset’s names out of the chain read')
 
@@ -6385,9 +6389,9 @@ export function run(test) {
        the quick names before it waits for the unit to settle. */
     assert.equal((flat.match(/const quick = names \? await quickSceneNames\(\) : true /g) || []).length, 1, 'the quick read is not taken in the one read of a preset')
     const once = withoutComments(rig.slice(rig.indexOf('async function readChainAndNames'), rig.indexOf('let staleTimer'))).replace(/\s+/g, ' ')
-    assert.match(once, /const read = await refreshBlocks\(\) if \(names && read && state\.preset\?\.number === number\) \{ .*?if \(!quick\) await refreshSceneNames\(copy\)/, 'the slow read still runs when the names were already there, or before the chain, or after a chain read that failed')
+    assert.match(once, /read = await refreshBlocks\(\) if \(names && read && state\.preset\?\.number === number\) \{ .*?if \(copy !== 'stale' && !quick\) await refreshSceneNames\(copy\)/, 'the slow read still runs when the names were already there, or before the chain, or after a chain read that failed')
     const loading = withoutComments(rig.slice(rig.indexOf('export async function loadPreset'))).replace(/\s+/g, ' ')
-    assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 \} await readPresetSoon\(OWN_SETTLE_MS, \{ reloaded: true \}\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
+    assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 syncChainBusy\(\) \} await readPresetSoon\(OWN_SETTLE_MS, \{ reloaded: true \}\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
     assert.match(rig, /const kept = await recallSceneNames\(owner, number\)/, 'the disk is not read first')
     assert.match(rig, /held = await device\.storedSceneNames\(slug, number\)/, 'the computer’s copy is never asked for')
     /* Read the slow way, they are kept everywhere. */
@@ -10096,6 +10100,156 @@ export function run(test) {
     assert.equal(asked(CHAIN), chains, 'a status read that missed twice dumped the preset')
     assert.equal(rig.chainFollowed(), false, 'tiles the status read never confirmed count as followed')
     rig.stopListening()
+  })
+
+  /*
+   * WHOSE TILES THESE ARE. A preset picked on the phone goes up by name on
+   * the tap and its chain a moment later, on purpose — reading it straight
+   * away is the dump the sound-dropout fix took out. In between, the stage
+   * tiles were the last song's and live. See lib/chain-view.
+   */
+  test('a preset picked on the phone is not drawn with the last song’s tiles, and they cannot switch it', async () => {
+    const { rig, clock, asked } = await rigOnTheBench()
+    const view = () => rig.chainViewOf(rig.getState())
+    assert.equal(view(), 'ready')
+    const load = rig.loadPreset(503)
+    assert.equal(rig.getState().preset.number, 503)
+    assert.equal(view(), 'loading', 'the last song’s tiles are drawn under this song’s name')
+    const drive = rig.getState().blocks.find((b) => b.slug === 'drive')
+    assert.equal(await rig.writeBypass(drive.effectId, false), false, 'a tile drawn for the last preset switched a block on this one')
+    assert.equal(await rig.writeChannel(drive.effectId, 'B'), false)
+    assert.equal(asked(/bypass$|channel$/), 0, 'the refused tap still reached the unit')
+    assert.equal(rig.getState().unsaved, null, 'a tap that sent nothing marked the preset as edited')
+    await clock.advance(rig.OWN_SETTLE_MS + 500)
+    await load
+    assert.equal(view(), 'ready')
+    assert.equal(rig.getState().chainFor, 503)
+    assert.equal(asked(CHAIN), 1, `the wait cost ${asked(CHAIN)} chain reads`)
+    assert.equal(await rig.writeBypass(drive.effectId, false), true, 'this preset’s own tiles cannot switch it once it is read')
+  })
+
+  test('a new preset whose chain could not be read on the phone says so, and Try again reads it', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    const view = () => rig.chainViewOf(rig.getState())
+    unit.chainFails = true
+    rig.loadPreset(21)
+    await clock.advance(rig.OWN_SETTLE_MS + 100)
+    /* The one more read a failed one is owed is still coming. */
+    assert.equal(view(), 'loading', 'the phone gave up before its second ask')
+    await clock.advance(rig.PRESET_SETTLE_MS + 500)
+    assert.equal(asked(CHAIN), 2)
+    assert.equal(view(), 'failed', 'a chain that never came is drawn as this preset’s, or waited on for ever')
+    unit.chainFails = false
+    const again = rig.retryChain()
+    assert.equal(view(), 'loading')
+    await clock.advance(100)
+    assert.equal(await again, true)
+    assert.equal(asked(CHAIN), 3, 'Try again is not one read of the chain')
+    assert.equal(view(), 'ready')
+  })
+
+  test('the phone’s own chain read again after an edit stays up, marked as updating', async () => {
+    const { rig, clock } = await rigOnTheBench()
+    const view = () => rig.chainViewOf(rig.getState())
+    const seen = new Set()
+    rig.useRig((s) => s)
+    const off = globalThis.__rigSub(() => seen.add(view()))
+    /* What the chain editor does after an Add or a Remove. */
+    const read = rig.refreshBlocks({ quiet: true })
+    assert.equal(view(), 'updating', 'a re-read of this preset’s chain hides it, or does not say so')
+    await clock.advance(10)
+    await read
+    off()
+    assert.equal(view(), 'ready')
+    assert.ok(!seen.has('loading') && !seen.has('failed'), 'the preset’s own chain was taken for another one’s while it was read')
+  })
+
+  test('the last song’s chain out of the computer’s copy is never drawn live on the phone, not even while the copy is asked', async () => {
+    const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
+    const view = () => rig.chainViewOf(rig.getState())
+    let answerCopy
+    const copyAsked = new Promise((go) => (answerCopy = go))
+    unit.copy = () => copyAsked.then(() => ({ name: nameOf(12), scenes: ['VERSE', '', '', '', '', '', '', ''], cells: [] }))
+    const seen = []
+    rig.useRig((s) => s)
+    const off = globalThis.__rigSub(() => seen.push(`${view()}/${rig.getState().chainFor}`))
+    const drive = rig.getState().blocks.find((b) => b.slug === 'drive')
+    rig.loadPreset(40)
+    await clock.advance(rig.OWN_SETTLE_MS + 500)
+    assert.equal(asked(CHAIN), 1)
+    assert.equal(asked('GET /preset/grid'), 1, 'the copy was never asked, so this is not the moment in question')
+    assert.equal(view(), 'loading', 'the last song’s tiles are up, live, while the copy is asked')
+    assert.equal(await rig.writeBypass(drive.effectId, false), false, 'a tap on the last song’s tile switched this song’s block')
+    assert.equal(asked(/bypass$/), 0)
+    answerCopy()
+    await clock.advance(10)
+    assert.equal(view(), 'loading')
+    const before = seen.length
+    unit.copy = null
+    await clock.advance(rig.CHAIN_FRESH_MS + 300)
+    off()
+    const early = seen.slice(0, before).filter((v) => /^(ready|updating)\//.test(v))
+    assert.deepEqual(early, [], `the last song’s chain was drawn as this one’s on the way: ${seen.slice(0, before)}`)
+    assert.equal(asked(CHAIN), 2)
+    assert.equal(view(), 'ready')
+    assert.equal(rig.getState().chainFor, 40)
+  })
+
+  test('a preset renamed on the phone keeps its tiles up and live while the computer’s copy still has the old name', async () => {
+    const { rig, clock, unit, asked, nameOf } = await rigOnTheBench()
+    const view = () => rig.chainViewOf(rig.getState())
+    /* Settings → rename: the unit has the new name, the computer's copy of
+       the chain the old one, for up to a quarter of a minute. */
+    unit.presetName = 'NEW NAME'
+    unit.copy = () => ({ name: nameOf(12), scenes: ['VERSE', 'CHORUS', '', '', '', '', '', ''], cells: [] })
+    rig.notePresetName('NEW NAME')
+    /* And a pull-down on the stage straight after. */
+    await rig.refreshAll()
+    const reads = asked(CHAIN)
+    assert.equal(view(), 'ready', 'a rename greyed this preset’s own tiles')
+    const drive = rig.getState().blocks.find((b) => b.slug === 'drive')
+    assert.equal(await rig.writeBypass(drive.effectId, false), true, 'a tap after a rename was refused')
+    await clock.advance(rig.CHAIN_FRESH_MS + 300)
+    assert.equal(asked(CHAIN), reads + 1, `the copy with the old name cost ${asked(CHAIN) - reads} more reads`)
+    await clock.advance(30000)
+    assert.equal(asked(CHAIN), reads + 1)
+    assert.equal(view(), 'ready')
+  })
+
+  test('connecting to the unit never says the chain could not be read while it is still reading it', async () => {
+    const { rig, clock } = await rigOnTheBench()
+    const view = () => rig.chainViewOf(rig.getState())
+    rig.reset()
+    const seen = []
+    rig.useRig((s) => s)
+    const off = globalThis.__rigSub(() => seen.push(view()))
+    const read = rig.refreshAll()
+    await clock.advance(50)
+    await read
+    off()
+    assert.ok(!seen.includes('failed'), `connecting said the chain could not be read on its way in: ${seen}`)
+    assert.equal(view(), 'ready')
+  })
+
+  test('a reset on the phone drops the chain reads counted before it', () => {
+    const rig = read('mobile/src/lib/rig.js')
+    const body = rig.slice(rig.indexOf('export function reset()'), rig.indexOf('set(initial)', rig.indexOf('export function reset()')))
+    assert.match(body, /chainWork = 0\s*chainEra \+= 1/, 'work from before a reset holds the phone’s chain busy, or ends work after it')
+  })
+
+  test('the phone’s Stage and Edit draw another preset’s chain as a wait, not as tiles', () => {
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /\{chainNow\.elsewhere \? \(\s*<View style=\{\{ width: '100%' \}\}>\s*<ChainWait chain=\{chainNow\}/, 'the stage draws the last song’s tiles under this song’s name')
+    assert.match(stage, /block=\{chainNow\.elsewhere \? null : blocks\.find/, 'a channel sheet opened on the last song stays up over this one')
+    assert.match(stage, /useEffect\(\(\) => \{\s*if \(chainNow\.elsewhere\) setPicking\(null\)/, 'the channel sheet comes back by itself over the new song’s tiles')
+    const edit = read('mobile/src/screens/Edit.js')
+    assert.match(edit, /\{chainNow\.elsewhere \? <ChainWait chain=\{chainNow\} height=\{TAP\} \/> : null\}/, 'the bench says nothing about a chain on its way')
+    assert.match(edit, /display: chainNow\.elsewhere \? 'none' : 'flex'/, 'the bench draws the last song’s tiles under this song’s name')
+    assert.match(edit, /const block = chainNow\.elsewhere \? null : blocks\.find/, 'the last song’s block stays open, its knobs writing to this song')
+    assert.match(edit, /\{chainNow\.elsewhere \? null : <ChainEditor /, 'the chain editor offers Remove on the last song’s blocks')
+    const wait = read('mobile/src/components/ChainWait.js')
+    assert.match(wait, /from '\.\.\/lib\/chain-view'/, 'the phone words its own wait')
+    assert.match(wait, /setTimeout\(\(\) => setLate\(true\), UPDATING_AFTER_MS\)/, '“Updating…” flickers up on every Add')
   })
 
   test('a chain that failed after a preset change is read once more, and a footswitch never lays its states over the last song', async () => {

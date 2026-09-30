@@ -43,6 +43,7 @@ import {
   refreshLoadedSceneNames,
   refreshTempo,
   chainWasRead,
+  beginChainRead,
   loadPreset as loadPresetInStore,
   SELECT_REFUSED,
   bufferReloaded,
@@ -67,6 +68,7 @@ import { checkRevert, noteEdit, revertSaid, revertTook, stuckLines } from './lib
 import { inDesktopApp } from './lib/desktop'
 import { createNameScan } from './lib/nameScan'
 import { Chain, PresetList, BlockPanel, Tuner } from './components/Console'
+import { useChain } from './components/ChainWait'
 import Screens, { viewsFor } from './components/Screens'
 import SceneArrange from './components/SceneArrange'
 import { useAsks } from './lib/asks'
@@ -1365,6 +1367,8 @@ export default function App() {
       await writeBypass(block.effectId, wanted)
       record('edit', `${block.name || block.slug} ${wanted ? 'bypassed' : 'engaged'}`)
     } catch (err) {
+      /* A tile drawn for the preset just left: the store sent nothing. */
+      if (err?.notThisChain) return
       /*
        * Whole, not flattened to its sentence.
        *
@@ -1432,6 +1436,9 @@ export default function App() {
     // Whether the unit answered this pass, which decides what a later failure
     // means: a read that lost a race, or a unit that has gone.
     let answered = false
+    /* Marked while the chain is being read, so the panels drawing it can say
+       so — greyed, "Updating…", after an Add or a Remove. See ChainWait. */
+    let doneReading = null
     try {
       /*
        * A channel with nothing answering on it is the worst case: every call
@@ -1483,6 +1490,7 @@ export default function App() {
        * reported without tearing down a working screen. See the catch.
        */
       answered = true
+      doneReading = beginChainRead()
       const [p, b] = await Promise.all([currentPreset(), presetBlocks()])
       setPreset(p)
       followUnitName(p)
@@ -1597,6 +1605,7 @@ export default function App() {
         setError(err)
       }
     } finally {
+      doneReading?.()
       setBusy(false)
     }
     return fresh
@@ -2354,11 +2363,14 @@ export default function App() {
           loaded = now.number
           /*
            * And the screen was wrong too, so it is corrected here rather than
-           * left to say one thing while the decision was made on another. The
-           * preset alone: a full re-read from a six-second poll would fight
-           * whoever is working at the Mac, and the number is what was lying.
+           * left to say one thing while the decision was made on another.
+           * Handed to the store's own follow, not App's full read(), which
+           * from a six-second poll would fight whoever is working at the Mac:
+           * one chain read after the settle, as any preset change gets. The
+           * number moved on its own left the chain the last preset's, and the
+           * screen said the read had failed when none was tried.
            */
-          if (now.number !== preset?.number) setPreset(now)
+          if (now.number !== preset?.number && !presetHeard(now)) setPreset(now)
         }
       } catch {
         // The unit would not answer. What the screen has is all there is, and
@@ -3450,7 +3462,11 @@ export default function App() {
   // The block the sheet is showing. Resolved once: a selection can outlive the
   // chain it pointed into (a preset change lands before the refresh does), and
   // an id with no block behind it must not open an empty sheet.
-  const openBlock = selectedBlock ? blocks.find((b) => b.effectId === selectedBlock) : null
+  /* And not while the blocks are another preset's: a knob on the last song's
+     amp would be turned on this song's, found by its number. It comes back
+     when this preset's chain lands, read for this preset. */
+  const chainNow = useChain()
+  const openBlock = selectedBlock && !chainNow.elsewhere ? blocks.find((b) => b.effectId === selectedBlock) : null
 
 
 
@@ -4512,11 +4528,14 @@ export default function App() {
           onError={setError}
         />
 
+        {/* A map read for the last song switched this song's blocks by number;
+            it starts again, empty, for each preset. */}
         <SceneMatrix
+          key={chainNow.number ?? 'none'}
           blocks={blocks}
           count={device?.capabilities?.sceneCount || 8}
           names={sceneNames}
-          busy={busy}
+          busy={busy || chainNow.elsewhere}
           onError={setError}
           onChanged={(summary) => {
             record('scene', summary)

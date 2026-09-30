@@ -3849,7 +3849,11 @@ test('the save guard asks the unit which preset is loaded, not the screen', () =
 
   // The screen was wrong too, so it is corrected rather than left disagreeing
   // with the decision just made from it.
-  assert.match(scope, /if \(now\.number !== preset\?\.number\) setPreset\(now\)/)
+  /* Handed to the store's follow, so the chain is read once for it: moved on
+     its own, the number left the chain the last preset's and the screen said
+     a read had failed that was never tried. */
+  assert.match(scope, /if \(now\.number !== preset\?\.number && !presetHeard\(now\)\) setPreset\(now\)/)
+  assert.doesNotMatch(scope, /if \(now\.number !== preset\?\.number\) setPreset\(now\)/, 'the save look moves the number alone, and the chain says it could not be read')
   // A unit that will not answer falls back to what the page has, which is what
   // this used for everything before.
   assert.match(scope, /let loaded = preset\?\.number \?\? null/)
@@ -9769,6 +9773,262 @@ onTheBench('a unit still writing to flash is asked again, quietly, and a preset 
   await done
   assert.equal(asked(WHICH), 3)
   assert.equal(ds.getSnapshot().preset.number, 40)
+})
+
+/*
+ * WHOSE CHAIN IS ON SCREEN. On the play test the new preset's name went up at
+ * once and the last preset's blocks stayed under it, live: a double-tap on an
+ * old tile switched a block on the new preset, found by its number. The chain
+ * is still read once, a moment after the switch — that is the sound-dropout
+ * fix — so what changes is only what the screens are told about the wait.
+ */
+const chainOnScreen = () => ds.chainViewOf(ds.getSnapshot())
+
+onTheBench('a preset chosen in the Mac window is not drawn with the last song’s chain, and its tiles cannot switch it', async () => {
+  const { clock, asked } = windowOnTheBench()
+  assert.equal(chainOnScreen(), 'ready')
+  const load = ds.loadPreset(503)
+  /* From the tap, before the unit has answered anything. */
+  assert.equal(chainOnScreen(), 'loading', 'the last song’s chain is drawn while the select is in the air')
+  assert.equal(ds.chainNumberOf(ds.getSnapshot()), 503, 'the wait is not for the preset asked for')
+  /* The second half of a double-tap on a tile drawn before the switch. */
+  await assert.rejects(() => ds.writeBypass(133, false), (err) => err.notThisChain === true, 'a tile drawn for the last preset switched a block on this one')
+  assert.equal(asked('POST /preset/blocks/133/bypass'), 0, 'the refused tap still reached the unit')
+  assert.equal(ds.getSnapshot().blocks.find((b) => b.effectId === 133).bypassed, true, 'the refused tap still moved a tile')
+  await clock.advance(10)
+  assert.equal(ds.getSnapshot().preset.number, 503)
+  assert.equal(chainOnScreen(), 'loading', 'the name went up and the old chain was taken for this one')
+  await clock.advance(ds.OWN_SETTLE_MS + 100)
+  await load
+  assert.equal(chainOnScreen(), 'ready')
+  assert.equal(ds.getSnapshot().chainFor, 503)
+  assert.equal(ds.getSnapshot().chainGoing, null)
+  /* And it cost what it cost before: one chain read, a moment later. */
+  assert.equal(asked(CHAIN), 1, `the wait cost ${asked(CHAIN)} chain reads`)
+  await ds.writeBypass(133, false)
+  assert.equal(asked('POST /preset/blocks/133/bypass'), 1, 'this preset’s own chain cannot be switched once it is read')
+})
+
+onTheBench('a new preset whose chain could not be read says so, and Try again reads it', async () => {
+  const { clock, unit, asked } = windowOnTheBench()
+  unit.chain = () => {
+    throw new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78')
+  }
+  const load = ds.loadPreset(7)
+  await clock.advance(ds.OWN_SETTLE_MS + 100)
+  /* Between the asks a failed chain read makes, it is still on its way. */
+  assert.equal(chainOnScreen(), 'loading', 'the chain said it could not be read before it had finished asking')
+  await clock.advance(ds.SETTLE_MS * ds.SETTLE_TRIES + 1000)
+  await load
+  assert.equal(chainOnScreen(), 'failed', 'a chain that never came is drawn as this preset’s, or waited on for ever')
+  await assert.rejects(() => ds.writeBypass(58, true), (err) => err.notThisChain === true)
+  unit.chain = null
+  const reads = asked(CHAIN)
+  const again = ds.retryChain()
+  assert.equal(chainOnScreen(), 'loading', 'Try again says nothing while it reads')
+  await clock.advance(10)
+  assert.ok(Array.isArray(await again))
+  assert.equal(asked(CHAIN), reads + 1, 'Try again is not one read of the chain')
+  assert.equal(chainOnScreen(), 'ready')
+})
+
+onTheBench('the same preset read again keeps its chain on screen, marked as updating', async () => {
+  const { clock, unit } = windowOnTheBench()
+  /* App's own read after an Add or a Remove. */
+  const done = ds.beginChainRead()
+  assert.equal(chainOnScreen(), 'updating', 'a re-read of this preset’s chain hides it, or does not say so')
+  done()
+  done()
+  assert.equal(chainOnScreen(), 'ready', 'a read marked over twice, or never unmarked')
+  /* A Revert: the same slot loaded again is not another song. */
+  const load = ds.loadPreset(12)
+  assert.equal(chainOnScreen(), 'updating', 'Revert took this preset’s chain for another one’s')
+  await clock.advance(ds.OWN_SETTLE_MS + 500)
+  await load
+  assert.equal(chainOnScreen(), 'ready')
+  /* A save to another slot moves the chain with the number, in one change. */
+  unit.number = 40
+  unit.presetName = 'My Lead'
+  const seen = []
+  const off = ds.subscribe(() => seen.push(chainOnScreen()))
+  const saved = ds.presetSaved(40, 'My Lead')
+  assert.deepEqual(seen, ['ready'], 'a save made the chain on screen another preset’s, even for a moment')
+  off()
+  await clock.advance(ds.SETTLING_MS * ds.SETTLING_TRIES + 1000)
+  await saved
+  assert.equal(ds.getSnapshot().chainFor, 40)
+})
+
+onTheBench('a chain that turns out to be the computer’s copy of the last song is not drawn under this one', async () => {
+  const { clock, unit, nameOf } = windowOnTheBench()
+  /* The computer answers out of its copy of the preset just left. */
+  unit.copy = () => ({ name: nameOf(12), scenes: ['VERSE', '', '', '', '', '', '', ''] })
+  const load = ds.loadPreset(30)
+  await clock.advance(ds.OWN_SETTLE_MS + 500)
+  await load
+  assert.equal(chainOnScreen(), 'loading', 'the last song’s chain, read out of the computer’s copy, is drawn as this one’s')
+  unit.copy = null
+  await clock.advance(ds.CHAIN_FRESH_MS + 1000)
+  assert.equal(chainOnScreen(), 'ready')
+  assert.equal(ds.getSnapshot().chainFor, 30)
+})
+
+onTheBench('the last song’s chain out of the computer’s copy is never drawn live under this one, not even while the copy is asked', async () => {
+  const { clock, unit, nameOf, asked } = windowOnTheBench()
+  /* The copy answers when the test says, so the moment between the chain
+     landing and the copy being judged can be looked at. */
+  let answerCopy
+  const copyAsked = new Promise((go) => (answerCopy = go))
+  unit.copy = () => copyAsked.then(() => ({ name: nameOf(12), scenes: ['VERSE', '', '', '', '', '', '', ''] }))
+  const seen = []
+  const off = ds.subscribe(() => seen.push(`${chainOnScreen()}/${ds.getSnapshot().chainFor}`))
+  const load = ds.loadPreset(30)
+  await clock.advance(ds.OWN_SETTLE_MS + 500)
+  assert.equal(asked(CHAIN), 1)
+  assert.equal(asked('GET /preset/grid'), 1, 'the copy was never asked, so this is not the moment in question')
+  assert.equal(chainOnScreen(), 'loading', 'the last song’s tiles are up, live, while the copy is asked')
+  await assert.rejects(() => ds.writeBypass(133, false), (err) => err.notThisChain === true, 'a tap on the last song’s tile switched this song’s block')
+  assert.equal(asked('POST /preset/blocks/133/bypass'), 0)
+  answerCopy()
+  await clock.advance(10)
+  await load
+  assert.equal(chainOnScreen(), 'loading')
+  const before = seen.length
+  unit.copy = null
+  await clock.advance(ds.CHAIN_FRESH_MS + 1000)
+  off()
+  const early = seen.slice(0, before).filter((v) => /^(ready|updating)\//.test(v))
+  assert.deepEqual(early, [], `the last song’s chain was drawn as this one’s on the way: ${seen.slice(0, before)}`)
+  assert.equal(chainOnScreen(), 'ready')
+  assert.equal(ds.getSnapshot().chainFor, 30)
+})
+
+onTheBench('a copy that still carries another name after the wait is this preset’s, renamed, and its chain goes up', async () => {
+  const { clock, unit, nameOf, asked } = windowOnTheBench()
+  unit.copy = () => ({ name: nameOf(12), scenes: ['VERSE', '', '', '', '', '', '', ''] })
+  const load = ds.loadPreset(30)
+  await clock.advance(ds.OWN_SETTLE_MS + 500)
+  await load
+  assert.equal(chainOnScreen(), 'loading')
+  await clock.advance(ds.CHAIN_FRESH_MS + 1000)
+  assert.equal(asked(CHAIN), 2)
+  assert.equal(chainOnScreen(), 'ready', 'a second mismatch left the chain waiting for ever')
+  assert.equal(ds.getSnapshot().chainFor, 30)
+})
+
+onTheBench('a preset renamed keeps its chain up and live while the computer’s copy still has the old name', async () => {
+  const { clock, unit, nameOf, asked } = windowOnTheBench()
+  /* What App's rename() does: the unit has the new name, the computer's copy
+     of the chain the old one, for up to a quarter of a minute. */
+  unit.presetName = 'NEW NAME'
+  unit.copy = () => ({ name: nameOf(12), scenes: ['VERSE', 'CHORUS', '', '', '', '', '', ''] })
+  ds.put({ preset: { number: 12, name: 'NEW NAME' } })
+  ds.chainWasRead(12)
+  await ds.refreshLoadedSceneNames(12)
+  assert.equal(chainOnScreen(), 'ready', 'a rename greyed this preset’s own chain')
+  /* Longer than a re-read goes unmentioned: still nothing on its way. */
+  await clock.advance(1000)
+  assert.equal(chainOnScreen(), 'ready', 'a rename said “Updating…” for a quarter of a minute')
+  await ds.writeBypass(133, false)
+  assert.equal(asked('POST /preset/blocks/133/bypass'), 1, 'a tap after a rename was refused')
+  const reads = asked(CHAIN)
+  await clock.advance(ds.CHAIN_FRESH_MS + 250 + 100)
+  assert.equal(asked(CHAIN), reads + 1, `the copy with the old name cost ${asked(CHAIN) - reads} more reads`)
+  await clock.advance(30000)
+  assert.equal(asked(CHAIN), reads + 1)
+  assert.equal(chainOnScreen(), 'ready')
+})
+
+onTheBench('a Try again that has to ask twice does not say it failed between the asks', async () => {
+  /* No long copy, so nothing but the read itself holds the chain on its way. */
+  const { clock, unit } = windowOnTheBench({ keepsCopy: false })
+  unit.chain = () => {
+    throw new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78')
+  }
+  const load = ds.loadPreset(7)
+  await clock.advance(ds.OWN_SETTLE_MS + ds.SETTLE_MS * ds.SETTLE_TRIES + 2000)
+  await load
+  assert.equal(chainOnScreen(), 'failed')
+  const again = ds.retryChain()
+  await clock.advance(10)
+  assert.equal(chainOnScreen(), 'loading', 'Try again said it failed between its asks')
+  unit.chain = null
+  await clock.advance(ds.SETTLE_MS * ds.SETTLE_TRIES + 1000)
+  assert.ok(Array.isArray(await again))
+  assert.equal(chainOnScreen(), 'ready')
+})
+
+onTheBench('a chain read from before a reset neither holds the chain busy nor ends a later one', async () => {
+  windowOnTheBench()
+  const busy = () => ds.getSnapshot().chainBusy
+  const d1 = ds.beginChainRead()
+  ds.reset()
+  const d2 = ds.beginChainRead()
+  assert.equal(busy(), true)
+  d2()
+  assert.equal(busy(), false, 'a read from before the reset holds the chain busy for ever')
+  const d3 = ds.beginChainRead()
+  d1()
+  assert.equal(busy(), true, 'a read from before the reset ended a later one')
+  d3()
+  assert.equal(busy(), false)
+})
+
+test('the words for a chain that is on its way are one set, and the stores draw them from the same rule', async () => {
+  const view = await import('../shared/chain-view.mjs')
+  const { chainView, chainActs, chainElsewhere, CHAIN_WORDS } = view
+  assert.equal(chainView({ want: 503, chainFor: 12, busy: true }), 'loading')
+  assert.equal(chainView({ want: 503, chainFor: 12, busy: false }), 'failed')
+  assert.equal(chainView({ want: 503, chainFor: null, busy: false }), 'failed')
+  assert.equal(chainView({ want: 12, chainFor: 12, busy: true }), 'updating')
+  assert.equal(chainView({ want: 12, chainFor: 12, busy: false }), 'ready')
+  /* A unit too busy to name its preset, or none known yet: nothing to hold them to. */
+  assert.equal(chainView({ want: -1, chainFor: 12, busy: false }), 'ready')
+  assert.equal(chainView({ want: undefined, chainFor: null, busy: false }), 'ready')
+  assert.ok(chainActs('ready') && chainActs('updating') && !chainActs('loading') && !chainActs('failed'))
+  assert.ok(chainElsewhere('loading') && chainElsewhere('failed') && !chainElsewhere('updating'))
+  assert.equal(CHAIN_WORDS.loading(503), 'Loading preset 503’s chain…')
+  assert.equal(CHAIN_WORDS.failed, 'Couldn’t read this preset’s chain')
+  assert.equal(CHAIN_WORDS.retry, 'Try again')
+  assert.equal(CHAIN_WORDS.updating, 'Updating…')
+  /* Only after long enough to notice; before that the chain just stays. */
+  assert.ok(view.UPDATING_AFTER_MS >= 250 && view.UPDATING_AFTER_MS <= 1000)
+  assert.match(readSrc(new URL('../mobile/src/lib/chain-view.js', import.meta.url), 'utf8'), /Generated from shared\/chain-view\.mjs/, 'the phone keeps its own copy of the rule')
+})
+
+test('every browser panel that draws the chain draws another preset’s as a wait, not as tiles', () => {
+  const src = (f) => readSrc(new URL(`../src/${f}`, import.meta.url), 'utf8')
+  const con = src('components/Console.jsx')
+  const chain = con.slice(con.indexOf('export function Chain('), con.indexOf('export function PresetList('))
+  assert.match(chain, /const shown = useChain\(\)[\s\S]*?if \(shown\.elsewhere\) \{\s*return \(\s*<div className="fx-panel">\s*<ChainWait chain=\{shown\} \/>/, 'the chain strip draws the last song’s tiles under this song’s name')
+  assert.ok(chain.indexOf('if (shown.elsewhere)') < chain.indexOf('chain.map((block)'), 'the tiles are drawn before the check')
+  assert.match(chain, /lastTap\.current\.of === shown\.number/, 'a tap on the last song and one on this pair up as a double-tap')
+  const grid = src('components/GridEditor.jsx')
+  assert.match(grid, /if \(chainNow\.elsewhere\) \{\s*return \([\s\S]*?<ChainWait chain=\{chainNow\}/, 'the chain editor offers Remove on the last song’s blocks')
+  const gig = src('components/Gig.jsx')
+  assert.match(gig, /\{shown\.elsewhere \? \(\s*<ChainWait chain=\{shown\}/, 'Play says nothing about a chain on its way')
+  assert.match(gig, /\{!shown\.elsewhere && blocks\.length \? \(\s*<div className=\{`gig-blocks/, 'Play draws the last song’s tiles under this song’s name')
+  assert.match(gig, /if \(err\?\.notThisChain\) return/, 'a refused tap on Play reads the unit back or says it failed')
+  const app = src('App.jsx')
+  assert.match(app, /const openBlock = selectedBlock && !chainNow\.elsewhere \?/, 'the last song’s block stays open over this one')
+  assert.match(app, /doneReading = beginChainRead\(\)\s*const \[p, b\] = await Promise\.all\(\[currentPreset\(\), presetBlocks\(\)\]\)/, 'App’s own read of the chain is not marked while it is in the air')
+  assert.match(app, /doneReading\?\.\(\)\s*setBusy\(false\)/, 'App’s read is marked for ever')
+  /* Both places the chain sheet and Edit draw from are the one strip. */
+  assert.equal((app.match(/<Chain\s/g) || []).length, 2)
+  assert.match(gig, /<ChainWait chain=\{shown\} className="gig-chain-wait" onRetry=\{retryHere\} \/>/, 'a Try again that worked on Play still says it could not read the chain')
+  assert.match(gig, /const retryHere = async \(\) => \{\s*const list = await retryChain\(\)\s*setChain\(Array\.isArray\(list\) \? 'ok' : 'failed'\)/)
+  assert.match(gig, /const chanBlock = chanEid === null \|\| shown\.elsewhere \? null :/, 'the last song’s channel sheet stays up, switching this song’s block by its number')
+  assert.match(gig, /useEffect\(\(\) => \{\s*if \(shown\.elsewhere\) setChanEid\(null\)/, 'the channel sheet comes back by itself over the new song’s tiles')
+  /* The strip above the editor says it; the editor only holds the space. */
+  assert.match(grid, /<ChainWait chain=\{chainNow\}[^>]*\squiet\b/, 'the Edit screen says the chain is loading twice')
+  assert.doesNotMatch(grid, /<ChainUpdating/, '“Updating…” shows twice on the Edit screen')
+  const scenes = app.slice(app.indexOf('<SceneMatrix'), app.indexOf('/>', app.indexOf('<SceneMatrix')))
+  assert.match(scenes, /key=\{chainNow\.number/, 'the scene map read for the last song switches this song’s blocks by number')
+  assert.match(scenes, /busy=\{[^}]*chainNow\.elsewhere/, 'the scene map can be read or tapped while the chain is another preset’s')
+  const wait = src('components/ChainWait.jsx')
+  assert.match(wait, /quiet \? null : \(\s*<p className="hint chain-wait-words">/, 'a quiet wait still speaks')
+  assert.match(wait, /from '\.\.\/\.\.\/shared\/chain-view\.mjs'/, 'the browser words its own wait')
+  assert.match(wait, /setTimeout\(\(\) => setLate\(true\), UPDATING_AFTER_MS\)/, '“Updating…” flickers up on every Add')
 })
 
 test('the Mac hears a request the moment it is left, looks once at a time, and honours a cancel', () => {

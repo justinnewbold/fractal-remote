@@ -9197,6 +9197,92 @@ button.recent-del:focus-visible {
   margin: 0 0 var(--s-2);
 }
 
+/*
+ * A chain that is another preset's, while this one's is read: grey cards
+ * where the tiles go, and the sentence under them. Cards rather than the old
+ * tiles greyed — those belong to the last song. See ChainWait.jsx.
+ */
+.chain-wait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-3);
+}
+
+.chain-wait-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-2);
+}
+
+.chain-wait-card {
+  width: 62px;
+  height: 62px;
+  border-radius: var(--r-1);
+  background: var(--panel-hi);
+  border: 1px solid var(--rule);
+}
+
+.chain-wait-lanes .chain-wait-cards {
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+}
+
+.chain-wait-lanes .chain-wait-card {
+  width: auto;
+  height: 44px;
+}
+
+.gig-chain-wait .chain-wait-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--gig-col-block, 130px), 1fr));
+  width: 100%;
+}
+
+.gig-chain-wait .chain-wait-card {
+  width: auto;
+  height: 72px;
+}
+
+.chain-wait-words {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  margin: 0;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chain-wait-card {
+    animation: chain-wait-pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes chain-wait-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* This preset's own chain, re-read for long enough to mention: still there,
+   greyed, and saying so. */
+.chain-updating .chain-strip,
+.chain-updating .chain-lanes,
+.gig-blocks.chain-updating {
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+
+.chain-updating-word {
+  margin: 0;
+  color: var(--silk-faint);
+}
+
 /* ---------- history: everything you have made ---------- */
 
 /*

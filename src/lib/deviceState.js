@@ -9,6 +9,7 @@ import {
   createOwnEchoes,
   judgeCopy
 } from '../../shared/own-echo.mjs'
+import { CHAIN_WORDS, chainActs, chainView } from '../../shared/chain-view.mjs'
 
 export { CHAIN_FRESH_MS, OWN_ECHO_MS, OWN_SETTLE_MS, PRESET_SETTLE_MS } from '../../shared/own-echo.mjs'
 
@@ -68,7 +69,20 @@ const BLANK = {
    * — is what tells an editor its values are someone else's now. See
    * bufferReloaded.
    */
-  editRev: 0
+  editRev: 0,
+  /*
+   * Which preset the blocks on screen were read for, whether a read of the
+   * chain is on its way, and which preset this window has just asked the
+   * unit for while that select is still in the air.
+   *
+   * The name of a new preset goes up at once and its chain a moment later,
+   * on purpose (see readPresetSoon). These say so, so that the screens can:
+   * the last song's tiles are not drawn under this song's name, and cannot
+   * switch its blocks. See shared/chain-view.mjs.
+   */
+  chainFor: null,
+  chainBusy: false,
+  chainGoing: null
 }
 
 let state = BLANK
@@ -112,6 +126,12 @@ export function set(patch) {
 export function bufferReloaded() {
   set({ editRev: state.editRev + 1 })
 }
+
+/** The preset the chain on screen is for: one being loaded, or the one on screen. */
+export const chainNumberOf = (s) => (Number.isInteger(s.chainGoing) ? s.chainGoing : s.preset?.number)
+
+/** 'ready', 'updating', 'loading' or 'failed'; see shared/chain-view.mjs. */
+export const chainViewOf = (s) => chainView({ want: chainNumberOf(s), chainFor: s.chainFor, busy: s.chainBusy })
 
 /**
  * The echo guard.
@@ -158,6 +178,45 @@ let clock = REAL_CLOCK
 
 export function attachClock(next) {
   clock = next || REAL_CLOCK
+}
+
+/*
+ * READS OF THE CHAIN IN THE AIR, counted rather than flagged: App's own read,
+ * a Try again and the one after a preset change can overlap, and the first
+ * one finishing does not mean the others have.
+ */
+let chainReads = 0
+/* Moved by reset(), so a read from before it cannot take one off after it. */
+let chainEra = 0
+
+/*
+ * Whether the chain is on its way: a read in the air, or a wait before one —
+ * a preset change settling, another client's change being given its moment,
+ * the computer's copy of another preset being waited out. Put in the store
+ * each time one of those moves, so a screen can say so. It costs nothing: it
+ * counts reads, it never makes one.
+ */
+function syncChainBusy() {
+  const busy = presetBusy() || (staleTimer !== null && !staleOwn) || gridTimer !== null || chainReads > 0 || judging !== null
+  if (state.chainBusy !== busy) set({ chainBusy: busy })
+}
+
+/**
+ * A read of the chain this window makes on its own, marked for as long as it
+ * is in the air. App's read() uses it; the store's own reads mark themselves.
+ * Returns the function that says it is over.
+ */
+export function beginChainRead() {
+  chainReads += 1
+  syncChainBusy()
+  const era = chainEra
+  let done = false
+  return () => {
+    if (done || era !== chainEra) return
+    done = true
+    chainReads = Math.max(0, chainReads - 1)
+    syncChainBusy()
+  }
 }
 
 /*
@@ -330,9 +389,11 @@ function chainSoon(read = () => refreshBlocks()) {
   clock.clearTimeout(gridTimer)
   gridTimer = clock.setTimeout(() => {
     gridTimer = null
+    syncChainBusy()
     if (presetBusy()) return
     read()
   }, PRESET_SETTLE_MS)
+  syncChainBusy()
 }
 
 /*
@@ -572,10 +633,11 @@ export async function refreshBlocks({ reloaded = false } = {}) {
   lastReadFailure = null
   const number = state.preset?.number
   const gen = followGen
+  const done = beginChainRead()
   try {
     const list = await driver.presetBlocks()
     if (!Array.isArray(list)) return null
-    chainWasRead(number, gen)
+    noteChainRead(number, gen)
     /*
      * A block that changed channel changed its values.
      *
@@ -595,13 +657,24 @@ export async function refreshBlocks({ reloaded = false } = {}) {
        chain up. Apart, an editor whose block changed channel read once for
        the new chain and again for the new rev — two reads at a unit that has
        just loaded, the first one thrown away. */
-    set(reloaded ? { blocks: list, editRev: state.editRev + 1 } : { blocks: list })
+    /* And which preset they are, in the same change: apart, a screen would
+       draw this song's blocks as the last song's for a moment. */
+    /* Not while the copy they came out of is still to be judged, or is being
+       waited out as another preset's: up at once, they were the last song's
+       tiles drawn live under this song's name for as long as the computer
+       took to answer. See judgeCopy below. */
+    const held = judging === number || (staleTimer !== null && !staleOwn)
+    chainForBefore = state.chainFor
+    const whose = held ? {} : { chainFor: number }
+    set(reloaded ? { blocks: list, ...whose, editRev: state.editRev + 1 } : { blocks: list, ...whose })
     return list
   } catch (err) {
     // The last known chain stays on screen: better than emptying it because
     // one poll lost a race for the port.
     lastReadFailure = err
     return null
+  } finally {
+    done()
   }
 }
 
@@ -647,13 +720,20 @@ export async function confirmedChain({
   gone = () => chainReadFailure()?.unitGone === true
 }) {
   const attempts = remote ? Math.max(1, relayTries) : Math.max(1, tries)
-  for (let i = 0; i < attempts; i++) {
-    if (i) await wait(gap)
-    const list = await read()
-    if (Array.isArray(list)) return list
-    if (gone()) return null
+  /* One read to the screens, the waits between asks included: a chain that
+     said it could not be read between two asks, and then could, flickers. */
+  const done = beginChainRead()
+  try {
+    for (let i = 0; i < attempts; i++) {
+      if (i) await wait(gap)
+      const list = await read()
+      if (Array.isArray(list)) return list
+      if (gone()) return null
+    }
+    return null
+  } finally {
+    done()
   }
-  return null
 }
 
 export async function refreshScene() {
@@ -739,9 +819,15 @@ export async function refreshLoadedSceneNames(number) {
     if (state.preset?.number !== number) return
     const here = judgeCopy(copy, state.preset?.name)
     if (here === 'stale') {
-      copyWasStale(number)
+      if (staleAgain !== number) {
+        copyWasStale(number)
+        return
+      }
+      /* The second mismatch: a rename, and the chain stands. */
+      markJudged(number)
       return
     }
+    markJudged(number)
     if (here?.length) {
       /* Named: kept for this slot. All blank: the unit says the scenes are
          unnamed, and a name this browser kept for the slot is shown. */
@@ -770,12 +856,31 @@ export async function refreshLoadedSceneNames(number) {
  */
 let staleTimer = null
 let staleAgain = null
+/*
+ * Whether the copy found stale is of this preset's own chain — one already on
+ * screen as this preset's before the read, as after a rename: "the chain goes
+ * grey for fifteen seconds after I rename it" was that copy being taken for
+ * the last song's. The one more read still goes; the chain stays up and live
+ * meanwhile, and the wait is not counted as the chain being on its way.
+ */
+let staleOwn = false
+/* What the chain on screen was for just before the last read put it up. */
+let chainForBefore = null
+/* The preset whose chain came out of a copy not yet judged; see judgeCopy. */
+let judging = null
+const markJudged = (n) => {
+  if (judging !== n) return
+  judging = null
+  set({ chainFor: n })
+  syncChainBusy()
+}
 function copyWasStale(number) {
   if (staleAgain === number) return
   chainRead = null
   clock.clearTimeout(staleTimer)
   staleTimer = clock.setTimeout(async () => {
     staleTimer = null
+    syncChainBusy()
     if (state.preset?.number !== number || presetBusy()) return
     staleAgain = number
     try {
@@ -786,6 +891,11 @@ function copyWasStale(number) {
       staleAgain = null
     }
   }, CHAIN_FRESH_MS + 250)
+  /* The blocks just read came out of that copy too: the last song's — unless
+     they were already up as this one's, and it is this one's with its old name. */
+  staleOwn = chainForBefore === number
+  if (!staleOwn) set({ chainFor: null })
+  syncChainBusy()
 }
 
 /**
@@ -902,6 +1012,12 @@ const presetBusy = () => presetLoads > 0 || settleTimer !== null || settleReadin
 
 /** A chain read for this preset has just landed. App's own read calls it too. */
 export function chainWasRead(number = state.preset?.number, gen = followGen) {
+  noteChainRead(number, gen)
+  chainForBefore = state.chainFor
+  set({ chainFor: Number.isInteger(number) ? number : null })
+}
+
+function noteChainRead(number, gen) {
   chainRead = { number, at: clock.now(), gen }
 }
 
@@ -985,11 +1101,15 @@ function readPresetSoon(wait, { scene = false, preset = false, names = true, rel
       return list
     })()
     settleReading = reading
+    syncChainBusy()
     reading.then((list) => {
       /* Only this read's own mark: a newer one may have started meanwhile,
          and this one finishing does not mean that one is done. */
       const mine = settleReading === reading
       if (mine) settleReading = null
+      /* The preset asked for has been read, or read as far as it will be. */
+      if (mine && !presetBusy()) set({ chainGoing: null })
+      syncChainBusy()
       for (const resolve of waiting) resolve(list)
       if (mine && sceneMissed) {
         sceneMissed = false
@@ -997,24 +1117,48 @@ function readPresetSoon(wait, { scene = false, preset = false, names = true, rel
       }
     })
   }, wait)
+  syncChainBusy()
   return done
 }
 
 /** The one read of a preset: the chain, then the names out of it, then its tempo. */
 async function readChainAndNames({ names = true, reloaded = false } = {}) {
   const number = state.preset?.number
-  const list = await confirmedChain({
-    read: () => refreshBlocks({ reloaded }),
-    wait: (ms) => new Promise((go) => clock.setTimeout(go, ms)),
-    /* A first no means even less from a phone's browser; see RELAY_TRIES. */
-    remote: driver?.isRemote?.() === true
-  })
-  /* Not after a read that failed: on a gen-3 the names come out of the same
-     copy of the preset, which a failed read did not leave, so asking was one
-     more dump, and the summary after it another, at a unit still loading. */
-  if (names && Array.isArray(list) && state.preset?.number === number) await refreshLoadedSceneNames(number)
+  /* Where the copy is judged, the chain is this preset's only once it has
+     been: see refreshBlocks. */
+  if (names && !!driver?.presetCopy && hostKeepsCopy() === true && Number.isInteger(number)) {
+    judging = number
+    syncChainBusy()
+  }
+  let list
+  try {
+    list = await confirmedChain({
+      read: () => refreshBlocks({ reloaded }),
+      wait: (ms) => new Promise((go) => clock.setTimeout(go, ms)),
+      /* A first no means even less from a phone's browser; see RELAY_TRIES. */
+      remote: driver?.isRemote?.() === true
+    })
+    /* Not after a read that failed: on a gen-3 the names come out of the same
+       copy of the preset, which a failed read did not leave, so asking was one
+       more dump, and the summary after it another, at a unit still loading. */
+    if (names && Array.isArray(list) && state.preset?.number === number) await refreshLoadedSceneNames(number)
+  } finally {
+    if (judging === number) {
+      judging = null
+      syncChainBusy()
+    }
+  }
   await refreshTempo()
   return list
+}
+
+/**
+ * Try again, from a chain that could not be read for this preset: the chain,
+ * its scene names out of the same copy, and its tempo — the read a preset
+ * change makes, asked for by somebody.
+ */
+export function retryChain() {
+  return readChainAndNames().catch(() => null)
 }
 
 /** GET /preset onto the screen, and what changes with it when it moved. */
@@ -1063,12 +1207,14 @@ export async function presetSaved(number, name) {
   const run = presetRun
   const was = state.preset
   const kept = typeof name === 'string' ? name.trim() : ''
-  /* The chain belongs to whichever number the buffer is under now. */
+  /* The chain belongs to whichever number the buffer is under now — the
+     bookkeeping and the screens both, in the one change that moves the
+     number, or the chain on screen reads for a moment as another preset's. */
   const carry = (to) => {
     if (chainRead && chainRead.number === state.preset?.number && to !== chainRead.number) chainRead = { ...chainRead, number: to }
+    return state.chainFor === state.preset?.number ? { chainFor: to } : {}
   }
-  carry(number)
-  set({ preset: { ...(was || {}), number, ...(kept ? { name: kept, empty: false } : {}) } })
+  set({ ...carry(number), preset: { ...(was || {}), number, ...(kept ? { name: kept, empty: false } : {}) } })
   if (!driver?.currentPreset) return
   for (let i = 0; i < SETTLING_TRIES; i++) {
     await new Promise((go) => clock.setTimeout(go, SETTLING_MS))
@@ -1083,8 +1229,7 @@ export async function presetSaved(number, name) {
     if (!Number.isInteger(fresh?.number) || fresh.number < 0) continue
     if (fresh.number === number || fresh.number === was?.number) {
       /* Same buffer either way; only the number and the name can move. */
-      carry(fresh.number)
-      set({ preset: fresh })
+      set({ ...carry(fresh.number), preset: fresh })
     } else presetMovedAtUnit(fresh, presetRun)
     return
   }
@@ -1102,6 +1247,9 @@ export const SELECT_REFUSED = "The unit didn't load that preset."
 export async function loadPreset(number, { selected } = {}) {
   const run = ++presetRun
   presetLoads += 1
+  /* From the tap, not from the unit's answer: a tile drawn for the preset
+     being left must not switch anything while the select is in the air. */
+  set({ chainGoing: number })
   /* A read still waiting to go is for a preset this tap has just left. */
   clock.clearTimeout(settleTimer)
   settleTimer = null
@@ -1110,6 +1258,7 @@ export async function loadPreset(number, { selected } = {}) {
   staleTimer = null
   clock.clearTimeout(sceneRetryTimer)
   sceneRetryTimer = null
+  syncChainBusy()
   const token = echoes.owe('preset')
   let again = false
   try {
@@ -1128,6 +1277,7 @@ export async function loadPreset(number, { selected } = {}) {
          the settled read, or the one more read the computer's copy of
          another preset was owed. */
       if (run === presetRun) {
+        set({ chainGoing: null })
         if (settleWaiting.length) readPresetSoon(OWN_SETTLE_MS)
         else if (hadStale && Number.isInteger(state.preset?.number)) copyWasStale(state.preset.number)
       }
@@ -1137,6 +1287,7 @@ export async function loadPreset(number, { selected } = {}) {
     /* A chain read owed to the preset just left: this one's read carries it. */
     clock.clearTimeout(gridTimer)
     gridTimer = null
+    syncChainBusy()
     selected?.()
     /* A newer tap owns the reads from here. */
     if (run !== presetRun) return state.preset
@@ -1161,6 +1312,7 @@ export async function loadPreset(number, { selected } = {}) {
   } finally {
     /* Never below nothing: reset() zeroes it under a load still in the air. */
     presetLoads = Math.max(0, presetLoads - 1)
+    syncChainBusy()
   }
   await readPresetSoon(OWN_SETTLE_MS, { preset: again, reloaded: true })
   return state.preset
@@ -1268,6 +1420,8 @@ function presetMovedAtUnit(fresh, run, { hostForgot = false } = {}) {
   if (run !== presetRun || presetLoads) return false
   if (!Number.isInteger(number) || number < 0 || !state.preset || number === state.preset.number) return false
   presetRun += 1
+  /* Somebody else moved it; whatever this window last asked for is moot. */
+  set({ chainGoing: null })
   enterPreset(fresh)
   clock.clearTimeout(staleTimer)
   staleTimer = null
@@ -1341,6 +1495,13 @@ export function writeTempo(bpm) {
  * failure that has nothing to do with it.
  */
 export async function writeBypass(effectId, bypassed) {
+  /*
+   * Not from a tile drawn for another preset. The screens stop drawing those
+   * the moment a preset is chosen, but a tap already on its way — the second
+   * half of a double-tap — used to land here and switch whatever block the
+   * NEW preset has under that number.
+   */
+  if (!chainActs(chainViewOf(state))) throw Object.assign(new Error(CHAIN_WORDS.refused), { notThisChain: true })
   const before = state.blocks
   set({
     blocks: before.map((b) => (b.effectId === effectId ? { ...b, bypassed } : b))
@@ -1421,6 +1582,11 @@ export function reset() {
   sceneAgain = false
   gridFollowing = null
   gridAgain = false
+  chainReads = 0
+  chainEra += 1
+  judging = null
+  staleOwn = false
+  chainForBefore = null
   stopListening()
   state = BLANK
   for (const listener of [...listeners]) listener()

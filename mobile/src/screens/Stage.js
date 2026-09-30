@@ -68,6 +68,7 @@ import Coach from '../components/Coach'
 import Sheet from '../components/Sheet'
 import TempoBox from '../components/TempoBox'
 import Tuner from '../components/Tuner'
+import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 
 /* Hoisted: a selector rebuilt each render re-reads the store on every notify. */
 const ofPreset = (s) => s.preset
@@ -106,6 +107,13 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   const sceneNames = useRig(ofSceneNames)
   const caps = useRig(ofCaps)
   const chain = useRig(ofChain)
+  /*
+   * Whose tiles these are. A preset picked here goes up by name on the tap
+   * and its chain a moment later; in between the tiles were the last song's,
+   * live, and a tap switched whatever the new preset has under the same
+   * number. Now grey cards stand in for them. See lib/chain-view.
+   */
+  const chainNow = useChain()
   const tunerOn = useRig(ofTunerOn)
   const tuning = useRig(ofTuning)
   const bpm = useRig(ofBpm)
@@ -266,6 +274,11 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   const fxCols = fitted ? fitted.fxCols : size.fx
   /** Which block's channel picker is open, by effect id. */
   const [picking, setPicking] = useState(null)
+  /* Closed, not only hidden: kept, the sheet came back over the new song's
+     tiles the moment its chain landed, and a tap changed its block. */
+  useEffect(() => {
+    if (chainNow.elsewhere) setPicking(null)
+  }, [chainNow.elsewhere])
 
   const channels = caps?.channelNames
   const slots = slotCount(caps)
@@ -285,7 +298,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
    * blocks it knew on screen, and a tip over stale tiles is a tip about a
    * preset that may not be loaded.
    */
-  const holdDoesSomething = chain === 'ok' && blocks.length > 0 && channels?.length > 1
+  const holdDoesSomething = chain === 'ok' && blocks.length > 0 && channels?.length > 1 && !chainNow.elsewhere
   const [coach, setCoach] = useState(false)
 
   useEffect(() => {
@@ -601,14 +614,16 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
           ) : null}
         </View>
 
-        {chain === 'failed' ? (
+        {chain === 'failed' && !chainNow.elsewhere ? (
           <Note tone="warn">
             The unit didn’t answer when we asked what’s in this preset, so these buttons are
             whatever it last told us. Pull down to ask again.
           </Note>
         ) : null}
 
-        {blocks.length === 0 && chain === 'ok' ? (
+        <ChainUpdating chain={chainNow} />
+
+        {blocks.length === 0 && chain === 'ok' && !chainNow.elsewhere ? (
           <Note>Nothing in this preset but input and output.</Note>
         ) : null}
 
@@ -649,9 +664,13 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             setGrid(e.nativeEvent.layout.width)
             setBlockGrid(e.nativeEvent.layout.height)
           }}
-          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}
+          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, opacity: chainNow.late ? 0.55 : 1 }}
         >
-          {blocks.map((block) => {
+          {chainNow.elsewhere ? (
+            <View style={{ width: '100%' }}>
+              <ChainWait chain={chainNow} height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)} />
+            </View>
+          ) : blocks.map((block) => {
             const hue = blockColor(block.slug)
             /* Named here rather than inline: the word the unit uses for this is
                not a word anybody says out loud, and it has no business sitting
@@ -833,7 +852,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
       />
 
       <ChannelSheet
-        block={blocks.find((b) => sameBlock(b, picking)) || null}
+        block={chainNow.elsewhere ? null : blocks.find((b) => sameBlock(b, picking)) || null}
         channels={channels}
         onClose={() => setPicking(null)}
         onPick={(ch) => {

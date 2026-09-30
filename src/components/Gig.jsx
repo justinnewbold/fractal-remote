@@ -14,8 +14,10 @@ import {
   writeScene,
   writeBypass,
   writeTuner,
-  refreshTempo
+  refreshTempo,
+  retryChain
 } from '../lib/deviceState'
+import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import { keepTaps, tappedBpm, tempoSender, TAP_REREAD_MS } from '../../shared/tempo.mjs'
 import { remoteActive } from '../lib/remote'
 import { STAGE_HIDDEN } from '../lib/guardrails'
@@ -127,6 +129,13 @@ export default function Gig({
   const tunerOn = useDevice(ofTunerOn)
   const tuning = useDevice(ofTuning)
   const bpm = useDevice(ofBpm)
+  /*
+   * Whose blocks these are. The name of a new preset is up the moment it is
+   * picked and its blocks a moment later, and in between the tiles here were
+   * the last song's, live: a tap switched whatever the new preset has under
+   * the same number. See shared/chain-view.mjs.
+   */
+  const shown = useChain()
 
   // Input, output and looper are not stage controls. The gate is — see STAGE_HIDDEN.
   const blocks = useMemo(
@@ -190,6 +199,13 @@ export default function Gig({
     })
     setChain(list ? 'ok' : 'failed')
     return list
+  }
+
+  /* Try again on a preset whose chain never arrived: the read a preset
+     change makes, with its scene names out of the same copy. */
+  const retryHere = async () => {
+    const list = await retryChain()
+    setChain(Array.isArray(list) ? 'ok' : 'failed')
   }
 
   /*
@@ -412,6 +428,9 @@ export default function Gig({
     try {
       await writeBypass(eid, wanted)
     } catch (err) {
+      /* A tap on a tile drawn for the preset just left: nothing was sent,
+         so there is nothing to report and nothing to read back. */
+      if (err?.notThisChain) return
       // The error itself: the app reads `unitGone` off it to tell a refused
       // write from a Mac that has lost the unit altogether, and a flattened
       // message cannot carry that.
@@ -540,7 +559,13 @@ export default function Gig({
    * being changed, so a fourteen-block preset does not mount fourteen.
    */
   const [chanEid, setChanEid] = useState(null)
-  const chanBlock = chanEid === null ? null : blocks.find((b) => b.effectId === chanEid) || null
+  /* A channel sheet opened on the last preset's block does not stay up over this one's. */
+  const chanBlock = chanEid === null || shown.elsewhere ? null : blocks.find((b) => b.effectId === chanEid) || null
+  /* Closed, not only hidden: kept, it came back over the new song's tiles the
+     moment its chain landed — same block number, new preset. */
+  useEffect(() => {
+    if (shown.elsewhere) setChanEid(null)
+  }, [shown.elsewhere])
   const tapCell = useRef(null)
   const holdTap = useLongPress(() => {
     haptic()
@@ -762,7 +787,7 @@ export default function Gig({
         that into a mystery about the app. A unit whose outputs aren't a block
         on a grid is not accused of anything.
       */}
-      {meterEid === null && chain === 'ok' && blocks.length && capabilities?.slotModel !== 'linear' ? (
+      {meterEid === null && chain === 'ok' && !shown.elsewhere && blocks.length && capabilities?.slotModel !== 'linear' ? (
         <p className="gig-note">
           This preset has no Output block, so nothing reaches your amp and there is no volume to
           move — which is why the speaker is missing from the bar. Add one at the end of the chain
@@ -963,7 +988,9 @@ export default function Gig({
         </p>
       ) : null}
 
-      {chain === 'failed' ? (
+      {shown.elsewhere ? (
+        <ChainWait chain={shown} className="gig-chain-wait" onRetry={retryHere} />
+      ) : chain === 'failed' ? (
         <div className="gig-note gig-note-action">
           <span>
             Couldn&rsquo;t read the chain{remoteActive() ? ' from the phone' : ''}, so
@@ -977,8 +1004,10 @@ export default function Gig({
         <p className="gig-note">Nothing switchable in this preset.</p>
       ) : null}
 
-      {blocks.length ? (
-        <div className="gig-blocks" ref={blocksRef}>
+      {!shown.elsewhere ? <ChainUpdating chain={shown} /> : null}
+
+      {!shown.elsewhere && blocks.length ? (
+        <div className={`gig-blocks ${shown.late ? 'chain-updating' : ''}`} ref={blocksRef}>
           {blocks.map((block) => (
             <BlockTile
               key={block.effectId}
