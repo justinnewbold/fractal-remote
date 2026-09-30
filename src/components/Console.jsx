@@ -51,6 +51,7 @@ import {
   blockParams,
   blockTypes,
   cabState,
+  listIrBanks,
   setEnum,
   setParam,
   setParamConfirmed,
@@ -63,15 +64,20 @@ import {
   MODEL_REFUSED,
   cabAfter,
   cabBackTo,
+  cabElsewhere,
   cabHidden,
+  cabLost,
   cabShowing,
   cabShows,
   cabWas,
+  irBanks,
+  irNow,
   pickCab,
   readCab,
   restoreCab,
   taken
 } from '../../shared/cab-pick.mjs'
+import IrPicker from './IrPicker'
 import {
   MODEL_HINT,
   modelSnapshot,
@@ -804,6 +810,11 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
    * Type. See shared/cab-pick.mjs.
    */
   const [cab, setCab] = useState(null)
+  /* The unit's IR names by bank (GET /cab/irs), for the IR picker. Asked for
+     once, the first time a cab with cab state is open: the list is the unit's
+     and not the preset's, and it is some three thousand names. */
+  const [irs, setIrs] = useState(null)
+  const irsAsked = useRef(false)
   const [tab, setTab] = useState('main')
   /* The way back from the last pick. For a model it is the whole block as it
      was read just before the pick, and it stays until another model is picked
@@ -903,6 +914,17 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readKey, onError])
+
+  useEffect(() => {
+    if (!cab || irsAsked.current) return
+    irsAsked.current = true
+    listIrBanks()
+      .then((b) => setIrs(b && typeof b === 'object' && !b.error ? b : null))
+      .catch(() => {
+        // Asked again next time a cab opens, rather than never.
+        irsAsked.current = false
+      })
+  }, [cab])
 
   // The offer belongs to the block it was made on, and dies with the panel.
   // So does a cab state: another block's would pick its cab through this one.
@@ -1024,6 +1046,10 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
      cab state says, and one playing an IR marks nothing in the list. */
   const cabNow = cabShowing(cab, models)
   const current = cabNow ? { value: cabNow.value, name: cabNow.name } : type
+  /* And which IR it holds, out of the unit's banks in the unit's order — see
+     irBanks on why that is not the order of /cab/irs. */
+  const irList = cab && block.slug === 'cab' && irs ? irBanks(cab, irs, { named: params }) : []
+  const irHere = irNow(cab, irList)
 
   // What the chosen model is modelled on, for the line under the picker.
   const chosenValue = cabNow
@@ -1327,8 +1353,20 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     const key = readKey
     const before = cab
     const write = (paramId, ordinal) => setEnum(block.effectId, paramId, ordinal)
-    const res = back ? await restoreCab(before, back, write) : await pickCab(before, value, write)
-    const name = back ? back.name : models.find((m) => m.value === Number(value))?.name
+    let res
+    try {
+      res = back ? await restoreCab(before, back, write) : await pickCab(before, value, write)
+    } catch (err) {
+      /* A write that threw rather than said no may have landed, and the ones
+         before it did. Holding the old numbers, the next pick into the old
+         bank skipped the bank write and played that number in the new one. */
+      const p = await blockParams(block.effectId).catch(() => null)
+      const now = await readCab(() => cabState(block.effectId), p)
+      if (liveKey.current === key) setCab(cabLost(before, now))
+      throw err
+    }
+    /* A DynaCab is a number out of the model list; an IR pick carries its name. */
+    const name = back ? back.name : (value?.name ?? models.find((m) => m.value === Number(value))?.name)
     const fresh = await blockParams(block.effectId)
     const now = await readCab(() => cabState(block.effectId), fresh)
     /* The panel moved on while this was out. The write went to the right
@@ -1354,7 +1392,12 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
       return
     }
     onChanged(`${block.name} → ${name}${read ? '' : " (sent — couldn't read it back to check)"}`)
-    const was = cabWas(before, models)
+    /* Every write taken, and the unit reads as something else: the 1.86.18
+       bug ("done", and the cab never moved). After onChanged, whose read
+       clears the error line. The Undo stays: the writes may have moved it. */
+    if (read && !landed) onError(cabElsewhere(read, models))
+    /* Told which pick this was: an IR's undo holds the bank and the IR too. */
+    const was = cabWas(before, models, value)
     if (undoable && !back && was && !cabShows(before, value)) {
       setUndo({ name: was.name, cab: was })
       undoTimer.current = setTimeout(() => setUndo(null), 8000)
@@ -1366,6 +1409,15 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   const swapModel = async (value) => {
     try {
       await applyModel(value)
+    } catch (err) {
+      onError(err.message)
+    }
+  }
+
+  /* An IR out of the IR picker: {bank, ir, name}, through the cab pick. */
+  const swapIr = async (pick) => {
+    try {
+      await applyCab(pick)
     } catch (err) {
       onError(err.message)
     }
@@ -1630,6 +1682,11 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
             </a>
           </figcaption>
         </figure>
+      ) : null}
+      {/* Under the DynaCab and what it is — its name, its words and its photo
+          stay together — and then the other half of what a cab block plays. */}
+      {irHere && irList.length ? (
+        <IrPicker banks={irList} now={irHere} onPick={swapIr} disabled={busy || !!restoringHere} />
       ) : null}
 
       {pages.length > 1 ? (

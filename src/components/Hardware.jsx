@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { cabState, listIrBanks, backupPreset, loadPresetBytes } from '../lib/forgefx'
+import { slotIr } from '../../shared/cab-pick.mjs'
 
 /**
  * A device enum, as one readable word.
@@ -61,7 +62,9 @@ export function CabPicker({ blocks, onError, onChanged, busy }) {
           {state.slots.map((slot) => (
             <div className="cab-slot" key={slot.slot}>
               <span className="silk-label">Slot {slot.slot}</span>
-              <span className="cab-ir">{slot.irName || `IR ${slot.irIndex ?? '—'}`}</span>
+              {/* "#12" is the host's word for an IR it has no name for, not a name —
+                  and his own banks are said by number (see slotIr). */}
+              <span className="cab-ir">{slotIr(slot)}</span>
               <span className="cab-bank mono">{label(slot.bank)}</span>
             </div>
           ))}

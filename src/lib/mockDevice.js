@@ -156,12 +156,20 @@ function sceneStateOf(seed, blocks) {
 /*
  * GET /cab/irs, as the device serves it: bank name → a plain list of IR names.
  * Not objects, and not wrapped in anything.
+ *
+ * And with an FM3's gap in it. The unit's banks are the five below, in that
+ * order, and /cab/irs has no USER — the host cannot read the names of his own
+ * IRs — so a picker that counted down these keys for its bank numbers put
+ * Legacy on bank 2, which is USER. The demo has the same gap so it goes wrong
+ * in the demo too, rather than only on the unit.
  */
 const IR_BANKS = {
-  'Factory 1': cabTypes.map((c) => c.name),
-  'Factory 2': cabTypes.slice(0, 40).map((c) => c.name),
-  Scratchpad: []
+  'FACTORY 1': cabTypes.map((c) => c.name),
+  'FACTORY 2': cabTypes.slice(0, 40).map((c) => c.name),
+  LEGACY: cabTypes.slice(0, 12).map((c) => `${c.name} (LEGACY)`),
+  SCRATCHPAD: []
 }
+const CAB_BANKS = ['FACTORY 1', 'FACTORY 2', 'USER', 'LEGACY', 'SCRATCHPAD']
 
 /*
  * Only what every Fractal block has, for a block whose real list was never
@@ -782,7 +790,7 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
     cabState: (eid) => {
       const block = state.blocks.find((b) => b.effectId === eid)
       if (block?.slug !== 'cab') return { error: 'not a cab block' }
-      const banks = Object.keys(IR_BANKS)
+      const banks = CAB_BANKS
       const knobs = paramsOf(eid)
       const MODES = ['LEGACY', 'DYNA-CAB']
       const mode = selectorOf(eid, 31, 1)

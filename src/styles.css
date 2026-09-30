@@ -4491,6 +4491,21 @@ input.type-search {
   font-weight: 600;
 }
 
+/* The IR picker under it (IrPicker.jsx): the same control, with the bank the
+   IR is in beside its name, and the banks as a row of chips over the list. */
+.ir-open-bank {
+  flex: 0 0 auto;
+  font-size: var(--f-1);
+  color: var(--silk-dim);
+}
+
+.ir-banks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  margin-top: var(--s-2);
+}
+
 .bypass-btn {
   flex: 0 0 auto;
   font-size: var(--f-1);

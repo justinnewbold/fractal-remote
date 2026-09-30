@@ -1782,8 +1782,11 @@ export function run(test) {
 
 
     // The cab panel: names and the enum labels, never the enum objects.
-    assert.ok(/slot\.irName/.test(hw), 'the cab panel no longer reads irName')
-    assert.ok(/slot\.irIndex/.test(hw), 'the cab panel no longer reads irIndex')
+    /* Through the shared slotIr, which reads irName and irIndex (pinned in
+       run.mjs): the host's "#12" and "<EMPTY>" are not names, and his own
+       banks' names are another unit's. */
+    assert.ok(/slotIr\(slot\)/.test(hw), 'the cab panel shows the unit\'s "#12" and "<EMPTY>" as if they were IR names again')
+    assert.ok(!/slot\.irName \|\| `IR /.test(hw), 'the cab panel names the IR itself again, past slotIr')
     assert.ok(
       /label\(slot\.bank\)/.test(hw) && /label\(state\.mode\)/.test(hw),
       'the cab panel renders a {value,label} enum straight into JSX again — that throws'
@@ -5405,6 +5408,25 @@ export function run(test) {
    * the grid uses to decide whether to wire the hold at all. Teaching a
    * gesture that is wired to `undefined` is worse than teaching nothing.
    */
+  test('a cab write that throws part way re-reads the cab, in both apps', () => {
+    /* A thrown write is not a no: the bank had moved, and the panel kept the
+       old one, so the next pick into the old bank skipped the bank write. */
+    const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+    const con = strip(readFileSync(new URL('../src/components/Console.jsx', import.meta.url), 'utf8'))
+    const edit = strip(readFileSync(new URL('../mobile/src/screens/Edit.js', import.meta.url), 'utf8'))
+    for (const [where, src, end] of [
+      ['browser', con, 'const swapModel = async'],
+      ['phone', edit, 'const swap = async']
+    ]) {
+      const body = src.slice(src.indexOf('const applyCab = async'), src.indexOf(end))
+      assert.ok(body.length > 100, `the ${where}'s applyCab moved; this check reads it`)
+      const caught = body.slice(body.indexOf('} catch (err) {'), body.indexOf('throw err'))
+      assert.ok(caught.length > 0, `the ${where}'s cab pick has no catch round its writes`)
+      assert.match(caught, /cabLost\(before, /, `the ${where} keeps the old cab numbers after a write threw`)
+      assert.match(caught, /readCab\(\(\) => cabState\(/, `the ${where} does not read the cab again after a write threw`)
+    }
+  })
+
   test('the channel tip waits for a preset where the hold does something', () => {
     const stage = readFileSync(new URL('../mobile/src/screens/Stage.js', import.meta.url), 'utf8')
     const coach = readFileSync(new URL('../mobile/src/components/Coach.js', import.meta.url), 'utf8')

@@ -9250,6 +9250,289 @@ test('the demo FM3’s cab state is shaped and numbered like the unit’s, and t
   assert.ok(!(await unit.blockParams(cabBlock.effectId)).named.some((p) => [31, 85, 86].includes(p.id)))
 })
 
+/*
+ * "Pick a cab IR by name."
+ *
+ * Neither app could put an IR on a cab: the IR number and the bank are off
+ * the knobs, and nothing took their place. These hold the IR picker to the
+ * unit's own bank order, the order of the writes, and an Undo that puts back
+ * all three of bank, IR and mode.
+ */
+const FM3_BANKS = ['FACTORY 1', 'FACTORY 2', 'USER', 'LEGACY', 'SCRATCHPAD']
+const fm3Irs = () => ({
+  'FACTORY 1': ['1x4 Pig 57', '1x4 Pig 121', '4x12 Recto'],
+  'FACTORY 2': ['2x12 Double Verb', 'TOTALLY-FLAT'],
+  LEGACY: ['1x6 OVAL', '1x8 TWEED', '4x12 G12H CREAMBACK MIX (CEL)'],
+  SCRATCHPAD: ['OH 412 MES V30 CHUNK', '<EMPTY>']
+})
+const irCab = (mode, bank = 0, ir = 2) => {
+  const c = cabFixture(mode, 3)
+  c.modeOptions = [{ value: 0, label: 'LEGACY' }, { value: 1, label: 'DYNA-CAB' }]
+  c.bankOptions = FM3_BANKS
+  c.slots[0] = { ...c.slots[0], bank: { value: bank, label: FM3_BANKS[bank] }, irIndex: ir, irName: bank === 2 ? `#${ir}` : 'x' }
+  return c
+}
+const irKnobs = { named: [{ id: 4, name: 'Type 1', value: 2, min: 0, max: 1023 }] }
+
+test('the IR banks are the unit’s, in the unit’s order, and USER is offered by number', async () => {
+  const { irBanks, irNow, cabShowing, slotIr } = await import('../shared/cab-pick.mjs')
+  const banks = irBanks(irCab(0), fm3Irs(), irKnobs)
+  /* /cab/irs has no USER: counting down its keys made Legacy bank 2, which is USER. */
+  assert.deepEqual(
+    banks.map((b) => [b.value, b.name]),
+    [[0, 'Factory 1'], [1, 'Factory 2'], [2, 'User'], [3, 'Legacy'], [4, 'Scratchpad']],
+    'the banks were numbered by the order of /cab/irs'
+  )
+  const legacy = banks.find((b) => b.name === 'Legacy')
+  assert.equal(legacy.names[0], '1x6 OVAL', 'the Legacy bank carries another bank’s names')
+  const user = banks.find((b) => b.user)
+  assert.equal(user.count, 1024, 'his own IRs are not offered as many as the IR control holds')
+  /* The host's "#5" is not a name; counted from one, as a person counts. */
+  assert.deepEqual(irNow(irCab(0, 2, 5), banks), { bank: 2, ir: 5, name: 'IR 6', bankName: 'User', playing: true })
+  assert.equal(irNow(irCab(0, 3, 1), banks).name, '1x8 TWEED')
+  assert.equal(irNow(irCab(1, 0, 2), banks).playing, false, 'a block on DynaCab was said to be playing its IR')
+  assert.equal(irNow({ ...irCab(0), unsure: true }, banks), null, 'an unsure read named an IR')
+  /* Scratchpad is his own bank. The FM3's list names it out of another unit's
+     IRs (the codec: "the donor unit's own IR library"), so it is by number. */
+  const scratch = banks.find((b) => b.value === 4)
+  assert.deepEqual([scratch.names, scratch.user, scratch.count], [[], true, 2], 'Scratchpad showed another unit’s IR names')
+  const donor = irCab(0, 4, 0)
+  donor.slots[0].irName = 'OH 412 MES V30 CHUNK'
+  assert.equal(irNow(donor, banks).name, 'IR 1', 'the IR control named a Scratchpad slot with another unit’s IR')
+  assert.equal(irNow(donor, []).name, 'IR 1', 'with no bank list, the host’s Scratchpad name came through')
+  assert.equal(cabShowing(donor).name, 'IR 1', 'the cab picker named a Scratchpad slot with another unit’s IR')
+  assert.equal(slotIr(donor.slots[0]), 'IR 1')
+  /* A firmware bank's name is still the host's. */
+  const legacySlot = irCab(0, 3, 1)
+  legacySlot.slots[0].irName = '1x8 TWEED'
+  assert.equal(cabShowing(legacySlot).name, '1x8 TWEED')
+  assert.equal(irNow(legacySlot, []).name, '1x8 TWEED')
+  /* No IR list, no names: the named banks drop out rather than showing as numbers. */
+  assert.deepEqual(irBanks(irCab(0), null, irKnobs).map((b) => b.name), ['User'])
+  assert.deepEqual(irBanks(null, fm3Irs(), irKnobs), [])
+})
+
+test('the IR search finds by name or number across the banks, and counts what it does not draw', async () => {
+  const { irBanks, findIrs, irLabel } = await import('../shared/cab-pick.mjs')
+  const banks = irBanks(irCab(0), fm3Irs(), irKnobs)
+  const browse = findIrs(banks, '', 3, 40)
+  assert.deepEqual(browse.rows.map((r) => r.name), ['1x6 OVAL', '1x8 TWEED', '4x12 G12H CREAMBACK MIX (CEL)'])
+  assert.equal(browse.more, 0)
+  const recto = findIrs(banks, '4x12 recto', 0, 40).rows
+  assert.deepEqual(recto.map((r) => [r.bank, r.ir, r.name, r.bankName]), [[0, 2, '4x12 Recto', 'Factory 1']])
+  const four = findIrs(banks, '4x12', 0, 40).rows.map((r) => r.bankName)
+  assert.deepEqual(four, ['Factory 1', 'Legacy'], 'a search stayed in one bank')
+  assert.deepEqual(findIrs(banks, 'user 700', 0, 40).rows.map((r) => [r.bank, r.ir, r.name]), [[2, 699, 'IR 700']])
+  /* A number on his own bank: his IR, not the factory names with "12" in them. */
+  const twelve = findIrs(banks, '12', 2, 40).rows[0]
+  assert.deepEqual([twelve.bank, twelve.ir, twelve.name], [2, 11, 'IR 12'], 'a number typed on his own bank found factory names first')
+  assert.deepEqual(findIrs(banks, 'oh 412', null, 40).rows, [], 'the search found another unit’s Scratchpad IRs')
+  const user = findIrs(banks, '', 2, 40)
+  assert.equal(user.rows.length, 40)
+  assert.equal(user.more, 1024 - 40, 'the rows not drawn were not counted')
+  assert.equal(irLabel('<EMPTY>', 1), 'IR 2 (empty)')
+  assert.equal(irLabel('#12', 12), 'IR 13')
+  assert.equal(irLabel('', undefined), 'IR —')
+})
+
+test('picking an IR writes the bank, then the IR, then the mode last, all as whole numbers', async () => {
+  const { pickCab, pickIr } = await import('../shared/cab-pick.mjs')
+  const sent = []
+  const write = async (id, v) => (sent.push([id, v]), { ok: true })
+  const res = await pickCab(irCab(1, 0, 2), { bank: 3, ir: 1, name: '1x8 TWEED' }, write)
+  assert.equal(res.ok, true)
+  assert.deepEqual(sent, [[0, 3], [4, 1], [31, 0]], 'the mode has to go last, once the IR it switches to is there')
+  for (const [, v] of sent) assert.ok(Number.isInteger(v), `${v} is a position, not an ordinal`)
+  assert.ok(!sent.some(([id]) => id === 85), 'an IR pick touched the DynaCab')
+
+  /* Already on the bank, and already playing an IR: the number alone. */
+  sent.length = 0
+  await pickIr(irCab(0, 3, 0), { bank: 3, ir: 2 }, write)
+  assert.deepEqual(sent, [[4, 2]])
+  /* An unsure state is trusted for nothing. */
+  sent.length = 0
+  await pickIr({ ...irCab(0, 3, 0), unsure: true }, { bank: 3, ir: 2 }, write)
+  assert.deepEqual(sent, [[0, 3], [4, 2], [31, 0]])
+
+  /* A refused bank stops there. */
+  sent.length = 0
+  const noBank = await pickIr(irCab(1, 0, 2), { bank: 3, ir: 1 }, async (id, v) => (sent.push([id, v]), { ok: id !== 0 }))
+  assert.equal(noBank.ok, false)
+  assert.deepEqual(sent, [[0, 3]], 'the IR went out after the bank was refused')
+  /* A refused IR puts the bank back, rather than leaving the old number in a new bank. */
+  sent.length = 0
+  const noIr = await pickIr(irCab(0, 0, 2), { bank: 3, ir: 1 }, async (id, v) => (sent.push([id, v]), { ok: id !== 4 }))
+  assert.equal(noIr.ok, false)
+  assert.deepEqual(sent, [[0, 3], [4, 1], [0, 0]], 'the bank was not put back after the IR was refused')
+  assert.ok(!sent.some(([id]) => id === 31), 'the mode went out after the IR was refused')
+})
+
+test('undoing an IR pick puts back the bank and the IR, the mode first back to a DynaCab and last back to an IR', async () => {
+  const { pickCab, restoreCab, cabWas, cabShows, cabBackTo, cabAfter, taken } = await import('../shared/cab-pick.mjs')
+  const pick = { bank: 2, ir: 9, name: 'IR 10' }
+  const before = irCab(1, 0, 2)
+  const was = cabWas(before, [{ value: 3, name: '1x12 Blue' }], pick)
+  assert.deepEqual([was.kind, was.bank, was.ir, was.mode, was.name], ['ir', 0, 2, 1, '1x12 Blue'])
+  /* A DynaCab pick's undo is what it always was. */
+  assert.equal(cabWas(before, [], 11).kind, undefined)
+
+  const res = await pickCab(before, pick, async () => ({ ok: true }))
+  /* A read-back that failed: what the writes left, which shows the pick. */
+  const after = cabAfter(before, taken(res))
+  assert.ok(cabShows(after, pick), 'the state kept after a failed re-read does not show the IR')
+  assert.deepEqual([after.slots[0].bank.label, after.slots[0].irIndex, after.mode.value], ['USER', 9, 0])
+  assert.equal(cabShows(after, 11), false, 'an IR was taken for a DynaCab')
+
+  const sent = []
+  const back = await restoreCab(after, was, async (id, v) => (sent.push([id, v]), { ok: true }))
+  assert.equal(back.ok, true)
+  assert.deepEqual(sent, [[31, 1], [0, 0], [4, 2]], 'undoing back to a DynaCab played the IRs on the way')
+  /* Back to an IR, the mode stays last, as in a pick. */
+  const fromIr = irCab(0, 0, 2)
+  const wasIr = cabWas(fromIr, [], pick)
+  const onIr = []
+  await restoreCab(cabAfter(fromIr, taken(await pickCab(fromIr, pick, async () => ({ ok: true })))), wasIr, async (id, v) => (onIr.push([id, v]), { ok: true }))
+  assert.deepEqual(onIr, [[0, 0], [4, 2], [31, 0]], 'the undo left the old number in the new bank, or switched before the IR was back')
+  assert.ok(cabBackTo(before, was))
+  assert.equal(cabBackTo(irCab(1, 2, 2), was), false, 'a block in another bank was taken as put back')
+  /* A refused IR pick counts only the bank it put back. */
+  const half = await pickCab(irCab(0, 0, 2), pick, async (id) => ({ ok: id !== 4 }))
+  assert.equal(cabAfter(irCab(0, 0, 2), taken(half)).slots[0].bank.value, 0)
+})
+
+test('the browser picks an IR on the discrete path, and every route it uses travels from a phone', async () => {
+  const store = { 'forgefx.host': 'http://unit.test' }
+  globalThis.localStorage = {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => {
+      store[k] = String(v)
+    },
+    removeItem: (k) => {
+      delete store[k]
+    }
+  }
+  const seen = []
+  globalThis.fetch = async (url, options = {}) => {
+    const method = options.method || 'GET'
+    const path = String(url).replace('http://unit.test', '')
+    seen.push({ method, path, body: options.body ? JSON.parse(options.body) : null })
+    const answer = path.endsWith('/cab') ? irCab(1, 0, 2) : path === '/cab/irs' ? fm3Irs() : { ok: true }
+    return { ok: true, status: 200, statusText: 'OK', text: async () => JSON.stringify(answer) }
+  }
+  try {
+    const fx = await import('../src/lib/forgefx.js')
+    const { pickCab, irBanks, findIrs } = await import('../shared/cab-pick.mjs')
+    const cab = await fx.cabState(62)
+    const banks = irBanks(cab, await fx.listIrBanks(), irKnobs)
+    const row = findIrs(banks, 'tweed', null, 40).rows[0]
+    await pickCab(cab, row, (id, v) => fx.setEnum(62, id, v))
+    const writes = seen.filter((c) => c.method !== 'GET')
+    assert.deepEqual(
+      writes.map((c) => [c.method, c.path, c.body]),
+      [
+        ['PUT', '/preset/blocks/62/params/0', { value: 3, continuous: false }],
+        ['PUT', '/preset/blocks/62/params/4', { value: 1, continuous: false }],
+        ['PUT', '/preset/blocks/62/params/31', { value: 0, continuous: false }]
+      ]
+    )
+    assert.ok(!seen.some((c) => c.path.endsWith('/type')), 'an IR pick posted a model change')
+    for (const c of seen) assert.equal(forbiddenRemotely(c.method, c.path), null, `${c.method} ${c.path} is refused over the relay`)
+  } finally {
+    delete globalThis.fetch
+    delete globalThis.localStorage
+  }
+})
+
+test('the cab editor offers the IR picker and picks through the cab pick, with an undo that knows it', () => {
+  const src = readSrc(new URL('../src/components/Console.jsx', import.meta.url), 'utf8')
+  const panel = src.slice(src.indexOf('export function BlockPanel'), src.indexOf('function fmt('))
+  const cabWrite = panel.slice(panel.indexOf('const applyCab = async'), panel.indexOf('const swapModel = async'))
+  /* Taken, and the cab reads as something else: said on screen, after the
+     change line, whose read clears the error line. */
+  const elsewhere = cabWrite.search(/if \(read && !landed\) onError\(cabElsewhere\(read, models\)\)/)
+  assert.ok(elsewhere > 0, 'a cab the unit did not keep is reported as done')
+  assert.ok(elsewhere > cabWrite.indexOf('onChanged(`${block.name} → ${name}${read'), 'the word that the cab did not land is cleared by the change line after it')
+  /* The DynaCab's name, words and photo stay together; the IR control after them. */
+  assert.ok(panel.indexOf('<IrPicker ') > panel.indexOf('className="gear-photo"'), 'the IR picker sits between the DynaCab picker and the DynaCab’s own description and photo')
+  assert.match(panel, /listIrBanks\(\)/, 'the cab editor never reads the IR names')
+  assert.match(panel, /irBanks\(cab, irs, \{ named: params \}\)/, 'the IR banks are not built from the cab state')
+  assert.match(panel, /<IrPicker banks=\{irList\} now=\{irHere\} onPick=\{swapIr\}/, 'the cab editor has no IR picker')
+  assert.match(panel.replace(/\s+/g, ' '), /const swapIr = async \(pick\) => \{ try \{ await applyCab\(pick\)/, 'an IR pick does not go through the cab pick')
+  assert.match(cabWrite, /const was = cabWas\(before, models, value\)/, 'the undo is not told an IR was picked, so it cannot put the bank back')
+  const picker = readSrc(new URL('../src/components/IrPicker.jsx', import.meta.url), 'utf8')
+  assert.match(picker, /findIrs\(banks, hunt, onBank, SHOWN\)/, 'the IR list has no search')
+  assert.match(picker, /onPick\(\{ bank: r\.bank, ir: r\.ir, name: r\.name \}\)/)
+  assert.match(picker, /USER_IRS_NOTE/, 'nothing says why his own IRs are numbers')
+})
+
+test('the demo FM3 has the unit’s bank gap, and an IR picked in it lands and comes back', async () => {
+  const { createMockDevice } = await import('../src/lib/mockDevice.js')
+  const { pickCab, restoreCab, cabWas, cabShows, cabBackTo, irBanks, irNow, findIrs } = await import('../shared/cab-pick.mjs')
+  const unit = createMockDevice('fm3')
+  const cabBlock = (await unit.presetBlocks()).find((b) => b.slug === 'cab')
+  const eid = cabBlock.effectId
+  const write = (id, v) => unit.setEnum(eid, id, v)
+  const cab = unit.cabState(eid)
+  assert.equal(cab.bankOptions[2], 'USER', 'the demo has no USER bank where an FM3 has one')
+  assert.ok(!('USER' in unit.irs()), 'the demo names his own IRs, which the unit does not')
+  const banks = irBanks(cab, unit.irs(), await unit.blockParams(eid))
+  const legacy = banks.find((b) => b.name === 'Legacy')
+  assert.equal(legacy.value, 3)
+  const row = findIrs(banks, '', legacy.value, 40).rows[1]
+  const was = cabWas(cab, [], row)
+  await pickCab(cab, row, write)
+  const picked = unit.cabState(eid)
+  assert.ok(cabShows(picked, row), 'the demo does not show the IR that was picked')
+  assert.equal(irNow(picked, banks).name, row.name)
+  assert.equal(picked.slots[0].irName, row.name, 'the demo named the IR out of another bank')
+  await restoreCab(picked, was, write)
+  assert.ok(cabBackTo(unit.cabState(eid), was), 'the undo did not put the demo back on its DynaCab')
+  /* A User IR has no name, and says its number. */
+  await pickCab(unit.cabState(eid), { bank: 2, ir: 4 }, write)
+  assert.equal(irNow(unit.cabState(eid), banks).name, 'IR 5')
+})
+
+test('an IR pick the unit took but did not keep says what the unit is on', async () => {
+  const { createMockDevice } = await import('../src/lib/mockDevice.js')
+  const { pickCab, cabShows, cabShowing, cabElsewhere, irBanks, findIrs, CAB_REFUSED } = await import('../shared/cab-pick.mjs')
+  const unit = createMockDevice('fm3')
+  const eid = (await unit.presetBlocks()).find((b) => b.slug === 'cab').effectId
+  const cab = unit.cabState(eid)
+  const irParam = cab.slots[0].irParam
+  const banks = irBanks(cab, unit.irs(), await unit.blockParams(eid))
+  const pick = findIrs(banks, '', banks.find((b) => b.name === 'Legacy').value, 40).rows[1]
+  /* Every write answered ok, and the unit stores the next IR along. */
+  const res = await pickCab(cab, pick, (id, v) => unit.setEnum(eid, id, id === irParam ? v + 1 : v))
+  const read = unit.cabState(eid)
+  assert.equal(res.ok, true)
+  assert.equal(cabShows(read, pick), false, 'the demo kept the IR it was meant to miss')
+  const shown = cabShowing(read).name
+  assert.notEqual(shown, pick.name)
+  assert.equal(cabElsewhere(read, []), `The unit shows ${shown} instead.`)
+  assert.equal(cabElsewhere(null), CAB_REFUSED)
+})
+
+test('after a write throws part way through an IR pick, the next pick writes the bank again', async () => {
+  const { pickCab, cabLost } = await import('../shared/cab-pick.mjs')
+  const before = irCab(0, 0, 5)
+  const thrown = await pickCab(before, { bank: 1, ir: 10 }, async (id) => {
+    if (id === 4) throw new Error("Your computer didn't answer.")
+    return { ok: true }
+  }).catch((e) => e)
+  assert.ok(thrown instanceof Error)
+  /* The re-read failed too: the old numbers are kept, but not trusted. */
+  const held = cabLost(before, null)
+  assert.equal(held.unsure, true, 'the panel still trusts the bank the unit moved off')
+  const sent = []
+  await pickCab(held, { bank: 0, ir: 7 }, async (id, v) => (sent.push([id, v]), { ok: true }))
+  assert.deepEqual(sent, [[0, 0], [4, 7], [31, 0]], 'the next pick into the old bank skipped the bank write')
+  /* A good re-read is the answer. */
+  const fresh = irCab(0, 1, 5)
+  assert.equal(cabLost(before, fresh), fresh)
+  assert.equal(cabLost(before, { ...fresh, unsure: true }).slots[0].bank.value, 0)
+  assert.equal(cabLost(null, null), null)
+})
+
 
 
 /*

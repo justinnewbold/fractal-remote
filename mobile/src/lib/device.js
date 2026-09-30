@@ -514,6 +514,13 @@ export const setType = (eid, value) => told(`block ${eid} model ${value}`, post(
 export const cabState = (eid) => remoteRequest(`/preset/blocks/${eid}/cab`)
 
 /**
+ * The unit's IR names by bank — the browser's `listIrBanks`, on the same
+ * route. A bare bank → names map; his own User IRs are not in it, because the
+ * host cannot read their names yet. See irBanks in lib/cab-pick.js.
+ */
+export const listIrBanks = () => remoteRequest('/cab/irs')
+
+/**
  * Set a discrete selector — a cab's mode, a slot's DynaCab — to an ordinal.
  *
  * Not a knob, so not normalised: option 11 of 45 is the eleventh cab, not a

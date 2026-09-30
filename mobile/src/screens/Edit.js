@@ -11,6 +11,7 @@ import {
   cabState,
   clearCell,
   idOf,
+  listIrBanks,
   modifierModel,
   placeBlock,
   sameBlock,
@@ -25,10 +26,14 @@ import {
   MODEL_REFUSED,
   cabAfter,
   cabBackTo,
+  cabElsewhere,
   cabHidden,
+  cabLost,
   cabShowing,
   cabShows,
   cabWas,
+  irBanks,
+  irNow,
   pickCab,
   readCab,
   restoreCab,
@@ -52,6 +57,7 @@ import { thud } from '../lib/feedback'
 import Knob, { fmt } from '../components/Knob'
 import Note from '../components/Note'
 import Grip from '../components/Grip'
+import IrPicker from '../components/IrPicker'
 import Press from '../components/Press'
 import { SaveButton, SaveNotes, useSaveToSlot } from '../components/SaveToSlot'
 import Tile from '../components/Tile'
@@ -490,6 +496,11 @@ function BlockPanel({
      is what the picker reads and writes through. Null for every other block,
      and for a unit with no cab state to give. */
   const [cab, setCab] = useState(null)
+  /* The unit's IR names by bank, for the IR picker: asked for once, when a
+     cab with cab state first opens here. They are the unit's, not the
+     preset's, and some three thousand names down a relay. */
+  const [irs, setIrs] = useState(null)
+  const irsAsked = useRef(false)
   const [tab, setTab] = useState('main')
   const [picking, setPicking] = useState(false)
   /* What is typed into the model find box. */
@@ -548,6 +559,17 @@ function BlockPanel({
   }, [eid, block.slug, onError])
 
   useEffect(() => () => clearTimeout(undoTimer.current), [])
+
+  useEffect(() => {
+    if (!cab || irsAsked.current) return
+    irsAsked.current = true
+    listIrBanks()
+      .then((b) => setIrs(b && typeof b === 'object' && !b.error ? b : null))
+      .catch(() => {
+        // Asked again the next time, rather than never.
+        irsAsked.current = false
+      })
+  }, [cab])
 
   /*
    * Levels are read, never turned.
@@ -720,7 +742,16 @@ function BlockPanel({
   const applyCab = async (value, { undoable = true, back = null } = {}) => {
     const before = cab
     const write = (paramId, ordinal) => setEnum(eid, paramId, ordinal)
-    const res = back ? await restoreCab(before, back, write) : await pickCab(before, value, write)
+    let res
+    try {
+      res = back ? await restoreCab(before, back, write) : await pickCab(before, value, write)
+    } catch (err) {
+      /* The browser's: a write that timed out may have landed, so the panel
+         reads again, or stops trusting the numbers it held. */
+      const p = await blockParams(eid).catch(() => null)
+      setCab(cabLost(before, await readCab(() => cabState(eid), p)))
+      throw err
+    }
     noteEdited()
     const fresh = await blockParams(eid)
     const now = await readCab(() => cabState(eid), fresh)
@@ -736,7 +767,7 @@ function BlockPanel({
       landed
         ? 'unit shows it'
         : read
-          ? `unit shows ${shows?.name ?? 'nothing'}, asked ${back ? back.name : Number(value)}`
+          ? `unit shows ${shows?.name ?? 'nothing'}, asked ${back ? back.name : (value?.name ?? Number(value))}`
           : "sent, couldn't read the cab back to check"
     )
     setParams(fresh?.named || [])
@@ -750,7 +781,10 @@ function BlockPanel({
       onError(CAB_REFUSED)
       return
     }
-    const was = cabWas(before, models)
+    /* Taken, and the unit reads as something else: said, not only logged. */
+    if (read && !landed) onError(cabElsewhere(read, models))
+    /* Told which pick this was: an IR's undo holds the bank and the IR too. */
+    const was = cabWas(before, models, value)
     if (undoable && !back && was && !cabShows(before, value)) {
       setUndo({ name: was.name, cab: was })
       undoTimer.current = setTimeout(() => setUndo(null), 8000)
@@ -764,6 +798,15 @@ function BlockPanel({
     setHunt('')
     try {
       await applyModel(value)
+    } catch (err) {
+      onError(err.message)
+    }
+  }
+
+  /* An IR out of the IR picker: {bank, ir, name}, through the cab pick. */
+  const swapIr = async (pick) => {
+    try {
+      await applyCab(pick)
     } catch (err) {
       onError(err.message)
     }
@@ -839,6 +882,9 @@ function BlockPanel({
      cab state says — and one playing an IR marks nothing in the list. */
   const cabNow = cabShowing(cab, models)
   const current = cabNow ? { value: cabNow.value, name: cabNow.name } : type
+  /* And which IR it holds, out of the unit's banks in the unit's order. */
+  const irList = cab && block.slug === 'cab' && irs ? irBanks(cab, irs, { named: params }) : []
+  const irHere = irNow(cab, irList)
 
   /*
    * The models worth drawing. Capped rather than paged: the list is scrolled
@@ -988,6 +1034,11 @@ function BlockPanel({
             </View>
           ) : null}
         </View>
+      ) : null}
+
+      {/* ------------------------------------------------------------ IR */}
+      {irHere && irList.length ? (
+        <IrPicker banks={irList} now={irHere} onPick={swapIr} disabled={!!restoring} />
       ) : null}
 
       {undo ? (

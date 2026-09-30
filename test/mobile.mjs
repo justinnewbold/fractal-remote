@@ -7207,6 +7207,8 @@ export function run(test) {
     assert.ok(!/setCab\(null\)/.test(cabWrite), 'a cab pick can still forget the cab state')
     assert.match(cabWrite.replace(/\s+/g, ' '), /`block \$\{eid\} model after the change`, landed \? 'unit shows it'/, 'the log still believes the Preamp Type')
     assert.match(cabWrite, /onError\(CAB_REFUSED\)/, 'a refused cab is not said on screen')
+    /* Taken, and the cab reads as something else: said, not only logged. */
+    assert.match(cabWrite, /if \(read && !landed\) onError\(cabElsewhere\(read, models\)\)/, 'a cab the unit did not keep is only in the log')
     assert.match(flat, /<Press label="Undo" height=\{44\} onPress=\{takeBack\} \/>/, 'undo does not know about cabs')
     assert.match(flat, /await applyCab\(null, \{ undoable: false, back: back\.cab \}\)/, 'undo does not put the mode and cab back')
     assert.match(flat, /\.filter\(\(p\) => !offDeck\.has\(p\.id\)\)/, 'the IR numbers are still knobs on the phone')
@@ -7334,6 +7336,47 @@ export function run(test) {
     await send(`/preset/blocks/${eid}/params/${knob.id}`, 'PUT', { value: 0.5, continuous: false })
     const after = (await send(`/preset/blocks/${eid}/params`)).named.find((p) => p.id === knob.id)
     assert.ok(Math.abs(after.value - (knob.min + knob.max) / 2) < 0.01, `a knob's discrete retry landed as ${after.value}`)
+  })
+
+  test('the phone’s cab block picks an IR by name the way the browser does', () => {
+    const edit = read('mobile/src/screens/Edit.js')
+    const flat = edit.replace(/\s+/g, ' ')
+    const cabWrite = edit.slice(edit.indexOf('const applyCab = async'), edit.indexOf('const swap = async'))
+    assert.match(flat, /listIrBanks\(\)/, 'the phone never reads the IR names')
+    assert.match(flat, /irBanks\(cab, irs, \{ named: params \}\)/, 'the phone’s IR banks are not built from the cab state')
+    assert.match(flat, /<IrPicker banks=\{irList\} now=\{irHere\} onPick=\{swapIr\} disabled=\{!!restoring\} \/>/, 'the phone’s cab has no IR picker')
+    assert.match(flat, /const swapIr = async \(pick\) => \{ try \{ await applyCab\(pick\)/, 'an IR pick on the phone does not go through the cab pick')
+    assert.match(cabWrite, /const was = cabWas\(before, models, value\)/, 'the phone’s undo cannot put the bank back')
+    const picker = read('mobile/src/components/IrPicker.js')
+    assert.match(picker, /from '\.\.\/lib\/cab-pick'/, 'the phone has its own idea of how an IR is found')
+    assert.match(picker, /findIrs\(banks, hunt, onBank, SHOWN\)/)
+    assert.match(picker, /onPick\(\{ bank: r\.bank, ir: r\.ir, name: r\.name \}\)/)
+    assert.match(read('mobile/src/lib/device.js'), /export const listIrBanks = \(\) => remoteRequest\('\/cab\/irs'\)/, 'the phone asks for the IR names somewhere the host does not serve them')
+    assert.match(read('mobile/src/lib/cab-pick.js'), /export async function pickIr\(/, 'the phone’s copy of the cab rules has no IR pick')
+  })
+
+  test('the demo answers the IR picker down the phone’s wire, and the undo puts all three back', async () => {
+    const { demoRequest } = await import('../mobile/src/lib/demoWire.js')
+    const { createMockDevice } = await import('../src/lib/mockDevice.js')
+    const { pickCab, restoreCab, cabWas, cabShows, cabBackTo, irBanks, findIrs } = await import('../mobile/src/lib/cab-pick.js')
+    const unit = createMockDevice('fm3')
+    const send = (path, method = 'GET', body) =>
+      demoRequest(unit, path, { method, body: body === undefined ? null : JSON.stringify(body) })
+    const eid = (await send('/preset/blocks')).find((b) => b.slug === 'cab').effectId
+    const sent = []
+    const write = (paramId, ordinal) => (sent.push([paramId, ordinal]), send(`/preset/blocks/${eid}/params/${paramId}`, 'PUT', { value: ordinal, continuous: false }))
+    const cab = await send(`/preset/blocks/${eid}/cab`)
+    const irs = await send('/cab/irs')
+    const banks = irBanks(cab, irs, await send(`/preset/blocks/${eid}/params`))
+    assert.deepEqual(banks.map((b) => b.name), ['Factory 1', 'Factory 2', 'User', 'Legacy'])
+    const row = findIrs(banks, 'legacy', null, 40).rows[2]
+    assert.equal(row.bank, 3, 'Legacy is not the fourth bank')
+    const was = cabWas(cab, [], row)
+    await pickCab(cab, row, write)
+    assert.deepEqual(sent, [[0, 3], [4, 2], [31, 0]], 'the phone wrote the IR out of order')
+    assert.ok(cabShows(await send(`/preset/blocks/${eid}/cab`), row), 'the demo does not show the IR the phone picked')
+    await restoreCab(await send(`/preset/blocks/${eid}/cab`), was, write)
+    assert.ok(cabBackTo(await send(`/preset/blocks/${eid}/cab`), was), 'the phone’s undo left the demo on the IR')
   })
 
   test('a knob that did not take says what the unit is holding, and why when it is the tempo', () => {

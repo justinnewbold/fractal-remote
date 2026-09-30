@@ -96,6 +96,8 @@ export async function demoRequest(mock, path, options = {}) {
     if (part[0] === 'preset' && part[1] === 'blocks' && part[3] === 'cab') {
       return mock.cabState(num(2))
     }
+    /* The IR names by bank, for the cab block's IR picker. */
+    if (path === '/cab/irs') return mock.irs()
     /* /blocks/{slug}/types */
     if (part[0] === 'blocks' && part[2] === 'types') return mock.blockTypes(part[1])
   }
@@ -142,7 +144,11 @@ export async function demoRequest(mock, path, options = {}) {
        * unit takes it. A knob sent on the discrete path is still a position
        * here, which is what the confirmed write's retry sends.
        */
-      if (body?.continuous === false && !mock.blockParams(eid).named.some((p) => p.id === id)) {
+      /* And a cab's IR number, which is on the knob list AND a whole number
+         when the IR picker sends it: the unit stores the number it is sent. */
+      const cab = mock.cabState(eid)
+      const irNumber = Array.isArray(cab?.slots) && cab.slots.some((s) => s.irParam === id)
+      if (body?.continuous === false && (irNumber || !mock.blockParams(eid).named.some((p) => p.id === id))) {
         return mock.setEnum(eid, id, body?.value)
       }
       return mock.setParam(eid, id, body?.value)
