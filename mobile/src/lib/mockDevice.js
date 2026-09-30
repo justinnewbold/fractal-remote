@@ -510,14 +510,26 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
    * it does a real one. The amp's file carries the whole layout as read; the
    * others carry only what the pages need (data/block-params.json).
    */
+  /*
+   * The file keeps only each page's parameter rows, so the mixer row every
+   * real page carries — Mix, Level, Balance, Input Gain, Spread — is put back
+   * from the names. Without it a demo Drive's Mix landed on Hidden, under a
+   * line saying Fractal's editor does not show it, which is not true.
+   */
+  const MIXER = /^(Mix|Level|Balance|Input Gain|Spread)( \d+)?$/
   function layoutOf(slug) {
     if (slug === 'amp') return ampParams.layout ? clone(ampParams.layout) : null
-    const pages = blockParams.blocks[slug]?.pages
+    const real = blockParams.blocks[slug]
+    const pages = real?.pages
     if (!pages?.length) return null
+    const mixer = (real.named || []).filter((p) => MIXER.test(p.name)).map((p) => ({ paramId: p.id }))
     return {
       pages: pages.map((pg) => ({
         name: pg.name,
-        rows: [{ section: 'parameters', controls: pg.ids.map((paramId) => ({ paramId })) }]
+        rows: [
+          { section: 'parameters', controls: pg.ids.map((paramId) => ({ paramId })) },
+          { section: 'mixer', controls: mixer }
+        ]
       }))
     }
   }

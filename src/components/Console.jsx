@@ -1131,9 +1131,11 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   writeOne.current = async ({ p, next, key, eid, name, slug, channel }) => {
     try {
       const res = await setParamConfirmed(eid, p.id, next, p)
+      /* By the name on the knob, not the catalog's. */
+      const called = p.label || p.name
       if (!res.ok)
         onError(
-          res.unverified ? `${p.name} was sent, but the app couldn't read it back to check.` : `${p.name} didn't take.`
+          res.unverified ? `${called} was sent, but the app couldn't read it back to check.` : `${called} didn't take.`
         )
       const fresh = await blockParams(eid)
       /* Another block, channel or scene came up while this was out: its
@@ -1157,7 +1159,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
        * The summary line stays exactly as it was, for the log a person reads.
        */
       onChanged(
-        `${name} · ${p.name} → ${next}`,
+        `${name} · ${called} → ${next}`,
         {
           block: name,
           slug,
@@ -1564,6 +1566,9 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
         </div>
       ) : null}
 
+      {/* Hidden says why its settings are there, once, above them. */}
+      {onPage?.note ? <p className="hint pad">{onPage.note}</p> : null}
+
       <div className="knob-deck">
         {/*
           The knobs stay up while they are being read again.
@@ -1580,7 +1585,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
             <div className="knob-cell" key={p.id} id={`p-${p.id}`}>
               <Knob
                 param={p}
-                label={p.name}
+                label={p.label || p.name}
                 value={valueOf(p)}
                 onChange={(v) => setLocal((prev) => ({ ...prev, [p.id]: v }))}
                 onCommit={(v) => commit(p, v)}
@@ -1671,7 +1676,7 @@ function ValueBox({ param, value, onCommit }) {
           e.currentTarget.blur()
         }
       }}
-      aria-label={`${param?.name} value`}
+      aria-label={`${param?.label || param?.name} value`}
     />
   )
 }

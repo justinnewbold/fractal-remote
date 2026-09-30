@@ -167,7 +167,7 @@ async function rigOnTheBench(over = {}) {
     'paramIndex.js': 'export const forget = () => {}\n',
     'sceneNameCache.js': 'export const forgetSceneNames = () => true\nexport const recallSceneNames = async () => []\nexport const rememberSceneNames = () => true\n'
   }
-  for (const f of ['own-echo.js', 'chain-view.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs']) {
+  for (const f of ['own-echo.js', 'chain-view.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -3935,7 +3935,7 @@ export function run(test) {
     const pages = editPages(params, layout)
     assert.deepEqual(
       pages.map((p) => [p.name, p.params.map((q) => q.id)]),
-      [['Basic', [1, 2]], ['Tone', [12, 13, 2]], ['More', [4, 99]]],
+      [['Basic', [1, 2]], ['Tone', [12, 13, 2]], ['Mix', [4]], ['Hidden', [99]]],
       'the pages are not the editor’s, or a control the unit sent became unreachable'
     )
     assert.equal(pageHolding(pages, 13).name, 'Tone', 'a search cannot find the page its control is on')
@@ -3955,6 +3955,188 @@ export function run(test) {
     }
   })
 
+  test('a Phaser has Fractal’s three pages, not eight, and no two tabs share a name', async () => {
+    /*
+     * "Phaser has two More tabs." The layout carries pages that only exist on
+     * old firmware whenever no newer page has their name — Phaser, Advanced,
+     * More and LFO beside today's Basic, Expert 1 and Expert 2 — and the app
+     * added its own More after them. Flanger, Filter and MegaTap the same.
+     */
+    const { editPages } = await import('../src/lib/editPages.js')
+    const knob = (id, name) => ({ id, name, value: 0, min: 0, max: 10 })
+    const page = (name, fw, ids, mixer = []) => ({
+      name,
+      ...(fw ? { fw } : {}),
+      rows: [
+        { section: 'parameters', controls: ids.map((paramId) => ({ paramId, label: `K${paramId}`, widget: 'knob' })) },
+        { section: 'mixer', controls: mixer.map((paramId) => ({ paramId, label: 'Mix', widget: 'knob' })) }
+      ]
+    })
+    const params = [1, 2, 3, 4, 5, 6, 7, 8, 30].map((id) => knob(id, `P${id}`))
+    /* What the server hands over for a Phaser on FM3 firmware 12. */
+    const phaser = {
+      pages: [
+        page('Phaser', { lt: '9,02' }, [1, 2, 3], [30]),
+        page('Advanced', { lt: '1,2' }, [4]),
+        page('More', { lt: '9,02' }, [5, 6]),
+        page('LFO', { lt: '9,02' }, [7]),
+        page('Basic', { gtet: '9,02' }, [1, 2], [30]),
+        page('Expert 1', { gtet: '9,02' }, [3, 4, 5], [30]),
+        page('Expert 2', { gtet: '9,02' }, [6, 7], [30])
+      ]
+    }
+    const tabs = editPages(params, phaser).map((p) => p.name)
+    assert.deepEqual(tabs, ['Basic', 'Expert 1', 'Expert 2', 'Mix', 'Hidden'], 'old firmware’s pages are still tabs')
+    assert.equal(new Set(tabs).size, tabs.length, 'two tabs share a name')
+
+    /* A Tremolo on some types has only old pages: the newest of them stay. */
+    const tremolo = { pages: [page('Tremolo', { lt: '1,00' }, [1]), page('Tremolo', { lt: '8,00' }, [1, 2])] }
+    const kept = editPages(params, tremolo).filter((p) => p.key.startsWith('page-'))
+    assert.deepEqual(kept.map((p) => [p.name, p.params.map((q) => q.id)]), [['Tremolo', [1, 2]]], 'a block with only old pages lost them all')
+
+    /* And two pages the layout does name alike are told apart. */
+    const twice = { pages: [page('Basic', null, [1]), page('Basic', null, [2])] }
+    assert.deepEqual(editPages(params, twice).slice(0, 2).map((p) => p.name), ['Basic', 'Basic 2'], 'two tabs are both called Basic')
+
+    /* The phone's copy is the same file. */
+    assert.ok(read('mobile/src/lib/editPages.js').includes(read('src/lib/editPages.js')), 'the phone draws its tabs by another rule')
+  })
+
+  test('a knob says what Fractal’s editor calls it, meters are not knobs, and the unnamed are on Hidden', async () => {
+    /*
+     * Knobs wore the server's name, which where the catalog has none is the
+     * raw internal one numbered across the block: "Gain 3", "HEADROOM",
+     * "GRIDHARDNESS". The layout that comes with every read already has
+     * Fractal's own caption for each control it places.
+     */
+    const { editPages, namedAsOnPages, HIDDEN_NOTE } = await import('../src/lib/editPages.js')
+    const { fixRead } = await import('../shared/param-fixes.mjs')
+    const { isSilencingParam } = await import('../src/lib/guardrails.js')
+    const amp = fixRead(JSON.parse(read('src/data/amp-params.json')))
+    const editable = amp.named.filter((p) => !isSilencingParam(p.name))
+    const pages = editPages(editable, amp.layout)
+    const on = (name) => pages.find((p) => p.name === name)
+    const said = (page) => page.params.map((p) => p.label)
+
+    /* The caption is the editor's, and its line breaks are spaces. */
+    assert.ok(said(on('Pwr Tubes + CF')).includes('Hardness'), 'the knob is still the catalog’s "Hardness 1"')
+    assert.ok(said(on('Authentic')).includes('Input Trim'), 'a two-line caption is not one line')
+    const broken = { pages: [{ name: 'P', rows: [{ section: 'parameters', controls: [{ paramId: 1, label: 'Tube\nHardness', widget: 'knob' }] }] }] }
+    assert.deepEqual(said(editPages([{ id: 1, name: 'TUBEHARD' }], broken)[0]), ['Tube Hardness'], 'a two-line caption is not one line')
+    /* Where one page has one caption twice, both keep the server's names. */
+    const repeats = { pages: [{ name: 'Two', rows: [{ section: 'parameters', controls: [{ paramId: 1, label: 'Depth', widget: 'knob' }, { paramId: 2, label: 'Depth', widget: 'knob' }] }] }] }
+    assert.deepEqual(said(editPages([{ id: 1, name: 'Depth 1' }, { id: 2, name: 'Depth 2' }], repeats)[0]), ['Depth 1', 'Depth 2'], 'two knobs on one page carry one name')
+
+    /* The bare numbers on an EQ page are frequencies, and only there. */
+    assert.deepEqual(said(on('Output EQ')), ['80 Hz', '240 Hz', '750 Hz', '2200 Hz', '6600 Hz'], 'an EQ band is a bare number')
+    const bands = { pages: [
+      { name: 'Graphic EQ', rows: [{ section: 'parameters', controls: [{ paramId: 1, label: '1.6K', widget: 'slider' }, { paramId: 2, label: '16k', widget: 'slider' }] }] },
+      { name: 'Level', rows: [{ section: 'parameters', controls: [{ paramId: 3, label: '1', widget: 'slider' }] }] }
+    ] }
+    const bandPages = editPages([{ id: 1, name: 'a' }, { id: 2, name: 'b' }, { id: 3, name: 'c' }], bands)
+    assert.deepEqual(said(bandPages[0]), ['1.6 kHz', '16 kHz'], 'a kilohertz band is not said as one')
+    assert.deepEqual(said(bandPages[1]), ['1'], 'a Vocoder band number grew a Hz')
+
+    /* The amp's meters are read-outs, and are nowhere to be turned. */
+    const everywhere = pages.flatMap((p) => p.params.map((q) => q.id))
+    for (const meter of [120, 121, 122, 132]) assert.ok(!everywhere.includes(meter), `meter ${meter} is drawn as a knob`)
+
+    /* The unnamed go last, on Hidden, which says why. */
+    const last = pages[pages.length - 1]
+    assert.equal(last.name, 'Hidden')
+    assert.equal(last.note, HIDDEN_NOTE)
+    assert.equal(HIDDEN_NOTE, 'Fractal’s own editor doesn’t show these.')
+    for (const name of ['GRIDHARDNESS', 'TRIODE2EXTIME', 'RESOLUTION']) assert.ok(said(last).includes(name), `${name} is not on Hidden`)
+    assert.ok(said(last).includes('Dynamic Damping') && !said(last).includes('DYNIMP'), 'DYNIMP is still called DYNIMP')
+
+    /* Search goes by the same names, and offers no meter. */
+    const searched = namedAsOnPages(editable, amp.layout)
+    assert.equal(searched.find((p) => p.id === 90).label, 'Hardness', 'search and the knob call it different things')
+    assert.ok(!searched.some((p) => [120, 121, 122, 132].includes(p.id)), 'search offers a meter to turn')
+    for (const file of ['src/lib/paramIndex.js', 'mobile/src/lib/paramIndex.js']) {
+      assert.match(read(file), /namedAsOnPages\(named, res\?\.layout\)\.map\(\(p\) => \(\{ \.\.\.p, name: p\.label \}\)\)/, `${file} searches by the catalog’s names`)
+    }
+    /* Two knobs called "Gain" on different pages are told apart by the page,
+       not by a range in brackets that is on neither knob. */
+    const { disambiguate } = await import('../src/lib/encoding.js')
+    const listed = disambiguate(searched.map((p) => ({ ...p, name: p.label })))
+    const nameOf = (id) => listed.find((p) => p.id === id).name
+    assert.equal(nameOf(7), 'Gain · Authentic', 'search tells the two Gains apart by a range')
+    assert.equal(nameOf(75), 'Gain · Input EQ', 'search tells the two Gains apart by a range')
+    assert.ok(!listed.some((p) => /\(/.test(p.name)), 'search shows a range in brackets')
+    /* And the knobs, and the Hidden line, on both ends. */
+    for (const file of ['src/components/Console.jsx', 'mobile/src/screens/Edit.js']) {
+      const src = read(file)
+      assert.match(src, /label=\{p\.label \|\| p\.name\}/, `${file} labels its knobs with the catalog’s names`)
+      assert.match(src, /onPage\?\.note \?/, `${file} does not say why Hidden’s settings are there`)
+      assert.match(src, /param\?\.label \|\| param\?\.name\} value/, `${file} reads the catalog’s name to a screen reader`)
+    }
+    assert.match(
+      read('mobile/src/screens/Edit.js'),
+      /const called = p\.label \|\| p\.name/,
+      'the phone says a knob that did not take by the catalog’s name, not by what the knob says'
+    )
+  })
+
+  test('a knob turning another block’s setting is never matched by its number', async () => {
+    /*
+     * An FM3 Multitap is handed the Delay block's editor page. Its controls
+     * are DELAY_LEVEL, DELAY_FEED and so on, and their numbers are the Delay
+     * block's — id 1 on a Multitap is "Delay 1". Matched on the number alone,
+     * the knob said "Level" and turning it moved a delay time.
+     */
+    const { editPages, namedAsOnPages } = await import('../src/lib/editPages.js')
+    const multitap = {
+      family: 'MULTITAP',
+      pages: [{ name: 'Time/FB', rows: [
+        { section: 'parameters', controls: [{ paramName: 'DELAY_FEED', paramId: 10, label: 'Feedback' }, { paramName: 'MULTITAP_TIME3', paramId: 3, label: 'Time 3' }] },
+        { section: 'mixer', controls: [{ paramName: 'DELAY_LEVEL', paramId: 1, label: 'Level' }] }
+      ] }]
+    }
+    const named = [{ id: 1, name: 'Delay 1' }, { id: 10, name: 'Level 2' }, { id: 3, name: 'Delay 3' }]
+    const shown = editPages(named, multitap).flatMap((pg) => pg.params)
+    const labelOf = (id) => shown.find((p) => p.id === id)?.label
+    assert.equal(labelOf(1), 'Delay 1', 'a Multitap delay time is called the Delay block’s "Level"')
+    assert.equal(labelOf(10), 'Level 2', 'a Multitap level is called the Delay block’s "Feedback"')
+    assert.equal(labelOf(3), 'Time 3', 'the Multitap’s own control lost its caption')
+    const found = namedAsOnPages(named, multitap)
+    assert.equal(found.find((p) => p.id === 1)?.label, 'Delay 1', 'search does not offer Delay 1 by its own name')
+
+    /* A meter on another block does not hide this block's setting of that number. */
+    const amp = { family: 'DISTORT', pages: [{ name: 'Amp', rows: [{ section: 'parameters', controls: [
+      { widget: 'meter', crossBlock: {}, paramName: 'OUTPUT_VUL', paramId: 22 },
+      { paramName: 'DISTORT_GAIN', paramId: 1, label: 'Gain' }
+    ] }] }] }
+    const all = editPages([{ id: 1, name: 'Gain' }, { id: 22, name: 'XFormer Low Freq' }], amp).flatMap((pg) => pg.params)
+    assert.ok(all.some((p) => p.id === 22), 'another block’s meter hid the amp’s XFormer Low Freq')
+  })
+
+  test('the Modifiers picker names a control as its knob does, and offers no meter', async () => {
+    /*
+     * The knob said "80 Hz" while the picker said "Bass 2", and the picker
+     * still offered "HEADROOM" and "B+" — read-outs a pedal cannot move. It
+     * now takes the search's own list, so the three cannot drift apart.
+     */
+    const { namedAsOnPages } = await import('../src/lib/editPages.js')
+    const { disambiguate } = await import('../src/lib/encoding.js')
+    const { fixRead } = await import('../shared/param-fixes.mjs')
+    const { isSilencingParam } = await import('../src/lib/guardrails.js')
+    const amp = fixRead(JSON.parse(read('src/data/amp-params.json')))
+    /* What asOnPages does; the search test above pins that it does it. */
+    const picked = disambiguate(namedAsOnPages(amp.named.filter((p) => !isSilencingParam(p.name)), amp.layout).map((p) => ({ ...p, name: p.label })))
+    for (const meter of [120, 121, 122, 132]) assert.ok(!picked.some((p) => p.id === meter), `the picker offers meter ${meter}`)
+    assert.equal(picked.find((p) => p.id === 57).name, '80 Hz', 'the picker and the knob call it different things')
+    assert.equal(picked.find((p) => p.id === 90).name, 'Hardness', 'the picker and the knob call it different things')
+    assert.notEqual(picked.find((p) => p.id === 7).name, picked.find((p) => p.id === 75).name, 'the picker shows two Gains alike')
+    for (const file of ['src/lib/paramIndex.js', 'mobile/src/lib/paramIndex.js'])
+      assert.match(read(file), /export const asOnPages = \(res\) =>/, `${file} keeps its list to itself`)
+    for (const file of ['src/components/Modifiers.jsx', 'mobile/src/screens/Edit.js']) {
+      const src = read(file)
+      assert.match(src, /setParams\(asOnPages\(res\)\)/, `${file}’s picker lists the raw names`)
+      assert.ok(!src.includes('setParams((res?.named'), `${file}’s picker lists the raw names`)
+    }
+  })
+
   test('the demo’s blocks have the editor’s pages, and its Compressor the FM3’s own ranges', async () => {
     const { createMockDevice } = await import('../src/lib/mockDevice.js')
     const { editPages } = await import('../src/lib/editPages.js')
@@ -3965,7 +4147,13 @@ export function run(test) {
       const r = await unit.blockParams(b.effectId)
       return editPages(r.named, r.layout).map((p) => p.name)
     }
-    assert.deepEqual(await pagesOf('drive'), ['Basic', 'Tone', 'Graphic EQ', 'Advanced', 'More'], 'the demo Drive is not on its editor pages')
+    assert.deepEqual(await pagesOf('drive'), ['Basic', 'Tone', 'Graphic EQ', 'Advanced', 'Mix', 'Hidden'], 'the demo Drive is not on its editor pages')
+    /* The demo's layouts keep only the parameter rows, so its Mix has to be
+       put back, or it sits on Hidden under a line that is not true of it. */
+    const drive = blocks.find((x) => x.slug === 'drive')
+    const r = await unit.blockParams(drive.effectId)
+    const hidden = editPages(r.named, r.layout).find((p) => p.name === 'Hidden')
+    assert.ok(!hidden.params.some((p) => /^(Mix|Balance)$/.test(p.name)), 'the demo Drive’s Mix is on Hidden, as if Fractal’s editor did not show it')
     assert.deepEqual((await pagesOf('comp')).slice(0, 2), ['Basic', 'Sidechain'], 'the demo Compressor is not on its editor pages')
 
     /* Read off the FM3's tables rather than typed in as typical. */

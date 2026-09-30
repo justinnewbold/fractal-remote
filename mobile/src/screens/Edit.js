@@ -39,7 +39,8 @@ import { colLabel, doubtfulWrite, gridShape, isSplitChain, laneItems, lanesShown
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
 import { isSilencingParam } from '../lib/guardrails'
 import { editPages, pageFor, pageHolding } from '../lib/editPages'
-import { buildParamIndex, findControls, indexFor } from '../lib/paramIndex'
+import { withUnit } from '../lib/param-fixes'
+import { asOnPages, buildParamIndex, findControls, indexFor } from '../lib/paramIndex'
 import { beginChainWrite, endChainWrite, getState, noteEdited, refreshBlocks, useRig, writeBypass, writeChannel } from '../lib/rig'
 import { useKeepAwake } from 'expo-keep-awake'
 import { logDebug } from '../lib/debugLog'
@@ -83,10 +84,12 @@ const didNotTake = (p, actual, params) => {
   const held = typeof actual === 'number' ? ` The unit is holding it at ${fmt(actual)}${p.unit ? ` ${p.unit}` : ''}.` : ''
   const tempo = (params || []).find((q) => /^tempo$/i.test(q?.name || ''))
   const lowest = typeof tempo?.min === 'number' ? tempo.min : 0
+  /* By the name on the knob, not the catalog's. */
+  const called = p.label || p.name
   if (/time/i.test(p.name || '') && tempo && typeof tempo.value === 'number' && tempo.value > lowest) {
-    return `${p.name} didn’t take.${held} This block’s Tempo is set to a note value, so its time follows the song tempo. Set Tempo to None to set the time by hand.`
+    return `${called} didn’t take.${held} This block’s Tempo is set to a note value, so its time follows the song tempo. Set Tempo to None to set the time by hand.`
   }
-  return `${p.name} didn’t take.${held}`
+  return `${called} didn’t take.${held}`
 }
 
 /**
@@ -1028,6 +1031,9 @@ function BlockPanel({
         tall as its contents, so it lurches down and back up — for a read that
         is usually over in a second, on values that are usually the same ones.
       */}
+      {/* Hidden says why its settings are there, once, above them. */}
+      {onPage?.note ? <Note>{onPage.note}</Note> : null}
+
       {loading && !shown.length ? (
         <Note>{`Reading ${block.name}…`}</Note>
       ) : (
@@ -1049,7 +1055,7 @@ function BlockPanel({
             >
               <Knob
                 param={p}
-                label={p.name}
+                label={p.label || p.name}
                 value={valueOf(p)}
                 onChange={(v) => setLocal((prev) => ({ ...prev, [p.id]: v }))}
                 onCommit={(v) => commit(p, v)}
@@ -1693,7 +1699,7 @@ function Modifiers({ blocks, onError }) {
       setLoading(true)
       try {
         const res = await blockParams(eid)
-        if (!stop) setParams((res?.named || []).filter((p) => !isSilencingParam(p.name)))
+        if (!stop) setParams(asOnPages(res))
       } catch (err) {
         if (!stop) onError(err.message)
       } finally {
@@ -1944,7 +1950,7 @@ function FindControl({ blocks, onPick, onError }) {
                 key={`${idOf(block)}-${param.id}`}
                 caption={block.name}
                 label={param.name}
-                sub={`${fmt(param.value)}${param.unit || ''}`}
+                sub={withUnit(fmt(param.value), param.unit)}
                 onPress={() => pick(idOf(block), param.id)}
               />
             ))}
@@ -2004,7 +2010,7 @@ function ValueBox({ param, value, onCommit }) {
       selectTextOnFocus
       keyboardType="numbers-and-punctuation"
       returnKeyType="done"
-      accessibilityLabel={`${param?.name} value`}
+      accessibilityLabel={`${param?.label || param?.name} value`}
       style={{
         width: '100%',
         minHeight: 32,

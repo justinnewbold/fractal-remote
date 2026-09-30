@@ -1,6 +1,7 @@
 import { blockParams, idOf, knobBlocks } from './device'
 import { disambiguate } from './encoding'
 import { isSilencingParam } from './guardrails'
+import { namedAsOnPages } from './editPages'
 
 /**
  * Every control in the preset, one flat list, so you can find one by name.
@@ -37,6 +38,17 @@ export const chainKey = (blocks) =>
     .map((b) => idOf(b))
     .join(',')
 
+/*
+ * Under the names the knobs wear, not the catalog's: a search for "bright
+ * cap" finds the knob that says Bright Cap, and a meter — which the pages do
+ * not draw — is not offered to turn. Levels are taken out by the catalog's
+ * name, which is the one the silencing rule knows.
+ */
+export const asOnPages = (res) => {
+  const named = (res?.named || []).filter((p) => !isSilencingParam(p.name))
+  return disambiguate(namedAsOnPages(named, res?.layout).map((p) => ({ ...p, name: p.label })))
+}
+
 /**
  * Build it, or hand back the one already built for this chain.
  *
@@ -58,7 +70,7 @@ export async function buildParamIndex(blocks, onProgress) {
   for (const block of editable) {
     try {
       const res = await blockParams(idOf(block))
-      for (const param of disambiguate(res?.named || []).filter((p) => !isSilencingParam(p.name))) {
+      for (const param of asOnPages(res).filter((p) => !isSilencingParam(p.name))) {
         out.push({ block, param })
       }
     } catch {

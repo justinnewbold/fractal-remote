@@ -69,7 +69,7 @@ export function disambiguate(named) {
     return {
       id: p.id,
       name: clash
-        ? `${p.name} (${sub ? `sub-block ${sub}, ` : ''}${p.min}-${p.max}${p.unit || ''})`
+        ? `${p.name} (${sub ? `sub-block ${sub}, ` : ''}${p.min}-${p.max}${p.unit ? ` ${p.unit}` : ''})`
         : p.name,
       subBlockId: sub,
       value: p.value,

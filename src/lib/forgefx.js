@@ -18,6 +18,7 @@ import { zeroBasedChain, wrongSlot } from './slots.js'
 import { cableColumns, toWireCable, toWireCell } from '../../shared/grid-plan.mjs'
 import { DEFAULT_SLUG, deviceSlug } from '../../shared/device-slug.mjs'
 import { firmwareOf } from '../../shared/firmware.mjs'
+import { fixRead } from '../../shared/param-fixes.mjs'
 import { cancelledSave, pendingSaveDoc, saveProgressDoc, saveResultDoc } from '../../shared/save-wait.mjs'
 import { toNormalized } from './scale.js'
 import { withLineage } from './lineage.js'
@@ -570,9 +571,15 @@ export const presetBlocks = async () => {
   return zeroBasedChain(list, lastCaps)
 }
 
-/** Named parameters for one placed block. `eid` is the effect id from presetBlocks(). */
+/**
+ * Named parameters for one placed block. `eid` is the effect id from presetBlocks().
+ *
+ * With the catalog's known mistakes put right on the way in (Presence
+ * Frequency is kHz, not Hz) — see shared/param-fixes.mjs — so the knob, the
+ * search and the report all start from the same words.
+ */
 export const blockParams = async (eid) =>
-  mock ? (await tick(), mock.blockParams(eid)) : request(`/preset/blocks/${eid}/params`)
+  fixRead(mock ? (await tick(), mock.blockParams(eid)) : await request(`/preset/blocks/${eid}/params`))
 
 /** ForgeFX's own reference material for a block family. */
 export const blockHelp = (slug) =>
@@ -1179,7 +1186,7 @@ export async function applyChanges(changes, onProgress) {
     }
     for (const param of change.params) {
       const range = fresh?.get(param.id) ?? param.range
-      advance(`${change.name} · ${param.name} → ${param.to}${param.unit}`)
+      advance(`${change.name} · ${param.name} → ${param.to}${param.unit ? ` ${param.unit}` : ''}`)
       try {
         const res = await setParamConfirmed(change.eid, param.id, param.to, {
           ...range,

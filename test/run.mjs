@@ -514,7 +514,7 @@ test('a step says what it is doing in words both apps will use', () => {
   const [, , param] = steps.stepsFor(
     oneBlock({ channel: 2, params: [{ id: 1, name: 'Gain', to: 6, unit: 'dB' }] })
   )
-  assert.equal(param.label, 'Amp 1 · Gain → 6dB')
+  assert.equal(param.label, 'Amp 1 · Gain → 6 dB', 'a number and its unit run together')
 })
 
 test('rubbish in the plan is skipped rather than written somewhere', () => {
@@ -2425,6 +2425,48 @@ test('leaves distinct parameter names alone', () => {
   ])
   assert.deepEqual(out.map((p) => p.name), ['Gain', 'Master'])
   assert.equal(out[0].subBlockId, null)
+})
+
+test('Presence Frequency is kHz, and the catalog’s other wrong units are put right where a read lands', async () => {
+  /*
+   * "Presence Frequency — 1 Hz." The number was right and the word was not:
+   * the catalog guesses Hz for a 0.1 to 10 control that is kHz. Keyed by
+   * block and setting number, and checked against what it expects to find.
+   */
+  const { fixRead, withUnit, UNIT_FIXES } = await import('../shared/param-fixes.mjs')
+  const amp = fixRead(JSON.parse(readSrc(new URL('../src/data/amp-params.json', import.meta.url), 'utf8')))
+  const by = (id) => amp.named.find((p) => p.id === id)
+  assert.equal(by(28).unit, 'kHz', 'Presence Frequency still says Hz')
+  assert.equal(by(31).unit, 'Hz', 'Depth Frequency, which is in hertz, was moved')
+  assert.equal(by(91).unit, 'Hz', 'the amp’s Tremolo Frequency still says dB')
+  for (const id of [119, 120, 121, 122, 123, 132]) assert.equal(by(id).unit, undefined, `a 0-to-1 amp setting (${id}) still says dB`)
+  assert.equal(by(97).name, 'Dynamic Damping', 'DYNIMP is still called DYNIMP')
+  assert.ok(UNIT_FIXES.every((f) => f.slug && Number.isInteger(f.id)), 'a unit fix is keyed by name instead of by setting')
+
+  /* Only what it expects: another block's 28, or a 28 already right, is left alone. */
+  const other = { slug: 'drive', named: [{ id: 28, name: 'Tone', unit: 'Hz', min: 0.1, max: 10 }] }
+  assert.equal(fixRead(other), other, 'a block with nothing to correct was copied or changed')
+  const right = fixRead({ slug: 'amp', named: [{ id: 28, name: 'Presence Frequency', unit: 'kHz', min: 0.1, max: 10 }] })
+  assert.equal(right.named[0].unit, 'kHz')
+  const elsewhere = fixRead({ slug: 'amp', named: [{ id: 28, name: 'Something', unit: 'Hz', min: 20, max: 20000 }] })
+  assert.equal(elsewhere.named[0].unit, 'Hz', 'a setting 28 with another range was corrected as if it were Presence Frequency')
+  assert.equal(fixRead(null), null)
+
+  /* Every read goes through it, at both ends. */
+  assert.match(readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8'), /export const blockParams = async \(eid\) =>\s*fixRead\(/, 'the browser shows the catalog’s units')
+  assert.match(readSrc(new URL('../mobile/src/lib/device.js', import.meta.url), 'utf8'), /export const blockParams = async \(eid\) => fixRead\(await remoteRequest/, 'the phone shows the catalog’s units')
+  assert.match(readSrc(new URL('../scripts/sync-relay-rules.mjs', import.meta.url), 'utf8'), /source: '\.\.\/shared\/param-fixes\.mjs'/, 'the phone has no copy of the fixes')
+
+  /* And a space between a number and its unit, everywhere. */
+  assert.equal(withUnit(1, 'kHz'), '1 kHz')
+  assert.equal(withUnit(4, ''), '4')
+  const { disambiguate } = await import('../src/lib/encoding.js')
+  assert.match(disambiguate([{ id: 1, name: 'Cut', min: 0, max: 10, unit: 'Hz' }, { id: 2, name: 'Cut', min: 0, max: 20, unit: 'Hz' }])[0].name, /0-10 Hz\)$/)
+  const search = readSrc(new URL('../src/components/ParamSearch.jsx', import.meta.url), 'utf8')
+  assert.match(search, /withUnit\(Math\.round\(param\.value \* 100\) \/ 100, param\.unit\)/, 'the browser’s search runs a number into its unit')
+  const phone = readSrc(new URL('../mobile/src/screens/Edit.js', import.meta.url), 'utf8')
+  assert.match(phone, /sub=\{withUnit\(fmt\(param\.value\), param\.unit\)\}/, 'the phone’s search runs a number into its unit')
+  assert.match(readSrc(new URL('../src/lib/presetReport.js', import.meta.url), 'utf8'), /return `\$\{rounded\}\$\{param\.unit \? ` \$\{param\.unit\}` : ''\}`/, 'the report runs a number into its unit')
 })
 
 test('separates a sub-block parameter that collides by name', () => {
@@ -8245,7 +8287,7 @@ test('the report names what would keep a preset quiet, in a player\'s words', as
     }
   })
   assert.equal(down.length, 1, 'a gain at zero is not silence and a level at -80 is')
-  assert.match(down[0], /Out 1 — Level is all the way down at -80dB/)
+  assert.match(down[0], /Out 1 — Level is all the way down at -80 dB\./)
 
   assert.equal(atMinimum({ value: -80, min: -80, max: 20 }), true)
   assert.equal(atMinimum({ value: -79, min: -80, max: 20 }), false)
@@ -8866,7 +8908,8 @@ test('the browser’s knob writes what a press reached, once the keys stop', () 
   assert.match(commit, /writes\.current\.send\(lane, /, 'two checked writes to one control can race again')
   assert.match(commit, /if \(prev\[p\.id\] !== next\) return prev/, 'a knob still being turned flicks back to an older read')
   assert.match(commit, /if \(liveKey\.current === key\) \{/, 'a write that finishes after another block opened hands that block its values')
-  assert.match(commit, /res\.unverified\s*\?\s*`\$\{p\.name\} was sent, but the app couldn't read it back to check\.`\s*:\s*`\$\{p\.name\} didn't take\.`/, 'a knob nobody could read back is announced as one the unit refused')
+  assert.match(commit, /res\.unverified\s*\?\s*`\$\{called\} was sent, but the app couldn't read it back to check\.`\s*:\s*`\$\{called\} didn't take\.`/, 'a knob nobody could read back is announced as one the unit refused')
+  assert.match(commit, /const called = p\.label \|\| p\.name/, 'a knob that did not take is named by the catalog, not by what the knob says')
 })
 
 console.log('\ncab picker')

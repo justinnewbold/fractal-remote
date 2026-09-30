@@ -91,7 +91,7 @@ export function stepsFor(changes) {
         eid: change.eid,
         name,
         param,
-        label: `${name} · ${param.name} → ${param.to}${param.unit || ''}`
+        label: `${name} · ${param.name} → ${param.to}${param.unit ? ` ${param.unit}` : ''}`
       })
     }
 

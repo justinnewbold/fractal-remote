@@ -109,7 +109,7 @@ export function silenceFaults({ blocks = [], params = {}, sceneName = '' } = {})
       if (!isLevelParam(param?.name) || !atMinimum(param)) continue
       faults.push(
         `${block.name || block.slug} — ${param.name} is all the way down at ${param.value}${
-          param.unit || ''
+          param.unit ? ` ${param.unit}` : ''
         }.`
       )
     }
@@ -131,7 +131,7 @@ const fed = (block) =>
 const value = (param) => {
   if (!isNumber(param.value)) return String(param.value ?? '—')
   const rounded = Math.abs(param.value) >= 100 ? Math.round(param.value) : Math.round(param.value * 1000) / 1000
-  return `${rounded}${param.unit || ''}`
+  return `${rounded}${param.unit ? ` ${param.unit}` : ''}`
 }
 
 const range = (param) =>

@@ -1,5 +1,17 @@
 import { blockParams, disambiguate } from './forgefx'
 import { EXCLUDED_BLOCKS, isSilencingParam } from './guardrails'
+import { namedAsOnPages } from './editPages'
+
+/*
+ * Under the names the knobs wear, not the catalog's: a search for "bright
+ * cap" finds the knob that says Bright Cap, and a meter — which the pages do
+ * not draw — is not offered to turn. Levels are taken out by the catalog's
+ * name, which is the one the silencing rule knows.
+ */
+export const asOnPages = (res) => {
+  const named = (res?.named || []).filter((p) => !isSilencingParam(p.name))
+  return disambiguate(namedAsOnPages(named, res?.layout).map((p) => ({ ...p, name: p.label })))
+}
 
 /**
  * Every editable control in the preset, one flat list.
@@ -20,7 +32,7 @@ export async function buildParamIndex(blocks) {
        * search box and dragged by a finger is the silent preset by another
        * route. They stay where the knob list keeps them, off the quick surfaces.
        */
-      for (const param of disambiguate(res?.named || []).filter((p) => !isSilencingParam(p.name))) {
+      for (const param of asOnPages(res).filter((p) => !isSilencingParam(p.name))) {
         out.push({ block, param })
       }
     } catch {

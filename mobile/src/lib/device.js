@@ -18,6 +18,7 @@
  */
 import { remoteRequest as overTheWire } from './relay'
 import { firmwareOf } from './firmware'
+import { fixRead } from './param-fixes'
 import { demoDevice } from './demo'
 import { demoRequest } from './demoWire'
 import { logDebug } from './debugLog'
@@ -281,8 +282,11 @@ export const getTempo = () => remoteRequest('/tempo')
  * — gen3's blockParams opens a connection rather than reusing the dump — which
  * is what makes confirming a write mean anything from a phone, where the cache
  * cannot be cleared.
+ *
+ * With the catalog's known mistakes put right on the way in (Presence
+ * Frequency is kHz, not Hz) — see lib/param-fixes.js.
  */
-export const blockParams = (eid) => remoteRequest(`/preset/blocks/${eid}/params`)
+export const blockParams = async (eid) => fixRead(await remoteRequest(`/preset/blocks/${eid}/params`))
 
 /** One knob's current value, read back off the unit. */
 async function readParamValue(eid, paramId) {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { EXCLUDED_BLOCKS } from '../lib/guardrails'
 import { buildParamIndex } from '../lib/paramIndex'
+import { withUnit } from '../../shared/param-fixes.mjs'
 
 /**
  * Find a control by name, across every block at once.
@@ -164,10 +165,7 @@ export default function ParamSearch({ blocks, onPick, onError }) {
                 >
                   <span className="hit-block">{block.name}</span>
                   <span className="hit-param">{param.name}</span>
-                  <span className="hit-value mono">
-                    {Math.round(param.value * 100) / 100}
-                    {param.unit || ''}
-                  </span>
+                  <span className="hit-value mono">{withUnit(Math.round(param.value * 100) / 100, param.unit)}</span>
                 </button>
               )
             })}

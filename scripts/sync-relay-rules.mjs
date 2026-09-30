@@ -113,6 +113,12 @@ export const FILES = [
    */
   { source: '../shared/model-undo.mjs', target: '../mobile/src/lib/model-undo.js' },
   /*
+   * The settings the unit's catalog names or measures wrongly — Presence
+   * Frequency in Hz when it is kHz — put right where a block's read lands. A
+   * phone saying 1 Hz beside a browser saying 1 kHz is one of them wrong.
+   */
+  { source: '../shared/param-fixes.mjs', target: '../mobile/src/lib/param-fixes.js' },
+  /*
    * Whose chain is on screen after a preset change: another preset's, being
    * read, or this one's. A phone that let the last song's tiles switch blocks
    * on this one, where the browser did not, would be one of them lying.
