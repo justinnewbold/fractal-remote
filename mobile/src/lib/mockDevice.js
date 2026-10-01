@@ -246,6 +246,13 @@ const midiCarried = () => {
  *   Anything unrecognised is the FM3, because a mock that cannot say what it
  *   is cannot draw a screen either.
  */
+/*
+ * One block as a stored preset's summary lists it — the hardware's shape,
+ * every block placed whatever the scene, so the demo's read-ahead on Play
+ * (shared/chain-outline.mjs) draws what the unit's would.
+ */
+const summaryBlock = (b) => ({ effectId: b.effectId, slug: b.slug ?? null, name: b.name, instance: null })
+
 export function createMockDevice(unitKey = DEFAULT_UNIT) {
   const unit = unitByKey(unitKey)
   const UNIT = unit.key
@@ -1007,19 +1014,18 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
     presetSummary: (n) => {
       const name = state.stored.get(n) || ''
       if (n === state.presetNumber)
-        return { number: n, name, blocks: state.blocks.filter((b) => !off(b.effectId)).map((b) => b.name) }
+        return { number: n, name, blocks: state.blocks.map(summaryBlock) }
       /* A factory slot nobody has built a rig for: the name is real and the
          block list is genuinely unknown until it is loaded, which is what an
          empty array says. */
       if (!rigSeeds.has(n) && !rigs.has(n) && !(String(n) in savedPresets(unit.key))) return { number: n, name, blocks: [] }
-      /* Another slot, so there is no scene to be in: scene one, the one it
-         would load on. */
+      /* Another slot: every block it holds, built the first time it is asked about. */
       if (!rigs.has(n)) rigs.set(n, buildRig(n))
       const rig = rigs.get(n)
       return {
         number: n,
         name,
-        blocks: rig.blocks.filter((b) => !rig.scenes.isOff(0, b.effectId)).map((b) => b.name)
+        blocks: rig.blocks.map(summaryBlock)
       }
     },
 

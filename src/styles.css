@@ -9440,6 +9440,24 @@ button.recent-del:focus-visible {
   height: 72px;
 }
 
+/* The waiting cards in exactly the space the last chain's pedals took, so the
+   scenes above keep their size through a preset change. See Gig.jsx. */
+.gig-blocks-held {
+  position: relative;
+  overflow: hidden;
+  margin-top: var(--s-3);
+}
+
+.gig-blocks-held .chain-wait {
+  padding: 0;
+}
+
+.gig-blocks-held .chain-wait-words {
+  position: absolute;
+  inset: 0;
+  padding: var(--s-2);
+}
+
 .chain-wait-words {
   display: flex;
   flex-wrap: wrap;

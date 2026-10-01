@@ -4998,7 +4998,10 @@ test('the simulated unit answers for the chain from the scene it is in', () => {
   const map = mock.slice(mock.indexOf('sceneStateNow:'), mock.indexOf('sceneStateNow:') + 700)
   assert.ok(!/% 3|state\.scene === 0 \?/.test(map), 'the scene map is a made-up pattern again, disagreeing with Play')
   assert.ok(!/b\.bypassed/.test(mock), 'something in the mock reads a per-block bypass flag, which no longer follows the scene')
-  for (const answer of ['presetBlocks', 'meters', 'presetSummary', 'sceneStateNow']) {
+  /* Not the summary: a stored preset's summary lists every block placed in
+     it, whatever the scene, as the hardware's does — Play's read-ahead draws
+     the next preset's pedals from it (shared/chain-outline.mjs). */
+  for (const answer of ['presetBlocks', 'meters', 'sceneStateNow']) {
     const body = mock.slice(mock.indexOf(`${answer}:`), mock.indexOf(`${answer}:`) + 700)
     assert.match(body, /off\(b\.effectId\)/, `${answer} does not ask the scene which blocks are off`)
   }
@@ -6319,6 +6322,8 @@ function windowOnTheBench(over = {}) {
     unitKey: () => unit.unitKey ?? 'rig:fm3',
     /* A gen-3 by default: the computer's copy of the preset is free to read again. */
     hostKeepsCopy: () => (unit.keepsCopy === undefined ? true : unit.keepsCopy),
+    /* A stored slot decoded without loading it — only where a test hands one over. See readAhead. */
+    ...(unit.summary ? { presetSummary: (n) => answer(`GET /presets/${n}/summary`, () => unit.summary(n)) } : {}),
     /* What a status read's ids are named by ahead of the chain read; none on an AM4. See drawOutline. */
     outlineCatalog: () => (unit.outlines === false || unit.keepsCopy === false ? null : BLOCK_CATALOG),
     /* The event stream; `unit.gap()` is it dropping. */
@@ -6348,6 +6353,104 @@ const onTheBench = (name, body) =>
       ds.attachClock(null)
     }
   })
+
+/*
+ * THE PRESETS EITHER SIDE. "The amp pedal names are blank for about half a
+ * second... preload the previous preset and preload the next preset with
+ * those names so it instantly changes." Play says where Previous and Next
+ * would land; the store reads those slots once the unit is quiet, one at a
+ * time, and a tap on one puts its pedals up at once — as an outline, because
+ * a summary does not say which are on, and the status read and the chain read
+ * still go and replace it.
+ */
+onTheBench('the next preset’s pedals are read while the unit is quiet, and go up the moment it is tapped', async () => {
+  const next = [
+    { slug: 'reverb', name: 'Reverb', effectId: 66, bypassed: false, channel: 'A' },
+    { slug: 'amp', name: 'Amp', effectId: 58, bypassed: false, channel: 'B' },
+    { slug: 'delay', name: 'Delay 1', effectId: 70, bypassed: true, channel: 'A' }
+  ]
+  const { clock, unit, asked } = windowOnTheBench({
+    summary: (n) =>
+      n === 13
+        ? { number: 13, name: 'SONG 13', blocks: next.map(({ effectId, slug, name }) => ({ effectId, slug, name, instance: 1 })) }
+        : { number: n, name: '', blocks: [] }
+  })
+  ds.readAhead([13, 11])
+  await clock.advance(ds.READ_AHEAD_MS - 100)
+  assert.equal(asked(SUMMARY), 0, 'the next preset was read before the unit had been quiet for a moment')
+  await clock.advance(200)
+  assert.equal(asked(SUMMARY), 1, 'the next preset was not read ahead')
+  await clock.advance(ds.READ_AHEAD_MS + 100)
+  assert.equal(asked(SUMMARY), 2, 'the previous preset was not read ahead, or both went at once')
+  await clock.advance(ds.READ_AHEAD_MS * 4)
+  assert.equal(asked(SUMMARY), 2, 'a slot read ahead once was read again')
+
+  unit.blocks = next
+  const load = ds.loadPreset(13)
+  /* From the tap, before the unit has answered anything. */
+  assert.deepEqual(
+    ds.getSnapshot().blocks.map((b) => b.slug),
+    ['amp', 'delay', 'reverb'],
+    'the pedals read ahead did not go up on the tap, in signal order'
+  )
+  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'outline', 'pedals read ahead are drawn as this preset’s finished chain')
+  assert.equal(ds.chainNumberOf(ds.getSnapshot()), 13)
+  /* Ahead of the chain read, the status read still fills in which are on. */
+  await clock.advance(ds.OUTLINE_AFTER_MS + 50)
+  assert.equal(ds.getSnapshot().blocks.find((b) => b.effectId === 70).bypassed, true, 'the status read did not say which pedals are on')
+  await clock.advance(ds.OWN_SETTLE_MS + 100)
+  await load
+  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'ready')
+  assert.equal(asked(CHAIN), 1, 'the chain was not read once after the switch, as always')
+  assert.equal(asked(SUMMARY), 2, 'a read ahead went while the preset was loading')
+})
+
+onTheBench('a slot nothing can be read ahead for waits for the status read, as before', async () => {
+  const { clock } = windowOnTheBench()
+  ds.readAhead([13])
+  await clock.advance(ds.READ_AHEAD_MS * 3)
+  const load = ds.loadPreset(13)
+  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'loading', 'a preset never read had pedals on the tap')
+  await clock.advance(ds.OWN_SETTLE_MS + 100)
+  await load
+  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'ready')
+})
+
+test('the read-ahead goes one slot at a time, waits for quiet, and stops for a unit that cannot', async () => {
+  const { createReadAhead } = await import('../shared/chain-outline.mjs')
+  const clock = handClock()
+  const reads = []
+  let quiet = false
+  let refuse = false
+  const kept = new Map()
+  const ahead = createReadAhead({
+    read: async (n) => {
+      reads.push(n)
+      if (refuse) throw Object.assign(new Error('no dump here'), { status: 501 })
+      return [{ slug: 'amp', effectId: 58 }]
+    },
+    has: (n) => kept.has(n),
+    keep: (n, list) => kept.set(n, list),
+    ready: () => quiet,
+    wait: (go, ms) => clock.setTimeout(go, ms),
+    clear: (t) => clock.clearTimeout(t),
+    after: 1000
+  })
+  ahead.want([5, 3, 5, null, -1])
+  await clock.advance(5000)
+  assert.deepEqual(reads, [], 'a slot was read while the unit was busy')
+  quiet = true
+  await clock.advance(1100)
+  assert.deepEqual(reads, [5], 'not the first slot first, or not one at a time')
+  await clock.advance(1100)
+  assert.deepEqual(reads, [5, 3])
+  ahead.want([7, 3])
+  refuse = true
+  await clock.advance(1100)
+  ahead.want([9])
+  await clock.advance(5000)
+  assert.deepEqual(reads, [5, 3, 7], 'a unit that has no such read was asked again')
+})
 
 onTheBench('a scene tapped in the Mac window costs one small read and no preset dump', async () => {
   const { clock, asked } = windowOnTheBench()
@@ -11291,7 +11394,11 @@ test('every browser panel that draws the chain draws another preset’s as a wai
   const grid = src('components/GridEditor.jsx')
   assert.match(grid, /if \(chainNow\.elsewhere\) \{\s*return \([\s\S]*?<ChainWait chain=\{chainNow\}/, 'the chain editor offers Remove on the last song’s blocks')
   const gig = src('components/Gig.jsx')
-  assert.match(gig, /\{shown\.elsewhere \? \(\s*<ChainWait chain=\{shown\}/, 'Play says nothing about a chain on its way')
+  assert.match(
+    gig,
+    /\{held \? \(\s*<div className="gig-blocks-held" ref=\{blocksRef\} style=\{\{ height: held\.height \}\}>\s*<ChainWait chain=\{shown\} cards=\{held\.count\}[\s\S]*?\) : shown\.elsewhere \? \(\s*<ChainWait chain=\{shown\}/,
+    'Play says nothing about a chain on its way, or the wait does not hold the pedals’ space'
+  )
   assert.match(gig, /\{!shown\.elsewhere && blocks\.length \? \(\s*<div className=\{`gig-blocks/, 'Play draws the last song’s tiles under this song’s name')
   assert.match(gig, /if \(err\?\.notThisChain\) return/, 'a refused tap on Play reads the unit back or says it failed')
   const app = src('App.jsx')
@@ -11474,7 +11581,8 @@ test('Play says where the looper went, and still never draws one', async () => {
   /* A pedal in the chain, not its own button: tapping it opens the buttons, never bypasses the block. */
   assert.match(gig, /\{looperHere \? \(\s*<BlockTile\s+key="looper"\s+block=\{looperHere\}\s+door\s+onToggle=\{\(\) => setLooping\(true\)\}/, 'the looper is not a pedal in the chain, or tapping it does not open its buttons')
   assert.ok(!/gig-note-action">\s*<button type="button" onClick=\{\(\) => setLooping/.test(gig), 'the looper still has its own button under the chain')
-  assert.match(gig, /blocks: blocks\.length \+ \(looperHere \? 1 : 0\)/, 'the fit does not count the looper pedal')
+  assert.match(gig, /const tileCount = blocks\.length \+ \(looperHere \? 1 : 0\)/, 'the fit does not count the looper pedal')
+  assert.match(gig, /blocks: fitCount,/, 'the fit does not count the looper pedal')
   assert.match(gig, /allBlocks\.filter\(\(b\) => b\.slug && !STAGE_HIDDEN\.includes\(b\.slug\)\)/, 'Play draws a tile for the looper, input or output')
 })
 

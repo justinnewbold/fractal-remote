@@ -10,11 +10,11 @@ import {
   judgeCopy
 } from '../../shared/own-echo.mjs'
 import { CHAIN_WORDS, chainActs, chainSwitches, chainView } from '../../shared/chain-view.mjs'
-import { OUTLINE_AFTER_MS, outlineChain } from '../../shared/chain-outline.mjs'
+import { OUTLINE_AFTER_MS, aheadChain, createReadAhead, outlineChain } from '../../shared/chain-outline.mjs'
 import { STAGE_HIDDEN } from './guardrails.js'
 
 export { CHAIN_FRESH_MS, OWN_ECHO_MS, OWN_SETTLE_MS, PRESET_SETTLE_MS } from '../../shared/own-echo.mjs'
-export { OUTLINE_AFTER_MS } from '../../shared/chain-outline.mjs'
+export { OUTLINE_AFTER_MS, READ_AHEAD_MS } from '../../shared/chain-outline.mjs'
 
 /**
  * One device, one copy of what it is doing.
@@ -1103,6 +1103,7 @@ function keepChain(number) {
 function forgetChain(number) {
   const key = keyFor(number)
   if (key) knownChains.delete(key)
+  if (key) aheadChains.delete(key)
   if (state.chainKnown === number) set({ chainKnown: null })
 }
 
@@ -1115,10 +1116,36 @@ export function chainChanged({ all = false } = {}) {
   touchedRun = presetRun
   if (all) {
     knownChains.clear()
+    aheadChains.clear()
     if (state.chainKnown !== null) set({ chainKnown: null })
     return
   }
   forgetChain(state.preset?.number)
+}
+
+/*
+ * THE PRESETS EITHER SIDE — the slots Previous and Next would land on, read
+ * once the unit is quiet and kept per unit like the chains above, so a tap on
+ * one puts its pedals up with its name. See shared/chain-outline.mjs, which
+ * the phone runs too. Play says which slots those are (readAhead).
+ */
+const aheadChains = new Map()
+const aheadHere = () => typeof driver?.presetSummary === 'function' && Array.isArray(driver?.outlineCatalog?.())
+const ahead = createReadAhead({
+  read: async (n) => aheadChain(await driver.presetSummary(n), n, driver.outlineCatalog()),
+  has: (n) => {
+    const key = keyFor(n)
+    return !aheadHere() || !key || n === state.preset?.number || knownChains.has(key) || aheadChains.has(key)
+  },
+  keep: (n, list) => keep(aheadChains, keyFor(n), list),
+  ready: () => !presetBusy() && chainReads === 0 && !state.tunerOn,
+  wait: (go, ms) => clock.setTimeout(go, ms),
+  clear: (timer) => clock.clearTimeout(timer)
+})
+
+/** Where Previous and Next would land now, for their pedals to be read ahead. */
+export function readAhead(numbers) {
+  ahead.want(numbers)
 }
 
 /** A chain read for this preset has just landed. App's own read calls it too. */
@@ -1383,7 +1410,10 @@ export async function loadPreset(number, { selected } = {}) {
   const sameSlot = number === state.preset?.number
   const seen = sameSlot ? null : knownPresets.get(keyFor(number)) || null
   const chainThen = seen ? knownChains.get(keyFor(number)) || null : null
-  const before = seen
+  /* Never played here, but read ahead as the next or the last slot: its pedals, as an outline. */
+  const readFirst = !chainThen && !sameSlot ? aheadChains.get(keyFor(number)) || null : null
+  ahead.nudge()
+  const before = seen || readFirst
     ? { preset: state.preset, blocks: state.blocks, sceneNames: state.sceneNames, chainFor: state.chainFor, chainKnown: state.chainKnown }
     : null
   /* What the chain on screen was — up from memory, or only the outline — for a refusal to put back. */
@@ -1395,7 +1425,13 @@ export async function loadPreset(number, { selected } = {}) {
     chainGoing: number,
     ...(seen ? { preset: { ...seen }, sceneNames: rememberedNames(number) } : {}),
     /* The same slot tapped twice keeps whatever it has. */
-    ...(chainThen ? { blocks: chainThen, chainFor: number, chainKnown: number } : sameSlot ? {} : { chainKnown: null })
+    ...(chainThen
+      ? { blocks: chainThen, chainFor: number, chainKnown: number }
+      : readFirst
+        ? { blocks: readFirst.map((b) => ({ ...b })), chainFor: number, chainKnown: number, chainOutline: number }
+        : sameSlot
+          ? {}
+          : { chainKnown: null })
   })
   /* A read still waiting to go is for a preset this tap has just left. */
   clock.clearTimeout(settleTimer)
@@ -1511,7 +1547,9 @@ async function drawOutline(number, run, sentAt) {
   /* Whose chain is up may have been settled meanwhile: a newer tap, or a read. */
   /* And only while the read after the switch is still to come: drawn after
      it, an outline would be left standing with nothing to replace it. */
-  const stillWanted = () => run === presetRun && presetBusy() && chainNumberOf(state) === number && state.chainFor !== number
+  /* Pedals read ahead are up already, with no states: the status read still fills those in. */
+  const stillWanted = () =>
+    run === presetRun && presetBusy() && chainNumberOf(state) === number && (state.chainFor !== number || state.chainOutline === number)
   if (!stillWanted()) return
   let states = null
   try {
@@ -1810,6 +1848,8 @@ export function reset() {
   lastRead = null
   knownChains.clear()
   knownPresets.clear()
+  aheadChains.clear()
+  ahead.stop()
   stopListening()
   state = BLANK
   for (const listener of [...listeners]) listener()

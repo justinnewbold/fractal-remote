@@ -110,3 +110,108 @@ export function outlineChain(states, catalog) {
   if (!out.length) return null
   return out.sort((a, b) => rankOf(a.slug) - rankOf(b.slug) || a.effectId - b.effectId)
 }
+
+/*
+ * THE PRESETS EITHER SIDE, READ BEFORE THEY ARE ASKED FOR.
+ *
+ * "The amp pedal names are blank for about half a second before it shows
+ * their names. Can you preload the previous preset and preload the next
+ * preset with those names so it instantly changes... preload the next one and
+ * keep the previous one." A preset played before already goes up from memory
+ * on the tap (KNOWN_CHAINS). One never played had grey cards until the status
+ * read above came back — a round trip after the select, longer through the
+ * relay.
+ *
+ * So once a preset has settled and the screen is quiet, the slots Previous and
+ * Next would land on are read — the stored slot decoded, without loading it,
+ * GET /presets/{n}/summary — and their pedals kept, in signal order. A tap on
+ * one puts those pedals up with the name, dimmed like any outline, and the
+ * status read and the chain read still go as they always did and replace them.
+ * The one you came from is in KNOWN_CHAINS already: that is the "keep the
+ * previous one".
+ *
+ * Gentle, because the dropouts came from reading the unit while it loads: one
+ * read at a time, never while a preset is loading, the chain being read or the
+ * tuner running, and only READ_AHEAD_MS after the last thing happened. A slot
+ * read once is not read again, and a unit that has no such read says so once
+ * and is not asked again.
+ */
+export const READ_AHEAD_MS = 2500
+
+/*
+ * A stored preset's summary, as the tiles a tap would put up. No bypass and no
+ * channel — a summary does not say which scene is on — so these are drawn as
+ * an outline, and the status read fills the states in.
+ *
+ * null for a summary that is about another slot, or names no block the
+ * catalog knows: the tap waits for the status read, as before.
+ */
+export function aheadChain(summary, number, catalog) {
+  if (!summary || typeof summary !== 'object') return null
+  if (Number.isInteger(summary.number) && summary.number !== number) return null
+  const blocks = Array.isArray(summary.blocks) ? summary.blocks : []
+  const states = blocks.filter((b) => b && Number.isInteger(b.effectId)).map((b) => ({ effectId: b.effectId }))
+  return outlineChain(states, catalog)
+}
+
+/**
+ * The reading itself, one end's copy each. `read(n)` makes the read and
+ * answers with what to keep (aheadChain's answer, null included); `has(n)` is
+ * whether that slot needs no read — kept already, or known from being played;
+ * `keep(n, list)` files the answer; `ready()` is whether the unit is quiet
+ * enough to be asked. `wait` and `clear` are the clock, so a test can drive it.
+ *
+ * `want([next, previous])` says where Previous and Next would land now; the
+ * first one still unknown is read after the wait, then the other. An empty
+ * want, or `stop()`, calls it all off.
+ */
+export function createReadAhead({ read, has, keep, ready, wait = setTimeout, clear = clearTimeout, after = READ_AHEAD_MS }) {
+  let wanted = []
+  let timer = null
+  let reading = false
+  let off = false
+  const missed = new Set()
+  const owed = () => wanted.find((n) => !missed.has(n) && !has(n))
+  const schedule = () => {
+    if (timer !== null) clear(timer)
+    timer = null
+    if (off || reading || owed() === undefined) return
+    timer = wait(tick, after)
+  }
+  const tick = async () => {
+    timer = null
+    if (off || reading) return
+    if (!ready()) return schedule()
+    const n = owed()
+    if (n === undefined) return
+    reading = true
+    try {
+      keep(n, await read(n))
+    } catch (err) {
+      /* 501: this unit cannot decode a stored slot. Nothing else will either. */
+      if (err?.status === 501) off = true
+      missed.add(n)
+    } finally {
+      reading = false
+    }
+    schedule()
+  }
+  return {
+    want(numbers) {
+      const next = (Array.isArray(numbers) ? numbers : []).filter((n, i, all) => Number.isInteger(n) && n >= 0 && all.indexOf(n) === i)
+      if (next.join(',') !== wanted.join(',')) missed.clear()
+      wanted = next
+      schedule()
+    },
+    /* Something just happened at the unit: the quiet starts again from now. */
+    nudge: schedule,
+    stop() {
+      wanted = []
+      if (timer !== null) clear(timer)
+      timer = null
+    },
+    get reading() {
+      return reading
+    }
+  }
+}

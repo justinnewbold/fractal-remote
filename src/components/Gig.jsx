@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { liveMeters, setChannel, setMetersWanted } from '../lib/forgefx'
 import {
   useDevice,
@@ -8,6 +8,7 @@ import {
   chainFollowed,
   loadPreset,
   presetReadPending,
+  readAhead,
   refreshScene,
   refreshSceneState,
   refreshLoadedSceneNames,
@@ -418,6 +419,9 @@ export default function Gig({
    * switching an effect — the drop "the sound should never cut out" is about.
    */
   const toggle = async (block) => {
+    /* A pedal read ahead of the switch, whose on or off the unit has not said
+       yet: a tap would be a guess, so it waits the moment for the status read. */
+    if (shown.outline && typeof block.bypassed !== 'boolean') return
     haptic()
     const eid = block.effectId
     const wanted = !block.bypassed
@@ -496,6 +500,16 @@ export default function Gig({
   const landing = (delta) =>
     stepTarget({ source, current: preset?.number, delta, favourites, lists })
 
+  /*
+   * And the pedals of where each would land, read while nothing else is going
+   * on, so the tap puts them up with the name. "Preload the next one and keep
+   * the previous one." See deviceState.readAhead.
+   */
+  const nextAt = landing(1)
+  const lastAt = landing(-1)
+  useEffect(() => readAhead([nextAt, lastAt]), [nextAt, lastAt])
+  useEffect(() => () => readAhead([]), [])
+
   const step = async (delta) => {
     const next = landing(delta)
     if (next === null) return
@@ -548,6 +562,26 @@ export default function Gig({
   const scenesRef = useRef(null)
   const blocksRef = useRef(null)
   const [fitVars, setFitVars] = useState(null)
+  /*
+   * THE PEDALS' SPACE, HELD WHILE THE NEXT PRESET'S CHAIN IS COMING.
+   *
+   * "Every time you do go previous or next the screen shrinks for a second and
+   * then goes back down." While another preset's chain was on its way the
+   * pedals went and the waiting cards took their place — a different height,
+   * and not counted as tile space, so the fit gave the scenes less room and
+   * shrank them, and gave it back when the pedals came. The phone was put
+   * right in 1.86.29; this is the same fix. The last chain's height and count
+   * are kept, and the cards wait in a box exactly that tall, which the fit
+   * counts as the pedals.
+   */
+  const heldBlocks = useRef({ count: 0, height: 0 })
+  const tileCount = blocks.length + (looperHere ? 1 : 0)
+  useLayoutEffect(() => {
+    if (shown.elsewhere || !blocksRef.current || !tileCount) return
+    heldBlocks.current = { count: tileCount, height: blocksRef.current.offsetHeight }
+  })
+  const held = shown.elsewhere && heldBlocks.current.height > 0 ? heldBlocks.current : null
+  const fitCount = held ? held.count : tileCount
   useEffect(() => {
     if (!fit) {
       setFitVars(null)
@@ -564,7 +598,7 @@ export default function Gig({
       const next = fitTiles({
         available: viewport - top - chrome,
         scenes: hasScenes ? sceneCount : 0,
-        blocks: blocks.length + (looperHere ? 1 : 0),
+        blocks: fitCount,
         sceneCols: sceneColsFor(null, sceneLayout),
         /* How wide the effects row is, so a phone's browser is not sent six
            across with tiles too narrow for a picture — see fitTiles. */
@@ -608,7 +642,7 @@ export default function Gig({
       window.visualViewport?.removeEventListener('resize', schedule)
       watch?.disconnect()
     }
-  }, [fit, hasScenes, sceneCount, blocks.length, sceneLayout, !!looperHere])
+  }, [fit, hasScenes, sceneCount, fitCount, sceneLayout])
 
   return (
     /*
@@ -874,7 +908,11 @@ export default function Gig({
         </p>
       ) : null}
 
-      {shown.elsewhere ? (
+      {held ? (
+        <div className="gig-blocks-held" ref={blocksRef} style={{ height: held.height }}>
+          <ChainWait chain={shown} cards={held.count} className="gig-chain-wait" onRetry={retryHere} />
+        </div>
+      ) : shown.elsewhere ? (
         <ChainWait chain={shown} className="gig-chain-wait" onRetry={retryHere} />
       ) : chain === 'failed' ? (
         <div className="gig-note gig-note-action">

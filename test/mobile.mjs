@@ -233,7 +233,11 @@ async function rigOnTheBench(over = {}) {
             ? unit.copy()
             : { name: unit.presetName ?? nameOf(unit.number), scenes: unit.namesInChain ? unit.scenes : [], cells: [] }
         const summary = path.match(/^\/presets\/(-?\d+)\/summary$/)
-        if (summary) return { number: Number(summary[1]), scenes: unit.scenes }
+        /* `unit.stored[n]` is what a stored slot's summary lists, for the read-ahead. */
+        if (summary) {
+          const n = Number(summary[1])
+          return { number: n, scenes: unit.scenes, ...(unit.stored?.[n] ? { blocks: unit.stored[n] } : {}) }
+        }
         const slot = path.match(/^\/presets\/(-?\d+)\/scenes$/)
         if (slot) return { number: Number(slot[1]), names: unit.scenes }
         if (path.startsWith('/store/config/')) return null
@@ -2024,7 +2028,7 @@ export function run(test) {
        breaks when a line reflows is a check nobody can edit around. */
     assert.match(
       rig.replace(/\s+/g, ' '),
-      /chain: recall \? 'ok' : 'reading', sceneNames: \[\]/,
+      /chain: recall \|\| readFirst \? 'ok' : 'reading', sceneNames: \[\]/,
       'the last preset’s scene names stay on the new preset’s tiles'
     )
 
@@ -10247,6 +10251,36 @@ export function run(test) {
     assert.equal(asked(CHAIN), 1, `a preset change with its pedals up first cost ${asked(CHAIN)} chain reads`)
     assert.equal(asked(STATE), 1)
     assert.equal(asked(SUMMARY), 0)
+  })
+
+  /*
+   * THE PRESETS EITHER SIDE, read before they are pressed for. "Preload the
+   * next one and keep the previous one." See lib/chain-outline's readAhead.
+   */
+  test('the next preset’s pedals are read while the phone is quiet, and go up the moment Next is pressed', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench()
+    const chains = twoSongs(unit)
+    chains[30] = SONG_30
+    unit.stored = { 30: SONG_30.map(({ effectId, slug, name }) => ({ effectId, slug, name, instance: 1 })) }
+    unit.lag = (line) => (line === CHAIN ? 1500 : 0)
+    const view = () => rig.chainViewOf(rig.getState())
+    const before = asked(SUMMARY)
+    rig.readAhead([30])
+    await clock.advance(rig.READ_AHEAD_MS + 100)
+    assert.equal(asked(SUMMARY), before + 1, 'the next preset was not read ahead')
+    await clock.advance(rig.READ_AHEAD_MS * 3)
+    assert.equal(asked(SUMMARY), before + 1, 'a slot read ahead once was read again')
+    rig.loadPreset(30)
+    /* On the press, before the unit has answered anything. */
+    assert.equal(view(), 'outline', 'the pedals read ahead did not go up on the press')
+    assert.deepEqual(slugsOf(rig.getState().blocks), ['drive', 'amp', 'reverb'])
+    await clock.advance(rig.OUTLINE_AFTER_MS + 50)
+    assert.equal(asked(STATE) > 0, true, 'the status read did not still fill in which pedals are on')
+    assert.equal(rig.getState().blocks.find((b) => b.slug === 'reverb').bypassed, true)
+    await clock.advance(rig.OWN_SETTLE_MS + 3000)
+    assert.equal(view(), 'ready')
+    assert.equal(asked(CHAIN), 1, 'reading ahead cost a chain read')
+    assert.equal(asked(SUMMARY), before + 1, 'a read ahead went while the preset was loading')
   })
 
   test('a pedal drawn ahead of the chain switches by its own effect id, and waits for the chain for its channel', async () => {
