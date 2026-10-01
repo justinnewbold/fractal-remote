@@ -44,6 +44,7 @@ no reason to care about because upstream has no phone on the other end.
 | Judge a placement or rename by reading it back, not by the ack | Over USB-MIDI the AM4's command ack has not been observed once, while the writes all land — so a block that was placed correctly was reported refused. |
 | Slice a block's channels by the unit's own item count | The per-channel stride came from a table that can disagree with the bulk read, so channel A read correctly and every other channel was offset — knobs that "did not take". |
 | Wait for the port to go quiet before re-requesting an incomplete dump | The re-request sent into the previous dump's tail collected the same stale terminator three times over. |
+| Allow the looper's buttons (`POST /preset/looper/control`) over the remote channel | A phone could see the Looper block and never press Record or Play. It is a performance control like a scene tap: no parameter written, nothing stored, no slot reached. |
 
 ## forgefx-midi — the preset codec
 
