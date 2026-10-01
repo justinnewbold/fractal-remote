@@ -654,6 +654,35 @@ export function endChainWrite({ refresh = true } = {}) {
   const asked = chainAsked
   chainAsked = false
   if (asked && refresh) refreshBlocks({ quiet: true })
+  readOnceCopyRunsOut()
+}
+
+/*
+ * ONE MORE READ ONCE THE COMPUTER'S COPY HAS RUN OUT, after the chain was
+ * changed or saved.
+ *
+ * "After adding the looper … it takes you back to the gig screen but doesn't
+ * register the looper, but then if I hit previous or next and go back, then it
+ * shows the looper." The computer keeps a fifteen-second copy of the chain,
+ * and a read already on its way when a block was placed — the Mac window's
+ * own, say — finished after the placement and was kept as the copy. Every read
+ * for the next fifteen seconds was the chain from before the looper, and the
+ * phone kept the last of those until the preset changed. The computer no
+ * longer keeps a read like that (ForgeFX, gen3 grid()); this puts it right on
+ * a Mac that has not been updated yet, quietly, once the copy has certainly
+ * gone. Not when the preset has moved on, and not while it is being read.
+ */
+let copyOutTimer = null
+function readOnceCopyRunsOut() {
+  const number = state.preset?.number
+  if (!Number.isInteger(number) || isDemo()) return
+  clearTimeout(copyOutTimer)
+  copyOutTimer = setTimeout(() => {
+    copyOutTimer = null
+    if (state.preset?.number !== number || chainWrites || presetBusy()) return
+    logDebug('chain', `reading ${number} again now the computer's copy has run out`, '')
+    refreshBlocks({ quiet: true }).catch(() => {})
+  }, CHAIN_FRESH_MS + 250)
 }
 
 let stopEvents = null
@@ -1306,6 +1335,8 @@ function discardUnsaved(unsaved) {
 /* What was kept for the slot is what it held before this save: forgotten. */
 export function savedToSlot(slot) {
   forgetChain(slot)
+  /* The gig screen comes back after a save: what it shows is read fresh. */
+  if (slot === state.preset?.number) readOnceCopyRunsOut()
   const unsaved = state.unsaved
   if (!unsaved || unsaved.number !== slot) return
   const slug = state.deviceSlug

@@ -12084,6 +12084,21 @@ test('the sign-up totals in Developer leave out the pairing accounts', async () 
   assert.match(sql, /grant execute on function public\.owner_overview\(\) to service_role/)
 })
 
+/*
+ * "It saves it but doesn't register it immediately." A chain read already on
+ * its way when the looper was placed was kept as the computer's copy, so the
+ * gig screen showed the chain from before it until the preset changed.
+ */
+test('after a chain change or a save the phone reads the chain once more when the computer’s copy has run out, and the Mac carries the fixed server', () => {
+  const rig = readSrc(new URL('../mobile/src/lib/rig.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+  assert.match(rig, /if \(asked && refresh\) refreshBlocks\(\{ quiet: true \}\) readOnceCopyRunsOut\(\) \}/, 'a chain write does not read again once the copy has run out')
+  assert.match(rig, /export function savedToSlot\(slot\) \{ forgetChain\(slot\) \/\*[^*]*\*\/ if \(slot === state\.preset\?\.number\) readOnceCopyRunsOut\(\)/, 'a save does not read the chain again')
+  assert.match(rig, /\}, CHAIN_FRESH_MS \+ 250\) \} /)
+  assert.match(rig, /if \(state\.preset\?\.number !== number \|\| chainWrites \|\| presetBusy\(\)\) return/, 'the late read lands on another preset')
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+gridgen$/, 'the computer app carries the server that keeps a read from before a placement')
+})
+
 test('a run of free cells in a lane is one gap, not a button per cell', async () => {
   const { laneItems, gapCols } = await import('../shared/grid-plan.mjs')
   const items = laneItems({ row: 0, blocks: [{ col: 0, name: 'Amp' }, { col: 4, name: 'Cab' }], gaps: [1, 2, 3, 5, 6, 7, 8, 9, 10, 11] })
