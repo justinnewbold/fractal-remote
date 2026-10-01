@@ -974,7 +974,8 @@ export function run(test) {
       assert.notEqual(at, -1, 'the browser Setup list moved; this check reads it')
       return block.slice(at, block.indexOf('</div>', at))
     }
-    const webFront = rowsIn(firstList(webSheet), 'title')
+    /* The front page is every group now, from the account card to the first page behind it. */
+    const webFront = rowsIn(webSheet.slice(webSheet.indexOf('setup-account-card'), webSheet.indexOf("setupPage === 'appearance'")), 'title')
     const webAbout = rowsIn(firstList(webSheet.slice(webSheet.indexOf("setupPage === 'about'"))), 'title')
 
     /* The phone: the front page is `page === null`, About is `page === 'about'`. */
@@ -988,7 +989,7 @@ export function run(test) {
     /* Up to the first page that is not the front one — 'unit', today. Named
        by the shape rather than by which page happens to come first, so adding
        a page does not silently widen the slice. */
-    const phoneFront = rowsIn(between('{page === null ? (', "{page === '"), 'title')
+    const phoneFront = rowsIn(between('{page === null ? (', "{page === 'account' ? ("), 'title')
     const phoneAbout = rowsIn(between("{page === 'about' ? (", '<Section>What stays at the computer</Section>'), 'title')
 
     for (const [where, rows] of [['browser front', webFront], ['phone front', phoneFront], ['browser About', webAbout], ['phone About', phoneAbout]]) {
@@ -1036,21 +1037,21 @@ export function run(test) {
     )
 
     /*
-     * AND THE NESTING ITSELF, named rather than inferred. These three are the
-     * instruction — "Move walkthrough, updates and troubleshooting INSIDE of
-     * the 'About' menu" — so they are behind the door at both ends and on
-     * neither front page.
+     * AND THE NESTING ITSELF, named rather than inferred. Updates stays inside
+     * About at both ends. Troubleshooting and the walkthrough came back out to
+     * the front, under Help — "think of anything that can be made so that the
+     * user has an easier time quickly locating settings" — and the three
+     * developer tools are behind one Developer row.
      */
-    for (const row of ['Updates', 'Troubleshooting']) {
-      assert.ok(webAbout.includes(row), `${row} is not inside the browser's About`)
-      assert.ok(phoneAbout.includes(row), `${row} is not inside the phone's About`)
-      assert.ok(!webFront.includes(row), `${row} is back on the browser's front list`)
-      assert.ok(!phoneFront.includes(row), `${row} is back on the phone's front list`)
+    assert.ok(webAbout.includes('Updates'), "Updates is not inside the browser's About")
+    assert.ok(phoneAbout.includes('Updates'), "Updates is not inside the phone's About")
+    for (const row of ['Troubleshooting', 'REPLAY', 'Developer']) {
+      assert.ok(webFront.includes(row), `${row} is not on the browser's front list`)
+      assert.ok(phoneFront.includes(row), `${row} is not on the phone's front list`)
     }
-    /* The walkthrough is the third, and both ends name it from the same
-       constant rather than typing the words, so it reads as REPLAY here. */
-    assert.ok(webAbout.includes('REPLAY'), "the walkthrough is not inside the browser's About")
-    assert.ok(phoneAbout.includes('REPLAY'), "the walkthrough is not inside the phone's About")
+    for (const row of ['Give someone access', 'Sales at a glance', 'Everyone with an account']) {
+      assert.ok(!webFront.includes(row) && !phoneFront.includes(row), `${row} is back on a front list instead of inside Developer`)
+    }
   })
 
   test('the web unlock page says what the phone paywall says, word for word', () => {
@@ -1119,7 +1120,8 @@ export function run(test) {
     /* And the row is only offered to somebody who can use it. */
     /* To anybody who has not paid, signed in or not, as on the phone — the
        sign-in, or the new account, comes on the way to the unlock page. */
-    assert.match(app, /\{paid\.checked && !paid\.unlocked \? \(\s*<SetupRow\s*key="unlock"[\s\S]{0,260}onClick=\{openUnlock\}/, 'the unlock row hides from somebody signed out, or skips the sign-in')
+    /* On the Account page now, with signing in, as on the phone. */
+    assert.match(app, /\{paid\.checked && !paid\.unlocked \? \(\s*<div className="setup-rows">\s*<SetupRow\s*key="unlock"[\s\S]{0,260}onClick=\{openUnlock\}/, 'the unlock row hides from somebody signed out, or skips the sign-in')
   })
 
   /**
@@ -1183,7 +1185,7 @@ export function run(test) {
     assert.match(read('mobile/src/screens/Settings.js'), /label="Sign in with an email and password"/, 'the phone lost its sign-in button')
     assert.match(
       app,
-      /\{signedInHere \|\| isDemo\(\) \|\| link\.role === 'remote' \? \([\s\S]{0,300}'Not signed in on this device\.'[\s\S]{0,500}Sign out on this device[\s\S]{0,300}setSignIn\('account'\)[\s\S]{0,120}Sign in with an email and password/,
+      /\{setupPage === 'account' \? \([\s\S]{0,900}'Not signed in on this device\.'[\s\S]{0,500}Sign out on this device[\s\S]{0,300}setSignIn\('account'\)[\s\S]{0,120}Sign in with an email and password/,
       'the browser’s Setup has no way to sign in from the demo'
     )
     assert.match(app, /paid\.for !== accountId/, 'the unlock page can open on the signed-out answer, before the new account’s is in')
@@ -1673,7 +1675,7 @@ export function run(test) {
     assert.match(settings, /label="PLAYING WITH NO INTERNET"[\s\S]{0,120}onPress=\{\(\) => setPage\('offline'\)\}/, 'there is no card for it on Phone & computer')
     assert.match(settings, /\{page === 'offline' && mayDrive\(purchase\) \? \(/, 'the page is not there, or is shown to somebody who has not paid')
     assert.match(settings, /head\('Playing with no internet', 'back'\)/)
-    assert.match(settings, /const PARENT = \{ trouble: 'about', offline: 'link' \}/, 'back from the page does not go to Phone & computer')
+    assert.match(settings, /const PARENT = \{ offline: 'link'[,} ]/, 'back from the page does not go to Phone & computer')
     assert.match(settings, /link: '‹ Phone & computer'/)
     /* Each step its own card, not a paragraph in small type. */
     for (const step of ['1  SAME WIFI', '2  OPEN THE CODE', '3  POINT THE CAMERA', 'OR TYPE THE ADDRESS']) {

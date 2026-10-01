@@ -59,6 +59,7 @@ import Note from '../components/Note'
 import Grip from '../components/Grip'
 import IrPicker from '../components/IrPicker'
 import RowsPanel from '../components/RowsPanel'
+import RenamePreset from '../components/RenamePreset'
 import Looper from '../components/Looper'
 import Press from '../components/Press'
 import { SaveButton, SaveNotes, useSaveToSlot } from '../components/SaveToSlot'
@@ -463,6 +464,14 @@ export default function Edit({ onBack }) {
       {chainNow.elsewhere ? null : <ChainEditor blocks={blocks} caps={caps} onError={setError} onScrollLock={setHeld} />}
 
       <Modifiers blocks={blocks} onError={setError} />
+
+      {/*
+        RENAME THE PRESET AND ITS SCENES, here beside the preset rather than
+        in Settings: "I think we should move rename presets and scenes out of
+        settings onto the edit screen." Closed until asked for, like the chain
+        editor and the modifiers above it.
+      */}
+      {chainNow.elsewhere ? null : <RenameDoor />}
     </ScrollView>
   )
 }
@@ -1194,6 +1203,20 @@ function BlockPanel({
  * Folded away until asked for. It is the least-reached-for thing on the bench
  * and the easiest to press by accident.
  */
+/** The rename boxes behind one button, the way Edit chain and Modifiers open. */
+function RenameDoor() {
+  const [open, setOpen] = useState(false)
+  if (!open) {
+    return <Press label="Rename preset and scenes" sub="Names you will know on a dark stage" onPress={() => setOpen(true)} />
+  }
+  return (
+    <View style={{ gap: space.md }}>
+      <RenamePreset />
+      <Press label="Close" height={40} onPress={() => setOpen(false)} />
+    </View>
+  )
+}
+
 function ChainEditor({ blocks, caps, onError, onScrollLock }) {
   const [open, setOpen] = useState(false)
   const [palette, setPalette] = useState(null)

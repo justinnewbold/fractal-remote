@@ -972,7 +972,7 @@ export function run(test) {
     assert.ok(!/noteSceneName[\s\S]*?device\.keepSceneNames\(slug, number, names\)/.test(rig.slice(rig.indexOf('export function noteSceneName'), rig.indexOf('function pendingFor'))), 'an unsaved scene name still goes to the computer\'s store')
     /* The save button settles it, and the names section says it is pending. */
     assert.match(read('mobile/src/components/SaveToSlot.js').replace(/\s+/g, ' '), /if \(res\.ok\) savedToSlot\(res\.slot\)/, 'a save that landed does not settle the names')
-    const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
+    const settings = read('mobile/src/components/RenamePreset.js').replace(/\s+/g, ' ')
     assert.match(settings, /const pending = !!unsaved && unsaved\.number === preset\?\.number/)
     assert.match(settings, /Renamed, not saved\. Tap Save to keep the new names\. Changing preset drops them, on the unit and here\./, 'nothing says a rename is not saved yet')
   })
@@ -1921,8 +1921,12 @@ export function run(test) {
      * and the right one: renaming is bench work and the stage screen is the one
      * a thumb crosses between songs.
      */
-    const settings = read('mobile/src/screens/Settings.js')
+    /* On the Edit screen now, beside the preset: "move rename presets and
+       scenes out of settings onto the edit screen". */
+    const settings = read('mobile/src/components/RenamePreset.js')
     const stage = read('mobile/src/screens/Stage.js')
+    assert.match(read('mobile/src/screens/Edit.js'), /\{chainNow\.elsewhere \? null : <RenameDoor \/>\}/, 'the Edit screen has no way to rename the preset')
+    assert.ok(!/RenamePreset|setPresetName/.test(read('mobile/src/screens/Settings.js')), 'renaming is still in Settings as well')
 
     assert.match(settings, /await setPresetName\(wanted\)/, 'the preset cannot be renamed from the phone')
     assert.match(settings, /await setSceneName\(index, wanted\)/, 'a scene cannot be renamed from the phone')
@@ -2123,49 +2127,21 @@ export function run(test) {
      */
     const settings = read('mobile/src/screens/Settings.js')
 
-    for (const row of [
-      'Phone & computer',
-      'Rename presets and scenes',
-      /* Stage tiles, the pictures and light or dark, behind one row. */
-      'Appearance',
-      'Troubleshooting',
-      'About'
-    ]) {
-      assert.match(
-        settings,
-        new RegExp(`title="${row.replace('&', '&')}"`),
-        `Setup has no ${row} row`
-      )
+    for (const row of ['Phone & computer', 'Tiles & scenes', 'Troubleshooting', 'About']) {
+      assert.match(settings, new RegExp(`title="${row}"`), `Setup has no ${row} row`)
     }
     assert.match(settings, /const \[page, setPage\] = useState\(startPage\)/, 'Setup is one scroll again rather than a list of pages')
 
-    /*
-     * The renaming boxes are behind their own row, not in front of everything.
-     * Checked by position: what is drawn for `page === null` must not contain
-     * them.
-     */
-    const root = settings.slice(settings.indexOf('{page === null ? ('), settings.indexOf("{page === 'appearance' ?"))
+    /* The front page holds doors, plus the one quick choice of light or dark. */
+    const root = settings.slice(settings.indexOf('{page === null ? ('), settings.indexOf("{page === 'account' ? ("))
     assert.ok(root.length > 200, 'the Setup root moved; this check reads it')
-    assert.ok(!/UnitBits/.test(root), 'the scene-name boxes are back on the front page of Setup')
-    /*
-     * AND HOW PLAY LOOKS IS BEHIND ITS OWN ROW.
-     *
-     * "Move this to its own sub menu called Appearance." It had been open at
-     * the foot of this page — "don't have it via a drop-down, have it always
-     * visible" — and that was his call, reversed now by him. The front page
-     * holds the door; the page behind it holds all three.
-     */
+    assert.ok(!/RenamePreset|NameField/.test(root), 'the scene-name boxes are back on the front page of Setup')
     assert.ok(!/<TileSize \/>/.test(root), 'the tile size buttons are back on the front page of Settings')
-    assert.ok(!/<Appearance \/>/.test(root), 'the light and dark buttons are back on the front page of Settings')
-    assert.match(root, /title="Appearance"[\s\S]{0,120}setPage\('appearance'\)/, 'Settings has no Appearance row')
-    const looks = settings.slice(settings.indexOf("{page === 'appearance' ?"), settings.indexOf("{page === 'unit' ?"))
-    assert.ok(looks.length > 100, 'the Appearance page is gone')
-    assert.match(looks, /head\('Appearance', 'back'\)/, 'the Appearance page has no title or way back')
-    assert.match(looks, /<TileSize onScrollLock=\{setHeld\} \/>/, 'the tile size buttons are not on the Appearance page')
-    assert.match(looks, /<Appearance \/>/, 'the light and dark buttons are not on the Appearance page')
-
-    const unit = settings.slice(settings.indexOf("{page === 'unit' ?"), settings.indexOf("{page === 'trouble' ?"))
-    assert.match(unit, /<UnitBits \/>/, 'renaming is not on the rename page')
+    assert.match(root, /title="Tiles & scenes"[\s\S]{0,160}setPage\('appearance'\)/, 'Settings has no Tiles & scenes row')
+    const looks = settings.slice(settings.indexOf("{page === 'appearance' ?"), settings.indexOf("{page === 'trouble' ?"))
+    assert.ok(looks.length > 100, 'the Tiles & scenes page is gone')
+    assert.match(looks, /head\('Tiles & scenes', 'back'\)/, 'the Tiles & scenes page has no title or way back')
+    assert.match(looks, /<TileSize onScrollLock=\{setHeld\} \/>/, 'the tile size buttons are not on the Tiles & scenes page')
 
     /*
      * Fixes, the log and the feedback form are three stages of one errand, so
@@ -3558,18 +3534,24 @@ export function run(test) {
      * in. Then clicking on it will take them to where they can sign in or
      * otherwise show them their account info."
      */
+    /* An account card at the top now, the version on it, opening an Account page of its own. */
     const phone = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
-    const top = phone.slice(phone.indexOf("{head('Settings')}"), phone.indexOf('title="Amp & pedal names"'))
-    assert.match(top, /\{`v\$\{APP_VERSION\}`\}/, 'the version left the top of the phone’s Settings')
-    assert.match(top, /signedInAs \|\| \(isPairAccount\(account\?\.email\) \? 'Paired, no account' : 'Not signed in'\)/, 'the phone does not say who is signed in, or that nobody is')
-    assert.match(top, /setPage\('link'\) setAccountMenu\(true\)/, 'the phone’s account line does not open the account')
-    assert.match(top, /onSignIn\(\)/, 'the phone’s Not signed in goes nowhere near a sign-in')
+    const top = phone.slice(phone.indexOf("{head('Settings')}"), phone.indexOf('<Group title="My rig">'))
+    assert.match(top, /<AccountCard asked=\{asked\} email=\{signedInAs\}/, 'the phone’s Settings does not open on who is signed in')
+    assert.match(top, /setPage\('account'\)/, 'the phone’s account card does not open the account')
+    assert.match(phone, /`\$\{what\} · v\$\{APP_VERSION\}`/, 'the version left the top of the phone’s Settings')
+    assert.match(phone, /email \|\| \(paired \? 'Paired, no account' : 'Not signed in'\)/, 'the phone does not say who is signed in, or that nobody is')
+    const account = phone.slice(phone.indexOf("{page === 'account' ? ("), phone.indexOf("{page === 'developer'"))
+    assert.match(account, /onPress=\{onSignIn\}/, 'the phone’s Account page has no way to sign in')
+    assert.match(account, /label="Sign out on this phone"/)
+    assert.match(account, /label="Change password"/, 'the password moved somewhere nobody will find it')
+    assert.match(account, /title="Unlock the full version"/, 'unlocking or restoring a purchase is not with the account')
 
     const web = read('src/App.jsx').replace(/\s+/g, ' ')
-    const head = web.slice(web.indexOf('<div className="setup-version-row">'), web.indexOf('<div className="setup-rows">'))
+    const head = web.slice(web.indexOf('className={`setup-account-card'), web.indexOf('<p className="silk-label setup-group">My rig</p>'))
     assert.match(head, /\{FULL\}/, 'the version left the top of the browser’s Settings')
     assert.match(head, /signedInHere \? link\.account\.email : isPairAccount\(link\.account\?\.email\) \? 'Paired, no account' : 'Not signed in'/, 'the browser does not say who is signed in, or that nobody is')
-    assert.match(head, /onClick=\{\(\) => setSetupPage\('link'\)\}/, 'the browser’s account line does not open the page with the account on it')
+    assert.match(head, /onClick=\{\(\) => setSetupPage\('account'\)\}/, 'the browser’s account card does not open the account')
   })
 
   test('the phone’s preset list has the browser’s jumps, sized to the unit', async () => {
@@ -5321,24 +5303,31 @@ export function run(test) {
     /* Only the rows on the front page, not the ones inside the pages it opens. */
     const front = settings.slice(
       settings.indexOf("{page === null ? ("),
-      settings.indexOf("{page === 'appearance' ?")
+      settings.indexOf("{page === 'account' ? (")
     )
-    const order = [...front.matchAll(/title=(?:"([^"]+)"|\{(?:purchase\.unlocked \? 'Full version' : '([^']+)'|(REPLAY))\})/g)]
-      .map((m) => m[1] || m[2] || m[3])
+    const order = [...front.matchAll(/<Group title="([^"]+)"|title=(?:"([^"]+)"|\{(REPLAY)\})/g)]
+      .map((m) => (m[1] ? `# ${m[1]}` : m[2] || m[3]))
 
+    /*
+     * Settings in groups: "think of anything that can be made so that the
+     * user has an easier time quickly locating settings". The account is a
+     * card above these; renaming went to Edit; the three developer tools are
+     * one row, on his account only.
+     */
     assert.deepEqual(order, [
-      'Amp & pedal names',
+      '# My rig',
       'Phone & computer',
-      'Rename presets and scenes',
-      /* "There needs to be something in settings … for when it keeps playing." */
       'Stop the looper',
-      'Appearance',
-      'Unlock the full version',
+      '# Play screen',
+      'Tiles & scenes',
+      '# Help',
+      'Troubleshooting',
+      'Amp & pedal names',
+      'REPLAY',
+      '# About',
       'About',
-      /* Last, and drawn only on his own account — shared/admin.mjs. */
-      'Give someone access',
-      'Sales at a glance',
-      'Everyone with an account'
+      '# Developer',
+      'Developer'
     ], 'the Setup rows are not in the order he asked for')
 
     /*
@@ -5349,14 +5338,14 @@ export function run(test) {
      * instruction an hour earlier: under it they still cost five lines of a
      * list somebody opens to do something else. In it they cost one.
      */
+    /* Updates stays inside About. Troubleshooting and the walkthrough came
+       back out, under Help on the front: the page needed most on a bad
+       evening was two taps deep. */
     const about = settings.slice(settings.indexOf("{page === 'about' ?"))
-    for (const [pattern, what] of [
-      [/title="Updates"/, 'Updates'],
-      [/title="Troubleshooting"/, 'Troubleshooting'],
-      [/title=\{REPLAY\}/, 'the walkthrough']
-    ]) {
-      assert.ok(pattern.test(about), `${what} is not inside About`)
-    }
+    assert.ok(/title="Updates"/.test(about), 'Updates is not inside About')
+    assert.ok(!/title="Troubleshooting"/.test(about), 'Troubleshooting is still buried inside About')
+    const help = front.slice(front.indexOf('<Group title="Help">'), front.indexOf('<Group title="About">'))
+    assert.ok(/title="Troubleshooting"/.test(help) && /title=\{REPLAY\}/.test(help), 'Troubleshooting or the walkthrough is not under Help')
   })
 
   test('playing with no internet is explained, and only to somebody who paid', () => {
@@ -7048,7 +7037,7 @@ export function run(test) {
     /* Both screens that can leave work unsaved read the same store value — a
        moved knob is lost exactly as a typed name is. */
     for (const [file, where] of [
-      ['mobile/src/screens/Settings.js', 'the rename screen'],
+      ['mobile/src/components/RenamePreset.js', 'the rename boxes'],
       ['mobile/src/screens/Edit.js', 'the Edit screen']
     ]) {
       const text = read(file)
@@ -7074,13 +7063,13 @@ export function run(test) {
       'the Edit screen draws Save whether or not there is anything to save'
     )
     assert.match(
-      read('mobile/src/screens/Settings.js'),
+      read('mobile/src/components/RenamePreset.js'),
       /<SaveButton[^/]*waiting=\{pending\}/,
       'the rename screen never lights its Save button'
     )
     assert.match(saver, /const run = startComputerSave\(\{ park: \(req\) => parkSave\(slug, req\), readResult: \(\) => readSaveResult\(slug\), slot: preset\?\.number, name: preset\?\.name \|\| ''/, 'the button does not ask the computer, or sends no name')
     /* On both screens where something gets changed. */
-    for (const screen of ['mobile/src/screens/Edit.js', 'mobile/src/screens/Settings.js']) {
+    for (const screen of ['mobile/src/screens/Edit.js', 'mobile/src/components/RenamePreset.js']) {
       const flat = read(screen).replace(/\s+/g, ' ')
       assert.match(flat, /const saveTo = useSaveToSlot\(\)/, `${screen} has no Save`)
       assert.match(flat, /<SaveButton s=\{saveTo\}/, `${screen} does not draw the Save button`)
@@ -7502,7 +7491,7 @@ export function run(test) {
      * carries, and the computer renames the preset to whatever the save
      * request says, so a stale one would have undone the rename in the slot.
      */
-    const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
+    const settings = read('mobile/src/components/RenamePreset.js').replace(/\s+/g, ' ')
     assert.match(settings, /await setPresetName\(wanted\) notePresetName\(wanted\)/, 'a preset rename is not believed')
     assert.match(settings, /await setSceneName\(index, wanted\) noteSceneName\(index, wanted\)/, 'a scene rename is not believed')
     /* It used to "drop the computer's cache" first. That route deletes the
@@ -8180,7 +8169,8 @@ export function run(test) {
     /* And it is reachable: on the Appearance page, beside the other settings
        about how the thing on the stand looks. */
     const settings = read('mobile/src/screens/Settings.js')
-    assert.match(settings, /<Section>Light or dark<\/Section>/, 'there is nowhere to choose a theme')
+    /* On the front of Settings now, under Play screen: one tap, not a page. */
+    assert.match(settings, /<Group title="Play screen">[\s\S]{0,600}<Appearance \/>/, 'there is nowhere to choose a theme')
     assert.match(settings, /setMode\(m, sync\)/, 'choosing a theme does not remember it')
 
     theme.setMode('auto')
@@ -8703,7 +8693,8 @@ export function run(test) {
       /onPress=\{\(\) => setPage\(upFrom\(page\)\)\}/,
       'the Back button and the swipe can disagree about where one step up is'
     )
-    assert.match(set, /const PARENT = \{ trouble: 'about'[,} ]/, 'Troubleshooting is not inside About')
+    /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer. */
+    assert.match(set, /const PARENT = \{ offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')

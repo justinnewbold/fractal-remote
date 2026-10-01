@@ -12784,3 +12784,46 @@ button.rows-choice span {
 .rows-confirm p {
   margin: 0;
 }
+
+/* ---------- Settings, in groups ---------- */
+
+button.setup-account-card {
+  display: grid;
+  gap: var(--s-1);
+  width: 100%;
+  text-align: left;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--panel);
+}
+
+.setup-account-who {
+  font-size: var(--f-4);
+  font-weight: 600;
+  color: var(--silk);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+button.setup-account-card.out .setup-account-who {
+  color: var(--signal);
+}
+
+.setup-account-what {
+  font-size: var(--f-2);
+  color: var(--ok);
+}
+
+.silk-label.setup-group {
+  margin: var(--s-4) 0 var(--s-1);
+}
+
+.setup-inline-theme {
+  padding: var(--s-2) 0;
+}
+
+.chain-rename {
+  margin-top: var(--s-4);
+}

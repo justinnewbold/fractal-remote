@@ -475,12 +475,13 @@ const SETUP_PAGES = {
   link: 'Phone & computer',
   phone: 'Get it on your phone',
   demo: 'Demo Unit',
-  rename: 'Rename presets and scenes',
-  appearance: 'Appearance',
+  account: 'Account',
+  appearance: 'Tiles & scenes',
   help: 'Troubleshooting',
   updates: 'Updates',
   about: 'About',
   /* Justin's own tools, on his account only — see shared/admin.mjs. */
+  developer: 'Developer',
   access: 'Give someone access',
   sales: 'Sales at a glance',
   accounts: 'Everyone with an account',
@@ -504,7 +505,7 @@ const SETUP_PAGES = {
  * A map rather than an `if`, so the next nested page is a line rather than a
  * branch.
  */
-const SETUP_PARENT = { help: 'about', updates: 'about', demo: 'link' }
+const SETUP_PARENT = { updates: 'about', demo: 'link', access: 'developer', sales: 'developer', accounts: 'developer' }
 const upFrom = (page) => SETUP_PARENT[page] || null
 const upLabel = (page) => `\u2039 ${SETUP_PAGES[upFrom(page)] || 'Settings'}`
 /** What the chat says when a request needed the model and the model is off. */
@@ -4478,6 +4479,26 @@ export default function App() {
                 onChanged={(summary) => record('modifier', `Modifier bound: ${summary}`)}
               />
             </Section>
+
+            {/*
+              RENAME THE PRESET AND ITS SCENES, beside the preset rather than
+              in Settings: "I think we should move rename presets and scenes
+              out of settings onto the edit screen." The phone's Edit has the
+              same button, in the same place under Modifiers.
+            */}
+            <div className="history-actions chain-rename">
+              <button
+                type="button"
+                className="chip"
+                disabled={busy || status !== 'live'}
+                onClick={() => {
+                  setSheetBack('chain')
+                  setSheet('scenes')
+                }}
+              >
+                Rename preset and scenes
+              </button>
+            </div>
           </>
         ) : null}
       </Sheet>
@@ -4926,64 +4947,39 @@ export default function App() {
               (Sign out, or Sign in) and, on the computer, the phone remote's
               own sign-in.
             */}
-            <div className="setup-version-row">
-              <div className="device-meta mono setup-version">{FULL}</div>
-              <button
-                type="button"
-                className={`setup-account${signedInHere ? '' : ' out'}`}
-                onClick={() => setSetupPage('link')}
-                aria-label={signedInHere ? `Signed in as ${link.account.email}. Account` : 'Not signed in. Sign in'}
-              >
+            {/*
+              SETTINGS, IN GROUPS — the phone's layout, at this end too.
+
+              "Think of anything that can be made so that the user has an
+              easier time quickly locating settings they wanna check out." The
+              account sits on top as a card, and the rest is under headings
+              that say what each group is for. Renaming presets and scenes
+              went to the chain sheet beside the preset; Troubleshooting came
+              up out of About; Justin's three tools became one Developer row.
+            */}
+            <button
+              type="button"
+              className={`setup-account-card${signedInHere ? '' : ' out'}`}
+              onClick={() => setSetupPage('account')}
+              aria-label={`Account, ${signedInHere ? link.account.email : 'not signed in'}`}
+            >
+              <span className="setup-account-who">
                 {signedInHere
                   ? link.account.email
                   : isPairAccount(link.account?.email)
                     ? 'Paired, no account'
                     : 'Not signed in'}
-              </button>
-            </div>
+              </span>
+              <span className="setup-account-what">
+                {isDemo() ? 'Demo' : paid.unlocked ? 'Full version' : 'Not unlocked yet'} · {FULL}
+              </span>
+            </button>
+
+            <p className="silk-label setup-group">My rig</p>
             <div className="setup-rows">
-              {/*
-                First, because it is the only row here anybody opens for the
-                fun of it.
-
-                "Move the amp and pedals button to the top of the list." Every
-                other row in this list is plumbing — what is connected, what
-                the screen looks like, what went wrong — and they are all rows
-                you go to when something needs sorting out. This one answers
-                "what IS a Das Metall, really", which is the question a player
-                has while playing, and it was last but two, under
-                Troubleshooting's neighbours.
-              */}
-              <SetupRow key="gear-names" title="Amp & pedal names" status="What each model on your unit really is" onClick={() => setSheet('gear')} />
-              {/* The whole chain on one line: the computer, and the unit on
-                  the end of it. Two rows could each only say half of it, and
-                  half of a chain is never the answer to "why is nothing
-                  happening". */}
               <SetupRow key="link" title="Phone & computer" status={[describeLink(link).note || 'Phone remote off', status === 'live' ? `${device?.short || device?.name || 'Unit'} · connected` : 'No unit'].join(' · ')} onClick={() => setSetupPage('link')} />
-              {/*
-                WHICH FRACTAL THE DEMO IS has gone back inside Phone & computer,
-                which is where the phone keeps it — a "Which unit" section on
-                that page, not a row on this list.
-
-                It was lifted to this level on the strength of "Only shows FM3
-                is the only model available", and the note written at the time
-                claimed the phone had it here too. It never did. So the row was
-                not the browser catching up with the phone, it was the browser
-                walking away from it, and this list is the one Justin has since
-                dictated: the things Setup is opened FOR, and one door.
-
-                The complaint it answered is answered anyway — the picker is a
-                row on the page named for the unit, and the DEMO badge still
-                opens it in one press.
-              */}
-              <SetupRow key="rename" title="Rename presets and scenes" status={status === 'live' ? 'Give them names you will know on a dark stage' : 'Connect a unit first'} onClick={() => setSetupPage('rename')} />
-              {/* "Move this to its own sub menu called Appearance." Tile size,
-                  the pictures and light or dark, behind one row — the phone's
-                  shape, in the phone's place. */}
               {/* The looper's emergency stop. "There needs to be something in
-                  settings … for when it keeps playing." It carries on across a
-                  preset change when the next preset has a Looper block too —
-                  the unit, not a fault — and this stops it on one tap. */}
+                  settings … for when it keeps playing." */}
               {status === 'live' ? (
                 <SetupRow
                   key="looper-stop"
@@ -5002,61 +4998,60 @@ export default function App() {
                   }}
                 />
               ) : null}
-              <SetupRow key="appearance" title="Appearance" status="Tile size, effect pictures, light or dark" onClick={() => setSetupPage('appearance')} />
-              {/*
-                THE SAME ROW THE PHONE HAS, in the same place: after renaming,
-                before About. "Unlock the full version" over the price, the
-                phone's words for the phone's errand.
-
-                For anybody who has not paid, signed in or not, as on the
-                phone. Signed out it asks for the sign-in first — where an
-                account can be made now: "somebody should be able to create an
-                account on the web and desktops, and make purchases as well" —
-                and lands on the unlock page after it. Once it is bought there
-                is nothing left to offer, and the row goes.
-
-                The phone's other wording, "Drive a real rig, or restore a
-                purchase", is for a store that has not answered with a price.
-                A browser has no store to restore from, so until the price
-                arrives it says the first half and nothing it cannot back up.
-              */}
-              {paid.checked && !paid.unlocked ? (
-                <SetupRow
-                  key="unlock"
-                  title="Unlock the full version"
-                  status={webPriceText ? `Drive a real rig · ${webPriceText}` : 'Drive a real rig'}
-                  onClick={openUnlock}
-                />
-              ) : null}
-              {/*
-                THE ONE ROW HERE THE PHONE HAS NOT GOT, and it stays on the
-                front page rather than moving into About with the other
-                once-ever errands.
-
-                "Not only behind the DEMO badge. Somebody who has a rig
-                connected and wants the remote in their pocket is the likeliest
-                buyer there is, and the badge they would have clicked is not on
-                screen for them." Burying it one door down would undo exactly
-                that. A phone has no use for it at all, which is why matching
-                the two lists row for row was never going to be the test.
-              */}
+              {/* The one row the phone has not got: somebody with a rig on the
+                  desk who wants the remote in their pocket. */}
               <SetupRow
                 key="phone-app"
                 title="Get it on your phone"
                 status="The remote, for a stage"
                 onClick={() => setSetupPage('phone')}
               />
-              <SetupRow key="about" title="About" status={FULL} onClick={() => setSetupPage('about')} />
-              {isAdmin(link.account?.email) ? (
-                <SetupRow key="access" title="Give someone access" status="Look someone up, or unlock them" onClick={() => setSetupPage('access')} />
-              ) : null}
-              {isAdmin(link.account?.email) ? (
-                <SetupRow key="sales" title="Sales at a glance" status="Today, this week, all time" onClick={() => setSetupPage('sales')} />
-              ) : null}
-              {isAdmin(link.account?.email) ? (
-                <SetupRow key="accounts" title="Everyone with an account" status="Who has signed up" onClick={() => setSetupPage('accounts')} />
-              ) : null}
             </div>
+
+            <p className="silk-label setup-group">Play screen</p>
+            <div className="setup-rows">
+              <SetupRow key="appearance" title="Tiles & scenes" status="Tile size, effect pictures, scene layout" onClick={() => setSetupPage('appearance')} />
+            </div>
+            {/* Light or dark right here, as on the phone: one click, not a page. */}
+            <div className="setup-inline-theme">
+              <Theme />
+            </div>
+
+            <p className="silk-label setup-group">Help</p>
+            <div className="setup-rows">
+              <SetupRow
+                key="help"
+                title="Troubleshooting"
+                status={`${getDebugLog().length} line${getDebugLog().length === 1 ? '' : 's'} in the log`}
+                onClick={() => setSetupPage('help')}
+              />
+              <SetupRow key="gear-names" title="Amp & pedal names" status="What each model on your unit really is" onClick={() => setSheet('gear')} />
+              <SetupRow
+                key="walkthrough"
+                title={REPLAY}
+                status="The three-step setup, again"
+                onClick={() => {
+                  setSheet(null)
+                  setWalkReplay(true)
+                  setComputerSetup(false)
+                  setWalkthrough(true)
+                }}
+              />
+            </div>
+
+            <p className="silk-label setup-group">About</p>
+            <div className="setup-rows">
+              <SetupRow key="about" title="About" status={FULL} onClick={() => setSetupPage('about')} />
+            </div>
+
+            {isAdmin(link.account?.email) ? (
+              <>
+                <p className="silk-label setup-group">Developer</p>
+                <div className="setup-rows">
+                  <SetupRow key="developer" title="Developer" status="Access, sales, and accounts" onClick={() => setSetupPage('developer')} />
+                </div>
+              </>
+            ) : null}
           </>
         ) : null}
 
@@ -5196,10 +5191,6 @@ export default function App() {
                   </div>
                 ) : null}
               </div>
-              <div className="setup-open">
-                <p className="silk-label setup-open-title">Light or dark</p>
-                <Theme />
-              </div>
             </div>
           </div>
         ) : null}
@@ -5236,44 +5227,6 @@ export default function App() {
                 </button>
               ))}
             </div>
-          </div>
-        ) : null}
-
-        {setupPage === 'rename' ? (
-          <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
-              ‹ Settings
-            </button>
-            <p className="setup-page-title">{SETUP_PAGES.rename}</p>
-            {/*
-              One errand, said in the words of the errand.
-
-              The button used to sit in the row of connection buttons on the
-              Unit page, between "Reconnect" and the address box, where it was
-              the only one of them that changed anything on the unit. Here it
-              is the page.
-            */}
-            <p className="hint">
-              The names your unit came with are numbers and abbreviations. These are the words you
-              read off a phone on a dark stage, so they are worth the minute it takes.
-            </p>
-            {status === 'live' ? (
-              <button
-                className="primary"
-                disabled={busy}
-                onClick={() => {
-                  setSheetBack('settings')
-                  setSheet('scenes')
-                }}
-              >
-                Rename preset or scenes
-              </button>
-            ) : (
-              <p className="hint">
-                Nothing to rename until a unit is answering. Phone &amp; computer, one row up, says
-                what the chain is doing.
-              </p>
-            )}
           </div>
         ) : null}
 
@@ -5377,26 +5330,8 @@ export default function App() {
             inside that. On the phone it is on this page, open. The computer
             signed out keeps its own sign-in, the phone remote's, above.
           */}
-          {signedInHere || isDemo() || link.role === 'remote' ? (
-            <Section
-              key="account"
-              title="Account"
-              note={signedInHere ? link.account.email : 'Not signed in on this device.'}
-              defaultOpen
-            >
-              <div className="history-actions">
-                {signedInHere ? (
-                  <button type="button" className="chip" onClick={() => linkAction('signout')} disabled={busy}>
-                    Sign out on this device
-                  </button>
-                ) : (
-                  <button type="button" className="primary" onClick={() => setSignIn('account')} disabled={busy}>
-                    Sign in with an email and password
-                  </button>
-                )}
-              </div>
-            </Section>
-          ) : null}
+          {/* Who this device is signed in as moved to its own Account page,
+              off the top of Settings — see setupPage 'account'. */}
           {/*
             How to get a computer on the other end at all, which is the
             question somebody has when there is nothing on the other end.
@@ -5610,6 +5545,59 @@ export default function App() {
           library. It takes real cards: webPurchase.js is on the live key since
           the sandbox checkout was walked through end to end.
         */}
+        {setupPage === 'account' ? (
+          <div className="setup-page">
+            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
+              ‹ Settings
+            </button>
+            <p className="setup-page-title">{SETUP_PAGES.account}</p>
+            {/* Everything about who this is, in one place: signing in and out,
+                and unlocking. It was the bottom of Phone & computer. */}
+            <Section
+              key="account"
+              title="Account"
+              note={signedInHere ? link.account.email : 'Not signed in on this device.'}
+              defaultOpen
+            >
+              <div className="history-actions">
+                {signedInHere ? (
+                  <button type="button" className="chip" onClick={() => linkAction('signout')} disabled={busy}>
+                    Sign out on this device
+                  </button>
+                ) : (
+                  <button type="button" className="primary" onClick={() => setSignIn('account')} disabled={busy}>
+                    Sign in with an email and password
+                  </button>
+                )}
+              </div>
+            </Section>
+            {paid.checked && !paid.unlocked ? (
+              <div className="setup-rows">
+                <SetupRow
+                  key="unlock"
+                  title="Unlock the full version"
+                  status={webPriceText ? `Drive a real rig · ${webPriceText}` : 'Drive a real rig'}
+                  onClick={openUnlock}
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {setupPage === 'developer' && isAdmin(link.account?.email) ? (
+          <div className="setup-page">
+            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
+              ‹ Settings
+            </button>
+            <p className="setup-page-title">{SETUP_PAGES.developer}</p>
+            <div className="setup-rows">
+              <SetupRow key="access" title="Give someone access" status="Look someone up, or unlock them" onClick={() => setSetupPage('access')} />
+              <SetupRow key="sales" title="Sales at a glance" status="Today, this week, all time" onClick={() => setSetupPage('sales')} />
+              <SetupRow key="accounts" title="Everyone with an account" status="Who has signed up" onClick={() => setSetupPage('accounts')} />
+            </div>
+          </div>
+        ) : null}
+
         {setupPage === 'unlock' ? (
           <div className="setup-page">
             <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('unlock'))}>
@@ -5622,8 +5610,8 @@ export default function App() {
 
         {setupPage === 'access' && isAdmin(link.account?.email) ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
-              ‹ Settings
+            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('access'))}>
+              {upLabel('access')}
             </button>
             <p className="setup-page-title">{SETUP_PAGES.access}</p>
             <AccessTool />
@@ -5632,8 +5620,8 @@ export default function App() {
 
         {setupPage === 'sales' && isAdmin(link.account?.email) ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
-              ‹ Settings
+            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('sales'))}>
+              {upLabel('sales')}
             </button>
             <p className="setup-page-title">{SETUP_PAGES.sales}</p>
             <SalesTool />
@@ -5642,8 +5630,8 @@ export default function App() {
 
         {setupPage === 'accounts' && isAdmin(link.account?.email) ? (
           <div className="setup-page">
-            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
-              ‹ Settings
+            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('accounts'))}>
+              {upLabel('accounts')}
             </button>
             <p className="setup-page-title">{SETUP_PAGES.accounts}</p>
             <AccountsTool />
@@ -5673,27 +5661,6 @@ export default function App() {
               {inDesktopApp() ? (
                 <SetupRow key="updates" title="Updates" status="This app, not your unit" onClick={() => setSetupPage('updates')} />
               ) : null}
-              <SetupRow
-                key="help"
-                title="Troubleshooting"
-                status={`${getDebugLog().length} line${getDebugLog().length === 1 ? '' : 's'} in the log`}
-                onClick={() => setSetupPage('help')}
-              />
-              {/*
-                The way back in, named the way the last screen of it promises:
-                "Need this again? Settings → Show the walkthrough."
-              */}
-              <SetupRow
-                key="walkthrough"
-                title={REPLAY}
-                status="The three-step setup, again"
-                onClick={() => {
-                  setSheet(null)
-                  setWalkReplay(true)
-                  setComputerSetup(false)
-                  setWalkthrough(true)
-                }}
-              />
             </div>
             {/* Reachable from inside the app, which is the point of writing
                 them. Same two links as the phone's About page. */}
