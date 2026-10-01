@@ -109,6 +109,29 @@ import { oneWriteAtATime } from '../../shared/knob-keys.mjs'
  * through the editor. A quick second tap on the tile itself does the same —
  * the first tap already opened the editor, so the double costs nothing extra.
  */
+/*
+ * WHAT THE MODEL IS LIKE, IN TWO LINES — the rest on a tap. On the play test
+ * the Bassman's paragraph pushed every knob below the bottom of a phone; the
+ * first two lines carry the gist, and Read more is there for the story.
+ */
+function GearAbout({ text }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="pad gear-about-box">
+      <p className={`hint gear-about${open ? '' : ' clamped'}`}>{text}</p>
+      <button type="button" className="gear-about-more" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        {open ? 'Show less' : 'Read more'}
+      </button>
+    </div>
+  )
+}
+
+/* How low a block's Level can be typed: low enough to balance, not to silence. */
+const LEVEL_FLOOR_DB = -20
+
+/* How many page tabs a block shows before More. */
+const TABS_SHOWN = 4
+
 export function Chain({ blocks, selected, onSelect, onToggle }) {
   const chain = blocks.filter((b) => !['input', 'output'].includes(b.slug))
   /*
@@ -366,7 +389,8 @@ export function PresetList({
   const base = picked || (needle || showAll ? slots : named)
   const shown = needle
     ? base.filter(
-        (s) => (s.name || '').toLowerCase().includes(needle) || String(s.number) === needle
+        /* A number finds its slot however it is typed: 59, 059. */
+        (s) => (s.name || '').toLowerCase().includes(needle) || (/^\d+$/.test(needle) && Number(needle) === s.number)
       )
     : base
   const unread = slots.length - known.length
@@ -816,6 +840,8 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   const [irs, setIrs] = useState(null)
   const irsAsked = useRef(false)
   const [tab, setTab] = useState('main')
+  /* Every page tab, or only the everyday ones — see the tab row. */
+  const [allTabs, setAllTabs] = useState(false)
   /* The way back from the last pick. For a model it is the whole block as it
      was read just before the pick, and it stays until another model is picked
      or the editor closes — see shared/model-undo.mjs. For a cab it is the cab
@@ -1685,7 +1711,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
         Under the lineage line and above the photograph: name it, say what it
         is like, then show it. Reading order rather than decoration.
       */}
-      {models.length && chosenAbout ? <p className="hint pad gear-about">{chosenAbout}</p> : null}
+      {models.length && chosenAbout ? <GearAbout key={chosenAbout} text={chosenAbout} /> : null}
       {models.length && chosenPhoto ? (
         <figure className="gear-photo">
           <img src={chosenPhoto.src} alt={chosenPhoto.alt} loading="lazy" />
@@ -1702,19 +1728,33 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
         <IrPicker banks={irList} now={irHere} onPick={swapIr} disabled={busy || !!restoringHere} />
       ) : null}
 
+      {/*
+        THE EVERYDAY PAGES, AND MORE. An amp has eleven, and on a phone's
+        browser they wrapped onto four lines above the knobs. The first four
+        are the ones played with; the page you are on always shows; Show all
+        lays out the rest. Not called More: a unit with no layout has a page
+        of that name.
+      */}
       {pages.length > 1 ? (
         <div className="block-tabs" role="tablist">
-          {pages.map((pg) => (
-            <button
-              key={pg.key}
-              role="tab"
-              aria-selected={pg.key === onPage?.key}
-              className={pg.key === onPage?.key ? 'current' : ''}
-              onClick={() => setTab(pg.key)}
-            >
-              {pg.name}
+          {pages
+            .filter((pg, i) => allTabs || pages.length <= TABS_SHOWN + 1 || i < TABS_SHOWN || pg.key === onPage?.key)
+            .map((pg) => (
+              <button
+                key={pg.key}
+                role="tab"
+                aria-selected={pg.key === onPage?.key}
+                className={pg.key === onPage?.key ? 'current' : ''}
+                onClick={() => setTab(pg.key)}
+              >
+                {pg.name}
+              </button>
+            ))}
+          {pages.length > TABS_SHOWN + 1 ? (
+            <button type="button" className="block-tabs-more" aria-expanded={allTabs} onClick={() => setAllTabs((v) => !v)}>
+              {allTabs ? 'Show fewer' : `Show all (${pages.length})`}
             </button>
-          ))}
+          ) : null}
         </div>
       ) : null}
 
@@ -1758,17 +1798,40 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
         )}
       </div>
 
-      {/* The block's output level: shown, never written. It's kept out of the
-          deck above because a generator that sets it to -60 dB makes a preset
-          that looks right and is silent — but gain staging is still something
-          you need to be able to read. A row, not the 164px column it was. */}
+      {/*
+        THE BLOCK'S OUTPUT LEVEL, typed in, never below LEVEL_FLOOR_DB.
+
+        It was read-only, kept from a preset generator that could set it to
+        -60 dB and make a preset that looked right and was silent. That
+        generator is gone, and gain staging is something a player does by
+        hand — so it can be set again, with a floor high enough that a slip
+        cannot silence the block. Kept out of the knob deck, a row of its own.
+      */}
       {level ? (
         <div className="block-level">
           <span className="silk-label">Level</span>
-          <span className="mono">
-            {fmt(level.value)} {level.unit}
-          </span>
-          <span className="hint">read-only</span>
+          {level.unit === 'dB' ? (
+            <>
+              <ValueBox
+                param={{ ...level, min: Math.max(typeof level.min === 'number' ? level.min : LEVEL_FLOOR_DB, LEVEL_FLOOR_DB) }}
+                value={valueOf(level)}
+                onCommit={(v) => {
+                  if (restoringHere) return
+                  const next = Math.max(LEVEL_FLOOR_DB, v)
+                  setLocal((prev) => ({ ...prev, [level.id]: next }))
+                  commit(level, next)
+                }}
+              />
+              <span className="hint">not below {LEVEL_FLOOR_DB} dB</span>
+            </>
+          ) : (
+            <>
+              <span className="mono">
+                {fmt(level.value)} {level.unit}
+              </span>
+              <span className="hint">read-only</span>
+            </>
+          )}
         </div>
       ) : null}
     </div>

@@ -162,7 +162,12 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
                 </div>
               ))}
             </div>
-            <p className="pw-note">{P2.foot}</p>
+            <p className="pw-note">
+              {P2.foot}{' '}
+              <button type="button" className="pw-note-link" onClick={() => setAt('pick')}>
+                {P2.footGo}
+              </button>
+            </p>
             {/* Held at the bottom of the screen while the boxes scroll under
                 it, so a phone too short for the whole page still shows the
                 way on. */}

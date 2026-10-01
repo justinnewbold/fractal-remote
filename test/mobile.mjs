@@ -3959,7 +3959,7 @@ export function run(test) {
     const pages = editPages(params, layout)
     assert.deepEqual(
       pages.map((p) => [p.name, p.params.map((q) => q.id)]),
-      [['Basic', [1, 2]], ['Tone', [12, 13, 2]], ['Mix', [4]], ['Hidden', [99]]],
+      [['Basic', [1, 2]], ['Tone', [12, 13, 2]], ['Mix', [4]], ['Extras', [99]]],
       'the pages are not the editor’s, or a control the unit sent became unreachable'
     )
     assert.equal(pageHolding(pages, 13).name, 'Tone', 'a search cannot find the page its control is on')
@@ -3973,7 +3973,7 @@ export function run(test) {
     for (const [where, file] of [['phone', 'mobile/src/screens/Edit.js'], ['browser', 'src/components/Console.jsx']]) {
       const src = read(file)
       assert.match(src, /const pages = editPages\(editable, layout\)/, `the ${where} still cuts the list after six`)
-      assert.match(src, /pages\.map\(\(pg\) =>/, `the ${where} draws no tab per page`)
+      assert.match(src, /pages(\s*\.filter\([^\n]*\)\s*)?\.map\(\(pg\) =>/, `the ${where} draws no tab per page`)
       assert.ok((src.match(/setLayout\((p|fresh)\?\.layout \|\| null\)/g) || []).length >= 2, `the ${where} keeps an old model’s pages after a swap`)
       assert.ok(!/editable\.slice\(0, 6\)/.test(src), `the ${where} still has its own six-and-the-rest split`)
     }
@@ -4010,7 +4010,7 @@ export function run(test) {
       ]
     }
     const tabs = editPages(params, phaser).map((p) => p.name)
-    assert.deepEqual(tabs, ['Basic', 'Expert 1', 'Expert 2', 'Mix', 'Hidden'], 'old firmware’s pages are still tabs')
+    assert.deepEqual(tabs, ['Basic', 'Expert 1', 'Expert 2', 'Mix', 'Extras'], 'old firmware’s pages are still tabs')
     assert.equal(new Set(tabs).size, tabs.length, 'two tabs share a name')
 
     /* A Tremolo on some types has only old pages: the newest of them stay. */
@@ -4067,7 +4067,7 @@ export function run(test) {
 
     /* The unnamed go last, on Hidden, which says why. */
     const last = pages[pages.length - 1]
-    assert.equal(last.name, 'Hidden')
+    assert.equal(last.name, 'Extras')
     assert.equal(last.note, HIDDEN_NOTE)
     assert.equal(HIDDEN_NOTE, 'Fractal’s own editor doesn’t show these.')
     for (const name of ['GRIDHARDNESS', 'TRIODE2EXTIME', 'RESOLUTION']) assert.ok(said(last).includes(name), `${name} is not on Hidden`)
@@ -4171,12 +4171,12 @@ export function run(test) {
       const r = await unit.blockParams(b.effectId)
       return editPages(r.named, r.layout).map((p) => p.name)
     }
-    assert.deepEqual(await pagesOf('drive'), ['Basic', 'Tone', 'Graphic EQ', 'Advanced', 'Mix', 'Hidden'], 'the demo Drive is not on its editor pages')
+    assert.deepEqual(await pagesOf('drive'), ['Basic', 'Tone', 'Graphic EQ', 'Advanced', 'Mix', 'Extras'], 'the demo Drive is not on its editor pages')
     /* The demo's layouts keep only the parameter rows, so its Mix has to be
        put back, or it sits on Hidden under a line that is not true of it. */
     const drive = blocks.find((x) => x.slug === 'drive')
     const r = await unit.blockParams(drive.effectId)
-    const hidden = editPages(r.named, r.layout).find((p) => p.name === 'Hidden')
+    const hidden = editPages(r.named, r.layout).find((p) => p.key === 'hidden')
     assert.ok(!hidden.params.some((p) => /^(Mix|Balance)$/.test(p.name)), 'the demo Drive’s Mix is on Hidden, as if Fractal’s editor did not show it')
     assert.deepEqual((await pagesOf('comp')).slice(0, 2), ['Basic', 'Sidechain'], 'the demo Compressor is not on its editor pages')
 

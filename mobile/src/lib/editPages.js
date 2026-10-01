@@ -54,8 +54,9 @@
  */
 export const FIRST_PAGE = 6
 
-/** The last tab's name and its one line. Justin may rename it. */
-export const HIDDEN_PAGE = 'Hidden'
+/** The last tab's name and its one line. "Hidden" read as a tab of things
+    you are not meant to touch, which is not what it holds. */
+export const HIDDEN_PAGE = 'Extras'
 export const HIDDEN_NOTE = 'Fractal’s own editor doesn’t show these.'
 
 /** "maj,min" as one comparable number; nothing is 0. */

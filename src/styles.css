@@ -11983,6 +11983,18 @@ button.setup-back {
   line-height: 1.45;
 }
 
+/* "Try the demo", inside the line that offers it. */
+.pw-note-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--signal);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .pw-progress {
   display: flex;
   flex-direction: column;
@@ -12849,4 +12861,33 @@ button.setup-account-card.out .setup-account-who {
 /* Add a looper, in one tap, above the lanes. See LooperAtEnd.jsx. */
 .looper-at-end {
   margin: var(--s-2) 0;
+}
+
+/* More / Fewer at the end of a block's page tabs. See Console.jsx. */
+.block-tabs-more {
+  border: 0;
+  background: none;
+  color: var(--signal);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* The model's story, two lines until asked. See GearAbout in Console.jsx. */
+.gear-about-box .gear-about {
+  margin: 0;
+}
+.gear-about.clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.gear-about-more {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--signal);
+  font-weight: 600;
+  font-size: var(--f-2);
+  cursor: pointer;
 }

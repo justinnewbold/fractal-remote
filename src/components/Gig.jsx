@@ -760,7 +760,11 @@ export default function Gig({
               straight against the button they sat at its top edge, with the
               rest of the tile empty under them. */}
           <span className="gig-name-row">
-            <span className="gig-name-num mono">{preset?.number ?? '--'}</span>
+            {/* Padded as the preset list pads it: "0 59 Bassguy" read as a typo
+                on the play test — slot 0, a preset called 59 Bassguy. */}
+            <span className="gig-name-num mono">
+              {Number.isInteger(preset?.number) && preset.number >= 0 ? String(preset.number).padStart(3, '0') : '--'}
+            </span>
             <span className="gig-name-word">{presetLabel(preset)}</span>
             <span className="gig-name-caret" aria-hidden="true">
               ⌄

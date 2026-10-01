@@ -235,6 +235,7 @@ import {
   remoteHostSeen,
   hostResponds,
   loadRemoteConfig,
+  sendPasswordReset,
   subscribeRemoteState
 } from './lib/remote'
 import { newEntry, append } from './lib/log'
@@ -325,6 +326,9 @@ const DID_STAYS_MS = 20000
  * or who met this app before the card existed, still gets told once — and put
  * away, it stays away.
  */
+/* Change password's word while the account service is being asked. */
+const PASSWORD_SENDING = 'Sending the link…'
+
 const HOLD_NOTE_KEY = 'fab.play.hold'
 const holdNoteWasSeen = () => {
   try {
@@ -1091,6 +1095,8 @@ export default function App() {
     setHoldNoteSeen(true)
   }
   const [demoNoteSeen, setDemoNoteSeen] = useState(() => demoNoteWasSeen())
+  /* What Change password on the Account page last said. */
+  const [passwordSaid, setPasswordSaid] = useState(null)
   const dismissDemoNote = () => {
     setDemoNoteSeen(true)
     rememberDemoNote()
@@ -4235,7 +4241,10 @@ export default function App() {
           check in test/structure.mjs. A hint belongs with the thing it hints
           at anyway.
         */}
-        {!holdNoteSeen ? (
+        {/* One note at a time: on the play test the demo's note and this one
+            stood stacked over the scenes and took a third of the screen. This
+            waits until the demo's has been put away. */}
+        {!holdNoteSeen && !(isDemo() && status === 'live' && !demoNoteSeen) ? (
           <p className="play-hint">
             <span>
               Hold a block &mdash; the amp, the drive, any of them &mdash; to bring up its channels
@@ -4461,7 +4470,14 @@ export default function App() {
               }}
             />
 
-            <Section key="chain-blocks" title="Add, remove and move blocks" defaultOpen>
+            {/* Folded until asked for, unless there is nothing to show yet: open,
+                it drew the chain a second and third time above the knobs
+                somebody opened Edit for. */}
+            <Section
+              key="chain-blocks"
+              title="Add, remove and move blocks"
+              defaultOpen={!blocks.some((b) => b.slug && b.slug !== 'input' && b.slug !== 'output')}
+            >
               <GridEditor
                 blocks={blocks}
                 capabilities={device?.capabilities}
@@ -4589,7 +4605,7 @@ export default function App() {
         open={presetMenu && narrow}
         onClose={() => setPresetMenu(false)}
         title="Choose a preset"
-        note={preset ? `${preset.number} · ${preset.name?.trim() || 'Untitled'} is loaded` : null}
+        note={preset ? `${Number.isInteger(preset.number) && preset.number >= 0 ? String(preset.number).padStart(3, '0') : preset.number} · ${preset.name?.trim() || 'Untitled'} is loaded` : null}
       >
         {presetPicker}
       </Sheet>
@@ -5580,11 +5596,38 @@ export default function App() {
               note={signedInHere ? link.account.email : 'Not signed in on this device.'}
               defaultOpen
             >
+              {/* Which version this account has, said where the account is.
+                  It was only in the line under the email on Settings. */}
+              {signedInHere && paid.checked ? (
+                <p className="hint">{paid.unlocked ? 'Full version — the phone remote is unlocked.' : 'Free — the phone remote is not unlocked yet.'}</p>
+              ) : null}
+              {passwordSaid ? <p className="hint" role="status">{passwordSaid}</p> : null}
               <div className="history-actions">
                 {signedInHere ? (
-                  <button type="button" className="chip" onClick={() => linkAction('signout')} disabled={busy}>
-                    Sign out on this device
-                  </button>
+                  <>
+                    {/* A new password by the same link Forgot password sends:
+                        the account service checks it is really you. */}
+                    <button
+                      type="button"
+                      className="chip"
+                      disabled={busy || passwordSaid === PASSWORD_SENDING}
+                      onClick={async () => {
+                        setPasswordSaid(PASSWORD_SENDING)
+                        try {
+                          const c = loadRemoteConfig() || {}
+                          await sendPasswordReset({ url: c.url, anonKey: c.anonKey, email: link.account.email, redirectTo: window.location.origin })
+                          setPasswordSaid(`A link to set a new password is on its way to ${link.account.email}.`)
+                        } catch (err) {
+                          setPasswordSaid(err?.message || 'The account service did not answer. Try again in a moment.')
+                        }
+                      }}
+                    >
+                      Change password
+                    </button>
+                    <button type="button" className="chip" onClick={() => linkAction('signout')} disabled={busy}>
+                      Sign out on this device
+                    </button>
+                  </>
                 ) : (
                   <button type="button" className="primary" onClick={() => setSignIn('account')} disabled={busy}>
                     Sign in with an email and password
