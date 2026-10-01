@@ -67,6 +67,8 @@ export const FILES = [
    * same unit as the phone doing it, so the two ends keep one rule.
    */
   { source: '../shared/own-echo.mjs', target: '../mobile/src/lib/own-echo.js' },
+  /* The looper's buttons: which latch, which are a quick press, and what Stop sends. */
+  { source: '../shared/looper.mjs', target: '../mobile/src/lib/looper.js' },
   /*
    * When a garbled preset dump is asked for again rather than shown.
    *

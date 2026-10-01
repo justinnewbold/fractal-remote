@@ -470,6 +470,16 @@ export const setTempo = (bpm) => told(`tempo ${bpm}`, post('/tempo', { bpm }))
 export const tapTempo = () => told('tap tempo', post('/tempo/tap'))
 
 /**
+ * One looper button, down (on) or up. Never sent twice by the relay: a second
+ * press is a second press. See lib/looper for which ones latch.
+ */
+export const looperControl = (eid, action, on) =>
+  told(`looper ${action} ${on ? 'down' : 'up'}`, post('/preset/looper/control', { eid, action, on }))
+
+/** Where the looper's playhead is and what the loop looks like. A read; empty for a block that is not a looper. */
+export const looperTelemetry = (eid) => remoteRequest(`/preset/looper?eid=${eid}`)
+
+/**
  * Start or stop the unit's tuner.
  *
  * Starting it is allowed remotely and works. Seeing the readings is a different

@@ -1455,6 +1455,8 @@ export function run(test) {
         'Amp & pedal names',
         'Phone & computer',
         'Rename presets and scenes',
+        /* The looper's emergency stop, the phone's row in the phone's place. */
+        'Stop the looper',
         /* "Move this to its own sub menu called Appearance." Tile size, the
            pictures and light or dark, behind one row — the phone's too. */
         'Appearance',
@@ -2789,7 +2791,9 @@ export function run(test) {
     assert.match(chanSheet, /<Sheet open=\{!!block\} onClose=\{onClose\} title=\{name\} note="Channel">/, 'the channel sheet does not slide up under the block\u2019s name')
     assert.match(chanSheet, /await setChannel\(block\.effectId, ch\)\s*\n\s*onClose\(\)/, 'the sheet does not go down once the channel is written')
     assert.match(bare, /onHold=\{\(\) => setChanEid\(block\.effectId\)\}/, 'a held tile no longer opens the sheet')
-    assert.equal((bare.match(/<Sheet\b/g) || []).length, 1, 'more than one channel sheet — one per tile again')
+    /* One channel sheet; the looper's buttons are the other sheet Play owns. */
+    assert.equal((bare.match(/<Sheet\b/g) || []).length, 2, 'more than one channel sheet — one per tile again')
+    assert.equal((bare.match(/<Sheet open=\{looping && /g) || []).length, 1, 'the second sheet on Play is not the looper\u2019s')
     const chanCss = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
     const pill = chanCss.match(/button\.gig-chan-btn \{([^}]*)\}/)?.[1] || ''
     assert.match(pill, /min-height: 88px/, 'a channel button is thin again')

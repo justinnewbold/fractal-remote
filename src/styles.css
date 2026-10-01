@@ -12546,3 +12546,92 @@ html[data-rail='on'] .gig[data-scene-layout='mine'] .gig-scenes {
     box-shadow: none;
   }
 }
+
+/* ---------- the looper's buttons ---------- */
+
+.looper {
+  display: grid;
+  gap: var(--s-2);
+  margin-bottom: var(--s-4);
+}
+
+.looper-status {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--f-3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--silk);
+}
+
+.looper-row {
+  display: grid;
+  gap: var(--s-2);
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.looper-row-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+button.looper-btn {
+  min-height: 64px;
+  padding: 0;
+  font-family: var(--display);
+  font-size: var(--f-5);
+  font-weight: 700;
+  text-transform: uppercase;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  color: var(--silk);
+}
+
+button.looper-btn.lit {
+  background: var(--live);
+  border-color: var(--live);
+  color: var(--on-signal);
+}
+
+/* Amber, the phone's colour for Rec too: the one button that changes what is in the loop. */
+button.looper-record.lit {
+  background: var(--signal);
+  border-color: var(--signal);
+}
+
+.looper-wave {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  height: 56px;
+  padding: 0 var(--s-1);
+  overflow: hidden;
+  background: var(--chassis);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+}
+
+.looper-wave-empty {
+  justify-content: center;
+  font-size: var(--f-3);
+  color: var(--silk-dim);
+}
+
+.looper-bar {
+  flex: 1;
+  background: var(--silk-dim);
+}
+
+.looper-head {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--signal);
+}
+
+.looper-error {
+  margin: 0;
+  color: var(--fault);
+}

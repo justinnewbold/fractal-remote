@@ -3092,7 +3092,9 @@ test('the mirror agrees with the host about every route this app calls', () => {
           '/telemetry/meters',
           // Edit-buffer writes; putting anything in a slot is still refused.
           '/preset/name',
-          '/scene/name'
+          '/scene/name',
+          // The looper's buttons: a performance control, like a scene tap.
+          '/preset/looper/control'
         ].includes(p) ||
         /^\/am4\/(bypass|scene|preset)$/.test(p)
       )
@@ -3128,6 +3130,7 @@ test('the mirror agrees with the host about every route this app calls', () => {
     ['POST', '/preset/grid/cable'],
     ['POST', '/preset/grid/select'],
     ['POST', '/preset/name'],
+    ['POST', '/preset/looper/control'],
     ['POST', '/preset/select'],
     ['POST', '/preset/store'],
     ['POST', '/scene'],
@@ -3494,6 +3497,74 @@ test('everything the relay carries may be sent twice, except a tap', async () =>
   assert.equal(repeatable('/tempo/tap'), false)
   assert.equal(repeatable('/tempo/tap?x=1'), false, 'a query string is not a different route')
   assert.equal(repeatable('/tempo/tap/'), false, 'nor is a trailing slash')
+  // A looper button is a press: a resent one is Record on, off and on again.
+  assert.equal(repeatable('/preset/looper/control'), false)
+  assert.equal(repeatable('/preset/looper'), true, 'where the playhead is, is a read')
+})
+
+test('the looper\u2019s buttons latch, press and stop the way Axiom drives the same block', async () => {
+  const L = await import('../shared/looper.mjs')
+  /* Record, Play, Dub, Reverse and Half latch: one write, and the next tap undoes it. */
+  let t = L.looperTap(L.IDLE_LATCH, 'record')
+  assert.deepEqual(t.sends, [true])
+  assert.equal(t.next.record, true)
+  t = L.looperTap(t.next, 'record')
+  assert.deepEqual(t.sends, [false], 'a second tap on Rec does not let it go')
+  assert.equal(t.next.record, false)
+  /* Stop, Undo and Once are a press and a release. */
+  for (const action of ['stop', 'undo', 'once']) assert.deepEqual(L.looperTap(L.IDLE_LATCH, action).sends, [true, false], `${action} is not a quick press`)
+  /* Stop puts out every light that means sound is moving. */
+  const lit = { ...L.IDLE_LATCH, record: true, play: true, overdub: true, reverse: true }
+  const stopped = L.looperTap(lit, 'stop').next
+  assert.deepEqual([stopped.record, stopped.play, stopped.overdub, stopped.reverse], [false, false, false, true], 'Stop leaves Rec, Play or Dub lit, or turns Reverse off')
+  assert.equal(L.looperTap(lit, 'undo').next, lit, 'Undo changes what is lit')
+  /* Every button in the panel has a word and every word is a button. */
+  assert.deepEqual(L.LOOPER_ROWS.flat().sort(), Object.keys(L.LOOPER_LABEL).sort())
+  /* The emergency stop: Stop pressed and let go, then everything that plays written off. Never a write that turns something ON except the press of Stop itself. */
+  assert.deepEqual(L.STOP_EVERYTHING.slice(0, 2), [['stop', true], ['stop', false]])
+  assert.ok(L.STOP_EVERYTHING.slice(2).every(([, on]) => on === false), 'the emergency stop switches something on')
+  assert.deepEqual(L.STOP_EVERYTHING.slice(2).map(([a]) => a).sort(), ['overdub', 'play', 'record'])
+  /* The status word. */
+  assert.equal(L.looperStatus(L.IDLE_LATCH, false), 'Stopped')
+  assert.equal(L.looperStatus(L.IDLE_LATCH, true), 'Playing', 'a moving playhead is not called playing')
+  assert.equal(L.looperStatus({ ...L.IDLE_LATCH, record: true }, true), 'Recording')
+  assert.equal(L.looperStatus(null, false), 'Stopped')
+  /* One latch per preset and block. */
+  assert.notEqual(L.looperKey(1, 158), L.looperKey(2, 158))
+  /* The telemetry, made safe to draw. */
+  assert.deepEqual(L.readTelemetry({ wave: [2, -1, 0.5, 'x'], position: 1.4 }), { wave: [1, 0, 0.5, 0], position: 1 })
+  assert.deepEqual(L.readTelemetry(null), { wave: [], position: null })
+  assert.deepEqual(L.readTelemetry({ position: 'soon' }).position, null)
+  const many = Array.from({ length: 595 }, (_, i) => (i === 300 ? 1 : 0.1))
+  const bars = L.waveBars(many, 60)
+  assert.equal(bars.length, 60)
+  assert.equal(Math.max(...bars), 1, 'the loudest point of the loop vanished in the cut-down')
+  assert.deepEqual(L.waveBars([0.2, 0.4], 60), [0.2, 0.4])
+  assert.deepEqual(L.waveBars(null), [])
+  /* Gentle on the unit: never faster than the meter gate that ended the dropouts. */
+  assert.ok(L.TELEMETRY_MS >= 1000, 'the looper asks the unit more than once a second')
+})
+
+test('the looper\u2019s buttons are at both ends: the pedal on Edit, a button on Play, and a stop in Setup', () => {
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+  const app = bare(readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8'))
+  assert.match(app, /\{openBlock\?\.slug === 'looper' \? <Looper block=\{openBlock\} presetNumber=\{preset\?\.number\} \/> : null\}/, 'tapping the Looper pedal in the browser does not open its buttons')
+  assert.match(app, /title="Stop the looper"/, 'Setup has no way to stop a looper that keeps playing')
+  assert.match(app, /await stopLooper\(looper\.effectId\)/)
+  const edit = bare(readSrc(new URL('../mobile/src/screens/Edit.js', import.meta.url), 'utf8'))
+  assert.match(edit, /\{block\?\.slug === 'looper' \? <Looper block=\{block\} \/> : null\}/, 'tapping the Looper pedal on the phone does not open its buttons')
+  const settings = bare(readSrc(new URL('../mobile/src/screens/Settings.js', import.meta.url), 'utf8'))
+  assert.match(settings, /title="Stop the looper"/, 'the phone\u2019s Settings has no way to stop a looper that keeps playing')
+  assert.match(settings, /await stopLooper\(looper\.effectId\)/)
+  /* Both ends send the same route, and the demo answers it rather than throwing. */
+  const phone = readSrc(new URL('../mobile/src/lib/device.js', import.meta.url), 'utf8')
+  const web = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
+  for (const src of [phone, web]) {
+    assert.match(src, /'\/preset\/looper\/control'/)
+    assert.match(src, /`\/preset\/looper\?eid=\$\{eid\}`/)
+  }
+  const demo = readSrc(new URL('../mobile/src/lib/demoWire.js', import.meta.url), 'utf8')
+  assert.match(demo, /path === '\/preset\/looper\/control'\) return \{ ok: true \}/, 'the demo throws on a looper button')
 })
 
 test('a request waits for the relay to come back rather than failing into the gap', async () => {
@@ -11388,17 +11459,18 @@ test('Play says where the looper went, and still never draws one', async () => {
    * the rig mid-song and on/off is not what a looper wants. But thirteen
    * blocks drawn as ten reads as three gone missing, so Play says where it is.
    */
-  const { STAGE_HIDDEN, hasLooper, LOOPER_ON_EDIT } = await import('../src/lib/guardrails.js')
+  const { STAGE_HIDDEN } = await import('../src/lib/guardrails.js')
+  const { findLooper } = await import('../shared/looper.mjs')
   for (const slug of ['input', 'output', 'looper']) assert.ok(STAGE_HIDDEN.includes(slug), `${slug} is a tile on Play now`)
-  assert.equal(hasLooper([{ slug: 'amp' }, { slug: 'looper' }]), true)
-  assert.equal(hasLooper([{ slug: 'amp' }, { slug: 'delay' }]), false, 'a preset with no looper is told where its looper is')
-  assert.equal(hasLooper(null), false)
-  assert.equal(LOOPER_ON_EDIT, 'Looper is on the Edit screen.')
+  assert.equal(findLooper([{ slug: 'amp' }, { slug: 'looper', effectId: 158 }])?.effectId, 158)
+  assert.equal(findLooper([{ slug: 'amp' }, { slug: 'delay' }]), null, 'a preset with no looper is offered a Looper button')
+  assert.equal(findLooper(null), null)
 
   const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
   const gig = bare(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8'))
   /* From every block, not the tiles: the tiles are exactly what leaves it out. */
-  assert.match(gig, /\{!shown\.elsewhere && onChain && hasLooper\(allBlocks\) \? \(\s*<p className="gig-note">\{LOOPER_ON_EDIT\}<\/p>/, 'Play does not say where the looper is, or asks the tiles, which never hold one')
+  assert.match(gig, /const looperHere = findLooper\(allBlocks\)/, 'the Looper button asks the tiles, which never hold one')
+  assert.match(gig, /\{!shown\.elsewhere && looperHere \? \(\s*<div className="gig-note gig-note-action">\s*<button type="button" onClick=\{\(\) => setLooping\(true\)\}>/, 'Play has no Looper button, or draws it over the last song')
   assert.match(gig, /allBlocks\.filter\(\(b\) => b\.slug && !STAGE_HIDDEN\.includes\(b\.slug\)\)/, 'Play draws a tile for the looper, input or output')
 })
 

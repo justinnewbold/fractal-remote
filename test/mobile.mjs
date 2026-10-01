@@ -5311,6 +5311,8 @@ export function run(test) {
       'Amp & pedal names',
       'Phone & computer',
       'Rename presets and scenes',
+      /* "There needs to be something in settings … for when it keeps playing." */
+      'Stop the looper',
       'Appearance',
       'Unlock the full version',
       'About',
@@ -11166,11 +11168,11 @@ export function run(test) {
 
     /*
      * "PLAY leaves out the Looper." It still does — see STAGE_HIDDEN — and
-     * says where it went, in the browser's words, from the generated copy of
-     * the browser's own rule.
+     * has a Looper button under the tiles instead, which opens its buttons.
      */
-    assert.match(stage, /import \{ hasLooper, LOOPER_ON_EDIT \} from '\.\.\/lib\/guardrails'/, 'the phone has its own idea of the looper line')
-    assert.match(stage, /\{onOpenEdit && !chainNow\.elsewhere && hasLooper\(allBlocks\) \? <Note>\{LOOPER_ON_EDIT\}<\/Note> : null\}/, 'the stage points to an Edit button it has not drawn, does not say where the looper is, or asks the tiles, which never hold one')
+    assert.match(stage, /import \{ findLooper \} from '\.\.\/lib\/looper'/, 'the phone has its own idea of which block is the looper')
+    assert.match(stage, /const looperHere = findLooper\(allBlocks\)/, 'the Looper button asks the tiles, which never hold one')
+    assert.match(stage, /\{!chainNow\.elsewhere && looperHere \? \(\s*<Press label="Looper"/, 'Play has no Looper button, or draws it over the last song')
     assert.match(stage, /const ofAllBlocks = \(s\) => s\.allBlocks/, 'the looper line reads the stage tiles, which leave the looper out')
   })
 }

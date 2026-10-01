@@ -98,6 +98,8 @@ export async function demoRequest(mock, path, options = {}) {
     }
     /* The IR names by bank, for the cab block's IR picker. */
     if (path === '/cab/irs') return mock.irs()
+    /* The demo has no loop to show. */
+    if (path.split('?')[0] === '/preset/looper') return { wave: [], position: null, level: null }
     /* /blocks/{slug}/types */
     if (part[0] === 'blocks' && part[2] === 'types') return mock.blockTypes(part[1])
   }
@@ -109,6 +111,8 @@ export async function demoRequest(mock, path, options = {}) {
     if (path === '/preset/name') return mock.setPresetName(body?.name)
     if (path === '/tempo') return mock.setTempo(body?.bpm)
     if (path === '/tempo/tap') return mock.tapTempo()
+    /* The demo's looper takes every press and makes no sound, like the tuner below. */
+    if (path === '/preset/looper/control') return { ok: true }
     /* The tuner is a stream on a real unit and the demo has one, but nothing on
        the phone subscribes to it — the readings arrive as relay events, and the
        demo has no relay. Switching it on succeeds and no needle moves, which is
