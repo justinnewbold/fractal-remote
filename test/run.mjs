@@ -11984,6 +11984,66 @@ test('a tab on an old version reloads itself at a quiet moment, never mid-typing
   for (const k of ['pointerdown', 'keydown', 'touchstart']) assert.ok(src.includes(`'${k}'`), `a ${k} does not count as somebody using the app`)
 })
 
+/*
+ * COPY A SCENE, COPY A CHANNEL. "Build scene 2 starting from scene 1, instead
+ * of switching every pedal by hand"; "copy one channel to another (A → B)".
+ */
+test('a scene copied onto another takes its on/off and channels, and the unit stays on the copy', async () => {
+  const { copyScene, sceneCopyPlan } = await import('../shared/copy-tools.mjs')
+  const scenes = [
+    [{ effectId: 58, bypassed: false, channel: 'A' }, { effectId: 66, bypassed: true, channel: 'A' }, { effectId: 70, bypassed: false, channel: 'B' }],
+    [{ effectId: 58, bypassed: false, channel: 'C' }, { effectId: 66, bypassed: false, channel: 'A' }, { effectId: 70, bypassed: false, channel: 'B' }]
+  ]
+  assert.deepEqual(sceneCopyPlan(scenes[0], scenes[1]), [{ effectId: 58, channel: 'A' }, { effectId: 66, bypassed: true }])
+  let at = 0
+  const sent = []
+  const wire = {
+    setScene: async (i) => void (at = i, sent.push(`scene ${i}`)),
+    sceneState: async () => scenes[at].map((x) => ({ ...x })),
+    setBypass: async (eid, b) => void (scenes[at].find((x) => x.effectId === eid).bypassed = b, sent.push(`bypass ${eid} ${b}`)),
+    setChannel: async (eid, c) => void (scenes[at].find((x) => x.effectId === eid).channel = c, sent.push(`channel ${eid} ${c}`))
+  }
+  const res = await copyScene({ from: 0, to: 1, wire })
+  assert.deepEqual(res, { ok: true, changed: 2 })
+  assert.equal(at, 1, 'the unit was not left on the scene copied to')
+  assert.deepEqual(scenes[1], scenes[0], 'scene 2 is not scene 1 after the copy')
+  assert.deepEqual(sent.slice(0, 2), ['scene 0', 'scene 1'], 'the copy did not read the first scene before writing the second')
+  assert.equal((await copyScene({ from: 2, to: 2, wire })).ok, false, 'a scene was copied onto itself')
+  const broken = await copyScene({ from: 0, to: 1, wire: { ...wire, sceneState: async () => (at === 0 ? [{ effectId: 58, bypassed: true, channel: 'D' }] : scenes[1]), setChannel: async () => { throw new Error('link lost') } } })
+  assert.equal(broken.ok, false)
+  assert.match(broken.error, /link lost/)
+})
+
+test('a channel copied onto another takes the model first, then every knob and switch that differs', async () => {
+  const { copyChannel, channelCopyPlan } = await import('../shared/copy-tools.mjs')
+  const range = { min: 0, max: 10 }
+  const ch = {
+    A: { type: { value: 7, name: 'Plexi' }, named: [{ id: 1, value: 6.5, ...range }, { id: 2, value: 3, ...range }], enums: [{ id: 9, value: 1 }] },
+    B: { type: { value: 3, name: 'Tweed' }, named: [{ id: 1, value: 2, ...range }, { id: 2, value: 3, ...range }], enums: [{ id: 9, value: 0 }] }
+  }
+  const plan = channelCopyPlan(ch.A, ch.B)
+  assert.deepEqual(plan.type, { value: 7, name: 'Plexi' })
+  assert.deepEqual(plan.knobs.map((k) => [k.id, k.value]), [[1, 6.5]], 'a knob that already matched was written, or one that did not was missed')
+  assert.deepEqual(plan.switches, [{ id: 9, value: 1 }])
+  let on = 'A'
+  const sent = []
+  const wire = {
+    setChannel: async (eid, c) => void (on = c, sent.push(`channel ${c}`)),
+    readBlock: async () => JSON.parse(JSON.stringify(ch[on])),
+    /* A new model brings its defaults: knob 2 moves, and must be put back. */
+    setType: async (eid, v) => void (ch[on].type = { value: v, name: 'Plexi' }, ch[on].named[1].value = 9, sent.push(`type ${v}`)),
+    setParam: async (eid, id, v) => void (ch[on].named.find((p) => p.id === id).value = v, sent.push(`param ${id} ${v}`)),
+    setEnum: async (eid, id, v) => void (ch[on].enums.find((e) => e.id === id).value = v, sent.push(`enum ${id} ${v}`))
+  }
+  const res = await copyChannel({ eid: 58, from: 'A', to: 'B', wire })
+  assert.equal(res.ok, true, res.error)
+  assert.equal(on, 'B', 'the block was not left on the channel copied to')
+  assert.deepEqual(ch.B, ch.A, 'channel B is not channel A after the copy')
+  assert.ok(sent.indexOf('type 7') < sent.findIndex((x) => x.startsWith('param')), 'the knobs went before the model, which then reset them')
+  assert.ok(sent.includes('param 2 3'), 'a knob the new model reset was not put back')
+  assert.equal((await copyChannel({ eid: 58, from: 'A', to: 'A', wire })).ok, false)
+})
+
 await settle()
 /*
  * The tally has to say when it is red.

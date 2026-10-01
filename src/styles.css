@@ -12891,3 +12891,36 @@ button.setup-account-card.out .setup-account-who {
   font-size: var(--f-2);
   cursor: pointer;
 }
+
+/* Copy channel, under the A/B/C/D row. See ChannelCopy in Console.jsx. */
+.chan-copy-open {
+  align-self: flex-start;
+  margin: var(--s-2) var(--s-3) 0;
+}
+.chan-copy {
+  margin: var(--s-2) var(--s-3) 0;
+}
+.chan-copy .hint {
+  margin: 0 0 var(--s-2);
+}
+
+/* Copy a scene, on the Scenes sheet. See SceneCopy.jsx. */
+.scene-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: var(--s-4) 0;
+}
+.scene-copy-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+}
+.scene-copy-row label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.scene-copy .chip {
+  align-self: flex-start;
+}
