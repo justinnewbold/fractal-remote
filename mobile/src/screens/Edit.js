@@ -58,6 +58,7 @@ import Knob, { fmt } from '../components/Knob'
 import Note from '../components/Note'
 import Grip from '../components/Grip'
 import IrPicker from '../components/IrPicker'
+import RowsPanel from '../components/RowsPanel'
 import Looper from '../components/Looper'
 import Press from '../components/Press'
 import { SaveButton, SaveNotes, useSaveToSlot } from '../components/SaveToSlot'
@@ -1562,11 +1563,15 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
         row is safe and stays available — cells and cables are different writes,
         and shuffling a row cannot disturb what joins it to another.
       */}
+      {/*
+        EVERY ROW AND EVERY JOIN. "We can only edit blocks in a single row,
+        even though the Forge effects I believe has capabilities just like
+        the FM3 edit software does where you can do split chains." It did —
+        this drew a note saying it could not. See components/RowsPanel.
+      */}
+      {linear ? null : <RowsPanel blocks={blocks} caps={caps} palette={palette} onError={onError} />}
       {splitChain ? (
-        <Note>
-          This preset uses more than one row. Moving blocks within a row is fine, but this app
-          can’t see or change how the rows are joined — do that on the computer.
-        </Note>
+        <Note>This preset uses more than one row. Each row’s blocks are listed below; the joins between them are in Rows and splits above.</Note>
       ) : null}
 
       <Text style={{ color: color.silkFaint, fontSize: font.micro }}>

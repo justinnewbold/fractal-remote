@@ -437,6 +437,18 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
     }
   }
 
+  /*
+   * The wires through empty cells (shunts), per preset. A cable that reaches
+   * an empty cell carries through it the way the real unit's does, so the
+   * row editor's parallel paths can be built, drawn and taken away in the
+   * demo. Not saved with a preset: the blocks' own joins are.
+   */
+  const shuntsBy = new Map()
+  const shunts = () => {
+    if (!shuntsBy.has(state.presetNumber)) shuntsBy.set(state.presetNumber, [])
+    return shuntsBy.get(state.presetNumber)
+  }
+
   /** The rig the unit is playing, written down: what Save keeps. */
   const dumpRig = () => ({
     blocks: clone(state.blocks),
@@ -912,6 +924,10 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
 
     placeBlock: (row, col, blockId) => {
       const existing = state.blocks.findIndex((b) => b.row === row && b.col === col)
+      /* A block put where a wire ran takes the wire's joins; clearing takes both. */
+      const wire = shunts().findIndex((w) => w.row === row && w.col === col)
+      const joined = wire >= 0 ? shunts()[wire].fromRows.slice() : null
+      if (wire >= 0) shunts().splice(wire, 1)
       if (blockId === 0) {
         if (existing >= 0) state.blocks.splice(existing, 1)
         return { ok: true }
@@ -924,7 +940,7 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
         effectId: blockId,
         row,
         col,
-        fromRows: [row],
+        fromRows: joined || [row],
         channel: 'A',
         type: 0
       }
@@ -940,8 +956,37 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
     grid: () => ({
       rows: GRID.rows,
       cols: GRID.cols,
-      cells: state.blocks.map((b) => ({ row: b.row, col: b.col, effectId: b.effectId, name: b.name }))
+      cells: [
+        ...state.blocks.map((b) => ({ row: b.row, col: b.col, effectId: b.effectId, name: b.name, fromRows: b.fromRows })),
+        ...shunts().map((w) => ({ row: w.row, col: w.col, effectId: w.effectId, name: 'Shunt', isShunt: true, fromRows: w.fromRows.slice() }))
+      ]
     }),
+
+    /*
+     * Join a cell to a row of the next column, or cut that join — the real
+     * unit's cable write. An empty cell a join reaches carries the wire on as
+     * a shunt; a shunt left with nothing feeding it goes.
+     */
+    cable: (srcRow, srcCol, destRow, connect = true) => {
+      const col = srcCol + 1
+      if (col >= GRID.cols) return { ok: true }
+      const block = state.blocks.find((b) => b.row === destRow && b.col === col)
+      let wire = shunts().find((w) => w.row === destRow && w.col === col)
+      const target = block || wire
+      if (connect) {
+        if (!target) {
+          wire = { row: destRow, col, effectId: 1024 + shunts().length, fromRows: [srcRow] }
+          shunts().push(wire)
+        } else {
+          const from = Array.isArray(target.fromRows) ? target.fromRows : []
+          if (!from.includes(srcRow)) target.fromRows = [...from, srcRow].sort((a, b) => a - b)
+        }
+      } else if (target) {
+        target.fromRows = (target.fromRows || []).filter((r) => r !== srcRow)
+        if (wire && !target.fromRows.length) shunts().splice(shunts().indexOf(wire), 1)
+      }
+      return { ok: true }
+    },
 
     versions: () => ({
       versions: [

@@ -587,6 +587,18 @@ export const placeBlock = (row, col, blockId) =>
 
 export const clearCell = (row, col) => placeBlock(row, col, 0)
 
+/**
+ * Every occupied cell of the grid, blocks AND the bare wires (shunts) between
+ * them, each with the rows of the column before it that feed it. What the
+ * row editor draws its joins from — see shared/split-chain.mjs. The same
+ * preset read the chain comes from, so the computer usually answers it out of
+ * the copy it has just made.
+ */
+export async function gridCells() {
+  const res = await remoteRequest('/preset/grid')
+  return Array.isArray(res?.cells) ? res.cells : []
+}
+
 /** Connect or cut a cable from one cell to a row in the next column. */
 export const setCable = (srcRow, srcCol, destRow, connect = true) =>
   told(

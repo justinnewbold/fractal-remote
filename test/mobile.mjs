@@ -1464,8 +1464,13 @@ export function run(test) {
       'the chain editor never works out whether the preset is split'
     )
     assert.ok(
-      /splitChain \? \(/.test(editor) && /can’t see or change how the rows are joined/.test(editor),
+      /splitChain \? \(/.test(editor) && /the joins between them are in Rows and splits above/.test(editor),
       'a split preset is drawn with nothing said about the routing'
+    )
+    /* And the routing is drawn now, not apologised for: see RowsPanel. */
+    assert.ok(
+      /\{linear \? null : <RowsPanel blocks=\{blocks\} caps=\{caps\} palette=\{palette\} onError=\{onError\} \/>\}/.test(editor),
+      'the phone still cannot see or change how the rows are joined'
     )
 
     /* Both ends draw the same lanes from the same file, so both ends owe the
@@ -1477,9 +1482,23 @@ export function run(test) {
       'the browser chain editor never works out whether the preset is split'
     )
     assert.ok(
-      /see or change how the rows are joined/.test(web),
+      /the joins\s+between them are in Rows and splits above/.test(web),
       'the browser draws a split preset with nothing said about the routing'
     )
+    assert.ok(/\{linear \? null : \(\s*<RowsPanel/.test(web), 'the browser still cannot see or change how the rows are joined')
+    /* The two panels are one design: the same planner, the same words. */
+    const webRows = read('src/components/RowsPanel.jsx')
+    const phoneRows = read('mobile/src/components/RowsPanel.js')
+    assert.match(webRows, /from '\.\.\/\.\.\/shared\/split-chain\.mjs'/)
+    assert.match(phoneRows, /from '\.\.\/lib\/split-chain'/)
+    for (const words of ['Rows and splits', 'Remove this parallel path', 'Nothing is saved until you press Save', 'Keep it', 'Reading how the rows are joined']) {
+      assert.ok(webRows.includes(words) && phoneRows.includes(words), `“${words}” is at one end only`)
+    }
+    /* Asked before anything is written, and the unit read back after. */
+    for (const src of [webRows, phoneRows]) {
+      assert.match(src, /onPress=\{\(\) => setConfirm\(|onClick=\{\(\) => setConfirm\(/, 'a layout is written on the first tap, with nothing asked')
+      assert.match(src, /await runPlan\(steps, \{ setCable, placeBlock, clearCell \}\)[\s\S]{0,400}await read\(\)/, 'the rows are not read back after they are changed')
+    }
   })
 
   test('the demo is twelve presets a player would recognise, and the seed cannot lie', async () => {
