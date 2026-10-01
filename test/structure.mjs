@@ -1387,7 +1387,10 @@ export function run(test) {
     const phone = readFileSync(new URL('../mobile/src/screens/Settings.js', import.meta.url), 'utf8')
 
     const titles = [...phone.matchAll(/<SetupRow\s+title="([^"]+)"/g)].map((m) => m[1])
-    assert.equal(titles[0], 'Amp & pedal names', `the phone's Setup opens on ${titles.join(', ')}`)
+    /* Settings in groups now: the rig first, then the play screen, then help —
+       where the amp and pedal names went, beside the other things to look up. */
+    assert.equal(titles[0], 'Phone & computer', `the phone's Setup opens on ${titles.join(', ')}`)
+    assert.ok(titles.includes('Amp & pedal names'), 'the amp and pedal names left Settings')
 
     /* The row's own component, not a colour pasted per row: one place to be
        wrong, and the same one the browser has. */
@@ -1418,7 +1421,8 @@ export function run(test) {
      * became "Troubleshooting" in the same pass.
      */
     const setup = sheet('Settings')
-    assert.match(setup, /<div className="device-meta mono setup-version">\{FULL\}<\/div>/, 'the version line is not at the top')
+    /* The version is on the account card at the top now, as on the phone. */
+    assert.match(setup, /className=\{`setup-account-card[\s\S]{0,700}\{FULL\}/, 'the version line is not at the top')
     /*
      * THE FRONT LIST ONLY, and that is the whole point of this check now.
      *
@@ -1440,68 +1444,45 @@ export function run(test) {
     }
     const rowsIn = (block) =>
       [...block.matchAll(/<SetupRow\b[\s\S]*?title=(?:"([^"]+)"|\{([A-Z_]+)\})/g)].map((m) => m[1] || m[2])
-    const rows = rowsIn(frontList(setup))
+    /*
+     * The whole front page now, groups and all: it runs from the account card
+     * to the first page behind it. The phone's groups, the phone's order, with
+     * the browser's one extra row (Get it on your phone) under My rig.
+     */
+    const front = setup.slice(setup.indexOf('setup-account-card'), setup.indexOf("setupPage === 'appearance'"))
+    const rows = [...front.matchAll(/setup-group">([^<]+)<|<SetupRow\b[\s\S]*?title=(?:"([^"]+)"|\{([A-Z_]+)\})/g)].map((m) =>
+      m[1] ? `# ${m[1]}` : m[2] || m[3]
+    )
     assert.deepEqual(
       rows,
       [
-        /*
-         * First, and asked for: "move the amp and pedals button to the top of
-         * the list". Every other row here is plumbing — what is connected,
-         * what the screen looks like, what went wrong — and each is opened
-         * when something needs sorting out. This one answers "what IS a Das
-         * Metall, really", which is a question somebody has mid-song, and it
-         * was fifth.
-         */
-        'Amp & pedal names',
+        '# My rig',
         'Phone & computer',
-        'Rename presets and scenes',
-        /* The looper's emergency stop, the phone's row in the phone's place. */
         'Stop the looper',
-        /* "Move this to its own sub menu called Appearance." Tile size, the
-           pictures and light or dark, behind one row — the phone's too. */
-        'Appearance',
-        /*
-         * The same row the phone has, in the same place. It used to be the
-         * one the browser could not have, because a browser has no App Store;
-         * Web Billing takes the card through Stripe instead. Drawn only for
-         * somebody signed in who has not paid, and this reads the file as
-         * text, so it is always in this list.
-         */
-        'Unlock the full version',
-        /*
-         * The one row here the phone has not got, and the reason it is not
-         * inside About with the other once-ever errands: "Somebody who has a
-         * rig connected and wants the remote in their pocket is the likeliest
-         * buyer there is." A phone needs no way to get itself onto a phone.
-         */
+        /* The one row the phone has not got: "Somebody who has a rig
+           connected and wants the remote in their pocket is the likeliest
+           buyer there is." */
         'Get it on your phone',
-        /* No 'Play screen'. No 'Demo Unit' either — it is inside Phone & computer, where the
-           phone keeps it. No 'Troubleshooting' and no walkthrough — inside
-           About, where Justin put the phone's. */
+        '# Play screen',
+        'Tiles & scenes',
+        '# Help',
+        'Troubleshooting',
+        'Amp & pedal names',
+        'REPLAY',
+        '# About',
         'About',
-        /* Last, and drawn only on his own account: "only when logged into the
-           justinnewbold@icloud.com account". See shared/admin.mjs. */
-        'Give someone access',
-        'Sales at a glance',
-        /* "How do I see a list of who has set up an account?" */
-        'Everyone with an account'
+        /* Drawn only on his own account: see shared/admin.mjs. */
+        '# Developer',
+        'Developer'
       ],
       `Settings opens on ${rows.length} rows: ${rows.join(', ')}`
     )
+    /* Light or dark on the front, under Play screen, as on the phone. */
+    assert.match(front, /setup-group">Play screen<[\s\S]{0,800}<Theme \/>/, 'light and dark are not on the front of Settings')
 
-    /*
-     * AND WHAT IS BEHIND THE ONE DOOR, in the phone's order.
-     *
-     * "Move walkthrough, updates and troubleshooting INSIDE of the 'About'
-     * menu." Carried out on the phone; this is the browser holding the same
-     * shape, so the next change to either list has to be made to both.
-     */
+    /* About holds Updates now, and the small print; Troubleshooting and the walkthrough moved up to Help. */
     const about = setup.slice(setup.indexOf("setupPage === 'about'"))
-    assert.deepEqual(
-      rowsIn(frontList(about)),
-      ['Updates', 'Troubleshooting', 'REPLAY'],
-      'the About page is not the three rows the phone has, in that order'
-    )
+    assert.deepEqual(rowsIn(frontList(about)), ['Updates'], 'the About page is not what the phone has')
     assert.ok(!setup.includes('<Group'), 'the doors are back')
 
     /*
@@ -1527,7 +1508,7 @@ export function run(test) {
     const noProse = loose.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, ' ')
     assert.ok(!/<Section/.test(noProse), 'Stage tiles and Appearance are folded away again')
     assert.match(loose, />Stage tiles</, 'the tile size control is not on the Appearance page')
-    assert.match(loose, /<Theme \/>/, 'the light and dark buttons are not on the Appearance page')
+    assert.ok(!/<Theme \/>/.test(loose), 'light and dark are on the Tiles & scenes page as well as the front')
 
     const behind = (key) => {
       const at = setup.indexOf(`setupPage === '${key}' ? (`)
@@ -1536,17 +1517,15 @@ export function run(test) {
       return [...setup.slice(at, next === -1 ? undefined : next).matchAll(/<Section\s+key="([^"]+)"/g)].map((m) => m[1])
     }
     for (const [page, panels] of [
-      /* Renaming is the page, with nothing in front of it. It is one button
-         and the sentence saying why it is worth pressing, so it needs no
-         folds at all. */
-      ['rename', []],
+      /* Who this is, in one place — moved off Phone & computer. */
+      ['account', ['account']],
       /* Which unit and which port lead, because they are the far end of the
          chain this page is about. The guide to getting a computer on the
          other end sits above the details about the line to it: it is the
          question somebody has when there is nothing on the other end at all.
          Account follows the phone remote, only in the demo and signed out:
          "there's actually no place to even sign in anywhere on the web app." */
-      ['link', ['connection', 'phone-remote', 'no-internet', 'account', 'ways-in', 'link-details']],
+      ['link', ['connection', 'phone-remote', 'no-internet', 'ways-in', 'link-details']],
       /* Fixes first: it is the one somebody is looking for when they open
          this page at all, and the log is what they send if it did not help. */
       ['help', ['fixes', 'preset-check', 'debug-log', 'feedback', 'what-s-changed-this-session']],
@@ -1571,10 +1550,7 @@ export function run(test) {
     /* Ends at the help page: 'play' used to be the next one and is gone. */
     const linkPage = setup.slice(setup.indexOf("setupPage === 'link'"), setup.indexOf("setupPage === 'help'"))
     assert.ok(linkPage.includes('<DeviceDetail'), 'the unit header is not on the Phone & computer page')
-    const renamePage = setup.slice(setup.indexOf("setupPage === 'rename'"), setup.indexOf("setupPage === 'link'"))
-    assert.ok(!renamePage.includes('<DeviceDetail'), 'the unit header is back in front of the rename button')
-    assert.match(renamePage, /setSheet\('scenes'\)/, 'the rename page does not open the names sheet')
-    assert.match(renamePage, /setSheetBack\('settings'\)/, 'closing the names sheet would drop out of Setup')
+    assert.ok(!setup.includes("setupPage === 'rename'"), 'renaming is back in Settings; it lives in the chain sheet now')
     const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
     assert.match(css, /button\.setup-row \{[^}]*min-height: 60px/, 'a Setup row is under thumb height')
     const row = readFileSync(new URL('../src/components/SetupRow.jsx', import.meta.url), 'utf8')
@@ -4985,11 +4961,12 @@ export function run(test) {
      * not a chip inside a fold, because everything else at that level is a row
      * and the one thing that is not is the one thing nobody finds.
      */
+    /* Under Help on the front of Settings now, beside Troubleshooting — one door, and the one somebody looks behind. */
+    const helpGroup = app.slice(app.indexOf('setup-group">Help<'), app.indexOf('setup-group">About<'))
+    assert.match(helpGroup, /<SetupRow\s*\n?\s*key="walkthrough"\s*\n?\s*title=\{REPLAY\}/, 'the walkthrough is not a row under Help')
+    assert.match(helpGroup, /setWalkthrough\(true\)/, 'the row under Help does not open the walkthrough')
     const aboutPage = app.slice(app.indexOf("setupPage === 'about' ? ("))
-    assert.match(aboutPage, /<SetupRow\s*\n?\s*key="walkthrough"\s*\n?\s*title=\{REPLAY\}/, 'the walkthrough is not a row on the About page')
-    assert.match(aboutPage, /setWalkthrough\(true\)/, 'the row on the About page does not open the walkthrough')
-    const frontRows = app.slice(app.indexOf('<SetupRow key="link"'), app.indexOf('<SetupRow key="about"'))
-    assert.ok(!frontRows.includes('key="walkthrough"'), 'the walkthrough is back on the front list, where the phone does not have it')
+    assert.ok(!/key="walkthrough"/.test(aboutPage.slice(0, aboutPage.indexOf('small-print'))), 'the walkthrough is in About as well as under Help')
   })
 
   test('the computer states the condition, and the phone is what answers it', () => {

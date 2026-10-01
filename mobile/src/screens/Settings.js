@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BackHandler, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { BackHandler, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native'
 
 import { color, font, mono, radius, space, TAP, MODES, getMode, setMode } from '../lib/theme'
 import { APP_VERSION } from '../lib/version'
@@ -20,8 +20,7 @@ import {
   remoteHosts,
   sendPasswordReset
 } from '../lib/relay'
-import { notePresetName, noteSceneName, useRig } from '../lib/rig'
-import { sceneShape, setPresetName, setSceneName } from '../lib/device'
+import { useRig } from '../lib/rig'
 import {
   SIZES,
   clampSize,
@@ -62,7 +61,6 @@ import Press from '../components/Press'
 import { stopLooper } from '../components/Looper'
 import { findLooper } from '../lib/looper'
 import SceneArrange from '../components/SceneArrange'
-import { SaveButton, SaveNotes, useSaveToSlot } from '../components/SaveToSlot'
 import EdgeBack from '../components/EdgeBack'
 import Sheet from '../components/Sheet'
 
@@ -256,8 +254,8 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { trouble: 'about', offline: 'link' }
-  const UP_LABEL = { about: '‹ About', link: '‹ Phone & computer' }
+  const PARENT = { offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer' }
+  const UP_LABEL = { link: '‹ Phone & computer', developer: '‹ Developer' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
 
@@ -307,85 +305,44 @@ export default function Settings({
         <>
           {head('Settings')}
           {/*
-            WHICH ACCOUNT, BESIDE THE VERSION. "Can we also list the user
-            account if they're signed in and if they're not signed in, have it
-            say not signed in. Then clicking on it will take them to where they
-            can sign in or otherwise show them their account info… where they
-            can sign out or change our password."
+            SETTINGS, IN GROUPS.
 
-            Signed in, it opens Phone & computer with the account's own sheet
-            up — password — and Sign out on the page under it. Not signed in,
-            it goes straight to the sign-in.
+            "Think of anything that can be made so that the user has an easier
+            time quickly locating settings they wanna check out. As right now
+            I don't think it's very clear." Ten rows of the same weight meant
+            reading every one to find anything. Now the account sits on top as
+            a card, and the rest is under five headings that say what each
+            group is for: the rig, the play screen, help, about, and — on his
+            account only — developer.
+
+            Two rows left. Renaming presets and scenes is part of the preset,
+            so it went to the Edit screen beside it. Troubleshooting came up
+            out of About, where it was two taps deep on the evening it is
+            needed most.
           */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
-            <Text style={{ color: color.silkFaint, fontSize: font.small, fontFamily: face }}>
-              {`v${APP_VERSION}`}
-            </Text>
-            {asked ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={signedInAs ? `Signed in as ${signedInAs}. Account` : 'Not signed in. Sign in'}
-                hitSlop={8}
-                style={{ flexShrink: 1 }}
-                onPress={() => {
-                  if (signedInAs) {
-                    setNote(null)
-                    setError(null)
-                    setPage('link')
-                    setAccountMenu(true)
-                  } else if (onSignIn && !isPairAccount(account?.email)) {
-                    onSignIn()
-                  } else {
-                    setPage('link')
-                  }
-                }}
-              >
-                <Text
-                  numberOfLines={1}
-                  ellipsizeMode="middle"
-                  style={{ color: signedInAs ? color.silkDim : color.signal, fontSize: font.small, textAlign: 'right' }}
-                >
-                  {signedInAs || (isPairAccount(account?.email) ? 'Paired, no account' : 'Not signed in')}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-          <View style={{ gap: 0 }}>
-            {/*
-              First, because it is the only row here anybody opens for the fun
-              of it. "Move the amp and pedals button to the top of the list."
-              Every other row is plumbing you go to when something needs
-              sorting out; this one answers "what IS a Das Metall, really",
-              which is a question you have while playing.
-            */}
-            {onOpenGear ? (
-              <SetupRow
-                title="Amp & pedal names"
-                status="What each model on your unit really is"
-                onPress={onOpenGear}
-              />
-            ) : null}
+          <AccountCard
+            asked={asked}
+            email={signedInAs}
+            paired={isPairAccount(account?.email)}
+            unlocked={purchase.unlocked}
+            demo={demo}
+            onPress={() => {
+              setNote(null)
+              setError(null)
+              setPage('account')
+            }}
+          />
+
+          <Group title="My rig">
             {/*
               One row for the whole chain: this phone, the computer, and the
-              unit plugged into it.
-
-              It was two rows — "Unit" on top and "Phone & computer" under it
-              — and neither could answer the only question anybody opens
-              either of them with. "Not connected" on the Unit row might mean
-              the unit is unplugged or might mean the computer is asleep, and
-              you had to open the second row to find out which. One chain, one
-              row, and the status says how far along it gets.
+              unit plugged into it — the status says how far along it gets.
             */}
             <SetupRow
               title="Phone & computer"
               status={
                 demo
-                  ? /* The unit the demo actually IS, not the one it used to be
-                       only able to be. This said "simulated FM3" whatever was
-                       picked, so an Axe-Fx III demo described itself as an
-                       FM3 one row above a bar reading Axe-Fx III — the exact
-                       fault the five demo units were added to end. */
-                    `Demo — simulated ${DEMO_UNITS.find((u) => u.key === unit)?.name || 'unit'}`
+                  ? `Demo — simulated ${DEMO_UNITS.find((u) => u.key === unit)?.name || 'unit'}`
                   : link !== 'connected'
                     ? linkWord
                     : unitState === 'missing'
@@ -397,30 +354,10 @@ export default function Settings({
               onPress={() => setPage('link')}
             />
             {/*
-              Named after the errand rather than after the thing.
-
-              This row said "Unit", and behind it were the rename boxes and a
-              line about whether the unit was answering. The line has gone up
-              one row where the rest of the chain is; the boxes are the whole
-              page now, so the row can say what pressing it gets you.
-            */}
-            <SetupRow
-              title="Rename presets and scenes"
-              status={
-                link === 'connected'
-                  ? 'Names you will know on a dark stage'
-                  : 'Connect a computer first'
-              }
-              onPress={() => setPage('unit')}
-            />
-            {/*
-              THE LOOPER'S EMERGENCY STOP.
-
-              "There needs to be something in settings … for when it keeps
-              playing." It keeps playing across a preset change whenever the
-              next preset has a Looper block too — that is the unit, not a
-              fault — and the buttons that stop it are a screen away. This row
-              stops it on one tap, from wherever the player is.
+              THE LOOPER'S EMERGENCY STOP. "There needs to be something in
+              settings … for when it keeps playing." It carries on across a
+              preset change when the next preset has a Looper block too, and
+              this stops it on one tap from wherever the player is.
             */}
             {link === 'connected' || demo ? (
               <SetupRow
@@ -429,121 +366,179 @@ export default function Settings({
                 onPress={stopTheLooper}
               />
             ) : null}
-            {/*
-              HOW PLAY LOOKS, behind its own row.
+          </Group>
 
-              "Move this to its own sub menu called Appearance." Tile size,
-              the pictures and light or dark sat open at the foot of this
-              list — asked for once so they were one tap away, and asked out
-              again now the list is long enough that they pushed it off the
-              screen. One row, one page, all three on it.
-            */}
+          <Group title="Play screen">
             <SetupRow
-              title="Appearance"
-              status="Tile size, effect pictures, light or dark"
+              title="Tiles & scenes"
+              status="Tile size, effect pictures, scene layout"
               onPress={() => setPage('appearance')}
             />
+            {/* Light or dark right here: one tap, not a page to open for it. */}
+            <View style={{ paddingVertical: space.md }}>
+              <Appearance />
+            </View>
+          </Group>
+
+          <Group title="Help">
+            {/* Up from inside About: the page needed most on a bad evening
+                is now one tap from Settings, not two. */}
+            {onOpenFixes || onOpenLog || onOpenReport ? (
+              <SetupRow
+                title="Troubleshooting"
+                status="What to try, the log, and telling us"
+                onPress={() => setPage('trouble')}
+              />
+            ) : null}
+            {/* What each model on the unit really is — something to look up
+                while playing, so it sits with the help rather than first. */}
+            {onOpenGear ? (
+              <SetupRow title="Amp & pedal names" status="What each model on your unit really is" onPress={onOpenGear} />
+            ) : null}
+            {onReplay ? <SetupRow title={REPLAY} status="The setup, from the start" onPress={onReplay} /> : null}
+          </Group>
+
+          <Group title="About">
             {/*
-              * THE FULL VERSION, AND THE WAY BACK TO ONE ALREADY PAID FOR.
-              *
-              * The top bar carries an Unlock button while the demo is on,
-              * which is where somebody deciding will find it. This row is for
-              * the two people that button cannot serve: somebody who wants to
-              * read about it before tapping anything, and somebody who has
-              * ALREADY PAID and is on a new handset.
-              *
-              * That second one is not a nicety. Apple requires a purchase to
-              * be restorable and rejects apps that hide it, and until this row
-              * existed the only Restore button in the app was on a paywall
-              * you could reach by exactly one route: signing in with a pairing
-              * code you had not paid for. A person who paid, changed phones
-              * and opened the demo had no way back to what they owned.
-              *
-              * AND IT GOES ENTIRELY ONCE THEY HAVE PAID. "The unlock full
-              * version needs to disappear if it has been unlocked."
-              *
-              * It used to stay, reading "Full version · Unlocked — thank you",
-              * which is a row that can be pressed to be told a thing it has
-              * already said. Nobody opens Setup to be thanked.
-              *
-              * The Apple rule is untouched by this, because it is about
-              * somebody who CANNOT reach what they bought. `unlocked` false is
-              * exactly that person — a new handset reads false until a restore
-              * says otherwise — and they still get the row, still worded so
-              * restoring is on it.
-              */}
+              The version, and an update waiting says so here, where the list
+              is read, instead of one page further in.
+            */}
+            <SetupRow
+              title="About"
+              status={updates.phase === 'ready' ? 'Update ready — tap to restart into it' : `v${APP_VERSION}`}
+              onPress={() => (updates.phase === 'ready' ? applyNow() : setPage('about'))}
+            />
+          </Group>
+
+          {/* Justin's own tools, on his account only — see lib/admin.js. One
+              row for all three: "we should probably just make that into one
+              menu called developer". */}
+          {isAdmin(account?.email) ? (
+            <Group title="Developer">
+              <SetupRow title="Developer" status="Access, sales, and accounts" onPress={() => setPage('developer')} />
+            </Group>
+          ) : null}
+        </>
+      ) : null}
+
+      {/* -------------------------------------------------------- account */}
+      {page === 'account' ? (
+        <>
+          {head('Account', 'back')}
+          {/* Everything about who this is, in one place. It was the bottom of
+              Phone & computer, which nobody would think to open to change a
+              password. */}
+          <View style={{ gap: space.md }}>
+            {isPairAccount(account?.email) || !account?.email ? (
+              <>
+                <Text style={{ color: color.silkDim, fontSize: font.small }}>
+                  {!asked
+                    ? 'Checking…'
+                    : isPairAccount(account?.email)
+                      ? 'Paired with your computer, no account. What you save stays on this phone.'
+                      : 'Not signed in on this device.'}
+                </Text>
+                {asked && onSignIn ? <Press label="Sign in with an email and password" onPress={onSignIn} /> : null}
+              </>
+            ) : (
+              <TipCard
+                icon={mailIcon}
+                label="SIGNED IN"
+                body={`${account.email}\nTap for password options`}
+                onPress={() => {
+                  setNote(null)
+                  setError(null)
+                  setAccountMenu(true)
+                }}
+              />
+            )}
+
+            {note ? <Note>{note}</Note> : null}
+            {error ? <Note tone="fault">{error}</Note> : null}
+
+            <Press label="Sign out on this phone" onPress={onSignOut} />
+            <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>
+              The computer stays signed in — signing out here must not drop the link mid-set.
+            </Text>
+          </View>
+
+          {/*
+            THE FULL VERSION, AND THE WAY BACK TO ONE ALREADY PAID FOR.
+
+            The Restore a purchase Apple requires, for somebody who paid and
+            is on a new handset — and gone once the app is unlocked: "the
+            unlock full version needs to disappear if it has been unlocked."
+          */}
+          <View style={{ gap: 0 }}>
             {purchase.unlocked ? null : (
               <SetupRow
                 title="Unlock the full version"
-                status={
-                  purchase.price
-                    ? `Drive a real rig · ${purchase.price}`
-                    : /* Never "Restore a purchase" as the only wording when the
-                         store is simply not ready — that reads as though buying
-                         is not on offer at all, which is how the whole thing
-                         came to be invisible. */
-                      'Drive a real rig, or restore a purchase'
-                }
+                status={purchase.price ? `Drive a real rig · ${purchase.price}` : 'Drive a real rig, or restore a purchase'}
                 onPress={onUnlock}
               />
             )}
-            <SetupRow title="About" status={`v${APP_VERSION}`} onPress={() => setPage('about')} />
-            {/* Justin's own tools, on his account only — see lib/admin.js. */}
-            {isAdmin(account?.email) ? (
-              <SetupRow title="Give someone access" status="Look someone up, or unlock them" onPress={() => setPage('access')} />
-            ) : null}
-            {isAdmin(account?.email) ? (
-              <SetupRow title="Sales at a glance" status="Today, this week, all time" onPress={() => setPage('sales')} />
-            ) : null}
-            {isAdmin(account?.email) ? (
-              <SetupRow title="Everyone with an account" status="Who has signed up" onPress={() => setPage('accounts')} />
-            ) : null}
           </View>
 
+          <Sheet open={accountMenu} onClose={() => setAccountMenu(false)} title="Your account" note={account?.email || ''}>
+            <Press
+              label="Change password"
+              sub="Type a new one here, twice"
+              onPress={() => {
+                setAccountMenu(false)
+                setChanging(true)
+              }}
+            />
+            <Press
+              label={busy ? 'Sending…' : 'Email me a link to reset it'}
+              sub="For when the old one is forgotten"
+              disabled={busy}
+              onPress={async () => {
+                setBusy(true)
+                try {
+                  await sendPasswordReset(account.email)
+                  setAccountMenu(false)
+                  setNote(`A link to set a new password is on its way to ${account.email}.`)
+                } catch (err) {
+                  setAccountMenu(false)
+                  setError(err.message)
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            />
+          </Sheet>
+
+          <PasswordBox
+            open={changing}
+            onChange={async (next) => {
+              await changePassword(next)
+              setNote('Password changed.')
+            }}
+            onClose={() => setChanging(false)}
+          />
+        </>
+      ) : null}
+
+      {/* ------------------------------------------------------ developer */}
+      {page === 'developer' && isAdmin(account?.email) ? (
+        <>
+          {head('Developer', 'back')}
+          <View style={{ gap: 0 }}>
+            <SetupRow title="Give someone access" status="Look someone up, or unlock them" onPress={() => setPage('access')} />
+            <SetupRow title="Sales at a glance" status="Today, this week, all time" onPress={() => setPage('sales')} />
+            <SetupRow title="Everyone with an account" status="Who has signed up" onPress={() => setPage('accounts')} />
+          </View>
         </>
       ) : null}
 
       {/* ------------------------------------------------------ appearance */}
       {page === 'appearance' ? (
         <>
-          {head('Appearance', 'back')}
+          {head('Tiles & scenes', 'back')}
           <View style={{ gap: space.md }}>
             <Section>Stage tiles</Section>
             <TileSize onScrollLock={setHeld} />
           </View>
-          {/*
-            Light, dark, or whatever the phone is set to.
-
-            "I'm not seeing where the light/dark/auto theme buttons are
-            anymore. Please put that back on Setup." The phone had none of
-            them and was dark whatever the handset was set to, which is the
-            wrong answer in a lit room.
-          */}
-          <View style={{ gap: space.md }}>
-            <Section>Light or dark</Section>
-            <Appearance />
-          </View>
-        </>
-      ) : null}
-
-      {/* -------------------------------------------------------- renaming */}
-      {page === 'unit' ? (
-        <>
-          {head('Rename presets and scenes', 'back')}
-          {/*
-            The boxes are the page now.
-
-            "Move the rename presets and scenes button to the settings menu"
-            put them behind a row called Unit, with a line above them about
-            whether the unit was answering. That line has gone to Phone &
-            computer, where the rest of the chain is — so what is left here is
-            one errand and nothing in front of it.
-          */}
-          <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 20 }}>
-            The names your unit came with are numbers and abbreviations. These are the words you
-            read off a phone on a dark stage.
-          </Text>
-          {link === 'connected' ? <UnitBits /> : <Note>Connect to the computer to rename anything.</Note>}
         </>
       ) : null}
 
@@ -851,104 +846,9 @@ export default function Settings({
             </View>
           ) : null}
 
-          <View style={{ gap: space.md }}>
-            <Section>Account</Section>
-            {isPairAccount(account?.email) || !account?.email ? (
-              <>
-                {/*
-                  What is actually true, which is three different states and
-                  used to be two. Paired by code is not the same as signed in
-                  with an account, and NEITHER is the same as the demo, where
-                  there is no session at all — and the demo is the one that
-                  used to read "Signed in."
-                */}
-                <Text style={{ color: color.silkDim, fontSize: font.small }}>
-                  {!asked
-                    ? 'Checking…'
-                    : isPairAccount(account?.email)
-                      ? 'Paired with your computer, no account. What you save stays on this phone.'
-                      : 'Not signed in on this device.'}
-                </Text>
-                {/*
-                  AND THE WAY BACK IN.
-
-                  "There is no way to login with user name and password after
-                  you are in the app on the demo." There was not: this block
-                  offered Sign out and nothing else, so somebody in the demo —
-                  who has nothing to sign out OF — had no route to an account
-                  they already own. Paired by code gets it too: that is how a
-                  phone moves from its computer's code to a real account.
-                */}
-                {asked && onSignIn ? (
-                  <Press label="Sign in with an email and password" onPress={onSignIn} />
-                ) : null}
-              </>
-            ) : (
-              /* The way in to the password: the account line itself, with a
-                 gear, rather than a box sitting open on the page. */
-              <TipCard
-                icon={mailIcon}
-                label="SIGNED IN"
-                body={`${account.email}\nTap for password options`}
-                onPress={() => {
-                  setNote(null)
-                  setError(null)
-                  setAccountMenu(true)
-                }}
-              />
-            )}
-
-            {note ? <Note>{note}</Note> : null}
-            {error ? <Note tone="fault">{error}</Note> : null}
-
-            <Press label="Sign out on this phone" onPress={onSignOut} />
-            <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>
-              The computer stays signed in — signing out here must not drop the link mid-set.
-            </Text>
-          </View>
-
-          <Sheet
-            open={accountMenu}
-            onClose={() => setAccountMenu(false)}
-            title="Your account"
-            note={account?.email || ''}
-          >
-            <Press
-              label="Change password"
-              sub="Type a new one here, twice"
-              onPress={() => {
-                setAccountMenu(false)
-                setChanging(true)
-              }}
-            />
-            <Press
-              label={busy ? 'Sending…' : 'Email me a link to reset it'}
-              sub="For when the old one is forgotten"
-              disabled={busy}
-              onPress={async () => {
-                setBusy(true)
-                try {
-                  await sendPasswordReset(account.email)
-                  setAccountMenu(false)
-                  setNote(`A link to set a new password is on its way to ${account.email}.`)
-                } catch (err) {
-                  setAccountMenu(false)
-                  setError(err.message)
-                } finally {
-                  setBusy(false)
-                }
-              }}
-            />
-          </Sheet>
-
-          <PasswordBox
-            open={changing}
-            onChange={async (next) => {
-              await changePassword(next)
-              setNote('Password changed.')
-            }}
-            onClose={() => setChanging(false)}
-          />
+          {/* Who this is signed in as moved to its own Account page, off the
+              top of Settings: "change password" under "Phone & computer" was
+              somewhere nobody would look. */}
         </>
       ) : null}
 
@@ -1092,31 +992,6 @@ export default function Settings({
             }
             onPress={() => (updates.phase === 'ready' ? applyNow() : checkNow())}
           />
-          {/*
-            Three rows became one door.
-
-            Fixes, Log and Feedback were three rows in a column, and they
-            are three stages of the same evening: read what to try, read
-            what actually happened, tell somebody when neither helped. As
-            separate rows each looked like a different errand, and the one
-            in the middle looked like a developer's.
-          */}
-          {onOpenFixes || onOpenLog || onOpenReport ? (
-            <SetupRow
-              title="Troubleshooting"
-              status="What to try, the log, and telling us"
-              onPress={() => setPage('trouble')}
-            />
-          ) : null}
-          {/* Openable again, because a tour worth showing once is worth
-              finding later — and somebody who skipped it on the first
-              launch has no other way back to it. */}
-          {/* The way back into the walkthrough, named the way its own last
-              screen promises: "Replay this anytime in Settings → Show the
-              walkthrough." */}
-          {onReplay ? (
-            <SetupRow title={REPLAY} status="The setup, from the start" onPress={onReplay} />
-          ) : null}
           </View>
 
           <View style={{ gap: space.md }}>
@@ -1197,152 +1072,6 @@ function SetupRow({ title, status, onPress }) {
       </View>
       <Text style={{ color: color.silkFaint, fontSize: font.lead }}>›</Text>
     </Pressable>
-  )
-}
-
-/**
- * Rename the preset, and rename its scenes.
- *
- * "Would also like to be able to rename presets and scenes in the app directly
- * without having to ask the chat."
- *
- * Both write the unit's EDIT BUFFER, like everything else this app does. The
- * new name is real the moment you type it and permanent once the preset is
- * saved to a slot — which the Save button below the names asks the computer
- * to do, because a phone is not allowed to overwrite a slot and should not be.
- *
- * AND THE WRITE IS BELIEVED. "Renaming a preset doesn't work, just goes right
- * back to the original name." The rename landed; the re-read that followed
- * came back with the old name and put it back on screen. So the screen is
- * told the name it wrote, rather than asked to read it back. See
- * rig.notePresetName. (It also sent DELETE /device/cache, to "drop the
- * computer's cache" — which deleted the computer's saved profile of the FM3
- * and left any name where it was, so it is gone.)
- *
- * It lives in Setup rather than on the stage screen, which is the browser's
- * choice and the right one: "move the rename presets and scenes button to the
- * settings menu". Renaming is bench work, and the stage screen is the one a
- * thumb crosses between songs.
- */
-function UnitBits() {
-  const preset = useRig((st) => st.preset)
-  const scenes = useRig((st) => st.sceneNames)
-  const caps = useRig((st) => st.capabilities)
-  const unsaved = useRig((st) => st.unsaved)
-  const shape = sceneShape(caps)
-  const pending = !!unsaved && unsaved.number === preset?.number
-
-  const [said, setSaid] = useState(null)
-  const [failed, setFailed] = useState(null)
-  const saveTo = useSaveToSlot()
-
-  const rename = async (name) => {
-    const wanted = name.trim()
-    if (!wanted || wanted === (preset?.name || '').trim()) return
-    setFailed(null)
-    try {
-      await setPresetName(wanted)
-      notePresetName(wanted)
-      setSaid(`This preset is called ${wanted} now. Tap Save to keep it.`)
-    } catch (err) {
-      setFailed(err.message)
-    }
-  }
-
-  const renameScene = async (index, name) => {
-    const wanted = name.trim()
-    if (!wanted || wanted === (scenes[index] || '').trim()) return
-    setFailed(null)
-    try {
-      await setSceneName(index, wanted)
-      noteSceneName(index, wanted)
-      setSaid(`Scene ${index + 1} is called ${wanted} now. Tap Save to keep it.`)
-    } catch (err) {
-      setFailed(err.message)
-    }
-  }
-
-  return (
-    <View style={{ gap: space.md }}>
-      <Section>This preset</Section>
-      {failed ? <Note tone="fault">{failed}</Note> : null}
-
-      <NameField
-        label="Preset name"
-        value={preset?.name || ''}
-        onDone={rename}
-      />
-
-      {shape.hasScenes
-        ? Array.from({ length: shape.count }, (_, i) => (
-            <NameField
-              key={i}
-              label={`Scene ${i + 1}`}
-              value={scenes[i] || ''}
-              onDone={(name) => renameScene(i, name)}
-            />
-          ))
-        : null}
-
-      {said ? <Note>{said}</Note> : null}
-      {pending ? (
-        <Note tone="warn">
-          Renamed, not saved. Tap Save to keep the new names. Changing preset drops them, on the
-          unit and here.
-        </Note>
-      ) : null}
-      <SaveNotes s={saveTo} />
-      <SaveButton s={saveTo} height={TAP} grow waiting={pending} />
-      <Note>
-        A new name is on the unit straight away and is lost on the next preset change unless it is
-        saved. Save asks the computer to write this slot, and that keeps everything changed from this
-        phone: names, knobs, blocks and the chain.
-      </Note>
-    </View>
-  )
-}
-
-/**
- * One name, as a field you can type in.
- *
- * Held locally while it is being typed. A box bound straight to what the unit
- * says snapped back to the old name the moment the last letter was deleted, so
- * you could not clear it to type a new one.
- */
-function NameField({ label, value, onDone }) {
-  const [draft, setDraft] = useState(null)
-  return (
-    <View style={{ gap: space.xs }}>
-      <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.2 }}>
-        {label.toUpperCase()}
-      </Text>
-      <TextInput
-        value={draft ?? value}
-        onChangeText={setDraft}
-        onBlur={() => {
-          if (draft !== null) onDone(draft)
-          setDraft(null)
-        }}
-        onSubmitEditing={() => {
-          if (draft !== null) onDone(draft)
-          setDraft(null)
-        }}
-        returnKeyType="done"
-        accessibilityLabel={label}
-        placeholder="Untitled"
-        placeholderTextColor={color.silkFaint}
-        style={{
-          minHeight: TAP,
-          paddingHorizontal: space.md,
-          borderRadius: radius.md,
-          borderWidth: 1,
-          borderColor: color.rule,
-          backgroundColor: color.panel,
-          color: color.silk,
-          fontSize: font.body
-        }}
-      />
-    </View>
   )
 }
 
@@ -1530,6 +1259,56 @@ function Section({ children }) {
     >
       {children}
     </Text>
+  )
+}
+
+/** A heading and the rows under it — one group of Settings. */
+function Group({ title, children }) {
+  return (
+    <View style={{ gap: space.xs }}>
+      <Section>{title}</Section>
+      <View style={{ gap: 0 }}>{children}</View>
+    </View>
+  )
+}
+
+/**
+ * Who this is, at the top of Settings: the account, and whether the app is
+ * the full version. Tapping it opens the Account page — signing in and out,
+ * the password, unlocking or restoring a purchase.
+ */
+function AccountCard({ asked, email, paired, unlocked, demo, onPress }) {
+  const who = !asked ? 'Checking…' : email || (paired ? 'Paired, no account' : 'Not signed in')
+  const what = demo ? 'Demo' : unlocked ? 'Full version' : 'Not unlocked yet'
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Account, ${who}, ${what}`}
+      onPress={() => {
+        tick()
+        onPress()
+      }}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.md,
+        padding: space.md,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: color.rule,
+        backgroundColor: pressed ? color.panelHi : color.panel
+      })}
+    >
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text numberOfLines={1} ellipsizeMode="middle" style={{ color: email ? color.silk : color.signal, fontSize: font.lead, fontWeight: '600' }}>
+          {who}
+        </Text>
+        <Text numberOfLines={1} style={{ color: color.ok, fontSize: font.small }}>
+          {`${what} · v${APP_VERSION}`}
+        </Text>
+      </View>
+      <Text style={{ color: color.silkFaint, fontSize: font.lead }}>›</Text>
+    </Pressable>
   )
 }
 
