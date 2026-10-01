@@ -1210,7 +1210,9 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
           </span>
         </span>
         <span className="gig-block-state">
-          {door ? 'Rec · Play' : unknown ? '\u00a0' : block.bypassed ? 'Off' : 'On'}
+          {/* One line, always: "Rec · Play" on a narrow tile wrapped down into
+              the looper's picture. */}
+          <span className="gig-block-word">{door ? 'Rec · Play' : unknown ? '\u00a0' : block.bypassed ? 'Off' : 'On'}</span>
           {/*
             The channel, in the top right corner, across from the on/off in
             the top left.
@@ -1224,7 +1226,9 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
             bare letter on something without channels would be a lie about the
             hardware.
           */}
-          {block.channel ? <span className="gig-block-channel">{block.channel}</span> : null}
+          {/* Not on the looper's door: it opens Record and Play, and a letter
+              in its corner crowded the words out. The phone's has none either. */}
+          {block.channel && !door ? <span className="gig-block-channel">{block.channel}</span> : null}
         </span>
       </button>
     </div>
