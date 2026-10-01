@@ -6688,13 +6688,16 @@ input.setlist-filter {
   /* The two arrows became one grip — see setlist-grip below. A song alone in
      a list has no grip at all, and `auto` lets that column collapse rather
      than leaving a 44px hole where a control used to be. */
-  grid-template-columns: 2ch minmax(0, 1fr) auto 44px;
+  grid-template-columns: 2ch minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s-1);
   min-height: 44px;
   padding-left: var(--s-1);
   border: 1px solid transparent;
   border-radius: var(--r-1);
+  /* Opaque: it slides off the ✕ behind it, and a see-through row shows the ✕
+     through every song in the list. */
+  background: var(--panel);
 }
 
 /*
@@ -6749,14 +6752,15 @@ button.setlist-grip:active {
   box-shadow: var(--e-2);
 }
 
-.setlist-song:not(.lifted) {
+.swipe-row:not(.lifted) {
   transition: transform 120ms ease;
 }
 
-/* The one playing, lit the way the live scene is. */
+/* The one playing, lit the way the live scene is — over the panel, so it
+   stays opaque above the ✕. */
 .setlist-song.current {
   border-color: var(--live);
-  background: var(--live-halo);
+  background: linear-gradient(var(--live-halo), var(--live-halo)), var(--panel);
 }
 
 .setlist-song-pos {
@@ -6783,15 +6787,83 @@ button.setlist-grip:active {
   color: var(--silk-faint);
 }
 
-/* `setlist-move` is gone with the arrows — the grip replaced both. */
-.setlist-song button.setlist-remove {
-  min-height: 44px;
-  padding: 0;
-  font-size: var(--f-2);
+/*
+ * SWIPE LEFT TO REMOVE — components/SwipeRow.jsx. The ✕ moved off the row and
+ * behind it: the row slides away to show it, a long slide removes the song.
+ */
+.swipe-row {
+  position: relative;
 }
 
-.setlist-song button.setlist-remove {
-  color: var(--silk-dim);
+.swipe-row.lifted {
+  z-index: 2;
+}
+
+button.swipe-row-remove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 84px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-1);
+  background: var(--fault);
+  color: #fff6f3;
+  font-size: var(--f-5);
+  font-weight: 700;
+}
+
+.swipe-row-face {
+  position: relative;
+  /* Up and down is still the page's; sideways is the row's. */
+  touch-action: pan-y;
+  transition: transform 160ms ease;
+}
+
+.swipe-row-face.moving {
+  transition: none;
+}
+
+/* The first-time hint showing the gesture: part of the way open and back. */
+.swipe-row-face.swipe-demo {
+  animation: swipe-demo 2.8s ease-in-out infinite;
+}
+
+@keyframes swipe-demo {
+  0%,
+  18% {
+    transform: translateX(0);
+  }
+  35%,
+  60% {
+    transform: translateX(-63px);
+  }
+  75%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swipe-row-face.swipe-demo {
+    animation: none;
+    transform: translateX(-63px);
+  }
+}
+
+.swipe-hint {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--signal);
+  border-radius: var(--r-2);
+  background: var(--signal-wash);
+}
+
+.swipe-hint p {
+  margin: 0;
 }
 
 .setlist-find {
