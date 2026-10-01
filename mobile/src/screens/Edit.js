@@ -58,6 +58,7 @@ import Knob, { fmt } from '../components/Knob'
 import Note from '../components/Note'
 import Grip from '../components/Grip'
 import IrPicker from '../components/IrPicker'
+import Looper from '../components/Looper'
 import Press from '../components/Press'
 import { SaveButton, SaveNotes, useSaveToSlot } from '../components/SaveToSlot'
 import Tile from '../components/Tile'
@@ -418,6 +419,13 @@ export default function Edit({ onBack }) {
           )
         })}
       </ScrollView>
+
+      {/*
+        "If you click the looper pedal, it pops up the looper controls." Above
+        its knobs rather than instead of them: the knobs are still how the
+        loop's level and mix are set.
+      */}
+      {block?.slug === 'looper' ? <Looper block={block} /> : null}
 
       {block ? (
         <View onLayout={panelLaid}>

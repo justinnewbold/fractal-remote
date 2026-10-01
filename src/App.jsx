@@ -81,6 +81,8 @@ import { checkRevert, noteEdit, revertSaid, revertTook, stuckLines } from './lib
 import { inDesktopApp } from './lib/desktop'
 import { createNameScan } from './lib/nameScan'
 import { Chain, PresetList, BlockPanel, Tuner } from './components/Console'
+import Looper, { stopLooper } from './components/Looper'
+import { findLooper } from '../shared/looper.mjs'
 import { useChain } from './components/ChainWait'
 import Screens, { viewsFor } from './components/Screens'
 import SceneArrange from './components/SceneArrange'
@@ -1255,6 +1257,8 @@ export default function App() {
      unit, or in his own dragged order. See gigSize. */
   const [sceneLayout, setSceneLayout] = useState(loadSceneLayout)
   const [sceneOrder, setSceneOrder] = useState(loadSceneOrder)
+  /* What Setup's Stop the looper row last did, in words, in place of its hint. */
+  const [looperSaid, setLooperSaid] = useState(null)
   /* Which page of Setup is open; null is the list of rows. */
   /* Which computer this browser is on, read once. The guide's routes are
      sorted by it; see shared/ways-in.mjs for why only this end sorts them. */
@@ -4498,6 +4502,10 @@ export default function App() {
             .join(' · ') || null
         }
       >
+        {/* "If you click the looper pedal, it pops up the looper controls."
+            Above its knobs, which still set the loop's level and mix. */}
+        {openBlock?.slug === 'looper' ? <Looper block={openBlock} presetNumber={preset?.number} /> : null}
+
         <BlockPanel
           block={openBlock}
           channels={device?.capabilities?.channelNames}
@@ -4972,6 +4980,28 @@ export default function App() {
               {/* "Move this to its own sub menu called Appearance." Tile size,
                   the pictures and light or dark, behind one row — the phone's
                   shape, in the phone's place. */}
+              {/* The looper's emergency stop. "There needs to be something in
+                  settings … for when it keeps playing." It carries on across a
+                  preset change when the next preset has a Looper block too —
+                  the unit, not a fault — and this stops it on one tap. */}
+              {status === 'live' ? (
+                <SetupRow
+                  key="looper-stop"
+                  title="Stop the looper"
+                  status={looperSaid || 'If a loop keeps playing'}
+                  onClick={async () => {
+                    const looper = findLooper(blocks)
+                    if (!looper) return setLooperSaid('This preset has no looper, so nothing is looping')
+                    setLooperSaid('Stopping…')
+                    try {
+                      await stopLooper(looper.effectId)
+                      setLooperSaid('Stopped')
+                    } catch (e) {
+                      setLooperSaid(`Didn’t stop — ${e?.message || 'the unit did not answer'}`)
+                    }
+                  }}
+                />
+              ) : null}
               <SetupRow key="appearance" title="Appearance" status="Tile size, effect pictures, light or dark" onClick={() => setSetupPage('appearance')} />
               {/*
                 THE SAME ROW THE PHONE HAS, in the same place: after renaming,

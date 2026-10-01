@@ -18,7 +18,9 @@ import {
 } from '../lib/deviceState'
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import { remoteActive } from '../lib/remote'
-import { STAGE_HIDDEN, hasLooper, LOOPER_ON_EDIT } from '../lib/guardrails'
+import { STAGE_HIDDEN } from '../lib/guardrails'
+import { findLooper } from '../../shared/looper.mjs'
+import Looper from './Looper'
 import { blockColor } from '../lib/blockColors'
 import { blockIcon } from '../lib/blockIcons'
 import { sceneColor } from '../lib/sceneColors'
@@ -448,6 +450,9 @@ export default function Gig({
    * being changed, so a fourteen-block preset does not mount fourteen.
    */
   const [chanEid, setChanEid] = useState(null)
+  /* The looper's buttons, opened from the Looper button under the tiles. */
+  const [looping, setLooping] = useState(false)
+  const looperHere = findLooper(allBlocks)
   /* A channel sheet opened on the last preset's block does not stay up over this one's. */
   const chanBlock = chanEid === null || shown.elsewhere || shown.outline ? null : blocks.find((b) => b.effectId === chanEid) || null
   /* Closed, not only hidden: kept, it came back over the new song's tiles the
@@ -911,14 +916,21 @@ export default function Gig({
 
         "PLAY leaves out the Looper." On purpose: input, output and the looper
         are never tiles here — see STAGE_HIDDEN — because an on/off switch is
-        not what a looper wants on a stage. It wants Record and Play, and
-        until those exist the honest thing is to say where it is, so a preset
-        with thirteen blocks and ten tiles doesn't look like three went
-        missing.
+        not what a looper wants on a stage. It wants Record and Play, and now
+        it has them: one button under the tiles that opens the looper's own
+        buttons. The phone's play screen has the same one.
       */}
-      {!shown.elsewhere && onChain && hasLooper(allBlocks) ? (
-        <p className="gig-note">{LOOPER_ON_EDIT}</p>
+      {!shown.elsewhere && looperHere ? (
+        <div className="gig-note gig-note-action">
+          <button type="button" onClick={() => setLooping(true)}>
+            Looper
+          </button>
+        </div>
       ) : null}
+
+      <Sheet open={looping && !!looperHere && !shown.elsewhere} onClose={() => setLooping(false)} title="Looper">
+        {looperHere ? <Looper block={looperHere} presetNumber={preset?.number} /> : null}
+      </Sheet>
 
       <ChannelSheet
         block={chanBlock}

@@ -59,6 +59,8 @@ import setupIcon from '../../assets/icons/setup.png'
 import Note from '../components/Note'
 import PasswordBox from '../components/PasswordBox'
 import Press from '../components/Press'
+import { stopLooper } from '../components/Looper'
+import { findLooper } from '../lib/looper'
 import SceneArrange from '../components/SceneArrange'
 import { SaveButton, SaveNotes, useSaveToSlot } from '../components/SaveToSlot'
 import EdgeBack from '../components/EdgeBack'
@@ -70,6 +72,7 @@ const ofDeviceName = (s) => s.deviceName
 const ofFirmware = (s) => s.firmware
 
 const ofUnitState = (s) => s.unit
+const ofAllBlocks = (s) => s.allBlocks
 
 /**
  * Everything that isn't playing.
@@ -155,6 +158,24 @@ export default function Settings({
   }, [link])
 
   const conflict = hostConflict(hosts, chosen)
+  /* What the Stop the looper row last did, in words, in place of its hint. */
+  const allBlocks = useRig(ofAllBlocks)
+  const [looperSaid, setLooperSaid] = useState(null)
+  async function stopTheLooper() {
+    const looper = findLooper(allBlocks)
+    if (!looper) {
+      setLooperSaid('This preset has no looper, so nothing is looping')
+      return
+    }
+    setLooperSaid('Stopping…')
+    try {
+      await stopLooper(looper.effectId)
+      setLooperSaid('Stopped')
+    } catch (e) {
+      setLooperSaid(`Didn’t stop — ${e?.message || 'the unit did not answer'}`)
+    }
+  }
+
   const unitDown = link === 'connected' && (unitState === 'missing' || unitState === 'silent')
   const lamp = unitDown ? 'fault' : link === 'connected' ? 'live' : link === 'no-answer' ? 'fault' : 'idle'
 
@@ -392,6 +413,22 @@ export default function Settings({
               }
               onPress={() => setPage('unit')}
             />
+            {/*
+              THE LOOPER'S EMERGENCY STOP.
+
+              "There needs to be something in settings … for when it keeps
+              playing." It keeps playing across a preset change whenever the
+              next preset has a Looper block too — that is the unit, not a
+              fault — and the buttons that stop it are a screen away. This row
+              stops it on one tap, from wherever the player is.
+            */}
+            {link === 'connected' || demo ? (
+              <SetupRow
+                title="Stop the looper"
+                status={looperSaid || 'If a loop keeps playing'}
+                onPress={stopTheLooper}
+              />
+            ) : null}
             {/*
               HOW PLAY LOOKS, behind its own row.
 

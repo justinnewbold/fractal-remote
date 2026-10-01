@@ -1645,6 +1645,22 @@ export const setTempo = (bpm) =>
 export const tapTempo = () =>
   mock ? tick().then(() => mock.tapTempo()) : request('/tempo/tap', { method: 'POST' })
 
+/**
+ * One looper button, down (on) or up. The relay never sends it twice; see
+ * shared/looper.mjs for which buttons latch and which are a quick press.
+ */
+export const looperControl = (eid, action, on) =>
+  mock
+    ? tick().then(() => ({ ok: true }))
+    : request('/preset/looper/control', {
+        method: 'POST',
+        body: JSON.stringify({ eid, action, on })
+      })
+
+/** Where the looper's playhead is and what the loop looks like. Empty for a block that is not a looper. */
+export const looperTelemetry = (eid) =>
+  mock ? tick().then(() => ({ wave: [], position: null, level: null })) : request(`/preset/looper?eid=${eid}`)
+
 /** Turn the hardware tuner on or off. */
 export const setTuner = (on) =>
   mock

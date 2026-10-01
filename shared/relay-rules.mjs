@@ -67,6 +67,13 @@ export function hostAllows(method, p) {
       p === '/mod/bind' ||
       p === '/preset/name' ||
       p === '/scene/name' ||
+      /*
+       * The looper's buttons. Added to the host on the pinned fork (see
+       * desktop/forgefx.lock.json): a performance control like a scene tap,
+       * which moves the looper's own audio, writes no parameter and reaches
+       * no slot.
+       */
+      p === '/preset/looper/control' ||
       /^\/am4\/(bypass|scene|preset)$/.test(p)
     )
   /*
@@ -165,7 +172,15 @@ export const RELAY_GRACE = 8000
  * the one that is not: it is a beat, and a resend is a beat that never
  * happened. So the retry covers the whole relay except this.
  */
-const NOT_REPEATABLE = [/^\/tempo\/tap$/]
+const NOT_REPEATABLE = [
+  /^\/tempo\/tap$/,
+  /*
+   * A looper button is a press, and a press sent twice is two presses: Record
+   * on, off, on again, or a second Undo taking away a layer nobody asked to
+   * lose. Same as a tap of the tempo.
+   */
+  /^\/preset\/looper\/control$/
+]
 
 export const repeatable = (path) => !NOT_REPEATABLE.some((re) => re.test(cleanPath(path)))
 

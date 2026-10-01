@@ -59,7 +59,7 @@ import tempoIcon from '../../assets/icons/tempo.png'
 import tunerIcon from '../../assets/icons/tuner.png'
 import { sceneColor } from '../lib/sceneColors'
 import { shortBlock } from '../lib/shortName'
-import { hasLooper, LOOPER_ON_EDIT } from '../lib/guardrails'
+import { findLooper } from '../lib/looper'
 import UnlockOffer from '../components/UnlockOffer'
 import Note from '../components/Note'
 import { fixById, fixFor } from '../lib/troubleshooting'
@@ -67,6 +67,7 @@ import Press from '../components/Press'
 import TempoDot from '../components/TempoDot'
 import Tile from '../components/Tile'
 import Coach from '../components/Coach'
+import Looper from '../components/Looper'
 import Sheet from '../components/Sheet'
 import TempoBox from '../components/TempoBox'
 import Tuner from '../components/Tuner'
@@ -289,6 +290,9 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   /* And on any other preset: a chain up from memory is drawn at once, and a
      sheet left open would be over the new song's block of the same number. */
   useEffect(() => setPicking(null), [chainNow.number])
+  /* The looper's buttons, opened from the Looper button under the tiles. */
+  const [looping, setLooping] = useState(false)
+  const looperHere = findLooper(allBlocks)
 
   const channels = caps?.channelNames
   const slots = slotCount(caps)
@@ -719,12 +723,13 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
         {/*
           Where the looper went. "PLAY leaves out the Looper" — on purpose,
           see STAGE_HIDDEN: an on/off tile is not what a looper wants on a
-          stage, it wants Record and Play. Until those exist, say where it is,
-          so ten tiles for a thirteen-block preset don't read as three lost.
-          The browser's Play says the same words — and, like it, only when
-          there is an Edit button to press.
+          stage, it wants Record and Play. Now it has them: one button, under
+          the tiles, that opens the looper's own buttons. The browser's Play
+          has the same one.
         */}
-        {onOpenEdit && !chainNow.elsewhere && hasLooper(allBlocks) ? <Note>{LOOPER_ON_EDIT}</Note> : null}
+        {!chainNow.elsewhere && looperHere ? (
+          <Press label="Looper" sub="Record, play and stop" onPress={() => setLooping(true)} />
+        ) : null}
 
       </View>
 
@@ -888,6 +893,10 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
           setPicking(null)
         }}
       />
+
+      <Sheet open={looping && !!looperHere && !chainNow.elsewhere} onClose={() => setLooping(false)} title="Looper">
+        {looperHere ? <Looper block={looperHere} /> : null}
+      </Sheet>
 
       {/* Closing the tuner stops it at the unit, which is what the button does. */}
       <Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} />
