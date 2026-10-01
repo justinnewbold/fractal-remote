@@ -125,6 +125,8 @@ export default function App() {
    */
   const [settingsAt, setSettingsAt] = useState(null)
   const [settingsVisit, setSettingsVisit] = useState(0)
+  /* Where Amp & pedal names goes back to: Settings, or Edit, whichever opened it. */
+  const [gearBack, setGearBack] = useState('settings')
   const openSettings = (at = null) => {
     setSettingsAt(at)
     setSettingsVisit((n) => n + 1)
@@ -856,11 +858,17 @@ export default function App() {
             ) : screen === 'setlists' ? (
               <Setlists onBack={() => setScreen('stage')} />
             ) : BENCH && screen === 'edit' ? (
-              <Edit onBack={() => setScreen('stage')} />
+              <Edit
+                onBack={() => setScreen('stage')}
+                onOpenGear={() => {
+                  setGearBack('edit')
+                  setScreen('gear')
+                }}
+              />
             ) : screen === 'connect' ? (
               <Connect onBack={() => setScreen('settings')} />
             ) : screen === 'gear' ? (
-              <Gear onBack={() => setScreen('settings')} />
+              <Gear onBack={() => setScreen(gearBack)} />
             ) : screen === 'log' ? (
               /* And a way to send it from the one screen where somebody is
                  already looking at the thing worth sending. Copying the log
@@ -902,7 +910,10 @@ export default function App() {
                 onBack={() => setScreen('stage')}
                 /* Works with the Mac off: it is a reference sheet, not a
                    question for the unit. */
-                onOpenGear={() => setScreen('gear')}
+                onOpenGear={() => {
+                  setGearBack('settings')
+                  setScreen('gear')
+                }}
                 /* Back to the start of the walkthrough. It replaces the
                    whole app while it is up, the same as on a first run. */
                 /*

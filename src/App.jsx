@@ -4498,6 +4498,17 @@ export default function App() {
               >
                 Rename preset and scenes
               </button>
+              {/* "Add the amps and pedals names as a link in the edit area." */}
+              <button
+                type="button"
+                className="chip"
+                onClick={() => {
+                  setSheetBack('chain')
+                  setSheet('gear')
+                }}
+              >
+                Amp &amp; pedal names
+              </button>
             </div>
           </>
         ) : null}
@@ -4891,8 +4902,11 @@ export default function App() {
       */}
       <Sheet
         open={sheet === 'gear'}
-        /* Only Setup's row opens it, so closing it is going back there. */
-        onClose={() => setSheet('settings')}
+        /* Back to whatever opened it: Setup's row, or the chain sheet's link. */
+        onClose={() => {
+          setSheet(sheetBack || 'settings')
+          setSheetBack(null)
+        }}
         title="Amp and pedal names"
         note={device?.short || device?.name || null}
         tall
@@ -5008,15 +5022,6 @@ export default function App() {
               />
             </div>
 
-            <p className="silk-label setup-group">Play screen</p>
-            <div className="setup-rows">
-              <SetupRow key="appearance" title="Tiles & scenes" status="Tile size, effect pictures, scene layout" onClick={() => setSetupPage('appearance')} />
-            </div>
-            {/* Light or dark right here, as on the phone: one click, not a page. */}
-            <div className="setup-inline-theme">
-              <Theme />
-            </div>
-
             <p className="silk-label setup-group">Help</p>
             <div className="setup-rows">
               <SetupRow
@@ -5025,7 +5030,10 @@ export default function App() {
                 status={`${getDebugLog().length} line${getDebugLog().length === 1 ? '' : 's'} in the log`}
                 onClick={() => setSetupPage('help')}
               />
-              <SetupRow key="gear-names" title="Amp & pedal names" status="What each model on your unit really is" onClick={() => setSheet('gear')} />
+              <SetupRow key="gear-names" title="Amp & pedal names" status="What each model on your unit really is" onClick={() => {
+                  setSheetBack('settings')
+                  setSheet('gear')
+                }} />
               <SetupRow
                 key="walkthrough"
                 title={REPLAY}
@@ -5052,6 +5060,16 @@ export default function App() {
                 </div>
               </>
             ) : null}
+            {/* Last: "Move the Play Screen section down to the bottom of the list." */}
+            <p className="silk-label setup-group">Play screen</p>
+            <div className="setup-rows">
+              <SetupRow key="appearance" title="Tiles & scenes" status="Tile size, effect pictures, scene layout" onClick={() => setSetupPage('appearance')} />
+            </div>
+            {/* Light or dark right here, as on the phone: one click, not a page. */}
+            <div className="setup-inline-theme">
+              <Theme />
+            </div>
+
           </>
         ) : null}
 

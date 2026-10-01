@@ -368,18 +368,6 @@ export default function Settings({
             ) : null}
           </Group>
 
-          <Group title="Play screen">
-            <SetupRow
-              title="Tiles & scenes"
-              status="Tile size, effect pictures, scene layout"
-              onPress={() => setPage('appearance')}
-            />
-            {/* Light or dark right here: one tap, not a page to open for it. */}
-            <View style={{ paddingVertical: space.md }}>
-              <Appearance />
-            </View>
-          </Group>
-
           <Group title="Help">
             {/* Up from inside About: the page needed most on a bad evening
                 is now one tap from Settings, not two. */}
@@ -418,6 +406,19 @@ export default function Settings({
               <SetupRow title="Developer" status="Access, sales, and accounts" onPress={() => setPage('developer')} />
             </Group>
           ) : null}
+
+          {/* Last: "Move the Play Screen section down to the bottom of the list." */}
+          <Group title="Play screen">
+            <SetupRow
+              title="Tiles & scenes"
+              status="Tile size, effect pictures, scene layout"
+              onPress={() => setPage('appearance')}
+            />
+            {/* Light or dark right here: one tap, not a page to open for it. */}
+            <View style={{ paddingVertical: space.md }}>
+              <Appearance />
+            </View>
+          </Group>
         </>
       ) : null}
 
