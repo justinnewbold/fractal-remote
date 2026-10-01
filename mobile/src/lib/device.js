@@ -164,6 +164,13 @@ export async function sceneState() {
   return Array.isArray(list) ? list : null
 }
 
+/**
+ * A stored preset decoded without loading it — its name, scenes and the
+ * blocks in it. Play reads the slots either side of this one with it, so a
+ * press of Next puts the pedals up at once (see rig.readAhead).
+ */
+export const presetSummary = (number) => remoteRequest(`/presets/${number}/summary`)
+
 /** The ones that belong on a stage: everything but the three you never kick. The gate is one you do. */
 export const stageBlocks = (blocks) =>
   (blocks || []).filter((b) => !STAGE_HIDDEN.includes(b.slug))

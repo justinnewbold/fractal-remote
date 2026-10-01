@@ -31,6 +31,7 @@ import {
   arrivedCurrent,
   clearError,
   loadPreset,
+  readAhead,
   refreshAll,
   rereadSceneNames,
   tapTempo,
@@ -427,6 +428,16 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
       ? stepTarget({ source, current: preset?.number, delta: by, favourites, lists })
       : stepSlot(preset?.number, by, caps)
 
+  /*
+   * And the pedals of where each would land, read while nothing else is going
+   * on, so the press puts them up with the name. "Preload the next one and
+   * keep the previous one." See rig.readAhead.
+   */
+  const nextAt = landing(1)
+  const lastAt = landing(-1)
+  useEffect(() => readAhead([nextAt, lastAt]), [nextAt, lastAt])
+  useEffect(() => () => readAhead([]), [])
+
   const step = async (by) => {
     const next = landing(by)
     if (next === null) {
@@ -728,8 +739,12 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             /* Named here rather than inline: the word the unit uses for this is
                not a word anybody says out loud, and it has no business sitting
                next to the text that gets drawn. */
-            const engaged = !block.bypassed
-            const state = engaged ? 'On' : 'Off'
+            /* Read ahead of the switch, on or off not said yet: dim and no
+               word, so the ones that are on light up rather than half of
+               them flipping from On to Off. */
+            const unknown = chainNow.outline && typeof block.bypassed !== 'boolean'
+            const engaged = !unknown && !block.bypassed
+            const state = unknown ? '\u00a0' : engaged ? 'On' : 'Off'
             return (
               <Tile
                 key={idOf(block)}
@@ -741,7 +756,12 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
                 ink={hue.ink}
                 on={engaged}
                 height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
-                onPress={() => writeBypass(idOf(block), !block.bypassed)}
+                /* A pedal read ahead of the switch, whose on or off the unit
+                   has not said yet: a tap would be a guess, so it waits. */
+                onPress={() => {
+                  if (chainNow.outline && typeof block.bypassed !== 'boolean') return
+                  writeBypass(idOf(block), !block.bypassed)
+                }}
                 /* Not on the outline: a channel waits for the chain read. */
                 onLongPress={
                   channels?.length > 1 && !chainNow.outline

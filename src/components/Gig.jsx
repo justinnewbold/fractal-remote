@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { liveMeters, setChannel, setMetersWanted } from '../lib/forgefx'
 import {
   useDevice,
@@ -8,6 +8,7 @@ import {
   chainFollowed,
   loadPreset,
   presetReadPending,
+  readAhead,
   refreshScene,
   refreshSceneState,
   refreshLoadedSceneNames,
@@ -62,6 +63,9 @@ const ofSceneNames = (s) => s.sceneNames
 const ofBlocks = (s) => s.blocks
 const ofTunerOn = (s) => s.tunerOn
 const ofTuning = (s) => s.tuning
+
+/* How long a preset's scenes stay nameless before Play says how to name them. */
+const UNNAMED_AFTER_MS = 1500
 
 export default function Gig({
   preset,
@@ -418,6 +422,9 @@ export default function Gig({
    * switching an effect — the drop "the sound should never cut out" is about.
    */
   const toggle = async (block) => {
+    /* A pedal read ahead of the switch, whose on or off the unit has not said
+       yet: a tap would be a guess, so it waits the moment for the status read. */
+    if (shown.outline && typeof block.bypassed !== 'boolean') return
     haptic()
     const eid = block.effectId
     const wanted = !block.bypassed
@@ -496,6 +503,16 @@ export default function Gig({
   const landing = (delta) =>
     stepTarget({ source, current: preset?.number, delta, favourites, lists })
 
+  /*
+   * And the pedals of where each would land, read while nothing else is going
+   * on, so the tap puts them up with the name. "Preload the next one and keep
+   * the previous one." See deviceState.readAhead.
+   */
+  const nextAt = landing(1)
+  const lastAt = landing(-1)
+  useEffect(() => readAhead([nextAt, lastAt]), [nextAt, lastAt])
+  useEffect(() => () => readAhead([]), [])
+
   const step = async (delta) => {
     const next = landing(delta)
     if (next === null) return
@@ -548,6 +565,44 @@ export default function Gig({
   const scenesRef = useRef(null)
   const blocksRef = useRef(null)
   const [fitVars, setFitVars] = useState(null)
+  /*
+   * A PRESET WHOSE SCENES REALLY HAVE NO NAMES — not one whose names are on
+   * their way. On the play test the "Those are scenes" note flashed up for a
+   * frame on every Next: the names are cleared on the press and arrive a
+   * moment later, and for that moment the note pushed everything under it
+   * down fifty pixels and back. So it waits for the chain to be this
+   * preset's and for the names to have stayed empty a second and a half.
+   */
+  const noNames = hasScenes && !names.some((n) => (n || '').trim()) && !shown.elsewhere && !shown.outline
+  const [unnamedSettled, setUnnamedSettled] = useState(false)
+  useEffect(() => {
+    if (!noNames) {
+      setUnnamedSettled(false)
+      return undefined
+    }
+    const timer = setTimeout(() => setUnnamedSettled(true), UNNAMED_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [noNames, shown.number])
+  /*
+   * THE PEDALS' SPACE, HELD WHILE THE NEXT PRESET'S CHAIN IS COMING.
+   *
+   * "Every time you do go previous or next the screen shrinks for a second and
+   * then goes back down." While another preset's chain was on its way the
+   * pedals went and the waiting cards took their place — a different height,
+   * and not counted as tile space, so the fit gave the scenes less room and
+   * shrank them, and gave it back when the pedals came. The phone was put
+   * right in 1.86.29; this is the same fix. The last chain's height and count
+   * are kept, and the cards wait in a box exactly that tall, which the fit
+   * counts as the pedals.
+   */
+  const heldBlocks = useRef({ count: 0, height: 0 })
+  const tileCount = blocks.length + (looperHere ? 1 : 0)
+  useLayoutEffect(() => {
+    if (shown.elsewhere || !blocksRef.current || !tileCount) return
+    heldBlocks.current = { count: tileCount, height: blocksRef.current.offsetHeight }
+  })
+  const held = shown.elsewhere && heldBlocks.current.height > 0 ? heldBlocks.current : null
+  const fitCount = held ? held.count : tileCount
   useEffect(() => {
     if (!fit) {
       setFitVars(null)
@@ -564,7 +619,7 @@ export default function Gig({
       const next = fitTiles({
         available: viewport - top - chrome,
         scenes: hasScenes ? sceneCount : 0,
-        blocks: blocks.length + (looperHere ? 1 : 0),
+        blocks: fitCount,
         sceneCols: sceneColsFor(null, sceneLayout),
         /* How wide the effects row is, so a phone's browser is not sent six
            across with tiles too narrow for a picture — see fitTiles. */
@@ -608,7 +663,7 @@ export default function Gig({
       window.visualViewport?.removeEventListener('resize', schedule)
       watch?.disconnect()
     }
-  }, [fit, hasScenes, sceneCount, blocks.length, sceneLayout, !!looperHere])
+  }, [fit, hasScenes, sceneCount, fitCount, sceneLayout])
 
   return (
     /*
@@ -854,7 +909,7 @@ export default function Gig({
         not be read, which is a different and more specific thing to say — so
         these two are mutually exclusive rather than stacked.
       */}
-      {hasScenes && !names.some((n) => (n || '').trim()) && !remoteActive() ? (
+      {unnamedSettled && !remoteActive() ? (
         <p className="gig-note">
           {/* The route named here is one that really exists: the Scenes sheet
               on Edit renames one directly. The line that sent people to the
@@ -867,14 +922,18 @@ export default function Gig({
       {/* An AM4 keeps its scene names inside a preset dump, and dumps don't
           travel the relay. Silence there reads as "this preset has unnamed
           scenes", which is a different and wrong thing to believe. */}
-      {hasScenes && !names.some((n) => (n || '').trim()) && remoteActive() ? (
+      {unnamedSettled && remoteActive() ? (
         <p className="gig-note">
           Scene names aren&rsquo;t readable from the phone. Open this preset once at the
           computer and they&rsquo;ll show here from then on.
         </p>
       ) : null}
 
-      {shown.elsewhere ? (
+      {held ? (
+        <div className="gig-blocks-held" ref={blocksRef} style={{ height: held.height }}>
+          <ChainWait chain={shown} cards={held.count} className="gig-chain-wait" onRetry={retryHere} />
+        </div>
+      ) : shown.elsewhere ? (
         <ChainWait chain={shown} className="gig-chain-wait" onRetry={retryHere} />
       ) : chain === 'failed' ? (
         <div className="gig-note gig-note-action">
@@ -1090,10 +1149,19 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
     { enabled: has && !busy }
   )
 
+  /*
+   * A pedal read ahead of the switch whose on or off the unit has not said
+   * yet. On the play test every one of them read On for a quarter of a second
+   * and half of them then flipped to Off. Drawn dim with no word instead, the
+   * ones that are on light up when the status read lands, and nothing is
+   * contradicted.
+   */
+  const unknown = !door && outline && typeof block.bypassed !== 'boolean'
+
   return (
     <div className="gig-block-cell">
       <button
-        className={`gig-block ${block.bypassed ? 'off' : 'on'}`}
+        className={`gig-block ${unknown || block.bypassed ? 'off' : 'on'}`}
         style={{
           '--block-fill': blockColor(block.slug).fill,
           '--block-ink': blockColor(block.slug).ink
@@ -1102,7 +1170,7 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
         disabled={busy}
         /* The looper pedal opens its buttons rather than switching it, so it
            is not a toggle and does not say it is one. */
-        aria-pressed={door ? undefined : !block.bypassed}
+        aria-pressed={door || unknown ? undefined : !block.bypassed}
         aria-label={door ? 'Looper — open Record, Play and Stop' : undefined}
         /* The phone says "Hold to switch channels" beside CHAIN; this screen
            has no heading there to carry it, so the tile says it when a mouse
@@ -1138,7 +1206,7 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
           </span>
         </span>
         <span className="gig-block-state">
-          {door ? 'Rec · Play' : block.bypassed ? 'Off' : 'On'}
+          {door ? 'Rec · Play' : unknown ? '\u00a0' : block.bypassed ? 'Off' : 'On'}
           {/*
             The channel, in the top right corner, across from the on/off in
             the top left.

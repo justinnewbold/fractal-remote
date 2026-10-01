@@ -185,6 +185,7 @@ import {
   setScene,
   sceneChannels,
   sceneState,
+  presetSummary,
   setPresetName,
   setChannel,
   blockParams,
@@ -291,6 +292,8 @@ attachDriver({
    * AM4 or a VP4 keeps its grey cards until the chain read, as before.
    */
   outlineCatalog: () => (hostKeepsCopy() === true && (!isDemo() || !!unitByKey(demoUnit())?.grid) ? blockCatalog : null),
+  /* The slots either side of this one, read ahead for Play: see deviceState.readAhead. */
+  presetSummary,
   /* Which unit a remembered chain belongs to: see deviceState.knownChain. */
   unitKey: () => `${isDemo() ? `demo:${demoUnit()}` : remoteActive() ? 'away' : 'rig'}:${currentDeviceSlug()}`
 })

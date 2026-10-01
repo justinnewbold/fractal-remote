@@ -114,3 +114,144 @@ export function outlineChain(states, catalog) {
   if (!out.length) return null
   return out.sort((a, b) => rankOf(a.slug) - rankOf(b.slug) || a.effectId - b.effectId)
 }
+
+/*
+ * THE PRESETS EITHER SIDE, READ BEFORE THEY ARE ASKED FOR.
+ *
+ * "The amp pedal names are blank for about half a second before it shows
+ * their names. Can you preload the previous preset and preload the next
+ * preset with those names so it instantly changes... preload the next one and
+ * keep the previous one." A preset played before already goes up from memory
+ * on the tap (KNOWN_CHAINS). One never played had grey cards until the status
+ * read above came back — a round trip after the select, longer through the
+ * relay.
+ *
+ * So once a preset has settled and the screen is quiet, the slots Previous and
+ * Next would land on are read — the stored slot decoded, without loading it,
+ * GET /presets/{n}/summary — and their pedals kept, in signal order. A tap on
+ * one puts those pedals up with the name, dimmed like any outline, and the
+ * status read and the chain read still go as they always did and replace them.
+ * The one you came from is in KNOWN_CHAINS already: that is the "keep the
+ * previous one".
+ *
+ * Gentle, because the dropouts came from reading the unit while it loads: one
+ * read at a time, never while a preset is loading, the chain being read or the
+ * tuner running, and only READ_AHEAD_MS after the last thing happened. A slot
+ * read once is not read again, and a unit that has no such read says so once
+ * and is not asked again.
+ */
+export const READ_AHEAD_MS = 2500
+
+/*
+ * A stored preset's summary, as the tiles a tap would put up. No bypass and no
+ * channel — a summary does not say which scene is on — so these are drawn as
+ * an outline, and the status read fills the states in (fillOutline).
+ *
+ * In the summary's own order and with the unit's own names, NOT the signal
+ * order above: the computer lists a summary's blocks walking the grid the same
+ * way it lists the chain read's, so these tiles are already where the chain
+ * read will put them. On the play test the guessed order had Wah before Comp,
+ * and the two swapped places half a second later when the chain landed.
+ *
+ * null for a summary that is about another slot, or names no block the
+ * catalog knows: the tap waits for the status read, as before.
+ */
+export function aheadChain(summary, number, catalog) {
+  if (!summary || typeof summary !== 'object' || !Array.isArray(catalog)) return null
+  if (Number.isInteger(summary.number) && summary.number !== number) return null
+  const byId = new Map()
+  for (const c of catalog) if (Number.isInteger(c?.page) && c.slug) byId.set(c.page, c)
+  const seen = new Set()
+  const out = []
+  for (const b of Array.isArray(summary.blocks) ? summary.blocks : []) {
+    const id = b?.effectId
+    if (!Number.isInteger(id) || seen.has(id)) continue
+    const c = byId.get(id)
+    if (!c) continue
+    seen.add(id)
+    const name = typeof b.name === 'string' && b.name.trim() ? b.name.trim() : c.name || c.slug
+    out.push({ slug: c.slug, name, effectId: id, bypassed: null, channel: null })
+  }
+  return out.length ? out : null
+}
+
+/*
+ * The status read laid over pedals already up from a read-ahead: their order
+ * and names kept, each one's on/off and channel filled in. A block the status
+ * read does not list is gone from the preset and goes; one it lists that was
+ * not read ahead joins at the end, in signal order. Without this the status
+ * read redrew the tiles in the guessed order, and they jumped twice.
+ */
+export function fillOutline(list, states, catalog) {
+  const fresh = outlineChain(states, catalog)
+  if (!fresh) return null
+  if (!Array.isArray(list) || !list.length) return fresh
+  const byId = new Map(fresh.map((b) => [b.effectId, b]))
+  const kept = list
+    .filter((b) => byId.has(b.effectId))
+    .map((b) => ({ ...b, bypassed: byId.get(b.effectId).bypassed, channel: byId.get(b.effectId).channel }))
+  const have = new Set(kept.map((b) => b.effectId))
+  return [...kept, ...fresh.filter((b) => !have.has(b.effectId))]
+}
+
+/**
+ * The reading itself, one end's copy each. `read(n)` makes the read and
+ * answers with what to keep (aheadChain's answer, null included); `has(n)` is
+ * whether that slot needs no read — kept already, or known from being played;
+ * `keep(n, list)` files the answer; `ready()` is whether the unit is quiet
+ * enough to be asked. `wait` and `clear` are the clock, so a test can drive it.
+ *
+ * `want([next, previous])` says where Previous and Next would land now; the
+ * first one still unknown is read after the wait, then the other. An empty
+ * want, or `stop()`, calls it all off.
+ */
+export function createReadAhead({ read, has, keep, ready, wait = setTimeout, clear = clearTimeout, after = READ_AHEAD_MS }) {
+  let wanted = []
+  let timer = null
+  let reading = false
+  let off = false
+  const missed = new Set()
+  const owed = () => wanted.find((n) => !missed.has(n) && !has(n))
+  const schedule = () => {
+    if (timer !== null) clear(timer)
+    timer = null
+    if (off || reading || owed() === undefined) return
+    timer = wait(tick, after)
+  }
+  const tick = async () => {
+    timer = null
+    if (off || reading) return
+    if (!ready()) return schedule()
+    const n = owed()
+    if (n === undefined) return
+    reading = true
+    try {
+      keep(n, await read(n))
+    } catch (err) {
+      /* 501: this unit cannot decode a stored slot. Nothing else will either. */
+      if (err?.status === 501) off = true
+      missed.add(n)
+    } finally {
+      reading = false
+    }
+    schedule()
+  }
+  return {
+    want(numbers) {
+      const next = (Array.isArray(numbers) ? numbers : []).filter((n, i, all) => Number.isInteger(n) && n >= 0 && all.indexOf(n) === i)
+      if (next.join(',') !== wanted.join(',')) missed.clear()
+      wanted = next
+      schedule()
+    },
+    /* Something just happened at the unit: the quiet starts again from now. */
+    nudge: schedule,
+    stop() {
+      wanted = []
+      if (timer !== null) clear(timer)
+      timer = null
+    },
+    get reading() {
+      return reading
+    }
+  }
+}
