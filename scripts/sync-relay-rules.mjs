@@ -74,6 +74,11 @@ export const FILES = [
   /* More than one row: the joins between them, and the writes that add or take away a parallel path. */
   { source: '../shared/split-chain.mjs', target: '../mobile/src/lib/split-chain.js' },
   /*
+   * Copy a scene onto another, and a block's channel onto another. Two ends
+   * copying differently would build two different scenes from the same tap.
+   */
+  { source: '../shared/copy-tools.mjs', target: '../mobile/src/lib/copy-tools.js' },
+  /*
    * When a garbled preset dump is asked for again rather than shown.
    *
    * The browser has had this since the day the message first appeared. The

@@ -7,6 +7,7 @@ import DebugLog from './components/DebugLog'
 import PresetReport from './components/PresetReport'
 import { installCrashCapture, logDebug, getDebugLog } from './lib/debugLog'
 import Scenes from './components/Scenes'
+import SceneCopy from './components/SceneCopy'
 import { CabPicker, Backup } from './components/Hardware'
 import Gig from './components/Gig'
 import TapTempo from './components/TapTempo'
@@ -4874,6 +4875,17 @@ export default function App() {
           }}
           onError={setError}
         />
+
+        {/* Start a scene from another one. See SceneCopy. */}
+        {hasScenes && !chainNow.elsewhere ? (
+          <SceneCopy
+            count={device?.capabilities?.sceneCount || 8}
+            names={sceneNames}
+            busy={busy || status !== 'live'}
+            onChanged={(summary) => record('scene', summary)}
+            onError={setError}
+          />
+        ) : null}
 
         {/* A map read for the last song switched this song's blocks by number;
             it starts again, empty, for each preset. */}

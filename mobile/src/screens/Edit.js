@@ -40,6 +40,7 @@ import {
   taken
 } from '../lib/cab-pick'
 import { MODEL_HINT, modelSnapshot, restoreModel, undoOffer, undoProgress, undoResult } from '../lib/model-undo'
+import { copyChannel } from '../lib/copy-tools'
 import { colLabel, doubtfulWrite, gapCols, gridShape, isSplitChain, laneItems, lanesShown, rowLabel } from '../lib/grid-plan'
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
 import { isSilencingParam } from '../lib/guardrails'
@@ -555,6 +556,8 @@ function BlockPanel({
      this panel was drawn in: a pick or an Undo outlives the render. */
   const liveChannel = () => (getState().allBlocks || []).find((b) => sameBlock(b, eid))?.channel ?? null
 
+  /* Moved by a channel copy, so the panel reads the block again. */
+  const [readAgain, setReadAgain] = useState(0)
   useEffect(() => {
     let stop = false
     ;(async () => {
@@ -584,7 +587,7 @@ function BlockPanel({
     return () => {
       stop = true
     }
-  }, [eid, block.slug, onError])
+  }, [eid, block.slug, onError, readAgain])
 
   useEffect(() => () => clearTimeout(undoTimer.current), [])
 
@@ -990,6 +993,18 @@ function BlockPanel({
             />
           ))}
         </View>
+      ) : null}
+
+      {/* Copy this channel onto another — see ChannelCopy below. */}
+      {channels?.length > 1 && block.channel ? (
+        <ChannelCopy
+          eid={eid}
+          block={block}
+          channels={channels}
+          disabled={!!restoring}
+          onDone={() => setReadAgain((n) => n + 1)}
+          onError={onError}
+        />
       ) : null}
 
       {/*
@@ -2185,6 +2200,74 @@ function Label({ children }) {
  * the one safe place to stop a slip is before it happens. Re-adding it gives
  * the same block with every knob back at its default.
  */
+/**
+ * COPY THIS CHANNEL ONTO ANOTHER — the browser's ChannelCopy, on the phone.
+ * The model and every knob and switch go across (lib/copy-tools, the same
+ * copy the browser runs), and the block is left on the channel copied to, so
+ * the scene plays the copy. Asked first: the other channel's settings go.
+ */
+function ChannelCopy({ eid, block, channels, disabled, onDone, onError }) {
+  const [open, setOpen] = useState(false)
+  const [working, setWorking] = useState(false)
+  const [said, setSaid] = useState(null)
+  const from = block.channel
+  const run = async (to) => {
+    setWorking(true)
+    setSaid(null)
+    try {
+      const res = await copyChannel({
+        eid,
+        from,
+        to,
+        wire: { setChannel: writeChannel, readBlock: blockParams, setType, setParam, setEnum }
+      })
+      setSaid(
+        res.ok
+          ? { bad: false, text: `Channel ${from} copied onto ${to} — ${res.changed} change${res.changed === 1 ? '' : 's'}. This scene is on ${to} now.` }
+          : { bad: true, text: `Copying stopped: ${res.error}` }
+      )
+      onDone?.()
+    } catch (err) {
+      onError?.(err?.message || String(err))
+    } finally {
+      setWorking(false)
+      setOpen(false)
+    }
+  }
+  const ask = (to) =>
+    Alert.alert(
+      `Copy channel ${from} onto ${to}?`,
+      `${to}’s model and settings are replaced, and this scene switches to ${to}.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: `Copy onto ${to}`, onPress: () => run(to) }
+      ]
+    )
+  return (
+    <View style={{ gap: space.sm }}>
+      {open ? (
+        <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
+          <Text style={{ color: color.silkDim, fontSize: font.small }}>Copy {from} onto</Text>
+          {channels
+            .filter((c) => c !== from)
+            .map((c) => (
+              <Press key={c} label={c} height={44} disabled={disabled || working} onPress={() => ask(c)} />
+            ))}
+          <Press label="Cancel" height={44} onPress={() => setOpen(false)} />
+        </View>
+      ) : (
+        <Press
+          label={working ? 'Copying…' : `Copy channel ${from} to…`}
+          height={44}
+          disabled={disabled || working}
+          onPress={() => setOpen(true)}
+        />
+      )}
+      {said ? <Note tone={said.bad ? 'warn' : undefined}>{said.text}</Note> : null}
+    </View>
+  )
+}
+
 function confirmRemove(name, go) {
   Alert.alert(
     `Remove ${name || 'this block'}?`,

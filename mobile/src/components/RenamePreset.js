@@ -5,6 +5,7 @@ import { color, font, radius, space, TAP } from '../lib/theme'
 import { notePresetName, noteSceneName, useRig } from '../lib/rig'
 import { sceneShape, setPresetName, setSceneName } from '../lib/device'
 import Note from './Note'
+import SceneCopy from './SceneCopy'
 import { SaveButton, SaveNotes, useSaveToSlot } from './SaveToSlot'
 
 /**
@@ -91,6 +92,9 @@ export default function RenamePreset() {
             />
           ))
         : null}
+
+      {/* Start a scene from another one. See SceneCopy. */}
+      {shape.hasScenes ? <SceneCopy count={shape.count} /> : null}
 
       {said ? <Note>{said}</Note> : null}
       {pending ? (

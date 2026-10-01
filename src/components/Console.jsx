@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useDevice, writeBypass, refreshSceneState, getSnapshot } from '../lib/deviceState'
+import { useDevice, writeBypass, refreshSceneState, getSnapshot, bufferReloaded } from '../lib/deviceState'
+import { copyChannel } from '../../shared/copy-tools.mjs'
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import { blockColor } from '../lib/blockColors'
 import { useDismiss } from '../lib/dismiss'
@@ -122,6 +123,80 @@ function GearAbout({ text }) {
       <button type="button" className="gear-about-more" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         {open ? 'Show less' : 'Read more'}
       </button>
+    </div>
+  )
+}
+
+/*
+ * COPY THIS CHANNEL ONTO ANOTHER — "copy one channel to another (A → B), to
+ * make B a small variation of A". The model and every knob and switch go
+ * across (shared/copy-tools.mjs, the phone's own copy too); the block is left
+ * on the channel copied to, so the scene plays the copy and it can be tweaked
+ * straight away. Asked first, because the other channel's settings go.
+ */
+function ChannelCopy({ block, channels, disabled, onDone, onError }) {
+  const [open, setOpen] = useState(false)
+  const [onto, setOnto] = useState(null)
+  const [working, setWorking] = useState(false)
+  const from = block.channel
+  const others = channels.filter((c) => c !== from)
+  const run = async () => {
+    setWorking(true)
+    try {
+      const res = await copyChannel({
+        eid: block.effectId,
+        from,
+        to: onto,
+        wire: { setChannel, readBlock: blockParams, setType, setParam, setEnum }
+      })
+      await refreshSceneState()
+      bufferReloaded()
+      if (res.ok) onDone(`${block.name}: channel ${from} copied onto ${onto} (${res.changed} change${res.changed === 1 ? '' : 's'})`)
+      else onError(`Copying channel ${from} onto ${onto} stopped: ${res.error}`)
+    } catch (err) {
+      onError(err?.message || String(err))
+    } finally {
+      setWorking(false)
+      setOnto(null)
+      setOpen(false)
+    }
+  }
+  if (!open) {
+    return (
+      <button type="button" className="chip chan-copy-open" disabled={disabled} onClick={() => setOpen(true)}>
+        Copy channel {from} to…
+      </button>
+    )
+  }
+  return (
+    <div className="chan-copy" role="group" aria-label={`Copy channel ${from}`}>
+      {onto ? (
+        <>
+          <p className="hint">
+            Copy channel {from} onto {onto}? {onto}&rsquo;s model and settings are replaced, and this scene switches to {onto}.
+          </p>
+          <div className="history-actions">
+            <button type="button" className="primary" disabled={working} onClick={run}>
+              {working ? 'Copying…' : `Copy onto ${onto}`}
+            </button>
+            <button type="button" className="chip" disabled={working} onClick={() => setOnto(null)}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="history-actions">
+          <span className="hint">Copy {from} onto</span>
+          {others.map((c) => (
+            <button key={c} type="button" className="chip" disabled={disabled} onClick={() => setOnto(c)}>
+              {c}
+            </button>
+          ))}
+          <button type="button" className="chip" onClick={() => setOpen(false)}>
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -1582,6 +1657,17 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
           {block.bypassed ? 'Bypassed' : 'Engaged'}
         </button>
       </div>
+
+      {/* Copy this channel onto another — see ChannelCopy. */}
+      {channels?.length > 1 && block.channel ? (
+        <ChannelCopy
+          block={block}
+          channels={channels}
+          disabled={busy || !!restoringHere}
+          onDone={(text) => onChanged(text, undefined, { chain: false })}
+          onError={onError}
+        />
+      ) : null}
 
       {undo ? (
         <div className="undo-strip" role="status">
