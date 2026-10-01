@@ -49,6 +49,7 @@ const shortName = (slug) => SHORT[slug] || (slug || '??').slice(0, 3).toUpperCas
 const colorFor = (slug) => blockColor(slug).fill
 import Knob from './Knob'
 import {
+  blockHelp,
   blockParams,
   blockTypes,
   cabState,
@@ -200,6 +201,9 @@ function ChannelCopy({ block, channels, disabled, onDone, onError }) {
     </div>
   )
 }
+
+/* Knob help per kind of block, kept for the life of the page. */
+const KNOB_HELP = new Map()
 
 /* How low a block's Level can be typed: low enough to balance, not to silence. */
 const LEVEL_FLOOR_DB = -20
@@ -1043,6 +1047,33 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   }, [block?.effectId, rev])
 
   /*
+   * WHAT EACH KNOB DOES, from the computer's own help for this family —
+   * "Decay time: how long the tail takes to fade out." Read once per kind of
+   * block and kept; a unit or a demo with none simply shows no "?".
+   */
+  const [help, setHelp] = useState(() => KNOB_HELP.get(block?.slug) ?? null)
+  const [helpOn, setHelpOn] = useState(null)
+  useEffect(() => {
+    const slug = block?.slug
+    if (!slug) return undefined
+    if (KNOB_HELP.has(slug)) {
+      setHelp(KNOB_HELP.get(slug))
+      return undefined
+    }
+    let live = true
+    blockHelp(slug)
+      .then((h) => {
+        const kept = h && typeof h === 'object' && h.params ? h : null
+        KNOB_HELP.set(slug, kept)
+        if (live) setHelp(kept)
+      })
+      .catch(() => KNOB_HELP.set(slug, null))
+    return () => {
+      live = false
+    }
+  }, [block?.slug])
+
+  /*
    * Derived above the effects that read them, and above the early return.
    *
    * A dependency array is evaluated during render, so an effect listing `rest`
@@ -1879,6 +1910,24 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
                   commit(p, v)
                 }}
               />
+              {help?.params?.[p.id]?.blurb ? (
+                <button
+                  type="button"
+                  className={`knob-help${helpOn === p.id ? ' open' : ''}`}
+                  aria-expanded={helpOn === p.id}
+                  aria-label={`What does ${p.label || p.name} do?`}
+                  onClick={() => setHelpOn((was) => (was === p.id ? null : p.id))}
+                >
+                  {helpOn === p.id ? (
+                    <span className="knob-help-text">
+                      {help.params[p.id].blurb}
+                      {help.params[p.id].tip ? ` ${help.params[p.id].tip}` : ''}
+                    </span>
+                  ) : (
+                    '?'
+                  )}
+                </button>
+              ) : null}
             </div>
           ))
         )}

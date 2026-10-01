@@ -5321,6 +5321,8 @@ export function run(test) {
     assert.deepEqual(order, [
       '# My rig',
       'Phone & computer',
+      /* What each footswitch does, where the switches can be read. */
+      'Footswitches',
       'Stop the looper',
       '# Help',
       'Troubleshooting',

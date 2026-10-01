@@ -286,6 +286,12 @@ export const AREAS = [
         web: null,
         phone: 'Done',
         why: 'the browser’s editor is part of the page, so there is nothing to leave'
+      },
+      {
+        does: 'put away what a knob does, after its ? opened it',
+        web: null,
+        phone: 'Hide',
+        why: 'the browser’s ? opens into the line itself and a second tap on it closes it; the phone’s knobs are three across, so the line opens under them and its button says Hide'
       }
       /*
        * The page tabs over a block's controls are not listed: they are named
@@ -954,6 +960,8 @@ export function run(test) {
     /* A row at one end only, and why. Same contract as AREAS: unexplained
        fails, explained passes, and the list is the open questions. */
     const ONE_END = {
+      Footswitches:
+        'phone only as a Settings row — the browser shows the same panel, from the same shared/footswitches.mjs, as a section of the Edit sheet, where it has been since it was built',
       'Get it on your phone': 'browser only — a phone has no use for a way to get itself onto a phone, and it stays on the front page rather than inside About because "somebody who has a rig connected and wants the remote in their pocket is the likeliest buyer there is"'
       /* 'Unlock the full version' was here as phone-only — "the browser has
          nothing to sell". Web Billing changed that, and the row is at both

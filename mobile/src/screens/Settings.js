@@ -21,6 +21,8 @@ import {
   sendPasswordReset
 } from '../lib/relay'
 import { useRig } from '../lib/rig'
+import { fcReadable } from '../lib/footswitches'
+import Footswitches from '../components/Footswitches'
 import {
   SIZES,
   clampSize,
@@ -71,6 +73,7 @@ const ofFirmware = (s) => s.firmware
 
 const ofUnitState = (s) => s.unit
 const ofAllBlocks = (s) => s.allBlocks
+const ofCapabilities = (s) => s.capabilities
 
 /**
  * Everything that isn't playing.
@@ -158,6 +161,8 @@ export default function Settings({
   const conflict = hostConflict(hosts, chosen)
   /* What the Stop the looper row last did, in words, in place of its hint. */
   const allBlocks = useRig(ofAllBlocks)
+  /* A unit whose switches can be read — see the Footswitches page. */
+  const switchesReadable = fcReadable(useRig(ofCapabilities))
   const [looperSaid, setLooperSaid] = useState(null)
   async function stopTheLooper() {
     const looper = findLooper(allBlocks)
@@ -359,6 +364,11 @@ export default function Settings({
               preset change when the next preset has a Looper block too, and
               this stops it on one tap from wherever the player is.
             */}
+            {/* What each switch does, read off the unit — the browser's
+                Footswitches panel, here. Only where the switches can be read. */}
+            {(link === 'connected' || demo) && switchesReadable ? (
+              <SetupRow title="Footswitches" status="What each switch does" onPress={() => setPage('footswitches')} />
+            ) : null}
             {link === 'connected' || demo ? (
               <SetupRow
                 title="Stop the looper"
@@ -533,6 +543,13 @@ export default function Settings({
       ) : null}
 
       {/* ------------------------------------------------------ appearance */}
+      {page === 'footswitches' ? (
+        <>
+          {head('Footswitches', 'back')}
+          <Footswitches />
+        </>
+      ) : null}
+
       {page === 'appearance' ? (
         <>
           {head('Tiles & scenes', 'back')}
