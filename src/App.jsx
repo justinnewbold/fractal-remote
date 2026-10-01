@@ -14,7 +14,7 @@ import TapTempo from './components/TapTempo'
 import SaveBar, { SaveLate } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
 import { overwriteCheck } from './lib/overwrite'
-import { SAVE_CANCELLED, SAVE_FRESH_MS, startSaveWait } from '../shared/save-wait.mjs'
+import { SAVE_CANCELLED, SAVE_FRESH_MS, SAVE_WORKING_WORDS, startSaveWait } from '../shared/save-wait.mjs'
 import {
   carryOutRestore,
   dirtyAfterRestore,
@@ -2250,6 +2250,15 @@ export default function App() {
        */
       markHandled(req?.id)
       setBusy(true)
+      /*
+       * EVERY STEP, TIMED, IN THE LOG. "When I hit save, it just kept saying
+       * saving the whole time and never confirmed." The phone waited on a
+       * save this window had picked up and never answered, and nothing here
+       * said which step it was waiting in. Now the log does.
+       */
+      const began = Date.now()
+      const step = (what) => logDebug('save', `phone save to slot ${req?.slot}: ${what}`, `${Date.now() - began} ms`)
+      step('picked up')
       try {
         /*
          * Picked up, said at once and in its own document: the phone waiting
@@ -2258,6 +2267,7 @@ export default function App() {
          * any answer as the last word.
          */
         await reportSavePicked(req.id)
+        step('told the phone it was picked up')
         /*
          * A slot this unit does not have is refused here, not by the unit.
          *
@@ -2279,6 +2289,7 @@ export default function App() {
          * request, since it cannot delete it. Asked once more here, just
          * before the one step that cannot be taken back.
          */
+        step('checking it is still wanted')
         const still = await takeParkedSave()
         if (still && (still.id !== req.id || still.cancelled)) {
           record('save', `The phone cancelled its save to slot ${req.slot}; nothing was written`)
@@ -2288,7 +2299,9 @@ export default function App() {
         }
         const name = (req.name || '').trim()
         if (name && name !== preset?.name?.trim()) await setPresetName(name)
+        step('asking the unit to store it')
         await storePreset(req.slot)
+        step('the unit stored it')
         // What that slot is called is now known exactly, and the phone that
         // asked for this reads it back off the host. See notePresetName.
         keepSavedName(req.slot, name || preset?.name)
@@ -2298,6 +2311,7 @@ export default function App() {
         // The phone is watching for this; without it, "asked" never becomes
         // "done" over there and the only honest thing it could say is nothing.
         await reportSave({ id: req.id, ok: true, slot: req.slot })
+        step('told the phone it was saved')
         setDirty(false)
         setSavedAt(Date.now())
         record('save', `Saved "${name || preset?.name}" to slot ${req.slot}, asked for from the phone`)
@@ -2336,8 +2350,11 @@ export default function App() {
               : prev
           )
         }
+        step(`failed — ${err?.message || err}`)
         await clearParkedSave().catch(() => {})
-        await reportSave({ id: req.id, ok: false, slot: req.slot, error: err.message }).catch(() => {})
+        await reportSave({ id: req.id, ok: false, slot: req.slot, error: err.message }).catch((e) =>
+          step(`could not tell the phone it failed — ${e?.message || e}`)
+        )
         setError(
           learned
             ? `Slot ${req.slot} isn't on this unit — it holds ${learned}, numbered 0 to ${learned - 1}. Nothing was saved.`
@@ -2531,7 +2548,9 @@ export default function App() {
         if (!(await cancelParkedSave(queuedSave.id))) throw new Error('not written')
       },
       listen: onConfigDoc,
-      onState: ({ late, picked }) => live && setSaveLate(late && !picked),
+      /* 'waiting' for a computer that has not answered, 'working' for one that
+         has it and is slow; both show, with Cancel. See SAVE_WORKING_WORDS. */
+      onState: ({ late, picked }) => live && setSaveLate(late ? (picked ? 'working' : 'waiting') : false),
       startedAt: queuedSave.at
     })
     queuedWait.current = wait
@@ -3904,7 +3923,9 @@ export default function App() {
         ) : null}
       </TopBar>
 
-      {queuedSave && saveLate ? <SaveLate onCancel={cancelQueuedSave} /> : null}
+      {queuedSave && saveLate ? (
+        <SaveLate onCancel={cancelQueuedSave} words={saveLate === 'working' ? SAVE_WORKING_WORDS : undefined} />
+      ) : null}
       {/* A restore from here still waiting on the computer, with the Presets
           sheet shut: the panel's own notice and Cancel went with it, and the
           sound can still change when the computer gets to it. */}

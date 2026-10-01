@@ -7138,8 +7138,8 @@ export function run(test) {
     const flat = saver.replace(/\s+/g, ' ')
     assert.ok(!/setSaid\(\{ tone: 'hint', text: 'Asked the computer/.test(saver), 'every save opens with a sentence about the computer again')
     assert.match(flat, /listen: onConfigDoc/, 'the phone still waits for its next look')
-    assert.match(flat, /onState: \(now\) => setLate\(now\.late && !now\.picked\)/)
-    assert.match(flat, /\{s\.saving && s\.late \? \( <> <Note tone="hint">\{SAVE_LATE_WORDS\}<\/Note> <Press label="Cancel" height=\{40\} onPress=\{s\.cancel\} \/>/, 'a late save has nothing to say and nothing to press')
+    assert.match(flat, /onState: \(now\) => \{ setLate\(now\.late\) setPicked\(now\.picked\)/, 'a late save the computer has picked up says nothing again')
+    assert.match(flat, /\{s\.saving && s\.late \? \( <> <Note tone="hint">\{s\.picked \? SAVE_WORKING_WORDS : SAVE_LATE_WORDS\}<\/Note> <Press label="Cancel" height=\{40\} onPress=\{s\.cancel\} \/>/, 'a late save has nothing to say and nothing to press')
     assert.match(flat, /cancel: \(\) => job\.current\?\.cancel\(\)/)
   })
 
@@ -7165,10 +7165,10 @@ export function run(test) {
      * vanished while it saved, and nothing said a word.
      */
     const bar = read('mobile/src/components/TopBar.js').replace(/\s+/g, ' ')
-    assert.match(bar, /import \{ SAVE_LATE_WORDS \} from '\.\.\/lib\/save-wait'/)
+    assert.match(bar, /import \{ SAVE_LATE_WORDS, SAVE_WORKING_WORDS \} from '\.\.\/lib\/save-wait'/)
     assert.match(bar, /const canSave = saveHere && \(saveTo\.saving \|\|/, 'the pill goes while it saves, and with it any sign of the save')
-    assert.match(bar, /\{saveHere && saveTo\.saving && saveTo\.late \? <Late onCancel=\{saveTo\.cancel\} \/> : null\}/, 'a late save on Play has nothing to say and nothing to press')
-    assert.match(bar, /function Late\(\{ onCancel \}\)[\s\S]*?\{SAVE_LATE_WORDS\}[\s\S]*?onCancel\(\)/)
+    assert.match(bar, /\{saveHere && saveTo\.saving && saveTo\.late \? <Late onCancel=\{saveTo\.cancel\} picked=\{saveTo\.picked\} \/> : null\}/, 'a late save on Play has nothing to say and nothing to press')
+    assert.match(bar, /function Late\(\{ onCancel, picked = false \}\)[\s\S]*?\{picked \? SAVE_WORKING_WORDS : SAVE_LATE_WORDS\}[\s\S]*?onCancel\(\)/)
   })
 
   test('the log says when the phone went to sleep and came back', () => {
@@ -9011,7 +9011,8 @@ export function run(test) {
     /* Two thresholds, and the long one is the one that acts without asking. */
     /* The numbers are shared/swipe-hint.mjs's now, so the browser's row lands the same way. */
     assert.match(swipe, /const landing = swipeLanding\(rest\.current \+ g\.dx\)/, 'the phone lands a swipe by its own rule rather than the shared one')
-    assert.match(swipe, /if \(landing === 'remove'\) \{\s*nope\(\)\s*away\(\)/, 'a full swipe does not remove the song')
+    /* A song goes on the full swipe; a row given `ask` (a chain block) parks open and asks. */
+    assert.match(swipe, /if \(landing === 'remove'\) \{\s*nope\(\)\s*if \(asking\.current\) \{\s*settle\(-OPEN\)\s*asking\.current\(away, \(\) => settle\(0\)\)\s*return\s*\}\s*away\(\)/, 'a full swipe does not remove the song')
     assert.match(swipe, /if \(landing === 'open'\) \{/, 'a part swipe does not park the row open')
     const hint = await import('../shared/swipe-hint.mjs')
     assert.ok(hint.SWIPE_FULL > hint.SWIPE_OPEN * 1.5, `a full swipe is ${hint.SWIPE_FULL}px and the open stop is ${hint.SWIPE_OPEN}px — too close to tell apart`)
@@ -10259,32 +10260,15 @@ export function run(test) {
    * THE PRESETS EITHER SIDE, read before they are pressed for. "Preload the
    * next one and keep the previous one." See lib/chain-outline's readAhead.
    */
-  test('the next preset’s pedals are read while the phone is quiet, and go up the moment Next is pressed', async () => {
+  test('Previous and Next never read another slot on the phone either', async () => {
     const { rig, clock, unit, asked } = await rigOnTheBench()
     const chains = twoSongs(unit)
     chains[30] = SONG_30
     unit.stored = { 30: SONG_30.map(({ effectId, slug, name }) => ({ effectId, slug, name, instance: 1 })) }
-    unit.lag = (line) => (line === CHAIN ? 1500 : 0)
-    const view = () => rig.chainViewOf(rig.getState())
     const before = asked(SUMMARY)
     rig.readAhead([30])
-    await clock.advance(rig.READ_AHEAD_MS + 100)
-    assert.equal(asked(SUMMARY), before + 1, 'the next preset was not read ahead')
-    await clock.advance(rig.READ_AHEAD_MS * 3)
-    assert.equal(asked(SUMMARY), before + 1, 'a slot read ahead once was read again')
-    rig.loadPreset(30)
-    /* On the press, before the unit has answered anything. */
-    assert.equal(view(), 'outline', 'the pedals read ahead did not go up on the press')
-    /* In the order the unit listed them, which is the chain read's: nothing moves when it lands. */
-    assert.deepEqual(slugsOf(rig.getState().blocks), ['reverb', 'amp', 'drive'])
-    await clock.advance(rig.OUTLINE_AFTER_MS + 50)
-    assert.equal(asked(STATE) > 0, true, 'the status read did not still fill in which pedals are on')
-    assert.equal(rig.getState().blocks.find((b) => b.slug === 'reverb').bypassed, true)
-    assert.deepEqual(slugsOf(rig.getState().blocks), ['reverb', 'amp', 'drive'], 'the status read reshuffled the pedals read ahead')
-    await clock.advance(rig.OWN_SETTLE_MS + 3000)
-    assert.equal(view(), 'ready')
-    assert.equal(asked(CHAIN), 1, 'reading ahead cost a chain read')
-    assert.equal(asked(SUMMARY), before + 1, 'a read ahead went while the preset was loading')
+    await clock.advance(rig.READ_AHEAD_MS * 10)
+    assert.equal(asked(SUMMARY), before, 'a slot other than the loaded one was read ahead — see READ_AHEAD_ON')
   })
 
   test('a pedal drawn ahead of the chain switches by its own effect id, and waits for the chain for its channel', async () => {

@@ -39,7 +39,7 @@ import {
   judgeCopy
 } from './own-echo'
 import { chainActs, chainSwitches, chainView } from './chain-view'
-import { OUTLINE_AFTER_MS, aheadChain, createReadAhead, fillOutline, outlineChain } from './chain-outline'
+import { OUTLINE_AFTER_MS, READ_AHEAD_ON, aheadChain, createReadAhead, fillOutline, outlineChain } from './chain-outline'
 import { blockCatalog } from './blockCatalog'
 import { unitByKey } from './demoUnits'
 
@@ -1129,8 +1129,9 @@ function forgetChain(number) {
 const aheadChains = new Map()
 const ahead = createReadAhead({
   read: async (n) => aheadChain(await device.presetSummary(n), n, blockCatalog),
+  /* Off: reading another slot moved the computer's idea of the loaded one — see READ_AHEAD_ON. */
   has: (n) =>
-    !outlinesHere() || n === state.preset?.number || knownChains.has(keyFor(n)) || aheadChains.has(keyFor(n)),
+    !READ_AHEAD_ON || !outlinesHere() || n === state.preset?.number || knownChains.has(keyFor(n)) || aheadChains.has(keyFor(n)),
   keep: (n, list) => {
     const key = keyFor(n)
     aheadChains.delete(key)

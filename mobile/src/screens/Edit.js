@@ -61,6 +61,7 @@ import Note from '../components/Note'
 import Grip from '../components/Grip'
 import IrPicker from '../components/IrPicker'
 import RowsPanel from '../components/RowsPanel'
+import SwipeAway from '../components/SwipeAway'
 import LooperAtEnd from '../components/LooperAtEnd'
 import RenamePreset from '../components/RenamePreset'
 import Looper from '../components/Looper'
@@ -1662,7 +1663,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
       ) : null}
 
       <Text style={{ color: color.silkFaint, fontSize: font.micro }}>
-        Hold ≡ and drag a block up or down to move it. Tap a block for Add and Remove.
+        Hold ≡ and drag a block up or down to move it. Swipe a block left to remove it, or tap it for Add and Remove.
       </Text>
 
       {lanes.map((lane) => {
@@ -1702,6 +1703,20 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
                   }}
                 >
                   {item.kind === 'block' ? (
+                    /*
+                     * SWIPE LEFT TO TAKE IT OUT. "Let's add swipe to delete on
+                     * the chain instead of having to tap on it and hit remove…
+                     * maybe with a confirmation X." The setlist's swipe, with
+                     * one difference: a block's settings go with it, so a full
+                     * swipe and the ✕ both ask first (SwipeAway's `ask`). The
+                     * ends of the chain cannot be taken out, and do not slide.
+                     */
+                    <Swipeable
+                      on={!['input', 'output'].includes(item.block?.slug) && !dragging}
+                      label={`Remove ${item.block?.name || 'this block'}`}
+                      onRemove={() => remove(lane.row, item.col)}
+                      ask={(go, keep) => confirmRemove(item.block?.name, go, keep)}
+                    >
                     <BlockCard
                       block={item.block}
                       at={where(lane.row, item.col)}
@@ -1726,6 +1741,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
                           : null
                       }
                     />
+                    </Swipeable>
                   ) : (
                     <Press
                       caption={whereGap(lane.row, item)}
@@ -2303,15 +2319,22 @@ function ChannelCopy({ eid, block, channels, disabled, onDone, onError }) {
   )
 }
 
-function confirmRemove(name, go) {
+function confirmRemove(name, go, keep) {
   Alert.alert(
     `Remove ${name || 'this block'}?`,
     'Its settings go with it. Adding it again brings it back with every knob at its default.',
     [
-      { text: 'Cancel', style: 'cancel' },
+      { text: 'Cancel', style: 'cancel', onPress: keep },
       { text: 'Remove', style: 'destructive', onPress: go }
-    ]
+    ],
+    /* Dismissed by tapping outside it, on Android: the row goes back too. */
+    { onDismiss: keep }
   )
+}
+
+/** SwipeAway where a row can be taken out, the row as it is where it cannot. */
+function Swipeable({ on, children, ...rest }) {
+  return on ? <SwipeAway {...rest}>{children}</SwipeAway> : children
 }
 
 /** The first block of each kind the chain has not used, in the unit's order. */

@@ -5,6 +5,7 @@ import { blockPositions, landingIndex, reorderPlan } from '../../shared/lane-ord
 import { chainPlan } from '../lib/actions'
 import ChainWait, { useChain } from './ChainWait'
 import RowsPanel from './RowsPanel'
+import SwipeRow from './SwipeRow'
 import LooperAtEnd from './LooperAtEnd'
 import {
   colLabel,
@@ -549,7 +550,32 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
             const lifted = !!dragging && index === dragging.index
             return (
               <div className={`chain-slot ${isOpen ? 'open' : ''} ${lifted ? 'lifted' : ''}`} key={at} ref={slotRef} style={slotStyle}>
-                <div className="chain-row">
+                {/*
+                  SWIPE LEFT TO TAKE IT OUT — the phone's chain does the same.
+                  "Let's add swipe to delete on the chain instead of having to
+                  tap on it and hit remove… maybe with a confirmation X." A
+                  swipe, or the ✕ it uncovers, asks the same question Remove
+                  asks, here on the page. The ends of the chain do not slide.
+                */}
+                <SwipeRow
+                  as="div"
+                  className="chain-row"
+                  fromButtons
+                  label={`Remove ${b.name}`}
+                  ask={
+                    editable && !['input', 'output'].includes(b.slug)
+                      ? (go, keep) => {
+                          keep()
+                          setIssue(null)
+                          setMoving(null)
+                          setOpen(at)
+                          setAsking(at)
+                        }
+                      : null
+                  }
+                  onRemove={() => {}}
+                  noSwipe={!editable || ['input', 'output'].includes(b.slug) || !!dragging}
+                >
                   <button
                     className={`chain-block ${isOpen ? 'open' : ''} ${
                       moving?.at === at || lifted ? 'lifting' : ''
@@ -581,7 +607,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
                       ≡
                     </button>
                   ) : null}
-                </div>
+                </SwipeRow>
 
                 {isOpen && editable ? (
                   <div className="chain-actions">
@@ -712,7 +738,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
       </div>
 
       <p className="hint">
-        Hold ≡ and drag a block up or down to move it. Tap a block for Add and Remove, or an empty
+        Hold ≡ and drag a block up or down to move it. Swipe a block left to remove it. Tap a block for Add and Remove, or an empty
         slot to put something in it.
       </p>
 

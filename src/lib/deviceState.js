@@ -10,7 +10,7 @@ import {
   judgeCopy
 } from '../../shared/own-echo.mjs'
 import { CHAIN_WORDS, chainActs, chainSwitches, chainView } from '../../shared/chain-view.mjs'
-import { OUTLINE_AFTER_MS, aheadChain, createReadAhead, fillOutline, outlineChain } from '../../shared/chain-outline.mjs'
+import { OUTLINE_AFTER_MS, READ_AHEAD_ON, aheadChain, createReadAhead, fillOutline, outlineChain } from '../../shared/chain-outline.mjs'
 import { STAGE_HIDDEN } from './guardrails.js'
 
 export { CHAIN_FRESH_MS, OWN_ECHO_MS, OWN_SETTLE_MS, PRESET_SETTLE_MS } from '../../shared/own-echo.mjs'
@@ -1130,7 +1130,8 @@ export function chainChanged({ all = false } = {}) {
  * the phone runs too. Play says which slots those are (readAhead).
  */
 const aheadChains = new Map()
-const aheadHere = () => typeof driver?.presetSummary === 'function' && Array.isArray(driver?.outlineCatalog?.())
+/* Off: reading another slot moved the computer's idea of the loaded one — see READ_AHEAD_ON. */
+const aheadHere = () => READ_AHEAD_ON && typeof driver?.presetSummary === 'function' && Array.isArray(driver?.outlineCatalog?.())
 const ahead = createReadAhead({
   read: async (n) => aheadChain(await driver.presetSummary(n), n, driver.outlineCatalog()),
   has: (n) => {

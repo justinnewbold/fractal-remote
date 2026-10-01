@@ -53,7 +53,14 @@ const CLAIM = SWIPE_CLAIM
  * it: while it is up the row slides part of the way open and back, over and
  * over, and stops the moment the hint is confirmed. See lib/swipe-hint.
  */
-export default function SwipeAway({ children, onRemove, label, demo = false }) {
+/*
+ * `ask` is for a row whose removal has to be asked about — a block in the
+ * chain, whose settings go with it. Given, a full swipe parks the row open
+ * instead of sending it off, and both that and the ✕ call ask(go, keep):
+ * go() sends the row off and removes it, keep() puts it back. A setlist row
+ * passes nothing and goes on the swipe, as before.
+ */
+export default function SwipeAway({ children, onRemove, label, demo = false, ask = null }) {
   const x = useRef(new Animated.Value(0)).current
   const [width, setWidth] = useState(0)
   /* Where the row sits between gestures: 0 or -OPEN. Read inside the
@@ -61,6 +68,8 @@ export default function SwipeAway({ children, onRemove, label, demo = false }) {
   const rest = useRef(0)
   const live = useRef(onRemove)
   live.current = onRemove
+  const asking = useRef(ask)
+  asking.current = ask
 
   const settle = (to) => {
     rest.current = to
@@ -111,6 +120,11 @@ export default function SwipeAway({ children, onRemove, label, demo = false }) {
         const landing = swipeLanding(rest.current + g.dx)
         if (landing === 'remove') {
           nope()
+          if (asking.current) {
+            settle(-OPEN)
+            asking.current(away, () => settle(0))
+            return
+          }
           away()
           return
         }
@@ -156,7 +170,8 @@ export default function SwipeAway({ children, onRemove, label, demo = false }) {
           hitSlop={8}
           onPress={() => {
             nope()
-            away()
+            if (asking.current) asking.current(away, () => settle(0))
+            else away()
           }}
           style={{ paddingHorizontal: space.lg, paddingVertical: space.md }}
         >

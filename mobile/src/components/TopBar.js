@@ -17,7 +17,7 @@ import Lamp from './Lamp'
 import Volume from './Volume'
 import { probeNow } from '../lib/link'
 import { useSaveToSlot } from './SaveToSlot'
-import { SAVE_LATE_WORDS } from '../lib/save-wait'
+import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS } from '../lib/save-wait'
 
 const face = Platform.select(mono)
 
@@ -537,7 +537,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
         A save from Play runs late the same as one from Edit, and Play has no
         notes under a button to say so. The same strip, with its Cancel.
       */}
-      {saveHere && saveTo.saving && saveTo.late ? <Late onCancel={saveTo.cancel} /> : null}
+      {saveHere && saveTo.saving && saveTo.late ? <Late onCancel={saveTo.cancel} picked={saveTo.picked} /> : null}
     </BlurView>
   )
 }
@@ -633,7 +633,7 @@ function Saved({ said, onClear }) {
 }
 
 /** A save from the bar that the computer has not answered yet, and a way out. */
-function Late({ onCancel }) {
+function Late({ onCancel, picked = false }) {
   return (
     <View
       style={{
@@ -652,7 +652,7 @@ function Late({ onCancel }) {
         paddingHorizontal: space.md
       }}
     >
-      <Text style={{ flex: 1, color: color.silk, fontSize: font.small }}>{SAVE_LATE_WORDS}</Text>
+      <Text style={{ flex: 1, color: color.silk, fontSize: font.small }}>{picked ? SAVE_WORKING_WORDS : SAVE_LATE_WORDS}</Text>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Cancel the save"
