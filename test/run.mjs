@@ -11693,6 +11693,98 @@ test('the browser’s setlist swipes a song away like the phone’s, with no ✕
   assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.swipe-row-face\.swipe-demo/, 'the demo slides for somebody who asked for less motion')
 })
 
+
+test('split chains: the rows and their joins are read, and a parallel path is planned, built and taken away', async () => {
+  const S = await import('../shared/split-chain.mjs')
+  /* One row: input, drive, amp, delay, reverb, cab, output — each fed from its own row. */
+  const chain = ['input', 'drive', 'amp', 'delay', 'reverb', 'cab', 'output']
+  const ids = { input: 37, drive: 118, amp: 58, delay: 70, reverb: 66, cab: 62, output: 42 }
+  const blocks = chain.map((slug, col) => ({ slug, name: slug.toUpperCase(), effectId: ids[slug], row: 0, col, fromRows: col ? [0] : [] }))
+  const cells = blocks.map((b) => ({ row: b.row, col: b.col, effectId: b.effectId, name: b.name, fromRows: b.fromRows }))
+  const map = S.gridMap(cells, blocks, { rows: 4, cols: 12 })
+  assert.equal(S.mainRow(map), 0)
+  assert.deepEqual(S.branches(map), [], 'a single row is drawn as having a parallel path')
+  assert.equal(S.joins(map).known, true)
+  assert.equal(S.joins(map).edges.length, 6)
+
+  /* Dry beside the delay: leaves after the amp, rejoins at the reverb, on the first free row. */
+  const dry = S.planParallel(map, { first: 3, last: 3 })
+  assert.equal(dry.ok, true)
+  assert.equal(dry.row, 1)
+  assert.deepEqual(dry.steps, [
+    { kind: 'cable', srcRow: 0, srcCol: 2, destRow: 1, connect: true },
+    { kind: 'cable', srcRow: 1, srcCol: 3, destRow: 0, connect: true }
+  ])
+  /* A wider path wires along its own row in between, and blocks go in before the cables. */
+  const wide = S.planParallel(map, { first: 2, last: 4, put: [{ col: 3, blockId: 71, name: 'Delay 2' }] })
+  assert.deepEqual(wide.steps.map((x) => x.kind), ['place', 'cable', 'cable', 'cable', 'cable'], 'a cable reaches an empty cell before the block it was meant for')
+  assert.deepEqual(wide.steps[0], { kind: 'place', row: 1, col: 3, blockId: 71, name: 'Delay 2' })
+  assert.deepEqual(wide.steps.slice(1).map((x) => [x.srcRow, x.srcCol, x.destRow]), [[0, 1, 1], [1, 2, 1], [1, 3, 1], [1, 4, 0]])
+  /* And refuses what cannot be wired. */
+  assert.equal(S.planParallel(map, { first: 0, last: 0 }).ok, false, 'a path before the first column has nothing to split from')
+  assert.equal(S.planParallel(map, { first: 6, last: 6 }).ok, false, 'a path after the output has nothing to join back into')
+  assert.equal(S.planParallel(map, { first: 4, last: 3 }).ok, false)
+
+  /* Run it against the demo unit and read it back: the path is there, joined at both ends. */
+  const { createMockDevice } = await import('../src/lib/mockDevice.js')
+  const mock = createMockDevice()
+  for (const b of mock.presetBlocks().filter((x) => x.row !== undefined)) mock.placeBlock(b.row, b.col, 0)
+  for (const b of blocks) mock.placeBlock(b.row, b.col, b.effectId)
+  const wire = { setCable: mock.cable, placeBlock: mock.placeBlock, clearCell: (r, c) => mock.placeBlock(r, c, 0) }
+  const ran = await S.runPlan(S.layoutsAround(map, map.at(0, 3), [{ family: 'delay', name: 'Delay 2', page: 71, instance: 2 }]).find((l) => l.key === 'second').plan.steps, wire)
+  assert.equal(ran.ok, true)
+  const after = S.gridMap(mock.grid().cells, mock.presetBlocks(), { rows: 4, cols: 12 })
+  const [path] = S.branches(after)
+  assert.ok(path, 'the demo does not keep a parallel path')
+  assert.deepEqual([path.row, path.start, path.end, path.from, path.to, path.open], [1, 3, 3, [0], [0], false])
+  assert.deepEqual(path.blocks.map((b) => b.effectId), [71])
+  assert.equal(after.at(0, 4).fromRows.includes(1), true, 'the path does not mix back into the main row')
+
+  /* Taking it away cuts both joins first, then clears the row — and says what goes. */
+  const gone = S.planRemoveBranch(after, 1)
+  assert.equal(gone.ok, true)
+  assert.deepEqual(gone.losing, ['Delay 2'])
+  assert.deepEqual(gone.steps.slice(0, 2), [
+    { kind: 'cable', srcRow: 0, srcCol: 2, destRow: 1, connect: false },
+    { kind: 'cable', srcRow: 1, srcCol: 3, destRow: 0, connect: false }
+  ], 'the main row keeps feeding a half-removed path')
+  assert.equal(gone.steps.at(-1).kind, 'clear')
+  await S.runPlan(gone.steps, wire)
+  const back = S.gridMap(mock.grid().cells, mock.presetBlocks(), { rows: 4, cols: 12 })
+  assert.deepEqual(S.branches(back), [], 'the path is still on the unit after it was taken away')
+  assert.deepEqual(back.at(0, 4).fromRows, [0])
+  assert.equal(S.planRemoveBranch(back, 0).ok, false, 'the main row can be removed as though it were a branch')
+
+  /* Delay and reverb side by side: the reverb moves, its old cell carries the wire. */
+  const choices = S.layoutsAround(map, map.at(0, 3), [])
+  assert.deepEqual(choices.map((c) => c.key), ['dry', 'second', 'delay-reverb'])
+  assert.equal(choices.find((c) => c.key === 'second').plan.ok, false, 'a second delay is offered on a unit with no spare one')
+  const side = choices.find((c) => c.key === 'delay-reverb').plan
+  assert.equal(side.ok, true)
+  await S.runPlan(side.steps, wire)
+  const sbs = S.gridMap(mock.grid().cells, mock.presetBlocks(), { rows: 4, cols: 12 })
+  assert.equal(sbs.at(1, 3)?.effectId, 66, 'the reverb is not beside the delay')
+  assert.equal(sbs.at(0, 4)?.kind, S.CELL.shunt, 'the reverb’s old cell does not carry the main row on')
+  assert.deepEqual(sbs.at(0, 4).fromRows, [0, 1], 'the delay and the reverb do not mix back together')
+  assert.equal(sbs.at(0, 5).fromRows.includes(0), true, 'the chain stops where the reverb was')
+
+  /* Never offered around the ends of the chain or the looper, or on a branch row. */
+  assert.deepEqual(S.layoutsAround(map, map.at(0, 0), []), [])
+  assert.deepEqual(S.layoutsAround(map, map.at(0, 6), []), [])
+  assert.deepEqual(S.layoutsAround(sbs, sbs.at(1, 3), []), [])
+
+  /* A unit that reports no joins is drawn as plain rows, and says the joins are a guess. */
+  const blind = S.gridMap(cells.map(({ fromRows, ...c }) => c), blocks.map(({ fromRows, ...b }) => b))
+  assert.equal(S.joins(blind).known, false)
+
+  /* Every step has words, and a step that throws stops the plan there. */
+  assert.match(S.stepWords({ kind: 'cable', srcRow: 0, srcCol: 2, destRow: 1, connect: true }), /join row 1, column 3 → row 2/)
+  const stopped = await S.runPlan(dry.steps, { setCable: async () => { throw new Error('port not open') } })
+  assert.deepEqual([stopped.ok, stopped.done, stopped.error], [false, 0, 'port not open'])
+  const doubtful = await S.runPlan(dry.steps, { setCable: async () => ({ ok: false }) })
+  assert.deepEqual([doubtful.ok, doubtful.doubtful], [true, 2], 'an ok:false answer stops the plan, though some units say it of writes that landed')
+})
+
 await settle()
 /*
  * The tally has to say when it is red.

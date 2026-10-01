@@ -71,6 +71,8 @@ export const FILES = [
   { source: '../shared/looper.mjs', target: '../mobile/src/lib/looper.js' },
   /* "Swipe left to remove a song": the words, and where a swipe lands. */
   { source: '../shared/swipe-hint.mjs', target: '../mobile/src/lib/swipe-hint.js' },
+  /* More than one row: the joins between them, and the writes that add or take away a parallel path. */
+  { source: '../shared/split-chain.mjs', target: '../mobile/src/lib/split-chain.js' },
   /*
    * When a garbled preset dump is asked for again rather than shown.
    *

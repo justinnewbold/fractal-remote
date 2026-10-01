@@ -130,7 +130,11 @@ export async function demoRequest(mock, path, options = {}) {
     if (part[0] === 'preset' && part[1] === 'blocks' && part[3] === 'type') {
       return mock.setType(num(2), body?.value)
     }
-    if (path === '/preset/grid/cable') return { ok: true }
+    if (path === '/preset/grid/cable') {
+      return mock.cable
+        ? mock.cable(body?.srcRow - 1, body?.srcCol - 1, body?.destRow - 1, body?.connect !== false)
+        : { ok: true }
+    }
   }
 
   if (method === 'PUT') {

@@ -1773,7 +1773,7 @@ export const clearCell = (row, col) => placeBlock(row, col, 0)
 /** Connect or cut a cable from one cell to a row in the next column. */
 export const setCable = (srcRow, srcCol, destRow, connect = true) =>
   mock
-    ? tick().then(() => ({ ok: true }))
+    ? tick().then(() => (mock.cable ? mock.cable(srcRow, srcCol, destRow, connect) : { ok: true }))
     : request('/preset/grid/cable', {
         method: 'POST',
         body: JSON.stringify({ ...toWireCable(srcRow, srcCol, destRow), connect })

@@ -12707,3 +12707,80 @@ button.looper-record.lit {
   margin: 0;
   color: var(--fault);
 }
+
+/* ---------- rows and splits (components/RowsPanel.jsx) ---------- */
+
+.rows-panel {
+  display: grid;
+  gap: var(--s-2);
+  margin-bottom: var(--s-4);
+}
+
+.rows-map-scroll {
+  overflow-x: auto;
+  padding-bottom: var(--s-2);
+}
+
+.rows-map {
+  position: relative;
+}
+
+.rows-line {
+  position: absolute;
+  background: var(--silk-dim);
+  pointer-events: none;
+}
+
+/* A join between rows, in the colour of the audio path. */
+.rows-line.split {
+  background: var(--signal);
+}
+
+button.rows-cell {
+  position: absolute;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-1);
+  font-family: var(--display);
+  font-size: var(--f-2);
+  font-weight: 700;
+}
+
+button.rows-cell.off {
+  opacity: 0.55;
+}
+
+button.rows-cell.chosen {
+  box-shadow: 0 0 0 3px var(--signal);
+}
+
+.rows-choices {
+  display: grid;
+  gap: var(--s-2);
+}
+
+button.rows-choice {
+  display: grid;
+  gap: var(--s-1);
+  text-align: left;
+  padding: var(--s-2) var(--s-3);
+}
+
+button.rows-choice span {
+  font-size: var(--f-2);
+  color: var(--silk-dim);
+}
+
+.rows-confirm {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--signal);
+  border-radius: var(--r-2);
+  background: var(--signal-wash);
+}
+
+.rows-confirm p {
+  margin: 0;
+}

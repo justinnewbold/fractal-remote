@@ -4,6 +4,7 @@ import { logDebug } from '../lib/debugLog'
 import { blockPositions, landingIndex, reorderPlan } from '../../shared/lane-order.mjs'
 import { chainPlan } from '../lib/actions'
 import ChainWait, { useChain } from './ChainWait'
+import RowsPanel from './RowsPanel'
 import {
   colLabel,
   doubtfulWrite,
@@ -706,10 +707,21 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
         slot to put something in it.
       </p>
 
+      {/* Every row and every join — the phone's Rows and splits. See RowsPanel. */}
+      {linear ? null : (
+        <RowsPanel
+          blocks={blocks}
+          capabilities={capabilities}
+          palette={palette}
+          busy={busy || !!working}
+          onChanged={onChanged}
+          onError={onError}
+        />
+      )}
       {splitChain ? (
-        <p className="chain-issue">
-          This preset uses more than one row. Moving blocks within a row is fine, but this app
-          can&rsquo;t see or change how the rows are joined &mdash; do that on your unit.
+        <p className="hint">
+          This preset uses more than one row. Each row&rsquo;s blocks are listed below; the joins
+          between them are in Rows and splits above.
         </p>
       ) : null}
 
