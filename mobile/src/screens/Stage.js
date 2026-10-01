@@ -246,9 +246,28 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
    * changes.
    */
   const [trim, setTrim] = useState(0)
-  /* The grey cards and the "Updating…" line stand in for a moment and go:
-     a trim measured over them is not the grid's, and is dropped with them. */
-  const fitKey = `${viewport}:${scenes.hasScenes ? scenes.count : 0}:${blocks.length}:${fitOn}:${sceneCols}:${chainNow.elsewhere}:${chainNow.late}`
+  /*
+   * THE PEDALS' ROOM IS KEPT WHILE THE NEXT PRESET LOADS.
+   *
+   * "When changing presets using previous or Next it shrinks the screen down
+   * for about a half a second." Between a preset change and its chain the
+   * tiles go and grey cards stand in — and the cards were a different size
+   * from the tiles, so the pedal area shrank, the fit worked the screen out
+   * again for a chain of no blocks, and Previous, Next, Tap and the rest
+   * jumped up the screen and back down when the chain landed.
+   *
+   * So the wait takes the last drawn chain's place exactly: as many cards as
+   * there were tiles, in the same height, and the fit keeps counting those
+   * blocks until the real ones arrive.
+   */
+  const heldGrid = useRef({ count: 0, height: 0 })
+  if (!chainNow.elsewhere && blocks.length > 0 && blockGrid > 0) heldGrid.current = { count: blocks.length, height: blockGrid }
+  const held = chainNow.elsewhere && heldGrid.current.height > 0 ? heldGrid.current : null
+  const fitBlocks = held ? held.count : blocks.length
+  /* The "Updating…" line stands in for a moment and goes: a trim measured
+     over it is not the grid's, and is dropped with it. The grey cards no
+     longer count — they hold the grid's own height. */
+  const fitKey = `${viewport}:${scenes.hasScenes ? scenes.count : 0}:${fitBlocks}:${fitOn}:${sceneCols}:${chainNow.late}`
   const lastKey = useRef(fitKey)
   if (lastKey.current !== fitKey) {
     lastKey.current = fitKey
@@ -268,7 +287,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
       ? fitTiles({
           available: viewport - chrome - trim,
           scenes: scenes.hasScenes ? scenes.count : 0,
-          blocks: blocks.length,
+          blocks: fitBlocks,
           sceneCols,
           fxCols: size.fx,
           gap: space.sm,
@@ -686,8 +705,14 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
           style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, opacity: chainNow.late ? 0.55 : chainNow.outline ? 0.72 : 1 }}
         >
           {chainNow.elsewhere ? (
-            <View style={{ width: '100%' }}>
-              <ChainWait chain={chainNow} height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)} />
+            <View style={{ width: '100%', height: held ? held.height : undefined, overflow: 'hidden' }}>
+              <ChainWait
+                chain={chainNow}
+                height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
+                cards={held ? held.count : 4}
+                width={held ? tileWidth(row, fxCols) : 84}
+                overlay={!!held}
+              />
             </View>
           ) : blocks.map((block) => {
             const hue = blockColor(block.slug)

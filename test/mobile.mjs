@@ -8796,7 +8796,7 @@ export function run(test) {
        inherits the trim from a bigger one and draws tiny tiles. */
     assert.match(
       stage,
-      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{blocks\.length\}:\$\{fitOn\}:\$\{sceneCols\}:\$\{chainNow\.elsewhere\}:\$\{chainNow\.late\}`/,
+      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{fitBlocks\}:\$\{fitOn\}:\$\{sceneCols\}:\$\{chainNow\.late\}`/,
       'the trim is not thrown away when the rig or the screen changes'
     )
     assert.match(stage, /if \(trim !== 0\) setTrim\(0\)/, 'the trim survives a change of preset, so a smaller rig gets a smaller tile')
@@ -10873,7 +10873,14 @@ export function run(test) {
 
   test('the phone’s Stage and Edit draw another preset’s chain as a wait, not as tiles', () => {
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(stage, /\{chainNow\.elsewhere \? \(\s*<View style=\{\{ width: '100%' \}\}>\s*<ChainWait chain=\{chainNow\}/, 'the stage draws the last song’s tiles under this song’s name')
+    assert.match(stage, /\{chainNow\.elsewhere \? \(\s*<View style=\{\{ width: '100%', height: held \? held\.height : undefined, overflow: 'hidden' \}\}>\s*<ChainWait\s+chain=\{chainNow\}/, 'the stage draws the last song’s tiles under this song’s name')
+    /* "It shrinks the screen down for about a half a second." The wait keeps
+       the last chain's room — as many cards, as wide, as high — and the fit
+       keeps counting those blocks, so nothing below the pedals jumps. */
+    assert.match(stage, /if \(!chainNow\.elsewhere && blocks\.length > 0 && blockGrid > 0\) heldGrid\.current = \{ count: blocks\.length, height: blockGrid \}/, 'the pedals’ room is not remembered')
+    assert.match(stage, /const fitBlocks = held \? held\.count : blocks\.length/, 'the fit works the screen out again for a chain of no blocks while the next one loads')
+    assert.match(stage, /blocks: fitBlocks,/, 'the fit does not use the held count')
+    assert.match(stage, /cards=\{held \? held\.count : 4\}\s*width=\{held \? tileWidth\(row, fxCols\) : 84\}\s*overlay=\{!!held\}/, 'the grey cards are not the tiles’ size, so the screen shrinks while a preset loads')
     assert.match(stage, /block=\{chainNow\.elsewhere(?: \|\| chainNow\.outline)? \? null : blocks\.find/, 'a channel sheet opened on the last song stays up over this one')
     assert.match(stage, /useEffect\(\(\) => \{\s*if \(chainNow\.elsewhere\) setPicking\(null\)/, 'the channel sheet comes back by itself over the new song’s tiles')
     const edit = read('mobile/src/screens/Edit.js')
