@@ -10348,6 +10348,27 @@ function waitBench() {
   }
 }
 
+test('a save stops before it is sent when the unit has moved to another preset', async () => {
+  const { stillOnPreset, movedOffWords } = saveWait
+  assert.deepEqual(await stillOnPreset(async () => ({ number: 12 }), 12), { ok: true })
+  const moved = await stillOnPreset(async () => ({ number: 13 }), 12)
+  assert.equal(moved.ok, false)
+  assert.equal(moved.on, 13)
+  assert.equal(moved.error, movedOffWords(13, 12))
+  assert.match(moved.error, /preset 13 now, not 12\. Nothing was saved/)
+  /* A read that fails, or says nothing, leaves the computer's own check to it. */
+  assert.equal((await stillOnPreset(async () => { throw new Error('gone') }, 12)).ok, true)
+  assert.equal((await stillOnPreset(async () => null, 12)).ok, true)
+  assert.equal((await stillOnPreset(async () => ({ number: 4 }), null)).ok, true)
+  /* Both ends ask before the request is parked. */
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const ask = app.indexOf('await stillOnPreset(currentPreset, preset?.number)')
+  assert.ok(ask > 0 && ask < app.indexOf('const parked = await parkSave('), 'the browser parks a save without asking where the unit is')
+  const phone = readSrc(new URL('../mobile/src/components/SaveToSlot.js', import.meta.url), 'utf8')
+  const there = phone.indexOf('await stillOnPreset(currentPreset, preset?.number)')
+  assert.ok(there > 0 && there < phone.indexOf('const run = startComputerSave('), 'the phone sends a save without asking where the unit is')
+})
+
 test('a save from away is answered the moment the computer writes, not on the next look', async () => {
   /*
    * "Save takes 60-90 s." The write is one message to the unit; the minute was
@@ -11926,6 +11947,141 @@ test('one tap puts the looper at the end of the chain, before the Output, and wi
   const none = planLooper(gridMap([], full), catalog)
   assert.equal(none.ok, false)
   assert.match(none.why, /no free space/)
+})
+
+/*
+ * "Undo for the last chain change." A block swiped out goes back in its own
+ * cell, wired to what fed it and what it fed; a looper put in comes out again,
+ * and an Output that stepped along for it steps back.
+ */
+test('Undo puts a block taken out back where it was, wired in, and takes a looper back out', async () => {
+  const { gridMap, planLooper, planPutBack, putBackWords, takeOutWords, UNDO_STALE } = await import('../shared/split-chain.mjs')
+  const catalog = JSON.parse(readSrc(new URL('../src/data/blocks.json', import.meta.url), 'utf8'))
+  const chain = [
+    { slug: 'input', name: 'Input 1', effectId: 37, row: 1, col: 0 },
+    { slug: 'drive', name: 'Drive 1', effectId: 50, row: 1, col: 1 },
+    { slug: 'amp', name: 'Amp 1', effectId: 58, row: 1, col: 2 },
+    { slug: 'delay', name: 'Delay 1', effectId: 70, row: 2, col: 2 },
+    { slug: 'output', name: 'Output 1', effectId: 42, row: 1, col: 4 }
+  ]
+  /* The drive feeds both the amp and the delay below it. */
+  const cells = [
+    { row: 1, col: 1, effectId: 50, fromRows: [1] },
+    { row: 1, col: 2, effectId: 58, fromRows: [1] },
+    { row: 2, col: 2, effectId: 70, fromRows: [1] }
+  ]
+  const back = planPutBack(gridMap(cells, chain, { rows: 4, cols: 12 }), 1, 1)
+  assert.equal(back.ok, true)
+  assert.equal(back.name, 'Drive 1')
+  assert.deepEqual(back.steps, [
+    { kind: 'place', row: 1, col: 1, blockId: 50, name: 'Drive 1' },
+    { kind: 'cable', srcRow: 1, srcCol: 0, destRow: 1, connect: true },
+    { kind: 'cable', srcRow: 1, srcCol: 1, destRow: 1, connect: true },
+    { kind: 'cable', srcRow: 1, srcCol: 1, destRow: 2, connect: true }
+  ])
+  /* Nothing there, nothing to put back. */
+  assert.equal(planPutBack(gridMap(cells, chain), 3, 3).ok, false)
+
+  /* The looper's way back. */
+  const wires = Array.from({ length: 7 }, (_, i) => ({ row: 1, col: 4 + i, effectId: 1001 + i, isShunt: true, fromRows: [1] }))
+  const roomy = [...chain.filter((b) => b.slug !== 'output'), { slug: 'output', name: 'Output 1', effectId: 42, row: 1, col: 11 }]
+  const plan = planLooper(gridMap(wires, roomy, { rows: 4, cols: 12 }), catalog)
+  assert.deepEqual(plan.undo, [{ kind: 'clear', row: 1, col: plan.col, name: 'Looper' }])
+  const tight = planLooper(gridMap([], chain.filter((b) => b.slug !== 'delay').map((b) => (b.slug === 'output' ? { ...b, col: 3 } : b))), catalog)
+  assert.deepEqual(tight.undo, [
+    { kind: 'clear', row: 1, col: 3, name: 'Looper' },
+    { kind: 'clear', row: 1, col: 4, name: 'Output 1' },
+    { kind: 'place', row: 1, col: 3, blockId: 42, name: 'Output 1' },
+    { kind: 'cable', srcRow: 1, srcCol: 2, destRow: 1, connect: true }
+  ])
+  /* A looper moved off a spare row has no way back: its settings went with it. */
+  const stray = planLooper(gridMap([], [...roomy, { slug: 'looper', name: 'Looper 1', effectId: 166, row: 0, col: 0 }]), catalog)
+  assert.equal(stray.undo, null)
+
+  /* What it says. */
+  assert.equal(putBackWords('Drive 1', { res: { ok: true }, landed: true, kept: true }).text, 'Put Drive 1 back, with its settings.')
+  assert.equal(putBackWords('Drive 1', { res: { ok: true }, landed: true, kept: false }).bad, true)
+  assert.match(putBackWords('Drive 1', { res: { ok: true }, landed: false, kept: null }).text, /didn’t take Drive 1 back/)
+  assert.equal(takeOutWords('the looper', { res: { ok: true }, gone: true }).text, 'Took the looper out again.')
+  assert.match(UNDO_STALE, /Nothing was changed/)
+
+  /* Both ends offer it, and only for the preset it was made on. */
+  for (const [file, from] of [
+    ['../src/components/ChainUndo.jsx', '../../shared/split-chain.mjs'],
+    ['../mobile/src/components/ChainUndo.js', '../lib/split-chain']
+  ]) {
+    const src = readSrc(new URL(file, import.meta.url), 'utf8')
+    assert.ok(src.includes(`from '${from}'`), `${file} has its own plan`)
+    assert.match(src, /const live = undo && undo\.n === (n|number) \? undo : null/, `${file} offers an Undo on another preset`)
+    assert.match(src, /setSaid\(\{ bad: true, text: UNDO_STALE \}\)/, `${file} runs an Undo over a chain changed since`)
+  }
+  const grid = readSrc(new URL('../src/components/GridEditor.jsx', import.meta.url), 'utf8')
+  const edit = readSrc(new URL('../mobile/src/screens/Edit.js', import.meta.url), 'utf8')
+  for (const [name, src] of [['GridEditor', grid], ['Edit', edit]]) {
+    const read = src.indexOf('await readPutBack(row, col,')
+    assert.ok(read > 0 && read < src.indexOf('await clearCell(row, col)', read), `${name} reads the block after it is gone`)
+    assert.match(src, /\{chainUndo\.bar\}/, `${name} has no Undo to press`)
+  }
+})
+
+/*
+ * "Show what's attached to each modifier." Each slot is read off the unit and
+ * said in a line — but only when its numbers name a listed source and a block
+ * in this preset. Anything else is "can't tell", never a guess.
+ */
+test('the modifier slots are read back and said in a line, and a slot that does not decode is not guessed at', async () => {
+  const { readAttached, slotBinding, attachedSummary, modSlotEid } = await import('../shared/mod-read.mjs')
+  const model = {
+    effectId: 3,
+    slotCount: 4,
+    fields: { source: { pid: 0 }, targetEffectId: { pid: 8 }, targetParam: { pid: 9 } },
+    sources: [{ ordinal: 0, name: 'None' }, { ordinal: 5, name: 'Expression 1' }, { ordinal: 1, name: 'LFO 1' }]
+  }
+  assert.equal(modSlotEid(model, 1), 3)
+  assert.equal(modSlotEid(model, 4), 6)
+  assert.equal(slotBinding({}, model).used, false)
+  const blocks = [{ effectId: 50, name: 'Drive 1' }, { effectId: 58, name: 'Amp 1' }]
+  const raw = { 3: { 0: 5, 8: 50, 9: 1 }, 4: {}, 5: { 0: 1, 8: 999, 9: 2 } }
+  const read = []
+  const res = await readAttached({
+    model,
+    blocks,
+    readRaw: async (eid) => {
+      read.push(eid)
+      if (eid === 6) throw new Error('timed out')
+      return { eid, values: raw[eid] }
+    },
+    readControls: async (eid) => ({ named: eid === 50 ? [{ id: 1, name: 'Gain' }] : [] }),
+    log: () => {}
+  })
+  assert.deepEqual(read, [3, 4, 5, 6])
+  assert.equal(res.lines.length, 2)
+  assert.equal(res.lines[0].text, 'Expression 1 → Drive 1 · Gain')
+  assert.equal(res.lines[1].known, false, 'a block not in this preset was guessed at')
+  assert.match(res.lines[1].text, /Slot 3 is set up, but the app can’t tell/)
+  assert.equal(res.unread, 1)
+  assert.equal(attachedSummary(res), '1 slot couldn’t be read.')
+  assert.equal(attachedSummary({ stopped: false, lines: [], unread: 0, total: 4 }), 'Nothing is attached in this preset.')
+  /* Another preset loaded mid-read stops it. */
+  let calls = 0
+  const stop = await readAttached({ model, blocks, readRaw: async () => ({ values: {} }), stillHere: () => calls++ < 2 })
+  assert.equal(stop.stopped, true)
+  /* On a tap, in both apps, inside the Modifiers panel. */
+  assert.match(readSrc(new URL('../src/components/Modifiers.jsx', import.meta.url), 'utf8'), /<ModAttached model=\{model\} blocks=\{blocks\} \/>/)
+  assert.match(readSrc(new URL('../mobile/src/screens/Edit.js', import.meta.url), 'utf8'), /<ModAttached model=\{model\} blocks=\{blocks\} \/>/)
+  for (const f of ['../src/components/ModAttached.jsx', '../mobile/src/components/ModAttached.js']) {
+    const src = readSrc(new URL(f, import.meta.url), 'utf8')
+    assert.match(src, /'Show what’s attached'/, `${f} reads on opening rather than on a tap`)
+    assert.match(src, /stillHere: \(\) => alive\.current &&/)
+  }
+})
+
+test('the sign-up totals in Developer leave out the pairing accounts', async () => {
+  const { PAIR_DOMAIN } = await import('../shared/pairing.mjs')
+  const sql = readSrc(new URL('../supabase/migrations/20261001_overview_without_pairing.sql', import.meta.url), 'utf8')
+  assert.ok(sql.includes(`not like '%@${PAIR_DOMAIN}'`), 'the totals count a pairing domain other than the app’s')
+  for (const k of ['accounts', 'accounts_day', 'accounts_week']) assert.match(sql, new RegExp(`'${k}', \\(select count\\(\\*\\) from people`), `${k} counts every account again`)
+  assert.match(sql, /grant execute on function public\.owner_overview\(\) to service_role/)
 })
 
 test('a run of free cells in a lane is one gap, not a button per cell', async () => {

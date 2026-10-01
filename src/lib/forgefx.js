@@ -1598,6 +1598,14 @@ export const decodePresetFile = (bytes) =>
 export const modifierModel = () => (mock ? tick().then(() => mock.modModel()) : request('/mod/model'))
 
 /**
+ * A block's stored values as whole numbers, `{ eid, values: { pid: n } }`,
+ * zeros left out. For a modifier slot, whose settings have no display range —
+ * see shared/mod-read.mjs. The demo has nothing attached.
+ */
+export const rawBlock = (eid) =>
+  mock ? tick().then(() => ({ eid, values: {} })) : request(`/preset/blocks/${Number(eid)}/raw`)
+
+/**
  * The footswitch dictionary: the words for each kind of action, each function
  * inside it and each LED colour. Only words — what a switch is set to is
  * fcSwitch, one switch at a time. See shared/footswitches.mjs.

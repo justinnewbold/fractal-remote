@@ -79,6 +79,33 @@ export const SAVE_REFUSED = 'The computer could not save it.'
 export const SAVE_UNSURE = 'The computer took it but didn’t say whether it saved. Check the slot on the unit before saving again.'
 export const SAVE_UNSENT = 'Couldn’t reach the computer to call the save off, so it may still happen. Check the slot before saving again.'
 
+/*
+ * STILL ON THE PRESET BEING SAVED?
+ *
+ * The save writes the unit's edit buffer into the slot. If the unit has moved
+ * to another preset since the edits were made — a footswitch, the knob on the
+ * front — the buffer now holds THAT preset, and saving it over the one on the
+ * screen loses both. So the unit is asked which preset it is on first, and a
+ * different answer stops the save before it is sent.
+ *
+ * A read that fails does not stop it: the computer checks again before it
+ * writes (fromSlot), and a save that cannot ask is still a save worth trying.
+ */
+export const movedOffWords = (on, editing) =>
+  `The unit is on preset ${on} now, not ${editing}. Nothing was saved — go back to ${editing} to save it.`
+
+export async function stillOnPreset(read, editing) {
+  if (!Number.isInteger(editing)) return { ok: true }
+  let on
+  try {
+    on = (await read())?.number
+  } catch {
+    return { ok: true }
+  }
+  if (!Number.isInteger(on) || on === editing) return { ok: true }
+  return { ok: false, on, error: movedOffWords(on, editing) }
+}
+
 /**
  * Wait for the answer to request `id`.
  *

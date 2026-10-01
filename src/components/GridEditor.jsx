@@ -7,6 +7,7 @@ import ChainWait, { useChain } from './ChainWait'
 import RowsPanel from './RowsPanel'
 import SwipeRow from './SwipeRow'
 import LooperAtEnd from './LooperAtEnd'
+import { readPutBack, useChainUndo } from './ChainUndo'
 import {
   colLabel,
   doubtfulWrite,
@@ -80,6 +81,8 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
   /* Whose chain the cards are. Another preset's are not drawn, and cannot be
      removed, moved or added beside: the cells they name are this preset's. */
   const chainNow = useChain({ editing: true })
+  /* The last chain change, and the one click that takes it back. */
+  const chainUndo = useChainUndo({ blocks, number: chainNow.number, onChanged })
 
   /*
    * DRAG TO REORDER, AS ON THE PHONE. "How does moving the blocks in the chain
@@ -187,6 +190,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
 
   const add = async (row, col) => {
     if (!choice) return
+    chainUndo.clear()
     setWorking(`add:${row}:${col}`)
     setIssue(null)
     try {
@@ -223,6 +227,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
    */
   const move = async (from, to) => {
     const block = from.block
+    chainUndo.clear()
     setWorking('moving')
     setIssue(null)
     try {
@@ -269,6 +274,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
       pos.to
     )
     if (!moves.length) return
+    chainUndo.clear()
     setWorking('moving')
     setIssue(null)
     const said = (r) => (r?.ok === false ? 'refused' : r?.ok === true ? 'ok' : 'no answer')
@@ -363,10 +369,13 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
    * says it.
    */
   const remove = async (row, col, name) => {
+    chainUndo.clear()
     setWorking('clearing')
     setIssue(null)
     const where = linear ? `slot ${label(col)}` : `row ${rowLabel(row)}, column ${label(col)}`
     try {
+      /* What it would take to put it back, read while it is still there. */
+      const putBack = await readPutBack(row, col, capabilities, blocks).catch(() => null)
       const r = await clearCell(row, col)
       logDebug('chain', `remove ${name || 'block'} at ${where}`, r?.ok === false ? 'refused' : r?.ok === true ? 'ok' : 'no answer')
       const now = await presetBlocks().catch(() => null)
@@ -382,6 +391,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
       }
       const cleared = linear ? `Cleared slot ${label(col)}` : `Cleared row ${rowLabel(row)}, column ${label(col)}`
       onChanged(now ? cleared : `${cleared} — could not re-read the chain to check`)
+      if (putBack) chainUndo.offer({ ...putBack, label: `put ${putBack.back.name} back` })
       close()
     } catch (err) {
       setIssue(err.message)
@@ -748,11 +758,18 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
           blocks={blocks}
           capabilities={capabilities}
           palette={palette}
-          busy={busy || !!working}
+          busy={busy || !!working || chainUndo.running}
           onChanged={onChanged}
           onError={onError}
+          onAdded={(plan) =>
+            chainUndo.offer(
+              plan.undo ? { kind: 'out', name: 'the looper', label: 'take the looper out', row: plan.row, col: plan.col, steps: plan.undo } : null
+            )
+          }
         />
       )}
+      {/* Undo for the last chain change: a block taken out, a looper put in. */}
+      {chainUndo.bar}
 
       {/* Every row and every join — the phone's Rows and splits. See RowsPanel. */}
       {linear ? null : (

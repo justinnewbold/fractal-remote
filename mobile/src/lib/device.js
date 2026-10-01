@@ -676,6 +676,9 @@ export async function wireRow(row, lastCol) {
  */
 export const modifierModel = () => remoteRequest('/mod/model')
 
+/** A block's stored values as whole numbers — a modifier slot's binding. See lib/mod-read. */
+export const rawBlock = (eid) => remoteRequest(`/preset/blocks/${Number(eid)}/raw`)
+
 /** Attach a source to a control, in one of the unit's modifier slots. */
 export const bindModifier = (slot, targetEffectId, targetParam, source) =>
   told(

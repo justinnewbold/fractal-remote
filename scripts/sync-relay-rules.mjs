@@ -79,6 +79,11 @@ export const FILES = [
    */
   { source: '../shared/copy-tools.mjs', target: '../mobile/src/lib/copy-tools.js' },
   /*
+   * What each modifier slot is attached to, read back off the unit. One
+   * reading for both ends, so a slot cannot say two different things.
+   */
+  { source: '../shared/mod-read.mjs', target: '../mobile/src/lib/mod-read.js' },
+  /*
    * What each footswitch does, in words, and the pace the switches are read
    * at. The phone's Footswitches page and the browser's say the same thing
    * about the same switch, and ask the unit no faster.

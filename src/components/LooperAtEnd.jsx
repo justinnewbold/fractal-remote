@@ -11,7 +11,7 @@ import { gridMap, mainRow, planLooper, runPlan, stepWords } from '../../shared/s
  * shared/split-chain.mjs's planLooper works out the place, the same copy the
  * phone runs. A looper found off the chain is moved, after a question.
  */
-export default function LooperAtEnd({ blocks, capabilities, palette, busy, onChanged, onError }) {
+export default function LooperAtEnd({ blocks, capabilities, palette, busy, onChanged, onError, onAdded }) {
   const [running, setRunning] = useState(false)
   const [said, setSaid] = useState(null)
   const [asking, setAsking] = useState(null)
@@ -30,7 +30,10 @@ export default function LooperAtEnd({ blocks, capabilities, palette, busy, onCha
       onChanged?.(res.ok ? 'Added a looper at the end of the chain' : 'The looper was added in part')
       if (!res.ok) setSaid({ bad: true, text: `Stopped at “${stepWords(res.failed)}” — ${res.error}. The chain has been read again.` })
       else if (res.doubtful) setSaid({ bad: true, text: doubtfulWrite({ ok: false }) })
-      else setSaid({ bad: false, text: done })
+      else {
+        setSaid({ bad: false, text: done })
+        onAdded?.(plan)
+      }
     } catch (err) {
       setSaid({ bad: true, text: err?.message || String(err) })
       onError?.(err?.message)

@@ -445,5 +445,72 @@ export function planLooper(map, catalog) {
   const start = lastFx ? lastFx.col : col - 1
   const end = out ? outAt : col + 1
   for (let c = Math.max(0, start); c < end && c + 1 < map.cols; c++) steps.push(cable(main, c, main))
-  return { ok: true, row: main, col, name: pick.name, moved: !!already, losing: already ? [already.name || 'Looper'] : [], steps }
+  /*
+   * The way back, for the Undo after it: the looper out again, and the Output
+   * back in the cell it stepped out of. The wires laid along the way stay —
+   * an empty cell with a wire through it is a bare wire, which is what most of
+   * those cells were before. A looper that was MOVED has no way back: the cell
+   * it came from was joined to nothing, and its settings went with the move.
+   */
+  const undo = already
+    ? null
+    : outAt !== outCol
+      ? [clear(main, col, pick.name), clear(main, outAt, out.name), place(main, outCol, out.effectId, out.name), cable(main, outCol - 1, main)]
+      : [clear(main, col, pick.name)]
+  return { ok: true, row: main, col, name: pick.name, moved: !!already, losing: already ? [already.name || 'Looper'] : [], steps, undo }
 }
+
+/* ---------------------------------------------------------------- */
+/* Undo for a block taken out                                         */
+/* ---------------------------------------------------------------- */
+
+/**
+ * The writes that put a block back where it was, read off the chain BEFORE it
+ * was taken out.
+ *
+ * "Undo for the last chain change." A swipe is quick and a slip is quicker, so
+ * the block goes back in its own cell, joined to whatever fed it and whatever
+ * it fed. Where the unit never said which rows fed a cell, the row's own
+ * neighbours are taken, which is how nearly every chain is wired.
+ *
+ * The settings are not here: those are a read of the block, kept beside this
+ * by the screen and written back after (shared/model-undo.mjs).
+ */
+export function planPutBack(map, row, col) {
+  const cell = map?.at?.(row, col)
+  if (!cell || cell.kind !== CELL.block || !Number.isInteger(cell.effectId)) return { ok: false }
+  const steps = [place(row, col, cell.effectId, cell.name)]
+  if (col > 0) {
+    const from = cell.fromRows || [row]
+    for (const r of from) if (map.at(r, col - 1)) steps.push(cable(r, col - 1, row))
+  }
+  for (const next of map.cells) {
+    if (next.col !== col + 1) continue
+    const from = next.fromRows || (next.row === row ? [row] : [])
+    if (from.includes(row)) steps.push(cable(row, col, next.row))
+  }
+  return { ok: true, row, col, effectId: cell.effectId, name: cell.name || 'the block', steps }
+}
+
+/**
+ * What the Undo says once it has run. `res` is runPlan's answer, `landed`
+ * whether the re-read shows the block in its cell, `kept` whether its settings
+ * went back (null when there were none to put back).
+ */
+export function putBackWords(name, { res, landed, kept }) {
+  if (res && !res.ok) return { bad: true, text: `Couldn’t put ${name} back — ${res.error}. The chain has been read again.` }
+  if (!landed) return { bad: true, text: `The unit didn’t take ${name} back. The chain has been read again.` }
+  if (kept === false) return { bad: true, text: `Put ${name} back, but some of its settings didn’t go back. Check them in the block.` }
+  if (kept === null) return { bad: false, text: `Put ${name} back. Its settings couldn’t be read before it came out, so check them.` }
+  return { bad: false, text: `Put ${name} back, with its settings.` }
+}
+
+/** The same for a block taken out again by Undo — the looper, after an add. */
+export function takeOutWords(name, { res, gone }) {
+  if (res && !res.ok) return { bad: true, text: `Couldn’t take ${name} out again — ${res.error}. The chain has been read again.` }
+  if (!gone) return { bad: true, text: `The unit didn’t take ${name} out. The chain has been read again.` }
+  return { bad: false, text: `Took ${name} out again.` }
+}
+
+/** An Undo that would land on a chain changed since is not run. */
+export const UNDO_STALE = 'The chain has changed since, so Undo was not run. Nothing was changed.'

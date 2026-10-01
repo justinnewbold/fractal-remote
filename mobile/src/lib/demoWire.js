@@ -65,6 +65,11 @@ export async function demoRequest(mock, path, options = {}) {
     if (path === '/scene') return mock.getScene()
     if (path === '/tempo') return mock.tempo()
     if (path === '/mod/model') return mock.modModel()
+    /* A modifier slot's stored numbers: the demo has nothing attached. */
+    {
+      const raw = path.match(/^\/preset\/blocks\/(\d+)\/raw$/)
+      if (raw) return { eid: Number(raw[1]), values: {} }
+    }
     /* The footswitches, as the browser's demo answers them. */
     if (path === '/fc/model') return mock.fcModel()
     if (path.startsWith('/fc/state')) {
