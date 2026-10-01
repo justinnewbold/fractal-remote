@@ -6390,14 +6390,19 @@ onTheBench('the next preset’s pedals are read while the unit is quiet, and go 
   /* From the tap, before the unit has answered anything. */
   assert.deepEqual(
     ds.getSnapshot().blocks.map((b) => b.slug),
-    ['amp', 'delay', 'reverb'],
-    'the pedals read ahead did not go up on the tap, in signal order'
+    ['reverb', 'amp', 'delay'],
+    'the pedals read ahead did not go up on the tap, in the order the unit listed them'
   )
   assert.equal(ds.chainViewOf(ds.getSnapshot()), 'outline', 'pedals read ahead are drawn as this preset’s finished chain')
   assert.equal(ds.chainNumberOf(ds.getSnapshot()), 13)
   /* Ahead of the chain read, the status read still fills in which are on. */
   await clock.advance(ds.OUTLINE_AFTER_MS + 50)
   assert.equal(ds.getSnapshot().blocks.find((b) => b.effectId === 70).bypassed, true, 'the status read did not say which pedals are on')
+  assert.deepEqual(
+    ds.getSnapshot().blocks.map((b) => b.slug),
+    ['reverb', 'amp', 'delay'],
+    'the status read put the pedals read ahead back in the guessed order, and they jumped'
+  )
   await clock.advance(ds.OWN_SETTLE_MS + 100)
   await load
   assert.equal(ds.chainViewOf(ds.getSnapshot()), 'ready')

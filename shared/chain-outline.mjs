@@ -141,17 +141,53 @@ export const READ_AHEAD_MS = 2500
 /*
  * A stored preset's summary, as the tiles a tap would put up. No bypass and no
  * channel — a summary does not say which scene is on — so these are drawn as
- * an outline, and the status read fills the states in.
+ * an outline, and the status read fills the states in (fillOutline).
+ *
+ * In the summary's own order and with the unit's own names, NOT the signal
+ * order above: the computer lists a summary's blocks walking the grid the same
+ * way it lists the chain read's, so these tiles are already where the chain
+ * read will put them. On the play test the guessed order had Wah before Comp,
+ * and the two swapped places half a second later when the chain landed.
  *
  * null for a summary that is about another slot, or names no block the
  * catalog knows: the tap waits for the status read, as before.
  */
 export function aheadChain(summary, number, catalog) {
-  if (!summary || typeof summary !== 'object') return null
+  if (!summary || typeof summary !== 'object' || !Array.isArray(catalog)) return null
   if (Number.isInteger(summary.number) && summary.number !== number) return null
-  const blocks = Array.isArray(summary.blocks) ? summary.blocks : []
-  const states = blocks.filter((b) => b && Number.isInteger(b.effectId)).map((b) => ({ effectId: b.effectId }))
-  return outlineChain(states, catalog)
+  const byId = new Map()
+  for (const c of catalog) if (Number.isInteger(c?.page) && c.slug) byId.set(c.page, c)
+  const seen = new Set()
+  const out = []
+  for (const b of Array.isArray(summary.blocks) ? summary.blocks : []) {
+    const id = b?.effectId
+    if (!Number.isInteger(id) || seen.has(id)) continue
+    const c = byId.get(id)
+    if (!c) continue
+    seen.add(id)
+    const name = typeof b.name === 'string' && b.name.trim() ? b.name.trim() : c.name || c.slug
+    out.push({ slug: c.slug, name, effectId: id, bypassed: null, channel: null })
+  }
+  return out.length ? out : null
+}
+
+/*
+ * The status read laid over pedals already up from a read-ahead: their order
+ * and names kept, each one's on/off and channel filled in. A block the status
+ * read does not list is gone from the preset and goes; one it lists that was
+ * not read ahead joins at the end, in signal order. Without this the status
+ * read redrew the tiles in the guessed order, and they jumped twice.
+ */
+export function fillOutline(list, states, catalog) {
+  const fresh = outlineChain(states, catalog)
+  if (!fresh) return null
+  if (!Array.isArray(list) || !list.length) return fresh
+  const byId = new Map(fresh.map((b) => [b.effectId, b]))
+  const kept = list
+    .filter((b) => byId.has(b.effectId))
+    .map((b) => ({ ...b, bypassed: byId.get(b.effectId).bypassed, channel: byId.get(b.effectId).channel }))
+  const have = new Set(kept.map((b) => b.effectId))
+  return [...kept, ...fresh.filter((b) => !have.has(b.effectId))]
 }
 
 /**

@@ -739,8 +739,12 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             /* Named here rather than inline: the word the unit uses for this is
                not a word anybody says out loud, and it has no business sitting
                next to the text that gets drawn. */
-            const engaged = !block.bypassed
-            const state = engaged ? 'On' : 'Off'
+            /* Read ahead of the switch, on or off not said yet: dim and no
+               word, so the ones that are on light up rather than half of
+               them flipping from On to Off. */
+            const unknown = chainNow.outline && typeof block.bypassed !== 'boolean'
+            const engaged = !unknown && !block.bypassed
+            const state = unknown ? '\u00a0' : engaged ? 'On' : 'Off'
             return (
               <Tile
                 key={idOf(block)}

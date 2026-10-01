@@ -1011,10 +1011,11 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
       const name = state.stored.get(n) || ''
       if (n === state.presetNumber)
         return { number: n, name, blocks: state.blocks.map(summaryBlock) }
-      /* A factory slot nobody has built a rig for: the name is real and the
-         block list is genuinely unknown until it is loaded, which is what an
-         empty array says. */
-      if (!rigSeeds.has(n) && !rigs.has(n) && !(String(n) in savedPresets(unit.key))) return { number: n, name, blocks: [] }
+      /* A slot with nothing in it. A named factory slot is not one: the unit
+         reads any stored preset's blocks without loading it, so the demo
+         builds that slot's rig to answer, as loading it would — Play's
+         read-ahead of the next preset depends on it. */
+      if (!name && !rigSeeds.has(n) && !rigs.has(n) && !(String(n) in savedPresets(unit.key))) return { number: n, name, blocks: [] }
       /* Another slot: every block it holds, built the first time it is asked about. */
       if (!rigs.has(n)) rigs.set(n, buildRig(n))
       const rig = rigs.get(n)

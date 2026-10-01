@@ -64,6 +64,9 @@ const ofBlocks = (s) => s.blocks
 const ofTunerOn = (s) => s.tunerOn
 const ofTuning = (s) => s.tuning
 
+/* How long a preset's scenes stay nameless before Play says how to name them. */
+const UNNAMED_AFTER_MS = 1500
+
 export default function Gig({
   preset,
   device,
@@ -563,6 +566,24 @@ export default function Gig({
   const blocksRef = useRef(null)
   const [fitVars, setFitVars] = useState(null)
   /*
+   * A PRESET WHOSE SCENES REALLY HAVE NO NAMES — not one whose names are on
+   * their way. On the play test the "Those are scenes" note flashed up for a
+   * frame on every Next: the names are cleared on the press and arrive a
+   * moment later, and for that moment the note pushed everything under it
+   * down fifty pixels and back. So it waits for the chain to be this
+   * preset's and for the names to have stayed empty a second and a half.
+   */
+  const noNames = hasScenes && !names.some((n) => (n || '').trim()) && !shown.elsewhere && !shown.outline
+  const [unnamedSettled, setUnnamedSettled] = useState(false)
+  useEffect(() => {
+    if (!noNames) {
+      setUnnamedSettled(false)
+      return undefined
+    }
+    const timer = setTimeout(() => setUnnamedSettled(true), UNNAMED_AFTER_MS)
+    return () => clearTimeout(timer)
+  }, [noNames, shown.number])
+  /*
    * THE PEDALS' SPACE, HELD WHILE THE NEXT PRESET'S CHAIN IS COMING.
    *
    * "Every time you do go previous or next the screen shrinks for a second and
@@ -888,7 +909,7 @@ export default function Gig({
         not be read, which is a different and more specific thing to say — so
         these two are mutually exclusive rather than stacked.
       */}
-      {hasScenes && !names.some((n) => (n || '').trim()) && !remoteActive() ? (
+      {unnamedSettled && !remoteActive() ? (
         <p className="gig-note">
           {/* The route named here is one that really exists: the Scenes sheet
               on Edit renames one directly. The line that sent people to the
@@ -901,7 +922,7 @@ export default function Gig({
       {/* An AM4 keeps its scene names inside a preset dump, and dumps don't
           travel the relay. Silence there reads as "this preset has unnamed
           scenes", which is a different and wrong thing to believe. */}
-      {hasScenes && !names.some((n) => (n || '').trim()) && remoteActive() ? (
+      {unnamedSettled && remoteActive() ? (
         <p className="gig-note">
           Scene names aren&rsquo;t readable from the phone. Open this preset once at the
           computer and they&rsquo;ll show here from then on.
@@ -1128,10 +1149,19 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
     { enabled: has && !busy }
   )
 
+  /*
+   * A pedal read ahead of the switch whose on or off the unit has not said
+   * yet. On the play test every one of them read On for a quarter of a second
+   * and half of them then flipped to Off. Drawn dim with no word instead, the
+   * ones that are on light up when the status read lands, and nothing is
+   * contradicted.
+   */
+  const unknown = !door && outline && typeof block.bypassed !== 'boolean'
+
   return (
     <div className="gig-block-cell">
       <button
-        className={`gig-block ${block.bypassed ? 'off' : 'on'}`}
+        className={`gig-block ${unknown || block.bypassed ? 'off' : 'on'}`}
         style={{
           '--block-fill': blockColor(block.slug).fill,
           '--block-ink': blockColor(block.slug).ink
@@ -1140,7 +1170,7 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
         disabled={busy}
         /* The looper pedal opens its buttons rather than switching it, so it
            is not a toggle and does not say it is one. */
-        aria-pressed={door ? undefined : !block.bypassed}
+        aria-pressed={door || unknown ? undefined : !block.bypassed}
         aria-label={door ? 'Looper — open Record, Play and Stop' : undefined}
         /* The phone says "Hold to switch channels" beside CHAIN; this screen
            has no heading there to carry it, so the tile says it when a mouse
@@ -1176,7 +1206,7 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
           </span>
         </span>
         <span className="gig-block-state">
-          {door ? 'Rec · Play' : block.bypassed ? 'Off' : 'On'}
+          {door ? 'Rec · Play' : unknown ? '\u00a0' : block.bypassed ? 'Off' : 'On'}
           {/*
             The channel, in the top right corner, across from the on/off in
             the top left.

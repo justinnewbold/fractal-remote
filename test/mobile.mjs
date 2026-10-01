@@ -10273,10 +10273,12 @@ export function run(test) {
     rig.loadPreset(30)
     /* On the press, before the unit has answered anything. */
     assert.equal(view(), 'outline', 'the pedals read ahead did not go up on the press')
-    assert.deepEqual(slugsOf(rig.getState().blocks), ['drive', 'amp', 'reverb'])
+    /* In the order the unit listed them, which is the chain read's: nothing moves when it lands. */
+    assert.deepEqual(slugsOf(rig.getState().blocks), ['reverb', 'amp', 'drive'])
     await clock.advance(rig.OUTLINE_AFTER_MS + 50)
     assert.equal(asked(STATE) > 0, true, 'the status read did not still fill in which pedals are on')
     assert.equal(rig.getState().blocks.find((b) => b.slug === 'reverb').bypassed, true)
+    assert.deepEqual(slugsOf(rig.getState().blocks), ['reverb', 'amp', 'drive'], 'the status read reshuffled the pedals read ahead')
     await clock.advance(rig.OWN_SETTLE_MS + 3000)
     assert.equal(view(), 'ready')
     assert.equal(asked(CHAIN), 1, 'reading ahead cost a chain read')

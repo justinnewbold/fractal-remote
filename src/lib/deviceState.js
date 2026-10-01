@@ -10,7 +10,7 @@ import {
   judgeCopy
 } from '../../shared/own-echo.mjs'
 import { CHAIN_WORDS, chainActs, chainSwitches, chainView } from '../../shared/chain-view.mjs'
-import { OUTLINE_AFTER_MS, aheadChain, createReadAhead, outlineChain } from '../../shared/chain-outline.mjs'
+import { OUTLINE_AFTER_MS, aheadChain, createReadAhead, fillOutline, outlineChain } from '../../shared/chain-outline.mjs'
 import { STAGE_HIDDEN } from './guardrails.js'
 
 export { CHAIN_FRESH_MS, OWN_ECHO_MS, OWN_SETTLE_MS, PRESET_SETTLE_MS } from '../../shared/own-echo.mjs'
@@ -1558,7 +1558,8 @@ async function drawOutline(number, run, sentAt) {
     return
   }
   if (!stillWanted()) return
-  const list = outlineChain(states, catalog)
+  /* Over pedals read ahead, their order and names stay: see fillOutline. */
+  const list = state.chainFor === number && state.chainOutline === number ? fillOutline(state.blocks, states, catalog) : outlineChain(states, catalog)
   if (!list || !list.some((b) => !STAGE_HIDDEN.includes(b.slug))) return
   statusIds = new Set(states.map((s) => s?.effectId))
   set({ blocks: list, chainFor: number, chainKnown: number, chainOutline: number })

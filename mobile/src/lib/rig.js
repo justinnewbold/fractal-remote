@@ -39,7 +39,7 @@ import {
   judgeCopy
 } from './own-echo'
 import { chainActs, chainSwitches, chainView } from './chain-view'
-import { OUTLINE_AFTER_MS, aheadChain, createReadAhead, outlineChain } from './chain-outline'
+import { OUTLINE_AFTER_MS, aheadChain, createReadAhead, fillOutline, outlineChain } from './chain-outline'
 import { blockCatalog } from './blockCatalog'
 import { unitByKey } from './demoUnits'
 
@@ -2251,7 +2251,11 @@ async function drawOutline(number, run, sentAt) {
     return
   }
   if (!stillWanted()) return
-  const all = outlineChain(states, blockCatalog)
+  /* Over pedals read ahead, their order and names stay: see fillOutline. */
+  const all =
+    state.chainFor === number && state.chainOutline === number
+      ? fillOutline(state.allBlocks, states, blockCatalog)
+      : outlineChain(states, blockCatalog)
   const blocks = all ? device.stageBlocks(all) : []
   if (!blocks.length) return
   statusIds = new Set(states.map((s) => s?.effectId))
