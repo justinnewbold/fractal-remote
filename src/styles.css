@@ -12845,3 +12845,8 @@ button.setup-account-card.out .setup-account-who {
 .chain-rename {
   margin-top: var(--s-4);
 }
+
+/* Add a looper, in one tap, above the lanes. See LooperAtEnd.jsx. */
+.looper-at-end {
+  margin: var(--s-2) 0;
+}

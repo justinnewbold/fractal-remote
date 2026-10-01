@@ -173,12 +173,29 @@ export function lanesShown(blocks, capabilities) {
   return spare ? [...held, spare] : held
 }
 
-/** Cards and gaps in one list, in column order, so a lane reads as a chain. */
-export const laneItems = (lane) =>
-  [
-    ...(lane?.blocks || []).map((b) => ({ kind: 'block', col: b.col, block: b })),
-    ...(lane?.gaps || []).map((col) => ({ kind: 'gap', col }))
-  ].sort((a, b) => a.col - b.col)
+/**
+ * Cards and gaps in one list, in column order, so a lane reads as a chain.
+ *
+ * A RUN OF FREE CELLS IS ONE GAP: `col` its first column, `last` its last.
+ * Twelve "Put Looper here" buttons down a phone for one empty row was the
+ * screen a looper got lost on — every free cell was its own full-width row,
+ * so the chain somebody came to edit was a long scroll away. A block put
+ * into a run goes in its first column, next to what is before it.
+ */
+export function laneItems(lane) {
+  const out = (lane?.blocks || []).map((b) => ({ kind: 'block', col: b.col, block: b }))
+  const gaps = [...(lane?.gaps || [])].sort((a, b) => a - b)
+  for (const col of gaps) {
+    const run = out.find((it) => it.kind === 'gap' && it.last === col - 1)
+    if (run && !out.some((it) => it.kind === 'block' && it.col === col - 1)) run.last = col
+    else out.push({ kind: 'gap', col, last: col })
+  }
+  return out.sort((a, b) => a.col - b.col)
+}
+
+/** Where a gap is, in words: "column 4", or "columns 2–12" for a run. */
+export const gapCols = (item, label = (c) => String(c + 1)) =>
+  item?.last > item?.col ? `${label(item.col)}–${label(item.last)}` : label(item?.col)
 
 /**
  * What to say about an answer of `ok: false`.

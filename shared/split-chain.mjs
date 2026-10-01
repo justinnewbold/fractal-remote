@@ -365,3 +365,81 @@ export async function runPlan(steps, wire) {
   }
   return { ok: true, done, doubtful }
 }
+
+/* ---------------------------------------------------------------- */
+/* The looper, at the end of the chain                               */
+/* ---------------------------------------------------------------- */
+
+/**
+ * Where a looper goes, and the writes that put it there.
+ *
+ * "Let's make it easier to add just a looper block, cause I wanna add that to
+ * a lot of my presets." On the main row, after the last effect and right
+ * before the Output: the loop records everything in front of it — amp, cab,
+ * delay and reverb tails — so what plays back sounds like what was played,
+ * and the Output's level knob still turns the loop down with everything else.
+ *
+ * The first free cell (empty, or a bare wire) between the last effect and the
+ * Output. None free but the column after the Output is: the Output steps one
+ * along and the looper takes its place. Then a cable from each cell into the
+ * next, from the effect before the looper to the Output, so the looper is on
+ * the signal path and not standing beside it — which is what placing it into
+ * an empty row did: "I was trying to add a looper into the blockchain, and I
+ * got this."
+ *
+ * A looper already on the main row is left where it is. One anywhere else —
+ * a spare row, joined to nothing — is taken out first and put in the right
+ * place, settings and all lost with it, which the app says before it asks.
+ */
+export function planLooper(map, catalog) {
+  const main = mainRow(map)
+  const row = rowCells(map, main)
+  const blocks = row.filter((c) => c.kind === CELL.block)
+  const already = map.cells.find((c) => c.kind === CELL.block && c.slug === 'looper')
+  if (already && already.row === main) {
+    return { ok: false, here: true, why: `This preset already has its looper, at column ${already.col + 1} of the chain.` }
+  }
+  const pick = already
+    ? { page: already.effectId, name: already.name || 'Looper' }
+    : (() => {
+        const spare = spareInstance(catalog, map, 'looper')
+        return spare ? { page: spare.page, name: spare.name || 'Looper' } : null
+      })()
+  if (!pick || !Number.isInteger(pick.page)) return { ok: false, why: 'This unit did not list a looper block.' }
+  if (!blocks.length) return { ok: false, why: 'There is no chain on this preset to put a looper at the end of.' }
+
+  const out = [...blocks].reverse().find((c) => c.slug === 'output') || null
+  const outCol = out ? out.col : map.cols
+  const lastFx = [...blocks].reverse().find((c) => c.col < outCol && c.slug !== 'output' && c.slug !== 'looper')
+  const from = lastFx ? lastFx.col + 1 : 1
+  const free = (col) => {
+    const c = map.at(main, col)
+    return !c || c.kind === CELL.shunt
+  }
+  const steps = []
+  if (already) steps.push(clear(already.row, already.col, already.name))
+  let col = null
+  for (let c = Math.max(1, from); c < outCol; c++) {
+    if (free(c)) {
+      col = c
+      break
+    }
+  }
+  let outAt = outCol
+  if (col === null) {
+    if (!out || out.col + 1 >= map.cols || !free(out.col + 1)) {
+      return { ok: false, why: 'There is no free space at the end of the chain. Take a block out, or move one, and try again.' }
+    }
+    /* The Output steps one along; the looper takes the cell it left. */
+    steps.push(clear(main, out.col, out.name))
+    steps.push(place(main, out.col + 1, out.effectId, out.name))
+    col = out.col
+    outAt = out.col + 1
+  }
+  steps.push(place(main, col, pick.page, pick.name))
+  /* A wire from the block before it to the Output, every cell along. */
+  const start = lastFx ? lastFx.col : col - 1
+  const end = out ? outAt : col + 1
+  for (let c = Math.max(0, start); c < end && c + 1 < map.cols; c++) steps.push(cable(main, c, main))
+  return { ok: true, row: main, col, name: pick.name, moved: !!already, losing: already ? [already.name || 'Looper'] : [], steps }
+}
