@@ -564,7 +564,7 @@ export default function Gig({
       const next = fitTiles({
         available: viewport - top - chrome,
         scenes: hasScenes ? sceneCount : 0,
-        blocks: blocks.length,
+        blocks: blocks.length + (looperHere ? 1 : 0),
         sceneCols: sceneColsFor(null, sceneLayout),
         /* How wide the effects row is, so a phone's browser is not sent six
            across with tiles too narrow for a picture — see fitTiles. */
@@ -608,7 +608,7 @@ export default function Gig({
       window.visualViewport?.removeEventListener('resize', schedule)
       watch?.disconnect()
     }
-  }, [fit, hasScenes, sceneCount, blocks.length, sceneLayout])
+  }, [fit, hasScenes, sceneCount, blocks.length, sceneLayout, !!looperHere])
 
   return (
     /*
@@ -908,23 +908,24 @@ export default function Gig({
               icon={icons ? blockIcon(block.slug) : null}
             />
           ))}
-        </div>
-      ) : null}
-
-      {/*
-        Where the looper went.
-
-        "PLAY leaves out the Looper." On purpose: input, output and the looper
-        are never tiles here — see STAGE_HIDDEN — because an on/off switch is
-        not what a looper wants on a stage. It wants Record and Play, and now
-        it has them: one button under the tiles that opens the looper's own
-        buttons. The phone's play screen has the same one.
-      */}
-      {!shown.elsewhere && looperHere ? (
-        <div className="gig-note gig-note-action">
-          <button type="button" onClick={() => setLooping(true)}>
-            Looper
-          </button>
+          {/*
+            THE LOOPER IS A PEDAL IN THE CHAIN, last, where the unit puts it.
+            "Looper button should show up as a button in the chain like all
+            the other effects — it should not be visible as its own button all
+            the time. Then tapping the looper pedal button is what will bring
+            up the controls." It is not an on/off switch (STAGE_HIDDEN still
+            keeps the looper out of those): tapping it opens Record, Play and
+            Stop, and never bypasses the block. The phone's Play does the same.
+          */}
+          {looperHere ? (
+            <BlockTile
+              key="looper"
+              block={looperHere}
+              door
+              onToggle={() => setLooping(true)}
+              icon={icons ? blockIcon('looper') : null}
+            />
+          ) : null}
         </div>
       ) : null}
 
@@ -1076,11 +1077,11 @@ export default function Gig({
  * The hold is answered by Gig, which owns the one channel sheet; the tile
  * only says it was held.
  */
-function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, icon }) {
+function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, icon, door = false }) {
   /* Only where there is something to choose. Not every block is channelled,
      and a menu with one entry in it is a menu that wasted a gesture. And not
      on the outline drawn ahead of the chain read: a channel waits for it. */
-  const has = (channels?.length || 0) > 1 && !outline
+  const has = (channels?.length || 0) > 1 && !outline && !door
   const hold = useLongPress(
     () => {
       haptic()
@@ -1099,7 +1100,10 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
         }}
         onClick={onToggle}
         disabled={busy}
-        aria-pressed={!block.bypassed}
+        /* The looper pedal opens its buttons rather than switching it, so it
+           is not a toggle and does not say it is one. */
+        aria-pressed={door ? undefined : !block.bypassed}
+        aria-label={door ? 'Looper — open Record, Play and Stop' : undefined}
         /* The phone says "Hold to switch channels" beside CHAIN; this screen
            has no heading there to carry it, so the tile says it when a mouse
            rests on it. */
@@ -1134,7 +1138,7 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
           </span>
         </span>
         <span className="gig-block-state">
-          {block.bypassed ? 'Off' : 'On'}
+          {door ? 'Rec · Play' : block.bypassed ? 'Off' : 'On'}
           {/*
             The channel, in the top right corner, across from the on/off in
             the top left.

@@ -302,7 +302,9 @@ export const AREAS = [
     buttons: [
       { does: 'open the block editor', web: 'Edit', phone: 'Edit' },
       { does: 'tap a tempo in', web: 'Tap', phone: 'Tap' },
-      { does: 'open the looper\u2019s Record, Play and Stop', web: 'Looper', phone: 'Looper' },
+      /* The looper is a pedal tile in the chain at both ends now, not a
+         labelled button, so it is held by its own tests in run.mjs and
+         mobile.mjs rather than by name here. */
       {
         does: 'turn the tuner on and off',
         web: 'Tuner',
