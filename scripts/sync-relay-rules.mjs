@@ -69,6 +69,8 @@ export const FILES = [
   { source: '../shared/own-echo.mjs', target: '../mobile/src/lib/own-echo.js' },
   /* The looper's buttons: which latch, which are a quick press, and what Stop sends. */
   { source: '../shared/looper.mjs', target: '../mobile/src/lib/looper.js' },
+  /* "Swipe left to remove a song": the words, and where a swipe lands. */
+  { source: '../shared/swipe-hint.mjs', target: '../mobile/src/lib/swipe-hint.js' },
   /*
    * When a garbled preset dump is asked for again rather than shown.
    *

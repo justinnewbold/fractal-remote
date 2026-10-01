@@ -11659,6 +11659,40 @@ test('the Footswitches fold reads only while it is open, and never on a timer', 
   assert.ok(!/<select[^>]*\bdisabled=/.test(panel), 'the Layout and View pickers are locked for a whole view, so reaching View 4 of a layout reads View 1 first')
 })
 
+
+test('the browser’s setlist swipes a song away like the phone’s, with no ✕ beside the grip', () => {
+  /*
+   * "Make it so you can swipe left on a song in the set list to delete it and
+   * then remove the exes from the right side of the hamburger drag icon."
+   */
+  const list = readSrc(new URL('../src/components/Setlists.jsx', import.meta.url), 'utf8')
+  const row = readSrc(new URL('../src/components/SwipeRow.jsx', import.meta.url), 'utf8')
+  const css = readSrc(new URL('../src/styles.css', import.meta.url), 'utf8')
+  assert.ok(!/className="setlist-remove"/.test(list), 'the ✕ is still on every row beside the grip')
+  assert.match(list, /<SwipeRow\s+key=\{n\}/, 'a song in the browser cannot be swiped away')
+  assert.match(list, /onRemove=\{\(\) => setPresets\(removeFrom\(chosen\.presets, n\)\)\}/, 'a swipe does not take the song out')
+  /* Same numbers as the phone, and a button inside the row keeps its own gesture. */
+  assert.match(row, /from '\.\.\/\.\.\/shared\/swipe-hint\.mjs'/, 'the browser swipes by its own numbers')
+  assert.match(row, /const landing = swipeLanding\(at\.current\)/)
+  assert.match(row, /e\.target\.closest\?\.\('button'\)\) return/, 'dragging the grip slides the row instead of moving the song')
+  assert.match(row, /Math\.abs\(ddx\) > Math\.abs\(ddy\) \* 2/, 'a scroll can swipe a song away')
+  assert.match(row, /place\(Math\.min\(0, s\.base \+ ddx\)\)/, 'the row can be dragged to the right, where there is nothing')
+  /* The ✕ stays in the page behind the row, so a keyboard can still remove a song. */
+  assert.match(row, /className="swipe-row-remove"\s+aria-label=\{label\}\s+onFocus=\{\(\) => place\(-SWIPE_OPEN\)\}/, 'without a pointer a song can no longer be removed')
+  const face = css.slice(css.indexOf('.swipe-row-face {'))
+  assert.match(face.slice(0, face.indexOf('}')), /touch-action: pan-y/, 'a sideways swipe on a phone is taken by the browser, or the sheet no longer scrolls')
+  const song = css.slice(css.indexOf('.setlist-song {'))
+  assert.match(song.slice(0, song.indexOf('}')), /background: var\(--panel\)/, 'the row is see-through, so the ✕ shows through every song')
+  assert.match(song.slice(0, song.indexOf('}')), /grid-template-columns: 2ch minmax\(0, 1fr\) auto;/, 'the row still keeps a column for the ✕')
+
+  /* The first-time hint, once per browser, with the first song showing the gesture. */
+  assert.match(list, /const swipeHint = !!chosen && showSwipeHint\(swipeSeen, chosen\.presets\.length\)/)
+  assert.match(list, /demo=\{i === 0 && swipeHint\}/, 'the hint describes the gesture without showing it')
+  assert.match(list, /window\.localStorage\.setItem\(SWIPE_HINT_KEY, 'done'\)/, 'Got it does not put the hint away for good')
+  assert.match(css, /@keyframes swipe-demo/)
+  assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.swipe-row-face\.swipe-demo/, 'the demo slides for somebody who asked for less motion')
+})
+
 await settle()
 /*
  * The tally has to say when it is red.

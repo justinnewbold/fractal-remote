@@ -27,6 +27,8 @@ import { tick } from '../lib/feedback'
 import Note from '../components/Note'
 import Grip from '../components/Grip'
 import SwipeAway from '../components/SwipeAway'
+import { markSwipeHint, swipeHintSeen } from '../lib/coach'
+import { SWIPE_HINT, showSwipeHint } from '../lib/swipe-hint'
 import Press from '../components/Press'
 import { landingIndex } from '../lib/laneOrder'
 import SongPicker from '../components/SongPicker'
@@ -94,6 +96,16 @@ export default function Setlists({ onBack }) {
    * them."
    */
   const [adding, setAdding] = useState(false)
+  /* Whether this phone has confirmed "Swipe left to remove a song". Null
+     until read, so the hint never flashes up for somebody who has seen it. */
+  const [swipeSeen, setSwipeSeen] = useState(null)
+  useEffect(() => {
+    let live = true
+    swipeHintSeen().then((seen) => live && setSwipeSeen(seen))
+    return () => {
+      live = false
+    }
+  }, [])
   /* Delete asks twice. One tap on a screen you are scrolling is one tap. */
   const [armed, setArmed] = useState(false)
   /*
@@ -327,6 +339,15 @@ export default function Setlists({ onBack }) {
               />
             ) : null}
 
+            {showSwipeHint(swipeSeen, chosen.presets.length) ? (
+              <SwipeHint
+                onOk={() => {
+                  markSwipeHint()
+                  setSwipeSeen(true)
+                }}
+              />
+            ) : null}
+
             {chosen.presets.length ? (
               chosen.presets.map((n, i) => (
                 <View
@@ -352,6 +373,7 @@ export default function Setlists({ onBack }) {
                     onDragMove={(dy) => dragMove(i, dy)}
                     onDragEnd={() => dragEnd(i)}
                     onRemove={() => setPresets(removeFrom(chosen.presets, n))}
+                    demo={i === 0 && showSwipeHint(swipeSeen, chosen.presets.length)}
                   />
                 </View>
               ))
@@ -489,9 +511,9 @@ function SourceRow({ on, onPress, name, note, editing = null }) {
  * movement — see SwipeAway — and a row that is mostly read now carries a name
  * and a grip rather than a name, a grip and a standing offer to delete it.
  */
-function Song({ position, slot, name, playing, alone, lifted, onPlay, onDragStart, onDragMove, onDragEnd, onRemove }) {
+function Song({ position, slot, name, playing, alone, lifted, onPlay, onDragStart, onDragMove, onDragEnd, onRemove, demo }) {
   return (
-    <SwipeAway onRemove={onRemove} label={`Remove ${name}`}>
+    <SwipeAway onRemove={onRemove} label={`Remove ${name}`} demo={demo}>
     <View
       style={{
         flexDirection: 'row',
@@ -546,6 +568,31 @@ function Song({ position, slot, name, playing, alone, lifted, onPlay, onDragStar
       )}
     </View>
     </SwipeAway>
+  )
+}
+
+/**
+ * "Swipe left to remove a song", the first time a setlist with a song in it
+ * is open on this phone. The first song slides to show it while this is up;
+ * Got it puts both away for good. The words are shared/swipe-hint.mjs's.
+ */
+function SwipeHint({ onOk }) {
+  return (
+    <View
+      accessibilityLiveRegion="polite"
+      style={{
+        gap: space.sm,
+        padding: space.md,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: color.signal,
+        backgroundColor: color.signalWash
+      }}
+    >
+      <Text style={{ color: color.silk, fontSize: font.lead, fontWeight: '700' }}>← {SWIPE_HINT.head}</Text>
+      <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 20 }}>{SWIPE_HINT.body}</Text>
+      <Press label={SWIPE_HINT.ok} tone="signal" on height={44} onPress={onOk} />
+    </View>
   )
 }
 

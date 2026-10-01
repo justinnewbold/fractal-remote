@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Sheet from './Sheet'
+import SwipeRow from './SwipeRow'
+import { SWIPE_HINT, SWIPE_HINT_KEY, showSwipeHint } from '../../shared/swipe-hint.mjs'
 import { landingIndex } from '../../shared/lane-order.mjs'
 import { toggleFavourite } from '../lib/presetMarks'
 import {
@@ -132,6 +134,27 @@ export default function Setlists({
    * is mobile/src/components/SongPicker.js; the rules are in lib/setlists.
    */
   const [adding, setAdding] = useState(false)
+  /*
+   * "Swipe left to remove a song", once per browser, the first time a
+   * setlist with a song in it is open. Storage that throws counts as seen —
+   * a hint that came back on every visit would be worse than none.
+   */
+  const [swipeSeen, setSwipeSeen] = useState(() => {
+    try {
+      return window.localStorage.getItem(SWIPE_HINT_KEY) === 'done'
+    } catch {
+      return true
+    }
+  })
+  const swipeHint = !!chosen && showSwipeHint(swipeSeen, chosen.presets.length)
+  const seeSwipeHint = () => {
+    setSwipeSeen(true)
+    try {
+      window.localStorage.setItem(SWIPE_HINT_KEY, 'done')
+    } catch {
+      /* one more showing next time, nothing else */
+    }
+  }
   const [needle, setNeedle] = useState('')
   const [picked, setPicked] = useState([])
   /* Delete asks twice. One tap on a sheet you are scrolling is one tap. */
@@ -342,19 +365,33 @@ export default function Setlists({
 
       {chosen ? (
         <div className="setlist-edit">
+          {swipeHint ? (
+            <div className="swipe-hint" role="status">
+              <strong>← {SWIPE_HINT.head}</strong>
+              <p className="hint">{SWIPE_HINT.body}</p>
+              <button type="button" className="primary" onClick={seeSwipeHint}>
+                {SWIPE_HINT.ok}
+              </button>
+            </div>
+          ) : null}
+
           {chosen.presets.length ? (
             <ol className="setlist-songs" aria-label={`Songs in ${chosen.name}`}>
               {chosen.presets.map((n, i) => (
-                <li
+                <SwipeRow
                   key={n}
-                  ref={(el) => {
+                  rowRef={(el) => {
                     if (el) rows.current[i] = el
                     else delete rows.current[i]
                   }}
+                  wrapClass={drag?.index === i ? 'lifted' : ''}
                   className={`setlist-song ${n === current ? 'current' : ''} ${
                     drag?.index === i ? 'lifted' : ''
                   }`}
                   style={shiftFor(i) ? { transform: `translateY(${shiftFor(i)}px)` } : undefined}
+                  label={`Remove ${nameOf(n) || `preset ${n}`} from ${chosen.name}`}
+                  onRemove={() => setPresets(removeFrom(chosen.presets, n))}
+                  demo={i === 0 && swipeHint}
                 >
                   <span className="setlist-song-pos mono">{i + 1}</span>
                   <span className="setlist-song-name">
@@ -383,15 +420,7 @@ export default function Setlists({
                       ≡
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    className="setlist-remove"
-                    onClick={() => setPresets(removeFrom(chosen.presets, n))}
-                    aria-label={`Remove ${nameOf(n) || `preset ${n}`} from ${chosen.name}`}
-                  >
-                    ✕
-                  </button>
-                </li>
+                </SwipeRow>
               ))}
             </ol>
           ) : (

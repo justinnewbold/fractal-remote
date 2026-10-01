@@ -55,8 +55,14 @@ export function useChain({ editing = false } = {}) {
  * sentence. Not the old tiles greyed out — those are the last song's, and a
  * new preset replaces them. Try again when nothing is coming.
  */
-export default function ChainWait({ chain, cards = 4, height = 56 }) {
+/*
+ * `overlay` is the stage holding the last chain's room: the cards are as many
+ * and as wide as the tiles were, and the sentence sits over them rather than
+ * under, so the wait is exactly the height of what it stands in for.
+ */
+export default function ChainWait({ chain, cards = 4, height = 56, width = 84, overlay = false }) {
   const failed = chain.view === 'failed'
+  const over = overlay && !failed
   return (
     <View accessibilityLiveRegion="polite" style={{ gap: space.md }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
@@ -64,7 +70,7 @@ export default function ChainWait({ chain, cards = 4, height = 56 }) {
           <View
             key={i}
             style={{
-              width: 84,
+              width,
               height,
               borderRadius: radius.sm,
               backgroundColor: color.panelHi,
@@ -74,9 +80,15 @@ export default function ChainWait({ chain, cards = 4, height = 56 }) {
           />
         ))}
       </View>
-      <Text style={{ color: color.silkDim, fontSize: font.small }}>
-        {failed ? CHAIN_WORDS.failed : CHAIN_WORDS.loading(chain.number)}
-      </Text>
+      {over ? (
+        <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: color.silkDim, fontSize: font.small }}>{CHAIN_WORDS.loading(chain.number)}</Text>
+        </View>
+      ) : (
+        <Text style={{ color: color.silkDim, fontSize: font.small }}>
+          {failed ? CHAIN_WORDS.failed : CHAIN_WORDS.loading(chain.number)}
+        </Text>
+      )}
       {failed ? <Press label={CHAIN_WORDS.retry} height={44} onPress={() => retryChain()} /> : null}
     </View>
   )

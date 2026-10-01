@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
+import { SWIPE_HINT_KEY } from './swipe-hint'
+
 /**
  * Whether the channel tip has been seen on this phone.
  *
@@ -30,4 +32,20 @@ export function markCoach() {
   AsyncStorage.setItem(KEY, 'done').catch(() => {
     /* Costs one more showing, and nothing else. */
   })
+}
+
+/*
+ * The setlist's "Swipe left to remove a song", once per phone. Its own key,
+ * so a phone that has already seen the channel tip still meets this one.
+ */
+export async function swipeHintSeen() {
+  try {
+    return (await AsyncStorage.getItem(SWIPE_HINT_KEY)) === 'done'
+  } catch {
+    return true
+  }
+}
+
+export function markSwipeHint() {
+  AsyncStorage.setItem(SWIPE_HINT_KEY, 'done').catch(() => {})
 }

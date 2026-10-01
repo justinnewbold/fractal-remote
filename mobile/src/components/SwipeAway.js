@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Animated, PanResponder, Pressable, Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
 import { nope, tick } from '../lib/feedback'
+import { SWIPE_CLAIM, SWIPE_OPEN, swipeLanding } from '../lib/swipe-hint'
 
 /**
  * Swipe a row left to remove it.
@@ -43,13 +44,16 @@ import { nope, tick } from '../lib/feedback'
  */
 
 /** How far the row parks when it is opened, and how wide the button is. */
-export const OPEN = 84
-/** Past this, the swipe was not a question. */
-const FULL = 180
+export const OPEN = SWIPE_OPEN
 /** Sideways by this much before the row claims the gesture at all. */
-const CLAIM = 12
+const CLAIM = SWIPE_CLAIM
 
-export default function SwipeAway({ children, onRemove, label }) {
+/*
+ * `demo` is the first-time hint showing the gesture rather than describing
+ * it: while it is up the row slides part of the way open and back, over and
+ * over, and stops the moment the hint is confirmed. See lib/swipe-hint.
+ */
+export default function SwipeAway({ children, onRemove, label, demo = false }) {
   const x = useRef(new Animated.Value(0)).current
   const [width, setWidth] = useState(0)
   /* Where the row sits between gestures: 0 or -OPEN. Read inside the
@@ -74,6 +78,24 @@ export default function SwipeAway({ children, onRemove, label }) {
     }).start(() => live.current?.())
   }
 
+  useEffect(() => {
+    if (!demo) return undefined
+    const nudge = Animated.loop(
+      Animated.sequence([
+        Animated.delay(500),
+        Animated.timing(x, { toValue: -OPEN * 0.75, duration: 420, useNativeDriver: true }),
+        Animated.delay(700),
+        Animated.timing(x, { toValue: 0, duration: 320, useNativeDriver: true }),
+        Animated.delay(900)
+      ])
+    )
+    nudge.start()
+    return () => {
+      nudge.stop()
+      x.setValue(rest.current)
+    }
+  }, [demo, x])
+
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
@@ -86,13 +108,13 @@ export default function SwipeAway({ children, onRemove, label }) {
         x.setValue(next)
       },
       onPanResponderRelease: (_e, g) => {
-        const total = rest.current + g.dx
-        if (total <= -FULL) {
+        const landing = swipeLanding(rest.current + g.dx)
+        if (landing === 'remove') {
           nope()
           away()
           return
         }
-        if (total <= -OPEN / 2) {
+        if (landing === 'open') {
           tick()
           settle(-OPEN)
           return
