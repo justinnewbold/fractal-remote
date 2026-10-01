@@ -390,6 +390,9 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
     }
   }
 
+  /* Nothing but the ends of the chain: where a starter chain is worth offering. */
+  const bareChain = !(blocks || []).some((b) => b.slug && b.slug !== 'input' && b.slug !== 'output')
+
   const buildStarter = async () => {
     setWorking('starter')
     setIssue(null)
@@ -698,9 +701,13 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
       <div className="history-head">
         <p className="silk-label">Edit the chain</p>
         <div className="history-actions">
-          <button className="chip" onClick={buildStarter} disabled={busy || !!working || paletteFailed}>
-            {working === 'starter' ? 'Building…' : 'Starter chain'}
-          </button>
+          {/* Only on a preset with nothing in it: next to a full chain it is
+              the one button here that writes five blocks at once. */}
+          {bareChain ? (
+            <button className="chip" onClick={buildStarter} disabled={busy || !!working || paletteFailed}>
+              {working === 'starter' ? 'Building…' : 'Starter chain'}
+            </button>
+          ) : null}
         </div>
       </div>
 

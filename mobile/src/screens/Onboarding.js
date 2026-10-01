@@ -299,6 +299,8 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
             ))}
           </View>
           <Note>{P2.foot}</Note>
+          {/* The line above as something to press, straight to the units. */}
+          <Press label={P2.footGo} height={44} onPress={() => go('pick')} />
           <Cta label={P2.go} onPress={() => go('mode')} />
         </>
       ) : null}

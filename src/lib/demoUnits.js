@@ -113,5 +113,10 @@ export const UNIT_KEYS = UNITS.map((u) => u.key)
  * else. The third read the unit and was right, so the bug looked like a phone
  * and a browser disagreeing about what was on screen.
  */
+/*
+ * In a guitarist's words. It said "real write behaviour including the silent
+ * clamp", which is true and means nothing to somebody who has just tapped Try
+ * the demo — the play test's first note.
+ */
 export const demoSentence = (key) =>
-  `Simulated ${unitByKey(key).name} — nothing here reaches hardware. Real models and parameter ranges, real write behaviour including the silent clamp.`
+  `This is a practice ${unitByKey(key).name}. Nothing you do here touches a real unit — the models, knobs and ranges are the real ones.`

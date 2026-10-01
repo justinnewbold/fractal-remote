@@ -20,7 +20,9 @@
  */
 const VERIFIED = {
   drive: { fill: '#c23b26', ink: '#ffffff' },
-  amp: { fill: '#b9bec6', ink: '#15181d' },
+  /* Silver off the AM4, taken a few shades deeper: at #b9bec6 an amp that
+     was ON read as switched off next to the pale off tiles on Play. */
+  amp: { fill: '#7d8591', ink: '#ffffff' },
   delay: { fill: '#2857c9', ink: '#ffffff' },
   reverb: { fill: '#5a3fc0', ink: '#ffffff' }
 }

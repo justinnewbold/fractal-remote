@@ -280,6 +280,9 @@ export const P2 = {
    */
   head: 'HOW IT WORKS',
   foot: 'No computer yet? Try a simulated unit free, with no time limit.',
+  /* The line above as something to press. On the play test it was plain
+     text, at the one moment a visitor without a computer wants exactly it. */
+  footGo: 'Try the demo',
   go: 'Got it'
 }
 

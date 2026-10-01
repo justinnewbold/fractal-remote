@@ -57,6 +57,52 @@ const FRESH_PARAM = 'fresh'
 /** How long "up to date" stays before it gets out of the way. */
 const LANDED_FOR_MS = 6000
 
+/*
+ * IT RELOADS ITSELF. "If you can build in the thing that we talked about where
+ * you can refresh the browser yourself, that would be fantastic." Reload was a
+ * button to find and press after every deploy. Now a tab that knows it is old
+ * takes the new version on its own — at a moment nobody is in the middle of
+ * anything:
+ *
+ *  - the moment it comes back to the front (a phone out of a pocket, a window
+ *    brought forward), when whatever was on screen is being looked at afresh;
+ *  - or after IDLE_RELOAD_MS with no touch, click or key, which is long enough
+ *    that a song played without touching the screen is never interrupted.
+ *
+ * Never with a box being typed in, and never twice for the same version: a
+ * reload that did not bring it in says so and leaves the button.
+ */
+export const IDLE_RELOAD_MS = 10 * 60 * 1000
+const AUTO_KEY = 'fab.update.auto'
+
+/* When this tab last came to the front — or loaded. The check that finds a
+   new version runs at exactly that moment, so a version found within a few
+   seconds of it is taken straight away. */
+let shownAt = Date.now()
+const FRONT_GRACE_MS = 8000
+
+/** Whether somebody is typing into something right now. */
+const typing = () => {
+  const el = document.activeElement
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+}
+
+/** Once per version: the reload this tab already tried for `script`. */
+function triedFor(script) {
+  try {
+    return sessionStorage.getItem(AUTO_KEY) === script
+  } catch {
+    return true
+  }
+}
+function markTried(script) {
+  try {
+    sessionStorage.setItem(AUTO_KEY, script)
+  } catch {
+    // Nowhere to remember it, so it is not tried at all (see triedFor).
+  }
+}
+
 function loadedScript() {
   const el = document.querySelector('script[type="module"][src*="/assets/"]')
   const src = el?.getAttribute('src') || ''
@@ -153,7 +199,11 @@ export default function UpdateNotice() {
      * been in a pocket since last week comes back, looks like it is checking,
      * and says nothing.
      */
-    const onShow = () => !document.hidden && check()
+    const onShow = () => {
+      if (document.hidden) return
+      shownAt = Date.now()
+      check()
+    }
     document.addEventListener('visibilitychange', onShow)
     window.addEventListener('pageshow', onShow)
     window.addEventListener('focus', onShow)
@@ -168,6 +218,38 @@ export default function UpdateNotice() {
       window.removeEventListener('focus', onShow)
     }
   }, [])
+
+  /* The reload on its own, once the tab knows it is old. See IDLE_RELOAD_MS. */
+  useEffect(() => {
+    if (!stale || triedFor(stale)) return undefined
+    let last = Date.now()
+    const touched = () => {
+      last = Date.now()
+    }
+    const go = () => {
+      if (typing() || triedFor(stale)) return
+      markTried(stale)
+      refresh()
+    }
+    const onFront = () => {
+      if (!document.hidden) go()
+    }
+    if (Date.now() - shownAt < FRONT_GRACE_MS) go()
+    const idle = setInterval(() => {
+      if (!document.hidden && Date.now() - last >= IDLE_RELOAD_MS) go()
+    }, 15 * 1000)
+    const kinds = ['pointerdown', 'keydown', 'wheel', 'touchstart']
+    for (const k of kinds) window.addEventListener(k, touched, { passive: true })
+    document.addEventListener('visibilitychange', onFront)
+    window.addEventListener('pageshow', onFront)
+    return () => {
+      clearInterval(idle)
+      for (const k of kinds) window.removeEventListener(k, touched)
+      document.removeEventListener('visibilitychange', onFront)
+      window.removeEventListener('pageshow', onFront)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stale])
 
   // "Up to date" is news for a moment, then it is clutter.
   useEffect(() => {
@@ -219,7 +301,7 @@ export default function UpdateNotice() {
   if (stale) {
     return (
       <div className="update-notice" role="status">
-        <span>A newer version of this app is out — this tab is running an older one.</span>
+        <span>A newer version of this app is out. It loads by itself next time you come back to the app — or now:</span>
         <button className="chip" onClick={refresh}>
           Reload
         </button>

@@ -252,7 +252,15 @@ export function accountSections(answer, filter = '', now = Date.now()) {
   if (!answer?.ok) return []
   const want = String(filter || '').trim().toLowerCase()
   const match = (email) => !want || String(email || '').toLowerCase().includes(want)
-  const people = (Array.isArray(answer.accounts) ? answer.accounts : []).filter((a) => match(a.email))
+  /*
+   * Not the hidden accounts the old pairing codes stood for
+   * (…@pair.fractal.newbold.cloud): they are devices, not people, and on the
+   * play test two of them sat in the list as sign-ups who had never confirmed
+   * an email. The same test as shared/pairing.mjs's isPairAccount.
+   */
+  const everyone = Array.isArray(answer.accounts) ? answer.accounts : []
+  const devices = everyone.filter((a) => /@pair\.fractal\.newbold\.cloud$/i.test(String(a?.email || '')))
+  const people = everyone.filter((a) => !devices.includes(a)).filter((a) => match(a.email))
   const waiting = (Array.isArray(answer.waiting) ? answer.waiting : []).filter((w) => match(w.email))
 
   const unlock = (a) => {
@@ -266,7 +274,7 @@ export function accountSections(answer, filter = '', now = Date.now()) {
       unlock(a)
     ].join(', ')
 
-  const total = Number(answer.total) || people.length
+  const total = Math.max(people.length, (Number(answer.total) || people.length) - devices.length)
   const sections = [
     {
       title: want ? `Accounts matching "${want}" (${people.length})` : `Everyone with an account (${total})`,

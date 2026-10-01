@@ -3733,7 +3733,7 @@ export function run(test) {
      * name", then "put the number inline with the name and make the font the
      * same size as the scenes."
      */
-    assert.match(preset, /className="gig-name-num mono">\{preset\?\.number \?\? '--'\}/, 'the preset tile has no slot number')
+    assert.match(preset, /className="gig-name-num mono">\s*\{Number\.isInteger\(preset\?\.number\)[^}]*padStart\(3, '0'\) : '--'\}/, 'the preset tile has no slot number, padded as the list pads it')
     assert.match(preset, /className="gig-name-word">\{presetLabel\(preset\)\}/, 'the preset tile has no name')
     assert.ok(preset.indexOf('gig-name-num') < preset.indexOf('gig-name-word'), 'the number is not before the name')
     const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')

@@ -11970,6 +11970,20 @@ test('a run of free cells in a lane is one gap, not a button per cell', async ()
   assert.equal(empty.length, 1, 'an empty row is still twelve buttons')
 })
 
+/*
+ * THE BROWSER TAKES A NEW VERSION ON ITS OWN — when it comes back to the
+ * front, or after ten minutes untouched; never while something is being
+ * typed, and never twice for the same version.
+ */
+test('a tab on an old version reloads itself at a quiet moment, never mid-typing or twice', () => {
+  const src = readSrc(new URL('../src/components/UpdateNotice.jsx', import.meta.url), 'utf8')
+  assert.match(src, /export const IDLE_RELOAD_MS = 10 \* 60 \* 1000/, 'the idle wait is not ten minutes')
+  assert.match(src, /if \(typing\(\) \|\| triedFor\(stale\)\) return/, 'it can reload over a box being typed in, or try twice')
+  assert.match(src, /markTried\(stale\)\s*\n\s*refresh\(\)/, 'it does not remember the version it tried')
+  assert.match(src, /Date\.now\(\) - shownAt < FRONT_GRACE_MS\) go\(\)/, 'a version found on coming back to the front waits for the next time')
+  for (const k of ['pointerdown', 'keydown', 'touchstart']) assert.ok(src.includes(`'${k}'`), `a ${k} does not count as somebody using the app`)
+})
+
 await settle()
 /*
  * The tally has to say when it is red.
