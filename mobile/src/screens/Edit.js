@@ -40,7 +40,7 @@ import {
   taken
 } from '../lib/cab-pick'
 import { MODEL_HINT, modelSnapshot, restoreModel, undoOffer, undoProgress, undoResult } from '../lib/model-undo'
-import { colLabel, doubtfulWrite, gridShape, isSplitChain, laneItems, lanesShown, rowLabel } from '../lib/grid-plan'
+import { colLabel, doubtfulWrite, gapCols, gridShape, isSplitChain, laneItems, lanesShown, rowLabel } from '../lib/grid-plan'
 import { blockPositions, landingIndex, reorderPlan, settledItems } from '../lib/laneOrder'
 import { isSilencingParam } from '../lib/guardrails'
 import { editPages, pageFor, pageHolding } from '../lib/editPages'
@@ -59,6 +59,7 @@ import Note from '../components/Note'
 import Grip from '../components/Grip'
 import IrPicker from '../components/IrPicker'
 import RowsPanel from '../components/RowsPanel'
+import LooperAtEnd from '../components/LooperAtEnd'
 import RenamePreset from '../components/RenamePreset'
 import Looper from '../components/Looper'
 import Press from '../components/Press'
@@ -1280,6 +1281,11 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
 
   const where = (row, col) =>
     linear ? `slot ${colLabel(col)}` : `row ${rowLabel(row)}, column ${colLabel(col)}`
+  /* A run of free cells, said as one: "row 1, columns 2–12". */
+  const whereGap = (row, item) => {
+    const many = item.last > item.col ? 's' : ''
+    return linear ? `slot${many} ${gapCols(item, colLabel)}` : `row ${rowLabel(row)}, column${many} ${gapCols(item, colLabel)}`
+  }
 
   /* A write is done when the unit has been asked AND the chain re-read. */
   const after = async (res) => {
@@ -1602,6 +1608,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
         this drew a note saying it could not. See components/RowsPanel.
       */}
       {linear ? null : <RowsPanel blocks={blocks} caps={caps} palette={palette} onError={onError} />}
+      {/* The block somebody wants in every preset, in one tap and in the right place. */}
+      {linear ? null : <LooperAtEnd blocks={blocks} caps={caps} palette={palette} busy={busy} onError={onError} />}
       {splitChain ? (
         <Note>This preset uses more than one row. Each row’s blocks are listed below; the joins between them are in Rows and splits above.</Note>
       ) : null}
@@ -1673,7 +1681,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
                     />
                   ) : (
                     <Press
-                      caption={where(lane.row, item.col)}
+                      caption={whereGap(lane.row, item)}
                       label={picked ? `Put ${picked.name} here` : 'Empty'}
                       disabled={busy || !picked}
                       height={48}

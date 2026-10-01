@@ -5,9 +5,11 @@ import { blockPositions, landingIndex, reorderPlan } from '../../shared/lane-ord
 import { chainPlan } from '../lib/actions'
 import ChainWait, { useChain } from './ChainWait'
 import RowsPanel from './RowsPanel'
+import LooperAtEnd from './LooperAtEnd'
 import {
   colLabel,
   doubtfulWrite,
+  gapCols,
   gridShape,
   isSplitChain,
   laneItems,
@@ -521,7 +523,7 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
                     }}
                     disabled={!editable || busy || !!working}
                   >
-                    <span className="chain-col mono">{label(item.col)}</span>
+                    <span className="chain-col mono">{gapCols(item, label)}</span>
                     <span className="chain-gap-word">
                       {target ? `Move ${moving.block.name} here` : 'Empty — tap to add'}
                     </span>
@@ -706,6 +708,18 @@ export default function GridEditor({ blocks, capabilities, busy, onError, onChan
         Hold ≡ and drag a block up or down to move it. Tap a block for Add and Remove, or an empty
         slot to put something in it.
       </p>
+
+      {/* The block somebody wants in every preset, in one tap and in the right place. */}
+      {linear ? null : (
+        <LooperAtEnd
+          blocks={blocks}
+          capabilities={capabilities}
+          palette={palette}
+          busy={busy || !!working}
+          onChanged={onChanged}
+          onError={onError}
+        />
+      )}
 
       {/* Every row and every join — the phone's Rows and splits. See RowsPanel. */}
       {linear ? null : (

@@ -11902,6 +11902,74 @@ test('split chains: the rows and their joins are read, and a parallel path is pl
   assert.deepEqual([doubtful.ok, doubtful.doubtful], [true, 2], 'an ok:false answer stops the plan, though some units say it of writes that landed')
 })
 
+/*
+ * THE LOOPER, AT THE END OF THE CHAIN. "Let's make it easier to add just a
+ * looper block... can you tell me where a looper block should go in the
+ * chain?" One tap puts it after the last effect, right before the Output, on
+ * the row the guitar comes in on, and wires it in — never on a spare row
+ * joined to nothing, which is where picking a cell had put it.
+ */
+test('one tap puts the looper at the end of the chain, before the Output, and wires it in', async () => {
+  const { gridMap, planLooper } = await import('../shared/split-chain.mjs')
+  const catalog = JSON.parse(readSrc(new URL('../src/data/blocks.json', import.meta.url), 'utf8'))
+  const chain = [
+    { slug: 'input', name: 'Input 1', effectId: 37, row: 1, col: 0 },
+    { slug: 'amp', name: 'Amp 1', effectId: 58, row: 1, col: 1 },
+    { slug: 'cab', name: 'Cab 1', effectId: 62, row: 1, col: 2 },
+    { slug: 'reverb', name: 'Reverb 1', effectId: 66, row: 1, col: 3 },
+    { slug: 'output', name: 'Output 1', effectId: 42, row: 1, col: 11 }
+  ]
+  const wires = Array.from({ length: 7 }, (_, i) => ({ row: 1, col: 4 + i, effectId: 1001 + i, isShunt: true, fromRows: [1] }))
+  const plan = planLooper(gridMap(wires, chain, { rows: 4, cols: 12 }), catalog)
+  assert.equal(plan.ok, true, plan.why)
+  assert.deepEqual([plan.row, plan.col], [1, 4], 'the looper is not straight after the last effect, on the chain’s own row')
+  assert.deepEqual(plan.steps[0], { kind: 'place', row: 1, col: 4, blockId: 166, name: 'Looper' })
+  const cables = plan.steps.filter((s) => s.kind === 'cable')
+  assert.deepEqual(cables.map((c) => c.srcCol), [3, 4, 5, 6, 7, 8, 9, 10], 'the looper is not wired from the reverb all the way to the Output')
+  assert.ok(cables.every((c) => c.srcRow === 1 && c.destRow === 1 && c.connect))
+
+  /* Already on the chain: left alone, and said so. */
+  const has = planLooper(gridMap([], [...chain, { slug: 'looper', name: 'Looper 1', effectId: 166, row: 1, col: 5 }]), catalog)
+  assert.equal(has.ok, false)
+  assert.equal(has.here, true)
+
+  /* On a spare row, joined to nothing — the screenshot: taken out and put at the end. */
+  const stray = planLooper(gridMap([], [...chain, { slug: 'looper', name: 'Looper 1', effectId: 166, row: 0, col: 0 }]), catalog)
+  assert.equal(stray.ok, true)
+  assert.equal(stray.moved, true)
+  assert.deepEqual(stray.steps[0], { kind: 'clear', row: 0, col: 0, name: 'Looper 1' })
+  assert.deepEqual([stray.row, stray.col], [1, 4])
+
+  /* No room before the Output: the Output steps one along and the looper takes its cell. */
+  const tight = chain.map((b) => (b.slug === 'output' ? { ...b, col: 4 } : b))
+  const shuffled = planLooper(gridMap([], tight), catalog)
+  assert.equal(shuffled.ok, true, shuffled.why)
+  assert.deepEqual(shuffled.steps.slice(0, 3), [
+    { kind: 'clear', row: 1, col: 4, name: 'Output 1' },
+    { kind: 'place', row: 1, col: 5, blockId: 42, name: 'Output 1' },
+    { kind: 'place', row: 1, col: 4, blockId: 166, name: 'Looper' }
+  ])
+
+  /* A full row says why rather than guessing. */
+  const full = Array.from({ length: 12 }, (_, col) => ({ slug: col === 11 ? 'output' : 'amp', name: `B${col}`, effectId: 500 + col, row: 0, col }))
+  const none = planLooper(gridMap([], full), catalog)
+  assert.equal(none.ok, false)
+  assert.match(none.why, /no free space/)
+})
+
+test('a run of free cells in a lane is one gap, not a button per cell', async () => {
+  const { laneItems, gapCols } = await import('../shared/grid-plan.mjs')
+  const items = laneItems({ row: 0, blocks: [{ col: 0, name: 'Amp' }, { col: 4, name: 'Cab' }], gaps: [1, 2, 3, 5, 6, 7, 8, 9, 10, 11] })
+  assert.deepEqual(
+    items.map((i) => (i.kind === 'gap' ? `gap${i.col}-${i.last}` : `block${i.col}`)),
+    ['block0', 'gap1-3', 'block4', 'gap5-11']
+  )
+  assert.equal(gapCols(items[1]), '2–4')
+  assert.equal(gapCols({ col: 6, last: 6 }), '7')
+  const empty = laneItems({ row: 0, blocks: [], gaps: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] })
+  assert.equal(empty.length, 1, 'an empty row is still twelve buttons')
+})
+
 await settle()
 /*
  * The tally has to say when it is red.
