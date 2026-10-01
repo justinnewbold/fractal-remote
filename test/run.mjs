@@ -11451,10 +11451,13 @@ test('the Mac hears a request the moment it is left, looks once at a time, and h
   assert.match(app, /const wait = startSaveWait\(\{/)
   assert.match(app, /cancelRequest: async \(\) => \{\s*if \(!\(await cancelParkedSave\(queuedSave\.id\)\)\) throw/, 'a cancel that never landed says nothing was saved')
   assert.match(app, /listen: onConfigDoc/)
-  assert.match(app, /onState: \(\{ late, picked \}\) => live && setSaveLate\(late && !picked\)/, 'the late line and Cancel stay up after the computer has the save')
+  /* Late, either way, is said — "it just kept saying saving the whole time": a
+     computer that has it and is slow says so, with Cancel, and so does one
+     that has not answered. */
+  assert.match(app, /onState: \(\{ late, picked \}\) => live && setSaveLate\(late \? \(picked \? 'working' : 'waiting'\) : false\)/, 'a late save the computer has picked up says nothing again')
   assert.match(app, /const parked = await parkSave\([\s\S]{0,300}?if \(!parked\) throw/, 'a request that never reached the computer is waited on for two minutes')
   assert.match(app, /setSaveError\(said\.error\)\s*setError\(said\.error\)/, 'a save that failed from away says so only inside a closed sheet')
-  assert.match(app, /\{queuedSave && saveLate \? <SaveLate onCancel=\{cancelQueuedSave\} \/> : null\}/, 'a late save has nothing to say and nothing to press')
+  assert.match(app, /\{queuedSave && saveLate \? \(\s*<SaveLate onCancel=\{cancelQueuedSave\} words=\{saveLate === 'working' \? SAVE_WORKING_WORDS : undefined\} \/>/, 'a late save has nothing to say and nothing to press')
   assert.match(app, /onCancel=\{cancelQueuedSave\}/)
   const fx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
   assert.match(fx, /export const cancelParkedSave = \(id\) => parkSave\(cancelledSave\(id\)\)/, 'a cancel from a phone is a DELETE, which never arrives')
@@ -11791,7 +11794,8 @@ test('the browser’s setlist swipes a song away like the phone’s, with no ✕
   /* Same numbers as the phone, and a button inside the row keeps its own gesture. */
   assert.match(row, /from '\.\.\/\.\.\/shared\/swipe-hint\.mjs'/, 'the browser swipes by its own numbers')
   assert.match(row, /const landing = swipeLanding\(at\.current\)/)
-  assert.match(row, /e\.target\.closest\?\.\('button'\)\) return/, 'dragging the grip slides the row instead of moving the song')
+  assert.match(row, /\(!fromButtons && e\.target\.closest\?\.\('button'\)\)\) return/, 'dragging the grip slides the row instead of moving the song')
+  assert.match(row, /if \(e\.target\.closest\?\.\('\.grip, \.chain-grip, \[data-grip\]'\)\) return/, 'a chain card’s grip slides it instead of moving it')
   assert.match(row, /Math\.abs\(ddx\) > Math\.abs\(ddy\) \* 2/, 'a scroll can swipe a song away')
   assert.match(row, /place\(Math\.min\(0, s\.base \+ ddx\)\)/, 'the row can be dragged to the right, where there is nothing')
   /* The ✕ stays in the page behind the row, so a keyboard can still remove a song. */

@@ -138,7 +138,9 @@ export default function SaveSheet({
     <div className="save-sheet">
       {queued ? (
         <p className="hint">
-          {late ? (
+          {late === 'working' ? (
+            <>Slot {queued.slot}: the computer has it and is writing it now. This says so the moment it lands.</>
+          ) : late ? (
             <>
               Slot {queued.slot} isn&rsquo;t saved yet. The computer hasn&rsquo;t answered &mdash; check
               Fractal Remote is open on it, or cancel.

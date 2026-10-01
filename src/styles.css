@@ -12947,3 +12947,8 @@ button.setup-account-card.out .setup-account-who {
   display: block;
   line-height: 1.4;
 }
+
+/* A chain card that slides: opaque, so the ✕ behind it shows only when it moves. */
+.chain-row.swipe-row-face {
+  background: var(--panel);
+}

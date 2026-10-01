@@ -5,7 +5,7 @@ import { logDebug } from '../lib/debugLog'
 import { parkSave, readSaveProgress, readSaveResult, saveInDemo } from '../lib/device'
 import { isDemo } from '../lib/demo'
 import { startComputerSave } from '../lib/saveViaComputer'
-import { SAVE_LATE_WORDS } from '../lib/save-wait'
+import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS } from '../lib/save-wait'
 import { onConfigDoc, savedToSlot, useRig } from '../lib/rig'
 import Note from './Note'
 import Press from './Press'
@@ -46,6 +46,8 @@ export function useSaveToSlot() {
   const [said, setSaid] = useState(null)
   /* The computer has not answered in a while, and has not picked it up. */
   const [late, setLate] = useState(false)
+  /* …and when it is late, whether the computer has picked it up. */
+  const [picked, setPicked] = useState(false)
   /* The save in flight, so Cancel can reach it. */
   const job = useRef(null)
 
@@ -101,13 +103,19 @@ export function useSaveToSlot() {
       readProgress: () => readSaveProgress(slug),
       /* The computer's store says the moment the answer is written. */
       listen: onConfigDoc,
-      onState: (now) => setLate(now.late && !now.picked)
+      onState: (now) => {
+        setLate(now.late)
+        setPicked(now.picked)
+        /* Where the wait is, for the log: "Saving…" alone said nothing. */
+        logDebug('write', `save to slot ${preset?.number}`, now.picked ? 'the computer has it' : now.late ? 'the computer has not answered yet' : 'waiting')
+      }
     })
     job.current = run
     const res = await run.done
     if (job.current === run) job.current = null
     setSaving(false)
     setLate(false)
+    setPicked(false)
     logDebug('write', `save to slot ${preset?.number}`, res.ok ? 'saved' : `failed — ${res.error}`)
     if (res.ok) savedToSlot(res.slot)
     setSaid(
@@ -132,6 +140,7 @@ export function useSaveToSlot() {
     saving,
     said,
     late,
+    picked,
     save,
     write,
     cancel: () => job.current?.cancel(),
@@ -198,7 +207,7 @@ export function SaveNotes({ s }) {
       ) : null}
       {s.saving && s.late ? (
         <>
-          <Note tone="hint">{SAVE_LATE_WORDS}</Note>
+          <Note tone="hint">{s.picked ? SAVE_WORKING_WORDS : SAVE_LATE_WORDS}</Note>
           <Press label="Cancel" height={40} onPress={s.cancel} />
         </>
       ) : null}
