@@ -972,7 +972,7 @@ export function run(test) {
        out of the computer's copy from before the rename — and the next Save
        carries whatever name the phone holds. */
     assert.match(rig, /if \(fresh && pending && pending\.number === fresh\.number && typeof pending\.presetName === 'string'\) \{ fresh\.name = state\.preset\?\.name \?\? fresh\.name \}/, 'a re-read can put the old preset name back over a pending rename')
-    assert.match(rig, /export function savedToSlot\(slot\) \{ forgetChain\(slot\) const unsaved = state\.unsaved if \(!unsaved \|\| unsaved\.number !== slot\) return const slug = state\.deviceSlug if \(slug\) device\.keepSceneNames\(slug, slot, state\.sceneNames\) set\(\{ unsaved: null \}\) \}/, 'a save does not settle the pending names or send them to the computer')
+    assert.match(rig, /export function savedToSlot\(slot\) \{ forgetChain\(slot\) \/\*[^*]*\*\/ if \(slot === state\.preset\?\.number\) readOnceCopyRunsOut\(\) const unsaved = state\.unsaved if \(!unsaved \|\| unsaved\.number !== slot\) return const slug = state\.deviceSlug if \(slug\) device\.keepSceneNames\(slug, slot, state\.sceneNames\) set\(\{ unsaved: null \}\) \}/, 'a save does not settle the pending names or send them to the computer')
     assert.ok(!/noteSceneName[\s\S]*?device\.keepSceneNames\(slug, number, names\)/.test(rig.slice(rig.indexOf('export function noteSceneName'), rig.indexOf('function pendingFor'))), 'an unsaved scene name still goes to the computer\'s store')
     /* The save button settles it, and the names section says it is pending. */
     assert.match(read('mobile/src/components/SaveToSlot.js').replace(/\s+/g, ' '), /if \(res\.ok\) savedToSlot\(res\.slot\)/, 'a save that landed does not settle the names')
@@ -1111,7 +1111,7 @@ export function run(test) {
     assert.match(rig, /if \(ownEcho\(kind, kind === 'scene' \? event\.index : undefined\)\) return if \(chainWrites\) \{ chainAsked = true return \} if \(kind === 'scene'\) followScene\(\) else if \(kind === 'preset'\) followPresetNews\(\) else followGridNews\(\)/, 'the chain is re-read on every announcement during a chain write')
     /* And the chain read another client's change waits for is held the same way. */
     assert.match(rig, /gridTimer = null syncChainBusy\(\) if \(presetBusy\(\)\) return if \(chainWrites\) \{ chainAsked = true return \} read\(\)/, 'a chain read owed to another client lands in the middle of a chain write')
-    assert.match(rig, /export function endChainWrite\(\{ refresh = true \} = \{\}\) \{ if \(!chainWrites\) return chainWrites -= 1 if \(chainWrites\) return const asked = chainAsked chainAsked = false if \(asked && refresh\) refreshBlocks\(\{ quiet: true \}\) \}/, 'announcements held during a write are lost, or read twice')
+    assert.match(rig, /export function endChainWrite\(\{ refresh = true \} = \{\}\) \{ if \(!chainWrites\) return chainWrites -= 1 if \(chainWrites\) return const asked = chainAsked chainAsked = false if \(asked && refresh\) refreshBlocks\(\{ quiet: true \}\) readOnceCopyRunsOut\(\) \}/, 'announcements held during a write are lost, or read twice')
 
     const edit = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
     assert.match(edit, /const after = async \(res\) => \{ .*?endChainWrite\(\{ refresh: false \}\) await refreshBlocks/, 'the write’s own read does not stand in for the held announcements')
