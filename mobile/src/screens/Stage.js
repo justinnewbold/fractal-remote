@@ -260,10 +260,20 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
    * there were tiles, in the same height, and the fit keeps counting those
    * blocks until the real ones arrive.
    */
+  /*
+   * THE LOOPER IS A PEDAL IN THE CHAIN. "Looper button should show up as a
+   * button in the chain like all the other effects — it should not be visible
+   * as its own button all the time. Then tapping the looper pedal button is
+   * what will bring up the controls." So it is one more tile, last in the
+   * chain where the unit puts it, and the fit counts it like any other.
+   */
+  const looperHere = findLooper(allBlocks)
+  const looperTile = !chainNow.elsewhere && !!looperHere
+  const tiles = blocks.length + (looperTile ? 1 : 0)
   const heldGrid = useRef({ count: 0, height: 0 })
-  if (!chainNow.elsewhere && blocks.length > 0 && blockGrid > 0) heldGrid.current = { count: blocks.length, height: blockGrid }
+  if (!chainNow.elsewhere && tiles > 0 && blockGrid > 0) heldGrid.current = { count: tiles, height: blockGrid }
   const held = chainNow.elsewhere && heldGrid.current.height > 0 ? heldGrid.current : null
-  const fitBlocks = held ? held.count : blocks.length
+  const fitBlocks = held ? held.count : tiles
   /* The "Updating…" line stands in for a moment and goes: a trim measured
      over it is not the grid's, and is dropped with it. The grey cards no
      longer count — they hold the grid's own height. */
@@ -309,9 +319,8 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   /* And on any other preset: a chain up from memory is drawn at once, and a
      sheet left open would be over the new song's block of the same number. */
   useEffect(() => setPicking(null), [chainNow.number])
-  /* The looper's buttons, opened from the Looper button under the tiles. */
+  /* The looper's buttons, opened from the Looper pedal in the chain. */
   const [looping, setLooping] = useState(false)
-  const looperHere = findLooper(allBlocks)
 
   const channels = caps?.channelNames
   const slots = slotCount(caps)
@@ -743,18 +752,28 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
               />
             )
           })}
+          {/*
+            The Looper's pedal. Not an on/off switch like the others — see
+            STAGE_HIDDEN, which still keeps the looper out of the on/off
+            tiles — but the door to Record, Play and Stop. Tapping it opens
+            the looper's buttons; it never bypasses the block.
+          */}
+          {looperTile ? (
+            <Tile
+              key="looper"
+              label={shortBlock(looperHere)}
+              icon={showIcons ? blockIcon('looper') : undefined}
+              topLeft="Rec · Play"
+              fill={blockColor('looper').fill}
+              ink={blockColor('looper').ink}
+              on={!looperHere.bypassed}
+              height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
+              onPress={() => setLooping(true)}
+              onLongPress={() => setLooping(true)}
+              style={{ width: tileWidth(row, fxCols) }}
+            />
+          ) : null}
         </View>
-
-        {/*
-          Where the looper went. "PLAY leaves out the Looper" — on purpose,
-          see STAGE_HIDDEN: an on/off tile is not what a looper wants on a
-          stage, it wants Record and Play. Now it has them: one button, under
-          the tiles, that opens the looper's own buttons. The browser's Play
-          has the same one.
-        */}
-        {!chainNow.elsewhere && looperHere ? (
-          <Press label="Looper" sub="Record, play and stop" onPress={() => setLooping(true)} />
-        ) : null}
 
       </View>
 

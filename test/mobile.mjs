@@ -10923,8 +10923,8 @@ export function run(test) {
     /* "It shrinks the screen down for about a half a second." The wait keeps
        the last chain's room — as many cards, as wide, as high — and the fit
        keeps counting those blocks, so nothing below the pedals jumps. */
-    assert.match(stage, /if \(!chainNow\.elsewhere && blocks\.length > 0 && blockGrid > 0\) heldGrid\.current = \{ count: blocks\.length, height: blockGrid \}/, 'the pedals’ room is not remembered')
-    assert.match(stage, /const fitBlocks = held \? held\.count : blocks\.length/, 'the fit works the screen out again for a chain of no blocks while the next one loads')
+    assert.match(stage, /if \(!chainNow\.elsewhere && tiles > 0 && blockGrid > 0\) heldGrid\.current = \{ count: tiles, height: blockGrid \}/, 'the pedals’ room is not remembered')
+    assert.match(stage, /const fitBlocks = held \? held\.count : tiles/, 'the fit works the screen out again for a chain of no blocks while the next one loads')
     assert.match(stage, /blocks: fitBlocks,/, 'the fit does not use the held count')
     assert.match(stage, /cards=\{held \? held\.count : 4\}\s*width=\{held \? tileWidth\(row, fxCols\) : 84\}\s*overlay=\{!!held\}/, 'the grey cards are not the tiles’ size, so the screen shrinks while a preset loads')
     assert.match(stage, /block=\{chainNow\.elsewhere(?: \|\| chainNow\.outline)? \? null : blocks\.find/, 'a channel sheet opened on the last song stays up over this one')
@@ -11225,7 +11225,13 @@ export function run(test) {
      */
     assert.match(stage, /import \{ findLooper \} from '\.\.\/lib\/looper'/, 'the phone has its own idea of which block is the looper')
     assert.match(stage, /const looperHere = findLooper\(allBlocks\)/, 'the Looper button asks the tiles, which never hold one')
-    assert.match(stage, /\{!chainNow\.elsewhere && looperHere \? \(\s*<Press label="Looper"/, 'Play has no Looper button, or draws it over the last song')
+    /* "Looper button should show up as a button in the chain like all the
+       other effects — it should not be visible as its own button all the
+       time." One more tile, counted by the fit, that opens the buttons. */
+    assert.match(stage, /const looperTile = !chainNow\.elsewhere && !!looperHere/, 'the looper pedal is drawn over the last song')
+    assert.match(stage, /const tiles = blocks\.length \+ \(looperTile \? 1 : 0\)/, 'the fit does not count the looper pedal')
+    assert.match(stage, /\{looperTile \? \(\s*<Tile\s+key="looper"[\s\S]{0,600}?onPress=\{\(\) => setLooping\(true\)\}/, 'the looper is not a pedal in the chain, or tapping it does not open its buttons')
+    assert.ok(!/<Press label="Looper"/.test(stage), 'the looper still has its own button under the chain')
     assert.match(stage, /const ofAllBlocks = \(s\) => s\.allBlocks/, 'the looper line reads the stage tiles, which leave the looper out')
   })
 }

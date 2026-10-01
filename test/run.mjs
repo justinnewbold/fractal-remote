@@ -11470,7 +11470,10 @@ test('Play says where the looper went, and still never draws one', async () => {
   const gig = bare(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8'))
   /* From every block, not the tiles: the tiles are exactly what leaves it out. */
   assert.match(gig, /const looperHere = findLooper\(allBlocks\)/, 'the Looper button asks the tiles, which never hold one')
-  assert.match(gig, /\{!shown\.elsewhere && looperHere \? \(\s*<div className="gig-note gig-note-action">\s*<button type="button" onClick=\{\(\) => setLooping\(true\)\}>/, 'Play has no Looper button, or draws it over the last song')
+  /* A pedal in the chain, not its own button: tapping it opens the buttons, never bypasses the block. */
+  assert.match(gig, /\{looperHere \? \(\s*<BlockTile\s+key="looper"\s+block=\{looperHere\}\s+door\s+onToggle=\{\(\) => setLooping\(true\)\}/, 'the looper is not a pedal in the chain, or tapping it does not open its buttons')
+  assert.ok(!/gig-note-action">\s*<button type="button" onClick=\{\(\) => setLooping/.test(gig), 'the looper still has its own button under the chain')
+  assert.match(gig, /blocks: blocks\.length \+ \(looperHere \? 1 : 0\)/, 'the fit does not count the looper pedal')
   assert.match(gig, /allBlocks\.filter\(\(b\) => b\.slug && !STAGE_HIDDEN\.includes\(b\.slug\)\)/, 'Play draws a tile for the looper, input or output')
 })
 
