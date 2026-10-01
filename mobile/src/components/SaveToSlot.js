@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 
 import { font } from '../lib/theme'
 import { logDebug } from '../lib/debugLog'
-import { parkSave, readSaveProgress, readSaveResult, saveInDemo } from '../lib/device'
+import { currentPreset, parkSave, readSaveProgress, readSaveResult, saveInDemo } from '../lib/device'
 import { isDemo } from '../lib/demo'
 import { startComputerSave } from '../lib/saveViaComputer'
-import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS } from '../lib/save-wait'
+import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS, stillOnPreset } from '../lib/save-wait'
 import { onConfigDoc, savedToSlot, useRig } from '../lib/rig'
 import Note from './Note'
 import Press from './Press'
@@ -94,6 +94,18 @@ export function useSaveToSlot() {
      */
     setSaid(null)
     setLate(false)
+    /*
+     * "You're on preset X." The unit is asked where it is before anything is
+     * sent: if it has moved since the edits, saving now would write the other
+     * preset over this one. See shared/save-wait.mjs.
+     */
+    const here = await stillOnPreset(currentPreset, preset?.number)
+    if (!here.ok) {
+      setSaving(false)
+      logDebug('write', `save to slot ${preset?.number}`, `stopped — the unit is on ${here.on}`)
+      setSaid({ tone: 'warn', text: here.error })
+      return
+    }
     const run = startComputerSave({
       park: (req) => parkSave(slug, req),
       readResult: () => readSaveResult(slug),

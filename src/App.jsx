@@ -14,7 +14,7 @@ import TapTempo from './components/TapTempo'
 import SaveBar, { SaveLate } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
 import { overwriteCheck } from './lib/overwrite'
-import { SAVE_CANCELLED, SAVE_FRESH_MS, SAVE_WORKING_WORDS, startSaveWait } from '../shared/save-wait.mjs'
+import { SAVE_CANCELLED, SAVE_FRESH_MS, SAVE_WORKING_WORDS, startSaveWait, stillOnPreset } from '../shared/save-wait.mjs'
 import {
   carryOutRestore,
   dirtyAfterRestore,
@@ -3072,6 +3072,12 @@ export default function App() {
        * carries it out where writing was always permitted.
        */
       if (remoteActive()) {
+        /* Still on the preset being saved? See shared/save-wait.mjs. */
+        const here = await stillOnPreset(currentPreset, preset?.number)
+        if (!here.ok) {
+          setSaveError(here.error)
+          return
+        }
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
         const parked = await parkSave({
           id,

@@ -19,7 +19,7 @@ import Press from './Press'
  * and reads the chain back. A looper found off the chain is moved, after a
  * question, because its settings go with it.
  */
-export default function LooperAtEnd({ blocks, caps, palette, busy, onError }) {
+export default function LooperAtEnd({ blocks, caps, palette, busy, onError, onAdded }) {
   const [running, setRunning] = useState(false)
   const [said, setSaid] = useState(null)
   const already = (blocks || []).find((b) => b.slug === 'looper')
@@ -38,7 +38,10 @@ export default function LooperAtEnd({ blocks, caps, palette, busy, onError }) {
       if (!res.ok) setSaid({ bad: true, text: `Stopped at “${stepWords(res.failed)}” — ${res.error}. The chain has been read again, so what you see is what the unit holds.` })
       else if (!landed) setSaid({ bad: true, text: 'The unit did not take the looper. The chain has been read again.' })
       else if (res.doubtful) setSaid({ bad: true, text: doubtfulWrite({ ok: false }) })
-      else setSaid({ bad: false, text: `Looper added at column ${plan.col + 1}, at the end of the chain. Nothing is saved until you press Save.` })
+      else {
+        setSaid({ bad: false, text: `Looper added at column ${plan.col + 1}, at the end of the chain. Nothing is saved until you press Save.` })
+        onAdded?.(plan)
+      }
     } catch (err) {
       endChainWrite()
       setSaid({ bad: true, text: err?.message || String(err) })

@@ -15,6 +15,7 @@ const ofScene = (s) => s.sceneIndex
 const ofBpm = (s) => s.bpm
 const ofTunerOn = (s) => s.tunerOn
 import { asOnPages } from '../lib/paramIndex'
+import ModAttached from './ModAttached'
 
 /**
  * Modifiers — what makes a preset respond instead of sit still.
@@ -137,6 +138,8 @@ export function Modifiers({ blocks, onError, onChanged, busy }) {
         Attach a source to a control so it moves while you play — envelope on drive, LFO on a
         filter, expression pedal on delay mix.
       </p>
+      {/* What each slot is attached to now, before attaching another. */}
+      <ModAttached model={model} blocks={blocks} />
 
       <div className="mod-grid">
         <label className="mod-field">

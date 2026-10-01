@@ -63,6 +63,8 @@ import IrPicker from '../components/IrPicker'
 import RowsPanel from '../components/RowsPanel'
 import SwipeAway from '../components/SwipeAway'
 import LooperAtEnd from '../components/LooperAtEnd'
+import { readPutBack, useChainUndo } from '../components/ChainUndo'
+import ModAttached from '../components/ModAttached'
 import RenamePreset from '../components/RenamePreset'
 import Looper from '../components/Looper'
 import Press from '../components/Press'
@@ -1301,6 +1303,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
    */
   const [settling, setSettling] = useState(null)
   const heights = useRef({})
+  /* The last chain change, and the one tap that takes it back. */
+  const chainUndo = useChainUndo()
 
   const { linear } = gridShape(caps)
   const lanes = lanesShown(blocks, caps)
@@ -1369,6 +1373,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
 
   const add = async (row, col, page = choice) => {
     if (page === null || page === undefined) return
+    chainUndo.clear()
     setBusy(true)
     setIssue(null)
     beginChainWrite()
@@ -1436,6 +1441,7 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
       pos.to
     )
     if (!moves.length) return
+    chainUndo.clear()
     /* Where the finger left it, held on screen through the writes below. */
     setSettling({ row: lane.row, from: pos.from, to: pos.to })
     setBusy(true)
@@ -1523,8 +1529,11 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
   }
 
   const remove = async (row, col) => {
+    chainUndo.clear()
     setBusy(true)
     setIssue(null)
+    /* What it would take to put it back, read while it is still there. */
+    const putBack = await readPutBack(row, col, caps, blocks).catch(() => null)
     beginChainWrite()
     try {
       const r = await clearCell(row, col)
@@ -1533,6 +1542,8 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
       logDebug('chain', `${where(row, col)} after the remove`, holds(row, col) ? 'still holds a block' : 'empty now')
       if (holds(row, col)) {
         setIssue(`The unit did not remove it: ${where(row, col)} still holds a block${refusedAnswer(r) ? ', and the unit answered “refused”' : ''}.`)
+      } else if (putBack) {
+        chainUndo.offer({ ...putBack, label: `put ${putBack.back.name} back` })
       }
     } catch (err) {
       setIssue(err.message)
@@ -1657,7 +1668,18 @@ function ChainEditor({ blocks, caps, onError, onScrollLock }) {
       */}
       {linear ? null : <RowsPanel blocks={blocks} caps={caps} palette={palette} onError={onError} />}
       {/* The block somebody wants in every preset, in one tap and in the right place. */}
-      {linear ? null : <LooperAtEnd blocks={blocks} caps={caps} palette={palette} busy={busy} onError={onError} />}
+      {linear ? null : (
+        <LooperAtEnd
+          blocks={blocks}
+          caps={caps}
+          palette={palette}
+          busy={busy || chainUndo.running}
+          onError={onError}
+          onAdded={(plan) => chainUndo.offer(plan.undo ? { kind: 'out', name: 'the looper', label: 'take the looper out', row: plan.row, col: plan.col, steps: plan.undo } : null)}
+        />
+      )}
+      {/* Undo for the last chain change: a block taken out, a looper put in. */}
+      {chainUndo.bar}
       {splitChain ? (
         <Note>This preset uses more than one row. Each row’s blocks are listed below; the joins between them are in Rows and splits above.</Note>
       ) : null}
@@ -1962,6 +1984,8 @@ function Modifiers({ blocks, onError }) {
             Attach a source to a control so it moves while you play — your picking on a drive, a
             pedal on delay mix.
           </Text>
+          {/* What each slot is attached to now, before attaching another. */}
+          <ModAttached model={model} blocks={blocks} />
 
           <Pick
             title="Slot"

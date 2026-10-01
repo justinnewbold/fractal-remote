@@ -12863,6 +12863,23 @@ button.setup-account-card.out .setup-account-who {
   margin: var(--s-2) 0;
 }
 
+/* What each modifier slot is attached to. See ModAttached.jsx. */
+.mod-attached {
+  margin: var(--s-2) 0;
+}
+.mod-attached-list {
+  list-style: none;
+  margin: var(--s-2) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-1);
+}
+
+/* Undo for the last chain change. See ChainUndo.jsx. */
+.chain-undo {
+  margin: var(--s-2) 0;
+}
+
 /* More / Fewer at the end of a block's page tabs. See Console.jsx. */
 .block-tabs-more {
   border: 0;
