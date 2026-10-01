@@ -143,6 +143,25 @@ export function outlineChain(states, catalog) {
 export const READ_AHEAD_MS = 2500
 
 /*
+ * OFF. Justin's log, the first evening it ran against a computer new enough
+ * to answer it:
+ *
+ *   14:19:00.207 [write] select preset 507 — ok
+ *   14:19:33.179 [preset] the unit is on preset 508 now, changed away from this phone
+ *   14:19:40.505 [preset] the unit is on preset 506 now, changed away from this phone
+ *   14:19:48.129 [preset] the unit is on preset 508 now, changed away from this phone
+ *
+ * 508 and 506 are exactly the two slots either side of 507, read ahead one
+ * after the other. Reading a stored slot — the summary is that slot dumped —
+ * leaves the computer reporting THAT slot as the one loaded, so the app
+ * followed a preset change nobody made, and a Save made then would have been
+ * aimed at the wrong slot. No read of another slot is worth that. The pedals
+ * of a preset played before still go up at once (KNOWN_CHAINS), which costs
+ * the unit nothing.
+ */
+export const READ_AHEAD_ON = false
+
+/*
  * A stored preset's summary, as the tiles a tap would put up. No bypass and no
  * channel — a summary does not say which scene is on — so these are drawn as
  * an outline, and the status read fills the states in (fillOutline).

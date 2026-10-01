@@ -6363,51 +6363,18 @@ const onTheBench = (name, body) =>
  * a summary does not say which are on, and the status read and the chain read
  * still go and replace it.
  */
-onTheBench('the next preset’s pedals are read while the unit is quiet, and go up the moment it is tapped', async () => {
-  const next = [
-    { slug: 'reverb', name: 'Reverb', effectId: 66, bypassed: false, channel: 'A' },
-    { slug: 'amp', name: 'Amp', effectId: 58, bypassed: false, channel: 'B' },
-    { slug: 'delay', name: 'Delay 1', effectId: 70, bypassed: true, channel: 'A' }
-  ]
-  const { clock, unit, asked } = windowOnTheBench({
-    summary: (n) =>
-      n === 13
-        ? { number: 13, name: 'SONG 13', blocks: next.map(({ effectId, slug, name }) => ({ effectId, slug, name, instance: 1 })) }
-        : { number: n, name: '', blocks: [] }
-  })
+onTheBench('Previous and Next never read another slot — reading one moved the computer’s idea of the loaded preset', async () => {
+  /* Justin's log: on 507, the unit "changed" to 508, then 506, then 508 —
+     the two slots either side, read ahead. See READ_AHEAD_ON. */
+  const { clock, asked } = windowOnTheBench({ summary: (n) => ({ number: n, name: `SONG ${n}`, blocks: [{ effectId: 58, slug: 'amp', name: 'Amp' }] }) })
   ds.readAhead([13, 11])
-  await clock.advance(ds.READ_AHEAD_MS - 100)
-  assert.equal(asked(SUMMARY), 0, 'the next preset was read before the unit had been quiet for a moment')
-  await clock.advance(200)
-  assert.equal(asked(SUMMARY), 1, 'the next preset was not read ahead')
-  await clock.advance(ds.READ_AHEAD_MS + 100)
-  assert.equal(asked(SUMMARY), 2, 'the previous preset was not read ahead, or both went at once')
-  await clock.advance(ds.READ_AHEAD_MS * 4)
-  assert.equal(asked(SUMMARY), 2, 'a slot read ahead once was read again')
-
-  unit.blocks = next
+  await clock.advance(ds.READ_AHEAD_MS * 10)
+  assert.equal(asked(SUMMARY), 0, 'a slot other than the loaded one was read ahead')
   const load = ds.loadPreset(13)
-  /* From the tap, before the unit has answered anything. */
-  assert.deepEqual(
-    ds.getSnapshot().blocks.map((b) => b.slug),
-    ['reverb', 'amp', 'delay'],
-    'the pedals read ahead did not go up on the tap, in the order the unit listed them'
-  )
-  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'outline', 'pedals read ahead are drawn as this preset’s finished chain')
-  assert.equal(ds.chainNumberOf(ds.getSnapshot()), 13)
-  /* Ahead of the chain read, the status read still fills in which are on. */
-  await clock.advance(ds.OUTLINE_AFTER_MS + 50)
-  assert.equal(ds.getSnapshot().blocks.find((b) => b.effectId === 70).bypassed, true, 'the status read did not say which pedals are on')
-  assert.deepEqual(
-    ds.getSnapshot().blocks.map((b) => b.slug),
-    ['reverb', 'amp', 'delay'],
-    'the status read put the pedals read ahead back in the guessed order, and they jumped'
-  )
   await clock.advance(ds.OWN_SETTLE_MS + 100)
   await load
-  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'ready')
-  assert.equal(asked(CHAIN), 1, 'the chain was not read once after the switch, as always')
-  assert.equal(asked(SUMMARY), 2, 'a read ahead went while the preset was loading')
+  assert.equal(ds.chainViewOf(ds.getSnapshot()), 'ready', 'a preset change does not still work without the read-ahead')
+  assert.equal(asked(SUMMARY), 0)
 })
 
 onTheBench('a slot nothing can be read ahead for waits for the status read, as before', async () => {
