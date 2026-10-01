@@ -5318,8 +5318,6 @@ export function run(test) {
       '# My rig',
       'Phone & computer',
       'Stop the looper',
-      '# Play screen',
-      'Tiles & scenes',
       '# Help',
       'Troubleshooting',
       'Amp & pedal names',
@@ -5327,8 +5325,14 @@ export function run(test) {
       '# About',
       'About',
       '# Developer',
-      'Developer'
+      'Developer',
+      /* "Move the Play Screen section down to the bottom of the list." */
+      '# Play screen',
+      'Tiles & scenes'
     ], 'the Setup rows are not in the order he asked for')
+    /* And the names are a tap from Edit too: "add the amps and pedals names as a link in the edit area". */
+    assert.match(read('mobile/src/screens/Edit.js'), /<Press label="Amp & pedal names"[^>]*onPress=\{onOpenGear\}/, 'Edit has no way to the amp and pedal names')
+    assert.match(read('mobile/App.js'), /<Gear onBack=\{\(\) => setScreen\(gearBack\)\} \/>/, 'the names go back to Settings even when Edit opened them')
 
     /*
      * AND THE OTHER THREE ARE INSIDE ABOUT, not under it.

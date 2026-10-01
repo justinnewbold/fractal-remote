@@ -139,7 +139,7 @@ const modelNote = (name) =>
  * knob turned here writes into the scene that is live, and a footswitch on the
  * floor changes every value on this screen without touching anything in it.
  */
-export default function Edit({ onBack }) {
+export default function Edit({ onBack, onOpenGear }) {
   /*
    * Whether a knob has the finger, and the screen therefore must not scroll.
    *
@@ -359,6 +359,15 @@ export default function Edit({ onBack }) {
           setFocus({ eid, paramId, nonce: Date.now() })
         }}
       />
+
+      {/*
+        WHAT A MODEL REALLY IS, one tap from where models are picked: "add the
+        amps and pedals names as a link in the edit area somewhere so the
+        people can quickly see those from that page".
+      */}
+      {onOpenGear ? (
+        <Press label="Amp & pedal names" sub="What each model on your unit really is" height={44} onPress={onOpenGear} />
+      ) : null}
 
       {/* ----------------------------------------------------------- chain */}
       {/*

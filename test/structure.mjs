@@ -1100,7 +1100,9 @@ export function run(test) {
     // And Setup's row opens it rather than unfolding four hundred rows in place.
     const setup = sheet('Settings')
     assert.match(setup, /key="gear-names"/, 'Setup has no way into the gear sheet')
-    assert.match(setup, /onClick=\{\(\) => setSheet\('gear'\)\}/, 'the way in does not open the sheet')
+    assert.match(setup, /setSheetBack\('settings'\)\s*setSheet\('gear'\)/, 'the way in does not open the sheet')
+    /* And from the chain sheet: "add the amps and pedals names as a link in the edit area". */
+    assert.match(readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8'), /setSheetBack\('chain'\)\s*setSheet\('gear'\)/, 'Edit has no way to the amp and pedal names')
   })
 
   
@@ -1463,8 +1465,6 @@ export function run(test) {
            connected and wants the remote in their pocket is the likeliest
            buyer there is." */
         'Get it on your phone',
-        '# Play screen',
-        'Tiles & scenes',
         '# Help',
         'Troubleshooting',
         'Amp & pedal names',
@@ -1473,7 +1473,10 @@ export function run(test) {
         'About',
         /* Drawn only on his own account: see shared/admin.mjs. */
         '# Developer',
-        'Developer'
+        'Developer',
+        /* Last: "Move the Play Screen section down to the bottom of the list." */
+        '# Play screen',
+        'Tiles & scenes'
       ],
       `Settings opens on ${rows.length} rows: ${rows.join(', ')}`
     )
@@ -1567,7 +1570,7 @@ export function run(test) {
     assert.match(setup, /if \(setupPage\) \{\s*\n\s*setSetupPage\(null\)\s*\n\s*return 'stay'/, 'closing a page leaves Setup')
     const sheetSrc = readFileSync(new URL('../src/components/Sheet.jsx', import.meta.url), 'utf8')
     assert.match(sheetSrc, /if \(close\(\) === 'stay'\) mark\(\)/, 'a sheet that stayed open on Back has no entry for the next Back')
-    assert.match(sheet('Amp and pedal names'), /onClose=\{\(\) => setSheet\('settings'\)\}/, 'closing the gear sheet leaves Setup')
+    assert.match(sheet('Amp and pedal names'), /setSheet\(sheetBack \|\| 'settings'\)/, 'closing the gear sheet leaves Setup, or the chain sheet that opened it')
   })
 
   
