@@ -65,6 +65,13 @@ export async function demoRequest(mock, path, options = {}) {
     if (path === '/scene') return mock.getScene()
     if (path === '/tempo') return mock.tempo()
     if (path === '/mod/model') return mock.modModel()
+    /* The footswitches, as the browser's demo answers them. */
+    if (path === '/fc/model') return mock.fcModel()
+    if (path.startsWith('/fc/state')) {
+      /* By hand: a phone has no URLSearchParams. */
+      const q = (name) => Number((path.match(new RegExp(`[?&]${name}=(\\d+)`)) || [])[1])
+      return mock.fcState(q('layout'), q('view'), q('switch'))
+    }
     /*
      * `/blocks`, NOT `/blocks/catalog`, and that one word was the error on
      * screen.

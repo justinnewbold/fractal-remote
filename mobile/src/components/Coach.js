@@ -25,8 +25,10 @@ import Press from './Press'
  * first", and copy that lives in a component is copy that gets tidied by
  * accident.
  */
-export default function Coach({ open, onTry, onSkip }) {
+export default function Coach({ open, stage = 'tip', onTry, onSkip, onDone }) {
   if (!open) return null
+  /* After the first button: waiting for the hold, then saying it worked. See P5.trying. */
+  const words = stage === 'trying' ? P5.trying : stage === 'done' ? P5.done : P5
 
   return (
     <View
@@ -44,10 +46,10 @@ export default function Coach({ open, onTry, onSkip }) {
         {P5.count}
       </Text>
       <Text style={{ color: color.silk, fontSize: font.lead, lineHeight: font.lead * 1.3 }}>
-        {P5.head}
+        {words.head}
       </Text>
       <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: font.body * 1.45 }}>
-        {P5.body}
+        {words.body}
       </Text>
 
       {/*
@@ -75,8 +77,16 @@ export default function Coach({ open, onTry, onSkip }) {
           channel picker for them would be performing the gesture rather than
           teaching it.
         */}
-        <Press grow tone="signal" label={P5.go} onPress={onTry} />
-        <Press grow label={P5.skip} onPress={onSkip} />
+        {stage === 'tip' ? (
+          <>
+            <Press grow tone="signal" label={P5.go} onPress={onTry} />
+            <Press grow label={P5.skip} onPress={onSkip} />
+          </>
+        ) : stage === 'trying' ? (
+          <Press grow label={P5.skip} onPress={onSkip} />
+        ) : (
+          <Press grow tone="signal" label={P5.done.go} onPress={onDone} />
+        )}
       </View>
 
       <Text style={{ color: color.silkFaint, fontSize: font.micro }}>{P5.foot}</Text>

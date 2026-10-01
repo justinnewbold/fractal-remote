@@ -6,6 +6,7 @@ import { color, font, mono, radius, space, TAP } from '../lib/theme'
 import {
   bindModifier,
   blockCatalog,
+  blockHelp,
   blockParams,
   blockTypes,
   cabState,
@@ -555,6 +556,24 @@ function BlockPanel({
   /* The channel this block is on now, from the store rather than the render
      this panel was drawn in: a pick or an Undo outlives the render. */
   const liveChannel = () => (getState().allBlocks || []).find((b) => sameBlock(b, eid))?.channel ?? null
+
+  /* What each knob does, from the computer's help; a "?" under the knob opens it. */
+  const [help, setHelp] = useState(() => KNOB_HELP.get(block.slug) ?? null)
+  const [helpOn, setHelpOn] = useState(null)
+  useEffect(() => {
+    if (KNOB_HELP.has(block.slug)) {
+      setHelp(KNOB_HELP.get(block.slug))
+      return undefined
+    }
+    let live = true
+    blockHelp(block.slug).then((h) => {
+      KNOB_HELP.set(block.slug, h)
+      if (live) setHelp(h)
+    })
+    return () => {
+      live = false
+    }
+  }, [block.slug])
 
   /* Moved by a channel copy, so the panel reads the block again. */
   const [readAgain, setReadAgain] = useState(0)
@@ -1183,10 +1202,23 @@ function BlockPanel({
                 onScrollLock={onScrollLock}
               />
               <ValueBox param={p} value={valueOf(p)} onCommit={(v) => commit(p, v)} />
+              {help?.params?.[p.id]?.blurb ? (
+                <Press
+                  label={helpOn === p.id ? 'Hide' : '?'}
+                  height={32}
+                  accessibilityLabel={`What does ${p.label || p.name} do?`}
+                  onPress={() => setHelpOn((was) => (was === p.id ? null : p.id))}
+                />
+              ) : null}
             </View>
           ))}
         </View>
       )}
+      {(() => {
+        const open = helpOn !== null ? shown.find((p) => p.id === helpOn) : null
+        const h = open ? help?.params?.[open.id] : null
+        return h?.blurb ? <Note>{`${open.label || open.name}: ${h.blurb}${h.tip ? ` ${h.tip}` : ''}`}</Note> : null
+      })()}
 
       {level ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
@@ -2200,6 +2232,9 @@ function Label({ children }) {
  * the one safe place to stop a slip is before it happens. Re-adding it gives
  * the same block with every knob back at its default.
  */
+/* Knob help per kind of block, kept while the app is open. */
+const KNOB_HELP = new Map()
+
 /**
  * COPY THIS CHANNEL ONTO ANOTHER — the browser's ChannelCopy, on the phone.
  * The model and every knob and switch go across (lib/copy-tools, the same

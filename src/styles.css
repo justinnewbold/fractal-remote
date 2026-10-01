@@ -12924,3 +12924,26 @@ button.setup-account-card.out .setup-account-who {
 .scene-copy .chip {
   align-self: flex-start;
 }
+
+/* What a knob does, under it: a small ? that opens into a line. See Console.jsx. */
+.knob-help {
+  align-self: center;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 var(--s-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: none;
+  color: var(--silk-dim);
+  font-size: var(--f-2);
+  cursor: pointer;
+}
+.knob-help.open {
+  border-radius: var(--r-1);
+  text-align: left;
+  padding: var(--s-2);
+}
+.knob-help-text {
+  display: block;
+  line-height: 1.4;
+}

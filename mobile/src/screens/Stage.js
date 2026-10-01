@@ -343,6 +343,8 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
    */
   const holdDoesSomething = chain === 'ok' && blocks.length > 0 && channels?.length > 1 && !chainNow.elsewhere && !chainNow.outline
   const [coach, setCoach] = useState(false)
+  /* 'tip', then after Try it 'trying' until a block is held, then 'done'. */
+  const [coachStage, setCoachStage] = useState('tip')
 
   useEffect(() => {
     if (!holdDoesSomething) return undefined
@@ -363,12 +365,21 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
     setCoach(false)
   }, [])
 
-  /* And it gets out of the way the moment somebody does the thing. Opening a
-     channel picker is the whole point of the card, so leaving it sitting
-     there afterwards would be the app failing to notice it had worked. */
+  /* Try it waits for the hold rather than closing like Skip — see P5.trying. */
+  const tryCoach = useCallback(() => {
+    markCoach()
+    setCoachStage('trying')
+  }, [])
+
+  /* And it notices the moment somebody does the thing: a channel picker
+     opening is the hold having worked, so the card says so, once, and goes
+     when Got it is pressed. */
   useEffect(() => {
-    if (picking && coach) closeCoach()
-  }, [picking, coach, closeCoach])
+    if (picking && coach && coachStage !== 'done') {
+      markCoach()
+      setCoachStage('done')
+    }
+  }, [picking, coach, coachStage])
 
   /*
    * `arriving` is the screen being shown again rather than pulled down, and
@@ -692,7 +703,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
           and a card up by the preset name would be describing something off
           the bottom of somebody's phone.
         */}
-        <Coach open={coach} onTry={closeCoach} onSkip={closeCoach} />
+        <Coach open={coach} stage={coachStage} onTry={tryCoach} onSkip={closeCoach} onDone={closeCoach} />
 
         {/*
           A wrapped grid of coloured tiles, which is the browser's chain and

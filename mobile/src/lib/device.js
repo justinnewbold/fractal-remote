@@ -295,6 +295,25 @@ export const getTempo = () => remoteRequest('/tempo')
  */
 export const blockParams = async (eid) => fixRead(await remoteRequest(`/preset/blocks/${eid}/params`))
 
+/** What the unit's footswitches can do — see lib/footswitches and the Footswitches page. */
+export const fcModel = () => remoteRequest('/fc/model')
+/** One switch's settings, by its path from fcStatePath; paced by readView. */
+export const fcSwitch = (path) => remoteRequest(path)
+
+/**
+ * What each knob of a kind of block does, from the computer's own help —
+ * { params: { [paramId]: { blurb, tip? } } }, or null for a family or a unit
+ * it has none for. See the "?" under a knob in Edit.
+ */
+export const blockHelp = async (slug) => {
+  try {
+    const h = await remoteRequest(`/help/blocks/${slug}`)
+    return h && typeof h === 'object' && h.params ? h : null
+  } catch {
+    return null
+  }
+}
+
 /** One knob's current value, read back off the unit. */
 async function readParamValue(eid, paramId) {
   const res = await blockParams(eid)

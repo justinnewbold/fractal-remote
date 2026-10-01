@@ -79,6 +79,12 @@ export const FILES = [
    */
   { source: '../shared/copy-tools.mjs', target: '../mobile/src/lib/copy-tools.js' },
   /*
+   * What each footswitch does, in words, and the pace the switches are read
+   * at. The phone's Footswitches page and the browser's say the same thing
+   * about the same switch, and ask the unit no faster.
+   */
+  { source: '../shared/footswitches.mjs', target: '../mobile/src/lib/footswitches.js' },
+  /*
    * When a garbled preset dump is asked for again rather than shown.
    *
    * The browser has had this since the day the message first appeared. The
