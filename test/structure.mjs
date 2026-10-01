@@ -5439,9 +5439,12 @@ export function run(test) {
     assert.match(stage, /markCoach\(\)/, 'the tip is not remembered, so it returns every launch')
     assert.match(
       stage,
-      /if \(picking && coach\) closeCoach\(\)/,
-      'the tip stays up after somebody has done the very thing it asked for'
+      /if \(picking && coach && coachStage !== 'done'\) \{\s*markCoach\(\)\s*setCoachStage\('done'\)/,
+      'the tip does not notice somebody has done the very thing it asked for'
     )
+    /* "Try it" and "Skip" did the same thing; Try it waits for the hold now. */
+    assert.match(stage, /onTry=\{tryCoach\}/, 'Try it closes the tip, the same as Skip')
+    assert.match(stage, /setCoachStage\('trying'\)/, 'Try it does not wait for the hold')
 
     /* Its own key. Sharing the walkthrough's would let finishing the
        walkthrough cancel a tip that had never been drawn. */

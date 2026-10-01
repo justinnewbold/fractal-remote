@@ -421,7 +421,23 @@ export const P5 = {
   hold: 'Hold for channel',
   go: 'Try it',
   skip: 'Skip',
-  foot: 'This tip appears here - exactly when the gesture becomes useful.'
+  foot: 'This tip appears here - exactly when the gesture becomes useful.',
+  /*
+   * AFTER TRY IT. "If they hit try it it should actually wait until they
+   * confirm that they've tried it before it says great job… otherwise it's
+   * pointless to have it say both of those." Try it used to close the card,
+   * the same as Skip. Now it waits for the hold, and says so when it lands.
+   * MY WORDING; Justin can change any of it.
+   */
+  trying: {
+    head: 'Go ahead — press and hold any block below.',
+    body: 'Keep your finger on it until the channels come up.'
+  },
+  done: {
+    head: 'That’s it.',
+    body: 'Hold any block to pick its channel. A quick tap still switches it on and off.',
+    go: 'Got it'
+  }
 }
 
 /** P6 — is the computer app installed yet. */
