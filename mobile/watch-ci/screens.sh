@@ -30,3 +30,12 @@ xcrun simctl launch --terminate-running-process "$UDID" "$ID" -demo NO
 sleep 5
 xcrun simctl io "$UDID" screenshot "screens/waiting.png"
 ls -la screens
+# The pictures, small, in the log as well: the artifact is not reachable from
+# everywhere a reviewer reads this check. Between markers, one per line.
+for f in screens/*.png; do
+  sips -Z 220 "$f" --out "/tmp/small.png" >/dev/null
+  echo "WATCHSHOT-BEGIN $(basename "$f")"
+  base64 -i /tmp/small.png | tr -d '\n'
+  echo
+  echo "WATCHSHOT-END"
+done
