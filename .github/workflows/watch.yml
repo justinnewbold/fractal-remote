@@ -71,7 +71,10 @@ jobs:
           if-no-files-found: ignore
 
   iphone:
-    runs-on: macos-15
+    # The newest Mac image: this Expo SDK's own native pieces (ExpoModulesJSI)
+    # do not build with the Xcode 16 the macos-15 image defaults to, and EAS
+    # builds with the newest Xcode too.
+    runs-on: macos-26
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
@@ -83,6 +86,9 @@ jobs:
       - name: Install
         working-directory: mobile
         run: npm ci
+
+      - name: Which Xcode
+        run: xcodebuild -version
 
       - name: The iPhone project, with the watch app in it
         working-directory: mobile
@@ -107,4 +113,6 @@ jobs:
           xcodebuild -workspace FractalRemote.xcworkspace -scheme FractalRemote \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build | tail -n 80
+            CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
+            || { grep -n -B2 -A12 -E 'error:|error |failed with exit' build.log | head -n 200; exit 1; }
+          tail -n 20 build.log
