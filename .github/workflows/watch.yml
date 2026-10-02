@@ -9,7 +9,11 @@
 #      against JSON the phone's own code wrote — test/run.mjs keeps it so);
 #   2. the whole watch app builds for a simulated watch;
 #   3. a picture of each page from that simulated watch, in demo mode, kept as
-#      the "watch-screens" artifact so the layout can be looked at.
+#      the "watch-screens" artifact so the layout can be looked at;
+#   4. (the `iphone` job) the whole iPhone app, generated the way EAS generates
+#      it, with the watch app inside and the phone's half of the link
+#      (mobile/modules/fractal-watch), built for the simulator. Everything an
+#      EAS build would do except sign it.
 #
 # The watch app on its own here (mobile/watch-ci/project.yml); in the shipping
 # build the same files go into the iPhone app's project.
@@ -20,6 +24,10 @@ on:
     paths:
       - 'mobile/targets/watch/**'
       - 'mobile/watch-ci/**'
+      - 'mobile/modules/**'
+      - 'mobile/app.json'
+      - 'mobile/package.json'
+      - 'mobile/package-lock.json'
       - 'shared/watch-link.mjs'
       - '.github/workflows/watch.yml'
   workflow_dispatch:
@@ -61,3 +69,40 @@ jobs:
           name: watch-screens
           path: mobile/watch-ci/screens
           if-no-files-found: ignore
+
+  iphone:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install
+        working-directory: mobile
+        run: npm ci
+
+      - name: The iPhone project, with the watch app in it
+        working-directory: mobile
+        run: npx expo prebuild -p ios --no-install
+
+      - name: The watch app is in it
+        working-directory: mobile/ios
+        run: |
+          grep -q 'cloud.newbold.fractalremote.watchkitapp' *.xcodeproj/project.pbxproj
+          grep -q 'Embed Watch Content' *.xcodeproj/project.pbxproj
+
+      - name: Pods
+        working-directory: mobile/ios
+        run: pod install
+
+      - name: The iPhone app and the watch app build
+        working-directory: mobile/ios
+        run: |
+          set -o pipefail
+          xcodebuild -workspace FractalRemote.xcworkspace -scheme FractalRemote \
+            -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -n 80

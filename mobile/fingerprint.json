@@ -20,6 +20,6 @@
     "If the change is wanted, `npm run fingerprint` rewrites this file and the",
     "diff records which change spent the build."
   ],
-  "android": "c0f64462a5e5e7d18cf9d624863d11460217b55c",
-  "ios": "d391c420c1a72a358929ea0f9ece55bf2d32a402"
+  "android": "0fce0cda645a273a5e5dc2b36c0c1ef436878378",
+  "ios": "b36405b9ff115e6da74a05f27b9856e9355d77ee"
 }
