@@ -98,11 +98,13 @@ jobs:
         working-directory: mobile/ios
         run: pod install
 
+      # A destination and no -sdk: an -sdk applies to every target, and the
+      # watch app built against the iPhone's SDK is not a watch app at all.
       - name: The iPhone app and the watch app build
         working-directory: mobile/ios
         run: |
           set -o pipefail
           xcodebuild -workspace FractalRemote.xcworkspace -scheme FractalRemote \
-            -configuration Debug -sdk iphonesimulator \
+            -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO build | tail -n 80
