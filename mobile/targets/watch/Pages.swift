@@ -215,7 +215,7 @@ private struct Needle: View {
                     Capsule()
                         .fill(inTune ? signal : Color.orange)
                         .frame(width: 6)
-                        .position(x: w / 2 + needleOffset(cents: cents) * (w / 2 - 3), y: geo.size.height / 2)
+                        .position(x: w / 2 + CGFloat(needleOffset(cents: cents)) * (w / 2 - 3), y: geo.size.height / 2)
                 }
             }
         }
