@@ -1,0 +1,48 @@
+{
+  "v": 1,
+  "at": 1759363200000,
+  "linked": true,
+  "preset": {
+    "number": 12,
+    "label": "012",
+    "name": "Crunch Rhythm"
+  },
+  "canPrevious": true,
+  "canNext": false,
+  "scene": 1,
+  "scenes": [
+    "Clean",
+    "Crunch",
+    "Lead",
+    "Scene 4",
+    "Scene 5",
+    "Scene 6",
+    "Scene 7",
+    "Scene 8"
+  ],
+  "pedals": [
+    {
+      "id": 50,
+      "short": "DRV",
+      "name": "Drive 1",
+      "on": true,
+      "fill": "#c0392b",
+      "ink": "#ffffff"
+    },
+    {
+      "id": 70,
+      "short": "DLY",
+      "name": "Delay 1",
+      "on": false,
+      "fill": "#7d8591",
+      "ink": "#ffffff"
+    }
+  ],
+  "tuner": {
+    "on": true,
+    "note": "E",
+    "octave": 2,
+    "cents": -2,
+    "inTune": true
+  }
+}

@@ -1,0 +1,30 @@
+# The watch app on its own, for CI to build and photograph
+# (.github/workflows/watch.yml). Not what ships: the shipping watch app is
+# built into the iPhone app's own project from the same files
+# (mobile/targets/watch).
+name: FractalWatchCI
+options:
+  deploymentTarget:
+    watchOS: "10.0"
+targets:
+  FractalWatch:
+    type: application
+    platform: watchOS
+    scheme: {}
+    sources:
+      - path: ../targets/watch
+        excludes:
+          - "*.js"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: cloud.newbold.fractalremote.watchkitapp
+        PRODUCT_NAME: FractalWatch
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Fractal
+        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: cloud.newbold.fractalremote
+        INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp: NO
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO

@@ -1,0 +1,86 @@
+import Foundation
+import WatchConnectivity
+
+/*
+ * THE WATCH'S END OF THE LINK TO THE PHONE.
+ *
+ * Apple keeps a watch app off the kind of always-open connection the relay
+ * is, so the watch never talks to the computer: it talks to the phone, over
+ * Apple's own watch-to-phone link, and the phone does the rest. Two ways a
+ * picture arrives — a message while both apps are awake, and the "application
+ * context", the last picture the phone left, which is there to draw from the
+ * moment the watch app opens.
+ *
+ * `demo` (launched with -demo YES) answers every request here instead, for the
+ * screenshots CI takes and for trying the pages with no phone in reach.
+ */
+@MainActor
+final class PhoneLink: NSObject, ObservableObject {
+    @Published private(set) var state: WatchState?
+    /** Whether the phone can be asked anything right now. */
+    @Published private(set) var reachable = false
+    let demo: Bool
+
+    private let session: WCSession? = WCSession.isSupported() ? WCSession.default : nil
+
+    init(demo: Bool = UserDefaults.standard.bool(forKey: "demo")) {
+        self.demo = demo
+        super.init()
+        if demo {
+            var sample = WatchState.sample
+            if UserDefaults.standard.bool(forKey: "tunerDemo") { sample = sample.answering(.tuner(on: true)) }
+            state = sample
+            reachable = true
+            return
+        }
+        session?.delegate = self
+        session?.activate()
+    }
+
+    func send(_ command: WatchCommand) {
+        if demo {
+            state = state?.answering(command)
+            return
+        }
+        guard let session, session.activationState == .activated, session.isReachable else { return }
+        session.sendMessage(["json": command.json], replyHandler: nil, errorHandler: nil)
+    }
+
+    fileprivate func take(_ json: String?) {
+        guard let json, let fresh = WatchState.decode(json) else { return }
+        state = fresh
+    }
+
+    fileprivate func reach(_ now: Bool) {
+        let was = reachable
+        reachable = now
+        /* Just come into reach: ask for the picture rather than wait for a change. */
+        if now && !was { send(.hello) }
+    }
+}
+
+extension PhoneLink: WCSessionDelegate {
+    nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        let kept = session.receivedApplicationContext["state"] as? String
+        let now = session.isReachable
+        Task { @MainActor in
+            self.take(kept)
+            self.reach(now)
+        }
+    }
+
+    nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+        let now = session.isReachable
+        Task { @MainActor in self.reach(now) }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        let json = message["state"] as? String
+        Task { @MainActor in self.take(json) }
+    }
+
+    nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        let json = applicationContext["state"] as? String
+        Task { @MainActor in self.take(json) }
+    }
+}

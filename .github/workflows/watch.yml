@@ -1,0 +1,63 @@
+# Check the Apple Watch app — for free, before any Expo build is spent on it.
+#
+# An iOS build slot is the one thing in this project that does not come back,
+# and the watch app is written in Swift, which nothing on a Linux box can
+# compile. So this job does on a GitHub Mac what an EAS build would otherwise
+# be the first to find out:
+#
+#   1. the watch's reading of what the phone sends (mobile/watch-ci, swift test,
+#      against JSON the phone's own code wrote — test/run.mjs keeps it so);
+#   2. the whole watch app builds for a simulated watch;
+#   3. a picture of each page from that simulated watch, in demo mode, kept as
+#      the "watch-screens" artifact so the layout can be looked at.
+#
+# The watch app on its own here (mobile/watch-ci/project.yml); in the shipping
+# build the same files go into the iPhone app's project.
+name: watch
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/targets/watch/**'
+      - 'mobile/watch-ci/**'
+      - 'shared/watch-link.mjs'
+      - '.github/workflows/watch.yml'
+  workflow_dispatch:
+
+jobs:
+  watch:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Which Xcode
+        run: xcodebuild -version
+
+      - name: The watch reads what the phone sends
+        working-directory: mobile/watch-ci
+        run: swift test
+
+      - name: Make the watch project
+        working-directory: mobile/watch-ci
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: The watch app builds
+        working-directory: mobile/watch-ci
+        run: |
+          set -o pipefail
+          xcodebuild -project FractalWatchCI.xcodeproj -scheme FractalWatch \
+            -sdk watchsimulator -configuration Debug -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build | tail -n 60
+
+      - name: A picture of each page
+        run: bash mobile/watch-ci/screens.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: watch-screens
+          path: mobile/watch-ci/screens
+          if-no-files-found: ignore

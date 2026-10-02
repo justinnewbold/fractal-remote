@@ -60,6 +60,7 @@ import tempoIcon from '../../assets/icons/tempo.png'
 import tunerIcon from '../../assets/icons/tuner.png'
 import { sceneColor } from '../lib/sceneColors'
 import { shortBlock } from '../lib/shortName'
+import { useWatchBridge } from '../lib/watchBridge'
 import { findLooper } from '../lib/looper'
 import UnlockOffer from '../components/UnlockOffer'
 import Note from '../components/Note'
@@ -479,6 +480,29 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
 
   /* The foot's buttons: the stage floor, or 48 when the screen is asked to fit. */
   const foot = tight ? 48 : TAP
+
+  /*
+   * The Apple Watch's four pages, drawn from this screen and worked by its own
+   * buttons: the scenes, the pedals, Previous and Next, the tuner. Nothing at
+   * all on a build without the watch in it. See lib/watchBridge.
+   */
+  useWatchBridge(
+    {
+      preset,
+      label: Number.isInteger(preset?.number) ? slotLabel(preset.number, caps?.presets?.addressing) : '',
+      scene,
+      sceneNames,
+      sceneCount: scenes.hasScenes ? scenes.count : 0,
+      /* Not another preset's: a tap would switch whatever shares the id. */
+      chain: chainNow.elsewhere ? [] : blocks,
+      tunerOn,
+      tuning,
+      linked: Number.isInteger(preset?.number),
+      canPrevious: lastAt !== null,
+      canNext: nextAt !== null
+    },
+    step
+  )
 
   return (
     <ScrollView

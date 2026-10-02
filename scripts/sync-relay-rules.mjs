@@ -84,6 +84,11 @@ export const FILES = [
    */
   { source: '../shared/mod-read.mjs', target: '../mobile/src/lib/mod-read.js' },
   /*
+   * What the phone tells the Apple Watch and what the watch may ask. One copy
+   * of the words, so the watch's Swift and the phone read the same fields.
+   */
+  { source: '../shared/watch-link.mjs', target: '../mobile/src/lib/watch-link.js' },
+  /*
    * What each footswitch does, in words, and the pace the switches are read
    * at. The phone's Footswitches page and the browser's say the same thing
    * about the same switch, and ask the unit no faster.

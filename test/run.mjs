@@ -12099,6 +12099,128 @@ test('after a chain change or a save the phone reads the chain once more when th
   assert.match(lock.forgefx.tag, /\+gridgen$/, 'the computer app carries the server that keeps a read from before a placement')
 })
 
+/*
+ * THE APPLE WATCH. "Maybe three different screens that you can swipe between
+ * … just simple actions from the watch." The phone sends the whole picture;
+ * the watch asks for one of five things, and anything else is dropped.
+ */
+test('the watch is sent the stage as one small picture, and may ask for only five things', async () => {
+  const { watchState, watchCommand, sameWatchState, WATCH_PEDALS_MAX } = await import('../shared/watch-link.mjs')
+  const fixture = JSON.parse(readSrc(new URL('../mobile/watch-ci/Tests/WatchModelTests/state.json', import.meta.url), 'utf8'))
+  const again = watchState({ at: 1759363200000, linked: true, preset: { number: 12, name: 'Crunch Rhythm' }, label: '012', scene: 1,
+    sceneNames: ['Clean', 'Crunch', 'Lead'], sceneCount: 8, canPrevious: true, canNext: false,
+    pedals: [{ id: 50, name: 'Drive 1', short: 'DRV', on: true, fill: '#c0392b', ink: '#ffffff' }, { id: 70, name: 'Delay 1', short: 'DLY', on: false, fill: 'nope', ink: '#ffffff' }],
+    tunerOn: true, tuning: { note: 'E', octave: 2, cents: -2.4 } })
+  assert.deepEqual(again, fixture, 'the watch’s test fixture is not what the phone sends any more — write it again')
+
+  /* Every field the phone sends is one the watch reads, by the same name. */
+  const swift = readSrc(new URL('../mobile/targets/watch/Model.swift', import.meta.url), 'utf8')
+  const fields = (o, out = new Set()) => {
+    for (const [k, v] of Object.entries(o)) {
+      out.add(k)
+      if (v && typeof v === 'object' && !Array.isArray(v)) fields(v, out)
+      if (Array.isArray(v) && v[0] && typeof v[0] === 'object') fields(v[0], out)
+    }
+    return out
+  }
+  for (const k of fields(fixture)) assert.match(swift, new RegExp(`\\bvar ${k}: `), `the watch does not read "${k}"`)
+
+  /* Nothing missing is ever "undefined" on the watch. */
+  const bare = watchState()
+  assert.equal(bare.preset.number, -1)
+  assert.equal(bare.scene, -1)
+  assert.deepEqual(bare.scenes, [])
+  assert.equal(bare.tuner.note, '')
+  /* The tuner reads nothing while it is off, and clamps a wild reading. */
+  assert.equal(watchState({ tunerOn: false, tuning: { note: 'A', cents: 3 } }).tuner.note, '')
+  assert.equal(watchState({ tunerOn: true, tuning: { note: 'A', cents: 300 } }).tuner.cents, 50)
+  assert.equal(watchState({ pedals: Array.from({ length: 30 }, (_, i) => ({ id: i, name: 'x' })) }).pedals.length, WATCH_PEDALS_MAX)
+
+  /* The five requests, and only the ones the watch could have been shown. */
+  const shown = watchState({ sceneCount: 4, pedals: [{ id: 50, name: 'Drive' }] })
+  assert.deepEqual(watchCommand({ do: 'scene', index: 3 }, shown), { do: 'scene', index: 3 })
+  assert.equal(watchCommand({ do: 'scene', index: 4 }, shown), null)
+  assert.deepEqual(watchCommand({ do: 'pedal', id: 50, on: false }, shown), { do: 'pedal', id: 50, on: false })
+  assert.equal(watchCommand({ do: 'pedal', id: 51, on: false }, shown), null, 'a pedal the watch was never shown was switched')
+  assert.deepEqual(watchCommand({ do: 'preset', step: -1 }, shown), { do: 'preset', step: -1 })
+  assert.equal(watchCommand({ do: 'preset', step: 5 }, shown), null)
+  assert.deepEqual(watchCommand({ do: 'tuner', on: true }, shown), { do: 'tuner', on: true })
+  assert.deepEqual(watchCommand({ do: 'hello' }, null), { do: 'hello' })
+  for (const bad of [null, 'scene', { do: 'save' }, { do: 'select', number: 5 }, { do: 'tuner', on: 'yes' }]) assert.equal(watchCommand(bad, shown), null)
+
+  /* The watch's own words for them are these same five. */
+  for (const [msg] of [[{ do: 'hello' }], [{ do: 'scene', index: 2 }], [{ do: 'pedal', id: 50, on: false }], [{ do: 'preset', step: -1 }], [{ do: 'tuner', on: true }]]) {
+    assert.ok(swift.includes(`"do":"${msg.do}"`), `the watch cannot ask for ${msg.do}`)
+  }
+  assert.equal(sameWatchState({ ...fixture, at: 1 }, { ...fixture, at: 2 }), true)
+})
+
+test('the phone sends the watch a tuner reading ten times a second and anything else four, and nothing twice', async () => {
+  const { createWatchSender, watchState, WATCH_TUNER_MS, WATCH_STATE_MS } = await import('../shared/watch-link.mjs')
+  let t = 0
+  const timers = []
+  const sent = []
+  const sender = createWatchSender({
+    send: (s, o) => sent.push({ s, urgent: o.urgent, at: t }),
+    now: () => t,
+    schedule: (fn, ms) => {
+      const x = { fn, at: t + ms }
+      timers.push(x)
+      return x
+    },
+    cancel: (x) => {
+      const i = timers.indexOf(x)
+      if (i >= 0) timers.splice(i, 1)
+    }
+  })
+  const turn = (ms) => {
+    t += ms
+    for (const x of [...timers]) if (x.at <= t) {
+      timers.splice(timers.indexOf(x), 1)
+      x.fn()
+    }
+  }
+  const at = (cents, scene = 0) => watchState({ sceneCount: 8, scene, tunerOn: true, tuning: { note: 'E', cents } })
+  sender.push(at(1))
+  assert.equal(sent.length, 1, 'the first picture waits')
+  sender.push(at(1))
+  assert.equal(sent.length, 1, 'the same picture was sent twice')
+  sender.push(at(2))
+  sender.push(at(3))
+  assert.equal(sent.length, 1)
+  turn(WATCH_TUNER_MS)
+  assert.equal(sent.length, 2)
+  assert.equal(sent[1].s.tuner.cents, 3, 'an old reading was sent rather than the latest')
+  assert.equal(sent[1].urgent, false, 'a tuner-only picture is kept as the phone’s lasting copy')
+  sender.push(at(3, 2))
+  turn(WATCH_TUNER_MS)
+  assert.equal(sent.length, 2, 'a scene change went at the tuner’s pace')
+  turn(WATCH_STATE_MS)
+  assert.equal(sent.length, 3)
+  assert.equal(sent[2].urgent, true)
+  /* The watch opening asks for it now. */
+  sender.flush(at(3, 2))
+  assert.equal(sent.length, 4)
+  sender.stop()
+})
+
+test('the stage screen keeps the watch, which is inert until the watch is built in, and CI builds and photographs the watch for free', () => {
+  const stage = readSrc(new URL('../mobile/src/screens/Stage.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+  assert.match(stage, /useWatchBridge\( \{ preset, label:/)
+  assert.match(stage, /chain: chainNow\.elsewhere \? \[\] : blocks,/, 'the watch is handed another preset’s pedals')
+  assert.match(stage, /canPrevious: lastAt !== null, canNext: nextAt !== null \}, step \)/, 'the watch’s Previous and Next are not the stage screen’s')
+  const bridge = readSrc(new URL('../mobile/src/lib/watchBridge.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+  assert.match(bridge, /requireOptionalNativeModule\('FractalWatch'\)/, 'a build without the watch would fail to start')
+  assert.match(bridge, /const watch = link\(\) if \(!watch\) return undefined/)
+  assert.match(bridge, /else if \(cmd\.do === 'scene'\) writeScene\(cmd\.index\) else if \(cmd\.do === 'pedal'\) writeBypass\(cmd\.id, !cmd\.on\) else if \(cmd\.do === 'preset'\) stepRef\.current\?\.\(cmd\.step\)/)
+  /* The tuner mutes the unit: the watch never turns it on by being swiped to. */
+  const pages = readSrc(new URL('../mobile/targets/watch/Pages.swift', import.meta.url), 'utf8')
+  assert.match(pages, /\.onDisappear \{\s*if state\.tuner\.on \{ link\.send\(\.tuner\(on: false\)\) \}/)
+  assert.ok(!/onAppear[^}]*tuner\(on: true\)/.test(pages), 'the tuner turns on by being swiped to')
+  const wf = readSrc(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')
+  for (const step of ['swift test', 'xcodegen generate', '-sdk watchsimulator', 'screens.sh', 'watch-screens']) assert.ok(wf.includes(step), `the watch check has no ${step}`)
+})
+
 test('a run of free cells in a lane is one gap, not a button per cell', async () => {
   const { laneItems, gapCols } = await import('../shared/grid-plan.mjs')
   const items = laneItems({ row: 0, blocks: [{ col: 0, name: 'Amp' }, { col: 4, name: 'Cab' }], gaps: [1, 2, 3, 5, 6, 7, 8, 9, 10, 11] })
