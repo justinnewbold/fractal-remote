@@ -16,9 +16,9 @@ struct FractalWatchApp: App {
  * FOUR PAGES, SWIPED UP AND DOWN: Scenes, Pedals, Presets, Tuner.
  *
  * It opens on Scenes, the one reached for most mid-song. The tuner is last and
- * does nothing until it is tapped: on a Fractal the tuner mutes the output,
- * and a watch that muted the band because a page was swiped past would be a
- * watch nobody wears twice. Leaving the tuner page turns it back off.
+ * does nothing until it is tapped: a unit set to mute while it tunes would
+ * otherwise go quiet because a page was swiped past. Leaving the tuner page
+ * turns it back off.
  *
  * Launched with -page N (CI's screenshots) it opens on that page instead.
  */
