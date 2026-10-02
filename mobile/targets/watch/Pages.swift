@@ -155,9 +155,13 @@ struct PresetsPage: View {
 // MARK: - Tuner
 
 /*
- * Off until tapped — the tuner mutes the unit — and off again when the page is
- * left. The note in big letters, a needle for how far off, green within three
- * cents, as on the phone.
+ * Off until tapped, and off again when the page is left. Whether the unit
+ * mutes while it tunes is the unit's own setting (Setup, Tuner, Mute), never
+ * the app's: "We don't want the unit to mute while the tuner is on, unless
+ * they set that in settings somewhere." Tapped rather than on arrival so a
+ * unit that IS set to mute is never muted by a swipe past. The note in big
+ * letters, a needle for how far off, green within three cents, as on the
+ * phone.
  */
 struct TunerPage: View {
     let state: WatchState
@@ -188,7 +192,7 @@ struct TunerPage: View {
                 } label: {
                     Label("Tuner on", systemImage: "tuningfork").frame(maxWidth: .infinity, minHeight: 56)
                 }
-                Text("The unit mutes while the tuner is on.")
+                Text("Tap to tune.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

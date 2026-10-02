@@ -2,5 +2,11 @@ node_modules/
 .expo/
 dist/
 ios/
+# …but not a local module's own native code (modules/fractal-watch/ios).
+!/modules/*/ios/
 android/
 *.log
+# Written by @bacons/apple-targets at every prebuild. Kept out of the watch
+# folder itself, because every file in there becomes part of the watch app.
+/targets/watch/Assets.xcassets/
+/targets/watch/Info.plist

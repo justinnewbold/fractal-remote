@@ -12221,6 +12221,32 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   for (const step of ['swift test', 'xcodegen generate', '-sdk watchsimulator', 'screens.sh', 'watch-screens']) assert.ok(wf.includes(step), `the watch check has no ${step}`)
 })
 
+test('the iPhone build carries the watch app and the phone’s half of the link', () => {
+  const app = JSON.parse(readSrc(new URL('../mobile/app.json', import.meta.url), 'utf8')).expo
+  assert.ok(app.plugins.includes('@bacons/apple-targets'), 'the watch app is not built into the iPhone app')
+  assert.equal(app.ios.appleTeamId, '3KA9RC7YE6', 'the watch app has no team to be signed for')
+  const target = readSrc(new URL('../mobile/targets/watch/expo-target.config.js', import.meta.url), 'utf8')
+  assert.match(target, /type: 'watch'/)
+  assert.match(target, /bundleIdentifier: '\.watchkitapp'/, 'the watch app is not cloud.newbold.fractalremote.watchkitapp')
+  /* The module the JavaScript asks for by name, and the two calls and one event it uses. */
+  const mod = JSON.parse(readSrc(new URL('../mobile/modules/fractal-watch/expo-module.config.json', import.meta.url), 'utf8'))
+  assert.deepEqual(mod.apple.modules, ['FractalWatchModule'])
+  const swift = readSrc(new URL('../mobile/modules/fractal-watch/ios/FractalWatchModule.swift', import.meta.url), 'utf8')
+  assert.match(swift, /Name\("FractalWatch"\)/)
+  assert.match(swift, /Events\("onCommand"\)/)
+  assert.match(swift, /Function\("sendState"\) \{ \(json: String, urgent: Bool\) in/)
+  const bridge = readSrc(new URL('../mobile/src/lib/watchBridge.js', import.meta.url), 'utf8')
+  assert.match(bridge, /watch\.sendState\(JSON\.stringify\(state\), urgent\)/)
+  assert.match(bridge, /addListener\?\.\('onCommand'/)
+  /* Both ends use the same key for a picture and for a request. */
+  const watch = readSrc(new URL('../mobile/targets/watch/PhoneLink.swift', import.meta.url), 'utf8')
+  assert.ok(swift.includes('["state": json]') && watch.includes('message["state"]'), 'the phone and the watch name the picture differently')
+  assert.ok(watch.includes('["json": command.json]') && swift.includes('message["json"]'), 'the phone and the watch name a request differently')
+  const wf = readSrc(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')
+  assert.match(wf, /npx expo prebuild -p ios --no-install/)
+  assert.match(wf, /-scheme FractalRemote/)
+})
+
 test('a run of free cells in a lane is one gap, not a button per cell', async () => {
   const { laneItems, gapCols } = await import('../shared/grid-plan.mjs')
   const items = laneItems({ row: 0, blocks: [{ col: 0, name: 'Amp' }, { col: 4, name: 'Cab' }], gaps: [1, 2, 3, 5, 6, 7, 8, 9, 10, 11] })

@@ -3,7 +3,7 @@
     "name": "Fractal Remote",
     "slug": "fractal-remote",
     "owner": "justinnewbold",
-    "version": "1.86.43",
+    "version": "1.86.44",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "fractalremote",
@@ -27,7 +27,8 @@
       "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "appleTeamId": "3KA9RC7YE6"
     },
     "android": {
       "package": "cloud.newbold.fractalremote",
@@ -47,7 +48,8 @@
           "backgroundColor": "#0d0f12",
           "imageWidth": 200
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ],
     "extra": {
       "eas": {
