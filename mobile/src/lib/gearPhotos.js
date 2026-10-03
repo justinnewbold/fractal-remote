@@ -26,10 +26,9 @@
  * the first batch of two hundred.
  *
  * A model with no picture answers null, and the screen shows nothing rather
- * than a placeholder. Since 1.86.49 nearly the whole catalog has one — a
+ * than a placeholder. Since 1.86.50 every model in the catalog has one — a
  * photograph where an openly licensed one exists, a drawing (marked as one)
- * where it does not. What is left is Fractal's own designs, which have no
- * real-world gear to show.
+ * where it does not — so null now means a name the catalog does not carry.
  */
 import photos from '../data/gear-photos.json' with { type: 'json' }
 

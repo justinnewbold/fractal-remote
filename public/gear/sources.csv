@@ -62,6 +62,8 @@ atomica,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/at
 band-commander,https://upload.wikimedia.org/wikipedia/commons/3/38/1968_Fender_Bandmaster_front.jpg,https://commons.wikimedia.org/wiki/File:1968_Fender_Bandmaster_front.jpg,Glamafez,CC0,2026-09-19,no
 bb-pre,https://upload.wikimedia.org/wikipedia/commons/f/fe/Art_Bromage%27s_Pedalboard%2C_2008-09-20_%28almost_done%29.jpg,"https://commons.wikimedia.org/wiki/File:Art_Bromage%27s_Pedalboard,_2008-09-20_(almost_done).jpg",ArtBrom,CC BY-SA 2.0,2026-09-19,no
 bender-fuzz,https://upload.wikimedia.org/wikipedia/commons/3/30/Vox_Tone_Bender.jpg,https://commons.wikimedia.org/wiki/File:Vox_Tone_Bender.jpg,"Johann from Munich, Germany",CC BY 2.0,2026-09-19,no
+big-hair,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+bit-crusher,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 blackglass-7k,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/blackglass-7k.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 blankenship-leeds,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/blankenship-leeds.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 bludojai,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/bludojai.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
@@ -71,11 +73,13 @@ bosom-boost,https://github.com/justinnewbold/fractal-remote/blob/main/public/gea
 box-o-crunch,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/box-o-crunch.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 brit-800,https://upload.wikimedia.org/wikipedia/commons/4/4f/Marshall_JCM800_amplifier.jpg,https://commons.wikimedia.org/wiki/File:Marshall_JCM800_amplifier.jpg,John2112,CC BY-SA 4.0,2026-09-19,no
 brit-afs100,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/brit-afs100.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+brit-brown,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 brit-jm45,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/brit-jm45.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 brit-jvm,https://upload.wikimedia.org/wikipedia/commons/6/6e/PDB_2022-30%2C_Marshall_JVM.jpg,https://commons.wikimedia.org/wiki/File:PDB_2022-30%2C_Marshall_JVM.jpg,Cjp24,CC BY-SA 4.0,2026-09-19,no
 brit-pre,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/brit-pre.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 brit-silver,https://upload.wikimedia.org/wikipedia/commons/c/c1/Marshall_Silver_Jubilee_combo.jpg,https://commons.wikimedia.org/wiki/File:Marshall_Silver_Jubilee_combo.jpg,Gavin Tapp,CC BY 2.0,2026-09-19,no
 brit-super,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/brit-super.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+buddah-duomaster,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 ca3,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/ca3.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 cameron-ccv,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/cameron-ccv.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 capt-hook,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/capt-hook.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
@@ -116,8 +120,29 @@ euro-blue,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/
 euro-red,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/euro-blue.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 euro-uber,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/euro-uber.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 face-fuzz,https://upload.wikimedia.org/wikipedia/commons/1/14/Dallas_Arbiter_Fuzz_Face.jpg,https://commons.wikimedia.org/wiki/File:Dallas_Arbiter_Fuzz_Face.jpg,sploshette,CC BY 2.0,2026-09-19,no
+fas-6160,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-bass,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-boost,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-brootalz,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-brown,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 fas-buttery,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/fas-buttery.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-class-a,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-crunch,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-express,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-hot-rod,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-lead-1,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-lead-2,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-led-drive,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-modern,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-modern-ii,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-modern-iii,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-rhythm,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-skull-crusher,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-stealth-blue,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fas-wreck,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 fat-rat,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/fat-rat.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fet-boost,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+fet-preamp,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 fox-ods,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/fox-ods.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 friedman-be,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/friedman-be.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 friedman-hbe,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/friedman-hbe.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
@@ -128,6 +153,7 @@ gauss-drive,https://github.com/justinnewbold/fractal-remote/blob/main/public/gea
 gibtone-scout,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/gibtone-scout.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 griddle-cake,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/griddle-cake.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 guardian-photon-speed,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/guardian-photon-speed.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+hard-fuzz,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 heartpedal-11,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/heartpedal-11.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 herbie,https://upload.wikimedia.org/wikipedia/commons/0/06/Diezel_Herbert.jpg,https://commons.wikimedia.org/wiki/File:Diezel_Herbert.jpg,Luke dukeee,CC BY-SA 4.0,2026-09-19,no
 hipower,https://upload.wikimedia.org/wikipedia/commons/6/67/Hiwatt_Model_DR103_100W_Guitar_Amplifier.jpg,https://commons.wikimedia.org/wiki/File:Hiwatt_Model_DR103_100W_Guitar_Amplifier.jpg,Oneparadigm,CC BY-SA 4.0,2026-09-19,no
@@ -149,6 +175,7 @@ matchbox-d-30,https://github.com/justinnewbold/fractal-remote/blob/main/public/g
 maxoff-808,https://upload.wikimedia.org/wikipedia/commons/3/3d/Maxon_OD808_%2810081674934%29.jpg,https://commons.wikimedia.org/wiki/File:Maxon_OD808_(10081674934).jpg,Mekkjp from Japan,CC BY-SA 2.0,2026-09-19,no
 mcmlxxxi-drive,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/mcmlxxxi-drive.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 micro-boost,https://upload.wikimedia.org/wikipedia/commons/0/0d/MXR_M-133_Micro_Amp_%28angled%29.jpg,https://commons.wikimedia.org/wiki/File:MXR_M-133_Micro_Amp_(angled).jpg,ben dalton,CC BY-SA 2.0,2026-09-19,no
+mid-boost,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 mosfet-distortion,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/mosfet-distortion.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 mr-z-highway-66,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/mr-z-highway-66.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 mr-z-mz,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/mr-z-mz.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
@@ -181,6 +208,7 @@ revv-gen,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/r
 royal-bass-di,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/royal-bass-di.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 ruby-rocket,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/ruby-rocket.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 sdd-preamp,https://upload.wikimedia.org/wikipedia/commons/b/b9/Large_pedal_board.jpg,https://commons.wikimedia.org/wiki/File:Large_pedal_board.jpg,Sidebart,CC BY-SA 4.0,2026-09-19,no
+shimmer-drive,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 shiver,https://upload.wikimedia.org/wikipedia/commons/7/70/Bogner_Shiva_Amp_by_MusicTales_02.jpg,https://commons.wikimedia.org/wiki/File:Bogner_Shiva_Amp_by_MusicTales_02.jpg,Serg Childed,CC BY-SA 4.0,2026-09-19,no
 shred-distortion,https://upload.wikimedia.org/wikipedia/commons/f/f6/Shredmaster.jpg,https://commons.wikimedia.org/wiki/File:Shredmaster.jpg,Frig8911,CC BY-SA 4.0,2026-09-19,no
 solo-100,https://upload.wikimedia.org/wikipedia/commons/8/8c/Soldano_Decatone%2BSLO100.jpg,https://commons.wikimedia.org/wiki/File:Soldano_Decatone%2BSLO100.jpg,fvancini,CC BY 2.0,2026-09-19,no
@@ -197,18 +225,24 @@ sunrise-splendor-hi-cut,https://github.com/justinnewbold/fractal-remote/blob/mai
 super-fuzz,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/super-fuzz.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 super-od,https://upload.wikimedia.org/wikipedia/commons/c/cb/Boss_SD-1_Super_Overdrive.jpg,https://commons.wikimedia.org/wiki/File:Boss_SD-1_Super_Overdrive.jpg,Kuriosatempel,CC BY-SA 4.0,2026-09-19,no
 super-verb,https://upload.wikimedia.org/wikipedia/commons/e/e3/Fender_Super_Reverb.jpg,https://commons.wikimedia.org/wiki/File:Fender_Super_Reverb.jpg,Pendeln,CC BY-SA 3.0,2026-09-19,no
+supertweed,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 supremo-trem,https://archive.org/details/oahu-supro-guitar-amplifier-catalog-1964,http://creativecommons.org/publicdomain/mark/1.0/,Public Domain (Oahu/Supro 1964 guitar+amplifier catalog scan via Internet Archive),Public Domain Mark 1.0,2026-09-27,no
 supro-black-magick,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/supro-black-magick.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 sv-bass,https://upload.wikimedia.org/wikipedia/commons/5/52/Ampeg_SVT_Classic.jpg,https://commons.wikimedia.org/wiki/File:Ampeg_SVT_Classic.jpg,Steen Elm,CC BY 2.0,2026-09-19,no
 t808-mod,https://upload.wikimedia.org/wikipedia/commons/4/44/Ibanez_TS-808_Tube_Screamer_Overdrive_Pro_%28True_bypass_Mod_and_Tone_Mod%29.jpg,https://commons.wikimedia.org/wiki/File:Ibanez_TS-808_Tube_Screamer_Overdrive_Pro_(True_bypass_Mod_and_Tone_Mod).jpg,Andrés Galeotti,CC BY 2.0,2026-09-27,no
 t808-od,https://upload.wikimedia.org/wikipedia/commons/b/b4/Ibanez_TS808_Tube_Screamer_%2848588080527%29_%28cropped%29.jpg,https://commons.wikimedia.org/wiki/File:Ibanez_TS808_Tube_Screamer_%2848588080527%29_%28cropped%29.jpg,Guitar Chalk,CC BY 2.0,2026-09-19,no
+tape-distortion,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 texas-star,https://upload.wikimedia.org/wikipedia/commons/0/0a/Mesa_Boogie_Lone_Star_2x12%22_Combo.jpg,https://commons.wikimedia.org/wiki/File:Mesa_Boogie_Lone_Star_2x12%22_Combo.jpg,ArtBrom,CC BY-SA 2.0,2026-09-19,no
+thordendal-modern,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+thordendal-vintage,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 timothy,https://upload.wikimedia.org/wikipedia/commons/5/54/Telecaster_Thinline_type_guitar_with_pedalboard_%28SecretPreamp%2CMXR10BandEQ%2CSupa-Trem%2CPOG2%2CSP_Comp%2CTuner%2CBigSky%2CSeaMachine%2CGigaDelay%2CTimmyOverdrive%2CBroadcast%2CVolumPedal%29_-_The_Smith_Center%2C_Las_Vegas_%282017-04-29_10.28.27_piqsels.com_en%29.jpg,"https://commons.wikimedia.org/wiki/File:Telecaster_Thinline_type_guitar_with_pedalboard_(SecretPreamp,MXR10BandEQ,Supa-Trem,POG2,SP_Comp,Tuner,BigSky,SeaMachine,GigaDelay,TimmyOverdrive,Broadcast,VolumPedal)_-_The_Smith_Center,_Las_Vegas_(2017-04-29_10.28.27_piqsels.com_en).jpg",Unknown author,CC0,2026-09-19,no
 tone-of-kings,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/tone-of-kings.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+treble-boost,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 tremolo-lux,https://archive.org/details/fender-guitar-catalog-1965-66,http://creativecommons.org/publicdomain/mark/1.0/,Public Domain (Fender Musical Instruments 1965-66 catalog scan via Internet Archive),Public Domain Mark 1.0,2026-09-27,no
 triple-crest,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/triple-crest.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 ts9dx,https://live.staticflickr.com/5338/7383773138_2a55470612_b.jpg,https://www.flickr.com/photos/79442148@N06/7383773138/,Helterr,CC BY 2.0,2026-09-24,no
 tube-drive,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/tube-drive.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
+tube-pre,,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 two-stone-j35,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/two-stone-j35.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
 usa-bass-400,https://upload.wikimedia.org/wikipedia/commons/2/26/Mesaboogie_bass_400plus_front.jpg,https://commons.wikimedia.org/wiki/File:Mesaboogie_bass_400plus_front.jpg,Doktor Strange,CC BY-SA 3.0,2026-09-19,no
 usa-jp,https://github.com/justinnewbold/fractal-remote/blob/main/public/gear/usa-jp.jpg,https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md,Justin Newbold,Original illustration,2026-10-03,yes
