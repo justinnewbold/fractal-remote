@@ -712,8 +712,12 @@ export function run(test) {
     for (const want of ['slug', 'source_url', 'rights_url', 'copyright_holder', 'licence']) {
       assert.ok(cols.includes(want), `sources.csv no longer records ${want}`)
     }
+    /* Quote-aware, as the generator is: six Commons file names carry a comma,
+       and a plain split once moved the photographer's name into the licence
+       column for every one of them — the credit under the picture read
+       "_Recording_Fischer · _Compound_Recordings". */
     const rows = csv.slice(1).filter(Boolean).map((line) => {
-      const v = line.split(',')
+      const v = line.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map((c) => c.replace(/,$/, '').replace(/^"|"$/g, '').replace(/""/g, '"'))
       return Object.fromEntries(cols.map((c, i) => [c, (v[i] ?? '').trim()]))
     })
     assert.ok(rows.length > 0, 'there are no gear photographs at all')
@@ -764,6 +768,12 @@ export function run(test) {
       rows.map((r) => r.slug).sort(),
       'src/data/gear-photos.json is stale — run `npm run gear:photos`'
     )
+    for (const r of rows) {
+      /* The licence is a licence and the holder a name, never a fragment of a
+         file name pushed sideways by a comma. */
+      assert.match(r.licence, /^(CC|Public domain|Public Domain Mark|Original illustration)/i, `${r.slug}: "${r.licence}" is not a licence — a field has shifted`)
+      assert.equal(r.is_illustration === 'yes', r.licence === 'Original illustration', `${r.slug}: is_illustration and the licence disagree`)
+    }
     for (const [slug, p] of Object.entries(photos)) {
       assert.ok(p.holder && p.rights, `${slug}: the generated entry lost its attribution`)
       assert.ok(existsSync(new URL(`../public/gear/${p.file}`, import.meta.url)), `${slug}: names a file that is not there`)
@@ -778,9 +788,12 @@ export function run(test) {
     const { photoFor } = await import('../src/lib/gearPhotos.js')
     const one = photoFor('1959SLP Treble')
     assert.ok(one?.src && one?.credit && one?.rights, 'photoFor no longer returns the credit with the picture')
-    /* A Dumble-style amp: the searches have never found an openly licensed
-       photo of one, so it is the safest example of a model with none. */
-    assert.equal(photoFor('Bludojai Clean'), null, 'a model with no photograph is being given one')
+    /* One of Fractal's own designs: there is no real amp to photograph or
+       draw, so it is the safest example of a model with no picture. */
+    assert.equal(photoFor('FAS Modern'), null, 'a model with no picture is being given one')
+    /* A drawing says it is a drawing, and still names who it is from. */
+    const drawn = photoFor('Bludojai Clean')
+    assert.ok(drawn?.illustration && /^Illustration · /.test(drawn.credit), 'a drawing is being shown as if it were a photograph')
     assert.equal(photoFor(''), null)
     assert.equal(photoFor(), null, 'photoFor throws rather than answering for a missing name')
 

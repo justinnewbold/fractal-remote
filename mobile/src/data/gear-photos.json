@@ -11,17 +11,52 @@
     "licence": "CC BY-SA 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Marshall_1959_Super_Lead_100_Reissue_%281%29.jpg"
   },
+  "1987x": {
+    "file": "1987x.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "1x10-bf-princetone": {
     "file": "1x10-bf-princetone.jpg",
     "holder": "Massimo Barbieri",
     "licence": "CC BY-SA 3.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Fender_Princeton_Reverb_Amp.jpg"
   },
+  "1x10-metro-blues": {
+    "file": "1x10-metro-blues.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "1x10-sf-princetone": {
     "file": "1x10-sf-princetone.jpg",
     "holder": "Bubba73",
     "licence": "CC BY-SA 3.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Fender_Princeton_1974.jpg"
+  },
+  "1x12-ac20": {
+    "file": "1x12-ac20.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "1x12-black-magick": {
+    "file": "1x12-black-magick.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "1x12-car-ambler": {
+    "file": "1x12-car-ambler.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "1x12-deluxe-tweed": {
     "file": "1x12-deluxe-tweed.jpg",
@@ -35,6 +70,20 @@
     "licence": "CC0",
     "rights": "https://commons.wikimedia.org/wiki/File:Fender_Deluxe_Reverb_Amp_%28by_cptbuzz%29.jpg"
   },
+  "1x12-div13-cj11": {
+    "file": "1x12-div13-cj11.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "1x12-g12t-100": {
+    "file": "1x12-g12t-100.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "1x12-hot-kitty": {
     "file": "1x12-hot-kitty.jpg",
     "holder": "Whey",
@@ -47,11 +96,39 @@
     "licence": "CC BY-SA 3.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Fender_blues_junior_blonde.jpg"
   },
+  "1x12-nuclear-tone": {
+    "file": "1x12-nuclear-tone.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "1x12-scholz": {
+    "file": "1x12-scholz.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "1x12-tweed-20112": {
+    "file": "1x12-tweed-20112.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "1x12-vibrato-lux": {
     "file": "1x12-vibrato-lux.jpg",
     "holder": "Tonereport",
     "licence": "CC BY-SA 4.0",
     "rights": "https://commons.wikimedia.org/wiki/File:1966_Vibrolux_Reverb.jpg"
+  },
+  "1x15-heart-key": {
+    "file": "1x15-heart-key.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "1x15-portabass": {
     "file": "1x15-portabass.jpg",
@@ -65,11 +142,50 @@
     "licence": "CC BY-SA 3.0",
     "rights": "https://commons.wikimedia.org/wiki/File:1964_Fender_Vibroverb.JPG"
   },
+  "1x8-5f1-tweed": {
+    "file": "1x8-5f1-tweed.jpg",
+    "holder": "Public Domain (Fender Musical Instruments 1957-58 catalog scan via Internet Archive)",
+    "licence": "Public Domain Mark 1.0",
+    "rights": "http://creativecommons.org/publicdomain/mark/1.0/"
+  },
+  "1x8-princetone": {
+    "file": "1x8-princetone.jpg",
+    "holder": "Bill Abbott",
+    "licence": "CC BY-SA 2.0",
+    "rights": "https://commons.wikimedia.org/wiki/File:A_very_early_Fender_guitar_amp._Tweed,_2_knobs._IMG_0873_(52454602188).jpg"
+  },
+  "2x10-heart-key": {
+    "file": "2x10-heart-key.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "2x10-super-6g4": {
     "file": "2x10-super-6g4.jpg",
     "holder": "Centervolume",
     "licence": "CC BY-SA 4.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Fender_Super_Amps.jpg"
+  },
+  "2x12-5153-stealth": {
+    "file": "2x12-5153-stealth.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "2x12-65-bassguy": {
+    "file": "2x12-65-bassguy.jpg",
+    "holder": "Public Domain (Fender Musical Instruments 1965-66 catalog scan via Internet Archive)",
+    "licence": "Public Domain Mark 1.0",
+    "rights": "http://creativecommons.org/publicdomain/mark/1.0/"
+  },
+  "2x12-chiefman": {
+    "file": "2x12-chiefman.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "2x12-class-a-30w": {
     "file": "2x12-class-a-30w.jpg",
@@ -83,6 +199,13 @@
     "licence": "CC BY 3.0",
     "rights": "https://commons.wikimedia.org/wiki/File:1973_Twin_Reverb.jpg"
   },
+  "2x12-lead-80": {
+    "file": "2x12-lead-80.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "2x12-texas-star": {
     "file": "2x12-texas-star.jpg",
     "holder": "ArtBrom from Seattle",
@@ -95,11 +218,25 @@
     "licence": "CC BY-SA 2.0",
     "rights": "https://www.flickr.com/photos/32742419@N04/3288593900/"
   },
+  "4x12-1960tv": {
+    "file": "4x12-1960tv.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "4x12-5153": {
     "file": "4x12-5153.jpg",
     "holder": "fvancini",
     "licence": "CC BY 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:EVH_5150III_full_stack.jpg"
+  },
+  "4x12-5153-stealth": {
+    "file": "4x12-5153-stealth.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "4x12-citrus": {
     "file": "4x12-citrus.jpg",
@@ -107,11 +244,90 @@
     "licence": "Public domain",
     "rights": "https://commons.wikimedia.org/wiki/File:Orange_AD30HTC_and_PPC412.jpg"
   },
+  "4x12-friedman-gb": {
+    "file": "4x12-friedman-gb.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "4x12-friedman-v30": {
+    "file": "4x12-friedman-v30.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "4x12-lerxst": {
+    "file": "4x12-lerxst.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "4x12-recto-slant": {
     "file": "4x12-recto-slant.jpg",
     "holder": "Roadside Guitars",
     "licence": "CC BY-SA 2.0",
     "rights": "https://www.flickr.com/photos/32742419@N04/3193180622/"
+  },
+  "4x12-recto-straight": {
+    "file": "4x12-recto-straight.jpg",
+    "holder": "Roadside Guitars",
+    "licence": "CC BY-SA 2.0",
+    "rights": "https://www.flickr.com/photos/32742419@N04/3193180622"
+  },
+  "4x12-rumble-ev12l": {
+    "file": "4x12-rumble-ev12l.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "4x12-rumble-ev12s": {
+    "file": "4x12-rumble-ev12s.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "4x12-solo-100": {
+    "file": "4x12-solo-100.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "4x12-usa-mc90": {
+    "file": "4x12-usa-mc90.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "59-bassguy": {
+    "file": "59-bassguy.jpg",
+    "holder": "Public Domain (Fender Musical Instruments 1959 catalog scan via Internet Archive)",
+    "licence": "Public Domain Mark 1.0",
+    "rights": "http://creativecommons.org/publicdomain/mark/1.0/"
+  },
+  "5f1-tweed": {
+    "file": "5f1-tweed.jpg",
+    "holder": "Public Domain (Fender Musical Instruments 1957-58 catalog scan via Internet Archive)",
+    "licence": "Public Domain Mark 1.0",
+    "rights": "http://creativecommons.org/publicdomain/mark/1.0/"
+  },
+  "5f8-tweed": {
+    "file": "5f8-tweed.jpg",
+    "holder": "Public Domain (Fender Musical Instruments 1959 catalog scan via Internet Archive)",
+    "licence": "Public Domain Mark 1.0",
+    "rights": "http://creativecommons.org/publicdomain/mark/1.0/"
+  },
+  "65-bassguy": {
+    "file": "65-bassguy.jpg",
+    "holder": "Public Domain (Fender Musical Instruments 1965-66 catalog scan via Internet Archive)",
+    "licence": "Public Domain Mark 1.0",
+    "rights": "http://creativecommons.org/publicdomain/mark/1.0/"
   },
   "6g12-concert": {
     "file": "6g12-concert.jpg",
@@ -125,17 +341,52 @@
     "licence": "CC BY-SA 4.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Fender_Super_Amps.jpg"
   },
+  "77-custom-od": {
+    "file": "77-custom-od.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "8x10-sv-bass": {
     "file": "8x10-sv-bass.jpg",
     "holder": "Roadside Guitars",
     "licence": "CC BY-SA 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Peavey_head_%26_Ampeg_Classic_cabinet.jpg"
   },
+  "ac-20": {
+    "file": "ac-20.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "angle-severe": {
+    "file": "angle-severe.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "angry-chuck": {
     "file": "angry-chuck.jpg",
     "holder": "El Grafo",
     "licence": "CC BY-SA 4.0",
     "rights": "https://commons.wikimedia.org/wiki/File:JHS_Angry_Charlie_V3.jpg"
+  },
+  "archean": {
+    "file": "archean.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "atomica": {
+    "file": "atomica.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "band-commander": {
     "file": "band-commander.jpg",
@@ -145,15 +396,64 @@
   },
   "bb-pre": {
     "file": "bb-pre.jpg",
-    "holder": "_2008-09-20_(almost_done).jpg",
-    "licence": "ArtBrom",
-    "rights": "https://commons.wikimedia.org/wiki/File:Art_Bromage%27s_Pedalboard"
+    "holder": "ArtBrom",
+    "licence": "CC BY-SA 2.0",
+    "rights": "https://commons.wikimedia.org/wiki/File:Art_Bromage%27s_Pedalboard,_2008-09-20_(almost_done).jpg"
   },
   "bender-fuzz": {
     "file": "bender-fuzz.jpg",
-    "holder": "Johann from Munich",
-    "licence": "Germany",
+    "holder": "Johann from Munich, Germany",
+    "licence": "CC BY 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Vox_Tone_Bender.jpg"
+  },
+  "blackglass-7k": {
+    "file": "blackglass-7k.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "blankenship-leeds": {
+    "file": "blankenship-leeds.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "bludojai": {
+    "file": "bludojai.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "blues-od": {
+    "file": "blues-od.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "bogfish": {
+    "file": "bogfish.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "bosom-boost": {
+    "file": "bosom-boost.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "box-o-crunch": {
+    "file": "box-o-crunch.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "brit-800": {
     "file": "brit-800.jpg",
@@ -161,11 +461,32 @@
     "licence": "CC BY-SA 4.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Marshall_JCM800_amplifier.jpg"
   },
+  "brit-afs100": {
+    "file": "brit-afs100.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "brit-jm45": {
+    "file": "brit-jm45.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "brit-jvm": {
     "file": "brit-jvm.jpg",
     "holder": "Cjp24",
     "licence": "CC BY-SA 4.0",
     "rights": "https://commons.wikimedia.org/wiki/File:PDB_2022-30%2C_Marshall_JVM.jpg"
+  },
+  "brit-pre": {
+    "file": "brit-pre.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "brit-silver": {
     "file": "brit-silver.jpg",
@@ -173,11 +494,74 @@
     "licence": "CC BY 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Marshall_Silver_Jubilee_combo.jpg"
   },
+  "brit-super": {
+    "file": "brit-super.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "ca3": {
+    "file": "ca3.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "cameron-ccv": {
+    "file": "cameron-ccv.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "capt-hook": {
+    "file": "capt-hook.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "car-ambler": {
+    "file": "car-ambler.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "carol-ann-od-2": {
+    "file": "carol-ann-od-2.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "carol-ann-triptik": {
+    "file": "carol-ann-triptik.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "carol-ann-tucana": {
+    "file": "carol-ann-tucana.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "citrus-a30": {
     "file": "citrus-a30.jpg",
     "holder": "muzyczny.pl",
     "licence": "CC BY-SA 4.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Wzmacniacz_gitarowy_AD30HTC_firmy_Orange.jpg"
+  },
+  "citrus-bass-200": {
+    "file": "citrus-bass-200.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "citrus-rv50": {
     "file": "citrus-rv50.jpg",
@@ -209,11 +593,52 @@
     "licence": "CC BY-SA 4.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Pink_Floyd_Their_Mortal_Remains_-_2017-10-13_-_Andy_Mabbett_-_28_(cropped_1).jpg"
   },
+  "colortone-od": {
+    "file": "colortone-od.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "comet-60": {
+    "file": "comet-60.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "comet-concourse": {
+    "file": "comet-concourse.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "compulsion-distortion": {
     "file": "compulsion-distortion.jpg",
-    "holder": "_2008-09-20_(almost_done).jpg",
-    "licence": "ArtBrom",
-    "rights": "https://commons.wikimedia.org/wiki/File:Art_Bromage%27s_Pedalboard"
+    "holder": "ArtBrom",
+    "licence": "CC BY-SA 2.0",
+    "rights": "https://commons.wikimedia.org/wiki/File:Art_Bromage%27s_Pedalboard,_2008-09-20_(almost_done).jpg"
+  },
+  "cornfed-m50": {
+    "file": "cornfed-m50.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "das-metall": {
+    "file": "das-metall.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "deluxe-6g3": {
+    "file": "deluxe-6g3.jpg",
+    "holder": "Public Domain (Fender Musical Instruments 1961 catalog scan via Internet Archive)",
+    "licence": "Public Domain Mark 1.0",
+    "rights": "http://creativecommons.org/publicdomain/mark/1.0/"
   },
   "deluxe-tweed": {
     "file": "deluxe-tweed.jpg",
@@ -227,6 +652,34 @@
     "licence": "CC0",
     "rights": "https://commons.wikimedia.org/wiki/File:Fender_Deluxe_Reverb_Amp_%28by_cptbuzz%29.jpg"
   },
+  "diamante": {
+    "file": "diamante.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "dirty-shirley": {
+    "file": "dirty-shirley.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "div": {
+    "file": "div.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "dizzy-v4": {
+    "file": "dizzy-v4.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "double-verb": {
     "file": "double-verb.jpg",
     "holder": "Micahmedia",
@@ -238,6 +691,12 @@
     "holder": "Matt Eason",
     "licence": "CC BY 2.5",
     "rights": "https://commons.wikimedia.org/wiki/File:Boss-DS-1.jpg"
+  },
+  "dweezil-s-bassguy": {
+    "file": "dweezil-s-bassguy.jpg",
+    "holder": "Public Domain (Fender Musical Instruments 1965-66 catalog scan via Internet Archive)",
+    "licence": "Public Domain Mark 1.0",
+    "rights": "http://creativecommons.org/publicdomain/mark/1.0/"
   },
   "energyball": {
     "file": "energyball.jpg",
@@ -251,6 +710,13 @@
     "licence": "CC BY-SA 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Xotic_effects_usa.jpg"
   },
+  "esoteric-bass-rcb": {
+    "file": "esoteric-bass-rcb.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "esoteric-rcb": {
     "file": "esoteric-rcb.jpg",
     "holder": "Mekkjp from Japan",
@@ -263,11 +729,74 @@
     "licence": "CC BY 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Pedals_(2006-11-04)_by_Johann_Burkard.jpg"
   },
+  "euro-blue": {
+    "file": "euro-blue.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "euro-red": {
+    "file": "euro-red.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "euro-uber": {
+    "file": "euro-uber.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "face-fuzz": {
     "file": "face-fuzz.jpg",
     "holder": "sploshette",
     "licence": "CC BY 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Dallas_Arbiter_Fuzz_Face.jpg"
+  },
+  "fas-buttery": {
+    "file": "fas-buttery.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fat-rat": {
+    "file": "fat-rat.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fox-ods": {
+    "file": "fox-ods.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "friedman-be": {
+    "file": "friedman-be.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "friedman-hbe": {
+    "file": "friedman-hbe.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "friedman-small-box": {
+    "file": "friedman-small-box.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "fryette-d60": {
     "file": "fryette-d60.jpg",
@@ -281,6 +810,41 @@
     "licence": "Public domain",
     "rights": "https://commons.wikimedia.org/wiki/File:Line6DL4.jpg"
   },
+  "gauss-drive": {
+    "file": "gauss-drive.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "gibtone-scout": {
+    "file": "gibtone-scout.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "griddle-cake": {
+    "file": "griddle-cake.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "guardian-photon-speed": {
+    "file": "guardian-photon-speed.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "heartpedal-11": {
+    "file": "heartpedal-11.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "herbie": {
     "file": "herbie.jpg",
     "holder": "Luke dukeee",
@@ -293,17 +857,66 @@
     "licence": "CC BY-SA 4.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Hiwatt_Model_DR103_100W_Guitar_Amplifier.jpg"
   },
+  "hoodoo-drive": {
+    "file": "hoodoo-drive.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "horizon-precision-drive": {
+    "file": "horizon-precision-drive.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "hot-kitty": {
+    "file": "hot-kitty.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "integral-pre": {
+    "file": "integral-pre.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "jam-ray": {
+    "file": "jam-ray.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "jazz-120": {
     "file": "jazz-120.jpg",
     "holder": "Roland Musikvertrieb Deutschland",
     "licence": "CC BY-SA 3.0",
     "rights": "https://commons.wikimedia.org/wiki/File:JC-120UT.jpg"
   },
+  "jmpre-1": {
+    "file": "jmpre-1.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "jr-blues": {
     "file": "jr-blues.jpg",
     "holder": "Tiled",
     "licence": "CC BY-SA 3.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Fender_blues_junior_blonde.jpg"
+  },
+  "js410": {
+    "file": "js410.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "klone-chiron": {
     "file": "klone-chiron.jpg",
@@ -335,11 +948,25 @@
     "licence": "CC BY-SA 2.0",
     "rights": "https://www.flickr.com/photos/devilelephant/3736142367/"
   },
+  "matchbox-d-30": {
+    "file": "matchbox-d-30.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "maxoff-808": {
     "file": "maxoff-808.jpg",
     "holder": "Mekkjp from Japan",
     "licence": "CC BY-SA 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Maxon_OD808_(10081674934).jpg"
+  },
+  "mcmlxxxi-drive": {
+    "file": "mcmlxxxi-drive.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "micro-boost": {
     "file": "micro-boost.jpg",
@@ -347,11 +974,74 @@
     "licence": "CC BY-SA 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:MXR_M-133_Micro_Amp_(angled).jpg"
   },
+  "mosfet-distortion": {
+    "file": "mosfet-distortion.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "mr-z-highway-66": {
+    "file": "mr-z-highway-66.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "mr-z-mz": {
+    "file": "mr-z-mz.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "mr-z-mz-38": {
+    "file": "mr-z-mz-38.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "mr-z-mz-8": {
+    "file": "mr-z-mz-8.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "noamp-bass-di": {
     "file": "noamp-bass-di.jpg",
     "holder": "6SN7",
     "licence": "CC BY 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Tech_21_SansAmp_Bass_Driver_DI.jpg"
+  },
+  "noamp-bass-pre": {
+    "file": "noamp-bass-pre.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "nobelium-ovd-1": {
+    "file": "nobelium-ovd-1.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "nuclear-tone": {
+    "file": "nuclear-tone.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "octave-distortion": {
+    "file": "octave-distortion.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "od-250": {
     "file": "od-250.jpg",
@@ -371,6 +1061,13 @@
     "licence": "public domain",
     "rights": "https://commons.wikimedia.org/wiki/File:Dumble_ODS_50W_Combo.jpg"
   },
+  "paradigm-shifter": {
+    "file": "paradigm-shifter.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "pi-fuzz": {
     "file": "pi-fuzz.jpg",
     "holder": "Skimel",
@@ -383,11 +1080,24 @@
     "licence": "CC BY-SA 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Marshall_1959_Super_Lead_100_Reissue_%281%29.jpg"
   },
+  "plexi-studio-20": {
+    "file": "plexi-studio-20.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "plus-distortion": {
     "file": "plus-distortion.jpg",
     "holder": "tpeck111",
     "licence": "CC BY-SA 3.0",
     "rights": "https://commons.wikimedia.org/wiki/File:1979_MXR_Distortion_%2B.jpg"
+  },
+  "porta-bass": {
+    "file": "porta-bass.jpg",
+    "holder": "Jackknife Barlow",
+    "licence": "CC BY 2.0",
+    "rights": "https://commons.wikimedia.org/wiki/File:Ampeg_Portaflex_B-15N_%281967-1968%29.jpg"
   },
   "princetone": {
     "file": "princetone.jpg",
@@ -433,15 +1143,36 @@
   },
   "recto1": {
     "file": "recto1.jpg",
-    "holder": "_Recording_Fischer",
-    "licence": "_Compound_Recordings",
-    "rights": "https://commons.wikimedia.org/wiki/File:Sovtek_Mig_60_%2B_Mesa_Boogie_Dual_Recto"
+    "holder": "Roadside Guitars",
+    "licence": "CC BY-SA 2.0",
+    "rights": "https://commons.wikimedia.org/wiki/File:Sovtek_Mig_60_%2B_Mesa_Boogie_Dual_Recto,_Recording_Fischer,_Compound_Recordings,_January_2008.jpg"
   },
   "recto2": {
     "file": "recto2.jpg",
-    "holder": "_Recording_Fischer",
-    "licence": "_Compound_Recordings",
-    "rights": "https://commons.wikimedia.org/wiki/File:Sovtek_Mig_60_%2B_Mesa_Boogie_Dual_Recto"
+    "holder": "Roadside Guitars",
+    "licence": "CC BY-SA 2.0",
+    "rights": "https://commons.wikimedia.org/wiki/File:Sovtek_Mig_60_%2B_Mesa_Boogie_Dual_Recto,_Recording_Fischer,_Compound_Recordings,_January_2008.jpg"
+  },
+  "revv-gen": {
+    "file": "revv-gen.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "royal-bass-di": {
+    "file": "royal-bass-di.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "ruby-rocket": {
+    "file": "ruby-rocket.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "sdd-preamp": {
     "file": "sdd-preamp.jpg",
@@ -467,11 +1198,81 @@
     "licence": "CC BY 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Soldano_Decatone%2BSLO100.jpg"
   },
+  "solo-88": {
+    "file": "solo-88.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "solo-99": {
+    "file": "solo-99.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "sonic-drive": {
+    "file": "sonic-drive.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "spawn-nitrous": {
+    "file": "spawn-nitrous.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "spawn-q-rod": {
+    "file": "spawn-q-rod.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "suhr-badger-18": {
+    "file": "suhr-badger-18.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "suhr-badger-30": {
+    "file": "suhr-badger-30.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "suhr-riot": {
     "file": "suhr-riot.jpg",
     "holder": "Андрей Вольский (Andrey Volskiy)",
     "licence": "Public Domain Mark 1.0",
     "rights": "https://www.flickr.com/photos/141965115@N04/26225433820/"
+  },
+  "sunrise-splendor": {
+    "file": "sunrise-splendor.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "sunrise-splendor-hi-cut": {
+    "file": "sunrise-splendor-hi-cut.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "super-fuzz": {
+    "file": "super-fuzz.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "super-od": {
     "file": "super-od.jpg",
@@ -485,11 +1286,30 @@
     "licence": "CC BY-SA 3.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Fender_Super_Reverb.jpg"
   },
+  "supremo-trem": {
+    "file": "supremo-trem.jpg",
+    "holder": "Public Domain (Oahu/Supro 1964 guitar+amplifier catalog scan via Internet Archive)",
+    "licence": "Public Domain Mark 1.0",
+    "rights": "http://creativecommons.org/publicdomain/mark/1.0/"
+  },
+  "supro-black-magick": {
+    "file": "supro-black-magick.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "sv-bass": {
     "file": "sv-bass.jpg",
     "holder": "Steen Elm",
     "licence": "CC BY 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Ampeg_SVT_Classic.jpg"
+  },
+  "t808-mod": {
+    "file": "t808-mod.jpg",
+    "holder": "Andrés Galeotti",
+    "licence": "CC BY 2.0",
+    "rights": "https://commons.wikimedia.org/wiki/File:Ibanez_TS-808_Tube_Screamer_Overdrive_Pro_(True_bypass_Mod_and_Tone_Mod).jpg"
   },
   "t808-od": {
     "file": "t808-od.jpg",
@@ -505,9 +1325,29 @@
   },
   "timothy": {
     "file": "timothy.jpg",
-    "holder": "MXR10BandEQ",
-    "licence": "Supa-Trem",
-    "rights": "https://commons.wikimedia.org/wiki/File:Telecaster_Thinline_type_guitar_with_pedalboard_(SecretPreamp"
+    "holder": "Unknown author",
+    "licence": "CC0",
+    "rights": "https://commons.wikimedia.org/wiki/File:Telecaster_Thinline_type_guitar_with_pedalboard_(SecretPreamp,MXR10BandEQ,Supa-Trem,POG2,SP_Comp,Tuner,BigSky,SeaMachine,GigaDelay,TimmyOverdrive,Broadcast,VolumPedal)_-_The_Smith_Center,_Las_Vegas_(2017-04-29_10.28.27_piqsels.com_en).jpg"
+  },
+  "tone-of-kings": {
+    "file": "tone-of-kings.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "tremolo-lux": {
+    "file": "tremolo-lux.jpg",
+    "holder": "Public Domain (Fender Musical Instruments 1965-66 catalog scan via Internet Archive)",
+    "licence": "Public Domain Mark 1.0",
+    "rights": "http://creativecommons.org/publicdomain/mark/1.0/"
+  },
+  "triple-crest": {
+    "file": "triple-crest.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "ts9dx": {
     "file": "ts9dx.jpg",
@@ -515,11 +1355,46 @@
     "licence": "CC BY 2.0",
     "rights": "https://www.flickr.com/photos/79442148@N06/7383773138/"
   },
+  "tube-drive": {
+    "file": "tube-drive.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "two-stone-j35": {
+    "file": "two-stone-j35.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "usa-bass-400": {
     "file": "usa-bass-400.jpg",
     "holder": "Doktor Strange",
     "licence": "CC BY-SA 3.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Mesaboogie_bass_400plus_front.jpg"
+  },
+  "usa-jp": {
+    "file": "usa-jp.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "usa-metro-blues": {
+    "file": "usa-metro-blues.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "usa-mk-iic": {
+    "file": "usa-mk-iic.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "usa-mk-iv": {
     "file": "usa-mk-iv.jpg",
@@ -527,16 +1402,71 @@
     "licence": "public domain",
     "rights": "https://commons.wikimedia.org/wiki/File:MarkIV.jpg"
   },
+  "usa-mk-v": {
+    "file": "usa-mk-v.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "usa-pre": {
+    "file": "usa-pre.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "valve-screamer-vs9": {
     "file": "valve-screamer-vs9.jpg",
     "holder": "Mataresephotos",
     "licence": "CC BY 3.0 US",
     "rights": "https://commons.wikimedia.org/wiki/File:Ibanez_ts9_tube_screamer.jpg"
   },
+  "vibra-king": {
+    "file": "vibra-king.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "vibrato-lux": {
+    "file": "vibrato-lux.jpg",
+    "holder": "Public Domain (Fender Musical Instruments 1961 catalog scan via Internet Archive)",
+    "licence": "Public Domain Mark 1.0",
+    "rights": "http://creativecommons.org/publicdomain/mark/1.0/"
+  },
   "vibrato-verb": {
     "file": "vibrato-verb.jpg",
     "holder": "GabeMc",
     "licence": "CC BY-SA 3.0",
     "rights": "https://commons.wikimedia.org/wiki/File:1964_Fender_Vibroverb.JPG"
+  },
+  "wrecker-express": {
+    "file": "wrecker-express.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "wrecker-liverpool": {
+    "file": "wrecker-liverpool.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "wrecker-rocket": {
+    "file": "wrecker-rocket.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "zen-master": {
+    "file": "zen-master.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   }
 }
