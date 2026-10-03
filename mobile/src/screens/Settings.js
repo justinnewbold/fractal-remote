@@ -46,6 +46,7 @@ import { mayDrive } from '../lib/unlock-rule'
 import { useComputerElsewhere } from '../lib/useComputerElsewhere'
 import { quitEditor } from '../lib/editors'
 import { isAdmin } from '../lib/admin'
+import { WATCH_HOW, watchPaired, watchSupported } from '../lib/watchBridge'
 import AccessTool from '../components/AccessTool'
 import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
@@ -398,6 +399,16 @@ export default function Settings({
               <SetupRow title="Amp & pedal names" status="What each model on your unit really is" onPress={onOpenGear} />
             ) : null}
             {onReplay ? <SetupRow title={REPLAY} status="The setup, from the start" onPress={onReplay} /> : null}
+            {/* "Add a watch section to the iOS app so that people know how to
+                use it and how to set it up, and then they know that there is
+                a watch companion app." iPhone only: there is no Android watch. */}
+            {Platform.OS === 'ios' && watchSupported() ? (
+              <SetupRow
+                title="Apple Watch"
+                status={watchPaired() ? 'On your watch · how to use it' : 'Scenes, pedals, presets and the tuner on your wrist'}
+                onPress={() => setPage('watch')}
+              />
+            ) : null}
           </Group>
 
           <Group title="About">
@@ -494,12 +505,12 @@ export default function Settings({
 
           <Sheet open={deleting} onClose={() => (busy ? null : setDeleting(false))} title="Delete account" note={account?.email || ''}>
             <Text style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
-              This deletes your account for good: your sign-in, your set lists, saved chats and everything else stored
-              under it. It cannot be undone. Any computer signed in to this account is signed out.
+              This deletes your account for good: your sign-in, your set lists, bug reports you sent from it and
+              everything else stored under it. It happens straight away and cannot be undone. Any computer signed in
+              to this account is signed out.
             </Text>
             <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 21 }}>
-              The full version you bought stays with your Apple ID or Google account. Restore Purchases brings it back on a
-              new account.
+              {`The full version you bought stays with your ${Platform.OS === 'ios' ? 'Apple ID' : 'Google account'}. Restore a purchase brings it back on a new account.`}
             </Text>
             <Press
               label={busy ? 'Deleting…' : 'Delete my account'}
@@ -994,6 +1005,39 @@ export default function Settings({
         </>
       ) : null}
 
+      {page === 'watch' ? (
+        <>
+          {head('Apple Watch', 'back')}
+          <View style={{ gap: space.md }}>
+            <Note tone={watchPaired() ? undefined : 'fault'}>
+              {watchPaired()
+                ? 'Fractal Remote is on your Apple Watch.'
+                : 'No Apple Watch with Fractal Remote on it is paired with this iPhone yet.'}
+            </Note>
+
+            <Section>What it does</Section>
+            <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 24 }}>
+              Fractal Remote comes with an Apple Watch app. Switch scenes, turn pedals on and off, step through presets
+              and tune, all from your wrist, without reaching for the phone.
+            </Text>
+
+            <Section>Setting it up</Section>
+            {WATCH_SETUP.map((line) => (
+              <Text key={line} style={{ color: color.silk, fontSize: font.body, lineHeight: 24 }}>
+                {line}
+              </Text>
+            ))}
+
+            <Section>Using it</Section>
+            {WATCH_HOW.map((line) => (
+              <Text key={line} style={{ color: color.silk, fontSize: font.body, lineHeight: 24 }}>
+                {line}
+              </Text>
+            ))}
+          </View>
+        </>
+      ) : null}
+
       {page === 'about' ? (
         <>
           {head('About', 'back')}
@@ -1106,6 +1150,14 @@ export default function Settings({
  * would have opened it to learn, so the list answers most questions without
  * anybody tapping anything.
  */
+/* How the watch app gets onto a watch. It comes with this app; nothing
+   separate is bought or downloaded. */
+const WATCH_SETUP = [
+  'There is nothing separate to download. The watch app comes with Fractal Remote, and on most watches it installs by itself. On the watch it is called Fractal.',
+  'If it is not on your watch: open the Watch app on this iPhone, scroll down to Available Apps, and tap Install next to Fractal Remote.',
+  'It needs watchOS 10 or later, and the watch paired with this iPhone.'
+]
+
 function SetupRow({ title, status, onPress }) {
   return (
     <Pressable

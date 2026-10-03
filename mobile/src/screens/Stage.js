@@ -43,7 +43,7 @@ import {
   writeTuner
 } from '../lib/rig'
 import { useDemoUnit } from '../lib/demo'
-import { coachSeen, markCoach } from '../lib/coach'
+import { coachSeen, markCoach, markWatchTip, watchTipSeen } from '../lib/coach'
 import { nope, thud } from '../lib/feedback'
 import { blockColor } from '../lib/blockColors'
 import { blockIcon } from '../lib/blockIcons'
@@ -60,7 +60,7 @@ import tempoIcon from '../../assets/icons/tempo.png'
 import tunerIcon from '../../assets/icons/tuner.png'
 import { sceneColor } from '../lib/sceneColors'
 import { shortBlock } from '../lib/shortName'
-import { useWatchBridge } from '../lib/watchBridge'
+import { WATCH_HOW, useWatchBridge, watchPaired } from '../lib/watchBridge'
 import { findLooper } from '../lib/looper'
 import UnlockOffer from '../components/UnlockOffer'
 import Note from '../components/Note'
@@ -357,6 +357,27 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
       live = false
     }
   }, [holdDoesSomething])
+
+  /*
+   * HOW THE WATCH IS USED, once, the first time a paired watch with the app on
+   * it is seen from here. "We don't need to do a swipe left and right as long
+   * as there's a thing that pops up the first time explaining how the user
+   * uses the Apple Watch." Waits for the channel tip, so two cards never stack.
+   */
+  const [watchTip, setWatchTip] = useState(false)
+  useEffect(() => {
+    if (coach || !watchPaired()) return undefined
+    let live = true
+    watchTipSeen().then((seen) => {
+      if (live && !seen) {
+        markWatchTip()
+        setWatchTip(true)
+      }
+    })
+    return () => {
+      live = false
+    }
+  }, [coach])
 
   /* Shown once, and remembered the moment it is shown rather than when it is
      answered — killing the app with the card up is not an accident to correct
@@ -728,6 +749,16 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
           the bottom of somebody's phone.
         */}
         <Coach open={coach} stage={coachStage} onTry={tryCoach} onSkip={closeCoach} onDone={closeCoach} />
+        <Sheet open={watchTip && !coach} onClose={() => setWatchTip(false)} title="Your Apple Watch" note="Fractal Remote is on your watch">
+          <View style={{ gap: space.md }}>
+            {WATCH_HOW.map((line) => (
+              <Text key={line} style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
+                {line}
+              </Text>
+            ))}
+            <Press label="Got it" tone="signal" on onPress={() => setWatchTip(false)} />
+          </View>
+        </Sheet>
 
         {/*
           A wrapped grid of coloured tiles, which is the browser's chain and

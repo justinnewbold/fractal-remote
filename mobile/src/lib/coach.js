@@ -49,3 +49,22 @@ export async function swipeHintSeen() {
 export function markSwipeHint() {
   AsyncStorage.setItem(SWIPE_HINT_KEY, 'done').catch(() => {})
 }
+
+/*
+ * "How the user uses the Apple Watch", once per phone, the first time the
+ * Play screen finds a paired watch with the app on it. Shown on the phone
+ * because the phone's words travel in an update and the watch's need a build.
+ */
+const WATCH_TIP_KEY = 'fractal.coach.watch.v1'
+
+export async function watchTipSeen() {
+  try {
+    return (await AsyncStorage.getItem(WATCH_TIP_KEY)) === 'done'
+  } catch {
+    return true
+  }
+}
+
+export function markWatchTip() {
+  AsyncStorage.setItem(WATCH_TIP_KEY, 'done').catch(() => {})
+}

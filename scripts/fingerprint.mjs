@@ -25,6 +25,7 @@
  * where the price gets named.
  */
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -46,10 +47,34 @@ const hashFor = (platform) => {
   return hash
 }
 
-const recorded = JSON.parse(readFileSync(file, 'utf8'))
-const now = { android: hashFor('android'), ios: hashFor('ios') }
+/*
+ * THE WATCH, WHICH EXPO'S FINGERPRINT DOES NOT SEE. The watch app is Swift in
+ * mobile/targets/watch, built by @bacons/apple-targets, and @expo/fingerprint
+ * hashes none of it: switching the watch's pages from up-and-down to sideways
+ * read "Unchanged". That is right for the runtime, since an update carries no
+ * Swift and the phone's half of the link is unaffected. It is wrong for the
+ * question this script answers, because a change there reaches nobody until
+ * an iOS build. So it gets its own hash: every file git knows of under the
+ * folder, path and contents, in order.
+ */
+const watchHash = () => {
+  const list = execFileSync('git', ['ls-files', '-co', '--exclude-standard', 'mobile/targets'], { cwd: root, encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean)
+    .sort()
+  const h = createHash('sha1')
+  for (const f of list) {
+    h.update(`${f}\0`)
+    h.update(readFileSync(join(root, f)))
+    h.update('\0')
+  }
+  return h.digest('hex')
+}
 
-const moved = ['android', 'ios'].filter((p) => recorded[p] !== now[p])
+const recorded = JSON.parse(readFileSync(file, 'utf8'))
+const now = { android: hashFor('android'), ios: hashFor('ios'), watch: watchHash() }
+
+const moved = ['android', 'ios', 'watch'].filter((p) => recorded[p] !== now[p])
 
 if (write) {
   writeFileSync(file, `${JSON.stringify({ ...recorded, ...now }, null, 2)}\n`)
@@ -61,7 +86,7 @@ if (write) {
   process.exit(0)
 }
 
-for (const p of ['android', 'ios']) {
+for (const p of ['android', 'ios', 'watch']) {
   console.log(`${p.padEnd(8)} ${now[p]}${recorded[p] === now[p] ? '' : `   was ${recorded[p]}`}`)
 }
 
@@ -77,6 +102,7 @@ if (!moved.length) {
  */
 const cost = {
   ios: 'iOS: a build slot, and there are only a few a month.',
+  watch: 'Watch: an iOS build. Updates keep reaching phones; the watch change waits for the build.',
   android: 'Android: a free APK from .github/workflows/apk.yml.'
 }
 console.error(
@@ -84,9 +110,13 @@ console.error(
     '',
     `NATIVE CHANGE — ${moved.join(' and ')} moved.`,
     '',
-    'Every copy of this app already on a phone stops receiving updates until a',
-    'new build is made and installed. Nothing will say so at the time; the',
-    'updates just stop arriving.',
+    ...(moved.some((p) => p !== 'watch')
+      ? [
+          'Every copy of this app already on a phone stops receiving updates until a',
+          'new build is made and installed. Nothing will say so at the time; the',
+          'updates just stop arriving.'
+        ]
+      : ['Phones keep taking updates. The watch change reaches nobody until the next iOS build.']),
     '',
     ...moved.map((p) => `  ${cost[p]}`),
     '',

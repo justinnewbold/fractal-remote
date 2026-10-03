@@ -39,6 +39,27 @@ function link() {
 /** Whether this build can talk to a watch at all. */
 export const watchSupported = () => !!link()
 
+/*
+ * HOW THE WATCH IS USED, in the order somebody meets it. One list for both
+ * places that say it: the note the Play screen shows once, and Settings →
+ * Apple Watch, where it can be read again.
+ */
+export const WATCH_HOW = [
+  'Keep the Play screen open on your iPhone while you use the watch. The watch works through this app, so it stops when the app is closed or the phone locks.',
+  'Swipe up or down on the watch, or turn the Digital Crown, to move between its four pages: Scenes, Pedals, Presets and Tuner.',
+  'Tap a scene or a pedal to switch it. Presets has Previous and Next.',
+  'The tuner starts only when you tap it, and turns off when you leave its page.'
+]
+
+/** A watch is paired with this phone and has the watch app on it. False on any doubt. */
+export function watchPaired() {
+  try {
+    return link()?.isPaired?.() === true
+  } catch {
+    return false
+  }
+}
+
 /**
  * Kept by the stage screen: `picture` is the watch's state as that screen
  * sees it now (watch-link's watchState input, with the stage's own blocks as

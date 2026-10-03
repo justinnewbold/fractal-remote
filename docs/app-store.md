@@ -139,6 +139,10 @@ to point at a policy that explains it is the strong position.
 
 ## Age rating
 
+**Social media features: No.** From September 2026 every update is asked this
+in the age-rating questionnaire. The app has no feed, no profiles and nothing
+one user can show another.
+
 **4+.** Every question in the questionnaire is None / No — including the newer
 ones about parental controls, age assurance, unrestricted web access,
 user-generated content, messaging, advertising, and medical or wellness
@@ -204,8 +208,18 @@ The demo is free and needs no account. An account is used for one thing
 only: joining this phone to a computer that has the guitar unit plugged
 into it.
 
-If you would prefer to review a signed-in account instead, please ask and we
-will provide credentials.
+A demo account for the signed-in screens is in App Review Information
+(Sign-in required).
+
+Deleting an account (Guideline 5.1.1(v)): tap the gear at the top right for
+Settings, tap the account card at the top, then Delete account, then
+"Delete my account". It deletes the account and everything stored under it
+straight away. To try it, please create a new account rather than deleting
+the demo account, which the rest of the review needs.
+
+Hardware (Guideline 2.1): a video filmed on an iPhone with a real FM3 on
+screen, from the first pairing through the whole workflow, is linked in App
+Review Information.
 ```
 
 **Why this matters more than anything else here.** A reviewer opens the app,
