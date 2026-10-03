@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BackHandler, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native'
+import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native'
 
 import { color, font, mono, radius, space, TAP, MODES, getMode, setMode } from '../lib/theme'
 import { APP_VERSION } from '../lib/version'
@@ -14,6 +14,7 @@ import { applyNow, checkNow, describeRunning, useUpdates } from '../lib/updates'
 import {
   changePassword,
   currentAccount,
+  deleteAccount,
   hostConflict,
   pickHost,
   remoteChosenHost,
@@ -138,6 +139,9 @@ export default function Settings({
      is not somebody's email and is not called one. */
   const signedInAs = account?.email && !isPairAccount(account.email) ? account.email : null
   const [changing, setChanging] = useState(false)
+  /* Delete account: Apple's 5.1.1(v). A sheet that says what goes, then one
+     more tap — never one tap from the page. */
+  const [deleting, setDeleting] = useState(false)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(null)
   const [error, setError] = useState(null)
@@ -471,7 +475,53 @@ export default function Settings({
             <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>
               The computer stays signed in — signing out here must not drop the link mid-set.
             </Text>
+
+            {/* Apple Guideline 5.1.1(v): an account made in the app can be
+                deleted in the app. On this page, and named plainly, so it is
+                found where an account is looked for. */}
+            {signedInAs ? (
+              <Press
+                label="Delete account"
+                sub="Remove this account and everything saved under it"
+                onPress={() => {
+                  setNote(null)
+                  setError(null)
+                  setDeleting(true)
+                }}
+              />
+            ) : null}
           </View>
+
+          <Sheet open={deleting} onClose={() => (busy ? null : setDeleting(false))} title="Delete account" note={account?.email || ''}>
+            <Text style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
+              This deletes your account for good: your sign-in, your set lists, saved chats and everything else stored
+              under it. It cannot be undone. Any computer signed in to this account is signed out.
+            </Text>
+            <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 21 }}>
+              The full version you bought stays with your Apple ID or Google account. Restore Purchases brings it back on a
+              new account.
+            </Text>
+            <Press
+              label={busy ? 'Deleting…' : 'Delete my account'}
+              tone="live"
+              disabled={busy}
+              onPress={async () => {
+                setBusy(true)
+                try {
+                  await deleteAccount()
+                  setDeleting(false)
+                  Alert.alert('Account deleted', `${account?.email || 'Your account'} has been deleted, and you are signed out.`)
+                  onSignOut?.()
+                } catch (err) {
+                  setDeleting(false)
+                  setError(err.message)
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            />
+            <Press label="Keep my account" disabled={busy} onPress={() => setDeleting(false)} />
+          </Sheet>
 
           {/*
             THE FULL VERSION, AND THE WAY BACK TO ONE ALREADY PAID FOR.
@@ -1324,6 +1374,13 @@ function AccountCard({ asked, email, paired, unlocked, demo, onPress }) {
         <Text numberOfLines={1} style={{ color: color.ok, fontSize: font.small }}>
           {`${what} · v${APP_VERSION}`}
         </Text>
+        {/* Said on the card, so Delete account is found from the first page
+            of Settings rather than guessed at (Apple 5.1.1(v)). */}
+        {email ? (
+          <Text numberOfLines={1} style={{ color: color.silkDim, fontSize: font.micro }}>
+            Password, sign out, delete account
+          </Text>
+        ) : null}
       </View>
       <Text style={{ color: color.silkFaint, fontSize: font.lead }}>›</Text>
     </Pressable>

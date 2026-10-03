@@ -1557,6 +1557,39 @@ export function run(test) {
     assert.match(store, /Review notes/, 'there are no review notes at all')
   })
 
+  test('an account made in the app can be deleted in the app, with everything under it', async () => {
+    /*
+     * Apple rejected 1.86.8 under Guideline 5.1.1(v): "The app supports
+     * account creation but does not include an option to initiate account
+     * deletion." Turning an account off is not enough, and neither is a
+     * support email. So: a Delete account button on the phone's Account page,
+     * named on the first page of Settings, and a server function that really
+     * deletes the account.
+     */
+    const settings = read('mobile/src/screens/Settings.js')
+    assert.match(settings, /label="Delete account"/, 'the phone has no Delete account button')
+    assert.match(settings, /Password, sign out, delete account/, 'the first page of Settings no longer says where Delete account is')
+    assert.match(settings, /await deleteAccount\(\)[\s\S]{0,200}onSignOut/, 'a deleted account is not signed out of')
+
+    const fn = read('supabase/functions/delete-account/index.ts')
+    /* Who is deleted comes from the verified session, never the request. */
+    assert.match(fn, /\/auth\/v1\/user/, 'the function no longer verifies who is asking')
+    assert.match(fn, /\/auth\/v1\/admin\/users\/\$\{id\}/, 'the function no longer deletes the account it verified')
+    assert.ok(!/body\??\.(id|user|account|email)\b/.test(fn), 'the function reads whom to delete from the request body')
+    assert.match(fn, /confirm !== 'delete'/, 'a call without the confirmation can delete an account')
+
+    /* Everything saved under an account goes with it. A table that names a
+       user without `on delete cascade` would outlive the deletion, which is
+       the data Apple's rule is about. */
+    const dir = new URL('../supabase/migrations/', import.meta.url)
+    for (const f of readdirSync(dir)) {
+      const sql = readFileSync(new URL(f, dir), 'utf8')
+      for (const m of sql.matchAll(/references auth\.users\s*\(id\)([^,\n]*)/gi)) {
+        assert.match(m[1], /on delete cascade/i, `${f}: a table references auth.users without on delete cascade`)
+      }
+    }
+  })
+
   test('the app says whose it is not, everywhere somebody would look', async () => {
     /*
      * "Leave the name, but add a disclaimer that we are in no way affiliated

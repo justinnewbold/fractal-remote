@@ -188,6 +188,35 @@ export async function signOut() {
   }
 }
 
+/**
+ * Delete this account for good: Apple's Guideline 5.1.1(v). The server
+ * (supabase/functions/delete-account) deletes the account its own session token
+ * names, and everything saved under it goes with it. Throws a sentence for the
+ * screen if it could not; on success the caller signs out as usual.
+ */
+export async function deleteAccount() {
+  const { data } = await supabase().auth.getSession()
+  const token = data?.session?.access_token
+  if (!token) throw new Error('Sign in again, then delete the account.')
+  let res
+  try {
+    res = await fetch(`${DEFAULT_PROJECT.url}/functions/v1/delete-account`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: DEFAULT_PROJECT.anonKey,
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ confirm: 'delete' })
+    })
+  } catch {
+    throw new Error('No connection to the account server. Check the internet and try again.')
+  }
+  const body = await res.json().catch(() => ({}))
+  logDebug(`delete account: ${res.status}`)
+  if (!res.ok || !body?.deleted) throw new Error(body?.error || 'The account could not be deleted. Try again in a minute.')
+}
+
 export async function changePassword(password) {
   const { error } = await supabase().auth.updateUser({ password })
   if (error) throw new Error(explainAuth(error.message))
