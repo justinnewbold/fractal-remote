@@ -21,5 +21,6 @@
     "diff records which change spent the build."
   ],
   "android": "e2b8a600e071aee8934ffe5488b566c4a3e1ca53",
-  "ios": "5ab14656215a6b5c504c24a38828e007824ce59b"
+  "ios": "5ab14656215a6b5c504c24a38828e007824ce59b",
+  "watch": "a07490000a9ddab33ae50bb08045c9c68c48c778"
 }
