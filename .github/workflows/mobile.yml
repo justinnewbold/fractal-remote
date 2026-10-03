@@ -311,12 +311,22 @@ jobs:
             --latest \
             --non-interactive
 
+      # The team, said rather than asked. A second target (the Apple Watch app)
+      # needs a provisioning profile of its own, so EAS signs in to Apple with
+      # the project's App Store Connect key to make it — and that sign-in asked
+      # "Apple Team ID:" on a job that cannot answer:
+      #
+      #   Failed to authenticate with the App Store Connect API key from EAS
+      #   credentials service: Input is required, but stdin is not readable.
+      #
+      # It is the team already in eas.json's submit block and app.json.
       - name: Build
         if: ${{ !inputs.submit_only }}
         working-directory: mobile
         env:
           EXPO_APPLE_ID: ${{ secrets.APPLE_ID }}
           EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          EXPO_APPLE_TEAM_ID: 3KA9RC7YE6
         run: |
           eas build \
             --platform "${{ inputs.platform }}" \
