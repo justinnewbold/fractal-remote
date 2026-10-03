@@ -320,6 +320,21 @@ jobs:
       #   credentials service: Input is required, but stdin is not readable.
       #
       # It is the team already in eas.json's submit block and app.json.
+      # And the App Store Connect API key (ASC_* secrets), so a provisioning
+      # profile that needs remaking — a new target, an expired one — is remade
+      # here rather than stopping the build. See ios-credentials.yml for the
+      # one-time setup it cannot do on its own.
+      - name: The Apple key, as a file only this job can read
+        if: ${{ !inputs.submit_only && inputs.platform != 'android' }}
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          if [ -n "$ASC_KEY_P8" ]; then
+            umask 077
+            printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
+            echo "EXPO_ASC_API_KEY_PATH=$RUNNER_TEMP/asc.p8" >> "$GITHUB_ENV"
+          fi
+
       - name: Build
         if: ${{ !inputs.submit_only }}
         working-directory: mobile
@@ -327,6 +342,9 @@ jobs:
           EXPO_APPLE_ID: ${{ secrets.APPLE_ID }}
           EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           EXPO_APPLE_TEAM_ID: 3KA9RC7YE6
+          EXPO_APPLE_TEAM_TYPE: INDIVIDUAL
+          EXPO_ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           eas build \
             --platform "${{ inputs.platform }}" \
