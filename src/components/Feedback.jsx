@@ -158,7 +158,8 @@ export default function Feedback({ device, link, platform, macVersion }) {
         <p className="hint">
           Your version and which unit you&rsquo;re on are sent too, so it can be looked into.
           {logGoes ? ' The log goes as well — you can read it above first.' : ''} Nothing
-          you&rsquo;ve built and no account details go with it.
+          you&rsquo;ve built goes with it. If you&rsquo;re signed in, the report is linked to your
+          account, so deleting the account deletes it too.
         </p>
       </div>
     </div>

@@ -229,7 +229,8 @@ export default function Report({ onBack, start = 'bug' }) {
               Your version, your phone&rsquo;s OS and which unit you&rsquo;re on are sent too, so it
               can be looked into.
               {bug && withLog ? ' The log goes as well — you can read it above first.' : ''} Nothing
-              you&rsquo;ve built and no account details go with it.
+              you&rsquo;ve built goes with it. If you&rsquo;re signed in, the report is linked to your account,
+              so deleting the account deletes it too.
             </Text>
           </>
         )}

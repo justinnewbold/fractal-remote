@@ -494,12 +494,12 @@ export default function Settings({
 
           <Sheet open={deleting} onClose={() => (busy ? null : setDeleting(false))} title="Delete account" note={account?.email || ''}>
             <Text style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
-              This deletes your account for good: your sign-in, your set lists, saved chats and everything else stored
-              under it. It cannot be undone. Any computer signed in to this account is signed out.
+              This deletes your account for good: your sign-in, your set lists, bug reports you sent from it and
+              everything else stored under it. It happens straight away and cannot be undone. Any computer signed in
+              to this account is signed out.
             </Text>
             <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 21 }}>
-              The full version you bought stays with your Apple ID or Google account. Restore Purchases brings it back on a
-              new account.
+              {`The full version you bought stays with your ${Platform.OS === 'ios' ? 'Apple ID' : 'Google account'}. Restore a purchase brings it back on a new account.`}
             </Text>
             <Press
               label={busy ? 'Deleting…' : 'Delete my account'}

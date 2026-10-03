@@ -49,7 +49,7 @@
   <body>
     <main>
       <h1>Privacy</h1>
-      <p class="when">Fractal Remote · last updated 24 September 2026</p>
+      <p class="when">Fractal Remote · last updated 3 October 2026</p>
 
       <p class="lead">
         <strong>This app collects as little as it can.</strong> Your phone talks to your
@@ -116,6 +116,7 @@
         <tr><th></th><th>Something is broken</th><th>Suggest feature</th></tr>
         <tr><td>What you wrote</td><td>yes</td><td>yes</td></tr>
         <tr><td>Your email, if you typed one</td><td>optional</td><td>optional</td></tr>
+        <tr><td>Which account sent it, if you are signed in</td><td>yes</td><td>yes</td></tr>
         <tr><td>App version, your unit, your OS, screen size</td><td>yes</td><td>yes</td></tr>
         <tr><td><strong>The debug log</strong></td><td>yes, and you can turn it off</td><td><strong>never</strong></td></tr>
       </table>
@@ -126,8 +127,9 @@
         database itself refuses to store one against a suggestion.
       </p>
       <p>
-        The log holds no preset contents, no audio, no account details, and nothing else you have
-        typed into the app.
+        The log holds no preset contents, no audio, no password, and nothing else you have typed
+        into the app. A report sent while signed in is linked to that account, so that deleting the
+        account deletes the report too.
       </p>
 
       <h2>What is never collected</h2>
@@ -152,20 +154,36 @@
         person who builds it.
       </p>
       <p>
+        Emails this app sends (a password reset, the desktop download link you asked for, and bug
+        reports on their way to the person who builds it) go through
+        <a href="https://resend.com/legal/privacy-policy" rel="noreferrer">Resend</a>. RevenueCat,
+        Supabase and Resend each hold only what is described on this page, use it only to provide
+        their part of the service, and protect it at least as this page describes.
+      </p>
+      <p>
         The desktop apps check for their own updates from GitHub, and the phone app checks for
         updates from Expo. Both are ordinary download requests.
       </p>
 
       <h2>How long it is kept</h2>
       <ul>
-        <li><strong>Your account and setlists</strong> — until you ask for them to be deleted.</li>
+        <li><strong>Your account and setlists</strong> — until you delete the account, or ask for it
+          to be deleted.</li>
+        <li><strong>An address the desktop download link was sent to</strong> — kept only as a
+          one-way scrambled fingerprint, to stop the link being sent to it over and over.</li>
         <li><strong>Bug reports</strong> — until the problem is fixed and long enough afterwards to
           be sure, then deleted.</li>
       </ul>
 
       <h2>Deleting your data</h2>
       <p>
-        Email <a href="mailto:justinnewbold@gmail.com">justinnewbold@gmail.com</a> and say what you
+        <strong>In the app:</strong> Settings → your account → <strong>Delete account</strong>. It
+        deletes your account, your setlists, bug reports sent from that account, and every other
+        record kept under it, straight away and for good. A full version you bought stays with your
+        Apple ID or Google account, and Restore a purchase brings it back on a new account.
+      </p>
+      <p>
+        <strong>Or by email:</strong> email <a href="mailto:justinnewbold@gmail.com">justinnewbold@gmail.com</a> and say what you
         want removed — your account, your setlists, a report you sent, or all of it. No form and no
         account needed to ask. It will be done and you will get a reply confirming it.
       </p>

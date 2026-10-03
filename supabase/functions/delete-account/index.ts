@@ -16,7 +16,7 @@
  * those rows, and the database does it in one step. test/limits.mjs holds every
  * table that names a user to that rule, so a new one cannot quietly survive a
  * deletion. Sessions go too, so a signed-in computer is signed out the next
- * time it refreshes.
+ * time it refreshes. The few rows keyed by an email address go first, below.
  *
  * The RevenueCat customer named after the account is deleted as well, when the
  * key is set. A purchase itself belongs to the buyer's Apple ID or Google
@@ -40,18 +40,54 @@ const json = (body: unknown, status = 200) =>
 
 const DEFAULT_PROJECT = 'proj827190e9'
 
-async function accountFrom(url: string, key: string, token: string): Promise<string | null> {
+async function accountFrom(url: string, key: string, token: string): Promise<{ id: string; email: string } | null> {
   try {
     const res = await fetch(`${url}/auth/v1/user`, {
       headers: { apikey: key, Authorization: `Bearer ${token}` }
     })
     if (!res.ok) return null
     const user = await res.json()
-    return String(user?.id || '') || null
+    const id = String(user?.id || '')
+    return id ? { id, email: String(user?.email || '').trim().toLowerCase() } : null
   } catch (err) {
     console.error(`delete-account: could not verify the token (${err})`)
     return null
   }
+}
+
+/*
+ * WHAT THE CASCADE CANNOT REACH. Three tables are keyed by an email address,
+ * or were written before the account existed, so deleting the user leaves them:
+ *
+ *   feedback             bug reports sent while signed in (user_id), or that
+ *                        gave this address to reply to (contact)
+ *   waiting_grants       an unlock waiting for this address to sign up
+ *   download_link_sends  the address the desktop link went to, stored as the
+ *                        sha256 of the lower-cased, trimmed address (see
+ *                        migrations/20260920_download_link_rate.sql)
+ *
+ * Deleted here with the service role, before the account goes. Best effort:
+ * a failure is logged and the account is still deleted.
+ */
+async function forgetRows(url: string, service: string, who: { id: string; email: string }) {
+  const rest = (path: string) =>
+    fetch(`${url}/rest/v1/${path}`, {
+      method: 'DELETE',
+      headers: { apikey: service, Authorization: `Bearer ${service}`, Prefer: 'return=minimal' }
+    })
+      .then((r) => (r.ok ? null : console.error(`delete-account: ${path.split('?')[0]} answered ${r.status}`)))
+      .catch((err) => console.error(`delete-account: ${path.split('?')[0]} unreachable (${err})`))
+  const jobs = [rest(`feedback?user_id=eq.${who.id}`)]
+  if (who.email) {
+    const at = encodeURIComponent(who.email)
+    /* ilike so a reply address typed in another case still matches, with its
+       wildcards escaped so "a_b@x" can never match somebody else's "acb@x". */
+    const like = encodeURIComponent(who.email.replace(/[\\%_]/g, (c) => `\\${c}`))
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(who.email))
+    const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+    jobs.push(rest(`feedback?contact=ilike.${like}`), rest(`waiting_grants?email=eq.${at}`), rest(`download_link_sends?addr_hash=eq.${hash}`))
+  }
+  await Promise.all(jobs)
 }
 
 /* Best effort, and never in the way: an account is deleted whether or not
@@ -84,8 +120,11 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}))
   if (body?.confirm !== 'delete') return json({ error: 'Not confirmed.' }, 400)
 
-  const id = token ? await accountFrom(url, anon, token) : null
-  if (!id) return json({ error: 'Sign in again, then delete the account.' }, 401)
+  const who = token ? await accountFrom(url, anon, token) : null
+  if (!who) return json({ error: 'Sign in again, then delete the account.' }, 401)
+  const id = who.id
+
+  await forgetRows(url, service, who)
 
   const res = await fetch(`${url}/auth/v1/admin/users/${id}`, {
     method: 'DELETE',
