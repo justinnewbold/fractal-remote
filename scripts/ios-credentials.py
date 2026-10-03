@@ -120,8 +120,9 @@ for step in range(40):
 read_for(5)
 out = screen()
 print(out[-6000:])
-blocks = re.findall(r"Target\s+FractalWatch[\s\S]{0,400}?(?=Target\s|\? What|$)", out)
-if blocks and "No credentials set up yet" not in blocks[-1]:
+# EAS's own line once every target is signed. The first run's per-target
+# block search missed it (the profile was made, the job still went red).
+if re.search(r"All credentials are ready to build[^\n]*watchkitapp", out):
     print("\nDONE: the watch app has its signing.")
     sys.exit(0)
 print("\nNOT CONFIRMED: read the screen above.")
