@@ -406,6 +406,20 @@
     "licence": "CC BY 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Vox_Tone_Bender.jpg"
   },
+  "big-hair": {
+    "file": "big-hair.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "bit-crusher": {
+    "file": "bit-crusher.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "blackglass-7k": {
     "file": "blackglass-7k.jpg",
     "holder": "Justin Newbold",
@@ -468,6 +482,13 @@
     "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
     "illustration": true
   },
+  "brit-brown": {
+    "file": "brit-brown.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "brit-jm45": {
     "file": "brit-jm45.jpg",
     "holder": "Justin Newbold",
@@ -496,6 +517,13 @@
   },
   "brit-super": {
     "file": "brit-super.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "buddah-duomaster": {
+    "file": "buddah-duomaster.jpg",
     "holder": "Justin Newbold",
     "licence": "Original illustration",
     "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
@@ -762,6 +790,41 @@
     "licence": "CC BY 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Dallas_Arbiter_Fuzz_Face.jpg"
   },
+  "fas-6160": {
+    "file": "fas-6160.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-bass": {
+    "file": "fas-bass.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-boost": {
+    "file": "fas-boost.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-brootalz": {
+    "file": "fas-brootalz.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-brown": {
+    "file": "fas-brown.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "fas-buttery": {
     "file": "fas-buttery.jpg",
     "holder": "Justin Newbold",
@@ -769,8 +832,120 @@
     "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
     "illustration": true
   },
+  "fas-class-a": {
+    "file": "fas-class-a.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-crunch": {
+    "file": "fas-crunch.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-express": {
+    "file": "fas-express.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-hot-rod": {
+    "file": "fas-hot-rod.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-lead-1": {
+    "file": "fas-lead-1.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-lead-2": {
+    "file": "fas-lead-2.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-led-drive": {
+    "file": "fas-led-drive.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-modern": {
+    "file": "fas-modern.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-modern-ii": {
+    "file": "fas-modern-ii.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-modern-iii": {
+    "file": "fas-modern-iii.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-rhythm": {
+    "file": "fas-rhythm.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-skull-crusher": {
+    "file": "fas-skull-crusher.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-stealth-blue": {
+    "file": "fas-stealth-blue.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fas-wreck": {
+    "file": "fas-wreck.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "fat-rat": {
     "file": "fat-rat.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fet-boost": {
+    "file": "fet-boost.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "fet-preamp": {
+    "file": "fet-preamp.jpg",
     "holder": "Justin Newbold",
     "licence": "Original illustration",
     "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
@@ -839,6 +1014,13 @@
   },
   "guardian-photon-speed": {
     "file": "guardian-photon-speed.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "hard-fuzz": {
+    "file": "hard-fuzz.jpg",
     "holder": "Justin Newbold",
     "licence": "Original illustration",
     "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
@@ -979,6 +1161,13 @@
     "holder": "ben dalton",
     "licence": "CC BY-SA 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:MXR_M-133_Micro_Amp_(angled).jpg"
+  },
+  "mid-boost": {
+    "file": "mid-boost.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "mosfet-distortion": {
     "file": "mosfet-distortion.jpg",
@@ -1186,6 +1375,13 @@
     "licence": "CC BY-SA 4.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Large_pedal_board.jpg"
   },
+  "shimmer-drive": {
+    "file": "shimmer-drive.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "shiver": {
     "file": "shiver.jpg",
     "holder": "Serg Childed",
@@ -1292,6 +1488,13 @@
     "licence": "CC BY-SA 3.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Fender_Super_Reverb.jpg"
   },
+  "supertweed": {
+    "file": "supertweed.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "supremo-trem": {
     "file": "supremo-trem.jpg",
     "holder": "Public Domain (Oahu/Supro 1964 guitar+amplifier catalog scan via Internet Archive)",
@@ -1323,11 +1526,32 @@
     "licence": "CC BY 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Ibanez_TS808_Tube_Screamer_%2848588080527%29_%28cropped%29.jpg"
   },
+  "tape-distortion": {
+    "file": "tape-distortion.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
   "texas-star": {
     "file": "texas-star.jpg",
     "holder": "ArtBrom",
     "licence": "CC BY-SA 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Mesa_Boogie_Lone_Star_2x12%22_Combo.jpg"
+  },
+  "thordendal-modern": {
+    "file": "thordendal-modern.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "thordendal-vintage": {
+    "file": "thordendal-vintage.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
   },
   "timothy": {
     "file": "timothy.jpg",
@@ -1337,6 +1561,13 @@
   },
   "tone-of-kings": {
     "file": "tone-of-kings.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "treble-boost": {
+    "file": "treble-boost.jpg",
     "holder": "Justin Newbold",
     "licence": "Original illustration",
     "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
@@ -1363,6 +1594,13 @@
   },
   "tube-drive": {
     "file": "tube-drive.jpg",
+    "holder": "Justin Newbold",
+    "licence": "Original illustration",
+    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
+    "illustration": true
+  },
+  "tube-pre": {
+    "file": "tube-pre.jpg",
     "holder": "Justin Newbold",
     "licence": "Original illustration",
     "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",

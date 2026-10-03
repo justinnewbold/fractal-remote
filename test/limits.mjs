@@ -788,9 +788,19 @@ export function run(test) {
     const { photoFor } = await import('../src/lib/gearPhotos.js')
     const one = photoFor('1959SLP Treble')
     assert.ok(one?.src && one?.credit && one?.rights, 'photoFor no longer returns the credit with the picture')
-    /* One of Fractal's own designs: there is no real amp to photograph or
-       draw, so it is the safest example of a model with no picture. */
-    assert.equal(photoFor('FAS Modern'), null, 'a model with no picture is being given one')
+    /* A name no model carries gets nothing, never a near miss. */
+    assert.equal(photoFor('Not An Amp At All'), null, 'a name with no picture is being given one')
+    /*
+     * "Make sure that we're not missing any more photos for the app now."
+     * Since 1.86.50 every amp, cab and drive in the catalog has a picture, a
+     * photograph or a drawing marked as one. A model added without one fails
+     * here, by name, rather than going quietly blank on the gear card.
+     */
+    const bare = []
+    for (const f of ['src/data/amp-types.json', 'src/data/cab-types.json', 'src/data/drive-types.json']) {
+      for (const m of JSON.parse(read(f))) if (!photoFor(m.name)) bare.push(m.name)
+    }
+    assert.deepEqual(bare, [], `these models have no picture: ${bare.join(', ')}`)
     /* A drawing says it is a drawing, and still names who it is from. */
     const drawn = photoFor('Bludojai Clean')
     assert.ok(drawn?.illustration && /^Illustration · /.test(drawn.credit), 'a drawing is being shown as if it were a photograph')
