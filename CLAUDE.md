@@ -102,6 +102,10 @@ other: its testers keep a store copy that the next update no longer
 matches, and nobody notices until they ask why nothing has changed. That
 happened after the watch build, to the Play closed testers on 1.86.8.
 
+**Keep count in docs/expo-builds.md.** "Keep track, that should leave us with
+13 builds left for this month." Every build started gets a row there with
+what it was for, and the line under each month says how many are left.
+
 So once he says yes to a build, run mobile.yml with platform `all`
 (production, submit), so iOS goes to TestFlight and Android to the Play
 closed-testing track in the same run. The yes still has to come first.
