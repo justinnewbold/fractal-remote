@@ -966,6 +966,8 @@ export function run(test) {
     /* A row at one end only, and why. Same contract as AREAS: unexplained
        fails, explained passes, and the list is the open questions. */
     const ONE_END = {
+      'Apple Watch':
+        'iPhone only — the watch app comes with the iPhone app and works through it; a browser has no watch, and there is no Android watch app',
       Footswitches:
         'phone only as a Settings row — the browser shows the same panel, from the same shared/footswitches.mjs, as a section of the Edit sheet, where it has been since it was built',
       'Get it on your phone': 'browser only — a phone has no use for a way to get itself onto a phone, and it stays on the front page rather than inside About because "somebody who has a rig connected and wants the remote in their pocket is the likeliest buyer there is"'

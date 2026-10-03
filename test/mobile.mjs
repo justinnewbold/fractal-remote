@@ -5328,6 +5328,7 @@ export function run(test) {
       'Troubleshooting',
       'Amp & pedal names',
       'REPLAY',
+      'Apple Watch',
       '# About',
       'About',
       '# Developer',
