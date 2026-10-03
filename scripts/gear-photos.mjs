@@ -57,7 +57,8 @@ for (const r of rows) {
     file,
     holder: r.copyright_holder,
     licence: r.licence,
-    rights: r.rights_url
+    rights: r.rights_url,
+    ...(r.is_illustration === 'yes' ? { illustration: true } : {})
   }
 }
 

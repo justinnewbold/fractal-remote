@@ -21,9 +21,11 @@
  * the wrong amp under a model name, which is the exact failure that threw away
  * the first batch of two hundred.
  *
- * A model with no photograph answers null, and the screen shows nothing rather
- * than a placeholder. The catalog is about a quarter covered; three quarters of
- * the time the honest answer is silence.
+ * A model with no picture answers null, and the screen shows nothing rather
+ * than a placeholder. Since 1.86.49 nearly the whole catalog has one — a
+ * photograph where an openly licensed one exists, a drawing (marked as one)
+ * where it does not. What is left is Fractal's own designs, which have no
+ * real-world gear to show.
  */
 import photos from '../data/gear-photos.json' with { type: 'json' }
 
@@ -81,11 +83,15 @@ export function photoFor(name, base = GEAR_BASE) {
     src: `${base}/${p.file}`,
     /* What to print under the picture. One string, because every caller wants
        the same sentence and three of them would word it three ways. */
-    credit: `${p.holder} · ${p.licence}`,
+    credit: p.illustration ? `Illustration · ${p.holder}` : `${p.holder} · ${p.licence}`,
     holder: p.holder,
     licence: p.licence,
     rights: p.rights,
-    alt: `${name}, the amplifier it is modelled on`
+    /* A drawing says it is one: where no openly licensed photograph exists,
+       Justin had the gear drawn, and a drawing passed off as a photograph is
+       the one thing it must never be. docs/gear-illustrations.md lists them. */
+    illustration: !!p.illustration,
+    alt: p.illustration ? `${name}, a drawing of the gear it is modelled on` : `${name}, the gear it is modelled on`
   }
 }
 
