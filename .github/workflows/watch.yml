@@ -36,6 +36,9 @@ jobs:
   watch:
     runs-on: macos-15
     timeout-minutes: 40
+    # Write only for the Releases page below, which only a manual run uses.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -69,6 +72,32 @@ jobs:
           name: watch-screens
           path: mobile/watch-ci/screens
           if-no-files-found: ignore
+
+      # THE APP STORE'S APPLE WATCH SCREENSHOTS. A listing whose build carries
+      # a watch app must have at least one, and these are the right size as
+      # they come: a 46mm watch simulator, full resolution. Artifacts can only
+      # be fetched when signed in to GitHub, so a manual run also puts them on
+      # the Releases page, where a plain link downloads them.
+      - name: The watch screenshots, for App Store Connect
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          cd mobile/watch-ci/screens
+          sips -g pixelWidth -g pixelHeight page-0.png
+          # JPEG, which carries no transparency: App Store Connect refuses a
+          # screenshot with an alpha channel, and the simulator's PNGs have one.
+          for f in page-0 page-1 page-2 page-3 tuner-on; do sips -s format jpeg -s formatOptions 95 "$f.png" --out "watch-$f.jpg" >/dev/null; done
+          if ! gh release view watch-screenshots >/dev/null 2>&1; then
+            gh release create watch-screenshots --title "Apple Watch screenshots (App Store)" \
+              --notes "For App Store Connect, under the version's Apple Watch screenshots. Taken from the watch app in demo mode." \
+              --prerelease --latest=false
+          fi
+          gh release upload watch-screenshots watch-page-*.jpg watch-tuner-on.jpg --clobber
+          for f in watch-page-0 watch-page-1 watch-page-2 watch-page-3 watch-tuner-on; do
+            echo "https://github.com/${{ github.repository }}/releases/download/watch-screenshots/$f.jpg" >> "$GITHUB_STEP_SUMMARY"
+          done
 
   iphone:
     # The newest Mac image: this Expo SDK's own native pieces (ExpoModulesJSI)

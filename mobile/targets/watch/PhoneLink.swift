@@ -14,6 +14,23 @@ import WatchConnectivity
  * `demo` (launched with -demo YES) answers every request here instead, for the
  * screenshots CI takes and for trying the pages with no phone in reach.
  */
+/*
+ * The launch arguments CI's screenshots pass (-demo YES, -page 2), read from
+ * the process rather than through UserDefaults. UserDefaults is one of Apple's
+ * "required reason" APIs: using it means declaring why in a privacy manifest,
+ * and a missing declaration is grounds for an upload to be refused. Reading
+ * the arguments directly is the same answer with nothing to declare.
+ */
+enum Launch {
+    static func value(_ name: String) -> String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let at = args.firstIndex(of: "-\(name)"), at + 1 < args.count else { return nil }
+        return args[at + 1]
+    }
+    static func flag(_ name: String) -> Bool { value(name) == "YES" }
+    static func number(_ name: String) -> Int { Int(value(name) ?? "") ?? 0 }
+}
+
 @MainActor
 final class PhoneLink: NSObject, ObservableObject {
     @Published private(set) var state: WatchState?
@@ -23,12 +40,12 @@ final class PhoneLink: NSObject, ObservableObject {
 
     private let session: WCSession? = WCSession.isSupported() ? WCSession.default : nil
 
-    init(demo: Bool = UserDefaults.standard.bool(forKey: "demo")) {
+    init(demo: Bool = Launch.flag("demo")) {
         self.demo = demo
         super.init()
         if demo {
             var sample = WatchState.sample
-            if UserDefaults.standard.bool(forKey: "tunerDemo") { sample = sample.answering(.tuner(on: true)) }
+            if Launch.flag("tunerDemo") { sample = sample.answering(.tuner(on: true)) }
             state = sample
             reachable = true
             return

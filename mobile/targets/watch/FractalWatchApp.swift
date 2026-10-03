@@ -24,7 +24,7 @@ struct FractalWatchApp: App {
  */
 struct RootView: View {
     @EnvironmentObject private var link: PhoneLink
-    @State private var page = UserDefaults.standard.integer(forKey: "page")
+    @State private var page = Launch.number("page")
 
     var body: some View {
         if let state = link.state, link.reachable, state.linked, !state.tooNew {

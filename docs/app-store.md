@@ -220,6 +220,11 @@ the demo account, which the rest of the review needs.
 Hardware (Guideline 2.1): a video filmed on an iPhone with a real FM3 on
 screen, from the first pairing through the whole workflow, is linked in App
 Review Information.
+
+Apple Watch: the watch app comes with the iPhone app. It works in the demo
+too. Start the demo as above, keep the Play screen open on the iPhone, then
+open Fractal on the watch. Swipe up or down between Scenes, Pedals, Presets
+and Tuner.
 ```
 
 **Why this matters more than anything else here.** A reviewer opens the app,

@@ -159,6 +159,34 @@ still stops for him first (see above): the merge rule does not cover a
 build, and a change that moves the fingerprint is not "green" for this
 purpose.
 
+**Before anything goes to Apple, check it against the guidelines as they
+are that day.**
+
+> "So I'm curious of why you didn't catch that there needs to be a delete
+> account in the first place."
+
+1.86.8 was rejected for two things a line-by-line read would have found:
+5.1.1(v), an app that makes accounts must delete them in the app (a rule
+since 2022), and 2.1, a hardware app needs a video of the hardware. The
+listing work covered the privacy label, the age rating and the review notes,
+and never went guideline by guideline. A one-time pass against the June 2026
+guidelines found more: wording that wasn't true, a privacy policy missing
+three things 5.1.1(i) requires, and the brand questions under 4.1(c) and
+5.2.1.
+
+So before a build is submitted for review:
+
+- Fetch https://developer.apple.com/app-store/review/guidelines/ and note its
+  "Last Updated" date. Read Apple's news posts since the last submission.
+- Go through it against the app as built: purchases (3.1.x), accounts and
+  deletion (5.1.1), data and third parties (5.1.2), privacy policy contents
+  (5.1.1(i)), names, icons and trademarks (4.1(c), 5.2.1), metadata
+  (2.3.x), and completeness and hardware (2.1).
+- Check that docs/app-store.md's review notes match what the build actually
+  does, and that every URL in the app and the listing still answers.
+- Tell him what was found in plain words before he submits, not after Apple
+  does.
+
 ## Things that cost real time to learn here
 
 **Every change needs a new version number.** The `version` job in
