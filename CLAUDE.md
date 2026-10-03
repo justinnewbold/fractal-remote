@@ -89,6 +89,23 @@ So: say what the build is for and wait. It is not covered by "he said keep
 going" earlier in a session, because the cost is per build rather than per
 task.
 
+**When there is a build, it is both phones, together.**
+
+> "Moving forward, let's always do android build and iOS build at the same
+> time if there's any changes because I have the exact same amount available
+> for each in Expo each month, which is 15."
+
+A build is only ever needed because the fingerprint moved, and the two
+platforms share almost everything that moves it — an iOS-only change (the
+watch) still moved Android's. A build on one platform alone strands the
+other: its testers keep a store copy that the next update no longer
+matches, and nobody notices until they ask why nothing has changed. That
+happened after the watch build, to the Play closed testers on 1.86.8.
+
+So once he says yes to a build, run mobile.yml with platform `all`
+(production, submit), so iOS goes to TestFlight and Android to the Play
+closed-testing track in the same run. The yes still has to come first.
+
 **And say so BEFORE a change that would need a build instead of an update.**
 
 > "You're supposed to let me know if anything you do would make it so that
