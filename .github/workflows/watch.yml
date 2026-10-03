@@ -86,15 +86,17 @@ jobs:
           set -e
           cd mobile/watch-ci/screens
           sips -g pixelWidth -g pixelHeight page-0.png
-          for f in page-0 page-1 page-2 page-3 tuner-on; do cp "$f.png" "watch-$f.png"; done
+          # JPEG, which carries no transparency: App Store Connect refuses a
+          # screenshot with an alpha channel, and the simulator's PNGs have one.
+          for f in page-0 page-1 page-2 page-3 tuner-on; do sips -s format jpeg -s formatOptions 95 "$f.png" --out "watch-$f.jpg" >/dev/null; done
           if ! gh release view watch-screenshots >/dev/null 2>&1; then
             gh release create watch-screenshots --title "Apple Watch screenshots (App Store)" \
               --notes "For App Store Connect, under the version's Apple Watch screenshots. Taken from the watch app in demo mode." \
               --prerelease --latest=false
           fi
-          gh release upload watch-screenshots watch-page-*.png watch-tuner-on.png --clobber
+          gh release upload watch-screenshots watch-page-*.jpg watch-tuner-on.jpg --clobber
           for f in watch-page-0 watch-page-1 watch-page-2 watch-page-3 watch-tuner-on; do
-            echo "https://github.com/${{ github.repository }}/releases/download/watch-screenshots/$f.png" >> "$GITHUB_STEP_SUMMARY"
+            echo "https://github.com/${{ github.repository }}/releases/download/watch-screenshots/$f.jpg" >> "$GITHUB_STEP_SUMMARY"
           done
 
   iphone:
