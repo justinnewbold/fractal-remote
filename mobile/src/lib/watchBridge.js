@@ -39,6 +39,15 @@ function link() {
 /** Whether this build can talk to a watch at all. */
 export const watchSupported = () => !!link()
 
+/** A watch is paired with this phone and has the watch app on it. False on any doubt. */
+export function watchPaired() {
+  try {
+    return link()?.isPaired?.() === true
+  } catch {
+    return false
+  }
+}
+
 /**
  * Kept by the stage screen: `picture` is the watch's state as that screen
  * sees it now (watch-link's watchState input, with the stage's own blocks as

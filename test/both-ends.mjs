@@ -308,6 +308,12 @@ export const AREAS = [
     buttons: [
       { does: 'open the block editor', web: 'Edit', phone: 'Edit' },
       { does: 'tap a tempo in', web: 'Tap', phone: 'Tap' },
+      {
+        does: 'put away the one-time note on using the Apple Watch',
+        web: null,
+        phone: 'Got it',
+        why: 'the watch pairs with an iPhone and works through the phone app; a browser has no watch to explain'
+      },
       /* The looper is a pedal tile in the chain at both ends now, not a
          labelled button, so it is held by its own tests in run.mjs and
          mobile.mjs rather than by name here. */
