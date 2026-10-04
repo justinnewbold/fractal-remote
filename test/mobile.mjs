@@ -3748,6 +3748,17 @@ export function run(test) {
     assert.match(app, /title="Which unit"[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost\)[\s\S]{0,500}await chooseHost\(row\.name\)[\s\S]{0,200}await read\(\)/, 'the website switches unit but does not read the new one')
   })
 
+  test('a live unit name opens Which unit when two units are on, like the demo', () => {
+    const app = read('mobile/App.js')
+    assert.match(app, /<LiveUnit\s+open=\{pickLive && !demo\}[\s\S]{0,200}hosts=\{link\.hosts\}\s+units=\{link\.units\}\s+chosen=\{link\.chosenHost\}/)
+    const sheet = read('mobile/src/components/LiveUnit.js')
+    assert.match(sheet, /unitChoices\(hosts, units, chosen\)/)
+    assert.match(sheet, /await chooseHost\(row\.name\)[\s\S]{0,160}onClose\(\)/, 'the sheet closes before the new unit is read')
+    const web = read('src/App.jsx')
+    assert.match(web, /if \(!isDemo\(\) && link\.role === 'remote' && link\.hosts\.length > 1\) \{\s*setSheet\('units'\)/)
+    assert.match(web, /open=\{sheet === 'units'\}[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost\)[\s\S]{0,600}await chooseHost\(row\.name\)[\s\S]{0,200}await read\(\)/)
+  })
+
   test('How many people counts from what is already kept, names nobody, and is his alone', async () => {
     const { usageSections } = await import('../shared/admin.mjs')
     const now = new Date(2026, 9, 4, 15, 0).getTime()
@@ -8464,7 +8475,7 @@ export function run(test) {
     const app = read('mobile/App.js')
     assert.match(
       app,
-      /onOpenUnit=\{\(\) => \(demo \? setPickUnit\(true\) : openSettings\('link'\)\)\}/,
+      /onOpenUnit=\{\(\) => \(demo \? setPickUnit\(true\) : link\.hosts\?\.length > 1 \? setPickLive\(true\) : openSettings\('link'\)\)\}/,
       'the unit name opens Setup in the demo again, with the five units two doors further in'
     )
     assert.match(app, /<DemoUnit open=\{pickUnit\} onClose=\{\(\) => setPickUnit\(false\)\}/, 'the picker is never drawn')

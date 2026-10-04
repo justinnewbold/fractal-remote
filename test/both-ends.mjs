@@ -1380,7 +1380,7 @@ export function run(test) {
   test('Phone & computer opens from the unit name and shows the same chain, at both ends', async () => {
     const phoneApp = read('mobile/App.js')
     const webApp = read('src/App.jsx').replace(/\s+/g, ' ')
-    assert.match(phoneApp, /onOpenUnit=\{\(\) => \(demo \? setPickUnit\(true\) : openSettings\('link'\)\)\}/, 'the phone’s unit name no longer opens Phone & computer')
+    assert.match(phoneApp, /onOpenUnit=\{\(\) => \(demo \? setPickUnit\(true\) : link\.hosts\?\.length > 1 \? setPickLive\(true\) : openSettings\('link'\)\)\}/, 'the phone’s unit name no longer opens Phone & computer')
     assert.match(read('mobile/src/screens/Settings.js'), /const \[page, setPage\] = useState\(startPage\)/, 'the phone’s Settings cannot open on a page')
     assert.match(webApp, /onOpenUnit=\{\(\) => \{.*setSetupPage\(isDemo\(\) \? 'demo' : 'link'\)/, 'the browser’s unit name no longer opens Phone & computer')
 
