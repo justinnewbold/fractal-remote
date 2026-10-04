@@ -12096,7 +12096,20 @@ test('after a chain change or a save the phone reads the chain once more when th
   assert.match(rig, /\}, CHAIN_FRESH_MS \+ 250\) \} /)
   assert.match(rig, /if \(state\.preset\?\.number !== number \|\| chainWrites \|\| presetBusy\(\)\) return/, 'the late read lands on another preset')
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
-  assert.match(lock.forgefx.tag, /\+gridgen$/, 'the computer app carries the server that keeps a read from before a placement')
+  assert.match(lock.forgefx.tag, /\+gridgen(\+|$)/, 'the computer app carries the server that keeps a read from before a placement')
+})
+
+/*
+ * "For some reason on the AM4, it's not reading the unit's tap tempo until you
+ * actually hit the tap button." ForgeFX had no AM4 tempo at all: GET /tempo
+ * answered 501. The server the Mac carries adds it on its own opt-in routes, so
+ * nothing that already reads /tempo or caps.tempo sees a difference.
+ */
+test('the computer app carries the server with the AM4 tempo on its own routes', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+am4tempo$/, 'the computer app does not carry the AM4 tempo')
+  assert.equal(lock.forgefx.branch, 'claude/am4-tempo')
+  assert.match(lock.forgefx.commit, /^[0-9a-f]{40}$/, 'the pin is not a full commit')
 })
 
 /*
