@@ -20,7 +20,7 @@ export default function Facts({ title, rows, onRow, detail }) {
           <div className="facts-row" key={`${row.label}-${i}`}>
             {row.label ? <dt>{row.label}</dt> : null}
             <dd>
-              {onRow && row.email ? (
+              {onRow && (row.email || row.id) ? (
                 <button type="button" className="facts-pick" onClick={() => onRow(row)}>
                   {row.value}
                 </button>

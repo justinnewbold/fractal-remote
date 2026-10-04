@@ -316,3 +316,80 @@ export function accountChoices(row) {
   if (row.waiting) return { give: false, takeBack: true }
   return { give: !row.unlocked, takeBack: !!row.unlocked }
 }
+
+/* ------------------------------------------------------------------------ */
+/* Messages from users                                                       */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * MESSAGES FROM USERS. "Everything people send through Troubleshooting →
+ * 'tell us', readable inside the app with the log they attached, instead of
+ * only arriving by email." The server is supabase/functions/owner-messages,
+ * with the same lock as grant-access. `action` is 'list', or 'message' with
+ * the report's `id` for one report and its log. Never throws.
+ */
+export async function messagesAction({ url, anonKey, token, action = 'list', id, fetchImpl }) {
+  if (!token) return { ok: false, message: 'Sign in first.' }
+  try {
+    const res = await (fetchImpl || globalThis.fetch)(`${url}/functions/v1/owner-messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: anonKey, Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action, id })
+    })
+    const body = await res.json().catch(() => ({}))
+    return { ...body, ok: Boolean(body?.ok), ...(body?.ok ? {} : { message: body?.message || `The server answered ${res.status}.` }) }
+  } catch (err) {
+    return { ok: false, message: `Could not reach the server (${err?.message || err}).` }
+  }
+}
+
+const KIND = { bug: 'Something broken', idea: 'Suggestion' }
+
+/** Where a report came from, in one line: the app, the unit, the phone. */
+const fromLine = (ctx = {}) =>
+  [
+    ctx.version ? `v${ctx.version}` : null,
+    ctx.macVersion ? `computer v${ctx.macVersion}` : null,
+    ctx.unit || null,
+    ctx.platform || ctx.os || null
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+/** The list: newest first, one row a report, tappable by its id. */
+export function messageSections(answer, now = Date.now()) {
+  if (!answer?.ok) return []
+  const list = Array.isArray(answer.messages) ? answer.messages : []
+  if (!list.length) return [{ title: 'Messages from users', rows: [{ label: '', value: 'Nobody has sent anything yet.' }] }]
+  return [
+    {
+      title: `Messages from users (${list.length})`,
+      rows: list.map((m) => {
+        const first = String(m.message || '').trim().replace(/\s+/g, ' ')
+        const head = `${KIND[m.kind] || 'Message'} · ${ago(m.created_at, now)}${m.has_log ? ' · log attached' : ''}`
+        const who = m.contact ? `Reply to ${m.contact}` : m.user_id ? 'From a signed-in account' : 'No reply address'
+        return {
+          label: '',
+          id: m.id,
+          value: `${head}\n${first.length > 140 ? `${first.slice(0, 140)}…` : first}\n${who}`
+        }
+      })
+    }
+  ]
+}
+
+/** One report opened: everything it carried, the log last, as text to read or copy. */
+export function messageDetail(m, now = Date.now()) {
+  if (!m) return null
+  const ctx = m.context && typeof m.context === 'object' ? m.context : {}
+  const facts = [
+    { label: 'What', value: KIND[m.kind] || 'Message' },
+    { label: 'When', value: `${dayOf(m.created_at)} (${ago(m.created_at, now)})` },
+    { label: 'Reply to', value: m.contact || 'They did not give an address' },
+    { label: 'From', value: fromLine(ctx) || 'Not said' },
+    ...(ctx.device ? [{ label: 'Device', value: String(ctx.device) }] : []),
+    ...(ctx.screen ? [{ label: 'Screen', value: String(ctx.screen) }] : []),
+    ...(ctx.lastError ? [{ label: 'Last error', value: String(ctx.lastError) }] : [])
+  ]
+  return { message: String(m.message || ''), facts, log: m.log ? String(m.log) : '' }
+}

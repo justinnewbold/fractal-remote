@@ -12977,3 +12977,18 @@ button.setup-account-card.out .setup-account-who {
 .chain-row.swipe-row-face {
   background: var(--panel);
 }
+
+/* Messages from users: what they wrote, then the log they sent with it. */
+.message-text {
+  white-space: pre-wrap;
+  margin: 0 0 0.75rem;
+}
+.message-log {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 0.75rem;
+  padding: 0.75rem;
+  border-radius: var(--r-1);
+  background: var(--panel);
+}

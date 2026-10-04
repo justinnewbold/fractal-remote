@@ -6,17 +6,12 @@ what it would take. Start from here when he says "let's do the next one".
 ## Justin's own tools (only on justinnewbold@icloud.com)
 
 Built so far: **Give someone access** with the **Customer lookup** under it, and
-**Sales at a glance**. Both in Settings, at the bottom. "Do number one and five
+**Sales at a glance**, and **Messages from users** (1.86.57). All in Settings → Developer. "Do number one and five
 for now, and then after that, let's put them on a list of to do sometime
 later."
 
 Still to do:
 
-- **Messages from users.** Everything people send through Troubleshooting →
-  "tell us", readable inside the app with the log they attached, instead of
-  only arriving by email. The messages already land in Supabase (see
-  `supabase/migrations/20260905_feedback_email.sql`); this is a page to read
-  them, behind the same lock as `supabase/functions/grant-access`.
 - **View as a new customer.** See the walkthrough, the paywall and the first
   screens exactly as a stranger sees them, without signing out or deleting
   anything. Useful for checking changes to those screens.

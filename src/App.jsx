@@ -111,6 +111,7 @@ import { isAdmin } from '../shared/admin.mjs'
 import AccessTool from './components/AccessTool'
 import SalesTool from './components/SalesTool'
 import AccountsTool from './components/AccountsTool'
+import MessagesTool from './components/MessagesTool'
 import { remember as rememberPreset, CHANGED as MARKS_CHANGED } from './lib/presetMarks'
 import { CHANGED as SETLISTS_CHANGED } from './lib/setlists'
 import { syncSetlists, setlistCloudReady } from './lib/cloudSetlists'
@@ -493,6 +494,7 @@ const SETUP_PAGES = {
   access: 'Give someone access',
   sales: 'Sales at a glance',
   accounts: 'Everyone with an account',
+  messages: 'Messages from users',
   /* The phone's sheet is titled Unlock; so is this page. */
   unlock: 'Unlock'
 }
@@ -513,7 +515,7 @@ const SETUP_PAGES = {
  * A map rather than an `if`, so the next nested page is a line rather than a
  * branch.
  */
-const SETUP_PARENT = { updates: 'about', demo: 'link', access: 'developer', sales: 'developer', accounts: 'developer' }
+const SETUP_PARENT = { updates: 'about', demo: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer' }
 const upFrom = (page) => SETUP_PARENT[page] || null
 const upLabel = (page) => `\u2039 ${SETUP_PAGES[upFrom(page)] || 'Settings'}`
 /** What the chat says when a request needed the model and the model is off. */
@@ -5114,7 +5116,7 @@ export default function App() {
               <>
                 <p className="silk-label setup-group">Developer</p>
                 <div className="setup-rows">
-                  <SetupRow key="developer" title="Developer" status="Access, sales, and accounts" onClick={() => setSetupPage('developer')} />
+                  <SetupRow key="developer" title="Developer" status="Access, sales, accounts and messages" onClick={() => setSetupPage('developer')} />
                 </div>
               </>
             ) : null}
@@ -5697,6 +5699,7 @@ export default function App() {
               <SetupRow key="access" title="Give someone access" status="Look someone up, or unlock them" onClick={() => setSetupPage('access')} />
               <SetupRow key="sales" title="Sales at a glance" status="Today, this week, all time" onClick={() => setSetupPage('sales')} />
               <SetupRow key="accounts" title="Everyone with an account" status="Who has signed up" onClick={() => setSetupPage('accounts')} />
+              <SetupRow key="messages" title="Messages from users" status="Bug reports and suggestions, with their logs" onClick={() => setSetupPage('messages')} />
             </div>
           </div>
         ) : null}
@@ -5728,6 +5731,16 @@ export default function App() {
             </button>
             <p className="setup-page-title">{SETUP_PAGES.sales}</p>
             <SalesTool />
+          </div>
+        ) : null}
+
+        {setupPage === 'messages' && isAdmin(link.account?.email) ? (
+          <div className="setup-page">
+            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('messages'))}>
+              {upLabel('messages')}
+            </button>
+            <p className="setup-page-title">{SETUP_PAGES.messages}</p>
+            <MessagesTool />
           </div>
         ) : null}
 
