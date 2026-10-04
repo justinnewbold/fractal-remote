@@ -102,6 +102,11 @@ other: its testers keep a store copy that the next update no longer
 matches, and nobody notices until they ask why nothing has changed. That
 happened after the watch build, to the Play closed testers on 1.86.8.
 
+**Native work that is finished but waiting for a build lives in docs/pending/**,
+as patches against main, so it is on GitHub rather than only in a container.
+When a build is agreed, apply them first (docs/pending/README.md says how) so
+the build carries them.
+
 **Keep count in docs/expo-builds.md.** "Keep track, that should leave us with
 13 builds left for this month." Every build started gets a row there with
 what it was for, and the line under each month says how many are left.

@@ -3,8 +3,8 @@ import { Keyboard, Text, TextInput, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { DEFAULT_PROJECT } from '../lib/project'
-import { supabaseClient } from '../lib/relay'
-import { accessAction, lookupRows } from '../lib/admin'
+import { resendConfirmation, sendPasswordReset, supabaseClient } from '../lib/relay'
+import { accessAction, lookupRows, signInHelp, signInHelpWords } from '../lib/admin'
 import Facts from './Facts'
 import Note from './Note'
 import Press from './Press'
@@ -27,6 +27,23 @@ export default function AccessTool() {
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(null)
   const [said, setSaid] = useState(null)
+  const [helped, setHelped] = useState(null)
+
+  /* Help them sign in: the email they are missing, for the address looked up. */
+  const help = async (kind) => {
+    const address = said.email
+    setBusy(kind)
+    setHelped(null)
+    try {
+      if (kind === 'confirm') await resendConfirmation(address)
+      else await sendPasswordReset(address)
+      setHelped(signInHelpWords(kind, address))
+    } catch (err) {
+      setHelped(signInHelpWords(kind, address, err?.message || String(err)))
+    } finally {
+      setBusy(null)
+    }
+  }
 
   const run = async (action) => {
     const address = email.trim()
@@ -38,6 +55,7 @@ export default function AccessTool() {
     Keyboard.dismiss()
     setBusy(action)
     setSaid(null)
+    setHelped(null)
     try {
       const { data } = await supabaseClient().auth.getSession()
       setSaid(
@@ -103,6 +121,27 @@ export default function AccessTool() {
       />
       <Press label={busy === 'revoke' ? 'Taking it back…' : 'Take it back'} height={TAP} disabled={!!busy} onPress={() => run('revoke')} />
       <Facts rows={lookupRows(said)} />
+      {signInHelp(said).confirm ? (
+        <Press
+          label={busy === 'confirm' ? 'Sending…' : 'Resend their "confirm your email" link'}
+          height={TAP}
+          disabled={!!busy}
+          onPress={() => help('confirm')}
+        />
+      ) : null}
+      {signInHelp(said).reset ? (
+        <Press
+          label={busy === 'reset' ? 'Sending…' : 'Send them a password reset'}
+          height={TAP}
+          disabled={!!busy}
+          onPress={() => help('reset')}
+        />
+      ) : null}
+      {helped ? (
+        <Note tone={helped.ok ? 'hint' : 'fault'} strong size={font.body}>
+          {helped.message}
+        </Note>
+      ) : null}
     </View>
   )
 }

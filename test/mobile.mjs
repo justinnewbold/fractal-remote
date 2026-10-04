@@ -3657,6 +3657,17 @@ export function run(test) {
     const copied = JSON.parse((server.match(/const ADMINS = (\[[^\]]*\])/) || [])[1]?.replace(/'/g, '"') || 'null')
     assert.deepEqual(copied, ADMINS, 'the server and the apps disagree about whose tools these are')
     assert.ok(server.indexOf('ADMINS.includes(fold(me.email))') < server.indexOf("rpc('account_details'"), 'the server looks somebody up before checking who is asking')
+    /* Help someone sign in: the one email they are missing, never both. */
+    const { signInHelp, signInHelpWords, messageSections } = await import('../shared/admin.mjs')
+    assert.deepEqual(signInHelp({ found: true, email: 'a@b.c', details: { confirmed: false } }), { confirm: true, reset: false }, 'an unconfirmed address is offered a reset it cannot use')
+    assert.deepEqual(signInHelp({ found: true, email: 'a@b.c', details: { confirmed: true } }), { confirm: false, reset: true })
+    assert.deepEqual(signInHelp({ found: false, email: 'a@b.c' }), { confirm: false, reset: false }, 'an address with no account is offered an email')
+    assert.match(signInHelpWords('reset', 'a@b.c').message, /a@b\.c/)
+    assert.equal(signInHelpWords('confirm', 'a@b.c', 'nope').ok, false)
+    const listed = messageSections({ ok: true, messages: [{ id: 'x', kind: 'bug', message: 'It broke', contact: 'a@b.c', has_log: true, created_at: Date.now() }] })
+    assert.match(listed[0].rows[0].value, /Something broken · today · log attached\nIt broke\nReply to a@b\.c/)
+    assert.equal(listed[0].rows[0].id, 'x', 'a message cannot be opened from the list')
+
     /* Messages from users: the same lock, checked before a single report is read. */
     const inbox = read('supabase/functions/owner-messages/index.ts')
     assert.deepEqual(JSON.parse((inbox.match(/const ADMINS = (\[[^\]]*\])/) || [])[1]?.replace(/'/g, '"') || 'null'), ADMINS, 'the messages server and the apps disagree about whose tools these are')

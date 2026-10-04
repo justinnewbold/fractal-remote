@@ -393,3 +393,28 @@ export function messageDetail(m, now = Date.now()) {
   ]
   return { message: String(m.message || ''), facts, log: m.log ? String(m.log) : '' }
 }
+
+/**
+ * HELP SOMEBODY SIGN IN, from the Customer lookup. "Resend their 'confirm
+ * your email' message, or send them a password reset. The lookup already says
+ * when somebody has not confirmed; this puts the button next to it."
+ *
+ * One button or the other, never both: somebody who has not confirmed cannot
+ * use a reset (Supabase sends nothing to an unconfirmed address), and somebody
+ * who has does not need the confirmation again. Both are the ordinary emails
+ * anyone can ask for from the sign-in screen, so nothing here needs the
+ * owner's key; the page only puts them where he is already looking.
+ */
+export function signInHelp(answer) {
+  const d = answer?.details
+  if (!answer?.found || !d || !answer.email) return { confirm: false, reset: false }
+  return { confirm: !d.confirmed, reset: !!d.confirmed }
+}
+
+/** What the page says after sending one. */
+export function signInHelpWords(kind, email, error) {
+  if (error) return { ok: false, message: `It did not send: ${error}` }
+  return kind === 'confirm'
+    ? { ok: true, message: `A new "confirm your email" link is on its way to ${email}.` }
+    : { ok: true, message: `A link to set a new password is on its way to ${email}.` }
+}

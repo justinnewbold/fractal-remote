@@ -1,0 +1,331 @@
+diff --git a/mobile/modules/fractal-watch/ios/FractalWatchModule.swift b/mobile/modules/fractal-watch/ios/FractalWatchModule.swift
+index 3eb8cea..cb82baa 100644
+--- a/mobile/modules/fractal-watch/ios/FractalWatchModule.swift
++++ b/mobile/modules/fractal-watch/ios/FractalWatchModule.swift
+@@ -1,4 +1,5 @@
+ import ExpoModulesCore
++import UIKit
+ import WatchConnectivity
+ 
+ /*
+@@ -16,9 +17,26 @@ import WatchConnectivity
+  * The phone does nothing with a request here: it goes to the JavaScript, which
+  * checks it against the last picture sent (watchCommand) before anything
+  * reaches the unit.
++ *
++ * WAKE ON TAP. "Do the wake on tap." A tap on the watch wakes this app in the
++ * background even with the phone locked in a pocket: Apple delivers the
++ * watch's message and gives the app a few seconds to answer it. Those
++ * seconds are stretched to WAKE_SECONDS with a background task, long
++ * enough for the JavaScript to rejoin the computer, send the change and
++ * send the watch its new picture, and then given back. A request that
++ * arrives before the JavaScript is listening (the app was launched by the
++ * tap itself) is held and handed over when it starts listening, rather than
++ * dropped. `wakes` tells the JavaScript this build does all that, so its help
++ * text can say the phone may be locked.
+  */
+ public class FractalWatchModule: Module {
+   private var link: WatchSessionLink?
++  private var listening = false
++  private var held: [(json: String, at: Date)] = []
++  private var awake: UIBackgroundTaskIdentifier = .invalid
++  private var sleepAt: DispatchWorkItem?
++  private static let WAKE_SECONDS: Double = 25
++  private static let HOLD_SECONDS: Double = 15
+ 
+   public func definition() -> ModuleDefinition {
+     Name("FractalWatch")
+@@ -27,10 +45,23 @@ public class FractalWatchModule: Module {
+ 
+     OnCreate {
+       self.link = WatchSessionLink { [weak self] json in
+-        self?.sendEvent("onCommand", ["json": json])
++        DispatchQueue.main.async { self?.arrived(json) }
+       }
+     }
+ 
++    OnStartObserving {
++      DispatchQueue.main.async {
++        self.listening = true
++        let fresh = self.held.filter { Date().timeIntervalSince($0.at) < Self.HOLD_SECONDS }
++        self.held = []
++        for item in fresh { self.sendEvent("onCommand", ["json": item.json]) }
++      }
++    }
++
++    OnStopObserving {
++      DispatchQueue.main.async { self.listening = false }
++    }
++
+     Function("sendState") { (json: String, urgent: Bool) in
+       self.link?.send(json, urgent: urgent)
+     }
+@@ -38,6 +69,42 @@ public class FractalWatchModule: Module {
+     Function("isPaired") { () -> Bool in
+       self.link?.paired ?? false
+     }
++
++    /* This build wakes on a watch tap (see WAKE ON TAP above). */
++    Function("wakes") { () -> Bool in
++      true
++    }
++  }
++
++  /* On the main queue: a request from the watch. Keep the app up long enough
++     to carry it out, then pass it on, or hold it for a moment. */
++  private func arrived(_ json: String) {
++    stayAwake()
++    if listening {
++      sendEvent("onCommand", ["json": json])
++    } else {
++      held.append((json, Date()))
++      if held.count > 8 { held.removeFirst(held.count - 8) }
++    }
++  }
++
++  private func stayAwake() {
++    if awake == .invalid {
++      awake = UIApplication.shared.beginBackgroundTask(withName: "watch tap") { [weak self] in self?.sleep() }
++    }
++    sleepAt?.cancel()
++    let later = DispatchWorkItem { [weak self] in self?.sleep() }
++    sleepAt = later
++    DispatchQueue.main.asyncAfter(deadline: .now() + Self.WAKE_SECONDS, execute: later)
++  }
++
++  private func sleep() {
++    sleepAt?.cancel()
++    sleepAt = nil
++    if awake != .invalid {
++      UIApplication.shared.endBackgroundTask(awake)
++      awake = .invalid
++    }
+   }
+ }
+ 
+diff --git a/mobile/src/lib/link.js b/mobile/src/lib/link.js
+index e7b8fde..a3aea6e 100644
+--- a/mobile/src/lib/link.js
++++ b/mobile/src/lib/link.js
+@@ -132,6 +132,31 @@ export function probeNow() {
+   schedule(0)
+ }
+ 
++/**
++ * Wait until the computer answers, asking at once, for at most `ms`.
++ *
++ * For a watch tap that woke the app with the phone locked: the connection to
++ * the computer went to sleep with the app, and the tap must not be sent into
++ * it before it is back. True when connected, false when it gave up.
++ */
++export function untilConnected(ms = 8000) {
++  if (state.link === 'connected') return Promise.resolve(true)
++  probeNow()
++  return new Promise((resolve) => {
++    let off = () => {}
++    const t = setTimeout(() => {
++      off()
++      resolve(false)
++    }, ms)
++    off = subscribeLink((s) => {
++      if (s.link !== 'connected') return
++      clearTimeout(t)
++      off()
++      resolve(true)
++    })
++  })
++}
++
+ function schedule(ms) {
+   if (timer) clearTimeout(timer)
+   timer = setTimeout(tick, ms)
+diff --git a/mobile/src/lib/watchBridge.js b/mobile/src/lib/watchBridge.js
+index 97fadb0..790d494 100644
+--- a/mobile/src/lib/watchBridge.js
++++ b/mobile/src/lib/watchBridge.js
+@@ -1,9 +1,11 @@
+ import { useEffect, useRef } from 'react'
++import { AppState } from 'react-native'
+ import { requireOptionalNativeModule } from 'expo'
+ 
+ import { blockColor } from './blockColors'
+ import { logDebug } from './debugLog'
+ import { idOf } from './device'
++import { probeNow, untilConnected } from './link'
+ import { shortBlock } from './shortName'
+ import { getState, writeBypass, writeScene, writeTuner } from './rig'
+ import { createWatchSender, watchCommand, watchState } from './watch-link'
+@@ -44,13 +46,27 @@ export const watchSupported = () => !!link()
+  * places that say it: the note the Play screen shows once, and Settings →
+  * Apple Watch, where it can be read again.
+  */
++export const WATCH_HOW_OPEN = 'Keep the Play screen open on your iPhone while you use the watch. The watch works through this app, so it stops when the app is closed or the phone locks.'
++export const WATCH_HOW_LOCKED = 'Leave this app on the Play screen, then lock your iPhone and put it away. Each tap on the watch wakes the phone for a moment to send it. The live tuner needs the phone open.'
+ export const WATCH_HOW = [
+-  'Keep the Play screen open on your iPhone while you use the watch. The watch works through this app, so it stops when the app is closed or the phone locks.',
++  WATCH_HOW_OPEN,
+   'Swipe up or down on the watch, or turn the Digital Crown, to move between its four pages: Scenes, Pedals, Presets and Tuner.',
+   'Tap a scene or a pedal to switch it. Presets has Previous and Next.',
+   'The tuner starts only when you tap it, and turns off when you leave its page.'
+ ]
+ 
++/** Whether this build wakes on a watch tap, so the phone may stay locked. */
++export function watchWakes() {
++  try {
++    return link()?.wakes?.() === true
++  } catch {
++    return false
++  }
++}
++
++/** How the watch is used, in this build's words: the first line depends on wake on tap. */
++export const watchHow = () => (watchWakes() ? [WATCH_HOW_LOCKED, ...WATCH_HOW.slice(1)] : WATCH_HOW)
++
+ /** A watch is paired with this phone and has the watch app on it. False on any doubt. */
+ export function watchPaired() {
+   try {
+@@ -88,14 +104,43 @@ export function useWatchBridge(picture, step) {
+       }
+       const cmd = watchCommand(msg, last.current)
+       if (!cmd) return
+-      logDebug('watch', cmd.do, JSON.stringify(cmd))
+-      if (cmd.do === 'hello') sender.current?.flush(last.current)
+-      else if (cmd.do === 'scene') writeScene(cmd.index)
+-      else if (cmd.do === 'pedal') writeBypass(cmd.id, !cmd.on)
+-      else if (cmd.do === 'preset') stepRef.current?.(cmd.step)
+-      else if (cmd.do === 'tuner') {
+-        if (getState().tunerOn !== cmd.on) writeTuner(cmd.on)
++      const asleep = AppState.currentState !== 'active'
++      logDebug('watch', cmd.do, `${JSON.stringify(cmd)}${asleep ? ' (woke the phone)' : ''}`)
++      if (cmd.do === 'hello') {
++        sender.current?.flush(last.current)
++        if (asleep) probeNow()
++        return
++      }
++      const run = () => {
++        if (cmd.do === 'scene') return writeScene(cmd.index)
++        if (cmd.do === 'pedal') return writeBypass(cmd.id, !cmd.on)
++        if (cmd.do === 'preset') return stepRef.current?.(cmd.step)
++        if (cmd.do === 'tuner' && getState().tunerOn !== cmd.on) return writeTuner(cmd.on)
++        return undefined
++      }
++      if (!asleep) {
++        run()
++        return
+       }
++      /*
++       * WOKEN BY THE TAP, the phone locked in a pocket. The connection to the
++       * computer slept with the app, so it is rejoined first, then the tap is
++       * sent, and tried once more if the first go found it still waking.
++       */
++      const pause = (ms) => new Promise((r) => setTimeout(r, ms))
++      /* The link can still say "connected" for a moment after waking, before
++         it notices the connection slept; the short pause lets it find out. */
++      probeNow()
++      pause(400)
++        .then(() => untilConnected())
++        .then(() => Promise.resolve(run()))
++        .catch(async (err) => {
++          logDebug('watch', 'first try failed while waking', err?.message || String(err))
++          await pause(1500)
++          await untilConnected()
++          return run()
++        })
++        .catch((err) => logDebug('watch', 'gave up', err?.message || String(err)))
+     })
+     return () => {
+       sub?.remove?.()
+diff --git a/mobile/src/screens/Settings.js b/mobile/src/screens/Settings.js
+index c0fe0f8..d1776af 100644
+--- a/mobile/src/screens/Settings.js
++++ b/mobile/src/screens/Settings.js
+@@ -46,7 +46,7 @@ import { mayDrive } from '../lib/unlock-rule'
+ import { useComputerElsewhere } from '../lib/useComputerElsewhere'
+ import { quitEditor } from '../lib/editors'
+ import { isAdmin } from '../lib/admin'
+-import { WATCH_HOW, watchPaired, watchSupported } from '../lib/watchBridge'
++import { watchHow, watchPaired, watchSupported } from '../lib/watchBridge'
+ import AccessTool from '../components/AccessTool'
+ import AccountsTool from '../components/AccountsTool'
+ import SalesTool from '../components/SalesTool'
+@@ -1036,7 +1036,7 @@ export default function Settings({
+             ))}
+ 
+             <Section>Using it</Section>
+-            {WATCH_HOW.map((line) => (
++            {watchHow().map((line) => (
+               <Text key={line} style={{ color: color.silk, fontSize: font.body, lineHeight: 24 }}>
+                 {line}
+               </Text>
+diff --git a/mobile/src/screens/Stage.js b/mobile/src/screens/Stage.js
+index 572f4c0..39eeff5 100644
+--- a/mobile/src/screens/Stage.js
++++ b/mobile/src/screens/Stage.js
+@@ -60,7 +60,7 @@ import tempoIcon from '../../assets/icons/tempo.png'
+ import tunerIcon from '../../assets/icons/tuner.png'
+ import { sceneColor } from '../lib/sceneColors'
+ import { shortBlock } from '../lib/shortName'
+-import { WATCH_HOW, useWatchBridge, watchPaired } from '../lib/watchBridge'
++import { useWatchBridge, watchHow, watchPaired } from '../lib/watchBridge'
+ import { findLooper } from '../lib/looper'
+ import UnlockOffer from '../components/UnlockOffer'
+ import Note from '../components/Note'
+@@ -751,7 +751,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
+         <Coach open={coach} stage={coachStage} onTry={tryCoach} onSkip={closeCoach} onDone={closeCoach} />
+         <Sheet open={watchTip && !coach} onClose={() => setWatchTip(false)} title="Your Apple Watch" note="Fractal Remote is on your watch">
+           <View style={{ gap: space.md }}>
+-            {WATCH_HOW.map((line) => (
++            {watchHow().map((line) => (
+               <Text key={line} style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
+                 {line}
+               </Text>
+diff --git a/mobile/targets/watch/PhoneLink.swift b/mobile/targets/watch/PhoneLink.swift
+index 20c9aa2..3bd4f00 100644
+--- a/mobile/targets/watch/PhoneLink.swift
++++ b/mobile/targets/watch/PhoneLink.swift
+@@ -77,7 +77,18 @@ final class PhoneLink: NSObject, ObservableObject {
+             return
+         }
+         guard let session, session.activationState == .activated, session.isReachable else { return }
+-        session.sendMessage(["json": command.json], replyHandler: nil, errorHandler: nil)
++        /*
++         * The message wakes the iPhone app in the background if it is asleep
++         * (the phone locked in a pocket), and the phone answers when it has it.
++         * Waking can miss the first time; one more try a second later.
++         */
++        let body: [String: Any] = ["json": command.json]
++        session.sendMessage(body, replyHandler: { _ in }, errorHandler: { _ in
++            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
++                guard session.isReachable else { return }
++                session.sendMessage(body, replyHandler: { _ in }, errorHandler: nil)
++            }
++        })
+     }
+ 
+     fileprivate func take(_ json: String?) {
+diff --git a/test/run.mjs b/test/run.mjs
+index aeeb156..3a18413 100644
+--- a/test/run.mjs
++++ b/test/run.mjs
+@@ -12212,7 +12212,11 @@ test('the stage screen keeps the watch, which is inert until the watch is built
+   const bridge = readSrc(new URL('../mobile/src/lib/watchBridge.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+   assert.match(bridge, /requireOptionalNativeModule\('FractalWatch'\)/, 'a build without the watch would fail to start')
+   assert.match(bridge, /const watch = link\(\) if \(!watch\) return undefined/)
+-  assert.match(bridge, /else if \(cmd\.do === 'scene'\) writeScene\(cmd\.index\) else if \(cmd\.do === 'pedal'\) writeBypass\(cmd\.id, !cmd\.on\) else if \(cmd\.do === 'preset'\) stepRef\.current\?\.\(cmd\.step\)/)
++  assert.match(bridge, /if \(cmd\.do === 'scene'\) return writeScene\(cmd\.index\) if \(cmd\.do === 'pedal'\) return writeBypass\(cmd\.id, !cmd\.on\) if \(cmd\.do === 'preset'\) return stepRef\.current\?\.\(cmd\.step\)/)
++  /* Wake on tap: a tap that woke the phone rejoins the computer before it is
++     sent, and the phone holds the app up long enough to send it. */
++  assert.match(bridge, /AppState\.currentState !== 'active'/, 'a tap that woke a locked phone is sent into a sleeping connection')
++  assert.match(bridge, /untilConnected\(\)/)
+   /* The tuner mutes the unit: the watch never turns it on by being swiped to. */
+   const pages = readSrc(new URL('../mobile/targets/watch/Pages.swift', import.meta.url), 'utf8')
+   assert.match(pages, /\.onDisappear \{\s*if state\.tuner\.on \{ link\.send\(\.tuner\(on: false\)\) \}/)
+@@ -12233,6 +12237,8 @@ test('the iPhone build carries the watch app and the phone’s half of the link'
+   assert.deepEqual(mod.apple.modules, ['FractalWatchModule'])
+   const swift = readSrc(new URL('../mobile/modules/fractal-watch/ios/FractalWatchModule.swift', import.meta.url), 'utf8')
+   assert.match(swift, /Name\("FractalWatch"\)/)
++  assert.match(swift, /beginBackgroundTask/, 'the phone is not kept awake long enough to send a watch tap')
++  assert.match(swift, /OnStartObserving/, 'a tap that launched the app is dropped before anything listens')
+   assert.match(swift, /Events\("onCommand"\)/)
+   assert.match(swift, /Function\("sendState"\) \{ \(json: String, urgent: Bool\) in/)
+   const bridge = readSrc(new URL('../mobile/src/lib/watchBridge.js', import.meta.url), 'utf8')

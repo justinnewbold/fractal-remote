@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { DEFAULT_PROJECT, supabaseClient } from '../lib/remote'
-import { accessAction, lookupRows } from '../../shared/admin.mjs'
+import { DEFAULT_PROJECT, resendConfirmation, sendPasswordReset, supabaseClient } from '../lib/remote'
+import { accessAction, lookupRows, signInHelp, signInHelpWords } from '../../shared/admin.mjs'
 import Facts from './Facts'
 
 /**
@@ -12,6 +12,23 @@ export default function AccessTool() {
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(null)
   const [said, setSaid] = useState(null)
+  const [helped, setHelped] = useState(null)
+
+  /* Help them sign in: the email they are missing, for the address looked up. */
+  const help = async (kind) => {
+    const address = said.email
+    setBusy(kind)
+    setHelped(null)
+    try {
+      if (kind === 'confirm') await resendConfirmation({ email: address })
+      else await sendPasswordReset({ email: address })
+      setHelped(signInHelpWords(kind, address))
+    } catch (err) {
+      setHelped(signInHelpWords(kind, address, err?.message || String(err)))
+    } finally {
+      setBusy(null)
+    }
+  }
 
   const run = async (action) => {
     const address = email.trim()
@@ -21,6 +38,7 @@ export default function AccessTool() {
     }
     setBusy(action)
     setSaid(null)
+    setHelped(null)
     try {
       const client = supabaseClient()
       const { data } = client ? await client.auth.getSession() : { data: null }
@@ -75,6 +93,25 @@ export default function AccessTool() {
         </button>
       </div>
       <Facts rows={lookupRows(said)} />
+      {signInHelp(said).confirm || signInHelp(said).reset ? (
+        <div className="history-actions">
+          {signInHelp(said).confirm ? (
+            <button type="button" className="chip" disabled={!!busy} onClick={() => help('confirm')}>
+              {busy === 'confirm' ? 'Sending…' : 'Resend their "confirm your email" link'}
+            </button>
+          ) : null}
+          {signInHelp(said).reset ? (
+            <button type="button" className="chip" disabled={!!busy} onClick={() => help('reset')}>
+              {busy === 'reset' ? 'Sending…' : 'Send them a password reset'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {helped ? (
+        <p className={helped.ok ? 'hint access-said' : 'save-error access-said'} role="status">
+          {helped.message}
+        </p>
+      ) : null}
     </div>
   )
 }
