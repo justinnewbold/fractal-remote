@@ -100,6 +100,7 @@ export default function Settings({
   onSignOut,
   onOpenGear,
   onReplay,
+  onViewAsCustomer,
   onOpenLog,
   onOpenFixes,
   onOpenReport,
@@ -603,6 +604,13 @@ export default function Settings({
             <SetupRow title="Everyone with an account" status="Who has signed up" onPress={() => setPage('accounts')} />
             <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
             <SetupRow title="What's live" status="Which version each piece is on" onPress={() => setPage('live')} />
+            {onViewAsCustomer ? (
+              <SetupRow
+                title="View as a new customer"
+                status="The walkthrough and the paywall, as a stranger sees them"
+                onPress={onViewAsCustomer}
+              />
+            ) : null}
           </View>
         </>
       ) : null}
