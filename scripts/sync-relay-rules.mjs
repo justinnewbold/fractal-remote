@@ -185,6 +185,8 @@ export const FILES = [
     target: '../mobile/src/lib/admin.js',
     render: (text) => banner('../shared/admin.mjs') + text.replace("from './owner-unlock.mjs'", "from './owner-unlock.js'")
   },
+  /* The metronome: where it clicks, and the number that switches each unit's. */
+  { source: '../shared/metronome.mjs', target: '../mobile/src/lib/metronome-rules.js' },
   /* What's live: which version each piece is on, for the Developer page. */
   { source: '../shared/whats-live.mjs', target: '../mobile/src/lib/whats-live.js' },
   /* Which program to close so the unit is free, named per unit. */

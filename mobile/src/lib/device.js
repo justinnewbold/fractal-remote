@@ -43,6 +43,7 @@ import { cableColumns, toWireCable, toWireCell } from './grid-plan'
 import { cleanPresetName, isEmptySlotName } from './unit.mjs'
 import { preferredEncoding, rememberEncoding } from './encoding'
 import { toNormalized } from './scale'
+import { unitMetronomeRequest } from './metronome-rules'
 
 export {
   EXCLUDED_BLOCKS,
@@ -555,6 +556,20 @@ export const cabState = (eid) => remoteRequest(`/preset/blocks/${eid}/cab`)
  * host cannot read their names yet. See irBanks in lib/cab-pick.js.
  */
 export const listIrBanks = () => remoteRequest('/cab/irs')
+
+/**
+ * The unit's own metronome, on or off: Setup → Global → Metronome.
+ *
+ * Which number that is depends on the unit (see shared/metronome.mjs), so a
+ * unit with none the app knows how to switch answers unsupported rather than
+ * having a guessed number written to it. Never in the demo: the simulation
+ * makes no sound, and nothing should be written on its behalf.
+ */
+export const setUnitMetronome = (slug, on) => {
+  const ask = unitMetronomeRequest(slug, on)
+  if (!ask || demoDevice()) return Promise.resolve({ ok: false, unsupported: !ask })
+  return told(`metronome ${on ? 'on' : 'off'}`, put(ask.path, ask.body))
+}
 
 /**
  * Set a discrete selector — a cab's mode, a slot's DynaCab — to an ordinal.

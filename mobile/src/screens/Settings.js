@@ -24,6 +24,8 @@ import {
 } from '../lib/relay'
 import { chooseHost } from '../lib/link'
 import { useRig } from '../lib/rig'
+import { setMetronome, useMetronome } from '../lib/metronome'
+import { PLACES as METRONOME_PLACES, metronomeNote, unitMetronome } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
 import {
@@ -174,6 +176,15 @@ export default function Settings({
   }, [link, page])
 
   const conflict = hostConflict(hosts, chosen)
+  const clickSetting = useMetronome()
+  const rigSlug = useRig((s) => s.deviceSlug)
+  const rigBpm = useRig((s) => s.bpm)
+  const [clickSaid, setClickSaid] = useState(null)
+  const changeClick = async (patch) => {
+    setClickSaid(null)
+    const said = await setMetronome(patch, rigSlug)
+    if (said?.ok === false && !said?.unsupported) setClickSaid('The unit didn’t take it. Check it’s connected, then try again.')
+  }
   /* What the Stop the looper row last did, in words, in place of its hint. */
   const allBlocks = useRig(ofAllBlocks)
   /* A unit whose switches can be read — see the Footswitches page. */
@@ -391,6 +402,9 @@ export default function Settings({
                 onPress={stopTheLooper}
               />
             ) : null}
+            {/* "A metronome that plays out loud that can be toggled on and
+                off in settings." On the unit, the phone or both. */}
+            <SetupRow title="Metronome" status={metronomeNote(clickSetting, rigSlug, rigBpm)} onPress={() => setPage('metronome')} />
           </Group>
 
           <Group title="Help">
@@ -958,6 +972,37 @@ export default function Settings({
           {/* Who this is signed in as moved to its own Account page, off the
               top of Settings: "change password" under "Phone & computer" was
               somewhere nobody would look. */}
+        </>
+      ) : null}
+
+      {/* ------------------------------------------------------- metronome */}
+      {page === 'metronome' ? (
+        <>
+          {head('Metronome', 'back')}
+          <View style={{ gap: space.md }}>
+            <Press
+              label={clickSetting.on ? 'Metronome on' : 'Metronome off'}
+              tone="live"
+              on={clickSetting.on}
+              height={TAP}
+              onPress={() => changeClick({ on: !clickSetting.on })}
+            />
+            <Section>Where it clicks</Section>
+            {METRONOME_PLACES.map((p) => (
+              <View key={p.key} style={{ gap: space.xs }}>
+                <Press label={p.label} tone="live" on={clickSetting.where === p.key} onPress={() => changeClick({ where: p.key })} />
+                <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{p.note}</Text>
+              </View>
+            ))}
+            {clickSaid ? <Note tone="fault">{clickSaid}</Note> : null}
+            <Note tone="hint">
+              {`It keeps the unit’s tempo${Number.isFinite(rigBpm) ? `, ${Math.round(rigBpm)} BPM right now` : ''}: tap tempo changes it. ${
+                unitMetronome(rigSlug)
+                  ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.'
+                  : 'This unit has no metronome the app can switch, so only the phone keeps time.'
+              } For now the phone flashes and taps; a sound comes with the next app update from the store.`}
+            </Note>
+          </View>
         </>
       ) : null}
 

@@ -9,6 +9,7 @@
 //   - parameter writes take real units ({"value": 9} for a 0-10 gain), not 0-1
 //   - /preset/store commits to a slot even when capabilities report supportsSave:false
 
+import { unitMetronomeRequest } from '../../shared/metronome.mjs'
 import { logDebug } from './debugLog.js'
 import { EXCLUDED_BLOCKS, safeParams } from './guardrails.js'
 import { paletteFor } from './palette.js'
@@ -668,6 +669,19 @@ export const setParam = (eid, paramId, value, param, continuous) => {
       continuous: continuous ?? preferredEncoding(eid, paramId)
     })
   })
+}
+
+/**
+ * The unit's own metronome, on or off: Setup → Global → Metronome.
+ *
+ * The phone's setUnitMetronome, here. Which number that is depends on the unit
+ * (shared/metronome.mjs); a unit with none the app knows answers unsupported,
+ * and the demo is never written to — the simulation makes no sound.
+ */
+export const setUnitMetronome = (slug, on) => {
+  const ask = unitMetronomeRequest(slug, on)
+  if (!ask || mock) return Promise.resolve({ ok: false, unsupported: !ask })
+  return request(ask.path, { method: ask.method, body: JSON.stringify(ask.body) })
 }
 
 /**
