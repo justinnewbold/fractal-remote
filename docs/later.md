@@ -6,7 +6,7 @@ what it would take. Start from here when he says "let's do the next one".
 ## Justin's own tools (only on justinnewbold@icloud.com)
 
 Built so far: **Give someone access** with the **Customer lookup** under it, and
-**Sales at a glance**, **Messages from users** (1.86.57), and the Customer lookup's **Help someone sign in** buttons (1.86.58), and **What's live** (1.86.59). All in Settings → Developer. "Do number one and five
+**Sales at a glance**, **Messages from users** (1.86.57), and the Customer lookup's **Help someone sign in** buttons (1.86.58), and **What's live** (1.86.59). Delete account works on the website and the Mac app too (1.86.60). All in Settings → Developer. "Do number one and five
 for now, and then after that, let's put them on a list of to do sometime
 later."
 
