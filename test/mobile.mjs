@@ -3668,6 +3668,18 @@ export function run(test) {
     assert.match(listed[0].rows[0].value, /Something broken · today · log attached\nIt broke\nReply to a@b\.c/)
     assert.equal(listed[0].rows[0].id, 'x', 'a message cannot be opened from the list')
 
+    /* What's live: the ledger read as it is written, and a phone behind the website said so. */
+    const live = await import('../shared/whats-live.mjs')
+    const ledger = live.readLedger(read('docs/expo-builds.md'))
+    assert.ok(ledger.ios?.version && ledger.android?.version, 'What\u2019s live cannot read the build ledger')
+    assert.match(ledger.left || '', /\d+ iOS, \d+ Android/, 'What\u2019s live lost the builds-left line')
+    const sample = { site: { value: { version: '1.86.60', commit: 'abc1234', built: '2026-10-04 03:00' } }, release: { value: { tag_name: 'v1.86.59' } }, ledger: { value: read('docs/expo-builds.md') } }
+    const behind = live.liveRows(sample, { kind: 'phone', version: '1.86.58' })
+    assert.match(behind[0].value, /^v1\.86\.58, behind v1\.86\.60/, 'a phone behind the newest update is not told')
+    assert.match(live.liveRows(sample, { kind: 'phone', version: '1.86.60' })[0].value, /up to date/)
+    assert.match(live.liveRows({ site: { failed: 'offline' } }, {})[0].value, /Couldn't read it \(offline\)/, 'a source that failed reads as a version')
+    assert.match(read('vite.config.js'), /fileName: 'version\.json'/, 'the website stopped saying which version it is')
+
     /* Messages from users: the same lock, checked before a single report is read. */
     const inbox = read('supabase/functions/owner-messages/index.ts')
     assert.deepEqual(JSON.parse((inbox.match(/const ADMINS = (\[[^\]]*\])/) || [])[1]?.replace(/'/g, '"') || 'null'), ADMINS, 'the messages server and the apps disagree about whose tools these are')
@@ -8723,7 +8735,7 @@ export function run(test) {
       'the Back button and the swipe can disagree about where one step up is'
     )
     /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer. */
-    assert.match(set, /const PARENT = \{ offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer' \}/, 'a page goes back somewhere it did not come from')
+    assert.match(set, /const PARENT = \{ offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')
