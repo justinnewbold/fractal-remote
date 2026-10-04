@@ -36,6 +36,20 @@ final class PhoneLink: NSObject, ObservableObject {
     @Published private(set) var state: WatchState?
     /** Whether the phone can be asked anything right now. */
     @Published private(set) var reachable = false
+    /*
+     * Whether the phone has been out of reach long enough to say so.
+     *
+     * "It basically keeps losing connection just for about a second saying
+     * please open the app on your phone." Raising the wrist wakes the watch
+     * app with the link not yet up, and Apple's reachability flickers off and
+     * on for a moment while it comes back. Each flicker used to swap the
+     * whole screen for "Open Fractal Remote on your iPhone". Now the last
+     * picture stays up, marked as reconnecting, and only a phone that has
+     * been gone for `grace` seconds gets the message.
+     */
+    @Published private(set) var away = false
+    private let grace: Double = 8
+    private var awayTimer: Task<Void, Never>?
     let demo: Bool
 
     private let session: WCSession? = WCSession.isSupported() ? WCSession.default : nil
@@ -52,6 +66,9 @@ final class PhoneLink: NSObject, ObservableObject {
         }
         session?.delegate = self
         session?.activate()
+        /* Before anything has been heard, the picture the phone last left. */
+        take(session?.receivedApplicationContext["state"] as? String)
+        reach(false)
     }
 
     func send(_ command: WatchCommand) {
@@ -71,8 +88,25 @@ final class PhoneLink: NSObject, ObservableObject {
     fileprivate func reach(_ now: Bool) {
         let was = reachable
         reachable = now
-        /* Just come into reach: ask for the picture rather than wait for a change. */
-        if now && !was { send(.hello) }
+        awayTimer?.cancel()
+        if now {
+            away = false
+            /* Just come into reach: ask for the picture rather than wait for a change. */
+            if !was { send(.hello) }
+        } else {
+            let wait = UInt64(grace * 1_000_000_000)
+            awayTimer = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: wait)
+                guard !Task.isCancelled, let self, !self.reachable else { return }
+                self.away = true
+            }
+        }
+    }
+
+    /* Asked again whenever the app comes back to the front: the wrist raised. */
+    func woke() {
+        guard !demo, let session else { return }
+        reach(session.activationState == .activated && session.isReachable)
     }
 }
 

@@ -1028,6 +1028,13 @@ export default function Settings({
               </Text>
             ))}
 
+            <Section>Keeping it on screen</Section>
+            {WATCH_KEEP.map((line) => (
+              <Text key={line} style={{ color: color.silk, fontSize: font.body, lineHeight: 24 }}>
+                {line}
+              </Text>
+            ))}
+
             <Section>Using it</Section>
             {WATCH_HOW.map((line) => (
               <Text key={line} style={{ color: color.silk, fontSize: font.body, lineHeight: 24 }}>
@@ -1156,6 +1163,19 @@ const WATCH_SETUP = [
   'There is nothing separate to download. The watch app comes with Fractal Remote, and on most watches it installs by itself. On the watch it is called Fractal.',
   'If it is not on your watch: open the Watch app on this iPhone, scroll down to Available Apps, and tap Install next to Fractal Remote.',
   'It needs watchOS 10 or later, and the watch paired with this iPhone.'
+]
+
+/*
+ * KEEPING IT ON THE WRIST. "It doesn't stay on very long, and then it'll
+ * disappear." A watch goes back to the clock about two minutes after the
+ * wrist drops, whatever the app, and dims sooner. Apple keeps both as the
+ * wearer's own settings — no app may hold the screen on by itself — so the
+ * help is telling him where they are.
+ */
+const WATCH_KEEP = [
+  'On this iPhone, open the Watch app, then General, then Return to Clock. Scroll down, tap Fractal, choose Custom, and set it to After 1 hour. The watch then comes back to Fractal, not the clock, every time you raise your wrist.',
+  'In the same Watch app, under Display & Brightness, turn on Always On. Fractal stays on screen, dimmed, while your wrist is down.',
+  'Also under Display & Brightness, set Wake Duration to Wake for 70 Seconds, so a tap on the screen keeps it bright for longer.'
 ]
 
 function SetupRow({ title, status, onPress }) {
