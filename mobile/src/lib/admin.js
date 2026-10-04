@@ -239,6 +239,103 @@ export function salesSections(answer, now = Date.now()) {
   return sections
 }
 
+/** Where somebody used it, in four plain places: the kinds above folded together. */
+const PLACES = ['iPhone app', 'Android app', 'Computer app', 'Website']
+const placeOf = (kind) => {
+  if (kind === 'iphone-app') return 'iPhone app'
+  if (kind === 'android-app') return 'Android app'
+  if (kind === 'computer') return 'Computer app'
+  if (String(kind || '').startsWith('web-')) return 'Website'
+  return null
+}
+/** RevenueCat's platform ("iOS", "Android", …) as one of the same places. */
+const placeOfPlatform = (platform) => {
+  if (/ios|iphone|ipad/i.test(String(platform || ''))) return 'iPhone app'
+  if (/android/i.test(String(platform || ''))) return 'Android app'
+  return null
+}
+/** Newest first by version number, so 1.86.62 sits above 1.86.9. */
+const byVersion = (a, b) => {
+  const pa = String(a).split('.').map(Number)
+  const pb = String(b).split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+    const d = (pb[i] || 0) - (pa[i] || 0)
+    if (d) return d
+  }
+  return 0
+}
+
+/**
+ * HOW MANY PEOPLE, as sections of facts.
+ *
+ * "Is there a way for me to see how many users are actively using the app?"
+ * `answer` is grant-access's 'usage': one entry per account, naming nobody,
+ * with when they last signed in, when each signed-in device last checked in,
+ * and what RevenueCat last saw. Somebody counts as using it on the newest of
+ * those. "Today" is the start of this device's day, so it is Justin's today.
+ *
+ * Nothing in here was recorded for this: no hours, no screens. A phone left
+ * open and signed in checks in about once an hour, which is as fine-grained as
+ * it gets — and the note at the bottom says so, so nobody reads more into it.
+ */
+export function usageSections(answer, now = Date.now()) {
+  if (!answer?.ok) return []
+  const people = Array.isArray(answer.people) ? answer.people : []
+  const at = (x) => dateOf(x)?.getTime() || 0
+  const today = dayStart(new Date(now))
+  const week = now - 7 * 86400000
+  const month = now - 30 * 86400000
+
+  const latest = people.map((p) => {
+    const devices = Array.isArray(p?.devices) ? p.devices : []
+    return Math.max(at(p?.lastSignIn), at(p?.seen?.last), ...devices.map((d) => at(d?.last_seen)))
+  })
+  const since = (t) => latest.filter((l) => l >= t).length
+
+  const used = [
+    { label: 'Today', value: String(since(today)) },
+    { label: 'Last 7 days', value: String(since(week)) },
+    { label: 'Last 30 days', value: String(since(month)) },
+    { label: 'Everyone with an account', value: String(answer.total || people.length) }
+  ]
+
+  /* Each person once per place, however many sessions they have there. */
+  const places = Object.fromEntries(PLACES.map((p) => [p, 0]))
+  const versions = {}
+  for (const p of people) {
+    const here = new Set()
+    for (const d of Array.isArray(p?.devices) ? p.devices : []) {
+      const place = placeOf(d?.kind)
+      if (place && at(d?.last_seen) >= month) here.add(place)
+    }
+    if (at(p?.seen?.last) >= month) {
+      const place = placeOfPlatform(p.seen.platform)
+      if (place) here.add(place)
+      if (p.seen.version) versions[p.seen.version] = (versions[p.seen.version] || 0) + 1
+    }
+    for (const place of here) places[place] += 1
+  }
+
+  const sections = [
+    { title: 'People who used it', rows: used },
+    { title: 'Where, in the last 30 days', rows: PLACES.map((p) => ({ label: p, value: String(places[p]) })) }
+  ]
+  const list = Object.keys(versions).sort(byVersion)
+  if (list.length) {
+    sections.push({
+      title: 'Phone app versions, last 30 days',
+      rows: list.map((v) => ({ label: v, value: `${versions[v]} ${versions[v] === 1 ? 'person' : 'people'}` }))
+    })
+  }
+  const notes = [
+    'Counted from when each account last signed in or last opened the app. Nothing new is recorded for this, so there are no hours or screens to show.',
+    'Somebody using two phones is still one person. Somebody using the website without signing in is not counted.'
+  ]
+  if ((answer.total || 0) > people.length) notes.push(`Only the newest ${people.length} of ${answer.total} accounts were counted.`)
+  sections.push({ title: 'Note', rows: notes.map((n) => ({ label: '', value: n })) })
+  return sections
+}
+
 /**
  * Everyone with an account, as sections of facts.
  *

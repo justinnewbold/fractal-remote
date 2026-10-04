@@ -12,6 +12,7 @@
  *   grant   give it the unlock for good (a RevenueCat granted entitlement)
  *   revoke  take back an unlock given here — a purchase is not touched
  *   sales   every sale so far, for Sales at a glance
+ *   usage   how many people used it lately, for How many people
  *
  * All three by email also answer with the Customer lookup: when they signed
  * up, whether they confirmed, what they paid for and where, which devices
@@ -231,6 +232,45 @@ async function sales() {
 }
 
 /*
+ * HOW MANY PEOPLE. "Is there a way for me to see how many users are actively
+ * using the app?" Counted from what the server already keeps about every
+ * account, and nothing new: when they last signed in, when each of their
+ * signed-in devices last checked in (auth.sessions, through account_details),
+ * and the app version RevenueCat last saw. No hours, no screens, nothing
+ * recorded while the app is in use: the privacy policy says there is no
+ * analytics, and this keeps that true.
+ *
+ * The answer names nobody. The phone counts it (usageSections in
+ * shared/admin.mjs), in Justin's own time zone.
+ */
+const MOST_PEOPLE = 500
+const MONTH = 30 * 86400000
+
+async function usage() {
+  const all = ((await rpc('owner_accounts', {})) || {}) as { total?: number; accounts?: { email: string }[] }
+  /* Not the hidden accounts the old pairing codes stood for: devices, not people. */
+  const listed = all.accounts || []
+  const everyone = listed.filter((a) => a?.email && !/@pair\.fractal\.newbold\.cloud$/i.test(a.email))
+  const people = everyone.slice(0, MOST_PEOPLE)
+  const found = await eachFew(people, 8, (a) => rpc('account_details', { address: a.email }) as Promise<Record<string, any> | null>)
+  const when = (at: unknown) => (at ? new Date(String(at)).getTime() || 0 : 0)
+  const out = await eachFew(found, 5, async (d) => {
+    if (!d?.id) return null
+    const devices = Array.isArray(d.devices) ? d.devices : []
+    const latest = Math.max(when(d.last_sign_in), ...devices.map((x: any) => when(x?.last_seen)))
+    /* RevenueCat only for anyone about this month: the version is only counted for them. */
+    const seen = Date.now() - latest < MONTH || !latest ? await lastSeen(String(d.id)) : null
+    return { lastSignIn: d.last_sign_in ?? null, devices, seen }
+  })
+  return {
+    ok: true,
+    total: Math.max(people.length, (Number(all.total) || 0) - (listed.length - everyone.length)),
+    counted: out.filter(Boolean).length,
+    people: out.filter(Boolean)
+  }
+}
+
+/*
  * "Is there any way we can send an email to them when I grant access to
  * somebody?"
  *
@@ -364,14 +404,15 @@ Deno.serve(async (req: Request) => {
   }
   const action = String(input.action || 'check')
   const email = String(input.email || '').trim().toLowerCase()
-  if (internal ? action !== 'claim' : !['check', 'grant', 'revoke', 'sales', 'accounts'].includes(action)) {
+  if (internal ? action !== 'claim' : !['check', 'grant', 'revoke', 'sales', 'accounts', 'usage'].includes(action)) {
     return json({ ok: false, message: 'Unknown action.' }, 400)
   }
-  if (action !== 'sales' && action !== 'accounts' && !email.includes('@')) return json({ ok: false, message: 'Type the email address they signed up with.' }, 400)
+  if (!['sales', 'accounts', 'usage'].includes(action) && !email.includes('@')) return json({ ok: false, message: 'Type the email address they signed up with.' }, 400)
   if (!env('REVENUECAT_SECRET')) return json({ ok: false, message: 'The server has no RevenueCat key set.' }, 500)
 
   try {
     if (action === 'sales') return json(await sales())
+    if (action === 'usage') return json(await usage())
     /* "How do I see a list of who has set up an account?" */
     if (action === 'accounts') return json({ ok: true, ...((await rpc('owner_accounts', {})) as Record<string, unknown>) })
 

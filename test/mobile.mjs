@@ -3656,7 +3656,13 @@ export function run(test) {
     const server = read('supabase/functions/grant-access/index.ts')
     const copied = JSON.parse((server.match(/const ADMINS = (\[[^\]]*\])/) || [])[1]?.replace(/'/g, '"') || 'null')
     assert.deepEqual(copied, ADMINS, 'the server and the apps disagree about whose tools these are')
-    assert.ok(server.indexOf('ADMINS.includes(fold(me.email))') < server.indexOf("rpc('account_details'"), 'the server looks somebody up before checking who is asking')
+    /* Inside the handler, where the order is the order it runs in: the helpers
+       above it (sales, usage) only run when the handler calls them. */
+    const handler = server.slice(server.indexOf('Deno.serve('))
+    const lock = handler.indexOf('ADMINS.includes(fold(me.email))')
+    for (const step of ["rpc('account_details'", 'await sales()', 'await usage()', "rpc('owner_accounts'"]) {
+      assert.ok(lock > 0 && handler.includes(step) && lock < handler.indexOf(step), `the server does ${step} before checking who is asking`)
+    }
     /* Help someone sign in: the one email they are missing, never both. */
     const { signInHelp, signInHelpWords, messageSections } = await import('../shared/admin.mjs')
     assert.deepEqual(signInHelp({ found: true, email: 'a@b.c', details: { confirmed: false } }), { confirm: true, reset: false }, 'an unconfirmed address is offered a reset it cannot use')
@@ -3701,6 +3707,49 @@ export function run(test) {
     assert.equal(down.ok, false)
     const signedOut = await accessAction({ url: 'x', anonKey: 'k', token: null, action: 'check', email: 'a@b.c' })
     assert.equal(signedOut.message, 'Sign in first.')
+  })
+
+  test('How many people counts from what is already kept, names nobody, and is his alone', async () => {
+    const { usageSections } = await import('../shared/admin.mjs')
+    const now = new Date(2026, 9, 4, 15, 0).getTime()
+    const hoursAgo = (h) => new Date(now - h * 3600000).toISOString()
+    const daysAgo = (d) => new Date(now - d * 86400000).toISOString()
+    const answer = {
+      ok: true,
+      total: 5,
+      people: [
+        /* On the iPhone app an hour ago, and the website last week: one person, two places. */
+        { lastSignIn: daysAgo(40), devices: [{ kind: 'iphone-app', last_seen: hoursAgo(1) }, { kind: 'web-mac', last_seen: daysAgo(5) }], seen: { version: '1.86.62', platform: 'iOS', last: hoursAgo(1) } },
+        /* Android, three days ago, known only to RevenueCat. */
+        { lastSignIn: daysAgo(60), devices: [], seen: { version: '1.86.9', platform: 'Android', last: daysAgo(3) } },
+        /* The computer app, twenty days ago. */
+        { lastSignIn: daysAgo(20), devices: [{ kind: 'computer', last_seen: daysAgo(20) }], seen: null },
+        /* Not since the summer. */
+        { lastSignIn: daysAgo(90), devices: [], seen: { version: '1.86.1', platform: 'iOS', last: daysAgo(90) } }
+      ]
+    }
+    const sections = usageSections(answer, now)
+    const rows = (title) => Object.fromEntries((sections.find((s) => s.title === title)?.rows || []).map((r) => [r.label, r.value]))
+    assert.deepEqual(rows('People who used it'), { Today: '1', 'Last 7 days': '2', 'Last 30 days': '3', 'Everyone with an account': '5' })
+    assert.deepEqual(rows('Where, in the last 30 days'), { 'iPhone app': '1', 'Android app': '1', 'Computer app': '1', Website: '1' })
+    /* Newest version first, by number not by text, and the summer's left out. */
+    const versions = sections.find((s) => s.title === 'Phone app versions, last 30 days').rows
+    assert.deepEqual(versions.map((r) => r.label), ['1.86.62', '1.86.9'])
+    assert.equal(versions[0].value, '1 person')
+    /* It says what it is counted from, and that hours are not. */
+    assert.match(JSON.stringify(sections.find((s) => s.title === 'Note')), /no hours or screens/)
+    assert.deepEqual(usageSections({ ok: false, message: 'Not allowed.' }), [])
+
+    /* The answer carries no address: the server never puts one in it. */
+    const server = read('supabase/functions/grant-access/index.ts')
+    const body = server.slice(server.indexOf('async function usage()'), server.indexOf('Deno.serve('))
+    assert.match(body, /return \{ lastSignIn: d\.last_sign_in \?\? null, devices, seen \}/, 'the usage answer carries more than counts need')
+
+    /* Both ends draw it only for him, from the Developer page. */
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'usage' && isAdmin\(account\?\.email\) \?/)
+    assert.match(read('src/App.jsx'), /\{setupPage === 'usage' && isAdmin\(link\.account\?\.email\) \?/)
+    assert.match(read('mobile/src/components/UsageTool.js'), /action: 'usage'/)
+    assert.match(read('src/components/UsageTool.jsx'), /action: 'usage'/)
   })
 
   test('Customer lookup and Sales at a glance say what happened, in his words', async () => {
@@ -8735,7 +8784,7 @@ export function run(test) {
       'the Back button and the swipe can disagree about where one step up is'
     )
     /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer. */
-    assert.match(set, /const PARENT = \{ offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer' \}/, 'a page goes back somewhere it did not come from')
+    assert.match(set, /const PARENT = \{ offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')
