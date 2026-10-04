@@ -3657,6 +3657,13 @@ export function run(test) {
     const copied = JSON.parse((server.match(/const ADMINS = (\[[^\]]*\])/) || [])[1]?.replace(/'/g, '"') || 'null')
     assert.deepEqual(copied, ADMINS, 'the server and the apps disagree about whose tools these are')
     assert.ok(server.indexOf('ADMINS.includes(fold(me.email))') < server.indexOf("rpc('account_details'"), 'the server looks somebody up before checking who is asking')
+    /* Messages from users: the same lock, checked before a single report is read. */
+    const inbox = read('supabase/functions/owner-messages/index.ts')
+    assert.deepEqual(JSON.parse((inbox.match(/const ADMINS = (\[[^\]]*\])/) || [])[1]?.replace(/'/g, '"') || 'null'), ADMINS, 'the messages server and the apps disagree about whose tools these are')
+    assert.ok(inbox.indexOf('ADMINS.includes(fold(me.email))') > 0 && inbox.indexOf('ADMINS.includes(fold(me.email))') < inbox.indexOf('await rows('), 'the messages server reads reports before checking who is asking')
+    assert.ok(!/method: 'DELETE'|method: 'PATCH'/.test(inbox), 'the messages page can change or delete a report')
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'messages' && isAdmin\(account\?\.email\) \?/)
+    assert.match(read('src/App.jsx'), /\{setupPage === 'messages' && isAdmin\(link\.account\?\.email\) \?/)
     assert.match(server, /actions\/grant_entitlement/, 'the server does not grant through RevenueCat')
     assert.match(server, /actions\/revoke_granted_entitlement/, 'the server cannot take a grant back')
     const sql = read('supabase/migrations/20260923_account_for_email.sql')
@@ -8705,7 +8712,7 @@ export function run(test) {
       'the Back button and the swipe can disagree about where one step up is'
     )
     /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer. */
-    assert.match(set, /const PARENT = \{ offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer' \}/, 'a page goes back somewhere it did not come from')
+    assert.match(set, /const PARENT = \{ offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')

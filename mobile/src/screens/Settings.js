@@ -50,6 +50,7 @@ import { WATCH_HOW, watchPaired, watchSupported } from '../lib/watchBridge'
 import AccessTool from '../components/AccessTool'
 import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
+import MessagesTool from '../components/MessagesTool'
 import Lamp from '../components/Lamp'
 import { ChainCards, TipCard } from '../components/Walk'
 import { linkChain } from '../lib/link-chain'
@@ -264,7 +265,7 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer' }
+  const PARENT = { offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer' }
   const UP_LABEL = { link: '‹ Phone & computer', developer: '‹ Developer' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
@@ -428,7 +429,7 @@ export default function Settings({
               menu called developer". */}
           {isAdmin(account?.email) ? (
             <Group title="Developer">
-              <SetupRow title="Developer" status="Access, sales, and accounts" onPress={() => setPage('developer')} />
+              <SetupRow title="Developer" status="Access, sales, accounts and messages" onPress={() => setPage('developer')} />
             </Group>
           ) : null}
 
@@ -599,6 +600,7 @@ export default function Settings({
             <SetupRow title="Give someone access" status="Look someone up, or unlock them" onPress={() => setPage('access')} />
             <SetupRow title="Sales at a glance" status="Today, this week, all time" onPress={() => setPage('sales')} />
             <SetupRow title="Everyone with an account" status="Who has signed up" onPress={() => setPage('accounts')} />
+            <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
           </View>
         </>
       ) : null}
@@ -944,6 +946,14 @@ export default function Settings({
         <>
           {head('Sales at a glance', 'back')}
           <SalesTool />
+        </>
+      ) : null}
+
+      {/* -------------------------------------------------------- messages */}
+      {page === 'messages' && isAdmin(account?.email) ? (
+        <>
+          {head('Messages from users', 'back')}
+          <MessagesTool />
         </>
       ) : null}
 

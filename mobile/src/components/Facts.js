@@ -31,13 +31,13 @@ export default function Facts({ title, rows, onRow }) {
       ) : null}
       <View style={{ borderRadius: radius.md, backgroundColor: color.panel, paddingHorizontal: space.md }}>
         {rows.map((row, i) => {
-          const tappable = !!(onRow && row.email)
+          const tappable = !!(onRow && (row.email || row.id))
           const Row = tappable ? Pressable : View
           return (
             <Row
               key={`${row.label}-${i}`}
               {...(tappable
-                ? { onPress: () => onRow(row), accessibilityRole: 'button', accessibilityHint: 'Opens this person' }
+                ? { onPress: () => onRow(row), accessibilityRole: 'button', accessibilityHint: row.id ? 'Opens this message' : 'Opens this person' }
                 : {})}
               style={tappable ? ({ pressed }) => look(i, pressed) : look(i, false)}
             >
