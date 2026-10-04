@@ -294,7 +294,13 @@ async function collectAnswers({ path, host = null, windowMs, sleep }) {
 async function readUnits({ windowMs, sleep }) {
   const once = hosts.filter((name, i) => hosts.indexOf(name) === i && hosts.lastIndexOf(name) === i)
   const found = await Promise.all(
-    once.map(async (name) => [name, await unitFrom(await collectAnswers({ path: '/healthz', host: name, windowMs, sleep }), decode)])
+    once.map(async (name) => {
+      const [health, device] = await Promise.all([
+        collectAnswers({ path: '/healthz', host: name, windowMs, sleep }),
+        collectAnswers({ path: '/device', host: name, windowMs, sleep })
+      ])
+      return [name, await unitFrom(health, decode, device)]
+    })
   )
   return Object.fromEntries(found.filter(([, unit]) => unit))
 }

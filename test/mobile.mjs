@@ -172,7 +172,7 @@ async function rigOnTheBench(over = {}) {
   }
   /* The catalog the pedals are named from before the chain is read; see lib/chain-outline. */
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
-  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js']) {
+  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -3718,6 +3718,17 @@ export function run(test) {
     /* Two answers mean a computer too old to be addressed: whose is whose cannot be said. */
     assert.equal(await unitFrom([JSON.stringify({ ok: true, device: 'FM3' }), JSON.stringify({ ok: true, device: 'AM4' })], raw), null)
     assert.equal(await unitFrom([], raw), null)
+    /* "It's just showing both listed as FM3": an AM4's computer says FM3 on /healthz
+       (the profile it started with) and AM4 on /device (the unit it detected). */
+    assert.deepEqual(
+      await unitFrom([JSON.stringify({ ok: true, device: 'FM3' })], raw, [JSON.stringify({ model: 'AM4', modelId: 21 })]),
+      { model: 'AM4', plugged: true }
+    )
+    /* A computer too old to answer /device still has its /healthz word. */
+    assert.deepEqual(await unitFrom([JSON.stringify({ ok: true, device: 'FM3' })], raw, []), { model: 'FM3', plugged: true })
+    for (const file of ['mobile/src/lib/relay.js', 'src/lib/remote.js']) {
+      assert.match(read(file), /collectAnswers\(\{ path: '\/device', host: name, windowMs, sleep \}\)/, `${file} names the unit from /healthz, which says FM3 for an AM4`)
+    }
     assert.equal(await unitFrom(['not json'], raw), null)
 
     const rows = unitChoices(['Studio iMac', 'MacBook Pro', 'Old Mac'], {
@@ -3757,6 +3768,58 @@ export function run(test) {
     const web = read('src/App.jsx')
     assert.match(web, /if \(!isDemo\(\) && link\.role === 'remote' && link\.hosts\.length > 1\) \{\s*setSheet\('units'\)/)
     assert.match(web, /open=\{sheet === 'units'\}[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost\)[\s\S]{0,600}await chooseHost\(row\.name\)[\s\S]{0,200}await read\(\)/)
+  })
+
+  test('the metronome clicks where it is told, with each unit’s own switch', async () => {
+    const m = await import('../shared/metronome.mjs')
+    /* Off unless turned on, and on the unit unless told otherwise. */
+    assert.deepEqual(m.metronomeSetting(null), { on: false, where: 'unit' })
+    assert.deepEqual(m.metronomeSetting({ on: true, where: 'nowhere' }), { on: true, where: 'unit' })
+    assert.deepEqual(m.clicks({ on: true, where: 'unit' }), { unit: true, phone: false })
+    assert.deepEqual(m.clicks({ on: true, where: 'phone' }), { unit: false, phone: true })
+    assert.deepEqual(m.clicks({ on: true, where: 'both' }), { unit: true, phone: true })
+    assert.deepEqual(m.clicks({ on: false, where: 'both' }), { unit: false, phone: false })
+
+    /* Each unit's own number — one unit's sent to another would mis-address. */
+    assert.deepEqual(m.unitMetronomeRequest('fm3', true), { method: 'PUT', path: '/preset/blocks/1/params/14878', body: { value: 1, continuous: false } })
+    assert.deepEqual(m.unitMetronomeRequest('fm9', false), { method: 'PUT', path: '/preset/blocks/1/params/14907', body: { value: 0, continuous: false } })
+    assert.deepEqual(m.unitMetronomeRequest('axefxiii', true).path, '/preset/blocks/1/params/14655')
+    assert.deepEqual(m.unitMetronomeRequest('am4', true), { method: 'PUT', path: '/device/param', body: { key: 'global.metronome', value: 1 } })
+    assert.equal(m.unitMetronomeRequest('vp4', true), null, 'a unit with no known switch is written a guess')
+    /* The codec agrees about those numbers. */
+    const codec = '../../forgefx-midi/src/gen3'
+    for (const [unit, id] of [['fm3', 14878], ['fm9', 14907], ['axe-fx-iii', 14655]]) {
+      const path = new URL(`${codec}/${unit}/params.ts`, import.meta.url)
+      if (existsSync(path)) assert.match(readFileSync(path, 'utf8'), new RegExp(`paramId: ${id}, name: 'GLOBAL_METRONOME'`), `${unit}'s metronome is not ${id}`)
+    }
+    /* Every relay request it makes is one the computer allows from a phone. */
+    const { hostAllows } = await import('../shared/relay-rules.mjs')
+    for (const slug of ['fm3', 'fm9', 'axefxiii', 'am4']) {
+      const r = m.unitMetronomeRequest(slug, true)
+      assert.ok(hostAllows(r.method, r.path), `the computer refuses ${slug}'s metronome from a phone`)
+    }
+
+    /* Beats counted from the start, so one late timer does not drag the rest. */
+    assert.equal(m.beatMs(120), 500)
+    assert.equal(m.beatMs(10), null)
+    assert.equal(m.nextBeat(0, 1250, 500), 1500)
+    assert.equal(m.nextBeat(0, 1500, 500), 2000)
+    assert.match(m.metronomeNote({ on: true, where: 'unit' }, 'fm3', 120), /On, 120 BPM, on the unit/)
+    assert.match(m.metronomeNote({ on: true, where: 'unit' }, 'vp4', 120), /no metronome the app can switch/)
+    assert.equal(m.metronomeNote({ on: false }, 'fm3', 120), 'Off')
+
+    /* Both ends: a row on Settings, the unit told only when its half changes, never in the demo. */
+    const phone = read('mobile/src/lib/metronome.js')
+    assert.match(phone, /if \(before === after\) return \{ ok: true \}/, 'turning the phone’s click on switches the unit’s off')
+    assert.match(read('mobile/src/lib/device.js'), /if \(!ask \|\| demoDevice\(\)\) return/)
+    assert.match(read('src/lib/forgefx.js'), /if \(!ask \|\| mock\) return/)
+    assert.match(read('mobile/src/screens/Settings.js'), /page === 'metronome'/)
+    assert.match(read('src/App.jsx'), /setupPage === 'metronome'/)
+    assert.match(read('mobile/App.js'), /<MetronomeBeat bpm=\{rigBpm\} \/>/)
+    assert.match(read('src/App.jsx'), /<MetronomeBeat bpm=\{rigBpm\} \/>/)
+    /* The beat never takes a press away from the screen under it. */
+    assert.match(read('mobile/src/components/MetronomeBeat.js'), /pointerEvents="none"/)
+    assert.match(read('src/styles.css'), /\.metronome-beat \{[^}]*pointer-events: none/)
   })
 
   test('How many people counts from what is already kept, names nobody, and is his alone', async () => {
@@ -5453,6 +5516,8 @@ export function run(test) {
       /* What each footswitch does, where the switches can be read. */
       'Footswitches',
       'Stop the looper',
+      /* "A metronome that plays out loud that can be toggled on and off in settings." */
+      'Metronome',
       '# Help',
       'Troubleshooting',
       'Amp & pedal names',

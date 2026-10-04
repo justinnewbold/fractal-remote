@@ -16,6 +16,8 @@ import UpdateReady from './src/components/UpdateReady'
 import { watchForUpdates } from './src/lib/updates'
 import DemoUnit from './src/components/DemoUnit'
 import LiveUnit from './src/components/LiveUnit'
+import MetronomeBeat from './src/components/MetronomeBeat'
+import { useUnitMetronome } from './src/lib/metronome'
 import Settings from './src/screens/Settings'
 import EdgeBack from './src/components/EdgeBack'
 import SignIn from './src/screens/SignIn'
@@ -315,6 +317,12 @@ export default function App() {
 
   const caps = useRig(ofCaps)
   const readFailed = useRig(ofError)
+  /* The metronome: the unit in front of us is told whenever it changes, and
+     the phone keeps time at its tempo. See lib/metronome. */
+  const rigSlug = useRig((s) => s.deviceSlug)
+  const rigBpm = useRig((s) => s.bpm)
+  const unitHere = useRig((s) => s.unit === 'present')
+  useUnitMetronome(rigSlug, unitHere && !demo)
   const settling =
     auth === 'in' &&
     !demo &&
@@ -1032,6 +1040,8 @@ export default function App() {
             </EdgeBack>
           </>
         )}
+        {/* The metronome's beat, over everything and pressing nothing. */}
+        <MetronomeBeat bpm={rigBpm} />
       </SafeAreaView>
     </SafeAreaProvider>
   )

@@ -1461,6 +1461,7 @@ export function run(test) {
         '# My rig',
         'Phone & computer',
         'Stop the looper',
+        'Metronome',
         /* The one row the phone has not got: "Somebody who has a rig
            connected and wants the remote in their pocket is the likeliest
            buyer there is." */

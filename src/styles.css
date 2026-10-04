@@ -12992,3 +12992,21 @@ button.setup-account-card.out .setup-account-who {
   border-radius: var(--r-1);
   background: var(--panel);
 }
+
+/* The metronome's beat: a frame round the page, lit on each beat and gone
+   again, over everything and pressing nothing. See MetronomeBeat. */
+.metronome-beat {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  border: 4px solid var(--ok);
+  opacity: 0;
+  z-index: 1000;
+}
+.metronome-beat-on {
+  animation: metronome-beat 140ms ease-out;
+}
+@keyframes metronome-beat {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
