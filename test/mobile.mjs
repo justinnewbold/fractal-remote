@@ -3709,6 +3709,56 @@ export function run(test) {
     assert.equal(signedOut.message, 'Sign in first.')
   })
 
+  test('Which unit names the unit on each computer, and switching reads the new one', async () => {
+    const { unitFrom, unitChoices } = await import('../shared/relay-rules.mjs')
+    const raw = async (a) => a
+    /* One answer to an addressed /healthz is that computer's unit. */
+    assert.deepEqual(await unitFrom([JSON.stringify({ ok: true, api: { version: 2 }, device: 'FM3' })], raw), { model: 'FM3', plugged: true })
+    assert.deepEqual(await unitFrom([JSON.stringify({ ok: false, device: 'AM4' })], raw), { model: 'AM4', plugged: false })
+    /* Two answers mean a computer too old to be addressed: whose is whose cannot be said. */
+    assert.equal(await unitFrom([JSON.stringify({ ok: true, device: 'FM3' }), JSON.stringify({ ok: true, device: 'AM4' })], raw), null)
+    assert.equal(await unitFrom([], raw), null)
+    assert.equal(await unitFrom(['not json'], raw), null)
+
+    const rows = unitChoices(['Studio iMac', 'MacBook Pro', 'Old Mac'], {
+      'Studio iMac': { model: 'AM4', plugged: true },
+      'MacBook Pro': { model: 'FM3', plugged: true }
+    }, 'MacBook Pro')
+    assert.deepEqual(rows.map((r) => [r.label, r.detail, r.on]), [
+      ['AM4', 'on Studio iMac', false],
+      ['FM3', 'on MacBook Pro', true],
+      ['Old Mac', 'Unit not known. Update the computer app on it to see which.', false]
+    ])
+    /* Nothing plugged in still answers, and goes last. */
+    const empty = unitChoices(['A', 'B'], { A: { model: 'FM3', plugged: false }, B: { model: 'AM4', plugged: true } })
+    assert.deepEqual(empty.map((r) => r.label), ['AM4', 'No unit plugged in'])
+
+    for (const file of ['mobile/src/lib/relay.js', 'src/lib/remote.js']) {
+      const src = read(file)
+      assert.match(src, /units = hosts\.length > 1 \? await readUnits\(\{ windowMs, sleep \}\) : \{\}/, `${file} does not ask which unit each computer has`)
+      assert.match(src, /collectAnswers\(\{ path: '\/healthz', host: name, windowMs, sleep \}\)/, `${file} asks which unit without addressing the computer`)
+    }
+    /* Picking a unit on the phone reads it again, start to finish. */
+    const link = read('mobile/src/lib/link.js')
+    assert.match(link, /export async function chooseHost\(name\) \{\s*const ok = await pickHost\(name\)[\s\S]{0,200}await refreshAll\(\)/, 'the phone switches unit but keeps the old one on screen')
+    const settings = read('mobile/src/screens/Settings.js')
+    assert.match(settings, /<Section>Which unit<\/Section>[\s\S]{0,300}unitChoices\(hosts, units, chosen\)/)
+    assert.ok(!settings.includes('<Section>Which computer</Section>'), 'the phone still says Which computer')
+    const app = read('src/App.jsx')
+    assert.match(app, /title="Which unit"[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost\)[\s\S]{0,500}await chooseHost\(row\.name\)[\s\S]{0,200}await read\(\)/, 'the website switches unit but does not read the new one')
+  })
+
+  test('a live unit name opens Which unit when two units are on, like the demo', () => {
+    const app = read('mobile/App.js')
+    assert.match(app, /<LiveUnit\s+open=\{pickLive && !demo\}[\s\S]{0,200}hosts=\{link\.hosts\}\s+units=\{link\.units\}\s+chosen=\{link\.chosenHost\}/)
+    const sheet = read('mobile/src/components/LiveUnit.js')
+    assert.match(sheet, /unitChoices\(hosts, units, chosen\)/)
+    assert.match(sheet, /await chooseHost\(row\.name\)[\s\S]{0,160}onClose\(\)/, 'the sheet closes before the new unit is read')
+    const web = read('src/App.jsx')
+    assert.match(web, /if \(!isDemo\(\) && link\.role === 'remote' && link\.hosts\.length > 1\) \{\s*setSheet\('units'\)/)
+    assert.match(web, /open=\{sheet === 'units'\}[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost\)[\s\S]{0,600}await chooseHost\(row\.name\)[\s\S]{0,200}await read\(\)/)
+  })
+
   test('How many people counts from what is already kept, names nobody, and is his alone', async () => {
     const { usageSections } = await import('../shared/admin.mjs')
     const now = new Date(2026, 9, 4, 15, 0).getTime()
@@ -8425,7 +8475,7 @@ export function run(test) {
     const app = read('mobile/App.js')
     assert.match(
       app,
-      /onOpenUnit=\{\(\) => \(demo \? setPickUnit\(true\) : openSettings\('link'\)\)\}/,
+      /onOpenUnit=\{\(\) => \(demo \? setPickUnit\(true\) : link\.hosts\?\.length > 1 \? setPickLive\(true\) : openSettings\('link'\)\)\}/,
       'the unit name opens Setup in the demo again, with the five units two doors further in'
     )
     assert.match(app, /<DemoUnit open=\{pickUnit\} onClose=\{\(\) => setPickUnit\(false\)\}/, 'the picker is never drawn')

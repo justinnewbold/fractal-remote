@@ -15,6 +15,7 @@ import WrongAccount from './src/components/WrongAccount'
 import UpdateReady from './src/components/UpdateReady'
 import { watchForUpdates } from './src/lib/updates'
 import DemoUnit from './src/components/DemoUnit'
+import LiveUnit from './src/components/LiveUnit'
 import Settings from './src/screens/Settings'
 import EdgeBack from './src/components/EdgeBack'
 import SignIn from './src/screens/SignIn'
@@ -217,6 +218,8 @@ export default function App() {
   const [picked, setPicked] = useState(null)
   /** Whether the five units are up, from the name in the corner. */
   const [pickUnit, setPickUnit] = useState(false)
+  /* The same, for real units: only when more than one computer answers. */
+  const [pickLive, setPickLive] = useState(false)
 
   /*
    * Whether there is a rig to draw yet.
@@ -801,11 +804,18 @@ export default function App() {
               link={link}
               onOpenSettings={() => openSettings()}
               onUnlock={() => setBuying(true)}
-              onOpenUnit={() => (demo ? setPickUnit(true) : openSettings('link'))}
+              onOpenUnit={() => (demo ? setPickUnit(true) : link.hosts?.length > 1 ? setPickLive(true) : openSettings('link'))}
               /* Edit has its own Save; two on one screen would be one too many. */
               saveHere={screen !== 'edit'}
             />
             <DemoUnit open={pickUnit} onClose={() => setPickUnit(false)} />
+            <LiveUnit
+              open={pickLive && !demo}
+              onClose={() => setPickLive(false)}
+              hosts={link.hosts}
+              units={link.units}
+              chosen={link.chosenHost}
+            />
             {/* Over the top of whatever is on screen, and gone again on a
                 tap. Nothing behind it is being withheld — they came looking
                 for this, so Back means back, not out. */}

@@ -47,6 +47,7 @@ import {
   subscribeHosts,
   hostConflict,
   remoteHosts,
+  remoteUnits,
   remoteChosenHost,
   pickHost,
   signOut,
@@ -465,6 +466,8 @@ let state = {
   clash: null,
   /** remote role: every Mac that answered the roll call, by name. */
   hosts: [],
+  /** remote role: which unit each of them has, by name (see unitFrom). */
+  units: {},
   /** remote role: which of them requests are addressed to, or null. */
   chosenHost: null,
   // Why the last pairing from a scanned code failed, for the connect screen.
@@ -562,7 +565,7 @@ async function join({ fresh = false } = {}) {
 async function countHosts() {
   try {
     await censusHosts()
-    set({ hosts: remoteHosts(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+    set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
   } catch {
     // A roll call that fails is not a reason to distrust the link.
   }
@@ -577,7 +580,7 @@ async function countHosts() {
  */
 export async function chooseHost(name) {
   await pickHost(name)
-  set({ hosts: remoteHosts(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+  set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
   return state.clash
 }
 
@@ -797,7 +800,7 @@ export async function bootLink() {
    * answer has to reach the screen from wherever it was taken. Without this the
    * notice would still be up over a link the gate had just cleared.
    */
-  subscribeHosts(() => set({ hosts: remoteHosts(), chosenHost: remoteChosenHost(), clash: hostConflict() }))
+  subscribeHosts(() => set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() }))
 
   if (role === 'mac') {
     await readMac()
@@ -1077,6 +1080,6 @@ export function _resetLink() {
   joining = false
   restoring = false
   booted = false
-  state = { role: 'unknown', link: 'off', account: null, hostOn: false, macName: null, macVersion: null, since: Date.now(), cloud: null, clash: null, hosts: [], chosenHost: null, pairError: null }
+  state = { role: 'unknown', link: 'off', account: null, hostOn: false, macName: null, macVersion: null, since: Date.now(), cloud: null, clash: null, hosts: [], units: {}, chosenHost: null, pairError: null }
   watchers.clear()
 }

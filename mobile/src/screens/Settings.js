@@ -16,11 +16,13 @@ import {
   currentAccount,
   deleteAccount,
   hostConflict,
-  pickHost,
   remoteChosenHost,
   remoteHosts,
-  sendPasswordReset
+  remoteUnits,
+  sendPasswordReset,
+  unitChoices
 } from '../lib/relay'
+import { chooseHost } from '../lib/link'
 import { useRig } from '../lib/rig'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
@@ -130,6 +132,7 @@ export default function Settings({
   const [asked, setAsked] = useState(false)
   const [hosts, setHosts] = useState(remoteHosts())
   const [chosen, setChosen] = useState(remoteChosenHost())
+  const [units, setUnits] = useState(remoteUnits())
   /*
    * The account line opens a small sheet of the things done about once —
    * change the password, or have a reset link sent. "Change it to where the
@@ -162,10 +165,13 @@ export default function Settings({
     }
   }, [])
 
+  /* Again on opening a page: the roll call finishes a few seconds after the
+     link does, so the list can arrive while nothing about the link changes. */
   useEffect(() => {
     setHosts(remoteHosts())
     setChosen(remoteChosenHost())
-  }, [link])
+    setUnits(remoteUnits())
+  }, [link, page])
 
   const conflict = hostConflict(hosts, chosen)
   /* What the Stop the looper row last did, in words, in place of its hint. */
@@ -920,21 +926,31 @@ export default function Settings({
             {link !== 'connected' ? <Press label="Look for the computer again" onPress={onReconnect} /> : null}
           </View>
 
+          {/*
+            WHICH UNIT, when more than one computer on this account answers.
+            "Instead of which computer, have it say which unit, and list the
+            units online." The unit leads and its computer is the line under
+            it; each phone remembers its own, so one phone can run the FM3
+            while another runs the AM4. See unitChoices in relay-rules.
+          */}
           {hosts.length > 1 ? (
             <View style={{ gap: space.md }}>
-              <Section>Which computer</Section>
+              <Section>Which unit</Section>
               {conflict ? <Note tone="fault">{conflict}</Note> : null}
-              {hosts.map((name, i) => (
-                <Press
-                  key={`${name}-${i}`}
-                  label={name}
-                  tone="live"
-                  on={name === chosen}
-                  onPress={async () => {
-                    await pickHost(name)
-                    setChosen(remoteChosenHost())
-                  }}
-                />
+              {unitChoices(hosts, units, chosen).map((row) => (
+                <View key={row.key} style={{ gap: space.xs }}>
+                  <Press
+                    label={row.label}
+                    tone="live"
+                    on={row.on}
+                    onPress={async () => {
+                      await chooseHost(row.name)
+                      setChosen(remoteChosenHost())
+                      setUnits(remoteUnits())
+                    }}
+                  />
+                  <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{row.detail}</Text>
+                </View>
               ))}
             </View>
           ) : null}
