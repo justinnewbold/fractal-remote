@@ -34,7 +34,8 @@ export const APPLE = {
 export const GOOGLE = {
   id: 'cloud.newbold.fractalremote',
   url: 'https://play.google.com/store/apps/details?id=cloud.newbold.fractalremote',
-  live: false
+  /* Live in production on Google Play since 4 October 2026. */
+  live: true
 }
 
 /**
