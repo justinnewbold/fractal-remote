@@ -688,6 +688,33 @@ export async function signOut() {
   }
 }
 
+/**
+ * Delete the signed-in account for good, and everything stored under it.
+ *
+ * The browser's copy of the phone's deleteAccount (mobile/src/lib/relay.js),
+ * the same server: supabase/functions/delete-account, which deletes only the
+ * account its session token names. Throws a sentence for the screen.
+ */
+export async function deleteAccount() {
+  if (!client) throw new Error('Sign in again, then delete the account.')
+  const { data } = await client.auth.getSession()
+  const token = data?.session?.access_token
+  if (!token) throw new Error('Sign in again, then delete the account.')
+  const c = loadRemoteConfig() || {}
+  let res
+  try {
+    res = await fetch(`${c.url || DEFAULT_PROJECT.url}/functions/v1/delete-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: c.anonKey || DEFAULT_PROJECT.anonKey, Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ confirm: 'delete' })
+    })
+  } catch {
+    throw new Error('No connection to the account server. Check the internet and try again.')
+  }
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok || !body?.deleted) throw new Error(body?.error || 'The account could not be deleted. Try again in a minute.')
+}
+
 /** Change the password of the account already signed in. */
 export async function changePassword(password) {
   if (!client) throw new Error('Sign in first.')

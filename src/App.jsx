@@ -234,6 +234,7 @@ import { loadSession, saveSession, interrupted } from './lib/session'
 import { pushEntry, replaceEntry } from './lib/nav'
 import { useDismiss } from './lib/dismiss'
 import {
+  deleteAccount,
   remoteActive,
   remoteHostSeen,
   hostResponds,
@@ -1102,6 +1103,8 @@ export default function App() {
   const [demoNoteSeen, setDemoNoteSeen] = useState(() => demoNoteWasSeen())
   /* What Change password on the Account page last said. */
   const [passwordSaid, setPasswordSaid] = useState(null)
+  /* Delete account: null, 'asking' (the warning is open), 'deleting', or a fault. */
+  const [deleting, setDeleting] = useState(null)
   const dismissDemoNote = () => {
     setDemoNoteSeen(true)
     rememberDemoNote()
@@ -5670,6 +5673,9 @@ export default function App() {
                     <button type="button" className="chip" onClick={() => linkAction('signout')} disabled={busy}>
                       Sign out on this device
                     </button>
+                    <button type="button" className="chip" onClick={() => setDeleting('asking')} disabled={busy || !!deleting}>
+                      Delete account
+                    </button>
                   </>
                 ) : (
                   <button type="button" className="primary" onClick={() => setSignIn('account')} disabled={busy}>
@@ -5677,6 +5683,47 @@ export default function App() {
                   </button>
                 )}
               </div>
+              {/* Delete account, as on the phone: one warning, then one more
+                  click. The same server (supabase/functions/delete-account). */}
+              {signedInHere && deleting ? (
+                <div className="facts-open" role="alertdialog" aria-label="Delete account">
+                  <p className="hint">
+                    This deletes your account for good: your sign-in, your set lists, bug reports you sent from it and
+                    everything else stored under it. It happens straight away and cannot be undone. Any computer or
+                    phone signed in to this account is signed out. A full version you bought stays with the account you
+                    paid with, and Restore a purchase brings it back on a new account.
+                  </p>
+                  {typeof deleting === 'object' ? (
+                    <p className="save-error" role="status">
+                      {deleting.fault}
+                    </p>
+                  ) : null}
+                  <div className="history-actions">
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={deleting === 'deleting'}
+                      onClick={async () => {
+                        const who = link.account.email
+                        setDeleting('deleting')
+                        try {
+                          await deleteAccount()
+                          setDeleting(null)
+                          linkAction('signout')
+                          setPasswordSaid(`${who} has been deleted, and you are signed out.`)
+                        } catch (err) {
+                          setDeleting({ fault: err?.message || String(err) })
+                        }
+                      }}
+                    >
+                      {deleting === 'deleting' ? 'Deleting…' : 'Delete my account'}
+                    </button>
+                    <button type="button" className="chip" disabled={deleting === 'deleting'} onClick={() => setDeleting(null)}>
+                      Keep my account
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </Section>
             {paid.checked && !paid.unlocked ? (
               <div className="setup-rows">

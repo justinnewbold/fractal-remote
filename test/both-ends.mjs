@@ -1201,7 +1201,7 @@ export function run(test) {
     assert.match(read('mobile/src/screens/Settings.js'), /label="Sign in with an email and password"/, 'the phone lost its sign-in button')
     assert.match(
       app,
-      /\{setupPage === 'account' \? \([\s\S]{0,900}'Not signed in on this device\.'[\s\S]{0,2500}Sign out on this device[\s\S]{0,300}setSignIn\('account'\)[\s\S]{0,120}Sign in with an email and password/,
+      /\{setupPage === 'account' \? \([\s\S]{0,900}'Not signed in on this device\.'[\s\S]{0,2500}Sign out on this device[\s\S]{0,700}setSignIn\('account'\)[\s\S]{0,120}Sign in with an email and password/,
       'the browser’s Setup has no way to sign in from the demo'
     )
     assert.match(app, /paid\.for !== accountId/, 'the unlock page can open on the signed-out answer, before the new account’s is in')

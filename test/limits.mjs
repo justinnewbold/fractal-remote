@@ -1571,6 +1571,12 @@ export function run(test) {
     assert.match(settings, /Password, sign out, delete account/, 'the first page of Settings no longer says where Delete account is')
     assert.match(settings, /await deleteAccount\(\)[\s\S]{0,200}onSignOut/, 'a deleted account is not signed out of')
 
+    /* And the browser and Mac app, for anybody who signed up there. */
+    const web = read('src/App.jsx')
+    assert.match(web, /Delete account\s*<\/button>/, 'the browser has no Delete account')
+    assert.match(web, /await deleteAccount\(\)[\s\S]{0,120}linkAction\('signout'\)/, 'a deleted account stays signed in on the browser')
+    assert.match(read('src/lib/remote.js'), /functions\/v1\/delete-account/)
+
     const fn = read('supabase/functions/delete-account/index.ts')
     /* Who is deleted comes from the verified session, never the request. */
     assert.match(fn, /\/auth\/v1\/user/, 'the function no longer verifies who is asking')
