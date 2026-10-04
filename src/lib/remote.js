@@ -709,6 +709,14 @@ export async function sendPasswordReset({ url, anonKey, email, redirectTo } = {}
   if (error) throw new Error(explainAuth(error.message))
 }
 
+/** A fresh "confirm your email" link, for an address that never tapped the first. */
+export async function resendConfirmation({ url, anonKey, email } = {}) {
+  const { createClient } = await import('@supabase/supabase-js')
+  const c = createClient(url || DEFAULT_PROJECT.url, anonKey || DEFAULT_PROJECT.anonKey)
+  const { error } = await c.auth.resend({ type: 'signup', email })
+  if (error) throw new Error(explainAuth(error.message))
+}
+
 export async function remoteSignIn({ url, anonKey, email, password }) {
   // Loaded on demand: a realtime client is a couple of hundred KB and most
   // sessions are local, sitting at the machine with the cable in it.

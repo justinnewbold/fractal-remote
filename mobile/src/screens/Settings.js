@@ -51,6 +51,7 @@ import AccessTool from '../components/AccessTool'
 import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
 import MessagesTool from '../components/MessagesTool'
+import LiveTool from '../components/LiveTool'
 import Lamp from '../components/Lamp'
 import { ChainCards, TipCard } from '../components/Walk'
 import { linkChain } from '../lib/link-chain'
@@ -265,7 +266,7 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer' }
+  const PARENT = { offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer' }
   const UP_LABEL = { link: '‹ Phone & computer', developer: '‹ Developer' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
@@ -429,7 +430,7 @@ export default function Settings({
               menu called developer". */}
           {isAdmin(account?.email) ? (
             <Group title="Developer">
-              <SetupRow title="Developer" status="Access, sales, accounts and messages" onPress={() => setPage('developer')} />
+              <SetupRow title="Developer" status="Access, sales, accounts, messages, what's live" onPress={() => setPage('developer')} />
             </Group>
           ) : null}
 
@@ -601,6 +602,7 @@ export default function Settings({
             <SetupRow title="Sales at a glance" status="Today, this week, all time" onPress={() => setPage('sales')} />
             <SetupRow title="Everyone with an account" status="Who has signed up" onPress={() => setPage('accounts')} />
             <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
+            <SetupRow title="What's live" status="Which version each piece is on" onPress={() => setPage('live')} />
           </View>
         </>
       ) : null}
@@ -946,6 +948,14 @@ export default function Settings({
         <>
           {head('Sales at a glance', 'back')}
           <SalesTool />
+        </>
+      ) : null}
+
+      {/* ------------------------------------------------------------ live */}
+      {page === 'live' && isAdmin(account?.email) ? (
+        <>
+          {head("What's live", 'back')}
+          <LiveTool />
         </>
       ) : null}
 

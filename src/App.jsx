@@ -112,6 +112,7 @@ import AccessTool from './components/AccessTool'
 import SalesTool from './components/SalesTool'
 import AccountsTool from './components/AccountsTool'
 import MessagesTool from './components/MessagesTool'
+import LiveTool from './components/LiveTool'
 import { remember as rememberPreset, CHANGED as MARKS_CHANGED } from './lib/presetMarks'
 import { CHANGED as SETLISTS_CHANGED } from './lib/setlists'
 import { syncSetlists, setlistCloudReady } from './lib/cloudSetlists'
@@ -495,6 +496,7 @@ const SETUP_PAGES = {
   sales: 'Sales at a glance',
   accounts: 'Everyone with an account',
   messages: 'Messages from users',
+  live: "What's live",
   /* The phone's sheet is titled Unlock; so is this page. */
   unlock: 'Unlock'
 }
@@ -515,7 +517,7 @@ const SETUP_PAGES = {
  * A map rather than an `if`, so the next nested page is a line rather than a
  * branch.
  */
-const SETUP_PARENT = { updates: 'about', demo: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer' }
+const SETUP_PARENT = { updates: 'about', demo: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer' }
 const upFrom = (page) => SETUP_PARENT[page] || null
 const upLabel = (page) => `\u2039 ${SETUP_PAGES[upFrom(page)] || 'Settings'}`
 /** What the chat says when a request needed the model and the model is off. */
@@ -5116,7 +5118,7 @@ export default function App() {
               <>
                 <p className="silk-label setup-group">Developer</p>
                 <div className="setup-rows">
-                  <SetupRow key="developer" title="Developer" status="Access, sales, accounts and messages" onClick={() => setSetupPage('developer')} />
+                  <SetupRow key="developer" title="Developer" status="Access, sales, accounts, messages, what's live" onClick={() => setSetupPage('developer')} />
                 </div>
               </>
             ) : null}
@@ -5700,6 +5702,7 @@ export default function App() {
               <SetupRow key="sales" title="Sales at a glance" status="Today, this week, all time" onClick={() => setSetupPage('sales')} />
               <SetupRow key="accounts" title="Everyone with an account" status="Who has signed up" onClick={() => setSetupPage('accounts')} />
               <SetupRow key="messages" title="Messages from users" status="Bug reports and suggestions, with their logs" onClick={() => setSetupPage('messages')} />
+              <SetupRow key="live" title="What's live" status="Which version each piece is on" onClick={() => setSetupPage('live')} />
             </div>
           </div>
         ) : null}
@@ -5731,6 +5734,16 @@ export default function App() {
             </button>
             <p className="setup-page-title">{SETUP_PAGES.sales}</p>
             <SalesTool />
+          </div>
+        ) : null}
+
+        {setupPage === 'live' && isAdmin(link.account?.email) ? (
+          <div className="setup-page">
+            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('live'))}>
+              {upLabel('live')}
+            </button>
+            <p className="setup-page-title">{SETUP_PAGES.live}</p>
+            <LiveTool />
           </div>
         ) : null}
 

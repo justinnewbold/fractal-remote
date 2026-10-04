@@ -185,6 +185,8 @@ export const FILES = [
     target: '../mobile/src/lib/admin.js',
     render: (text) => banner('../shared/admin.mjs') + text.replace("from './owner-unlock.mjs'", "from './owner-unlock.js'")
   },
+  /* What's live: which version each piece is on, for the Developer page. */
+  { source: '../shared/whats-live.mjs', target: '../mobile/src/lib/whats-live.js' },
   /* Which program to close so the unit is free, named per unit. */
   { source: '../shared/editors.mjs', target: '../mobile/src/lib/editors.js' },
   {

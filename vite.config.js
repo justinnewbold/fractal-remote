@@ -20,8 +20,24 @@ function commit() {
   }
 }
 
+/*
+ * /version.json in every deploy: what the Developer page's What's live reads
+ * (shared/whats-live.mjs) to say which version the website is on, without a
+ * key or a guess.
+ */
+const versionFile = () => ({
+  name: 'version-file',
+  generateBundle() {
+    this.emitFile({
+      type: 'asset',
+      fileName: 'version.json',
+      source: `${JSON.stringify({ version: pkg.version, commit: commit(), built: new Date().toISOString().slice(0, 16).replace('T', ' ') })}\n`
+    })
+  }
+})
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), versionFile()],
   define: {
     // Shown in the UI. Which build is running has been mistaken for a code bug
     // more than once, so it should be readable without asking.

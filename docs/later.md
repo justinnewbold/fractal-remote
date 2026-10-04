@@ -6,7 +6,7 @@ what it would take. Start from here when he says "let's do the next one".
 ## Justin's own tools (only on justinnewbold@icloud.com)
 
 Built so far: **Give someone access** with the **Customer lookup** under it, and
-**Sales at a glance**, and **Messages from users** (1.86.57). All in Settings → Developer. "Do number one and five
+**Sales at a glance**, **Messages from users** (1.86.57), and the Customer lookup's **Help someone sign in** buttons (1.86.58), and **What's live** (1.86.59). All in Settings → Developer. "Do number one and five
 for now, and then after that, let's put them on a list of to do sometime
 later."
 
@@ -15,13 +15,6 @@ Still to do:
 - **View as a new customer.** See the walkthrough, the paywall and the first
   screens exactly as a stranger sees them, without signing out or deleting
   anything. Useful for checking changes to those screens.
-- **Help someone sign in.** From the Customer lookup: resend their "confirm your
-  email" message, or send them a password reset. The lookup already says when
-  somebody has not confirmed; this puts the button next to it.
-- **What's live.** Which version each piece is on (iPhone, Android, website,
-  computer app), and whether the latest update has reached phones. Answers
-  "why am I still on 1.66?" at a glance.
-
 ## Older Fractal units
 
 The Axe-Fx II (Mark I, Mark II, XL and XL+) is in as of 1.86.0: presets,
