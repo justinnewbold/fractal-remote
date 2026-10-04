@@ -52,6 +52,7 @@ import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
 import MessagesTool from '../components/MessagesTool'
 import LiveTool from '../components/LiveTool'
+import UsageTool from '../components/UsageTool'
 import Lamp from '../components/Lamp'
 import { ChainCards, TipCard } from '../components/Walk'
 import { linkChain } from '../lib/link-chain'
@@ -267,7 +268,7 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer' }
+  const PARENT = { offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' }
   const UP_LABEL = { link: '‹ Phone & computer', developer: '‹ Developer' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
@@ -601,6 +602,7 @@ export default function Settings({
           <View style={{ gap: 0 }}>
             <SetupRow title="Give someone access" status="Look someone up, or unlock them" onPress={() => setPage('access')} />
             <SetupRow title="Sales at a glance" status="Today, this week, all time" onPress={() => setPage('sales')} />
+            <SetupRow title="How many people" status="Who used it today, this week, this month" onPress={() => setPage('usage')} />
             <SetupRow title="Everyone with an account" status="Who has signed up" onPress={() => setPage('accounts')} />
             <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
             <SetupRow title="What's live" status="Which version each piece is on" onPress={() => setPage('live')} />
@@ -956,6 +958,14 @@ export default function Settings({
         <>
           {head('Sales at a glance', 'back')}
           <SalesTool />
+        </>
+      ) : null}
+
+      {/* ----------------------------------------------------------- usage */}
+      {page === 'usage' && isAdmin(account?.email) ? (
+        <>
+          {head('How many people', 'back')}
+          <UsageTool />
         </>
       ) : null}
 
