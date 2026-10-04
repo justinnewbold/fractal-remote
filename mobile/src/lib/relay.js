@@ -33,6 +33,8 @@ import {
   forbiddenRemotely,
   hostConflict as conflictBetween,
   hostNamesFrom as namesFrom,
+  unitChoices,
+  unitFrom,
   repeatable,
   timeoutFor
 } from './relay-rules'
@@ -64,6 +66,8 @@ let hosts = []
 let chosen = null
 /** Whether addressing one Mac has been PROVED to leave the others out. */
 let targeted = false
+/** Which unit each of them is driving, by name, when it could be told: see readUnits. */
+let units = {}
 /** Roll calls in progress: an id, and every answer that has come back to it. */
 const censuses = new Map()
 
@@ -243,6 +247,11 @@ export const remoteLinked = () => !!session
 export const remoteHostSeen = () => hostSeen
 export const lastAnswerAt = () => answeredAt
 export const remoteHosts = () => hosts
+
+/** Which unit each answering computer has, by its name: { model, plugged }. */
+export const remoteUnits = () => units
+
+export { unitChoices }
 export const remoteChosenHost = () => chosen
 
 export const hostConflict = (list = hosts, pick = chosen, proved = targeted) =>
@@ -502,6 +511,7 @@ export async function remoteDisconnect() {
   // Who answered belongs to the channel that is going away. Carrying it over
   // would keep writes refused on a link where the second Mac is long gone.
   hosts = []
+  units = {}
   chosen = null
   targeted = false
   censuses.clear()
@@ -555,6 +565,7 @@ export async function censusHosts({
   }
   targeted = false
   if (hosts.length > 1 && chosen) await confirmTargeting({ windowMs, sleep })
+  units = hosts.length > 1 ? await readUnits({ windowMs, sleep }) : {}
   return hosts
 }
 
@@ -575,6 +586,23 @@ async function collectAnswers({ path, host = null, windowMs, sleep }) {
     censuses.delete(id)
   }
   return answers
+}
+
+/**
+ * Ask each computer, by name, what it has plugged in.
+ *
+ * Only when there is more than one: with one computer there is nothing to
+ * choose, and the unit is on the screen already. All at once, so the wait is
+ * one window however many there are. A name two computers share cannot be
+ * addressed to one of them, so it is not asked; see unitFrom for why an
+ * answer that does not come back alone is not believed either.
+ */
+async function readUnits({ windowMs, sleep }) {
+  const once = hosts.filter((name, i) => hosts.indexOf(name) === i && hosts.lastIndexOf(name) === i)
+  const found = await Promise.all(
+    once.map(async (name) => [name, await unitFrom(await collectAnswers({ path: '/healthz', host: name, windowMs, sleep }), decode)])
+  )
+  return Object.fromEntries(found.filter(([, unit]) => unit))
 }
 
 /**

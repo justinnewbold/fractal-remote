@@ -241,7 +241,8 @@ import {
   hostResponds,
   loadRemoteConfig,
   sendPasswordReset,
-  subscribeRemoteState
+  subscribeRemoteState,
+  unitChoices
 } from './lib/remote'
 import { newEntry, append } from './lib/log'
 import { watchEvery, probeSays, countQuiet, unitGone } from '../shared/unit-watch.mjs'
@@ -5358,6 +5359,34 @@ export default function App() {
               it used to be behind a row called "Unit", one door along.
             */}
             <DeviceDetail status={status} device={device} onRetry={reconnect} busy={busy} />
+            {/*
+              WHICH UNIT, when more than one computer on this account answers
+              — the phone's section of the same name, the same words
+              (unitChoices in shared/relay-rules.mjs). Picking one reads the
+              unit again: the AM4 and the FM3 are different chains.
+            */}
+            {link.role === 'remote' && link.hosts.length > 1 ? (
+              <Section key="which-unit" title="Which unit" note="Each computer on this account, by the unit plugged into it">
+                <div className="setup-rows">
+                  {unitChoices(link.hosts, link.units, link.chosenHost).map((row) => (
+                    <SetupRow
+                      key={row.key}
+                      title={row.on ? `${row.label} ✓` : row.label}
+                      status={row.detail}
+                      onClick={async () => {
+                        setBusy(true)
+                        try {
+                          await chooseHost(row.name)
+                        } finally {
+                          setBusy(false)
+                        }
+                        await read()
+                      }}
+                    />
+                  ))}
+                </div>
+              </Section>
+            ) : null}
             {/*
               WHICH UNIT THE DEMO IS, on the page about the unit — where the
               phone keeps it, as a "Which unit" section on its own link page.

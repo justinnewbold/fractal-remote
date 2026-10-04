@@ -969,7 +969,7 @@ test('nothing is written while two computers are listening', () => {
   // taken on.
   assert.match(
     src,
-    /hosts = \[\]\s*\n\s*chosen = null\s*\n\s*targeted = false\s*\n\s*censuses\.clear\(\)/,
+    /hosts = \[\]\s*\n\s*units = \{\}\s*\n\s*chosen = null\s*\n\s*targeted = false\s*\n\s*censuses\.clear\(\)/,
     'a stale count outlives its connection'
   )
 

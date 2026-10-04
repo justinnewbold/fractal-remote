@@ -30,6 +30,8 @@ import {
   remoteHostSeen,
   remoteHosts,
   remoteRequest,
+  remoteUnits,
+  pickHost,
   restoreSession,
   subscribeHostSeen,
   subscribeRemoteState
@@ -72,6 +74,7 @@ const initial = {
    */
   hostVersion: null,
   hosts: [],
+  units: {},
   chosenHost: null,
   clash: null
 }
@@ -86,7 +89,8 @@ const set = (patch) => {
     next.macName === state.macName &&
     next.clash === state.clash &&
     next.chosenHost === state.chosenHost &&
-    next.hosts.length === state.hosts.length
+    next.hosts.length === state.hosts.length &&
+    next.units === state.units
   ) {
     return
   }
@@ -220,10 +224,30 @@ async function join() {
 async function countHosts() {
   try {
     await censusHosts()
-    set({ hosts: remoteHosts(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+    set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
   } catch {
     // A roll call that fails is not a reason to distrust the link.
   }
+}
+
+/**
+ * Drive this unit and no other: the Which unit buttons.
+ *
+ * Then read the unit again, start to finish. Moving from the computer with
+ * the AM4 to the one with the FM3 is a different unit, with a different
+ * chain and different presets in the same slots, and everything on screen
+ * was read off the other one. refreshAll is what tells a new unit from an
+ * old one and drops the names that belonged to it.
+ */
+export async function chooseHost(name) {
+  const ok = await pickHost(name)
+  set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+  try {
+    await refreshAll()
+  } catch {
+    // The rig store keeps what it learned, including the failure.
+  }
+  return ok
 }
 
 /**

@@ -1527,8 +1527,10 @@ export function run(test) {
          other end sits above the details about the line to it: it is the
          question somebody has when there is nothing on the other end at all.
          Account follows the phone remote, only in the demo and signed out:
-         "there's actually no place to even sign in anywhere on the web app." */
-      ['link', ['connection', 'phone-remote', 'no-internet', 'ways-in', 'link-details']],
+         "there's actually no place to even sign in anywhere on the web app."
+         Which unit leads them all when more than one computer answers: "have
+         it say which unit, and list the units online." */
+      ['link', ['which-unit', 'connection', 'phone-remote', 'no-internet', 'ways-in', 'link-details']],
       /* Fixes first: it is the one somebody is looking for when they open
          this page at all, and the log is what they send if it did not help. */
       ['help', ['fixes', 'preset-check', 'debug-log', 'feedback', 'what-s-changed-this-session']],

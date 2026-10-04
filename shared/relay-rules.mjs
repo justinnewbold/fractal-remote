@@ -274,3 +274,54 @@ export async function hostNamesFrom(answers, read) {
   }
   return named
 }
+
+/**
+ * WHICH UNIT EACH COMPUTER HAS, from one addressed /healthz each.
+ *
+ * "Instead of which computer, have it say which unit, and list the units
+ * online." Two computers on one account, an AM4 on one and an FM3 on the
+ * other: the person choosing is choosing a unit, and the computer it hangs
+ * off is the detail. Each computer's /healthz says what it is driving —
+ * `device` is the unit's model, `ok` whether one is plugged in at all.
+ *
+ * Only an answer that came back ALONE can be tied to the computer it was
+ * addressed to. A computer too old to honour addressing answers for itself
+ * whatever name was asked, so two answers mean nothing here can say whose is
+ * whose — and a guess would put the FM3's name on the AM4's button. That is
+ * null, and the button says the computer instead.
+ */
+export async function unitFrom(answers, read) {
+  if (!Array.isArray(answers) || answers.length !== 1) return null
+  try {
+    const body = JSON.parse(await read(answers[0]))
+    const at = body?.data && typeof body.data === 'object' ? body.data : body
+    const model = typeof at?.device === 'string' ? at.device.trim() : ''
+    if (!model) return null
+    return { model, plugged: at.ok !== false }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The buttons under Which unit, one per computer that answered.
+ *
+ * The unit leads and the computer follows: "FM3", then "on Justin's MacBook
+ * Pro". A computer with nothing plugged in still gets a button — it answered,
+ * and it is the one somebody plugs a unit into next — but says so, and goes
+ * after the ones with a unit on them.
+ */
+export function unitChoices(hostNames = [], units = {}, chosen = null) {
+  const rows = hostNames.map((name, i) => {
+    const unit = units?.[name] || null
+    return {
+      name,
+      key: `${name}-${i}`,
+      label: unit ? (unit.plugged ? unit.model : 'No unit plugged in') : name,
+      detail: unit ? `on ${name}` : 'Unit not known. Update the computer app on it to see which.',
+      plugged: Boolean(unit?.plugged),
+      on: name === chosen
+    }
+  })
+  return [...rows.filter((r) => r.plugged), ...rows.filter((r) => !r.plugged)]
+}
