@@ -9826,9 +9826,19 @@ export function run(test) {
     const src = read('mobile/src/lib/purchases.js')
     assert.match(
       src,
-      /export const shouldOffer = \(\{ demo \}\) => Boolean\(demo\) && !state\.unlocked/,
+      /export const shouldOffer = \(\{ demo \}\) => Boolean\(demo\) && !shown\.unlocked/,
       'shouldOffer changed shape — it must not consult `available`'
     )
+
+    /*
+     * View as a new customer: every screen is told "not unlocked", and only
+     * the screens. The computer link's gate (mayConnect) and the store are
+     * read from the real state, so posing can never unlock or lock anything.
+     */
+    assert.match(src, /export const purchaseState = \(\) => shown/, 'screens read the real unlock while posing as a new customer')
+    assert.match(src, /export const mayConnect = \(\) => mayDrive\(state\)/, 'posing as a new customer changes what the computer link allows')
+    assert.match(src, /shown = posing \? \{ \.\.\.state, unlocked: false, posing: true \} : state/)
+    assert.match(read('mobile/App.js'), /purchase\.posing \?[\s\S]{0,80}Viewing as a new customer · tap to stop[\s\S]{0,60}poseAsNewCustomer\(false\)/, 'there is no way out of viewing as a new customer')
     const fn = src.slice(src.indexOf('export const shouldOffer'), src.indexOf('export const shouldOffer') + 200)
     assert.ok(!/available/.test(fn), 'the offer is gated on the store being ready again')
 

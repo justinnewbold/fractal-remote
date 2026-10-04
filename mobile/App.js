@@ -37,7 +37,7 @@ import { installCrashCapture } from './src/lib/debugLog'
 import { restoreDemo, setDemo, useDemo } from './src/lib/demo'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
-import { checkOwner, linkAccount, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
+import { checkOwner, linkAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
 import { shouldAskToPay } from './src/lib/unlock-rule'
 
 /**
@@ -794,6 +794,9 @@ export default function App() {
               somebody after the demo picker on a walk through Setup and into
               a page named after pairing a phone.
             */}
+            {purchase.posing ? (
+              <Press label="Viewing as a new customer · tap to stop" tone="signal" on onPress={() => poseAsNewCustomer(false)} />
+            ) : null}
             <TopBar
               link={link}
               onOpenSettings={() => openSettings()}
@@ -930,6 +933,15 @@ export default function App() {
                  * first run; who is signed in is none of its business.
                  */
                 onReplay={() => {
+                  setScreen('stage')
+                  setReplaying(true)
+                  setSeenWalk(false)
+                }}
+                /* Developer → View as a new customer: the walkthrough again, and
+                   every screen told this phone has not unlocked, until the
+                   banner over the play screen is tapped. See poseAsNewCustomer. */
+                onViewAsCustomer={() => {
+                  poseAsNewCustomer(true)
                   setScreen('stage')
                   setReplaying(true)
                   setSeenWalk(false)

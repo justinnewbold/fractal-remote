@@ -108,8 +108,30 @@ const watchers = new Set()
 const announce = () => {
   for (const fn of watchers) fn()
 }
+/*
+ * VIEW AS A NEW CUSTOMER. "See the walkthrough, the paywall and the first
+ * screens exactly as a stranger sees them, without signing out or deleting
+ * anything." (docs/later.md) While it is on, every screen is told this phone
+ * has not unlocked. Nothing is changed: the purchase, the account and the
+ * store are untouched, the server's own gate on the computer link is the
+ * real one, and turning it off (the banner, or restarting the app) puts the
+ * real answer straight back.
+ */
+let posing = false
+let shown = state
+const refreshShown = () => {
+  shown = posing ? { ...state, unlocked: false, posing: true } : state
+}
+
 const set = (next) => {
   state = { ...state, ...next }
+  refreshShown()
+  announce()
+}
+
+export function poseAsNewCustomer(on) {
+  posing = Boolean(on)
+  refreshShown()
   announce()
 }
 
@@ -638,9 +660,9 @@ export const mayConnect = () => mayDrive(state)
  * a price and a working button, or an honest line about why not. A route to
  * an explanation beats no route at all, every time.
  */
-export const shouldOffer = ({ demo }) => Boolean(demo) && !state.unlocked
+export const shouldOffer = ({ demo }) => Boolean(demo) && !shown.unlocked
 
-export const purchaseState = () => state
+export const purchaseState = () => shown
 
 const subscribe = (fn) => {
   watchers.add(fn)
@@ -655,4 +677,6 @@ export const __reset = () => {
   Purchases = null
   pkg = null
   state = { available: false, unlocked: false, checking: true, price: null, why: null }
+  posing = false
+  shown = state
 }
