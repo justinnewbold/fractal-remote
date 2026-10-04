@@ -281,8 +281,8 @@ export async function hostNamesFrom(answers, read) {
  * "Instead of which computer, have it say which unit, and list the units
  * online." Two computers on one account, an AM4 on one and an FM3 on the
  * other: the person choosing is choosing a unit, and the computer it hangs
- * off is the detail. Each computer's /healthz says what it is driving —
- * `device` is the unit's model, `ok` whether one is plugged in at all.
+ * off is the detail. Each computer's /device says which unit it detected,
+ * and its /healthz whether one is plugged in at all.
  *
  * Only an answer that came back ALONE can be tied to the computer it was
  * addressed to. A computer too old to honour addressing answers for itself
@@ -290,17 +290,34 @@ export async function hostNamesFrom(answers, read) {
  * whose — and a guess would put the FM3's name on the AM4's button. That is
  * null, and the button says the computer instead.
  */
-export async function unitFrom(answers, read) {
+export async function unitFrom(answers, read, deviceAnswers = []) {
   if (!Array.isArray(answers) || answers.length !== 1) return null
-  try {
-    const body = JSON.parse(await read(answers[0]))
-    const at = body?.data && typeof body.data === 'object' ? body.data : body
-    const model = typeof at?.device === 'string' ? at.device.trim() : ''
-    if (!model) return null
-    return { model, plugged: at.ok !== false }
-  } catch {
-    return null
+  const body = async (list) => {
+    if (!Array.isArray(list) || list.length !== 1) return null
+    try {
+      const b = JSON.parse(await read(list[0]))
+      return b?.data && typeof b.data === 'object' ? b.data : b
+    } catch {
+      return null
+    }
   }
+  const health = await body(answers)
+  /*
+   * THE MODEL FROM /device, NOT /healthz, when the computer says it.
+   *
+   * "It's just showing both listed as FM3." /healthz names the profile the
+   * server started with — the gen-3 one, FM3 — and an AM4 is driven by a
+   * driver of its own without that ever changing, so a computer with an AM4
+   * on it answered FM3 there. /device names the unit it actually detected
+   * (registryCore deviceInfo: "the provisional gen-3 profile can't identify
+   * an AM4"). /healthz still says whether one is plugged in at all.
+   */
+  const device = await body(deviceAnswers)
+  const detected = typeof device?.model === 'string' ? device.model.trim() : ''
+  const named = typeof health?.device === 'string' ? health.device.trim() : ''
+  const model = detected || named
+  if (!health || !model) return null
+  return { model, plugged: health.ok !== false }
 }
 
 /**

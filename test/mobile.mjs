@@ -3718,6 +3718,17 @@ export function run(test) {
     /* Two answers mean a computer too old to be addressed: whose is whose cannot be said. */
     assert.equal(await unitFrom([JSON.stringify({ ok: true, device: 'FM3' }), JSON.stringify({ ok: true, device: 'AM4' })], raw), null)
     assert.equal(await unitFrom([], raw), null)
+    /* "It's just showing both listed as FM3": an AM4's computer says FM3 on /healthz
+       (the profile it started with) and AM4 on /device (the unit it detected). */
+    assert.deepEqual(
+      await unitFrom([JSON.stringify({ ok: true, device: 'FM3' })], raw, [JSON.stringify({ model: 'AM4', modelId: 21 })]),
+      { model: 'AM4', plugged: true }
+    )
+    /* A computer too old to answer /device still has its /healthz word. */
+    assert.deepEqual(await unitFrom([JSON.stringify({ ok: true, device: 'FM3' })], raw, []), { model: 'FM3', plugged: true })
+    for (const file of ['mobile/src/lib/relay.js', 'src/lib/remote.js']) {
+      assert.match(read(file), /collectAnswers\(\{ path: '\/device', host: name, windowMs, sleep \}\)/, `${file} names the unit from /healthz, which says FM3 for an AM4`)
+    }
     assert.equal(await unitFrom(['not json'], raw), null)
 
     const rows = unitChoices(['Studio iMac', 'MacBook Pro', 'Old Mac'], {
