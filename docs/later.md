@@ -12,6 +12,21 @@ later."
 
 Nothing is left on this list.
 
+## AM4
+
+- **Tap tempo and the tempo box on the AM4.** "Put on a todo for us to figure
+  out the tempo on AM4." Every tempo read and write on an AM4 answers
+  "unsupported" (Justin's log, 1.86.69, 5 October 2026): the computer app's
+  AM4 driver (ForgeFX `server/src/drivers/am4.ts`) has no `getTempo` or
+  `setTempo`, and the codec (forgefx-midi `src/am4/params.ts`) has no
+  preset-tempo parameter mapped — only the per-block tempo divisions and
+  `GLOBAL_TEMPO_CC`. What it takes: find where the AM4 keeps the preset's
+  tempo, by recording what AM4-Edit sends while the tempo is changed on
+  Justin's AM4, then add the two calls to the AM4 driver on the mirror's
+  branch and move `desktop/forgefx.lock.json` to it. That is a new computer
+  app for Justin to install, not a phone build. The metronome follows the
+  unit's tempo already, so it starts following taps once this lands.
+
 ## Older Fractal units
 
 The Axe-Fx II (Mark I, Mark II, XL and XL+) is in as of 1.86.0: presets,
