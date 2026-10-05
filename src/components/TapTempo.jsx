@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { setTempo } from '../lib/forgefx'
+import { refusedAlready, setTempo } from '../lib/forgefx'
+import { NO_TEMPO, isUnsupported } from '../../shared/unsupported.mjs'
 import { useDevice, refreshTempo, getSnapshot, chainNumberOf } from '../lib/deviceState'
 import { keepTaps, tappedBpm, tempoSender, TAP_REREAD_MS } from '../../shared/tempo.mjs'
 import { tick as haptic } from '../lib/feedback'
@@ -120,7 +121,7 @@ export default function TapTempo({ onError, onChanged, where = 'bar' }) {
           if (closing.current) setTimeout(() => reportBurst(), 0)
         }
       },
-      (err) => onError(err.message)
+      (err) => onError(isUnsupported(err) ? NO_TEMPO : err.message)
     )
   }
 
@@ -150,6 +151,11 @@ export default function TapTempo({ onError, onChanged, where = 'bar' }) {
   }, [going])
 
   const tap = async () => {
+    /* A unit that has said it has no tempo the app can set: say so, send nothing. */
+    if (refusedAlready('POST', '/tempo')) {
+      onError(NO_TEMPO)
+      return
+    }
     /*
      * The number goes NOW; the read-back waits for the burst to end.
      *
@@ -236,7 +242,7 @@ export default function TapTempo({ onError, onChanged, where = 'bar' }) {
       setTapped(null)
       onChanged?.(`Tempo → ${n} BPM`)
     } catch (err) {
-      onError(err.message)
+      onError(isUnsupported(err) ? NO_TEMPO : err.message)
     }
   }
 

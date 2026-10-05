@@ -10,6 +10,7 @@
 //   - /preset/store commits to a slot even when capabilities report supportsSave:false
 
 import { unitMetronomeRequest } from '../../shared/metronome.mjs'
+import { rememberedRefusal, unsupportedMemo } from '../../shared/unsupported.mjs'
 import { logDebug } from './debugLog.js'
 import { EXCLUDED_BLOCKS, safeParams } from './guardrails.js'
 import { paletteFor } from './palette.js'
@@ -240,13 +241,23 @@ const whyItFailed = (err) =>
  * that opens with four alarms about nothing is a log whose real lines get
  * skimmed past.
  */
+/* What the attached unit has refused as unsupported: see shared/unsupported.mjs. */
+const refused = unsupportedMemo()
+
+/** Whether this unit has already refused this kind of request as unsupported. */
+export const refusedAlready = (method, path) => !mock && refused.known(method, path)
+
 const routine = (path, options, err) =>
   !!err?.remoteBlocked ||
+  /* Asked once, logged once: a remembered refusal is not news. */
+  !!err?.remembered ||
   ((options.method || 'GET') === 'GET' && /^\/store\/config\//.test(path) && err?.status === 404) ||
   /* An empty slot, asked for its copy before a Put back: nothing to keep. See snapshotSlot. */
   (/^\/backup\/preset\/\d+$/.test(path) && err?.status === 422)
 
 async function request(path, options = {}) {
+  const method = options.method || 'GET'
+  if (!mock && refused.known(method, path)) return Promise.reject(rememberedRefusal(method, path))
   /*
    * A dump that arrived garbled is asked for again before anyone sees it.
    * lib/retry.js says why, and which requests may be asked twice. Here
@@ -262,6 +273,7 @@ async function request(path, options = {}) {
       if (!routine(path, options, err)) {
         logDebug('unit', `${options.method || 'GET'} ${path} failed`, whyItFailed(err))
       }
+      if (!mock) refused.heard(method, path, err)
       throw err
     }
   )
@@ -422,6 +434,8 @@ let lastCaps = null
  * connection — so the failure is swallowed and the unit still detects.
  */
 export const detect = async () => {
+  /* A unit detected afresh is asked everything afresh: see shared/unsupported.mjs. */
+  refused.forget()
   const res = mock ? (await tick(), mock.detect()) : await request('/device/detect')
   const label = res?.short || res?.name
   if (label) unitSlug = deviceSlug(label)
@@ -2375,7 +2389,11 @@ export async function readSceneNames(number) {
         traceStep('scenes: found names')
         return clean
       } else if (Array.isArray(names)) {
+        /* An answer, and a true one: the scenes are unnamed. Taking the whole
+           preset again as a backup would read the same 12 KB a second time to
+           learn the same nothing — which an AM4 log showed it doing. */
         traceStep('scenes: the unit answered, and every scene is unnamed')
+        return names.map(() => '')
       }
     } catch (err) {
       traceStep(`scenes: ${err?.status === 404 || err?.status === 501 ? 'not on this computer app' : `failed — ${err.message}`}`)

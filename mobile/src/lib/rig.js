@@ -29,6 +29,7 @@ import { forgetSceneNames, recallSceneNames, rememberSceneNames } from './sceneN
 import { subscribeHostSeen, subscribeRemoteEvents, subscribeRemoteState } from './relay'
 import { demoUnit, isDemo } from './demo'
 import { logDebug } from './debugLog'
+import { NO_TEMPO, isUnsupported } from './unsupported'
 import {
   CHAIN_FRESH_MS,
   OWN_SETTLE_MS,
@@ -1941,11 +1942,16 @@ let taps = []
  */
 const sendTempo = tempoSender(
   (bpm) => device.setTempo(bpm),
-  (err) => set(faultFrom(err))
+  (err) => set(faultFrom(isUnsupported(err) ? { message: NO_TEMPO } : err))
 )
 
 export async function tapTempo() {
   clearTimeout(reread)
+  /* A unit that has said it has no tempo the app can set: say so, send nothing. */
+  if (device.refusedAlready('POST', '/tempo')) {
+    set(faultFrom({ message: NO_TEMPO }))
+    return false
+  }
   /*
    * WHAT THE TAPS MEAN, SHOWN NOW AND SENT NOW.
    *
@@ -1985,7 +1991,11 @@ export function writeTempo(bpm) {
   noteEdited()
   expect('bpm', bpm)
   tempoSetAt = Date.now()
-  return optimistic({ bpm }, { bpm: was }, () => device.setTempo(bpm))
+  return optimistic({ bpm }, { bpm: was }, () =>
+    device.setTempo(bpm).catch((err) => {
+      throw isUnsupported(err) ? Object.assign(new Error(NO_TEMPO), { status: 501 }) : err
+    })
+  )
 }
 
 /*
