@@ -27,6 +27,7 @@ const net = require('node:net')
 /* Held to shared/ways-in.mjs REPO by a test — this cannot be the repository
    the code lives in and the download link be a different one. */
 const RELEASES_URL = 'https://github.com/justinnewbold/fractal-remote/releases/latest'
+const LATEST_API_URL = 'https://api.github.com/repos/justinnewbold/fractal-remote/releases/latest'
 
 let tray = null
 let win = null
@@ -649,7 +650,19 @@ async function beginUpdates() {
           win.webContents.send('updates:state', { ...state, line: updateLine(state) })
         }
       },
-      log: (err) => console.error('[updates]', err?.message || err)
+      log: (err) => console.error('[updates]', err?.message || err),
+      // What is on GitHub now, from its API rather than its web pages: see
+      // releaseVerdict in lib/updates.mjs.
+      running: app.getVersion(),
+      lookup: async () => {
+        const { net: web } = require('electron')
+        const res = await web.fetch(LATEST_API_URL, {
+          headers: { Accept: 'application/vnd.github+json' },
+          cache: 'no-store'
+        })
+        if (!res.ok) throw new Error(`GitHub said ${res.status}`)
+        return res.json()
+      }
     })
     if (outcome === 'stuck') {
       // Said at once; the reason follows when macOS's log has been read, which

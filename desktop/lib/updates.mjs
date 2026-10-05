@@ -40,6 +40,8 @@ export function updateLine(state = { kind: 'idle' }) {
         : 'Update installs when you quit'
     case 'current':
       return 'Up to date'
+    case 'building':
+      return state.version ? `Version ${state.version} is still being built` : 'A new version is still being built'
     case 'trouble':
       return state.message ? `Update problem: ${state.message}` : "Couldn't check for updates"
     case 'stuck':
@@ -123,7 +125,52 @@ export function shortReason(err) {
  * Returns `check`, which never rejects — a check that fails is a state, not an
  * error anyone has to handle.
  */
-export function wireUpdates({ updater, native = null, onState, log = () => {} }) {
+/**
+ * What GitHub's API says the newest release is, against the version running.
+ *
+ * "I keep clicking check for updates and it says no updates available. The
+ * only way I can check for an update is to force close the app and restart
+ * it." Two things made a check made from inside a running app unreliable:
+ *
+ * - The library asks github.com's web pages which release is newest, and
+ *   those can answer from a copy minutes old.
+ * - A release appears on GitHub about ten minutes BEFORE its Mac files do,
+ *   because every computer's build uploads into it as it finishes. A check in
+ *   that gap found the release, could not find the Mac file list, and failed.
+ *
+ * So a check first asks GitHub's API (api.github.com), which says what is
+ * there now, and reads the answer here:
+ *
+ *   { kind: 'newer', version, feed } — newer, and its Mac files are in
+ *   { kind: 'building', version }    — newer, but the Mac files are not in yet
+ *   { kind: 'same', version }        — nothing newer than this
+ *   null                             — no answer worth acting on
+ */
+export function releaseVerdict(release, running) {
+  const tag = typeof release?.tag_name === 'string' ? release.tag_name : null
+  if (!tag || release.draft || release.prerelease) return null
+  const version = tag.replace(/^v/, '')
+  if (!newerThan(version, running)) return { kind: 'same', version }
+  const names = (Array.isArray(release.assets) ? release.assets : []).map((a) => a?.name)
+  const macFile = names.some((n) => typeof n === 'string' && /-mac\.zip$/.test(n))
+  if (!names.includes('latest-mac.yml') || !macFile) return { kind: 'building', version }
+  const feed = String(release.html_url || '').replace('/releases/tag/', '/releases/download/')
+  return feed.includes('/releases/download/') ? { kind: 'newer', version, feed } : null
+}
+
+/** Whether version a is newer than b, both "1.2.3". Anything unreadable is not newer. */
+export function newerThan(a, b) {
+  const parts = (v) => String(v || '').split('.').map((n) => Number.parseInt(n, 10))
+  const x = parts(a)
+  const y = parts(b)
+  if (x.length !== 3 || y.length !== 3 || [...x, ...y].some((n) => !Number.isFinite(n))) return false
+  for (let i = 0; i < 3; i++) {
+    if (x[i] !== y[i]) return x[i] > y[i]
+  }
+  return false
+}
+
+export function wireUpdates({ updater, native = null, onState, log = () => {}, lookup = null, running = null }) {
   if (!updater) return { check: async () => {} }
 
   updater.autoDownload = true
@@ -227,6 +274,28 @@ export function wireUpdates({ updater, native = null, onState, log = () => {} })
       if (held !== null) {
         say({ kind: 'ready', version: held })
         return
+      }
+      if (lookup && running) {
+        let verdict = null
+        try {
+          verdict = releaseVerdict(await lookup(), running)
+        } catch (err) {
+          // No API answer: the library's own check below is still worth having.
+          log(err)
+        }
+        if (verdict?.kind === 'building') {
+          say({ kind: 'building', version: verdict.version })
+          return
+        }
+        // Point the library at exactly that release, so it cannot be told an
+        // older one by a page answering from a stale copy.
+        if (verdict?.kind === 'newer' && typeof updater.setFeedURL === 'function') {
+          try {
+            updater.setFeedURL({ provider: 'generic', url: verdict.feed })
+          } catch (err) {
+            log(err)
+          }
+        }
       }
       try {
         await updater.checkForUpdates()
