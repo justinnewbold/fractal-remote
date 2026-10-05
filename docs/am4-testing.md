@@ -46,3 +46,21 @@ saved as its own file, and the bytes that change are the answer.
 
 5. Send the files back. Each one becomes a change to the computer app's AM4
    driver, which is a new computer app to install — not a phone build.
+
+## Never again: the "everything" sweep froze an AM4 (1.86.72)
+
+The AM4 finder in 1.86.72 asked the unit for every block id from 1 to 255
+(GET_ALL_PARAMS) plus the active preset dump, one after another. On his AM4
+the first snapshot left the screen stuck on **SAVING** for minutes; it took a
+power cycle. The second snapshot then said nothing changed although he had
+changed the metronome speed — because tempo and the metronome are preset and
+global settings, which that question never reaches. 1.86.73 took the finder
+out of the app entirely.
+
+Rules for anything that talks to an AM4 directly:
+
+- Never ask about ids nobody has seen the AM4 answer. Only the block ids
+  AM4-Edit itself asks about, at AM4-Edit's own pace.
+- Tempo and the metronome are single settings, read one at a time (fn 0x01),
+  not part of any block's list.
+- One question at a time, with a pause, and stop at the first odd answer.

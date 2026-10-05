@@ -3875,34 +3875,14 @@ export function run(test) {
     }
   })
 
-  test('the AM4 finder asks what the unit holds, and lists what moved', async () => {
-    const f = await import('../shared/am4-finder.mjs')
-    /* The same frames the computer app's own log shows it sending. */
-    assert.equal(f.toHex(f.getAllParams(0x76)), 'f0000174151f760079f7')
-    assert.equal(f.toHex(f.getAllParams(0x4e)).slice(0, 16), 'f0000174151f4e00')
-    assert.equal(f.toHex(f.activeDump()).slice(0, 18), 'f0000174150 37f7f00'.replace(' ', ''))
-    /* A reply: header naming the id, one chunk of three values, footer. */
-    const pack = (v) => [v & 0x7f, (v >> 7) & 0x7f, (v >> 14) & 0x03]
-    const header = [0xf0, 0x00, 0x01, 0x74, 0x15, 0x74, 0x4e, 0x00, 0x03, 0x00, 0x00, 0xf7]
-    const chunk = [0xf0, 0x00, 0x01, 0x74, 0x15, 0x75, 0x03, 0x00, ...pack(120), ...pack(65534), ...pack(7), 0x00, 0xf7]
-    const footer = [0xf0, 0x00, 0x01, 0x74, 0x15, 0x76, 0x00, 0xf7]
-    assert.deepEqual(f.valuesFrom(0x4e, [header, chunk, footer].map(f.toHex)), [120, 65534, 7])
-    /* Another id's reply in the same window is not this one's. */
-    assert.equal(f.valuesFrom(0x50, [header, chunk, footer]), null)
-    /* What moved, with its channel when the block has four. */
-    const a = { blocks: { 78: [1, 2, 3, 4, 5, 6, 7, 8] }, dump: [9, 9] }
-    const b = { blocks: { 78: [1, 2, 3, 4, 5, 60, 7, 8] }, dump: [9, 8] }
-    const moved = f.differences(a, b)
-    assert.deepEqual(moved[0], { kind: 'block', eid: 78, index: 5, param: 1, channel: 2, before: 6, after: 60 })
-    assert.deepEqual(moved[1], { kind: 'dump', offset: 1, before: 9, after: 8 })
-    assert.match(f.describe(moved), /block 78 value 5 \(param 1, channel C\): 6 → 60/)
-    assert.equal(f.describe([]), 'Nothing changed between the two snapshots.')
-    /* Only in the Mac app's own window, only with an AM4, only on his account. */
-    const app = read('src/App.jsx')
-    assert.match(app, /inDesktopApp\(\) && slugOfUnit\(device\) === 'am4' \? \(\s*<SetupRow key="finder"/)
-    assert.match(app, /setupPage === 'finder' && isAdmin\(link\.account\?\.email\)/)
-    /* Straight to this computer, never over the relay. */
-    assert.match(read('src/lib/forgefx.js'), /export const rawSysex = async \(bytes\) => \{[\s\S]{0,200}directRequest\('\/debug\/raw'/)
+  test('the AM4 finder is gone: its sweep froze an AM4 on SAVING', () => {
+    /* Asking the AM4 for every block id from 1 to 255, plus the active dump,
+       left a real unit stuck on SAVING for minutes and needing a power cycle.
+       Nothing in the app sends the unit raw bytes any more. */
+    assert.equal(existsSync(new URL('../shared/am4-finder.mjs', import.meta.url)), false)
+    assert.equal(existsSync(new URL('../src/components/Am4Finder.jsx', import.meta.url)), false)
+    assert.doesNotMatch(read('src/App.jsx'), /Am4Finder|setupPage === 'finder'/)
+    assert.doesNotMatch(read('src/lib/forgefx.js'), /\/debug\/raw/)
   })
 
   test('How many people counts from what is already kept, names nobody, and is his alone', async () => {
