@@ -1689,6 +1689,20 @@ export default function App() {
   }, [])
 
   /*
+   * A DIFFERENT COMPUTER IS A DIFFERENT UNIT, so read it again.
+   *
+   * Picked under Which unit, or by the roll call when two answered and this
+   * browser had never been told which (firstUnitHost in shared/relay-rules):
+   * either way what is on screen was read off the other one, or off both.
+   */
+  const lastHost = useRef(link.chosenHost)
+  useEffect(() => {
+    if (lastHost.current === link.chosenHost) return
+    lastHost.current = link.chosenHost
+    if (link.role === 'remote' && link.chosenHost) read()
+  }, [link.chosenHost, link.role, read])
+
+  /*
    * Below read(), and that is not a matter of taste.
    *
    * A dependency array is evaluated DURING RENDER, so an effect that names
@@ -4515,7 +4529,6 @@ export default function App() {
                   setBusy(false)
                 }
                 setSheet(null)
-                await read()
               }}
             />
           ))}
@@ -5433,7 +5446,6 @@ export default function App() {
                         } finally {
                           setBusy(false)
                         }
-                        await read()
                       }}
                     />
                   ))}

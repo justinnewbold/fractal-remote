@@ -342,3 +342,20 @@ export function unitChoices(hostNames = [], units = {}, chosen = null) {
   })
   return [...rows.filter((r) => r.plugged), ...rows.filter((r) => !r.plugged)]
 }
+
+/**
+ * Which computer to drive when more than one answers and nobody has said.
+ *
+ * "unit: AM4 … POST /preset/select failed — Preset location index must be
+ * integer 0..103, got 495." A browser that had never been told which unit to
+ * drive addressed nothing, so every request went to BOTH computers: the FM3's
+ * answered the reads first (preset 494 of 512) and the AM4's refused the
+ * writes those reads led to — and the ones it did not refuse landed on both
+ * units. Not choosing is the dangerous answer, so one is chosen: the first
+ * computer with a unit plugged in, else the first that answered. Not
+ * remembered — a choice somebody makes under Which unit is, and outranks it.
+ */
+export function firstUnitHost(hostNames = [], units = {}) {
+  const once = hostNames.filter((name, i) => hostNames.indexOf(name) === i && hostNames.lastIndexOf(name) === i)
+  return once.find((name) => units?.[name]?.plugged) || once[0] || null
+}
