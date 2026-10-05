@@ -686,6 +686,20 @@ export const setParam = (eid, paramId, value, param, continuous) => {
 }
 
 /**
+ * Send the unit raw bytes and keep every frame it answers with.
+ *
+ * The computer app's POST /debug/raw, which only answers on the computer
+ * itself — never over the relay — so this is for the Mac app's own window.
+ * The AM4 finder (components/Am4Finder.jsx) is the one caller.
+ */
+export const rawSysex = async (bytes) => {
+  if (mock) return []
+  const hex = bytes.map((b) => b.toString(16).padStart(2, '0')).join('')
+  const res = await directRequest('/debug/raw', { method: 'POST', body: JSON.stringify({ hex }) })
+  return Array.isArray(res?.frames) ? res.frames : []
+}
+
+/**
  * The unit's own metronome, on or off: Setup → Global → Metronome.
  *
  * The phone's setUnitMetronome, here. Which number that is depends on the unit

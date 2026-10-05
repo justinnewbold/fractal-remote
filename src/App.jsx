@@ -12,6 +12,7 @@ import { CabPicker, Backup } from './components/Hardware'
 import Gig from './components/Gig'
 import TapTempo from './components/TapTempo'
 import MetronomeBeat from './components/MetronomeBeat'
+import Am4Finder from './components/Am4Finder'
 import { setMetronome, useMetronome, useUnitMetronome } from './lib/metronome'
 import { PLACES as METRONOME_PLACES, metronomeNote, unitMetronome } from '../shared/metronome.mjs'
 import { deviceSlug as slugOfUnit } from '../shared/device-slug.mjs'
@@ -505,6 +506,7 @@ const SETUP_PAGES = {
   messages: 'Messages from users',
   live: "What's live",
   metronome: 'Metronome',
+  finder: 'AM4 finder',
   usage: 'How many people',
   /* The phone's sheet is titled Unlock; so is this page. */
   unlock: 'Unlock'
@@ -526,7 +528,7 @@ const SETUP_PAGES = {
  * A map rather than an `if`, so the next nested page is a line rather than a
  * branch.
  */
-const SETUP_PARENT = { updates: 'about', demo: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' }
+const SETUP_PARENT = { updates: 'about', demo: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', finder: 'developer' }
 const upFrom = (page) => SETUP_PARENT[page] || null
 const upLabel = (page) => `\u2039 ${SETUP_PAGES[upFrom(page)] || 'Settings'}`
 /** What the chat says when a request needed the model and the model is off. */
@@ -5847,6 +5849,11 @@ export default function App() {
               <SetupRow key="accounts" title="Everyone with an account" status="Who has signed up" onClick={() => setSetupPage('accounts')} />
               <SetupRow key="messages" title="Messages from users" status="Bug reports and suggestions, with their logs" onClick={() => setSetupPage('messages')} />
               <SetupRow key="live" title="What's live" status="Which version each piece is on" onClick={() => setSetupPage('live')} />
+              {/* Only in the Mac app's own window, with an AM4 on it: the finder
+                  talks to the unit directly, which nothing over the relay may. */}
+              {inDesktopApp() && slugOfUnit(device) === 'am4' ? (
+                <SetupRow key="finder" title="AM4 finder" status="Find where a setting lives on the AM4" onClick={() => setSetupPage('finder')} />
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -5926,6 +5933,16 @@ export default function App() {
                   : 'This unit has no metronome the app can switch, so only this screen keeps time.'
               }`}
             </p>
+          </div>
+        ) : null}
+
+        {setupPage === 'finder' && isAdmin(link.account?.email) ? (
+          <div className="setup-page">
+            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('finder'))}>
+              {upLabel('finder')}
+            </button>
+            <p className="setup-page-title">{SETUP_PAGES.finder}</p>
+            <Am4Finder />
           </div>
         ) : null}
 

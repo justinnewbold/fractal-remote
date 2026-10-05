@@ -13010,3 +13010,15 @@ button.setup-account-card.out .setup-account-who {
   from { opacity: 1; }
   to { opacity: 0; }
 }
+
+/* The AM4 finder's list of what changed: plain text, selectable, scrolls. */
+.finder-result {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: var(--f-1);
+  padding: var(--s-2);
+  border-radius: var(--r-1);
+  background: var(--panel);
+  user-select: text;
+}
