@@ -33,6 +33,7 @@ import {
   forbiddenRemotely,
   hostConflict as conflictBetween,
   hostNamesFrom as namesFrom,
+  firstUnitHost,
   unitChoices,
   unitFrom,
   repeatable,
@@ -563,9 +564,11 @@ export async function censusHosts({
     const remembered = await recallHost()
     if (hosts.includes(remembered)) chosen = remembered
   }
+  units = hosts.length > 1 ? await readUnits({ windowMs, sleep }) : {}
+  /* Nobody said which: drive one rather than all of them (firstUnitHost). */
+  if (hosts.length > 1 && !chosen) chosen = firstUnitHost(hosts, units)
   targeted = false
   if (hosts.length > 1 && chosen) await confirmTargeting({ windowMs, sleep })
-  units = hosts.length > 1 ? await readUnits({ windowMs, sleep }) : {}
   return hosts
 }
 

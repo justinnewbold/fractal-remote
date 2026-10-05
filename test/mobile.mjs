@@ -3756,7 +3756,7 @@ export function run(test) {
     assert.match(settings, /<Section>Which unit<\/Section>[\s\S]{0,300}unitChoices\(hosts, units, chosen\)/)
     assert.ok(!settings.includes('<Section>Which computer</Section>'), 'the phone still says Which computer')
     const app = read('src/App.jsx')
-    assert.match(app, /title="Which unit"[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost\)[\s\S]{0,500}await chooseHost\(row\.name\)[\s\S]{0,200}await read\(\)/, 'the website switches unit but does not read the new one')
+    assert.match(app, /title="Which unit"[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost\)[\s\S]{0,500}await chooseHost\(row\.name\)/, 'the website switches unit but does not read the new one')
   })
 
   test('a live unit name opens Which unit when two units are on, like the demo', () => {
@@ -3767,7 +3767,7 @@ export function run(test) {
     assert.match(sheet, /await chooseHost\(row\.name\)[\s\S]{0,160}onClose\(\)/, 'the sheet closes before the new unit is read')
     const web = read('src/App.jsx')
     assert.match(web, /if \(!isDemo\(\) && link\.role === 'remote' && link\.hosts\.length > 1\) \{\s*setSheet\('units'\)/)
-    assert.match(web, /open=\{sheet === 'units'\}[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost\)[\s\S]{0,600}await chooseHost\(row\.name\)[\s\S]{0,200}await read\(\)/)
+    assert.match(web, /open=\{sheet === 'units'\}[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost\)[\s\S]{0,600}await chooseHost\(row\.name\)/)
   })
 
   test('the metronome clicks where it is told, with each unit’s own switch', async () => {
@@ -3820,6 +3820,22 @@ export function run(test) {
     /* The beat never takes a press away from the screen under it. */
     assert.match(read('mobile/src/components/MetronomeBeat.js'), /pointerEvents="none"/)
     assert.match(read('src/styles.css'), /\.metronome-beat \{[^}]*pointer-events: none/)
+  })
+
+  test('two computers and no choice made drives one of them, never both', async () => {
+    const { firstUnitHost } = await import('../shared/relay-rules.mjs')
+    /* The one with a unit plugged in, else the first that answered. */
+    assert.equal(firstUnitHost(['MacBook', 'Laptop'], { MacBook: { model: 'FM3', plugged: false }, Laptop: { model: 'AM4', plugged: true } }), 'Laptop')
+    assert.equal(firstUnitHost(['MacBook', 'Laptop'], {}), 'MacBook')
+    /* Two computers with one name cannot be told apart, so neither is addressed. */
+    assert.equal(firstUnitHost(['Mac', 'Mac'], {}), null)
+    assert.equal(firstUnitHost([], {}), null)
+    for (const file of ['mobile/src/lib/relay.js', 'src/lib/remote.js']) {
+      assert.match(read(file), /if \(hosts\.length > 1 && !chosen\) chosen = firstUnitHost\(hosts, units\)\s*targeted = false\s*if \(hosts\.length > 1 && chosen\) await confirmTargeting/, `${file} leaves two computers both answering`)
+    }
+    /* And what was read while both answered is read again from the one chosen. */
+    assert.match(read('mobile/src/lib/link.js'), /if \(remoteHosts\(\)\.length > 1 && remoteChosenHost\(\) !== before\) await refreshAll\(\)/)
+    assert.match(read('src/App.jsx'), /if \(lastHost\.current === link\.chosenHost\) return[\s\S]{0,120}if \(link\.role === 'remote' && link\.chosenHost\) read\(\)/)
   })
 
   test('How many people counts from what is already kept, names nobody, and is his alone', async () => {

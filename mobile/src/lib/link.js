@@ -223,8 +223,12 @@ async function join() {
 
 async function countHosts() {
   try {
+    const before = remoteChosenHost()
     await censusHosts()
     set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+    /* The roll call picked one of two (firstUnitHost): what was read while it
+       listened came from whichever answered first, so read it again. */
+    if (remoteHosts().length > 1 && remoteChosenHost() !== before) await refreshAll()
   } catch {
     // A roll call that fails is not a reason to distrust the link.
   }
