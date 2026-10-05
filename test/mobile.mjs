@@ -3879,12 +3879,56 @@ export function run(test) {
 
   test('the AM4 finder is gone: its sweep froze an AM4 on SAVING', () => {
     /* Asking the AM4 for every block id from 1 to 255, plus the active dump,
-       left a real unit stuck on SAVING for minutes and needing a power cycle.
-       Nothing in the app sends the unit raw bytes any more. */
+       left a real unit stuck on SAVING for minutes and needing a power cycle. */
     assert.equal(existsSync(new URL('../shared/am4-finder.mjs', import.meta.url)), false)
     assert.equal(existsSync(new URL('../src/components/Am4Finder.jsx', import.meta.url)), false)
     assert.doesNotMatch(read('src/App.jsx'), /Am4Finder|setupPage === 'finder'/)
-    assert.doesNotMatch(read('src/lib/forgefx.js'), /\/debug\/raw/)
+  })
+
+  test('the AM4 check reads one named setting per press, and can write nothing', async () => {
+    const c = await import('../shared/am4-check.mjs')
+    /* The read AM4-Edit sends for one value: 18 bytes, action 0x000E. */
+    const tempo = c.CHECKS.find((x) => x.key === 'tempo')
+    const frame = c.readFrame(tempo)
+    assert.equal(frame.length, 18)
+    assert.equal(c.toHex(frame).slice(0, 24), 'f0000174150102001c000e00')
+    assert.equal(frame[16], c.checksum(frame.slice(0, 16)))
+    /* A reply carrying 120.0 at that address, packed the AM4's way. */
+    const pack = (raw) => {
+      const out = []
+      let carry = 0
+      raw.forEach((b, i) => {
+        const k = i + 1
+        out.push((((b >> k) & 0x7f) | carry) & 0x7f)
+        carry = ((~(0x7f << k) & b) << (7 - k)) & 0x7f
+      })
+      return [...out, carry]
+    }
+    const f32 = new Uint8Array(new Float32Array([120]).buffer)
+    const body = [0xf0, 0x00, 0x01, 0x74, 0x15, 0x01, 0x02, 0x00, 0x1c, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x04, 0x00, ...pack([...f32])]
+    const reply = [...body, c.checksum(body), 0xf7]
+    assert.equal(reply.length, 23)
+    assert.equal(c.valueFrom(tempo, [c.toHex(reply)]).float, 120)
+    assert.equal(c.sayValue(tempo, c.valueFrom(tempo, [reply])), '120 BPM (120.0)')
+    /* Another address's answer, or a broken one, is not this one's. */
+    const other = c.CHECKS.find((x) => x.key === 'metronome')
+    assert.equal(c.valueFrom(other, [reply]), null)
+    const broken = [...reply]
+    broken[21] ^= 1
+    assert.equal(c.valueFrom(tempo, [broken]), null)
+    assert.match(c.sayValue(tempo, null), /No answer/)
+    /* Only reads, only the named addresses, one at a time with a pause. */
+    assert.ok(c.CHECKS.length <= 4, 'the check grew into a sweep')
+    for (const x of c.CHECKS) assert.equal(c.readFrame(x)[5], 0x01)
+    assert.ok(c.PAUSE_MS >= 1000)
+    const page = read('src/components/Am4Check.jsx')
+    assert.doesNotMatch(page, /setEnum|setParam|PUT|for \(|while \(|setInterval/, 'the check can write, or loops')
+    assert.match(page, /if \(busy\) return/)
+    /* Only in the Mac app's own window, only with an AM4, only on his account; straight to this computer. */
+    const app = read('src/App.jsx')
+    assert.match(app, /inDesktopApp\(\) && slugOfUnit\(device\) === 'am4' \? \(\s*<SetupRow key="am4check"/)
+    assert.match(app, /setupPage === 'am4check' && isAdmin\(link\.account\?\.email\)/)
+    assert.match(read('src/lib/forgefx.js'), /export const rawSysex = async \(bytes\) => \{[\s\S]{0,200}directRequest\('\/debug\/raw'/)
   })
 
   test('How many people counts from what is already kept, names nobody, and is his alone', async () => {

@@ -80,6 +80,7 @@ import {
 import ParamSearch from './components/ParamSearch'
 import UpdateNotice from './components/UpdateNotice'
 import Updates, { UpdateReadyNotice } from './components/Updates'
+import Am4Check from './components/Am4Check'
 import RenamePreset from './components/RenamePreset'
 import { countFromRefusal, slotCount, slotOutside, slotProblem, slotsForChat, timeLeft } from './lib/slots'
 import { checkRevert, noteEdit, revertSaid, revertTook, stuckLines } from './lib/revertCheck'
@@ -506,6 +507,7 @@ const SETUP_PAGES = {
   live: "What's live",
   metronome: 'Metronome',
   usage: 'How many people',
+  am4check: 'AM4 check',
   /* The phone's sheet is titled Unlock; so is this page. */
   unlock: 'Unlock'
 }
@@ -526,7 +528,7 @@ const SETUP_PAGES = {
  * A map rather than an `if`, so the next nested page is a line rather than a
  * branch.
  */
-const SETUP_PARENT = { updates: 'about', demo: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' }
+const SETUP_PARENT = { updates: 'about', demo: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', am4check: 'developer' }
 const upFrom = (page) => SETUP_PARENT[page] || null
 const upLabel = (page) => `\u2039 ${SETUP_PAGES[upFrom(page)] || 'Settings'}`
 /** What the chat says when a request needed the model and the model is off. */
@@ -5847,6 +5849,11 @@ export default function App() {
               <SetupRow key="accounts" title="Everyone with an account" status="Who has signed up" onClick={() => setSetupPage('accounts')} />
               <SetupRow key="messages" title="Messages from users" status="Bug reports and suggestions, with their logs" onClick={() => setSetupPage('messages')} />
               <SetupRow key="live" title="What's live" status="Which version each piece is on" onClick={() => setSetupPage('live')} />
+              {/* Only in the Mac app's own window, with an AM4 on it: the check
+                  talks to the unit directly, which nothing over the relay may. */}
+              {inDesktopApp() && slugOfUnit(device) === 'am4' ? (
+                <SetupRow key="am4check" title="AM4 check" status="Read one AM4 setting at a time" onClick={() => setSetupPage('am4check')} />
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -5926,6 +5933,16 @@ export default function App() {
                   : 'This unit has no metronome the app can switch, so only this screen keeps time.'
               }`}
             </p>
+          </div>
+        ) : null}
+
+        {setupPage === 'am4check' && isAdmin(link.account?.email) ? (
+          <div className="setup-page">
+            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('am4check'))}>
+              {upLabel('am4check')}
+            </button>
+            <p className="setup-page-title">{SETUP_PAGES.am4check}</p>
+            <Am4Check />
           </div>
         ) : null}
 
