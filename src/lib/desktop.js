@@ -77,7 +77,7 @@ export const updateReady = (state) => state?.kind === 'ready'
 export function updateAdvice(state) {
   switch (state?.kind) {
     case 'ready':
-      return 'Restart to update and the app comes back on the new version in a few seconds. Or leave it: it installs the next time you quit.'
+      return 'Restart to update and the app comes back on the new version in a few seconds. Or leave it: it installs the next time you quit. Anything newer is checked for when it opens again.'
     case 'downloading':
     case 'found':
       return 'It downloads in the background. You will be told when it is ready.'

@@ -8509,6 +8509,35 @@ test('ready means macOS has the update, not merely that we downloaded it', async
   assert.match(main, /wireUpdates\(\{\s*\n\s*updater: autoUpdater,\s*\n\s*native,/, 'the native updater is not handed to wireUpdates')
 })
 
+test('Check for updates after one is ready keeps it ready, and never asks macOS twice', async () => {
+  /*
+   * "It should update when I go to the settings and click check for updates.
+   * That isn't working. Only force closing and restarting works." macOS takes
+   * one update per run; asking again found the same version (or a newer one),
+   * said Preparing… for ever, and took the Restart button with it.
+   */
+  const seen = []
+  const u = fakeUpdater()
+  const n = fakeUpdater()
+  const { check } = updates.wireUpdates({ updater: u, native: n, onState: (s) => seen.push(s) })
+  await check()
+  u.emit('update-available', { version: '1.86.73' })
+  u.emit('update-downloaded', { version: '1.86.73' })
+  n.emit('update-downloaded')
+  assert.deepEqual(seen.at(-1), { kind: 'ready', version: '1.86.73' })
+  await check()
+  await check()
+  assert.equal(u.checked, 1, 'asked again once macOS already holds an update')
+  assert.deepEqual(seen.at(-1), { kind: 'ready', version: '1.86.73' }, 'the Restart button went away')
+  // Before anything is held, a check is a check — and "staging" alone is not held.
+  const p = fakeUpdater()
+  const pn = fakeUpdater()
+  const later = updates.wireUpdates({ updater: p, native: pn, onState: () => {} })
+  p.emit('update-downloaded', { version: '1.86.74' })
+  await later.check()
+  assert.equal(p.checked, 1)
+})
+
 test('an app run from Downloads is offered a home in Applications first', () => {
   assert.deepEqual(updates.installPlace({ exePath: '/private/var/folders/zz/T/AppTranslocation/ABC/d/Fractal Remote.app/Contents/MacOS/Fractal Remote', inApplications: false }), { ok: false, reason: 'translocated' })
   assert.deepEqual(updates.installPlace({ exePath: '/Users/j/Downloads/Fractal Remote.app/Contents/MacOS/Fractal Remote', inApplications: false }), { ok: false, reason: 'not-applications' })
