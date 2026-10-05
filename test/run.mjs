@@ -12194,7 +12194,7 @@ test('the computer app carries the server with the AM4 tempo on its own routes',
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+am4tempo(\+|$)/, 'the computer app does not carry the AM4 tempo')
   // "Have it actually show the firmware version here" — /device answered null for an AM4.
-  assert.match(lock.forgefx.tag, /\+am4fw$/, 'the computer app does not read the AM4 firmware')
+  assert.match(lock.forgefx.tag, /\+am4fw(\+|$)/, 'the computer app does not read the AM4 firmware')
   assert.equal(lock.forgefx.branch, 'claude/am4-tempo')
   assert.match(lock.forgefx.commit, /^[0-9a-f]{40}$/, 'the pin is not a full commit')
 })
