@@ -22,6 +22,8 @@ export default function Updates() {
   const bridge = desktopBridge()
   const [state, setState] = useState(null)
   const [asking, setAsking] = useState(false)
+  // Above the early return: a hook after one is a different hook order per render.
+  const [installing, setInstalling] = useState(false)
 
   useEffect(() => {
     if (!bridge) return undefined
@@ -41,7 +43,6 @@ export default function Updates() {
 
   const line = state?.line
   const advice = updateAdvice(state)
-  const [installing, setInstalling] = useState(false)
 
   return (
     <div className="updates">

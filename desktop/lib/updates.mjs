@@ -129,6 +129,23 @@ export function wireUpdates({ updater, native = null, onState, log = () => {} })
   updater.autoDownload = true
   updater.autoInstallOnAppQuit = true
   let version = null
+  /*
+   * The version macOS has taken and is holding to install on quit, once it
+   * has one. After that, this run of the app is done with updating.
+   *
+   * "It should update when I go to the settings and click check for updates.
+   * That isn't working. Only force closing and restarting works." macOS's
+   * updater takes ONE update per run: once it holds one, it ignores every
+   * further request until the app has quit. But Check for updates asked
+   * anyway — the library compared against the version RUNNING, not the one
+   * waiting, so it found the same update (or a newer one) again, downloaded
+   * it, and said "Preparing…", which macOS then never finished. The Restart
+   * button went with the "ready" it replaced, and the only way left was to
+   * quit by force. So once something is held, a check says so and stops:
+   * restart, and the new run checks again on its way up, newer versions
+   * included.
+   */
+  let held = null
 
   const say = (state) => {
     try {
@@ -163,6 +180,7 @@ export function wireUpdates({ updater, native = null, onState, log = () => {} })
    */
   on('update-downloaded', (info) => {
     version = info?.version || version
+    if (!native) held = version
     say({ kind: native ? 'staging' : 'ready', version })
   })
   // The library's own failures are the network, nearly always; "couldn't
@@ -172,7 +190,10 @@ export function wireUpdates({ updater, native = null, onState, log = () => {} })
     say({ kind: 'trouble' })
   })
   if (native && typeof native.on === 'function') {
-    native.on('update-downloaded', () => say({ kind: 'ready', version }))
+    native.on('update-downloaded', () => {
+      held = version
+      say({ kind: 'ready', version })
+    })
     // macOS refusing the file — a signature it does not trust, a place it
     // cannot write — is the reason an install never happened, said out loud.
     native.on('error', (err) => {
@@ -203,6 +224,10 @@ export function wireUpdates({ updater, native = null, onState, log = () => {} })
     },
 
     check: async () => {
+      if (held !== null) {
+        say({ kind: 'ready', version: held })
+        return
+      }
       try {
         await updater.checkForUpdates()
       } catch (err) {
