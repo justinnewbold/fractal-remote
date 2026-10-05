@@ -3929,6 +3929,11 @@ export function run(test) {
     assert.match(c.sayMoved(before, after), /number at 8: 120\.0 → 90\.000/)
     assert.equal(c.sayMoved(before, before), 'Nothing moved since the last read.')
     assert.match(c.sayValue(tempo, before), /^40 bytes: 0303/)
+    /* What his AM4 actually answered: its own screen text from byte 8 on. */
+    const his = c.fromHex('fa0049000000803f3235302042504d00000000000000000000000000000000000000000000000000')
+    assert.equal(c.displayText(his), '250 BPM')
+    assert.match(c.sayValue(tempo, { bytes: his }), /^AM4 shows “250 BPM”/)
+    assert.equal(c.displayText(c.fromHex('a9aa490055aa2a3f302e303020644200')), '0.00 dB')
     /* Another address's answer, or a broken one, is not this one's. */
     const other = c.CHECKS.find((x) => x.key === 'metronome')
     assert.equal(c.valueFrom(other, [a]), null)

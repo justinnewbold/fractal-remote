@@ -160,5 +160,19 @@ export function sayValue(check, value) {
     if (!Number.isFinite(n)) return `An answer, but not a number (stored as ${value.whole}).`
     return check.key === 'tempo' && n >= 20 && n <= 400 ? `${Math.round(n)} BPM (${short(n)})` : short(n)
   }
-  return `${value.bytes.length} bytes: ${toHex(value.bytes)}`
+  const shows = displayText(value.bytes)
+  return shows ? `AM4 shows “${shows}” (${value.bytes.length} bytes: ${toHex(value.bytes)})` : `${value.bytes.length} bytes: ${toHex(value.bytes)}`
+}
+
+/**
+ * The AM4's own words for the setting, from a long answer: bytes 8 on are the
+ * text its screen shows ("250 BPM", "PRESET", "0.00 dB" on his AM4), ended by
+ * a zero. Null when they are not plain text.
+ */
+export function displayText(bytes) {
+  if (!Array.isArray(bytes) || bytes.length <= 8) return null
+  const end = bytes.indexOf(0, 8)
+  const text = bytes.slice(8, end === -1 ? bytes.length : end)
+  if (!text.length || text.some((b) => b < 0x20 || b > 0x7e)) return null
+  return String.fromCharCode(...text)
 }
