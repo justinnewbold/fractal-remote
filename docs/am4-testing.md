@@ -11,7 +11,7 @@ that the FM3's has (`gen3.ts`), kept to what an AM4 actually has on it:
 
 | Missing | What it costs in the app |
 |---|---|
-| `getTempo` / `setTempo` / `tapTempo` | Tap and the tempo box say the tempo can't be set; the metronome cannot follow taps |
+| ~~`getTempo` / `setTempo` / `tapTempo`~~ | **Found 2026-10-05** with the AM4 check: Controllers → Tempo is parameter (0x0002, 0x001C), 24..250 BPM (norm = (bpm−24)/226). In the computer app from 1.86.79 |
 | Metronome | Removed in 1.86.74: the guessed `global.metronome` write froze his AM4 on SAVING every time it connected. It is a level on Controllers → Tempo, not a switch |
 | `sceneState` | Which pedals are on in each scene, without switching to it |
 | `cabState` / `cabIrs` | The cab picker |
@@ -64,3 +64,19 @@ Rules for anything that talks to an AM4 directly:
 - Tempo and the metronome are single settings, read one at a time (fn 0x01),
   not part of any block's list.
 - One question at a time, with a pause, and stop at the first odd answer.
+
+## Found with the AM4 check (2026-10-05)
+
+The long read (action 0x0D) answers with a 40-byte description whose bytes
+8+ are the AM4's own display text, bytes 0–1 a whole number and bytes 4–7 the
+0..1 value it stores.
+
+| Setting | Address | Read on his AM4 | Range |
+|---|---|---|---|
+| Tempo | 0x0002 / 0x001C | "250 BPM" (1.0), "107 BPM" (0.36731) | 24..250 BPM |
+| Tempo To Use | 0x0002 / 0x001D | "PRESET" (0) | list |
+| Metronome level | 0x0001 / 0x0061 | "0.00 dB" (0.66666) | −64..+32 dB, by one reading |
+
+The metronome level is a Global setting, and writing a guessed Global froze
+the AM4 on SAVING once already. It stays read-only until a level write has
+been tried by hand with the unit in view.

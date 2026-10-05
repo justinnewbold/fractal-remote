@@ -3948,6 +3948,8 @@ export function run(test) {
     assert.match(app, /inDesktopApp\(\) && slugOfUnit\(device\) === 'am4' \? \(\s*<SetupRow key="am4check"/)
     assert.match(app, /setupPage === 'am4check' && isAdmin\(link\.account\?\.email\)/)
     assert.match(read('src/lib/forgefx.js'), /export const rawSysex = async \(bytes\) => \{[\s\S]{0,200}directRequest\('\/debug\/raw'/)
+    /* What it found ships: the computer app carries the tempo it read. */
+    assert.match(read('desktop/forgefx.lock.json'), /\+am4tempoparam/, 'the Mac app does not carry the AM4 tempo the check found')
   })
 
   test('How many people counts from what is already kept, names nobody, and is his alone', async () => {
