@@ -185,6 +185,8 @@ export const FILES = [
     target: '../mobile/src/lib/admin.js',
     render: (text) => banner('../shared/admin.mjs') + text.replace("from './owner-unlock.mjs'", "from './owner-unlock.js'")
   },
+  /* What the unit said it cannot do, so it is not asked again. */
+  { source: '../shared/unsupported.mjs', target: '../mobile/src/lib/unsupported.js' },
   /* The metronome: where it clicks, and the number that switches each unit's. */
   { source: '../shared/metronome.mjs', target: '../mobile/src/lib/metronome-rules.js' },
   /* What's live: which version each piece is on, for the Developer page. */

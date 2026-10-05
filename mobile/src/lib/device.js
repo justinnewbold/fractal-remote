@@ -36,14 +36,28 @@ import { logDebug } from './debugLog'
  */
 const remoteRequest = (path, options) => {
   const demo = demoDevice()
-  return demo ? demoRequest(demo, path, options) : overTheWire(path, options)
+  if (demo) return demoRequest(demo, path, options)
+  /* What this unit has already refused as unsupported is not asked again. */
+  const method = options?.method || 'GET'
+  if (refused.known(method, path)) return Promise.reject(rememberedRefusal(method, path))
+  return overTheWire(path, options).catch((err) => {
+    refused.heard(method, path, err)
+    throw err
+  })
 }
+
+/* What the attached unit has refused as unsupported: see shared/unsupported.mjs. */
+const refused = unsupportedMemo()
+
+/** Whether this unit has already refused this kind of request as unsupported. */
+export const refusedAlready = (method, path) => !demoDevice() && refused.known(method, path)
 import { withLineage } from './lineage'
 import { cableColumns, toWireCable, toWireCell } from './grid-plan'
 import { cleanPresetName, isEmptySlotName } from './unit.mjs'
 import { preferredEncoding, rememberEncoding } from './encoding'
 import { toNormalized } from './scale'
 import { unitMetronomeRequest } from './metronome-rules'
+import { rememberedRefusal, unsupportedMemo } from './unsupported'
 
 export {
   EXCLUDED_BLOCKS,
@@ -97,6 +111,8 @@ const told = (what, req) =>
  * eight scenes. The shape of every other answer depends on this one.
  */
 export const detect = async () => {
+  /* A unit detected afresh is asked everything afresh: see shared/unsupported.mjs. */
+  refused.forget()
   const res = await remoteRequest('/device/detect')
   /*
    * AND THE FIRMWARE, WHICH IS ON THE OTHER ENDPOINT. `/device/detect` answers

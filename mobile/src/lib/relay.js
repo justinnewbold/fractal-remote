@@ -548,7 +548,7 @@ export async function remoteDisconnect() {
  * instant, because "no second answer yet" and "no second answer at all" are the
  * same thing until the clock runs out. Taken once per connect.
  */
-export async function censusHosts({
+async function takeCensus({
   windowMs = 1500,
   sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 } = {}) {
@@ -570,6 +570,32 @@ export async function censusHosts({
   targeted = false
   if (hosts.length > 1 && chosen) await confirmTargeting({ windowMs, sleep })
   return hosts
+}
+
+/*
+ * A WRITE WAITS FOR THE ROLL CALL, so it lands on one unit and not two.
+ *
+ * Until the roll call has picked a computer (firstUnitHost), nothing is
+ * addressed, so a press made in those first seconds went to every computer on
+ * the account. Reads are left alone — they are re-read from the one chosen —
+ * but a write is held until the count is in, and no longer than it can take.
+ */
+let counting = null
+const COUNT_WAIT_MS = 6000
+
+export function censusHosts(options) {
+  const run = takeCensus(options)
+  counting = run
+  run.finally(() => {
+    if (counting === run) counting = null
+  }).catch(() => {})
+  return run
+}
+
+/** Resolves once no roll call is running, or after COUNT_WAIT_MS at most. */
+function countDone() {
+  if (!counting) return Promise.resolve()
+  return Promise.race([counting.catch(() => {}), new Promise((r) => setTimeout(r, COUNT_WAIT_MS))])
 }
 
 /** Shout one read and keep every answer, rather than the first. */
@@ -748,6 +774,8 @@ export async function waitForRelay(
  */
 export async function remoteRequest(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase()
+  /* Held while the roll call picks a computer: see countDone. */
+  if (method !== 'GET') await countDone()
   /*
    * A dump that arrived in the wrong order is asked for again, not shown.
    *

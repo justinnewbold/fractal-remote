@@ -26,6 +26,8 @@ Nothing is left on this list.
   branch and move `desktop/forgefx.lock.json` to it. That is a new computer
   app for Justin to install, not a phone build. The metronome follows the
   unit's tempo already, so it starts following taps once this lands.
+  The recording session, and the rest of what the AM4 cannot do yet, are in
+  docs/am4-testing.md.
 
 ## Older Fractal units
 

@@ -172,7 +172,7 @@ async function rigOnTheBench(over = {}) {
   }
   /* The catalog the pedals are named from before the chain is read; see lib/chain-outline. */
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
-  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js']) {
+  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'unsupported.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -3836,6 +3836,43 @@ export function run(test) {
     /* And what was read while both answered is read again from the one chosen. */
     assert.match(read('mobile/src/lib/link.js'), /if \(remoteHosts\(\)\.length > 1 && remoteChosenHost\(\) !== before\) await refreshAll\(\)/)
     assert.match(read('src/App.jsx'), /if \(lastHost\.current === link\.chosenHost\) return[\s\S]{0,120}if \(link\.role === 'remote' && link\.chosenHost\) read\(\)/)
+  })
+
+  test('a unit is not asked again what it said it cannot do, and Tap says so in words', async () => {
+    const { unsupportedMemo, requestKind, isUnsupported, rememberedRefusal, NO_TEMPO } = await import('../shared/unsupported.mjs')
+    const memo = unsupportedMemo()
+    assert.equal(requestKind('get', '/presets/97/summary'), 'GET /presets/:n/summary')
+    memo.heard('GET', '/presets/97/summary', { status: 501, message: 'unsupported' })
+    assert.ok(memo.known('GET', '/presets/98/summary'), 'preset 98 is asked after 97 said no')
+    assert.ok(!memo.known('GET', '/presets/98/scenes'))
+    /* Only "unsupported" is kept: a timeout or a 503 is worth asking again. */
+    memo.heard('GET', '/tempo', { status: 503, message: 'port not open' })
+    assert.ok(!memo.known('GET', '/tempo'))
+    /* Never what decides which unit it is. */
+    memo.heard('GET', '/device/detect', { status: 501 })
+    assert.ok(!memo.known('GET', '/device/detect'))
+    memo.forget()
+    assert.equal(memo.size(), 0)
+    const err = rememberedRefusal('POST', '/tempo')
+    assert.ok(isUnsupported(err) && err.remembered)
+    assert.match(NO_TEMPO, /Tap tempo on the unit itself/)
+
+    /* Both ends answer from memory, learn from refusals, and forget on detect. */
+    const web = read('src/lib/forgefx.js')
+    assert.match(web, /if \(!mock && refused\.known\(method, path\)\) return Promise\.reject\(rememberedRefusal\(method, path\)\)/)
+    assert.match(web, /export const detect = async \(\) => \{[\s\S]{0,200}refused\.forget\(\)/)
+    const phone = read('mobile/src/lib/device.js')
+    assert.match(phone, /if \(refused\.known\(method, path\)\) return Promise\.reject\(rememberedRefusal\(method, path\)\)/)
+    assert.match(phone, /export const detect = async \(\) => \{[\s\S]{0,200}refused\.forget\(\)/)
+    /* Tap on a unit with no tempo says so and sends nothing. */
+    assert.match(read('src/components/TapTempo.jsx'), /if \(refusedAlready\('POST', '\/tempo'\)\) \{\s*onError\(NO_TEMPO\)\s*return/)
+    assert.match(read('mobile/src/lib/rig.js'), /if \(device\.refusedAlready\('POST', '\/tempo'\)\) \{\s*set\(faultFrom\(\{ message: NO_TEMPO \}\)\)\s*return false/)
+    /* Unnamed scenes are an answer: no second dump to learn the same nothing. */
+    assert.match(web, /traceStep\('scenes: the unit answered, and every scene is unnamed'\)\s*return names\.map\(\(\) => ''\)/)
+    /* And a write waits for the roll call, on both ends. */
+    for (const file of ['mobile/src/lib/relay.js', 'src/lib/remote.js']) {
+      assert.match(read(file), /export async function remoteRequest\(path, options = \{\}\) \{\s*const method = \(options\.method \|\| 'GET'\)\.toUpperCase\(\)\s*\/\*[^*]*\*\/\s*if \(method !== 'GET'\) await countDone\(\)/, `${file} sends a write before the roll call has picked a computer`)
+    }
   })
 
   test('How many people counts from what is already kept, names nobody, and is his alone', async () => {
@@ -7953,7 +7990,7 @@ export function run(test) {
     assert.match(demo, /mock = want \? createMockDevice\(unit\) : null/, 'the switch does not build a unit')
     assert.match(
       read('mobile/src/lib/device.js').replace(/\s+/g, ' '),
-      /const demo = demoDevice\(\) return demo \? demoRequest\(demo, path, options\) : overTheWire\(path, options\)/,
+      /const demo = demoDevice\(\) if \(demo\) return demoRequest\(demo, path, options\)[\s\S]{0,300}return overTheWire\(path, options\)/,
       'the app does not route through the demo, so turning it on changes nothing'
     )
   })
