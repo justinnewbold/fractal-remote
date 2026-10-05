@@ -6,7 +6,7 @@
  * to play on the unit or the phone or both?"
  *
  * The unit has one. FM3 (firmware 12 and later), FM9, Axe-Fx III (31 and
- * later) and AM4 all carry a Metronome switch in Setup → Global, and it
+ * later) carry a Metronome switch in Setup → Global, and it
  * clicks through the unit's own outputs at the unit's own tempo — the one the
  * Tap button and the tempo box already set. That is the click to play to: it
  * is in the same speakers as the guitar and the unit keeps the time itself.
@@ -49,8 +49,14 @@ export const clicks = (setting) => {
  * On the gen-3 units it is a parameter of the GLOBAL virtual block, effect id
  * 1, and its number is the unit's own — the FM3's is not the Axe-Fx III's, and
  * the codec's notes say plainly that sending one unit's number to another
- * "would mis-address" (forgefx-midi gen3/*\/params.ts, GLOBAL_METRONOME). The
- * AM4 names it instead: global.metronome, written through /device/param.
+ * "would mis-address" (forgefx-midi gen3/*\/params.ts, GLOBAL_METRONOME).
+ *
+ * The AM4 is left out on purpose. Its metronome is a level on Controllers →
+ * Tempo, not a switch, and the address the app used to write (global.metronome)
+ * was a guess from a name that no AM4 had ever answered. The app wrote it every
+ * time an AM4 came online with the click set to Unit, and his AM4 froze on
+ * SAVING each time until it was restarted. Nothing is written to an AM4's
+ * global settings until a real unit has proven the address.
  */
 const GEN3 = { fm3: 14878, fm9: 14907, axefxiii: 14655 }
 
@@ -58,7 +64,6 @@ const GEN3 = { fm3: 14878, fm9: 14907, axefxiii: 14655 }
 export function unitMetronome(slug) {
   const key = String(slug || '').toLowerCase()
   if (GEN3[key]) return { kind: 'block', eid: 1, paramId: GEN3[key] }
-  if (key === 'am4') return { kind: 'key', key: 'global.metronome' }
   return null
 }
 
