@@ -3887,34 +3887,53 @@ export function run(test) {
 
   test('the AM4 check reads one named setting per press, and can write nothing', async () => {
     const c = await import('../shared/am4-check.mjs')
-    /* The read AM4-Edit sends for one value: 18 bytes, action 0x000E. */
     const tempo = c.CHECKS.find((x) => x.key === 'tempo')
+    /* The long read AM4-Edit polls bypass with: 18 bytes, action 0x000D. The
+       short read (0x000E) answered 0.000 for everything on his AM4. */
     const frame = c.readFrame(tempo)
     assert.equal(frame.length, 18)
-    assert.equal(c.toHex(frame).slice(0, 24), 'f0000174150102001c000e00')
+    assert.equal(c.toHex(frame).slice(0, 24), 'f0000174150102001c000d00')
     assert.equal(frame[16], c.checksum(frame.slice(0, 16)))
-    /* A reply carrying 120.0 at that address, packed the AM4's way. */
+    /* Replies packed the AM4's way: 7 raw bytes travel as 8. */
     const pack = (raw) => {
       const out = []
-      let carry = 0
-      raw.forEach((b, i) => {
-        const k = i + 1
-        out.push((((b >> k) & 0x7f) | carry) & 0x7f)
-        carry = ((~(0x7f << k) & b) << (7 - k)) & 0x7f
-      })
-      return [...out, carry]
+      for (let at = 0; at < raw.length; at += 7) {
+        const run = raw.slice(at, at + 7)
+        let carry = 0
+        run.forEach((b, i) => {
+          const k = i + 1
+          out.push((((b >> k) & 0x7f) | carry) & 0x7f)
+          carry = ((~(0x7f << k) & b) << (7 - k)) & 0x7f
+        })
+        out.push(carry)
+      }
+      return out
     }
-    const f32 = new Uint8Array(new Float32Array([120]).buffer)
-    const body = [0xf0, 0x00, 0x01, 0x74, 0x15, 0x01, 0x02, 0x00, 0x1c, 0x00, 0x0e, 0x00, 0x00, 0x00, 0x04, 0x00, ...pack([...f32])]
-    const reply = [...body, c.checksum(body), 0xf7]
-    assert.equal(reply.length, 23)
-    assert.equal(c.valueFrom(tempo, [c.toHex(reply)]).float, 120)
-    assert.equal(c.sayValue(tempo, c.valueFrom(tempo, [reply])), '120 BPM (120.0)')
+    const reply = (action, raw) => {
+      const body = [0xf0, 0x00, 0x01, 0x74, 0x15, 0x01, 0x02, 0x00, 0x1c, 0x00, action, 0x00, 0x00, 0x00, raw.length & 0x7f, raw.length >> 7, ...pack(raw)]
+      return [...body, c.checksum(body), 0xf7]
+    }
+    /* The 4-byte shape still reads as a number. */
+    const f32 = [...new Uint8Array(new Float32Array([120]).buffer)]
+    const small = reply(0x0e, f32)
+    assert.equal(small.length, 23)
+    assert.equal(c.valueFrom(tempo, [c.toHex(small)]).float, 120)
+    assert.equal(c.sayValue(tempo, c.valueFrom(tempo, [small])), '120 BPM (120.0)')
+    /* The long one: 40 bytes, 64 on the wire, and what moved between two. */
+    const forty = (bpm) => [...Array(8).fill(3), ...new Uint8Array(new Float32Array([bpm]).buffer), ...Array(28).fill(0)]
+    const a = reply(0x0d, forty(120))
+    assert.equal(a.length, 64)
+    const before = c.valueFrom(tempo, [a])
+    assert.deepEqual(before.bytes, forty(120))
+    const after = c.valueFrom(tempo, [reply(0x0d, forty(90))])
+    assert.match(c.sayMoved(before, after), /number at 8: 120\.0 → 90\.000/)
+    assert.equal(c.sayMoved(before, before), 'Nothing moved since the last read.')
+    assert.match(c.sayValue(tempo, before), /^40 bytes: 0303/)
     /* Another address's answer, or a broken one, is not this one's. */
     const other = c.CHECKS.find((x) => x.key === 'metronome')
-    assert.equal(c.valueFrom(other, [reply]), null)
-    const broken = [...reply]
-    broken[21] ^= 1
+    assert.equal(c.valueFrom(other, [a]), null)
+    const broken = [...a]
+    broken[62] ^= 1
     assert.equal(c.valueFrom(tempo, [broken]), null)
     assert.match(c.sayValue(tempo, null), /No answer/)
     /* Only reads, only the named addresses, one at a time with a pause. */
