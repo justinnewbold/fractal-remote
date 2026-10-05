@@ -12,7 +12,7 @@ that the FM3's has (`gen3.ts`), kept to what an AM4 actually has on it:
 | Missing | What it costs in the app |
 |---|---|
 | `getTempo` / `setTempo` / `tapTempo` | Tap and the tempo box say the tempo can't be set; the metronome cannot follow taps |
-| Metronome on/off is a guess | `global.metronome` = 1/0, never seen on a real AM4 |
+| Metronome | Removed in 1.86.74: the guessed `global.metronome` write froze his AM4 on SAVING every time it connected. It is a level on Controllers → Tempo, not a switch |
 | `sceneState` | Which pedals are on in each scene, without switching to it |
 | `cabState` / `cabIrs` | The cab picker |
 | `fcReadState` / `fcReadSwitch` | What each footswitch does |

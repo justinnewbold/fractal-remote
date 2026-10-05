@@ -3784,7 +3784,9 @@ export function run(test) {
     assert.deepEqual(m.unitMetronomeRequest('fm3', true), { method: 'PUT', path: '/preset/blocks/1/params/14878', body: { value: 1, continuous: false } })
     assert.deepEqual(m.unitMetronomeRequest('fm9', false), { method: 'PUT', path: '/preset/blocks/1/params/14907', body: { value: 0, continuous: false } })
     assert.deepEqual(m.unitMetronomeRequest('axefxiii', true).path, '/preset/blocks/1/params/14655')
-    assert.deepEqual(m.unitMetronomeRequest('am4', true), { method: 'PUT', path: '/device/param', body: { key: 'global.metronome', value: 1 } })
+    /* Never a guess at an AM4's global settings: that froze his AM4 on SAVING. */
+    assert.equal(m.unitMetronomeRequest('am4', true), null, 'the AM4 is written an unproven global')
+    assert.equal(m.unitMetronomeRequest('am4', false), null)
     assert.equal(m.unitMetronomeRequest('vp4', true), null, 'a unit with no known switch is written a guess')
     /* The codec agrees about those numbers. */
     const codec = '../../forgefx-midi/src/gen3'
@@ -3794,7 +3796,7 @@ export function run(test) {
     }
     /* Every relay request it makes is one the computer allows from a phone. */
     const { hostAllows } = await import('../shared/relay-rules.mjs')
-    for (const slug of ['fm3', 'fm9', 'axefxiii', 'am4']) {
+    for (const slug of ['fm3', 'fm9', 'axefxiii']) {
       const r = m.unitMetronomeRequest(slug, true)
       assert.ok(hostAllows(r.method, r.path), `the computer refuses ${slug}'s metronome from a phone`)
     }
