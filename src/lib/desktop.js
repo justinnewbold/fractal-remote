@@ -93,6 +93,8 @@ export function updateAdvice(state) {
       return 'Fractal Remote is not in your Applications folder, and macOS only replaces an app that is. Move it there and updates install themselves again.'
     case 'current':
       return 'This is the newest version.'
+    case 'building':
+      return 'A new Mac version takes about ten minutes to appear after a change. Press Check for updates again in a few minutes and it downloads by itself.'
     case 'checking':
       return null
     default:

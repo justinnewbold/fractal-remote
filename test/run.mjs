@@ -8538,6 +8538,62 @@ test('Check for updates after one is ready keeps it ready, and never asks macOS 
   assert.equal(p.checked, 1)
 })
 
+test('a check asks GitHub what is there now, and says when the Mac version is still being built', async () => {
+  /*
+   * "I keep clicking check for updates and it says no updates available. The
+   * only way I can check for an update is to force close the app and restart
+   * it." A release is on GitHub ten minutes before its Mac files are, and the
+   * web pages the library reads can be minutes old.
+   */
+  const release = (tag, names) => ({
+    tag_name: tag,
+    html_url: `https://github.com/justinnewbold/fractal-remote/releases/tag/${tag}`,
+    assets: names.map((name) => ({ name }))
+  })
+  const done = ['latest-mac.yml', 'Fractal-Remote-1.86.76-arm64-mac.zip', 'Fractal-Remote-1.86.76-mac.zip']
+  assert.deepEqual(updates.releaseVerdict(release('v1.86.76', done), '1.86.75'), {
+    kind: 'newer',
+    version: '1.86.76',
+    feed: 'https://github.com/justinnewbold/fractal-remote/releases/download/v1.86.76'
+  })
+  assert.deepEqual(updates.releaseVerdict(release('v1.86.76', ['Fractal-Remote-1.86.76.AppImage']), '1.86.75'), { kind: 'building', version: '1.86.76' })
+  assert.deepEqual(updates.releaseVerdict(release('v1.86.75', done), '1.86.75'), { kind: 'same', version: '1.86.75' })
+  assert.equal(updates.releaseVerdict({ ...release('v1.86.76', done), draft: true }, '1.86.75'), null)
+  assert.equal(updates.releaseVerdict(null, '1.86.75'), null)
+  assert.equal(updates.newerThan('1.86.10', '1.86.9'), true, 'compared as text')
+  assert.equal(updates.newerThan('1.86.9', '1.86.10'), false)
+
+  // Still being built: said, and the library is not asked to fail at it.
+  const seen = []
+  const u = fakeUpdater()
+  const building = updates.wireUpdates({ updater: u, onState: (s) => seen.push(s), running: '1.86.75', lookup: async () => release('v1.86.76', []) })
+  await building.check()
+  assert.equal(u.checked, 0)
+  assert.deepEqual(seen.at(-1), { kind: 'building', version: '1.86.76' })
+  assert.match(updates.updateLine(seen.at(-1)), /1\.86\.76 is still being built/)
+
+  // Ready on GitHub: the library is pointed at exactly that release, then asked.
+  const v = fakeUpdater()
+  let feed = null
+  v.setFeedURL = (f) => {
+    feed = f
+  }
+  const ready = updates.wireUpdates({ updater: v, onState: () => {}, running: '1.86.75', lookup: async () => release('v1.86.76', done) })
+  await ready.check()
+  assert.deepEqual(feed, { provider: 'generic', url: 'https://github.com/justinnewbold/fractal-remote/releases/download/v1.86.76' })
+  assert.equal(v.checked, 1)
+
+  // No answer from the API: the library's own check still happens.
+  const w = fakeUpdater()
+  const offline = updates.wireUpdates({ updater: w, onState: () => {}, running: '1.86.75', lookup: async () => { throw new Error('offline') } })
+  await offline.check()
+  assert.equal(w.checked, 1)
+
+  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  assert.match(main, /api\.github\.com\/repos\/justinnewbold\/fractal-remote\/releases\/latest/)
+  assert.match(main, /running: app\.getVersion\(\),\s*\n\s*lookup: async/)
+})
+
 test('an app run from Downloads is offered a home in Applications first', () => {
   assert.deepEqual(updates.installPlace({ exePath: '/private/var/folders/zz/T/AppTranslocation/ABC/d/Fractal Remote.app/Contents/MacOS/Fractal Remote', inApplications: false }), { ok: false, reason: 'translocated' })
   assert.deepEqual(updates.installPlace({ exePath: '/Users/j/Downloads/Fractal Remote.app/Contents/MacOS/Fractal Remote', inApplications: false }), { ok: false, reason: 'not-applications' })
