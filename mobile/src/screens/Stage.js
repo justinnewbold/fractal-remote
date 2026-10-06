@@ -7,10 +7,12 @@ import { tileWidth as tileWidthIn } from '../lib/tileGrid'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
 import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot } from '../lib/device'
 import {
+  applySong,
   listsFor,
   marksFor,
   orderFor,
   positionIn,
+  songFor,
   sourceFor,
   sourceLabel,
   stepTarget
@@ -482,7 +484,15 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
     thud()
     /* Not awaited: the rig puts the new slot on screen immediately and confirms
        it behind that. Waiting here would make Next feel like it missed. */
-    loadPreset(next)
+    const loading = loadPreset(next)
+    /* And the song's own scene and tempo, once its preset is in, when the
+       setlist gives it some: one tap is the whole change between songs. */
+    const song = order ? songFor(source, lists, next) : null
+    if (song) {
+      Promise.resolve(loading)
+        .then(() => applySong(song, { scene: writeScene, tempo: writeTempo }))
+        .catch(() => {})
+    }
   }
 
   /*

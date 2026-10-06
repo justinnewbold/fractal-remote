@@ -39,9 +39,22 @@
  * Global setting named GLOBAL_METLEVEL1, at 97 (0x61) in the same table.
  */
 export const CHECKS = [
-  { key: 'tempo', label: 'Tempo', where: 'Controllers → Tempo', pidLow: 0x0002, pidHigh: 0x001c },
-  { key: 'tempo-to-use', label: 'Tempo to use', where: 'Controllers → Tempo To Use', pidLow: 0x0002, pidHigh: 0x001d },
-  { key: 'metronome', label: 'Metronome level', where: 'Controllers → Metronome', pidLow: 0x0001, pidHigh: 0x0061 }
+  { key: 'tempo', label: 'Tempo', where: 'Controllers → Tempo (found 2026-10-05)', pidLow: 0x0002, pidHigh: 0x001c },
+  { key: 'metronome', label: 'Metronome level', where: 'Controllers → Metronome', pidLow: 0x0001, pidHigh: 0x0061 },
+  /*
+   * The cab. forgefx-midi's catalog has amp.cab, "Cab #" in AM4-Edit, at
+   * (0x003E, 0x000C) — CABINET_TYPE1. If the long read's text names the cab
+   * the AM4 shows, the cab picker can list and pick cabs by name.
+   */
+  { key: 'cab', label: 'Cab', where: 'Amp → Cab → Cab 1', pidLow: 0x003e, pidHigh: 0x000c },
+  /*
+   * The output level bar. AM4-Edit polls (0x002A, 0x0016) and (0x002A, 0x0017)
+   * on its main page with the live-value read (action 0x0010), the same read
+   * the tuner already uses (docs/AM4-CAPTURE-2026-07-05.md, "main/home meters").
+   * Read while playing and while silent: a meter moves between the two.
+   */
+  { key: 'out-1', label: 'Output level (first)', where: 'Home screen meter', pidLow: 0x002a, pidHigh: 0x0016, read: 0x0010 },
+  { key: 'out-2', label: 'Output level (second)', where: 'Home screen meter', pidLow: 0x002a, pidHigh: 0x0017, read: 0x0010 }
 ]
 
 /** How long a person must wait between two questions. One at a time, unhurried. */
@@ -59,8 +72,8 @@ export const toHex = (bytes) => bytes.map((b) => b.toString(16).padStart(2, '0')
 export const fromHex = (hex) => (String(hex || '').match(/../g) || []).map((x) => parseInt(x, 16))
 
 /** The 18-byte long read of one setting. */
-export function readFrame({ pidLow, pidHigh }) {
-  const head = [0xf0, 0x00, 0x01, 0x74, 0x15, 0x01, ...encode14(pidLow), ...encode14(pidHigh), ...encode14(READ_LONG), 0x00, 0x00, 0x00, 0x00]
+export function readFrame({ pidLow, pidHigh, read = READ_LONG }) {
+  const head = [0xf0, 0x00, 0x01, 0x74, 0x15, 0x01, ...encode14(pidLow), ...encode14(pidHigh), ...encode14(read), 0x00, 0x00, 0x00, 0x00]
   return [...head, checksum(head), 0xf7]
 }
 

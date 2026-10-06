@@ -118,6 +118,8 @@ export function mergeUnit(mine = {}, theirs = {}, now = Date.now()) {
       id: list.id,
       name: typeof list.name === 'string' && list.name.trim() ? list.name.trim() : 'Setlist',
       presets: slots(list.presets),
+      /* Each song's scene and tempo travel with its list; setlists.js cleans them on the way in. */
+      songs: list.songs && typeof list.songs === 'object' && !Array.isArray(list.songs) ? list.songs : {},
       at: num(list.at)
     }))
 

@@ -32,6 +32,7 @@ import { SWIPE_HINT, showSwipeHint } from '../lib/swipe-hint'
 import Press from '../components/Press'
 import { landingIndex } from '../lib/laneOrder'
 import SongPicker from '../components/SongPicker'
+import SongSetup from '../components/SongSetup'
 
 const face = Platform.select(mono)
 
@@ -96,6 +97,7 @@ export default function Setlists({ onBack }) {
    * them."
    */
   const [adding, setAdding] = useState(false)
+  const [settingUp, setSettingUp] = useState(false)
   /* Whether this phone has confirmed "Swipe left to remove a song". Null
      until read, so the hint never flashes up for somebody who has seen it. */
   const [swipeSeen, setSwipeSeen] = useState(null)
@@ -382,6 +384,16 @@ export default function Setlists({ onBack }) {
             )}
 
             <Press label="Add songs…" sub="Pick from every preset, as many as you like" onPress={() => setAdding(true)} />
+            {/* Each song's own scene and tempo, set when Next lands on it. */}
+            {chosen.presets.length ? (
+              <Press
+                label={settingUp ? 'Done setting up songs' : 'Set up each song…'}
+                sub="The scene and tempo each song switches to"
+                on={settingUp}
+                onPress={() => setSettingUp((v) => !v)}
+              />
+            ) : null}
+            {settingUp ? <SongSetup device={device} list={chosen} nameOf={nameOfSlot} addressing={addressing} /> : null}
             <SongPicker
               open={adding}
               listName={chosen.name}
