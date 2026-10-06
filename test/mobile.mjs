@@ -3773,12 +3773,13 @@ export function run(test) {
   test('the metronome clicks where it is told, with each unit’s own switch', async () => {
     const m = await import('../shared/metronome.mjs')
     /* Off unless turned on, and on the unit unless told otherwise. */
-    assert.deepEqual(m.metronomeSetting(null), { on: false, where: 'unit' })
-    assert.deepEqual(m.metronomeSetting({ on: true, where: 'nowhere' }), { on: true, where: 'unit' })
-    assert.deepEqual(m.clicks({ on: true, where: 'unit' }), { unit: true, phone: false })
-    assert.deepEqual(m.clicks({ on: true, where: 'phone' }), { unit: false, phone: true })
-    assert.deepEqual(m.clicks({ on: true, where: 'both' }), { unit: true, phone: true })
-    assert.deepEqual(m.clicks({ on: false, where: 'both' }), { unit: false, phone: false })
+    assert.deepEqual(m.metronomeSetting(null), { on: false, where: 'unit', watch: false })
+    assert.deepEqual(m.metronomeSetting({ on: true, where: 'nowhere' }), { on: true, where: 'unit', watch: false })
+    assert.deepEqual(m.clicks({ on: true, where: 'unit' }), { unit: true, phone: false, watch: false })
+    assert.deepEqual(m.clicks({ on: true, where: 'unit', watch: true }), { unit: true, phone: false, watch: true })
+    assert.deepEqual(m.clicks({ on: true, where: 'phone' }), { unit: false, phone: true, watch: false })
+    assert.deepEqual(m.clicks({ on: true, where: 'both' }), { unit: true, phone: true, watch: false })
+    assert.deepEqual(m.clicks({ on: false, where: 'both', watch: true }), { unit: false, phone: false, watch: false })
 
     /* Each unit's own number — one unit's sent to another would mis-address. */
     assert.deepEqual(m.unitMetronomeRequest('fm3', true), { method: 'PUT', path: '/preset/blocks/1/params/14878', body: { value: 1, continuous: false } })

@@ -30,6 +30,15 @@ final class WatchModelTests: XCTestCase {
         XCTAssertEqual(state.tuner.note, "E")
         XCTAssertEqual(state.tuner.cents, -2)
         XCTAssertTrue(state.tuner.inTune)
+        XCTAssertEqual(state.metronome, WatchMetronome(on: true, bpm: 120))
+    }
+
+    func testAPhoneWithNoMetronomeIsReadAsOff() throws {
+        var picture = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(try fixture().utf8)) as? [String: Any])
+        picture.removeValue(forKey: "metronome")
+        let raw = try XCTUnwrap(String(data: try JSONSerialization.data(withJSONObject: picture), encoding: .utf8))
+        let state = try XCTUnwrap(WatchState.decode(raw))
+        XCTAssertNil(state.metronome)
     }
 
     func testAPictureItCannotReadIsNotDrawn() {

@@ -1,12 +1,15 @@
 import { useEffect, useRef } from 'react'
+import { AppState } from 'react-native'
 import { requireOptionalNativeModule } from 'expo'
 
 import { blockColor } from './blockColors'
 import { logDebug } from './debugLog'
 import { idOf } from './device'
+import { probeNow, untilConnected } from './link'
 import { shortBlock } from './shortName'
 import { getState, writeBypass, writeScene, writeTuner } from './rig'
 import { createWatchSender, watchCommand, watchState } from './watch-link'
+import { metronome } from './metronome'
 
 /*
  * THE APPLE WATCH, FROM THE PHONE'S SIDE.
@@ -44,12 +47,26 @@ export const watchSupported = () => !!link()
  * places that say it: the note the Play screen shows once, and Settings →
  * Apple Watch, where it can be read again.
  */
+export const WATCH_HOW_OPEN = 'Keep the Play screen open on your iPhone while you use the watch. The watch works through this app, so it stops when the app is closed or the phone locks.'
+export const WATCH_HOW_LOCKED = 'Leave this app on the Play screen, then lock your iPhone and put it away. Each tap on the watch wakes the phone for a moment to send it. The live tuner needs the phone open.'
 export const WATCH_HOW = [
-  'Keep the Play screen open on your iPhone while you use the watch. The watch works through this app, so it stops when the app is closed or the phone locks.',
+  WATCH_HOW_OPEN,
   'Swipe up or down on the watch, or turn the Digital Crown, to move between its four pages: Scenes, Pedals, Presets and Tuner.',
   'Tap a scene or a pedal to switch it. Presets has Previous and Next.',
   'The tuner starts only when you tap it, and turns off when you leave its page.'
 ]
+
+/** Whether this build wakes on a watch tap, so the phone may stay locked. */
+export function watchWakes() {
+  try {
+    return link()?.wakes?.() === true
+  } catch {
+    return false
+  }
+}
+
+/** How the watch is used, in this build's words: the first line depends on wake on tap. */
+export const watchHow = () => (watchWakes() ? [WATCH_HOW_LOCKED, ...WATCH_HOW.slice(1)] : WATCH_HOW)
 
 /** A watch is paired with this phone and has the watch app on it. False on any doubt. */
 export function watchPaired() {
@@ -88,14 +105,43 @@ export function useWatchBridge(picture, step) {
       }
       const cmd = watchCommand(msg, last.current)
       if (!cmd) return
-      logDebug('watch', cmd.do, JSON.stringify(cmd))
-      if (cmd.do === 'hello') sender.current?.flush(last.current)
-      else if (cmd.do === 'scene') writeScene(cmd.index)
-      else if (cmd.do === 'pedal') writeBypass(cmd.id, !cmd.on)
-      else if (cmd.do === 'preset') stepRef.current?.(cmd.step)
-      else if (cmd.do === 'tuner') {
-        if (getState().tunerOn !== cmd.on) writeTuner(cmd.on)
+      const asleep = AppState.currentState !== 'active'
+      logDebug('watch', cmd.do, `${JSON.stringify(cmd)}${asleep ? ' (woke the phone)' : ''}`)
+      if (cmd.do === 'hello') {
+        sender.current?.flush(last.current)
+        if (asleep) probeNow()
+        return
       }
+      const run = () => {
+        if (cmd.do === 'scene') return writeScene(cmd.index)
+        if (cmd.do === 'pedal') return writeBypass(cmd.id, !cmd.on)
+        if (cmd.do === 'preset') return stepRef.current?.(cmd.step)
+        if (cmd.do === 'tuner' && getState().tunerOn !== cmd.on) return writeTuner(cmd.on)
+        return undefined
+      }
+      if (!asleep) {
+        run()
+        return
+      }
+      /*
+       * WOKEN BY THE TAP, the phone locked in a pocket. The connection to the
+       * computer slept with the app, so it is rejoined first, then the tap is
+       * sent, and tried once more if the first go found it still waking.
+       */
+      const pause = (ms) => new Promise((r) => setTimeout(r, ms))
+      /* The link can still say "connected" for a moment after waking, before
+         it notices the connection slept; the short pause lets it find out. */
+      probeNow()
+      pause(400)
+        .then(() => untilConnected())
+        .then(() => Promise.resolve(run()))
+        .catch(async (err) => {
+          logDebug('watch', 'first try failed while waking', err?.message || String(err))
+          await pause(1500)
+          await untilConnected()
+          return run()
+        })
+        .catch((err) => logDebug('watch', 'gave up', err?.message || String(err)))
     })
     return () => {
       sub?.remove?.()
@@ -109,7 +155,9 @@ export function useWatchBridge(picture, step) {
     if (!sender.current) return
     const { chain, ...rest } = picture
     const pedals = (chain || []).map((b) => ({ id: idOf(b), name: b.name, short: shortBlock(b), on: !b.bypassed, ...blockColor(b.slug) }))
-    const state = watchState({ ...rest, pedals })
+    /* The metronome's tap, when the watch's switch is on: see lib/metronome. */
+    const beat = metronome()
+    const state = watchState({ ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm } })
     last.current = state
     sender.current.push(state)
   })

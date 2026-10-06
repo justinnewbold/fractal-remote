@@ -136,6 +136,31 @@ export function probeNow() {
   schedule(0)
 }
 
+/**
+ * Wait until the computer answers, asking at once, for at most `ms`.
+ *
+ * For a watch tap that woke the app with the phone locked: the connection to
+ * the computer went to sleep with the app, and the tap must not be sent into
+ * it before it is back. True when connected, false when it gave up.
+ */
+export function untilConnected(ms = 8000) {
+  if (state.link === 'connected') return Promise.resolve(true)
+  probeNow()
+  return new Promise((resolve) => {
+    let off = () => {}
+    const t = setTimeout(() => {
+      off()
+      resolve(false)
+    }, ms)
+    off = subscribeLink((s) => {
+      if (s.link !== 'connected') return
+      clearTimeout(t)
+      off()
+      resolve(true)
+    })
+  })
+}
+
 function schedule(ms) {
   if (timer) clearTimeout(timer)
   timer = setTimeout(tick, ms)

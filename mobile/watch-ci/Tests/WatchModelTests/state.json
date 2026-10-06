@@ -44,5 +44,9 @@
     "octave": 2,
     "cents": -2,
     "inTune": true
+  },
+  "metronome": {
+    "on": true,
+    "bpm": 120
   }
 }

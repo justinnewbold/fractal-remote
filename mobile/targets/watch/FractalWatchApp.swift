@@ -26,6 +26,8 @@ struct RootView: View {
     @EnvironmentObject private var link: PhoneLink
     @Environment(\.scenePhase) private var phase
     @State private var page = Launch.number("page")
+    /* The metronome's tap: see Metronome.swift. */
+    @State private var wrist = WristMetronome()
 
     var body: some View {
         Group {
@@ -56,6 +58,10 @@ struct RootView: View {
         }
         .onChange(of: phase) { _, now in
             if now == .active { link.woke() }
+            if now != .active { wrist.stop() } else { wrist.follow(link.state?.metronome) }
+        }
+        .onChange(of: link.state?.metronome) { _, now in
+            if phase == .active { wrist.follow(now) }
         }
     }
 }

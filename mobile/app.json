@@ -3,7 +3,7 @@
     "name": "Fractal Remote",
     "slug": "fractal-remote",
     "owner": "justinnewbold",
-    "version": "1.86.81",
+    "version": "1.86.83",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "fractalremote",
@@ -81,7 +81,8 @@
           "imageWidth": 200
         }
       ],
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "expo-asset"
     ],
     "extra": {
       "eas": {

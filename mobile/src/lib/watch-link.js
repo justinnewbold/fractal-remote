@@ -63,6 +63,7 @@ export function watchState({
   linked = false,
   canPrevious = false,
   canNext = false,
+  metronome = null,
   at = Date.now()
 } = {}) {
   const count = int(sceneCount) && sceneCount > 0 ? Math.min(sceneCount, 8) : 0
@@ -98,8 +99,17 @@ export function watchState({
       octave: note && int(tuning?.octave) ? tuning.octave : -1,
       cents,
       inTune: !!note && Math.abs(cents) <= WATCH_IN_TUNE_CENTS
-    }
+    },
+    /* Tap on every beat, at this tempo — or not. See shared/metronome.mjs. */
+    metronome: metronomeForWatch(metronome)
   }
+}
+
+/** The metronome's word to the watch: on only with a tempo anybody would play to. */
+function metronomeForWatch(m) {
+  const bpm = Number(m?.bpm)
+  const on = m?.on === true && Number.isFinite(bpm) && bpm >= 20 && bpm <= 400
+  return { on, bpm: on ? Math.round(bpm * 10) / 10 : 0 }
 }
 
 /**

@@ -11,8 +11,8 @@
  * Tap button and the tempo box already set. That is the click to play to: it
  * is in the same speakers as the guitar and the unit keeps the time itself.
  *
- * The phone's click is the other half: until the next store build it is a
- * flash and a tap you feel, and after it a sound (docs/pending/metronome.patch).
+ * The phone's click is the other half: a short click it plays out loud, with
+ * a flash and a tap you feel. And the watch can tap on the wrist with it.
  *
  * Both apps read this file — the phone through the copy `npm run sync:rules`
  * writes — so the two can never disagree about which number turns an FM3's
@@ -22,16 +22,18 @@
 /** Where the click goes. 'unit' is the default: it is the one with steady time. */
 export const PLACES = [
   { key: 'unit', label: 'Unit', note: 'Clicks through the unit’s own outputs' },
-  { key: 'phone', label: 'Phone', note: 'Flashes and taps on this phone' },
+  { key: 'phone', label: 'Phone', note: 'Clicks out loud on this phone, with a flash' },
   { key: 'both', label: 'Both', note: 'The unit clicks and the phone keeps time with it' }
 ]
 
-export const DEFAULT_METRONOME = { on: false, where: 'unit' }
+export const DEFAULT_METRONOME = { on: false, where: 'unit', watch: false }
 
 /** A stored setting, made safe: anything unreadable is the default. */
 export function metronomeSetting(saved) {
   const where = PLACES.some((p) => p.key === saved?.where) ? saved.where : DEFAULT_METRONOME.where
-  return { on: saved?.on === true, where }
+  /* The Apple Watch's tap is its own switch: it keeps time on the wrist
+     wherever the click itself is coming from. */
+  return { on: saved?.on === true, where, watch: saved?.watch === true }
 }
 
 /** Which ends click, for a setting. */
@@ -39,7 +41,8 @@ export const clicks = (setting) => {
   const s = metronomeSetting(setting)
   return {
     unit: s.on && (s.where === 'unit' || s.where === 'both'),
-    phone: s.on && (s.where === 'phone' || s.where === 'both')
+    phone: s.on && (s.where === 'phone' || s.where === 'both'),
+    watch: s.on && s.watch
   }
 }
 
