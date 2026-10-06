@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Sheet from './Sheet'
 import SwipeRow from './SwipeRow'
+import SongSetup from './SongSetup'
 import { SWIPE_HINT, SWIPE_HINT_KEY, showSwipeHint } from '../../shared/swipe-hint.mjs'
 import { landingIndex } from '../../shared/lane-order.mjs'
 import { toggleFavourite } from '../lib/presetMarks'
@@ -134,6 +135,7 @@ export default function Setlists({
    * is mobile/src/components/SongPicker.js; the rules are in lib/setlists.
    */
   const [adding, setAdding] = useState(false)
+  const [settingUp, setSettingUp] = useState(false)
   /*
    * "Swipe left to remove a song", once per browser, the first time a
    * setlist with a song in it is open. Storage that throws counts as seen —
@@ -429,6 +431,16 @@ export default function Setlists({
               song, and after the last one it starts over.
             </p>
           )}
+
+          {/* Each song's own scene and tempo, set when Next lands on it. */}
+          {chosen.presets.length ? (
+            <div className="history-actions">
+              <button type="button" className="chip" aria-expanded={settingUp} onClick={() => setSettingUp((v) => !v)}>
+                {settingUp ? 'Done setting up songs' : 'Set up each song (scene, tempo)'}
+              </button>
+            </div>
+          ) : null}
+          {settingUp ? <SongSetup deviceKey={deviceKey} list={chosen} nameOf={nameOf} addressing={addressing} /> : null}
 
           {adding ? (
             <div className="setlist-find">

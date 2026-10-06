@@ -33,7 +33,7 @@ import {
 } from './presetMarks'
 
 export { ALL, STARRED } from './setlists'
-export { addAll, addTo, moveIn, orderFor, pickMatches, positionIn, removeFrom, sourceLabel, stepTarget, togglePick } from './setlists'
+export { addAll, addTo, applySong, moveIn, orderFor, pickMatches, positionIn, removeFrom, songFor, songIn, songsWith, songWords, sourceLabel, stepTarget, togglePick, SCENES, SONG_BPM } from './setlists'
 export { deviceSlug } from './device-slug'
 
 /** Every setlist this unit has, in the order they were made. */

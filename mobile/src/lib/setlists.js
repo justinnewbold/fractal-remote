@@ -77,8 +77,98 @@ const cleanList = (l) => {
     id,
     name: typeof l.name === 'string' && l.name.trim() ? l.name.trim() : 'Setlist',
     presets: cleanSlots(l.presets),
+    songs: cleanSongs(l.songs, l.presets),
     at: Number.isFinite(l.at) ? l.at : 0
   }
+}
+
+/*
+ * WHAT EACH SONG SETS UP WHEN IT IS PICKED.
+ *
+ * "Make each song set itself up when you pick it": Next lands on the song's
+ * preset, and then the song's scene and tempo go to the unit too, so one tap
+ * is the whole change between songs. Kept on the setlist, per song, rather
+ * than on the preset, because the same preset plays in more than one song —
+ * a clean tone at 92 for one and at 140 for the next.
+ *
+ * Keyed by slot, the way the list is: a slot is in a setlist once. Either half
+ * may be missing, and missing means "leave it as the preset has it".
+ */
+export const SCENES = 8
+export const SONG_BPM = { min: 24, max: 250 }
+
+const cleanSong = (raw) => {
+  if (!raw || typeof raw !== 'object') return null
+  const out = {}
+  if (Number.isInteger(raw.scene) && raw.scene >= 0 && raw.scene < SCENES) out.scene = raw.scene
+  const bpm = Math.round(Number(raw.bpm))
+  if (raw.bpm !== null && raw.bpm !== undefined && Number.isFinite(bpm) && bpm >= SONG_BPM.min && bpm <= SONG_BPM.max) out.bpm = bpm
+  return Object.keys(out).length ? out : null
+}
+
+/** A setlist's songs as stored: only slots still in the list, only halves that mean something. */
+export function cleanSongs(songs, presets) {
+  const inList = new Set(cleanSlots(presets))
+  const out = {}
+  if (!songs || typeof songs !== 'object' || Array.isArray(songs)) return out
+  for (const [key, raw] of Object.entries(songs)) {
+    const slot = Number(key)
+    if (!inList.has(slot)) continue
+    const song = cleanSong(raw)
+    if (song) out[slot] = song
+  }
+  return out
+}
+
+/** What a slot sets up in a setlist, or null when it sets nothing up. */
+export const songIn = (list, slot) => (list && list.songs && list.songs[slot]) || null
+
+/** What landing on `slot` from this source should set up: only a setlist's songs set anything. */
+export function songFor(source, lists, slot) {
+  if (source === ALL || source === STARRED || typeof source !== 'string') return null
+  return songIn((lists || []).find((l) => l.id === source), slot)
+}
+
+/** One song's setup changed: a patch of {scene, bpm}, where null clears that half. */
+export function songsWith(list, slot, patch) {
+  const was = (list && list.songs && list.songs[slot]) || {}
+  const next = { ...was, ...patch }
+  for (const k of Object.keys(next)) if (next[k] === null || next[k] === undefined) delete next[k]
+  return cleanSongs({ ...((list && list.songs) || {}), [slot]: next }, list ? list.presets : [])
+}
+
+/** The setup in his words: "Scene 2 · 120 BPM", or '' when the song sets nothing up. */
+export function songWords(song) {
+  if (!song) return ''
+  const parts = []
+  if (Number.isInteger(song.scene)) parts.push(`Scene ${song.scene + 1}`)
+  if (Number.isFinite(song.bpm)) parts.push(`${song.bpm} BPM`)
+  return parts.join(' · ')
+}
+
+/**
+ * Put the song's setup on the unit, once its preset has loaded: the scene
+ * first, then the tempo, each only if the song has one. A half that fails is
+ * reported and the other half still goes — a tempo is worth having even when
+ * the scene did not take.
+ */
+export async function applySong(song, { scene, tempo }) {
+  const failed = []
+  if (song && Number.isInteger(song.scene) && scene) {
+    try {
+      await scene(song.scene)
+    } catch {
+      failed.push('scene')
+    }
+  }
+  if (song && Number.isFinite(song.bpm) && tempo) {
+    try {
+      await tempo(song.bpm)
+    } catch {
+      failed.push('tempo')
+    }
+  }
+  return failed
 }
 
 /** A tombstone, or null. What a delete leaves behind so it can travel. */
@@ -380,13 +470,14 @@ export function createList(device, name, storage) {
     id,
     name: (name || '').trim() || `Setlist ${lists.length + 1}`,
     presets: [],
+    songs: {},
     at: Date.now()
   }
   saveLists(device, [...lists, list], storage)
   return list
 }
 
-/** Change one list's name or presets. Returns the lists as they read back. */
+/** Change one list's name, presets or songs. Returns the lists as they read back. */
 export function updateList(device, id, patch, storage) {
   const lists = listsFor(device, storage).map((l) =>
     l.id === id ? { ...l, ...patch, id, at: Date.now() } : l

@@ -55,7 +55,7 @@ export default function Am4Check() {
   return (
     <div className="access-tool">
       <p className="footnote">
-        Press Read. Then change that setting on the AM4 itself (its Controllers page) and press Read again. The page
+        Press Read. Then change that setting on the AM4 itself and press Read again. For the output level, read once while playing and once while silent. The page
         says what moved in the AM4&rsquo;s answer. Then press Copy and paste it into the chat. This only reads; it
         cannot change or save anything on the AM4.
       </p>

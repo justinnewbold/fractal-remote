@@ -13,6 +13,7 @@ import {
   refreshSceneState,
   refreshLoadedSceneNames,
   writeScene,
+  writeTempo,
   writeBypass,
   writeTuner,
   retryChain
@@ -36,6 +37,8 @@ import {
   stepTarget,
   sourceLabel,
   positionIn,
+  songFor,
+  applySong,
   CHANGED as SETLISTS_CHANGED
 } from '../lib/setlists'
 import Setlists from './Setlists'
@@ -524,6 +527,13 @@ export default function Gig({
          still loading it. */
       await loadPreset(next)
       onPresetLoaded?.()
+      /* And the song's own scene and tempo, when the setlist gives it some:
+         one tap is the whole change between songs. See songFor. */
+      const song = songFor(source, lists, next)
+      if (song) {
+        const failed = await applySong(song, { scene: writeScene, tempo: writeTempo })
+        if (failed.length) onError(`The song’s ${failed.join(' and ')} didn’t take. Set it by hand for this one.`)
+      }
     } catch (err) {
       onError(err.message)
     } finally {

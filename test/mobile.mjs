@@ -3885,6 +3885,48 @@ export function run(test) {
     assert.doesNotMatch(read('src/App.jsx'), /Am4Finder|setupPage === 'finder'/)
   })
 
+  test('a setlist song sets up its own scene and tempo when Next lands on it', async () => {
+    const s = await import('../src/lib/setlists.js')
+    const store = new Map()
+    const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) }
+    const list = s.createList('fm3', 'Friday', storage)
+    s.updateList('fm3', list.id, { presets: [4, 9, 12] }, storage)
+    let [l] = s.listsFor('fm3', storage)
+    /* One song at Scene 2, 120 BPM; another with only a tempo; a slot not in the list is dropped. */
+    s.updateList('fm3', l.id, { songs: { ...s.songsWith(l, 9, { scene: 1, bpm: 120 }), 77: { bpm: 90 } } }, storage)
+    ;[l] = s.listsFor('fm3', storage)
+    s.updateList('fm3', l.id, { songs: s.songsWith(l, 12, { bpm: 140.4 }) }, storage)
+    ;[l] = s.listsFor('fm3', storage)
+    assert.deepEqual(l.songs, { 9: { scene: 1, bpm: 120 }, 12: { bpm: 140 } })
+    assert.equal(s.songWords(l.songs[9]), 'Scene 2 · 120 BPM')
+    assert.equal(s.songWords(l.songs[12]), '140 BPM')
+    /* Nonsense is not kept: a ninth scene, a tempo off every unit. */
+    assert.deepEqual(s.cleanSongs({ 4: { scene: 8, bpm: 999 } }, [4]), {})
+    /* Clearing a half leaves the other. */
+    assert.deepEqual(s.songsWith(l, 9, { scene: null })[9], { bpm: 120 })
+    /* Only a setlist sets anything up; the slots and the stars never do. */
+    assert.deepEqual(s.songFor(l.id, [l], 9), { scene: 1, bpm: 120 })
+    assert.equal(s.songFor(s.ALL, [l], 9), null)
+    assert.equal(s.songFor(s.STARRED, [l], 9), null)
+    assert.equal(s.songFor(l.id, [l], 4), null)
+    /* Applied scene first, then tempo; a half that fails is named and the other still goes. */
+    const did = []
+    const failed = await s.applySong({ scene: 1, bpm: 120 }, {
+      scene: async (i) => { did.push(`scene ${i}`); throw new Error('no') },
+      tempo: async (b) => { did.push(`tempo ${b}`) }
+    })
+    assert.deepEqual(did, ['scene 1', 'tempo 120'])
+    assert.deepEqual(failed, ['scene'])
+    /* The songs travel: a merge keeps them with their list. */
+    assert.match(read('src/lib/setlistMerge.js'), /songs: list\.songs && typeof list\.songs === 'object'/, 'a sync drops each song’s setup')
+    /* Both stage screens apply it after the preset, from the setlist being walked. */
+    assert.match(read('src/components/Gig.jsx'), /await loadPreset\(next\)[\s\S]{0,300}songFor\(source, lists, next\)[\s\S]{0,200}applySong\(song, \{ scene: writeScene, tempo: writeTempo \}\)/)
+    assert.match(read('mobile/src/screens/Stage.js'), /const loading = loadPreset\(next\)[\s\S]{0,300}songFor\(source, lists, next\)[\s\S]{0,300}applySong\(song, \{ scene: writeScene, tempo: writeTempo \}\)/)
+    /* And both setlist screens can set it up. */
+    assert.match(read('src/components/Setlists.jsx'), /<SongSetup deviceKey=\{deviceKey\} list=\{chosen\}/)
+    assert.match(read('mobile/src/screens/Setlists.js'), /<SongSetup device=\{device\} list=\{chosen\}/)
+  })
+
   test('the AM4 check reads one named setting per press, and can write nothing', async () => {
     const c = await import('../shared/am4-check.mjs')
     const tempo = c.CHECKS.find((x) => x.key === 'tempo')
@@ -3942,7 +3984,11 @@ export function run(test) {
     assert.equal(c.valueFrom(tempo, [broken]), null)
     assert.match(c.sayValue(tempo, null), /No answer/)
     /* Only reads, only the named addresses, one at a time with a pause. */
-    assert.ok(c.CHECKS.length <= 4, 'the check grew into a sweep')
+    assert.ok(c.CHECKS.length <= 6, 'the check grew into a sweep')
+    /* The meters are asked with the live-value read AM4-Edit polls them with; the rest with the long read. */
+    assert.equal(c.toHex(c.readFrame(c.CHECKS.find((x) => x.key === 'out-1'))).slice(0, 24), 'f00001741501 2a00 1600 1000'.replace(/ /g, ''))
+    assert.equal(c.readFrame(c.CHECKS.find((x) => x.key === 'out-1'))[10], 0x10)
+    assert.equal(c.readFrame(c.CHECKS.find((x) => x.key === 'cab'))[10], 0x0d)
     for (const x of c.CHECKS) assert.equal(c.readFrame(x)[5], 0x01)
     assert.ok(c.PAUSE_MS >= 1000)
     const page = read('src/components/Am4Check.jsx')
