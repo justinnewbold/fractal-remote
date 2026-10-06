@@ -17,6 +17,5 @@ then bump the version, delete the patch file in the same change, and build.
 
 | Patch | What it does | Moves |
 |---|---|---|
-| `wake-on-tap.patch` | The phone can stay locked in a pocket: each watch tap wakes the app in the background to send the change (PR #641's first version, 1b4d304). | iOS + watch |
-| `metronome-sound-and-watch.patch` | The metronome clicks out loud on the phone (expo-audio, a 30 ms click in `mobile/assets/click.wav`, plays with the ring switch on silent and mixes with music), and taps on the Apple Watch on every beat with its own switch on Settings → Metronome. Apply **after** `wake-on-tap.patch`: it was made on top of it. Adds `expo-audio ~57.0.5`, so `npm install` in `mobile/` writes the lockfile. | iOS + Android + watch |
-| `watch-icon.patch` | The Apple Watch app gets its own icon on a light ground (`mobile/assets/watch-icon.png`, from `watch-icon.svg`). Apple refused build 23 under guideline 4 because the phone icon's black background stops a watch icon reading as a circle. Independent of the two above. | iOS + watch |
+
+Nothing is waiting: the last three (wake-on-tap, metronome sound and watch tap, the light-ground watch icon) went into the build after Apple refused build 23.

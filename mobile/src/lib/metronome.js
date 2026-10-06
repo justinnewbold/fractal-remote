@@ -1,5 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { createAudioPlayer, setAudioModeAsync } from 'expo-audio'
+import clickSound from '../../assets/click.wav'
 
 import { setUnitMetronome } from './device'
 import { DEFAULT_METRONOME, beatMs, clicks, metronomeSetting, nextBeat } from './metronome-rules'
@@ -83,8 +85,32 @@ export function useUnitMetronome(slug, present) {
   }, [slug, present])
 }
 
+/*
+ * The click itself: thirty milliseconds of tick (assets/click.wav), loaded
+ * once and played from the top on every beat. Made on first use, not at
+ * launch, so a phone that never turns the metronome on never opens audio.
+ *
+ * Plays with the ring switch on silent — a metronome somebody turned on is a
+ * sound they asked for — and alongside whatever else is playing, so a backing
+ * track keeps going under it.
+ */
+let player = null
+const click = () => {
+  try {
+    if (!player) {
+      setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'mixWithOthers' }).catch(() => {})
+      player = createAudioPlayer(clickSound)
+    }
+    player.seekTo(0)
+    player.play()
+  } catch {
+    // A phone that cannot make the sound still flashes and taps.
+  }
+}
+
 /**
- * The phone's half: a tap you feel on every beat, and a flash for the screen.
+ * The phone's half: a click out loud on every beat, a tap you feel with it,
+ * and a flash for the screen.
  *
  * Counted from when it started rather than from the last beat (nextBeat), so
  * a timer that runs late once does not drag every beat after it. `onBeat` is
@@ -101,6 +127,7 @@ export function usePhoneClick(bpm, onBeat) {
     let alive = true
     const step = () => {
       if (!alive) return
+      click()
       tick()
       onBeat?.()
       const due = nextBeat(startedAt, Date.now(), beat)

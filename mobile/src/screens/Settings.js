@@ -50,7 +50,7 @@ import { mayDrive } from '../lib/unlock-rule'
 import { useComputerElsewhere } from '../lib/useComputerElsewhere'
 import { quitEditor } from '../lib/editors'
 import { isAdmin } from '../lib/admin'
-import { WATCH_HOW, watchPaired, watchSupported } from '../lib/watchBridge'
+import { watchHow, watchPaired, watchSupported } from '../lib/watchBridge'
 import AccessTool from '../components/AccessTool'
 import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
@@ -1000,8 +1000,24 @@ export default function Settings({
                 unitMetronome(rigSlug)
                   ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.'
                   : 'This unit has no metronome the app can switch, so only the phone keeps time.'
-              } For now the phone flashes and taps; a sound comes with the next app update from the store.`}
+              }`}
             </Note>
+            {/* "Same with the watch, metronome that can beep on the watch."
+                Its own switch: the wrist keeps time whichever end clicks. */}
+            {Platform.OS === 'ios' && watchSupported() ? (
+              <>
+                <Section>Apple Watch</Section>
+                <Press
+                  label={clickSetting.watch ? 'Tap on the watch: on' : 'Tap on the watch: off'}
+                  tone="live"
+                  on={clickSetting.watch}
+                  onPress={() => changeClick({ watch: !clickSetting.watch })}
+                />
+                <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
+                  A tap and a tick on every beat, while the Fractal app is open on the watch.
+                </Text>
+              </>
+            ) : null}
           </View>
         </>
       ) : null}
@@ -1135,7 +1151,7 @@ export default function Settings({
             ))}
 
             <Section>Using it</Section>
-            {WATCH_HOW.map((line) => (
+            {watchHow().map((line) => (
               <Text key={line} style={{ color: color.silk, fontSize: font.body, lineHeight: 24 }}>
                 {line}
               </Text>

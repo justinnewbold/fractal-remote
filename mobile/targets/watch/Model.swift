@@ -36,6 +36,12 @@ struct WatchTuner: Codable, Equatable {
     var inTune: Bool
 }
 
+/** The metronome's word to the watch: tap on every beat at this tempo, or not. */
+struct WatchMetronome: Codable, Equatable {
+    var on: Bool
+    var bpm: Double
+}
+
 struct WatchState: Codable, Equatable {
     /** WATCH_LINK_VERSION in shared/watch-link.mjs. */
     static let linkVersion = 1
@@ -50,6 +56,8 @@ struct WatchState: Codable, Equatable {
     var scenes: [String]
     var pedals: [WatchPedal]
     var tuner: WatchTuner
+    /** Optional: a phone older than the metronome sends none, and that is "off". */
+    var metronome: WatchMetronome? = nil
 
     static func decode(_ json: String) -> WatchState? {
         guard let data = json.data(using: .utf8) else { return nil }

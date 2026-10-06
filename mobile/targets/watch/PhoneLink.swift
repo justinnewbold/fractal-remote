@@ -77,7 +77,18 @@ final class PhoneLink: NSObject, ObservableObject {
             return
         }
         guard let session, session.activationState == .activated, session.isReachable else { return }
-        session.sendMessage(["json": command.json], replyHandler: nil, errorHandler: nil)
+        /*
+         * The message wakes the iPhone app in the background if it is asleep
+         * (the phone locked in a pocket), and the phone answers when it has it.
+         * Waking can miss the first time; one more try a second later.
+         */
+        let body: [String: Any] = ["json": command.json]
+        session.sendMessage(body, replyHandler: { _ in }, errorHandler: { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                guard session.isReachable else { return }
+                session.sendMessage(body, replyHandler: { _ in }, errorHandler: nil)
+            }
+        })
     }
 
     fileprivate func take(_ json: String?) {

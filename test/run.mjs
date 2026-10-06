@@ -12210,7 +12210,7 @@ test('the watch is sent the stage as one small picture, and may ask for only fiv
   const again = watchState({ at: 1759363200000, linked: true, preset: { number: 12, name: 'Crunch Rhythm' }, label: '012', scene: 1,
     sceneNames: ['Clean', 'Crunch', 'Lead'], sceneCount: 8, canPrevious: true, canNext: false,
     pedals: [{ id: 50, name: 'Drive 1', short: 'DRV', on: true, fill: '#c0392b', ink: '#ffffff' }, { id: 70, name: 'Delay 1', short: 'DLY', on: false, fill: 'nope', ink: '#ffffff' }],
-    tunerOn: true, tuning: { note: 'E', octave: 2, cents: -2.4 } })
+    tunerOn: true, tuning: { note: 'E', octave: 2, cents: -2.4 }, metronome: { on: true, bpm: 120 } })
   assert.deepEqual(again, fixture, 'the watch’s test fixture is not what the phone sends any more — write it again')
 
   /* Every field the phone sends is one the watch reads, by the same name. */
@@ -12312,7 +12312,11 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   const bridge = readSrc(new URL('../mobile/src/lib/watchBridge.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
   assert.match(bridge, /requireOptionalNativeModule\('FractalWatch'\)/, 'a build without the watch would fail to start')
   assert.match(bridge, /const watch = link\(\) if \(!watch\) return undefined/)
-  assert.match(bridge, /else if \(cmd\.do === 'scene'\) writeScene\(cmd\.index\) else if \(cmd\.do === 'pedal'\) writeBypass\(cmd\.id, !cmd\.on\) else if \(cmd\.do === 'preset'\) stepRef\.current\?\.\(cmd\.step\)/)
+  assert.match(bridge, /if \(cmd\.do === 'scene'\) return writeScene\(cmd\.index\) if \(cmd\.do === 'pedal'\) return writeBypass\(cmd\.id, !cmd\.on\) if \(cmd\.do === 'preset'\) return stepRef\.current\?\.\(cmd\.step\)/)
+  /* Wake on tap: a tap that woke the phone rejoins the computer before it is
+     sent, and the phone holds the app up long enough to send it. */
+  assert.match(bridge, /AppState\.currentState !== 'active'/, 'a tap that woke a locked phone is sent into a sleeping connection')
+  assert.match(bridge, /untilConnected\(\)/)
   /* The tuner mutes the unit: the watch never turns it on by being swiped to. */
   const pages = readSrc(new URL('../mobile/targets/watch/Pages.swift', import.meta.url), 'utf8')
   assert.match(pages, /\.onDisappear \{\s*if state\.tuner\.on \{ link\.send\(\.tuner\(on: false\)\) \}/)
@@ -12333,6 +12337,8 @@ test('the iPhone build carries the watch app and the phone’s half of the link'
   assert.deepEqual(mod.apple.modules, ['FractalWatchModule'])
   const swift = readSrc(new URL('../mobile/modules/fractal-watch/ios/FractalWatchModule.swift', import.meta.url), 'utf8')
   assert.match(swift, /Name\("FractalWatch"\)/)
+  assert.match(swift, /beginBackgroundTask/, 'the phone is not kept awake long enough to send a watch tap')
+  assert.match(swift, /OnStartObserving/, 'a tap that launched the app is dropped before anything listens')
   assert.match(swift, /Events\("onCommand"\)/)
   assert.match(swift, /Function\("sendState"\) \{ \(json: String, urgent: Bool\) in/)
   const bridge = readSrc(new URL('../mobile/src/lib/watchBridge.js', import.meta.url), 'utf8')

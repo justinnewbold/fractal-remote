@@ -9,8 +9,10 @@ module.exports = {
   type: 'watch',
   name: 'FractalWatch',
   displayName: 'Fractal',
-  icon: '../../assets/icon.png',
+  // Its own icon, on a light ground: Apple refused build 23 (guideline 4) because the
+  // phone icon's black background stops a watch icon reading as a circle.
+  icon: '../../assets/watch-icon.png',
   bundleIdentifier: '.watchkitapp',
   deploymentTarget: '10.0',
-  frameworks: ['SwiftUI', 'WatchConnectivity']
+  frameworks: ['SwiftUI', 'WatchConnectivity', 'WatchKit']
 }

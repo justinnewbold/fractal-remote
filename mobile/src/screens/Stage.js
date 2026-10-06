@@ -62,7 +62,7 @@ import tempoIcon from '../../assets/icons/tempo.png'
 import tunerIcon from '../../assets/icons/tuner.png'
 import { sceneColor } from '../lib/sceneColors'
 import { shortBlock } from '../lib/shortName'
-import { WATCH_HOW, useWatchBridge, watchPaired } from '../lib/watchBridge'
+import { useWatchBridge, watchHow, watchPaired } from '../lib/watchBridge'
 import { findLooper } from '../lib/looper'
 import UnlockOffer from '../components/UnlockOffer'
 import Note from '../components/Note'
@@ -761,7 +761,7 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
         <Coach open={coach} stage={coachStage} onTry={tryCoach} onSkip={closeCoach} onDone={closeCoach} />
         <Sheet open={watchTip && !coach} onClose={() => setWatchTip(false)} title="Your Apple Watch" note="Fractal Remote is on your watch">
           <View style={{ gap: space.md }}>
-            {WATCH_HOW.map((line) => (
+            {watchHow().map((line) => (
               <Text key={line} style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
                 {line}
               </Text>
