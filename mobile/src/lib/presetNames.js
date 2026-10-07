@@ -237,7 +237,18 @@ export const flushPersist = () => {
   sync.setItem(KEY, JSON.stringify(all))
 }
 
-/** Take the computer's list. Host wins where the two disagree: it has the cable. */
+/**
+ * Take the computer's list. Host wins where the two disagree about a NAME: it
+ * has the cable, and a rename at the computer lands there first.
+ *
+ * But the computer's "empty" never wipes out a name. "I'll refresh the names
+ * and they'll show up for the presets. And then when I scroll up or down and
+ * scroll back, they show empty again." Refresh read slots 479-489 off the FM3
+ * itself and got their names; the computer's copy, taken before those presets
+ * were saved, still said those slots were empty — and every reconnect took
+ * that copy in again, over names the unit had just given. Only the unit can
+ * say a slot is empty: a read of the slot does that, and still does.
+ */
 function takeIn(doc) {
   let changed = 0
   for (const [key, raw] of Object.entries(doc || {})) {
@@ -245,6 +256,7 @@ function takeIn(doc) {
     if (!Number.isInteger(n) || n < 0 || typeof raw !== 'string') continue
     const name = cleanPresetName(raw)
     if (names.get(n) === name) continue
+    if (!name && names.get(n)) continue
     names.set(n, name)
     changed++
   }
