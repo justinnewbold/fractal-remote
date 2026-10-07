@@ -54,7 +54,22 @@ export const CHECKS = [
    * Read while playing and while silent: a meter moves between the two.
    */
   { key: 'out-1', label: 'Output level (first)', where: 'Home screen meter', pidLow: 0x002a, pidHigh: 0x0016, read: 0x0010 },
-  { key: 'out-2', label: 'Output level (second)', where: 'Home screen meter', pidLow: 0x002a, pidHigh: 0x0017, read: 0x0010 }
+  { key: 'out-2', label: 'Output level (second)', where: 'Home screen meter', pidLow: 0x002a, pidHigh: 0x0017, read: 0x0010 },
+  /*
+   * The wah on the expression pedal. "The wah seems to be on but won't move
+   * with the pedal": Axiom adds a wah with no modifier, and the AM4's
+   * modifier messages aren't decoded. AM4-Edit's own table for the modifier
+   * block (forgefx-midi src/am4/modifiers.ts, effect type 3) puts the source
+   * at 10, the target block at 18 and the target knob at 19 — the same table
+   * that put tempo at 28, which this check proved. Modifier 1 is block 0x0003
+   * (the page AM4-Edit opens for it, docs/AM4-B3-REMAINING-WINDOWS.md).
+   * Read them, link the wah to the pedal in AM4-Edit (Wah → Control → Pedal
+   * or External 1), read again: if source, block and knob follow, Axiom can
+   * write the same three settings and link a wah itself.
+   */
+  { key: 'mod-source', label: 'Pedal link: source', where: 'Modifier 1 → Source', pidLow: 0x0003, pidHigh: 0x000a },
+  { key: 'mod-block', label: 'Pedal link: which block', where: 'Modifier 1 → target block', pidLow: 0x0003, pidHigh: 0x0012 },
+  { key: 'mod-knob', label: 'Pedal link: which knob', where: 'Modifier 1 → target knob', pidLow: 0x0003, pidHigh: 0x0013 }
 ]
 
 /** How long a person must wait between two questions. One at a time, unhurried. */

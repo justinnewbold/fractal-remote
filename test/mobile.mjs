@@ -3985,7 +3985,9 @@ export function run(test) {
     assert.equal(c.valueFrom(tempo, [broken]), null)
     assert.match(c.sayValue(tempo, null), /No answer/)
     /* Only reads, only the named addresses, one at a time with a pause. */
-    assert.ok(c.CHECKS.length <= 6, 'the check grew into a sweep')
+    // Eight named rows, one press each: the pedal-link rows are three more questions, never a loop.
+    assert.ok(c.CHECKS.length <= 8, 'the check grew into a sweep')
+    assert.deepEqual(c.CHECKS.filter((x) => x.key.startsWith('mod-')).map((x) => [x.pidLow, x.pidHigh]), [[3, 10], [3, 18], [3, 19]])
     /* The meters are asked with the live-value read AM4-Edit polls them with; the rest with the long read. */
     assert.equal(c.toHex(c.readFrame(c.CHECKS.find((x) => x.key === 'out-1'))).slice(0, 24), 'f00001741501 2a00 1600 1000'.replace(/ /g, ''))
     assert.equal(c.readFrame(c.CHECKS.find((x) => x.key === 'out-1'))[10], 0x10)
