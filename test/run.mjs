@@ -4282,6 +4282,8 @@ test('the computer wins where the two disagree about a slot', () => {
   assert.ok(!/nameCache\.has\(number\)/.test(imp), 'a name this browser already has still wins over the computer\'s')
   assert.match(imp, /if \(nameCache\.get\(number\) === name\) continue/, 'every import counts every slot as changed')
   assert.match(imp, /if \(!doc \|\| typeof doc !== 'object'\) return 0/, 'a missing host copy is treated as an answer')
+  /* And the host's "empty" never wipes out a name: only a read of the slot says it is empty. */
+  assert.match(imp, /if \(!name && nameCache\.get\(number\)\) continue/, 'a stale empty on the computer wipes out a name the unit gave')
 })
 
 console.log('\nwriting one amp on three channels')

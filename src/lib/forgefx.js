@@ -2242,6 +2242,10 @@ export async function importHostNames() {
     const number = Number(key)
     if (!Number.isInteger(number) || typeof name !== 'string') continue
     if (nameCache.get(number) === name) continue
+    /* The host's "empty" never wipes out a name: a copy taken before a preset
+       was saved said the slot was empty for ever after, over the name the unit
+       had just given. Only a read of the slot itself says it is empty. */
+    if (!name && nameCache.get(number)) continue
     nameCache.set(number, name)
     changed++
   }

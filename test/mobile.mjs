@@ -6877,6 +6877,14 @@ export function run(test) {
       assert.deepEqual(disk.fm3.names, { 3: 'NEW THREE', 5: 'FIVE', 7: '', 9: 'NINE' }, 'the disk copy is not the whole list')
       assert.ok(disk.fm3.at > 1, 'the disk copy does not say when the computer was last asked')
 
+      /* "I'll refresh the names and they'll show up, and when I scroll back
+         they show empty again." The computer's copy still calls slot 9 empty;
+         taking it in again must not wipe the name the unit gave. */
+      unit.__host({ fm3: { 3: 'NEW THREE', 5: 'FIVE', 7: '<EMPTY>', 9: '<EMPTY>' } })
+      await names.adopt('fm3')
+      assert.equal(names.nameOf(9), 'NINE', 'the computer’s stale empty wiped out a name the unit gave')
+      assert.equal(names.nameOf(7), '', 'a slot nobody has named is still empty')
+
       /* Rows 5 and 12 are on screen. Nothing is read: no screen is mounted,
          so there is no interest, and that rule is tested elsewhere. */
       names.wantOnly([5, 12])
