@@ -29,7 +29,7 @@ export const APPLE = {
   id: '6812916461',
   url: 'https://apps.apple.com/app/id6812916461',
   /* Live on the App Store since 8 October 2026: Apple approved build 24
-     (1.86.83) and the listing went up once Pricing and Availability was set. */
+     (1.86.83), and the listing came up a few hours after release. */
   live: true
 }
 

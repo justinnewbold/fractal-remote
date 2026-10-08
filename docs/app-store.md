@@ -186,9 +186,11 @@ question automatically on every submission rather than asking you each time.
 - **The app record itself** — bundle ID `cloud.newbold.fractalremote`.
 - **Pricing and Availability** — App Store Connect → the app → Pricing and
   Availability: price **Free**, and the countries it is sold in. Without it an
-  approved app says *Ready for Distribution* and still appears nowhere — which
-  is exactly what happened on 8 October 2026. The EU asks for a trader-status
-  declaration (Digital Services Act) before it will list the app there.
+  approved app is listed nowhere. The EU asks for a trader-status declaration
+  (Digital Services Act) before it will list the app there.
+- **After approval, give it a few hours.** "Ready for Distribution" means
+  released, but on 8 October 2026 the listing answered 404 for some hours —
+  with Pricing and Availability already set — and then came up by itself.
 
 ---
 

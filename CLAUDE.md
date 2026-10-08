@@ -204,9 +204,11 @@ icon now (mobile/assets/watch-icon.png); keep it light.
 **The app is live on both stores** (Google Play 4 October 2026, the App Store
 8 October 2026). Two things follow:
 
-- An approved build is not on sale until App Store Connect's Pricing and
-  Availability is set. "Ready for Distribution" with nothing there means the
-  app is listed nowhere — check it on every new app record.
+- "Ready for Distribution" is released, but the listing takes a few hours to
+  appear: on 8 October 2026 apps.apple.com answered 404 for some hours after
+  approval with Pricing and Availability already set, then came up on its
+  own. Wait before suspecting anything. Pricing and Availability (price and
+  countries) still has to be set on any new app record, or it never appears.
 - Every merge to main sends an over-the-air update on the production channel,
   and that now reaches paying customers on both stores (and a reviewer
   holding a build under review). Fixes go out as before; a big new phone
