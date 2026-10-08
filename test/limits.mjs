@@ -1595,6 +1595,10 @@ export function run(test) {
     assert.ok(length(description) <= 4000, `the description is ${length(description)} characters; both stores take 4000`)
 
     assert.ok(!/no computer to look around/.test(description), 'the demo line reads as "no computer needed" again')
+    /* The listing names VP4 and Fractal Audio, so its trademark line has to:
+       the shared one does, and a hand-typed one left both out. */
+    const { AFFILIATION } = await import('../shared/affiliation.mjs')
+    assert.ok(description.includes(AFFILIATION), 'the description no longer ends on the shared disclaimer')
     for (const [where, text] of [['promotional text', promo], ['description', description], ['Play summary', short], ['subtitle', subtitle]]) {
       assert.ok(!/\bfree\b[^.\n]{0,40}\bapp\b|\bapp\b[^.\n]{0,20}\bis free\b/i.test(text), `the ${where} calls an app free`)
     }
@@ -1635,6 +1639,17 @@ export function run(test) {
       v('old', 'REPLACED_WITH_NEW_VERSION', 'REPLACED_WITH_NEW_VERSION')
     ]).map((x) => x.id)
     assert.deepEqual(chosen, ['live', 'next'], 'the text goes on the wrong versions')
+    const { coming } = await import('../scripts/store-text.mjs')
+    assert.deepEqual(
+      coming([
+        v('live', 'READY_FOR_SALE', 'READY_FOR_DISTRIBUTION'),
+        v('review', 'WAITING_FOR_REVIEW', 'WAITING_FOR_REVIEW'),
+        v('held', 'PENDING_DEVELOPER_RELEASE', 'PENDING_DEVELOPER_RELEASE'),
+        v('old', 'REPLACED_WITH_NEW_VERSION', 'REPLACED_WITH_NEW_VERSION')
+      ]).map((x) => x.id),
+      ['review', 'held'],
+      'a version still to be released is not warned about, so its old paragraph comes back unannounced'
+    )
   })
 
   test('an account made in the app can be deleted in the app, with everything under it', async () => {

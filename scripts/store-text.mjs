@@ -77,6 +77,24 @@ export function targets(versions) {
   })
 }
 
+/*
+ * And the ones it cannot touch yet but that are still coming: a version in
+ * review, or approved and waiting to be released, carries its own copy of the
+ * paragraph and puts it on the page the day it goes out. Not written, because
+ * Apple's word on editing a version mid-review is not clear and a refusal
+ * would stop the run before it reached the live one; SAID, so it is not a
+ * surprise. Everything older is finished and never shown again.
+ */
+const GONE = new Set(['REPLACED_WITH_NEW_VERSION', 'REMOVED_FROM_SALE', 'DEVELOPER_REMOVED_FROM_SALE'])
+
+export function coming(versions) {
+  const chosen = new Set(targets(versions))
+  return versions.filter((v) => {
+    const { appStoreState, appVersionState } = v.attributes ?? {}
+    return !chosen.has(v) && ![appStoreState, appVersionState].some((s) => GONE.has(s))
+  })
+}
+
 async function main() {
   const apply = process.argv.includes('--apply')
   const text = promoText(readFileSync(new URL('../docs/app-store.md', import.meta.url), 'utf8'))
@@ -98,6 +116,13 @@ async function main() {
   const { data: versions } = await asc(`/v1/apps/${APPLE.id}/appStoreVersions?filter[platform]=IOS&limit=20`)
   const chosen = targets(versions)
   if (!chosen.length) throw new Error('no version on sale or being prepared — nothing to put the text on')
+  for (const v of coming(versions)) {
+    const { versionString, appStoreState, appVersionState } = v.attributes
+    console.log(
+      `::warning::${versionString} is ${appVersionState ?? appStoreState} and was not changed. ` +
+        'Run this again once it is released, or it goes out with its old paragraph.'
+    )
+  }
 
   for (const version of chosen) {
     const { versionString, appStoreState, appVersionState } = version.attributes

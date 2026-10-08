@@ -40,7 +40,9 @@ keeps the paragraphs and adds no line breaks of its own.
 The paragraph at the very top of the listing, and the one part of it that
 changes without a build or a review. It is not pasted: Actions → store-text →
 Run workflow, tick **Write it**, and it goes straight to the live version.
-Unticked, it only shows what is there now.
+Unticked, it only shows what is there now. **Run it again after each new
+version is released:** a version already in review keeps its own copy of the
+paragraph, and the run warns about any it could not change.
 
 ```
 REQUIRES A COMPUTER. Your Fractal plugs by USB into a Mac, PC or Linux computer running our desktop app, and your phone controls it from there. The demo needs no gear.
@@ -91,7 +93,7 @@ Once the two are paired, the phone works from anywhere: the same room, the far s
 ONE PAYMENT, LIFETIME UNLOCK
 Controlling real hardware is a single purchase. It unlocks the full app on every device you own, forever, including every future update, on all supported Fractal units. No subscription.
 
-Not affiliated with, authorized by, or endorsed by Fractal Audio Systems. FM3, FM9, Axe-Fx and AM4 are trademarks of their respective owner.
+Fractal Remote is an independent app. It is in no way affiliated with, endorsed by, or sponsored by Fractal Audio Systems, Inc. “Fractal Audio”, “Axe-Fx”, “FM3”, “FM9”, “AM4” and “VP4” are trademarks of Fractal Audio Systems, Inc., used here only to say which hardware this app works with.
 ```
 
 ### Google Play
