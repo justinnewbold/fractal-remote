@@ -671,6 +671,21 @@ export function run(test) {
     }
   })
 
+  test('the Edit screen says it is a beta, by its name and at the foot of the page', () => {
+    /* "I don't feel like the edit screen is ready yet can we add to the screen
+       that it's a beta feature. Next to edit on the edit screen have (Beta)
+       then have a notice at the bottom of the page." */
+    const edit = read('mobile/src/screens/Edit.js').replace(/\s+/g, ' ')
+    assert.match(edit, /Edit <Text style=\{[^}]*\}\}>\(Beta\)<\/Text>/, 'the Edit title lost its (Beta)')
+    assert.match(edit, /accessibilityLabel="Edit, beta"/, 'a screen reader hears the title without the beta')
+    assert.match(edit, /const BETA_NOTE = 'Edit is a beta feature\./, 'the beta notice is gone')
+    /* At the foot: after the last thing on the page, and before it closes. */
+    const foot = edit.slice(edit.indexOf('<RenameDoor />'), edit.indexOf('</ScrollView>', edit.indexOf('<RenameDoor />')))
+    assert.match(foot, /<Note tone="warn">\{BETA_NOTE\}<\/Note>/, 'the beta notice is not at the bottom of the page')
+    /* And it points at a way to say what is wrong that exists. */
+    assert.match(read('mobile/src/screens/Settings.js'), /title="Feedback"/, 'the notice sends people to a Feedback row that is gone')
+  })
+
   test('the Mac, Windows and Linux icons on Connect a computer open the downloads page', () => {
     /* "Can we make the icons at the bottom work to take them straight to the
        download page on fractal.newbold.cloud/downloads." */

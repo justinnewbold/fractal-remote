@@ -274,8 +274,20 @@ export default function Edit({ onBack, onOpenGear }) {
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
         <View style={{ flexShrink: 1 }}>
-          <Text accessibilityRole="header" style={{ color: color.silk, fontSize: font.title, fontWeight: '700' }}>
-            Edit
+          {/*
+            (BETA), because it is. "I don't feel like the edit screen is ready
+            yet can we add to the screen that it's a beta feature. Next to edit
+            on the edit screen have (Beta) then have a notice at the bottom of
+            the page." Smaller and in the accent colour, so the screen's name
+            is still the first thing read. The notice is at the foot of the
+            page (BETA_NOTE).
+          */}
+          <Text
+            accessibilityRole="header"
+            accessibilityLabel="Edit, beta"
+            style={{ color: color.silk, fontSize: font.title, fontWeight: '700' }}
+          >
+            Edit <Text style={{ color: color.signal, fontSize: font.lead, fontWeight: '700' }}>(Beta)</Text>
           </Text>
           {/*
             WHERE YOU ARE, not a sentence about it.
@@ -487,9 +499,22 @@ export default function Edit({ onBack, onOpenGear }) {
         editor and the modifiers above it.
       */}
       {chainNow.elsewhere ? null : <RenameDoor />}
+
+      {/* Last on the page, under everything it is about. */}
+      <Note tone="warn">{BETA_NOTE}</Note>
     </ScrollView>
   )
 }
+
+/**
+ * What the foot of the Edit screen says, while it is a beta.
+ *
+ * Plain about what can go wrong (a control that is missing, or that moves
+ * differently from the unit) and where to say so, rather than a word that
+ * only says "unfinished". Feedback is the row in Settings.
+ */
+const BETA_NOTE =
+  'Edit is a beta feature. Some blocks and controls may be missing, or may not change the same way they do on your unit yet. If something looks wrong, tell us with Feedback in Settings.'
 
 /**
  * One block's controls.
