@@ -9240,6 +9240,11 @@ export function run(test) {
     assert.deepEqual(plain, [], 'a sideways ScrollView that is not a SideScroll: its drags go back a screen')
     const side = read('mobile/src/components/SideScroll.js')
     assert.match(side, /onTouchStart=\{\(e\) => \{\s*holdSideways\(\)/, 'a sideways row no longer says it was touched')
+    /* The other two places a right swipe means something besides back. */
+    const away = read('mobile/src/components/SwipeAway.js').replace(/\s+/g, ' ')
+    assert.match(away, /onTouchStart=\{\(\) => \{ if \(rest\.current !== 0\) holdSideways\(\) \}\}/, 'an open row loses the drag that closes it to the back swipe')
+    const card = read('mobile/src/components/GearCard.js').replace(/\s+/g, ' ')
+    assert.match(card, /onTouchStart=\{\(\) => \{ if \(live\.current\.many\) holdSideways\(\) \}\}/, 'a swipe to the previous model can land in Settings')
     const edge = read('mobile/src/components/EdgeBack.js')
     assert.match(edge, /onTouchEnd=\{done\}/, 'the hold is never let go when the finger lifts')
     assert.match(edge, /onTouchCancel=\{releaseSideways\}/, 'the hold is never let go when the touch is cancelled')

@@ -4,6 +4,7 @@ import { Animated, PanResponder, Pressable, Text, View } from 'react-native'
 import { color, font, radius, space } from '../lib/theme'
 import { nope, tick } from '../lib/feedback'
 import { SWIPE_CLAIM, SWIPE_OPEN, swipeLanding } from '../lib/swipe-hint'
+import { holdSideways } from '../lib/edge-back'
 
 /**
  * Swipe a row left to remove it.
@@ -179,7 +180,21 @@ export default function SwipeAway({ children, onRemove, label, demo = false, ask
         </Pressable>
       </View>
 
-      <Animated.View style={{ transform: [{ translateX: x }] }} {...pan.panHandlers}>
+      {/*
+        AN OPEN ROW KEEPS THE DRAG THAT CLOSES IT. Left to right is how an
+        open row is put back, and it is also the back swipe's direction —
+        which took that drag and left the screen with the row still open, on
+        the Edit screen's chain and on a setlist. So an open row says so on
+        touch-down and the back swipe stands aside (lib/edge-back.js). A
+        closed row does not: a right swipe over it still goes back.
+      */}
+      <Animated.View
+        style={{ transform: [{ translateX: x }] }}
+        {...pan.panHandlers}
+        onTouchStart={() => {
+          if (rest.current !== 0) holdSideways()
+        }}
+      >
         {children}
       </Animated.View>
     </View>

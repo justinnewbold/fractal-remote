@@ -20,8 +20,11 @@
  * towards its start, and the chain on the Edit screen is a long row by
  * design. So a sideways scroller (SideScroll) says so the moment it is
  * touched, and the back gesture stands aside until every finger is up.
- * Knobs, sliders and swipe-to-remove rows claim their own drags and keep
- * them; this never captures from a child.
+ * Two others hold it the same way, because a right swipe means something
+ * there too: an OPEN swipe-to-remove row (SwipeAway), which a right swipe
+ * closes, and the amp and pedal card (GearCard), which a right swipe turns
+ * back. Knobs and sliders claim their drags on touch-down and refuse to hand
+ * them over, so they need no hold; this never captures from a child.
  */
 
 /** How far it has to travel before the claim is made, in pixels. */

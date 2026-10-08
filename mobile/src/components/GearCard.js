@@ -17,6 +17,7 @@ import { color, font, radius, space } from '../lib/theme'
 import { photoFor } from '../lib/gearPhotos'
 import { descriptionFor, paragraphsOf, specsFor } from '../lib/lineage'
 import { HOSTED_ORIGIN } from '../lib/pairing'
+import { holdSideways } from '../lib/edge-back'
 import Press from './Press'
 import { tick } from '../lib/feedback'
 import chevronIcon from '../../assets/icons/chevron.png'
@@ -166,7 +167,20 @@ export default function GearCard({ entry, entries = [], onGo, onBack }) {
         ) : null}
       </View>
 
-      <View style={{ flex: 1 }} {...pan.panHandlers}>
+      {/*
+        A SWIPE HERE TURNS THE CARD, and a right swipe is also the back
+        swipe's direction. The back swipe claims a few points sooner than
+        this does, so it could take a slow swipe to the previous model and
+        land in Settings. While there is another card to turn to, touching
+        the card says so and the back swipe stands aside (lib/edge-back.js).
+      */}
+      <View
+        style={{ flex: 1 }}
+        {...pan.panHandlers}
+        onTouchStart={() => {
+          if (live.current.many) holdSideways()
+        }}
+      >
       <Animated.View style={{ flex: 1, transform: [{ translateX: x }] }}>
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: space.lg + (many ? 40 : 0), paddingBottom: space.xxl, gap: space.md }}
