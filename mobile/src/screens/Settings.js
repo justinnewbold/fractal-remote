@@ -51,7 +51,7 @@ import { useComputerElsewhere } from '../lib/useComputerElsewhere'
 import { quitEditor } from '../lib/editors'
 import { isAdmin } from '../lib/admin'
 import { watchHow, watchPaired, watchSupported } from '../lib/watchBridge'
-import { bluetoothSupported, useBluetooth } from '../lib/bluetooth'
+import { bluetoothSupported, useBluetoothOn } from '../lib/bluetooth'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage from './Bluetooth'
 import AccessTool from '../components/AccessTool'
@@ -194,7 +194,7 @@ export default function Settings({
   const caps = useRig(ofCapabilities)
   const switchesReadable = fcReadable(caps)
   /* Bluetooth (beta): whether the phone is talking to the unit itself. */
-  const bluetooth = useBluetooth().on
+  const bluetooth = useBluetoothOn()
   const [looperSaid, setLooperSaid] = useState(null)
   async function stopTheLooper() {
     const looper = findLooper(allBlocks)
@@ -262,6 +262,15 @@ export default function Settings({
         : link === 'no-answer'
           ? 'Your computer isn’t answering'
           : 'Not connected'
+  /* Over Bluetooth (beta) the row is about the adapter on the unit, not a computer. */
+  const bluetoothWord =
+    link === 'connected'
+      ? unitState === 'missing' || unitState === 'silent'
+        ? `Bluetooth · ${deviceName || 'unit'} not answering`
+        : `${deviceName || 'Unit'} · Bluetooth`
+      : link === 'joining'
+        ? 'Bluetooth · looking for the adapter'
+        : 'Bluetooth · not connected'
 
   /*
    * TWO WAYS OUT OF EVERY PAGE, and they go to different places on purpose.
@@ -380,13 +389,15 @@ export default function Settings({
               status={
                 demo
                   ? `Demo — simulated ${DEMO_UNITS.find((u) => u.key === unit)?.name || 'unit'}`
-                  : link !== 'connected'
-                    ? linkWord
-                    : unitState === 'missing'
-                      ? 'Computer connected · no unit'
-                      : unitState === 'silent'
-                        ? `Computer connected · ${deviceName || 'unit'} not answering`
-                        : `${deviceName || 'Unit'} · connected`
+                  : bluetooth
+                    ? bluetoothWord
+                    : link !== 'connected'
+                      ? linkWord
+                      : unitState === 'missing'
+                        ? 'Computer connected · no unit'
+                        : unitState === 'silent'
+                          ? `Computer connected · ${deviceName || 'unit'} not answering`
+                          : `${deviceName || 'Unit'} · connected`
               }
               onPress={() => setPage('link')}
             />

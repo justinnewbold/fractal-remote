@@ -30,8 +30,8 @@ import { logDebug } from './debugLog'
  *                 rig store's `unit`, exactly as it is over the computer,
  *                 where 'connected' is the computer and the unit is its own
  *                 word in the bar;
- *   'off'       — not trying: no unit chosen, not unlocked, or the player
- *                 pressed Disconnect.
+ *   'off'       — not trying: no unit chosen, no adapter picked, not
+ *                 unlocked, or the player pressed Disconnect.
  *
  * Like link.js it is a loop rather than a button: an adapter that drops (out
  * of range, the unit switched off, iOS letting an idle link go) is looked for
@@ -128,7 +128,12 @@ function begin() {
     return
   }
   const name = s.adapter?.name || 'the Bluetooth adapter'
-  tell?.({ link: held ? 'off' : 'joining', macName: name, hostVersion: null })
+  /*
+   * With no adapter picked nothing is being looked for, so the link is 'off'
+   * as it is for no unit: 'joining' put "Finding the Bluetooth adapter" on
+   * the stage for ever, with a button that looked again for nothing.
+   */
+  tell?.({ link: held || !s.adapter ? 'off' : 'joining', macName: name, hostVersion: null })
   if (held) return noteBluetooth({ phase: 'held' })
   if (!s.adapter) return noteBluetooth({ phase: 'no-adapter' })
   noteBluetooth({ phase: 'connecting' })
@@ -162,7 +167,12 @@ async function tryConnect() {
   } finally {
     inFlight = false
   }
-  if (mine !== attempt || !running || held) return
+  if (!running || held) return
+  if (mine !== attempt) {
+    /* Overtaken while it waited (another adapter was picked, say): the one wanted now is tried now. */
+    if (!wire) tryConnect()
+    return
+  }
   if (ok) {
     /* The module says 'connected' as it connects (heardState); this is for an event that never arrived. */
     if (!wire) connected({ id: s.adapter.id, name: s.adapter.name })
@@ -191,7 +201,7 @@ async function connected(e) {
   unhear = made.subscribe(handleEvent)
   setSwitch({ on: bluetoothOn(), wire: made })
   const name = e?.name || s.adapter?.name || 'the Bluetooth adapter'
-  noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null })
+  noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null })
   tell?.({ link: 'connected', macName: name, hostVersion: null })
   say(`connected to ${name}; asking the ${unitName(s.unit)} what it is`)
   try {

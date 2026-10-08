@@ -298,8 +298,9 @@ export function am4Sender(send, log = () => {}) {
  * @param {{now, setTimeout, clearTimeout}} [o.clock]
  * @param {(line:string) => void} [o.log]
  * @param {(methods:object) => void} [o.remember]  called when auto learns a way, to keep it on the phone
+ * @param {(name:string) => void} [o.onForeign]  called once when an AM4 answers a connection made for another unit, so the page can say so
  */
-export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember } = {}) {
+export function createBleWire({ send, unit, catalog = [], methods, clock, log, remember, onForeign } = {}) {
   const spec = SPEC[unit]
   if (!spec) throw new Error(`Bluetooth does not know a unit called ${unit}.`)
   if (typeof send !== 'function') throw new Error('Bluetooth needs a way to send.')
@@ -355,14 +356,42 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   let lastSent = { messages: [], at: -Infinity }
   let echoes = 0
   let thruTold = false
-  let late = null
   let foreign = null
   let pushes = 0
+  /* Whether the unit has answered anything on this connection: the footswitch watch waits for it. */
+  let answered = false
+  /* An AM4 answered a connection made for another unit: nothing more is sent. See heardAnAm4. */
+  let wrongUnit = false
+
+  /*
+   * A QUESTION THAT WENT UNANSWERED MAY STILL BE ANSWERED, late, and that
+   * answer must not be taken for the next one of the same kind. Each kind
+   * (the function byte) that timed out is remembered here until when its
+   * answer would be too late to arrive.
+   */
+  const lateUntil = new Map()
+  let holdTimer = null
+  const lateFor = (fn) => (lateUntil.get(fn) ?? -Infinity) - time.now()
+
+  /*
+   * How long a gen-3 question must wait for a late answer to its kind to pass.
+   * A current-preset answer that arrived late was being taken for a stored
+   * name, which turned stored names off for the whole connection; a stored
+   * name that arrived late was taken for the loaded preset. Not the tuner's
+   * frequency question: a reading that comes late is still a reading, and
+   * holding it would put a two-second gap in the needle. Not the AM4, whose
+   * every answer is told apart by the address it carries (and whose one that
+   * is not, the stored name, waits on its own: see am4NameOf).
+   */
+  const heldFor = (job) => (am4 || !job.opts.match || job.opts.fn === undefined || job.opts.fn === FN.PARAM ? 0 : lateFor(job.opts.fn))
 
   const isEcho = (bytes, now) => now - lastSent.at <= ECHO_MS && lastSent.messages.some((m) => sameBytes(m, bytes))
 
+  const wrongUnitError = () => failure(`An AM4 answered, not the ${spec.name}. Pick AM4 on the Bluetooth (beta) page in Settings.`, 409)
+
   function ex(out, opts = {}) {
     if (closed) return Promise.reject(notConnected())
+    if (wrongUnit) return Promise.reject(wrongUnitError())
     const priority = PRI[opts.priority] ?? PRI.read
     if (priority === PRI.poll && (current || waiting.length)) return Promise.resolve(SKIPPED)
     return new Promise((resolve, reject) => {
@@ -374,7 +403,22 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   function pump() {
-    if (current || closed || !waiting.length) return
+    if (current || closed || wrongUnit || !waiting.length) return
+    const hold = heldFor(waiting[0])
+    if (hold > 0) {
+      /* A watch poll is not worth waiting for: the next one asks. Anything else waits it out, and a write still goes ahead of it. */
+      if (waiting[0].priority === PRI.poll) {
+        waiting.shift().resolve(SKIPPED)
+        return pump()
+      }
+      if (holdTimer === null) {
+        holdTimer = time.setTimeout(() => {
+          holdTimer = null
+          pump()
+        }, hold)
+      }
+      return
+    }
     const job = waiting.shift()
     current = job
     job.started = time.now()
@@ -391,7 +435,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     job.timer = time.setTimeout(() => {
       if (current !== job) return
       if (job.opts.match) {
-        if (job.opts.fn !== undefined) late = { fn: job.opts.fn, until: time.now() + LATE_MS }
+        if (job.opts.fn !== undefined) lateUntil.set(job.opts.fn, time.now() + LATE_MS)
         if (job.priority !== PRI.poll) say(`no answer to ${job.opts.what || toHex(messages[0])} in ${job.opts.ms} ms`)
       }
       end(job, null)
@@ -432,6 +476,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     const now = time.now()
     if (f[4] !== model) {
       if (f[4] !== 0x7f) foreign = { model: f[4], at: now }
+      if (!am4 && f[4] === MODELS.am4) heardAnAm4()
       return
     }
     const job = current
@@ -454,6 +499,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const got = job.opts.match(f)
       if (got !== null && got !== undefined) {
         job.back = f
+        answered = true
         return end(job, got)
       }
     }
@@ -461,6 +507,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const no = parseRejected(f, model)
       if (no && no.fn === job.opts.fn) {
         job.back = f
+        answered = true
         say(`the unit refused ${job.opts.what || 'it'}: ${rejectedWords(no.code)}`)
         return end(job, { rejected: no.code })
       }
@@ -468,9 +515,30 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     unasked(f, now)
   }
 
+  /*
+   * AN AM4 ON THE OTHER END OF A CONNECTION MADE FOR ANOTHER UNIT: the wrong
+   * unit was picked. The AM4 has frozen on messages it did not expect, and
+   * how it takes another unit's is not known, so from here nothing more goes
+   * out on this connection — the watch stops, everything waiting is refused
+   * unsent, and every request after it is refused with the reason. Picking
+   * AM4 makes a new connection, and that one is the AM4's own.
+   */
+  function heardAnAm4() {
+    if (wrongUnit) return
+    wrongUnit = true
+    stopPolls()
+    say(`an AM4 answered, not the ${spec.name}: nothing more is sent on this connection`)
+    while (waiting.length) waiting.shift().reject(wrongUnitError())
+    try {
+      if (onForeign) onForeign('AM4')
+    } catch {
+      // Telling the page is a courtesy; the wire has already stopped.
+    }
+  }
+
   /** What the unit said that nobody was waiting for. */
   function unasked(f, now) {
-    if (late && now <= late.until && f[5] === late.fn) return
+    if (lateFor(f[5]) >= 0) return
     if (am4) return
     const push = parseTunerPush(f, model)
     if (push) {
@@ -618,7 +686,6 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   let numberedOff = false
   let sceneNamesOff = false
   let sceneCache = null
-  let quietUntil = 0
 
   const sceneNow = (priority = 'read') => ask(buildGetScene(model), (f) => parseScene(f, model), WAIT.scene, 'the scene', { priority })
   const presetNow = (priority = 'read') => ask(buildGetPreset(model), (f) => parsePresetName(f, model), WAIT.preset, 'the preset', { priority })
@@ -683,17 +750,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * blank for a slot that has a name would wipe one learned over the relay.
    * So the answer has to be for the slot asked about; one for another slot
    * means this unit cannot say, and it is not asked again on this connection.
+   * (After any preset question goes unanswered, this one waits for the late
+   * answer to pass rather than take it: see heldFor.)
    */
   async function gen3StoredName(n) {
     presetNumber(n)
     if (numberedOff) throw unsupported()
-    const wait = quietUntil - time.now()
-    if (wait > 0) await pause(wait)
     const got = await ask(buildGetPresetName(model, n), (f) => parsePresetName(f, model), WAIT.preset, `preset ${n}’s name`)
-    if (got === null) {
-      quietUntil = time.now() + LATE_MS
-      throw timedOut()
-    }
+    if (got === null) throw timedOut()
     if (rejected(got) || got.number !== n) {
       numberedOff = true
       say(`the ${spec.name} answered for another preset when asked for ${n}’s name: stored names are not read on this connection`)
@@ -743,22 +807,42 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     fire(buildSetScene(model, i), `scene ${i + 1}`, { ms: WAIT.sceneEcho, allowEcho: true, match: (f) => parseScene(f, model) })
   const sendEditScene = (i) => fire(buildSetSceneEdit(model, i), `scene ${i + 1} (FM3-Edit’s way)`)
 
+  /*
+   * WHAT A TRIAL CAN LEARN FROM. Each trial below sends one way, reads the
+   * unit back, and tries the other way if it did not land. But a write to
+   * where the unit already is lands whether it worked or not — the first
+   * scene of a setlist song, a tempo it is already at — and a way learned
+   * from that is remembered on the phone and sent from then on unchecked,
+   * so every later write would fail without a word. So the unit is asked
+   * where it is first (or the caller says, having just asked), and a way is
+   * only learned from a write that moved it. The writes still go out either
+   * way: the player asked for them.
+   */
+  const movedFrom = (from, to) => Number.isInteger(from) && from !== to
+
   /**
    * Try the published scene change, and FM3-Edit's if that did not land.
-   * Which one worked, or null when the unit would not say where it ended up.
+   * Which one worked, or null when the unit would not say where it ended up
+   * or was already there.
    */
-  async function trialScene(i) {
+  async function trialScene(i, before) {
+    const from = before === undefined ? await sceneNow() : before
+    let moved = movedFrom(from, i)
     const r = await sendPublishedScene(i)
-    if (r === i) {
-      /* Checked once, because an echo from MIDI Thru looks exactly like the unit's answer. */
+    if (!rejected(r)) {
+      /*
+       * Checked, because an echo from MIDI Thru looks exactly like the unit's
+       * answer, and because a unit can take it and say nothing.
+       */
       const now = await sceneNow()
-      if (now === i) return 'published'
+      if (now === i) return moved ? 'published' : null
       if (now === null) return null
+      moved = true
     }
     const e = await sendEditScene(i)
     if (rejected(e)) throw refusedBy(e.rejected)
     const now = await sceneNow()
-    if (now === i) return 'edit'
+    if (now === i) return moved ? 'edit' : null
     if (now === null) return null
     throw failure(`The unit stayed on scene ${now + 1}.`, 502)
   }
@@ -791,18 +875,22 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* A refusal about the block itself is not a reason to try the other way. */
   const aboutTheBlock = (code) => code === 0x05 || code === 0x07
 
-  async function trialChannel(eid, c) {
+  /* As trialScene: only a write that moved the block teaches anything. */
+  async function trialChannel(eid, c, before) {
+    const from = before === undefined ? await channelNow(eid) : before
+    let moved = movedFrom(from, c)
     const p = await fire(buildSetChannel(model, eid, c), `block ${eid} to ${CH[c]}`)
     if (rejected(p) && aboutTheBlock(p.rejected)) throw refusedBy(p.rejected)
     if (!rejected(p)) {
       const now = await channelNow(eid)
-      if (now === c) return 'published'
+      if (now === c) return moved ? 'published' : null
       if (now === null) return null
+      moved = true
     }
     const e = await fire(buildSetChannelEdit(model, eid, c), `block ${eid} to ${CH[c]} (FM3-Edit’s way)`)
     if (rejected(e)) throw refusedBy(e.rejected)
     const now = await channelNow(eid)
-    if (now === c) return 'edit'
+    if (now === c) return moved ? 'edit' : null
     if (now === null) return null
     throw failure(`The block stayed on ${CH[now] || now}.`, 502)
   }
@@ -830,23 +918,27 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /* ---- tempo ---- */
 
-  async function trialTempo(bpm) {
+  async function trialTempo(bpm, before) {
     /*
      * EXACTLY, not within one: a gen-3 unit answers a whole BPM, and the
      * check panel moves the tempo by one — within one of the target is also
      * within one of where it started, which would call a write that did
-     * nothing a success.
+     * nothing a success. And as trialScene, only from a tempo it was not
+     * already at.
      */
+    const from = before === undefined ? await tempoNow() : before
+    let moved = movedFrom(from, bpm)
     const p = await fire(buildSetTempo(model, bpm), `tempo ${bpm}`)
     if (!rejected(p)) {
       const now = await tempoNow()
-      if (now === bpm) return 'published'
+      if (now === bpm) return moved ? 'published' : null
       if (!Number.isInteger(now)) return null
+      moved = true
     }
     const e = await fire(buildSetTempoEdit(model, bpm), `tempo ${bpm} (FM3-Edit’s way)`)
     if (rejected(e)) throw refusedBy(e.rejected)
     const now = await tempoNow()
-    if (now === bpm) return 'edit'
+    if (now === bpm) return moved ? 'edit' : null
     if (!Number.isInteger(now)) return null
     throw failure(`The tempo stayed at ${now}.`, 502)
   }
@@ -890,16 +982,24 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return got && !rejected(got) ? got.number : null
   }
 
-  async function trialPreset(n) {
+  /* As trialScene: choosing the preset that is already loaded teaches nothing. */
+  async function trialPreset(n, before) {
+    let from = before
+    if (from === undefined) {
+      const got = await presetNow()
+      from = got && !rejected(got) ? got.number : null
+    }
+    let moved = movedFrom(from, n)
     const s = await sendSysexPreset(n)
     if (!rejected(s)) {
       const at = await landedOn()
-      if (at === n) return 'sysex'
+      if (at === n) return moved ? 'sysex' : null
       if (at === null) return null
+      moved = true
     }
     await sendPc(n)
     const at = await landedOn()
-    if (at === n) return 'pc'
+    if (at === n) return moved ? 'pc' : null
     if (at === null) return null
     throw failure(`The unit stayed on preset ${at}.`, 502)
   }
@@ -1045,6 +1145,23 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   let structure = null
   let structureTold = false
+  let slotsHeard = null
+
+  /*
+   * THE SLOT CODES, ONLY FROM AN ANSWER THAT HELD TOGETHER. They are not just
+   * shown: they are the blocks the AM4 is asked about and the ones the
+   * player's taps switch, so a damaged answer must not choose them. One with
+   * a bad checksum keeps its preset, scene and name (each held to its range
+   * in the codec, so the page is not left blind), but its slots are only
+   * believed when the answer before it said the same — which is also what
+   * keeps a unit whose checksum turns out always to be off working. Until
+   * then they are null, and whoever needs them asks again.
+   */
+  function believeSlots(got) {
+    const agrees = slotsHeard !== null && sameBytes(slotsHeard, got.slots)
+    slotsHeard = got.slots
+    return got.checksumOk || agrees ? got : { ...got, slots: null }
+  }
 
   async function readStructure({ priority = 'read', fresh = false } = {}) {
     if (!fresh && structure && time.now() - structure.at < STRUCTURE_FRESH_MS) return structure.value
@@ -1056,8 +1173,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       /* Nobody has checked this answer's checksum on a real AM4: say what it was, once. */
       say(got.checksumOk ? 'the AM4’s preset answer carries a good checksum' : 'the AM4’s preset answer did not carry a good checksum; its numbers were in range, so it is used')
     }
-    structure = { value: got, at: time.now() }
-    return got
+    const value = believeSlots(got)
+    structure = { value, at: time.now() }
+    return value
   }
 
   async function am4Detect() {
@@ -1104,8 +1222,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * question about a block that is not on the list.
    */
   async function am4Placed() {
-    const s = await readStructure()
-    if (!s) return null
+    let s = await readStructure()
+    /* Slots not believed yet (see believeSlots): asked once more, and believed if the two agree. */
+    if (s && !s.slots) s = await readStructure({ fresh: true })
+    if (!s || !s.slots) return null
     const out = []
     for (let i = 0; i < s.slots.length; i++) {
       const code = s.slots[i]
@@ -1150,6 +1270,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * could be filed under the wrong slot.
    */
   let nameAt = -Infinity
+  let quietUntil = 0
   let nameChain = Promise.resolve()
   function am4NameOf(n) {
     const run = nameChain.then(async () => {
@@ -1358,7 +1479,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* The footswitch watch                                              */
   /* ================================================================ */
 
-  const polls = { on: false, timer: null, tick: 0 }
+  const polls = { on: false, timer: null, tick: 0, run: 0 }
   let checking = false
 
   async function gen3Poll(n) {
@@ -1388,28 +1509,44 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     noteScene(s.scene, true)
   }
 
-  async function pollTick() {
+  /*
+   * EACH START IS ITS OWN RUN, the way rig's watchUnit has watchRun. The
+   * screen goes off and on in a blink — Control Center, a notification, Face
+   * ID, every Android unlock — and a tick still waiting for its answer when
+   * that happens would otherwise wake up, see the watch on again, and start a
+   * second loop beside the new one: one more for every blink, each a 238-byte
+   * answer on a 31,250-baud line, for as long as the adapter stayed connected.
+   * A tick from an older run ends where it is.
+   *
+   * And nothing is asked until the unit has answered something on this
+   * connection. A unit that never has may be the wrong one (an AM4 picked as
+   * an FM3), and the rig's own ten-second check is enough for a silent one.
+   */
+  async function pollTick(run) {
+    if (run !== polls.run) return
     polls.timer = null
     if (!polls.on || closed) return
     const n = polls.tick++
     try {
-      if (!tuner.on && !checking) await (am4 ? am4Poll() : gen3Poll(n))
+      if (!tuner.on && !checking && answered) await (am4 ? am4Poll() : gen3Poll(n))
     } catch {
       // A missed poll is the next poll's job.
     }
-    if (polls.on && !closed) polls.timer = time.setTimeout(pollTick, am4 ? POLL_MS.am4 : POLL_MS.scene)
+    if (polls.on && !closed && run === polls.run) polls.timer = time.setTimeout(() => pollTick(run), am4 ? POLL_MS.am4 : POLL_MS.scene)
   }
 
   /** Start watching for footswitch changes, with a poll straight away. The link layer calls this when the screen comes on. */
   function startPolls() {
-    if (polls.on || closed) return
+    if (polls.on || closed || wrongUnit) return
     polls.on = true
-    polls.timer = time.setTimeout(pollTick, 0)
+    const run = ++polls.run
+    polls.timer = time.setTimeout(() => pollTick(run), 0)
   }
 
   /** Stop watching: the screen went off, or the adapter went away. */
   function stopPolls() {
     polls.on = false
+    polls.run++
     if (polls.timer !== null) time.clearTimeout(polls.timer)
     polls.timer = null
   }
@@ -1462,7 +1599,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const from = await row('Scene', () => sceneNow(), (v) => said(v, (s) => `scene ${s + 1}`))
       if (!Number.isInteger(from)) throw failure('The unit did not say which scene it is on.', 504)
       const to = from === 1 ? 0 : 1
-      const way = await row(`Scene ${to + 1}`, () => trialScene(to), (w) => wayWords(w))
+      const way = await row(`Scene ${to + 1}`, () => trialScene(to, from), (w) => wayWords(w))
       if (way) learn('scene', way)
       await row(`Back to scene ${from + 1}`, () => (way ? sceneBy(way, from) : trialScene(from)), sentWords)
       last.scene = from
@@ -1474,7 +1611,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const amp = list.find((b) => b.effectId === 58) || list.find((b) => b.channels > 1)
       if (!amp) throw failure('There is no block with channels in this preset.', 409)
       const to = amp.channel === 1 ? 0 : 1
-      const way = await row(`${nameOf(amp.effectId)} to ${CH[to]}`, () => trialChannel(amp.effectId, to), (w) => wayWords(w))
+      const way = await row(`${nameOf(amp.effectId)} to ${CH[to]}`, () => trialChannel(amp.effectId, to, amp.channel), (w) => wayWords(w))
       if (way) learn('channel', way)
       await row(`${nameOf(amp.effectId)} back to ${CH[amp.channel]}`, () => (way ? changeChannelBy(way, amp.effectId, amp.channel) : trialChannel(amp.effectId, amp.channel)), sentWords)
       return { way }
@@ -1483,7 +1620,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const from = await row('Tempo', () => tempoNow(), (v) => said(v, (b) => `${b} BPM`))
       if (!Number.isInteger(from)) throw failure('The unit did not say its tempo.', 504)
       const to = from >= AM4.TEMPO_MAX ? from - 1 : from + 1
-      const way = await row(`Tempo ${to}`, () => trialTempo(to), (w) => wayWords(w))
+      const way = await row(`Tempo ${to}`, () => trialTempo(to, from), (w) => wayWords(w))
       if (way) learn('tempo', way)
       await row(`Tempo back to ${from}`, () => (way ? tempoBy(way, from) : trialTempo(from)), sentWords)
       last.bpm = from
@@ -1495,7 +1632,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const scene = await row('Scene', () => sceneNow(), (v) => said(v, (s) => `scene ${s + 1}`))
       const from = now.number
       const to = from >= spec.maxPreset ? from - 1 : from + 1
-      const way = await row(`Preset ${to}`, () => trialPreset(to), (w) => (w === 'sysex' ? 'the SysEx switch worked' : w === 'pc' ? 'Program Change worked' : 'sent; the unit did not say where it landed'))
+      const way = await row(`Preset ${to}`, () => trialPreset(to, from), (w) => (w === 'sysex' ? 'the SysEx switch worked' : w === 'pc' ? 'Program Change worked' : 'sent; the unit did not say where it landed'))
       if (way) learn('preset', way)
       await row(`Back to preset ${from}`, () => (way ? presetBy(way, from) : trialPreset(from)), sentWords)
       /* Loading a preset puts it on its own first scene; "back" means the scene too. */
@@ -1551,7 +1688,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   /* The AM4, step by step: reads from the list, and four writes that each put things back. */
-  const slotWords = (codes) => codes.map((c) => (c ? am4Block(c)?.slug || `0x${c.toString(16)}` : 'empty')).join(', ')
+  const slotWords = (codes) =>
+    codes ? codes.map((c) => (c ? am4Block(c)?.slug || `0x${c.toString(16)}` : 'empty')).join(', ') : 'not taken from an answer that did not hold together'
   const AM4_CHECKS = {
     structure: (row) =>
       row('Preset, name, scene and blocks', () => readStructure({ fresh: true }), (s) =>
@@ -1563,7 +1701,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     blocks: async (row) => {
       const s = await row('Preset', () => readStructure({ fresh: true }), (v) => (v ? `slots ${slotWords(v.slots)}` : 'no answer'))
       if (!s) return
-      for (const code of s.slots) {
+      for (const code of s.slots || []) {
         const block = am4Block(code)
         if (!block) continue
         await row(`${block.slug} on or off`, () => am4BypassNow(code), (v) => said(v, (off) => (off ? 'off' : 'on')))
@@ -1599,6 +1737,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     },
     'write-bypass': async (row) => {
       const s = await row('Preset', () => readStructure({ fresh: true }), (v) => (v ? `slots ${slotWords(v.slots)}` : 'no answer'))
+      if (s && !s.slots) throw failure('The AM4’s answer came through damaged, so no block was switched. Run it again.', 502)
       const code = s ? s.slots.find((c) => am4Block(c)) : undefined
       if (!code) throw failure('There is no block to switch in this preset.', 409)
       const slug = am4Block(code).slug
@@ -1688,6 +1827,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (closed) return
     closed = true
     stopPolls()
+    if (holdTimer !== null) time.clearTimeout(holdTimer)
+    holdTimer = null
     tuner.on = false
     tuner.run++
     if (tuner.timer !== null) time.clearTimeout(tuner.timer)

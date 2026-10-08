@@ -60,7 +60,9 @@ const NOW = {
   /* Android is scanning. */
   looking: false,
   /* The name the adapter gave when it connected. */
-  connectedTo: null
+  connectedTo: null,
+  /* The unit that answered instead of the one picked (an AM4 on an FM3's connection), or null. */
+  answeredAs: null
 }
 
 const UNIT_KEYS = BLE_UNITS.map((u) => u.key)
@@ -213,9 +215,23 @@ export function subscribeBluetooth(fn) {
 }
 
 const read = () => snapshot
+const readOn = () => snapshot.on
+const readTrouble = () => snapshot.trouble
 
-/** The settings and what is happening now, redrawn whenever either changes. */
+/** The settings and what is happening now, redrawn whenever either changes. For the Bluetooth page. */
 export const useBluetooth = () => useSyncExternalStore(subscribeBluetooth, read, read)
+
+/*
+ * ONLY WHETHER IT IS ON, for everything outside the page. The whole snapshot
+ * is a new object at every change — each adapter the scan finds, each change
+ * to an iPhone's list of MIDI ports once Find has been pressed — and a screen
+ * reading it redraws for every one, even with Bluetooth off. A true or false
+ * that has not changed redraws nothing.
+ */
+export const useBluetoothOn = () => useSyncExternalStore(subscribeBluetooth, readOn, readOn)
+
+/** What stands between the phone and the adapter, or null: for the waiting screen. A word, so it redraws only when it changes. */
+export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth, readTrouble, readTrouble)
 
 /**
  * Pick the settings up from last time.
@@ -227,6 +243,7 @@ export const useBluetooth = () => useSyncExternalStore(subscribeBluetooth, read,
  * module is not asked anything unless the disk says the mode was on.
  */
 export async function restoreBluetooth() {
+  const before = JSON.stringify(saved)
   try {
     const raw = await AsyncStorage.getItem(KEY)
     const was = settle(raw ? JSON.parse(raw) : null)
@@ -235,6 +252,8 @@ export async function restoreBluetooth() {
     saved = { ...SAVED }
   }
   setSwitch({ on: saved.on })
+  /* Nothing on disk is the ordinary case, and it changes nothing: no screen is redrawn for it. */
+  if (JSON.stringify(saved) === before) return saved.on
   now = { ...now, phase: saved.on ? 'idle' : 'off' }
   if (saved.on) logDebug('ble', `Bluetooth (beta) is on, for the ${unitName(saved.unit)}`)
   announce()
@@ -362,6 +381,12 @@ export async function findAdapters() {
     }
     const list = adapterDevices()
     fresh = new Set(list.map((d) => d.id).filter((id) => !before.has(id)))
+    /*
+     * Every port and the driver that owns it, in the log. Which driver is
+     * Apple's Bluetooth one is not written down anywhere reliable, so the
+     * page matches on nothing; a pasted log from a real adapter settles it.
+     */
+    logDebug('ble', 'ports after Apple’s Bluetooth screen', list.map((d) => `${d.name || '?'} [${d.driver || 'no driver'}${d.offline ? ', offline' : ''}${fresh.has(d.id) ? ', new' : ''}]`).join('; ') || 'none')
     showList(list)
     return
   }
@@ -423,7 +448,9 @@ export function openWire() {
     catalog: blockCatalog,
     methods: methodsFor(unit),
     log: (line) => logDebug('ble', line),
-    remember: (m) => rememberMethods(unit, m)
+    remember: (m) => rememberMethods(unit, m),
+    /* The wrong unit was picked: the wire has stopped sending, and the page says which one answered. */
+    onForeign: (name) => noteBluetooth({ answeredAs: name })
   })
   const mine = wire
   joiner = createJoiner({

@@ -38,7 +38,7 @@ import { clearLinkFault, useRig } from './src/lib/rig'
 import { keepLog } from './src/lib/logKeep'
 import { installCrashCapture } from './src/lib/debugLog'
 import { restoreDemo, setDemo, useDemo } from './src/lib/demo'
-import { restoreBluetooth, useBluetooth } from './src/lib/bluetooth'
+import { restoreBluetooth, useBluetoothOn, useBluetoothTrouble } from './src/lib/bluetooth'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
@@ -262,8 +262,9 @@ export default function App() {
    * And whether the phone talks to the unit itself, through a Bluetooth MIDI
    * adapter, rather than through the computer. Off unless somebody turned it
    * on in Settings → Phone & computer → Bluetooth (beta); see lib/bluetooth.
+   * Only the on-or-off, so the page's own goings-on do not redraw the app.
    */
-  const bluetooth = useBluetooth().on
+  const bluetooth = useBluetoothOn()
 
   /*
    * And whether this person has paid to point the app at a real unit.
@@ -893,6 +894,7 @@ export default function App() {
                 onRetry={probeNow}
                 onSwitch={() => openSettings('link')}
                 onTroubleshoot={openConnectFix}
+                onBluetooth={() => openSettings('bluetooth')}
               />
             ) : screen === 'presets' ? (
               <Presets onBack={() => setScreen('stage')} />
@@ -1106,14 +1108,17 @@ const ofError = (s) => s.error
 /* How long "Finding your computer…" stands on its own before it says more. */
 const WAKING_LONG_MS = 15000
 
-function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
+function Waking({ link, onRetry, onSwitch, onTroubleshoot, onBluetooth }) {
   /*
    * OVER BLUETOOTH (BETA) THERE IS NO COMPUTER TO FIND. What is being looked
    * for is the adapter on the unit — the link names it, so the line below
    * already says "Finding" it — and everything about the computer and its
    * account is left out: it would be advice about something not in use.
+   * What stands in the way, when the phone knows (its Bluetooth off, Nearby
+   * devices refused), is said instead of the plugs.
    */
-  const bluetooth = useBluetooth().on
+  const bluetooth = useBluetoothOn()
+  const trouble = useBluetoothTrouble()
   const said =
     link.link === 'connected'
       ? 'Asking your unit what it is\u2026'
@@ -1178,9 +1183,12 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
       {long && link.link !== 'connected' ? (
         <View style={{ alignSelf: 'stretch', gap: space.md }}>
           {bluetooth ? (
-            <Note tone="warn">
-              Check the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is
-              connected to it.
+            <Note tone={trouble ? 'fault' : 'warn'}>
+              {trouble === 'bluetooth-off'
+                ? 'Bluetooth is off on this phone. Turn it on in the phone’s settings.'
+                : trouble === 'permission'
+                  ? 'Allow Nearby devices for Fractal Remote in Android’s settings.'
+                  : 'Check the phone’s Bluetooth is on, that the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it.'}
             </Note>
           ) : elsewhere ? (
             <Note tone="fault">
@@ -1200,9 +1208,10 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
           ) : (
             <Press label="Look for the computer again" onPress={() => onRetry?.()} />
           )}
-          {/* Over Bluetooth the way to the adapter's page; the computer's
-              troubleshooting is about a computer that is not in use. */}
-          {bluetooth && onSwitch ? <Press label="Phone & computer" onPress={onSwitch} /> : null}
+          {/* Over Bluetooth the adapter's own page, where it is found and
+              its status is; the computer's troubleshooting is about a
+              computer that is not in use. */}
+          {bluetooth && onBluetooth ? <Press label="Bluetooth (beta)" onPress={onBluetooth} /> : null}
           {/* "Open the troubleshooting if it doesn't connect" — the browser's
               connecting screen has the same button. */}
           {onTroubleshoot && !bluetooth ? <Press label="Troubleshooting" onPress={onTroubleshoot} /> : null}

@@ -694,11 +694,19 @@ const headMatches = (f, request) => {
  * one is reported (checksumOk) rather than thrown away: dropping it would
  * leave the AM4 path blind, and that is a fix only a new build could deliver.
  * The numbers in it are held to their ranges instead, so a damaged answer
- * that says preset 3000 is still refused.
+ * that says preset 3000 is still refused, and the wire does not take new
+ * slot codes from one on its own word (bleWire's believeSlots).
+ *
+ * EXACTLY 238 bytes, the length AM4-Edit's capture shows. A byte lost on the
+ * way still makes a frame that unpacks, with everything after the loss
+ * shifted — and the slot codes in it choose which blocks the AM4 is asked
+ * about and sent switches for.
  */
 const STRUCTURE_BYTES = 192
+/* The header, the 192 bytes as 220 septets in one stream, the checksum and F7. */
+const STRUCTURE_FRAME = 16 + Math.ceil((STRUCTURE_BYTES * 8) / 7) + 2
 export function parseAm4Structure(f) {
-  if (!isFrom(f, MODELS.am4, FN.PARAM) || f.length < 230) return null
+  if (!isFrom(f, MODELS.am4, FN.PARAM) || f.length !== STRUCTURE_FRAME) return null
   if (decode14(f[6], f[7]) !== AM4.PRESET_REG || decode14(f[8], f[9]) !== AM4.STRUCTURE) return null
   if (decode14(f[10], f[11]) !== AM4.READ_STRUCTURE) return null
   const raw = unpackMsb(f.slice(16, -2), STRUCTURE_BYTES)

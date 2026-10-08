@@ -145,3 +145,19 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
             || { grep -n -B2 -A12 -E 'error:|error |failed with exit' build.log | head -n 200; exit 1; }
           tail -n 20 build.log
+
+      # BLUETOOTH (BETA) BRANCH ONLY: the same app for a real iPhone, unsigned.
+      # The simulator build above cannot see a framework that is only on
+      # devices (CoreAudioKit's Bluetooth pairing screen is guarded out of the
+      # simulator), so this is the free proof that the device build links,
+      # before an EAS build slot is spent finding out.
+      - name: The iPhone app builds for a real device
+        working-directory: mobile/ios
+        run: |
+          set -o pipefail
+          xcodebuild -workspace FractalRemote.xcworkspace -scheme FractalRemote \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO build > device.log 2>&1 \
+            || { grep -n -B2 -A12 -E 'error:|error |failed with exit' device.log | head -n 200; exit 1; }
+          tail -n 20 device.log

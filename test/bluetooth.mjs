@@ -385,6 +385,7 @@ async function onTheLine(kind, options = {}) {
   const events = []
   const logs = []
   const remembered = []
+  const foreign = []
   let wire = null
   const joiner = sx.createJoiner({ onSysex: (f) => wire.heard(f), onShort: (m) => wire.heardShort(m) })
   const line = { lastDone: 0 }
@@ -409,6 +410,7 @@ async function onTheLine(kind, options = {}) {
     methods: options.methods,
     log: (l) => logs.push(l),
     remember: (m) => remembered.push(m),
+    onForeign: (name) => foreign.push(name),
     send: (b) => {
       sent.push({ at: clock.now(), bytes: [...b] })
       unit.hear([...b])
@@ -419,7 +421,7 @@ async function onTheLine(kind, options = {}) {
   const get = (path) => drive(clock, wire.request(path))
   const post = (path, body) => drive(clock, wire.request(path, { method: 'POST', body: JSON.stringify(body ?? null) }))
   const frames = () => sent.map((s) => s.bytes)
-  return { sx, clock, wire, unit, sent, frames, events, logs, remembered, get, post, say, line }
+  return { sx, clock, wire, unit, sent, frames, events, logs, remembered, foreign, get, post, say, line }
 }
 
 const sameFrame = (a, b) => hex(a) === hex(b)
@@ -856,6 +858,9 @@ export function run(test) {
     const badSum = [...f]
     badSum[236] ^= 1
     assert.equal(sx.parseAm4Structure(badSum).checksumOk, false, 'kept, and said')
+    /* A byte lost on the way still unpacks, with every slot after it shifted: not an answer. */
+    assert.equal(sx.parseAm4Structure([...f.slice(0, 100), ...f.slice(101)]), null, 'a 237-byte answer was read')
+    assert.equal(sx.parseAm4Structure([...f.slice(0, 100), 0, ...f.slice(100)]), null, 'a 239-byte answer was read')
     raw.splice(0, 4, ...u32(3000))
     const wild = [...H('F0 00 01 74 15 01 4E 01 00 00 1F 00 00 00 40 01'), ...sx.packMsb(raw)]
     assert.equal(sx.parseAm4Structure([...wild, sx.checksum(wild), 0xf7]), null, 'preset 3000 was believed')
@@ -864,6 +869,26 @@ export function run(test) {
     assert.equal(sx.am4LocationCode(103), 'Z04')
     assert.deepEqual(sx.am4Block(0x77), { slug: 'drive', base: 0x76, copy: 1 })
     assert.equal(sx.am4Block(0x3e), null, 'the cab is not a block the AM4 places')
+
+    /*
+     * AND ON/OFF AND CHANNEL ANSWERS THIS CODEC DID NOT MAKE. Everywhere else
+     * these parsers are fed by fakeAm4, which packs its replies with this
+     * codec's own packChunked, so a packing or offset mistake would cancel
+     * itself out and pass. These were packed by forgefx-midi's
+     * packValueChunked and closed with its fractalChecksum, and ForgeFX's own
+     * parseLongReadBypassFlag and parseActiveChannelResponse read them the
+     * same way.
+     */
+    const H2 = (s, n, t) => H(`${s}${' 00'.repeat(n)} ${t}`)
+    const driveOff = H2('F0 00 01 74 15 01 76 00 03 00 0D 00 00 00 28 00 00 00 00 00 00 00 01 00 1F 53 68 64 30', 33, '30 F7')
+    const driveOn = H2('F0 00 01 74 15 01 76 00 03 00 0D 00 00 00 28 00 00 00 00 00 00 00 00 00 00 13 69 60', 34, '5B F7')
+    assert.equal(driveOff.length, 64)
+    assert.equal(sx.parseAm4Bypass(driveOff, 0x76), true, 'the drive, off (raw float 1.0)')
+    assert.equal(sx.parseAm4Bypass(driveOn, 0x76), false, 'the drive, on (raw float 0.0)')
+    const ampC = H2('F0 00 01 74 15 01 3A 00 5D 0F 0D 00 00 00 36 00 1D', 57, '40 00 00 00 1F F7')
+    assert.equal(ampC.length, 80)
+    assert.equal(sx.parseAm4Channel(ampC, 0x3a), 2, 'the amp, on C')
+    assert.equal(sx.parseAm4Channel(ampC, 0x76), null, 'another block’s answer')
   })
 
   test('the AM4 wire’s one way out sends nothing that is off the list', async () => {
@@ -934,8 +959,10 @@ export function run(test) {
   test('a scene change goes the published way first, and is checked once before it is remembered', async () => {
     const t = await onTheLine('fm3')
     assert.deepEqual(await t.post('/scene', { index: 2 }), { ok: true })
-    assert.ok(sameFrame(t.frames()[0], t.sx.buildSetScene(0x11, 2)), 'the published scene change was not first')
-    assert.ok(sameFrame(t.frames()[1], t.sx.buildGetScene(0x11)), 'the change was not checked')
+    /* Where it is first: a change to the scene it was already on would prove nothing. */
+    assert.ok(sameFrame(t.frames()[0], t.sx.buildGetScene(0x11)), 'the unit was not asked where it was before the trial')
+    assert.ok(sameFrame(t.frames()[1], t.sx.buildSetScene(0x11, 2)), 'the published scene change was not first')
+    assert.ok(sameFrame(t.frames()[2], t.sx.buildGetScene(0x11)), 'the change was not checked')
     assert.equal(t.unit.state.scene, 2)
     assert.equal(t.remembered.at(-1).learned.scene, 'published')
     assert.deepEqual(t.events, [{ type: 'scene', index: 2 }])
@@ -949,7 +976,9 @@ export function run(test) {
   test('with no answer to the published scene change, FM3-Edit’s frame is sent and remembered', async () => {
     const t = await onTheLine('fm3', { sceneEcho: false, publishedScene: false })
     await t.post('/scene', { index: 2 })
-    assert.deepEqual(t.frames().map(hex), [t.sx.buildSetScene(0x11, 2), t.sx.buildSetSceneEdit(0x11, 2), t.sx.buildGetScene(0x11)].map(hex))
+    /* Checked even with no answer to the change: a unit can take it and say nothing, and then FM3-Edit's would be learned from a write that moved nothing. */
+    const get = t.sx.buildGetScene(0x11)
+    assert.deepEqual(t.frames().map(hex), [get, t.sx.buildSetScene(0x11, 2), get, t.sx.buildSetSceneEdit(0x11, 2), get].map(hex))
     assert.equal(t.unit.state.scene, 2)
     assert.equal(t.remembered.at(-1).learned.scene, 'edit')
     assert.ok(t.logs.some((l) => /FM3-Edit/.test(l) && /remembered/.test(l)), 'the choice was not logged')
@@ -967,7 +996,8 @@ export function run(test) {
     const t = await onTheLine('fm9', { publishedTempo: false })
     await t.post('/tempo', { bpm: 133 })
     const fns = t.frames().map((f) => hex(f))
-    assert.deepEqual(fns, [t.sx.buildSetTempo(0x12, 133), t.sx.buildGetTempo(0x12), t.sx.buildSetTempoEdit(0x12, 133), t.sx.buildGetTempo(0x12)].map(hex))
+    const get = t.sx.buildGetTempo(0x12)
+    assert.deepEqual(fns, [get, t.sx.buildSetTempo(0x12, 133), get, t.sx.buildSetTempoEdit(0x12, 133), get].map(hex))
     assert.equal(t.unit.state.bpm, 133)
     assert.equal(t.remembered.at(-1).learned.tempo, 'edit')
   })
@@ -975,9 +1005,10 @@ export function run(test) {
   test('a preset switch goes as the 0x27 frame, checked once, and remembered', async () => {
     const t = await onTheLine('fm3')
     assert.deepEqual(await t.post('/preset/select', { number: 475 }), { ok: true })
-    assert.ok(sameFrame(t.frames()[0], H('F0 00 01 74 11 01 27 00 00 00 00 00 5B 03 00 00 00 00 00 00 00 6A F7')))
-    assert.ok(sameFrame(t.frames()[1], t.sx.buildGetPreset(0x11)), 'where it landed was not asked')
-    assert.ok(t.sent[1].at - t.sent[0].at >= 300, 'asked before the unit had a moment to switch')
+    assert.ok(sameFrame(t.frames()[0], t.sx.buildGetPreset(0x11)), 'the unit was not asked where it was before the trial')
+    assert.ok(sameFrame(t.frames()[1], H('F0 00 01 74 11 01 27 00 00 00 00 00 5B 03 00 00 00 00 00 00 00 6A F7')))
+    assert.ok(sameFrame(t.frames()[2], t.sx.buildGetPreset(0x11)), 'where it landed was not asked')
+    assert.ok(t.sent[2].at - t.sent[1].at >= 300, 'asked before the unit had a moment to switch')
     assert.equal(t.unit.state.preset, 475)
     assert.equal(t.remembered.at(-1).learned.preset, 'sysex')
     assert.deepEqual(t.events, [{ type: 'changed', scope: 'preset' }])
@@ -1024,9 +1055,49 @@ export function run(test) {
     const t = await onTheLine('fm3', { publishedChannel: false })
     await t.post('/preset/blocks/58/channel', { channel: 'C' })
     const kinds = t.frames().map((f) => (f[5] === 0x01 ? `01/${f[6].toString(16)}` : f[5].toString(16)))
-    assert.deepEqual(kinds, ['b', '13', '01/16', '13'])
+    assert.deepEqual(kinds, ['13', 'b', '13', '01/16', '13'])
     assert.equal(t.unit.state.blocks.find((b) => b.eid === 58).channel, 2)
     assert.equal(t.remembered.at(-1).learned.channel, 'edit')
+  })
+
+  /*
+   * A first write to where the unit already is lands whether its way works or
+   * not — the first scene of a setlist song, a tempo it is already at. A way
+   * learned from that is kept on the phone and sent unchecked from then on,
+   * so every later write would fail without a word, and putting it right
+   * would cost another pair of builds. Each pretend FM9 here ignores the way
+   * tried first.
+   */
+  test('a first write to what the unit already has teaches nothing, and the next real change still finds the way that works', async () => {
+    const tempo = await onTheLine('fm9', { publishedTempo: false })
+    await tempo.post('/tempo', { bpm: 120 })
+    assert.deepEqual(tempo.wire.methods().learned, {}, 'the tempo it was already at taught a way')
+    assert.equal(tempo.remembered.length, 0, 'a way was kept on the phone')
+    await tempo.post('/tempo', { bpm: 130 })
+    assert.equal(tempo.unit.state.bpm, 130, 'the next tempo went the way that does nothing')
+    assert.equal(tempo.wire.methods().learned.tempo, 'edit')
+
+    const preset = await onTheLine('fm9', { sysexPreset: false })
+    await preset.post('/preset/select', { number: 12 })
+    assert.deepEqual(preset.wire.methods().learned, {}, 'the preset already loaded taught a way')
+    await preset.post('/preset/select', { number: 13 })
+    assert.equal(preset.unit.state.preset, 13, 'the next preset never tried Program Change')
+    assert.equal(preset.wire.methods().learned.preset, 'pc')
+
+    const channel = await onTheLine('fm9', { publishedChannel: false })
+    await channel.post('/preset/blocks/58/channel', { channel: 'A' })
+    assert.deepEqual(channel.wire.methods().learned, {}, 'the channel the amp was already on taught a way')
+    await channel.post('/preset/blocks/58/channel', { channel: 'B' })
+    assert.equal(channel.unit.state.blocks.find((b) => b.eid === 58).channel, 1, 'the amp stayed on A')
+    assert.equal(channel.wire.methods().learned.channel, 'edit')
+
+    /* With MIDI Thru on, the unit's own copy of the change reads as its answer. */
+    const scene = await onTheLine('fm9', { publishedScene: false, sceneEcho: false, thru: true })
+    await scene.post('/scene', { index: 0 })
+    assert.deepEqual(scene.wire.methods().learned, {}, 'the scene it was already on taught a way')
+    await scene.post('/scene', { index: 2 })
+    assert.equal(scene.unit.state.scene, 2, 'the unit stayed on scene 1')
+    assert.equal(scene.wire.methods().learned.scene, 'edit')
   })
 
   test('a refusal from the unit is an error, and a bypass on a block not in the preset says why', async () => {
@@ -1055,6 +1126,44 @@ export function run(test) {
     const before = other.sent.length
     await assert.rejects(other.get('/presets/14'), (e) => e.status === 501)
     assert.equal(other.sent.length, before, 'asked again after the unit said it cannot')
+  })
+
+  /*
+   * ForgeFX gives a preset question four seconds on a slow link; the phone
+   * gives it one and a half. An answer after that is real, but it answers the
+   * question that went unanswered, not the next one of the same kind: taken
+   * for a stored name it turned stored names off for the whole connection,
+   * and a stored name taken for the loaded preset is a preset change that
+   * never happened.
+   */
+  test('a preset answer that comes late is not taken for the next preset question', async () => {
+    const name = (s) => [...s.padEnd(32)].map((c) => c.charCodeAt(0))
+    /* Every other answer takes 200 ms, so the next question's answer is still on its way when the late one lands. */
+    const t = await onTheLine('fm9', { delay: 200 })
+    const hear = t.unit.hear
+    let slow = true
+    t.unit.hear = (b) => {
+      /* The first "which preset?" is answered 1.6 s later. */
+      if (slow && b[5] === 0x0d && b[6] === 0x7f && b[7] === 0x7f) {
+        slow = false
+        return t.say(t.sx.frame(0x12, 0x0d, [...t.sx.encode14(12), ...name('SONG 12')]), 1600)
+      }
+      hear(b)
+    }
+    assert.deepEqual(await t.get('/preset'), { number: -1, name: '' })
+    assert.deepEqual(await t.get('/presets/13'), { number: 13, name: 'SONG 13' }, 'the late answer was taken for preset 13’s name')
+    assert.deepEqual(await t.get('/presets/14'), { number: 14, name: '' })
+    assert.ok(!t.logs.some((l) => /answered for another preset/.test(l)), 'a late answer turned stored names off')
+
+    const u = await onTheLine('fm9', { delay: 200 })
+    const hearU = u.unit.hear
+    u.unit.hear = (b) => {
+      /* A stored name, answered 1.6 s later. */
+      if (b[5] === 0x0d && !(b[6] === 0x7f && b[7] === 0x7f)) return u.say(u.sx.frame(0x12, 0x0d, [...u.sx.encode14(400), ...name('OTHER')]), 1600)
+      hearU(b)
+    }
+    await assert.rejects(u.get('/presets/400'), (e) => e.status === 504)
+    assert.deepEqual(await u.get('/preset'), { number: 12, name: 'SONG 12' }, 'preset 400’s late name was taken for the loaded preset')
   })
 
   test('scene names for the loaded preset, read once and kept; any other preset is refused with nothing sent', async () => {
@@ -1193,14 +1302,99 @@ export function run(test) {
 
   test('the watch never asks while the player is waiting on an answer', async () => {
     const t = await onTheLine('fm3', { delay: 900 })
+    /* Answered once, so the watch is really asking (it waits for that). */
+    await t.get('/scene')
     t.wire.startPolls()
     await advance(t.clock, 50)
+    assert.ok(sameFrame(t.frames().at(-1), t.sx.buildGetScene(0x11)), 'the watch was not asking')
     const read = t.wire.request('/preset/blocks')
     await drive(t.clock, read)
     const dumpAt = t.sent.findIndex((s) => s.bytes[5] === 0x13)
     const answered = t.sent[dumpAt].at + 900
     const between = t.sent.filter((s, i) => i > dumpAt && s.at < answered)
     assert.deepEqual(between.map((s) => hex(s.bytes)), [], 'a poll went out while the chain was being read')
+    t.wire.close()
+  })
+
+  /*
+   * The screen goes off and on in a blink — Control Center, a notification,
+   * Face ID, every Android unlock — and a tick still waiting for its answer
+   * used to wake into the new run and start a second loop beside it: one more
+   * for every blink, for as long as the adapter stayed connected. On the AM4
+   * that is a 238-byte answer each, on a 31,250-baud line.
+   */
+  test('the watch switched off and on while a question is out is still one watch, not one per blink', async () => {
+    const { POLL_MS } = await import(WIRE)
+    for (const [kind, question, every] of [
+      ['am4', (sx) => sx.buildAm4Structure(), POLL_MS.am4],
+      ['fm3', (sx) => sx.buildGetScene(0x11), POLL_MS.scene]
+    ]) {
+      const t = await onTheLine(kind)
+      await t.get('/preset')
+      /* The watch's first question goes unanswered, and the screen blinks five times while it waits. */
+      t.unit.opt.silent = true
+      t.wire.startPolls()
+      await advance(t.clock, 10)
+      for (let i = 0; i < 5; i++) {
+        t.wire.stopPolls()
+        t.wire.startPolls()
+        await advance(t.clock, 1)
+      }
+      t.unit.opt.silent = false
+      await advance(t.clock, 3000)
+      const mark = t.sent.length
+      await advance(t.clock, 20000)
+      const asked = t.sent.slice(mark).filter((s) => sameFrame(s.bytes, question(t.sx))).length
+      assert.ok(asked >= 5, `${kind}: the watch stopped (${asked} questions in 20 s)`)
+      assert.ok(asked <= 20000 / every + 1, `${kind}: ${asked} questions in 20 s, so more than one watch is running`)
+      t.wire.close()
+    }
+  })
+
+  /*
+   * The wrong unit picked: FM3 on the page, his AM4 on the adapter. The AM4
+   * has frozen on messages it did not expect, so the first frame that carries
+   * its model byte stops the connection sending anything at all — the watch,
+   * what was waiting, and everything asked after — and says why.
+   */
+  test('a connection made for an FM3 that hears an AM4 sends it nothing more', async () => {
+    const t = await onTheLine('fm3', { silent: true })
+    t.wire.startPolls()
+    const asking = t.wire.request('/scene')
+    const waiting = t.wire.request('/tempo').then(
+      () => null,
+      (e) => e
+    )
+    /* The AM4's own refusal of a message for some other unit. */
+    t.clock.setTimeout(() => t.wire.heard(t.sx.frame(0x15, 0x64, [0x0c, 0x02])), 10)
+    assert.deepEqual(await drive(t.clock, asking), { index: -1 })
+    assert.equal((await drive(t.clock, waiting))?.status, 409, 'what was waiting was sent anyway')
+    const before = t.sent.length
+    assert.equal(before, 1, 'more than the one question in flight went out')
+    t.wire.startPolls()
+    await advance(t.clock, 60000)
+    for (const [path, body] of [['/preset'], ['/device/detect'], ['/scene', { index: 1 }], ['/preset/select', { number: 3 }], ['/tuner', { on: true }]]) {
+      await assert.rejects(body ? t.post(path, body) : t.get(path), (e) => e.status === 409 && /An AM4 answered, not the FM3\./.test(e.message), path)
+    }
+    assert.equal(t.sent.length, before, 'the AM4 was still sent an FM3’s messages')
+    assert.deepEqual(t.foreign, ['AM4'], 'the page was not told which unit answered')
+    assert.ok(t.logs.some((l) => /an AM4 answered, not the FM3/.test(l)))
+    /* The AM4's own connection is not stopped by its own answers. */
+    const am4 = await onTheLine('am4')
+    assert.equal((await am4.get('/device/detect')).connected, true)
+    assert.deepEqual(am4.foreign, [])
+  })
+
+  test('the footswitch watch waits until the unit has answered once on this connection', async () => {
+    const t = await onTheLine('am4', { silent: true })
+    t.wire.startPolls()
+    await advance(t.clock, 10000)
+    assert.equal(t.sent.length, 0, 'the watch asked a unit that has never answered')
+    t.unit.opt.silent = false
+    await t.get('/preset')
+    const after = t.sent.length
+    await advance(t.clock, 4100)
+    assert.ok(t.sent.length - after >= 1, 'the watch did not start once the unit answered')
     t.wire.close()
   })
 
@@ -1354,6 +1548,70 @@ export function run(test) {
     const chain = await t.get('/preset/blocks')
     assert.deepEqual(chain[1], { slug: '0x9a', name: '0x9a', effectId: 0x9a, row: 1, col: 2, fromRows: [], bypassed: null, channel: null })
     assert.ok(!t.frames().some((f) => f[6] === 0x1a && f[7] === 0x01), 'the unknown block was asked about')
+    assert.equal(t.unit.state.frozen, false)
+  })
+
+  /*
+   * The slot codes in the preset answer are the addresses the AM4 is asked
+   * about and sent switches for. A byte lost on the adapter's MIDI side
+   * shifts every one of them, and a bad checksum says the answer is not to
+   * be trusted; neither may choose them.
+   */
+  test('a damaged preset answer cannot choose which blocks the AM4 is asked about', async () => {
+    const t = await onTheLine('am4')
+    const u32 = (n) => [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff]
+    const answer = (slots) => {
+      const raw = new Array(192).fill(0)
+      raw.splice(0, 4, ...u32(5))
+      raw.splice(8, 4, ...u32(1))
+      slots.forEach((code, i) => raw.splice(0xb0 + i * 4, 4, ...u32(code)))
+      const body = [...H('F0 00 01 74 15 01 4E 01 00 00 1F 00 00 00 40 01'), ...t.sx.packMsb(raw)]
+      return [...body, t.sx.checksum(body), 0xf7]
+    }
+    const hear = t.unit.hear
+    /* The next preset answer is this one; the unit answers truly after it. */
+    const once = (make) => {
+      let left = 1
+      t.unit.hear = (b) => {
+        if (left && b[10] === 0x1f) {
+          left = 0
+          return t.say(make())
+        }
+        hear(b)
+      }
+    }
+    const asked = () => t.frames().filter((f) => f[10] === 0x0d && (f[8] === 0x03 || f[8] === 0x5d)).map((f) => t.sx.decode14(f[6], f[7]))
+    const theirs = [0x3a, 0x76, 0x77]
+
+    /* A byte lost: 237 bytes, still unpacking, every slot after the loss shifted. */
+    once(() => {
+      const f = answer([0x42, 0x46, 0, 0])
+      f.splice(100, 1)
+      return f
+    })
+    await assert.rejects(t.get('/preset/blocks'), (e) => e.status === 504)
+    assert.deepEqual(asked(), [], 'a shortened answer chose blocks to ask about')
+
+    /* A bad checksum, and other slots in it: asked again, and the true answer used. */
+    once(() => {
+      const f = answer([0x42, 0x46, 0, 0])
+      f[f.length - 2] ^= 1
+      return f
+    })
+    const chain = await t.get('/preset/blocks')
+    assert.deepEqual(chain.map((b) => b.effectId), theirs, 'the damaged answer’s blocks were drawn')
+    assert.deepEqual([...new Set(asked())], theirs, 'a damaged answer chose a block to ask about')
+
+    /* A unit whose every answer has a bad checksum still works: two answers that agree are believed. */
+    t.unit.hear = (b) => {
+      if (b[10] !== 0x1f) return hear(b)
+      const f = answer(t.unit.state.slots)
+      f[f.length - 2] ^= 1
+      t.say(f)
+    }
+    t.unit.state.slots = [0x42, 0, 0, 0]
+    await advance(t.clock, 500)
+    assert.deepEqual((await t.get('/preset/blocks')).map((b) => b.effectId), [0x42])
     assert.equal(t.unit.state.frozen, false)
   })
 
@@ -1649,7 +1907,7 @@ export function run(test) {
       'debugLog.js': 'export const logDebug = () => {}\n',
       'lineage.js': 'export const withLineage = (slug, x) => x\n'
     }
-    for (const f of ['bleSwitch.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'unsupported.js', 'device.js']) {
+    for (const f of ['bleSwitch.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'unsupported.js', 'device.js']) {
       files[f] = esm(lib(f))
     }
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
@@ -1665,7 +1923,8 @@ export function run(test) {
     try {
       /* Off, as it starts: the computer, and nothing else. */
       assert.equal(sw.bluetoothOn(), false, 'Bluetooth starts on')
-      assert.deepEqual(await device.currentPreset(), { number: 7, name: 'FROM THE COMPUTER' })
+      const fromComputer = await device.currentPreset()
+      assert.deepEqual([fromComputer.number, fromComputer.name], [7, 'FROM THE COMPUTER'])
       await device.setScene(2)
       assert.deepEqual(relay.asked, ['GET /preset', 'POST /scene'], 'with Bluetooth off the computer was not asked, or was asked something else')
 
@@ -1685,7 +1944,8 @@ export function run(test) {
         }
       }
       sw.setSwitch({ on: true, wire })
-      assert.deepEqual(await device.currentPreset(), { number: 12, name: 'SONG 12' })
+      const fromWire = await device.currentPreset()
+      assert.deepEqual([fromWire.number, fromWire.name], [12, 'SONG 12'])
       await device.setScene(3)
       await assert.rejects(device.fcModel(), (e) => e.status === 501)
       assert.deepEqual(heard, [
@@ -1738,20 +1998,31 @@ export function run(test) {
     const imports = [...src('mobile/src/lib/bleLink.js').matchAll(/^import[\s\S]*?from\s+'([^']+)'/gm)].map((m) => m[1])
     assert.ok(!imports.includes('./link'), 'bleLink imports link.js')
     assert.match(flat('mobile/src/lib/bleLink.js'), /if \(!mayConnect\(\)\) \{/, 'Bluetooth connects for somebody who has not unlocked the app')
+    /* With no adapter picked nothing is looked for: 'joining' put a spinner on the stage for ever. */
+    assert.match(flat('mobile/src/lib/bleLink.js'), /tell\?\.\(\{ link: held \|\| !s\.adapter \? 'off' : 'joining',/, 'no adapter reads as looking for one')
+    /* A new connection starts with no word of the wrong unit from the last one. */
+    assert.match(flat('mobile/src/lib/bleLink.js'), /noteBluetooth\(\{ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null \}\)/)
   })
 
   test('App.js restarts the link when Bluetooth goes on or off, and keeps Edit and the account warning away from it', () => {
     const app = flat('mobile/App.js')
-    assert.match(app, /const bluetooth = useBluetooth\(\)\.on/)
+    /* Only the on-or-off: the whole snapshot is a new object at every scan result and port change, and the app redrew for each. */
+    assert.match(app, /const bluetooth = useBluetoothOn\(\)/)
+    for (const p of ['mobile/App.js', 'mobile/src/screens/Settings.js']) assert.ok(!/useBluetooth\(\)/.test(code(p)), `${p} redraws for every change on the Bluetooth page`)
     assert.match(app, /useEffect\(\(\) => \{ restoreBluetooth\(\) \}, \[\]\)/, 'the setting is never picked up at launch')
     assert.match(app, /startLink\(\) return \(\) => \{ stopLink\(\) \} \}, \[auth, demo, bluetooth\]\)/, 'turning Bluetooth on or off does not restart the link')
     assert.match(app, /BENCH && \(demo \|\| link\.link === 'connected'\) && !overBluetooth\(caps\) \? \(\) => setScreen\('edit'\) : null/, 'Edit opens over Bluetooth')
     assert.match(app, /<WrongAccount active=\{[^}]*&& !bluetooth\}/, 'the stage warns about a computer on another account while on Bluetooth')
     /* The waiting screen, over Bluetooth, is about the adapter. */
     const waking = app.slice(app.indexOf('function Waking('))
-    assert.match(waking, /const bluetooth = useBluetooth\(\)\.on/)
-    assert.match(waking, /Check the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it\./)
+    assert.match(waking, /const bluetooth = useBluetoothOn\(\) const trouble = useBluetoothTrouble\(\)/)
+    assert.match(waking, /Check the phone’s Bluetooth is on, that the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it\./)
+    /* What the phone knows is in the way is said instead of the plugs. */
+    assert.match(waking, /trouble === 'bluetooth-off' \? 'Bluetooth is off on this phone\. Turn it on in the phone’s settings\.'/)
+    assert.match(waking, /trouble === 'permission' \? 'Allow Nearby devices for Fractal Remote in Android’s settings\.'/)
     assert.match(waking, /<Press label="Look for the adapter again" onPress=\{\(\) => onRetry\?\.\(\)\} \/>/)
+    assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth \(beta\)" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
+    assert.match(app, /onBluetooth=\{\(\) => openSettings\('bluetooth'\)\}/)
     assert.match(waking, /\{email && link\.link !== 'connected' && !bluetooth \? \(/, 'the waiting screen names the computer’s account over Bluetooth')
   })
 
@@ -1811,6 +2082,13 @@ export function run(test) {
     assert.match(page, /\{BLE_UNITS\.map\(\(u\) => \( <Press key=\{u\.key\} label=\{u\.name\} tone="signal" on=\{u\.key === b\.unit\}/)
     /* The switch cannot be turned on before a unit is picked. */
     assert.match(page, /disabled=\{!b\.on && \(!b\.unit \|\| !mayDrive\(purchase\)\)\}/)
+    /* And the unit cannot be changed while it is on: one mis-tap would send another unit's messages to the one on the adapter. */
+    assert.match(page, /on=\{u\.key === b\.unit\} disabled=\{b\.on\}/, 'the unit can be changed while connected')
+    assert.match(page, /\{b\.on \? <Hint>To change the unit, turn Use Bluetooth off first\.<\/Hint> : null\}/)
+    /* What stopped the search shows with the switch off too; and the wrong unit answering says what to do. */
+    const status = page.slice(page.indexOf('function status('), page.indexOf('const TONES'))
+    assert.ok(status.indexOf("b.trouble === 'bluetooth-off'") < status.indexOf("if (!b.on) return { line: 'Off'"), 'the switch being off hides why the search failed')
+    assert.match(status, /if \(b\.answeredAs\) \{ return \{ line: `An \$\{b\.answeredAs\} answered, not the \$\{name\}\./)
   })
 
   test('the Bluetooth page says plainly what is different from USB, and names no adapter maker', () => {
@@ -1833,7 +2111,7 @@ export function run(test) {
     /* The status line, in his words. */
     assert.match(page, /Adapter connected, but the \$\{name\} isn’t answering\. Check both MIDI plugs, and that MIDI Thru is off\./)
     assert.match(page, /'Allow Nearby devices for Fractal Remote in Android’s settings'/)
-    assert.match(page, /'Turn Bluetooth on'/)
+    assert.match(page, /'Turn on Bluetooth in the phone’s settings'/)
   })
 
   test('the native module: its name and events, the simulator kept out, and no MIDI client until one is needed', () => {
@@ -1852,7 +2130,8 @@ export function run(test) {
      * `#if targetEnvironment(simulator)`.
      */
     const deviceOnly = []
-    for (const line of swift.split('\n')) {
+    const swiftCode = swift.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/.*$/gm, '')
+    for (const line of swiftCode.split('\n')) {
       const t = line.trim()
       if (t.startsWith('#if ')) deviceOnly.push(t === '#if !targetEnvironment(simulator)')
       else if (t === '#else') deviceOnly.push(!deviceOnly.pop())

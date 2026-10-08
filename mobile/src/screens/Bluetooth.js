@@ -77,14 +77,22 @@ const signal = (rssi) => (!Number.isFinite(rssi) ? '' : rssi > -60 ? 'strong sig
  */
 function status(b, unitState) {
   const name = unitName(b.unit)
-  if (!b.on) return { line: 'Off', tone: 'dim' }
-  if (b.trouble === 'bluetooth-off') return { line: 'Turn Bluetooth on', tone: 'fault' }
+  /* Whatever the switch says: finding the adapter before turning this on is the usual order, and a search that could not start has to say why. */
+  if (b.trouble === 'bluetooth-off') return { line: 'Turn on Bluetooth in the phone’s settings', tone: 'fault' }
   if (b.trouble === 'permission') return { line: 'Allow Nearby devices for Fractal Remote in Android’s settings', tone: 'fault' }
+  if (!b.on) return { line: 'Off', tone: 'dim' }
   if (b.phase === 'locked') return { line: 'Unlock the app to connect to your unit', tone: 'fault' }
   if (!b.unit || b.phase === 'no-unit') return { line: 'Pick your unit', tone: 'dim' }
   if (!b.adapter || b.phase === 'no-adapter') return { line: 'Find the adapter, above', tone: 'dim' }
   if (b.phase === 'held') return { line: 'Disconnected', tone: 'dim' }
   if (b.phase === 'connected') {
+    /* The wrong unit picked: the phone has stopped sending to it, and this is the way out. */
+    if (b.answeredAs) {
+      return {
+        line: `An ${b.answeredAs} answered, not the ${name}. Turn Use Bluetooth off, pick ${b.answeredAs} under Your unit, then turn it back on.`,
+        tone: 'fault'
+      }
+    }
     if (unitState === 'present') return { line: `Connected · ${name} answering`, tone: 'ok' }
     if (unitState === 'missing' || unitState === 'silent') {
       return {
@@ -176,6 +184,12 @@ export default function BluetoothPage({ purchase }) {
         {b.on ? <Hint>While this is on, the phone does not use the computer at all.</Hint> : null}
       </View>
 
+      {/*
+        Not while it is on. A tap here while connected would send the new
+        unit's messages straight away to whatever is on the adapter, and one
+        mis-tap is enough; the AM4 has frozen on messages it did not expect.
+        With the switch off nothing is connected to send to.
+      */}
       <View style={{ gap: space.sm }}>
         <Heading>Your unit</Heading>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
@@ -185,6 +199,7 @@ export default function BluetoothPage({ purchase }) {
               label={u.name}
               tone="signal"
               on={u.key === b.unit}
+              disabled={b.on}
               height={44}
               style={{ paddingHorizontal: space.md }}
               onPress={() => setBluetoothUnit(u.key)}
@@ -192,6 +207,7 @@ export default function BluetoothPage({ purchase }) {
           ))}
         </View>
         <Hint>The one the adapter is plugged into. The phone only ever talks to the unit picked here.</Hint>
+        {b.on ? <Hint>To change the unit, turn Use Bluetooth off first.</Hint> : null}
       </View>
 
       <View style={{ gap: space.sm }}>
@@ -251,6 +267,17 @@ export default function BluetoothPage({ purchase }) {
           {said.line}
         </Text>
         {b.said ? <Note tone="warn">{b.said}</Note> : null}
+        {/* An iPhone forgets an adapter it has not used for a while, and only
+            Apple's screen can connect it again: the app is not allowed to.
+            Android cannot tell the phone's Bluetooth being off from the
+            adapter being out of range, so it names both. */}
+        {b.on && b.phase === 'connecting' ? (
+          <Hint>
+            {ios
+              ? 'If this stays here, press Find the adapter and connect it again in Apple’s screen.'
+              : 'If this stays here, check the phone’s Bluetooth is on, and that the adapter is plugged in and lit.'}
+          </Hint>
+        ) : null}
       </View>
 
       {b.unit ? (
