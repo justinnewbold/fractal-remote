@@ -2062,7 +2062,10 @@ export function run(test) {
       }
     }
     walk(new URL('../mobile/src/', import.meta.url))
-    files.push(fileURLToPath(new URL('../mobile/App.js', import.meta.url)))
+    /* Forward slashes, like the walk above: on Windows fileURLToPath gives
+       backslashes, '/mobile/' is not found, and the read is handed the whole
+       absolute path twice over. */
+    files.push(fileURLToPath(new URL('../mobile/App.js', import.meta.url)).replaceAll('\\', '/'))
     const askers = files.filter((f) => /FractalBleMidi/.test(code(f.slice(f.indexOf('/mobile/') + 1)))).map((f) => f.split('/mobile/')[1])
     assert.deepEqual(askers, ['src/lib/bluetooth.js'], 'something other than bluetooth.js reaches for the native module')
 
