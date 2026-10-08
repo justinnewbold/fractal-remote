@@ -62,6 +62,7 @@ import Grip from '../components/Grip'
 import IrPicker from '../components/IrPicker'
 import RowsPanel from '../components/RowsPanel'
 import SwipeAway from '../components/SwipeAway'
+import SideScroll from '../components/SideScroll'
 import LooperAtEnd from '../components/LooperAtEnd'
 import { readPutBack, useChainUndo } from '../components/ChainUndo'
 import ModAttached from '../components/ModAttached'
@@ -400,8 +401,7 @@ export default function Edit({ onBack, onOpenGear }) {
       */}
       <ChainUpdating chain={chainNow} />
       {chainNow.elsewhere ? <ChainWait chain={chainNow} height={TAP} /> : null}
-      <ScrollView
-        horizontal
+      <SideScroll
         showsHorizontalScrollIndicator={false}
         style={{ display: chainNow.elsewhere ? 'none' : 'flex', opacity: chainNow.late ? 0.55 : 1 }}
         /* The chain is wider than the phone by design now, so the last tile
@@ -435,7 +435,7 @@ export default function Edit({ onBack, onOpenGear }) {
             />
           )
         })}
-      </ScrollView>
+      </SideScroll>
 
       {/*
         "If you click the looper pedal, it pops up the looper controls." Above
@@ -1152,7 +1152,7 @@ function BlockPanel({
         row scrolls sideways rather than squeezing the words.
       */}
       {pages.length > 1 ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+        <SideScroll showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
           {pages.map((pg) => (
             <Press
               key={pg.key}
@@ -1163,7 +1163,7 @@ function BlockPanel({
               onPress={() => setTab(pg.key)}
             />
           ))}
-        </ScrollView>
+        </SideScroll>
       ) : null}
 
       {/*

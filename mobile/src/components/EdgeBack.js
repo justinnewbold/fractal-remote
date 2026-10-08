@@ -1,8 +1,9 @@
 import { useRef } from 'react'
 import { PanResponder, View } from 'react-native'
+import { claimsBack, goesBack, releaseSideways, sidewaysHeld } from '../lib/edge-back'
 
 /**
- * Swipe in from the left edge to go back one step.
+ * Swipe left to right to go back one step.
  *
  * "I want to make some swipe gestures and make it easy for someone to exit the
  * menu they're in or go back to the previous menu, so under the settings menu
@@ -24,13 +25,17 @@ import { PanResponder, View } from 'react-native'
  * PanResponder ships inside React Native, so this goes out over the air like
  * any other change. See mobile/fingerprint.json and CLAUDE.md.
  *
- * WHAT IT REFUSES TO CLAIM, because a gesture that fires when you did not mean
+ * WHAT IT TAKES AND WHAT IT LEAVES, because a gesture that fires when you did not mean
  * it is worse than no gesture:
  *
- *   - It must START at the left edge. A drag beginning anywhere else is
- *     somebody using the screen, and the screen keeps it.
+ *   - It works from ANYWHERE on the screen, not only the edge. It was meant
+ *     to be edge-only and never was (lib/edge-back.js says why), and that is
+ *     the swipe people use now, and the way iOS 26 goes back too.
+ *   - It never takes a drag that began on a row that scrolls sideways
+ *     (SideScroll). Left to right is how such a row scrolls back, and taking
+ *     it threw people out of the Edit screen while they scrolled the chain.
  *   - It must be going sideways, by a clear margin over vertical. Otherwise
- *     every scroll that began near the left edge would exit the page.
+ *     every scroll down the page would exit it.
  *   - A tap is never a swipe: it only ever claims the gesture on MOVE, so
  *     buttons under it keep working normally.
  *
@@ -39,14 +44,7 @@ import { PanResponder, View } from 'react-native'
  * thumb is a deliberate one.
  */
 
-/** How far in from the left a gesture may start and still mean "back". */
-export const EDGE = 28
-/** How far it has to travel before the claim is made, in pixels. */
-const CLAIM = 10
-/** How far it has to end up, unless it was thrown. */
-const TRAVEL = 60
-/** A flick: fast enough that distance stops mattering. */
-const FLICK = 0.35
+/* The numbers, and the decisions made with them, are lib/edge-back.js's. */
 
 export default function EdgeBack({ onBack, children, style }) {
   /*
@@ -64,8 +62,7 @@ export default function EdgeBack({ onBack, children, style }) {
     PanResponder.create({
       /* Never on touch-down: that would eat taps meant for buttons. */
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_e, g) =>
-        g.x0 <= EDGE && g.dx > CLAIM && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+      onMoveShouldSetPanResponder: (_e, g) => claimsBack(g, sidewaysHeld()),
       /*
        * DELIBERATELY NOT THE CAPTURE VERSION. Capture asks from the outside
        * in and would take the gesture off whatever is under the finger —
@@ -79,15 +76,27 @@ export default function EdgeBack({ onBack, children, style }) {
        * claim it wanted it.
        */
       onPanResponderRelease: (_e, g) => {
-        if (g.dx > TRAVEL || (g.vx > FLICK && g.dx > CLAIM)) latest.current?.()
+        if (goesBack(g)) latest.current?.()
       }
     })
   ).current
 
   /* No handlers at all when there is nowhere to go: a View that claims
      gestures and then does nothing with them is a dead patch of screen. */
+  /* The sideways hold ends with the touch. Every touch bubbles up to here
+     whoever answers it, so this hears the last finger lift even when a row
+     or a knob had the drag. */
+  const done = (e) => {
+    if (!e.nativeEvent.touches?.length) releaseSideways()
+  }
+
   return (
-    <View style={[{ flex: 1 }, style]} {...(onBack ? pan.panHandlers : null)}>
+    <View
+      style={[{ flex: 1 }, style]}
+      {...(onBack ? pan.panHandlers : null)}
+      onTouchEnd={done}
+      onTouchCancel={releaseSideways}
+    >
       {children}
     </View>
   )

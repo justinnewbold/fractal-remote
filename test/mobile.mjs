@@ -1296,7 +1296,10 @@ export function run(test) {
     assert.ok(!/flexDirection: 'row', flexWrap: 'wrap', gap: space\.sm \} > \{blocks\.map/.test(edit), 'the chain still wraps into a grid')
     assert.match(
       edit,
-      /<ScrollView horizontal showsHorizontalScrollIndicator=\{false\}[^>]*> \{blocks\.map/,
+      /* A SideScroll: a sideways ScrollView that keeps its drags from the
+         back gesture, which took a left-to-right scroll of this very row
+         back to Play. */
+      /<SideScroll showsHorizontalScrollIndicator=\{false\}[^>]*> \{blocks\.map/,
       'the chain is not a row you can swipe'
     )
     /* A fixed width, because a row that scrolls has no width to share out and
@@ -9047,9 +9050,20 @@ export function run(test) {
       !/onMoveShouldSetPanResponderCapture/.test(edge.replace(/\/\*[\s\S]*?\*\//g, ' ')),
       'the swipe captures gestures from its children — a slider at the left edge would lose its drag'
     )
-    /* Started at the edge, going sideways, by a margin over vertical. */
-    assert.match(edge, /g\.x0 <= EDGE/, 'a drag from anywhere on screen counts as going back')
-    assert.match(edge, /Math\.abs\(g\.dx\) > Math\.abs\(g\.dy\) \* 2/, 'a vertical scroll can trigger the back swipe')
+    /*
+     * Going sideways, by a margin over vertical, and never off a sideways
+     * row. This line used to require `g.x0 <= EDGE`, believing it made the
+     * swipe edge-only — but x0 is 0 until the responder is granted, so every
+     * drag "began at the edge" and back has always worked from anywhere.
+     * That is kept on purpose now (lib/edge-back.js), and nothing reads x0,
+     * which means nothing before a grant. The numbers are tested properly in
+     * the next test.
+     */
+    const lib = read('mobile/src/lib/edge-back.js')
+    assert.match(edge, /onMoveShouldSetPanResponder: \(_e, g\) => claimsBack\(g, sidewaysHeld\(\)\)/, 'the swipe decides for itself again')
+    assert.ok(!/\bx0\b/.test(edge.replace(/\/\*[\s\S]*?\*\//g, ' ')), 'the swipe reads x0, which is 0 until a grant')
+    assert.ok(!/\bx0\b/.test(lib.replace(/\/\*[\s\S]*?\*\//g, ' ')), 'the swipe reads x0, which is 0 until a grant')
+    assert.match(lib, /Math\.abs\(g\.dx\) > Math\.abs\(g\.dy\) \* 2/, 'a vertical scroll can trigger the back swipe')
 
     /*
      * WHERE BACK GOES IS THE SAME PLACE DONE ALREADY WENT.
@@ -9125,6 +9139,71 @@ export function run(test) {
        "‹ About", because "‹ Settings" would name a screen it does not go to. */
     assert.match(back, /label=\{upLabel\(page\)\}/, 'a submenu has no way back to the list')
     assert.match(back, /label="Done" height=\{40\} onPress=\{onBack\}/, 'a submenu has no Done, so leaving takes a tap per level')
+  })
+
+  /**
+   * A ROW THAT SCROLLS SIDEWAYS KEEPS ITS DRAGS FROM THE BACK SWIPE.
+   *
+   * "On the edit screen when swiping from left to right to scroll the blocks
+   * it goes back to the Home Screen."
+   *
+   * The gesture states below are what React Native's PanResponder hands
+   * onMoveShouldSetPanResponder before anything is granted: x0 still 0 from
+   * the touch going down, moveX where the finger is now, dx how far it has
+   * come since it went down.
+   */
+  test('a drag that starts on a sideways row never goes back, and one anywhere else still does', async () => {
+    const back = await import('../mobile/src/lib/edge-back.js')
+    const drag = (from, to, dy = 2) => ({ x0: 0, moveX: to, dx: to - from, dy })
+
+    /* The bug: a thumb on the chain row going right, to scroll it back. */
+    assert.equal(back.claimsBack(drag(180, 260), true), false, 'scrolling the chain back to its start leaves the Edit screen')
+    assert.equal(back.claimsBack(drag(8, 90), true), false, 'a drag on a sideways row is taken when it starts near the edge')
+    /* Everywhere else it is the swipe people already use: from anywhere. */
+    assert.equal(back.claimsBack(drag(8, 90)), true, 'a swipe in from the left edge no longer goes back')
+    assert.equal(back.claimsBack(drag(180, 260)), true, 'a swipe from mid-screen stopped going back, which it always has')
+    /* Still not a scroll down the page, and still not leftwards. */
+    assert.equal(back.claimsBack(drag(8, 40, 30)), false, 'a mostly-vertical drag goes back')
+    assert.equal(back.claimsBack(drag(200, 120)), false, 'a leftward drag goes back')
+
+    /* The hold lasts exactly as long as the touch. */
+    back.holdSideways()
+    assert.equal(back.sidewaysHeld(), true)
+    back.releaseSideways()
+    assert.equal(back.sidewaysHeld(), false, 'the hold outlives the touch, and the back gesture stays dead')
+
+    /* The release still needs travel, or a flick. */
+    assert.equal(back.goesBack({ dx: 30, vx: 0.1 }), false, 'a short slow wobble goes back')
+    assert.equal(back.goesBack({ dx: 30, vx: 0.6 }), true, 'a flick does not go back')
+    assert.equal(back.goesBack({ dx: 90, vx: 0 }), true, 'a long slow swipe does not go back')
+
+    /*
+     * EVERY SIDEWAYS ROW IS A SideScroll, so a new one cannot bring this
+     * back. A plain horizontal ScrollView never says it was touched, and the
+     * back gesture would take a left-to-right drag off it again.
+     */
+    const files = []
+    const walk = (dir) => {
+      for (const name of readdirSync(new URL(`../${dir}/`, import.meta.url))) {
+        const rel = `${dir}/${name}`
+        if (statSync(new URL(`../${rel}`, import.meta.url)).isDirectory()) walk(rel)
+        else if (name.endsWith('.js')) files.push(rel)
+      }
+    }
+    walk('mobile/src')
+    files.push('mobile/App.js')
+    const plain = []
+    for (const f of files) {
+      if (f.endsWith('components/SideScroll.js')) continue
+      const code = read(f).replace(/\/\*[\s\S]*?\*\//g, ' ')
+      for (const m of code.matchAll(/<ScrollView\b[^>]*?\bhorizontal\b/g)) plain.push(`${f}: ${m[0].slice(0, 60)}`)
+    }
+    assert.deepEqual(plain, [], 'a sideways ScrollView that is not a SideScroll: its drags go back a screen')
+    const side = read('mobile/src/components/SideScroll.js')
+    assert.match(side, /onTouchStart=\{\(e\) => \{\s*holdSideways\(\)/, 'a sideways row no longer says it was touched')
+    const edge = read('mobile/src/components/EdgeBack.js')
+    assert.match(edge, /onTouchEnd=\{done\}/, 'the hold is never let go when the finger lifts')
+    assert.match(edge, /onTouchCancel=\{releaseSideways\}/, 'the hold is never let go when the touch is cancelled')
   })
 
   /**
