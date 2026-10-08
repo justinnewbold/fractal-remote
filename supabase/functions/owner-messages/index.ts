@@ -8,8 +8,8 @@
  * Every report lands in public.feedback (migrations/20260905_feedback_email.sql),
  * which no client may read back. This reads it with the service role, for one
  * caller: the owner's account, proved by a token Supabase has signed. The
- * same lock as grant-access, and the same hashed address: test/mobile.mjs
- * holds both copies to shared/admin.mjs.
+ * same lock as grant-access, on the same account id: test/mobile.mjs holds
+ * both copies to shared/admin.mjs.
  *
  *   list     the newest reports, without their logs (a log can run long)
  *   message  one report, with its log
@@ -17,14 +17,8 @@
  * Read-only on purpose. Nothing here changes or deletes a report.
  */
 
-const ADMINS = ['672e291a']
-
-function fold(text: string): string {
-  let h = 5381
-  const s = String(text || '').trim().toLowerCase()
-  for (let i = 0; i < s.length; i += 1) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0
-  return h.toString(16).padStart(8, '0')
-}
+/* His account's id, as in grant-access: never a hash of an address, which a made-up address could match. */
+const ADMINS = ['7dfe6912-e43b-49bf-84e4-b56afbd442b1']
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -71,7 +65,7 @@ Deno.serve(async (req: Request) => {
   const token = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : ''
   const me = token ? await caller(token) : null
   /* The lock, before anything is read. */
-  if (!me || !ADMINS.includes(fold(me.email))) return json({ ok: false, message: 'Not allowed.' }, 403)
+  if (!me || !ADMINS.includes(me.id)) return json({ ok: false, message: 'Not allowed.' }, 403)
 
   let input: { action?: string; id?: string } = {}
   try {

@@ -3676,14 +3676,24 @@ export function run(test) {
   test('Give someone access is his alone, on both ends and on the server', async () => {
     /*
      * "Do I have an ability to manually activate an account for somebody?"
-     * "Yes, build that in and only when logged into the justinnewbold@icloud.com
+     * "Yes, build that in and only when logged into the [his iCloud address]
      * account."
      */
     const { ADMINS, isAdmin, accessAction } = await import('../shared/admin.mjs')
-    const { fold } = await import('../shared/owner-unlock.mjs')
-    assert.deepEqual(ADMINS, [fold('justinnewbold@icloud.com')], 'the tools are for some other account')
-    assert.ok(isAdmin('justinnewbold@icloud.com') && isAdmin(' JustinNewbold@iCloud.com '), 'his own account does not get the tools')
-    assert.ok(!isAdmin('justinnewbold@mac.com') && !isAdmin('') && !isAdmin(null), 'somebody else gets the tools')
+    const ME = '7dfe6912-e43b-49bf-84e4-b56afbd442b1'
+    assert.deepEqual(ADMINS, [ME], 'the tools are for some other account')
+    assert.ok(isAdmin(ME) && isAdmin(` ${ME.toUpperCase()} `), 'his own account does not get the tools')
+    assert.ok(!isAdmin('00000000-0000-4000-8000-000000000000') && !isAdmin('') && !isAdmin(null), 'somebody else gets the tools')
+    /*
+     * BY THE ACCOUNT, NEVER BY THE ADDRESS. The lock was once an eight-character
+     * djb2 hash of his email, and a made-up address with the same hash takes a
+     * second to find: whoever signed up with one had every customer's details.
+     * Nothing that looks like that may come back, here or on either server.
+     */
+    assert.ok(!isAdmin('someone@example.com'), 'an email address opens the tools')
+    for (const file of ['shared/admin.mjs', 'supabase/functions/grant-access/index.ts', 'supabase/functions/owner-messages/index.ts']) {
+      assert.ok(!/\bfold\(|5381|me\.email\)/.test(read(file).replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')), `${file} decides who is Justin from the email address again`)
+    }
 
     /* The server holds the same list, and checks it before doing anything. */
     const server = read('supabase/functions/grant-access/index.ts')
@@ -3692,7 +3702,7 @@ export function run(test) {
     /* Inside the handler, where the order is the order it runs in: the helpers
        above it (sales, usage) only run when the handler calls them. */
     const handler = server.slice(server.indexOf('Deno.serve('))
-    const lock = handler.indexOf('ADMINS.includes(fold(me.email))')
+    const lock = handler.indexOf('ADMINS.includes(me.id)')
     for (const step of ["rpc('account_details'", 'await sales()', 'await usage()', "rpc('owner_accounts'"]) {
       assert.ok(lock > 0 && handler.includes(step) && lock < handler.indexOf(step), `the server does ${step} before checking who is asking`)
     }
@@ -3722,18 +3732,18 @@ export function run(test) {
     /* Messages from users: the same lock, checked before a single report is read. */
     const inbox = read('supabase/functions/owner-messages/index.ts')
     assert.deepEqual(JSON.parse((inbox.match(/const ADMINS = (\[[^\]]*\])/) || [])[1]?.replace(/'/g, '"') || 'null'), ADMINS, 'the messages server and the apps disagree about whose tools these are')
-    assert.ok(inbox.indexOf('ADMINS.includes(fold(me.email))') > 0 && inbox.indexOf('ADMINS.includes(fold(me.email))') < inbox.indexOf('await rows('), 'the messages server reads reports before checking who is asking')
+    assert.ok(inbox.indexOf('ADMINS.includes(me.id)') > 0 && inbox.indexOf('ADMINS.includes(me.id)') < inbox.indexOf('await rows('), 'the messages server reads reports before checking who is asking')
     assert.ok(!/method: 'DELETE'|method: 'PATCH'/.test(inbox), 'the messages page can change or delete a report')
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'messages' && isAdmin\(account\?\.email\) \?/)
-    assert.match(read('src/App.jsx'), /\{setupPage === 'messages' && isAdmin\(link\.account\?\.email\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'messages' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('src/App.jsx'), /\{setupPage === 'messages' && isAdmin\(link\.account\?\.id\) \?/)
     assert.match(server, /actions\/grant_entitlement/, 'the server does not grant through RevenueCat')
     assert.match(server, /actions\/revoke_granted_entitlement/, 'the server cannot take a grant back')
     const sql = read('supabase/migrations/20260923_account_for_email.sql')
     assert.match(sql, /revoke all on function public\.account_for_email\(text\) from public, anon, authenticated/, 'a client can look up whether an email has an account')
 
     /* Both ends draw the page only for him. */
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'access' && isAdmin\(account\?\.email\) \?/)
-    assert.match(read('src/App.jsx'), /\{setupPage === 'access' && isAdmin\(link\.account\?\.email\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'access' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('src/App.jsx'), /\{setupPage === 'access' && isAdmin\(link\.account\?\.id\) \?/)
 
     /* And the call never throws, whatever the line does. */
     const down = await accessAction({ url: 'x', anonKey: 'k', token: 't', action: 'check', email: 'a@b.c', fetchImpl: () => Promise.reject(new Error('offline')) })
@@ -4051,7 +4061,7 @@ export function run(test) {
     /* Only in the Mac app's own window, only with an AM4, only on his account; straight to this computer. */
     const app = read('src/App.jsx')
     assert.match(app, /inDesktopApp\(\) && slugOfUnit\(device\) === 'am4' \? \(\s*<SetupRow key="am4check"/)
-    assert.match(app, /setupPage === 'am4check' && isAdmin\(link\.account\?\.email\)/)
+    assert.match(app, /setupPage === 'am4check' && isAdmin\(link\.account\?\.id\)/)
     assert.match(read('src/lib/forgefx.js'), /export const rawSysex = async \(bytes\) => \{[\s\S]{0,200}directRequest\('\/debug\/raw'/)
     /* What it found ships: the computer app carries the tempo it read. */
     assert.match(read('desktop/forgefx.lock.json'), /\+am4tempoparam/, 'the Mac app does not carry the AM4 tempo the check found')
@@ -4094,8 +4104,8 @@ export function run(test) {
     assert.match(body, /return \{ lastSignIn: d\.last_sign_in \?\? null, devices, seen \}/, 'the usage answer carries more than counts need')
 
     /* Both ends draw it only for him, from the Developer page. */
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'usage' && isAdmin\(account\?\.email\) \?/)
-    assert.match(read('src/App.jsx'), /\{setupPage === 'usage' && isAdmin\(link\.account\?\.email\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'usage' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('src/App.jsx'), /\{setupPage === 'usage' && isAdmin\(link\.account\?\.id\) \?/)
     assert.match(read('mobile/src/components/UsageTool.js'), /action: 'usage'/)
     assert.match(read('src/components/UsageTool.jsx'), /action: 'usage'/)
   })
@@ -4175,7 +4185,7 @@ export function run(test) {
 
     /* The server: one more action, behind the same lock, and nothing a client can call. */
     const server = read('supabase/functions/grant-access/index.ts')
-    assert.ok(server.indexOf('ADMINS.includes(fold(me.email))') < server.indexOf("await sales()"), 'sales are counted before checking who is asking')
+    assert.ok(server.indexOf('ADMINS.includes(me.id)') < server.indexOf("await sales()"), 'sales are counted before checking who is asking')
     assert.match(server, /\/purchases\?limit=100/, 'the lookup never asks what they bought')
     /* A database function that returns nothing answers with an empty body.
        Reading that as JSON said "Something went wrong" after a grant worked. */
@@ -4184,8 +4194,8 @@ export function run(test) {
     for (const fn of ['account_details(text)', 'owner_overview()']) {
       assert.ok(sql.includes(`revoke all on function public.${fn} from public, anon, authenticated`), `a client can call ${fn}`)
     }
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'sales' && isAdmin\(account\?\.email\) \?/)
-    assert.match(read('src/App.jsx'), /\{setupPage === 'sales' && isAdmin\(link\.account\?\.email\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'sales' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('src/App.jsx'), /\{setupPage === 'sales' && isAdmin\(link\.account\?\.id\) \?/)
 
     /*
      * "Is there any way we can send an email to them when I grant access to
@@ -4195,7 +4205,7 @@ export function run(test) {
     const grant = server.slice(server.indexOf("if (action === 'grant') {"))
     assert.match(server, /const giving = action === 'grant' \|\| action === 'claim'\s+const before = giving \? await unlocked\(account, entitlement\) : false/, 'a grant does not know whether it was news')
     assert.match(server, /giving && has && !before \? await tellThem\(String\(found\?\.email \|\| email\)\)/, 'the email is not tied to a grant that changed something')
-    assert.ok(server.indexOf('await tellThem(') > server.indexOf('ADMINS.includes(fold(me.email))'), 'the email can be sent before checking who is asking')
+    assert.ok(server.indexOf('await tellThem(') > server.indexOf('ADMINS.includes(me.id)'), 'the email can be sent before checking who is asking')
     assert.match(server, /subject: 'You have full access to Fractal Remote'/)
     assert.match(server, /from: FROM/)
     assert.match(server, /<b>\$\{shown\}<\/b>/, 'the address goes into the email unescaped')
@@ -4231,7 +4241,7 @@ export function run(test) {
     assert.match(server, /await rpc\('wait_for_grant', \{ address: email \}\)/, 'Give access on an address with no account adds nothing')
     assert.match(server, /internal \? action !== 'claim'/, 'the internal caller may ask for more than a claim')
     assert.match(server, /action === 'claim' && !\(await rpc\('is_waiting_grant'/, 'a claim can unlock an address nobody put on the list')
-    assert.match(server, /if \(!internal && \(!me \|\| !ADMINS\.includes\(fold\(me\.email\)\)\)\)/, 'the lock no longer holds for everybody else')
+    assert.match(server, /if \(!internal && \(!me \|\| !ADMINS\.includes\(me\.id\)\)\)/, 'the lock no longer holds for everybody else')
     const ent = read('supabase/functions/entitlement/index.ts')
     assert.match(ent, /if \(answer === false && who\.email && \(await waiting\(who\.email\)\)\)/, 'a waiting address is claimed on something other than a definite no, or not by its own verified owner')
     assert.ok(ent.indexOf('await waiting(who.email)') > ent.indexOf('const who = await accountFrom(token)'), 'the claim is made before the token is verified')
@@ -4271,10 +4281,10 @@ export function run(test) {
     assert.equal(found[0].rows.length, 1, 'finding an email does not narrow the list')
     assert.equal(accountSections(list, 'nobody', nowAt)[0].rows[0].value, 'Nobody with an account matches that.')
     assert.match(server, /if \(action === 'accounts'\) return json\(\{ ok: true, \.\.\.\(\(await rpc\('owner_accounts', \{\}\)\)/)
-    assert.ok(server.indexOf("action === 'accounts'") > server.indexOf('ADMINS.includes(fold(me.email))'), 'the list is read before checking who is asking')
+    assert.ok(server.indexOf("action === 'accounts'") > server.indexOf('ADMINS.includes(me.id)'), 'the list is read before checking who is asking')
     assert.match(read('supabase/migrations/20260924_owner_accounts.sql'), /revoke all on function public\.owner_accounts\(\) from public, anon, authenticated/, 'a client can read every account')
-    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'accounts' && isAdmin\(account\?\.email\) \?/)
-    assert.match(read('src/App.jsx'), /\{setupPage === 'accounts' && isAdmin\(link\.account\?\.email\) \?/)
+    assert.match(read('mobile/src/screens/Settings.js'), /\{page === 'accounts' && isAdmin\(account\?\.id\) \?/)
+    assert.match(read('src/App.jsx'), /\{setupPage === 'accounts' && isAdmin\(link\.account\?\.id\) \?/)
   })
 
   test('the advice to close Fractal’s own software names it, per unit where the unit is known', async () => {
@@ -10270,29 +10280,29 @@ export function run(test) {
    * password is the gate exactly as it is everywhere else.
    */
   test('an owner account is unlocked, and no address is in the repository', async () => {
-    const { isOwner, fold } = await import(
+    const { isOwner, OWNERS, accountId } = await import(
       new URL('../shared/owner-unlock.mjs', import.meta.url).href
     )
 
-    assert.equal(isOwner('justinnewbold@gmail.com'), true, 'the author is not unlocked')
-    assert.equal(isOwner('  JustinNewbold@GMAIL.com '), true, 'case and spacing break the match')
-    assert.equal(isOwner('someone@else.com'), false, 'a stranger is unlocked')
-    assert.equal(isOwner('pair-abcd@fractal.local'), false, 'a pairing-code account is unlocked')
-    for (const nothing of ['', null, undefined, 'notanemail']) {
+    /*
+     * BY ACCOUNT ID, NEVER BY ADDRESS. This list was once an eight-character
+     * djb2 hash of an email, and a made-up address with the same hash takes a
+     * second to find, so anybody could have signed up into a free unlock.
+     * Every entry is an id; a listed id passes in any case and spacing; an
+     * address never passes, whatever it hashes to.
+     */
+    assert.ok(Array.isArray(OWNERS) && OWNERS.every((id) => accountId(id) === id), 'something other than an account id is on the owner list')
+    for (const id of OWNERS) assert.equal(isOwner(` ${id.toUpperCase()} `), true, 'case and spacing break the match')
+    assert.equal(isOwner('00000000-0000-4000-8000-000000000000'), false, 'an account that is not on the list is unlocked')
+    for (const nothing of ['', null, undefined, 'notanemail', 'someone@example.com', 'pair-abcd@fractal.local']) {
       assert.equal(isOwner(nothing), false, `"${nothing}" counted as an owner`)
     }
 
-    /* The hashing buys no secrecy and is not meant to — it keeps an address
-       out of a public file, where it would be scraped within a week. So the
-       file must not contain one. */
+    /* Ids are not inboxes, so the file holds no address either. */
     const src = readFileSync(new URL('../shared/owner-unlock.mjs', import.meta.url), 'utf8')
     const found = src.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi) || []
-    assert.deepEqual(
-      found.filter((a) => a !== 'someone@example.com'),
-      [],
-      'an email address is written into shared/owner-unlock.mjs'
-    )
-    assert.equal(typeof fold, 'function', 'fold is gone, so owners cannot be added')
+    assert.deepEqual(found, [], 'an email address is written into shared/owner-unlock.mjs')
+    assert.ok(!/\bfold\(|5381/.test(src), 'the owner list is back to a hash of the address, which a made-up address can match')
 
     /* And the app reads the account from the SESSION, never from a box. */
     const lib = read('mobile/src/lib/purchases.js')

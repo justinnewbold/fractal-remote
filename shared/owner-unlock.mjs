@@ -18,52 +18,41 @@
  * The password is the gate, exactly as it is for everything else that account
  * can reach.
  *
- * WHY HASHES RATHER THAN ADDRESSES. Not secrecy — see above, it buys none.
- * An email address in a public file is scraped and sold within a week, and
- * that is a real cost for no benefit. A hash is the same check with nobody's
- * inbox in it.
+ * ACCOUNT IDS, NOT A HASH OF THE ADDRESS. The first version kept an eight-
+ * character djb2 hash of the email here, so that no inbox sat in a public
+ * file. That made the list a lock it could not be: eight hex characters is 32
+ * bits, and djb2 runs backwards, so a DIFFERENT address with the same eight
+ * characters can be made in about a second. Sign up with one of those,
+ * confirm it, and you were on the list. Found on 8 October 2026, the day the
+ * repository went public, before anybody had used it (no account but his own
+ * matched either hash).
  *
- * It is deliberately NOT a cryptographic hash. A pure-JS one costs nothing to
- * carry and adds no dependency to the phone app — and a dependency here would
- * move the native fingerprint and spend an iOS build, which is a poor trade
- * for a list of two. Anyone determined can find the address; that was never
- * what this protects.
+ * An account's id is the one thing a stranger cannot make: Supabase picks it
+ * when the account is created and puts it in every token the account signs
+ * in with. Knowing it does not let you become it. And it holds nobody's inbox.
+ *
+ * Empty for now. The address the old hash stood for has never had an account,
+ * so the list never unlocked anybody; his own account is unlocked through
+ * RevenueCat like everybody else's. Add one by pasting an account's id (Supabase
+ * dashboard → Authentication → Users), and paste the same line into
+ * supabase/functions/entitlement — test/server.mjs holds the two together.
  */
+export const OWNERS = []
 
-/** djb2, as a hex string. Stable, tiny, and the same at both ends. */
-export function fold(text) {
-  let h = 5381
-  const s = String(text || '')
-    .trim()
-    .toLowerCase()
-  for (let i = 0; i < s.length; i += 1) {
-    h = ((h << 5) + h + s.charCodeAt(i)) >>> 0
-  }
-  return h.toString(16).padStart(8, '0')
+/** An account id as Supabase writes it, a lowercase uuid; anything else is nobody. */
+export const accountId = (id) => {
+  const at = String(id || '').trim().toLowerCase()
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(at) ? at : ''
 }
-
-/**
- * The accounts that carry an unlock without a purchase.
- *
- * Add one by running `fold('someone@example.com')` and pasting the answer.
- */
-export const OWNERS = [
-  /* The author, who has to be able to drive a real rig before there is
-     anything to buy. The VALUE is written out rather than computed from the
-     address here — calling fold('…') in this file would put the address in
-     it, which is the one thing the hashing was for. */
-  '8a9f8fc4'
-]
 
 /**
  * Whether this signed-in account is one of them.
  *
- * Takes the email the ACCOUNT SERVICE reports, never one typed into a box:
+ * Takes the id the ACCOUNT SERVICE reports, never anything typed into a box:
  * the caller is `currentAccount()`, which reads it back from the session.
- * An empty or missing address is nobody.
+ * Anything that is not an account id is nobody.
  */
-export const isOwner = (email) => {
-  const at = String(email || '').trim()
-  if (!at || !at.includes('@')) return false
-  return OWNERS.includes(fold(at))
+export const isOwner = (id) => {
+  const at = accountId(id)
+  return Boolean(at) && OWNERS.includes(at)
 }

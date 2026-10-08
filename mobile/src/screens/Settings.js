@@ -450,7 +450,7 @@ export default function Settings({
           {/* Justin's own tools, on his account only — see lib/admin.js. One
               row for all three: "we should probably just make that into one
               menu called developer". */}
-          {isAdmin(account?.email) ? (
+          {isAdmin(account?.id) ? (
             <Group title="Developer">
               <SetupRow title="Developer" status="Access, sales, accounts, messages, what's live" onPress={() => setPage('developer')} />
             </Group>
@@ -616,7 +616,7 @@ export default function Settings({
       ) : null}
 
       {/* ------------------------------------------------------ developer */}
-      {page === 'developer' && isAdmin(account?.email) ? (
+      {page === 'developer' && isAdmin(account?.id) ? (
         <>
           {head('Developer', 'back')}
           <View style={{ gap: 0 }}>
@@ -1023,7 +1023,7 @@ export default function Settings({
       ) : null}
 
       {/* ---------------------------------------------------------- access */}
-      {page === 'access' && isAdmin(account?.email) ? (
+      {page === 'access' && isAdmin(account?.id) ? (
         <>
           {head('Give someone access', 'back')}
           <AccessTool />
@@ -1031,7 +1031,7 @@ export default function Settings({
       ) : null}
 
       {/* ----------------------------------------------------------- sales */}
-      {page === 'sales' && isAdmin(account?.email) ? (
+      {page === 'sales' && isAdmin(account?.id) ? (
         <>
           {head('Sales at a glance', 'back')}
           <SalesTool />
@@ -1039,7 +1039,7 @@ export default function Settings({
       ) : null}
 
       {/* ----------------------------------------------------------- usage */}
-      {page === 'usage' && isAdmin(account?.email) ? (
+      {page === 'usage' && isAdmin(account?.id) ? (
         <>
           {head('How many people', 'back')}
           <UsageTool />
@@ -1047,7 +1047,7 @@ export default function Settings({
       ) : null}
 
       {/* ------------------------------------------------------------ live */}
-      {page === 'live' && isAdmin(account?.email) ? (
+      {page === 'live' && isAdmin(account?.id) ? (
         <>
           {head("What's live", 'back')}
           <LiveTool />
@@ -1055,7 +1055,7 @@ export default function Settings({
       ) : null}
 
       {/* -------------------------------------------------------- messages */}
-      {page === 'messages' && isAdmin(account?.email) ? (
+      {page === 'messages' && isAdmin(account?.id) ? (
         <>
           {head('Messages from users', 'back')}
           <MessagesTool />
@@ -1063,7 +1063,7 @@ export default function Settings({
       ) : null}
 
       {/* -------------------------------------------------------- accounts */}
-      {page === 'accounts' && isAdmin(account?.email) ? (
+      {page === 'accounts' && isAdmin(account?.id) ? (
         <>
           {head('Everyone with an account', 'back')}
           <AccountsTool />

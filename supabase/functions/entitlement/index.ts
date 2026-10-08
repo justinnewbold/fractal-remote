@@ -173,20 +173,12 @@ async function owns(account: string): Promise<boolean | null> {
  *
  * shared/owner-unlock.mjs is the source. It cannot be imported here — this
  * runs in Deno on Supabase and that file lives in the app's repository — so it
- * is copied, and test/server.mjs fails if the two ever differ. Hashes rather
- * than addresses for the reason that file gives: nobody's inbox in a public
- * repository. It grants nothing on its own; the caller has already proved,
- * with a signed token, which account they are.
+ * is copied, and test/server.mjs fails if the two ever differ. Account ids,
+ * not a hash of the address: that file says why the hash was no lock at all.
+ * It grants nothing on its own; the caller has already proved, with a signed
+ * token, which account they are.
  */
-const OWNERS = ['8a9f8fc4']
-
-/** djb2, as the phone computes it. Must match shared/owner-unlock.mjs exactly. */
-function fold(text: string): string {
-  let h = 5381
-  const s = String(text || '').trim().toLowerCase()
-  for (let i = 0; i < s.length; i += 1) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0
-  return h.toString(16).padStart(8, '0')
-}
+const OWNERS: string[] = []
 
 /**
  * Write down what was learned, so the relay can read it.
@@ -271,7 +263,7 @@ Deno.serve(async (req: Request) => {
   /* An owner is unlocked whatever RevenueCat says, and is written down as one
      so the relay agrees. Checked first: RevenueCat's honest "never bought
      it" about an owner must not be the answer anybody records. */
-  if (OWNERS.includes(fold(who.email))) {
+  if (OWNERS.includes(who.id)) {
     await record(account, true, 'owner')
     return json({ unlocked: true })
   }

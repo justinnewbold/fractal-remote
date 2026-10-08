@@ -15,7 +15,7 @@ import Sheet from './Sheet'
  * EVERYONE WITH AN ACCOUNT — Justin's page, and nobody else's.
  *
  * "How do I see a list of who has set up an account? Need to check
- * L4adaptive@gmail.com." Every account, newest first, with a box to find one
+ * [a customer's address]." Every account, newest first, with a box to find one
  * address, and the waiting list under it. The same server as Give someone
  * access (supabase/functions/grant-access), which decides who may ask.
  *

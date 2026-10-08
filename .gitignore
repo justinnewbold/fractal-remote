@@ -5,3 +5,6 @@ dist
 .DS_Store
 desktop/vendor
 desktop/package-lock.json
+
+# What the Supabase CLI leaves behind after a deploy
+supabase/.temp/
