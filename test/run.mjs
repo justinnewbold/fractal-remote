@@ -5676,6 +5676,10 @@ console.log('\nthe phone apps')
 const { run: mobile } = await import('./mobile.mjs')
 mobile(test)
 
+console.log('\nbluetooth (beta)')
+const { run: bluetooth } = await import('./bluetooth.mjs')
+bluetooth(test)
+
 console.log('\nboth ends')
 const { run: bothEnds } = await import('./both-ends.mjs')
 bothEnds(test)

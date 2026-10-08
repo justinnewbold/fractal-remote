@@ -103,7 +103,7 @@ export const checksumOk = (f) => Array.isArray(f) && f.length >= 8 && checksum(f
  * wrapped preset number is a different preset.
  */
 export function encode14(n) {
-  if (!Number.isInteger(n) || n < 0 || n > ASK14) throw new RangeError(`${n} does not fit in fourteen bits`)
+  if (!Number.isInteger(n) || n < 0 || n > ASK14) throw new Error(`${n} does not fit in fourteen bits`)
   return [n & 0x7f, (n >> 7) & 0x7f]
 }
 
@@ -146,10 +146,14 @@ const readF32le = (b, at) => bitsFloat(readU32le(b, at))
  * AM4: eight-bit bytes as a stream of seven-bit ones, the top bit of the
  * first byte first, the last septet padded with zeros at the bottom.
  *
- * The AM4 uses the same idea two ways, and mixing them up scrambles every
- * field rather than failing: the structure read is ONE continuous stream
- * (packMsb / unpackMsb), and everything else restarts the stream every seven
- * bytes (packChunked / unpackChunked).
+ * ForgeFX describes this two ways — the structure read as ONE continuous
+ * stream (packMsb / unpackMsb), everything else as a stream that restarts
+ * every seven bytes (packChunked / unpackChunked) — and both are kept here
+ * under those names so each reads like the spec it came from. They are the
+ * same bytes: seven bytes are exactly eight septets, so a restart lands where
+ * the continuous stream already is. The test holds them to each other. What
+ * DOES scramble every field is reading the bits the other way round, low bit
+ * first, which is the mistake ForgeFX's note warns about.
  */
 export function packMsb(raw) {
   const out = []
@@ -247,7 +251,7 @@ export function channelIndex(c) {
 export const channelLetter = (i) => CHANNELS[i] ?? null
 
 const scene8 = (i) => {
-  if (!Number.isInteger(i) || i < 0 || i > 7) throw new RangeError(`scene ${i} is not 0..7`)
+  if (!Number.isInteger(i) || i < 0 || i > 7) throw new Error(`scene ${i} is not 0..7`)
   return i
 }
 
@@ -277,13 +281,13 @@ export const buildSetBypass = (model, eid, bypassed) => frame(model, FN.BYPASS, 
 
 export function buildSetChannel(model, eid, channel) {
   const c = channelIndex(channel)
-  if (c === null) throw new RangeError(`channel ${channel} is not A..D`)
+  if (c === null) throw new Error(`channel ${channel} is not A..D`)
   return frame(model, FN.CHANNEL, [...encode14(eid), c])
 }
 /** FM3-Edit's channel change: sub 0x16, the block, the channel as a number. */
 export function buildSetChannelEdit(model, eid, channel) {
   const c = channelIndex(channel)
-  if (c === null) throw new RangeError(`channel ${channel} is not A..D`)
+  if (c === null) throw new Error(`channel ${channel} is not A..D`)
   return buildEditFrame(model, 0x16, eid, 0, septets32(c))
 }
 
@@ -293,7 +297,7 @@ export function buildSetChannelEdit(model, eid, channel) {
  * The number rides in the value slot exactly as a whole number would.
  */
 export function buildSwitchPreset(model, number) {
-  if (!Number.isInteger(number) || number < 0 || number > 1023) throw new RangeError(`preset ${number} is not 0..1023`)
+  if (!Number.isInteger(number) || number < 0 || number > 1023) throw new Error(`preset ${number} is not 0..1023`)
   return buildEditFrame(model, 0x27, 0, 0, septets32(number))
 }
 
@@ -307,8 +311,8 @@ export function buildSwitchPreset(model, number) {
  * takes it in CC32.
  */
 export function buildProgramChange(number, { channel = 1, bankIn = 'cc0' } = {}) {
-  if (!Number.isInteger(number) || number < 0 || number > 16383) throw new RangeError(`preset ${number} is out of range`)
-  if (!Number.isInteger(channel) || channel < 1 || channel > 16) throw new RangeError(`MIDI number ${channel} is not 1..16`)
+  if (!Number.isInteger(number) || number < 0 || number > 16383) throw new Error(`preset ${number} is out of range`)
+  if (!Number.isInteger(channel) || channel < 1 || channel > 16) throw new Error(`MIDI number ${channel} is not 1..16`)
   const ch = channel - 1
   const bank = number >> 7
   const [cc0, cc32] = bankIn === 'cc32' ? [(bank >> 7) & 0x7f, bank & 0x7f] : [bank & 0x7f, 0]
@@ -329,14 +333,14 @@ export const buildStatusDump = (model) => frame(model, FN.STATUS)
 export const buildGetTempo = (model) => frame(model, FN.TEMPO, [ASK, ASK])
 
 const bpmOk = (bpm) => {
-  if (!Number.isInteger(bpm) || bpm < 1 || bpm >= ASK14) throw new RangeError(`tempo ${bpm} is out of range`)
+  if (!Number.isInteger(bpm) || bpm < 1 || bpm >= ASK14) throw new Error(`tempo ${bpm} is out of range`)
   return bpm
 }
 /** The published tempo SET. It does not take on an FM3; see buildSetTempoEdit. */
 export const buildSetTempo = (model, bpm) => frame(model, FN.TEMPO, encode14(bpmOk(bpm)))
 /** FM3-Edit's tempo write: the Controllers block (2), parameter 0x20, the BPM as a float. */
 export function buildSetTempoEdit(model, bpm) {
-  if (!Number.isFinite(bpm) || bpm <= 0) throw new RangeError(`tempo ${bpm} is out of range`)
+  if (!Number.isFinite(bpm) || bpm <= 0) throw new Error(`tempo ${bpm} is out of range`)
   return buildEditFrame(model, 0x09, 0x02, 0x20, floatSeptets(bpm))
 }
 
@@ -540,11 +544,11 @@ export function am4Frame({ pidLow, pidHigh, action, hdr3 = 0, hdr4 = 0, payload 
 }
 
 const am4Code = (code) => {
-  if (!am4Block(code)) throw new RangeError(`0x${Number(code).toString(16)} is not an AM4 block`)
+  if (!am4Block(code)) throw new Error(`0x${Number(code).toString(16)} is not an AM4 block`)
   return code
 }
 const location = (n) => {
-  if (!Number.isInteger(n) || n < 0 || n >= AM4.LOCATIONS) throw new RangeError(`location ${n} is not 0..103`)
+  if (!Number.isInteger(n) || n < 0 || n >= AM4.LOCATIONS) throw new Error(`location ${n} is not 0..103`)
   return n
 }
 
@@ -559,13 +563,13 @@ export const buildAm4ChannelRead = (code) => am4Frame({ pidLow: am4Code(code), p
 export const buildAm4TempoRead = () => am4Frame({ pidLow: AM4.TEMPO_LOW, pidHigh: AM4.TEMPO_HIGH, action: AM4.READ_LONG })
 /** One of the tuner's four readings: 1 note, 2 frequency, 3 cents, 4 string. */
 export function buildAm4TunerPoll(which) {
-  if (!Number.isInteger(which) || which < 1 || which > 4) throw new RangeError(`tuner reading ${which} is not 1..4`)
+  if (!Number.isInteger(which) || which < 1 || which > 4) throw new Error(`tuner reading ${which} is not 1..4`)
   return am4Frame({ pidLow: AM4.TUNER, pidHigh: which, action: AM4.POLL })
 }
 
 /** The scene, as a whole number. (The preset below is a float. The AM4 is like that.) */
 export function buildAm4Scene(index) {
-  if (!Number.isInteger(index) || index < 0 || index >= AM4.SCENES) throw new RangeError(`scene ${index} is not 0..3`)
+  if (!Number.isInteger(index) || index < 0 || index >= AM4.SCENES) throw new Error(`scene ${index} is not 0..3`)
   return am4Frame({ pidLow: AM4.PRESET_REG, pidHigh: AM4.SCENE, action: AM4.SET, hdr4: 4, payload: am4U32(index) })
 }
 /** Load a stored location. Anything unsaved on the unit is lost, exactly as on its own front panel. */
@@ -576,7 +580,7 @@ export const buildAm4Bypass = (code, bypassed) =>
 /** Always at the block's BASE code: a channel written to a second copy's code lands nowhere. */
 export function buildAm4Channel(code, channel) {
   const c = channelIndex(channel)
-  if (c === null) throw new RangeError(`channel ${channel} is not A..D`)
+  if (c === null) throw new Error(`channel ${channel} is not A..D`)
   const base = am4Block(am4Code(code)).base
   return am4Frame({ pidLow: base, pidHigh: AM4.CHANNEL_WRITE, action: AM4.SET, hdr4: 4, payload: am4Float(c) })
 }

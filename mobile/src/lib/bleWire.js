@@ -346,17 +346,20 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   let closed = false
   let tracing = null
 
-  /* What was just sent, for the echo guard. */
-  const recent = []
+  /*
+   * What was sent last, for the echo guard: the last frame ONLY, not
+   * everything lately. The published scene change and the answer to the
+   * "which scene?" asked straight after it are the same bytes (0C 02 both
+   * ways), so a guard with a longer memory throws away the answer.
+   */
+  let lastSent = { messages: [], at: -Infinity }
   let echoes = 0
   let thruTold = false
   let late = null
   let foreign = null
   let pushes = 0
 
-  const prune = (now) => {
-    while (recent.length && now - recent[0].at > ECHO_MS) recent.shift()
-  }
+  const isEcho = (bytes, now) => now - lastSent.at <= ECHO_MS && lastSent.messages.some((m) => sameBytes(m, bytes))
 
   function ex(out, opts = {}) {
     if (closed) return Promise.reject(notConnected())
@@ -376,12 +379,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     current = job
     job.started = time.now()
     const messages = job.opts.messages ? job.out : [job.out]
+    lastSent = { messages: [], at: job.started }
     for (const m of messages) {
       const result = sendFrame(m)
       if (result !== 'sent') {
         return end(job, null, result === 'refused' ? failure('That message is never sent to the AM4.', 500, { refused: true }) : notConnected())
       }
-      recent.push({ bytes: m, at: job.started })
+      lastSent.messages.push(m)
     }
     if (job.priority === PRI.write) say(`sent ${job.opts.what || 'a write'}: ${messages.map(toHex).join(' | ')}`)
     job.timer = time.setTimeout(() => {
@@ -430,16 +434,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (f[4] !== 0x7f) foreign = { model: f[4], at: now }
       return
     }
-    prune(now)
     const job = current
     /*
      * THE ECHO GUARD. With MIDI Thru on, the unit hands the phone its own
      * message straight back, and an echoed "which scene?" (0C 7F) reads as
-     * scene 8. A frame identical to one just sent is dropped — except while a
-     * write is waiting for the one answer that IS identical: the published
-     * scene change, which the unit answers with the same bytes.
+     * scene 8. A frame identical to the one just sent is dropped — except
+     * while a write is waiting for the one answer that IS identical: the
+     * published scene change, which the unit answers with the same bytes.
      */
-    if (recent.some((r) => sameBytes(r.bytes, f)) && !(job && job.opts.allowEcho)) {
+    if (isEcho(f, now) && !(job && job.opts.allowEcho)) {
       echoes++
       if (echoes >= 3 && !thruTold) {
         thruTold = true
@@ -485,9 +488,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /** A short message: only Program Change means anything here. */
   function heardShort(msg) {
     if (closed || !Array.isArray(msg) || !msg.length) return
-    const now = time.now()
-    prune(now)
-    if (recent.some((r) => sameBytes(r.bytes, msg))) return
+    if (isEcho(msg, time.now())) return
     if ((msg[0] & 0xf0) === 0xc0) {
       say(`the unit sent Program Change ${msg[1]}: its preset changed`)
       sceneCache = null
@@ -762,17 +763,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     throw failure(`The unit stayed on scene ${now + 1}.`, 502)
   }
 
-  async function sceneBy(way, i) {
-    const r = way === 'published' ? await sendPublishedScene(i) : await sendEditScene(i)
-    return !rejected(r) ? true : r.rejected
-  }
+  /* One way, sent: null when nothing came back, {rejected} for a refusal. */
+  const sceneBy = (way, i) => (way === 'published' ? sendPublishedScene(i) : sendEditScene(i))
 
   async function changeScene(i) {
     const way = wayFor('scene')
     if (way) {
       const r = await sceneBy(way, i)
-      if (r === true) return
-      if (ways.scene !== 'auto') throw refusedBy(r)
+      if (!rejected(r)) return
+      if (ways.scene !== 'auto') throw refusedBy(r.rejected)
       forget('scene')
     }
     const found = await trialScene(i)
@@ -832,16 +831,22 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* ---- tempo ---- */
 
   async function trialTempo(bpm) {
+    /*
+     * EXACTLY, not within one: a gen-3 unit answers a whole BPM, and the
+     * check panel moves the tempo by one — within one of the target is also
+     * within one of where it started, which would call a write that did
+     * nothing a success.
+     */
     const p = await fire(buildSetTempo(model, bpm), `tempo ${bpm}`)
     if (!rejected(p)) {
       const now = await tempoNow()
-      if (Number.isInteger(now) && Math.abs(now - bpm) <= 1) return 'published'
+      if (now === bpm) return 'published'
       if (!Number.isInteger(now)) return null
     }
     const e = await fire(buildSetTempoEdit(model, bpm), `tempo ${bpm} (FM3-Edit’s way)`)
     if (rejected(e)) throw refusedBy(e.rejected)
     const now = await tempoNow()
-    if (Number.isInteger(now) && Math.abs(now - bpm) <= 1) return 'edit'
+    if (now === bpm) return 'edit'
     if (!Number.isInteger(now)) return null
     throw failure(`The tempo stayed at ${now}.`, 502)
   }
@@ -899,21 +904,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     throw failure(`The unit stayed on preset ${at}.`, 502)
   }
 
-  async function presetBy(way, n) {
-    if (way === 'pc') {
-      await sendPc(n)
-      return true
-    }
-    const r = await sendSysexPreset(n)
-    return !rejected(r) ? true : r.rejected
-  }
+  /* One way, sent: Program Change is never answered, so only the SysEx switch can be refused. */
+  const presetBy = (way, n) => (way === 'pc' ? sendPc(n) : sendSysexPreset(n))
 
   async function changePreset(n) {
     const way = wayFor('preset')
     if (way) {
       const r = await presetBy(way, n)
-      if (r === true) return
-      if (ways.preset !== 'auto') throw refusedBy(r)
+      if (!rejected(r)) return
+      if (ways.preset !== 'auto') throw refusedBy(r.rejected)
       forget('preset')
     }
     const found = await trialPreset(n)
@@ -1350,7 +1349,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (!route) {
       say(`not over Bluetooth: ${method} ${clean}`)
       /* The computer's own documents simply do not exist here, which the app already handles. */
-      throw clean === '/device' || clean.startsWith('/store/') ? notHere() : unsupported()
+      throw method === 'GET' && (clean === '/device' || clean.startsWith('/store/')) ? notHere() : unsupported()
     }
     return route()
   }
@@ -1420,6 +1419,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* ================================================================ */
 
   const nameOf = (eid) => blocks.find((b) => b?.page === eid)?.name || `block ${eid}`
+  /* A write's row: sent, or what the unit said about it. */
+  const sentWords = (v) => (rejected(v) ? `refused: ${rejectedWords(v.rejected)}` : 'sent')
   const said = (v, words) => (v === null || v === undefined ? 'no answer' : rejected(v) ? `refused: ${rejectedWords(v.rejected)}` : words(v))
 
   /* Gen 3, step by step. Each `row` is one question as the panel shows it. */
@@ -1463,7 +1464,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const to = from === 1 ? 0 : 1
       const way = await row(`Scene ${to + 1}`, () => trialScene(to), (w) => wayWords(w))
       if (way) learn('scene', way)
-      await row(`Back to scene ${from + 1}`, () => (way ? sceneBy(way, from) : trialScene(from)), () => 'sent')
+      await row(`Back to scene ${from + 1}`, () => (way ? sceneBy(way, from) : trialScene(from)), sentWords)
       last.scene = from
       return { way }
     },
@@ -1475,7 +1476,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const to = amp.channel === 1 ? 0 : 1
       const way = await row(`${nameOf(amp.effectId)} to ${CH[to]}`, () => trialChannel(amp.effectId, to), (w) => wayWords(w))
       if (way) learn('channel', way)
-      await row(`${nameOf(amp.effectId)} back to ${CH[amp.channel]}`, () => (way ? changeChannelBy(way, amp.effectId, amp.channel) : trialChannel(amp.effectId, amp.channel)), () => 'sent')
+      await row(`${nameOf(amp.effectId)} back to ${CH[amp.channel]}`, () => (way ? changeChannelBy(way, amp.effectId, amp.channel) : trialChannel(amp.effectId, amp.channel)), sentWords)
       return { way }
     },
     'write-tempo': async (row) => {
@@ -1484,18 +1485,25 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const to = from >= AM4.TEMPO_MAX ? from - 1 : from + 1
       const way = await row(`Tempo ${to}`, () => trialTempo(to), (w) => wayWords(w))
       if (way) learn('tempo', way)
-      await row(`Tempo back to ${from}`, () => (way ? tempoBy(way, from) : trialTempo(from)), () => 'sent')
+      await row(`Tempo back to ${from}`, () => (way ? tempoBy(way, from) : trialTempo(from)), sentWords)
       last.bpm = from
       return { way }
     },
     'write-preset': async (row) => {
       const now = await row('Preset', () => presetNow(), (v) => said(v, (p) => `preset ${p.number}, ${p.name || '(no name)'}`))
       if (!now || rejected(now)) throw failure('The unit did not say which preset it is on.', 504)
+      const scene = await row('Scene', () => sceneNow(), (v) => said(v, (s) => `scene ${s + 1}`))
       const from = now.number
       const to = from >= spec.maxPreset ? from - 1 : from + 1
       const way = await row(`Preset ${to}`, () => trialPreset(to), (w) => (w === 'sysex' ? 'the SysEx switch worked' : w === 'pc' ? 'Program Change worked' : 'sent; the unit did not say where it landed'))
       if (way) learn('preset', way)
-      await row(`Back to preset ${from}`, () => (way ? presetBy(way, from) : trialPreset(from)), () => 'sent')
+      await row(`Back to preset ${from}`, () => (way ? presetBy(way, from) : trialPreset(from)), sentWords)
+      /* Loading a preset puts it on its own first scene; "back" means the scene too. */
+      if (Number.isInteger(scene)) {
+        await pause(WAIT.landed)
+        await row(`Back to scene ${scene + 1}`, () => changeScene(scene), sentWords)
+        last.scene = scene
+      }
       notePreset({ number: from }, false)
       emit({ type: 'changed', scope: 'preset' })
       return { way }
@@ -1503,7 +1511,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     'write-tuner': async (row) => {
       const before = { polled: tuner.polled, pushes }
       await row('Tuner on', () => fire(buildTunerPage(model, true), 'the tuner page'), () => 'tuner page open')
-      await row('Tuner data, asked for', () => fire(buildTuner(model, true), 'the tuner'), () => 'sent')
+      await row('Tuner data, asked for', () => fire(buildTuner(model, true), 'the tuner'), sentWords)
       let polled = 0
       const until = time.now() + 3000
       while (time.now() < until) {
@@ -1573,9 +1581,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const s = await row('Scene', () => readStructure({ fresh: true }), (v) => (v ? `scene ${v.scene + 1}` : 'no answer'))
       if (!s) throw failure('The AM4 did not say which scene it is on.', 504)
       const to = s.scene === 1 ? 0 : 1
-      await row(`Scene ${to + 1}`, () => fire(buildAm4Scene(to), `scene ${to + 1}`), () => 'sent')
+      await row(`Scene ${to + 1}`, () => fire(buildAm4Scene(to), `scene ${to + 1}`), sentWords)
       await row('Where it landed', () => readStructure({ fresh: true }), (v) => (v ? (v.scene === to ? `scene ${to + 1}: it worked` : `still scene ${v.scene + 1}`) : 'no answer'))
-      await row(`Back to scene ${s.scene + 1}`, () => fire(buildAm4Scene(s.scene), `scene ${s.scene + 1}`), () => 'sent')
+      await row(`Back to scene ${s.scene + 1}`, () => fire(buildAm4Scene(s.scene), `scene ${s.scene + 1}`), sentWords)
       structure = null
       last.scene = s.scene
     },
@@ -1583,9 +1591,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const from = await row('Tempo', () => am4TempoNow(), (v) => said(v, (b) => `${b} BPM`))
       if (!Number.isInteger(from)) throw failure('The AM4 did not say its tempo.', 504)
       const to = from >= AM4.TEMPO_MAX ? from - 1 : from + 1
-      await row(`Tempo ${to}`, () => fire(buildAm4Tempo(to), `tempo ${to}`), () => 'sent')
-      await row('Tempo now', () => am4TempoNow(), (v) => said(v, (b) => (Math.abs(b - to) <= 1 ? `${b} BPM: it worked` : `${b} BPM: it did not take`)))
-      await row(`Tempo back to ${from}`, () => fire(buildAm4Tempo(from), `tempo ${from}`), () => 'sent')
+      await row(`Tempo ${to}`, () => fire(buildAm4Tempo(to), `tempo ${to}`), sentWords)
+      /* Exactly: the check moves it by one, so "within one" would pass a write that did nothing. */
+      await row('Tempo now', () => am4TempoNow(), (v) => said(v, (b) => (b === to ? `${b} BPM: it worked` : `${b} BPM: it did not take`)))
+      await row(`Tempo back to ${from}`, () => fire(buildAm4Tempo(from), `tempo ${from}`), sentWords)
       last.bpm = from
     },
     'write-bypass': async (row) => {
@@ -1595,22 +1604,26 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       const slug = am4Block(code).slug
       const was = await row(`${slug} on or off`, () => am4BypassNow(code), (v) => said(v, (off) => (off ? 'off' : 'on')))
       if (typeof was !== 'boolean') throw failure(`The AM4 did not say whether the ${slug} is on.`, 504)
-      await row(`${slug} ${was ? 'on' : 'off'}`, () => fire(buildAm4Bypass(code, !was), `the ${slug}`), () => 'sent')
+      await row(`${slug} ${was ? 'on' : 'off'}`, () => fire(buildAm4Bypass(code, !was), `the ${slug}`), sentWords)
       await row(`${slug} now`, () => am4BypassNow(code), (v) => said(v, (off) => (off !== was ? `${off ? 'off' : 'on'}: it worked` : 'it did not change')))
-      await row(`${slug} back ${was ? 'off' : 'on'}`, () => fire(buildAm4Bypass(code, was), `the ${slug}`), () => 'sent')
+      await row(`${slug} back ${was ? 'off' : 'on'}`, () => fire(buildAm4Bypass(code, was), `the ${slug}`), sentWords)
     },
     'write-preset': async (row) => {
       const s = await row('Preset', () => readStructure({ fresh: true }), (v) => (v ? `${am4LocationCode(v.location)} ${v.name}` : 'no answer'))
       if (!s) throw failure('The AM4 did not say which preset it is on.', 504)
       const from = s.location
       const to = from >= AM4.LOCATIONS - 1 ? from - 1 : from + 1
-      await row(`Preset ${am4LocationCode(to)}`, () => fire(buildAm4Preset(to), `preset ${am4LocationCode(to)}`), () => 'sent')
+      await row(`Preset ${am4LocationCode(to)}`, () => fire(buildAm4Preset(to), `preset ${am4LocationCode(to)}`), sentWords)
       await pause(WAIT.landed)
       await row('Where it landed', () => readStructure({ fresh: true }), (v) =>
         v ? (v.location === to ? `${am4LocationCode(to)}: it worked` : `still ${am4LocationCode(v.location)}`) : 'no answer'
       )
-      await row(`Back to ${am4LocationCode(from)}`, () => fire(buildAm4Preset(from), `preset ${am4LocationCode(from)}`), () => 'sent')
+      await row(`Back to ${am4LocationCode(from)}`, () => fire(buildAm4Preset(from), `preset ${am4LocationCode(from)}`), sentWords)
+      /* Loading a preset puts it on its own first scene; "back" means the scene too. */
+      await pause(WAIT.landed)
+      await row(`Back to scene ${s.scene + 1}`, () => fire(buildAm4Scene(s.scene), `scene ${s.scene + 1}`), sentWords)
       structure = null
+      last.scene = s.scene
       notePreset({ number: from }, false)
       /* The unsaved changes are gone: the app reads the preset afresh. */
       emit({ type: 'changed', scope: 'preset' })

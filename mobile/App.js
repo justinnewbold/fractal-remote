@@ -38,6 +38,8 @@ import { clearLinkFault, useRig } from './src/lib/rig'
 import { keepLog } from './src/lib/logKeep'
 import { installCrashCapture } from './src/lib/debugLog'
 import { restoreDemo, setDemo, useDemo } from './src/lib/demo'
+import { restoreBluetooth, useBluetooth } from './src/lib/bluetooth'
+import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
 import { checkOwner, linkAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
@@ -256,6 +258,12 @@ export default function App() {
    * what it was doing.
    */
   const demo = useDemo()
+  /*
+   * And whether the phone talks to the unit itself, through a Bluetooth MIDI
+   * adapter, rather than through the computer. Off unless somebody turned it
+   * on in Settings → Phone & computer → Bluetooth (beta); see lib/bluetooth.
+   */
+  const bluetooth = useBluetooth().on
 
   /*
    * And whether this person has paid to point the app at a real unit.
@@ -472,6 +480,12 @@ export default function App() {
      restart — see watchForUpdates and components/UpdateReady. */
   useEffect(() => watchForUpdates(), [])
 
+  /* Bluetooth (beta), picked up from last time. First, so that a phone left
+     on Bluetooth starts on Bluetooth; one read of the phone's own storage. */
+  useEffect(() => {
+    restoreBluetooth()
+  }, [])
+
   // A session left over from last time is the ordinary case: a phone that
   // signed in once is a remote, and it should say "Connecting…" from its first
   // frame rather than showing a sign-in form for the second it takes to find
@@ -517,6 +531,11 @@ export default function App() {
    *
    * remoteDisconnect() drops the channel, not the account, so the session is
    * still there to rejoin with.
+   *
+   * AND BLUETOOTH (BETA), for the same reason as the demo. Turning it on or
+   * off touches neither `auth` nor `demo`, and the link has to start again
+   * the other way: stopLink lets go of whichever it was using and clears the
+   * rig, and startLink then connects to the adapter or to the computer.
    */
   useEffect(() => {
     if (auth !== 'in') return undefined
@@ -524,7 +543,7 @@ export default function App() {
     return () => {
       stopLink()
     }
-  }, [auth, demo])
+  }, [auth, demo, bluetooth])
 
   /*
    * Setlists and stars, kept in step with the Mac.
@@ -840,9 +859,10 @@ export default function App() {
             {/* A downloaded update, offered as a restart — never taken on its own. */}
             <UpdateReady />
             {/* A computer on another account, said on the stage too and not
-                only in Setup — Waking says it for itself while it is up. */}
+                only in Setup — Waking says it for itself while it is up.
+                Not over Bluetooth, where no computer is being looked for. */}
             <WrongAccount
-              active={auth === 'in' && !demo && !settling && screen === 'stage' && link.link !== 'connected'}
+              active={auth === 'in' && !demo && !settling && screen === 'stage' && link.link !== 'connected' && !bluetooth}
               onSwitch={() => openSettings('link')}
               onTroubleshoot={openConnectFix}
             />
@@ -1030,9 +1050,12 @@ export default function App() {
                  * Only once the Mac is answering either way: every control on
                  * that screen is read off the unit, so with nothing on the other
                  * end it is a screen of empty knobs.
+                 *
+                 * And never over Bluetooth (beta), which carries playing and
+                 * nothing else: no knobs, no models, no saving.
                  */
                 onOpenEdit={
-                  BENCH && (demo || link.link === 'connected') ? () => setScreen('edit') : null
+                  BENCH && (demo || link.link === 'connected') && !overBluetooth(caps) ? () => setScreen('edit') : null
                 }
                 onUnlock={() => setBuying(true)}
               />
@@ -1084,6 +1107,13 @@ const ofError = (s) => s.error
 const WAKING_LONG_MS = 15000
 
 function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
+  /*
+   * OVER BLUETOOTH (BETA) THERE IS NO COMPUTER TO FIND. What is being looked
+   * for is the adapter on the unit — the link names it, so the line below
+   * already says "Finding" it — and everything about the computer and its
+   * account is left out: it would be advice about something not in use.
+   */
+  const bluetooth = useBluetooth().on
   const said =
     link.link === 'connected'
       ? 'Asking your unit what it is\u2026'
@@ -1131,7 +1161,7 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
    * was off. The account server can tell: a computer on this wifi, signed
    * into a different account, is a yes (lib/useComputerElsewhere.js).
    */
-  const elsewhere = useComputerElsewhere(long && link.link !== 'connected')
+  const elsewhere = useComputerElsewhere(long && link.link !== 'connected' && !bluetooth)
   return (
     <View
       accessibilityLiveRegion="polite"
@@ -1139,7 +1169,7 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
     >
       <ActivityIndicator color={color.silkDim} />
       <Text style={{ color: color.silkDim, fontSize: font.body, textAlign: 'center' }}>{said}</Text>
-      {email && link.link !== 'connected' ? (
+      {email && link.link !== 'connected' && !bluetooth ? (
         <Text style={{ color: color.silkFaint, fontSize: font.small, textAlign: 'center' }}>
           {'Make sure you’re connected to your computer using '}
           <Text style={{ color: color.silkDim, fontWeight: '700' }}>{email}</Text>.
@@ -1147,7 +1177,12 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
       ) : null}
       {long && link.link !== 'connected' ? (
         <View style={{ alignSelf: 'stretch', gap: space.md }}>
-          {elsewhere ? (
+          {bluetooth ? (
+            <Note tone="warn">
+              Check the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is
+              connected to it.
+            </Note>
+          ) : elsewhere ? (
             <Note tone="fault">
               {email
                 ? `The computer on this wifi is signed into a different account. This phone is signed in as ${email}. Sign the Fractal app on the computer in with ${email}, or sign this phone into the computer’s account.`
@@ -1160,10 +1195,17 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
             </Note>
           )}
           {elsewhere && onSwitch ? <Press label="Switch account on this phone" onPress={onSwitch} /> : null}
-          <Press label="Look for the computer again" onPress={() => onRetry?.()} />
+          {bluetooth ? (
+            <Press label="Look for the adapter again" onPress={() => onRetry?.()} />
+          ) : (
+            <Press label="Look for the computer again" onPress={() => onRetry?.()} />
+          )}
+          {/* Over Bluetooth the way to the adapter's page; the computer's
+              troubleshooting is about a computer that is not in use. */}
+          {bluetooth && onSwitch ? <Press label="Phone & computer" onPress={onSwitch} /> : null}
           {/* "Open the troubleshooting if it doesn't connect" — the browser's
               connecting screen has the same button. */}
-          {onTroubleshoot ? <Press label="Troubleshooting" onPress={onTroubleshoot} /> : null}
+          {onTroubleshoot && !bluetooth ? <Press label="Troubleshooting" onPress={onTroubleshoot} /> : null}
         </View>
       ) : null}
     </View>

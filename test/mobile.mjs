@@ -38,7 +38,9 @@ const traverse = babelTraverse.default || babelTraverse
  * inside a try. The phone has neither, which is why the try is there.
  */
 const PHONE_GLOBALS = new Set([
-  'AbortController', 'Array', 'Boolean', 'Date', 'Error', 'Event', 'Infinity', 'JSON', 'Map',
+  /* ArrayBuffer, DataView, Float32Array and Uint32Array: the Bluetooth codec's
+     float32 packing (lib/fractal-sysex.mjs). Hermes has all four. */
+  'AbortController', 'Array', 'ArrayBuffer', 'Boolean', 'DataView', 'Float32Array', 'Uint32Array', 'Date', 'Error', 'Event', 'Infinity', 'JSON', 'Map',
   'Math', 'NaN', 'Number', 'Object', 'Promise', 'RegExp', 'Set', 'String', 'Symbol',
   'TextDecoder', 'TextEncoder', 'Uint8Array', 'WeakMap', 'WeakSet',
   'cancelAnimationFrame', 'clearInterval', 'clearTimeout', 'console', 'decodeURIComponent',
@@ -161,6 +163,8 @@ async function rigOnTheBench(over = {}) {
     `,
     'demo.js': "export const isDemo = () => false\nexport const demoDevice = () => null\nexport const demoUnit = () => 'fm3'\n",
     'demoWire.js': "export const demoRequest = () => { throw new Error('no demo on the bench') }\n",
+    /* Bluetooth (beta) off, as it is unless somebody turns it on: every request goes to the pretend computer. */
+    'bleSwitch.js': 'export const bluetoothWire = () => null\nexport const bluetoothOn = () => false\nexport const overBluetooth = () => false\n',
     'debugLog.js': 'export const logDebug = () => {}\n',
     'lineage.js': 'export const withLineage = (x) => x\n',
     'presetNames.js': 'export const adopt = async () => 0\nexport const forget = () => {}\nexport const learn = () => {}\nexport const nameOf = () => undefined\n',
@@ -3631,7 +3635,8 @@ export function run(test) {
 
     const phone = read('mobile/App.js').replace(/\s+/g, ' ')
     const waking = phone.slice(phone.indexOf('function Waking('))
-    assert.match(waking, /useComputerElsewhere\(long && link\.link !== 'connected'\)/, 'the phone never asks while it waits')
+    /* Not over Bluetooth (beta), where no computer is being looked for. */
+    assert.match(waking, /useComputerElsewhere\(long && link\.link !== 'connected' && !bluetooth\)/, 'the phone never asks while it waits')
     assert.match(waking, /This phone is signed in as \$\{email\}/, 'the phone does not say which account it is on')
     assert.match(waking, /Switch account on this phone/, 'the phone gives no way to change account')
     assert.match(read('mobile/src/screens/Settings.js'), /useComputerElsewhere\(link === 'no-answer'\)/, 'Setup never asks')
@@ -3644,7 +3649,7 @@ export function run(test) {
     assert.match(wrong, /Switch account on this phone/, 'the stage gives no way to change account')
     assert.match(
       phone,
-      /<WrongAccount active=\{auth === 'in' && !demo && !settling && screen === 'stage' && link\.link !== 'connected'\}/,
+      /<WrongAccount active=\{auth === 'in' && !demo && !settling && screen === 'stage' && link\.link !== 'connected' && !bluetooth\}/,
       'the stage screen says nothing while the link is down on another account'
     )
 
@@ -5707,7 +5712,7 @@ export function run(test) {
     const flat = app.replace(/\s+/g, ' ')
     assert.match(
       flat,
-      /if \(auth !== 'in'\) return undefined startLink\(\) return \(\) => \{ stopLink\(\) \} \}, \[auth, demo\]\)/,
+      /if \(auth !== 'in'\) return undefined startLink\(\) return \(\) => \{ stopLink\(\) \} \}, \[auth, demo, bluetooth\]\)/,
       'leaving the demo no longer tears the link down, so a simulated rig stays on screen as a real one'
     )
 
@@ -9162,7 +9167,7 @@ export function run(test) {
       'the Back button and the swipe can disagree about where one step up is'
     )
     /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer. */
-    assert.match(set, /const PARENT = \{ offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' \}/, 'a page goes back somewhere it did not come from')
+    assert.match(set, /const PARENT = \{ offline: 'link', bluetooth: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')
