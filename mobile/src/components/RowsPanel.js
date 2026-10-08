@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
 import { clearCell, gridCells, placeBlock, setCable } from '../lib/device'
@@ -23,6 +23,7 @@ import {
   usedRows
 } from '../lib/split-chain'
 import Note from './Note'
+import SideScroll from './SideScroll'
 import Press from './Press'
 
 /* The map's measurements: a cell, the gap a join is drawn in, and the space between rows. */
@@ -141,7 +142,7 @@ export default function RowsPanel({ blocks, caps, palette, onError }) {
       ) : null}
 
       {cells !== null ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: space.lg }}>
+        <SideScroll showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: space.lg }}>
           <View style={{ width: mapWidth, height: mapHeight }}>
             {/* The joins first, so the cells draw over their ends. */}
             {edges.map((e, i) => {
@@ -220,7 +221,7 @@ export default function RowsPanel({ blocks, caps, palette, onError }) {
               )
             })}
           </View>
-        </ScrollView>
+        </SideScroll>
       ) : null}
 
       {cells !== null && !known ? (
