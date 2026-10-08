@@ -671,6 +671,21 @@ export function run(test) {
     }
   })
 
+  test('the Mac, Windows and Linux icons on Connect a computer open the downloads page', () => {
+    /* "Can we make the icons at the bottom work to take them straight to the
+       download page on fractal.newbold.cloud/downloads." */
+    const connect = read('mobile/src/screens/Connect.js').replace(/\s+/g, ' ')
+    for (const name of ['Mac', 'Windows', 'Linux']) {
+      assert.ok(connect.includes(`'${name}'`), `the ${name} icon is not one of the links`)
+    }
+    assert.match(connect, /accessibilityRole="link"/, 'the icons are pictures rather than links')
+    assert.match(connect, /accessibilityLabel=\{`\$\{name\} download page`\}/, 'a screen reader cannot tell what the icons open')
+    assert.match(connect, /Linking\.openURL\(`https:\/\/\$\{DOWNLOADS_URL\}`\)/, 'the icons open somewhere other than the downloads page')
+    assert.ok(!/accessibilityElementsHidden importantForAccessibility="no-hide-descendants"> \{\[/.test(connect), 'the icons are hidden from screen readers while they do something')
+    const { DOWNLOADS_URL } = { DOWNLOADS_URL: read('mobile/src/lib/downloadLink.js').match(/export const DOWNLOADS_URL = '([^']+)'/)?.[1] }
+    assert.equal(DOWNLOADS_URL, 'fractal.newbold.cloud/downloads', 'the downloads address moved')
+  })
+
   test('the phone cannot ask for anything the computer refuses', async () => {
     /*
      * Both ends read the same rule, so this is really a check that the phone
@@ -4652,7 +4667,16 @@ export function run(test) {
     const src = read('shared/ways-in.mjs')
     const screen = read('mobile/src/screens/Connect.js')
     assert.ok(!/WAYS/.test(screen), 'the phone lists the desktop download routes again')
-    assert.ok(!/Linking\.openURL/.test(screen), 'the phone can be sent to a download page again')
+    /*
+     * ONE PAGE IT MAY OPEN, and only that one: his own downloads page, from
+     * the Mac, Windows and Linux icons. "Can we make the icons at the bottom
+     * work to take them straight to the download page on
+     * fractal.newbold.cloud/downloads." What was ruled out was GitHub and the
+     * routes' install steps, and both stay out.
+     */
+    const opens = [...screen.matchAll(/Linking\.openURL\(([^)]*)\)/g)].map((m) => m[1])
+    assert.deepEqual(opens, ['`https://${DOWNLOADS_URL}`'], 'the phone can be sent to a page other than the downloads page')
+    assert.ok(!/github/i.test(screen.replace(/\/\*[\s\S]*?\*\//g, ' ')), 'the phone is sent to GitHub again')
     /* His mockup: the card says it is the desktop app, for which computers,
        and the address sits in it with a copy button. */
     assert.match(screen, /\{CONNECT\.cardBody\}/, 'nothing says which machine the address is for')

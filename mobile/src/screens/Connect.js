@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Image, ScrollView, Text, TextInput, View } from 'react-native'
+import { Image, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { CONNECT, P6 } from '../lib/onboarding'
@@ -12,7 +12,8 @@ import linuxIcon from '../../assets/icons/linux.png'
 import CopyAddress from '../components/CopyAddress'
 import Note from '../components/Note'
 import Press from '../components/Press'
-import { sendDownloadLink } from '../lib/downloadLink'
+import { DOWNLOADS_URL, sendDownloadLink } from '../lib/downloadLink'
+import { tick } from '../lib/feedback'
 
 /**
  * How to get a computer on the other end of this — asked from a phone.
@@ -197,9 +198,34 @@ export default function Connect({ onBack }) {
 
       <View style={{ alignItems: 'center', gap: space.sm, paddingTop: space.md }}>
         <Text style={{ color: color.silkDim, fontSize: font.body }}>{CONNECT.foot}</Text>
-        <View style={{ flexDirection: 'row', gap: space.xl }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          {[appleIcon, windowsIcon, linuxIcon].map((src, i) => (
-            <Image key={i} source={src} style={{ width: 24, height: 24, tintColor: color.silkDim }} />
+        {/*
+          EACH ONE OPENS THE DOWNLOADS PAGE. "Can we make the icons at the
+          bottom work to take them straight to the download page on
+          fractal.newbold.cloud/downloads." The same page for all three: it
+          lists every computer's download, and opened on the computer itself
+          it puts that one first, so a Mac icon and a Windows icon have
+          nowhere different to go. Opened in the phone's own browser, from
+          where it can be shared or sent on.
+        */}
+        <View style={{ flexDirection: 'row', gap: space.lg }}>
+          {[
+            [appleIcon, 'Mac'],
+            [windowsIcon, 'Windows'],
+            [linuxIcon, 'Linux']
+          ].map(([src, name]) => (
+            <Pressable
+              key={name}
+              accessibilityRole="link"
+              accessibilityLabel={`${name} download page`}
+              hitSlop={space.sm}
+              onPress={() => {
+                tick()
+                Linking.openURL(`https://${DOWNLOADS_URL}`).catch(() => {})
+              }}
+              style={({ pressed }) => ({ padding: space.sm, opacity: pressed ? 0.5 : 1 })}
+            >
+              <Image source={src} style={{ width: 28, height: 28, tintColor: color.silkDim }} />
+            </Pressable>
           ))}
         </View>
       </View>
