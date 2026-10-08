@@ -124,14 +124,16 @@ export function run(test) {
      * unlock an owner on the phone and lock them out of the relay — the
      * phone saying yes and the rig saying nothing, with no way to tell why.
      */
-    const { OWNERS, fold } = await import('../shared/owner-unlock.mjs')
+    const { OWNERS } = await import('../shared/owner-unlock.mjs')
     const src = code(read('supabase/functions/entitlement/index.ts'))
-    const copied = JSON.parse((src.match(/const OWNERS = (\[[^\]]*\])/) || [])[1]?.replace(/'/g, '"') || 'null')
+    const copied = JSON.parse((src.match(/const OWNERS(?:: string\[\])? = (\[[^\]]*\])/) || [])[1]?.replace(/'/g, '"') || 'null')
     assert.deepEqual(copied, OWNERS, 'the server and the phone disagree about who is an owner')
-    /* And the fold is the same fold: one hash, reached two ways. */
-    assert.match(src, /h = \(\(h << 5\) \+ h \+ s\.charCodeAt\(i\)\) >>> 0/, 'the server hashes an address differently from the phone')
-    assert.match(src, /padStart\(8, '0'\)/, 'the server pads the hash differently from the phone')
-    assert.equal(fold('  Someone@Example.com '), fold('someone@example.com'), 'the phone’s fold stopped ignoring case and spaces')
+    /*
+     * And by the signed account's id, never by its address. The list was once
+     * an eight-character hash of an email, which a made-up address could match
+     * in a second and so sign itself up into a free, sticky unlock.
+     */
+    assert.ok(!/\bfold\(|5381|OWNERS\.includes\([^)]*email/.test(src), 'the server decides who is an owner from the email address again')
   })
 
   test('only a definite answer is ever written down', () => {
@@ -148,7 +150,7 @@ export function run(test) {
     assert.ok(unknown > 0 && written > 0, 'the handler moved; this check reads it')
     assert.ok(unknown < written, 'the table is written before the unreachable case has returned')
     /* The owner check comes before RevenueCat is asked at all. */
-    assert.ok(handler.indexOf('OWNERS.includes(fold(who.email))') < handler.indexOf('await owns(account)'), 'an owner is asked about as a customer first')
+    assert.ok(handler.indexOf('OWNERS.includes(who.id)') < handler.indexOf('await owns(account)'), 'an owner is asked about as a customer first')
   })
 
   test('the webhook trusts nobody without the secret, and reads nothing into the event', () => {

@@ -1,7 +1,7 @@
 /**
  * THE TOOLS ONLY JUSTIN SEES.
  *
- * "Yes, build that in and only when logged into the justinnewbold@icloud.com
+ * "Yes, build that in and only when logged into the [his iCloud address]
  * account."
  *
  * The first is Give someone access: type a customer's email, see whether they
@@ -20,18 +20,20 @@
  *
  * Hidden from everybody else, but hiding is a convenience and not the lock:
  * supabase/functions/grant-access checks the caller's signed account itself
- * and refuses anybody not on this list. A hash rather than the address, for
- * the reason shared/owner-unlock.mjs gives — no inbox in a public repository.
+ * and refuses anybody not on this list. An account id, not a hash of the
+ * address, for the reason shared/owner-unlock.mjs gives: the eight-character
+ * hash this used to be could be matched by a made-up address in a second, and
+ * that would have opened every customer's details to whoever made it.
  */
-import { fold } from './owner-unlock.mjs'
+import { accountId } from './owner-unlock.mjs'
 
-/** fold('justinnewbold@icloud.com'). Copied into the server function; a test holds them equal. */
-export const ADMINS = ['672e291a']
+/** His account's id. Copied into grant-access and owner-messages; a test holds all three equal. */
+export const ADMINS = ['7dfe6912-e43b-49bf-84e4-b56afbd442b1']
 
-/** Whether the account signed in here is the one the tools are for. */
-export const isAdmin = (email) => {
-  const at = String(email || '').trim()
-  return at.includes('@') && ADMINS.includes(fold(at))
+/** Whether the account signed in here (by its id) is the one the tools are for. */
+export const isAdmin = (id) => {
+  const at = accountId(id)
+  return Boolean(at) && ADMINS.includes(at)
 }
 
 /**

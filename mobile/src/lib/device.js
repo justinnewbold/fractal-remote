@@ -21,7 +21,6 @@ import { firmwareOf } from './firmware'
 import { fixRead } from './param-fixes'
 import { demoDevice } from './demo'
 import { demoRequest } from './demoWire'
-import { bluetoothWire } from './bleSwitch'
 import { logDebug } from './debugLog'
 
 /**
@@ -34,20 +33,10 @@ import { logDebug } from './debugLog'
  *
  * Nothing below this line knows which it is talking to, which is the property
  * worth having: the screens are the same screens.
- *
- * BLUETOOTH (BETA) IS THE SAME SEAM, one line under the demo. With it on, the
- * phone talks to the unit itself through a Bluetooth MIDI adapter, and
- * everything is answered or refused in bleWire.js without a byte going to the
- * computer. It comes before the memo of refusals on purpose: the wire refuses
- * what it cannot do by itself, with nothing sent, so there is nothing to
- * remember. With it off, bluetoothWire() is null and this is exactly the path
- * it always was.
  */
 const remoteRequest = (path, options) => {
   const demo = demoDevice()
   if (demo) return demoRequest(demo, path, options)
-  const ble = bluetoothWire()
-  if (ble) return ble.request(path, options)
   /* What this unit has already refused as unsupported is not asked again. */
   const method = options?.method || 'GET'
   if (refused.known(method, path)) return Promise.reject(rememberedRefusal(method, path))

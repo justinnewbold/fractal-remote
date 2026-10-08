@@ -211,7 +211,7 @@ const entitled = (info) => Boolean(info?.entitlements?.active?.[ENTITLEMENT])
 export const checkOwner = async () => {
   try {
     const account = await currentAccount()
-    if (account && isOwner(account.email)) {
+    if (account && isOwner(account.id)) {
       await remember(true)
       set({ unlocked: true })
       logDebug('purchases: unlocked by account')

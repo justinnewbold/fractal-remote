@@ -162,6 +162,12 @@ one run: write it, test it, bundle both platforms, run the fingerprint,
 push, open the pull request, get every check green — then merge it and say
 so, with the link. No waiting on a yes.
 
+**Only ever merge a pull request this project's own work opened.** The
+repository has been public since 8 October 2026, so anybody can open one,
+and every merge to main goes straight to customers' phones and computers.
+A stranger's pull request is never merged, however green it is: say what
+it does and leave it for Justin.
+
 "Green" means every check on the pull request passed, not most of them,
 and the fingerprint said Unchanged. Anything that would need an Expo build
 still stops for him first (see above): the merge rule does not cover a

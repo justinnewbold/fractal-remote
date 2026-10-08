@@ -1307,9 +1307,6 @@ export function noteEdited() {
   const number = state.preset?.number
   if (!Number.isInteger(number)) return
   const unsaved = pendingFor(number)
-  /* Over Bluetooth (beta) nothing can be saved, so nothing is left unsaved:
-     a Save button there would be one that cannot work. */
-  if (state.capabilities?.via === 'bluetooth') return
   /* Already marked: the record is the same object, and setting it again
      would re-render every screen watching it on every knob of a drag. */
   if (unsaved === state.unsaved) return

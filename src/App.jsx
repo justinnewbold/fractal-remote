@@ -5188,7 +5188,7 @@ export default function App() {
               <SetupRow key="about" title="About" status={FULL} onClick={() => setSetupPage('about')} />
             </div>
 
-            {isAdmin(link.account?.email) ? (
+            {isAdmin(link.account?.id) ? (
               <>
                 <p className="silk-label setup-group">Developer</p>
                 <div className="setup-rows">
@@ -5836,7 +5836,7 @@ export default function App() {
           </div>
         ) : null}
 
-        {setupPage === 'developer' && isAdmin(link.account?.email) ? (
+        {setupPage === 'developer' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
             <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
               ‹ Settings
@@ -5868,7 +5868,7 @@ export default function App() {
           </div>
         ) : null}
 
-        {setupPage === 'access' && isAdmin(link.account?.email) ? (
+        {setupPage === 'access' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
             <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('access'))}>
               {upLabel('access')}
@@ -5878,7 +5878,7 @@ export default function App() {
           </div>
         ) : null}
 
-        {setupPage === 'sales' && isAdmin(link.account?.email) ? (
+        {setupPage === 'sales' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
             <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('sales'))}>
               {upLabel('sales')}
@@ -5936,7 +5936,7 @@ export default function App() {
           </div>
         ) : null}
 
-        {setupPage === 'am4check' && isAdmin(link.account?.email) ? (
+        {setupPage === 'am4check' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
             <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('am4check'))}>
               {upLabel('am4check')}
@@ -5946,7 +5946,7 @@ export default function App() {
           </div>
         ) : null}
 
-        {setupPage === 'usage' && isAdmin(link.account?.email) ? (
+        {setupPage === 'usage' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
             <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('usage'))}>
               {upLabel('usage')}
@@ -5956,7 +5956,7 @@ export default function App() {
           </div>
         ) : null}
 
-        {setupPage === 'live' && isAdmin(link.account?.email) ? (
+        {setupPage === 'live' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
             <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('live'))}>
               {upLabel('live')}
@@ -5966,7 +5966,7 @@ export default function App() {
           </div>
         ) : null}
 
-        {setupPage === 'messages' && isAdmin(link.account?.email) ? (
+        {setupPage === 'messages' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
             <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('messages'))}>
               {upLabel('messages')}
@@ -5976,7 +5976,7 @@ export default function App() {
           </div>
         ) : null}
 
-        {setupPage === 'accounts' && isAdmin(link.account?.email) ? (
+        {setupPage === 'accounts' && isAdmin(link.account?.id) ? (
           <div className="setup-page">
             <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('accounts'))}>
               {upLabel('accounts')}

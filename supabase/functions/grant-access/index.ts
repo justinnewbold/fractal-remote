@@ -4,7 +4,7 @@
  * "If for some reason there's something weird where somebody makes a purchase
  * but it's not registering, do I have an ability to manually activate an
  * account for somebody?" and "Yes, build that in and only when logged into
- * the justinnewbold@icloud.com account."
+ * the [his iCloud address] account."
  *
  * One request, four actions, the first three by the customer's email:
  *
@@ -41,19 +41,14 @@ const ENTITLEMENT = 'full'
 const FOREVER = Date.UTC(2100, 0, 1)
 
 /*
- * The one account that may use this, as a hash — the same djb2 as
- * shared/owner-unlock.mjs, so no inbox sits in a public repository. Copied
- * from shared/admin.mjs, which is the source; test/mobile.mjs fails if the two
- * ever differ.
+ * The one account that may use this, by its id: the id Supabase put in the
+ * token, which nobody can choose. It used to be an eight-character hash of the
+ * address, and a made-up address with the same hash could be found in a second
+ * (shared/owner-unlock.mjs says how this was found). Copied from
+ * shared/admin.mjs, which is the source; test/mobile.mjs fails if the two ever
+ * differ.
  */
-const ADMINS = ['672e291a']
-
-function fold(text: string): string {
-  let h = 5381
-  const s = String(text || '').trim().toLowerCase()
-  for (let i = 0; i < s.length; i += 1) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0
-  return h.toString(16).padStart(8, '0')
-}
+const ADMINS = ['7dfe6912-e43b-49bf-84e4-b56afbd442b1']
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -395,7 +390,7 @@ Deno.serve(async (req: Request) => {
   const internal = Boolean(token && service && token === service)
   const me = token && !internal ? await caller(token) : null
   /* The lock. Anybody else gets the same answer as nobody at all. */
-  if (!internal && (!me || !ADMINS.includes(fold(me.email)))) return json({ ok: false, message: 'Not allowed.' }, 403)
+  if (!internal && (!me || !ADMINS.includes(me.id))) return json({ ok: false, message: 'Not allowed.' }, 403)
 
   let input: { action?: string; email?: string } = {}
   try {

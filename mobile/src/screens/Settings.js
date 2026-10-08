@@ -51,9 +51,6 @@ import { useComputerElsewhere } from '../lib/useComputerElsewhere'
 import { quitEditor } from '../lib/editors'
 import { isAdmin } from '../lib/admin'
 import { watchHow, watchPaired, watchSupported } from '../lib/watchBridge'
-import { bluetoothSupported, useBluetoothOn } from '../lib/bluetooth'
-import { overBluetooth } from '../lib/bleSwitch'
-import BluetoothPage from './Bluetooth'
 import AccessTool from '../components/AccessTool'
 import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
@@ -191,10 +188,7 @@ export default function Settings({
   /* What the Stop the looper row last did, in words, in place of its hint. */
   const allBlocks = useRig(ofAllBlocks)
   /* A unit whose switches can be read — see the Footswitches page. */
-  const caps = useRig(ofCapabilities)
-  const switchesReadable = fcReadable(caps)
-  /* Bluetooth (beta): whether the phone is talking to the unit itself. */
-  const bluetooth = useBluetoothOn()
+  const switchesReadable = fcReadable(useRig(ofCapabilities))
   const [looperSaid, setLooperSaid] = useState(null)
   async function stopTheLooper() {
     const looper = findLooper(allBlocks)
@@ -262,15 +256,6 @@ export default function Settings({
         : link === 'no-answer'
           ? 'Your computer isn’t answering'
           : 'Not connected'
-  /* Over Bluetooth (beta) the row is about the adapter on the unit, not a computer. */
-  const bluetoothWord =
-    link === 'connected'
-      ? unitState === 'missing' || unitState === 'silent'
-        ? `Bluetooth · ${deviceName || 'unit'} not answering`
-        : `${deviceName || 'Unit'} · Bluetooth`
-      : link === 'joining'
-        ? 'Bluetooth · looking for the adapter'
-        : 'Bluetooth · not connected'
 
   /*
    * TWO WAYS OUT OF EVERY PAGE, and they go to different places on purpose.
@@ -300,7 +285,7 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', bluetooth: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' }
+  const PARENT = { offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' }
   const UP_LABEL = { link: '‹ Phone & computer', developer: '‹ Developer' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
@@ -389,15 +374,13 @@ export default function Settings({
               status={
                 demo
                   ? `Demo — simulated ${DEMO_UNITS.find((u) => u.key === unit)?.name || 'unit'}`
-                  : bluetooth
-                    ? bluetoothWord
-                    : link !== 'connected'
-                      ? linkWord
-                      : unitState === 'missing'
-                        ? 'Computer connected · no unit'
-                        : unitState === 'silent'
-                          ? `Computer connected · ${deviceName || 'unit'} not answering`
-                          : `${deviceName || 'Unit'} · connected`
+                  : link !== 'connected'
+                    ? linkWord
+                    : unitState === 'missing'
+                      ? 'Computer connected · no unit'
+                      : unitState === 'silent'
+                        ? `Computer connected · ${deviceName || 'unit'} not answering`
+                        : `${deviceName || 'Unit'} · connected`
               }
               onPress={() => setPage('link')}
             />
@@ -412,8 +395,7 @@ export default function Settings({
             {(link === 'connected' || demo) && switchesReadable ? (
               <SetupRow title="Footswitches" status="What each switch does" onPress={() => setPage('footswitches')} />
             ) : null}
-            {/* Not over Bluetooth (beta): the looper is left off its chain. */}
-            {(link === 'connected' || demo) && !overBluetooth(caps) ? (
+            {link === 'connected' || demo ? (
               <SetupRow
                 title="Stop the looper"
                 status={looperSaid || 'If a loop keeps playing'}
@@ -468,7 +450,7 @@ export default function Settings({
           {/* Justin's own tools, on his account only — see lib/admin.js. One
               row for all three: "we should probably just make that into one
               menu called developer". */}
-          {isAdmin(account?.email) ? (
+          {isAdmin(account?.id) ? (
             <Group title="Developer">
               <SetupRow title="Developer" status="Access, sales, accounts, messages, what's live" onPress={() => setPage('developer')} />
             </Group>
@@ -634,7 +616,7 @@ export default function Settings({
       ) : null}
 
       {/* ------------------------------------------------------ developer */}
-      {page === 'developer' && isAdmin(account?.email) ? (
+      {page === 'developer' && isAdmin(account?.id) ? (
         <>
           {head('Developer', 'back')}
           <View style={{ gap: 0 }}>
@@ -717,13 +699,6 @@ export default function Settings({
       {page === 'link' ? (
         <>
           {head('Phone & computer', 'back')}
-          {/* Said first, because everything under it is about a computer
-              this phone is not using while it is on. */}
-          {bluetooth && !demo ? (
-            <Note tone="warn">
-              Bluetooth (beta) is on. This phone talks to the unit directly, not through the computer.
-            </Note>
-          ) : null}
 
           <View style={{ gap: space.md }}>
             <Section>The link</Section>
@@ -956,22 +931,6 @@ export default function Settings({
             ) : null}
 
             {/*
-              BLUETOOTH (BETA): the phone straight to the unit, through a
-              Bluetooth MIDI adapter on its MIDI In and Out, with no computer.
-              Behind the unlock like the card above, and only in a build that
-              carries the Bluetooth code on a phone that can do it: anybody
-              else never sees it.
-            */}
-            {mayDrive(purchase) && bluetoothSupported() ? (
-              <TipCard
-                icon={sendIcon}
-                label="BLUETOOTH (BETA)"
-                body="Play without a computer, through a Bluetooth MIDI adapter on the unit."
-                onPress={() => setPage('bluetooth')}
-              />
-            ) : null}
-
-            {/*
               Only while there is something to try. "The Try now button is
               there and if you click it it does — I'm not sure why it's even
               there if we're already all connected." It looks for the computer
@@ -1013,15 +972,6 @@ export default function Settings({
           {/* Who this is signed in as moved to its own Account page, off the
               top of Settings: "change password" under "Phone & computer" was
               somewhere nobody would look. */}
-        </>
-      ) : null}
-
-      {/* ------------------------------------------------------- bluetooth */}
-      {/* The page, behind the same gate as its card on Phone & computer. */}
-      {page === 'bluetooth' && mayDrive(purchase) && bluetoothSupported() ? (
-        <>
-          {head('Bluetooth (beta)', 'back')}
-          <BluetoothPage purchase={purchase} />
         </>
       ) : null}
 
@@ -1073,7 +1023,7 @@ export default function Settings({
       ) : null}
 
       {/* ---------------------------------------------------------- access */}
-      {page === 'access' && isAdmin(account?.email) ? (
+      {page === 'access' && isAdmin(account?.id) ? (
         <>
           {head('Give someone access', 'back')}
           <AccessTool />
@@ -1081,7 +1031,7 @@ export default function Settings({
       ) : null}
 
       {/* ----------------------------------------------------------- sales */}
-      {page === 'sales' && isAdmin(account?.email) ? (
+      {page === 'sales' && isAdmin(account?.id) ? (
         <>
           {head('Sales at a glance', 'back')}
           <SalesTool />
@@ -1089,7 +1039,7 @@ export default function Settings({
       ) : null}
 
       {/* ----------------------------------------------------------- usage */}
-      {page === 'usage' && isAdmin(account?.email) ? (
+      {page === 'usage' && isAdmin(account?.id) ? (
         <>
           {head('How many people', 'back')}
           <UsageTool />
@@ -1097,7 +1047,7 @@ export default function Settings({
       ) : null}
 
       {/* ------------------------------------------------------------ live */}
-      {page === 'live' && isAdmin(account?.email) ? (
+      {page === 'live' && isAdmin(account?.id) ? (
         <>
           {head("What's live", 'back')}
           <LiveTool />
@@ -1105,7 +1055,7 @@ export default function Settings({
       ) : null}
 
       {/* -------------------------------------------------------- messages */}
-      {page === 'messages' && isAdmin(account?.email) ? (
+      {page === 'messages' && isAdmin(account?.id) ? (
         <>
           {head('Messages from users', 'back')}
           <MessagesTool />
@@ -1113,7 +1063,7 @@ export default function Settings({
       ) : null}
 
       {/* -------------------------------------------------------- accounts */}
-      {page === 'accounts' && isAdmin(account?.email) ? (
+      {page === 'accounts' && isAdmin(account?.id) ? (
         <>
           {head('Everyone with an account', 'back')}
           <AccountsTool />

@@ -3,7 +3,7 @@
     "name": "Fractal Remote",
     "slug": "fractal-remote",
     "owner": "justinnewbold",
-    "version": "1.87.0",
+    "version": "1.86.91",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "fractalremote",
@@ -26,8 +26,7 @@
       "supportsTablet": true,
       "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "NSBluetoothAlwaysUsageDescription": "Fractal Remote uses Bluetooth to talk to your Fractal unit through a Bluetooth MIDI adapter."
+        "ITSAppUsesNonExemptEncryption": false
       },
       "appleTeamId": "3KA9RC7YE6",
       "privacyManifests": {
