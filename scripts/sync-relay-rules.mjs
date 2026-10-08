@@ -242,7 +242,7 @@ export const FILES = [
    * shared/owner-unlock.mjs directly and nothing in the suite bundles the
    * phone. `npx expo export` is the check that catches it.
    *
-   * There is nothing secret in the file. It carries folded hashes, never an
+   * There is nothing secret in the file. It carries account ids, never an
    * address, so the generated copy is as public as the source.
    */
   { source: '../shared/owner-unlock.mjs', target: '../mobile/src/lib/owner-unlock.js' },

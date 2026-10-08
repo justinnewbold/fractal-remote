@@ -222,18 +222,9 @@ index 721f1f4..6e1ebf4 100644
        ) : null}
      </View>
 diff --git a/mobile/app.json b/mobile/app.json
-index f62bd91..b76b9b0 100644
+index f62bd91..3708afe 100644
 --- a/mobile/app.json
 +++ b/mobile/app.json
-@@ -3,7 +3,7 @@
-     "name": "Fractal Remote",
-     "slug": "fractal-remote",
-     "owner": "justinnewbold",
--    "version": "1.86.90",
-+    "version": "1.87.0",
-     "orientation": "portrait",
-     "icon": "./assets/icon.png",
-     "scheme": "fractalremote",
 @@ -26,7 +26,8 @@
        "supportsTablet": true,
        "buildNumber": "1",
@@ -2136,12 +2127,52 @@ index eebdd45..e7910ac 100644
      "fflate": "^0.8.3",
      "react": "19.2.3",
      "react-native": "0.86.3",
+diff --git a/mobile/src/lib/bleAdapters.js b/mobile/src/lib/bleAdapters.js
+new file mode 100644
+index 0000000..456dc32
+--- /dev/null
++++ b/mobile/src/lib/bleAdapters.js
+@@ -0,0 +1,34 @@
++/**
++ * WHICH OF THE PORTS IS THE ADAPTER. Pure, so it is tested without a phone;
++ * lib/bluetooth uses it on the list the native module gives.
++ */
++
++/*
++ * NOT AN ADAPTER: Apple's own Wi-Fi MIDI. Every iPhone lists "Network Session
++ * 1" as a two-way port, and on the first AM4 test it was offered first,
++ * picked, took every message and answered none — "Adapter connected, but the
++ * AM4 isn't answering", with the real adapter sitting just below it. Told by
++ * its driver, Apple's network (RTP) one, and by its name in case the driver
++ * ever reads differently.
++ */
++export const isNetworkSession = (d) => /RTP/i.test(String(d?.driver || '')) || /^network session\b/i.test(String(d?.name || ''))
++
++/** Something the page may offer as the adapter. */
++export const isAdapter = (d) => !!d && typeof d.id === 'string' && !isNetworkSession(d)
++
++/**
++ * THE ONE TO USE, when there is no question about it, or null.
++ *
++ * "Setting up the Bluetooth is kind of weird. A lot of different buttons to
++ * press." So the phone picks the adapter itself when only one could be meant:
++ * the one just connected in Apple's screen, or else the only one there is.
++ * Two or more, and nothing new among them, is a real question, and the page
++ * asks it with a list.
++ */
++export function pickAdapter(list, fresh = new Set()) {
++  const here = (Array.isArray(list) ? list : []).filter((d) => isAdapter(d) && !d.offline)
++  const just = here.filter((d) => fresh.has(d.id))
++  if (just.length === 1) return just[0]
++  if (!just.length && here.length === 1) return here[0]
++  return null
++}
 diff --git a/mobile/src/lib/bleLink.js b/mobile/src/lib/bleLink.js
 new file mode 100644
-index 0000000..59027c7
+index 0000000..31a5c26
 --- /dev/null
 +++ b/mobile/src/lib/bleLink.js
-@@ -0,0 +1,365 @@
+@@ -0,0 +1,382 @@
 +import { AppState, Platform } from 'react-native'
 +
 +import { bluetoothOn, setSwitch } from './bleSwitch'
@@ -2348,6 +2379,23 @@ index 0000000..59027c7
 +  noteBluetooth({ phase: 'connected', connectedTo: name, trouble: null, answeredAs: null })
 +  tell?.({ link: 'connected', macName: name, hostVersion: null })
 +  say(`connected to ${name}; asking the ${unitName(s.unit)} what it is`)
++  /*
++   * ONE QUESTION TO WAKE THE LINK, ITS ANSWER NOT USED. On the AM4 test the
++   * first question after connecting went unanswered, and the same question a
++   * moment later was answered in 132 ms, as was everything after it. So the
++   * first question on a new link is asked here and thrown away, and the real
++   * ones start after it: the page no longer says "isn't answering" about a
++   * unit that is. It is the unit's own probe, so on the AM4 it is a frame on
++   * the allowlist; one extra read on connecting is all it costs. Why the
++   * first is lost is not known yet — the debug log of the next test says.
++   */
++  try {
++    const woke = await made.request('/device/detect')
++    say(woke?.connected ? 'the first question was answered' : 'no answer to the first question; asking again')
++  } catch {
++    say('no answer to the first question; asking again')
++  }
++  if (wire !== made || !running) return
 +  try {
 +    await refreshAll()
 +  } catch {
@@ -4447,10 +4495,10 @@ index 0000000..4c4e72e
 +}
 diff --git a/mobile/src/lib/bluetooth.js b/mobile/src/lib/bluetooth.js
 new file mode 100644
-index 0000000..9cc0878
+index 0000000..1f327bc
 --- /dev/null
 +++ b/mobile/src/lib/bluetooth.js
-@@ -0,0 +1,498 @@
+@@ -0,0 +1,512 @@
 +import { useSyncExternalStore } from 'react'
 +import { Platform } from 'react-native'
 +import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -4460,6 +4508,7 @@ index 0000000..9cc0878
 +import { createJoiner } from './fractal-sysex.mjs'
 +import { blockCatalog } from './blockCatalog'
 +import { setSwitch } from './bleSwitch'
++import { isAdapter, pickAdapter } from './bleAdapters'
 +import { logDebug } from './debugLog'
 +
 +/**
@@ -4627,11 +4676,12 @@ index 0000000..9cc0878
 +export function adapterDevices() {
 +  try {
 +    const list = ble()?.devices?.()
-+    return Array.isArray(list) ? list.filter((d) => d && typeof d.id === 'string') : []
++    return Array.isArray(list) ? list.filter(isAdapter) : []
 +  } catch {
 +    return []
 +  }
 +}
++
 +
 +/** Connect to one adapter by its id. True when the module says it took. */
 +export async function connectAdapter(id) {
@@ -4800,7 +4850,7 @@ index 0000000..9cc0878
 +
 +/* Newly found first, so the one that was just paired is the one at the top. */
 +function showList(list) {
-+  const rows = (Array.isArray(list) ? list : []).filter((d) => d && typeof d.id === 'string')
++  const rows = (Array.isArray(list) ? list : []).filter(isAdapter)
 +  rows.sort((a, b) => Number(fresh.has(b.id)) - Number(fresh.has(a.id)))
 +  noteBluetooth({ devices: rows.map((d) => ({ ...d, fresh: fresh.has(d.id) })) })
 +}
@@ -4817,6 +4867,10 @@ index 0000000..9cc0878
 + * one. What is listed after Done that was not there before is the adapter
 + * just paired, and goes first. Android: ask for "Nearby devices", then scan
 + * for ten seconds; what is found arrives while it looks.
++ *
++ * When only one adapter could be meant it is chosen here (pickAdapter), and
++ * on an iPhone the promise resolves to it; otherwise to nothing, and the list
++ * on the page asks.
 + */
 +export async function findAdapters() {
 +  const mod = ble()
@@ -4841,7 +4895,10 @@ index 0000000..9cc0878
 +     */
 +    logDebug('ble', 'ports after Apple’s Bluetooth screen', list.map((d) => `${d.name || '?'} [${d.driver || 'no driver'}${d.offline ? ', offline' : ''}${fresh.has(d.id) ? ', new' : ''}]`).join('; ') || 'none')
 +    showList(list)
-+    return
++    /* The one just connected, or the only one: chosen without asking. */
++    const pick = pickAdapter(list, fresh)
++    if (pick) chooseAdapter(pick)
++    return pick
 +  }
 +
 +  let granted = false
@@ -4865,7 +4922,12 @@ index 0000000..9cc0878
 +  clearTimeout(lookTimer)
 +  noteBluetooth({ looking: true })
 +  showList(adapterDevices())
-+  lookTimer = setTimeout(() => noteBluetooth({ looking: false }), SCAN_SECONDS * 1000 + 500)
++  lookTimer = setTimeout(() => {
++    noteBluetooth({ looking: false })
++    /* One adapter found and none chosen yet: that is the one. Two is a question, and the list asks it. */
++    const pick = saved.adapter ? null : pickAdapter(now.devices)
++    if (pick) chooseAdapter(pick)
++  }, SCAN_SECONDS * 1000 + 500)
 +}
 +
 +/* ------------------------------------------------------------------ */
@@ -5940,11 +6002,11 @@ index e8b5d9a..2a00aa8 100644
    if (unsaved === state.unsaved) return
 diff --git a/mobile/src/screens/Bluetooth.js b/mobile/src/screens/Bluetooth.js
 new file mode 100644
-index 0000000..7e55e24
+index 0000000..f890f8b
 --- /dev/null
 +++ b/mobile/src/screens/Bluetooth.js
-@@ -0,0 +1,414 @@
-+import { useState } from 'react'
+@@ -0,0 +1,454 @@
++import { useEffect, useState } from 'react'
 +import { Platform, Text, View } from 'react-native'
 +import * as Clipboard from 'expo-clipboard'
 +
@@ -5952,6 +6014,7 @@ index 0000000..7e55e24
 +import { APP_VERSION } from '../lib/version'
 +import { BLE_UNITS, WAYS } from '../lib/bleWire'
 +import {
++  adapterDevices,
 +  checkSteps,
 +  chooseAdapter,
 +  findAdapters,
@@ -5964,7 +6027,6 @@ index 0000000..7e55e24
 +  unitName,
 +  useBluetooth
 +} from '../lib/bluetooth'
-+import { holdBluetooth, pokeBluetooth } from '../lib/bleLink'
 +import { useRig } from '../lib/rig'
 +import { mayDrive } from '../lib/unlock-rule'
 +import Note from '../components/Note'
@@ -5974,10 +6036,21 @@ index 0000000..7e55e24
 + * Settings → Phone & computer → Bluetooth (beta).
 + *
 + * The phone talking straight to the unit, through a Bluetooth MIDI adapter
-+ * plugged into the unit's MIDI In and Out, with no computer anywhere. Top to
-+ * bottom it is the order somebody sets it up in: what it is and what it
-+ * cannot do, the switch, which unit, which adapter, whether it is working,
-+ * and then the check, which is for finding out what a real unit does.
++ * plugged into the unit's MIDI In and Out, with no computer anywhere.
++ *
++ * TWO STEPS AND ONE BUTTON. "Setting up the Bluetooth is kind of weird. A lot
++ * of different buttons to press. Maybe we can make it a little easier. It was
++ * very confusing for me, but I did figure it out finally." The first version
++ * had a switch, a unit, a Find button, a list with a Use this one in every
++ * row, Connect, Disconnect and Forget, and they had to be pressed in the
++ * right order. Now: 1, which unit; 2, Connect. Connect opens Apple's
++ * Bluetooth screen (or looks, on Android), picks the adapter itself when only
++ * one could be meant (lib/bluetooth's pickAdapter), and turns Bluetooth on.
++ * The list only appears when there is a real choice to make. Once it is on,
++ * the one button is Stop, which hands the phone back to the computer.
++ *
++ * What it cannot do comes after, and the check, for finding out what a real
++ * unit does, is folded away under Testing tools.
 + *
 + * THE CHECK IS FOR TESTING, and says so. This build takes no updates over
 + * the air, so where a unit might ignore a command both ways of sending it
@@ -6029,13 +6102,13 @@ index 0000000..7e55e24
 +  if (!b.on) return { line: 'Off', tone: 'dim' }
 +  if (b.phase === 'locked') return { line: 'Unlock the app to connect to your unit', tone: 'fault' }
 +  if (!b.unit || b.phase === 'no-unit') return { line: 'Pick your unit', tone: 'dim' }
-+  if (!b.adapter || b.phase === 'no-adapter') return { line: 'Find the adapter, above', tone: 'dim' }
++  if (!b.adapter || b.phase === 'no-adapter') return { line: 'No adapter yet. Tap Stop, then Connect.', tone: 'dim' }
 +  if (b.phase === 'held') return { line: 'Disconnected', tone: 'dim' }
 +  if (b.phase === 'connected') {
 +    /* The wrong unit picked: the phone has stopped sending to it, and this is the way out. */
 +    if (b.answeredAs) {
 +      return {
-+        line: `An ${b.answeredAs} answered, not the ${name}. Turn Use Bluetooth off, pick ${b.answeredAs} under Your unit, then turn it back on.`,
++        line: `An ${b.answeredAs} answered, not the ${name}. Tap Stop, pick ${b.answeredAs} in step 1, then tap Connect.`,
 +        tone: 'fault'
 +      }
 +    }
@@ -6099,6 +6172,50 @@ index 0000000..7e55e24
 +    }
 +  }
 +
++  /*
++   * CONNECT. With an adapter from last time, that is all it does: Bluetooth
++   * on. Without one it goes and finds it, and Bluetooth comes on the moment
++   * one is chosen — by the phone when only one could be meant, or by a tap
++   * in the list when there is a real choice. `wanted` is that promise, kept
++   * until an adapter arrives.
++   */
++  const [wanted, setWanted] = useState(false)
++  /* Apple's screen closed with no adapter connected in it. */
++  const [missed, setMissed] = useState(false)
++  useEffect(() => {
++    if (!wanted || !b.adapter || !b.unit || b.on) return
++    setWanted(false)
++    if (mayDrive(purchase)) setBluetooth(true)
++  }, [wanted, b.adapter?.id, b.unit, b.on, purchase])
++
++  const canStart = !!b.unit && mayDrive(purchase)
++  const find = async () => {
++    setMissed(false)
++    setWanted(true)
++    const pick = await findAdapters()
++    if (ios && !pick && !adapterDevices().some((d) => !d.offline)) setMissed(true)
++  }
++  const start = () => {
++    if (!canStart) return
++    if (b.adapter) setBluetooth(true)
++    else find()
++  }
++  /* Another adapter: forget this one, then the same as the first time. */
++  const another = () => {
++    if (!canStart) return
++    forgetAdapter()
++    find()
++  }
++  /* A row tapped in the list: that adapter, and on. */
++  const choose = (d) => {
++    chooseAdapter(d)
++    setWanted(true)
++  }
++
++  /* The list is only for a real choice: no adapter chosen yet, and some to choose from. */
++  const showList = !b.on && !b.adapter && b.devices.length > 0
++  const [tools, setTools] = useState(false)
++
 +  return (
 +    <View style={{ gap: space.xl }}>
 +      <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>
@@ -6107,37 +6224,14 @@ index 0000000..7e55e24
 +        saving, and the computer isn’t used.
 +      </Text>
 +
-+      <View style={{ gap: space.sm }}>
-+        <Heading>What’s different from USB</Heading>
-+        {DIFFERENT.map((line) => (
-+          <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
-+            <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22 }}>•</Text>
-+            <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
-+          </View>
-+        ))}
-+      </View>
-+
-+      {/* The switch. Not before a unit is picked: see lib/bluetooth's SAVED. */}
-+      <View style={{ gap: space.sm }}>
-+        <Press
-+          label={b.on ? 'Use Bluetooth: on' : 'Use Bluetooth: off'}
-+          tone="live"
-+          on={b.on}
-+          disabled={!b.on && (!b.unit || !mayDrive(purchase))}
-+          onPress={() => setBluetooth(!b.on)}
-+        />
-+        {!b.unit ? <Hint>Pick your unit first, just below.</Hint> : null}
-+        {b.on ? <Hint>While this is on, the phone does not use the computer at all.</Hint> : null}
-+      </View>
-+
 +      {/*
-+        Not while it is on. A tap here while connected would send the new
-+        unit's messages straight away to whatever is on the adapter, and one
-+        mis-tap is enough; the AM4 has frozen on messages it did not expect.
-+        With the switch off nothing is connected to send to.
++        STEP 1. Not while it is on: a tap here while connected would send the
++        new unit's messages straight away to whatever is on the adapter, and
++        one mis-tap is enough; the AM4 has frozen on messages it did not
++        expect. With it off nothing is connected to send to.
 +      */}
 +      <View style={{ gap: space.sm }}>
-+        <Heading>Your unit</Heading>
++        <Heading>1 · Which unit is the adapter plugged into?</Heading>
 +        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
 +          {BLE_UNITS.map((u) => (
 +            <Press
@@ -6152,81 +6246,89 @@ index 0000000..7e55e24
 +            />
 +          ))}
 +        </View>
-+        <Hint>The one the adapter is plugged into. The phone only ever talks to the unit picked here.</Hint>
-+        {b.on ? <Hint>To change the unit, turn Use Bluetooth off first.</Hint> : null}
++        {b.on ? <Hint>To change the unit, tap Stop first.</Hint> : null}
 +      </View>
 +
++      {/* STEP 2. One button: Connect, or Stop once it is on. */}
 +      <View style={{ gap: space.sm }}>
-+        <Heading>Adapter</Heading>
-+        {b.adapter ? (
++        <Heading>2 · Connect</Heading>
++        {b.on ? (
 +          <View style={{ gap: space.sm }}>
-+            <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '700' }}>
-+              {b.connectedTo || b.adapter.name || 'The adapter you picked'}
++            <Text accessibilityLiveRegion="polite" style={{ color: TONES[said.tone](), fontSize: font.body + 1, lineHeight: 24 }}>
++              {said.line}
 +            </Text>
-+            {b.on && b.phase === 'held' ? <Press label="Connect" onPress={pokeBluetooth} /> : null}
-+            {b.on && (b.phase === 'connected' || b.phase === 'connecting') ? (
-+              <Press label="Disconnect" onPress={holdBluetooth} />
++            {b.on && b.phase === 'connecting' ? (
++              <Hint>
++                {ios
++                  ? 'If this stays here, tap Stop, then Connect, and connect the adapter again in Apple’s screen.'
++                  : 'If this stays here, check the phone’s Bluetooth is on, and that the adapter is plugged in and lit.'}
++              </Hint>
 +            ) : null}
-+            <Press label="Forget this adapter" onPress={forgetAdapter} />
++            <Press label="Stop using Bluetooth" onPress={() => setBluetooth(false)} />
++            <Hint>While Bluetooth is on, the phone does not use the computer at all. Stop goes back to the computer.</Hint>
++          </View>
++        ) : (
++          <View style={{ gap: space.sm }}>
++            <Press
++              label={b.looking ? 'Looking…' : b.adapter ? `Connect to ${b.adapter.name || 'the adapter'}` : 'Connect'}
++              tone="live"
++              disabled={!canStart || b.looking}
++              onPress={start}
++            />
++            <Hint>
++              {!b.unit
++                ? 'Pick your unit first, just above.'
++                : b.adapter
++                  ? 'Uses the adapter from last time.'
++                  : ios
++                    ? 'Apple’s Bluetooth screen opens. Tap your adapter, wait until it says Connected, then tap Done. The phone does the rest.'
++                    : 'The phone looks for the adapter for ten seconds, then connects to it.'}
++            </Hint>
++            {b.adapter ? <Press label="Use a different adapter" height={44} disabled={!canStart || b.looking} onPress={another} /> : null}
++          </View>
++        )}
++        {!b.on && b.trouble ? <Text style={{ color: color.fault, fontSize: font.body, lineHeight: 22 }}>{said.line}</Text> : null}
++        {!b.on && missed && !b.adapter ? (
++          <Text style={{ color: color.fault, fontSize: font.body, lineHeight: 22 }}>
++            No adapter was connected. Tap Connect again, and in Apple’s screen tap your adapter and wait for Connected before Done.
++          </Text>
++        ) : null}
++        {b.said ? <Note tone="warn">{b.said}</Note> : null}
++
++        {showList ? (
++          <View style={{ gap: space.sm }}>
++            <Hint>{b.looking ? 'Found so far. Tap yours:' : 'More than one is here. Tap yours:'}</Hint>
++            {b.devices.map((d) => {
++              const detail = ios ? (d.offline ? 'not connected to this phone' : d.fresh ? 'just connected' : '') : signal(d.rssi)
++              return (
++                <Press
++                  key={d.id}
++                  label={`${d.name || 'An adapter with no name'}${detail ? ` · ${detail}` : ''}`}
++                  height={52}
++                  disabled={!canStart}
++                  onPress={() => choose(d)}
++                />
++              )
++            })}
 +          </View>
 +        ) : null}
-+        <Press
-+          label={ios ? 'Find the adapter' : b.looking ? 'Looking…' : 'Look for adapters'}
-+          disabled={b.looking}
-+          onPress={findAdapters}
-+        />
-+        <Hint>
-+          {ios
-+            ? 'Opens Apple’s Bluetooth screen. Connect the adapter there, press Done, then pick it below.'
-+            : 'Looks for ten seconds. Pick the adapter when it shows up.'}
-+        </Hint>
-+        {b.devices.map((d) => {
-+          const chosen = d.id === b.adapter?.id
-+          const detail = ios ? (d.offline ? 'not connected to this phone' : d.fresh ? 'just connected' : '') : signal(d.rssi)
-+          return (
-+            <View
-+              key={d.id}
-+              style={{
-+                gap: space.sm,
-+                padding: space.md,
-+                borderRadius: radius.md,
-+                borderWidth: 1,
-+                borderColor: color.rule,
-+                backgroundColor: color.panel
-+              }}
-+            >
-+              <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '700' }}>{d.name || 'An adapter with no name'}</Text>
-+              {detail ? <Text style={{ color: color.silkDim, fontSize: font.small }}>{detail}</Text> : null}
-+              {chosen ? (
-+                <Text style={{ color: color.ok, fontSize: font.small }}>This is the one in use.</Text>
-+              ) : (
-+                <Press label="Use this one" height={44} onPress={() => chooseAdapter(d)} />
-+              )}
-+            </View>
-+          )
-+        })}
 +      </View>
 +
 +      <View style={{ gap: space.sm }}>
-+        <Heading>Status</Heading>
-+        <Text accessibilityLiveRegion="polite" style={{ color: TONES[said.tone](), fontSize: font.body + 1, lineHeight: 24 }}>
-+          {said.line}
-+        </Text>
-+        {b.said ? <Note tone="warn">{b.said}</Note> : null}
-+        {/* An iPhone forgets an adapter it has not used for a while, and only
-+            Apple's screen can connect it again: the app is not allowed to.
-+            Android cannot tell the phone's Bluetooth being off from the
-+            adapter being out of range, so it names both. */}
-+        {b.on && b.phase === 'connecting' ? (
-+          <Hint>
-+            {ios
-+              ? 'If this stays here, press Find the adapter and connect it again in Apple’s screen.'
-+              : 'If this stays here, check the phone’s Bluetooth is on, and that the adapter is plugged in and lit.'}
-+          </Hint>
-+        ) : null}
++        <Heading>What’s different from USB</Heading>
++        {DIFFERENT.map((line) => (
++          <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
++            <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22 }}>•</Text>
++            <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
++          </View>
++        ))}
 +      </View>
 +
++      {/* For finding out what a real unit does: out of the way until asked for. */}
 +      {b.unit ? (
++        <Press label={tools ? 'Hide testing tools' : 'Testing tools'} height={44} onPress={() => setTools(!tools)} />
++      ) : null}
++      {b.unit && tools ? (
 +        <View style={{ gap: space.md }}>
 +          <Heading>Check</Heading>
 +          <Hint>
@@ -6497,10 +6599,10 @@ index c4b62a6..928374c 100644
          <>
 diff --git a/test/bluetooth.mjs b/test/bluetooth.mjs
 new file mode 100644
-index 0000000..e157c26
+index 0000000..152b121
 --- /dev/null
 +++ b/test/bluetooth.mjs
-@@ -0,0 +1,2172 @@
+@@ -0,0 +1,2231 @@
 +/**
 + * BLUETOOTH (BETA): the phone talking to the unit with no computer between.
 + *
@@ -8586,11 +8688,12 @@ index 0000000..e157c26
 +    assert.deepEqual(BLE_UNITS.map((u) => u.name), ['AM4', 'FM3', 'FM9', 'Axe-Fx III'])
 +    const page = flat('mobile/src/screens/Bluetooth.js')
 +    assert.match(page, /\{BLE_UNITS\.map\(\(u\) => \( <Press key=\{u\.key\} label=\{u\.name\} tone="signal" on=\{u\.key === b\.unit\}/)
-+    /* The switch cannot be turned on before a unit is picked. */
-+    assert.match(page, /disabled=\{!b\.on && \(!b\.unit \|\| !mayDrive\(purchase\)\)\}/)
++    /* Connect cannot be pressed before a unit is picked, nor by somebody who has not unlocked the app. */
++    assert.match(page, /const canStart = !!b\.unit && mayDrive\(purchase\)/)
++    assert.match(page, /tone="live" disabled=\{!canStart \|\| b\.looking\} onPress=\{start\}/, 'Connect can be pressed with no unit picked')
 +    /* And the unit cannot be changed while it is on: one mis-tap would send another unit's messages to the one on the adapter. */
 +    assert.match(page, /on=\{u\.key === b\.unit\} disabled=\{b\.on\}/, 'the unit can be changed while connected')
-+    assert.match(page, /\{b\.on \? <Hint>To change the unit, turn Use Bluetooth off first\.<\/Hint> : null\}/)
++    assert.match(page, /\{b\.on \? <Hint>To change the unit, tap Stop first\.<\/Hint> : null\}/)
 +    /* What stopped the search shows with the switch off too; and the wrong unit answering says what to do. */
 +    const status = page.slice(page.indexOf('function status('), page.indexOf('const TONES'))
 +    assert.ok(status.indexOf("b.trouble === 'bluetooth-off'") < status.indexOf("if (!b.on) return { line: 'Off'"), 'the switch being off hides why the search failed')
@@ -8609,7 +8712,8 @@ index 0000000..e157c26
 +    ]) {
 +      assert.ok(page.includes(`'${line}'`), `the page does not say: ${line}`)
 +    }
-+    assert.ok(page.indexOf('What’s different from USB') < page.indexOf('Use Bluetooth: on'), 'the list is not under the intro')
++    /* After the two steps now: "a lot of different buttons to press" put setting it up first. */
++    assert.ok(page.indexOf('2 · Connect') < page.indexOf('What’s different from USB'), 'the list is above the steps again')
 +    /* What the app itself says never names the adapter's maker: the adapter's own name, from the adapter, is fine. */
 +    for (const p of ['mobile/src/screens/Bluetooth.js', 'mobile/src/screens/Settings.js', 'mobile/App.js', 'mobile/src/lib/bluetooth.js', 'mobile/src/lib/bleLink.js']) {
 +      assert.ok(!/\bCME\b|WIDI/i.test(code(p)), `${p} names an adapter maker`)
@@ -8618,6 +8722,63 @@ index 0000000..e157c26
 +    assert.match(page, /Adapter connected, but the \$\{name\} isn’t answering\. Check both MIDI plugs, and that MIDI Thru is off\./)
 +    assert.match(page, /'Allow Nearby devices for Fractal Remote in Android’s settings'/)
 +    assert.match(page, /'Turn on Bluetooth in the phone’s settings'/)
++  })
++
++  test('setting it up is two steps and one button, and the phone picks the adapter when only one could be meant', async () => {
++    /*
++     * "Setting up the Bluetooth is kind of weird. A lot of different buttons
++     * to press. Maybe we can make it a little easier. It was very confusing
++     * for me, but I did figure it out finally."
++     */
++    const { isNetworkSession, pickAdapter } = await import('../mobile/src/lib/bleAdapters.js')
++    const session = { id: '1:2', name: 'Network Session 1', driver: 'com.apple.AppleMIDIRTPDriver' }
++    const adapter = { id: '3:4', name: 'WIDI Uhost Bluetooth', driver: 'com.apple.AppleMIDIBluetoothDriver' }
++    const other = { id: '5:6', name: 'Another adapter' }
++    /* Apple's Wi-Fi MIDI is never an adapter: on the first AM4 test it was picked and answered nothing. */
++    assert.equal(isNetworkSession(session), true)
++    assert.equal(isNetworkSession({ id: '1:2', name: 'Network Session 2' }), true, 'told only by its driver')
++    assert.equal(isNetworkSession({ id: '1:2', name: 'Studio', driver: 'com.apple.AppleMIDIRTPDriver' }), true, 'told only by its name')
++    assert.equal(isNetworkSession(adapter), false)
++    /* The AM4 test's own list: the session and the adapter. The adapter, without asking. */
++    assert.equal(pickAdapter([session, adapter]), adapter, 'the phone asks which one when only one is an adapter')
++    /* The one just connected in Apple's screen, even with another one there. */
++    assert.equal(pickAdapter([adapter, other], new Set([other.id])), other)
++    /* Two, and nothing new: a real question, so the list asks it. */
++    assert.equal(pickAdapter([adapter, other]), null, 'the phone guessed between two adapters')
++    assert.equal(pickAdapter([adapter, other], new Set([adapter.id, other.id])), null, 'the phone guessed between two new adapters')
++    /* One that is not connected to this phone is not picked, and nothing is nothing. */
++    assert.equal(pickAdapter([{ ...adapter, offline: true }]), null)
++    assert.equal(pickAdapter([]), null)
++    assert.equal(pickAdapter(null), null)
++
++    /* lib/bluetooth offers nothing that is not an adapter, and chooses when the picker says so. */
++    const ble = flat('mobile/src/lib/bluetooth.js')
++    assert.match(ble, /return Array\.isArray\(list\) \? list\.filter\(isAdapter\) : \[\]/, 'the Wi-Fi session is offered as an adapter again')
++    assert.match(ble, /const rows = \(Array\.isArray\(list\) \? list : \[\]\)\.filter\(isAdapter\)/, 'the list the page draws offers the Wi-Fi session')
++    assert.match(ble, /const pick = pickAdapter\(list, fresh\) if \(pick\) chooseAdapter\(pick\) return pick/, 'after Apple’s screen the adapter is not chosen by itself')
++    assert.match(ble, /const pick = saved\.adapter \? null : pickAdapter\(now\.devices\) if \(pick\) chooseAdapter\(pick\)/, 'after an Android search the only adapter is not chosen by itself')
++
++    /* The page: step 1 the unit, step 2 Connect; Stop once it is on; the list only for a real choice. */
++    const page = flat('mobile/src/screens/Bluetooth.js')
++    assert.ok(page.indexOf('1 · Which unit is the adapter plugged into?') < page.indexOf('2 · Connect'), 'the steps are out of order')
++    assert.match(page, /const showList = !b\.on && !b\.adapter && b\.devices\.length > 0/, 'the list shows when there is nothing to choose')
++    assert.match(page, /if \(!wanted \|\| !b\.adapter \|\| !b\.unit \|\| b\.on\) return setWanted\(false\) if \(mayDrive\(purchase\)\) setBluetooth\(true\)/, 'choosing the adapter does not turn Bluetooth on')
++    assert.match(page, /if \(b\.adapter\) setBluetooth\(true\) else find\(\)/, 'Connect with an adapter from last time goes looking again')
++    assert.match(page, /<Press label="Stop using Bluetooth" onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
++    /* The old buttons are gone from the way through. */
++    const drawn = code('mobile/src/screens/Bluetooth.js')
++    for (const gone of ['Use Bluetooth: on', 'Use Bluetooth: off', 'Forget this adapter', 'Use this one', '"Disconnect"']) {
++      assert.ok(!drawn.includes(gone), `the page has its old button back: ${gone}`)
++    }
++    /* "Use a different adapter" forgets the one in use first, so Connect cannot come back on with it. */
++    assert.match(page, /const another = \(\) => \{ if \(!canStart\) return forgetAdapter\(\) find\(\) \}/)
++    /* The check is still there for testing, folded away. */
++    assert.match(page, /\{b\.unit && tools \? \( <View style=\{\{ gap: space\.md \}\}> <Heading>Check<\/Heading>/, 'the testing tools are on the page unasked')
++
++    /* And one question wakes a new link, its answer not used, before the rig asks the real ones. */
++    const link = flat('mobile/src/lib/bleLink.js')
++    const wake = link.indexOf("const woke = await made.request('/device/detect')")
++    assert.ok(wake > 0 && wake < link.indexOf('await refreshAll()', wake), 'the rig asks its questions before the link is woken')
 +  })
 +
 +  test('the native module: its name and events, the simulator kept out, and no MIDI client until one is needed', () => {

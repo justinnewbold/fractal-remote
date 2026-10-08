@@ -31,7 +31,13 @@
  */
 import { accountId } from './owner-unlock.js'
 
-/** His account's id. Copied into grant-access and owner-messages; a test holds all three equal. */
+/**
+ * His account's id. Copied into grant-access and owner-messages; a test holds
+ * all three equal. It follows the ACCOUNT, not the address: if his account is
+ * ever deleted and made again, the new one has a new id, and every tool on
+ * both ends is gone until that id is put here and in both functions, and the
+ * two are deployed again.
+ */
 export const ADMINS = ['7dfe6912-e43b-49bf-84e4-b56afbd442b1']
 
 /** Whether the account signed in here (by its id) is the one the tools are for. */
