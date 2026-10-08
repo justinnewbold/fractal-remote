@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
@@ -22,6 +23,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
+import android.os.SystemClock
 import android.util.Log
 import expo.modules.interfaces.permissions.PermissionsResponseListener
 import expo.modules.interfaces.permissions.PermissionsStatus
@@ -55,7 +57,9 @@ import java.util.UUID
  *                          the unit's MIDI In.
  *   onBytes { bytes }    — each piece that comes in, exactly as it came.
  *   onState { state, id, name, reason? }
- *                        — 'connected' after connect; 'disconnected' when
+ *                        — 'connected' once the phone really has a Bluetooth
+ *                          link to the adapter (not merely when Android hands
+ *                          the device over: see connect); 'disconnected' when
  *                          Android says our adapter has gone.
  *
  * NOTHING HAPPENS UNTIL IT IS ASKED FOR. No scan, no permission prompt and
@@ -84,7 +88,12 @@ class FractalBleMidiModule : Module() {
     val toUnit: MidiInputPort,
     val fromUnit: MidiOutputPort,
     val listener: MidiReceiver
-  )
+  ) {
+    /* False from the moment Android hands the device over until the
+       Bluetooth link under it is up (see connect). Nothing is sent and no
+       'disconnected' goes out until then. Only touched while holding `lock`. */
+    var ready = false
+  }
 
   private val main = Handler(Looper.getMainLooper())
 
@@ -103,8 +112,11 @@ class FractalBleMidiModule : Module() {
   private val context: Context?
     get() = appContext.reactContext
 
+  private val bluetoothManager: BluetoothManager?
+    get() = context?.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+
   private val bluetooth: BluetoothAdapter?
-    get() = (context?.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+    get() = bluetoothManager?.adapter
 
   private val midi: MidiManager?
     get() = context?.getSystemService(Context.MIDI_SERVICE) as? MidiManager
@@ -286,10 +298,20 @@ class FractalBleMidiModule : Module() {
 
   // Connecting
 
-  /* Main thread. Android opens the adapter as a MIDI device of its own and
-     answers later, on the main thread. If it never answers (the adapter is out
-     of range), the attempt gives up after OPEN_TIMEOUT_MS, and a device that
-     turns up after that is closed rather than used. */
+  /* Main thread. Android hands the adapter over as a MIDI device of its own
+     almost at once, and that proves nothing: its Bluetooth MIDI service only
+     starts connecting at that moment, and gives the device out straight away
+     whether the adapter is there or not. Until the link is up, anything sent
+     waits in Android's queue and nothing can come back.
+
+     So the attempt (Opening) stays open after the device arrives, and only
+     says 'connected' once the phone has a real Bluetooth link to the adapter
+     and Android has had LINK_SETTLE_MS to find the MIDI service on it and
+     switch on its replies. If that never happens (the adapter is off, out of
+     range, or the unit powering it is off), the attempt gives up after
+     OPEN_TIMEOUT_MS, lets go of the device and answers false, and the
+     JavaScript's own retry takes it from there. A device that turns up after
+     that is closed rather than used. */
   private fun connect(id: String, promise: Promise) {
     val adapter = bluetooth
     val manager = midi
@@ -297,54 +319,146 @@ class FractalBleMidiModule : Module() {
       promise.resolve(false)
       return
     }
-    val current = synchronized(lock) { link }
+    val current = synchronized(lock) { link?.takeIf { it.ready } }
     if (current != null && current.id == id) {
       sendEvent("onState", mapOf("state" to "connected", "id" to id, "name" to current.name))
       promise.resolve(true)
       return
     }
-    /* A scan running alongside slows the connection down, and the adapter has been chosen. */
+    /* A scan running alongside slows the connection down, and the adapter has
+       been chosen. This also cancels an attempt still under way. */
     stopScanning()
     close()
     val target = adapter.getRemoteDevice(id)
     val name = synchronized(lock) { found[id]?.get("name") as? String } ?: nameOf(target) ?: id
     val mine = synchronized(lock) { ++attempt }
-    var settled = false
-    val giveUp = Runnable {
-      if (!settled) {
-        settled = true
-        synchronized(lock) { if (attempt == mine) attempt++ }
-        promise.resolve(false)
-      }
-    }
-    main.postDelayed(giveUp, OPEN_TIMEOUT_MS)
+    val opening = Opening(id, name, target, mine, promise)
+    main.postDelayed(opening.giveUp, OPEN_TIMEOUT_MS)
     try {
       manager.openBluetoothDevice(
         target,
-        MidiManager.OnDeviceOpenedListener { opened ->
-          main.removeCallbacks(giveUp)
-          val wanted = !settled && synchronized(lock) { attempt == mine }
-          val ok = wanted && opened != null && adopt(opened, id, name)
-          if (!ok) closeQuietly(opened)
-          if (!settled) {
-            settled = true
-            if (ok) sendEvent("onState", mapOf("state" to "connected", "id" to id, "name" to name))
-            promise.resolve(ok)
-          }
-        },
+        MidiManager.OnDeviceOpenedListener { opening.opened(it) },
         main
       )
     } catch (e: SecurityException) {
-      main.removeCallbacks(giveUp)
-      settled = true
-      promise.reject("E_PERMISSION", "Bluetooth permission is needed to connect to the adapter.", e)
+      opening.refuse(e)
     }
+  }
+
+  /* One call to connect(), from asking Android for the device to the answer.
+     Main thread only, like everything that drives it, so `settled` needs no
+     lock. `attempt` moving past `mine` means the JavaScript has asked for
+     something else since (disconnect, or another connect), and whoever moved
+     it has closed what this attempt had. */
+  private inner class Opening(
+    private val id: String,
+    private val name: String,
+    private val target: BluetoothDevice,
+    private val mine: Int,
+    private val promise: Promise
+  ) {
+    private var settled = false
+    /* When the Bluetooth link was first seen up, or 0 while it is not. */
+    private var linkedAt = 0L
+
+    val giveUp = Runnable { fail() }
+    private val check = Runnable { poll() }
+
+    private fun current() = synchronized(lock) { attempt == mine }
+
+    /* Android's answer to openBluetoothDevice: the device, or null. */
+    fun opened(device: MidiDevice?) {
+      if (settled || device == null || !adopt(device, id, name, mine)) {
+        closeQuietly(device)
+        fail()
+        return
+      }
+      poll()
+    }
+
+    /* Every POLL_MS, until the link has been up for LINK_SETTLE_MS without a
+       break, or the attempt ends. */
+    private fun poll() {
+      if (settled) return
+      if (!current()) {
+        fail()
+        return
+      }
+      val up = try {
+        linkUp(target)
+      } catch (e: SecurityException) {
+        refuse(e)
+        return
+      }
+      val now = SystemClock.uptimeMillis()
+      linkedAt = if (!up) 0L else if (linkedAt == 0L) now else linkedAt
+      if (up && now - linkedAt >= LINK_SETTLE_MS) {
+        ready()
+      } else {
+        main.postDelayed(check, POLL_MS)
+      }
+    }
+
+    private fun ready() {
+      val live = synchronized(lock) {
+        val ours = link
+        if (attempt == mine && ours != null) {
+          ours.ready = true
+          true
+        } else {
+          false
+        }
+      }
+      if (!live) {
+        fail()
+        return
+      }
+      settled = true
+      main.removeCallbacks(giveUp)
+      main.removeCallbacks(check)
+      sendEvent("onState", mapOf("state" to "connected", "id" to id, "name" to name))
+      promise.resolve(true)
+    }
+
+    /* Out of time, cancelled, or no device came. */
+    fun fail() {
+      if (end()) promise.resolve(false)
+    }
+
+    fun refuse(e: SecurityException) {
+      if (end()) promise.reject("E_PERMISSION", "Bluetooth permission is needed to connect to the adapter.", e)
+    }
+
+    /* True only the first time. Lets go of whatever this attempt still holds;
+       moving `attempt` on (close does) also means a device that arrives after
+       this is closed rather than used. */
+    private fun end(): Boolean {
+      if (settled) return false
+      settled = true
+      main.removeCallbacks(giveUp)
+      main.removeCallbacks(check)
+      if (current()) close()
+      return true
+    }
+  }
+
+  /* Whether the phone has a Bluetooth link to this adapter at all. Android's
+     MIDI service makes that link in a process of its own, so this asks the
+     Bluetooth service, which knows every app's links. A link some other app
+     holds to the adapter counts too; that is rare, and the MIDI service's own
+     connection over it is then quick. Throws SecurityException without
+     "Nearby devices" on Android 12 and newer. */
+  private fun linkUp(device: BluetoothDevice): Boolean {
+    val manager = bluetoothManager ?: return false
+    return manager.getConnectionState(device, BluetoothProfile.GATT) == BluetoothProfile.STATE_CONNECTED
   }
 
   /* Port 0 both ways: a Bluetooth MIDI adapter has exactly one of each.
      "Input" is Android's word for the adapter's way in, so it is what we
-     send on; we listen on its output. */
-  private fun adopt(opened: MidiDevice, id: String, name: String): Boolean {
+     send on; we listen on its output. False if the ports would not open, or
+     if attempt `mine` is no longer the one wanted; either way nothing is kept
+     and the caller closes the device. */
+  private fun adopt(opened: MidiDevice, id: String, name: String, mine: Int): Boolean {
     val toUnit = opened.openInputPort(0)
     val fromUnit = opened.openOutputPort(0)
     if (toUnit == null || fromUnit == null) {
@@ -362,8 +476,22 @@ class FractalBleMidiModule : Module() {
       }
     }
     fromUnit.connect(listener)
-    synchronized(lock) {
-      link = Link(id, name, opened, toUnit, fromUnit, listener)
+    /* The check and the keeping happen under one lock. disconnect() runs on
+       the JavaScript thread and can land at any moment before this: it moves
+       `attempt` on and, finding no link yet, has nothing else to close. Were
+       the check made earlier, the link would be stored after it and stay open
+       after the JavaScript had asked to drop it. */
+    val kept = synchronized(lock) {
+      if (attempt == mine) {
+        link = Link(id, name, opened, toUnit, fromUnit, listener)
+        true
+      } else {
+        false
+      }
+    }
+    if (!kept) {
+      release(toUnit, fromUnit, listener)
+      return false
     }
     watch()
     return true
@@ -400,14 +528,21 @@ class FractalBleMidiModule : Module() {
     midi?.unregisterDeviceCallback(callback)
   }
 
+  /* Main thread. A device that goes before its link was ever up (Android
+     gave up on the Bluetooth connection, or Bluetooth was switched off) was
+     never reported connected, so no 'disconnected' goes out for it either:
+     closing it moves `attempt` on, and the attempt still waiting in connect()
+     answers false. */
   private fun removed(device: MidiDeviceInfo) {
     val gone = synchronized(lock) {
       val ours = link ?: return
       if (ours.device.info.id != device.id) return
-      ours
+      ours to ours.ready
     }
     close()
-    sendEvent("onState", mapOf("state" to "disconnected", "id" to gone.id, "name" to gone.name, "reason" to "removed"))
+    if (!gone.second) return
+    val was = gone.first
+    sendEvent("onState", mapOf("state" to "disconnected", "id" to was.id, "name" to was.name, "reason" to "removed"))
   }
 
   /* Ours to close, so no 'disconnected' goes out: that event means the
@@ -420,23 +555,30 @@ class FractalBleMidiModule : Module() {
       link = null
       was
     } ?: return
+    release(old.toUnit, old.fromUnit, old.listener)
+    closeQuietly(old.device)
+  }
+
+  /* Stops listening and closes both ports. The device is the caller's. */
+  private fun release(toUnit: MidiInputPort, fromUnit: MidiOutputPort, listener: MidiReceiver) {
     try {
-      old.fromUnit.disconnect(old.listener)
+      fromUnit.disconnect(listener)
     } catch (e: RuntimeException) {
       Log.w(TAG, "MIDI listener: ${e.message}")
     }
-    closeQuietly(old.fromUnit)
-    closeQuietly(old.toUnit)
-    closeQuietly(old.device)
+    closeQuietly(fromUnit)
+    closeQuietly(toUnit)
   }
 
   // Sending
 
   /* On the JavaScript thread. MidiInputPort.send blocks until the bytes are
-     written, which for a SysEx frame of a few dozen bytes is no time at all. */
+     written, which for a SysEx frame of a few dozen bytes is no time at all.
+     Refused until the link is up: before that, Android would only queue the
+     bytes, with nothing to send them on. */
   private fun send(bytes: List<Int>): Boolean {
     if (bytes.isEmpty() || bytes.any { it !in 0..0xFF }) return false
-    val port = synchronized(lock) { link?.toUnit } ?: return false
+    val port = synchronized(lock) { link?.takeIf { it.ready }?.toUnit } ?: return false
     val data = ByteArray(bytes.size) { bytes[it].toByte() }
     return try {
       port.send(data, 0, data.size)
@@ -473,6 +615,19 @@ class FractalBleMidiModule : Module() {
     private val MIDI_SERVICE: UUID = UUID.fromString("03B80E5A-EDE8-4B33-A751-6CE34EC4C700")
 
     private const val MAX_SCAN_SECONDS = 60
+
+    /* The whole of connect(): Android handing the device over, the Bluetooth
+       link coming up, and LINK_SETTLE_MS after it. */
     private const val OPEN_TIMEOUT_MS = 15_000L
+
+    /* How often connect() asks whether the Bluetooth link is up yet. */
+    private const val POLL_MS = 200L
+
+    /* How long the link has to have been up before it is reported connected.
+       Android's MIDI service finds the MIDI service on the adapter, reads it,
+       asks for bigger packets and switches its replies on, one after another,
+       once the link is made; a probe sent before that is lost. Nothing tells
+       an app when it has finished, so this is a measured guess. */
+    private const val LINK_SETTLE_MS = 1_000L
   }
 }

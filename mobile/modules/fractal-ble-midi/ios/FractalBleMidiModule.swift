@@ -26,8 +26,10 @@ import CoreAudioKit
  *   scan(seconds)        — nothing to scan for (Apple's screen does that); it
  *                          only says whether any port is listed.
  *   devices()            — every two-way MIDI port: an id made of its two
- *                          unique ids, "<destination>:<source>", its name, and
- *                          whether it is offline.
+ *                          unique ids, "<destination>:<source>", its name,
+ *                          whether it is offline, and (iPhone only) the name
+ *                          of the driver that owns it, so the page can show
+ *                          which one Apple's Bluetooth MIDI driver is.
  *   connect(id), disconnect()
  *   send(bytes)          — one whole SysEx frame, or short messages.
  *   onBytes { bytes }    — what came in, as plain MIDI 1.0 bytes.
@@ -61,6 +63,7 @@ public class FractalBleMidiModule: Module {
   /* Main queue only. */
   private var refreshLater: DispatchWorkItem?
   private var pairPromise: Promise?
+  private var pairSheetGone: SheetGone?
   private var lastLogged = ""
 
   /* CoreMIDI reports one change several times over; wait this long for it to finish. */
@@ -174,8 +177,11 @@ public class FractalBleMidiModule: Module {
 
   /* On the main queue. Apple's screen lists the Bluetooth MIDI adapters in
      range and connects the one tapped. It has no Done button of its own, so it
-     is put in a navigation bar that has one, and swiping it away is turned off
-     so Done is the only way out and the promise always settles. */
+     is put in a navigation bar that has one. Done goes on the LEFT: Apple's
+     screen puts its own "searching" spinner on the right once it starts
+     looking, and a Done there would be pushed out by it (AudioKit puts its
+     Done back after every layout for that reason). Swiping the sheet down is
+     a way out too. Either way the promise settles, once. */
   private func pair(_ promise: Promise) {
     #if targetEnvironment(simulator)
     promise.reject("E_SIMULATOR", "Bluetooth MIDI needs a real iPhone or iPad: the simulator has no Bluetooth.")
@@ -193,22 +199,29 @@ public class FractalBleMidiModule: Module {
     let central = CABTMIDICentralViewController()
     let sheet = UINavigationController(rootViewController: central)
     sheet.modalPresentationStyle = .formSheet
-    sheet.isModalInPresentation = true
     let done = UIAction { [weak self, weak sheet] _ in
       sheet?.dismiss(animated: true) {
         self?.pairingDone()
       }
     }
-    central.navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .done, primaryAction: done)
+    central.navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .done, primaryAction: done)
+    /* The sheet only holds its delegate weakly, so it is kept here until
+       pairingDone lets it go. */
+    let gone = SheetGone { [weak self] in
+      self?.pairingDone()
+    }
+    sheet.presentationController?.delegate = gone
+    pairSheetGone = gone
     pairPromise = promise
     top.present(sheet, animated: true)
     #endif
   }
 
-  /* Main queue: Apple's screen has gone. A second tap on Done finds nothing
-     left to settle. The list goes out again, because what the screen just
-     connected is usually the reason it was opened. */
+  /* Main queue: Apple's screen has gone, by Done or by a swipe. A second tap
+     on Done finds nothing left to settle. The list goes out again, because
+     what the screen just connected is usually the reason it was opened. */
   private func pairingDone() {
+    pairSheetGone = nil
     guard let promise = pairPromise else { return }
     pairPromise = nil
     refreshSoon()
@@ -231,6 +244,7 @@ public class FractalBleMidiModule: Module {
         "id": "\(Self.uid(d)):\(Self.uid(s))",
         "name": Self.name(d),
         "offline": Self.offline(d),
+        "driver": Self.text(d, kMIDIPropertyDriverOwner),
       ])
     }
     return list
@@ -264,9 +278,15 @@ public class FractalBleMidiModule: Module {
   }
 
   /* The name of Apple's Bluetooth MIDI driver is not written down anywhere
-     reliable, so nothing here matches on it. Instead every port, one-way and
-     virtual ones included, goes to the device log with its driver, whenever
-     the list changes, so a capture from a real adapter can settle it. */
+     reliable, so nothing here matches on it. Instead each two-way port carries
+     its driver in devices(), where the page can show it, and every port,
+     one-way and virtual ones included, goes to the device log with its driver
+     whenever the list changes, so a capture from a real adapter can settle it.
+
+     NSLog, not Expo's log.info: that one ends up in os.Logger at the info
+     level with the text marked private, so a TestFlight or App Store build
+     would log "<private>", and only while Console was showing info messages.
+     NSLog writes at the default level, kept on the phone, in plain text. */
   private func logPorts() {
     var lines: [String] = []
     for i in 0..<MIDIGetNumberOfDestinations() {
@@ -277,7 +297,7 @@ public class FractalBleMidiModule: Module {
     let all = lines.joined(separator: "; ")
     if all == lastLogged { return }
     lastLogged = all
-    log.info("FractalBleMidi ports:", all)
+    NSLog("FractalBleMidi ports: %@", all)
   }
 
   // MARK: - Connecting
@@ -578,5 +598,21 @@ public class FractalBleMidiModule: Module {
   private static func name(_ object: MIDIObjectRef) -> String {
     let display = text(object, kMIDIPropertyDisplayName)
     return display.isEmpty ? text(object, kMIDIPropertyName) : display
+  }
+}
+
+/* Tells the module when Apple's Bluetooth sheet has been swiped away, which
+   UIKit reports only to the sheet's presentation delegate. A tap on Done
+   dismisses it in code, which UIKit does not report here, so the two never
+   both fire; pairingDone would shrug off a second call anyway. */
+final class SheetGone: NSObject, UIAdaptivePresentationControllerDelegate {
+  private let gone: () -> Void
+
+  init(_ gone: @escaping () -> Void) {
+    self.gone = gone
+  }
+
+  func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+    gone()
   }
 }
