@@ -24,8 +24,9 @@ notes*. Read that one even if you skip the rest.
 **Say it needs a computer before anything else.** "I think we need to make it
 more clear that this app requires a computer connected to the fractal to work…
 It's a lot of reading to get to that point." So the promotional text, the
-description and the Play summary all open on REQUIRES A COMPUTER, and the
-demo paragraph says the demo is the one part that needs nothing.
+description and the Play summary all open on it (in capitals everywhere but
+the Play summary, which Google asks not to shout), and the demo paragraph
+says the demo is the one part that needs nothing.
 
 **Never call the computer app free.** "That could confuse people thinking the
 iOS/android app is free." Call it the desktop app. A test holds every block
@@ -101,12 +102,17 @@ them, press **Save**, then **Publishing overview → Send changes for review**.
 Google usually passes a text change within a day.
 
 - **Full description (4000):** the Description above, exactly.
-- **Short description (80):** the line under the app's name.
+- **Short description (80):** the line under the app's name. **Not in
+  capitals.** Google's help for this one field says "Do not use capitalization
+  for emphasis", and its metadata policy lists "ALL CAPS although not part of
+  brand name" as a violation. Apple has no such rule, so the capitals stay on
+  the App Store, and the headings in the full description (SUPPORTED UNITS and
+  the rest) have been on Play since launch.
 
 ### Google Play: short description (80)
 
 ```
-REQUIRES A COMPUTER and our desktop app. Control your Fractal from your phone.
+Requires a computer and our desktop app. Control your Fractal from your phone.
 ```
 
 ### URLs

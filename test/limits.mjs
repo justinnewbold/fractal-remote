@@ -1581,7 +1581,11 @@ export function run(test) {
 
     assert.match(promo, /^REQUIRES A COMPUTER\./, 'the top of the listing no longer opens on the computer')
     assert.match(description, /^REQUIRES A COMPUTER\./, 'the description no longer opens on the computer')
-    assert.match(short, /^REQUIRES A COMPUTER/, 'the Play summary no longer opens on the computer')
+    /* Sentence case on Play alone: its help for this field says "Do not use
+       capitalization for emphasis", and its metadata policy calls ALL CAPS
+       outside a brand name a violation. */
+    assert.match(short, /^Requires a computer\b/, 'the Play summary no longer opens on the computer')
+    assert.ok(!/\b[A-Z]{4,}\b/.test(short), 'the Play summary shouts, which Google asks it not to')
     assert.match(subtitle ?? '', /computer/i, 'the subtitle no longer says it needs a computer')
     assert.match(description.split('\n\n')[0], /stay on and connected/, 'the description stopped saying the computer is needed while you play')
 
