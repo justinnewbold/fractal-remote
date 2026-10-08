@@ -452,7 +452,7 @@ export const startPurchases = async () => {
       why: !canPay
         ? 'This copy of the app cannot take payments.'
         : !sellable
-          ? 'The store has nothing to sell yet.'
+          ? 'Couldn’t reach the store just now. Close the app fully and open it again to try, or tap Restore a purchase if you’ve bought it before.'
           : null
     })
     if (!available) {

@@ -124,9 +124,10 @@
       <ul>
         <li>
           The computer app holds the cable; the phone drives it from a stage.
-          Android is on
-          <a href="https://play.google.com/store/apps/details?id=cloud.newbold.fractalremote">Google Play</a>,
-          and iPhone is on the way.
+          iPhone and iPad are on the
+          <a href="https://apps.apple.com/app/id6812916461">App Store</a>,
+          and Android is on
+          <a href="https://play.google.com/store/apps/details?id=cloud.newbold.fractalremote">Google Play</a>.
         </li>
         <li>
           Sign in with the same account on both, and that is the pairing done.
@@ -315,9 +316,12 @@
             })
             .join('')
 
+          /* A phone reading this page wants the phone app, and an iPhone's is
+             on the App Store — not the Android page it used to be sent to. */
           if (me === 'android' || me === 'ios') {
+            var phone = me === 'ios' ? 'https://apps.apple.com/app/id6812916461' : '/android'
             say('Version ' + String(rel.tag_name).replace(/^v/, '') +
-                ' &middot; these are the COMPUTER apps &mdash; the phone app is <a href="/android">here</a>')
+                ' &middot; these are the COMPUTER apps &mdash; the phone app is <a href="' + phone + '">here</a>')
           }
         })
         .catch(function (err) {

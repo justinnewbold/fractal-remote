@@ -1,6 +1,13 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/iphone",
+      "destination": "https://apps.apple.com/app/id6812916461",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/android",

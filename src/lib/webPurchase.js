@@ -148,7 +148,7 @@ export async function buyOnWeb({ accountId, email }) {
   try {
     const p = await purchasesFor(accountId)
     const pkg = theUnlockIn(await p.getOfferings())
-    if (!pkg) return { ok: false, cancelled: false, message: 'The store has nothing to sell yet.' }
+    if (!pkg) return { ok: false, cancelled: false, message: 'Couldn’t get the price just now. Check your connection and try again.' }
     const { customerInfo } = await p.purchase({ rcPackage: pkg, customerEmail: email || undefined })
     const yes = Boolean(customerInfo?.entitlements?.active?.[ENTITLEMENT])
     /* Tell the relay now, rather than waiting for the webhook to land. */
