@@ -5,6 +5,9 @@ ios/
 # …but not a local module's own native code (modules/fractal-watch/ios).
 !/modules/*/ios/
 android/
+# …and the same for a local module's Android code (modules/fractal-ble-midi/android), less what Gradle builds there.
+!/modules/*/android/
+/modules/*/android/build/
 *.log
 # Written by @bacons/apple-targets at every prebuild. Kept out of the watch
 # folder itself, because every file in there becomes part of the watch app.
