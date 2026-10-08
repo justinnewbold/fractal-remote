@@ -101,8 +101,10 @@ Cloud builds, no Xcode and no Android Studio:
 3. The build appears at [expo.dev](https://expo.dev) with an install link.
 
 Profiles are in `eas.json`. `preview` is the one to start with — an installable
-build for a device, an `.apk` on Android. `production` is what goes to the App
-Store and Play.
+build for a device, an `.apk` on Android. `production` with submit goes to
+TestFlight and to Play's closed-testing track — not to customers. To reach App
+Store customers the build is added to a new version in App Store Connect and
+sent for review; on Play it is promoted from closed testing to production.
 
 `ios-simulator` is the one that needs no Apple account at all. An iOS build
 normally has to be signed with a certificate from the Apple Developer account

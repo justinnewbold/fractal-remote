@@ -301,6 +301,7 @@ async function tellThem(to: string): Promise<boolean> {
       <p style="margin:0 0 20px">
         <a href="${SITE}" style="background:#7c5cff;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;display:inline-block;font-weight:600">Open Fractal Remote</a>
       </p>
+      <p style="margin:0 0 16px">The phone app is free on the <a href="https://apps.apple.com/app/id6812916461">App Store</a> (iPhone and iPad) and on <a href="https://play.google.com/store/apps/details?id=cloud.newbold.fractalremote">Google Play</a> (Android).</p>
       <p style="margin:0 0 16px">To control your Fractal unit, you also need the free computer app, which holds the USB cable:<br><a href="${SITE}/downloads">${SITE}/downloads</a></p>
       <p style="margin:0;color:#8b9099;font-size:13px">If the app was already open, close it and open it again to see the unlock.</p>
     </div>`

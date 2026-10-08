@@ -89,7 +89,7 @@ export const WAYS = [
       'Plug your unit into the Mac with its USB cable.',
       quitEditor(null),
       'In the app, choose Set up phone remote and sign in. Make an account there if you have not got one.',
-      'On your phone, sign in with that same account. That is the whole of it.'
+      'On your phone, get Fractal Remote from the App Store or Google Play and sign in with that same account. That is the whole of it.'
     ],
     links: [{ label: 'Download Fractal Remote for Mac', url: RELEASES }]
   },

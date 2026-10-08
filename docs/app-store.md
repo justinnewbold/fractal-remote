@@ -1,5 +1,9 @@
 # Getting onto the App Store
 
+**Live on the App Store since 8 October 2026** (build 24, 1.86.83):
+https://apps.apple.com/app/id6812916461. Everything below still applies to
+every new version sent for review.
+
 Everything App Store Connect asks for, answered. Copy the fields straight
 across; the notes say why an answer is what it is where that matters.
 
@@ -180,6 +184,11 @@ question automatically on every submission rather than asking you each time.
 - **Banking and tax forms** — same place. These take the longest, sometimes
   days, so start them before you need them.
 - **The app record itself** — bundle ID `cloud.newbold.fractalremote`.
+- **Pricing and Availability** — App Store Connect → the app → Pricing and
+  Availability: price **Free**, and the countries it is sold in. Without it an
+  approved app says *Ready for Distribution* and still appears nowhere — which
+  is exactly what happened on 8 October 2026. The EU asks for a trader-status
+  declaration (Digital Services Act) before it will list the app there.
 
 ---
 

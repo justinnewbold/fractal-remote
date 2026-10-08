@@ -3886,6 +3886,24 @@ export function run(test) {
     assert.doesNotMatch(read('src/App.jsx'), /Am4Finder|setupPage === 'finder'/)
   })
 
+  test('the iPhone app is live, and every page sends iPhone users to the one App Store address', async () => {
+    const { APPLE, GOOGLE, STORES } = await import('../shared/stores.mjs')
+    assert.equal(APPLE.live, true, 'the App Store card still says coming soon')
+    assert.equal(GOOGLE.live, true)
+    assert.equal(APPLE.url, `https://apps.apple.com/app/id${APPLE.id}`)
+    assert.ok(STORES.every((s) => s.live))
+    /* Every hand-typed App Store link is the one in stores.mjs: a typo there is a dead link on a page nobody re-reads. */
+    for (const file of ['public/downloads.html', 'public/support.html', 'public/android.html', 'vercel.json', 'supabase/functions/grant-access/index.ts']) {
+      const links = read(file).match(/https:\/\/apps\.apple\.com\/[^"'\s<>)]*/g) || []
+      assert.ok(links.length, `${file} no longer offers the App Store`)
+      for (const l of links) assert.equal(l, APPLE.url, `${file} links somewhere other than the listing`)
+    }
+    assert.match(read('index.html'), new RegExp(`<meta name="apple-itunes-app" content="app-id=${APPLE.id}" />`))
+    /* An iPhone reading the downloads page is sent to the App Store, not the Android page. */
+    assert.match(read('public/downloads.html'), /var phone = me === 'ios' \? 'https:\/\/apps\.apple\.com\/app\/id6812916461' : '\/android'/)
+    assert.doesNotMatch(read('public/downloads.html'), /iPhone is on the way/)
+  })
+
   test('a setlist song sets up its own scene and tempo when Next lands on it', async () => {
     const s = await import('../src/lib/setlists.js')
     const store = new Map()
