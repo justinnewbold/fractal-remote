@@ -1,0 +1,53 @@
+# Put the App Store's promotional text live, from docs/app-store.md.
+#
+# The promotional text is the paragraph at the very top of the listing, and the
+# only part of it Apple lets change without a new build or a review. It is where
+# "REQUIRES A COMPUTER" goes, so somebody knows what they need before reading
+# anything else. scripts/store-text.mjs does the work; this hands it the App
+# Store Connect key the builds already use (ASC_KEY_ID, ASC_ISSUER_ID,
+# ASC_KEY_P8). Started by hand. It builds nothing and spends no build slot.
+#
+# Leave "Write it" unticked to see what the store says now and what would
+# change. Tick it to change it.
+name: store-text
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Write it (unticked only shows what is there and what would change)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  promo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: The Apple key, as a file only this job can read
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          umask 077
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
+          grep -q 'BEGIN PRIVATE KEY' "$RUNNER_TEMP/asc.p8" || { echo "::error::ASC_KEY_P8 is not a .p8 key"; exit 1; }
+
+      - name: The promotional text
+        env:
+          ASC_KEY_PATH: ${{ runner.temp }}/asc.p8
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: node scripts/store-text.mjs ${{ inputs.apply && '--apply' || '' }}
+
+      - name: The key is gone
+        if: always()
+        run: rm -f "$RUNNER_TEMP/asc.p8"
