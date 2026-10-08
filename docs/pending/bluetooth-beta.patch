@@ -222,7 +222,7 @@ index 721f1f4..6e1ebf4 100644
        ) : null}
      </View>
 diff --git a/mobile/app.json b/mobile/app.json
-index f62bd91..3708afe 100644
+index 92a339f..a099d8f 100644
 --- a/mobile/app.json
 +++ b/mobile/app.json
 @@ -26,7 +26,8 @@
@@ -235,6 +235,43 @@ index f62bd91..3708afe 100644
        },
        "appleTeamId": "3KA9RC7YE6",
        "privacyManifests": {
+diff --git a/mobile/assets/icons/bluetooth.png b/mobile/assets/icons/bluetooth.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..8f20c842f93ac665871ffabaa669e994fba23459
+GIT binary patch
+literal 1426
+zcmV;D1#S9?P)<h;3K|Lk000e1NJLTq003YB003YJ1^@s6;+S_h000G9Nkl<Zc-rlq
+z&x;&I6vw}>XLf_D_z#HU#e*krf<!M~y?WTiEXMUB9y}~4LIjET9O5A={x}I6l7p9=
+zlaPZD1TTV!BHj`~kbn|dXS%;0@(PR2PESvFS5H;VD`<Lt^^f{~>UI5i^=bf1YfX~s
+zjgu4rg}$vsgoblG@h5FQGYbeKejy?i$sGXC0hj{#K}7DURluwvp!m9fo#b!)KmAVf
+zUH52mAS?xV?2z2|gfDe->1zkdAPijL>b67jF3F1I%oDyM`LDh{G6>;H|7ow}pOlh=
+zP$bq^cm@CgR11E$1z-kXm*kO%Q~;u`6N&^4VwsppK}Zomo0JTMTmd8lA!h(dK*$|H
+z^bj@yK-3U61wgbAas<GXAmj)@8aisxLC6unUCmb#5OM-g>i#_dpJ?7@u|voSfP40f
+zh`bHpswZ-^5T>K4^T3(n`*5pJtsNC`SFK`KMc!%w0V1-eqo|{J){2qDpNL2$B6Hm;
+z=iLgBoP)j)kv#yHW446p2;z%~lq8=9@Vs90dlC65un)IT|M4D4#BK?}O1|ztB6;6)
+zoXkjm>Up|k$$6%_KkFS|Pwum`?if9{^CKVCoHktM)KLJFBt2`M_~&aP&D4e1+H=(v
+zfV03J5I*$tl9Ko?!%vZ%>sEI4;r0R00HJIEQ0e!_B%ko}lu9M+&U+fbM4O03t+zT_
+z#i!43s)(-v_;N{SP4u3(0lXAatI(~WX=GzF6TQYCEyj(g+g6IrP*<{UYiW{(%m#;`
+z=bDJfjN}CX@9RBI8pL<k|F)K=_yK4;e<C731NclcI$wt+c;e4h{6oE$ro7Mfo-c{W
+zudW}HT170{ge$r<0sV@(XEW3td!gajlg@L4<ReK>@ao$R_aJO{0I=0l{2kAN5*{HN
+z20|ALI5mLyc??z#)FTy=2Q2`+;a$tb9|*z~J#K#m3%F?F4-4TE$us(T-XP?wB+r@n
+z!$NSw26wnT{n%otVKc=a2tu1wnfPHKR4v4}k{=jCpJd{%5rT=oMhGVU8X=hYYlL9p
+zuMvWYKQM$<`T_2@H%<JW5On)u1qh|~7p|ose(a@U6(26V-w1#|MdZFtDY3;nI+Xsp
+zGo{NT=(4i_TehH|__H3Bu&o`j2Jw?!J0d6X4MGIs8-xhNHwY1kZx99&zl}qtG6-SB
+z@6r!22m_1%R}1m)7=&TPci(?Q@~wtxDeki~I)$b4TvQYPVexP2WZS(K6SMa98dnU$
+zFyh}J`IsL2W(xoZ-bm`v#zPoD{2gy@XqO<p&4u7%1p0`t$99>XzCF;?cu5(+5aJgW
+zC)`i`^DQ&J(1&Yr!mEp4j}tDJ^iUfe=oTm3{k$$txWeKUZ|8Ur&UzETE9yoph75|c
+zIN`-9xcIdcU7T>J)lwG43Hw&yRxSxH{t0oyhuFY4;ZjSy+r}1uBjbc!Gw!PsD!OYV
+zA8k{?<s2s*Y{4cGp)Ph*0XQJ}Ie-`Snzu#dx)VQ8=~`6srz_M+|LB5KY0oQKRKnYq
+zteoS7M_IJb)d^n3MiD6kl`K)KI_^>OL$}7p1)vbhu?$XuUj*<@%;JyH4_HU~o8-9^
+z#80UXX;TLz87G{h1w4y~mq?4Y<mU*WY1}Eg$4-s_id4kU6+luIZeilbYpy1~0mxhY
+z+yNxf$tp~I1F%YJT7lPw7Xl7NxG63#FBxXA<p}}-5Zymc@}2^iFIW!W#1Cu*hYf!S
+zaoxlZ3&BmU`k)r9aZK`K&kL4}_>$t|Nd3)E0(e0y-0wu>7yo-Jt|L5->ei9sBw9%r
+g!dQO{XDR3OAJCMFj*RwtrT_o{07*qoM6N<$f<D!m2><{9
+
+literal 0
+HcmV?d00001
+
 diff --git a/mobile/fingerprint.json b/mobile/fingerprint.json
 index 29a27b5..073fb3a 100644
 --- a/mobile/fingerprint.json
@@ -2127,6 +2164,156 @@ index eebdd45..e7910ac 100644
      "fflate": "^0.8.3",
      "react": "19.2.3",
      "react-native": "0.86.3",
+diff --git a/mobile/src/components/TopBar.js b/mobile/src/components/TopBar.js
+index b263e91..6bac595 100644
+--- a/mobile/src/components/TopBar.js
++++ b/mobile/src/components/TopBar.js
+@@ -12,6 +12,8 @@ import { setDemo, useDemo } from '../lib/demo'
+ import { shouldOffer, usePurchase } from '../lib/purchases'
+ import setupIcon from '../../assets/icons/setup.png'
+ import volumeIcon from '../../assets/icons/volume.png'
++import bluetoothIcon from '../../assets/icons/bluetooth.png'
++import { useBluetoothOn } from '../lib/bluetooth'
+ import { idOf } from '../lib/device'
+ import Lamp from './Lamp'
+ import Volume from './Volume'
+@@ -85,6 +87,16 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
+    * that. "It does sound connected, even in demo."
+    */
+   const demo = useDemo()
++  /*
++   * OVER BLUETOOTH, THE BAR SAYS SO. "Can we change the connected thing to be
++   * blue when it's on a Bluetooth connection instead of green? And instead of
++   * a green dot next to the unit name have a Bluetooth icon when it's
++   * connected via Bluetooth." So the word goes blue and the lamp becomes the
++   * Bluetooth mark: what an eye lands on before a song now says which way the
++   * phone is reaching the unit, not only that it is. Never in the demo, which
++   * is reaching nothing.
++   */
++  const bluetooth = useBluetoothOn() && !demo
+ 
+   /*
+    * Named once, because the word and the pill below must agree about it.
+@@ -150,7 +162,9 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
+    * has already paid still reads DEMO — offering an unlock to a person who
+    * owns it sends them to a paywall that bounces them straight back out.
+    */
+-  const word = canBuy ? 'unlock' : demo ? 'demo' : linkWord(tone, 'remote')
++  /* Over Bluetooth there is no computer to be missing: the link that is down is the adapter's. */
++  const linkSays = linkWord(tone, 'remote')
++  const word = canBuy ? 'unlock' : demo ? 'demo' : bluetooth && linkSays === 'no computer' ? 'not connected' : linkSays
+ 
+   /*
+    * TWO SPOTS, EACH TELLING ITS OWN TRUTH. The word on the right is the
+@@ -229,7 +243,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
+         backgroundColor: at(color.panel, 0.55)
+       }}
+     >
+-      <Lamp state={unitLamp} />
++      {bluetooth ? <BluetoothMark state={unitLamp} /> : <Lamp state={unitLamp} />}
+ 
+       {/*
+         The name is pressed, not just read. "If you tap the top left button
+@@ -327,7 +341,10 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
+             ? null
+             : {
+                 accessibilityRole: 'button',
+-                accessibilityLabel: 'Which computer this phone is connected to',
++                /* The mark is a picture, so the words carry the Bluetooth for a screen reader. */
++                accessibilityLabel: bluetooth
++                  ? `${connected ? 'Connected' : 'Not connected'} over Bluetooth. Which adapter`
++                  : 'Which computer this phone is connected to',
+                 suppressHighlighting: true,
+                 onPress: () => {
+                   tick()
+@@ -337,7 +354,9 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
+         style={{
+           color:
+             mark === 'ok'
+-              ? color.ok
++              ? bluetooth
++                ? color.ble
++                : color.ok
+               : mark === 'no'
+                 ? color.fault
+                 : mark === 'wait'
+@@ -531,7 +550,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
+       */}
+       <Volume blocks={blocks} open={volume} onClose={() => setVolume(false)} onError={setFailed} />
+       {failed ? <Reported said={failed} onClear={() => setFailed(null)} /> : null}
+-      {saying && !demo ? <Which link={link} onClose={() => setSaying(false)} /> : null}
++      {saying && !demo ? <Which link={link} bluetooth={bluetooth} onClose={() => setSaying(false)} /> : null}
+       {saveTo.said && saveHere ? <Saved said={saveTo.said} onClear={saveTo.dismiss} /> : null}
+       {/*
+         A save from Play runs late the same as one from Edit, and Play has no
+@@ -542,6 +561,28 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
+   )
+ }
+ 
++/**
++ * The lamp, over Bluetooth: the Bluetooth mark in the lamp's place, lit the
++ * way the lamp would be. Blue, not green, while the unit answers, to match
++ * the blue CONNECTED beside it; red while it does not, as the lamp is; dim
++ * while it has not been asked yet. A Bluetooth mark that stayed blue over a
++ * unit that had stopped answering would be the bar saying all is well in the
++ * one place that exists to say when it is not.
++ */
++function BluetoothMark({ state }) {
++  const tint = state === 'good' ? color.ble : state === 'fault' ? color.fault : color.silkFaint
++  return (
++    <Image
++      source={bluetoothIcon}
++      accessible={false}
++      resizeMode="contain"
++      /* 14 high to read as the mark, and in the dot's 10 of width (the mark itself is
++         about 8 wide), so the unit's name does not jump sideways when Bluetooth comes on. */
++      style={{ width: 14, height: 14, marginHorizontal: -2, tintColor: tint }}
++    />
++  )
++}
++
+ const ofDeviceName = (s) => s.deviceName
+ const ofPreset = (s) => s.preset
+ const ofUnsaved = (s) => s.unsaved
+@@ -552,7 +593,37 @@ const ofAllBlocks = (s) => s.allBlocks
+  * Which computer this phone is talking to, under the bar: the browser's
+  * note from its CONNECTED, in the same words. A tap on it puts it away.
+  */
+-function Which({ link, onClose }) {
++function Which({ link, bluetooth = false, onClose }) {
++  /* Over Bluetooth the far end is the adapter, and the link carries its name. */
++  if (bluetooth) {
++    const adapter = link?.macName || 'the adapter'
++    const said =
++      link?.link === 'connected'
++        ? `Connected over Bluetooth, through ${adapter}.`
++        : link?.link === 'joining'
++          ? `Finding ${adapter}…`
++          : 'Not connected to the Bluetooth adapter.'
++    return (
++      <Pressable
++        accessibilityRole="button"
++        accessibilityLabel={`${said} Tap to close.`}
++        onPress={onClose}
++        style={{
++          position: 'absolute',
++          left: 0,
++          right: 0,
++          top: '100%',
++          zIndex: 3,
++          padding: space.lg,
++          borderBottomWidth: 1,
++          borderBottomColor: color.rule,
++          backgroundColor: color.panelHi
++        }}
++      >
++        <Text style={{ color: color.silk, fontSize: font.body }}>{said}</Text>
++      </Pressable>
++    )
++  }
+   const where = link?.macName || 'your computer'
+   const said =
+     link?.link === 'connected'
 diff --git a/mobile/src/lib/bleAdapters.js b/mobile/src/lib/bleAdapters.js
 new file mode 100644
 index 0000000..456dc32
@@ -5937,7 +6124,7 @@ index 0000000..f90a21a
 +/** The AM4's note index as a note: MIDI = index + 9. */
 +export const am4Note = (index) => midiNote(Math.round(index) + 9)
 diff --git a/mobile/src/lib/link.js b/mobile/src/lib/link.js
-index c724be3..09e0994 100644
+index 26ce84d..604633c 100644
 --- a/mobile/src/lib/link.js
 +++ b/mobile/src/lib/link.js
 @@ -17,6 +17,8 @@
@@ -5949,7 +6136,7 @@ index c724be3..09e0994 100644
  
  import {
    censusHosts,
-@@ -131,6 +133,8 @@ let unbind = []
+@@ -140,6 +142,8 @@ let unbind = []
  
  /** Ask again NOW — the screen came back, the network came back, someone tapped. */
  export function probeNow() {
@@ -5958,7 +6145,7 @@ index c724be3..09e0994 100644
    if (!running) return
    delay = 0
    schedule(0)
-@@ -352,6 +356,18 @@ function say(line) {
+@@ -361,6 +365,18 @@ function say(line) {
  
  /** Start the loop. Idempotent — a second call is a probe, not a second loop. */
  export function startLink() {
@@ -5977,7 +6164,7 @@ index c724be3..09e0994 100644
    /*
     * The demo has no far end, so there is nothing to find and nothing to poll.
     *
-@@ -429,6 +445,8 @@ function enterDemo() {
+@@ -438,6 +454,8 @@ function enterDemo() {
  }
  
  export async function stopLink() {
@@ -6000,12 +6187,48 @@ index e8b5d9a..2a00aa8 100644
    /* Already marked: the record is the same object, and setting it again
       would re-render every screen watching it on every knob of a drag. */
    if (unsaved === state.unsaved) return
+diff --git a/mobile/src/lib/theme.js b/mobile/src/lib/theme.js
+index 0ba4d71..b0fb1cd 100644
+--- a/mobile/src/lib/theme.js
++++ b/mobile/src/lib/theme.js
+@@ -24,6 +24,11 @@ const DARK = {
+   live: '#5fbfd1', // the Mac is answering
+   fault: '#e0684f',
+   ok: '#63c68c',
++  /* Bluetooth (beta): the unit answering over Bluetooth, not through a
++     computer. "Can we change the connected thing to be blue when it's on a
++     Bluetooth connection instead of green?" Bluetooth's own blue, lifted to
++     read on this black. The phone only: the browser never talks Bluetooth. */
++  ble: '#5aa5ff',
+ 
+   onSignal: '#14161a', // ink on an amber ground
+   /* Ink on the red of a destructive ground. White in BOTH themes, unlike
+@@ -47,8 +52,9 @@ const DARK = {
+  * NOT AN INVERSION. The four semantic colours are darkened rather than
+  * swapped, because their whole job is to mean something at a glance — amber
+  * is the audio path, cyan is the computer answering, red is a fault, green is
+- * good — and amber at #f0a73c on white is a colour you cannot read. Same
+- * meanings, enough contrast to carry them.
++ * good, blue is the unit answering over Bluetooth — and amber at #f0a73c on
++ * white is a colour you cannot read. Same meanings, enough contrast to carry
++ * them.
+  */
+ const LIGHT = {
+   chassis: '#f4f2ee',
+@@ -63,6 +69,7 @@ const LIGHT = {
+   live: '#1d6b7a',
+   fault: '#b23c26',
+   ok: '#2c7a4b',
++  ble: '#1f5fc4',
+ 
+   onSignal: '#fffaf2',
+   onFault: '#fff6f3',
 diff --git a/mobile/src/screens/Bluetooth.js b/mobile/src/screens/Bluetooth.js
 new file mode 100644
-index 0000000..f890f8b
+index 0000000..b108a92
 --- /dev/null
 +++ b/mobile/src/screens/Bluetooth.js
-@@ -0,0 +1,454 @@
+@@ -0,0 +1,455 @@
 +import { useEffect, useState } from 'react'
 +import { Platform, Text, View } from 'react-native'
 +import * as Clipboard from 'expo-clipboard'
@@ -6124,7 +6347,8 @@ index 0000000..f890f8b
 +  return { line: `Connecting to ${b.adapter?.name || 'the adapter'}…`, tone: 'dim' }
 +}
 +
-+const TONES = { ok: () => color.ok, fault: () => color.fault, dim: () => color.silkDim }
++/* Blue for the unit answering over Bluetooth, as the bar is; green stays the unit answering through a computer. */
++const TONES = { ok: () => color.ble, fault: () => color.fault, dim: () => color.silkDim }
 +
 +export default function BluetoothPage({ purchase }) {
 +  const b = useBluetooth()
@@ -6461,7 +6685,7 @@ index 0000000..f890f8b
 +  return <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>{children}</Text>
 +}
 diff --git a/mobile/src/screens/Settings.js b/mobile/src/screens/Settings.js
-index c4b62a6..928374c 100644
+index c5486ba..46bd8c5 100644
 --- a/mobile/src/screens/Settings.js
 +++ b/mobile/src/screens/Settings.js
 @@ -51,6 +51,9 @@ import { useComputerElsewhere } from '../lib/useComputerElsewhere'
@@ -6599,10 +6823,10 @@ index c4b62a6..928374c 100644
          <>
 diff --git a/test/bluetooth.mjs b/test/bluetooth.mjs
 new file mode 100644
-index 0000000..152b121
+index 0000000..c673b3e
 --- /dev/null
 +++ b/test/bluetooth.mjs
-@@ -0,0 +1,2231 @@
+@@ -0,0 +1,2274 @@
 +/**
 + * BLUETOOTH (BETA): the phone talking to the unit with no computer between.
 + *
@@ -8781,6 +9005,49 @@ index 0000000..152b121
 +    assert.ok(wake > 0 && wake < link.indexOf('await refreshAll()', wake), 'the rig asks its questions before the link is woken')
 +  })
 +
++  test('over Bluetooth the bar is blue and its lamp is the Bluetooth mark', () => {
++    /*
++     * "Can we change the connected thing to be blue when it's on a Bluetooth
++     * connection instead of green? And instead of a green dot next to the unit
++     * name have a Bluetooth icon when it's connected via Bluetooth."
++     */
++    const bar = flat('mobile/src/components/TopBar.js')
++    assert.match(bar, /const bluetooth = useBluetoothOn\(\) && !demo/, 'the demo would wear the Bluetooth look')
++    assert.match(bar, /\{bluetooth \? <BluetoothMark state=\{unitLamp\} \/> : <Lamp state=\{unitLamp\} \/>\}/, 'the lamp is not the Bluetooth mark over Bluetooth')
++    assert.match(bar, /mark === 'ok' \? bluetooth \? color\.ble : color\.ok/, 'CONNECTED is not blue over Bluetooth')
++    /* The mark is lit the way the lamp is: blue answering, red not, dim not yet asked. */
++    assert.match(bar, /const tint = state === 'good' \? color\.ble : state === 'fault' \? color\.fault : color\.silkFaint/, 'the mark stays blue over a unit that stopped answering')
++    assert.match(bar, /source=\{bluetoothIcon\}/)
++    /* No computer to be missing over Bluetooth, and a screen reader is told it is Bluetooth. */
++    assert.match(bar, /bluetooth && linkSays === 'no computer' \? 'not connected' : linkSays/, 'the bar says NO COMPUTER over Bluetooth')
++    assert.match(bar, /over Bluetooth\. Which adapter/, 'a screen reader is not told the link is Bluetooth')
++    assert.match(bar, /<Which link=\{link\} bluetooth=\{bluetooth\}/)
++    /* A blue in both themes, and plainly not the computer's cyan or the unit's green: at least 20 degrees of hue from each, theme by theme. */
++    const theme = src('mobile/src/lib/theme.js')
++    const hue = (hex) => {
++      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
++      const max = Math.max(r, g, b)
++      const d = max - Math.min(r, g, b)
++      if (!d) return 0
++      const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
++      return (h * 60 + 360) % 360
++    }
++    const apart = (a, b) => Math.min(Math.abs(hue(a) - hue(b)), 360 - Math.abs(hue(a) - hue(b)))
++    for (const name of ['DARK', 'LIGHT']) {
++      const block = theme.slice(theme.indexOf(`const ${name} = {`), theme.indexOf('\n}', theme.indexOf(`const ${name} = {`)))
++      const of = (key) => (block.match(new RegExp(`\\b${key}: '(#[0-9a-f]{6})'`, 'i')) || [])[1]
++      assert.ok(of('ble'), `Bluetooth has no blue in the ${name.toLowerCase()} theme`)
++      for (const other of ['live', 'ok']) {
++        assert.ok(apart(of('ble'), of(other)) >= 20, `the ${name.toLowerCase()} theme's Bluetooth blue is too close to its ${other} colour`)
++      }
++    }
++    /* And the picture is there, the same size and kind as the bar's others. */
++    const png = readFileSync(new URL('../mobile/assets/icons/bluetooth.png', import.meta.url))
++    assert.equal(png.toString('ascii', 1, 4), 'PNG')
++    assert.equal(png.readUInt32BE(16), 96, 'the Bluetooth mark is not 96 wide like the other icons')
++    assert.equal(png.readUInt32BE(20), 96, 'the Bluetooth mark is not 96 high like the other icons')
++  })
++
 +  test('the native module: its name and events, the simulator kept out, and no MIDI client until one is needed', () => {
 +    const config = JSON.parse(src('mobile/modules/fractal-ble-midi/expo-module.config.json'))
 +    assert.deepEqual(config.platforms, ['apple', 'android'])
@@ -8835,7 +9102,7 @@ index 0000000..152b121
 +  })
 +}
 diff --git a/test/mobile.mjs b/test/mobile.mjs
-index ba39007..96f5511 100644
+index 184941e..d6bf1db 100644
 --- a/test/mobile.mjs
 +++ b/test/mobile.mjs
 @@ -38,7 +38,9 @@ const traverse = babelTraverse.default || babelTraverse
@@ -8858,7 +9125,7 @@ index ba39007..96f5511 100644
      'debugLog.js': 'export const logDebug = () => {}\n',
      'lineage.js': 'export const withLineage = (x) => x\n',
      'presetNames.js': 'export const adopt = async () => 0\nexport const forget = () => {}\nexport const learn = () => {}\nexport const nameOf = () => undefined\n',
-@@ -3470,7 +3474,7 @@ export function run(test) {
+@@ -3482,7 +3486,7 @@ export function run(test) {
      assert.match(flat, /!demo &&/, 'the demo is made to wait for a computer it does not have')
      assert.match(
        flat,
@@ -8867,7 +9134,7 @@ index ba39007..96f5511 100644
        'nothing is shown while the app waits'
      )
  
-@@ -3631,7 +3635,8 @@ export function run(test) {
+@@ -3643,7 +3647,8 @@ export function run(test) {
  
      const phone = read('mobile/App.js').replace(/\s+/g, ' ')
      const waking = phone.slice(phone.indexOf('function Waking('))
@@ -8877,7 +9144,7 @@ index ba39007..96f5511 100644
      assert.match(waking, /This phone is signed in as \$\{email\}/, 'the phone does not say which account it is on')
      assert.match(waking, /Switch account on this phone/, 'the phone gives no way to change account')
      assert.match(read('mobile/src/screens/Settings.js'), /useComputerElsewhere\(link === 'no-answer'\)/, 'Setup never asks')
-@@ -3644,7 +3649,7 @@ export function run(test) {
+@@ -3656,7 +3661,7 @@ export function run(test) {
      assert.match(wrong, /Switch account on this phone/, 'the stage gives no way to change account')
      assert.match(
        phone,
@@ -8886,7 +9153,7 @@ index ba39007..96f5511 100644
        'the stage screen says nothing while the link is down on another account'
      )
  
-@@ -5707,7 +5712,7 @@ export function run(test) {
+@@ -5729,7 +5734,7 @@ export function run(test) {
      const flat = app.replace(/\s+/g, ' ')
      assert.match(
        flat,
@@ -8895,7 +9162,16 @@ index ba39007..96f5511 100644
        'leaving the demo no longer tears the link down, so a simulated rig stays on screen as a real one'
      )
  
-@@ -9162,7 +9167,7 @@ export function run(test) {
+@@ -8347,7 +8352,7 @@ export function run(test) {
+        must never wear CONNECTED. */
+     assert.match(
+       bar,
+-      /const word = canBuy \? 'unlock' : demo \? 'demo' : linkWord\(tone, 'remote'\)/,
++      /const linkSays = linkWord\(tone, 'remote'\)\s+const word = canBuy \? 'unlock' : demo \? 'demo' : bluetooth && linkSays === 'no computer' \? 'not connected' : linkSays/,
+       'the bar still says CONNECTED in the demo'
+     )
+     assert.match(bar, /const mark = demo \? 'wait' : linkTone\(tone\)/, 'the demo word is drawn in the colour a real connection gets')
+@@ -9184,7 +9189,7 @@ export function run(test) {
        'the Back button and the swipe can disagree about where one step up is'
      )
      /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer. */
@@ -8904,6 +9180,15 @@ index ba39007..96f5511 100644
      /* And it says where it is going, because "Settings" would be a lie. */
      assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
      assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')
+@@ -10249,7 +10254,7 @@ export function run(test) {
+      */
+     assert.match(
+       bar,
+-      /const word = canBuy \? 'unlock' : demo \? 'demo' : linkWord\(tone, 'remote'\)/,
++      /const linkSays = linkWord\(tone, 'remote'\)\s+const word = canBuy \? 'unlock' : demo \? 'demo' : bluetooth && linkSays === 'no computer' \? 'not connected' : linkSays/,
+       'the word no longer says UNLOCK in the demo, or says it outside one'
+     )
+ 
 diff --git a/test/run.mjs b/test/run.mjs
 index 2161b60..c7f87d3 100644
 --- a/test/run.mjs
