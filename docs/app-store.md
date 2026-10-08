@@ -17,15 +17,35 @@ notes*. Read that one even if you skip the rest.
 | Field | Limit | Value |
 |---|---|---|
 | **Name** | 30 | `Fractal Remote` |
-| **Subtitle** | 30 | `Run your rig from your phone` |
+| **Subtitle** | 30 | `Phone remote, needs a computer` |
 | **Category** | — | Primary: **Music**. Secondary: **Utilities** |
 | **Price** | — | **Free** (USD 0.00). The $9.99 unlock is an in-app purchase, set up separately under In-App Purchases |
 
+**Say it needs a computer before anything else.** "I think we need to make it
+more clear that this app requires a computer connected to the fractal to work…
+It's a lot of reading to get to that point." So the promotional text, the
+description and the Play summary all open on it (in capitals everywhere but
+the Play summary, which Google asks not to shout), and the demo paragraph
+says the demo is the one part that needs nothing.
+
+**Never call the computer app free.** "That could confuse people thinking the
+iOS/android app is free." Call it the desktop app. A test holds every block
+here to both rules.
+
+Each block below is pasted as it stands: one line per paragraph, so the store
+keeps the paragraphs and adds no line breaks of its own.
+
 ### Promotional text (170, editable any time without a new build)
 
+The paragraph at the very top of the listing, and the one part of it that
+changes without a build or a review. It is not pasted: Actions → store-text →
+Run workflow, tick **Write it**, and it goes straight to the live version.
+Unticked, it only shows what is there now. **Run it again after each new
+version is released:** a version already in review keeps its own copy of the
+paragraph, and the run warns about any it could not change.
+
 ```
-Your setlist, your scenes and your whole chain on the phone in your hand —
-and a tuner you can read from the back of the stage.
+REQUIRES A COMPUTER. Your Fractal plugs by USB into a Mac, PC or Linux computer running our desktop app, and your phone controls it from there. The demo needs no gear.
 ```
 
 ### Keywords (100, commas, no spaces after them)
@@ -41,50 +61,60 @@ the people who make that gear.
 
 ### Description
 
+Changes only with a new version, so it goes in with the next build. The same
+text goes on Google Play, where it can change any time (see below).
+
 ```
-Fractal Remote puts your rig on your phone.
+REQUIRES A COMPUTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play.
 
-Plug your Fractal unit into a computer, open Fractal Remote on your phone, and
-everything the unit can do is in your hand — from the back of the stage, from
-the couch, or from the other side of the room.
+Fractal Remote turns your phone into a remote control for your Fractal Audio rig. Switch presets and scenes, turn blocks on and off, change channels, tune up and tap tempo, without walking back to your unit. Build a setlist for tonight and step through it with two big buttons you can hit in the dark.
 
-WHAT YOU CAN DO
+SUPPORTED UNITS
+FM3, FM9, Axe-Fx III, AM4 and VP4.
 
-• Change presets and scenes, with names you can actually read
-• See your whole signal chain and switch blocks in or out
-• Tune up, with a display readable at a distance in the dark
-• Build setlists and star the presets you reach for
-• Reach for a knob and change it without walking back to the rack
+TRY THE DEMO, FOR AS LONG AS YOU LIKE
+The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer described at the top.
 
-ONE ACCOUNT, BOTH ENDS
+WHAT IT DOES
+• Switch any of your presets, by name, in slot order or from a setlist
+• Scenes, with the names your unit already uses
+• Turn blocks on and off, and pick channels A to D
+• Open a block and change its real parameters on real knobs
+• Tuner, with the note and how far off you are
+• Tap tempo, with the tempo on the button
+• Setlists and starred presets, kept with your account across devices
+• Colors that match your unit's own screen, so you find things by looking
 
-Sign the phone and the computer app into the same account and they find each
-other — at home, at rehearsal, or at the venue. Your setlists and starred
-presets follow you to any device.
+HOW IT WORKS
+A phone cannot talk to a Fractal unit on its own. So the desktop app runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to that. Get it at fractal.newbold.cloud/downloads.
 
-BUILT FOR A STAGE, NOT A DESK
+Once the two are paired, the phone works from anywhere: the same room, the far side of the stage, or a different building.
 
-Big targets you can hit without looking. A screen that stays readable when the
-lights go down. Nothing that needs two hands.
+ONE PAYMENT, LIFETIME UNLOCK
+Controlling real hardware is a single purchase. It unlocks the full app on every device you own, forever, including every future update, on all supported Fractal units. No subscription.
 
-FREE TO TRY
+Fractal Remote is an independent app. It is in no way affiliated with, endorsed by, or sponsored by Fractal Audio Systems, Inc. “Fractal Audio”, “Axe-Fx”, “FM3”, “FM9”, “AM4” and “VP4” are trademarks of Fractal Audio Systems, Inc., used here only to say which hardware this app works with.
+```
 
-The demo is free, with every screen working on a simulated unit. A one-time
-purchase unlocks control of your own rig.
+### Google Play
 
-WHAT YOU NEED
+Both of these change any time, with no build: Play Console → Fractal Remote →
+**Grow users → Store presence → Store listings** → the default listing. Paste
+them, press **Save**, then **Publishing overview → Send changes for review**.
+Google usually passes a text change within a day.
 
-• A Fractal Audio unit — FM3, FM9, Axe-Fx, AM4 or VP4
-• A Mac or Windows computer with a USB cable to the unit
-• The free Fractal Remote app for that computer, from fractal.newbold.cloud
+- **Full description (4000):** the Description above, exactly.
+- **Short description (80):** the line under the app's name. **Not in
+  capitals.** Google's help for this one field says "Do not use capitalization
+  for emphasis", and its metadata policy lists "ALL CAPS although not part of
+  brand name" as a violation. Apple has no such rule, so the capitals stay on
+  the App Store, and the headings in the full description (SUPPORTED UNITS and
+  the rest) have been on Play since launch.
 
-JUST LOOKING?
+### Google Play: short description (80)
 
-Tap "Try the demo" on the first screen. It is a simulated FM3 — every screen
-works, with no hardware at all.
-
-Fractal Remote is an independent app. It is in no way affiliated with,
-endorsed by, or sponsored by Fractal Audio Systems, Inc.
+```
+Requires a computer and our desktop app. Control your Fractal from your phone.
 ```
 
 ### URLs

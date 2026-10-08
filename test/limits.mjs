@@ -1557,6 +1557,101 @@ export function run(test) {
     assert.match(store, /Review notes/, 'there are no review notes at all')
   })
 
+  test('the store says it needs a computer first, and never calls the computer app free', async () => {
+    /*
+     * "I think we need to make it more clear that this app requires a computer
+     * connected to the fractal to work. Maybe even in all caps. It's a lot of
+     * reading to get to that point."
+     *
+     * The listing said it two-thirds of the way down, under HOW IT WORKS — and
+     * above that, in the demo paragraph, "You need no hardware and no computer
+     * to look around", which a skim reads as the opposite.
+     *
+     * And then: "Don't say free fractal remote app. That could confuse people
+     * thinking the iOS/android app is free." So the computer app is the
+     * desktop app, never the free one, anywhere in the store copy.
+     */
+    const { fenced, promoText, PROMO_LIMIT } = await import('../scripts/store-text.mjs')
+    const store = read('docs/app-store.md')
+    const promo = promoText(store)
+    const description = fenced(store, '### Description')
+    const short = fenced(store, '### Google Play: short description').trim()
+    const subtitle = store.match(/\| \*\*Subtitle\*\* \| 30 \| `([^`]+)` \|/)?.[1]
+    const length = (s) => [...s].length
+
+    assert.match(promo, /^REQUIRES A COMPUTER\./, 'the top of the listing no longer opens on the computer')
+    assert.match(description, /^REQUIRES A COMPUTER\./, 'the description no longer opens on the computer')
+    /* Sentence case on Play alone: its help for this field says "Do not use
+       capitalization for emphasis", and its metadata policy calls ALL CAPS
+       outside a brand name a violation. */
+    assert.match(short, /^Requires a computer\b/, 'the Play summary no longer opens on the computer')
+    assert.ok(!/\b[A-Z]{4,}\b/.test(short), 'the Play summary shouts, which Google asks it not to')
+    assert.match(subtitle ?? '', /computer/i, 'the subtitle no longer says it needs a computer')
+    assert.match(description.split('\n\n')[0], /stay on and connected/, 'the description stopped saying the computer is needed while you play')
+
+    assert.ok(length(promo) <= PROMO_LIMIT, `the promotional text is ${length(promo)} characters`)
+    assert.ok(length(short) <= 80, `the Play summary is ${length(short)} characters; Play takes 80`)
+    assert.ok(length(subtitle) <= 30, `the subtitle is ${length(subtitle)} characters; Apple takes 30`)
+    assert.ok(length(description) <= 4000, `the description is ${length(description)} characters; both stores take 4000`)
+
+    assert.ok(!/no computer to look around/.test(description), 'the demo line reads as "no computer needed" again')
+    /* The listing names VP4 and Fractal Audio, so its trademark line has to:
+       the shared one does, and a hand-typed one left both out. */
+    const { AFFILIATION } = await import('../shared/affiliation.mjs')
+    assert.ok(description.includes(AFFILIATION), 'the description no longer ends on the shared disclaimer')
+    for (const [where, text] of [['promotional text', promo], ['description', description], ['Play summary', short], ['subtitle', subtitle]]) {
+      assert.ok(!/\bfree\b[^.\n]{0,40}\bapp\b|\bapp\b[^.\n]{0,20}\bis free\b/i.test(text), `the ${where} calls an app free`)
+    }
+  })
+
+  test('the promotional text goes to App Store Connect signed the way Apple checks it', async () => {
+    /*
+     * scripts/store-text.mjs only ever runs with the real key, on GitHub, so
+     * the parts that can be wrong without it are proved here: a token Apple
+     * would refuse (DER signature, an expiry past twenty minutes, the wrong
+     * audience), and the choice of which versions get the text.
+     */
+    const { generateKeyPairSync, verify } = await import('node:crypto')
+    const { token, targets } = await import('../scripts/store-text.mjs')
+    const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' })
+    const p8 = privateKey.export({ type: 'pkcs8', format: 'pem' })
+
+    const jwt = token({ keyId: 'KEY123', issuerId: 'issuer-1', p8, now: 1_000_000 })
+    const [head, body, signature] = jwt.split('.')
+    const decode = (part) => JSON.parse(Buffer.from(part, 'base64url').toString('utf8'))
+    assert.deepEqual(decode(head), { alg: 'ES256', kid: 'KEY123', typ: 'JWT' })
+    const claims = decode(body)
+    assert.equal(claims.aud, 'appstoreconnect-v1')
+    assert.equal(claims.iss, 'issuer-1')
+    assert.ok(claims.exp > claims.iat && claims.exp - claims.iat <= 20 * 60, 'Apple refuses a token that lives past twenty minutes')
+    const raw = Buffer.from(signature, 'base64url')
+    assert.equal(raw.length, 64, 'the signature is DER rather than the r||s a JWT carries')
+    assert.ok(
+      verify('sha256', Buffer.from(`${head}.${body}`), { key: publicKey, dsaEncoding: 'ieee-p1363' }, raw),
+      'the token does not verify against its own key'
+    )
+
+    const v = (id, appStoreState, appVersionState) => ({ id, attributes: { appStoreState, appVersionState } })
+    const chosen = targets([
+      v('live', 'READY_FOR_SALE', 'READY_FOR_DISTRIBUTION'),
+      v('next', 'PREPARE_FOR_SUBMISSION', 'PREPARE_FOR_SUBMISSION'),
+      v('review', 'WAITING_FOR_REVIEW', 'WAITING_FOR_REVIEW'),
+      v('old', 'REPLACED_WITH_NEW_VERSION', 'REPLACED_WITH_NEW_VERSION')
+    ]).map((x) => x.id)
+    assert.deepEqual(chosen, ['live', 'next'], 'the text goes on the wrong versions')
+    const { coming } = await import('../scripts/store-text.mjs')
+    assert.deepEqual(
+      coming([
+        v('live', 'READY_FOR_SALE', 'READY_FOR_DISTRIBUTION'),
+        v('review', 'WAITING_FOR_REVIEW', 'WAITING_FOR_REVIEW'),
+        v('held', 'PENDING_DEVELOPER_RELEASE', 'PENDING_DEVELOPER_RELEASE'),
+        v('old', 'REPLACED_WITH_NEW_VERSION', 'REPLACED_WITH_NEW_VERSION')
+      ]).map((x) => x.id),
+      ['review', 'held'],
+      'a version still to be released is not warned about, so its old paragraph comes back unannounced'
+    )
+  })
+
   test('an account made in the app can be deleted in the app, with everything under it', async () => {
     /*
      * Apple rejected 1.86.8 under Guideline 5.1.1(v): "The app supports
