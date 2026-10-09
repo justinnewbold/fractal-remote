@@ -3877,6 +3877,29 @@ export function run(test) {
     assert.match(read('src/App.jsx'), /<MetronomeBeat bpm=\{rigBpm\} \/>/)
     /* The beat never takes a press away from the screen under it. */
     assert.match(read('mobile/src/components/MetronomeBeat.js'), /pointerEvents="none"/)
+    /*
+     * And it is rounded with the glass. "The corners of the screen get cut
+     * off where they're rounded": a square frame to the very edge puts its
+     * corners behind the screen's curve.
+     */
+    const beat = read('mobile/src/components/MetronomeBeat.js')
+    assert.match(beat, /borderRadius: round/, 'the beat’s frame is square again, and its corners are cut off by the screen')
+    assert.match(beat, /const round = cornerRadius\(\{ os: Platform\.OS, width, height, top, pad: Platform\.isPad \}\)/)
+    const { cornerRadius } = await import('../mobile/src/lib/screenCorners.js')
+    /* His iPhone 17 Pro Max, and its family. */
+    assert.equal(cornerRadius({ os: 'ios', width: 440, height: 956, top: 62 }), 62)
+    assert.equal(cornerRadius({ os: 'ios', width: 956, height: 440, top: 62 }), 62, 'a screen read the other way up is another phone')
+    assert.equal(cornerRadius({ os: 'ios', width: 393, height: 852, top: 59 }), 55)
+    /* A size two models share takes the rounder: a frame that curves more than the glass is all seen. */
+    assert.equal(cornerRadius({ os: 'ios', width: 375, height: 812, top: 44 }), 44)
+    /* An iPhone not on the list yet, with an island, is treated as the roundest; one with a home button is square. */
+    assert.equal(cornerRadius({ os: 'ios', width: 999, height: 2000, top: 62 }), 62)
+    assert.equal(cornerRadius({ os: 'ios', width: 375, height: 667, top: 20 }), 0)
+    assert.equal(cornerRadius({ os: 'ios', width: 1024, height: 1366, top: 24 }), 0, 'an iPad with a home button gets round corners')
+    assert.ok(cornerRadius({ os: 'ios', width: 1024, height: 1366, top: 32, pad: true }) > 0)
+    /* Android cannot be asked without native code: a round default, scaled to the screen. */
+    assert.ok(cornerRadius({ os: 'android', width: 412, height: 915, top: 24 }) >= 35)
+    assert.equal(cornerRadius({}), 0)
     assert.match(read('src/styles.css'), /\.metronome-beat \{[^}]*pointer-events: none/)
   })
 

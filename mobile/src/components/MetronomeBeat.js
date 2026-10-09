@@ -1,7 +1,9 @@
 import { useCallback, useRef } from 'react'
-import { Animated, StyleSheet } from 'react-native'
+import { Animated, Platform, StyleSheet, useWindowDimensions } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { usePhoneClick } from '../lib/metronome'
+import { cornerRadius } from '../lib/screenCorners'
 import { color } from '../lib/theme'
 
 /**
@@ -19,12 +21,16 @@ export default function MetronomeBeat({ bpm }) {
     Animated.timing(glow, { toValue: 0, duration: 140, useNativeDriver: true }).start()
   }, [glow])
   usePhoneClick(bpm, onBeat)
+  /* Rounded with the glass, or the corners of the frame are cut off behind it: see lib/screenCorners. */
+  const { width, height } = useWindowDimensions()
+  const { top } = useSafeAreaInsets()
+  const round = cornerRadius({ os: Platform.OS, width, height, top, pad: Platform.isPad })
 
   return (
     <Animated.View
       pointerEvents="none"
       accessible={false}
-      style={[StyleSheet.absoluteFill, { borderWidth: 4, borderColor: color.ok, opacity: glow }]}
+      style={[StyleSheet.absoluteFill, { borderWidth: 4, borderRadius: round, borderColor: color.ok, opacity: glow }]}
     />
   )
 }
