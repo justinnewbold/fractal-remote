@@ -72,6 +72,9 @@ jobs:
           name: watch-screens
           path: mobile/watch-ci/screens
           if-no-files-found: ignore
+          # Screenshots for looking at a pull request, not for keeping: three days
+          # instead of 90.
+          retention-days: 3
 
       # THE APP STORE'S APPLE WATCH SCREENSHOTS. A listing whose build carries
       # a watch app must have at least one, and these are the right size as
