@@ -1,9 +1,9 @@
 diff --git a/.github/workflows/apk.yml b/.github/workflows/apk.yml
-index e0e1e42..671342d 100644
+index 6b8567f..e716c92 100644
 --- a/.github/workflows/apk.yml
 +++ b/.github/workflows/apk.yml
-@@ -300,6 +300,9 @@ jobs:
-           path: ${{ steps.apk.outputs.path }}
+@@ -303,6 +303,9 @@ jobs:
+           retention-days: 3
  
        - name: Put it on the Releases page
 +        # Main only: the download page offers the newest apk-v release to
@@ -13,10 +13,10 @@ index e0e1e42..671342d 100644
            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
            TAG: apk-v${{ steps.v.outputs.version }}
 diff --git a/.github/workflows/watch.yml b/.github/workflows/watch.yml
-index 7371e4f..13edca3 100644
+index 3e5c475..fea6daa 100644
 --- a/.github/workflows/watch.yml
 +++ b/.github/workflows/watch.yml
-@@ -145,3 +145,19 @@ jobs:
+@@ -148,3 +148,19 @@ jobs:
              CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
              || { grep -n -B2 -A12 -E 'error:|error |failed with exit' build.log | head -n 200; exit 1; }
            tail -n 20 build.log
@@ -6821,12 +6821,40 @@ index c5486ba..46bd8c5 100644
        {/* ------------------------------------------------------- metronome */}
        {page === 'metronome' ? (
          <>
+diff --git a/mobile/src/screens/Stage.js b/mobile/src/screens/Stage.js
+index 5071417..f35d4c2 100644
+--- a/mobile/src/screens/Stage.js
++++ b/mobile/src/screens/Stage.js
+@@ -45,6 +45,7 @@ import {
+   writeTuner
+ } from '../lib/rig'
+ import { useDemoUnit } from '../lib/demo'
++import { overBluetooth } from '../lib/bleSwitch'
+ import { coachSeen, markCoach, markWatchTip, watchTipSeen } from '../lib/coach'
+ import { nope, thud } from '../lib/feedback'
+ import { blockColor } from '../lib/blockColors'
+@@ -676,7 +677,14 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
+           */}
+           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+             <Label>Scenes</Label>
+-            <RefreshNames />
++            {/*
++              Not on an AM4 over Bluetooth (beta), where it could only ever say
++              "Couldn't read them": the AM4 gives its scene names out only in a
++              whole-preset dump, which is never sent to it over Bluetooth (see
++              lib/bleWire's AM4 allowlist). The names this phone has seen
++              through the computer are still shown, from sceneNameCache.
++            */}
++            {overBluetooth(caps) && device === 'am4' ? null : <RefreshNames />}
+           </View>
+           <View
+             onLayout={(e) => {
 diff --git a/test/bluetooth.mjs b/test/bluetooth.mjs
 new file mode 100644
-index 0000000..c673b3e
+index 0000000..7fa3f49
 --- /dev/null
 +++ b/test/bluetooth.mjs
-@@ -0,0 +1,2274 @@
+@@ -0,0 +1,2290 @@
 +/**
 + * BLUETOOTH (BETA): the phone talking to the unit with no computer between.
 + *
@@ -9048,6 +9076,22 @@ index 0000000..c673b3e
 +    assert.equal(png.readUInt32BE(20), 96, 'the Bluetooth mark is not 96 high like the other icons')
 +  })
 +
++  test('on an AM4 over Bluetooth the Play screen offers no Refresh names, and keeps the names it already has', async () => {
++    /*
++     * "On the Bluetooth connection is it supposed to read the scene names?"
++     * Not on the AM4: its scene names come only in a whole-preset dump, which
++     * is never sent to it over Bluetooth. So the link that could only fail is
++     * not offered, and the names this phone has seen through the computer
++     * still go up, from the same per-unit store, under the same 'am4' name.
++     */
++    const stage = flat('mobile/src/screens/Stage.js')
++    assert.match(stage, /\{overBluetooth\(caps\) && device === 'am4' \? null : <RefreshNames \/>\}/, 'Refresh names is offered where it can only fail')
++    const rig = flat('mobile/src/lib/rig.js')
++    assert.match(rig, /const kept = await recallSceneNames\(owner, number\) if \(kept\.length && state\.preset\?\.number === number\) set\(\{ sceneNames: kept \}\)/, 'the names already seen are not shown first')
++    const { deviceSlug } = await import('../shared/device-slug.mjs')
++    assert.equal(deviceSlug({ name: 'AM4', short: 'AM4' }), 'am4', 'Bluetooth files the AM4 under another name, so the computer’s names are not found')
++  })
++
 +  test('the native module: its name and events, the simulator kept out, and no MIDI client until one is needed', () => {
 +    const config = JSON.parse(src('mobile/modules/fractal-ble-midi/expo-module.config.json'))
 +    assert.deepEqual(config.platforms, ['apple', 'android'])
@@ -9102,7 +9146,7 @@ index 0000000..c673b3e
 +  })
 +}
 diff --git a/test/mobile.mjs b/test/mobile.mjs
-index 184941e..d6bf1db 100644
+index 184941e..1e18e47 100644
 --- a/test/mobile.mjs
 +++ b/test/mobile.mjs
 @@ -38,7 +38,9 @@ const traverse = babelTraverse.default || babelTraverse
@@ -9125,7 +9169,17 @@ index 184941e..d6bf1db 100644
      'debugLog.js': 'export const logDebug = () => {}\n',
      'lineage.js': 'export const withLineage = (x) => x\n',
      'presetNames.js': 'export const adopt = async () => 0\nexport const forget = () => {}\nexport const learn = () => {}\nexport const nameOf = () => undefined\n',
-@@ -3482,7 +3486,7 @@ export function run(test) {
+@@ -2877,7 +2881,8 @@ export function run(test) {
+     assert.match(rigSrc, /export async function rereadSceneNames\(\)/)
+     assert.match(rigSrc, /if \(names === null \|\| state\.preset\?\.number !== number\) return 'failed'\n  if \(!names\.some\(\(n\) => n\)\) return 'none'/, 'Refresh names cannot tell unnamed scenes from a failed read')
+     const stage = read('mobile/src/screens/Stage.js')
+-    assert.match(stage, /<Label>Scenes<\/Label>\s*<RefreshNames \/>/, 'Refresh names is not beside the Scenes heading')
++    /* Beside the heading; over Bluetooth on an AM4 it is held back (test/bluetooth.mjs says why). */
++    assert.match(stage, /<Label>Scenes<\/Label>\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?(?:\{overBluetooth\(caps\) && device === 'am4' \? null : )?<RefreshNames \/>/, 'Refresh names is not beside the Scenes heading')
+     assert.match(stage, /await refreshAll\(\)\s*\/\*[^*]*\*\/\s*if \(!arriving\) await rereadSceneNames\(\)/, 'pulling down does not read the scene names fresh')
+     assert.match(stage, /none: 'No names on the unit'/)
+     assert.match(stage, /failed: "Couldn't read them"/)
+@@ -3482,7 +3487,7 @@ export function run(test) {
      assert.match(flat, /!demo &&/, 'the demo is made to wait for a computer it does not have')
      assert.match(
        flat,
@@ -9134,7 +9188,7 @@ index 184941e..d6bf1db 100644
        'nothing is shown while the app waits'
      )
  
-@@ -3643,7 +3647,8 @@ export function run(test) {
+@@ -3643,7 +3648,8 @@ export function run(test) {
  
      const phone = read('mobile/App.js').replace(/\s+/g, ' ')
      const waking = phone.slice(phone.indexOf('function Waking('))
@@ -9144,7 +9198,7 @@ index 184941e..d6bf1db 100644
      assert.match(waking, /This phone is signed in as \$\{email\}/, 'the phone does not say which account it is on')
      assert.match(waking, /Switch account on this phone/, 'the phone gives no way to change account')
      assert.match(read('mobile/src/screens/Settings.js'), /useComputerElsewhere\(link === 'no-answer'\)/, 'Setup never asks')
-@@ -3656,7 +3661,7 @@ export function run(test) {
+@@ -3656,7 +3662,7 @@ export function run(test) {
      assert.match(wrong, /Switch account on this phone/, 'the stage gives no way to change account')
      assert.match(
        phone,
@@ -9153,7 +9207,7 @@ index 184941e..d6bf1db 100644
        'the stage screen says nothing while the link is down on another account'
      )
  
-@@ -5729,7 +5734,7 @@ export function run(test) {
+@@ -5729,7 +5735,7 @@ export function run(test) {
      const flat = app.replace(/\s+/g, ' ')
      assert.match(
        flat,
@@ -9162,7 +9216,7 @@ index 184941e..d6bf1db 100644
        'leaving the demo no longer tears the link down, so a simulated rig stays on screen as a real one'
      )
  
-@@ -8347,7 +8352,7 @@ export function run(test) {
+@@ -8347,7 +8353,7 @@ export function run(test) {
         must never wear CONNECTED. */
      assert.match(
        bar,
@@ -9171,7 +9225,7 @@ index 184941e..d6bf1db 100644
        'the bar still says CONNECTED in the demo'
      )
      assert.match(bar, /const mark = demo \? 'wait' : linkTone\(tone\)/, 'the demo word is drawn in the colour a real connection gets')
-@@ -9184,7 +9189,7 @@ export function run(test) {
+@@ -9184,7 +9190,7 @@ export function run(test) {
        'the Back button and the swipe can disagree about where one step up is'
      )
      /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer. */
@@ -9180,7 +9234,7 @@ index 184941e..d6bf1db 100644
      /* And it says where it is going, because "Settings" would be a lie. */
      assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
      assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')
-@@ -10249,7 +10254,7 @@ export function run(test) {
+@@ -10249,7 +10255,7 @@ export function run(test) {
       */
      assert.match(
        bar,
