@@ -21,16 +21,17 @@ export default function MetronomeBeat({ bpm }) {
     Animated.timing(glow, { toValue: 0, duration: 140, useNativeDriver: true }).start()
   }, [glow])
   usePhoneClick(bpm, onBeat)
-  /* Rounded with the glass, or the corners of the frame are cut off behind it: see lib/screenCorners. */
+  /* Rounded with the glass, or the corners of the frame are cut off behind it: see lib/screenCorners.
+     'continuous' is the iPhone's own curve, which starts bending sooner than a circle; Android ignores it. */
   const { width, height } = useWindowDimensions()
-  const { top } = useSafeAreaInsets()
-  const round = cornerRadius({ os: Platform.OS, width, height, top, pad: Platform.isPad })
+  const { top, bottom } = useSafeAreaInsets()
+  const round = cornerRadius({ os: Platform.OS, width, height, top, bottom, pad: Platform.isPad })
 
   return (
     <Animated.View
       pointerEvents="none"
       accessible={false}
-      style={[StyleSheet.absoluteFill, { borderWidth: 4, borderRadius: round, borderColor: color.ok, opacity: glow }]}
+      style={[StyleSheet.absoluteFill, { borderWidth: 4, borderRadius: round, borderCurve: 'continuous', borderColor: color.ok, opacity: glow }]}
     />
   )
 }

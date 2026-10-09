@@ -13000,6 +13000,11 @@ button.setup-account-card.out .setup-account-who {
   inset: 0;
   pointer-events: none;
   border: 4px solid var(--ok);
+  /* Opened from an iPhone's home screen the page reaches under the rounded
+     glass (viewport-fit=cover), and a square frame lost its corners there.
+     Round only where there is a home indicator: anywhere else the inset is 0
+     and so is this. The phone app's lib/screenCorners says why 62. */
+  border-radius: clamp(0px, calc(env(safe-area-inset-bottom, 0px) * 1000), 62px);
   opacity: 0;
   z-index: 1000;
 }

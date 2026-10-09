@@ -96,7 +96,13 @@ export function run(test) {
      * scrims, pills — is rounder, so the two never read as the same surface.
      * A circle and a square corner are shapes, not steps.
      */
-    const shapes = new Set(['0', '50%'])
+    const shapes = new Set([
+      '0',
+      '50%',
+      /* The screen's own glass, for the metronome's frame round the whole
+         page: the phone's curve, not one of the app's. */
+      'clamp(0px, calc(env(safe-area-inset-bottom, 0px) * 1000), 62px)'
+    ])
     const bare = declarations('border-radius').filter(
       (v) => !shapes.has(v) && !v.includes('var(')
     )

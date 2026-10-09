@@ -3884,22 +3884,31 @@ export function run(test) {
      */
     const beat = read('mobile/src/components/MetronomeBeat.js')
     assert.match(beat, /borderRadius: round/, 'the beat’s frame is square again, and its corners are cut off by the screen')
-    assert.match(beat, /const round = cornerRadius\(\{ os: Platform\.OS, width, height, top, pad: Platform\.isPad \}\)/)
+    assert.match(beat, /const round = cornerRadius\(\{ os: Platform\.OS, width, height, top, bottom, pad: Platform\.isPad \}\)/)
+    assert.match(beat, /borderCurve: 'continuous'/, 'the frame bends later than the iPhone’s glass does, and its corners are clipped')
     const { cornerRadius } = await import('../mobile/src/lib/screenCorners.js')
     /* His iPhone 17 Pro Max, and its family. */
-    assert.equal(cornerRadius({ os: 'ios', width: 440, height: 956, top: 62 }), 62)
-    assert.equal(cornerRadius({ os: 'ios', width: 956, height: 440, top: 62 }), 62, 'a screen read the other way up is another phone')
-    assert.equal(cornerRadius({ os: 'ios', width: 393, height: 852, top: 59 }), 55)
+    assert.equal(cornerRadius({ os: 'ios', width: 440, height: 956, top: 62, bottom: 34 }), 62)
+    assert.equal(cornerRadius({ os: 'ios', width: 956, height: 440, top: 62, bottom: 34 }), 62, 'a screen read the other way up is another phone')
+    assert.equal(cornerRadius({ os: 'ios', width: 393, height: 852, top: 59, bottom: 34 }), 55)
+    assert.equal(cornerRadius({ os: 'ios', width: 420, height: 912, top: 68, bottom: 34 }), 62)
     /* A size two models share takes the rounder: a frame that curves more than the glass is all seen. */
-    assert.equal(cornerRadius({ os: 'ios', width: 375, height: 812, top: 44 }), 44)
-    /* An iPhone not on the list yet, with an island, is treated as the roundest; one with a home button is square. */
-    assert.equal(cornerRadius({ os: 'ios', width: 999, height: 2000, top: 62 }), 62)
-    assert.equal(cornerRadius({ os: 'ios', width: 375, height: 667, top: 20 }), 0)
-    assert.equal(cornerRadius({ os: 'ios', width: 1024, height: 1366, top: 24 }), 0, 'an iPad with a home button gets round corners')
-    assert.ok(cornerRadius({ os: 'ios', width: 1024, height: 1366, top: 32, pad: true }) > 0)
-    /* Android cannot be asked without native code: a round default, scaled to the screen. */
-    assert.ok(cornerRadius({ os: 'android', width: 412, height: 915, top: 24 }) >= 35)
+    assert.equal(cornerRadius({ os: 'ios', width: 375, height: 812, top: 44, bottom: 34 }), 44)
+    assert.equal(cornerRadius({ os: 'ios', width: 375, height: 812, top: 50, bottom: 34 }), 44)
+    /* Display Zoom: a big phone zoomed says it is an X, and its glass is far rounder than an X's. */
+    assert.ok(cornerRadius({ os: 'ios', width: 375, height: 812, top: 53, bottom: 34 }) >= 56, 'a zoomed big iPhone has its corners cut off again')
+    /* An iPhone not on the list yet is treated as the roundest; one with a home button is square. */
+    assert.equal(cornerRadius({ os: 'ios', width: 999, height: 2000, top: 62, bottom: 34 }), 62)
+    assert.equal(cornerRadius({ os: 'ios', width: 375, height: 667, top: 20, bottom: 0 }), 0)
+    /* Rounded iPads have a 24-point status bar, which the first version took for square glass. */
+    assert.equal(cornerRadius({ os: 'ios', width: 1024, height: 1366, top: 24, bottom: 20, pad: true }), 22, 'a rounded iPad gets a square flash')
+    assert.equal(cornerRadius({ os: 'ios', width: 1024, height: 1366, top: 20, bottom: 0, pad: true }), 0, 'an iPad with a home button gets round corners')
+    /* Android cannot be asked without native code: rounder than Google's own (a Pixel 9 is 50), capped for tablets. */
+    assert.ok(cornerRadius({ os: 'android', width: 411, height: 915 }) >= 51, 'a Pixel 9’s corners are cut off')
+    assert.equal(cornerRadius({ os: 'android', width: 800, height: 1280 }), 60)
     assert.equal(cornerRadius({}), 0)
+    /* And the browser opened from the home screen, which reaches under the glass too. */
+    assert.match(read('src/styles.css'), /\.metronome-beat \{[^}]*border-radius: clamp\(0px, calc\(env\(safe-area-inset-bottom, 0px\) \* 1000\), 62px\)/)
     assert.match(read('src/styles.css'), /\.metronome-beat \{[^}]*pointer-events: none/)
   })
 
