@@ -27,4 +27,15 @@ then bump the version, delete the patch file in the same change, and build.
 - Over Bluetooth the bar at the top says so: CONNECTED is Bluetooth blue instead of green, and the dot beside the unit's name is the Bluetooth mark, blue while the unit answers and red when it does not ("instead of a green dot next to the unit name have a Bluetooth icon"). The adapter's name is in the note under CONNECTED, and a screen reader is told it is Bluetooth.
 - On an AM4 over Bluetooth, Play no longer offers Refresh names, which could only fail there: the AM4 gives scene names out only in a whole-preset dump, never sent to it over Bluetooth. Names this phone has already seen through the computer still show, from the same store ("On the Bluetooth connection is it supposed to read the scene names?").
 
+**From the Bluetooth gap audit (9 Oct)**, also in the patch, none of it a new message to any unit:
+
+- A unit that has never answered is sent nothing but "are you there?". The wrong-unit guard only tripped when an AM4 said something; one picked as an FM3 that stayed silent went on being sent FM3 messages by the full read and every check (`unheard` in `bleWire.js`). Reads held this way come back as "not answering"; writes are refused with the reason.
+- On an iPhone, Connect with a remembered adapter that is not connected to the phone opens Apple's Bluetooth screen, as the hint always said it would.
+- The words: Android 11 and older is told to allow Location and turn it on (not "Nearby devices", which it does not have), and an Android search that finds nothing says so. The iPhone's "no adapter" says to check Bluetooth is on and allowed. A connected adapter the unit never answers says it has to carry MIDI both ways. "What's different from USB" names the looper, volume, unit metronome and Footswitches page.
+- The metronome page says the unit's click cannot be switched over Bluetooth, instead of "the unit didn't take it". The tuner with no readings no longer blames a computer that is not there.
+- Refresh names on an FM3, FM9 or Axe-Fx III reads the scene names again instead of handing back the kept copy.
+- The preset list's Refresh puts a name back when its re-read fails, on screen and on disk. Over Bluetooth a failed read is likely, and the name used to be lost for good.
+
+Left alone, with the reason: the FM9's and Axe-Fx III's extra blocks (Amp 2, Cab 2, Drive 3 and so on) do not show as pedals over Bluetooth. The fix needs their block numbers, which are not in this repository and nobody here has either unit to check them against; a wrong guess could put an output block on the pedal board.
+
 This patch leaves out the version number and the build log (docs/expo-builds.md already has build 25's row), so it applies to main as it moves. Apply it with `git apply`, then the steps above.

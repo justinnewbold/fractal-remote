@@ -51,14 +51,14 @@ index 0a15667..9cc8474 100644
  # Written by @bacons/apple-targets at every prebuild. Kept out of the watch
  # folder itself, because every file in there becomes part of the watch app.
 diff --git a/mobile/App.js b/mobile/App.js
-index 721f1f4..6e1ebf4 100644
+index cf59b13..4df9553 100644
 --- a/mobile/App.js
 +++ b/mobile/App.js
 @@ -38,6 +38,8 @@ import { clearLinkFault, useRig } from './src/lib/rig'
  import { keepLog } from './src/lib/logKeep'
  import { installCrashCapture } from './src/lib/debugLog'
  import { restoreDemo, setDemo, useDemo } from './src/lib/demo'
-+import { restoreBluetooth, useBluetoothOn, useBluetoothTrouble } from './src/lib/bluetooth'
++import { ALLOW_WORDS, restoreBluetooth, useBluetoothOn, useBluetoothTrouble } from './src/lib/bluetooth'
 +import { overBluetooth } from './src/lib/bleSwitch'
  import { BENCH } from './src/lib/features'
  import Paywall from './src/screens/Paywall'
@@ -111,7 +111,7 @@ index 721f1f4..6e1ebf4 100644
  
    /*
     * Setlists and stars, kept in step with the Mac.
-@@ -840,9 +860,10 @@ export default function App() {
+@@ -838,9 +858,10 @@ export default function App() {
              {/* A downloaded update, offered as a restart — never taken on its own. */}
              <UpdateReady />
              {/* A computer on another account, said on the stage too and not
@@ -124,7 +124,7 @@ index 721f1f4..6e1ebf4 100644
                onSwitch={() => openSettings('link')}
                onTroubleshoot={openConnectFix}
              />
-@@ -873,6 +894,7 @@ export default function App() {
+@@ -871,6 +892,7 @@ export default function App() {
                  onRetry={probeNow}
                  onSwitch={() => openSettings('link')}
                  onTroubleshoot={openConnectFix}
@@ -132,7 +132,7 @@ index 721f1f4..6e1ebf4 100644
                />
              ) : screen === 'presets' ? (
                <Presets onBack={() => setScreen('stage')} />
-@@ -1030,9 +1052,12 @@ export default function App() {
+@@ -1028,9 +1050,12 @@ export default function App() {
                   * Only once the Mac is answering either way: every control on
                   * that screen is read off the unit, so with nothing on the other
                   * end it is a screen of empty knobs.
@@ -146,7 +146,7 @@ index 721f1f4..6e1ebf4 100644
                  }
                  onUnlock={() => setBuying(true)}
                />
-@@ -1083,7 +1108,17 @@ const ofError = (s) => s.error
+@@ -1081,7 +1106,17 @@ const ofError = (s) => s.error
  /* How long "Finding your computer…" stands on its own before it says more. */
  const WAKING_LONG_MS = 15000
  
@@ -165,7 +165,7 @@ index 721f1f4..6e1ebf4 100644
    const said =
      link.link === 'connected'
        ? 'Asking your unit what it is\u2026'
-@@ -1131,7 +1166,7 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
+@@ -1129,7 +1164,7 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
     * was off. The account server can tell: a computer on this wifi, signed
     * into a different account, is a yes (lib/useComputerElsewhere.js).
     */
@@ -174,7 +174,7 @@ index 721f1f4..6e1ebf4 100644
    return (
      <View
        accessibilityLiveRegion="polite"
-@@ -1139,7 +1174,7 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
+@@ -1137,7 +1172,7 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
      >
        <ActivityIndicator color={color.silkDim} />
        <Text style={{ color: color.silkDim, fontSize: font.body, textAlign: 'center' }}>{said}</Text>
@@ -183,7 +183,7 @@ index 721f1f4..6e1ebf4 100644
          <Text style={{ color: color.silkFaint, fontSize: font.small, textAlign: 'center' }}>
            {'Make sure you’re connected to your computer using '}
            <Text style={{ color: color.silkDim, fontWeight: '700' }}>{email}</Text>.
-@@ -1147,7 +1182,15 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
+@@ -1145,7 +1180,15 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
        ) : null}
        {long && link.link !== 'connected' ? (
          <View style={{ alignSelf: 'stretch', gap: space.md }}>
@@ -193,14 +193,14 @@ index 721f1f4..6e1ebf4 100644
 +              {trouble === 'bluetooth-off'
 +                ? 'Bluetooth is off on this phone. Turn it on in the phone’s settings.'
 +                : trouble === 'permission'
-+                  ? 'Allow Nearby devices for Fractal Remote in Android’s settings.'
++                  ? `${ALLOW_WORDS}.`
 +                  : 'Check the phone’s Bluetooth is on, that the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it.'}
 +            </Note>
 +          ) : elsewhere ? (
              <Note tone="fault">
                {email
                  ? `The computer on this wifi is signed into a different account. This phone is signed in as ${email}. Sign the Fractal app on the computer in with ${email}, or sign this phone into the computer’s account.`
-@@ -1160,10 +1203,18 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
+@@ -1158,10 +1201,18 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot }) {
              </Note>
            )}
            {elsewhere && onSwitch ? <Press label="Switch account on this phone" onPress={onSwitch} /> : null}
@@ -222,7 +222,7 @@ index 721f1f4..6e1ebf4 100644
        ) : null}
      </View>
 diff --git a/mobile/app.json b/mobile/app.json
-index 92a339f..a099d8f 100644
+index 939d7a5..b18e474 100644
 --- a/mobile/app.json
 +++ b/mobile/app.json
 @@ -26,7 +26,8 @@
@@ -2314,6 +2314,41 @@ index b263e91..6bac595 100644
    const where = link?.macName || 'your computer'
    const said =
      link?.link === 'connected'
+diff --git a/mobile/src/components/Tuner.js b/mobile/src/components/Tuner.js
+index 86b89fe..6692e6f 100644
+--- a/mobile/src/components/Tuner.js
++++ b/mobile/src/components/Tuner.js
+@@ -6,6 +6,7 @@ import { at as tint } from '../lib/vivid'
+ import { color, font, mono, radius, space, TAP } from '../lib/theme'
+ import Note from './Note'
+ import Press from './Press'
++import { useBluetoothOn } from '../lib/bluetooth'
+ 
+ const face = Platform.select(mono)
+ 
+@@ -36,6 +37,8 @@ const face = Platform.select(mono)
+  */
+ export default function Tuner({ reading, on, onClose }) {
+   const [stalled, setStalled] = useState(false)
++  /* Over Bluetooth there is no computer to blame: the unit itself is quiet. */
++  const bluetooth = useBluetoothOn()
+   const lastAt = useRef(0)
+   const { width } = useWindowDimensions()
+ 
+@@ -180,7 +183,12 @@ export default function Tuner({ reading, on, onClose }) {
+               {reading?.note ? `${cents > 0 ? '+' : ''}${cents} cents` : 'Play a string'}
+             </Text>
+ 
+-            {stalled ? (
++            {stalled && bluetooth ? (
++              <Note tone="warn">
++                The tuner is on, but the unit isn’t sending readings over Bluetooth. Use the unit’s own
++                display for now.
++              </Note>
++            ) : stalled ? (
+               <Note tone="warn">
+                 The tuner is running on the unit, but the readings aren’t reaching this phone — your
+                 computer keeps them to itself over a remote link. Use the unit’s own display, or tune at
 diff --git a/mobile/src/lib/bleAdapters.js b/mobile/src/lib/bleAdapters.js
 new file mode 100644
 index 0000000..456dc32
@@ -2802,10 +2837,10 @@ index 0000000..f0d252f
 +}
 diff --git a/mobile/src/lib/bleWire.js b/mobile/src/lib/bleWire.js
 new file mode 100644
-index 0000000..4c4e72e
+index 0000000..bf7b47b
 --- /dev/null
 +++ b/mobile/src/lib/bleWire.js
-@@ -0,0 +1,1874 @@
+@@ -0,0 +1,1906 @@
 +/**
 + * BLUETOOTH (BETA): THE UNIT, ANSWERED BY THE PHONE ITSELF.
 + *
@@ -3197,9 +3232,33 @@ index 0000000..4c4e72e
 +
 +  const wrongUnitError = () => failure(`An AM4 answered, not the ${spec.name}. Pick AM4 on the Bluetooth (beta) page in Settings.`, 409)
 +
++  /*
++   * NOTHING BUT "ARE YOU THERE?" GOES TO A UNIT THAT HAS NEVER ANSWERED.
++   *
++   * The wrong-unit guard above only trips when an AM4 SAYS something. One
++   * picked as an FM3 might say nothing to an FM3's messages instead, and
++   * then the guard never trips: the full read on connecting and every check
++   * after it went on sending it FM3 messages, and both freezes on record
++   * came from messages an AM4 did not expect. So until this connection has
++   * had an answer of any kind, only the unit's own probe goes out (the
++   * detect question, `probe: true`). A read held here comes back as nothing
++   * came, so every screen shows what it shows for a unit that is not
++   * answering; a write is refused, so nothing is learned from it and the
++   * player is told why. The first answer opens the line for everything.
++   *
++   * Not for the AM4's own connection: what it protects is the AM4, and the
++   * gen-3 units have no freezes on record.
++   */
++  const unheard = () =>
++    failure(`The ${spec.name} has not answered yet, so nothing is sent to it. Check the unit picked on the Bluetooth (beta) page, and the adapter's plugs.`, 504)
++
 +  function ex(out, opts = {}) {
 +    if (closed) return Promise.reject(notConnected())
 +    if (wrongUnit) return Promise.reject(wrongUnitError())
++    if (!am4 && !answered && !opts.probe) {
++      if (opts.priority !== 'poll') say(`held until the ${spec.name} answers: ${opts.what || 'a message'}`)
++      return opts.priority === 'write' ? Promise.reject(unheard()) : Promise.resolve(null)
++    }
 +    const priority = PRI[opts.priority] ?? PRI.read
 +    if (priority === PRI.poll && (current || waiting.length)) return Promise.resolve(SKIPPED)
 +    return new Promise((resolve, reject) => {
@@ -3508,7 +3567,7 @@ index 0000000..4c4e72e
 +  }
 +
 +  async function gen3Detect() {
-+    const got = await ask(buildGetScene(model), (f) => parseScene(f, model), WAIT.detect, 'the scene, to see whether the unit answers')
++    const got = await ask(buildGetScene(model), (f) => parseScene(f, model), WAIT.detect, 'the scene, to see whether the unit answers', { probe: true })
 +    const answered = Number.isInteger(got) || rejected(got)
 +    if (Number.isInteger(got)) last.scene = got
 +    say(answered ? `the ${spec.name} answers` : foreignWords() || `the ${spec.name} did not answer`)
@@ -4677,15 +4736,23 @@ index 0000000..4c4e72e
 +    },
 +    /** For the log and the panel: how many of our own messages came back, and how many tuner pushes arrived. */
 +    counts: () => ({ echoes, pushes }),
++    /*
++     * Refresh names asked: the next read of the scene names goes to the unit.
++     * Kept until the preset changes otherwise, so a scene renamed on the
++     * unit's own screen never showed, under a button promising a fresh read.
++     */
++    forgetSceneNames() {
++      sceneCache = null
++    },
 +    close
 +  }
 +}
 diff --git a/mobile/src/lib/bluetooth.js b/mobile/src/lib/bluetooth.js
 new file mode 100644
-index 0000000..1f327bc
+index 0000000..80480bd
 --- /dev/null
 +++ b/mobile/src/lib/bluetooth.js
-@@ -0,0 +1,512 @@
+@@ -0,0 +1,533 @@
 +import { useSyncExternalStore } from 'react'
 +import { Platform } from 'react-native'
 +import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -4858,6 +4925,19 @@ index 0000000..1f327bc
 +    sub = null
 +  }
 +}
++
++/*
++ * WHAT TO ALLOW, IN ANDROID'S OWN WORDS FOR THIS PHONE. Android 12 and newer
++ * asks for "Nearby devices". Android 11 and older asks for Location instead
++ * (the module asks for what the phone has: FractalBleMidiModule.kt), and
++ * finds nothing at all while the phone's Location is switched off, without
++ * saying why. Only ever telling an older phone about Nearby devices sent its
++ * owner looking for a setting it does not have.
++ */
++const OLD_ANDROID = Platform.OS === 'android' && Number(Platform.Version) < 31
++export const ALLOW_WORDS = OLD_ANDROID
++  ? 'Allow Location for Fractal Remote in Android’s settings, and turn Location on'
++  : 'Allow Nearby devices for Fractal Remote in Android’s settings'
 +
 +/** The adapters the module can see now. Empty on any trouble. */
 +export function adapterDevices() {
@@ -5114,6 +5194,14 @@ index 0000000..1f327bc
 +    /* One adapter found and none chosen yet: that is the one. Two is a question, and the list asks it. */
 +    const pick = saved.adapter ? null : pickAdapter(now.devices)
 +    if (pick) chooseAdapter(pick)
++    /* Nothing at all: said, rather than a search that ends in silence. */
++    if (!saved.adapter && !now.devices.length) {
++      noteBluetooth({
++        said: OLD_ANDROID
++          ? 'No adapter found. On this phone, Location has to be on for it to find one: turn it on, then tap Connect again.'
++          : 'No adapter found. Check it is plugged in, lit and close to the phone, then tap Connect again.'
++      })
++    }
 +  }, SCAN_SECONDS * 1000 + 500)
 +}
 +
@@ -5199,7 +5287,7 @@ index 0000000..1f327bc
 +  }
 +}
 diff --git a/mobile/src/lib/device.js b/mobile/src/lib/device.js
-index 60ff1e7..d0a1c3e 100644
+index 60ff1e7..dc0d095 100644
 --- a/mobile/src/lib/device.js
 +++ b/mobile/src/lib/device.js
 @@ -21,6 +21,7 @@ import { firmwareOf } from './firmware'
@@ -5231,6 +5319,17 @@ index 60ff1e7..d0a1c3e 100644
    /* What this unit has already refused as unsupported is not asked again. */
    const method = options?.method || 'GET'
    if (refused.known(method, path)) return Promise.reject(rememberedRefusal(method, path))
+@@ -188,6 +199,10 @@ export async function sceneState() {
+  */
+ export const presetSummary = (number) => remoteRequest(`/presets/${number}/summary`)
+ 
++/* Over Bluetooth the wire keeps the loaded preset's scene names; a fresh read
++   asks it to let them go first. Through a computer, nothing to do. */
++export const freshSceneNames = () => bluetoothWire()?.forgetSceneNames?.()
++
+ /** The ones that belong on a stage: everything but the three you never kick. The gate is one you do. */
+ export const stageBlocks = (blocks) =>
+   (blocks || []).filter((b) => !STAGE_HIDDEN.includes(b.slug))
 diff --git a/mobile/src/lib/fractal-sysex.mjs b/mobile/src/lib/fractal-sysex.mjs
 new file mode 100644
 index 0000000..f90a21a
@@ -6173,8 +6272,122 @@ index 26ce84d..604633c 100644
    running = false
    if (timer) clearTimeout(timer)
    timer = null
+diff --git a/mobile/src/lib/metronome.js b/mobile/src/lib/metronome.js
+index 64fed26..fcca008 100644
+--- a/mobile/src/lib/metronome.js
++++ b/mobile/src/lib/metronome.js
+@@ -7,6 +7,7 @@ import { setUnitMetronome } from './device'
+ import { DEFAULT_METRONOME, beatMs, clicks, metronomeSetting, nextBeat } from './metronome-rules'
+ import { tick } from './feedback'
+ import { logDebug } from './debugLog'
++import { isUnsupported } from './unsupported'
+ 
+ /**
+  * THE METRONOME SETTING, and the two things it drives.
+@@ -66,6 +67,9 @@ export async function setMetronome(patch, slug) {
+     if (said?.ok === false && !said?.unsupported) logDebug('metronome', 'the unit did not take it', JSON.stringify(said))
+     return said || { ok: true }
+   } catch (err) {
++    /* A unit (or a link: Bluetooth refuses every setting write) that has no
++       click to switch is not a unit that failed to take it. */
++    if (isUnsupported(err)) return { ok: false, unsupported: true }
+     logDebug('metronome', 'could not reach the unit', String(err?.message || err))
+     return { ok: false, message: String(err?.message || err) }
+   }
+diff --git a/mobile/src/lib/presetNames.js b/mobile/src/lib/presetNames.js
+index c3dbb49..df61a03 100644
+--- a/mobile/src/lib/presetNames.js
++++ b/mobile/src/lib/presetNames.js
+@@ -50,6 +50,18 @@ let draining = false
+ let failed = false
+ /** The rows a screen last said were in front of somebody. Refresh re-reads these. */
+ let onScreen = []
++/*
++ * WHAT A REFRESH TOOK OFF THE SCREEN, until the unit answers again.
++ *
++ * Refresh blanks the rows in front of you and asks for them afresh, which is
++ * right when the read comes back. When it does not — over Bluetooth that is
++ * likely: a slow AM4 name, a gen-3 unit that cannot name other presets — the
++ * row stayed blank, and the next name that did arrive wrote the whole list
++ * to disk without it, so a name first learned through the computer was lost
++ * for good. So the old name waits here: put back on a failed read, kept on
++ * disk until then, dropped once the unit has answered.
++ */
++const blanked = new Map()
+ 
+ /** How many mounted screens are waiting on these. Zero stops the drain. */
+ let interest = 0
+@@ -98,10 +110,16 @@ async function drain() {
+       const n = queue.shift()
+       try {
+         const got = await presetName(n)
++        blanked.delete(n)
+         names.set(n, got.empty ? '' : got.name)
+         persist()
+         announce()
+       } catch {
++        if (blanked.has(n)) {
++          names.set(n, blanked.get(n))
++          blanked.delete(n)
++          announce()
++        }
+         /*
+          * One slot failing is one slot. A unit that has gone will fail every
+          * one of them, and the screens say so once rather than per row — but
+@@ -212,6 +230,9 @@ const readDisk = () => {
+ 
+ let saveTimer = null
+ 
++/* What is known, and what a refresh has taken off the screen but not yet replaced. */
++const onDisk = () => ({ ...Object.fromEntries(blanked), ...Object.fromEntries(names) })
++
+ /**
+  * Write what is known to disk, coalesced: a scroll learns names one at a time
+  * and this rewrites the unit's whole list.
+@@ -222,7 +243,7 @@ function persist() {
+   saveTimer = setTimeout(() => {
+     saveTimer = null
+     const all = readDisk()
+-    all[owner] = { at: tookHostAt, names: Object.fromEntries(names) }
++    all[owner] = { at: tookHostAt, names: onDisk() }
+     sync.setItem(KEY, JSON.stringify(all))
+   }, 500)
+ }
+@@ -233,7 +254,7 @@ export const flushPersist = () => {
+   clearTimeout(saveTimer)
+   saveTimer = null
+   const all = readDisk()
+-  all[owner] = { at: tookHostAt, names: Object.fromEntries(names) }
++  all[owner] = { at: tookHostAt, names: onDisk() }
+   sync.setItem(KEY, JSON.stringify(all))
+ }
+ 
+@@ -279,6 +300,7 @@ export async function adopt(slug) {
+   if (owner !== slug) {
+     owner = slug
+     names.clear()
++    blanked.clear()
+     asked.clear()
+     queue.length = 0
+     failed = false
+@@ -320,6 +342,7 @@ export async function refresh() {
+   const changed = await pullHost()
+   const again = onScreen.slice()
+   for (const n of again) {
++    if (names.has(n)) blanked.set(n, names.get(n))
+     names.delete(n)
+     asked.delete(n)
+   }
+@@ -362,6 +385,7 @@ export function useNames() {
+  */
+ export function forget() {
+   names.clear()
++  blanked.clear()
+   asked.clear()
+   queue.length = 0
+   failed = false
 diff --git a/mobile/src/lib/rig.js b/mobile/src/lib/rig.js
-index e8b5d9a..2a00aa8 100644
+index e8b5d9a..b745e2a 100644
 --- a/mobile/src/lib/rig.js
 +++ b/mobile/src/lib/rig.js
 @@ -1307,6 +1307,9 @@ export function noteEdited() {
@@ -6187,6 +6400,14 @@ index e8b5d9a..2a00aa8 100644
    /* Already marked: the record is the same object, and setting it again
       would re-render every screen watching it on every knob of a drag. */
    if (unsaved === state.unsaved) return
+@@ -1500,6 +1503,7 @@ export async function refreshSceneNames(copy) {
+ export async function rereadSceneNames() {
+   const number = state.preset?.number
+   if (!Number.isInteger(number)) return 'failed'
++  device.freshSceneNames?.()
+   const names = await namesOfLoaded(number)
+   if (names === null || state.preset?.number !== number) return 'failed'
+   if (!names.some((n) => n)) return 'none'
 diff --git a/mobile/src/lib/theme.js b/mobile/src/lib/theme.js
 index 0ba4d71..b0fb1cd 100644
 --- a/mobile/src/lib/theme.js
@@ -6225,10 +6446,10 @@ index 0ba4d71..b0fb1cd 100644
    onFault: '#fff6f3',
 diff --git a/mobile/src/screens/Bluetooth.js b/mobile/src/screens/Bluetooth.js
 new file mode 100644
-index 0000000..b108a92
+index 0000000..99b760f
 --- /dev/null
 +++ b/mobile/src/screens/Bluetooth.js
-@@ -0,0 +1,455 @@
+@@ -0,0 +1,478 @@
 +import { useEffect, useState } from 'react'
 +import { Platform, Text, View } from 'react-native'
 +import * as Clipboard from 'expo-clipboard'
@@ -6237,6 +6458,7 @@ index 0000000..b108a92
 +import { APP_VERSION } from '../lib/version'
 +import { BLE_UNITS, WAYS } from '../lib/bleWire'
 +import {
++  ALLOW_WORDS,
 +  adapterDevices,
 +  checkSteps,
 +  chooseAdapter,
@@ -6295,7 +6517,9 @@ index 0000000..b108a92
 +  'Footswitch changes may take a moment to show.',
 +  'About 30 feet of range.',
 +  'The adapter connects to one thing at a time.',
-+  'On the AM4, scene names don’t show over Bluetooth.'
++  'On the AM4, scene names don’t show over Bluetooth.',
++  /* Found by their absence until this line: every one of them is hidden over Bluetooth, not broken. */
++  'No looper, volume button, unit metronome click or Footswitches page.'
 +]
 +
 +/* The panel's choices, in the order the panel lists them. */
@@ -6321,7 +6545,7 @@ index 0000000..b108a92
 +  const name = unitName(b.unit)
 +  /* Whatever the switch says: finding the adapter before turning this on is the usual order, and a search that could not start has to say why. */
 +  if (b.trouble === 'bluetooth-off') return { line: 'Turn on Bluetooth in the phone’s settings', tone: 'fault' }
-+  if (b.trouble === 'permission') return { line: 'Allow Nearby devices for Fractal Remote in Android’s settings', tone: 'fault' }
++  if (b.trouble === 'permission') return { line: ALLOW_WORDS, tone: 'fault' }
 +  if (!b.on) return { line: 'Off', tone: 'dim' }
 +  if (b.phase === 'locked') return { line: 'Unlock the app to connect to your unit', tone: 'fault' }
 +  if (!b.unit || b.phase === 'no-unit') return { line: 'Pick your unit', tone: 'dim' }
@@ -6419,16 +6643,28 @@ index 0000000..b108a92
 +    const pick = await findAdapters()
 +    if (ios && !pick && !adapterDevices().some((d) => !d.offline)) setMissed(true)
 +  }
-+  const start = () => {
-+    if (!canStart) return
-+    if (b.adapter) setBluetooth(true)
-+    else find()
-+  }
 +  /* Another adapter: forget this one, then the same as the first time. */
 +  const another = () => {
 +    if (!canStart) return
 +    forgetAdapter()
 +    find()
++  }
++  /*
++   * ON AN IPHONE, AN ADAPTER FROM LAST TIME THAT IS NOT CONNECTED TO IT NOW
++   * goes through Apple's screen again. Apple's screen is the only way an app
++   * can connect one, and turning Bluetooth on with it offline only waited
++   * for it to come back by itself, under a hint telling the player to tap
++   * Connect and use Apple's screen — which Connect never opened.
++   */
++  const offlineHere = (a) => {
++    const seen = adapterDevices().find((d) => d.id === a.id)
++    return !seen || !!seen.offline
++  }
++  const start = () => {
++    if (!canStart) return
++    if (b.adapter && ios && offlineHere(b.adapter)) return another()
++    if (b.adapter) setBluetooth(true)
++    else find()
 +  }
 +  /* A row tapped in the list: that adapter, and on. */
 +  const choose = (d) => {
@@ -6481,6 +6717,13 @@ index 0000000..b108a92
 +            <Text accessibilityLiveRegion="polite" style={{ color: TONES[said.tone](), fontSize: font.body + 1, lineHeight: 24 }}>
 +              {said.line}
 +            </Text>
++            {/* The usual reason a connected adapter hears nothing back: it only carries one way. */}
++            {b.on && b.phase === 'connected' && !b.answeredAs && (unitState === 'missing' || unitState === 'silent') ? (
++              <Hint>
++                The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way:
++                use one with two plugs, in the unit’s MIDI In and MIDI Out.
++              </Hint>
++            ) : null}
 +            {b.on && b.phase === 'connecting' ? (
 +              <Hint>
 +                {ios
@@ -6514,7 +6757,8 @@ index 0000000..b108a92
 +        {!b.on && b.trouble ? <Text style={{ color: color.fault, fontSize: font.body, lineHeight: 22 }}>{said.line}</Text> : null}
 +        {!b.on && missed && !b.adapter ? (
 +          <Text style={{ color: color.fault, fontSize: font.body, lineHeight: 22 }}>
-+            No adapter was connected. Tap Connect again, and in Apple’s screen tap your adapter and wait for Connected before Done.
++            No adapter was connected. Check Bluetooth is on, and allowed for Fractal Remote in the iPhone’s Settings. Then
++            tap Connect again, and in Apple’s screen tap your adapter and wait for Connected before Done.
 +          </Text>
 +        ) : null}
 +        {b.said ? <Note tone="warn">{b.said}</Note> : null}
@@ -6685,7 +6929,7 @@ index 0000000..b108a92
 +  return <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>{children}</Text>
 +}
 diff --git a/mobile/src/screens/Settings.js b/mobile/src/screens/Settings.js
-index c5486ba..46bd8c5 100644
+index c5486ba..8077d81 100644
 --- a/mobile/src/screens/Settings.js
 +++ b/mobile/src/screens/Settings.js
 @@ -51,6 +51,9 @@ import { useComputerElsewhere } from '../lib/useComputerElsewhere'
@@ -6821,6 +7065,21 @@ index c5486ba..46bd8c5 100644
        {/* ------------------------------------------------------- metronome */}
        {page === 'metronome' ? (
          <>
+@@ -997,9 +1047,11 @@ export default function Settings({
+             {clickSaid ? <Note tone="fault">{clickSaid}</Note> : null}
+             <Note tone="hint">
+               {`It keeps the unit’s tempo${Number.isFinite(rigBpm) ? `, ${Math.round(rigBpm)} BPM right now` : ''}: tap tempo changes it. ${
+-                unitMetronome(rigSlug)
+-                  ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.'
+-                  : 'This unit has no metronome the app can switch, so only the phone keeps time.'
++                bluetooth && !demo
++                  ? 'Over Bluetooth the app can’t switch the unit’s click: pick Phone to hear it here.'
++                  : unitMetronome(rigSlug)
++                    ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.'
++                    : 'This unit has no metronome the app can switch, so only the phone keeps time.'
+               }`}
+             </Note>
+             {/* "Same with the watch, metronome that can beep on the watch."
 diff --git a/mobile/src/screens/Stage.js b/mobile/src/screens/Stage.js
 index 5071417..f35d4c2 100644
 --- a/mobile/src/screens/Stage.js
@@ -6851,10 +7110,10 @@ index 5071417..f35d4c2 100644
              onLayout={(e) => {
 diff --git a/test/bluetooth.mjs b/test/bluetooth.mjs
 new file mode 100644
-index 0000000..7fa3f49
+index 0000000..cc7efd5
 --- /dev/null
 +++ b/test/bluetooth.mjs
-@@ -0,0 +1,2290 @@
+@@ -0,0 +1,2385 @@
 +/**
 + * BLUETOOTH (BETA): the phone talking to the unit with no computer between.
 + *
@@ -7278,6 +7537,21 @@ index 0000000..7fa3f49
 +  const get = (path) => drive(clock, wire.request(path))
 +  const post = (path, body) => drive(clock, wire.request(path, { method: 'POST', body: JSON.stringify(body ?? null) }))
 +  const frames = () => sent.map((s) => s.bytes)
++  /*
++   * HELLO FIRST, as the link does on every connection (bleLink's wake). A
++   * gen-3 wire sends nothing but its probe to a unit that has never answered
++   * (see `unheard` in bleWire), so a test of what comes after starts the way
++   * the phone does: one detect, answered, then the slate wiped so the test
++   * sees only its own frames. A silent unit, or `hello: false`, is left as it
++   * is: those tests are about the line before anything has answered.
++   */
++  if (kind !== 'am4' && !options.silent && options.hello !== false) {
++    await get('/device/detect')
++    await advance(clock, 50)
++    sent.length = 0
++    logs.length = 0
++    events.length = 0
++  }
 +  return { sx, clock, wire, unit, sent, frames, events, logs, remembered, foreign, get, post, say, line }
 +}
 +
@@ -8033,6 +8307,31 @@ index 0000000..7fa3f49
 +    assert.equal(t.sent.length, before, 'the names were read twice')
 +    await assert.rejects(t.get('/presets/13/summary'), (e) => e.status === 501)
 +    assert.equal(t.sent.length, before)
++    /* Refresh names asks again: a scene renamed on the unit's screen shows without a preset change. */
++    t.wire.forgetSceneNames()
++    await t.get('/presets/12/scenes')
++    assert.equal(t.sent.length - before, 8, 'Refresh names handed back the kept copy instead of asking the unit')
++    const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
++    const rig = read('mobile/src/lib/rig.js')
++    const reread = rig.slice(rig.indexOf('export async function rereadSceneNames'))
++    assert.ok(reread.indexOf('device.freshSceneNames?.()') > 0 && reread.indexOf('device.freshSceneNames?.()') < reread.indexOf('await namesOfLoaded(number)'), 'Refresh names reads before letting the kept names go')
++    assert.match(read('mobile/src/lib/device.js'), /export const freshSceneNames = \(\) => bluetoothWire\(\)\?\.forgetSceneNames\?\.\(\)/)
++  })
++
++  test('over Bluetooth, the metronome and the tuner say what is true of Bluetooth, not of a computer', () => {
++    /* Its own readers: the shared ones further down this file are not made yet when this runs. */
++    const src = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
++    const flat = (f) => src(f).replace(/\s+/g, ' ')
++    /* The unit's click cannot be switched over Bluetooth (every setting write is refused): not "the unit didn't take it". */
++    const metronome = src('mobile/src/lib/metronome.js')
++    assert.match(metronome, /if \(isUnsupported\(err\)\) return \{ ok: false, unsupported: true \}/, 'a refused click reads as a unit that failed to take it')
++    assert.ok(metronome.indexOf('if (isUnsupported(err))') < metronome.indexOf("logDebug('metronome', 'could not reach the unit'"))
++    const settings = flat('mobile/src/screens/Settings.js')
++    assert.match(settings, /bluetooth && !demo \? 'Over Bluetooth the app can’t switch the unit’s click: pick Phone to hear it here\.'/)
++    /* And a tuner with no readings blames no computer when there is none. */
++    const tuner = flat('mobile/src/components/Tuner.js')
++    assert.match(tuner, /const bluetooth = useBluetoothOn\(\)/)
++    assert.match(tuner, /\{stalled && bluetooth \? \( <Note tone="warn"> The tuner is on, but the unit isn’t sending readings over Bluetooth\./)
 +  })
 +
 +  test('requests go one at a time: the second frame waits for the first answer, or the first timeout', async () => {
@@ -8045,11 +8344,12 @@ index 0000000..7fa3f49
 +    assert.equal(t.sent.length, 2)
 +    assert.ok(t.sent[1].at >= answerDone, `the second went at ${t.sent[1].at}, before the first answer finished at ${answerDone}`)
 +
++    /* Two probes, the only thing a unit that has never answered is sent. */
 +    const quiet = await onTheLine('fm3', { silent: true })
-+    const c = quiet.wire.request('/preset')
-+    const d = quiet.wire.request('/scene')
++    const c = quiet.wire.request('/device/detect')
++    const d = quiet.wire.request('/device/detect')
 +    await drive(quiet.clock, Promise.all([c, d]))
-+    assert.ok(quiet.sent[1].at >= 1500, 'the second went before the first had timed out')
++    assert.ok(quiet.sent[1].at >= 1200, 'the second went before the first had timed out')
 +  })
 +
 +  test('the player’s writes go ahead of reads already waiting', async () => {
@@ -8127,6 +8427,11 @@ index 0000000..7fa3f49
 +
 +  test('a frame with a bad checksum, or from another unit, is not taken as the answer', async () => {
 +    const t = await onTheLine('fm3', { silent: true })
++    /* One good answer first, by hand, or the scene question is never sent. */
++    const hello = t.wire.request('/device/detect')
++    t.clock.setTimeout(() => t.wire.heard(t.sx.frame(0x11, 0x0c, [0])), 10)
++    assert.equal((await drive(t.clock, hello)).connected, true)
++    await advance(t.clock, 50)
 +    const p = t.wire.request('/scene')
 +    t.clock.setTimeout(() => t.wire.heard(H('F0 00 01 74 11 0C 03 19 F7')), 10)
 +    t.clock.setTimeout(() => t.wire.heard(t.sx.frame(0x12, 0x0c, [4])), 20)
@@ -8217,14 +8522,14 @@ index 0000000..7fa3f49
 +  test('a connection made for an FM3 that hears an AM4 sends it nothing more', async () => {
 +    const t = await onTheLine('fm3', { silent: true })
 +    t.wire.startPolls()
-+    const asking = t.wire.request('/scene')
-+    const waiting = t.wire.request('/tempo').then(
++    const asking = t.wire.request('/device/detect')
++    const waiting = t.wire.request('/device/detect').then(
 +      () => null,
 +      (e) => e
 +    )
 +    /* The AM4's own refusal of a message for some other unit. */
 +    t.clock.setTimeout(() => t.wire.heard(t.sx.frame(0x15, 0x64, [0x0c, 0x02])), 10)
-+    assert.deepEqual(await drive(t.clock, asking), { index: -1 })
++    assert.equal((await drive(t.clock, asking)).connected, false)
 +    assert.equal((await drive(t.clock, waiting))?.status, 409, 'what was waiting was sent anyway')
 +    const before = t.sent.length
 +    assert.equal(before, 1, 'more than the one question in flight went out')
@@ -8240,6 +8545,35 @@ index 0000000..7fa3f49
 +    const am4 = await onTheLine('am4')
 +    assert.equal((await am4.get('/device/detect')).connected, true)
 +    assert.deepEqual(am4.foreign, [])
++  })
++
++  test('a unit that has never answered is sent nothing but the probe: an AM4 picked as an FM3 that stays silent', async () => {
++    /*
++     * The guard above trips only when the AM4 says something. If it says
++     * nothing to an FM3's messages, the full read and every check after it
++     * would go on sending it FM3 messages. So nothing but "are you there?"
++     * goes out until something answers.
++     */
++    const t = await onTheLine('fm3', { silent: true })
++    assert.equal((await t.get('/device/detect')).connected, false)
++    const probe = hex(t.frames()[0])
++    assert.deepEqual(await t.get('/preset'), { number: -1, name: '' })
++    assert.deepEqual(await t.get('/scene'), { index: -1 })
++    assert.deepEqual(await t.get('/tempo'), { bpm: 0 })
++    await assert.rejects(t.get('/preset/blocks'), (e) => e.status === 504)
++    await assert.rejects(t.get('/presets/40'), (e) => e.status === 504)
++    await assert.rejects(t.post('/scene', { index: 2 }), (e) => e.status === 504 && /has not answered yet, so nothing is sent/.test(e.message), 'a write to a silent unit was sent, or counted as done')
++    await assert.rejects(t.post('/preset/select', { number: 3 }), (e) => e.status === 504)
++    t.wire.startPolls()
++    await advance(t.clock, 20000)
++    assert.deepEqual(t.frames().map(hex), [probe], 'a unit that has never answered was sent more than the probe')
++    assert.deepEqual(t.remembered, [], 'a way to send was learned from a unit that never answered')
++    assert.ok(t.logs.some((l) => /held until the FM3 answers/.test(l)), 'the log does not say what was held')
++    /* And the first answer opens the line. */
++    t.unit.opt.silent = false
++    assert.equal((await t.get('/device/detect')).connected, true)
++    assert.ok(Number.isInteger((await t.get('/scene')).index) && (await t.get('/scene')).index >= 0, 'an answered unit is still held')
++    t.wire.close()
 +  })
 +
 +  test('the footswitch watch waits until the unit has answered once on this connection', async () => {
@@ -8518,8 +8852,11 @@ index 0000000..7fa3f49
 +  test('an adapter that will not take a message is an error, not a write that worked', async () => {
 +    const { createBleWire } = await import(WIRE)
 +    const wire = createBleWire({ unit: 'fm3', send: () => false, clock: fakeClock() })
-+    await assert.rejects(wire.request('/scene', { method: 'POST', body: '{"index":1}' }), (e) => e.status === 503)
-+    await assert.rejects(wire.request('/preset'), (e) => e.status === 503)
++    await assert.rejects(wire.request('/device/detect'), (e) => e.status === 503)
++    /* And with nothing ever answered, a write is refused unsent: never counted as one that worked. */
++    await assert.rejects(wire.request('/scene', { method: 'POST', body: '{"index":1}' }), (e) => e.status === 504)
++    const am4 = createBleWire({ unit: 'am4', send: () => false, clock: fakeClock() })
++    await assert.rejects(am4.request('/preset'), (e) => e.status === 503)
 +    assert.throws(() => createBleWire({ unit: 'vp4', send: () => true }), /does not know a unit called vp4/)
 +  })
 +
@@ -8876,7 +9213,7 @@ index 0000000..7fa3f49
 +    assert.match(waking, /Check the phone’s Bluetooth is on, that the adapter is plugged into the unit’s MIDI In and Out and lit, and that nothing else is connected to it\./)
 +    /* What the phone knows is in the way is said instead of the plugs. */
 +    assert.match(waking, /trouble === 'bluetooth-off' \? 'Bluetooth is off on this phone\. Turn it on in the phone’s settings\.'/)
-+    assert.match(waking, /trouble === 'permission' \? 'Allow Nearby devices for Fractal Remote in Android’s settings\.'/)
++    assert.match(waking, /trouble === 'permission' \? `\$\{ALLOW_WORDS\}\.`/, 'the waiting screen words the permission its own way')
 +    assert.match(waking, /<Press label="Look for the adapter again" onPress=\{\(\) => onRetry\?\.\(\)\} \/>/)
 +    assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth \(beta\)" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
 +    assert.match(app, /onBluetooth=\{\(\) => openSettings\('bluetooth'\)\}/)
@@ -8960,7 +9297,8 @@ index 0000000..7fa3f49
 +      'Footswitch changes may take a moment to show.',
 +      'About 30 feet of range.',
 +      'The adapter connects to one thing at a time.',
-+      'On the AM4, scene names don’t show over Bluetooth.'
++      'On the AM4, scene names don’t show over Bluetooth.',
++      'No looper, volume button, unit metronome click or Footswitches page.'
 +    ]) {
 +      assert.ok(page.includes(`'${line}'`), `the page does not say: ${line}`)
 +    }
@@ -8972,8 +9310,21 @@ index 0000000..7fa3f49
 +    }
 +    /* The status line, in his words. */
 +    assert.match(page, /Adapter connected, but the \$\{name\} isn’t answering\. Check both MIDI plugs, and that MIDI Thru is off\./)
-+    assert.match(page, /'Allow Nearby devices for Fractal Remote in Android’s settings'/)
++    assert.match(page, /if \(b\.trouble === 'permission'\) return \{ line: ALLOW_WORDS, tone: 'fault' \}/)
 +    assert.match(page, /'Turn on Bluetooth in the phone’s settings'/)
++    /*
++     * Android 11 and older asks for Location, not Nearby devices, and finds
++     * nothing while Location is off; the words follow the phone, and an
++     * empty search is said rather than ending in silence.
++     */
++    const lib = src('mobile/src/lib/bluetooth.js')
++    assert.match(lib, /const OLD_ANDROID = Platform\.OS === 'android' && Number\(Platform\.Version\) < 31/)
++    assert.match(lib, /\? 'Allow Location for Fractal Remote in Android’s settings, and turn Location on'\s*: 'Allow Nearby devices for Fractal Remote in Android’s settings'/)
++    assert.match(lib, /if \(!saved\.adapter && !now\.devices\.length\) \{/, 'an Android search that finds nothing ends in silence')
++    assert.match(lib, /Location has to be on for it to find one/)
++    /* The iPhone's "nothing connected" says where Bluetooth is allowed, and a one-way adapter is named as the likely cause. */
++    assert.match(page, /No adapter was connected\. Check Bluetooth is on, and allowed for Fractal Remote in the iPhone’s Settings\./)
++    assert.match(page, /The adapter has to carry MIDI both ways\./)
 +  })
 +
 +  test('setting it up is two steps and one button, and the phone picks the adapter when only one could be meant', async () => {
@@ -9016,6 +9367,9 @@ index 0000000..7fa3f49
 +    assert.match(page, /const showList = !b\.on && !b\.adapter && b\.devices\.length > 0/, 'the list shows when there is nothing to choose')
 +    assert.match(page, /if \(!wanted \|\| !b\.adapter \|\| !b\.unit \|\| b\.on\) return setWanted\(false\) if \(mayDrive\(purchase\)\) setBluetooth\(true\)/, 'choosing the adapter does not turn Bluetooth on')
 +    assert.match(page, /if \(b\.adapter\) setBluetooth\(true\) else find\(\)/, 'Connect with an adapter from last time goes looking again')
++    /* Except on an iPhone it is not connected to: Apple's screen is the only way back, so Connect opens it. */
++    assert.match(page, /if \(b\.adapter && ios && offlineHere\(b\.adapter\)\) return another\(\)/, 'Connect on an iPhone waits for an offline adapter instead of opening Apple’s screen')
++    assert.match(page, /const seen = adapterDevices\(\)\.find\(\(d\) => d\.id === a\.id\) return !seen \|\| !!seen\.offline/)
 +    assert.match(page, /<Press label="Stop using Bluetooth" onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
 +    /* The old buttons are gone from the way through. */
 +    const drawn = code('mobile/src/screens/Bluetooth.js')
@@ -9146,7 +9500,7 @@ index 0000000..7fa3f49
 +  })
 +}
 diff --git a/test/mobile.mjs b/test/mobile.mjs
-index 184941e..1e18e47 100644
+index bf15a0d..7c76568 100644
 --- a/test/mobile.mjs
 +++ b/test/mobile.mjs
 @@ -38,7 +38,9 @@ const traverse = babelTraverse.default || babelTraverse
@@ -9207,7 +9561,7 @@ index 184941e..1e18e47 100644
        'the stage screen says nothing while the link is down on another account'
      )
  
-@@ -5729,7 +5735,7 @@ export function run(test) {
+@@ -5750,7 +5756,7 @@ export function run(test) {
      const flat = app.replace(/\s+/g, ' ')
      assert.match(
        flat,
@@ -9216,7 +9570,54 @@ index 184941e..1e18e47 100644
        'leaving the demo no longer tears the link down, so a simulated rig stays on screen as a real one'
      )
  
-@@ -8347,7 +8353,7 @@ export function run(test) {
+@@ -6927,7 +6933,12 @@ export function run(test) {
+         if (hostDoc instanceof Error) throw hostDoc
+         return hostDoc ? hostDoc[slug] ?? null : null
+       }
+-      export async function presetName(n) { unitReads.push(n); return { number: n, name: 'FROM UNIT ' + n, empty: false } }
++      export const failing = new Set()
++      export async function presetName(n) {
++        unitReads.push(n)
++        if (failing.has(n)) throw new Error('no answer')
++        return { number: n, name: 'FROM UNIT ' + n, empty: false }
++      }
+     `
+     const STORE = `
+       const mem = new Map()
+@@ -6949,7 +6960,7 @@ export function run(test) {
+       assert.doesNotMatch(moved, /'\.\/device'|'\.\/store'|'\.\/presetName'|'react'/, 'presetNames no longer imports what this stands in for')
+       /* The hook is not what is under test; React is a stub so the module
+          loads from a temp folder that has no node_modules. */
+-      writeFileSync(join(dir, 'react.mjs'), 'export const useEffect = () => {}\nexport const useSyncExternalStore = () => 0\n')
++      writeFileSync(join(dir, 'react.mjs'), 'export const undo = []\nexport const useEffect = (f) => { undo.push(f()) }\nexport const useSyncExternalStore = () => 0\n')
+       writeFileSync(join(dir, 'device.mjs'), DEVICE)
+       writeFileSync(join(dir, 'store.mjs'), STORE)
+       writeFileSync(join(dir, 'presetName.mjs'), read('mobile/src/lib/presetName.js'))
+@@ -7003,6 +7014,23 @@ export function run(test) {
+       assert.equal(names.nameOf(12), undefined)
+       assert.equal(names.nameOf(3), 'NEW THREE', 'a row off screen was thrown away by a refresh')
+ 
++      /*
++       * And a re-read that FAILS puts the old name back, on screen and on
++       * disk. Over Bluetooth a failed name read is likely, and the row used
++       * to stay blank while the next name that did arrive wrote the list to
++       * disk without it: a name learned through the computer, lost for good.
++       */
++      const react = await import(at('react.mjs'))
++      unit.failing.add(5)
++      names.useNames()
++      await new Promise((r) => setTimeout(r, 20))
++      assert.equal(names.nameOf(5), 'FIVE RENAMED', 'a name refresh could not re-read is gone from the screen')
++      assert.equal(names.nameOf(12), 'FROM UNIT 12')
++      names.flushPersist()
++      assert.equal(JSON.parse(store.sync.getItem('fractal.presetNames')).fm3.names[5], 'FIVE RENAMED', 'a name refresh could not re-read is gone from the disk')
++      react.undo.pop()?.()
++      unit.failing.clear()
++
+       /* A computer with no list — an older app, or the demo — costs nothing
+          and changes nothing. */
+       unit.__host(new Error('not found'))
+@@ -8368,7 +8396,7 @@ export function run(test) {
         must never wear CONNECTED. */
      assert.match(
        bar,
@@ -9225,7 +9626,7 @@ index 184941e..1e18e47 100644
        'the bar still says CONNECTED in the demo'
      )
      assert.match(bar, /const mark = demo \? 'wait' : linkTone\(tone\)/, 'the demo word is drawn in the colour a real connection gets')
-@@ -9184,7 +9190,7 @@ export function run(test) {
+@@ -9205,7 +9233,7 @@ export function run(test) {
        'the Back button and the swipe can disagree about where one step up is'
      )
      /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer. */
@@ -9234,7 +9635,7 @@ index 184941e..1e18e47 100644
      /* And it says where it is going, because "Settings" would be a lie. */
      assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
      assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')
-@@ -10249,7 +10255,7 @@ export function run(test) {
+@@ -10270,7 +10298,7 @@ export function run(test) {
       */
      assert.match(
        bar,
