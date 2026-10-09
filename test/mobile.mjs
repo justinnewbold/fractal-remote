@@ -4866,9 +4866,11 @@ export function run(test) {
     assert.match(web, /<SignIn variant="stage"/, 'the browser’s first screen has no form of its own')
     assert.match(web, /\{SETUP\.howTo\}/, 'the browser’s first screen lost How to connect my computer')
     assert.match(read('src/components/SignIn.jsx'), /className="signin-pair"/, 'Create account and Forgot password are not side by side in the browser')
-    assert.match(signIn, /canMakeAccount \? switchTo\('up'\) : onUnlock\?\.\(\)/, 'Create account before the unlock has nothing to unlock with')
-    const outBranch = read('mobile/App.js').replace(/\s+/g, ' ')
-    assert.match(outBranch, /onUnlock=\{\(\) => setBuying\(true\)\} \/> \{\/\*[^]*?\*\/\} \{buying \? \( <Paywall asked/, 'the sign-in Unlock opens a paywall that is never drawn')
+    /* Create account makes an account for anybody now, so a tester can be let in
+       with Give access; somebody who has not paid signs in to the purchase page. */
+    assert.ok(!/onUnlock/.test(signIn), 'the sign-in screen sends Create account to the purchase page again')
+    const app = read('mobile/App.js').replace(/\s+/g, ' ')
+    assert.match(app, /if \(shouldAskToPay\(\{ inApp: auth === 'in', demo, \.\.\.purchase \}\)\) setAuth\('paywall'\)/, 'an account that has not been unlocked signs in to the app instead of the purchase page')
   })
 
   test('the App Store review notes name buttons that exist', () => {
@@ -5501,6 +5503,25 @@ export function run(test) {
     assert.match(signedIn, /setDemo\(false\)/, 'signing in leaves the phone in the demo')
     /* And the other half is still there, or the door only shuts one way. */
     assert.match(app, /const toSignIn = \(\) => \{[\s\S]{0,200}setDemo\(false\)/, 'leaving for the sign-in screen no longer ends the demo')
+
+    /*
+     * AND IT WAITS FOR THE ACCOUNT'S UNLOCK before letting them in.
+     *
+     * "I still wanna recruit some testers sometimes and give them access, and
+     * I don't wanna make it difficult for them." Somebody given access is
+     * unlocked by the relay claim a second or two after the store says no;
+     * going straight in showed them the price for those seconds. So the
+     * sign-in waits on a spinner for linkAccount, which waits for the claim
+     * when the store's answer is not a yes, and lets go on its own.
+     */
+    assert.match(signedIn, /setAuth\('checking'\)\s*linked\.then\(\(\) => setAuth\('in'\)\)/, 'signing in opens the app before the account’s unlock is known, so a tester sees the price')
+    const buys = read('mobile/src/lib/purchases.js')
+    const linking = buys.slice(buys.indexOf('const link = async'), buys.indexOf('export const unlinkAccount'))
+    assert.match(linking, /if \(info && entitled\(info\)\) \{[\s\S]{0,200}\} else \{\s*await claiming\s*\}/, 'a sign-in no longer waits for the relay claim that unlocks a tester')
+    assert.match(linking, /Promise\.race\(\[link\(\)\.catch\(\(\) => \{\}\), late\]\)/, 'the sign-in can wait for ever, or be left on a spinner by a rejection')
+    assert.match(buys, /const LINK_WAIT_MS = (\d+)/, 'the sign-in wait has no bound')
+    assert.ok(Number(buys.match(/const LINK_WAIT_MS = (\d+)/)[1]) <= 15000, 'a sign-in can sit on a spinner for longer than anybody will wait')
+    assert.match(buys, /claiming = claimRelay\(\)\.then\(\(yes\) => \(yes \? catchUp\(api\) : null\)\)/, 'the claim a sign-in waits for is not the one the link started')
 
     /*
      * WHICH CLOSES THE ONLY WAY IN, so there has to be another.
@@ -10383,12 +10404,15 @@ export function run(test) {
    * different screens, not to the point that it's annoying but to the point
    * where there is a clear path."
    */
-  test('there are five ways to the purchase and they all go to one place', () => {
+  test('there are four ways to the purchase and they all go to one place', () => {
+    /* Four, not five: the sign-in screen's Create account makes an account for
+       anybody now (testers), and an account that has not paid signs in to the
+       purchase page instead. */
     const app = read('mobile/App.js')
     assert.equal(
       (app.match(/onUnlock=\{\(\) => setBuying\(true\)\}/g) || []).length,
-      5,
-      'the bar, Settings, the stage screen, the walkthrough and the sign-in screen do not all open the same paywall'
+      4,
+      'the bar, Settings, the stage screen and the walkthrough do not all open the same paywall'
     )
 
     /*

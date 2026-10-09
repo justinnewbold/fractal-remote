@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import {
   Image,
   KeyboardAvoidingView,
@@ -15,8 +15,6 @@ import Note from '../components/Note'
 import Press from '../components/Press'
 import Connect from './Connect'
 import { setDemo } from '../lib/demo'
-import { usePurchase } from '../lib/purchases'
-import { mayDrive } from '../lib/unlock-rule'
 import { SETUP } from '../lib/onboarding'
 import mailIcon from '../../assets/icons/mail.png'
 import lockIcon from '../../assets/icons/lock.png'
@@ -45,8 +43,8 @@ import externalIcon from '../../assets/icons/external.png'
  * Nothing here mentions a channel, a relay, or the name of the account
  * service — that part has not changed.
  */
-export default function SignIn({ onSignedIn, onDemo, onUnlock }) {
-  const [mode_, setMode] = useState('in') // 'in' | 'up'
+export default function SignIn({ onSignedIn, onDemo }) {
+  const [mode, setMode] = useState('in') // 'in' | 'up'
   /*
    * The instructions, from the one screen that needs them most.
    *
@@ -55,51 +53,36 @@ export default function SignIn({ onSignedIn, onDemo, onUnlock }) {
    * or how. There is now.
    */
   /*
-   * WHETHER AN ACCOUNT CAN BE MADE HERE AT ALL.
+   * AN ACCOUNT CAN BE MADE HERE BY ANYBODY, BEFORE PAYING, as in the browser.
    *
-   * "On the phones, only show the create account window after the phone has
-   * been unlocked."
+   * It used to wait for the unlock: "On the phones, only show the create
+   * account window after the phone has been unlocked", on the reasoning that
+   * an account only joins a phone to a computer, which is the paid half. Then
+   * Give access arrived, and an account became the way a tester is let in:
+   * "I tried to set my daughter up with a free account on iPhone, but in the
+   * app it doesn't let you set up an account until you've purchased... I
+   * still wanna recruit some testers sometimes and give them access, and I
+   * don't wanna make it difficult for them."
    *
-   * An account exists to join this phone to a computer, and that is the paid
-   * half. Offering to make one before the unlock is offering to set up the
-   * thing they have not bought — and the account is no use on its own.
+   * So Create account opens the form for everybody. Nothing is given away by
+   * it: an account that has not been unlocked signs in to the purchase page
+   * (App.js, shouldAskToPay), and one Justin has given access to, or put on
+   * the waiting list, is unlocked the moment it signs in (the entitlement
+   * function claims the waiting list). Buying without an account is still
+   * the demo's Unlock.
    *
-   * `mayDrive` rather than `purchase.unlocked`, because it is the rule the
-   * rest of the app already uses and it errs the right way: somebody the
-   * store cannot be asked about is treated as unlocked, so a bad minute on a
-   * hotel network does not hide the form from somebody who paid.
+   * Which is also why this screen no longer reads the purchase at all. It
+   * once turned itself into Create account the moment an unlock landed here;
+   * with nothing on this screen able to unlock, that only ever fired late, on
+   * a restore finishing behind it, and told a person who already HAS an
+   * account to make one.
    */
-  const purchase = usePurchase()
-  const canMakeAccount = mayDrive(purchase)
-  /* The store can answer late, so somebody can be on the Create Account form
-     when the answer arrives and turns out to be no. Nothing snaps out from
-     under them in that case — the form goes back to signing in, which is the
-     only thing they can do anyway. */
-  const mode = canMakeAccount ? mode_ : 'in'
   const [helping, setHelping] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [note, setNote] = useState(null)
-
-  /*
-   * UNLOCKED FROM THIS SCREEN, IT GOES STRAIGHT TO MAKING THE ACCOUNT.
-   *
-   * The unlock is the step before the account, so the moment it lands the
-   * form turns into Create Account and says so, rather than leaving somebody
-   * who has just paid looking at a sign-in form for an account they do not
-   * have yet.
-   */
-  const couldMake = useRef(canMakeAccount)
-  useEffect(() => {
-    if (canMakeAccount && !couldMake.current) {
-      setMode('up')
-      setError(null)
-      setNote('Unlocked. Now make your account — use the same one on your computer.')
-    }
-    couldMake.current = canMakeAccount
-  }, [canMakeAccount])
 
   const ready = email.includes('@') && password.length >= 6
 
@@ -301,14 +284,8 @@ export default function SignIn({ onSignedIn, onDemo, onUnlock }) {
         />
 
         {/*
-          CREATE ACCOUNT FOR EVERYBODY, AS DRAWN — and still after the unlock.
-
-          "On the phones, only show the create account window after the phone
-          has been unlocked." The mockup shows the button to everybody, and
-          both hold: before the unlock it opens the unlock, and the moment the
-          unlock lands the form turns into Create account by itself (see
-          couldMake above). The note and the separate Unlock button that stood
-          here are gone into it.
+          CREATE ACCOUNT FOR EVERYBODY, AS DRAWN, and now it makes one for
+          everybody too: see "AN ACCOUNT CAN BE MADE HERE BY ANYBODY" above.
         */}
         <View style={{ flexDirection: 'row', gap: space.md }}>
           <Press
@@ -316,7 +293,7 @@ export default function SignIn({ onSignedIn, onDemo, onUnlock }) {
             label={mode === 'up' ? 'I already have one' : 'Create account'}
             disabled={busy}
             onPress={() =>
-              mode === 'up' ? switchTo('in') : canMakeAccount ? switchTo('up') : onUnlock?.()
+              switchTo(mode === 'up' ? 'in' : 'up')
             }
           />
           {mode === 'in' ? (

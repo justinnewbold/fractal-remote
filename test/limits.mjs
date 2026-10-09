@@ -1666,6 +1666,21 @@ export function run(test) {
     assert.match(settings, /Password, sign out, delete account/, 'the first page of Settings no longer says where Delete account is')
     assert.match(settings, /await deleteAccount\(\)[\s\S]{0,200}onSignOut/, 'a deleted account is not signed out of')
 
+    /*
+     * And from the purchase page. Anybody can make an account on the phone
+     * now, before paying, and one that has not been unlocked signs in to the
+     * purchase page, imposed, with no way through to Settings — so an
+     * account made in the app could not be deleted in it, which is the
+     * rejection above all over again.
+     */
+    const paywall = read('mobile/src/screens/Paywall.js')
+    assert.match(paywall, /label="Delete account"/, 'the purchase page an unpaid account lands on has no Delete account')
+    assert.match(paywall, /await deleteAccount\(\)[\s\S]{0,200}onDeleted\?\.\(\)/, 'an account deleted from the purchase page is not signed out of')
+    assert.match(paywall, /const canDelete = !asked && Boolean\(onDeleted\)/, 'the purchase page offers to delete an account to somebody in the demo')
+    assert.match(paywall, /\}, \[canDelete\]\)/, 'the purchase page asks the account server who is signed in on every render')
+    const phoneApp = read('mobile/App.js')
+    assert.match(phoneApp, /<Paywall\s+onSignIn=\{toSignIn\}[\s\S]{0,900}onDeleted=\{\(\) => \{\s*signOut\(\)/, 'the purchase page an unpaid account signs in to cannot delete it')
+
     /* And the browser and Mac app, for anybody who signed up there. */
     const web = read('src/App.jsx')
     assert.match(web, /Delete account\s*<\/button>/, 'the browser has no Delete account')

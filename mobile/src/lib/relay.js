@@ -126,6 +126,22 @@ export async function signIn({ email, password }) {
 export async function signUp({ email, password }) {
   const { data, error } = await supabase().auth.signUp({ email, password })
   if (error) throw new Error(explainAuth(error.message))
+  /*
+   * An address that already has an account is not an error to the account
+   * service: it answers as if it had made one — a user with no identities and
+   * no session — so a stranger cannot learn which addresses are taken. Read
+   * as a new account, that told somebody coming back "Account made, confirm
+   * it from the email" for an email that never comes. Their details are the
+   * sign-in they meant, so this signs them in, as the browser does
+   * (src/lib/link.js, createAccount); only a wrong password gets a message.
+   */
+  if (Array.isArray(data?.user?.identities) && data.user.identities.length === 0) {
+    try {
+      return { needsConfirmation: false, userId: await signIn({ email, password }) }
+    } catch {
+      throw new Error('That email already has an account. Sign in with it, or reset the password.')
+    }
+  }
   // Confirmation may be required, in which case there is no session yet.
   if (data?.session?.user?.id) userId = data.session.user.id
   return { needsConfirmation: !data?.session, userId: data?.user?.id || null }

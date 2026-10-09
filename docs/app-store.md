@@ -256,7 +256,9 @@ Deleting an account (Guideline 5.1.1(v)): tap the gear at the top right for
 Settings, tap the account card at the top, then Delete account, then
 "Delete my account". It deletes the account and everything stored under it
 straight away. To try it, please create a new account rather than deleting
-the demo account, which the rest of the review needs.
+the demo account, which the rest of the review needs. A new account that has
+not bought the full version opens on the purchase page instead of Settings;
+Delete account is at the foot of that page, and does the same.
 
 Hardware (Guideline 2.1): a video filmed on an iPhone with a real FM3 on
 screen, from the first pairing through the whole workflow, is linked in App

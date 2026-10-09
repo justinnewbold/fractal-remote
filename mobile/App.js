@@ -742,7 +742,7 @@ export default function App() {
               /* And so is somebody who bought this on another phone. The
                  purchase follows the account, so signing in is what tells
                  RevenueCat which account to answer for. */
-              linkAccount()
+              const linked = linkAccount()
               /*
                * AND THE DEMO ENDS, because signing in is heading for a real
                * rig. "When I sign in, it takes me directly to the demo."
@@ -755,29 +755,21 @@ export default function App() {
                * The two halves of one door now agree.
                */
               setDemo(false)
-              setAuth('in')
+              /*
+               * ON A SPINNER UNTIL THE ACCOUNT'S UNLOCK IS KNOWN. A tester
+               * Justin gave access to is unlocked by the server a second or
+               * two after the store first says no, and going straight in put
+               * the price in front of them for those seconds. linkAccount
+               * waits for that answer, and lets go on its own if it is slow.
+               */
+              setAuth('checking')
+              linked.then(() => setAuth('in'))
             }}
             onDemo={() => setAuth('in')}
-            /* The note on that screen says to unlock first, and this is the
-               button it now has for it. */
-            onUnlock={() => setBuying(true)}
           />
-          {/* Drawn in this branch too, or the sign-in screen's Unlock would
-              set `buying` and nothing would appear. Unlocking lands back on
-              the form, which then turns into Create Account by itself. */}
-          {buying ? (
-            <Paywall
-              asked
-              onSignIn={() => setBuying(false)}
-              onUnlocked={() => setBuying(false)}
-              onDemo={() => {
-                setBuying(false)
-                setDemo(true)
-                setAuth('in')
-              }}
-              onBack={() => setBuying(false)}
-            />
-          ) : null}
+          {/* No purchase page from here any more: Create account makes an
+              account for anybody (see SignIn), and one that has not been
+              unlocked signs in to the purchase page below. */}
           </>
         ) : auth === 'paywall' ? (
           <Paywall
@@ -791,6 +783,12 @@ export default function App() {
               setAuth('in')
             }}
             onBack={() => {
+              signOut().catch(() => {})
+              setAuth('out')
+            }}
+            /* Apple's 5.1.1(v), on the one page an unpaid account can reach:
+               the account is gone, so its session goes with it. */
+            onDeleted={() => {
               signOut().catch(() => {})
               setAuth('out')
             }}
