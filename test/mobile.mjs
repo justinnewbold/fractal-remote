@@ -1171,6 +1171,18 @@ export function run(test) {
     assert.match(link, /logDebug\('link', `join failed after \$\{Math\.round\(\(Date\.now\(\) - began\) \/ 100\) \/ 10\}s`, err\?\.message \|\| String\(err\)\)/, 'a failed join leaves nothing in the log')
   })
 
+  test('a computer answer that arrives after the loop stopped changes nothing on screen', () => {
+    /*
+     * refresh() used to write 'off' whenever the loop was not running, so a
+     * probe still out when the demo started finished afterwards and turned
+     * the demo's CONNECTED into NO COMPUTER. Whatever stops the loop says what
+     * the link is itself: stopLink resets it, the demo sets its own.
+     */
+    const link = read('mobile/src/lib/link.js').replace(/\s+/g, ' ')
+    assert.match(link, /function refresh\(\) \{ if \(!running\) return if \(!remoteActive\(\)\)/, 'a late answer can overwrite the link after the loop stopped')
+    assert.match(link, /resetRig\(\) set\(\{ \.\.\.initial \}\)/, 'stopping the loop no longer resets the link itself')
+  })
+
   test('tapping a found control brings the page to the block it opened', () => {
     /*
      * "It'll pull up the parameters but then clicking on it does nothing." It

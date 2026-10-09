@@ -298,6 +298,9 @@ jobs:
         with:
           name: fractal-remote-apk
           path: ${{ steps.apk.outputs.path }}
+          # The finished installers are on the Releases page; this copy is only for
+          # fetching a build by hand, so it goes after three days instead of 90.
+          retention-days: 3
 
       - name: Put it on the Releases page
         env:

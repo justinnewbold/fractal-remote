@@ -117,9 +117,18 @@ export function subscribeLink(fn) {
   return () => watchers.delete(fn)
 }
 
-/** What the app should show, given the loop's own view of things. */
+/**
+ * What the app should show, given the loop's own view of things.
+ *
+ * NOTHING ONCE THE LOOP HAS STOPPED. It used to say 'off' then, and that was
+ * a late answer overwriting a newer truth: a probe still out when the demo
+ * started (or, in the Bluetooth beta, when Bluetooth took over the link)
+ * finished afterwards, came back here, and turned the demo's CONNECTED into
+ * NO COMPUTER. Whatever stopped the loop has already said what the link is:
+ * stopLink resets it, the demo and Bluetooth set their own.
+ */
 function refresh() {
-  if (!running) return set({ link: 'off' })
+  if (!running) return
   if (!remoteActive()) return set({ link: 'joining' })
   set({ link: remoteHostSeen() ? 'connected' : 'no-answer' })
 }
