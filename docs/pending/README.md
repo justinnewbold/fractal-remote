@@ -38,4 +38,6 @@ then bump the version, delete the patch file in the same change, and build.
 
 Left alone, with the reason: the FM9's and Axe-Fx III's extra blocks (Amp 2, Cab 2, Drive 3 and so on) do not show as pedals over Bluetooth. The fix needs their block numbers, which are not in this repository and nobody here has either unit to check them against; a wrong guess could put an output block on the pedal board.
 
+**Decided, 9 Oct: the unlock check over Bluetooth stays as it is for now.** It fails open, like the rest of the app: a phone may drive a unit over Bluetooth when it has paid OR when the store cannot answer (no signal, the store not reached yet, nothing to sell, or a copy that cannot take payments, such as the APK on GitHub). So an unpaid phone with no signal, or that APK, can use Bluetooth without paying. Justin chose this over requiring a remembered "paid" answer ("Leave it as is for now"), which would close that gap at the cost of locking out a paying customer on a fresh install who has never reached the store. Ask again only if he raises it.
+
 This patch leaves out the version number and the build log (docs/expo-builds.md already has build 25's row), so it applies to main as it moves. Apply it with `git apply`, then the steps above.
