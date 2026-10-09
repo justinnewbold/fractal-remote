@@ -4866,9 +4866,11 @@ export function run(test) {
     assert.match(web, /<SignIn variant="stage"/, 'the browser’s first screen has no form of its own')
     assert.match(web, /\{SETUP\.howTo\}/, 'the browser’s first screen lost How to connect my computer')
     assert.match(read('src/components/SignIn.jsx'), /className="signin-pair"/, 'Create account and Forgot password are not side by side in the browser')
-    assert.match(signIn, /canMakeAccount \? switchTo\('up'\) : onUnlock\?\.\(\)/, 'Create account before the unlock has nothing to unlock with')
-    const outBranch = read('mobile/App.js').replace(/\s+/g, ' ')
-    assert.match(outBranch, /onUnlock=\{\(\) => setBuying\(true\)\} \/> \{\/\*[^]*?\*\/\} \{buying \? \( <Paywall asked/, 'the sign-in Unlock opens a paywall that is never drawn')
+    /* Create account makes an account for anybody now, so a tester can be let in
+       with Give access; somebody who has not paid signs in to the purchase page. */
+    assert.ok(!/onUnlock/.test(signIn), 'the sign-in screen sends Create account to the purchase page again')
+    const app = read('mobile/App.js').replace(/\s+/g, ' ')
+    assert.match(app, /if \(shouldAskToPay\(\{ inApp: auth === 'in', demo, \.\.\.purchase \}\)\) setAuth\('paywall'\)/, 'an account that has not been unlocked signs in to the app instead of the purchase page')
   })
 
   test('the App Store review notes name buttons that exist', () => {
@@ -10383,12 +10385,15 @@ export function run(test) {
    * different screens, not to the point that it's annoying but to the point
    * where there is a clear path."
    */
-  test('there are five ways to the purchase and they all go to one place', () => {
+  test('there are four ways to the purchase and they all go to one place', () => {
+    /* Four, not five: the sign-in screen's Create account makes an account for
+       anybody now (testers), and an account that has not paid signs in to the
+       purchase page instead. */
     const app = read('mobile/App.js')
     assert.equal(
       (app.match(/onUnlock=\{\(\) => setBuying\(true\)\}/g) || []).length,
-      5,
-      'the bar, Settings, the stage screen, the walkthrough and the sign-in screen do not all open the same paywall'
+      4,
+      'the bar, Settings, the stage screen and the walkthrough do not all open the same paywall'
     )
 
     /*

@@ -3994,14 +3994,15 @@ export function run(test) {
     const native = readFileSync(new URL('../mobile/src/screens/SignIn.js', import.meta.url), 'utf8')
     assert.ok(!/useState\('code'\)/.test(native), 'the phone leads with a code box again')
     assert.ok(!/pairCredentials/.test(native), 'the phone signs in with a code again')
-    assert.match(native, /const canMakeAccount = mayDrive\(purchase\)/, 'the phone does not check the unlock before offering an account')
-    /* His mockup shows Create account to everybody; before the unlock it
-       opens the unlock, so an account is still only made after one. */
-    assert.match(
-      native,
-      /mode === 'up' \? switchTo\('in'\) : canMakeAccount \? switchTo\('up'\) : onUnlock\?\.\(\)/,
-      'Create account makes an account before the app is unlocked'
-    )
+    /*
+     * His mockup shows Create account to everybody, and it now makes one for
+     * everybody: "I still wanna recruit some testers sometimes and give them
+     * access, and I don't wanna make it difficult for them." The unlock still
+     * guards the app itself, at the purchase page an unpaid account signs in to.
+     */
+    assert.ok(!/canMakeAccount/.test(native), 'the phone hides Create account until the unlock again')
+    assert.match(native, /onPress=\{\(\) =>\s*switchTo\(mode === 'up' \? 'in' : 'up'\)\s*\}/, 'Create account does something other than open the form')
+    assert.match(native, /const mode = mode_\b/, 'the form is held on Sign in for somebody who has not paid')
     /* mayDrive rather than purchase.unlocked: somebody the store cannot be
        asked about is treated as unlocked, so a bad minute on a hotel network
        does not hide the form from somebody who paid. */

@@ -758,26 +758,10 @@ export default function App() {
               setAuth('in')
             }}
             onDemo={() => setAuth('in')}
-            /* The note on that screen says to unlock first, and this is the
-               button it now has for it. */
-            onUnlock={() => setBuying(true)}
           />
-          {/* Drawn in this branch too, or the sign-in screen's Unlock would
-              set `buying` and nothing would appear. Unlocking lands back on
-              the form, which then turns into Create Account by itself. */}
-          {buying ? (
-            <Paywall
-              asked
-              onSignIn={() => setBuying(false)}
-              onUnlocked={() => setBuying(false)}
-              onDemo={() => {
-                setBuying(false)
-                setDemo(true)
-                setAuth('in')
-              }}
-              onBack={() => setBuying(false)}
-            />
-          ) : null}
+          {/* No purchase page from here any more: Create account makes an
+              account for anybody (see SignIn), and one that has not been
+              unlocked signs in to the purchase page below. */}
           </>
         ) : auth === 'paywall' ? (
           <Paywall
