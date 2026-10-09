@@ -1676,7 +1676,8 @@ export function run(test) {
     const paywall = read('mobile/src/screens/Paywall.js')
     assert.match(paywall, /label="Delete account"/, 'the purchase page an unpaid account lands on has no Delete account')
     assert.match(paywall, /await deleteAccount\(\)[\s\S]{0,200}onDeleted\?\.\(\)/, 'an account deleted from the purchase page is not signed out of')
-    assert.match(paywall, /if \(asked \|\| !onDeleted\) return undefined/, 'the purchase page offers to delete an account to somebody in the demo')
+    assert.match(paywall, /const canDelete = !asked && Boolean\(onDeleted\)/, 'the purchase page offers to delete an account to somebody in the demo')
+    assert.match(paywall, /\}, \[canDelete\]\)/, 'the purchase page asks the account server who is signed in on every render')
     const phoneApp = read('mobile/App.js')
     assert.match(phoneApp, /<Paywall\s+onSignIn=\{toSignIn\}[\s\S]{0,900}onDeleted=\{\(\) => \{\s*signOut\(\)/, 'the purchase page an unpaid account signs in to cannot delete it')
 

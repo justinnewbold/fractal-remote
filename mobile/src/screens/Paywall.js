@@ -56,14 +56,18 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
    */
   const [account, setAccount] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  /* On whether it can be offered, not on the callback: App hands a new
+     function every render, and each run here is a call to the account
+     server. */
+  const canDelete = !asked && Boolean(onDeleted)
   useEffect(() => {
-    if (asked || !onDeleted) return undefined
+    if (!canDelete) return undefined
     let alive = true
     currentAccount().then((who) => alive && setAccount(who))
     return () => {
       alive = false
     }
-  }, [asked, onDeleted])
+  }, [canDelete])
   const signedInAs = account?.email && !isPairAccount(account.email) ? account.email : null
 
   if (unlocked) onUnlocked?.()
