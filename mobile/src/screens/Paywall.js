@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ScrollView, Text, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Alert, ScrollView, Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
 import Note from '../components/Note'
@@ -8,6 +8,8 @@ import Sheet from '../components/Sheet'
 import { buyUnlock, restorePurchase, usePurchase } from '../lib/purchases'
 import { UNITS } from '../lib/demoUnits'
 import { ALREADY_UNLOCKED } from '../lib/onboarding'
+import { currentAccount, deleteAccount } from '../lib/relay'
+import { isPairAccount } from '../lib/pairing'
 
 /*
  * The units named on the offer, read off the list the app actually carries.
@@ -38,10 +40,31 @@ const supportedWords =
  * anyway: the person tapping it has already paid, and hiding their way back in
  * behind the thing that charges them again would be a poor way to treat them.
  */
-export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, asked = false }) {
+export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDeleted, asked = false }) {
   const { price, unlocked, available, why, detail } = usePurchase()
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState(null)
+  /*
+   * DELETE ACCOUNT, FOR SOMEBODY WHO MADE ONE AND HAS NOT PAID.
+   *
+   * Apple's 5.1.1(v): an account made in the app can be deleted in the app.
+   * Settings has had it since 1.86.9, but anybody can make an account on the
+   * phone now, before paying, and an account that has not been unlocked
+   * signs in to THIS page, imposed, with no way through to Settings. So the
+   * same sheet is here, for the imposed page only: the one asked for from
+   * the demo is not signed in to anything.
+   */
+  const [account, setAccount] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  useEffect(() => {
+    if (asked || !onDeleted) return undefined
+    let alive = true
+    currentAccount().then((who) => alive && setAccount(who))
+    return () => {
+      alive = false
+    }
+  }, [asked, onDeleted])
+  const signedInAs = account?.email && !isPairAccount(account.email) ? account.email : null
 
   if (unlocked) onUnlocked?.()
 
@@ -148,6 +171,48 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, asked = 
         The demo stays free for as long as you want it. It is the whole app
         against a simulated unit — nothing in it is cut short.
       </Text>
+
+      {signedInAs ? (
+        <Press
+          label="Delete account"
+          sub={`Remove ${signedInAs} and everything saved under it`}
+          disabled={busy}
+          onPress={() => {
+            setSaid(null)
+            setDeleting(true)
+          }}
+        />
+      ) : null}
+
+      {signedInAs ? (
+        <Sheet open={deleting} onClose={() => (busy ? null : setDeleting(false))} title="Delete account" note={signedInAs}>
+          <Text style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
+            This deletes your account for good: your sign-in, your set lists, bug reports you sent from it and
+            everything else stored under it. It happens straight away and cannot be undone. Any computer signed in
+            to this account is signed out.
+          </Text>
+          <Press
+            label={busy ? 'Deleting…' : 'Delete my account'}
+            tone="live"
+            disabled={busy}
+            onPress={async () => {
+              setBusy(true)
+              try {
+                await deleteAccount()
+                setDeleting(false)
+                Alert.alert('Account deleted', `${signedInAs} has been deleted, and you are signed out.`)
+                onDeleted?.()
+              } catch (err) {
+                setDeleting(false)
+                setSaid({ tone: 'fault', text: err.message })
+              } finally {
+                setBusy(false)
+              }
+            }}
+          />
+          <Press label="Keep my account" disabled={busy} onPress={() => setDeleting(false)} />
+        </Sheet>
+      ) : null}
     </ScrollView>
   )
 

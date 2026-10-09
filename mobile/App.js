@@ -742,7 +742,7 @@ export default function App() {
               /* And so is somebody who bought this on another phone. The
                  purchase follows the account, so signing in is what tells
                  RevenueCat which account to answer for. */
-              linkAccount()
+              const linked = linkAccount()
               /*
                * AND THE DEMO ENDS, because signing in is heading for a real
                * rig. "When I sign in, it takes me directly to the demo."
@@ -755,7 +755,15 @@ export default function App() {
                * The two halves of one door now agree.
                */
               setDemo(false)
-              setAuth('in')
+              /*
+               * ON A SPINNER UNTIL THE ACCOUNT'S UNLOCK IS KNOWN. A tester
+               * Justin gave access to is unlocked by the server a second or
+               * two after the store first says no, and going straight in put
+               * the price in front of them for those seconds. linkAccount
+               * waits for that answer, and lets go on its own if it is slow.
+               */
+              setAuth('checking')
+              linked.then(() => setAuth('in'))
             }}
             onDemo={() => setAuth('in')}
           />
@@ -775,6 +783,12 @@ export default function App() {
               setAuth('in')
             }}
             onBack={() => {
+              signOut().catch(() => {})
+              setAuth('out')
+            }}
+            /* Apple's 5.1.1(v), on the one page an unpaid account can reach:
+               the account is gone, so its session goes with it. */
+            onDeleted={() => {
               signOut().catch(() => {})
               setAuth('out')
             }}

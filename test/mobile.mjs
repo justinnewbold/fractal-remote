@@ -5505,6 +5505,25 @@ export function run(test) {
     assert.match(app, /const toSignIn = \(\) => \{[\s\S]{0,200}setDemo\(false\)/, 'leaving for the sign-in screen no longer ends the demo')
 
     /*
+     * AND IT WAITS FOR THE ACCOUNT'S UNLOCK before letting them in.
+     *
+     * "I still wanna recruit some testers sometimes and give them access, and
+     * I don't wanna make it difficult for them." Somebody given access is
+     * unlocked by the relay claim a second or two after the store says no;
+     * going straight in showed them the price for those seconds. So the
+     * sign-in waits on a spinner for linkAccount, which waits for the claim
+     * when the store's answer is not a yes, and lets go on its own.
+     */
+    assert.match(signedIn, /setAuth\('checking'\)\s*linked\.then\(\(\) => setAuth\('in'\)\)/, 'signing in opens the app before the account’s unlock is known, so a tester sees the price')
+    const buys = read('mobile/src/lib/purchases.js')
+    const linking = buys.slice(buys.indexOf('const link = async'), buys.indexOf('export const unlinkAccount'))
+    assert.match(linking, /if \(info && entitled\(info\)\) \{[\s\S]{0,200}\} else \{\s*await claiming\s*\}/, 'a sign-in no longer waits for the relay claim that unlocks a tester')
+    assert.match(linking, /Promise\.race\(\[link\(\)\.catch\(\(\) => \{\}\), late\]\)/, 'the sign-in can wait for ever, or be left on a spinner by a rejection')
+    assert.match(buys, /const LINK_WAIT_MS = (\d+)/, 'the sign-in wait has no bound')
+    assert.ok(Number(buys.match(/const LINK_WAIT_MS = (\d+)/)[1]) <= 15000, 'a sign-in can sit on a spinner for longer than anybody will wait')
+    assert.match(buys, /claiming = claimRelay\(\)\.then\(\(yes\) => \(yes \? catchUp\(api\) : null\)\)/, 'the claim a sign-in waits for is not the one the link started')
+
+    /*
      * WHICH CLOSES THE ONLY WAY IN, so there has to be another.
      *
      * "It would be a good idea for somebody that wants to maybe view what it

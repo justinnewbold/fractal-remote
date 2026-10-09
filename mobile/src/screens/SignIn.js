@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import {
   Image,
   KeyboardAvoidingView,
@@ -15,8 +15,6 @@ import Note from '../components/Note'
 import Press from '../components/Press'
 import Connect from './Connect'
 import { setDemo } from '../lib/demo'
-import { usePurchase } from '../lib/purchases'
-import { mayDrive } from '../lib/unlock-rule'
 import { SETUP } from '../lib/onboarding'
 import mailIcon from '../../assets/icons/mail.png'
 import lockIcon from '../../assets/icons/lock.png'
@@ -46,7 +44,7 @@ import externalIcon from '../../assets/icons/external.png'
  * service — that part has not changed.
  */
 export default function SignIn({ onSignedIn, onDemo }) {
-  const [mode_, setMode] = useState('in') // 'in' | 'up'
+  const [mode, setMode] = useState('in') // 'in' | 'up'
   /*
    * The instructions, from the one screen that needs them most.
    *
@@ -72,34 +70,19 @@ export default function SignIn({ onSignedIn, onDemo }) {
    * the waiting list, is unlocked the moment it signs in (the entitlement
    * function claims the waiting list). Buying without an account is still
    * the demo's Unlock.
+   *
+   * Which is also why this screen no longer reads the purchase at all. It
+   * once turned itself into Create account the moment an unlock landed here;
+   * with nothing on this screen able to unlock, that only ever fired late, on
+   * a restore finishing behind it, and told a person who already HAS an
+   * account to make one.
    */
-  const purchase = usePurchase()
-  const unlocked = mayDrive(purchase)
-  const mode = mode_
   const [helping, setHelping] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [note, setNote] = useState(null)
-
-  /*
-   * UNLOCKED FROM THIS SCREEN, IT GOES STRAIGHT TO MAKING THE ACCOUNT.
-   *
-   * The unlock is the step before the account, so the moment it lands the
-   * form turns into Create Account and says so, rather than leaving somebody
-   * who has just paid looking at a sign-in form for an account they do not
-   * have yet.
-   */
-  const couldMake = useRef(unlocked)
-  useEffect(() => {
-    if (unlocked && !couldMake.current) {
-      setMode('up')
-      setError(null)
-      setNote('Unlocked. Now make your account — use the same one on your computer.')
-    }
-    couldMake.current = unlocked
-  }, [unlocked])
 
   const ready = email.includes('@') && password.length >= 6
 

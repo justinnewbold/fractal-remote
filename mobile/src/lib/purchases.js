@@ -269,6 +269,9 @@ const catchUp = async (api) => {
   }
 }
 
+/* The relay claim the last link started, so a sign-in can wait for it. */
+let claiming = Promise.resolve()
+
 const linkTo = async (api, id) => {
   if (!api?.logIn || !id) return null
   try {
@@ -276,8 +279,10 @@ const linkTo = async (api, id) => {
     logDebug('purchases: linked to the account')
     /* And tell the relay. logIn is the moment a handset's purchase becomes an
        account's, so it is the moment the relay's table can first be right
-       about it. Not awaited: nothing on this screen depends on the answer. */
-    claimRelay().then((yes) => (yes ? catchUp(api) : null))
+       about it. Not awaited here: at launch nothing waits on the answer. A
+       sign-in does (linkAccount), and reads it from `claiming`. Neither half
+       ever throws. */
+    claiming = claimRelay().then((yes) => (yes ? catchUp(api) : null))
     return out?.customerInfo || null
   } catch (err) {
     /* Not fatal, and not evidence of anything. The remembered answer stands
@@ -294,8 +299,24 @@ const linkTo = async (api, id) => {
  * Only ever unlocks. A logIn that comes back with nothing is not proof the
  * person has not paid — it is one answer from one network call — and the rule
  * at the top of this file is that only certainty locks anybody out.
+ *
+ * AND IT IS WORTH WAITING FOR, which the sign-in screen now does (App.js).
+ * Somebody Justin gave access to, or put on the waiting list, is unlocked by
+ * the relay claim this starts, a second or two after the store has already
+ * said no. Not waited for, the first thing a tester he invited saw was the
+ * price, which then vanished on its own: "I don't wanna make it difficult for
+ * them." So when the store's own answer is not a yes, this waits for the
+ * claim too.
+ *
+ * Bounded, because a sign-in waits on it behind a spinner and a stage is
+ * where the line is worst. The claim gives up at eight seconds on its own
+ * (relayPass); this lets go at LINK_WAIT_MS whatever is still going, and
+ * whatever finishes later still unlocks — the Paywall closes itself on an
+ * unlock.
  */
-export const linkAccount = async () => {
+const LINK_WAIT_MS = 10000
+
+const link = async () => {
   const api = await load()
   if (!api) return
   try {
@@ -306,11 +327,23 @@ export const linkAccount = async () => {
       await remember(true)
       set({ unlocked: true })
       logDebug('purchases: unlocked by a purchase on this account')
+    } else {
+      await claiming
     }
     loadPrice()
   } catch (err) {
     logDebug(`purchases: link failed (${err?.message || err})`)
   }
+}
+
+/* NEVER REJECTS: the sign-in screen waits on it behind a spinner, and a
+   rejection would leave somebody looking at that spinner for good. */
+export const linkAccount = () => {
+  let stop
+  const late = new Promise((resolve) => {
+    stop = setTimeout(resolve, LINK_WAIT_MS)
+  })
+  return Promise.race([link().catch(() => {}), late]).finally(() => clearTimeout(stop))
 }
 
 /**

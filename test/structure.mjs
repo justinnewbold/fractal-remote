@@ -3990,6 +3990,11 @@ export function run(test) {
     assert.match(remoteLib, /const existing = Array\.isArray\(data\?\.user\?\.identities\) && data\.user\.identities\.length === 0/, 'an address that already has an account reads as a new one')
     assert.match(linkLib, /if \(existing\) \{\s*try \{\s*await signInAccount\(\{ email, password \}\)/, 'Create Account with an existing account’s details does not sign them in')
     assert.match(src, /onCreate=\{async \(details\) => \{\s*const out = await createAccount\(details\)/, 'the browser cannot make an account on the way to the unlock')
+    /* And the phone, now that anybody can press its Create account: a tester
+       told twice to "make an account" is the likeliest person to have one. */
+    const phoneRelay = readFileSync(new URL('../mobile/src/lib/relay.js', import.meta.url), 'utf8')
+    assert.match(phoneRelay, /if \(Array\.isArray\(data\?\.user\?\.identities\) && data\.user\.identities\.length === 0\) \{\s*try \{\s*return \{ needsConfirmation: false, userId: await signIn\(\{ email, password \}\) \}/, 'Create account on the phone, with an existing account’s details, says to check an email that never comes')
+    assert.match(phoneRelay, /That email already has an account\. Sign in with it, or reset the password\./, 'the phone and the browser say different things about a taken address')
 
     const native = readFileSync(new URL('../mobile/src/screens/SignIn.js', import.meta.url), 'utf8')
     assert.ok(!/useState\('code'\)/.test(native), 'the phone leads with a code box again')
@@ -4002,11 +4007,11 @@ export function run(test) {
      */
     assert.ok(!/canMakeAccount/.test(native), 'the phone hides Create account until the unlock again')
     assert.match(native, /onPress=\{\(\) =>\s*switchTo\(mode === 'up' \? 'in' : 'up'\)\s*\}/, 'Create account does something other than open the form')
-    assert.match(native, /const mode = mode_\b/, 'the form is held on Sign in for somebody who has not paid')
-    /* mayDrive rather than purchase.unlocked: somebody the store cannot be
-       asked about is treated as unlocked, so a bad minute on a hotel network
-       does not hide the form from somebody who paid. */
-    assert.match(native, /import \{ mayDrive \} from '\.\.\/lib\/unlock-rule'/, 'the phone invents its own unlock rule for this')
+    assert.match(native, /const \[mode, setMode\] = useState\('in'\)/, 'the form is held on something other than its own choice again')
+    /* Nothing on this screen can unlock, so it has no business watching the
+       purchase: the last time it did, a restore landing late told somebody
+       with an account to go and make one. */
+    assert.ok(!/usePurchase|mayDrive/.test(native), 'the sign-in form reads the purchase again')
   })
 
   test('nothing promises that joining a phone needs no account', () => {
