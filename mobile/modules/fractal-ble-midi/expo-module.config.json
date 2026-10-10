@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["FractalBleMidiModule"]
+  },
+  "android": {
+    "modules": ["cloud.newbold.fractalremote.blemidi.FractalBleMidiModule"]
+  }
+}

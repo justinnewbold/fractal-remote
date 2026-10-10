@@ -303,6 +303,9 @@ jobs:
           retention-days: 3
 
       - name: Put it on the Releases page
+        # Main only: the download page offers the newest apk-v release to
+        # everyone, and a test APK from another branch must never be it.
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: apk-v${{ steps.v.outputs.version }}

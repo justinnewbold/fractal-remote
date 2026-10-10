@@ -5,8 +5,11 @@ Bluetooth capabilities if we had a Bluetooth dongle? ... is it even possible
 with the ForgeFX software?" He already owns a CME WIDI Master, which he uses
 with a mini controller.
 
-Nothing here is built. This is what was found, so the next person starts from
-it instead of from nothing.
+Way B below is now built: Bluetooth (beta), in the phone app under Settings →
+Phone & computer → Bluetooth (beta), with a setup guide for customers at
+public/bluetooth.html. Everything else on this page is what was found on 8
+October, before any of it was built or tried, kept so the next person starts
+from it instead of from nothing.
 
 ## The short answer
 
@@ -112,8 +115,10 @@ has Web MIDI or Web Bluetooth. On Android it needs a helper app kept running.
 ## Dongles
 
 - **CME WIDI Master** (Justin's).
-  - It is one plug in one jack, so on its own it carries MIDI one way. A
-    remote needs both ways: one into MIDI In, one from MIDI Out.
+  - It comes in two parts: the main plug goes in MIDI Out, and a small
+    second plug on a short lead goes in MIDI In (CME's manual). With both in,
+    it carries MIDI both ways, which a remote needs. With only the main plug
+    in, it carries one way.
   - It takes power only from a MIDI Out jack.
   - **On an FM3 it runs hot.** The FM3's MIDI Out supplies 5 V with no
     current-limiting resistor. Users fix it with a 220-ohm resistor; Fractal

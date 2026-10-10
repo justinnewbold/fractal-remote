@@ -6,6 +6,7 @@ import { at as tint } from '../lib/vivid'
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
 import Note from './Note'
 import Press from './Press'
+import { useBluetoothOn } from '../lib/bluetooth'
 
 const face = Platform.select(mono)
 
@@ -36,6 +37,8 @@ const face = Platform.select(mono)
  */
 export default function Tuner({ reading, on, onClose }) {
   const [stalled, setStalled] = useState(false)
+  /* Over Bluetooth there is no computer to blame: the unit itself is quiet. */
+  const bluetooth = useBluetoothOn()
   const lastAt = useRef(0)
   const { width } = useWindowDimensions()
 
@@ -180,7 +183,12 @@ export default function Tuner({ reading, on, onClose }) {
               {reading?.note ? `${cents > 0 ? '+' : ''}${cents} cents` : 'Play a string'}
             </Text>
 
-            {stalled ? (
+            {stalled && bluetooth ? (
+              <Note tone="warn">
+                The tuner is on, but the unit isn’t sending readings over Bluetooth. Use the unit’s own
+                display for now.
+              </Note>
+            ) : stalled ? (
               <Note tone="warn">
                 The tuner is running on the unit, but the readings aren’t reaching this phone — your
                 computer keeps them to itself over a remote link. Use the unit’s own display, or tune at

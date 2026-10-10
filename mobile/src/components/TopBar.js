@@ -12,6 +12,8 @@ import { setDemo, useDemo } from '../lib/demo'
 import { shouldOffer, usePurchase } from '../lib/purchases'
 import setupIcon from '../../assets/icons/setup.png'
 import volumeIcon from '../../assets/icons/volume.png'
+import bluetoothIcon from '../../assets/icons/bluetooth.png'
+import { useBluetoothOn } from '../lib/bluetooth'
 import { idOf } from '../lib/device'
 import Lamp from './Lamp'
 import Volume from './Volume'
@@ -85,6 +87,16 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
    * that. "It does sound connected, even in demo."
    */
   const demo = useDemo()
+  /*
+   * OVER BLUETOOTH, THE BAR SAYS SO. "Can we change the connected thing to be
+   * blue when it's on a Bluetooth connection instead of green? And instead of
+   * a green dot next to the unit name have a Bluetooth icon when it's
+   * connected via Bluetooth." So the word goes blue and the lamp becomes the
+   * Bluetooth mark: what an eye lands on before a song now says which way the
+   * phone is reaching the unit, not only that it is. Never in the demo, which
+   * is reaching nothing.
+   */
+  const bluetooth = useBluetoothOn() && !demo
 
   /*
    * Named once, because the word and the pill below must agree about it.
@@ -150,7 +162,9 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
    * has already paid still reads DEMO — offering an unlock to a person who
    * owns it sends them to a paywall that bounces them straight back out.
    */
-  const word = canBuy ? 'unlock' : demo ? 'demo' : linkWord(tone, 'remote')
+  /* Over Bluetooth there is no computer to be missing: the link that is down is the adapter's. */
+  const linkSays = linkWord(tone, 'remote')
+  const word = canBuy ? 'unlock' : demo ? 'demo' : bluetooth && linkSays === 'no computer' ? 'not connected' : linkSays
 
   /*
    * TWO SPOTS, EACH TELLING ITS OWN TRUTH. The word on the right is the
@@ -229,7 +243,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
         backgroundColor: at(color.panel, 0.55)
       }}
     >
-      <Lamp state={unitLamp} />
+      {bluetooth ? <BluetoothMark state={unitLamp} /> : <Lamp state={unitLamp} />}
 
       {/*
         The name is pressed, not just read. "If you tap the top left button
@@ -327,7 +341,10 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
             ? null
             : {
                 accessibilityRole: 'button',
-                accessibilityLabel: 'Which computer this phone is connected to',
+                /* The mark is a picture, so the words carry the Bluetooth for a screen reader. */
+                accessibilityLabel: bluetooth
+                  ? `${connected ? 'Connected' : 'Not connected'} over Bluetooth. Which adapter`
+                  : 'Which computer this phone is connected to',
                 suppressHighlighting: true,
                 onPress: () => {
                   tick()
@@ -337,7 +354,9 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
         style={{
           color:
             mark === 'ok'
-              ? color.ok
+              ? bluetooth
+                ? color.ble
+                : color.ok
               : mark === 'no'
                 ? color.fault
                 : mark === 'wait'
@@ -531,7 +550,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
       */}
       <Volume blocks={blocks} open={volume} onClose={() => setVolume(false)} onError={setFailed} />
       {failed ? <Reported said={failed} onClear={() => setFailed(null)} /> : null}
-      {saying && !demo ? <Which link={link} onClose={() => setSaying(false)} /> : null}
+      {saying && !demo ? <Which link={link} bluetooth={bluetooth} onClose={() => setSaying(false)} /> : null}
       {saveTo.said && saveHere ? <Saved said={saveTo.said} onClear={saveTo.dismiss} /> : null}
       {/*
         A save from Play runs late the same as one from Edit, and Play has no
@@ -539,6 +558,28 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
       */}
       {saveHere && saveTo.saving && saveTo.late ? <Late onCancel={saveTo.cancel} picked={saveTo.picked} /> : null}
     </BlurView>
+  )
+}
+
+/**
+ * The lamp, over Bluetooth: the Bluetooth mark in the lamp's place, lit the
+ * way the lamp would be. Blue, not green, while the unit answers, to match
+ * the blue CONNECTED beside it; red while it does not, as the lamp is; dim
+ * while it has not been asked yet. A Bluetooth mark that stayed blue over a
+ * unit that had stopped answering would be the bar saying all is well in the
+ * one place that exists to say when it is not.
+ */
+function BluetoothMark({ state }) {
+  const tint = state === 'good' ? color.ble : state === 'fault' ? color.fault : color.silkFaint
+  return (
+    <Image
+      source={bluetoothIcon}
+      accessible={false}
+      resizeMode="contain"
+      /* 14 high to read as the mark, and in the dot's 10 of width (the mark itself is
+         about 8 wide), so the unit's name does not jump sideways when Bluetooth comes on. */
+      style={{ width: 14, height: 14, marginHorizontal: -2, tintColor: tint }}
+    />
   )
 }
 
@@ -552,7 +593,37 @@ const ofAllBlocks = (s) => s.allBlocks
  * Which computer this phone is talking to, under the bar: the browser's
  * note from its CONNECTED, in the same words. A tap on it puts it away.
  */
-function Which({ link, onClose }) {
+function Which({ link, bluetooth = false, onClose }) {
+  /* Over Bluetooth the far end is the adapter, and the link carries its name. */
+  if (bluetooth) {
+    const adapter = link?.macName || 'the adapter'
+    const said =
+      link?.link === 'connected'
+        ? `Connected over Bluetooth, through ${adapter}.`
+        : link?.link === 'joining'
+          ? `Finding ${adapter}…`
+          : 'Not connected to the Bluetooth adapter.'
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${said} Tap to close.`}
+        onPress={onClose}
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: '100%',
+          zIndex: 3,
+          padding: space.lg,
+          borderBottomWidth: 1,
+          borderBottomColor: color.rule,
+          backgroundColor: color.panelHi
+        }}
+      >
+        <Text style={{ color: color.silk, fontSize: font.body }}>{said}</Text>
+      </Pressable>
+    )
+  }
   const where = link?.macName || 'your computer'
   const said =
     link?.link === 'connected'

@@ -26,6 +26,10 @@
       "destination": "/privacy.html"
     },
     {
+      "source": "/bluetooth",
+      "destination": "/bluetooth.html"
+    },
+    {
       "source": "/notices",
       "destination": "/notices.txt"
     },

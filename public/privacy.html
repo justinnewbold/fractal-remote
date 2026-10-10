@@ -90,7 +90,8 @@
       <p>
         The commands between your phone and your computer pass through a relay while you are
         connected this way — a preset change, a scene, a knob. They are passed along, not written
-        down.
+        down. Over Bluetooth (beta) they go from the phone to the adapter on your unit, through no
+        relay and no internet at all.
       </p>
 
       <h3>Unlocking the full version — a purchase record only if you buy it</h3>
@@ -170,9 +171,9 @@
         <li><strong>No location.</strong> The app never reads where you are from the phone, and
           does not ask for Location, with one exception that is Android's rule rather than ours.
           <strong>Bluetooth (beta)</strong> lets the phone talk to your unit through a Bluetooth
-          MIDI adapter; it is still being tested and is not open to customers yet. On Android 11
-          and older, Android lets no app look for a Bluetooth device without the Location
-          permission, so on those phones the app asks for it when you tap Connect on the Bluetooth
+          MIDI adapter, with no computer; it is part of the full version, for everyone who has
+          unlocked the app. On Android 11 and older, Android lets no app look for a Bluetooth
+          device without the Location permission, so on those phones the app asks for it when you tap Connect on the Bluetooth
           page, and uses it only to find the adapter, never to read where the phone is. Newer
           Android phones ask for Nearby devices instead, and an iPhone asks only to use Bluetooth.
           The country RevenueCat notes, under <em>Unlocking the full version</em>, is worked out by
@@ -223,13 +224,22 @@
         download link you asked for, the one telling a tester they have been given full access, and
         bug reports on their way to the person who builds it) go through
         <a href="https://resend.com/legal/privacy-policy" rel="noreferrer">Resend</a>. RevenueCat,
-        Supabase and Resend each hold only what is described on this page, use it only to provide
-        their part of the service, and protect it at least as this page describes.
+        Supabase, Resend, <a href="https://expo.dev/privacy" rel="noreferrer">Expo</a> (the phone
+        app's update checks) and
+        <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" rel="noreferrer">GitHub</a>
+        (the desktop app's update checks) each hold only what is described on this page, use it only
+        to provide their part of the service, and protect it at least as this page describes.
       </p>
       <p>
         The desktop apps check for their own updates from GitHub, and the phone app checks for
-        updates from Expo. On the phone, the photographs on the gear pages are fetched from this
-        website as you look through them. All of these are ordinary download requests.
+        updates from Expo. The phone's update check carries a random number for that install, made
+        up the first time the app runs, so Expo can tell one install from another; never your name
+        or email address. The desktop's check carries no number at all. On the phone, the
+        photographs on the gear pages are fetched from this website as you look through them.
+        Besides that number, the phone's check sends what any app update needs: which phone system
+        it is, the app's version and the update it already has, and, after a launch that crashed,
+        the error message the app stopped on, so a broken update can be found and taken back. Nothing
+        in it says who you are.
       </p>
 
       <h2>How long it is kept</h2>
@@ -250,6 +260,10 @@
         deletes your account, your setlists, bug reports sent from that account, and every other
         record kept under it, straight away and for good. A full version you bought stays with your
         Apple ID or Google account, and Restore a purchase brings it back on a new account.
+      </p>
+      <p>
+        If you have not bought the full version, the app opens on the purchase page instead of
+        Settings. <strong>Delete account</strong> is at the bottom of that page, and does the same.
       </p>
       <p>
         <strong>Or by email:</strong> email <a href="mailto:justinnewbold@gmail.com">justinnewbold@gmail.com</a> and say what you

@@ -16,5 +16,6 @@ being queued: it still used a slot.
 | 3 Oct | 1.86.53 | 1 | 1 | Delete account (Apple 5.1.1(v)), privacy manifests, the watch note, and the resubmission |
 | 6 Oct | 1.86.83 | 1 | 1 | Apple refused build 23 (guideline 4: the watch icon's black background). The light-ground watch icon, plus the two pieces waiting for a build: watch taps with the phone locked, and the metronome's sound and wrist tap |
 | 8 Oct | 1.87.0 | 1 (TestFlight, build 25) | 1 (errored on Expo's side: "temporary network issue", CREDENTIALS_TEMPORARY_NETWORK_ERROR, a minute in; counted, as every started build is) | Bluetooth (beta), a TEST build: made from branch claude/fractal-remote-continue-ljfqcd (draft PR #671, never merged; the work now waits in docs/pending/bluetooth-beta.patch), never sent as an update, takes none of main's. Not the store build: the cells say so in words, so the What's live page keeps 1.86.83 as the store copy |
+| 10 Oct | 1.87.1 | 1 | 1 | Bluetooth (beta) for everyone who has unlocked the app ("If Bluetooth is ready, let's get it submitted"): the native Bluetooth MIDI module, the beta note, What you need and the setup guide, the iPhone Bluetooth permission check, Auto appearance on iPhone, three unused Android permissions dropped. iOS to TestFlight, Android straight to Google Play production. Started from main right after PR #680 merged |
 
-**Left this month: 11 iOS, 11 Android.**
+**Left this month: 10 iOS, 10 Android.**

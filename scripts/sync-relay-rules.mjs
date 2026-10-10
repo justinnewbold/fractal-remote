@@ -185,6 +185,14 @@ export const FILES = [
     target: '../mobile/src/lib/admin.js',
     render: (text) => banner('../shared/admin.mjs') + text.replace("from './owner-unlock.mjs'", "from './owner-unlock.js'")
   },
+  /*
+   * What to buy for Bluetooth (beta), how it plugs in, and the address of the
+   * full guide. Only the phone has Bluetooth, but the website's guide
+   * (public/bluetooth.html) names the same parts at the same addresses, and
+   * a test holds that page to this file, so the source lives in shared/
+   * where plain Node can read it. Pure data, so a plain copy.
+   */
+  { source: '../shared/bluetooth-gear.mjs', target: '../mobile/src/lib/bluetooth-gear.js' },
   /* What the unit said it cannot do, so it is not asked again. */
   { source: '../shared/unsupported.mjs', target: '../mobile/src/lib/unsupported.js' },
   /* The metronome: where it clicks, and the number that switches each unit's. */

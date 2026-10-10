@@ -47,7 +47,7 @@ on:
         default: preview
         options: [preview, ios-simulator, production, development]
       submit:
-        description: 'Send it to TestFlight / Play when it finishes'
+        description: 'Send it to TestFlight, and to Google Play production (everyone), when it finishes'
         type: boolean
         default: false
       submit_only:
@@ -291,6 +291,14 @@ jobs:
       # Off by default. A submission is outward-facing — it puts a build in
       # front of Apple's review tooling and every TestFlight tester — so it is
       # asked for by ticking the box, not a side effect of building.
+      #
+      # AND ON ANDROID IT IS THE PUBLIC. "I don't do any close testing
+      # anymore. Android. It's all production now." eas.json sends Android to
+      # Play's production track, not the closed-testing one ("alpha") it used
+      # to: once Google's review passes, the build rolls out to every Play
+      # customer. iOS is unchanged — TestFlight first, and the App Store only
+      # after Justin sends that build for review in App Store Connect.
+
       # Sends the build that already exists, rather than making another.
       #
       # A submission can fail on its own — a missing App Store Connect app id,
