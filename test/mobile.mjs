@@ -5224,13 +5224,13 @@ export function run(test) {
      * the pasted block, and what it says has to be what the build does.
      */
     assert.match(pasted, /Bluetooth \(beta\)\./, 'Bluetooth (beta) is in this version, and the notes that get pasted do not describe it')
-    /* Where it is, by the words the screens draw: the gear, Phone & computer, then the card. */
+    /* Where it is, by the words the screens draw: the gear, then the Bluetooth (beta) row. */
     const settingsSrc = read('mobile/src/screens/Settings.js')
-    assert.match(settingsSrc, /label="BLUETOOTH \(BETA\)"/)
-    assert.match(settingsSrc, /head\('Phone & computer', 'back'\)/)
-    assert.match(pasted, /Phone & computer,\s+then\s+BLUETOOTH \(BETA\)/, 'the 1.87.1 notes do not say where Bluetooth is')
-    /* Open to everybody who has unlocked the app, which is the gate the card and the page are behind, and no list. */
-    assert.match(settingsSrc.replace(/\s+/g, ' '), /\{mayDrive\(purchase\) && bluetoothSupported\(\) \? \( <TipCard icon=\{sendIcon\} label="BLUETOOTH \(BETA\)"/)
+    assert.match(settingsSrc, /title="Bluetooth \(beta\)"/)
+    assert.match(settingsSrc, /head\('Bluetooth \(beta\)', 'back'\)/)
+    assert.match(pasted, /Settings,\s+then\s+Bluetooth \(beta\)/, 'the 1.87.1 notes do not say where Bluetooth is')
+    /* Open to everybody who has unlocked the app, which is the gate the row and the page are behind, and no list. */
+    assert.match(settingsSrc.replace(/\s+/g, ' '), /\{mayDrive\(purchase\) && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/)
     assert.match(pasted, /everyone\s+who\s+has\s+unlocked\s+the\s+app/, 'the 1.87.1 notes do not say who Bluetooth is for')
     assert.ok(!/selected\s+accounts|chosen\s+accounts|shown\s+only\s+to/i.test(pasted), 'the 1.87.1 notes say Bluetooth is shown only to some accounts, and there is no such list')
     assert.equal(existsSync(new URL('../shared/bluetooth-testers.mjs', import.meta.url)), false, 'the Bluetooth tester list is back, and the notes say there is none')
@@ -5927,7 +5927,17 @@ export function run(test) {
        sensible window, and a check that depends on prose length is a check
        that breaks when somebody explains themselves properly. */
     const bare = settings.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, ' ').replace(/\s+/g, ' ')
-    assert.match(bare, /\) : purchase\.unlocked \? \( <TipCard icon=\{playIcon\} label="DEMO" onPress=\{\(\) => setDemo\(true\)\} \/>/, 'a paid phone has no way into the demo')
+    /*
+     * And now the way in is the walkthrough, for everybody. "Remove the demo
+     * card from the phone and computer screen. If a user wants to access it
+     * again, they can still access it from the show walkthrough." So the card
+     * is gone, and the walkthrough has to still be there and still start one.
+     */
+    assert.doesNotMatch(bare, /label="DEMO"/, 'the DEMO card is back on Phone & computer')
+    assert.match(bare, /<SetupRow title=\{REPLAY\} [^>]*onPress=\{onReplay\} \/>/, 'Settings has no Show the walkthrough, the one way into the demo for a paid phone')
+    const onb = read('mobile/src/screens/Onboarding.js').replace(/\s+/g, ' ')
+    assert.match(onb, /label=\{P2\.footGo\}[\s\S]{0,80}?go\('pick'\)/, 'the walkthrough no longer offers the demo')
+    assert.doesNotMatch(onb, /usePurchase/, 'the walkthrough’s demo is held back from a paid phone')
 
     /*
      * AND THE TWO DOORS ARE NAMED FOR THE TWO PEOPLE WALKING THROUGH THEM.
@@ -6188,6 +6198,8 @@ export function run(test) {
     assert.deepEqual(order, [
       '# My rig',
       'Phone & computer',
+      /* "Move the Bluetooth card from the phone and computer menu to its own menu under the settings menu." */
+      'Bluetooth (beta)',
       /* What each footswitch does, where the switches can be read. */
       'Footswitches',
       'Stop the looper',
@@ -7027,9 +7039,36 @@ export function run(test) {
     /* On the computer's card now: its name and version, from shared/link-chain.mjs. */
     assert.match(settings, /computer: \{ name: macName, version: hostVersion, link \}/, 'Setup never says the computer’s version')
     assert.match(read('shared/link-chain.mjs'), /\$\{computerName\}\$\{version\(computer\.version\)\}/, 'the computer card forgot its version')
-    assert.match(settings, /const behind = !!hostVersion && isOlder\(hostVersion, APP_VERSION\) === true/, 'a computer that did not say its version is told it is behind')
-    /* A missing version is said as missing, with where to look, not as "behind". */
-    assert.match(settings, /link === 'connected' && !demo && !throughAdapter && !hostVersion \? \( <Note> The computer didn’t say which version it is running: its app is older than 7\.205\.0, or it could not write its name for the phone\. If the computer is on 7\.295\.0 or newer, its menu bar icon has a line saying what the phones hear about its version/, 'a missing version does not point at the Mac’s own menu line')
+    /*
+     * An old computer app is said on its own card, in red, in a few words.
+     * "Instead of having that warning, just use the 'your computer' card
+     * instead, and have a very short message that says, for example —
+     * update computer app to latest version. And have the text be in red."
+     */
+    assert.doesNotMatch(settings, /The app on the computer is behind this one|didn’t say which version/, 'the long version notes are back under the cards')
+    const { linkChain, UPDATE_COMPUTER } = await import('../shared/link-chain.mjs')
+    assert.equal(UPDATE_COMPUTER, 'Update the computer app to the latest version')
+    const card = (computer, extra = {}) =>
+      linkChain({ here: 'phone', unit: { name: 'FM3', state: 'present' }, computer, phone: { version: '1.87.4' }, ...extra }).find((c) => c.key === 'computer')
+    assert.equal(card({ name: 'MacBook Pro', version: '1.86.69', link: 'connected' }).warn, UPDATE_COMPUTER, 'an older computer app is not told to update')
+    assert.equal(card({ name: 'MacBook Pro', version: '1.87.4', link: 'connected' }).warn, undefined, 'a computer on this version is told to update')
+    assert.equal(card({ name: 'MacBook Pro', version: '1.87.5', link: 'connected' }).warn, undefined, 'a newer computer app is told to update')
+    assert.equal(card({ name: 'MacBook Pro', version: null, link: 'connected' }).warn, UPDATE_COMPUTER, 'a computer too old to say its version is not told to update')
+    assert.equal(card({ name: null, version: null, link: 'connected' }).warn, undefined, 'the line flashes up before the computer has said anything')
+    assert.equal(card({ name: 'MacBook Pro', version: '1.86.69', link: 'joining' }).warn, undefined)
+    assert.equal(card({ name: 'MacBook Pro', version: '1.86.69', link: 'connected' }, { demo: true }).warn, undefined, 'the demo is told to update a computer')
+    assert.equal(card({ name: 'MacBook Pro', version: '1.86.69', link: 'connected' }, { here: 'computer' }).warn, undefined, 'the computer tells itself to update')
+    assert.equal(card({ name: 'MacBook Pro', version: 'v1.86', link: 'connected' }).warn, undefined, 'a version that cannot be read still gets an opinion')
+    /* Drawn in red at both ends. */
+    const walk = read('mobile/src/components/Walk.js').replace(/\s+/g, ' ')
+    assert.match(walk, /\{warn \? <Text style=\{\{ color: color\.fault,/)
+    assert.match(walk, /warn=\{card\.warn\}/)
+    const web = read('src/components/Walk.jsx').replace(/\s+/g, ' ')
+    assert.match(web, /\{warn \? <span className="walk-card-warn">\{warn\}<\/span> : null\}/)
+    assert.match(web, /warn=\{card\.warn\}/)
+    assert.match(read('src/styles.css'), /\.walk-card-warn \{\s*color: var\(--fault\);/)
+    /* The phone's copy imports the version rule by the name Metro can find. */
+    assert.match(read('mobile/src/lib/link-chain.js'), /import \{ isOlder \} from '\.\/versions\.js'/)
 
     /*
      * The comparison is strict about what it will answer, and that is the
@@ -9661,7 +9700,7 @@ export function run(test) {
       'the Back button and the swipe can disagree about where one step up is'
     )
     /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer. */
-    assert.match(set, /const PARENT = \{ offline: 'link', bluetooth: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' \}/, 'a page goes back somewhere it did not come from')
+    assert.match(set, /const PARENT = \{ offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')

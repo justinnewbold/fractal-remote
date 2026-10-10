@@ -4,7 +4,6 @@ import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, Text, Vie
 import { color, font, mono, radius, space, TAP, MODES, getMode, setMode } from '../lib/theme'
 import { APP_VERSION } from '../lib/version'
 import { AFFILIATION } from '../lib/affiliation'
-import { isOlder } from '../lib/versions'
 import { setDemo, useDemo, useDemoUnit, setDemoUnit } from '../lib/demo'
 import { UNITS as DEMO_UNITS } from '../lib/demoUnits'
 import { getDebugLog } from '../lib/debugLog'
@@ -52,7 +51,6 @@ import { quitEditor } from '../lib/editors'
 import { isAdmin } from '../lib/admin'
 import { watchHow, watchPaired, watchSupported } from '../lib/watchBridge'
 import { bluetoothSupported, useBluetoothOn } from '../lib/bluetooth'
-import { BETA_CARD } from '../lib/bluetooth-gear'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage from './Bluetooth'
 import AccessTool from '../components/AccessTool'
@@ -241,7 +239,6 @@ export default function Settings({
      redrew, so the five buttons stayed lit on whichever unit the app started
      as however many times they were pressed. */
   const unit = useDemoUnit()
-  const behind = !!hostVersion && isOlder(hostVersion, APP_VERSION) === true
   /* Bluetooth (beta) with no demo: no computer in the chain. bleLink puts the
      adapter's name where the computer's goes (macName), and never a version. */
   const throughAdapter = bluetooth && !demo
@@ -304,7 +301,7 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', bluetooth: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' }
+  const PARENT = { offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' }
   const UP_LABEL = { link: '‹ Phone & computer', developer: '‹ Developer' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
@@ -405,6 +402,23 @@ export default function Settings({
               }
               onPress={() => setPage('link')}
             />
+            {/*
+              BLUETOOTH (BETA), ITS OWN ROW. "Move the Bluetooth card from the
+              phone and computer menu to its own menu under the settings menu.
+              Still saying Bluetooth (beta)." The phone straight to the unit,
+              through a Bluetooth MIDI adapter on its MIDI In and Out, with no
+              computer. Behind the unlock, and only in a build that carries
+              the Bluetooth code on a phone that can do it: anybody else never
+              sees it. The page it opens starts with the beta note, the
+              iPhone's or Android's own (betaNote).
+            */}
+            {mayDrive(purchase) && bluetoothSupported() ? (
+              <SetupRow
+                title="Bluetooth (beta)"
+                status={bluetooth ? 'On · the phone talks to the unit itself' : 'Off · play without a computer'}
+                onPress={() => setPage('bluetooth')}
+              />
+            ) : null}
             {/*
               THE LOOPER'S EMERGENCY STOP. "There needs to be something in
               settings … for when it keeps playing." It carries on across a
@@ -827,62 +841,20 @@ export default function Settings({
                   <TipCard icon={playIcon} label="EXIT DEMO" body="Back to your own rig" onPress={() => setDemo(false)} />
                 ) : null}
               </>
-            ) : purchase.unlocked ? (
-              /*
-                THE WAY IN, FOR SOMEBODY WHO HAS PAID.
-
-                "It would be a good idea for somebody that wants to maybe view
-                what it looks like having an AxeFX 3 or another model they
-                don't have yet to play around with it."
-
-                The demo is hidden from everybody who has bought the app —
-                it is not on the walkthrough they have been past, and signing
-                in ends it — so this is the door he asked to keep. Here rather
-                than on the front list because this page is what the phone is
-                talking to, and the demo is a thing to talk to.
-
-                ONE WORD, not the sign-in screen's three. "If they are
-                already signed in and the app is unlocked, instead of saying
-                try the demo, have it just say Demo."
-
-                The two are not the same sentence because the two readers are
-                not the same person. "Try the Demo" is an offer, made to
-                somebody who has not paid and is deciding — try it, see what
-                it does. By the time this button is on screen that decision is
-                made: they are signed in, they own the app, and the demo is
-                simply one of the things it has. A place, not a pitch.
-
-                And no heading over it, which he confirmed. A heading here
-                would be a sentence I wrote rather than one he did, and the
-                button already says what it does.
-              */
-              <TipCard icon={playIcon} label="DEMO" onPress={() => setDemo(true)} />
             ) : null}
+            {/*
+              No DEMO card here any more. "Remove the demo card from the phone
+              and computer screen. If a user wants to access it again, they can
+              still access it from the show walkthrough." Settings → Show the
+              walkthrough → Try the demo is the way in, for everybody.
+            */}
 
             {/*
-              What the computer is running, and whether that is behind.
-
-              "Does the Mac app need to be updated to the latest version? Or
-              would that affect how the app performs?" It would: that app holds
-              the cable to the unit and does every read this phone asks for, so
-              an old one is slow here in a way that looks exactly like this app
-              being slow. The number was already being sent and nobody looked at
-              it.
+              What the computer is running, and whether that is behind, is on
+              the YOUR COMPUTER card now, in red: "instead of having that
+              warning, just use the 'your computer' card instead, and have a
+              very short message". See shared/link-chain.mjs.
             */}
-            {link === 'connected' && !demo && behind ? (
-              <Note tone="warn">
-                The app on the computer is behind this one. Update it there — it is the part that
-                holds the cable to your unit, and an old one is slow here in a way that looks like
-                this app being slow.
-              </Note>
-            ) : null}
-            {link === 'connected' && !demo && !throughAdapter && !hostVersion ? (
-              <Note>
-                The computer didn’t say which version it is running: its app is older than 7.205.0, or
-                it could not write its name for the phone. If the computer is on 7.295.0 or newer, its menu bar icon has a line saying what the
-                phones hear about its version, and that line says what is wrong.
-              </Note>
-            ) : null}
 
             {/* A computer on this wifi on another account is the reason, and it is
                 said instead — see useComputerElsewhere. */}
@@ -962,26 +934,6 @@ export default function Settings({
               />
             ) : null}
 
-            {/*
-              BLUETOOTH (BETA): the phone straight to the unit, through a
-              Bluetooth MIDI adapter on its MIDI In and Out, with no computer.
-              Behind the unlock like the card above, and only in a build that
-              carries the Bluetooth code on a phone that can do it: anybody
-              else never sees it.
-
-              A PUBLIC BETA, FOR EVERYBODY WHO HAS UNLOCKED THE APP. "If
-              Bluetooth is ready, let's get it submitted… let's just say that
-              Bluetooth is beta though in the app and give like a disclaimer
-              saying that Bluetooth might not function correctly." So the line
-              under the label says it is new, and that so far it has only been
-              tried on the AM4, from an iPhone (BETA_CARD, in
-              shared/bluetooth-gear.mjs). The
-              page it opens starts with the fuller note, the iPhone's or
-              Android's own (betaNote).
-            */}
-            {mayDrive(purchase) && bluetoothSupported() ? (
-              <TipCard icon={sendIcon} label="BLUETOOTH (BETA)" body={BETA_CARD} onPress={() => setPage('bluetooth')} />
-            ) : null}
 
             {/*
               Only while there is something to try. "The Try now button is
@@ -1029,7 +981,7 @@ export default function Settings({
       ) : null}
 
       {/* ------------------------------------------------------- bluetooth */}
-      {/* The page, behind the same gate as its card on Phone & computer. Its
+      {/* The page, behind the same gate as its row on Settings. Its
           Testing tools are Justin's alone (admin), as the Developer pages are:
           Apple's 2.2 keeps test benches out of what customers see. */}
       {page === 'bluetooth' && mayDrive(purchase) && bluetoothSupported() ? (

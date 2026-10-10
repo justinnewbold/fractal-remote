@@ -41,8 +41,9 @@ export function Tile({ icon, size = 64 }) {
 /**
  * A card: the tile, an amber label, a line under it, and on the right a
  * chevron when it goes somewhere (or whatever `right` is, such as a lamp).
+ * `warn` is a short line in red under that, for the one thing to do about it.
  */
-export function TipCard({ icon, label, body, onPress, right, tile = 64 }) {
+export function TipCard({ icon, label, body, warn, onPress, right, tile = 64 }) {
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
@@ -70,6 +71,7 @@ export function TipCard({ icon, label, body, onPress, right, tile = 64 }) {
       <View style={{ flex: 1, gap: space.xs }}>
         <Text style={{ color: color.signal, fontSize: font.lead, fontWeight: '800', letterSpacing: 1 }}>{label}</Text>
         {body ? <Text style={{ color: color.silkDim, fontSize: font.body + 1, lineHeight: 22 }}>{body}</Text> : null}
+        {warn ? <Text style={{ color: color.fault, fontSize: font.body, fontWeight: '700', lineHeight: 20 }}>{warn}</Text> : null}
       </View>
       {right || (onPress ? <Image source={chevronIcon} style={{ width: 16, height: 16, tintColor: color.silkDim }} /> : null)}
     </Pressable>
@@ -95,6 +97,7 @@ export function ChainCards({ cards }) {
             tile={52}
             label={card.label}
             body={card.body}
+            warn={card.warn}
             right={<Lamp state={LAMP[card.tone] || 'idle'} size={12} />}
           />
           {card.wire ? <ChainWire label={card.wire} lit={card.lit} /> : null}

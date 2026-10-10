@@ -2404,29 +2404,31 @@ export function run(test) {
   test('Settings offers Bluetooth (beta) only to somebody unlocked, on a phone and build that can do it', () => {
     /*
      * Back to what it was before the tester list: the unlock and the build
-     * check, and nothing about which account. "If Bluetooth is ready, let's
-     * get it submitted… let's just say that Bluetooth is beta though in the
-     * app." So every paying customer gets it, labelled beta, and the line
-     * under the label says so (BETA_CARD, shared/bluetooth-gear.mjs).
+     * check, and nothing about which account. Every paying customer gets it,
+     * labelled beta. And it is its own row on Settings now: "Move the
+     * Bluetooth card from the phone and computer menu to its own menu under
+     * the settings menu. Still saying Bluetooth (beta)."
      */
     const settings = src('mobile/src/screens/Settings.js')
     const one = settings.replace(/\s+/g, ' ')
-    assert.match(one, /\{mayDrive\(purchase\) && bluetoothSupported\(\) \? \( <TipCard icon=\{sendIcon\} label="BLUETOOTH \(BETA\)"/, 'the card is not behind the unlock and the build check')
-    assert.match(one, /label="BLUETOOTH \(BETA\)"[\s\S]{0,200}onPress=\{\(\) => setPage\('bluetooth'\)\}/, 'the card opens nothing')
+    assert.match(one, /\{mayDrive\(purchase\) && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/, 'the row is not behind the unlock and the build check')
+    assert.match(one, /title="Bluetooth \(beta\)"[\s\S]{0,300}onPress=\{\(\) => setPage\('bluetooth'\)\}/, 'the row opens nothing')
     /* The page itself, through the same gate for everybody. It is told whether this is Justin's account only for its Testing tools (Apple's 2.2), never to let anybody in. */
     assert.match(one, /\{page === 'bluetooth' && mayDrive\(purchase\) && bluetoothSupported\(\) \? \( <> \{head\('Bluetooth \(beta\)', 'back'\)\} <BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} \/>/)
-    /* The card's line says it is a beta, in the gear file's words. */
-    assert.match(one, /import \{ BETA_CARD \} from '\.\.\/lib\/bluetooth-gear'/)
-    assert.match(one, /label="BLUETOOTH \(BETA\)" body=\{BETA_CARD\}/, 'the card on Phone & computer does not say Bluetooth is a beta')
-    /* Every way onto the card and the page goes through that gate: no other mention of either. */
-    assert.equal((settings.match(/label="BLUETOOTH \(BETA\)"/g) || []).length, 1, 'a second Bluetooth card skips the gate')
+    /* Every way onto the row and the page goes through that gate: no other mention of either. */
+    assert.equal((settings.match(/title="Bluetooth \(beta\)"/g) || []).length, 1, 'a second Bluetooth row skips the gate')
+    assert.equal((settings.match(/label="BLUETOOTH \(BETA\)"/g) || []).length, 0, 'the old card is still on Phone & computer')
     assert.equal((settings.match(/<BluetoothPage /g) || []).length, 1, 'a second way onto the page skips the gate')
-    assert.match(one, /const PARENT = \{ offline: 'link', bluetooth: 'link',/, 'back from the page does not go to Phone & computer')
+    assert.doesNotMatch(one, /bluetooth: 'link'/, 'back from the page goes to Phone & computer, not Settings')
+    /* On the front list, after Phone & computer and before the metronome. */
+    const front = settings.slice(settings.indexOf('{page === null ? ('), settings.indexOf("{page === 'account' ? ("))
+    const row = front.indexOf('title="Bluetooth (beta)"')
+    assert.ok(row > front.indexOf('title="Phone & computer"') && row < front.indexOf('title="Metronome"'), 'the row is not on the Settings list beside Phone & computer')
+    const link = settings.slice(settings.indexOf("{page === 'link' ? ("), settings.indexOf("{page === 'bluetooth'"))
+    assert.doesNotMatch(link, /setPage\('bluetooth'\)/, 'Phone & computer still opens Bluetooth')
     /* After the link page and before the metronome: outside every slice the other tests take. */
     const at = settings.indexOf("{page === 'bluetooth'")
     assert.ok(at > settings.indexOf("{page === 'link' ? (") && at < settings.indexOf("{page === 'metronome' ? ("), 'the page moved into a slice another test reads')
-    /* The card sits after PLAYING WITH NO INTERNET, on Phone & computer. */
-    assert.ok(settings.indexOf('label="BLUETOOTH (BETA)"') > settings.indexOf('label="PLAYING WITH NO INTERNET"'))
     assert.match(one, /Bluetooth \(beta\) is on\. This phone talks to the unit directly, not through the computer\./, 'Phone & computer does not say Bluetooth is on')
     /* The looper row stays away: the looper is left off the chain over Bluetooth. */
     assert.match(one, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) \? \( <SetupRow title="Stop the looper"/)
@@ -3223,7 +3225,8 @@ export function run(test) {
       assert.match(note, /^Bluetooth is new \(beta\), and may not work correctly with every unit or adapter\./)
       assert.match(note, /If something doesn’t work, the cable to the computer still does\./)
     }
-    assert.match(gear.BETA_CARD, /\(beta\)/)
+    /* The card that led to the page is gone with the card: the row on Settings says (beta) in its title. */
+    assert.equal(gear.BETA_CARD, undefined, 'the old Phone & computer card’s words are back')
     /*
      * And from an iPhone only. No Android phone has ever run it (the one
      * Android build that carried it stopped on Expo's side), and Android
@@ -3241,18 +3244,16 @@ export function run(test) {
     assert.match(gear.BETA_NOTE_ANDROID, /from an iPhone, and not yet from an Android phone/, 'the beta note lets Android customers think it has been tried on their phone')
     assert.match(gear.BETA_NOTE_IPHONE, /So far it has been tried on the AM4, from an iPhone\. If something/, 'the iPhone’s beta note does not say where it has been tried')
     assert.ok(!/android|google|play store|\bapk\b/i.test(gear.BETA_NOTE_IPHONE), 'the iPhone’s beta note names another phone, which Apple’s 2.3.10 rejects')
-    assert.ok(!/android|google|play store|\bapk\b/i.test(gear.BETA_CARD), 'the card both phones draw names another phone')
     assert.equal(gear.BETA_NOTE_ANDROID.replace(', and not yet from an Android phone', ''), gear.BETA_NOTE_IPHONE, 'the two beta notes say different things besides the Android clause')
     /* Picked by the phone's own platform; anything not Android gets the iPhone's, so no new platform ever shows Android's name. */
     assert.equal(gear.betaNote('android'), gear.BETA_NOTE_ANDROID)
     assert.equal(gear.betaNote('ios'), gear.BETA_NOTE_IPHONE)
     assert.equal(gear.betaNote(undefined), gear.BETA_NOTE_IPHONE)
     assert.equal(gear.BETA_NOTE, undefined, 'one beta note for both phones is back')
-    assert.match(gear.BETA_CARD, /from an iPhone/, 'the card leaves out that it has only been tried from an iPhone')
     for (const unit of gear.TESTED) {
       const name = BLE_UNITS.find((u) => u.key === unit).name
       for (const note of [gear.BETA_NOTE_IPHONE, gear.BETA_NOTE_ANDROID]) {
-        assert.ok(note.includes(`tried on the ${name}`) && gear.BETA_CARD.includes(name), `the beta note does not say it was tried on the ${name}`)
+        assert.ok(note.includes(`tried on the ${name}`), `the beta note does not say it was tried on the ${name}`)
       }
     }
     /* The phone carries the same file, generated (the sync test holds it to the source). */

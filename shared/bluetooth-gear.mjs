@@ -97,9 +97,6 @@ export const BETA_NOTE_ANDROID =
 /** The beta note for the phone it is shown on, from Platform.OS. */
 export const betaNote = (os) => (os === 'android' ? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE)
 
-/** The same, short enough for the card on Phone & computer that leads to the page. */
-export const BETA_CARD =
-  'Play without a computer, through a Bluetooth MIDI adapter on the unit. New (beta): so far tried on the AM4 from an iPhone, and it may not work with every unit, adapter or phone.'
 
 /** The parts, by the name printed on the box, each with what it is for in a line. */
 export const PARTS = {

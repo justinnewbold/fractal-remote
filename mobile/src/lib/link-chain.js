@@ -2,6 +2,8 @@
  * Do not edit. Change the source and run `npm run sync:rules`; the test suite
  * fails on any difference between the two. */
 
+import { isOlder } from './versions.js'
+
 /**
  * THE THREE CARDS AT THE TOP OF PHONE & COMPUTER, worded once for both ends.
  *
@@ -27,7 +29,20 @@
  * adapter in the computer's place, joined to the unit by the MIDI cable (the
  * C2MIDI Pro the guide names) and to the phone by Bluetooth. A phone's only,
  * and the demo wins over it, as it does in link.js.
+ *
+ * AN OLD COMPUTER APP IS SAID ON ITS OWN CARD, in red (`warn`). "Instead of
+ * having that warning, just use the 'your computer' card instead, and have a
+ * very short message that says, for example — update computer app to latest
+ * version. And have the text be in red." The phone, the website and the
+ * computer app share one version number, and the computer app fetches its
+ * own updates and installs them when it is quit — so a computer older than
+ * this phone has a newer app waiting for it. One that names itself but not
+ * its version is older still (from before it could). Not until the computer
+ * has said its name, so the line never flashes up in the moment between
+ * connecting and the first read.
  */
+export const UPDATE_COMPUTER = 'Update the computer app to the latest version'
+
 
 /**
  * @param {object} p
@@ -76,6 +91,15 @@ export function linkChain({ here, demo = false, via = 'computer', unit = {}, com
             ? { body: `${computerName} isn’t answering`, tone: 'bad' }
             : { body: 'Not connected', tone: 'dim' }
 
+  const computerWarn =
+    atPhone && !demo && !ble && computer.link === 'connected' && phone.version && computer.name
+      ? computer.version
+        ? isOlder(computer.version, phone.version) === true
+          ? UPDATE_COMPUTER
+          : null
+        : UPDATE_COMPUTER
+      : null
+
   const adapterCard =
     adapter.link === 'connected'
       ? { body: adapter.name || 'Connected', tone: 'good' }
@@ -95,7 +119,7 @@ export function linkChain({ here, demo = false, via = 'computer', unit = {}, com
     { key: 'unit', label: 'YOUR UNIT', ...unitCard, wire: ble ? 'MIDI CABLE' : 'USB CABLE' },
     ble
       ? { key: 'adapter', label: 'BLUETOOTH ADAPTER', ...adapterCard, wire: 'BLUETOOTH' }
-      : { key: 'computer', label: atPhone ? 'YOUR COMPUTER' : 'THIS COMPUTER', ...computerCard, wire: 'SECURE LINK' },
+      : { key: 'computer', label: atPhone ? 'YOUR COMPUTER' : 'THIS COMPUTER', ...computerCard, ...(computerWarn ? { warn: computerWarn } : {}), wire: 'SECURE LINK' },
     { key: 'phone', label: atPhone ? 'THIS PHONE' : 'YOUR PHONE', ...phoneCard }
   ].map((card, i, all) => ({
     ...card,

@@ -968,6 +968,8 @@ export function run(test) {
     const ONE_END = {
       'Apple Watch':
         'iPhone only — the watch app comes with the iPhone app and works through it; a browser has no watch, and there is no Android watch app',
+      'Bluetooth (beta)':
+        'phone only — a browser cannot reach a Bluetooth MIDI adapter; the phone does it through its own native module',
       Footswitches:
         'phone only as a Settings row — the browser shows the same panel, from the same shared/footswitches.mjs, as a section of the Edit sheet, where it has been since it was built',
       'Get it on your phone': 'browser only — a phone has no use for a way to get itself onto a phone, and it stays on the front page rather than inside About because "somebody who has a rig connected and wants the remote in their pocket is the likeliest buyer there is"'
@@ -1439,7 +1441,8 @@ export function run(test) {
     assert.match(flat, /via: throughAdapter \? 'bluetooth' : 'computer'/)
     assert.match(flat, /adapter: \{ name: macName, link \}/)
     assert.match(flat, /link === 'connected' && !demo && !throughAdapter && \(unitState === 'missing' \|\| unitState === 'silent'\)/, 'the USB and editor advice shows over Bluetooth')
-    assert.match(flat, /link === 'connected' && !demo && !throughAdapter && !hostVersion \?/, 'the computer-version note shows over Bluetooth')
+    assert.ok(cards.every((c) => !c.warn), 'the Bluetooth chain tells somebody to update a computer')
+    assert.doesNotMatch(flat, /didn’t say which version/, 'the computer-version note is back on Phone & computer')
     const walk = read('mobile/src/components/Walk.js').replace(/\s+/g, ' ')
     assert.match(walk, /import bluetoothIcon from '\.\.\/\.\.\/assets\/icons\/bluetooth\.png'/)
     assert.match(walk, /const CHAIN_ICONS = \{ unit: ampIcon, computer: laptopIcon, adapter: bluetoothIcon, phone: phoneIcon \}/)

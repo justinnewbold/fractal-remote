@@ -123,7 +123,11 @@ export const FILES = [
    * The three cards at the top of Phone & computer — the unit, the computer
    * and the phone — so both ends say the same thing about the same chain.
    */
-  { source: '../shared/link-chain.mjs', target: '../mobile/src/lib/link-chain.js' },
+  {
+    source: '../shared/link-chain.mjs',
+    target: '../mobile/src/lib/link-chain.js',
+    render: (text) => banner('../shared/link-chain.mjs') + text.replace("from './versions.mjs'", "from './versions.js'")
+  },
   /* Which picture each kind of effect wears on Play, so the two ends agree. */
   { source: '../shared/block-icons.mjs', target: '../mobile/src/lib/block-icons.js' },
   /*
