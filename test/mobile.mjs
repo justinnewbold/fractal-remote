@@ -11357,6 +11357,11 @@ export function run(test) {
     assert.equal(asked(/^GET \/presets\/40\/scenes$/), 0, 'a slot known to be unnamed was read again')
     const src = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
     assert.match(src, /rememberSceneNames\(device\.nameOwner\(state\.deviceSlug\), number, names, \{ blank: true \}\)/, 'an unnamed slot read over Bluetooth is not written down')
+    /* Not while tuning: the read would freeze the needle for its four seconds. */
+    assert.match(src, /const wait = state\.tunerOn \? AM4_NAMES_QUIET_MS : pressedAt \+ AM4_NAMES_QUIET_MS - Date\.now\(\)/)
+    assert.match(src, /export async function writeTuner\(on\) \{ pressed\(\)/)
+    /* The same fault again is quiet only while it is still on screen: a second outage is said. */
+    assert.match(src, /if \(fault\.error === state\.error && fault\.errorLink === state\.errorLink && faultLeft\(state, Date\.now\(\)\) > 0\) return/)
     const cache = read('mobile/src/lib/sceneNameCache.js').replace(/\s+/g, ' ')
     assert.match(cache, /if \(!kept\.some\(\(n\) => n\) && !\(blank && kept\.length\)\) return false/)
     assert.match(cache, /export async function sceneNamesKnown\(owner, number\)/)

@@ -16,7 +16,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import { firmwareOf } from './firmware'
-import { faultFrom, withdrawsFault } from './fault-rule'
+import { faultFrom, faultLeft, withdrawsFault } from './fault-rule'
 
 import * as device from './device'
 import { idOf, sameBlock } from './unit.mjs'
@@ -1382,10 +1382,12 @@ export async function refreshPreset() {
   try {
     takePreset(await device.currentPreset())
   } catch (err) {
-    /* The unit watch asks this on a timer: the same fault again is not news,
-       and raising it again would bring the toast back every few seconds. */
+    /* The unit watch asks this on a timer: the same fault again, while it is
+       still on screen, is not news, and raising it again would bring the
+       toast back every few seconds. Once it has gone, the same fault later
+       is a new outage, and is said. */
     const fault = faultFrom(err)
-    if (fault.error === state.error && fault.errorLink === state.errorLink) return
+    if (fault.error === state.error && fault.errorLink === state.errorLink && faultLeft(state, Date.now()) > 0) return
     set(fault)
   }
 }
@@ -1672,7 +1674,8 @@ function namesWhenQuiet(number, copy) {
   const check = () => {
     quietTimer = null
     if (state.preset?.number !== number || named() || !bluetoothAm4()) return
-    const wait = pressedAt + AM4_NAMES_QUIET_MS - Date.now()
+    /* Not while tuning either: four seconds of a frozen needle mid-string. */
+    const wait = state.tunerOn ? AM4_NAMES_QUIET_MS : pressedAt + AM4_NAMES_QUIET_MS - Date.now()
     if (wait > 0) {
       quietTimer = setTimeout(check, wait)
       return
@@ -2176,6 +2179,7 @@ function startDemoTuner() {
  * start must not leave a screen waiting for readings that are never coming.
  */
 export async function writeTuner(on) {
+  pressed()
   set({ tunerOn: on, tuning: on ? state.tuning : null, error: null, errorLink: false })
   if (!on) stopDemoTuner()
   try {
