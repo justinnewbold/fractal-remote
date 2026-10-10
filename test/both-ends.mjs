@@ -1008,7 +1008,7 @@ export function run(test) {
        by the shape rather than by which page happens to come first, so adding
        a page does not silently widen the slice. */
     const phoneFront = rowsIn(between('{page === null ? (', "{page === 'account' ? ("), 'title')
-    const phoneAbout = rowsIn(between("{page === 'about' ? (", '<Section>What stays at the computer</Section>'), 'title')
+    const phoneAbout = rowsIn(between("{page === 'about' ? (", '<Section>The small print</Section>'), 'title')
 
     for (const [where, rows] of [['browser front', webFront], ['phone front', phoneFront], ['browser About', webAbout], ['phone About', phoneAbout]]) {
       assert.ok(rows.length > 0, `${where} came back empty; this check no longer reads the list`)

@@ -1237,14 +1237,12 @@ export default function Settings({
           />
           </View>
 
-          <View style={{ gap: space.md }}>
-            <Section>What stays at the computer</Section>
-            <Note>
-              Saving to a slot, backups, restores, firmware and raw SysEx are refused from a
-              distance — by your computer, not by this app. A phone on a dark stage should not be able to
-              overwrite a preset you spent a week on.
-            </Note>
-          </View>
+          {/*
+            No "What stays at the computer" box any more. It said saving was
+            refused from a phone, and saving works from the phone now (the
+            computer writes it — see lib/saveViaComputer). "Update or remove
+            that message."
+          */}
           {/*
             Reachable from inside the app, which is the point of writing them.
             A store requires a privacy policy at a URL and the licences we ship
