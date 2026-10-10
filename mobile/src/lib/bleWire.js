@@ -31,13 +31,17 @@ import {
   MODELS,
   am4Allowed,
   am4Block,
+  am4ChannelFrom,
   am4DumpPart,
   am4LocationCode,
   am4Note,
+  am4ShortAllowed,
+  am4TunerCcFrom,
   buildAm4Bypass,
   buildAm4BypassRead,
   buildAm4Channel,
   buildAm4ChannelRead,
+  buildAm4MidiChannelRead,
   buildAm4Preset,
   buildAm4Scene,
   buildAm4StoredDump,
@@ -45,6 +49,8 @@ import {
   buildAm4Structure,
   buildAm4Tempo,
   buildAm4TempoRead,
+  buildAm4TunerCc,
+  buildAm4TunerCcRead,
   buildAm4TunerPoll,
   buildGetPreset,
   buildGetPresetName,
@@ -73,6 +79,7 @@ import {
   parseAm4Bypass,
   parseAm4Channel,
   parseAm4DumpSceneNames,
+  parseAm4GlobalLong,
   parseAm4StoredName,
   parseAm4Structure,
   parseAm4Tempo,
@@ -284,13 +291,17 @@ const OFF_STAGE = ['input', 'output', 'looper']
 const silentTuner = () => ({ type: 'tuner', note: '', octave: undefined, cents: null })
 
 /**
- * THE AM4'S ONE WAY OUT. Every frame for the AM4 passes through this, and a
- * frame that is not on AM4_ALLOWED is not sent: it is logged and dropped.
+ * THE AM4'S ONE WAY OUT. Every message for the AM4 passes through this. A
+ * SysEx frame goes only if it is on AM4_ALLOWED. Anything shorter goes only
+ * if it is the tuner's CC on the number and channel THIS connection read from
+ * the AM4 (`learned`, see am4ShortAllowed): before that read, nothing short
+ * goes at all. Anything else is logged and dropped.
  * 'sent', 'refused' or 'failed' (the adapter would not take it).
  */
-export function am4Sender(send, log = () => {}) {
+export function am4Sender(send, log = () => {}, learned = () => null) {
   return (bytes) => {
-    if (!am4Allowed(bytes)) {
+    const ok = Array.isArray(bytes) && bytes[0] === 0xf0 ? am4Allowed(bytes) : am4ShortAllowed(bytes, learned())
+    if (!ok) {
       log(`refused to send the AM4 ${toHex(bytes)}: it is not one of the messages the AM4 is ever sent`)
       return 'refused'
     }
@@ -330,7 +341,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       // The log is for reading afterwards; it can never stop a request.
     }
   }
-  const sendFrame = am4 ? am4Sender(send, say) : (bytes) => (send(bytes) === false ? 'failed' : 'sent')
+  /* Asked at each send, so a short message is held to what this connection has read by then (see the tuner below). */
+  const sendFrame = am4 ? am4Sender(send, say, () => tuner.unitCc) : (bytes) => (send(bytes) === false ? 'failed' : 'sent')
 
   const handlers = new Set()
   const emit = (event) => {
@@ -1152,7 +1164,30 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /* ---- tuner ---- */
 
-  const tuner = { on: false, way: null, run: 0, timer: null, pushSent: false, pageOpen: false, lastNote: null, polled: 0 }
+  /*
+   * The last five are the AM4's own tuner screen, which this phone opens and
+   * closes with the CC its MIDI pedal would send. `unitCc` is what THIS
+   * connection read of that setting, {cc, channel} or null, and the only CC
+   * the AM4 may be sent; `unitOpen` that a 127 went out and its 0 is still
+   * owed; `unitRead` that the setting has been asked about on this
+   * connection; `unitAsk` false once an answer was missing or unclear, so it
+   * is not asked again; `unitSays` what the last open found.
+   */
+  const tuner = {
+    on: false,
+    way: null,
+    run: 0,
+    timer: null,
+    pushSent: false,
+    pageOpen: false,
+    lastNote: null,
+    polled: 0,
+    unitCc: null,
+    unitOpen: false,
+    unitRead: false,
+    unitAsk: true,
+    unitSays: null
+  }
 
   function reading(event) {
     const word = event.note ? `${event.note}${event.octave ?? ''}` : ''
@@ -1563,20 +1598,154 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     tunerLater(run, TUNER_MS, () => am4TunerTick(run))
   }
 
+  /*
+   * THE AM4'S OWN TUNER, ON THE UNIT ITSELF.
+   *
+   * "On the AM4 the tuner doesn't activate on the device, it only shows it on
+   * the phone ... I know that it has MIDI support for activating and
+   * deactivating a tuner because I have a MIDI device that does it. Works
+   * fine on the FM3." The readings never needed the tuner screen open, so
+   * the phone tuned and the AM4 sat on its preset. What his pedal sends is
+   * the Control Change under SETUP > MIDI/Remote > Tuner: 127 to open, 0 to
+   * close.
+   *
+   * That number is the player's own choice, with no factory one, so it is
+   * read from the AM4 each time the tuner opens, never guessed: a number
+   * that means something else on his rig would fire that instead, every time
+   * the tuner opened and closed. If the AM4 says NONE, or anything not
+   * plainly a number, nothing is sent and the readings go on exactly as
+   * before. Nothing is ever written to the AM4 here.
+   */
+
+  /*
+   * One read of the setting, fresh: {cc, channel}, 'none', or null when the
+   * answer was missing or unclear — and then it is not asked again on this
+   * connection, so a unit that cannot answer is asked once, not at every
+   * press. The channel is asked only when there is a number to send on it.
+   */
+  async function readUnitTuner() {
+    if (!tuner.unitAsk) return null
+    tuner.unitRead = true
+    tuner.unitCc = null
+    const a = await ask(buildAm4TunerCcRead(), (f) => parseAm4GlobalLong(f, AM4.TUNER_CC), WAIT.am4Tempo, 'the AM4’s Tuner setting')
+    const words = a && !rejected(a) ? `“${a.text ?? ''}” (number ${a.whole})` : ''
+    const cc = rejected(a) ? null : am4TunerCcFrom(a)
+    if (cc === 'none') {
+      say(`the AM4’s Tuner setting reads ${words}: no MIDI number, so its own tuner is left as it is (SETUP > MIDI/Remote > Tuner)`)
+      return 'none'
+    }
+    if (cc === null) {
+      tuner.unitAsk = false
+      const why = rejected(a) ? `the AM4 refused the question: ${rejectedWords(a.rejected)}` : a ? `it reads ${words}, which is not plainly one number` : 'no answer'
+      say(`the AM4’s own tuner is left as it is: about its Tuner setting, ${why}. Not asked again on this connection`)
+      return null
+    }
+    const c = await ask(buildAm4MidiChannelRead(), (f) => parseAm4GlobalLong(f, AM4.MIDI_CHANNEL), WAIT.am4Tempo, 'the AM4’s MIDI channel')
+    const channel = am4ChannelFrom(rejected(c) ? null : c)
+    tuner.unitCc = { cc, channel }
+    say(`the AM4’s Tuner setting reads ${words}, its MIDI channel “${c && !rejected(c) ? c.text ?? '' : 'no answer'}”: CC ${cc} on channel ${channel}`)
+    return tuner.unitCc
+  }
+
+  /* The CC as a write: ahead of the polls, and held behind a stored preset coming back rather than sent into it. */
+  const sendUnitTuner = (on, setting) =>
+    ex(buildAm4TunerCc(on, setting), {
+      ms: WAIT.am4Settle,
+      what: `the AM4’s own tuner ${on ? 'open' : 'closed'} (CC ${setting.cc} at ${on ? 127 : 0}, channel ${setting.channel})`,
+      priority: 'write'
+    })
+
+  async function openUnitTuner(run) {
+    const setting = await readUnitTuner()
+    if (setting === 'none') return 'none'
+    if (!setting) return 'unknown'
+    /* Let go of while it was being read: no 127 for a tuner nobody has open. */
+    if (!tuner.on || tuner.run !== run) return 'unknown'
+    /* Owed from here: the wire's close() sends the 0 if it lets go before this is answered. */
+    tuner.unitOpen = true
+    await sendUnitTuner(true, setting)
+    return 'opened'
+  }
+
+  /*
+   * THE 0, OWED OR NOT. With the number read at the open when this connection
+   * opened it; read first when this connection has never asked, because the
+   * link may have dropped with the AM4 on its tuner and come back as a new
+   * connection. 0 is a level, not a toggle, so a 0 to a tuner already closed
+   * does nothing — and 127 is never sent to close one.
+   */
+  async function closeUnitTuner() {
+    let setting = tuner.unitOpen ? tuner.unitCc : null
+    if (!setting && !tuner.unitRead) {
+      const read = await readUnitTuner()
+      if (read && read !== 'none') setting = read
+    }
+    if (!setting) return
+    /* Still owed until it has gone: let go of while it waits its turn, the wire's close() sends it instead. */
+    tuner.unitOpen = true
+    await sendUnitTuner(false, setting)
+    tuner.unitOpen = false
+  }
+
+  async function am4TunerOpen() {
+    if (tuner.on) return { ok: true, unitTuner: tuner.unitSays || 'unknown' }
+    tuner.on = true
+    tuner.run++
+    tuner.lastNote = null
+    const run = tuner.run
+    let says = 'unknown'
+    try {
+      says = await openUnitTuner(run)
+    } catch (err) {
+      /* Only the AM4's own screen is lost: the phone still tunes. */
+      say(`the AM4’s own tuner was not opened: ${err?.message || err}`)
+    }
+    tuner.unitSays = says
+    if (tuner.on && tuner.run === run) am4TunerTick(run)
+    return { ok: true, unitTuner: says }
+  }
+
+  async function am4TunerClose() {
+    if (tuner.on) {
+      tuner.on = false
+      tuner.run++
+      if (tuner.timer !== null) time.clearTimeout(tuner.timer)
+      tuner.timer = null
+    }
+    tuner.unitSays = null
+    try {
+      await closeUnitTuner()
+    } catch (err) {
+      say(`the AM4’s own tuner was not closed: ${err?.message || err}`)
+    }
+    return { ok: true }
+  }
+
+  /*
+   * ONE AFTER ANOTHER. An open waits on two answers before its 127 goes, and
+   * a close pressed meanwhile must not overtake it: the 0 would go first, the
+   * late 127 after it, and the AM4 would be left on its tuner with the
+   * phone's closed.
+   */
+  let am4TunerTurns = Promise.resolve()
+  function am4TunerInTurn(on) {
+    const turn = am4TunerTurns.then(() => (on ? am4TunerOpen() : am4TunerClose()))
+    am4TunerTurns = turn.catch(() => {})
+    return turn
+  }
+
   /* ================================================================ */
   /* The routes                                                        */
   /* ================================================================ */
 
+  /* The AM4 in turn, on and off alike (see am4TunerInTurn); the gen-3 units open their tuner page. */
   async function writeTuner(on) {
+    if (am4) return am4TunerInTurn(on === true)
     if (on === true) {
       if (tuner.on) return { ok: true }
       tuner.on = true
       tuner.run++
       tuner.lastNote = null
-      if (am4) {
-        am4TunerTick(tuner.run)
-        return { ok: true }
-      }
       try {
         await gen3TunerOn()
       } catch (err) {
@@ -1591,7 +1760,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     tuner.run++
     if (tuner.timer !== null) time.clearTimeout(tuner.timer)
     tuner.timer = null
-    if (!am4) await gen3TunerOff()
+    await gen3TunerOff()
     return { ok: true }
   }
 
@@ -2027,6 +2196,18 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     stopPolls()
     if (holdTimer !== null) time.clearTimeout(holdTimer)
     holdTimer = null
+    /*
+     * Let go of with the AM4's own tuner open (Disconnect, Bluetooth off,
+     * another unit picked): its 0 is the last thing sent, straight out while
+     * the adapter is still there. Never into a stored preset still coming
+     * back — the AM4 is sent nothing while it is sending — so then it stays
+     * on its tuner, for its own footswitch. After a drop the adapter has
+     * already gone and this reaches nothing.
+     */
+    if (am4 && tuner.unitOpen && tuner.unitCc && !current?.opts.collect && !draining()) {
+      say(`the AM4’s own tuner closed as the connection closes: ${sendFrame(buildAm4TunerCc(false, tuner.unitCc))}`)
+    }
+    tuner.unitOpen = false
     tuner.on = false
     tuner.run++
     if (tuner.timer !== null) time.clearTimeout(tuner.timer)

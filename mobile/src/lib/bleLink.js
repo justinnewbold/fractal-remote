@@ -14,7 +14,7 @@ import {
   subscribeBluetooth,
   unitName
 } from './bluetooth'
-import { handleEvent, refreshAll, reset as resetRig, stopWatching, watchUnit } from './rig'
+import { getState, handleEvent, refreshAll, reset as resetRig, stopWatching, watchUnit } from './rig'
 import { mayConnect } from './purchases'
 import { logDebug } from './debugLog'
 
@@ -227,6 +227,16 @@ async function connected(e) {
     // The rig store keeps what it learned, including the failure.
   }
   if (wire !== made || !running) return
+  /*
+   * BACK WITH THE TUNER STILL OPEN. A drop leaves the app's tuner open and
+   * this new connection's closed: the needle froze, and on the AM4 the unit's
+   * own tuner screen was the old connection's. Opened again here, so the
+   * readings come back and the unit is on its tuner as the phone says.
+   */
+  if (getState().tunerOn) {
+    say('the tuner was open when the adapter went; opening it again')
+    made.request('/tuner', { method: 'POST', body: '{"on":true}' }).catch(() => {})
+  }
   if (AppState.currentState !== 'background') {
     watchUnit()
     made.startPolls()
