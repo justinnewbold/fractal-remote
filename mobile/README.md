@@ -102,9 +102,12 @@ Cloud builds, no Xcode and no Android Studio:
 
 Profiles are in `eas.json`. `preview` is the one to start with — an installable
 build for a device, an `.apk` on Android. `production` with submit goes to
-TestFlight and to Play's closed-testing track — not to customers. To reach App
-Store customers the build is added to a new version in App Store Connect and
-sent for review; on Play it is promoted from closed testing to production.
+TestFlight and to Play's production track. On iOS that is not customers yet:
+to reach App Store customers the build is added to a new version in App Store
+Connect and sent for review. On Play it IS customers: "I don't do any close
+testing anymore. Android. It's all production now." Once Google's review
+passes, the build rolls out to everyone on Google Play, with no closed-testing
+step in between.
 
 `ios-simulator` is the one that needs no Apple account at all. An iOS build
 normally has to be signed with a certificate from the Apple Developer account

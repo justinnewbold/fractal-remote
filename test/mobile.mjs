@@ -38,7 +38,9 @@ const traverse = babelTraverse.default || babelTraverse
  * inside a try. The phone has neither, which is why the try is there.
  */
 const PHONE_GLOBALS = new Set([
-  'AbortController', 'Array', 'Boolean', 'Date', 'Error', 'Event', 'Infinity', 'JSON', 'Map',
+  /* ArrayBuffer, DataView, Float32Array and Uint32Array: the Bluetooth codec's
+     float32 packing (lib/fractal-sysex.mjs). Hermes has all four. */
+  'AbortController', 'Array', 'ArrayBuffer', 'Boolean', 'DataView', 'Float32Array', 'Uint32Array', 'Date', 'Error', 'Event', 'Infinity', 'JSON', 'Map',
   'Math', 'NaN', 'Number', 'Object', 'Promise', 'RegExp', 'Set', 'String', 'Symbol',
   'TextDecoder', 'TextEncoder', 'Uint8Array', 'WeakMap', 'WeakSet',
   'cancelAnimationFrame', 'clearInterval', 'clearTimeout', 'console', 'decodeURIComponent',
@@ -161,6 +163,8 @@ async function rigOnTheBench(over = {}) {
     `,
     'demo.js': "export const isDemo = () => false\nexport const demoDevice = () => null\nexport const demoUnit = () => 'fm3'\n",
     'demoWire.js': "export const demoRequest = () => { throw new Error('no demo on the bench') }\n",
+    /* Bluetooth (beta) off, as it is unless somebody turns it on: every request goes to the pretend computer. */
+    'bleSwitch.js': 'export const bluetoothWire = () => null\nexport const bluetoothOn = () => false\nexport const overBluetooth = () => false\n',
     'debugLog.js': 'export const logDebug = () => {}\n',
     'lineage.js': 'export const withLineage = (x) => x\n',
     'presetNames.js': 'export const adopt = async () => 0\nexport const forget = () => {}\nexport const learn = () => {}\nexport const nameOf = () => undefined\n',
@@ -349,6 +353,24 @@ export function run(test) {
   
   
   
+  test('an Android submission goes to Google Play’s production track, not closed testing', () => {
+    /*
+     * "I don't do any close testing anymore. Android. It's all production
+     * now." The submit profile sent Android to "alpha", Play's closed
+     * testing, where only the testers on its list could install it. Now it
+     * is the production track: every Play customer, once Google's review
+     * passes. eas.json is plain JSON and takes no comment, so the reason
+     * lives here and in mobile.yml beside the Submit box.
+     */
+    const eas = JSON.parse(read('mobile/eas.json'))
+    assert.equal(eas.submit?.production?.android?.track, 'production', 'Android is submitted to a testing track again')
+    /* And nothing that describes a submission still says it goes to closed testing. */
+    for (const file of ['mobile/README.md', '.github/workflows/mobile.yml']) {
+      assert.ok(!/closed[- ]testing track|closed testing to production/i.test(read(file)), `${file} still says an Android submission goes to closed testing`)
+    }
+    assert.match(read('.github/workflows/mobile.yml'), /It's all production now\./, 'mobile.yml no longer says why Android goes straight to production')
+  })
+
   test('the phone and the browser share every rule they must agree on, character for character', async () => {
     /*
      * The web app imports these directly; the phone gets a generated copy,
@@ -2877,7 +2899,8 @@ export function run(test) {
     assert.match(rigSrc, /export async function rereadSceneNames\(\)/)
     assert.match(rigSrc, /if \(names === null \|\| state\.preset\?\.number !== number\) return 'failed'\n  if \(!names\.some\(\(n\) => n\)\) return 'none'/, 'Refresh names cannot tell unnamed scenes from a failed read')
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(stage, /<Label>Scenes<\/Label>\s*<RefreshNames \/>/, 'Refresh names is not beside the Scenes heading')
+    /* Beside the heading; over Bluetooth on an AM4 it is held back (test/bluetooth.mjs says why). */
+    assert.match(stage, /<Label>Scenes<\/Label>\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?(?:\{overBluetooth\(caps\) && device === 'am4' \? null : )?<RefreshNames \/>/, 'Refresh names is not beside the Scenes heading')
     assert.match(stage, /await refreshAll\(\)\s*\/\*[^*]*\*\/\s*if \(!arriving\) await rereadSceneNames\(\)/, 'pulling down does not read the scene names fresh')
     assert.match(stage, /none: 'No names on the unit'/)
     assert.match(stage, /failed: "Couldn't read them"/)
@@ -3482,7 +3505,7 @@ export function run(test) {
     assert.match(flat, /!demo &&/, 'the demo is made to wait for a computer it does not have')
     assert.match(
       flat,
-      /\{settling && screen === 'stage' \? \( <Waking link=\{link\} onRetry=\{probeNow\} onSwitch=\{\(\) => openSettings\('link'\)\} onTroubleshoot=\{openConnectFix\} \/>/,
+      /\{settling && screen === 'stage' \? \( <Waking link=\{link\} onRetry=\{probeNow\} onSwitch=\{\(\) => openSettings\('link'\)\} onTroubleshoot=\{openConnectFix\} onBluetooth=\{\(\) => openSettings\('bluetooth'\)\} \/>/,
       'nothing is shown while the app waits'
     )
 
@@ -3643,7 +3666,8 @@ export function run(test) {
 
     const phone = read('mobile/App.js').replace(/\s+/g, ' ')
     const waking = phone.slice(phone.indexOf('function Waking('))
-    assert.match(waking, /useComputerElsewhere\(long && link\.link !== 'connected'\)/, 'the phone never asks while it waits')
+    /* Not over Bluetooth (beta), where no computer is being looked for. */
+    assert.match(waking, /useComputerElsewhere\(long && link\.link !== 'connected' && !bluetooth\)/, 'the phone never asks while it waits')
     assert.match(waking, /This phone is signed in as \$\{email\}/, 'the phone does not say which account it is on')
     assert.match(waking, /Switch account on this phone/, 'the phone gives no way to change account')
     assert.match(read('mobile/src/screens/Settings.js'), /useComputerElsewhere\(link === 'no-answer'\)/, 'Setup never asks')
@@ -3656,7 +3680,7 @@ export function run(test) {
     assert.match(wrong, /Switch account on this phone/, 'the stage gives no way to change account')
     assert.match(
       phone,
-      /<WrongAccount active=\{auth === 'in' && !demo && !settling && screen === 'stage' && link\.link !== 'connected'\}/,
+      /<WrongAccount active=\{auth === 'in' && !demo && !settling && screen === 'stage' && link\.link !== 'connected' && !bluetooth\}/,
       'the stage screen says nothing while the link is down on another account'
     )
 
@@ -5053,35 +5077,33 @@ export function run(test) {
     assert.match(pasted, /It is still being\s+improved\./, 'the 1.87.1 notes do not say Edit is still being improved')
 
     /*
-     * Bluetooth is Justin's call, so its paragraph is NOT in the block that
-     * gets pasted: a reviewer told about a feature that is not in the build,
-     * or that is but is shown to every paying customer, is told something
-     * untrue. It waits in its own block, marked.
+     * BLUETOOTH (BETA) IS IN, FOR EVERYBODY WHO HAS UNLOCKED THE APP.
+     *
+     * This held Bluetooth OUT of the block that gets pasted while it was
+     * Justin's call, and then held the paragraph to a list of tester accounts
+     * with the demo account on it. He has decided: "If Bluetooth is ready,
+     * let's get it submitted… let's just say that Bluetooth is beta though in
+     * the app and give like a disclaimer." The list is gone with that, so the
+     * assertions that pinned "not yet" and "only the listed accounts" are
+     * changed on purpose, not to get them to pass: the paragraph is now in
+     * the pasted block, and what it says has to be what the build does.
      */
-    assert.ok(!/Bluetooth/.test(pasted), 'Bluetooth is in the notes that get pasted before Justin has decided')
-    const rest = store.slice(store.indexOf('```', open + 3) + 3)
-    assert.match(rest, /\*\*Only if Bluetooth goes in this version: Justin decides\.\*\*[\s\S]{0,1200}```\s*Bluetooth \(beta\)\./, 'the Bluetooth paragraph is not kept apart and marked as his decision')
-
-    /*
-     * AND THE LIST THAT PARAGRAPH CLAIMS. It tells the reviewer Bluetooth is
-     * shown to "the demo account in App Review Information among them". The
-     * reviewer signs in as that account, which is not an admin, so a list
-     * holding nobody but the admins (Justin) shows the reviewer no Bluetooth
-     * card where the notes say there is one, and 2.3.1(a) wants every new
-     * feature reachable. The list (shared/bluetooth-testers.mjs) comes with
-     * the Bluetooth work and is not on main yet, so the doc says to check it
-     * by eye, and this reads it wherever it exists. The check bites the
-     * moment the paragraph is moved into the block that gets pasted, which is
-     * the step that makes the claim; the assertion above that keeps Bluetooth
-     * out of that block is the one to change on purpose when Justin decides.
-     */
-    assert.match(rest, /`BLUETOOTH_TESTERS` in `shared\/bluetooth-testers\.mjs`[\s\S]{0,300}demo account's own id has to be on that list/, 'the notes no longer say to check the demo account is on the Bluetooth list')
-    const testers = new URL('../shared/bluetooth-testers.mjs', import.meta.url)
-    if (/Bluetooth/.test(pasted) && existsSync(testers)) {
-      const { BLUETOOTH_TESTERS } = await import(testers.href)
-      const { ADMINS } = await import('../shared/admin.mjs')
-      assert.ok(BLUETOOTH_TESTERS.some((id) => !ADMINS.includes(id)), 'the notes tell the reviewer Bluetooth is open to the demo account, and the list holds nobody but the admins')
-    }
+    assert.match(pasted, /Bluetooth \(beta\)\./, 'Bluetooth (beta) is in this version, and the notes that get pasted do not describe it')
+    /* Where it is, by the words the screens draw: the gear, Phone & computer, then the card. */
+    const settingsSrc = read('mobile/src/screens/Settings.js')
+    assert.match(settingsSrc, /label="BLUETOOTH \(BETA\)"/)
+    assert.match(settingsSrc, /head\('Phone & computer', 'back'\)/)
+    assert.match(pasted, /Phone & computer,\s+then\s+BLUETOOTH \(BETA\)/, 'the 1.87.1 notes do not say where Bluetooth is')
+    /* Open to everybody who has unlocked the app, which is the gate the card and the page are behind, and no list. */
+    assert.match(settingsSrc.replace(/\s+/g, ' '), /\{mayDrive\(purchase\) && bluetoothSupported\(\) \? \( <TipCard icon=\{sendIcon\} label="BLUETOOTH \(BETA\)"/)
+    assert.match(pasted, /everyone\s+who\s+has\s+unlocked\s+the\s+app/, 'the 1.87.1 notes do not say who Bluetooth is for')
+    assert.ok(!/selected\s+accounts|chosen\s+accounts|shown\s+only\s+to/i.test(pasted), 'the 1.87.1 notes say Bluetooth is shown only to some accounts, and there is no such list')
+    assert.equal(existsSync(new URL('../shared/bluetooth-testers.mjs', import.meta.url)), false, 'the Bluetooth tester list is back, and the notes say there is none')
+    assert.ok(!/BLUETOOTH_TESTERS|bluetooth-testers/.test(store), 'the store notes still send somebody to a Bluetooth list that no longer exists')
+    /* A beta, said as one, on hardware the reviewer will not have: so a video (2.1). */
+    assert.match(pasted, /marked\s+beta/, 'the 1.87.1 notes do not say Bluetooth is marked beta')
+    assert.match(pasted, /video/, 'the 1.87.1 notes give the reviewer no video of Bluetooth working on hardware they do not have')
+    assert.match(pasted, /asks for Bluetooth permission only when Connect is\s+tapped/, 'the 1.87.1 notes do not say when Bluetooth permission is asked')
 
     /* And a What's New, which Apple asks for on every version after the first. */
     const news = store.indexOf("### What's New in This Version, 1.87.1", at)
@@ -5091,7 +5113,15 @@ export function run(test) {
     assert.ok([...whatsNew].length <= 4000, 'What’s New is longer than Apple takes')
     const play = whatsNew.trim().split('\n').slice(0, 5).join('\n')
     assert.ok([...play].length <= 500, `the five lines for Google Play come to ${[...play].length}; Play takes 500`)
-    assert.ok(!/Bluetooth/.test(whatsNew), 'What’s New tells every customer about a Bluetooth only testers can open')
+    /*
+     * And now What's New does tell every customer, since every customer who
+     * has unlocked the app can open it — this used to forbid the line while
+     * only testers could. Changed on purpose with the decision above. The
+     * line says beta in itself, because What's New is read without the app.
+     */
+    const bleLine = whatsNew.split('\n').find((l) => /Bluetooth/.test(l)) || ''
+    assert.ok(bleLine, 'Bluetooth (beta) is in this version, and What’s New does not say so')
+    assert.match(bleLine, /\(beta\)/, 'What’s New announces Bluetooth without saying it is a beta')
   })
 
   test('the unlock row is gone once there is nothing left to unlock', () => {
@@ -5906,7 +5936,7 @@ export function run(test) {
     const flat = app.replace(/\s+/g, ' ')
     assert.match(
       flat,
-      /if \(auth !== 'in'\) return undefined startLink\(\) return \(\) => \{ stopLink\(\) \} \}, \[auth, demo\]\)/,
+      /if \(auth !== 'in'\) return undefined startLink\(\) return \(\) => \{ stopLink\(\) \} \}, \[auth, demo, bluetooth\]\)/,
       'leaving the demo no longer tears the link down, so a simulated rig stays on screen as a real one'
     )
 
@@ -7083,7 +7113,12 @@ export function run(test) {
         if (hostDoc instanceof Error) throw hostDoc
         return hostDoc ? hostDoc[slug] ?? null : null
       }
-      export async function presetName(n) { unitReads.push(n); return { number: n, name: 'FROM UNIT ' + n, empty: false } }
+      export const failing = new Set()
+      export async function presetName(n) {
+        unitReads.push(n)
+        if (failing.has(n)) throw new Error('no answer')
+        return { number: n, name: 'FROM UNIT ' + n, empty: false }
+      }
     `
     const STORE = `
       const mem = new Map()
@@ -7105,7 +7140,7 @@ export function run(test) {
       assert.doesNotMatch(moved, /'\.\/device'|'\.\/store'|'\.\/presetName'|'react'/, 'presetNames no longer imports what this stands in for')
       /* The hook is not what is under test; React is a stub so the module
          loads from a temp folder that has no node_modules. */
-      writeFileSync(join(dir, 'react.mjs'), 'export const useEffect = () => {}\nexport const useSyncExternalStore = () => 0\n')
+      writeFileSync(join(dir, 'react.mjs'), 'export const undo = []\nexport const useEffect = (f) => { undo.push(f()) }\nexport const useSyncExternalStore = () => 0\n')
       writeFileSync(join(dir, 'device.mjs'), DEVICE)
       writeFileSync(join(dir, 'store.mjs'), STORE)
       writeFileSync(join(dir, 'presetName.mjs'), read('mobile/src/lib/presetName.js'))
@@ -7158,6 +7193,23 @@ export function run(test) {
       assert.equal(names.nameOf(5), undefined, 'a row on screen keeps its old name through a refresh instead of being asked again')
       assert.equal(names.nameOf(12), undefined)
       assert.equal(names.nameOf(3), 'NEW THREE', 'a row off screen was thrown away by a refresh')
+
+      /*
+       * And a re-read that FAILS puts the old name back, on screen and on
+       * disk. Over Bluetooth a failed name read is likely, and the row used
+       * to stay blank while the next name that did arrive wrote the list to
+       * disk without it: a name learned through the computer, lost for good.
+       */
+      const react = await import(at('react.mjs'))
+      unit.failing.add(5)
+      names.useNames()
+      await new Promise((r) => setTimeout(r, 20))
+      assert.equal(names.nameOf(5), 'FIVE RENAMED', 'a name refresh could not re-read is gone from the screen')
+      assert.equal(names.nameOf(12), 'FROM UNIT 12')
+      names.flushPersist()
+      assert.equal(JSON.parse(store.sync.getItem('fractal.presetNames')).fm3.names[5], 'FIVE RENAMED', 'a name refresh could not re-read is gone from the disk')
+      react.undo.pop()?.()
+      unit.failing.clear()
 
       /* A computer with no list — an older app, or the demo — costs nothing
          and changes nothing. */
@@ -8496,7 +8548,20 @@ export function run(test) {
      */
     const app = read('mobile/App.js').replace(/\s+/g, ' ')
     assert.match(app, /if \(demo\) return undefined let alive = true let stop = null hydrate\(\)\.then/, 'the account sync still runs in the demo')
-    assert.match(app, /\}, \[auth, demo\]\)/, 'the sync is not re-decided when the demo goes on or off')
+    /*
+     * The end of THE SYNC'S OWN effect, not any effect's. This used to look
+     * for `}, [auth, demo])` anywhere in App.js, which only ever meant the
+     * sync while it was the one effect ending that way. For a while another
+     * one did (a Bluetooth account check, since taken out), and the bare text
+     * went on passing with the sync's `demo` gone — the very bug this test is
+     * here for. Kept tied to the sync, so the next effect that ends that way
+     * cannot do the same.
+     */
+    assert.match(
+      app,
+      /hydrate\(\)\.then\(\(\) => \{ if \(alive\) stop = keepSetlistsInStep\(setPicked\) \}\) return \(\) => \{ alive = false stop\?\.\(\) \} \}, \[auth, demo\]\)/,
+      'the sync is not re-decided when the demo goes on or off'
+    )
 
     /* And the link loop never starts, so no channel is joined and no session
        is fetched: the demo makes no request at all. */
@@ -8524,7 +8589,7 @@ export function run(test) {
        must never wear CONNECTED. */
     assert.match(
       bar,
-      /const word = canBuy \? 'unlock' : demo \? 'demo' : linkWord\(tone, 'remote'\)/,
+      /const linkSays = linkWord\(tone, 'remote'\)\s+const word = canBuy \? 'unlock' : demo \? 'demo' : bluetooth && linkSays === 'no computer' \? 'not connected' : linkSays/,
       'the bar still says CONNECTED in the demo'
     )
     assert.match(bar, /const mark = demo \? 'wait' : linkTone\(tone\)/, 'the demo word is drawn in the colour a real connection gets')
@@ -8799,6 +8864,17 @@ export function run(test) {
     assert.equal(theme.isDark(), false, 'auto ignores a phone set to light')
     theme.setSystemDark(true)
     assert.equal(theme.isDark(), true, 'auto ignores a phone set to dark')
+    /*
+     * AND THE IPHONE IS ALLOWED TO SAY. app.json's userInterfaceStyle was
+     * "dark", which a build writes into the iPhone app as "always dark": iOS
+     * then reports every window as dark, so Appearance answered 'dark' on an
+     * iPhone set to light, and Auto could never be light there. Android
+     * ignores the setting (it needs expo-system-ui, which the app does not
+     * have) and already followed the phone. "automatic" lets the iPhone
+     * follow it too. It is part of the fingerprint, so it only changes with
+     * a build.
+     */
+    assert.equal(JSON.parse(read('mobile/app.json')).expo.userInterfaceStyle, 'automatic', 'the iPhone is held dark again, and Auto cannot follow it')
 
     /*
      * Every key is written on every change. A colour that existed in one
@@ -9361,7 +9437,7 @@ export function run(test) {
       'the Back button and the swipe can disagree about where one step up is'
     )
     /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer. */
-    assert.match(set, /const PARENT = \{ offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' \}/, 'a page goes back somewhere it did not come from')
+    assert.match(set, /const PARENT = \{ offline: 'link', bluetooth: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')
@@ -10426,7 +10502,7 @@ export function run(test) {
      */
     assert.match(
       bar,
-      /const word = canBuy \? 'unlock' : demo \? 'demo' : linkWord\(tone, 'remote'\)/,
+      /const linkSays = linkWord\(tone, 'remote'\)\s+const word = canBuy \? 'unlock' : demo \? 'demo' : bluetooth && linkSays === 'no computer' \? 'not connected' : linkSays/,
       'the word no longer says UNLOCK in the demo, or says it outside one'
     )
 

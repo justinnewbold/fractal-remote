@@ -51,6 +51,10 @@ import { useComputerElsewhere } from '../lib/useComputerElsewhere'
 import { quitEditor } from '../lib/editors'
 import { isAdmin } from '../lib/admin'
 import { watchHow, watchPaired, watchSupported } from '../lib/watchBridge'
+import { bluetoothSupported, useBluetoothOn } from '../lib/bluetooth'
+import { BETA_CARD } from '../lib/bluetooth-gear'
+import { overBluetooth } from '../lib/bleSwitch'
+import BluetoothPage from './Bluetooth'
 import AccessTool from '../components/AccessTool'
 import AccountsTool from '../components/AccountsTool'
 import SalesTool from '../components/SalesTool'
@@ -188,7 +192,10 @@ export default function Settings({
   /* What the Stop the looper row last did, in words, in place of its hint. */
   const allBlocks = useRig(ofAllBlocks)
   /* A unit whose switches can be read — see the Footswitches page. */
-  const switchesReadable = fcReadable(useRig(ofCapabilities))
+  const caps = useRig(ofCapabilities)
+  const switchesReadable = fcReadable(caps)
+  /* Bluetooth (beta): whether the phone is talking to the unit itself. */
+  const bluetooth = useBluetoothOn()
   const [looperSaid, setLooperSaid] = useState(null)
   async function stopTheLooper() {
     const looper = findLooper(allBlocks)
@@ -256,6 +263,15 @@ export default function Settings({
         : link === 'no-answer'
           ? 'Your computer isn’t answering'
           : 'Not connected'
+  /* Over Bluetooth (beta) the row is about the adapter on the unit, not a computer. */
+  const bluetoothWord =
+    link === 'connected'
+      ? unitState === 'missing' || unitState === 'silent'
+        ? `Bluetooth · ${deviceName || 'unit'} not answering`
+        : `${deviceName || 'Unit'} · Bluetooth`
+      : link === 'joining'
+        ? 'Bluetooth · looking for the adapter'
+        : 'Bluetooth · not connected'
 
   /*
    * TWO WAYS OUT OF EVERY PAGE, and they go to different places on purpose.
@@ -285,7 +301,7 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' }
+  const PARENT = { offline: 'link', bluetooth: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' }
   const UP_LABEL = { link: '‹ Phone & computer', developer: '‹ Developer' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
@@ -374,13 +390,15 @@ export default function Settings({
               status={
                 demo
                   ? `Demo — simulated ${DEMO_UNITS.find((u) => u.key === unit)?.name || 'unit'}`
-                  : link !== 'connected'
-                    ? linkWord
-                    : unitState === 'missing'
-                      ? 'Computer connected · no unit'
-                      : unitState === 'silent'
-                        ? `Computer connected · ${deviceName || 'unit'} not answering`
-                        : `${deviceName || 'Unit'} · connected`
+                  : bluetooth
+                    ? bluetoothWord
+                    : link !== 'connected'
+                      ? linkWord
+                      : unitState === 'missing'
+                        ? 'Computer connected · no unit'
+                        : unitState === 'silent'
+                          ? `Computer connected · ${deviceName || 'unit'} not answering`
+                          : `${deviceName || 'Unit'} · connected`
               }
               onPress={() => setPage('link')}
             />
@@ -395,7 +413,8 @@ export default function Settings({
             {(link === 'connected' || demo) && switchesReadable ? (
               <SetupRow title="Footswitches" status="What each switch does" onPress={() => setPage('footswitches')} />
             ) : null}
-            {link === 'connected' || demo ? (
+            {/* Not over Bluetooth (beta): the looper is left off its chain. */}
+            {(link === 'connected' || demo) && !overBluetooth(caps) ? (
               <SetupRow
                 title="Stop the looper"
                 status={looperSaid || 'If a loop keeps playing'}
@@ -699,6 +718,13 @@ export default function Settings({
       {page === 'link' ? (
         <>
           {head('Phone & computer', 'back')}
+          {/* Said first, because everything under it is about a computer
+              this phone is not using while it is on. */}
+          {bluetooth && !demo ? (
+            <Note tone="warn">
+              Bluetooth (beta) is on. This phone talks to the unit directly, not through the computer.
+            </Note>
+          ) : null}
 
           <View style={{ gap: space.md }}>
             <Section>The link</Section>
@@ -931,6 +957,26 @@ export default function Settings({
             ) : null}
 
             {/*
+              BLUETOOTH (BETA): the phone straight to the unit, through a
+              Bluetooth MIDI adapter on its MIDI In and Out, with no computer.
+              Behind the unlock like the card above, and only in a build that
+              carries the Bluetooth code on a phone that can do it: anybody
+              else never sees it.
+
+              A PUBLIC BETA, FOR EVERYBODY WHO HAS UNLOCKED THE APP. "If
+              Bluetooth is ready, let's get it submitted… let's just say that
+              Bluetooth is beta though in the app and give like a disclaimer
+              saying that Bluetooth might not function correctly." So the line
+              under the label says it is new, and that so far it has only been
+              tried on the AM4, from an iPhone (BETA_CARD, in
+              shared/bluetooth-gear.mjs). The
+              page it opens starts with the fuller note (BETA_NOTE).
+            */}
+            {mayDrive(purchase) && bluetoothSupported() ? (
+              <TipCard icon={sendIcon} label="BLUETOOTH (BETA)" body={BETA_CARD} onPress={() => setPage('bluetooth')} />
+            ) : null}
+
+            {/*
               Only while there is something to try. "The Try now button is
               there and if you click it it does — I'm not sure why it's even
               there if we're already all connected." It looks for the computer
@@ -975,6 +1021,15 @@ export default function Settings({
         </>
       ) : null}
 
+      {/* ------------------------------------------------------- bluetooth */}
+      {/* The page, behind the same gate as its card on Phone & computer. */}
+      {page === 'bluetooth' && mayDrive(purchase) && bluetoothSupported() ? (
+        <>
+          {head('Bluetooth (beta)', 'back')}
+          <BluetoothPage purchase={purchase} />
+        </>
+      ) : null}
+
       {/* ------------------------------------------------------- metronome */}
       {page === 'metronome' ? (
         <>
@@ -997,9 +1052,11 @@ export default function Settings({
             {clickSaid ? <Note tone="fault">{clickSaid}</Note> : null}
             <Note tone="hint">
               {`It keeps the unit’s tempo${Number.isFinite(rigBpm) ? `, ${Math.round(rigBpm)} BPM right now` : ''}: tap tempo changes it. ${
-                unitMetronome(rigSlug)
-                  ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.'
-                  : 'This unit has no metronome the app can switch, so only the phone keeps time.'
+                bluetooth && !demo
+                  ? 'Over Bluetooth the app can’t switch the unit’s click: pick Phone to hear it here.'
+                  : unitMetronome(rigSlug)
+                    ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.'
+                    : 'This unit has no metronome the app can switch, so only the phone keeps time.'
               }`}
             </Note>
             {/* "Same with the watch, metronome that can beep on the watch."

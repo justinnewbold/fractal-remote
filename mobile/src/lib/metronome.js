@@ -7,6 +7,7 @@ import { setUnitMetronome } from './device'
 import { DEFAULT_METRONOME, beatMs, clicks, metronomeSetting, nextBeat } from './metronome-rules'
 import { tick } from './feedback'
 import { logDebug } from './debugLog'
+import { isUnsupported } from './unsupported'
 
 /**
  * THE METRONOME SETTING, and the two things it drives.
@@ -66,6 +67,9 @@ export async function setMetronome(patch, slug) {
     if (said?.ok === false && !said?.unsupported) logDebug('metronome', 'the unit did not take it', JSON.stringify(said))
     return said || { ok: true }
   } catch (err) {
+    /* A unit (or a link: Bluetooth refuses every setting write) that has no
+       click to switch is not a unit that failed to take it. */
+    if (isUnsupported(err)) return { ok: false, unsupported: true }
     logDebug('metronome', 'could not reach the unit', String(err?.message || err))
     return { ok: false, message: String(err?.message || err) }
   }

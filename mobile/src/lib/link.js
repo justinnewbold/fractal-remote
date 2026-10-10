@@ -17,6 +17,8 @@
 import { AppState } from 'react-native'
 import { isDemo } from './demo'
 import { logDebug } from './debugLog'
+import { bluetoothOn } from './bleSwitch'
+import { pokeBluetooth, startBluetoothLink, stopBluetoothLink } from './bleLink'
 
 import {
   censusHosts,
@@ -140,6 +142,8 @@ let unbind = []
 
 /** Ask again NOW — the screen came back, the network came back, someone tapped. */
 export function probeNow() {
+  /* Over Bluetooth "again" means the adapter: the waiting screen's button and a watch tap both come here. */
+  if (bluetoothOn() && !isDemo()) return pokeBluetooth()
   if (!running) return
   delay = 0
   schedule(0)
@@ -362,6 +366,18 @@ function say(line) {
 /** Start the loop. Idempotent — a second call is a probe, not a second loop. */
 export function startLink() {
   /*
+   * BLUETOOTH (BETA): NO COMPUTER TO FIND, so none is looked for. The phone
+   * connects to the adapter on the unit instead (bleLink.js), and the link
+   * says 'connected' once the adapter is; whether the unit answers is the
+   * rig's `unit`, the same as over the computer. The demo still wins, as it
+   * does in device.js: somebody looking around is not driving a rig.
+   */
+  if (bluetoothOn() && !isDemo()) {
+    running = false
+    startBluetoothLink(set)
+    return stopLink
+  }
+  /*
    * The demo has no far end, so there is nothing to find and nothing to poll.
    *
    * Said as 'connected' because that is what it is from every screen's point of
@@ -438,6 +454,8 @@ function enterDemo() {
 }
 
 export async function stopLink() {
+  /* First, and synchronously: Bluetooth lets go of the adapter before the link and the rig are reset. */
+  stopBluetoothLink()
   running = false
   if (timer) clearTimeout(timer)
   timer = null

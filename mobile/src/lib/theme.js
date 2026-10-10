@@ -24,6 +24,11 @@ const DARK = {
   live: '#5fbfd1', // the Mac is answering
   fault: '#e0684f',
   ok: '#63c68c',
+  /* Bluetooth (beta): the unit answering over Bluetooth, not through a
+     computer. "Can we change the connected thing to be blue when it's on a
+     Bluetooth connection instead of green?" Bluetooth's own blue, lifted to
+     read on this black. The phone only: the browser never talks Bluetooth. */
+  ble: '#5aa5ff',
 
   onSignal: '#14161a', // ink on an amber ground
   /* Ink on the red of a destructive ground. White in BOTH themes, unlike
@@ -47,8 +52,9 @@ const DARK = {
  * NOT AN INVERSION. The four semantic colours are darkened rather than
  * swapped, because their whole job is to mean something at a glance — amber
  * is the audio path, cyan is the computer answering, red is a fault, green is
- * good — and amber at #f0a73c on white is a colour you cannot read. Same
- * meanings, enough contrast to carry them.
+ * good, blue is the unit answering over Bluetooth — and amber at #f0a73c on
+ * white is a colour you cannot read. Same meanings, enough contrast to carry
+ * them.
  */
 const LIGHT = {
   chassis: '#f4f2ee',
@@ -63,6 +69,7 @@ const LIGHT = {
   live: '#1d6b7a',
   fault: '#b23c26',
   ok: '#2c7a4b',
+  ble: '#1f5fc4',
 
   onSignal: '#fffaf2',
   onFault: '#fff6f3',

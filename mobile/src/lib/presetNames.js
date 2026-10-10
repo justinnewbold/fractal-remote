@@ -50,6 +50,18 @@ let draining = false
 let failed = false
 /** The rows a screen last said were in front of somebody. Refresh re-reads these. */
 let onScreen = []
+/*
+ * WHAT A REFRESH TOOK OFF THE SCREEN, until the unit answers again.
+ *
+ * Refresh blanks the rows in front of you and asks for them afresh, which is
+ * right when the read comes back. When it does not — over Bluetooth that is
+ * likely: a slow AM4 name, a gen-3 unit that cannot name other presets — the
+ * row stayed blank, and the next name that did arrive wrote the whole list
+ * to disk without it, so a name first learned through the computer was lost
+ * for good. So the old name waits here: put back on a failed read, kept on
+ * disk until then, dropped once the unit has answered.
+ */
+const blanked = new Map()
 
 /** How many mounted screens are waiting on these. Zero stops the drain. */
 let interest = 0
@@ -98,10 +110,16 @@ async function drain() {
       const n = queue.shift()
       try {
         const got = await presetName(n)
+        blanked.delete(n)
         names.set(n, got.empty ? '' : got.name)
         persist()
         announce()
       } catch {
+        if (blanked.has(n)) {
+          names.set(n, blanked.get(n))
+          blanked.delete(n)
+          announce()
+        }
         /*
          * One slot failing is one slot. A unit that has gone will fail every
          * one of them, and the screens say so once rather than per row — but
@@ -212,6 +230,9 @@ const readDisk = () => {
 
 let saveTimer = null
 
+/* What is known, and what a refresh has taken off the screen but not yet replaced. */
+const onDisk = () => ({ ...Object.fromEntries(blanked), ...Object.fromEntries(names) })
+
 /**
  * Write what is known to disk, coalesced: a scroll learns names one at a time
  * and this rewrites the unit's whole list.
@@ -222,7 +243,7 @@ function persist() {
   saveTimer = setTimeout(() => {
     saveTimer = null
     const all = readDisk()
-    all[owner] = { at: tookHostAt, names: Object.fromEntries(names) }
+    all[owner] = { at: tookHostAt, names: onDisk() }
     sync.setItem(KEY, JSON.stringify(all))
   }, 500)
 }
@@ -233,7 +254,7 @@ export const flushPersist = () => {
   clearTimeout(saveTimer)
   saveTimer = null
   const all = readDisk()
-  all[owner] = { at: tookHostAt, names: Object.fromEntries(names) }
+  all[owner] = { at: tookHostAt, names: onDisk() }
   sync.setItem(KEY, JSON.stringify(all))
 }
 
@@ -279,6 +300,7 @@ export async function adopt(slug) {
   if (owner !== slug) {
     owner = slug
     names.clear()
+    blanked.clear()
     asked.clear()
     queue.length = 0
     failed = false
@@ -320,6 +342,7 @@ export async function refresh() {
   const changed = await pullHost()
   const again = onScreen.slice()
   for (const n of again) {
+    if (names.has(n)) blanked.set(n, names.get(n))
     names.delete(n)
     asked.delete(n)
   }
@@ -362,6 +385,7 @@ export function useNames() {
  */
 export function forget() {
   names.clear()
+  blanked.clear()
   asked.clear()
   queue.length = 0
   failed = false

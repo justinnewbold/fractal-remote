@@ -112,8 +112,15 @@ the build carries them.
 what it was for, and the line under each month says how many are left.
 
 So once he says yes to a build, run mobile.yml with platform `all`
-(production, submit), so iOS goes to TestFlight and Android to the Play
-closed-testing track in the same run. The yes still has to come first.
+(production, submit), so iOS goes to TestFlight and Android to Google Play's
+production track in the same run. The yes still has to come first.
+
+> "I don't do any close testing anymore. Android. It's all production now"
+
+That is from 10 October 2026, and it replaces the Play closed-testing track
+that Android builds used to go to. The track a build is sent to is
+`submit.production.android.track` in mobile/eas.json, which has to say
+`production`.
 
 **And say so BEFORE a change that would need a build instead of an update.**
 

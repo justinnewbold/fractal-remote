@@ -3,11 +3,11 @@
     "name": "Fractal Remote",
     "slug": "fractal-remote",
     "owner": "justinnewbold",
-    "version": "1.86.98",
+    "version": "1.87.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "fractalremote",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "backgroundColor": "#0d0f12",
     "primaryColor": "#f0a73c",
     "platforms": [
@@ -26,7 +26,8 @@
       "supportsTablet": true,
       "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSBluetoothAlwaysUsageDescription": "Fractal Remote uses Bluetooth to talk to your Fractal unit through a Bluetooth MIDI adapter."
       },
       "appleTeamId": "3KA9RC7YE6",
       "privacyManifests": {
@@ -68,7 +69,12 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0d0f12"
-      }
+      },
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "plugins": [
       "expo-status-bar",
