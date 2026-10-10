@@ -1,10 +1,12 @@
 import { useEffect, useSyncExternalStore } from 'react'
+import { Platform } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { createAudioPlayer, setAudioModeAsync } from 'expo-audio'
+import { createAudioPlayer, setAudioModeAsync, setIsAudioActiveAsync } from 'expo-audio'
 import clickSound from '../../assets/click.wav'
+import clickPadded from '../../assets/click-pad.wav'
 
 import { readUnitMetronome, setUnitMetronome } from './device'
-import { DEFAULT_METRONOME, beatMs, clicks, followSwitch, metronomeSetting, nextBeat, unitClick } from './metronome-rules'
+import { DEFAULT_METRONOME, beatMs, clicks, flashLead, flashNudge, followSwitch, metronomeSetting, nextBeat, unitClick } from './metronome-rules'
 import { useRig } from './rig'
 import { useBluetoothOn } from './bluetooth'
 import { isDemo } from './demo'
@@ -192,26 +194,199 @@ function useUnitCan() {
 }
 
 /*
- * The click itself: thirty milliseconds of tick (assets/click.wav), loaded
- * once and played from the top on every beat. Made on first use, not at
- * launch, so a phone that never turns the metronome on never opens audio.
+ * FLASH TIMING: how much later (or earlier) than standard the flash and the
+ * tap come, for this phone and whatever it plays through. Settings → Metronome
+ * moves it; shared/metronome.mjs says what standard is and keeps it in range.
+ */
+const FLASH_KEY = 'fractal.metronome.flash'
+let nudge = 0
+AsyncStorage.getItem(FLASH_KEY)
+  .then((raw) => {
+    if (raw === null) return
+    nudge = flashNudge(Number(raw))
+    announce()
+  })
+  .catch(() => {})
+export const flashTiming = () => nudge
+export function setFlashTiming(ms) {
+  nudge = flashNudge(ms)
+  announce()
+  AsyncStorage.setItem(FLASH_KEY, String(nudge)).catch(() => {})
+}
+export function useFlashTiming() {
+  return useSyncExternalStore(
+    (fn) => {
+      watchers.add(fn)
+      return () => watchers.delete(fn)
+    },
+    () => nudge,
+    () => nudge
+  )
+}
+
+/*
+ * Every beat the phone clicks, for anything else that lights on it — the
+ * green dot on Tap — so it lights with the click and the edge flash rather
+ * than on a clock of its own.
+ */
+const beatWatchers = new Set()
+export function onPhoneBeat(fn) {
+  beatWatchers.add(fn)
+  return () => beatWatchers.delete(fn)
+}
+let clickingNow = false
+const clickingWatchers = new Set()
+const setClicking = (on) => {
+  if (clickingNow === on) return
+  clickingNow = on
+  for (const fn of clickingWatchers) fn()
+}
+/** Whether the phone is clicking right now, as a hook. */
+export function usePhoneClicking() {
+  return useSyncExternalStore(
+    (fn) => {
+      clickingWatchers.add(fn)
+      return () => clickingWatchers.delete(fn)
+    },
+    () => clickingNow,
+    () => clickingNow
+  )
+}
+
+/*
+ * THE CLICK ITSELF: thirty milliseconds of tick, loaded once and played on
+ * every beat. Made when the click first starts, not at launch, so a phone
+ * that never turns the metronome on never opens audio.
  *
  * Plays with the ring switch on silent — a metronome somebody turned on is a
  * sound they asked for — and alongside whatever else is playing, so a backing
  * track keeps going under it.
+ *
+ * WHY TWO PLAYERS ON AN iPHONE, and why it is ready before the first beat.
+ * "The flash is not matching up with the sound." It was the sound that was
+ * late, and late by a different amount every beat:
+ *
+ * - The player rewound itself on the beat. The rewind is an asynchronous call
+ *   that only runs after the beat's own code has finished, and the play is
+ *   immediate — so the play came first, at the end of the last click, and
+ *   the sound waited on the rewind landing behind it.
+ * - The phone let go of its audio a tenth of a second after every click, and
+ *   took it back on the next one, so every beat started the speaker (and any
+ *   Bluetooth link) from cold.
+ *
+ * So on an iPhone two players take turns: the one that sounds was rewound a
+ * whole beat ago, and the one that sounded last is rewound behind it. The
+ * audio is kept awake while the click runs, and let go two seconds after it
+ * stops (a tap-tempo press restarts the click, and must not pause it).
+ *
+ * Android plays its seek and its play in order, so one player does; but it
+ * starts a new audio track for every click and fades each one in over 20 ms,
+ * which took the whole click with it. Its click (assets/click-pad.wav) starts
+ * with 25 ms of silence for the fade to spend itself on, and FLASH_LEAD
+ * counts it.
  */
-let player = null
-const click = () => {
-  try {
-    if (!player) {
-      setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'mixWithOthers' }).catch(() => {})
-      player = createAudioPlayer(clickSound)
-    }
-    player.seekTo(0)
-    player.play()
-  } catch {
-    // A phone that cannot make the sound still flashes and taps.
+const IOS = Platform.OS === 'ios'
+let players = null
+let turn = 0
+let preparing = null
+let releaseTimer = null
+
+function prepareClick() {
+  if (!preparing) {
+    preparing = (async () => {
+      await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'mixWithOthers' }).catch(() => {})
+      players = IOS
+        ? [createAudioPlayer(clickSound, { keepAudioSessionActive: true }), createAudioPlayer(clickSound, { keepAudioSessionActive: true })]
+        : [createAudioPlayer(clickPadded)]
+      /* Loaded before the first beat, or the first click is a click that never sounds. */
+      for (let waited = 0; waited < 500 && !players.every((p) => p.isLoaded); waited += 20) {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+    })().catch(() => {
+      // A phone that cannot make the sound still flashes and taps.
+    })
   }
+  return preparing.then(async () => {
+    /* Every player at the top before a run starts: a run that stopped mid-turn left one at the end. */
+    if (!players) return
+    await Promise.all(
+      players.map((p) => {
+        try {
+          p.pause()
+          return Promise.resolve(p.seekTo(0)).catch(() => {})
+        } catch {
+          return null
+        }
+      })
+    )
+  })
+}
+
+function click() {
+  if (!players) return null
+  try {
+    if (!IOS) {
+      Promise.resolve(players[0].seekTo(0)).catch(() => {})
+      players[0].play()
+      return players[0]
+    }
+    const now = players[turn]
+    turn = 1 - turn
+    now.play()
+    /* Rewound after this beat's code, which is when an iPhone runs it: never in front of this click. */
+    Promise.resolve(players[turn].seekTo(0)).catch(() => {})
+    return now
+  } catch {
+    return null
+  }
+}
+
+/* Two seconds after the click stops: the audio is let go, unless it has started again. */
+function releaseLater() {
+  clearTimeout(releaseTimer)
+  releaseTimer = setTimeout(() => {
+    releaseTimer = null
+    try {
+      players?.forEach((p) => p.pause())
+    } catch {
+      // Gone already.
+    }
+    if (IOS) setIsAudioActiveAsync(false).catch(() => {})
+  }, 2000)
+}
+
+/*
+ * HOW LATE THE CLICK REALLY STARTS, on his phone, into the log. A few beats
+ * into each run the iPhone's player is asked where it has got to, a moment
+ * after it was told to play and again a little later if it had not started:
+ * what it has not yet played is how long it took to start. Said once a run,
+ * so "Send logs to developer" brings back a number nobody had to measure by
+ * ear.
+ */
+const LAG_PROBES_MS = [20, 50, 80, 120]
+function probeLag(player, lags, lead) {
+  if (!IOS || !player || lags.done) return
+  const ask = (i) =>
+    setTimeout(() => {
+      if (lags.done) return
+      let at
+      try {
+        at = player.currentTime
+      } catch {
+        return
+      }
+      if (!(at > 0)) {
+        if (i + 1 < LAG_PROBES_MS.length) return ask(i + 1)
+        lags.push(LAG_PROBES_MS[i])
+      } else if (at < 0.03) lags.push(LAG_PROBES_MS[i] - at * 1000)
+      else return
+      if (lags.length < 6) return
+      lags.done = true
+      const sorted = [...lags].sort((a, b) => a - b)
+      const mid = Math.round((sorted[2] + sorted[3]) / 2)
+      logDebug('metronome', `the click starts about ${mid} ms after the beat; the flash comes ${lead} ms after it`)
+    }, LAG_PROBES_MS[i] - (i ? LAG_PROBES_MS[i - 1] : 0))
+  ask(0)
 }
 
 /**
@@ -235,21 +410,44 @@ export function usePhoneClick(bpm, onBeat) {
   const running = Boolean(on && beat)
   useEffect(() => {
     if (!on || !beat) return undefined
-    const startedAt = Date.now()
+    let startedAt = 0
     let timer = null
     let alive = true
+    let n = 0
+    /* The flashes and taps still to come, cleared when the click stops: none lands after it. */
+    const later = new Set()
+    const lags = []
     const step = () => {
       if (!alive) return
-      click()
-      tick()
-      onBeat?.()
+      const sounding = click()
+      if (n++ >= 2) probeLag(sounding, lags, flashLead(Platform.OS, nudge))
+      /* The flash and the tap wait for the sound: see FLASH_LEAD. Read each beat, so Flash timing moves it at once. */
+      const t = setTimeout(() => {
+        later.delete(t)
+        if (!alive) return
+        tick()
+        onBeat?.()
+        for (const fn of beatWatchers) fn()
+      }, flashLead(Platform.OS, nudge))
+      later.add(t)
       const due = nextBeat(startedAt, Date.now(), beat)
       timer = setTimeout(step, Math.max(0, due - Date.now()))
     }
-    step()
+    clearTimeout(releaseTimer)
+    releaseTimer = null
+    setClicking(true)
+    prepareClick().finally(() => {
+      if (!alive) return
+      startedAt = Date.now()
+      step()
+    })
     return () => {
       alive = false
       clearTimeout(timer)
+      for (const t of later) clearTimeout(t)
+      later.clear()
+      setClicking(false)
+      releaseLater()
     }
   }, [on, beat, onBeat])
   return running

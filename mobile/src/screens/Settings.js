@@ -23,8 +23,8 @@ import {
 } from '../lib/relay'
 import { chooseHost } from '../lib/link'
 import { useRig } from '../lib/rig'
-import { setMetronome, useMetronome, useUnitHeardOn } from '../lib/metronome'
-import { metronomeNote, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
+import { setFlashTiming, setMetronome, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
+import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
 import {
@@ -231,6 +231,9 @@ export default function Settings({
   const unitCan = unitClick(rigSlug, clickHere)
   /* And whether the unit has said its click is on: until it does, the phone keeps time under Unit too. */
   const clickHeard = useUnitHeardOn(rigSlug)
+  /* Flash timing, offered wherever the phone's own click can be the one that sounds. */
+  const flashTiming = useFlashTiming()
+  const phoneMayClick = clicks({ ...clickSetting, on: true }, unitCan.can, clickHeard).phone
   /* Which one, and told when it changes. Read as `demoUnit()` this never
      redrew, so the five buttons stayed lit on whichever unit the app started
      as however many times they were pressed. */
@@ -1027,6 +1030,37 @@ export default function Settings({
                   : ''
               }`}
             </Note>
+            {/*
+              FLASH TIMING. "The visual edge screen flash is not actually
+              matching up with the sound that the phone makes." The flash now
+              waits for the click by as long as this phone usually takes to
+              make it, but a Bluetooth speaker or headphones take longer, and
+              the phone cannot tell from here which it is playing through.
+              So the flash can be moved to meet the click, by ear.
+            */}
+            {phoneMayClick ? (
+              <>
+                <Section>Flash timing</Section>
+                <View style={{ flexDirection: 'row', gap: space.sm }}>
+                  <Press
+                    label="Earlier"
+                    grow
+                    disabled={flashTiming <= FLASH_NUDGE.min}
+                    onPress={() => setFlashTiming(flashTiming - FLASH_NUDGE.step)}
+                  />
+                  <Press
+                    label="Later"
+                    grow
+                    disabled={flashTiming >= FLASH_NUDGE.max}
+                    onPress={() => setFlashTiming(flashTiming + FLASH_NUDGE.step)}
+                  />
+                </View>
+                <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
+                  {`${flashTimingNote(flashTiming)}. If the flash comes before the click, tap Later; if it comes after, tap Earlier. Through a Bluetooth speaker or headphones it usually needs Later several times.`}
+                </Text>
+                {flashTiming !== 0 ? <Press label="Back to standard" onPress={() => setFlashTiming(0)} /> : null}
+              </>
+            ) : null}
             {/* "Same with the watch, metronome that can beep on the watch."
                 Its own switch: the wrist keeps time whichever end clicks. */}
             {Platform.OS === 'ios' && watchSupported() ? (

@@ -13013,6 +13013,8 @@ button.setup-account-card.out .setup-account-who {
      and so is this. The phone app's lib/screenCorners says why 62. */
   border-radius: clamp(0px, calc(env(safe-area-inset-bottom, 0px) * 1000), 62px);
   opacity: 0;
+  /* Its own layer, so a whole-screen frame lighting on the beat is not repainted late. */
+  will-change: opacity;
   z-index: 1000;
 }
 .metronome-beat-on {

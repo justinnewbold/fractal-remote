@@ -172,8 +172,13 @@ export function useScreenClick(bpm, onBeat) {
     const step = beat / 1000
     let next = ctx ? ctx.currentTime + 0.05 : 0
     let alive = true
+    let told = false
+    /* Booked beeps and flashes, so a stop or a new tempo takes back the ones not yet heard. */
+    const booked = []
+    const flashes = new Set()
+    /* While the browser will not let sound start yet: the flash keeps the tempo on its own. */
+    let silentSince = null
     const beep = (at) => {
-      if (!ctx) return
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.frequency.value = 1500
@@ -183,18 +188,38 @@ export function useScreenClick(bpm, onBeat) {
       osc.connect(gain).connect(ctx.destination)
       osc.start(at)
       osc.stop(at + 0.06)
+      return osc
     }
     /* Look a little ahead and book every beat in it on the audio clock. */
     const plan = () => {
       if (!alive) return
-      if (ctx) {
+      if (ctx && ctx.state === 'running') {
+        if (silentSince !== null) {
+          silentSince = null
+          next = ctx.currentTime + 0.05
+        }
+        while (booked.length && booked[0].at < ctx.currentTime - 0.1) booked.shift()
         while (next < ctx.currentTime + 0.2) {
-          beep(next)
-          const wait = Math.max(0, (next - ctx.currentTime) * 1000)
-          setTimeout(() => alive && onBeat?.(), wait)
+          booked.push({ osc: beep(next), at: next })
+          /* The flash on the beep as it is HEARD, not as it is made, less the frame it takes to draw. */
+          const heard = heardAt(ctx, next)
+          if (!told) {
+            told = true
+            logDebug('metronome', `the beep reaches the speaker ${Math.round(heard - (performance.now() + (next - ctx.currentTime) * 1000))} ms after it is made`)
+          }
+          const t = setTimeout(() => {
+            flashes.delete(t)
+            if (alive) onBeat?.()
+          }, Math.max(0, heard - FLASH_FRAME_MS - performance.now()))
+          flashes.add(t)
           next += step
         }
-      } else {
+        return
+      }
+      const now = performance.now()
+      if (silentSince === null) silentSince = now - beat
+      if (now - silentSince >= beat) {
+        silentSince += beat * Math.floor((now - silentSince) / beat)
         onBeat?.()
       }
     }
@@ -203,6 +228,42 @@ export function useScreenClick(bpm, onBeat) {
     return () => {
       alive = false
       clearInterval(timer)
+      for (const t of flashes) clearTimeout(t)
+      flashes.clear()
+      /* A beep stopped before it starts never sounds: none is heard without its flash. */
+      for (const b of booked) {
+        try {
+          b.osc.stop()
+        } catch {
+          // Already over.
+        }
+      }
+      booked.length = 0
     }
   }, [on, beat, onBeat])
 }
+
+/*
+ * WHEN A BEEP BOOKED AT AUDIO TIME `t` COMES OUT OF THE SPEAKER, on
+ * performance.now()'s clock.
+ *
+ * "They're not flashing and beeping at the same time." The flash was timed to
+ * when the beep is made, and the sound then has the trip out of the browser
+ * and the computer to make: a few tens of milliseconds on a laptop's own
+ * speakers, a good deal more through Bluetooth. The browser says how long,
+ * where it can: getOutputTimestamp() pairs the audio clock with the page's
+ * clock at the speaker, and baseLatency/outputLatency are the same trip by
+ * another route. An answer more than 400 ms out is not believed.
+ */
+const heardAt = (ctx, t) => {
+  const made = performance.now() + (t - ctx.currentTime) * 1000
+  const stamp = ctx.getOutputTimestamp?.()
+  if (stamp && stamp.contextTime > 0 && stamp.performanceTime > 0) {
+    const at = stamp.performanceTime + (t - stamp.contextTime) * 1000
+    if (at - made >= 0 && at - made < 400) return at
+  }
+  const trip = ((ctx.baseLatency || 0) + (ctx.outputLatency || 0)) * 1000
+  return made + (trip >= 0 && trip < 400 ? trip : 0)
+}
+/* A class set in a timer reaches the glass about a frame and a half later at 60 Hz. */
+const FLASH_FRAME_MS = 20

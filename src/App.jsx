@@ -39,6 +39,7 @@ import LocalLibrary from './components/LocalLibrary'
 import GearNames from './components/GearNames'
 import PhoneApp from './components/PhoneApp'
 import SetupRow from './components/SetupRow'
+import MetronomeSwitch from './components/MetronomeSwitch'
 import Onboarding, { onboarded, markOnboarded } from './components/Onboarding'
 import { ALREADY_UNLOCKED, REPLAY } from '../shared/onboarding.mjs'
 import { FULL, BUILT_AT, VERSION } from './lib/version'
@@ -5024,6 +5025,8 @@ export default function App() {
         {sheet === 'volume' && outputEid !== null ? (
           <Volume eid={outputEid} preset={preset} onError={setError} />
         ) : null}
+        {/* "Make it so the metronome can be turned on and off in the volume section of the app." */}
+        {sheet === 'volume' ? <MetronomeSwitch slug={slugOfUnit(device)} /> : null}
       </Sheet>
 
       {/*

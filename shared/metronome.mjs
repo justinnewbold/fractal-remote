@@ -191,11 +191,53 @@ export function beatMs(bpm) {
  * Counted from the start rather than from the last beat, so a timer that
  * fires late once does not push every beat after it late too: a JavaScript
  * timer is never exact, and a metronome that drifts is worse than none.
+ *
+ * AND A TIMER THAT FIRES A MOMENT EARLY IS STILL THAT BEAT. Date.now() is
+ * whole milliseconds and a beat seldom is (130 BPM is 461.538 ms), and an
+ * Android timer can fire a millisecond or three before it was asked to. Read
+ * as "the beat is not here yet", that booked the same beat again a few
+ * milliseconds later: a double click and a double flash, on several beats in
+ * a hundred at 97, 143 or 177 BPM. Anything within EARLY_MS of a beat is that
+ * beat, and the next one is the one after it.
  */
+const EARLY_MS = 10
 export function nextBeat(startedAt, now, beat) {
   if (!beat) return null
-  const n = Math.floor((now - startedAt) / beat) + 1
+  const n = Math.floor((now - startedAt + EARLY_MS) / beat) + 1
   return startedAt + n * beat
+}
+
+/*
+ * HOW LONG AFTER THE PHONE IS TOLD TO CLICK THE CLICK IS HEARD, and so how
+ * long the flash and the tap wait for it.
+ *
+ * "The visual edge screen flash is not actually matching up with the sound
+ * that the phone makes." The flash is on the glass a frame after it is asked
+ * for; the sound has a longer road. On an iPhone, a player that is already
+ * rewound and an audio session that is kept awake (lib/metronome.js) still
+ * take a few tens of milliseconds to start. On Android the player starts a new
+ * audio track on every click and the phone's own output is slower, and the
+ * click has 25 ms of silence in front of it (assets/click-pad.wav: Android
+ * fades every new track in over its first 20 ms, which used to swallow the
+ * click). These are the starting points; Settings → Metronome → Flash timing
+ * moves them, which a Bluetooth speaker or headphones will need — the phone
+ * cannot tell from here how far away the speaker is.
+ */
+export const FLASH_LEAD = { ios: 40, android: 100 }
+/* What Flash timing may add or take away, and by how much a press. */
+export const FLASH_NUDGE = { min: -100, max: 400, step: 20 }
+export const flashNudge = (ms) => {
+  const n = Math.round(Number(ms) / FLASH_NUDGE.step) * FLASH_NUDGE.step
+  return Number.isFinite(n) ? Math.max(FLASH_NUDGE.min, Math.min(FLASH_NUDGE.max, n)) : 0
+}
+/** How long after the click is started the flash and the tap come, on this platform. */
+export const flashLead = (os, nudge = 0) => Math.max(0, (FLASH_LEAD[os] ?? 0) + flashNudge(nudge))
+
+/** Flash timing in his words: where the flash sits against the standard for this phone. */
+export function flashTimingNote(nudge) {
+  const n = flashNudge(nudge)
+  if (n === 0) return 'Standard'
+  return `${Math.abs(n)} ms ${n > 0 ? 'later' : 'earlier'} than standard`
 }
 
 /**
