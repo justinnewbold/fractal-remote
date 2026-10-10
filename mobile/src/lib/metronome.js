@@ -115,11 +115,17 @@ const click = () => {
  * Counted from when it started rather than from the last beat (nextBeat), so
  * a timer that runs late once does not drag every beat after it. `onBeat` is
  * handed each beat so a screen can flash with it.
+ *
+ * Answers whether it is clicking right now: the setting says the phone clicks
+ * AND there is a tempo to click at. MetronomeBeat keeps the screen awake on
+ * that, and on nothing wider, so a phone with the click switched on but no
+ * tempo yet still sleeps as it always has.
  */
 export function usePhoneClick(bpm, onBeat) {
   const s = useMetronome()
   const on = clicks(s).phone
   const beat = beatMs(bpm)
+  const running = Boolean(on && beat)
   useEffect(() => {
     if (!on || !beat) return undefined
     const startedAt = Date.now()
@@ -139,4 +145,5 @@ export function usePhoneClick(bpm, onBeat) {
       clearTimeout(timer)
     }
   }, [on, beat, onBeat])
+  return running
 }

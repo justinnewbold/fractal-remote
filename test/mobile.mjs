@@ -3912,6 +3912,35 @@ export function run(test) {
     assert.match(read('src/styles.css'), /\.metronome-beat \{[^}]*pointer-events: none/)
   })
 
+  test('the phone stays awake while its own click is running, on every screen', () => {
+    /*
+     * The screen only stayed on while Play or Edit was open (useKeepAwake in
+     * Stage and Edit). The click runs everywhere — MetronomeBeat is drawn over
+     * the whole app — so on the setlist or the preset list the phone locked
+     * itself on its usual timeout and the click stopped with it.
+     */
+    const beat = read('mobile/src/components/MetronomeBeat.js')
+    assert.match(beat, /import \{ useKeepAwake \} from 'expo-keep-awake'/, 'the beat does not use the keep-awake the Play screen uses')
+    assert.match(beat, /const clicking = usePhoneClick\(bpm, onBeat\)/, 'the beat does not ask whether the phone is clicking')
+    assert.match(beat, /\{clicking \? <StayAwake \/> : null\}/, 'the screen is held awake whether or not the click is running')
+    /* Its own tag: a bare one would be fine today, but a shared default tag
+       would let the metronome letting go release Play's hold too. */
+    assert.match(beat, /function StayAwake\(\) \{\s*useKeepAwake\('metronome'\)\s*return null\s*\}/, 'the metronome holds the screen under no tag of its own')
+
+    /* "Running" is exactly when the click ticks: switched on for the phone, and a tempo to click at. */
+    const lib = read('mobile/src/lib/metronome.js')
+    const hook = lib.slice(lib.indexOf('export function usePhoneClick'))
+    assert.match(hook, /const running = Boolean\(on && beat\)/, 'the phone is kept awake on something other than the click running')
+    assert.match(hook, /if \(!on \|\| !beat\) return undefined/, 'the click and the keep-awake no longer start on the same thing')
+    assert.match(hook, /\}, \[on, beat, onBeat\]\)\s*return running\s*\}/, 'usePhoneClick no longer says whether it is clicking')
+
+    /* No new package: the one the Play screen already uses, so nothing native moves. */
+    assert.ok(JSON.parse(read('mobile/package.json')).dependencies['expo-keep-awake'], 'expo-keep-awake is gone from the phone')
+    /* And Play and Edit keep their own holds as before. */
+    assert.match(read('mobile/src/screens/Stage.js'), /useKeepAwake\(\)/)
+    assert.match(read('mobile/src/screens/Edit.js'), /useKeepAwake\(\)/)
+  })
+
   test('two computers and no choice made drives one of them, never both', async () => {
     const { firstUnitHost } = await import('../shared/relay-rules.mjs')
     /* The one with a unit plugged in, else the first that answered. */
@@ -4350,7 +4379,10 @@ export function run(test) {
     const { WINDOWS_DRIVER, FRACTAL_DOWNLOADS } = await import('../shared/editors.mjs')
     assert.match(WINDOWS_DRIVER, /^Windows only: /, 'the driver line does not say it is for Windows')
     assert.match(WINDOWS_DRIVER, /already installed one of Fractal's editors on this PC \(FM3-Edit, .*Axe-Edit, AM4-Edit or VP4-Edit\), you already have it/, 'the driver line does not say an editor already brought it')
-    assert.equal(FRACTAL_DOWNLOADS, 'https://www.fractalaudio.com/downloads/')
+    /* Fractal's support page, which lists each unit's downloads page: the old
+       /downloads/ answers "Forbidden" now, to a browser too. */
+    assert.equal(FRACTAL_DOWNLOADS, 'https://www.fractalaudio.com/support/')
+    assert.ok(!/fractalaudio\.com\/downloads\/?['"]/.test(read('shared/editors.mjs')), 'the link to Fractal goes back to the page that answers Forbidden')
     const waysSrc = read('shared/ways-in.mjs')
     const win = waysSrc.slice(waysSrc.indexOf("id: 'windows-app'"), waysSrc.indexOf("id: 'linux-app'"))
     assert.ok(win.indexOf('WINDOWS_DRIVER') > -1 && win.indexOf('WINDOWS_DRIVER') < win.indexOf('Plug your unit'), 'the Windows steps do not mention the driver before the cable goes in')
@@ -4968,6 +5000,98 @@ export function run(test) {
       !/local network|outside your home\s+wifi/i.test(pasted),
       'the review notes describe the two-tier app that no longer exists'
     )
+  })
+
+  test('the review notes waiting for 1.87.1 say what is new, and name what the app draws', async () => {
+    /*
+     * Apple's 2.3.1(a): every new feature "must be described with specificity
+     * in the Notes for Review". The notes for the version in the store stay
+     * as they were sent; the next version's are their own block under their
+     * own heading, so neither test above reads them by mistake (both take the
+     * FIRST "## Review notes"), and this one reads nothing else.
+     */
+    const store = read('docs/app-store.md')
+    const at = store.indexOf('## For the next version (1.87.1, not yet submitted)')
+    assert.ok(at > store.indexOf('## Review notes'), 'the next version’s notes are missing, or sit above the live ones the other tests read')
+    const notesAt = store.indexOf('### Notes for App Review, 1.87.1', at)
+    assert.ok(notesAt > at, 'the next version has no review notes')
+    const open = store.indexOf('```', notesAt)
+    const pasted = store.slice(open + 3, store.indexOf('```', open + 3))
+    const copy = read('shared/onboarding.mjs')
+
+    /* The same walkthrough the live notes send a reviewer through. */
+    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ']) {
+      assert.ok(pasted.includes(label), `the 1.87.1 notes stopped naming "${label}"`)
+      assert.ok(copy.includes(label), `the 1.87.1 notes name "${label}", which the walkthrough no longer says`)
+    }
+
+    /* The sentence that stopped being true is gone from what gets pasted. */
+    assert.ok(!/one thing\s+only/.test(pasted), 'the 1.87.1 notes still say an account is for one thing only')
+
+    /* Accounts before buying, by the buttons the screens actually draw. */
+    assert.match(pasted, /make an account, before buying/, 'the 1.87.1 notes do not say an account can be made before buying')
+    assert.match(read('mobile/src/screens/SignIn.js'), /'Create account'/)
+    assert.ok(pasted.includes('Create account'), 'the 1.87.1 notes do not say where an account is made')
+    assert.match(read('mobile/src/screens/Paywall.js'), /label="Delete account"/)
+    assert.match(pasted, /purchase page[\s\S]{0,80}Delete account is at the foot of that page/, 'the 1.87.1 notes do not say where an unpaid account is deleted')
+
+    /*
+     * Edit (Beta), as the screen labels itself, and said to work — in words
+     * that agree with the screen's own Beta note, which the reviewer reads
+     * too. This pinned "It works fully" until the note was set beside it:
+     * the note says some blocks and controls may be missing, and 2.3.1(a)
+     * wants the notes specific and true, so the notes now say why it is a
+     * Beta in the note's own terms. Changed on purpose, not to get it to pass.
+     */
+    const edit = read('mobile/src/screens/Edit.js')
+    assert.match(edit, /Edit <Text[^>]*>\(Beta\)<\/Text>/)
+    assert.match(read('mobile/src/screens/Stage.js'), /label="Edit"/)
+    assert.match(edit, /Some blocks and controls may be missing, or may not change the same way they do on your unit yet\./, 'the Beta note on Edit changed; read the 1.87.1 notes against it again')
+    assert.ok(!/works fully/.test(pasted), 'the 1.87.1 notes say Edit works fully, and its own Beta note says blocks and controls may be missing')
+    assert.match(pasted, /Edit \(Beta\)\.[\s\S]{0,200}Everything it shows works, in the demo too\./, 'the 1.87.1 notes do not say Edit works, in the demo too')
+    assert.match(pasted, /marked Beta because it does not yet cover every block and control of\s+every unit, and a control may not yet move quite the way it does on the\s+unit itself/, 'the 1.87.1 notes do not say why Edit is a Beta, in the terms its own note uses')
+    assert.match(pasted, /It is still being\s+improved\./, 'the 1.87.1 notes do not say Edit is still being improved')
+
+    /*
+     * Bluetooth is Justin's call, so its paragraph is NOT in the block that
+     * gets pasted: a reviewer told about a feature that is not in the build,
+     * or that is but is shown to every paying customer, is told something
+     * untrue. It waits in its own block, marked.
+     */
+    assert.ok(!/Bluetooth/.test(pasted), 'Bluetooth is in the notes that get pasted before Justin has decided')
+    const rest = store.slice(store.indexOf('```', open + 3) + 3)
+    assert.match(rest, /\*\*Only if Bluetooth goes in this version: Justin decides\.\*\*[\s\S]{0,1200}```\s*Bluetooth \(beta\)\./, 'the Bluetooth paragraph is not kept apart and marked as his decision')
+
+    /*
+     * AND THE LIST THAT PARAGRAPH CLAIMS. It tells the reviewer Bluetooth is
+     * shown to "the demo account in App Review Information among them". The
+     * reviewer signs in as that account, which is not an admin, so a list
+     * holding nobody but the admins (Justin) shows the reviewer no Bluetooth
+     * card where the notes say there is one, and 2.3.1(a) wants every new
+     * feature reachable. The list (shared/bluetooth-testers.mjs) comes with
+     * the Bluetooth work and is not on main yet, so the doc says to check it
+     * by eye, and this reads it wherever it exists. The check bites the
+     * moment the paragraph is moved into the block that gets pasted, which is
+     * the step that makes the claim; the assertion above that keeps Bluetooth
+     * out of that block is the one to change on purpose when Justin decides.
+     */
+    assert.match(rest, /`BLUETOOTH_TESTERS` in `shared\/bluetooth-testers\.mjs`[\s\S]{0,300}demo account's own id has to be on that list/, 'the notes no longer say to check the demo account is on the Bluetooth list')
+    const testers = new URL('../shared/bluetooth-testers.mjs', import.meta.url)
+    if (/Bluetooth/.test(pasted) && existsSync(testers)) {
+      const { BLUETOOTH_TESTERS } = await import(testers.href)
+      const { ADMINS } = await import('../shared/admin.mjs')
+      assert.ok(BLUETOOTH_TESTERS.some((id) => !ADMINS.includes(id)), 'the notes tell the reviewer Bluetooth is open to the demo account, and the list holds nobody but the admins')
+    }
+
+    /* And a What's New, which Apple asks for on every version after the first. */
+    const news = store.indexOf("### What's New in This Version, 1.87.1", at)
+    assert.ok(news > at, 'there is no What’s New for 1.87.1')
+    const nOpen = store.indexOf('```', news)
+    const whatsNew = store.slice(store.indexOf('\n', nOpen) + 1, store.indexOf('```', nOpen + 3))
+    assert.ok([...whatsNew].length <= 4000, 'What’s New is longer than Apple takes')
+    const play = whatsNew.trim().split('\n').slice(0, 5).join('\n')
+    assert.ok([...play].length <= 500, `the five lines for Google Play come to ${[...play].length}; Play takes 500`)
+    assert.ok(!/Bluetooth/.test(whatsNew), 'What’s New tells every customer about a Bluetooth only testers can open')
   })
 
   test('the unlock row is gone once there is nothing left to unlock', () => {

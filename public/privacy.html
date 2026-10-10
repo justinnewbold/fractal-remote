@@ -49,7 +49,7 @@
   <body>
     <main>
       <h1>Privacy</h1>
-      <p class="when">Fractal Remote · last updated 3 October 2026</p>
+      <p class="when">Fractal Remote · last updated 10 October 2026</p>
 
       <p class="lead">
         <strong>This app collects as little as it can.</strong> Your phone talks to your
@@ -61,17 +61,22 @@
       </p>
 
       <p>
-        Everything below is about the parts that <em>do</em> use the internet, and each one is
-        something you choose to turn on.
+        Everything below is about the parts that <em>do</em> use the internet. Each one is
+        something you choose to turn on, except two: the phone app asking whether it is unlocked
+        when it opens, described under <em>Unlocking the full version</em>, and the apps checking
+        for updates, at the end of <em>Where it is kept</em>. Neither carries a name or an email
+        address.
       </p>
 
       <h2>What is collected, and only if you ask for it</h2>
 
-      <h3>An account — needed to join a phone to a computer</h3>
+      <h3>An account — only if you make one</h3>
       <p>
         The demo needs no account, and neither does the computer app on its own. Joining the two —
-        so the phone can drive the unit plugged into your computer — is the one thing that does:
-        the two ends find each other by both being signed into the same account.
+        so the phone can drive the unit plugged into your computer — is what an account is for:
+        the two ends find each other by both being signed into the same account. The same account
+        is what carries a full version you bought, and your setlists, to your other devices.
+        Anybody can make one, before buying or without buying at all.
       </p>
       <p>
         A phone on the same wifi as the computer can still reach it directly, with no account and
@@ -88,7 +93,7 @@
         down.
       </p>
 
-      <h3>Unlocking the full version — only if you buy it</h3>
+      <h3>Unlocking the full version — a purchase record only if you buy it</h3>
       <p>
         The unlock is a one-time purchase. On a phone it is made through the App Store or Google
         Play, and in a browser through a checkout run by RevenueCat and Stripe. Your card details go
@@ -100,12 +105,33 @@
         or device made the purchase, when, and through which store — not your name, card or
         address. Apple's, Google's and Stripe's own privacy policies cover the payment itself.
       </p>
+      <p>
+        To know whether a phone is unlocked, the phone app asks RevenueCat each time it opens,
+        bought or not, under a number: the account's if you are signed in, otherwise one made up
+        for that phone. Never your name or email address. So RevenueCat also notes when the app
+        last asked, which version of the app and of the phone's system it was, and which country
+        it was in.
+      </p>
 
       <h3>Your setlists — only if you are signed in</h3>
       <p>
         So the setlist you built on the couch is on your phone at the gig. It holds the names and
         order of the songs you saved and which presets you starred. Nothing else about your
         presets, and no audio of any kind.
+      </p>
+
+      <h3>Free access for a tester — only if Justin gives it to you</h3>
+      <p>
+        Justin, who builds the app, sometimes gives a tester the full version for nothing, using
+        the email address the tester gave him. If that address already has an account, the full
+        version is added to it straight away. If it has none yet, the address goes on a short
+        waiting list — the address and the date it was added, nothing else — and the first time
+        somebody signs in with it, the full version is added and the address comes off the list.
+      </p>
+      <p>
+        Either way, one email goes to that address to say so, headed "You have full access to
+        Fractal Remote", with how to sign in and where to get the apps. It is sent when the access
+        is given, and that is the only time.
       </p>
 
       <h3>Bug reports and suggestions — only when you press Send</h3>
@@ -135,9 +161,22 @@
       <h2>What is never collected</h2>
       <ul>
         <li><strong>No analytics and no tracking of any kind.</strong> There is no analytics
-          service in this app, no advertising identifier, and no third-party tracking code. Nobody
-          is counting your screens or your sessions.</li>
-        <li><strong>No location.</strong> Never asked for, never read.</li>
+          service in this app, no advertising identifier, and no third-party tracking code. Nothing
+          tells anybody which screens you open, what you press or how long you play: the debug log
+          described above stays on your phone or computer unless you send it with a report. The
+          one count there is — how many accounts were used lately, on the builder's own pages
+          described below — is worked out from sign-in times that are kept anyway, and names
+          nobody.</li>
+        <li><strong>No location.</strong> The app never reads where you are from the phone, and
+          does not ask for Location, with one exception that is Android's rule rather than ours.
+          <strong>Bluetooth (beta)</strong> lets the phone talk to your unit through a Bluetooth
+          MIDI adapter; it is still being tested and is not open to customers yet. On Android 11
+          and older, Android lets no app look for a Bluetooth device without the Location
+          permission, so on those phones the app asks for it when you tap Connect on the Bluetooth
+          page, and uses it only to find the adapter, never to read where the phone is. Newer
+          Android phones ask for Nearby devices instead, and an iPhone asks only to use Bluetooth.
+          The country RevenueCat notes, under <em>Unlocking the full version</em>, is worked out by
+          RevenueCat from the internet connection, not from the phone's location.</li>
         <li><strong>No contacts, photos, camera or microphone.</strong> None of them are used.</li>
         <li><strong>No audio.</strong> This app sends control messages to your unit. It does not
           record, stream or process sound.</li>
@@ -154,15 +193,43 @@
         person who builds it.
       </p>
       <p>
-        Emails this app sends (a password reset, the desktop download link you asked for, and bug
-        reports on their way to the person who builds it) go through
+        <strong>What the person who builds it can see.</strong> Justin has a few pages in the app,
+        under Settings → Developer, that open for his own account and nobody else's — the server
+        checks which account is asking, not only the app. On them he can see:
+      </p>
+      <ul>
+        <li><strong>Everyone with an account</strong> — each account's email address, when it was
+          made, whether the address was confirmed, when it last signed in, and whether it has the
+          full version. And the waiting list above.</li>
+        <li><strong>One account, looked up by its email address</strong> — the same, plus what it
+          bought, when and through which store; which kinds of device it is signed in on (the phone
+          app, the computer app, or the website, told apart by the name the app or browser gives
+          when it signs in) and when each last checked in; and the app version and phone system
+          RevenueCat last saw.</li>
+        <li><strong>How many people</strong> — how many accounts were used today, in the last 7
+          days and in the last 30, on which kinds of device, and on which app versions. A count,
+          naming nobody.</li>
+        <li><strong>Sales</strong> — each purchase: when, through which store, for how much, and
+          by which account.</li>
+        <li><strong>Messages</strong> — the bug reports and suggestions described above.</li>
+      </ul>
+      <p>
+        All of it is read from what the account service and RevenueCat already keep in order to
+        sign you in and to know whether you have paid. Nothing new is recorded for these pages: no
+        screens, no buttons, no time spent in the app.
+      </p>
+      <p>
+        Emails this app sends (a link to confirm your address or reset a password, the desktop
+        download link you asked for, the one telling a tester they have been given full access, and
+        bug reports on their way to the person who builds it) go through
         <a href="https://resend.com/legal/privacy-policy" rel="noreferrer">Resend</a>. RevenueCat,
         Supabase and Resend each hold only what is described on this page, use it only to provide
         their part of the service, and protect it at least as this page describes.
       </p>
       <p>
         The desktop apps check for their own updates from GitHub, and the phone app checks for
-        updates from Expo. Both are ordinary download requests.
+        updates from Expo. On the phone, the photographs on the gear pages are fetched from this
+        website as you look through them. All of these are ordinary download requests.
       </p>
 
       <h2>How long it is kept</h2>
@@ -171,6 +238,8 @@
           to be deleted.</li>
         <li><strong>An address the desktop download link was sent to</strong> — kept only as a
           one-way scrambled fingerprint, to stop the link being sent to it over and over.</li>
+        <li><strong>An address on the testers' waiting list</strong> — until somebody first signs
+          in with it, or until the access is taken back or you ask for it to be removed.</li>
         <li><strong>Bug reports</strong> — until the problem is fixed and long enough afterwards to
           be sure, then deleted.</li>
       </ul>
@@ -184,7 +253,8 @@
       </p>
       <p>
         <strong>Or by email:</strong> email <a href="mailto:justinnewbold@gmail.com">justinnewbold@gmail.com</a> and say what you
-        want removed — your account, your setlists, a report you sent, or all of it. No form and no
+        want removed — your account, your setlists, a report you sent, an address on the testers'
+        waiting list, or all of it. No form and no
         account needed to ask. It will be done and you will get a reply confirming it.
       </p>
       <p>

@@ -47,8 +47,16 @@ export const ALL_EDITORS = 'FM3-Edit, FM9-Edit, Axe-Edit III, Axe-Edit, AM4-Edit
  * over USB, this one included. Most people who own one have it already,
  * because Fractal's editors install it and do not work without it either, so
  * that is said first: it is the answer for nearly everybody.
+ *
+ * THE LINK IS FRACTAL'S SUPPORT PAGE, NOT ITS OLD DOWNLOADS PAGE. That one,
+ * /downloads/, answers "Forbidden" now, to a browser as much as to anything
+ * else (checked 10 October 2026): Fractal moved its downloads to one page per
+ * unit (/fm3-downloads/, /am4-downloads/ and so on), and the Windows steps
+ * this is linked from do not know which unit it is. The support page lists
+ * every unit's downloads page, which is what the driver line already says to
+ * look for. Check it still answers before changing it again.
  */
-export const FRACTAL_DOWNLOADS = 'https://www.fractalaudio.com/downloads/'
+export const FRACTAL_DOWNLOADS = 'https://www.fractalaudio.com/support/'
 
 export const WINDOWS_DRIVER = `Windows only: your Fractal unit needs Fractal's own USB driver before any program can see it. If you have already installed one of Fractal's editors on this PC (${ALL_EDITORS.replace(/, (?=[^,]*$)/, ' or ')}), you already have it. If not, it is a free download on Fractal's website, on your unit's downloads page.`
 

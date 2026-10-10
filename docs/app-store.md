@@ -7,8 +7,13 @@ every new version sent for review.
 Everything App Store Connect asks for, answered. Copy the fields straight
 across; the notes say why an answer is what it is where that matters.
 
-**The one that gets apps like this rejected** is at the bottom, under *Review
+**The one that gets apps like this rejected** is near the bottom, under *Review
 notes*. Read that one even if you skip the rest.
+
+**The version in the store and the next one are kept apart.** Everything down
+to the end of *Review notes* is for the version in the store now, except where
+it says it waits for the next build. What goes with the next version, 1.87.1,
+is at the very bottom, under *For the next version*.
 
 ---
 
@@ -229,6 +234,9 @@ question automatically on every submission rather than asking you each time.
 **Paste this into App Review Information → Notes.** This is the paragraph that
 decides whether the app is rejected as non-functional.
 
+**This block is the one for the version in the store now (1.86.83).** For
+1.87.1, use the notes under *For the next version* at the bottom instead.
+
 ```
 This app is a remote control for Fractal Audio guitar hardware. Normally it
 connects to a computer that has the guitar unit plugged into it over USB.
@@ -291,3 +299,143 @@ tests read it instead — one holds every label here against the walkthrough's
 own strings, the other against the sign-in screen's — and both read only the
 fenced block above, because this paragraph quotes the wording it replaced and
 a search of the whole file finds the explanation rather than the instruction.
+
+---
+
+## For the next version (1.87.1, not yet submitted)
+
+**Everything above this heading is for the version in the store now** (1.86.83,
+build 24, and the updates it has had since), except the Description and the
+Subtitle, which are already the new ones and wait for this version (Apple
+changes both only with a new version). **Everything under it is for 1.87.1,**
+the next store build, and is pasted when that version is set up in App Store
+Connect. Until then the notes above stay as they are.
+
+Why the notes change at all: Apple's guideline 2.3.1(a) says every new feature
+"must be described with specificity in the Notes for Review", and 2.3.12 says
+What's New has to list the bigger changes. Three things are new to a reviewer
+since 1.86.83 was approved: an account can be made before buying, Edit says
+(Beta), and Bluetooth, if it goes in. And one sentence in the old notes stopped
+being true: "An account is used for one thing only: joining this phone to a
+computer". An account also carries the full version and the setlists to other
+devices, and anybody can make one now, so it is rewritten below.
+
+### Notes for App Review, 1.87.1
+
+**Paste this into App Review Information → Notes**, in place of the block
+above, when 1.87.1 is sent.
+
+```
+This app is a remote control for Fractal Audio guitar hardware. Normally it
+connects to a computer that has the guitar unit plugged into it over USB.
+
+You will not have that hardware, so the app includes a full demo mode that
+needs nothing but the phone, and no account:
+
+  1. Tap "Get started"
+  2. Tap "Got it"
+  3. Tap "Start free demo"
+  4. Choose any unit, then tap "Play with ..."
+
+That loads a simulated unit with twelve presets and named scenes. Every
+screen works — presets, scenes, the signal chain, the tuner, tap tempo,
+setlists, settings. Nothing in the demo reaches real hardware.
+
+The demo is free and needs no account. An account is what joins this phone
+to a computer that has the guitar unit plugged into it, and it carries the
+full version and the user's setlists to their other devices.
+
+New in this version:
+
+Accounts before buying. Anybody can now make an account, before buying or
+without buying: Create account is on the sign-in screen. Making one unlocks
+nothing; the full version is still the one in-app purchase. An account that
+has not bought the full version opens on the purchase page instead of
+Settings, and Delete account is at the foot of that page.
+
+Edit (Beta). The Edit screen, opened with Edit at the bottom of the Play
+screen, is now marked Beta. Everything it shows works, in the demo too. It
+is marked Beta because it does not yet cover every block and control of
+every unit, and a control may not yet move quite the way it does on the
+unit itself, as the note at the foot of that screen says. It is still being
+improved.
+
+A demo account for the signed-in screens is in App Review Information
+(Sign-in required).
+
+Deleting an account (Guideline 5.1.1(v)): tap the gear at the top right for
+Settings, tap the account card at the top, then Delete account, then
+"Delete my account". It deletes the account and everything stored under it
+straight away. To try it, please create a new account rather than deleting
+the demo account, which the rest of the review needs. A new account that has
+not bought the full version opens on the purchase page instead of Settings;
+Delete account is at the foot of that page, and does the same.
+
+Hardware (Guideline 2.1): a video filmed on an iPhone with a real FM3 on
+screen, from the first pairing through the whole workflow, is linked in App
+Review Information.
+
+Apple Watch: the watch app comes with the iPhone app. It works in the demo
+too. Start the demo as above, keep the Play screen open on the iPhone, then
+open Fractal on the watch. Swipe up or down between Scenes, Pedals, Presets
+and Tuner.
+```
+
+**Only if Bluetooth goes in this version: Justin decides.** If it does not,
+leave this paragraph out. If it does, move it into the notes block above,
+after the Edit (Beta) paragraph, so what gets pasted is one block. It is
+only true once two things are done first:
+Bluetooth is shown only to chosen accounts with Apple's demo account among
+them (today it would show to everyone who has paid), and a short phone video
+of it working is linked in App Review Information. Apple's 2.3.1(a) also
+says a new feature must be "accessible for review", which is why the demo
+account has to be on the list rather than left off it.
+
+```
+Bluetooth (beta). This version can also reach the guitar unit with no
+computer, through a Bluetooth MIDI adapter (for example a CME WIDI) plugged
+into the unit's MIDI In and Out. While it is being tested it is shown only
+to selected accounts, the demo account in App Review Information among
+them: Settings, then Phone & computer, then BLUETOOTH (BETA). It needs the
+adapter and a unit, so a video of it working is linked in App Review
+Information. The phone asks for Bluetooth permission only when Connect is
+tapped on that page.
+```
+
+**Check the list before this paragraph goes in.** The accounts Bluetooth is
+shown to are `BLUETOOTH_TESTERS` in `shared/bluetooth-testers.mjs`, which the
+Bluetooth work is adding. The reviewer signs in with the demo account, so the
+demo account's own id has to be on that list: Justin's account being there is
+not enough, and neither is the note in the file that says where it goes. The
+id is in the Supabase dashboard, under Authentication → Users, beside the demo
+address. Without it the reviewer finds no Bluetooth card where the notes say
+there is one. Adding it is ordinary app code, so it goes out as an update, not
+a build. Once this paragraph is in the block above, a test refuses a list that
+holds nobody but the admins.
+
+### What's New in This Version, 1.87.1
+
+Plain words, one change a line. The App Store takes 4000 characters, and
+all of it fits. Google Play's release notes take only 500, so on Play use the
+first five lines, which come to 445.
+
+```
+• You can now make an account before buying.
+• Delete account is also at the bottom of the purchase page.
+• Edit is marked Beta while it keeps getting better. If anything on it looks wrong, tell us with Feedback in Settings.
+• With the phone's own metronome click on, the screen stays awake on every screen, so the click no longer stops when the phone would have gone to sleep.
+• The metronome's flash follows the rounded corners of your screen.
+• Scrolling the signal chain sideways on Edit no longer swipes you back to Play.
+• The Mac, Windows and Linux icons on Connect a computer open the download page.
+• Preset names no longer go blank again after Refresh names.
+• The demo no longer says NO COMPUTER a moment after it starts.
+```
+
+**Bluetooth is left out of What's New on purpose, even if it goes into this
+build.** What's New is read by every customer, and while only chosen accounts
+can see Bluetooth, a line about it would announce something they cannot open.
+This line is for the version where Bluetooth opens to everyone, not this one:
+
+```
+• Bluetooth (beta): play with no computer, through a Bluetooth MIDI adapter on your unit.
+```

@@ -31,17 +31,40 @@ a real one yet — a friend of Justin's is the first tester. After that:
 - **Axe-Fx II: tuner, tempo, scene names, the preset name list.** Each needs a
   recording of what the unit sends, from the tester's rig.
 - **AX8.** Easy once the Axe-Fx II is proven: it is an Axe-Fx II with fewer
-  blocks and a different model byte. Needs an AX8 owner to test.
+  blocks and a different model byte. **A friend of Justin's is willing to
+  test one** (8 October). The plan offered that day, and not yet given a go:
+  first the computer app stops sending FM3 messages to a unit it cannot
+  drive (today it recognises an AX8 and then talks to it like an FM3), and
+  shows an AX8 look-only, with every change blocked. Then four short sessions
+  on the tester's rig: look only, small changes never saved, adding and
+  changing blocks, and saving last of all, into a spare slot. None of it
+  needs a phone build: it is the computer app, which updates itself, and
+  ordinary phone updates. The tester needs free access, given by email as
+  for any tester.
 - **FX8 and FX8 Mk II.** Medium to hard. Fractal never published how it talks,
   and it has an 8-slot chain instead of a grid. Needs an owner and recordings
   of FX8-Edit.
 - **Original Axe-Fx (Standard, Ultra).** Hard. A different language, no USB
   (a MIDI cable interface), no scenes, no X/Y. Needs an owner.
 
+## The watch
+
+- **Straight to the computer over Wi-Fi, with no phone.** Justin asked on 4
+  October whether the watch could skip the phone and talk to the computer on
+  the same Wi-Fi. Wake on tap went first instead (1.86.83: the phone stays
+  locked in a pocket and each watch tap wakes it), and this was parked as "a
+  good second step later". What it would take: the watch sends its taps to
+  the computer app's own page on the home network (port 5056, the one
+  "Playing with no internet" uses), and has to be told the computer's
+  address once, by the phone or by typing it, because Apple does not let a
+  watch look for it. What it would be like: fine for scenes, pedals and
+  presets, but only on the computer's own Wi-Fi (often missing at a gig),
+  a choppy tuner, because Apple lets a watch ask over and over but never
+  keep a line open, and more watch battery while it is open. It needs a
+  build, since watch code only reaches anyone inside the app, and trying on
+  a real watch before it is worth one.
+
 ## Waiting on something
 
-- **The GitHub description** still says "AI-powered preset builder…". It
-  needs changing by hand on the repository's page (the gear next to About).
-- **RevenueCat's sample products.** The test store still holds the three
-  sample packages RevenueCat starts every project with. They need deleting
-  in the RevenueCat dashboard.
+Nothing right now. The GitHub description and RevenueCat's sample products
+were both done by Justin on 29 September.
