@@ -388,7 +388,9 @@ and MIDI Out (for example a CME WIDI Uhost with a CME C2MIDI Pro cable). It
 is part of the full version, for everyone who has unlocked the app, and is
 marked beta wherever it appears. Signed in with the demo account in App
 Review Information, it is here: tap the gear at the top right for
-Settings, then Phone & computer, then BLUETOOTH (BETA). It needs a Fractal
+Settings, then Bluetooth (beta). (On the very first launch, before the
+app has updated itself, it is under Settings, then Phone & computer, then
+BLUETOOTH (BETA).) It needs a Fractal
 unit with an adapter on it, which you will not have, so a video of it
 working, filmed on an iPhone with a real AM4, is here:
 [VIDEO LINK — Justin films it on the TestFlight copy]
@@ -439,8 +441,10 @@ buttons on the Bluetooth page open amazon.com.
 
 **Bluetooth is in this version, open to everyone who has unlocked the app.**
 So its paragraph is in the block above, and it names no list of accounts:
-there is none any more. The card on Phone & computer shows to anybody who
-has paid, the same as the rest of the full version.
+there is none any more. The Bluetooth (beta) row on Settings shows to
+anybody who has paid, the same as the rest of the full version. (Until
+1.87.4 it was a card on Phone & computer; a fresh install of the 1.87.1
+build shows it there until its first update arrives.)
 
 **Four things before that block is pasted:**
 
@@ -460,8 +464,8 @@ has paid, the same as the rest of the full version.
     these notes. If that iPhone has already allowed Bluetooth for Fractal
     Remote, delete the app and install it again from TestFlight first, so
     the question shows.
-  - **In this order:** the Bluetooth (beta) page (Settings, Phone &
-    computer, BLUETOOTH (BETA)) → tap Connect → the iPhone asks to allow
+  - **In this order:** the Bluetooth (beta) page (Settings, Bluetooth
+    (beta)) → tap Connect → the iPhone asks to allow
     Bluetooth, tap Allow → Apple's Bluetooth screen opens → tap the adapter
     and wait until it says Connected → tap Done → the page says "Connected ·
     AM4 answering" → change a preset and then a scene on the phone, and show
@@ -686,7 +690,7 @@ No hardware? The app has a full demo that needs no account and no gear:
   3. Tap "Start free demo"
   4. Choose any unit, then tap "Play with ..."
 
-Bluetooth (beta): tap the gear at the top right for Settings, then Phone & computer, then BLUETOOTH (BETA). It needs a Bluetooth MIDI adapter on a Fractal unit; a video of it working is at [VIDEO LINK].
+Bluetooth (beta): tap the gear at the top right for Settings, then Bluetooth (beta) (on the very first launch, before the app updates itself: Settings, then Phone & computer, then BLUETOOTH (BETA)). It needs a Bluetooth MIDI adapter on a Fractal unit; a video of it working is at [VIDEO LINK].
 ```
 
 Use the same video link as Apple's notes.

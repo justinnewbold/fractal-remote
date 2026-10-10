@@ -38,7 +38,7 @@ import Note from '../components/Note'
 import Press from '../components/Press'
 
 /**
- * Settings → Phone & computer → Bluetooth (beta).
+ * Settings → Bluetooth (beta).
  *
  * The phone talking straight to the unit, through a Bluetooth MIDI adapter
  * plugged into the unit's MIDI In and Out, with no computer anywhere.

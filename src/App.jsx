@@ -12,8 +12,8 @@ import { CabPicker, Backup } from './components/Hardware'
 import Gig from './components/Gig'
 import TapTempo from './components/TapTempo'
 import MetronomeBeat from './components/MetronomeBeat'
-import { setMetronome, useMetronome, useUnitMetronome } from './lib/metronome'
-import { PLACES as METRONOME_PLACES, metronomeNote, unitMetronome } from '../shared/metronome.mjs'
+import { setMetronome, useMetronome, useUnitHeardOn, useUnitMetronome } from './lib/metronome'
+import { metronomeNote, placeLit, placesFor, unitClick } from '../shared/metronome.mjs'
 import { deviceSlug as slugOfUnit } from '../shared/device-slug.mjs'
 import SaveBar, { SaveLate } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
@@ -587,6 +587,10 @@ export default function App() {
   const rigBpm = useDevice((s) => s.bpm)
   const [clickSaid, setClickSaid] = useState(null)
   useUnitMetronome(slugOfUnit(device), status === 'live' && !isDemo())
+  /* Where the unit's click can be switched (not an AM4, not the demo), and whether the unit has said it is on. */
+  const clickHere = { demo: isDemo() }
+  const unitCan = unitClick(slugOfUnit(device), clickHere)
+  const clickHeard = useUnitHeardOn(slugOfUnit(device))
   /*
    * The block the volume moves, which is also the reason there is a speaker in
    * the bar at all. The output block's Level is the whole preset's volume —
@@ -5145,7 +5149,7 @@ export default function App() {
               <SetupRow
                 key="metronome"
                 title="Metronome"
-                status={metronomeNote(clickSetting, slugOfUnit(device), rigBpm)}
+                status={metronomeNote(clickSetting, slugOfUnit(device), rigBpm, { ...clickHere, heard: clickHeard })}
                 onClick={() => setSetupPage('metronome')}
               />
               {/* The one row the phone has not got: somebody with a rig on the
@@ -5908,12 +5912,14 @@ export default function App() {
             </div>
             <p className="silk-label setup-group">Where it clicks</p>
             <div className="setup-rows">
-              {METRONOME_PLACES.map((p) => (
+              {placesFor(unitCan.can).map((p) => (
                 <SetupRow
                   key={`metronome-${p.key}`}
-                  title={`${p.key === 'phone' ? 'This screen' : p.key === 'both' ? 'Both' : p.label}${clickSetting.where === p.key ? ' ✓' : ''}`}
+                  title={`${p.key === 'phone' ? 'This screen' : p.key === 'both' ? 'Both' : p.label}${placeLit(clickSetting, p.key, unitCan.can) ? ' ✓' : ''}`}
                   status={p.key === 'phone' ? 'Beeps and flashes here' : p.key === 'both' ? 'The unit clicks and this screen keeps time with it' : p.note}
                   onClick={async () => {
+                    /* The only row where the unit cannot click: a saved Unit stays for when it can. */
+                    if (!unitCan.can) return
                     setClickSaid(null)
                     const said = await setMetronome({ where: p.key }, slugOfUnit(device))
                     if (said?.ok === false && !said?.unsupported) setClickSaid('The unit didn’t take it. Check it’s connected, then try again.')
@@ -5928,9 +5934,13 @@ export default function App() {
             ) : null}
             <p className="footnote">
               {`It keeps the unit’s tempo${Number.isFinite(rigBpm) ? `, ${Math.round(rigBpm)} BPM right now` : ''}: tap tempo changes it. ${
-                unitMetronome(slugOfUnit(device))
+                unitCan.can
                   ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.'
-                  : 'This unit has no metronome the app can switch, so only this screen keeps time.'
+                  : unitCan.why.replace(/(only )?the phone keeps time/, (_m, only) => `${only || ''}this screen keeps time`)
+              }${
+                unitCan.can && clickSetting.on && clickSetting.where === 'unit' && !clickHeard
+                  ? ' Until the unit says its click is on, this screen keeps time as well.'
+                  : ''
               }`}
             </p>
           </div>
