@@ -1367,7 +1367,7 @@ export function run(test) {
      * Over Bluetooth (and on an AM4) the unit's click is not offered at all,
      * the page says why, and a Unit picked earlier clicks on the phone.
      */
-    assert.match(settings, /const clickHere = \{ bluetooth: bluetooth && !demo \} const unitCan = unitClick\(rigSlug, clickHere\)/)
+    assert.match(settings, /const clickHere = \{ bluetooth: bluetooth && !demo, demo \} const unitCan = unitClick\(rigSlug, clickHere\)/)
     assert.match(settings, /placesFor\(unitCan\.can\)\.map/, 'Unit and Both are offered where the unit cannot click')
     assert.match(settings, /unitCan\.can \? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to\.' : unitCan\.why/)
     assert.match(flat('mobile/App.js'), /useUnitMetronome\(rigSlug, unitHere && !demo, \{ bluetooth \}\)/, 'a refused click is still sent on every Bluetooth arrival')

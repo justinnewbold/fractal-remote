@@ -9,7 +9,7 @@
 //   - parameter writes take real units ({"value": 9} for a 0-10 gain), not 0-1
 //   - /preset/store commits to a slot even when capabilities report supportsSave:false
 
-import { unitMetronomeRequest } from '../../shared/metronome.mjs'
+import { unitMetronome, unitMetronomeRequest } from '../../shared/metronome.mjs'
 import { rememberedRefusal, unsupportedMemo } from '../../shared/unsupported.mjs'
 import { logDebug } from './debugLog.js'
 import { EXCLUDED_BLOCKS, safeParams } from './guardrails.js'
@@ -711,6 +711,24 @@ export const setUnitMetronome = (slug, on) => {
   const ask = unitMetronomeRequest(slug, on)
   if (!ask || mock) return Promise.resolve(ask ? { ok: true, simulated: true } : { ok: false, unsupported: true })
   return request(ask.path, { method: ask.method, body: JSON.stringify(ask.body) })
+}
+
+/**
+ * Where the unit says its metronome switch is — the phone's readUnitMetronome.
+ * "ok" to the write only means the unit did not object, so until this reads
+ * back as on, this screen keeps time under Unit as well. null when nothing
+ * came back, and always in the demo.
+ */
+export async function readUnitMetronome(slug) {
+  const how = unitMetronome(slug)
+  if (!how || how.kind !== 'block' || mock) return null
+  try {
+    const res = await request(`/preset/blocks/${how.eid}/readrange`, { method: 'POST', body: JSON.stringify({ pids: [how.paramId] }) })
+    const value = res?.[how.paramId] ?? res?.[String(how.paramId)]
+    return Number.isFinite(value) ? value : null
+  } catch {
+    return null
+  }
 }
 
 /**

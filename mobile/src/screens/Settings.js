@@ -23,8 +23,8 @@ import {
 } from '../lib/relay'
 import { chooseHost } from '../lib/link'
 import { useRig } from '../lib/rig'
-import { setMetronome, useMetronome } from '../lib/metronome'
-import { metronomeNote, placesFor, unitClick } from '../lib/metronome-rules'
+import { setMetronome, useMetronome, useUnitHeardOn } from '../lib/metronome'
+import { metronomeNote, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
 import {
@@ -226,9 +226,11 @@ export default function Settings({
    * and whether it answers, which Mac the phone is on, what size the tiles are.
    */
   const demo = useDemo()
-  /* Where the unit's own click can be switched from here: not over Bluetooth, not on an AM4. */
-  const clickHere = { bluetooth: bluetooth && !demo }
+  /* Where the unit's own click can be switched from here: not over Bluetooth, not on an AM4, not in the demo. */
+  const clickHere = { bluetooth: bluetooth && !demo, demo }
   const unitCan = unitClick(rigSlug, clickHere)
+  /* And whether the unit has said its click is on: until it does, the phone keeps time under Unit too. */
+  const clickHeard = useUnitHeardOn(rigSlug)
   /* Which one, and told when it changes. Read as `demoUnit()` this never
      redrew, so the five buttons stayed lit on whichever unit the app started
      as however many times they were pressed. */
@@ -434,7 +436,11 @@ export default function Settings({
             ) : null}
             {/* "A metronome that plays out loud that can be toggled on and
                 off in settings." On the unit, the phone or both. */}
-            <SetupRow title="Metronome" status={metronomeNote(clickSetting, rigSlug, rigBpm, clickHere)} onPress={() => setPage('metronome')} />
+            <SetupRow
+              title="Metronome"
+              status={metronomeNote(clickSetting, rigSlug, rigBpm, { ...clickHere, heard: clickHeard })}
+              onPress={() => setPage('metronome')}
+            />
           </Group>
 
           <Group title="Help">
@@ -998,10 +1004,16 @@ export default function Settings({
               onPress={() => changeClick({ on: !clickSetting.on })}
             />
             <Section>Where it clicks</Section>
-            {/* Only Phone where the unit's click cannot be switched: Unit and Both would click nowhere. */}
+            {/* Only Phone where the unit's click cannot be switched: Unit and Both would click nowhere.
+                It is lit then, being what clicks, and a tap on it keeps a saved Unit for when the unit can. */}
             {placesFor(unitCan.can).map((p) => (
               <View key={p.key} style={{ gap: space.xs }}>
-                <Press label={p.label} tone="live" on={clickSetting.where === p.key} onPress={() => changeClick({ where: p.key })} />
+                <Press
+                  label={p.label}
+                  tone="live"
+                  on={placeLit(clickSetting, p.key, unitCan.can)}
+                  onPress={() => (unitCan.can ? changeClick({ where: p.key }) : null)}
+                />
                 <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{p.note}</Text>
               </View>
             ))}
@@ -1009,6 +1021,10 @@ export default function Settings({
             <Note tone="hint">
               {`It keeps the unit’s tempo${Number.isFinite(rigBpm) ? `, ${Math.round(rigBpm)} BPM right now` : ''}: tap tempo changes it. ${
                 unitCan.can ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.' : unitCan.why
+              }${
+                unitCan.can && clickSetting.on && clickSetting.where === 'unit' && !clickHeard
+                  ? ' Until the unit says its click is on, the phone keeps time as well.'
+                  : ''
               }`}
             </Note>
             {/* "Same with the watch, metronome that can beep on the watch."

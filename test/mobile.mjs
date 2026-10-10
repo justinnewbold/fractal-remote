@@ -4006,11 +4006,24 @@ export function run(test) {
     assert.match(m.metronomeNote(unit, 'am4', 120), /only the phone keeps time/)
     /* The phone's own click hears the same rule, from the unit and the link it is on. */
     const metronome = read('mobile/src/lib/metronome.js').replace(/\s+/g, ' ')
-    assert.match(metronome, /const can = useUnitCan\(\) const on = clicks\(s, can\)\.phone/, 'the phone stays silent where the unit cannot click')
+    assert.match(metronome, /const \{ can, heard: heardOn \} = useUnitCan\(\) const on = clicks\(s, can, heardOn\)\.phone/, 'the phone stays silent where the unit cannot click')
     assert.match(metronome, /const can = unitClick\(slug, here\)\.can const before = clicks\(setting, can\)\.unit/)
-    assert.match(metronome, /if \(!present \|\| !clicks\(setting, unitClick\(slug, \{ bluetooth \}\)\.can\)\.unit\) return/)
+    assert.match(metronome, /if \(!clicks\(setting, unitClick\(slug, \{ bluetooth \}\)\.can\)\.unit\) return switchUnit\(slug, true\)/)
     /* "ok" only means the unit did not object: what it then says it is at goes into the log. */
     assert.match(metronome, /readUnitMetronome\(slug\) \.then\(/)
+    /* And the demo's unit makes no sound, so Unit there is the phone. */
+    assert.equal(m.unitClick('fm3', { demo: true }).can, false, 'the demo says the unit clicks, and nothing does')
+    assert.match(m.unitClick('fm3', { demo: true }).why, /demo/)
+    assert.match(metronome, /const demo = isDemo\(\) const bluetooth = useBluetoothOn\(\) && !demo return \{ can: unitClick\(slug, \{ bluetooth, demo \}\)\.can/)
+    /* Only Phone offered, so Phone is lit, and tapping it keeps a saved Unit. */
+    assert.equal(m.placeLit(unit, 'phone', false), true, 'the one row offered is not lit, though it is what clicks')
+    assert.equal(m.placeLit(unit, 'unit', true), true)
+    assert.equal(m.placeLit(unit, 'phone', true), false)
+    const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
+    assert.match(settings, /on=\{placeLit\(clickSetting, p\.key, unitCan\.can\)\} onPress=\{\(\) => \(unitCan\.can \? changeClick\(\{ where: p\.key \}\) : null\)\}/, 'tapping the only row wipes a saved Unit')
+    const web = read('src/App.jsx').replace(/\s+/g, ' ')
+    assert.match(web, /placeLit\(clickSetting, p\.key, unitCan\.can\) \? ' ✓' : ''/)
+    assert.match(web, /if \(!unitCan\.can\) return setClickSaid\(null\)/)
     const device = read('mobile/src/lib/device.js').replace(/\s+/g, ' ')
     assert.match(device, /export async function readUnitMetronome\(slug\) \{ const how = unitMetronome\(slug\) if \(!how \|\| how\.kind !== 'block' \|\| demoDevice\(\)\) return null/)
     assert.match(device, /const eid = how\.eid try \{ const res = await post\(`\/preset\/blocks\/\$\{eid\}\/readrange`, \{ pids: \[how\.paramId\] \}\)/)
@@ -4019,6 +4032,106 @@ export function run(test) {
     assert.equal(hostAllows('POST', '/preset/blocks/1/readrange'), true)
     /* And the demo's units click without "the unit didn't take it". */
     assert.match(device, /if \(!ask \|\| demoDevice\(\)\) return Promise\.resolve\(ask \? \{ ok: true, simulated: true \} : \{ ok: false, unsupported: true \}\)/)
+  })
+
+  test('under Unit the phone keeps time until the unit says its own click is on', async () => {
+    /*
+     * "It doesn't turn it on the unit on the FM3 or the AM4. It only works on
+     * the phone." The FM3 answers the write "ok" whenever it does not object,
+     * and nobody has seen one act on its switch — so Unit on his FM3 clicked
+     * nowhere. Now the phone keeps time under Unit until the unit's switch
+     * reads back as on, and stops the moment it does.
+     */
+    const m = await import('../shared/metronome.mjs')
+    const unit = { on: true, where: 'unit' }
+    assert.deepEqual(m.clicks(unit, true, false), { unit: true, phone: true, watch: false }, 'Unit with nothing heard clicks nowhere')
+    assert.deepEqual(m.clicks(unit, true, true), { unit: true, phone: false, watch: false })
+    assert.deepEqual(m.clicks({ on: true, where: 'phone' }, true, false), { unit: false, phone: true, watch: false })
+    assert.deepEqual(m.clicks({ on: true, where: 'both' }, true, false), { unit: true, phone: true, watch: false })
+    assert.equal(m.switchHeardOn(1), true)
+    assert.equal(m.switchHeardOn(0), false)
+    assert.equal(m.switchHeardOn(null), false, 'no answer is taken for a click')
+    assert.match(m.metronomeNote(unit, 'fm3', 120, { heard: false }), /on the phone until the unit says its click is on$/)
+    assert.match(m.metronomeNote(unit, 'fm3', 120, { heard: true }), /on the unit$/)
+
+    /* Run, not read: the phone's metronome.js beside stand-ins for the phone and a unit that answers. */
+    const dir = mkdtempSync(join(tmpdir(), 'click-'))
+    try {
+      const esm = (src) => src.replace(/from '\.\/([\w.-]+)'/g, (whole, name) => (/\.m?js$/.test(name) ? whole : `from './${name}.js'`))
+      const files = {
+        'package.json': '{ "type": "module" }',
+        'react.js': 'export const useEffect = (fn) => { globalThis.__clickEffect = fn }\nexport const useSyncExternalStore = (sub, get) => get()\n',
+        'storage.js': 'export default { getItem: async () => null, setItem: async () => {} }\n',
+        'audio.js': 'export const createAudioPlayer = () => ({ seekTo() {}, play() {} })\nexport const setAudioModeAsync = async () => {}\n',
+        'click.js': 'export default 0\n',
+        'device.js': `
+          export const writes = []
+          export let switchAt = null
+          export const __answer = (v) => { switchAt = v }
+          export const setUnitMetronome = async (slug, on) => { writes.push(slug + ' ' + (on ? 'on' : 'off')); return { ok: true } }
+          export const readUnitMetronome = async () => switchAt
+        `,
+        'rig.js': "export const useRig = (pick) => pick({ deviceSlug: 'fm3' })\n",
+        'bluetooth.js': 'export const useBluetoothOn = () => false\n',
+        'demo.js': 'export const isDemo = () => false\n',
+        'feedback.js': 'export const tick = () => {}\n',
+        'debugLog.js': 'export const said = []\nexport const logDebug = (...a) => said.push(a.join(" "))\n',
+        'unsupported.js': 'export const isUnsupported = () => false\n',
+        'metronome-rules.js': read('mobile/src/lib/metronome-rules.js'),
+        'metronome.js': esm(read('mobile/src/lib/metronome.js'))
+          .replace("from 'react'", "from './react.js'")
+          .replace("from '@react-native-async-storage/async-storage'", "from './storage.js'")
+          .replace("from 'expo-audio'", "from './audio.js'")
+          .replace("from '../../assets/click.wav'", "from './click.js'")
+      }
+      for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+      const at = (f) => pathToFileURL(join(dir, f)).href
+      const click = await import(at('metronome.js'))
+      const unitEnd = await import(at('device.js'))
+      const log = await import(at('debugLog.js'))
+      const settle = async () => {
+        for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r))
+      }
+
+      /* Unit picked on an FM3 that says nothing back: written on, and the phone keeps time. */
+      await click.setMetronome({ on: true, where: 'unit' }, 'fm3')
+      await settle()
+      assert.deepEqual(unitEnd.writes, ['fm3 on'])
+      assert.equal(click.unitHeardOn('fm3'), false, 'a unit that said nothing is taken to be clicking')
+      assert.ok(log.said.some((l) => /did not say where its metronome switch is/.test(l)), 'the log does not say the unit was silent')
+
+      /* Picked again once the FM3 does answer: heard on, and only for that unit. */
+      unitEnd.__answer(1)
+      await click.setMetronome({ where: 'phone' }, 'fm3')
+      await click.setMetronome({ where: 'unit' }, 'fm3')
+      await settle()
+      assert.deepEqual(unitEnd.writes, ['fm3 on', 'fm3 off', 'fm3 on'])
+      assert.equal(click.unitHeardOn('fm3'), true, 'the unit said its click is on, and the phone keeps clicking over it')
+      assert.equal(click.unitHeardOn('fm9'), false, 'one unit heard is every unit heard')
+      assert.ok(log.said.some((l) => /the unit says its metronome switch is at 1/.test(l)))
+
+      /* Off is believed at once: the phone never goes quiet waiting on an answer. */
+      await click.setMetronome({ on: false }, 'fm3')
+      assert.equal(click.unitHeardOn('fm3'), false)
+
+      /* An answer of "off" after an "on" is not a click either. */
+      unitEnd.__answer(0)
+      await click.setMetronome({ on: true }, 'fm3')
+      await settle()
+      assert.equal(click.unitHeardOn('fm3'), false, 'a switch read back as off is heard as on')
+
+      /* And a unit that goes is no longer heard: the next one has to say so again. */
+      unitEnd.__answer(1)
+      click.useUnitMetronome('fm3', true)
+      globalThis.__clickEffect()
+      await settle()
+      assert.equal(click.unitHeardOn('fm3'), true, 'a unit arriving with Unit on is not asked where its switch is')
+      click.useUnitMetronome('fm3', false)
+      globalThis.__clickEffect()
+      assert.equal(click.unitHeardOn('fm3'), false, 'a unit that went is still heard clicking')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   test('the metronome clicks where it is told, with each unit’s own switch', async () => {
@@ -7017,6 +7130,25 @@ export function run(test) {
       /set\(\{ macName: String\(name\), hostVersion: version \? String\(version\) : null \}\)/,
       'the version the computer sends is still thrown away'
     )
+
+    /*
+     * And a new version on its own reaches the screen. The computer card's red
+     * "Update the computer app" line reads it, and an updated computer keeps
+     * its name, so set() took the new version for a no-change and the red line
+     * stayed up after the update had happened. Every field of the link state is
+     * in that guard, so the next one added cannot be forgotten the same way.
+     */
+    const guard = link.match(/const set = \(patch\) => \{[\s\S]*?if \(([\s\S]*?)\) \{\s*return/)[1]
+    const fields = [
+      ...link
+        .match(/const initial = \{([\s\S]*?)\n\}/)[1]
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .matchAll(/^\s*(\w+):/gm)
+    ].map((m) => m[1])
+    assert.ok(fields.includes('hostVersion') && fields.length >= 7, `the link state was not read: ${fields}`)
+    for (const field of fields) {
+      assert.match(guard, new RegExp(`next\\.${field}\\b`), `set() throws away a change to ${field} alone`)
+    }
 
     /*
      * AND ASKED AGAIN. "The Mac's version line still says did not say" — on a

@@ -38,23 +38,41 @@ export function metronomeSetting(saved) {
 
 /**
  * Which ends click, for a setting — on a unit whose click the app can switch
- * (`can`, from unitClick) or not.
+ * (`can`, from unitClick) or not, and whose own switch has been HEARD to be
+ * on since the app last switched it (`heard`) or not.
  *
  * "The unit metronome click is not working… It only works on the phone, not
  * the unit." On an AM4, and on any unit over Bluetooth, the app cannot switch
  * the unit's click — and Unit picked there used to mean NOTHING clicked
  * anywhere, the phone included, under a line saying the phone kept time. So
  * where the unit cannot click, Unit falls back to the phone, and the choice
- * is kept for when it can (his FM3 through the computer).
+ * is kept for when it can.
+ *
+ * And where it can, the unit has to say so first. "It doesn't turn it on the
+ * unit on the FM3" either: the FM3 answers the write "ok" whenever it does not
+ * object, which is not the same as clicking. So under Unit the phone keeps
+ * time as well until the unit's own switch reads back as on, and stops the
+ * moment it does. A click from the phone beats no click at all.
  */
-export const clicks = (setting, can = true) => {
+export const clicks = (setting, can = true, heard = true) => {
   const s = metronomeSetting(setting)
   return {
     unit: s.on && can && (s.where === 'unit' || s.where === 'both'),
-    phone: s.on && (s.where === 'phone' || s.where === 'both' || (!can && s.where === 'unit')),
+    phone: s.on && (s.where === 'phone' || s.where === 'both' || (s.where === 'unit' && (!can || !heard))),
     watch: s.on && s.watch
   }
 }
+
+/**
+ * Whether a place's row is lit. Where the unit cannot click only Phone is
+ * offered (placesFor), and the phone is then what clicks whatever was saved —
+ * so Phone is lit, and tapping it is not a new choice: a saved Unit stays, for
+ * when the unit can click again.
+ */
+export const placeLit = (setting, key, can = true) => (can ? metronomeSetting(setting).where === key : key === 'phone')
+
+/** A unit's switch read back (normalised 0..1, or an ordinal), as heard on or not. */
+export const switchHeardOn = (value) => Number.isFinite(value) && value >= 0.5
 
 /*
  * The unit's Metronome switch, per unit.
@@ -86,10 +104,18 @@ export function unitMetronome(slug) {
  * Whether the app can switch this unit's click from here: `{ can: true }`, or
  * `{ can: false, why }` in plain words for the Metronome page. Over Bluetooth
  * (beta) the phone sends a unit only the handful of messages it is sure of,
- * and a setting is not one of them.
+ * and a setting is not one of them — nor can it switch OFF a click the unit
+ * was already making when Bluetooth was turned on, so the page says so.
  */
-export function unitClick(slug, { bluetooth = false } = {}) {
-  if (bluetooth) return { can: false, why: 'Over Bluetooth the app can’t switch the unit’s click, so the phone keeps time.' }
+export function unitClick(slug, { bluetooth = false, demo = false } = {}) {
+  /* The demo's unit makes no sound: Unit there clicked nowhere, under a line saying the unit did. */
+  if (demo) return { can: false, why: 'The demo’s unit makes no sound, so the phone keeps time.' }
+  if (bluetooth) {
+    return {
+      can: false,
+      why: 'Over Bluetooth the app can’t switch the unit’s click, so the phone keeps time. If the unit was already clicking, switch its Metronome off on the unit.'
+    }
+  }
   if (String(slug || '').toLowerCase() === 'am4') return { can: false, why: 'The app can’t switch the AM4’s own click yet, so the phone keeps time.' }
   if (!unitMetronome(slug)) return { can: false, why: 'This unit has no metronome the app can switch, so only the phone keeps time.' }
   return { can: true }
@@ -125,7 +151,11 @@ export function nextBeat(startedAt, now, beat) {
   return startedAt + n * beat
 }
 
-/** What the setting says under it, in his words. `here` is how the unit is reached ({ bluetooth }). */
+/**
+ * What the setting says under it, in his words. `here` is how the unit is
+ * reached ({ bluetooth, demo }) and whether its own switch has been heard on
+ * ({ heard }).
+ */
 export function metronomeNote(setting, slug, bpm, here = {}) {
   const s = metronomeSetting(setting)
   if (!s.on) return 'Off'
@@ -133,5 +163,6 @@ export function metronomeNote(setting, slug, bpm, here = {}) {
   const place = PLACES.find((p) => p.key === s.where)?.label || 'Unit'
   if ((s.where === 'unit' || s.where === 'both') && !unitMetronome(slug)) return `On, ${at}. This unit has no metronome the app can switch, so only the phone keeps time.`
   if ((s.where === 'unit' || s.where === 'both') && !unitClick(slug, here).can) return `On, ${at}, on the phone`
+  if (s.where === 'unit' && here.heard === false) return `On, ${at}, on the phone until the unit says its click is on`
   return `On, ${at}, on the ${place.toLowerCase() === 'both' ? 'unit and the phone' : place.toLowerCase()}`
 }
