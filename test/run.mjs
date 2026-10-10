@@ -8379,15 +8379,34 @@ test('a tap faster than the unit takes is a mis-tap: nothing is sent, nothing is
     })
   }
   assert.deepEqual(replay([31041, 31258]), [null, null], 'the bounce made a tempo')
-  const after = replay([31641, 33940, 34124, 34291])
-  for (const bad of [200, 45, 48, 343]) assert.ok(!after.includes(bad), `${bad} went to the AM4 again`)
+  /* Exactly: two taps 2.3 s apart are 26, a tempo the AM4 takes; the quick pair after is nothing. */
+  assert.deepEqual(replay([31641, 33940, 34124, 34291]), [null, 26, null, null], 'a tempo nobody played went to the AM4')
   assert.deepEqual(replay([39759, 39925]), [null, null])
   assert.deepEqual(replay([2005806, 2006356, 2006956]), [null, 109, 104], 'the tempos he did play are lost')
   /* A pause then a quick pair is not averaged: the newer gap wins. */
   assert.equal(tempo.tappedBpm([0, 2300, 2800]), 120, 'a pause was averaged into the tempo')
-  /* A bounce is dropped from the count, so it cannot spoil the next tap either. */
-  assert.deepEqual(tempo.keepTaps([1000], 1217, am4), [1217])
+  /* Steady taps, a stop to listen, one more tap: the pause is not a tempo, and the next tap is back on the beat. */
+  assert.equal(tempo.tappedBpm([500, 1000, 1500, 3500], am4), null, 'the pause itself went to the unit as the tempo')
+  assert.deepEqual(replay([0, 500, 1000, 1500, 3500, 4000, 4500]), [null, 120, 120, 120, null, 120, 120])
+  /* A thumb's double touch (under 160 ms on an AM4) is ignored, so the next real tap still lands on the beat. */
+  assert.deepEqual(tempo.keepTaps([1000], 1100, am4), [1000], 'a double touch joined the count')
+  assert.deepEqual(replay([0, 500, 1000, 1080, 1500, 2000]), [null, 120, 120, 120, 120, 120], 'a double touch spoiled the next figure')
+  /* A gap only a little too fast is kept, for the average to smooth. */
+  assert.deepEqual(tempo.keepTaps([1000], 1217, am4), [1000, 1217])
   assert.deepEqual(tempo.keepTaps([1000], 1500, am4), [1000, 1500])
+  /* Steady tapping near the top of the range: some figures may be skipped, none is wrong. */
+  for (const [bpm, jitter] of [[240, 15], [245, 15], [200, 20], [120, 30], [60, 60]]) {
+    let seed = 7
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+    let taps = []
+    let at = 0
+    for (let i = 0; i < 300; i++) {
+      at += 60000 / bpm + (rnd() * 2 - 1) * jitter
+      taps = tempo.keepTaps(taps, at, am4)
+      const got = tempo.tappedBpm(taps, am4)
+      if (i > 1 && got != null) assert.ok(Math.abs(got - bpm) <= bpm * 0.15, `steady taps at ${bpm} sent ${got}`)
+    }
+  }
   assert.match(tapSrc, /<BpmBox [^>]*range=\{tempoRange\(currentDeviceSlug\(\)\)\}/)
   const stageSrc = readSrc(new URL('../mobile/src/screens/Stage.js', import.meta.url), 'utf8')
   assert.match(stageSrc, /<TempoBox[^>]*range=\{tempoRange\(device, caps\?\.via\)\}/)

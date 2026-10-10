@@ -2026,6 +2026,9 @@ export function run(test) {
     assert.deepEqual(stall.unit.state.heardWhileSending.map(hex), [], 'the press went to the AM4 while it was still sending the preset given up on')
     assert.equal(stall.unit.state.scene, 3, 'the press was lost')
     assert.equal(stall.unit.state.frozen, false)
+    /* Not again by itself: a read given up part-way would hold the line again on every visit. */
+    await assert.rejects(stall.get('/presets/5/scenes'), (e) => e.status === 501)
+    assert.deepEqual(stall.unit.state.dumped, [5], 'a preset given up on part-way was read again with nothing asking')
     /* Refresh names asks again: one stalled read does not turn the names off. */
     stall.wire.forgetSceneNames()
     stall.unit.opt.stallAfterHead = 0

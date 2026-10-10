@@ -1425,10 +1425,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const am4Names = new Map()
   /* A second ask for a slot already coming is the same read, not another four seconds. */
   const am4NamesComing = new Map()
+  /* A slot given up on part-way (a link too slow, a unit that stalled) is not read again by itself: only Refresh names asks. */
+  const am4NamesGaveUp = new Set()
   let am4DumpsOff = false
   function am4SceneNames(n) {
     presetNumber(n)
     if (am4Names.has(n)) return Promise.resolve({ number: n, names: am4Names.get(n) })
+    if (am4NamesGaveUp.has(n)) return Promise.reject(unsupported())
     if (!am4NamesComing.has(n)) {
       const coming = readAm4SceneNames(n).finally(() => am4NamesComing.delete(n))
       am4NamesComing.set(n, coming)
@@ -1463,6 +1466,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (!heardHead) {
         am4DumpsOff = true
         say('the AM4 did not answer a request for a stored preset; its scene names are not asked for again on this connection')
+      } else {
+        am4NamesGaveUp.add(n)
+        say(`gave up on the scene names of ${am4LocationCode(n)} part-way; Refresh names asks again`)
       }
       throw timedOut()
     }
@@ -2073,6 +2079,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       am4Names.clear()
       /* Refresh names is asked for: an AM4 that once did not answer is asked again. */
       am4DumpsOff = false
+      am4NamesGaveUp.clear()
     },
     close
   }
