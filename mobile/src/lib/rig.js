@@ -20,7 +20,7 @@ import { faultFrom, withdrawsFault } from './fault-rule'
 
 import * as device from './device'
 import { idOf, sameBlock } from './unit.mjs'
-import { TAP_REREAD_MS, keepTaps, tappedBpm, tempoSender } from './tempo'
+import { TAP_REREAD_MS, keepTaps, tappedBpm, tempoRange, tempoSender } from './tempo'
 import { watchEvery, probeSays, countQuiet, unitGone } from './unit-watch'
 import { DEFAULT_SLUG, deviceSlug } from './device-slug'
 import { adopt as adoptNames, forget as forgetNames, learn as learnName, nameOf } from './presetNames'
@@ -123,6 +123,9 @@ const initial = {
   /* Whether `error` is a complaint about the link, and so is withdrawn
      when the link comes back. See faultFrom. */
   errorLink: false,
+  /* When `error` was raised, so the Play screen can let it go after a while
+     (lib/fault-rule faultLeft) without clearing it. */
+  faultAt: 0,
   /*
    * Whether what answered is the simulation rather than a rig.
    *
@@ -167,6 +170,9 @@ export function set(patch) {
   if ('chainKnown' in patch && !('chainOutline' in patch) && patch.chainKnown !== state.chainOutline) {
     patch = { ...patch, chainOutline: null }
   }
+  /* Stamped where every fault passes. The same words raised again are news
+     again, and get their full time on screen. */
+  if (patch.error) patch = { ...patch, faultAt: Date.now() }
   state = { ...state, ...patch }
   emit()
 }
@@ -1968,7 +1974,9 @@ export async function tapTempo() {
    * that answer is the number this sent, so it agrees.
    */
   taps = keepTaps(taps, Date.now())
-  const guess = tappedBpm(taps)
+  /* The unit's own range: an AM4 refuses past 250, and a mis-tap is not a tempo. */
+  const range = tempoRange(state.deviceSlug, state.capabilities?.via)
+  const guess = tappedBpm(taps, range)
   if (guess != null) {
     /* The tempo lives in the preset, so a tap is a change to it — and a save
        that dropped the tempo somebody just set would be a save that lied. */

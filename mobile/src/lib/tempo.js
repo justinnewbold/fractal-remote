@@ -8,12 +8,45 @@
  * Tap gets you close; typing gets you exact. "On the tap button, let's do
  * where they hold the tap button they can manually enter in the beats per
  * minute they want." Both apps offer that box, so both apps have to agree on
- * what counts as a tempo — and the unit's own range is the whole of the rule:
- * 20 to 400 BPM. Anything outside it is refused here, in words, rather than
- * clamped somewhere downstream into a number nobody typed.
+ * what counts as a tempo — and the unit's own range is the whole of the rule.
+ * Anything outside it is refused here, in words, rather than clamped
+ * somewhere downstream into a number nobody typed.
+ *
+ * 20 to 400 is only the fallback, for a unit that has not said what it is.
  */
 export const BPM_MIN = 20
 export const BPM_MAX = 400
+export const ANY_BPM = Object.freeze({ min: BPM_MIN, max: BPM_MAX })
+
+/*
+ * WHAT A FRACTAL ACTUALLY TAKES: 24 TO 250.
+ *
+ * "If you tap too fast on the tap tempo, it moves the screen down and you
+ * accidentally hit the next button because it's giving the error the top of
+ * the screen." Two taps 217 ms apart are 276 BPM. That passed 20..400, went
+ * to his AM4, and the AM4 refused it: "A tempo of 276 is outside 24 to 250."
+ *
+ * The AM4's range was read off a real unit (Controllers → Tempo: "250 BPM" is
+ * the top of its scale and "107 BPM" sits at 0.367, so it runs 24 to 250 —
+ * ForgeFX's am4.ts, and AM4.TEMPO_MIN/MAX in the phone's fractal-sysex). The
+ * FM3, FM9 and Axe-Fx III editors give the same parameter the same 24 to 250,
+ * and the Bluetooth wire already holds every unit to it.
+ */
+export const UNIT_BPM = Object.freeze({ min: 24, max: 250 })
+const RANGES = { am4: UNIT_BPM, fm3: UNIT_BPM, fm9: UNIT_BPM, axefxiii: UNIT_BPM }
+
+const usable = (r) => (r && Number.isFinite(r.min) && Number.isFinite(r.max) && r.min < r.max ? r : ANY_BPM)
+
+/**
+ * The tempos this unit takes, by its slug (lib/device-slug) and how it is
+ * reached (capabilities.via). Over Bluetooth the phone's own wire refuses
+ * anything outside 24 to 250 whatever the unit, so that is its range there.
+ */
+export function tempoRange(slug, via) {
+  const key = String(slug || '').toLowerCase()
+  if (RANGES[key]) return RANGES[key]
+  return via === 'bluetooth' ? UNIT_BPM : ANY_BPM
+}
 
 /**
  * What typed text means as a tempo.
@@ -22,15 +55,16 @@ export const BPM_MAX = 400
  *   { empty }  — nothing typed; the caller leaves the tempo alone
  *   { error }  — a sentence for the person, never a code
  */
-export function checkBpm(text) {
+export function checkBpm(text, range = ANY_BPM) {
+  const { min, max } = usable(range)
   const raw = String(text ?? '').trim()
   if (!raw) return { empty: true }
   const n = Math.round(Number(raw.replace(/[^0-9.]/g, '')))
   if (!Number.isFinite(n) || !/^\d+(\.\d+)?$/.test(raw.replace(/\s+/g, ''))) {
     return { error: 'Type a tempo as a number, like 120.' }
   }
-  if (n < BPM_MIN || n > BPM_MAX) {
-    return { error: `${n} BPM is out of range — the unit takes ${BPM_MIN} to ${BPM_MAX}.` }
+  if (n < min || n > max) {
+    return { error: `${n} BPM is out of range — the unit takes ${min} to ${max}.` }
   }
   return { bpm: n }
 }
@@ -116,9 +150,11 @@ export const TAP_GAP_MAX_MS = 3200
 
 /**
  * @param {number[]} taps  when each tap happened, oldest first, in ms
+ * @param {{min:number, max:number}} [range]  the unit's tempos (tempoRange)
  * @returns {number|null}  whole BPM, or null while there is not yet a rhythm
  */
-export function tappedBpm(taps = []) {
+export function tappedBpm(taps = [], range = ANY_BPM) {
+  const { min, max } = usable(range)
   const times = (Array.isArray(taps) ? taps : []).filter((t) => Number.isFinite(t))
   if (times.length < 2) return null
 
@@ -133,9 +169,11 @@ export function tappedBpm(taps = []) {
 
   const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length
   const bpm = Math.round(60000 / mean)
-  /* Outside what the unit accepts is not a tempo, it is a mis-tap. Saying
-     nothing leaves the last good figure up, which is the honest answer. */
-  return bpm >= BPM_MIN && bpm <= BPM_MAX ? bpm : null
+  /* Outside what the unit accepts is not a tempo, it is a mis-tap — two
+     taps a thumb's bounce apart, most often. Saying nothing leaves the last
+     good figure up, which is the honest answer, and sends nothing for the
+     unit to refuse in a red line across the top of the screen. */
+  return bpm >= min && bpm <= max ? bpm : null
 }
 
 /**

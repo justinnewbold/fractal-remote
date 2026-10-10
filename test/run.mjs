@@ -8324,6 +8324,52 @@ test('an impossible tempo is refused in words, never clamped', () => {
   assert.match(tempo.checkBpm('1x0').error, /number/i)
 })
 
+/*
+ * "If you tap too fast on the tap tempo, it moves the screen down and you
+ * accidentally hit the next button because it's giving the error the top of
+ * the screen." Two taps 217 ms apart on his AM4 made 276, which passed 20..400,
+ * was sent, and was refused: "A tempo of 276 is outside 24 to 250."
+ */
+test('a tap faster than the unit takes is a mis-tap: nothing is sent, nothing is said', async () => {
+  const { AM4 } = await import('../mobile/src/lib/fractal-sysex.mjs')
+  const am4 = tempo.tempoRange('am4')
+  assert.deepEqual(am4, { min: 24, max: 250 })
+  assert.equal(am4.min, AM4.TEMPO_MIN, 'the tap rule and the Bluetooth wire disagree on the bottom')
+  assert.equal(am4.max, AM4.TEMPO_MAX, 'the tap rule and the Bluetooth wire disagree on the top')
+  for (const slug of ['fm3', 'fm9', 'axefxiii']) assert.deepEqual(tempo.tempoRange(slug), am4, slug)
+  assert.deepEqual(tempo.tempoRange('AM4'), am4, 'the slug is matched however it is written')
+  assert.deepEqual(tempo.tempoRange('device'), { min: 20, max: 400 }, 'a unit that has not named itself keeps the fallback')
+  assert.deepEqual(tempo.tempoRange(undefined), { min: 20, max: 400 })
+  assert.deepEqual(tempo.tempoRange('device', 'bluetooth'), am4, 'over Bluetooth the wire refuses past 250 whatever the unit')
+
+  /* His log, 09:59:31.041 and .258. */
+  assert.equal(tempo.tappedBpm([31041, 31258]), 276, 'the fallback range is unchanged')
+  assert.equal(tempo.tappedBpm([31041, 31258], am4), null, 'a 276 went to the AM4 again')
+  assert.equal(tempo.tappedBpm([0, 1000, 2000], am4), 60)
+  assert.equal(tempo.tappedBpm([0, 240], am4), 250, 'the top of the range is a tempo')
+  assert.equal(tempo.tappedBpm([0, 2600], am4), null, '23 BPM is below what the AM4 takes')
+
+  assert.match(tempo.checkBpm('276', am4).error, /24 to 250/)
+  assert.equal(tempo.checkBpm('276', am4).bpm, undefined)
+  assert.deepEqual(tempo.checkBpm('250', am4), { bpm: 250 })
+  assert.deepEqual(tempo.checkBpm('24', am4), { bpm: 24 })
+  assert.ok(tempo.checkBpm('23', am4).error)
+  assert.deepEqual(tempo.checkBpm('300'), { bpm: 300 }, 'no range given is the fallback')
+  assert.deepEqual(tempo.checkBpm('120', null), { bpm: 120 }, 'a missing range is the fallback, not a crash')
+
+  /* Both ends hand the unit's range in. */
+  const rigSrc = readSrc(new URL('../mobile/src/lib/rig.js', import.meta.url), 'utf8')
+  assert.match(rigSrc, /const range = tempoRange\(state\.deviceSlug, state\.capabilities\?\.via\)\s+const guess = tappedBpm\(taps, range\)/)
+  const tapSrc = readSrc(new URL('../src/components/TapTempo.jsx', import.meta.url), 'utf8')
+  assert.match(tapSrc, /tappedBpm\(taps\.current, tempoRange\(currentDeviceSlug\(\)\)\)/)
+  assert.match(tapSrc, /<BpmBox [^>]*range=\{tempoRange\(currentDeviceSlug\(\)\)\}/)
+  const stageSrc = readSrc(new URL('../mobile/src/screens/Stage.js', import.meta.url), 'utf8')
+  assert.match(stageSrc, /<TempoBox[^>]*range=\{tempoRange\(device, caps\?\.via\)\}/)
+  const boxSrc = readSrc(new URL('../mobile/src/components/TempoBox.js', import.meta.url), 'utf8')
+  assert.match(boxSrc, /\$\{range\.min\} to \$\{range\.max\} beats per minute/, 'the box names 20 to 400 to an AM4')
+  assert.doesNotMatch(boxSrc, /BPM_MIN|BPM_MAX/)
+})
+
 test('the Tap button opens the tempo box on a hold or a right-click, at both ends', () => {
   /* The button is TapTempo's now — Play and Edit both draw it — so that is where its hold is read. */
   const gig = readSrc(new URL('../src/components/TapTempo.jsx', import.meta.url), 'utf8')
@@ -8340,7 +8386,7 @@ test('the Tap button opens the tempo box on a hold or a right-click, at both end
   assert.match(gig, /useDismiss\(tapCell, \(\) => setTyping\(false\), \{ open: typing \}\)/, 'nothing closes the box on a tap elsewhere or Escape')
   // The box itself refuses with the shared words, and no longer sits unused in App.
   const box = readSrc(new URL('../src/components/BpmBox.jsx', import.meta.url), 'utf8')
-  assert.match(box, /checkBpm\(typed\)/, 'the box has its own idea of a valid tempo')
+  assert.match(box, /checkBpm\(typed, range\)/, 'the box has its own idea of a valid tempo')
   const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
   assert.ok(!/function BpmBox/.test(app), 'the tempo box is still defined in App.jsx, where nothing renders it')
   // The phone app: the same hold, the same check, from the same source.
@@ -8355,7 +8401,7 @@ test('the Tap button opens the tempo box on a hold or a right-click, at both end
    * its own idea of a valid tempo.
    */
   const tempoBox = readSrc(new URL('../mobile/src/components/TempoBox.js', import.meta.url), 'utf8')
-  assert.match(tempoBox, /checkBpm\(typed\)/, 'the phone checks a typed tempo by its own rule')
+  assert.match(tempoBox, /checkBpm\(typed, range\)/, 'the phone checks a typed tempo by its own rule')
   assert.match(tempoBox, /<Modal visible=\{!!open\}/, 'the tempo box is back in the page, where the keyboard covers it')
   /* The write is the screen's to hand down and the box's to call, so both ends
      of that are checked: a box wired to nothing looks identical to one that

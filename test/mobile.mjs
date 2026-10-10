@@ -1082,7 +1082,7 @@ export function run(test) {
       assert.match(rig, new RegExp(call), `${what} does not count as unsaved work`)
     }
     /* A tap only counts once it has become a number worth sending. */
-    assert.match(rig, /const guess = tappedBpm\(taps\) if \(guess != null\) \{ [^}]*noteEdited\(\)/, 'a tapped tempo does not count as unsaved work')
+    assert.match(rig, /const guess = tappedBpm\(taps, range\) if \(guess != null\) \{ [^}]*noteEdited\(\)/, 'a tapped tempo does not count as unsaved work')
 
     /* Moving around the rig is not editing it. */
     const moves = rig.slice(rig.indexOf('export function writeScene(index)'), rig.indexOf('export async function refreshSceneState()'))
@@ -3247,6 +3247,48 @@ export function run(test) {
       /\{error \? \( <Note tone="fault" onDismiss=\{\(\) => setError\(null\)\}>/,
       'the edit screen’s error still cannot be dismissed'
     )
+  })
+
+  test('the play screen’s fault floats over the screen and never moves it', async () => {
+    /*
+     * "If you tap too fast on the tap tempo, it moves the screen down and you
+     * accidentally hit the next button because it's giving the error the top
+     * of the screen. Can we just have it be like an overlay toast
+     * notification that doesn't move the screen at all?"
+     */
+    const stage = read('mobile/src/screens/Stage.js').replace(/\s+/g, ' ')
+    const end = stage.indexOf('</ScrollView>')
+    assert.ok(end > 0)
+    assert.ok(
+      stage.indexOf('<Note tone="fault" onDismiss={clearError}>') > end,
+      'the fault is back in the scrolling content, where it pushes the foot under a thumb'
+    )
+    assert.ok(stage.indexOf('sub="What to try"') > end, 'the fault’s fix is back in the scrolling content')
+    assert.match(stage, /<Toast open=\{!!error\}> \{error \? \( <Note tone="fault" onDismiss=\{clearError\}>/)
+    assert.match(stage, /sub="What to try" height=\{44\}/)
+    assert.doesNotMatch(stage, /setTimeout\([^)]*clearError/, 'the timer clears the store App reads to tell a failed first read')
+
+    const toast = read('mobile/src/components/Toast.js')
+    assert.match(toast, /position: 'absolute'/)
+    assert.doesNotMatch(toast, /top: '100%'/, 'the card hangs outside its parent, where a press may not reach it')
+    assert.doesNotMatch(toast, /from '\.\.\/lib\/rig'/, 'hiding the toast must never touch the store')
+    assert.match(toast, /announceForAccessibility/)
+    assert.match(toast, /isScreenReaderEnabled/, 'a timed message is gone before VoiceOver reads it')
+
+    const { faultLeft, FAULT_SHOWN_MS } = await import('../mobile/src/lib/fault-rule.js')
+    assert.ok(FAULT_SHOWN_MS >= 4000 && FAULT_SHOWN_MS <= 10000)
+    assert.equal(faultLeft({ error: null }, 5), 0)
+    assert.equal(faultLeft({ error: 'x', faultAt: 1000 }, 1000), FAULT_SHOWN_MS)
+    assert.equal(faultLeft({ error: 'x', faultAt: 1000 }, 1000 + FAULT_SHOWN_MS), 0)
+    assert.equal(faultLeft({ error: 'x', faultAt: 1000 }, 61000), 0, 'never negative')
+    assert.equal(
+      faultLeft({ error: 'Not connected to your computer.', errorLink: true, faultAt: 0 }, 1e12),
+      Infinity,
+      'a fault about the link describes now, and goes when the link is back'
+    )
+
+    const rig = read('mobile/src/lib/rig.js')
+    assert.match(rig, /if \(patch\.error\) patch = \{ \.\.\.patch, faultAt: Date\.now\(\) \}/, 'the same fault raised again is not news')
   })
 
   test('the phone wears the browser\u2019s header', () => {

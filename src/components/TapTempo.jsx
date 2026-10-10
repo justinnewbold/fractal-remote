@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { refusedAlready, setTempo } from '../lib/forgefx'
+import { currentDeviceSlug, refusedAlready, setTempo } from '../lib/forgefx'
 import { NO_TEMPO, isUnsupported } from '../../shared/unsupported.mjs'
 import { useDevice, refreshTempo, getSnapshot, chainNumberOf } from '../lib/deviceState'
-import { keepTaps, tappedBpm, tempoSender, TAP_REREAD_MS } from '../../shared/tempo.mjs'
+import { keepTaps, tappedBpm, tempoRange, tempoSender, TAP_REREAD_MS } from '../../shared/tempo.mjs'
 import { tick as haptic } from '../lib/feedback'
 import { useLongPress } from '../lib/longPress'
 import { useDismiss } from '../lib/dismiss'
@@ -167,7 +167,8 @@ export default function TapTempo({ onError, onChanged, where = 'bar' }) {
     clearTimeout(reread.current)
     haptic()
     taps.current = keepTaps(taps.current, Date.now())
-    const guess = tappedBpm(taps.current)
+    /* The unit's own range: an AM4 refuses past 250, and a mis-tap is not a tempo. */
+    const guess = tappedBpm(taps.current, tempoRange(currentDeviceSlug()))
     if (guess != null) {
       setTapped(guess)
       if (burst.current == null) {
@@ -279,7 +280,7 @@ export default function TapTempo({ onError, onChanged, where = 'bar' }) {
       {typing ? (
         <div className="gig-tempo" role="group" aria-label="Type a tempo">
           <span className="silk-label">Tempo</span>
-          <BpmBox bpm={bpm} autoFocus onSet={typeTempo} onError={onError} onDone={() => setTyping(false)} />
+          <BpmBox bpm={bpm} autoFocus onSet={typeTempo} range={tempoRange(currentDeviceSlug())} onError={onError} onDone={() => setTyping(false)} />
           <span className="hint">Enter sets it</span>
         </div>
       ) : null}

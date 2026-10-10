@@ -66,6 +66,8 @@ import { shortBlock } from '../lib/shortName'
 import { useWatchBridge, watchHow, watchPaired } from '../lib/watchBridge'
 import { findLooper } from '../lib/looper'
 import UnlockOffer from '../components/UnlockOffer'
+import Toast, { useStillNews } from '../components/Toast'
+import { faultLeft } from '../lib/fault-rule'
 import Note from '../components/Note'
 import { fixById, fixFor } from '../lib/troubleshooting'
 import Press from '../components/Press'
@@ -75,6 +77,7 @@ import Coach from '../components/Coach'
 import Looper from '../components/Looper'
 import Sheet from '../components/Sheet'
 import TempoBox from '../components/TempoBox'
+import { tempoRange } from '../lib/tempo'
 import Tuner from '../components/Tuner'
 import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 
@@ -90,6 +93,8 @@ const ofTunerOn = (s) => s.tunerOn
 const ofTuning = (s) => s.tuning
 const ofBpm = (s) => s.bpm
 const ofError = (s) => s.error
+const ofErrorLink = (s) => s.errorLink
+const ofFaultAt = (s) => s.faultAt
 const ofSlug = (s) => s.deviceSlug
 
 /**
@@ -148,7 +153,14 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
    * its state out here is how the keyboard came to be covering it.
    */
   const [typing, setTyping] = useState(false)
-  const error = useRig(ofError)
+  const fault = useRig(ofError)
+  const faultLink = useRig(ofErrorLink)
+  const faultAt = useRig(ofFaultAt)
+  /* The fault while it is still news (lib/fault-rule faultLeft). Hidden, never
+     cleared: App tells a rig that failed its first read by the store's copy. */
+  const error = useStillNews(fault, faultAt, faultLeft({ error: fault, errorLink: faultLink, faultAt }, Date.now()))
+    ? fault
+    : null
 
   const [refreshing, setRefreshing] = useState(false)
   /*
@@ -537,518 +549,532 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   )
 
   return (
-    <ScrollView
-      style={{ flex: 1 }}
-      /* The viewport, and everything in it: fit is the difference between
-         the two, less the grids. */
-      onLayout={(e) => setViewport(e.nativeEvent.layout.height)}
-      onContentSizeChange={(_w, h) => setContent(h)}
-      contentContainerStyle={{
-        padding: space.lg,
-        gap: tight ? space.md : space.lg,
-        paddingBottom: tight ? space.lg : space.xxl
-      }}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={() => reload()} tintColor={color.silkDim} />
-      }
-    >
-      {/* Above the faults, because a fault is about right now and this is
-          about the app itself — and below nothing, because this is the first
-          screen and the top of it is where an eye starts. */}
-      <UnlockOffer onUnlock={onUnlock} />
-      {conflict ? <Note tone="fault">{conflict}</Note> : null}
-      {error ? (
-        <Note tone="fault" onDismiss={clearError}>
-          {error}
-        </Note>
-      ) : null}
-      {/*
-        And what to do about it, when this app can tell.
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        /* The viewport, and everything in it: fit is the difference between
+           the two, less the grids. */
+        onLayout={(e) => setViewport(e.nativeEvent.layout.height)}
+        onContentSizeChange={(_w, h) => setContent(h)}
+        contentContainerStyle={{
+          padding: space.lg,
+          gap: tight ? space.md : space.lg,
+          paddingBottom: tight ? space.lg : space.xxl
+        }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => reload()} tintColor={color.silkDim} />
+        }
+      >
+        {/* The first thing on the first screen, because the top of it is where
+            an eye starts. A fault is not in here any more: it floats over the
+            screen (the Toast at the end), so it never moves what is under it. */}
+        <UnlockOffer onUnlock={onUnlock} />
+        {conflict ? <Note tone="fault">{conflict}</Note> : null}
 
-        A message that says what went wrong and offers nothing to do next is
-        where the guide came from. fixFor reads the message for a handful of
-        plain signals; anything it cannot place gets no button, which is the
-        honest answer — a wrong fix offered confidently costs more than no fix
-        offered at all.
+        {/* ---------------------------------------------------------- preset */}
+        <View style={{ gap: space.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>
+              {Number.isInteger(preset?.number)
+                ? `PRESET ${slotLabel(preset.number, caps?.presets?.addressing)}`
+                : 'PRESET —'}
+              {slots ? ` OF ${slots}` : ''}
+            </Text>
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+              {/*
+                What is up here rather than down among the scenes.
 
-        Its own conditional rather than a fragment inside the note's: the note
-        above is read by a test for the exact shape that makes it dismissible,
-        and wrapping it was how that broke.
-      */}
-      {error && onOpenFix && fixFor(error) ? (
-        <Press
-          label={fixById(fixFor(error)).title}
-          sub="What to try"
-          onPress={() => onOpenFix(fixFor(error))}
-        />
-      ) : null}
+                This corner takes you OFF the screen, which is the honest
+                grouping: everything below the preset name acts on the rig you
+                are playing, and this does not. It is also the corner furthest
+                from where a thumb rests during a song.
 
-      {/* ---------------------------------------------------------- preset */}
-      <View style={{ gap: space.sm }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.5 }}>
-            {Number.isInteger(preset?.number)
-              ? `PRESET ${slotLabel(preset.number, caps?.presets?.addressing)}`
-              : 'PRESET —'}
-            {slots ? ` OF ${slots}` : ''}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            {/*
-              What is up here rather than down among the scenes.
+                The speaker and Setup used to be in this row too. They are on the
+                bar at the top of the app now, where the browser keeps them — see
+                components/TopBar.
 
-              This corner takes you OFF the screen, which is the honest
-              grouping: everything below the preset name acts on the rig you
-              are playing, and this does not. It is also the corner furthest
-              from where a thumb rests during a song.
+                A ✦ Tone button stood here until the tone designer was taken out
+                of the app. A row that closes up around a button it was not given
+                is the same row either way.
+              */}
+              {/*
+                EDIT IS NOT HERE ANY MORE. "On the phone versions move the edit
+                button down to the bottom tab bar exactly like it's set up on the
+                web app." It sat up here beside the preset name on the reasoning
+                that neither of them acts on the rig you are playing — true, and
+                it put the way to the bench in the row your eye goes to first,
+                at 36 points, above everything you actually press on a stage.
 
-              The speaker and Setup used to be in this row too. They are on the
-              bar at the top of the app now, where the browser keeps them — see
-              components/TopBar.
-
-              A ✦ Tone button stood here until the tone designer was taken out
-              of the app. A row that closes up around a button it was not given
-              is the same row either way.
-            */}
-            {/*
-              EDIT IS NOT HERE ANY MORE. "On the phone versions move the edit
-              button down to the bottom tab bar exactly like it's set up on the
-              web app." It sat up here beside the preset name on the reasoning
-              that neither of them acts on the rig you are playing — true, and
-              it put the way to the bench in the row your eye goes to first,
-              at 36 points, above everything you actually press on a stage.
-
-              The browser has always had it on the bottom bar beside the tuner
-              and the tempo. That bar is the strip for what you do BETWEEN
-              songs rather than during one, which is exactly what opening the
-              chain is.
-            */}
+                The browser has always had it on the bottom bar beside the tuner
+                and the tempo. That bar is the strip for what you do BETWEEN
+                songs rather than during one, which is exactly what opening the
+                chain is.
+              */}
+            </View>
           </View>
+
+          {/*
+            The preset is a button now, not a heading.
+
+            It reads the same and does the thing the browser's does: tapping it
+            opens every slot by name. Previous and Next stay either side of it
+            because they are the mid-song controls and a list is not — but
+            "get me to SCHISM" was unanswerable on this screen until now.
+          */}
+          {/*
+            "…" rather than "Untitled" for the one round trip between pressing a
+            preset and the unit saying what it is called. The slot is already in
+            the line above, so nothing here is a guess. See rig.loadPreset.
+          */}
+          <Press
+            label={preset?.pending && !preset?.name ? '…' : presetLabel(preset)}
+            sub={onOpenPresets ? 'Tap for all presets' : undefined}
+            /* No list picture on the left any more: "take that off of that
+               one", and make the name "a little bit bigger". The chevron on
+               the right still says the tap opens something. */
+            after={onOpenPresets ? chevronIcon : undefined}
+            labelSize={font.lead + 2}
+            height={tight ? TAP : TAP + 12}
+            disabled={!onOpenPresets}
+            onPress={onOpenPresets}
+            style={{ paddingHorizontal: space.lg }}
+          />
+
         </View>
 
+        {/* ---------------------------------------------------------- scenes */}
         {/*
-          The preset is a button now, not a heading.
+          Two across, named, and each one its own colour — the browser's Play
+          screen, tile for tile.
 
-          It reads the same and does the thing the browser's does: tapping it
-          opens every slot by name. Previous and Next stay either side of it
-          because they are the mid-song controls and a list is not — but
-          "get me to SCHISM" was unanswerable on this screen until now.
+          Four across with nothing but a numeral was a reading task: eight
+          identical panels, and between two bars of a song you are counting
+          squares. Two across buys the width for the NAME, which is the thing a
+          player actually thinks in — RHYTHM, LEAD, CLEAN — and the colour means
+          the right tile is found before any of it is read.
+
+          The number stays, small, above the name. It is what the unit calls the
+          scene and what a setlist written on paper says.
         */}
-        {/*
-          "…" rather than "Untitled" for the one round trip between pressing a
-          preset and the unit saying what it is called. The slot is already in
-          the line above, so nothing here is a guess. See rig.loadPreset.
-        */}
-        <Press
-          label={preset?.pending && !preset?.name ? '…' : presetLabel(preset)}
-          sub={onOpenPresets ? 'Tap for all presets' : undefined}
-          /* No list picture on the left any more: "take that off of that
-             one", and make the name "a little bit bigger". The chevron on
-             the right still says the tap opens something. */
-          after={onOpenPresets ? chevronIcon : undefined}
-          labelSize={font.lead + 2}
-          height={tight ? TAP : TAP + 12}
-          disabled={!onOpenPresets}
-          onPress={onOpenPresets}
-          style={{ paddingHorizontal: space.lg }}
-        />
+        {scenes.hasScenes ? (
+          <View style={{ gap: space.sm }}>
+            {/*
+              "Keep having issues showing the scene names on the AM4. Have a way to
+              refresh them." Beside the heading, the size of the heading: a thing
+              reached for now and then, not a control on the stage.
+            */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Label>Scenes</Label>
+              {/*
+                Not on an AM4 over Bluetooth (beta), where it could only ever say
+                "Couldn't read them": the AM4 gives its scene names out only in a
+                whole-preset dump, which is never sent to it over Bluetooth (see
+                lib/bleWire's AM4 allowlist). The names this phone has seen
+                through the computer are still shown, from sceneNameCache.
+              */}
+              {overBluetooth(caps) && device === 'am4' ? null : <RefreshNames />}
+            </View>
+            <View
+              onLayout={(e) => {
+                setGrid(e.nativeEvent.layout.width)
+                setSceneGrid(e.nativeEvent.layout.height)
+              }}
+              style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}
+            >
+              {/* Drawn in the layout's order, but each tile is still its own
+                  scene: "5" says 5, wears 5's colour and selects scene 5. */}
+              {sceneOrderFor(sceneLayout, scenes.count, loadSceneOrder(sync)).map((i) => {
+                const hue = sceneColor(i)
+                return (
+                  <Tile
+                    key={i}
+                    caption={String(i + 1)}
+                    label={sceneNames[i] || ''}
+                    /* The rule under the name, from his mockup of this screen.
+                       Scenes wear one; the chain tiles below do not, which is
+                       how he drew them. */
+                    bar
+                    fill={hue.fill}
+                    ink={hue.ink}
+                    on={i === scene}
+                    height={tileH}
+                    haptic={thud}
+                    onPress={() => writeScene(i)}
+                    /* Two lines, a size down, at every width: "Scene names
+                       cut short." Wrapping fixes it for everyone — a hold to
+                       show the name would be a footswitch that doesn't switch. */
+                    wrap
+                    style={{ width: tileWidth(row, sceneCols) }}
+                  />
+                )
+              })}
+            </View>
+          </View>
+        ) : null}
 
-      </View>
-
-      {/* ---------------------------------------------------------- scenes */}
-      {/*
-        Two across, named, and each one its own colour — the browser's Play
-        screen, tile for tile.
-
-        Four across with nothing but a numeral was a reading task: eight
-        identical panels, and between two bars of a song you are counting
-        squares. Two across buys the width for the NAME, which is the thing a
-        player actually thinks in — RHYTHM, LEAD, CLEAN — and the colour means
-        the right tile is found before any of it is read.
-
-        The number stays, small, above the name. It is what the unit calls the
-        scene and what a setlist written on paper says.
-      */}
-      {scenes.hasScenes ? (
+        {/* ---------------------------------------------------------- blocks */}
         <View style={{ gap: space.sm }}>
           {/*
-            "Keep having issues showing the scene names on the AM4. Have a way to
-            refresh them." Beside the heading, the size of the heading: a thing
-            reached for now and then, not a control on the stage.
+            "Where it says chain above the pedals, also put hold to switch
+            channels. So users know that they can just hold the things to switch
+            between channels, A B C and D." Beside the heading, in the heading's
+            own size, the way Refresh names sits beside Scenes. Only when a hold
+            does something: a unit with no channels has nothing to switch.
           */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Label>Scenes</Label>
-            {/*
-              Not on an AM4 over Bluetooth (beta), where it could only ever say
-              "Couldn't read them": the AM4 gives its scene names out only in a
-              whole-preset dump, which is never sent to it over Bluetooth (see
-              lib/bleWire's AM4 allowlist). The names this phone has seen
-              through the computer are still shown, from sceneNameCache.
-            */}
-            {overBluetooth(caps) && device === 'am4' ? null : <RefreshNames />}
+            <Label icon={chainIcon}>
+              {chain === 'reading' ? 'Reading the chain…' : chain === 'failed' ? 'Chain — out of date' : 'Chain'}
+            </Label>
+            {channels?.length > 1 && blocks.length ? (
+              <Text style={{ color: color.silkDim, fontSize: font.micro, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                {HOLD_FOR_CHANNELS}
+              </Text>
+            ) : null}
           </View>
+
+          {chain === 'failed' && !chainNow.elsewhere ? (
+            <Note tone="warn">
+              The unit didn’t answer when we asked what’s in this preset, so these buttons are
+              whatever it last told us. Pull down to ask again.
+            </Note>
+          ) : null}
+
+          <ChainUpdating chain={chainNow} />
+
+          {blocks.length === 0 && chain === 'ok' && !chainNow.elsewhere ? (
+            <Note>Nothing in this preset but input and output.</Note>
+          ) : null}
+
+          {/*
+            The channel tip, directly over the tiles it is about.
+
+            Inside the chain's own block rather than at the top of the screen,
+            because "this tip appears here" is a promise about WHERE: the
+            gesture it describes belongs to the squares eight points below it,
+            and a card up by the preset name would be describing something off
+            the bottom of somebody's phone.
+          */}
+          <Coach open={coach} stage={coachStage} onTry={tryCoach} onSkip={closeCoach} onDone={closeCoach} />
+          <Sheet open={watchTip && !coach} onClose={() => setWatchTip(false)} title="Your Apple Watch" note="Fractal Remote is on your watch">
+            <View style={{ gap: space.md }}>
+              {watchHow().map((line) => (
+                <Text key={line} style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
+                  {line}
+                </Text>
+              ))}
+              <Press label="Got it" tone="signal" on onPress={() => setWatchTip(false)} />
+            </View>
+          </Sheet>
+
+          {/*
+            A wrapped grid of coloured tiles, which is the browser's chain and
+            also the unit's own screen.
+
+            A full-width row per block was honest and unreadable: seven rows of
+            "Delay 1 / Channel A" is a list to be read top to bottom, and it
+            pushed the tempo and the tuner off the bottom of the phone. Four
+            across fits the whole chain in the space two rows used to take, and
+            the colour does the finding — the drive is red on the AM4's display,
+            so it is red here.
+
+            The abbreviation is shortName's, shared with the browser: DLY, and
+            DLY 2 only when there is more than one, because a preset can hold a
+            second delay without holding the first.
+
+            Tapping still toggles. The channel moved into the tile as a sub-line
+            and onto a hold, because a separate square per block doubled the
+            number of targets on the busiest part of the screen.
+          */}
           <View
+            /* Both grids measure, because a unit that reports no scenes never
+               draws the other one and these tiles would have no width. */
             onLayout={(e) => {
               setGrid(e.nativeEvent.layout.width)
-              setSceneGrid(e.nativeEvent.layout.height)
+              setBlockGrid(e.nativeEvent.layout.height)
             }}
-            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}
+            /* Dimmed a little while they are only the outline: this preset's
+               pedals, the chain read still finishing behind them. */
+            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, opacity: chainNow.late ? 0.55 : chainNow.outline ? 0.72 : 1 }}
           >
-            {/* Drawn in the layout's order, but each tile is still its own
-                scene: "5" says 5, wears 5's colour and selects scene 5. */}
-            {sceneOrderFor(sceneLayout, scenes.count, loadSceneOrder(sync)).map((i) => {
-              const hue = sceneColor(i)
+            {chainNow.elsewhere ? (
+              <View style={{ width: '100%', height: held ? held.height : undefined, overflow: 'hidden' }}>
+                <ChainWait
+                  chain={chainNow}
+                  height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
+                  cards={held ? held.count : 4}
+                  width={held ? tileWidth(row, fxCols) : 84}
+                  overlay={!!held}
+                />
+              </View>
+            ) : blocks.map((block) => {
+              const hue = blockColor(block.slug)
+              /* Named here rather than inline: the word the unit uses for this is
+                 not a word anybody says out loud, and it has no business sitting
+                 next to the text that gets drawn. */
+              /* Read ahead of the switch, on or off not said yet: dim and no
+                 word, so the ones that are on light up rather than half of
+                 them flipping from On to Off. */
+              const unknown = chainNow.outline && typeof block.bypassed !== 'boolean'
+              const engaged = !unknown && !block.bypassed
+              const state = unknown ? '\u00a0' : engaged ? 'On' : 'Off'
               return (
                 <Tile
-                  key={i}
-                  caption={String(i + 1)}
-                  label={sceneNames[i] || ''}
-                  /* The rule under the name, from his mockup of this screen.
-                     Scenes wear one; the chain tiles below do not, which is
-                     how he drew them. */
-                  bar
+                  key={idOf(block)}
+                  label={shortBlock(block)}
+                  icon={showIcons ? blockIcon(block.slug) : undefined}
+                  topLeft={state}
+                  topRight={block.channel || undefined}
                   fill={hue.fill}
                   ink={hue.ink}
-                  on={i === scene}
-                  height={tileH}
-                  haptic={thud}
-                  onPress={() => writeScene(i)}
-                  /* Two lines, a size down, at every width: "Scene names
-                     cut short." Wrapping fixes it for everyone — a hold to
-                     show the name would be a footswitch that doesn't switch. */
-                  wrap
-                  style={{ width: tileWidth(row, sceneCols) }}
+                  on={engaged}
+                  height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
+                  /* A pedal read ahead of the switch, whose on or off the unit
+                     has not said yet: a tap would be a guess, so it waits. */
+                  onPress={() => {
+                    if (chainNow.outline && typeof block.bypassed !== 'boolean') return
+                    writeBypass(idOf(block), !block.bypassed)
+                  }}
+                  /* Not on the outline: a channel waits for the chain read. */
+                  onLongPress={
+                    channels?.length > 1 && !chainNow.outline
+                      ? () => setPicking(picking === idOf(block) ? null : idOf(block))
+                      : undefined
+                  }
+                  style={{ width: tileWidth(row, fxCols) }}
                 />
               )
             })}
-          </View>
-        </View>
-      ) : null}
-
-      {/* ---------------------------------------------------------- blocks */}
-      <View style={{ gap: space.sm }}>
-        {/*
-          "Where it says chain above the pedals, also put hold to switch
-          channels. So users know that they can just hold the things to switch
-          between channels, A B C and D." Beside the heading, in the heading's
-          own size, the way Refresh names sits beside Scenes. Only when a hold
-          does something: a unit with no channels has nothing to switch.
-        */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Label icon={chainIcon}>
-            {chain === 'reading' ? 'Reading the chain…' : chain === 'failed' ? 'Chain — out of date' : 'Chain'}
-          </Label>
-          {channels?.length > 1 && blocks.length ? (
-            <Text style={{ color: color.silkDim, fontSize: font.micro, letterSpacing: 1.5, textTransform: 'uppercase' }}>
-              {HOLD_FOR_CHANNELS}
-            </Text>
-          ) : null}
-        </View>
-
-        {chain === 'failed' && !chainNow.elsewhere ? (
-          <Note tone="warn">
-            The unit didn’t answer when we asked what’s in this preset, so these buttons are
-            whatever it last told us. Pull down to ask again.
-          </Note>
-        ) : null}
-
-        <ChainUpdating chain={chainNow} />
-
-        {blocks.length === 0 && chain === 'ok' && !chainNow.elsewhere ? (
-          <Note>Nothing in this preset but input and output.</Note>
-        ) : null}
-
-        {/*
-          The channel tip, directly over the tiles it is about.
-
-          Inside the chain's own block rather than at the top of the screen,
-          because "this tip appears here" is a promise about WHERE: the
-          gesture it describes belongs to the squares eight points below it,
-          and a card up by the preset name would be describing something off
-          the bottom of somebody's phone.
-        */}
-        <Coach open={coach} stage={coachStage} onTry={tryCoach} onSkip={closeCoach} onDone={closeCoach} />
-        <Sheet open={watchTip && !coach} onClose={() => setWatchTip(false)} title="Your Apple Watch" note="Fractal Remote is on your watch">
-          <View style={{ gap: space.md }}>
-            {watchHow().map((line) => (
-              <Text key={line} style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
-                {line}
-              </Text>
-            ))}
-            <Press label="Got it" tone="signal" on onPress={() => setWatchTip(false)} />
-          </View>
-        </Sheet>
-
-        {/*
-          A wrapped grid of coloured tiles, which is the browser's chain and
-          also the unit's own screen.
-
-          A full-width row per block was honest and unreadable: seven rows of
-          "Delay 1 / Channel A" is a list to be read top to bottom, and it
-          pushed the tempo and the tuner off the bottom of the phone. Four
-          across fits the whole chain in the space two rows used to take, and
-          the colour does the finding — the drive is red on the AM4's display,
-          so it is red here.
-
-          The abbreviation is shortName's, shared with the browser: DLY, and
-          DLY 2 only when there is more than one, because a preset can hold a
-          second delay without holding the first.
-
-          Tapping still toggles. The channel moved into the tile as a sub-line
-          and onto a hold, because a separate square per block doubled the
-          number of targets on the busiest part of the screen.
-        */}
-        <View
-          /* Both grids measure, because a unit that reports no scenes never
-             draws the other one and these tiles would have no width. */
-          onLayout={(e) => {
-            setGrid(e.nativeEvent.layout.width)
-            setBlockGrid(e.nativeEvent.layout.height)
-          }}
-          /* Dimmed a little while they are only the outline: this preset's
-             pedals, the chain read still finishing behind them. */
-          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, opacity: chainNow.late ? 0.55 : chainNow.outline ? 0.72 : 1 }}
-        >
-          {chainNow.elsewhere ? (
-            <View style={{ width: '100%', height: held ? held.height : undefined, overflow: 'hidden' }}>
-              <ChainWait
-                chain={chainNow}
-                height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
-                cards={held ? held.count : 4}
-                width={held ? tileWidth(row, fxCols) : 84}
-                overlay={!!held}
-              />
-            </View>
-          ) : blocks.map((block) => {
-            const hue = blockColor(block.slug)
-            /* Named here rather than inline: the word the unit uses for this is
-               not a word anybody says out loud, and it has no business sitting
-               next to the text that gets drawn. */
-            /* Read ahead of the switch, on or off not said yet: dim and no
-               word, so the ones that are on light up rather than half of
-               them flipping from On to Off. */
-            const unknown = chainNow.outline && typeof block.bypassed !== 'boolean'
-            const engaged = !unknown && !block.bypassed
-            const state = unknown ? '\u00a0' : engaged ? 'On' : 'Off'
-            return (
+            {/*
+              The Looper's pedal. Not an on/off switch like the others — see
+              STAGE_HIDDEN, which still keeps the looper out of the on/off
+              tiles — but the door to Record, Play and Stop. Tapping it opens
+              the looper's buttons; it never bypasses the block.
+            */}
+            {looperTile ? (
               <Tile
-                key={idOf(block)}
-                label={shortBlock(block)}
-                icon={showIcons ? blockIcon(block.slug) : undefined}
-                topLeft={state}
-                topRight={block.channel || undefined}
-                fill={hue.fill}
-                ink={hue.ink}
-                on={engaged}
+                key="looper"
+                label={shortBlock(looperHere)}
+                icon={showIcons ? blockIcon('looper') : undefined}
+                topLeft="Rec · Play"
+                fill={blockColor('looper').fill}
+                ink={blockColor('looper').ink}
+                on={!looperHere.bypassed}
                 height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
-                /* A pedal read ahead of the switch, whose on or off the unit
-                   has not said yet: a tap would be a guess, so it waits. */
-                onPress={() => {
-                  if (chainNow.outline && typeof block.bypassed !== 'boolean') return
-                  writeBypass(idOf(block), !block.bypassed)
-                }}
-                /* Not on the outline: a channel waits for the chain read. */
-                onLongPress={
-                  channels?.length > 1 && !chainNow.outline
-                    ? () => setPicking(picking === idOf(block) ? null : idOf(block))
-                    : undefined
-                }
+                onPress={() => setLooping(true)}
+                onLongPress={() => setLooping(true)}
                 style={{ width: tileWidth(row, fxCols) }}
               />
-            )
-          })}
-          {/*
-            The Looper's pedal. Not an on/off switch like the others — see
-            STAGE_HIDDEN, which still keeps the looper out of the on/off
-            tiles — but the door to Record, Play and Stop. Tapping it opens
-            the looper's buttons; it never bypasses the block.
-          */}
-          {looperTile ? (
-            <Tile
-              key="looper"
-              label={shortBlock(looperHere)}
-              icon={showIcons ? blockIcon('looper') : undefined}
-              topLeft="Rec · Play"
-              fill={blockColor('looper').fill}
-              ink={blockColor('looper').ink}
-              on={!looperHere.bypassed}
-              height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
-              onPress={() => setLooping(true)}
-              onLongPress={() => setLooping(true)}
-              style={{ width: tileWidth(row, fxCols) }}
-            />
-          ) : null}
+            ) : null}
+          </View>
+
         </View>
 
-      </View>
+        {/* ------------------------------------------------------------ foot */}
+        {/*
+          Previous / Next, then Tuner and Tap. One block at the bottom, which is
+          the browser's own arrangement and was Justin's correction to it:
 
-      {/* ------------------------------------------------------------ foot */}
-      {/*
-        Previous / Next, then Tuner and Tap. One block at the bottom, which is
-        the browser's own arrangement and was Justin's correction to it:
+          "Move Previous / Next directly above the bottom tap bar."
 
-        "Move Previous / Next directly above the bottom tap bar."
+          They sat up by the preset name, which is where you READ, not where your
+          thumb rests. The phone had them there too — the same mistake, made a
+          second time — so stepping presets was at the top of the screen and the
+          tuner was off the bottom of it.
+        */}
+        <View style={{ gap: space.sm }}>
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Press
+              grow
+              label="Previous"
+              icon={chevronIcon}
+              flip
+              height={foot}
+              disabled={landing(-1) === null}
+              onPress={() => step(-1)}
+            />
+            <Press
+              grow
+              caption="Setlists"
+              label={order ? sourceLabel(source, { favourites, lists }) : 'All'}
+              sub={where || undefined}
+              tone="signal"
+              on={Boolean(order)}
+              height={foot}
+              disabled={!onOpenSetlists}
+              onPress={onOpenSetlists}
+            />
+            <Press
+              grow
+              label="Next"
+              after={chevronIcon}
+              height={foot}
+              disabled={landing(1) === null}
+              onPress={() => step(1)}
+            />
+          </View>
 
-        They sat up by the preset name, which is where you READ, not where your
-        thumb rests. The phone had them there too — the same mistake, made a
-        second time — so stepping presets was at the top of the screen and the
-        tuner was off the bottom of it.
-      */}
-      <View style={{ gap: space.sm }}>
-        <View style={{ flexDirection: 'row', gap: space.sm }}>
-          <Press
-            grow
-            label="Previous"
-            icon={chevronIcon}
-            flip
-            height={foot}
-            disabled={landing(-1) === null}
-            onPress={() => step(-1)}
-          />
-          <Press
-            grow
-            caption="Setlists"
-            label={order ? sourceLabel(source, { favourites, lists }) : 'All'}
-            sub={where || undefined}
-            tone="signal"
-            on={Boolean(order)}
-            height={foot}
-            disabled={!onOpenSetlists}
-            onPress={onOpenSetlists}
-          />
-          <Press
-            grow
-            label="Next"
-            after={chevronIcon}
-            height={foot}
-            disabled={landing(1) === null}
-            onPress={() => step(1)}
-          />
+          {/*
+            Tuner and Tap on one row, and the tempo ON the Tap button rather than
+            beside it as its own heading with a forty-point number. That number
+            was answering "what is this preset at" with a third of the screen; on
+            the button it answers the same question and costs nothing.
+
+            Tuner only where the unit has one. Absent means unknown — an older
+            host predating the flag — and unknown still gets to try.
+          */}
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            {caps?.tuner !== false ? (
+              <Press
+                grow
+                label={tunerOn ? 'Stop tuner' : 'Tuner'}
+                icon={tunerIcon}
+                tone="live"
+                on={tunerOn}
+                height={foot}
+                onPress={() => writeTuner(!tunerOn)}
+              />
+            ) : null}
+            {/*
+              The way to the bench, in the middle. "Let's move the edit button to
+              the center and the tap tempo button to the right."
+
+              It sat on the right because it is the only one of the three that
+              leaves this screen, and last felt like the place for that. What
+              that reasoning missed is which hand is holding the phone: the
+              right edge is where a thumb rests, and the button under the thumb
+              should be the one pressed mid-song, not the one pressed between
+              them.
+            */}
+            {onOpenEdit ? (
+              <Press grow label="Edit" icon={editIcon} height={foot} onPress={onOpenEdit} />
+            ) : null}
+            {/*
+              Tap Tempo on the right, where the thumb is.
+
+              The one thing in this app that must never be sent twice. A parameter
+              arriving twice leaves the unit where it was; a beat arriving twice is
+              a beat that never happened, so the relay excludes this route from its
+              retry.
+
+              Hold it to type a tempo: "on the tap button, let's do where they hold
+              the tap button they can manually enter in the beats per minute they
+              want."
+            */}
+            <Press
+              grow
+              /* "Change the label on the tap tempo button to just say Tap." */
+              label="Tap"
+              accessibilityLabel={Number.isFinite(bpm) ? `Tap tempo, ${Math.round(bpm)}` : 'Tap tempo'}
+              sub={Number.isFinite(bpm) ? String(Math.round(bpm)) : undefined}
+              icon={tempoIcon}
+              tone="signal"
+              height={foot}
+              onPress={tapTempo}
+              onLongPress={() => setTyping(true)}
+              /* "A green light dot ... that flashes at the current tempo." */
+              badge={<TempoDot bpm={bpm} />}
+            />
+          </View>
+
+
         </View>
 
         {/*
-          Tuner and Tap on one row, and the tempo ON the Tap button rather than
-          beside it as its own heading with a forty-point number. That number
-          was answering "what is this preset at" with a third of the screen; on
-          the button it answers the same question and costs nothing.
+          NO FOOTER. "Get rid of the everything you change here text at the bottom
+          of the screen."
 
-          Tuner only where the unit has one. Absent means unknown — an older
-          host predating the flag — and unknown still gets to try.
+          It explained where changes land — true, and the kind of thing you read
+          once and then scroll past for the rest of the app's life. The bar at the
+          top already says which unit is being driven and that the link is up,
+          which is the part that goes on mattering.
         */}
-        <View style={{ flexDirection: 'row', gap: space.sm }}>
-          {caps?.tuner !== false ? (
-            <Press
-              grow
-              label={tunerOn ? 'Stop tuner' : 'Tuner'}
-              icon={tunerIcon}
-              tone="live"
-              on={tunerOn}
-              height={foot}
-              onPress={() => writeTuner(!tunerOn)}
-            />
-          ) : null}
-          {/*
-            The way to the bench, in the middle. "Let's move the edit button to
-            the center and the tap tempo button to the right."
 
-            It sat on the right because it is the only one of the three that
-            leaves this screen, and last felt like the place for that. What
-            that reasoning missed is which hand is holding the phone: the
-            right edge is where a thumb rests, and the button under the thumb
-            should be the one pressed mid-song, not the one pressed between
-            them.
-          */}
-          {onOpenEdit ? (
-            <Press grow label="Edit" icon={editIcon} height={foot} onPress={onOpenEdit} />
-          ) : null}
-          {/*
-            Tap Tempo on the right, where the thumb is.
+        {/*
+          The two things that cover the screen rather than sitting in it, drawn
+          last and outside the foot because both are modals.
 
-            The one thing in this app that must never be sent twice. A parameter
-            arriving twice leaves the unit where it was; a beat arriving twice is
-            a beat that never happened, so the relay excludes this route from its
-            retry.
+          The volume is not among them any more: the speaker moved to the bar at
+          the top of the app, which is where the browser keeps it, and the sheet
+          moved with the button that opens it. See components/TopBar.
+        */}
+        {/*
+          The channel picker, over the screen rather than inside it.
 
-            Hold it to type a tempo: "on the tap button, let's do where they hold
-            the tap button they can manually enter in the beats per minute they
-            want."
-          */}
+          "When holding a block to change channel have it be an overlay on the
+          screen instead of inserting itself into the screen like the web
+          version." It opened underneath the chain, which pushed everything below
+          it down — so the tiles a thumb was aimed at moved while the thumb was on
+          its way, on the one screen where that can happen mid-song.
+        */}
+        {/*
+          Typing a tempo, high on the screen.
+
+          "When holding tap button to manually enter tempo the keyboard blocks the
+          numbers so you can see what your typing." It was in the foot — which is
+          where a thumb rests and therefore exactly where the keyboard opens.
+        */}
+        <TempoBox
+          open={typing}
+          bpm={bpm}
+          range={tempoRange(device, caps?.via)}
+          onSet={writeTempo}
+          onClose={() => setTyping(false)}
+        />
+
+        <ChannelSheet
+          block={chainNow.elsewhere || chainNow.outline ? null : blocks.find((b) => sameBlock(b, picking)) || null}
+          channels={channels}
+          onClose={() => setPicking(null)}
+          onPick={(ch) => {
+            writeChannel(picking, ch)
+            setPicking(null)
+          }}
+        />
+
+        <Sheet open={looping && !!looperHere && !chainNow.elsewhere} onClose={() => setLooping(false)} title="Looper">
+          {looperHere ? <Looper block={looperHere} /> : null}
+        </Sheet>
+
+        {/* Closing the tuner stops it at the unit, which is what the button does. */}
+        <Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} />
+      </ScrollView>
+
+      {/*
+        THE FAULT, OVER THE SCREEN AND NEVER IN IT. "Can we just have it be
+        like an overlay toast notification that doesn't move the screen at
+        all?" In the scrolling content it was one more row above everything,
+        and the foot slid down under a thumb already on its way to Tap. It
+        also counted toward the fit, so every tile shrank to make room for it.
+      */}
+      <Toast open={!!error}>
+        {error ? (
+          <Note tone="fault" onDismiss={clearError}>
+            {error}
+          </Note>
+        ) : null}
+        {/*
+          And what to do about it, when this app can tell.
+
+          A message that says what went wrong and offers nothing to do next is
+          where the guide came from. fixFor reads the message for a handful of
+          plain signals; anything it cannot place gets no button, which is the
+          honest answer — a wrong fix offered confidently costs more than no fix
+          offered at all.
+
+          Its own conditional rather than a fragment inside the note's: the note
+          above is read by a test for the exact shape that makes it dismissible,
+          and wrapping it was how that broke.
+        */}
+        {error && onOpenFix && fixFor(error) ? (
           <Press
-            grow
-            /* "Change the label on the tap tempo button to just say Tap." */
-            label="Tap"
-            accessibilityLabel={Number.isFinite(bpm) ? `Tap tempo, ${Math.round(bpm)}` : 'Tap tempo'}
-            sub={Number.isFinite(bpm) ? String(Math.round(bpm)) : undefined}
-            icon={tempoIcon}
-            tone="signal"
-            height={foot}
-            onPress={tapTempo}
-            onLongPress={() => setTyping(true)}
-            /* "A green light dot ... that flashes at the current tempo." */
-            badge={<TempoDot bpm={bpm} />}
+            label={fixById(fixFor(error)).title}
+            sub="What to try"
+            height={44}
+            onPress={() => onOpenFix(fixFor(error))}
           />
-        </View>
-
-
-      </View>
-
-      {/*
-        NO FOOTER. "Get rid of the everything you change here text at the bottom
-        of the screen."
-
-        It explained where changes land — true, and the kind of thing you read
-        once and then scroll past for the rest of the app's life. The bar at the
-        top already says which unit is being driven and that the link is up,
-        which is the part that goes on mattering.
-      */}
-
-      {/*
-        The two things that cover the screen rather than sitting in it, drawn
-        last and outside the foot because both are modals.
-
-        The volume is not among them any more: the speaker moved to the bar at
-        the top of the app, which is where the browser keeps it, and the sheet
-        moved with the button that opens it. See components/TopBar.
-      */}
-      {/*
-        The channel picker, over the screen rather than inside it.
-
-        "When holding a block to change channel have it be an overlay on the
-        screen instead of inserting itself into the screen like the web
-        version." It opened underneath the chain, which pushed everything below
-        it down — so the tiles a thumb was aimed at moved while the thumb was on
-        its way, on the one screen where that can happen mid-song.
-      */}
-      {/*
-        Typing a tempo, high on the screen.
-
-        "When holding tap button to manually enter tempo the keyboard blocks the
-        numbers so you can see what your typing." It was in the foot — which is
-        where a thumb rests and therefore exactly where the keyboard opens.
-      */}
-      <TempoBox
-        open={typing}
-        bpm={bpm}
-        onSet={writeTempo}
-        onClose={() => setTyping(false)}
-      />
-
-      <ChannelSheet
-        block={chainNow.elsewhere || chainNow.outline ? null : blocks.find((b) => sameBlock(b, picking)) || null}
-        channels={channels}
-        onClose={() => setPicking(null)}
-        onPick={(ch) => {
-          writeChannel(picking, ch)
-          setPicking(null)
-        }}
-      />
-
-      <Sheet open={looping && !!looperHere && !chainNow.elsewhere} onClose={() => setLooping(false)} title="Looper">
-        {looperHere ? <Looper block={looperHere} /> : null}
-      </Sheet>
-
-      {/* Closing the tuner stops it at the unit, which is what the button does. */}
-      <Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} />
-    </ScrollView>
+        ) : null}
+      </Toast>
+    </View>
   )
 }
 

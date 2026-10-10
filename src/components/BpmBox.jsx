@@ -6,7 +6,7 @@ import { checkBpm } from '../../shared/tempo.mjs'
  *
  * Tap gets you close; typing gets you exact. Shows "120 BPM" at rest; a tap
  * into it drops the unit and selects the number so typing replaces it. Enter
- * or tapping away commits, Escape abandons, and the device's own 20–400 range
+ * or tapping away commits, Escape abandons, and the unit's own range (24–250 on a Fractal)
  * is enforced (in shared/tempo.mjs, with the phone apps) so an impossible
  * tempo is refused with words rather than silently clamped downstream.
  *
@@ -14,7 +14,7 @@ import { checkBpm } from '../../shared/tempo.mjs'
  * when the Tap button is held or right-clicked, so it takes `autoFocus` and
  * tells its owner when it is finished either way.
  */
-export default function BpmBox({ bpm, onSet, onError, onDone, autoFocus = false }) {
+export default function BpmBox({ bpm, onSet, onError, onDone, autoFocus = false, range }) {
   const [text, setText] = useState(autoFocus && Number.isFinite(bpm) ? String(Math.round(bpm)) : null)
   const abandon = useRef(false)
 
@@ -28,7 +28,7 @@ export default function BpmBox({ bpm, onSet, onError, onDone, autoFocus = false 
     if (text === null) return
     const typed = text
     setText(null)
-    const checked = checkBpm(typed)
+    const checked = checkBpm(typed, range)
     if (checked.error) {
       onError?.(checked.error)
     } else if (checked.bpm !== undefined && checked.bpm !== Math.round(bpm)) {
