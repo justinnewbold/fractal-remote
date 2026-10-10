@@ -601,10 +601,15 @@ export const buildAm4Tempo = (bpm) =>
  * any block code the AM4 reports, a second copy included; `'base'` is a
  * block's base code only, for the one write that must go there.
  *
- * Deliberately NOT here, ever, over Bluetooth: fn 0x1F, the fn 0x03 dumps
- * (so no AM4 scene names in this version), saving (action 0x1B), renaming,
- * placing blocks, any other parameter write, the identify broadcast, the
- * firmware question, and the gen-3 probes.
+ * Deliberately NOT here, ever, over Bluetooth: fn 0x1F, saving (action
+ * 0x1B), renaming, placing blocks, any other parameter write, the identify
+ * broadcast, the firmware question, and the gen-3 probes.
+ *
+ * And one frame that is not a parameter frame at all, held to its own rule
+ * below: the fn 0x03 request for a STORED preset (am4DumpAllowed), the only
+ * way an AM4 hands over its scene names. It is the exact request the
+ * computer app sends the same AM4 over USB for the same names, and it reads
+ * a slot without loading it.
  */
 export const AM4_ALLOWED = [
   { name: 'structure read', fn: 0x01, pidLow: 0x00ce, pidHigh: 0x0000, action: 0x001f, hdr4: 0, size: 18 },
@@ -648,13 +653,15 @@ const valueFits = (want, f) => {
  * never been sent.
  */
 export function am4Allowed(f) {
-  if (!Array.isArray(f) || f.length < 18) return null
+  if (!Array.isArray(f) || f.length < 11) return null
   for (let i = 0; i < f.length; i++) {
     const b = f[i]
     if (!Number.isInteger(b) || b < 0 || b > 0xff) return null
     if (i > 0 && i < f.length - 1 && b > 0x7f) return null
   }
   if (!isFractal(f) || f[4] !== MODELS.am4 || !checksumOk(f)) return null
+  if (f[5] === AM4_DUMP_ASK.fn) return am4DumpAllowed(f)
+  if (f.length < 18) return null
   const pidLow = decode14(f[6], f[7])
   const pidHigh = decode14(f[8], f[9])
   const action = decode14(f[10], f[11])
@@ -677,6 +684,19 @@ export function am4Allowed(f) {
 
 /** Whether the AM4 may be sent these bytes. */
 export const isAllowedAm4 = (f) => am4Allowed(f) !== null
+
+/*
+ * THE ONE NON-PARAMETER FRAME: "send me stored preset n", eleven bytes,
+ * F0 00 01 74 15 03 <bank> <sub> 00 <cs> F7, bank A..Z as 0..25 and sub
+ * 01..04 as 0..3. Not the active-buffer form (7F 7F 00), which nothing here
+ * needs, and nothing else under fn 0x03 — the Axe-Fx II's fn 0x03 RELOADS
+ * the slot, and an AM4 has only ever been sent this shape.
+ */
+const AM4_DUMP_ASK = Object.freeze({ name: 'stored preset dump', fn: 0x03, size: 11 })
+function am4DumpAllowed(f) {
+  if (f.length !== AM4_DUMP_ASK.size || f[5] !== AM4_DUMP_ASK.fn) return null
+  return f[6] <= 25 && f[7] <= 3 && f[8] === 0 ? AM4_DUMP_ASK : null
+}
 
 /* ------------------------------------------------------------------ */
 /* AM4 — reading what comes back                                       */
@@ -771,6 +791,143 @@ export function parseAm4TunerPoll(f, which) {
   if (f[12] !== 0 || f[13] !== 0 || decode14(f[14], f[15]) !== 4 || f[22] !== 0xf7 || !checksumOk(f)) return null
   const v = am4ReadFloat(f, 16)
   return Number.isFinite(v) ? v : null
+}
+
+/* ------------------------------------------------------------------ */
+/* AM4 — a stored preset whole, for its scene names                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * "Can't we just add a thing that loads it the first time, or a button to
+ * reload the names ... let's make them load even if it's slower on
+ * Bluetooth, but it doesn't have to constantly be rereading them once it
+ * reads them once."
+ *
+ * An AM4 has no "what is scene 3 called?". Its scene names are only inside
+ * the whole preset, which it sends as six frames, 12,352 bytes:
+ *
+ *   0x77  13 bytes    which slot: bank, sub, and three more
+ *   0x78  3082 bytes  × 4, each a 2-byte tag and 3072 bytes of packed data
+ *   0x79  11 bytes    a 16-bit XOR of the whole, which nothing here needs
+ *
+ * The packed data is the gen-3 preset container: every three bytes on the
+ * wire are one 16-bit word (b0 | b1 << 7 | b2 << 14), little-endian, 8192
+ * bytes in all. In it, at 0x04, a CRC-16 (CCITT, init 0xAA55) of the whole
+ * with that field zeroed; at 0x48 and 0x4A the body's size unpacked and
+ * packed; and from 0x4C the body, Huffman-coded with its own code tree in
+ * front. The four scene names are 32-byte ASCII fields at 0x04 + n × 0x50 of
+ * the UNPACKED body, so only its first 276 bytes are ever unpacked here.
+ *
+ * Written from the published container format (Andrew Mercurio's
+ * fractal-syx-codec, Apache-2.0; see NOTICES.md), not from anyone's code.
+ */
+export const AM4_DUMP = Object.freeze({
+  ASK: 0x03,
+  HEAD: 0x77,
+  CHUNK: 0x78,
+  FOOT: 0x79,
+  HEAD_BYTES: 13,
+  CHUNK_BYTES: 3082,
+  FOOT_BYTES: 11,
+  CHUNKS: 4,
+  PATCH_BYTES: 8192
+})
+
+/** Ask for stored location n (A01 is 0, Z04 is 103). It reads the slot; it does not load it. */
+export const buildAm4StoredDump = (n) => frame(MODELS.am4, AM4_DUMP.ASK, [location(n) >> 2, n & 3, 0])
+
+/** Which part of a dump this frame is: 'head', 'chunk', 'foot', or null for none of it. */
+export function am4DumpPart(f) {
+  if (!isFrom(f, MODELS.am4, f?.[5]) || !checksumOk(f)) return null
+  if (f[5] === AM4_DUMP.HEAD && f.length === AM4_DUMP.HEAD_BYTES) return 'head'
+  if (f[5] === AM4_DUMP.CHUNK && f.length === AM4_DUMP.CHUNK_BYTES) return 'chunk'
+  if (f[5] === AM4_DUMP.FOOT && f.length === AM4_DUMP.FOOT_BYTES) return 'foot'
+  return null
+}
+
+const crcCcitt = (bytes) => {
+  let crc = 0xaa55
+  for (const b of bytes) {
+    crc ^= b << 8
+    for (let i = 0; i < 8; i++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff
+  }
+  return crc
+}
+
+/*
+ * The body's first `want` bytes. The code tree comes first: a 1 bit is a
+ * leaf and the eight bits after it its byte; a 0 is a fork, its left side
+ * then its right. Then each byte is a walk down from the root, 0 left and 1
+ * right, most significant bit first. A tree deeper than 256 is not one this
+ * format can make (one leaf per byte value), so it is refused rather than
+ * followed off the end of the stream.
+ */
+function unpackBody(packed, want) {
+  let at = 0
+  const bit = () => {
+    if (at >= packed.length * 8) throw new Error('the preset ended early')
+    const b = (packed[at >> 3] >> (7 - (at & 7))) & 1
+    at++
+    return b
+  }
+  const tree = (depth) => {
+    if (depth > 256) throw new Error('not a preset')
+    if (bit()) {
+      let v = 0
+      for (let i = 0; i < 8; i++) v = (v << 1) | bit()
+      return v
+    }
+    return [tree(depth + 1), tree(depth + 1)]
+  }
+  const root = tree(0)
+  const out = []
+  while (out.length < want) {
+    let node = root
+    while (Array.isArray(node)) node = node[bit()]
+    out.push(node)
+  }
+  return out
+}
+
+/**
+ * The scene names out of the six frames an AM4 answered buildAm4StoredDump(n)
+ * with: { location, names: [4 strings], } — or null when they are not all
+ * there, are for another slot, or do not add up. A frame lost or damaged on
+ * the way fails its own checksum or length; one that slips past still fails
+ * the CRC over the whole, so a name is never read out of a shifted preset.
+ */
+export function parseAm4DumpSceneNames(frames, n) {
+  if (!Array.isArray(frames) || !Number.isInteger(n) || n < 0 || n >= AM4.LOCATIONS) return null
+  const parts = frames.map(am4DumpPart)
+  const head = frames[parts.indexOf('head')]
+  const chunks = frames.filter((_f, i) => parts[i] === 'chunk')
+  if (!head || chunks.length !== AM4_DUMP.CHUNKS || !parts.includes('foot')) return null
+  if (head[6] * 4 + head[7] !== n) return null
+  const raw = []
+  for (const c of chunks) {
+    /* After the six-byte envelope and the two-byte tag, up to the checksum. */
+    for (let i = 8; i + 2 < c.length - 2; i += 3) {
+      const w = (c[i] | (c[i + 1] << 7) | (c[i + 2] << 14)) & 0xffff
+      raw.push(w & 0xff, w >> 8)
+    }
+  }
+  if (raw.length !== AM4_DUMP.PATCH_BYTES) return null
+  const u16 = (o) => raw[o] | (raw[o + 1] << 8)
+  const zeroed = raw.slice()
+  zeroed[4] = 0
+  zeroed[5] = 0
+  if (crcCcitt(zeroed) !== u16(4)) return null
+  const size = u16(0x48)
+  const packedSize = u16(0x4a)
+  const want = 4 + 3 * 0x50 + 32
+  if (size < want || packedSize === 0 || 0x4c + packedSize > raw.length) return null
+  let body
+  try {
+    body = unpackBody(raw.slice(0x4c, 0x4c + packedSize), want)
+  } catch {
+    return null
+  }
+  return { location: n, names: [0, 1, 2, 3].map((s) => asciiName(body.slice(4 + s * 0x50, 4 + s * 0x50 + 32))) }
 }
 
 /* ------------------------------------------------------------------ */

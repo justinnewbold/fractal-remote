@@ -3,7 +3,7 @@ import { Modal, Platform, Pressable, Text, TextInput, View, useWindowDimensions 
 import { BlurView } from 'expo-blur'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
-import { BPM_MAX, BPM_MIN, checkBpm } from '../lib/tempo'
+import { ANY_BPM, checkBpm } from '../lib/tempo'
 import Note from './Note'
 import Press from './Press'
 
@@ -35,7 +35,7 @@ const face = Platform.select(mono)
  * broken. checkBpm is shared with the browser, so both refuse the same things
  * in the same words.
  */
-export default function TempoBox({ open, bpm, onSet, onClose }) {
+export default function TempoBox({ open, bpm, range = ANY_BPM, onSet, onClose }) {
   const [typed, setTyped] = useState('')
   const [error, setError] = useState(null)
   const { height } = useWindowDimensions()
@@ -50,7 +50,7 @@ export default function TempoBox({ open, bpm, onSet, onClose }) {
   }, [open, bpm])
 
   const commit = async () => {
-    const checked = checkBpm(typed)
+    const checked = checkBpm(typed, range)
     if (checked.error) {
       setError(checked.error)
       return
@@ -130,7 +130,7 @@ export default function TempoBox({ open, bpm, onSet, onClose }) {
             />
 
             <Text style={{ color: color.silkDim, fontSize: font.small, textAlign: 'center' }}>
-              {`${BPM_MIN} to ${BPM_MAX} beats per minute`}
+              {`${range.min} to ${range.max} beats per minute`}
             </Text>
 
             {error ? <Note tone="fault">{error}</Note> : null}

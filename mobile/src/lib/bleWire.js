@@ -31,6 +31,7 @@ import {
   MODELS,
   am4Allowed,
   am4Block,
+  am4DumpPart,
   am4LocationCode,
   am4Note,
   buildAm4Bypass,
@@ -39,6 +40,7 @@ import {
   buildAm4ChannelRead,
   buildAm4Preset,
   buildAm4Scene,
+  buildAm4StoredDump,
   buildAm4StoredName,
   buildAm4Structure,
   buildAm4Tempo,
@@ -70,6 +72,7 @@ import {
   isFractal,
   parseAm4Bypass,
   parseAm4Channel,
+  parseAm4DumpSceneNames,
   parseAm4StoredName,
   parseAm4Structure,
   parseAm4Tempo,
@@ -141,7 +144,14 @@ export const WAIT = {
   am4Tempo: 800,
   am4Tuner: 400,
   /* An AM4 write is not answered; the line is held this long so its echo passes first. */
-  am4Settle: 40
+  am4Settle: 40,
+  /*
+   * A stored preset, whole (the scene names): the longest the AM4 may go
+   * quiet between its six frames, and the most the whole may take. A 3,082-byte
+   * frame is about a second at 31,250 baud, and the whole about four.
+   */
+  am4DumpGap: 2500,
+  am4DumpAll: 20000
 }
 
 /** A frame identical to one just sent, arriving within this, is the phone hearing itself. */
@@ -374,6 +384,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const lateUntil = new Map()
   let holdTimer = null
+  /* Until when an answer given up on part-way may still be coming (see heardBytes). */
+  let drainUntil = 0
+  let drainCap = 0
+  const draining = () => drainUntil > time.now()
   const lateFor = (fn) => (lateUntil.get(fn) ?? -Infinity) - time.now()
 
   /*
@@ -420,7 +434,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       return opts.priority === 'write' ? Promise.reject(unheard()) : Promise.resolve(null)
     }
     const priority = PRI[opts.priority] ?? PRI.read
-    if (priority === PRI.poll && (current || waiting.length)) return Promise.resolve(SKIPPED)
+    if (priority === PRI.poll && (current || waiting.length || draining())) return Promise.resolve(SKIPPED)
     return new Promise((resolve, reject) => {
       const job = { out, opts, priority, resolve, reject, back: null }
       const at = waiting.findIndex((j) => j.priority > priority)
@@ -431,6 +445,17 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   function pump() {
     if (current || closed || wrongUnit || !waiting.length) return
+    /* An AM4 still sending a preset nobody waited out is sent nothing until it stops. */
+    const still = drainUntil - time.now()
+    if (still > 0) {
+      if (holdTimer === null) {
+        holdTimer = time.setTimeout(() => {
+          holdTimer = null
+          pump()
+        }, still)
+      }
+      return
+    }
     const hold = heldFor(waiting[0])
     if (hold > 0) {
       /* A watch poll is not worth waiting for: the next one asks. Anything else waits it out, and a write still goes ahead of it. */
@@ -459,14 +484,20 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       lastSent.messages.push(m)
     }
     if (job.priority === PRI.write) say(`sent ${job.opts.what || 'a write'}: ${messages.map(toHex).join(' | ')}`)
-    job.timer = time.setTimeout(() => {
+    job.expire = () => {
       if (current !== job) return
-      if (job.opts.match) {
+      if (job.opts.match || job.opts.collect) {
         if (job.opts.fn !== undefined) lateUntil.set(job.opts.fn, time.now() + LATE_MS)
         if (job.priority !== PRI.poll) say(`no answer to ${job.opts.what || toHex(messages[0])} in ${job.opts.ms} ms`)
       }
+      /* Given up on part-way through: the unit may still be sending the rest of it. */
+      if (job.opts.collect && job.back) {
+        drainUntil = time.now() + job.opts.ms
+        drainCap = drainUntil + (job.opts.cap ?? 0)
+      }
       end(job, null)
-    }, job.opts.ms ?? 0)
+    }
+    job.timer = time.setTimeout(job.expire, job.opts.ms ?? 0)
   }
 
   function end(job, value, err) {
@@ -497,6 +528,38 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /* ---------------- hearing ---------------- */
 
+  /*
+   * A LONG ANSWER IS TIMED BY ITS BYTES, NOT ITS FRAMES.
+   *
+   * A stored preset is four frames of 3,082 bytes. Timed frame to frame, a
+   * Bluetooth link slower than about 1.2 KB/s could never finish one: the
+   * wait ran out mid-frame, the read gave up, and the next message went to an
+   * AM4 still sending — the one thing it must never be. So every byte that
+   * arrives (not the real-time ones, which a unit may send for ever) starts
+   * the wait again; and an answer given up on part-way holds the line until
+   * the unit has been quiet for as long again, up to the most it may take.
+   */
+  function heardBytes(bytes) {
+    if (closed || bytes == null || typeof bytes.length !== 'number') return
+    let real = false
+    for (let i = 0; i < bytes.length; i++) {
+      if ((bytes[i] & 0xff) < 0xf8) {
+        real = true
+        break
+      }
+    }
+    if (!real) return
+    const now = time.now()
+    const job = current
+    if (job && job.opts.collect && job.timer !== undefined) {
+      time.clearTimeout(job.timer)
+      const left = (job.opts.cap ?? Infinity) - (now - job.started)
+      job.timer = time.setTimeout(job.expire, Math.max(0, Math.min(job.opts.ms, left)))
+    } else if (drainUntil > now) {
+      drainUntil = Math.min(now + WAIT.am4DumpGap, drainCap)
+    }
+  }
+
   /** A whole SysEx frame from the joiner. */
   function heard(f) {
     if (closed || !isFractal(f)) return
@@ -521,6 +584,23 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         say('the unit is echoing what it receives: MIDI Thru is on')
       }
       return
+    }
+    /*
+     * An answer in several frames (an AM4's stored preset): each one that is
+     * part of it is kept, and the wait starts again from it, up to the most
+     * the whole may take. Nothing else is sent meanwhile — the queue holds.
+     */
+    if (job && job.opts.collect) {
+      const got = job.opts.collect(f)
+      if (got !== undefined) {
+        job.back = f
+        answered = true
+        if (got !== null) return end(job, got)
+        time.clearTimeout(job.timer)
+        const left = (job.opts.cap ?? Infinity) - (now - job.started)
+        job.timer = time.setTimeout(job.expire, Math.max(0, Math.min(job.opts.ms, left)))
+        return
+      }
     }
     if (job && job.opts.match) {
       const got = job.opts.match(f)
@@ -1324,6 +1404,83 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return { number: n, name: got.name }
   }
 
+  /*
+   * AN AM4'S SCENE NAMES, THE SLOW WAY, ONCE.
+   *
+   * "Let's make them load even if it's slower on Bluetooth, but it doesn't
+   * have to constantly be rereading them once it reads them once, it can go
+   * off the remembered names unless they hit refresh." They are only inside
+   * the whole stored preset (parseAm4DumpSceneNames), four seconds of it at
+   * 5-pin speed. The phone remembers what this finds (rig.refreshSceneNames),
+   * so it runs the first time a preset is seen and when Refresh names is
+   * pressed, never on every change.
+   *
+   * NOTHING ELSE IS SENT WHILE IT COMES. The AM4 has frozen on things it did
+   * not expect, and nobody has seen what it does with a message arriving
+   * while it is sending a preset out — the computer never does that either.
+   * So this is one exchange like any other, and a press made during it waits
+   * for it to end. A unit that does not even start answering is not asked
+   * again on this connection.
+   */
+  const am4Names = new Map()
+  /* A second ask for a slot already coming is the same read, not another four seconds. */
+  const am4NamesComing = new Map()
+  /* A slot given up on part-way (a link too slow, a unit that stalled) is not read again by itself: only Refresh names asks. */
+  const am4NamesGaveUp = new Set()
+  let am4DumpsOff = false
+  function am4SceneNames(n) {
+    presetNumber(n)
+    if (am4Names.has(n)) return Promise.resolve({ number: n, names: am4Names.get(n) })
+    if (am4NamesGaveUp.has(n)) return Promise.reject(unsupported())
+    if (!am4NamesComing.has(n)) {
+      const coming = readAm4SceneNames(n).finally(() => am4NamesComing.delete(n))
+      am4NamesComing.set(n, coming)
+    }
+    return am4NamesComing.get(n)
+  }
+  async function readAm4SceneNames(n) {
+    if (am4DumpsOff) throw unsupported()
+    const frames = []
+    let heardHead = false
+    const started = time.now()
+    const got = await ask(
+      buildAm4StoredDump(n),
+      null,
+      WAIT.am4DumpGap,
+      `the scene names of ${am4LocationCode(n)}`,
+      {
+        cap: WAIT.am4DumpAll,
+        collect: (f) => {
+          const part = am4DumpPart(f)
+          if (!part || (part === 'head' && heardHead)) return undefined
+          if (part === 'head') heardHead = true
+          else if (!heardHead) return undefined
+          frames.push(f)
+          if (part !== 'foot') return null
+          return parseAm4DumpSceneNames(frames, n) || { broken: true }
+        }
+      }
+    )
+    if (rejected(got)) throw refusedBy(got.rejected)
+    if (!got) {
+      if (!heardHead) {
+        am4DumpsOff = true
+        say('the AM4 did not answer a request for a stored preset; its scene names are not asked for again on this connection')
+      } else {
+        am4NamesGaveUp.add(n)
+        say(`gave up on the scene names of ${am4LocationCode(n)} part-way; Refresh names asks again`)
+      }
+      throw timedOut()
+    }
+    if (got.broken) {
+      say(`the scene names of ${am4LocationCode(n)} came back damaged; not used`)
+      throw timedOut()
+    }
+    say(`read the scene names of ${am4LocationCode(n)} in ${((time.now() - started) / 1000).toFixed(1)} s`)
+    am4Names.set(n, got.names)
+    return { number: n, names: got.names }
+  }
+
   async function am4SelectPreset(number) {
     const n = presetNumber(number)
     const r = await fire(buildAm4Preset(n), `preset ${am4LocationCode(n)}`)
@@ -1452,8 +1609,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       if (part[0] === 'presets' && isNum(part[1])) {
         const n = Number(part[1])
         if (part.length === 2) return () => (am4 ? am4StoredName(n) : gen3StoredName(n))
-        /* The AM4 keeps scene names only in a 12 KB dump, which is never asked for over Bluetooth. */
-        if (am4) return null
+        /* The AM4 keeps scene names only in its 12 KB stored preset: read for the
+           names alone, and never as a summary, which Play asks of the slots
+           either side of this one. */
+        if (am4) return part.length === 3 && part[2] === 'scenes' ? () => am4SceneNames(n) : null
         if (part.length === 3 && part[2] === 'summary') {
           return async () => ({ number: n, name: last.name, scenes: await gen3SceneNames(n) })
         }
@@ -1482,6 +1641,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * here with nothing sent. A refusal never falls through to the computer —
    * with Bluetooth on, there is no computer to fall through to.
    */
+  const toldNot = new Set()
   async function request(path, options = {}) {
     if (closed) throw notConnected()
     const method = String(options?.method || 'GET').toUpperCase()
@@ -1495,7 +1655,18 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     const route = method === 'GET' || method === 'POST' ? routeFor(method, clean, part, body) : null
     if (!route) {
-      say(`not over Bluetooth: ${method} ${clean}`)
+      /*
+       * WHAT BLUETOOTH NEVER ANSWERS IS SAID ONCE A CONNECTION. "Don't know if
+       * you can see any issues from this log." Most of it was this line. What
+       * routeFor refuses once it refuses for the whole connection: still
+       * refused every time with nothing sent, but written down for the first
+       * of each kind only (preset 98's and 99's are one kind).
+       */
+      const kind = `${method} ${clean.replace(/(\/|%3A|:)\d+(?=\/|$)/gi, '$1n')}`
+      if (!toldNot.has(kind)) {
+        toldNot.add(kind)
+        say(`not over Bluetooth: ${method} ${clean}`)
+      }
       /* The computer's own documents simply do not exist here, which the app already handles. */
       throw method === 'GET' && (clean === '/device' || clean.startsWith('/store/')) ? notHere() : unsupported()
     }
@@ -1883,6 +2054,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     },
     heard,
     heardShort,
+    /** Every chunk of bytes from the adapter, before the joiner: a long answer is timed by them. */
+    heardBytes,
     startPolls,
     stopPolls,
     check,
@@ -1903,6 +2076,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      */
     forgetSceneNames() {
       sceneCache = null
+      am4Names.clear()
+      /* Refresh names is asked for: an AM4 that once did not answer is asked again. */
+      am4DumpsOff = false
+      am4NamesGaveUp.clear()
     },
     close
   }

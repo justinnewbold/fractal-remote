@@ -242,6 +242,9 @@ export default function Settings({
      as however many times they were pressed. */
   const unit = useDemoUnit()
   const behind = !!hostVersion && isOlder(hostVersion, APP_VERSION) === true
+  /* Bluetooth (beta) with no demo: no computer in the chain. bleLink puts the
+     adapter's name where the computer's goes (macName), and never a version. */
+  const throughAdapter = bluetooth && !demo
 
   const [page, setPage] = useState(startPage)
   useEffect(() => {
@@ -741,12 +744,15 @@ export default function Settings({
               cards={linkChain({
                 here: 'phone',
                 demo,
+                via: throughAdapter ? 'bluetooth' : 'computer',
                 unit: {
                   name: demo ? DEMO_UNITS.find((u) => u.key === unit)?.name || 'FM3' : deviceName,
                   firmware,
                   state: unitState
                 },
                 computer: { name: macName, version: hostVersion, link },
+                /* Over Bluetooth, link.js's macName is the adapter's name. */
+                adapter: { name: macName, link },
                 phone: {
                   version: APP_VERSION,
                   email: account?.email && !isPairAccount(account.email) ? account.email : null
@@ -758,7 +764,7 @@ export default function Settings({
                 card that says so. The usual reason besides the cable is
                 Fractal's own editor holding the unit — named, per unit where
                 it is known (lib/editors.js). */}
-            {link === 'connected' && !demo && (unitState === 'missing' || unitState === 'silent') ? (
+            {link === 'connected' && !demo && !throughAdapter && (unitState === 'missing' || unitState === 'silent') ? (
               <Note tone="fault">
                 {unitState === 'missing'
                   ? `${quitEditor(deviceName)} This finds the unit again by itself once it is free.`
@@ -870,7 +876,7 @@ export default function Settings({
                 this app being slow.
               </Note>
             ) : null}
-            {link === 'connected' && !demo && !hostVersion ? (
+            {link === 'connected' && !demo && !throughAdapter && !hostVersion ? (
               <Note>
                 The computer didn’t say which version it is running: its app is older than 7.205.0, or
                 it could not write its name for the phone. If the computer is on 7.295.0 or newer, its menu bar icon has a line saying what the
@@ -984,7 +990,7 @@ export default function Settings({
               again, which on a live link is a button that does nothing you
               can see. Said as what it does, too.
             */}
-            {link !== 'connected' ? <Press label="Look for the computer again" onPress={onReconnect} /> : null}
+            {link !== 'connected' ? <Press label={throughAdapter ? 'Look for the adapter again' : 'Look for the computer again'} onPress={onReconnect} /> : null}
           </View>
 
           {/*

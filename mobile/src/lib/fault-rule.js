@@ -38,3 +38,22 @@ export const faultFrom = (err) => ({
  */
 export const withdrawsFault = ({ error = null, errorLink = false } = {}, link) =>
   Boolean(error) && Boolean(errorLink) && link === 'connected'
+
+/*
+ * HOW LONG THE PLAY SCREEN SHOWS A FAULT.
+ *
+ * "Can we just have it be like an overlay toast notification that doesn't
+ * move the screen at all?" It floats now, so it no longer moves anything —
+ * but a note floating over the preset is only welcome while it is news. Eight
+ * seconds is long enough to read between songs and gone before the next one:
+ * the same eight App gives "Picked up …".
+ */
+export const FAULT_SHOWN_MS = 8000
+
+/**
+ * How much longer a fault is shown at `now`, in ms: 0 once it has had its
+ * time (or there is none), Infinity while it is about the link — that one
+ * describes a live condition, and goes when the link is back or on its ✕.
+ */
+export const faultLeft = ({ error = null, errorLink = false, faultAt = 0 } = {}, now = 0) =>
+  !error ? 0 : errorLink ? Infinity : Math.max(0, faultAt + FAULT_SHOWN_MS - now)

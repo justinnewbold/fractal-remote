@@ -170,7 +170,7 @@ async function rigOnTheBench(over = {}) {
     'demo.js': "export const isDemo = () => false\nexport const demoDevice = () => null\nexport const demoUnit = () => 'fm3'\n",
     'demoWire.js': "export const demoRequest = () => { throw new Error('no demo on the bench') }\n",
     /* Bluetooth (beta) off, as it is unless somebody turns it on: every request goes to the pretend computer. */
-    'bleSwitch.js': 'export const bluetoothWire = () => null\nexport const bluetoothOn = () => false\nexport const overBluetooth = () => false\n',
+    'bleSwitch.js': "export const bluetoothWire = () => null\nexport const bluetoothOn = () => false\nexport const overBluetooth = (caps) => caps?.via === 'bluetooth'\n",
     'debugLog.js': 'export const logDebug = () => {}\n',
     'lineage.js': 'export const withLineage = (x) => x\n',
     'presetNames.js': 'export const adopt = async () => 0\nexport const forget = () => {}\nexport const learn = () => {}\nexport const nameOf = () => undefined\n',
@@ -178,7 +178,8 @@ async function rigOnTheBench(over = {}) {
     /* `keptNames` is what this phone's disk holds for a slot, from an earlier visit. */
     'sceneNameCache.js':
       `const kept = ${JSON.stringify(over.keptNames || {})}\n` +
-      'export const forgetSceneNames = () => true\nexport const recallSceneNames = async (owner, n) => kept[n] || []\nexport const rememberSceneNames = () => true\n'
+      'export const forgetSceneNames = () => true\nexport const recallSceneNames = async (owner, n) => ((kept[n] || []).some(Boolean) ? kept[n] : [])\nexport const rememberSceneNames = () => true\n' +
+      'export const sceneNamesKnown = async (owner, n) => Object.prototype.hasOwnProperty.call(kept, n)\n'
   }
   /* The catalog the pedals are named from before the chain is read; see lib/chain-outline. */
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
@@ -224,7 +225,7 @@ async function rigOnTheBench(over = {}) {
     answer = (method, path, body) => {
       if (method === 'GET') {
         if (path === '/device/detect')
-          return { connected: true, name: 'FM3', short: 'FM3', capabilities: unit.capabilities ?? { scenes: 8, meters: { outputLevels: true } } }
+          return { connected: true, name: unit.short ?? 'FM3', short: unit.short ?? 'FM3', capabilities: unit.capabilities ?? { scenes: 8, meters: { outputLevels: true } } }
         if (path === '/device') return {}
         if (path === '/preset') {
           if (unit.which) return unit.which()
@@ -1082,7 +1083,7 @@ export function run(test) {
       assert.match(rig, new RegExp(call), `${what} does not count as unsaved work`)
     }
     /* A tap only counts once it has become a number worth sending. */
-    assert.match(rig, /const guess = tappedBpm\(taps\) if \(guess != null\) \{ [^}]*noteEdited\(\)/, 'a tapped tempo does not count as unsaved work')
+    assert.match(rig, /const guess = tappedBpm\(taps, range\) if \(guess != null\) \{ [^}]*noteEdited\(\)/, 'a tapped tempo does not count as unsaved work')
 
     /* Moving around the rig is not editing it. */
     const moves = rig.slice(rig.indexOf('export function writeScene(index)'), rig.indexOf('export async function refreshSceneState()'))
@@ -1178,7 +1179,7 @@ export function run(test) {
 
     /* A unit mid-switch reports slot -1, and nothing is filed under it. */
     const dev = read('mobile/src/lib/device.js').replace(/\s+/g, ' ')
-    assert.match(dev, /export async function storedSceneNames\(slug, number\) \{ .*?number < 0 \|\| demoDevice\(\)\) return null/)
+    assert.match(dev, /export async function storedSceneNames\(slug, number\) \{ .*?number < 0 \|\| demoDevice\(\) \|\| bluetoothWire\(\)\) return null/)
     assert.match(dev, /export function keepSceneNames\(slug, number, names\) \{ if \(!slug \|\| !Number\.isInteger\(number\) \|\| number < 0/)
   })
 
@@ -2979,11 +2980,11 @@ export function run(test) {
      */
     assert.match(device, /export async function unitSceneNames\(number\) \{[\s\S]*?remoteRequest\(`\/presets\/\$\{number\}\/scenes`\)/, 'the phone has no way to read an AM4\'s scene names itself')
     assert.match(device, /if \(Number\.isInteger\(res\?\.number\) && res\.number !== number\) return null/, 'an answer for another slot is believed')
-    assert.match(rigSrc, /if \(summary\.length \|\| state\.preset\?\.number !== number\) return summary\n  return device\.unitSceneNames\(number\)/, 'a preset with nothing kept does not ask the unit')
+    assert.match(rigSrc, /if \(summary\.length \|\| state\.preset\?\.number !== number\) return summary\n  \}\n  return device\.unitSceneNames\(number\)/, 'a preset with nothing kept does not ask the unit')
     assert.match(rigSrc, /export async function rereadSceneNames\(\)/)
     assert.match(rigSrc, /if \(names === null \|\| state\.preset\?\.number !== number\) return 'failed'\n  if \(!names\.some\(\(n\) => n\)\) return 'none'/, 'Refresh names cannot tell unnamed scenes from a failed read')
     const stage = read('mobile/src/screens/Stage.js')
-    /* Beside the heading; over Bluetooth on an AM4 it is held back (test/bluetooth.mjs says why). */
+    /* Beside the heading, over Bluetooth on an AM4 too (test/bluetooth.mjs says how). */
     assert.match(stage, /<Label>Scenes<\/Label>\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?(?:\{overBluetooth\(caps\) && device === 'am4' \? null : )?<RefreshNames \/>/, 'Refresh names is not beside the Scenes heading')
     assert.match(stage, /await refreshAll\(\)\s*\/\*[^*]*\*\/\s*if \(!arriving\) await rereadSceneNames\(\)/, 'pulling down does not read the scene names fresh')
     assert.match(stage, /none: 'No names on the unit'/)
@@ -3247,6 +3248,48 @@ export function run(test) {
       /\{error \? \( <Note tone="fault" onDismiss=\{\(\) => setError\(null\)\}>/,
       'the edit screen’s error still cannot be dismissed'
     )
+  })
+
+  test('the play screen’s fault floats over the screen and never moves it', async () => {
+    /*
+     * "If you tap too fast on the tap tempo, it moves the screen down and you
+     * accidentally hit the next button because it's giving the error the top
+     * of the screen. Can we just have it be like an overlay toast
+     * notification that doesn't move the screen at all?"
+     */
+    const stage = read('mobile/src/screens/Stage.js').replace(/\s+/g, ' ')
+    const end = stage.indexOf('</ScrollView>')
+    assert.ok(end > 0)
+    assert.ok(
+      stage.indexOf('<Note tone="fault" onDismiss={clearError}>') > end,
+      'the fault is back in the scrolling content, where it pushes the foot under a thumb'
+    )
+    assert.ok(stage.indexOf('sub="What to try"') > end, 'the fault’s fix is back in the scrolling content')
+    assert.match(stage, /<Toast open=\{!!error\}> \{error \? \( <Note tone="fault" onDismiss=\{clearError\}>/)
+    assert.match(stage, /sub="What to try" height=\{44\}/)
+    assert.doesNotMatch(stage, /setTimeout\([^)]*clearError/, 'the timer clears the store App reads to tell a failed first read')
+
+    const toast = read('mobile/src/components/Toast.js')
+    assert.match(toast, /position: 'absolute'/)
+    assert.doesNotMatch(toast, /top: '100%'/, 'the card hangs outside its parent, where a press may not reach it')
+    assert.doesNotMatch(toast, /from '\.\.\/lib\/rig'/, 'hiding the toast must never touch the store')
+    assert.match(toast, /announceForAccessibility/)
+    assert.match(toast, /isScreenReaderEnabled/, 'a timed message is gone before VoiceOver reads it')
+
+    const { faultLeft, FAULT_SHOWN_MS } = await import('../mobile/src/lib/fault-rule.js')
+    assert.ok(FAULT_SHOWN_MS >= 4000 && FAULT_SHOWN_MS <= 10000)
+    assert.equal(faultLeft({ error: null }, 5), 0)
+    assert.equal(faultLeft({ error: 'x', faultAt: 1000 }, 1000), FAULT_SHOWN_MS)
+    assert.equal(faultLeft({ error: 'x', faultAt: 1000 }, 1000 + FAULT_SHOWN_MS), 0)
+    assert.equal(faultLeft({ error: 'x', faultAt: 1000 }, 61000), 0, 'never negative')
+    assert.equal(
+      faultLeft({ error: 'Not connected to your computer.', errorLink: true, faultAt: 0 }, 1e12),
+      Infinity,
+      'a fault about the link describes now, and goes when the link is back'
+    )
+
+    const rig = read('mobile/src/lib/rig.js')
+    assert.match(rig, /if \(patch\.error\) patch = \{ \.\.\.patch, faultAt: Date\.now\(\) \}/, 'the same fault raised again is not news')
   })
 
   test('the phone wears the browser\u2019s header', () => {
@@ -6960,6 +7003,24 @@ export function run(test) {
       /'computer app': link\.hostVersion \|\| 'did not say \(older than 7\.205\.0, or could not write it\)'/,
       'a pasted log still cannot say what the computer is running'
     )
+    /*
+     * And over Bluetooth (beta), where there is no computer: the pasted log
+     * said "computer: WIDI Uhost Bluetooth" and "computer app: did not say".
+     */
+    const logScreen = read('mobile/src/screens/Log.js').replace(/\s+/g, ' ')
+    assert.match(logScreen, /import \{ bluetoothOn \} from '\.\.\/lib\/bleSwitch'/)
+    assert.match(logScreen, /const throughAdapter = bluetoothOn\(\) && !isDemo\(\)/)
+    assert.match(
+      logScreen,
+      /\.\.\.\(throughAdapter \? \{ link: `Bluetooth \(beta\), \$\{link\.link\}\$\{link\.macName && link\.link !== 'off' \? `, through \$\{link\.macName\}` : ''\}` \} : \{ computer: link\.macName \|\| 'none',/,
+      'over Bluetooth the pasted log still names the adapter as a computer'
+    )
+    const rigLines = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
+    assert.match(rigLines, /const blue = caps\?\.capabilities\?\.via === 'bluetooth'/)
+    assert.match(rigLines, /'the unit answers through the Bluetooth adapter'/, 'over Bluetooth the log says the computer has a unit')
+    assert.match(rigLines, /'the unit does not answer through the Bluetooth adapter'/)
+    assert.match(rigLines, /viaBluetooth\(\) \? 'the unit did not answer through the Bluetooth adapter' : 'the unit did not answer the computer'/)
+    assert.match(read('mobile/src/lib/bleWire.js'), /via: 'bluetooth'/, 'the mark the log wording reads is gone from the Bluetooth detect')
 
     /* And on screen, where somebody can act on it. */
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
@@ -6968,7 +7029,7 @@ export function run(test) {
     assert.match(read('shared/link-chain.mjs'), /\$\{computerName\}\$\{version\(computer\.version\)\}/, 'the computer card forgot its version')
     assert.match(settings, /const behind = !!hostVersion && isOlder\(hostVersion, APP_VERSION\) === true/, 'a computer that did not say its version is told it is behind')
     /* A missing version is said as missing, with where to look, not as "behind". */
-    assert.match(settings, /link === 'connected' && !demo && !hostVersion \? \( <Note> The computer didn’t say which version it is running: its app is older than 7\.205\.0, or it could not write its name for the phone\. If the computer is on 7\.295\.0 or newer, its menu bar icon has a line saying what the phones hear about its version/, 'a missing version does not point at the Mac’s own menu line')
+    assert.match(settings, /link === 'connected' && !demo && !throughAdapter && !hostVersion \? \( <Note> The computer didn’t say which version it is running: its app is older than 7\.205\.0, or it could not write its name for the phone\. If the computer is on 7\.295\.0 or newer, its menu bar icon has a line saying what the phones hear about its version/, 'a missing version does not point at the Mac’s own menu line')
 
     /*
      * The comparison is strict about what it will answer, and that is the
@@ -7494,7 +7555,7 @@ export function run(test) {
        the quick names before it waits for the unit to settle. */
     assert.equal((flat.match(/const quick = names \? await quickSceneNames\(\) : true /g) || []).length, 1, 'the quick read is not taken in the one read of a preset')
     const once = withoutComments(rig.slice(rig.indexOf('async function readChainAndNames'), rig.indexOf('let staleTimer'))).replace(/\s+/g, ' ')
-    assert.match(once, /read = await refreshBlocks\(\) if \(names && read && state\.preset\?\.number === number\) \{ .*?if \(copy !== 'stale' && !quick\) await refreshSceneNames\(copy\)/, 'the slow read still runs when the names were already there, or before the chain, or after a chain read that failed')
+    assert.match(once, /read = await refreshBlocks\(\) if \(names && read && state\.preset\?\.number === number\) \{ .*?if \(copy !== 'stale' && !quick\) \{ (?:\/\*[^*]*\*\/ )?if \(bluetoothAm4\(\)\) namesWhenQuiet\(number, copy\) else await refreshSceneNames\(copy\) \}/, 'the slow read still runs when the names were already there, or before the chain, or after a chain read that failed')
     const loading = withoutComments(rig.slice(rig.indexOf('export async function loadPreset'))).replace(/\s+/g, ' ')
     assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 syncChainBusy\(\) \} await readPresetSoon\(settleFrom\(sentAt\), \{ reloaded: true \}\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
     assert.match(rig, /const kept = await recallSceneNames\(owner, number\)/, 'the disk is not read first')
@@ -7636,7 +7697,11 @@ export function run(test) {
      */
     const flat = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
     assert.doesNotMatch(flat, /label="Try now"/, 'the button still says Try now, which says nothing about what it tries')
-    assert.match(flat, /\{link !== 'connected' \? <Press label="Look for the computer again" onPress=\{onReconnect\} \/> : null\}/, 'the reconnect button is shown on a live link')
+    assert.match(
+      flat,
+      /\{link !== 'connected' \? <Press label=\{throughAdapter \? 'Look for the adapter again' : 'Look for the computer again'\} onPress=\{onReconnect\} \/> : null\}/,
+      'the reconnect button is shown on a live link'
+    )
   })
 
   test('the password is asked for from the account line, not left open on the page', () => {
@@ -11138,6 +11203,92 @@ export function run(test) {
     await clock.advance(3000)
     /* And the unit's answer, out of the chain read, still goes over them. */
     assert.deepEqual(rig.getState().sceneNames.slice(0, 2), ['VERSE', 'CHORUS'], 'what the unit says no longer replaces a kept copy')
+  })
+
+  /*
+   * "Don't know if you can see any issues from this log." Over Bluetooth the
+   * phone asked the computer's store for scene names on every preset change
+   * and again at 4, 9 and 18 seconds — a computer that was not there.
+   */
+  test('over Bluetooth a preset change asks no computer’s store, and a preset whose names are kept is not read again', async () => {
+    const BLE = { via: 'bluetooth', scenes: 4, sceneCount: 4, slotModel: 'linear' }
+    const STORE_NAMES = /^GET \/store\/config\/scene-names/
+    const SCENES = /^GET \/presets\/\d+\/scenes$/
+    const fresh = await rigOnTheBench({ capabilities: BLE, namesInChain: false, scenes: ['', '', '', ''] })
+    fresh.rig.loadPreset(40)
+    await fresh.clock.advance(30000)
+    assert.equal(fresh.asked(STORE_NAMES), 0, 'a computer’s store was asked over Bluetooth')
+
+    const kept = await rigOnTheBench({ capabilities: BLE, namesInChain: false, scenes: ['', '', '', ''], keptNames: { 40: ['CLEAN', 'DRIVE', '', ''] } })
+    kept.rig.loadPreset(40)
+    await kept.clock.advance(30000)
+    assert.deepEqual(kept.rig.getState().sceneNames.slice(0, 2), ['CLEAN', 'DRIVE'])
+    assert.equal(kept.asked(SUMMARY), 0, 'remembered names were read again over Bluetooth')
+    assert.equal(kept.asked(SCENES), 0, 'remembered names were read again over Bluetooth')
+    assert.equal(kept.asked(STORE_NAMES), 0)
+  })
+
+  /*
+   * An AM4's names over Bluetooth are four seconds of the line, and a press
+   * made meanwhile waits. In his log the next press came 2 to 3 seconds after
+   * the song changed, so the read waits for a quiet moment.
+   */
+  test('over Bluetooth an AM4’s first read of a preset’s names waits until nothing has been pressed for a while', async () => {
+    const SCENES = /^GET \/presets\/\d+\/scenes$/
+    const { rig, clock, asked } = await rigOnTheBench({
+      short: 'AM4',
+      capabilities: { via: 'bluetooth', scenes: 4, sceneCount: 4, slotModel: 'linear' },
+      namesInChain: false,
+      scenes: ['CLEAN', 'LEAD', '', '']
+    })
+    assert.equal(rig.getState().deviceSlug, 'am4')
+    rig.loadPreset(40)
+    await clock.advance(3000)
+    assert.equal(asked(SCENES), 0, 'the names were read straight after the preset changed, in the way of the next press')
+    rig.writeScene(1)
+    await clock.advance(rig.AM4_NAMES_QUIET_MS - 1000)
+    assert.equal(asked(SCENES), 0, 'the names were read while the player was still pressing')
+    await clock.advance(2000)
+    assert.equal(asked(SCENES), 1, 'the names were never read once it went quiet')
+    assert.deepEqual(rig.getState().sceneNames.slice(0, 2), ['CLEAN', 'LEAD'])
+    /* And a preset left before the quiet comes is not read at all. */
+    rig.loadPreset(41)
+    await clock.advance(2000)
+    rig.loadPreset(42)
+    await clock.advance(rig.AM4_NAMES_QUIET_MS + 1000)
+    assert.equal(asked(/^GET \/presets\/41\/scenes$/), 0, 'a preset already left was read')
+    assert.equal(asked(/^GET \/presets\/42\/scenes$/), 1)
+  })
+
+  test('over Bluetooth a slot already read and found unnamed is not read again after a reconnect', async () => {
+    const { rig, clock, asked } = await rigOnTheBench({
+      short: 'AM4',
+      capabilities: { via: 'bluetooth', scenes: 4, sceneCount: 4, slotModel: 'linear' },
+      namesInChain: false,
+      scenes: ['', '', '', ''],
+      keptNames: { 40: ['', '', '', ''] }
+    })
+    rig.loadPreset(40)
+    await clock.advance(rig.AM4_NAMES_QUIET_MS + 5000)
+    assert.equal(asked(/^GET \/presets\/40\/scenes$/), 0, 'a slot known to be unnamed was read again')
+    const src = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
+    assert.match(src, /rememberSceneNames\(device\.nameOwner\(state\.deviceSlug\), number, names, \{ blank: true \}\)/, 'an unnamed slot read over Bluetooth is not written down')
+    /* Not while tuning: the read would freeze the needle for its four seconds. */
+    assert.match(src, /const wait = state\.tunerOn \? AM4_NAMES_QUIET_MS : pressedAt \+ AM4_NAMES_QUIET_MS - Date\.now\(\)/)
+    assert.match(src, /export async function writeTuner\(on\) \{ pressed\(\)/)
+    /* The same fault again is quiet only while it is still on screen: a second outage is said. */
+    assert.match(src, /if \(fault\.error === state\.error && fault\.errorLink === state\.errorLink && faultLeft\(state, Date\.now\(\)\) > 0\) return/)
+    const cache = read('mobile/src/lib/sceneNameCache.js').replace(/\s+/g, ' ')
+    assert.match(cache, /if \(!kept\.some\(\(n\) => n\) && !\(blank && kept\.length\)\) return false/)
+    assert.match(cache, /export async function sceneNamesKnown\(owner, number\)/)
+  })
+
+  test('two passes that both want a preset’s scene names read them once', async () => {
+    const { rig, clock, asked } = await rigOnTheBench({ namesInChain: false, scenes: ['A', 'B', '', '', '', '', '', ''] })
+    await Promise.all([rig.refreshSceneNames(), rig.refreshSceneNames()])
+    await clock.advance(0)
+    assert.equal(asked(SUMMARY), 1, 'two reads of the same names went to the unit at once')
+    assert.equal(rig.getState().sceneNames[0], 'A')
   })
 
   test('a preset played before is back on the tap, chain and all, and still costs exactly one chain read', async () => {

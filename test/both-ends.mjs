@@ -1401,6 +1401,51 @@ export function run(test) {
   })
 
   /*
+   * Over Bluetooth (beta) the screen drew the adapter as a computer, joined
+   * to the unit by a USB cable, under a note about the computer's version.
+   */
+  test('over Bluetooth (beta) the chain is the unit, the adapter and the phone, with no computer in it', async () => {
+    const { linkChain } = await import('../shared/link-chain.mjs')
+    const blue = (adapter, unit = { name: 'AM4', state: 'present' }) =>
+      linkChain({ here: 'phone', via: 'bluetooth', unit, computer: { name: adapter.name, link: adapter.link }, adapter, phone: { version: '1.87.3' } })
+    const cards = blue({ name: 'WIDI Uhost Bluetooth', link: 'connected' })
+    assert.deepEqual(cards.map((c) => c.key), ['unit', 'adapter', 'phone'])
+    assert.deepEqual(cards.map((c) => c.label), ['YOUR UNIT', 'BLUETOOTH ADAPTER', 'THIS PHONE'])
+    assert.deepEqual(cards.map((c) => c.wire), ['MIDI CABLE', 'BLUETOOTH', undefined])
+    assert.deepEqual(cards.map((c) => c.body), ['AM4', 'WIDI Uhost Bluetooth', 'v1.87.3'])
+    assert.deepEqual(cards.map((c) => c.lit), [true, true, undefined])
+    for (const c of cards) assert.doesNotMatch(`${c.label} ${c.body} ${c.wire || ''}`, /computer|USB|SECURE LINK/i, `a computer is still in the Bluetooth chain: ${c.label}`)
+
+    const finding = blue({ name: 'WIDI Uhost Bluetooth', link: 'joining' })
+    assert.deepEqual([finding[0].body, finding[0].tone], ['Reached through the Bluetooth adapter', 'dim'])
+    assert.deepEqual([finding[1].body, finding[1].tone], ['Looking for WIDI Uhost Bluetooth…', 'busy'])
+    assert.deepEqual([blue({ name: 'WIDI Uhost Bluetooth', link: 'off' })[1].body, blue({ link: 'off' })[1].tone], ['Not connected', 'dim'])
+    const quiet = blue({ name: 'WIDI Uhost Bluetooth', link: 'connected' }, { name: 'AM4', state: 'missing' })[0]
+    assert.equal(quiet.tone, 'bad')
+    assert.match(quiet.body, /MIDI IN/)
+    assert.match(quiet.body, /MIDI OUT/)
+    assert.doesNotMatch(quiet.body, /USB/)
+
+    /* Nothing else moves: the computer's chain, the demo, and the computer's own end. */
+    const fm3 = { here: 'phone', unit: { name: 'FM3', state: 'present' }, computer: { name: 'MacBook Pro', version: '1.86.8', link: 'connected' }, phone: { version: '1.86.8' } }
+    assert.deepEqual(linkChain(fm3), linkChain({ ...fm3, via: 'computer' }))
+    assert.deepEqual(linkChain({ ...fm3, demo: true, via: 'bluetooth' }).map((c) => c.key), ['unit', 'computer', 'phone'], 'the demo drew an adapter')
+    assert.deepEqual(linkChain({ ...fm3, here: 'computer', via: 'bluetooth' }).map((c) => c.key), ['unit', 'computer', 'phone'])
+
+    const settings = read('mobile/src/screens/Settings.js')
+    const flat = settings.replace(/\s+/g, ' ')
+    assert.match(flat, /const throughAdapter = bluetooth && !demo/)
+    assert.ok(settings.indexOf('const throughAdapter') > settings.indexOf('const demo = useDemo()'), 'throughAdapter is read before demo exists')
+    assert.match(flat, /via: throughAdapter \? 'bluetooth' : 'computer'/)
+    assert.match(flat, /adapter: \{ name: macName, link \}/)
+    assert.match(flat, /link === 'connected' && !demo && !throughAdapter && \(unitState === 'missing' \|\| unitState === 'silent'\)/, 'the USB and editor advice shows over Bluetooth')
+    assert.match(flat, /link === 'connected' && !demo && !throughAdapter && !hostVersion \?/, 'the computer-version note shows over Bluetooth')
+    const walk = read('mobile/src/components/Walk.js').replace(/\s+/g, ' ')
+    assert.match(walk, /import bluetoothIcon from '\.\.\/\.\.\/assets\/icons\/bluetooth\.png'/)
+    assert.match(walk, /const CHAIN_ICONS = \{ unit: ampIcon, computer: laptopIcon, adapter: bluetoothIcon, phone: phoneIcon \}/)
+  })
+
+  /*
    * THE MODEL PAGE TURNS TO THE NEXT MODEL, at both ends.
    *
    * "Make it so swiping left or right on the screen takes you forward or

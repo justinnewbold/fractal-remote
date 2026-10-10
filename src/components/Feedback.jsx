@@ -66,7 +66,7 @@ export default function Feedback({ device, link, platform, macVersion }) {
   if (sent) {
     return (
       <div className="feedback feedback-sent">
-        <p>Sent — thank you. It goes straight to the person who builds this.</p>
+        <p>Sent to the developer — thank you.</p>
         <button className="chip" onClick={() => setSent(false)}>
           Send another
         </button>

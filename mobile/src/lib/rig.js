@@ -16,16 +16,16 @@
  */
 import { useSyncExternalStore } from 'react'
 import { firmwareOf } from './firmware'
-import { faultFrom, withdrawsFault } from './fault-rule'
+import { faultFrom, faultLeft, withdrawsFault } from './fault-rule'
 
 import * as device from './device'
 import { idOf, sameBlock } from './unit.mjs'
-import { TAP_REREAD_MS, keepTaps, tappedBpm, tempoSender } from './tempo'
+import { TAP_REREAD_MS, keepTaps, tappedBpm, tempoRange, tempoSender } from './tempo'
 import { watchEvery, probeSays, countQuiet, unitGone } from './unit-watch'
 import { DEFAULT_SLUG, deviceSlug } from './device-slug'
 import { adopt as adoptNames, forget as forgetNames, learn as learnName, nameOf } from './presetNames'
 import { forget as forgetControls } from './paramIndex'
-import { forgetSceneNames, recallSceneNames, rememberSceneNames } from './sceneNameCache'
+import { forgetSceneNames, recallSceneNames, rememberSceneNames, sceneNamesKnown } from './sceneNameCache'
 import { subscribeHostSeen, subscribeRemoteEvents, subscribeRemoteState } from './relay'
 import { demoUnit, isDemo } from './demo'
 import { logDebug } from './debugLog'
@@ -123,6 +123,9 @@ const initial = {
   /* Whether `error` is a complaint about the link, and so is withdrawn
      when the link comes back. See faultFrom. */
   errorLink: false,
+  /* When `error` was raised, so the Play screen can let it go after a while
+     (lib/fault-rule faultLeft) without clearing it. */
+  faultAt: 0,
   /*
    * Whether what answered is the simulation rather than a rig.
    *
@@ -167,6 +170,9 @@ export function set(patch) {
   if ('chainKnown' in patch && !('chainOutline' in patch) && patch.chainKnown !== state.chainOutline) {
     patch = { ...patch, chainOutline: null }
   }
+  /* Stamped where every fault passes. The same words raised again are news
+     again, and get their full time on screen. */
+  if (patch.error) patch = { ...patch, faultAt: Date.now() }
   state = { ...state, ...patch }
   emit()
 }
@@ -222,6 +228,11 @@ export function reset() {
   judging = null
   staleOwn = false
   chainForBefore = null
+  following = null
+  namesRead = null
+  clearTimeout(quietTimer)
+  quietTimer = null
+  pressedAt = 0
   echoes.clear()
   set(initial)
 }
@@ -893,7 +904,22 @@ async function readAll() {
   const simulated = isDemo()
   if (slug !== state.deviceSlug || simulated !== state.simulated) forgetNames()
   const unit = caps?.connected === false ? 'missing' : 'present'
-  if (unit !== state.unit) logDebug('unit', unit === 'missing' ? 'the computer has no unit' : 'the computer has a unit', caps?.short || caps?.name || undefined)
+  /* Over Bluetooth (beta) the answer came through the adapter, not a computer
+     (bleWire's detect carries capabilities.via 'bluetooth'). */
+  const blue = caps?.capabilities?.via === 'bluetooth'
+  if (unit !== state.unit) {
+    logDebug(
+      'unit',
+      blue
+        ? unit === 'missing'
+          ? 'the unit does not answer through the Bluetooth adapter'
+          : 'the unit answers through the Bluetooth adapter'
+        : unit === 'missing'
+          ? 'the computer has no unit'
+          : 'the computer has a unit',
+      caps?.short || caps?.name || undefined
+    )
+  }
   set({
     capabilities: caps?.capabilities ?? null,
     deviceName: caps?.short || caps?.name || '',
@@ -974,7 +1000,11 @@ async function readChainAndNames({ names = true } = {}) {
       markJudged(number)
       /* The chain this preset had, for the next time it is chosen. */
       keepChain(number)
-      if (copy !== 'stale' && !quick) await refreshSceneNames(copy)
+      if (copy !== 'stale' && !quick) {
+        /* An AM4's over Bluetooth hold the line for seconds: they wait for a quiet moment. */
+        if (bluetoothAm4()) namesWhenQuiet(number, copy)
+        else await refreshSceneNames(copy)
+      }
     }
   } finally {
     if (judging === number) {
@@ -1352,7 +1382,13 @@ export async function refreshPreset() {
   try {
     takePreset(await device.currentPreset())
   } catch (err) {
-    set(faultFrom(err))
+    /* The unit watch asks this on a timer: the same fault again, while it is
+       still on screen, is not news, and raising it again would bring the
+       toast back every few seconds. Once it has gone, the same fault later
+       is a new outage, and is said. */
+    const fault = faultFrom(err)
+    if (fault.error === state.error && fault.errorLink === state.errorLink && faultLeft(state, Date.now()) > 0) return
+    set(fault)
   }
 }
 
@@ -1371,7 +1407,9 @@ function takePreset(fresh) {
    * bar as "unit not answering" rather than a slot -1 under a green word.
    */
   const answered = Number.isInteger(fresh?.number) && fresh.number >= 0
-  if (fresh?.number === -1 && state.unit !== 'silent') logDebug('unit', 'the unit did not answer the computer', 'no preset number')
+  if (fresh?.number === -1 && state.unit !== 'silent') {
+    logDebug('unit', viaBluetooth() ? 'the unit did not answer through the Bluetooth adapter' : 'the unit did not answer the computer', 'no preset number')
+  }
   if (answered && state.unit === 'silent') logDebug('unit', 'the unit is answering again')
   set({ preset: fresh, ...(fresh?.number === -1 ? { unit: 'silent' } : answered && state.unit !== 'missing' ? { unit: 'present' } : {}) })
 }
@@ -1460,10 +1498,20 @@ async function namesOfLoaded(number, copy) {
     return null
   }
   if (here?.length) return here
-  const summary = await device.sceneNames(number)
-  if (summary.length || state.preset?.number !== number) return summary
+  /* An AM4 over Bluetooth has no summary to give: its names are read whole,
+     straight off the unit (lib/bleWire am4SceneNames). */
+  if (!bluetoothAm4()) {
+    const summary = await device.sceneNames(number)
+    if (summary.length || state.preset?.number !== number) return summary
+  }
   return device.unitSceneNames(number)
 }
+
+/* Whether the unit is reached over Bluetooth (beta): no computer, no computer's store.
+   Read off the capabilities, as noteEdited does, so the bench can say so too. */
+const viaBluetooth = () => state.capabilities?.via === 'bluetooth'
+/* An AM4 over Bluetooth, whose names are slow to read. */
+const bluetoothAm4 = () => viaBluetooth() && state.deviceSlug === 'am4'
 
 /**
  * What this preset's scenes are called, when the unit did not volunteer them.
@@ -1473,10 +1521,35 @@ async function namesOfLoaded(number, copy) {
  * between scenes with a footswitch. Never fails a screen — a unit with no scene
  * names gets numbered tiles, which is what it had before.
  */
+/*
+ * One read of a preset's scene names at a time: a second pass over the same
+ * preset (both out of the one chain read together, refreshBlocks handing the
+ * second the first's promise) waits on the first instead of asking again. On
+ * an AM4 a read is a whole stored preset, four seconds of the line over
+ * Bluetooth, so two at once was eight.
+ */
+let namesRead = null
 export async function refreshSceneNames(copy) {
   const number = state.preset?.number
   if (!Number.isInteger(number)) return
+  const key = keyFor(number)
+  if (namesRead?.key === key) return namesRead.done
+  const done = readNamesOf(number, copy)
+  namesRead = { key, done }
+  try {
+    await done
+  } finally {
+    if (namesRead?.done === done) namesRead = null
+  }
+}
+
+async function readNamesOf(number, copy) {
   const names = await namesOfLoaded(number, copy)
+  /* Over Bluetooth, a slot read and found unnamed is written down too, so
+     it is not read again after the next reconnect. */
+  if (Array.isArray(names) && names.length && !names.some((n) => n) && viaBluetooth() && state.preset?.number === number) {
+    rememberSceneNames(device.nameOwner(state.deviceSlug), number, names, { blank: true })
+  }
   /* Still the same preset: a slow read that lands after the next tap would
      otherwise put the last song's names on this song's tiles. */
   if (!names?.some((n) => n) || state.preset?.number !== number) return
@@ -1537,6 +1610,13 @@ export async function quickSceneNames() {
   const owner = device.nameOwner(slug)
   const kept = await recallSceneNames(owner, number)
   if (kept.length && state.preset?.number === number) set({ sceneNames: kept })
+  /*
+   * Over Bluetooth there is no computer's store to ask, and what this phone
+   * kept IS the record. "It doesn't have to constantly be rereading them once
+   * it reads them once, it can go off the remembered names unless they hit
+   * refresh." A preset whose names are kept is not read again.
+   */
+  if (viaBluetooth()) return (kept.length > 0 || (await sceneNamesKnown(owner, number))) && state.preset?.number === number
   let held = null
   try {
     held = await device.storedSceneNames(slug, number)
@@ -1568,9 +1648,53 @@ export const COMPUTER_NAMES_AFTER_MS = [4000, 9000, 18000]
 
 const named = () => (state.sceneNames || []).some((n) => (n || '').trim())
 
+/* The preset change whose names are being followed, and when its last ask is due. */
+let following = null
+
+/*
+ * AN AM4'S SCENE NAMES OVER BLUETOOTH WAIT FOR A QUIET MOMENT.
+ *
+ * Reading them is the whole stored preset, about four seconds of the line,
+ * and nothing else is sent to an AM4 while it comes — so a press made then
+ * waits for the end of it. Straight after landing on a preset is exactly when
+ * the next press comes: in his log, two taps and a Next within three seconds
+ * of the song changing. So the first read of a preset's names waits until
+ * nothing has been pressed for AM4_NAMES_QUIET_MS, and is dropped if the
+ * preset changes first. Refresh names does not wait: it was asked for.
+ */
+export const AM4_NAMES_QUIET_MS = 5000
+let pressedAt = 0
+let quietTimer = null
+const pressed = () => {
+  pressedAt = Date.now()
+}
+
+function namesWhenQuiet(number, copy) {
+  clearTimeout(quietTimer)
+  const check = () => {
+    quietTimer = null
+    if (state.preset?.number !== number || named() || !bluetoothAm4()) return
+    /* Not while tuning either: four seconds of a frozen needle mid-string. */
+    const wait = state.tunerOn ? AM4_NAMES_QUIET_MS : pressedAt + AM4_NAMES_QUIET_MS - Date.now()
+    if (wait > 0) {
+      quietTimer = setTimeout(check, wait)
+      return
+    }
+    refreshSceneNames(copy).catch(() => {})
+  }
+  quietTimer = setTimeout(check, Math.max(AM4_NAMES_QUIET_MS - (Date.now() - pressedAt), 0))
+}
+
 function followComputerNames() {
   const number = state.preset?.number
+  /* Over Bluetooth there is no computer to have them: every ask was refused. */
+  if (viaBluetooth()) return
   if (!Number.isInteger(number) || named()) return
+  /* Two passes over one preset change (the settled read, and a pull-down
+     landing meanwhile) are one follow, not two sets of asks in one millisecond. */
+  const key = `${presetRun}:${keyFor(number)}`
+  if (following?.key === key && Date.now() < following.until) return
+  following = { key, until: Date.now() + COMPUTER_NAMES_AFTER_MS[COMPUTER_NAMES_AFTER_MS.length - 1] }
   for (const wait of COMPUTER_NAMES_AFTER_MS) {
     setTimeout(async () => {
       if (state.preset?.number !== number || named()) return
@@ -1712,6 +1836,7 @@ async function readBlocks(quiet) {
  * which is how a refused bypass once restored a chain that never existed.
  */
 async function optimistic(patch, revert, send) {
+  pressed()
   set({ ...patch, error: null, errorLink: false })
   try {
     await send()
@@ -1922,6 +2047,8 @@ async function readTappedTempo() {
    than waited for. Module-level beside `reread` because a burst of taps is one
    rhythm however many screens come and go during it. */
 let taps = []
+/* Which preset they were tapped on: another song starts another count. */
+let tapsOn = null
 
 /*
  * What crosses the network is the NUMBER, not the taps.
@@ -1950,6 +2077,7 @@ const sendTempo = tempoSender(
 )
 
 export async function tapTempo() {
+  pressed()
   clearTimeout(reread)
   /* A unit that has said it has no tempo the app can set: say so, send nothing. */
   if (device.refusedAlready('POST', '/tempo')) {
@@ -1967,8 +2095,17 @@ export async function tapTempo() {
    * which is how the unit's own answer gets to win a moment later — and now
    * that answer is the number this sent, so it agrees.
    */
-  taps = keepTaps(taps, Date.now())
-  const guess = tappedBpm(taps)
+  /* The unit's own range: an AM4 refuses past 250, and a mis-tap is not a tempo. */
+  const range = tempoRange(state.deviceSlug, state.capabilities?.via)
+  /* "Press Next by accident, then one tap" sent the new song 200, worked out
+     from the last song's taps. A new preset is a new count. */
+  const on = chainKey()
+  if (on !== tapsOn) {
+    taps = []
+    tapsOn = on
+  }
+  taps = keepTaps(taps, Date.now(), range)
+  const guess = tappedBpm(taps, range)
   if (guess != null) {
     /* The tempo lives in the preset, so a tap is a change to it — and a save
        that dropped the tempo somebody just set would be a save that lied. */
@@ -2042,6 +2179,7 @@ function startDemoTuner() {
  * start must not leave a screen waiting for readings that are never coming.
  */
 export async function writeTuner(on) {
+  pressed()
   set({ tunerOn: on, tuning: on ? state.tuning : null, error: null, errorLink: false })
   if (!on) stopDemoTuner()
   try {
@@ -2089,6 +2227,7 @@ export async function writeTuner(on) {
  * inventing "Untitled" for the one round trip it takes to find out.
  */
 export async function loadPreset(number) {
+  pressed()
   const was = state.preset
   /*
    * The control index is about the preset that was loaded, not this one. Slot
