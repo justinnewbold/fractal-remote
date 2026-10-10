@@ -1362,7 +1362,15 @@ export function run(test) {
     assert.match(metronome, /if \(isUnsupported\(err\)\) return \{ ok: false, unsupported: true \}/, 'a refused click reads as a unit that failed to take it')
     assert.ok(metronome.indexOf('if (isUnsupported(err))') < metronome.indexOf("logDebug('metronome', 'could not reach the unit'"))
     const settings = flat('mobile/src/screens/Settings.js')
-    assert.match(settings, /bluetooth && !demo \? 'Over Bluetooth the app can’t switch the unit’s click: pick Phone to hear it here\.'/)
+    /*
+     * "The unit metronome click is not working… It only works on the phone."
+     * Over Bluetooth (and on an AM4) the unit's click is not offered at all,
+     * the page says why, and a Unit picked earlier clicks on the phone.
+     */
+    assert.match(settings, /const clickHere = \{ bluetooth: bluetooth && !demo \} const unitCan = unitClick\(rigSlug, clickHere\)/)
+    assert.match(settings, /placesFor\(unitCan\.can\)\.map/, 'Unit and Both are offered where the unit cannot click')
+    assert.match(settings, /unitCan\.can \? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to\.' : unitCan\.why/)
+    assert.match(flat('mobile/App.js'), /useUnitMetronome\(rigSlug, unitHere && !demo, \{ bluetooth \}\)/, 'a refused click is still sent on every Bluetooth arrival')
     /* And a tuner with no readings blames no computer when there is none. */
     const tuner = flat('mobile/src/components/Tuner.js')
     assert.match(tuner, /const bluetooth = useBluetoothOn\(\)/)

@@ -3976,6 +3976,51 @@ export function run(test) {
     assert.match(web, /open=\{sheet === 'units'\}[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost\)[\s\S]{0,600}await chooseHost\(row\.name\)/)
   })
 
+  /*
+   * "The unit metronome click is not working. It doesn't turn it on the unit
+   * on the FM3 or the AM4. It only works on the phone." On an AM4, and over
+   * Bluetooth, the app cannot switch the unit's click — and Unit picked there
+   * meant nothing clicked anywhere.
+   */
+  test('where the unit’s click cannot be switched, Unit is not offered and the phone keeps time', async () => {
+    const m = await import('../shared/metronome.mjs')
+    assert.deepEqual(m.unitClick('fm3'), { can: true })
+    assert.equal(m.unitClick('fm3', { bluetooth: true }).can, false)
+    assert.match(m.unitClick('fm3', { bluetooth: true }).why, /Over Bluetooth/)
+    assert.equal(m.unitClick('am4').can, false, 'the AM4’s click is written again, the write that froze it')
+    assert.match(m.unitClick('am4').why, /AM4/)
+    assert.equal(m.unitClick('vp4').can, false)
+    /* Unit picked, the unit unable: the phone clicks, the unit is never told. */
+    const unit = { on: true, where: 'unit' }
+    assert.deepEqual(m.clicks(unit, false), { unit: false, phone: true, watch: false }, 'nothing clicks anywhere when the unit cannot')
+    assert.deepEqual(m.clicks(unit, true), { unit: true, phone: false, watch: false })
+    assert.deepEqual(m.clicks({ on: true, where: 'both' }, false), { unit: false, phone: true, watch: false })
+    assert.deepEqual(m.clicks({ on: false, where: 'unit' }, false), { unit: false, phone: false, watch: false })
+    assert.deepEqual(m.clicks(unit), m.clicks(unit, true), 'the old one-argument call changed meaning')
+    /* Only Phone offered where the unit cannot click. */
+    assert.deepEqual(m.placesFor(false).map((p) => p.key), ['phone'])
+    assert.deepEqual(m.placesFor(true).map((p) => p.key), ['unit', 'phone', 'both'])
+    /* And the Settings row says where it really clicks. */
+    assert.match(m.metronomeNote(unit, 'fm3', 120, { bluetooth: true }), /on the phone$/)
+    assert.match(m.metronomeNote(unit, 'fm3', 120), /on the unit$/)
+    assert.match(m.metronomeNote(unit, 'am4', 120), /only the phone keeps time/)
+    /* The phone's own click hears the same rule, from the unit and the link it is on. */
+    const metronome = read('mobile/src/lib/metronome.js').replace(/\s+/g, ' ')
+    assert.match(metronome, /const can = useUnitCan\(\) const on = clicks\(s, can\)\.phone/, 'the phone stays silent where the unit cannot click')
+    assert.match(metronome, /const can = unitClick\(slug, here\)\.can const before = clicks\(setting, can\)\.unit/)
+    assert.match(metronome, /if \(!present \|\| !clicks\(setting, unitClick\(slug, \{ bluetooth \}\)\.can\)\.unit\) return/)
+    /* "ok" only means the unit did not object: what it then says it is at goes into the log. */
+    assert.match(metronome, /readUnitMetronome\(slug\) \.then\(/)
+    const device = read('mobile/src/lib/device.js').replace(/\s+/g, ' ')
+    assert.match(device, /export async function readUnitMetronome\(slug\) \{ const how = unitMetronome\(slug\) if \(!how \|\| how\.kind !== 'block' \|\| demoDevice\(\)\) return null/)
+    assert.match(device, /const eid = how\.eid try \{ const res = await post\(`\/preset\/blocks\/\$\{eid\}\/readrange`, \{ pids: \[how\.paramId\] \}\)/)
+    /* The read-back route is one a phone may use through the relay. */
+    const { hostAllows } = await import('../shared/relay-rules.mjs')
+    assert.equal(hostAllows('POST', '/preset/blocks/1/readrange'), true)
+    /* And the demo's units click without "the unit didn't take it". */
+    assert.match(device, /if \(!ask \|\| demoDevice\(\)\) return Promise\.resolve\(ask \? \{ ok: true, simulated: true \} : \{ ok: false, unsupported: true \}\)/)
+  })
+
   test('the metronome clicks where it is told, with each unit’s own switch', async () => {
     const m = await import('../shared/metronome.mjs')
     /* Off unless turned on, and on the unit unless told otherwise. */

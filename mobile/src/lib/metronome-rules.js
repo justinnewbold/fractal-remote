@@ -10,9 +10,9 @@
  * to play on the unit or the phone or both?"
  *
  * The unit has one. FM3 (firmware 12 and later), FM9, Axe-Fx III (31 and
- * later) carry a Metronome switch in Setup → Global, and it
- * clicks through the unit's own outputs at the unit's own tempo — the one the
- * Tap button and the tempo box already set. That is the click to play to: it
+ * later) carry a Metronome switch on the Controllers → Tempo page (a Global
+ * setting, effect id 1), and it clicks through the unit's own outputs at the
+ * unit's own tempo — the one the Tap button and the tempo box already set. That is the click to play to: it
  * is in the same speakers as the guitar and the unit keeps the time itself.
  *
  * The phone's click is the other half: a short click it plays out loud, with
@@ -40,12 +40,22 @@ export function metronomeSetting(saved) {
   return { on: saved?.on === true, where, watch: saved?.watch === true }
 }
 
-/** Which ends click, for a setting. */
-export const clicks = (setting) => {
+/**
+ * Which ends click, for a setting — on a unit whose click the app can switch
+ * (`can`, from unitClick) or not.
+ *
+ * "The unit metronome click is not working… It only works on the phone, not
+ * the unit." On an AM4, and on any unit over Bluetooth, the app cannot switch
+ * the unit's click — and Unit picked there used to mean NOTHING clicked
+ * anywhere, the phone included, under a line saying the phone kept time. So
+ * where the unit cannot click, Unit falls back to the phone, and the choice
+ * is kept for when it can (his FM3 through the computer).
+ */
+export const clicks = (setting, can = true) => {
   const s = metronomeSetting(setting)
   return {
-    unit: s.on && (s.where === 'unit' || s.where === 'both'),
-    phone: s.on && (s.where === 'phone' || s.where === 'both'),
+    unit: s.on && can && (s.where === 'unit' || s.where === 'both'),
+    phone: s.on && (s.where === 'phone' || s.where === 'both' || (!can && s.where === 'unit')),
     watch: s.on && s.watch
   }
 }
@@ -58,12 +68,14 @@ export const clicks = (setting) => {
  * the codec's notes say plainly that sending one unit's number to another
  * "would mis-address" (forgefx-midi gen3/*\/params.ts, GLOBAL_METRONOME).
  *
- * The AM4 is left out on purpose. Its metronome is a level on Controllers →
- * Tempo, not a switch, and the address the app used to write (global.metronome)
- * was a guess from a name that no AM4 had ever answered. The app wrote it every
- * time an AM4 came online with the click set to Unit, and his AM4 froze on
- * SAVING each time until it was restarted. Nothing is written to an AM4's
- * global settings until a real unit has proven the address.
+ * The AM4 is left out on purpose. AM4-Edit's Controllers → Tempo page shows
+ * a Metronome switch beside its level (GLOBAL_METRONOME, 0x0001/0x00A0 in its
+ * own tables), and that is the address the app used to write as
+ * global.metronome — every time an AM4 came online with the click set to
+ * Unit. His AM4 froze on SAVING each time until it was restarted. Nothing is
+ * written to an AM4's global settings until a read has followed that switch
+ * on the AM4's own screen and one write has been tried by hand with the unit
+ * in view.
  */
 const GEN3 = { fm3: 14878, fm9: 14907, axefxiii: 14655 }
 
@@ -73,6 +85,22 @@ export function unitMetronome(slug) {
   if (GEN3[key]) return { kind: 'block', eid: 1, paramId: GEN3[key] }
   return null
 }
+
+/**
+ * Whether the app can switch this unit's click from here: `{ can: true }`, or
+ * `{ can: false, why }` in plain words for the Metronome page. Over Bluetooth
+ * (beta) the phone sends a unit only the handful of messages it is sure of,
+ * and a setting is not one of them.
+ */
+export function unitClick(slug, { bluetooth = false } = {}) {
+  if (bluetooth) return { can: false, why: 'Over Bluetooth the app can’t switch the unit’s click, so the phone keeps time.' }
+  if (String(slug || '').toLowerCase() === 'am4') return { can: false, why: 'The app can’t switch the AM4’s own click yet, so the phone keeps time.' }
+  if (!unitMetronome(slug)) return { can: false, why: 'This unit has no metronome the app can switch, so only the phone keeps time.' }
+  return { can: true }
+}
+
+/** The places to offer: only the phone where the unit's click cannot be switched. */
+export const placesFor = (can) => (can ? PLACES : PLACES.filter((p) => p.key === 'phone'))
 
 /** The request that turns it on or off: a path and a body for remoteRequest or ForgeFX. */
 export function unitMetronomeRequest(slug, on) {
@@ -101,12 +129,13 @@ export function nextBeat(startedAt, now, beat) {
   return startedAt + n * beat
 }
 
-/** What the setting says under it, in his words. */
-export function metronomeNote(setting, slug, bpm) {
+/** What the setting says under it, in his words. `here` is how the unit is reached ({ bluetooth }). */
+export function metronomeNote(setting, slug, bpm, here = {}) {
   const s = metronomeSetting(setting)
   if (!s.on) return 'Off'
   const at = beatMs(bpm) ? `${Math.round(bpm)} BPM` : 'the unit’s tempo'
   const place = PLACES.find((p) => p.key === s.where)?.label || 'Unit'
   if ((s.where === 'unit' || s.where === 'both') && !unitMetronome(slug)) return `On, ${at}. This unit has no metronome the app can switch, so only the phone keeps time.`
+  if ((s.where === 'unit' || s.where === 'both') && !unitClick(slug, here).can) return `On, ${at}, on the phone`
   return `On, ${at}, on the ${place.toLowerCase() === 'both' ? 'unit and the phone' : place.toLowerCase()}`
 }

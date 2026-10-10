@@ -13,7 +13,7 @@ import Gig from './components/Gig'
 import TapTempo from './components/TapTempo'
 import MetronomeBeat from './components/MetronomeBeat'
 import { setMetronome, useMetronome, useUnitMetronome } from './lib/metronome'
-import { PLACES as METRONOME_PLACES, metronomeNote, unitMetronome } from '../shared/metronome.mjs'
+import { metronomeNote, placesFor, unitClick } from '../shared/metronome.mjs'
 import { deviceSlug as slugOfUnit } from '../shared/device-slug.mjs'
 import SaveBar, { SaveLate } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
@@ -5908,7 +5908,7 @@ export default function App() {
             </div>
             <p className="silk-label setup-group">Where it clicks</p>
             <div className="setup-rows">
-              {METRONOME_PLACES.map((p) => (
+              {placesFor(unitClick(slugOfUnit(device)).can).map((p) => (
                 <SetupRow
                   key={`metronome-${p.key}`}
                   title={`${p.key === 'phone' ? 'This screen' : p.key === 'both' ? 'Both' : p.label}${clickSetting.where === p.key ? ' ✓' : ''}`}
@@ -5928,9 +5928,9 @@ export default function App() {
             ) : null}
             <p className="footnote">
               {`It keeps the unit’s tempo${Number.isFinite(rigBpm) ? `, ${Math.round(rigBpm)} BPM right now` : ''}: tap tempo changes it. ${
-                unitMetronome(slugOfUnit(device))
+                unitClick(slugOfUnit(device)).can
                   ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.'
-                  : 'This unit has no metronome the app can switch, so only this screen keeps time.'
+                  : unitClick(slugOfUnit(device)).why.replace(/(only )?the phone keeps time/, (_m, only) => `${only || ''}this screen keeps time`)
               }`}
             </p>
           </div>

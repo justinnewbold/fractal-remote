@@ -3,8 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio'
 import clickSound from '../../assets/click.wav'
 
-import { setUnitMetronome } from './device'
-import { DEFAULT_METRONOME, beatMs, clicks, metronomeSetting, nextBeat } from './metronome-rules'
+import { readUnitMetronome, setUnitMetronome } from './device'
+import { DEFAULT_METRONOME, beatMs, clicks, metronomeSetting, nextBeat, unitClick } from './metronome-rules'
+import { useRig } from './rig'
+import { useBluetoothOn } from './bluetooth'
+import { isDemo } from './demo'
 import { tick } from './feedback'
 import { logDebug } from './debugLog'
 import { isUnsupported } from './unsupported'
@@ -55,16 +58,30 @@ export function useMetronome() {
  * phone's tap on must not reach out and switch the unit's click off when
  * somebody had turned it on at the unit by hand.
  */
-export async function setMetronome(patch, slug) {
-  const before = clicks(setting).unit
+export async function setMetronome(patch, slug, here = {}) {
+  /* Where the unit's click cannot be switched (an AM4, Bluetooth), its half never changes. */
+  const can = unitClick(slug, here).can
+  const before = clicks(setting, can).unit
   setting = metronomeSetting({ ...setting, ...patch })
   announce()
   AsyncStorage.setItem(KEY, JSON.stringify(setting)).catch(() => {})
-  const after = clicks(setting).unit
+  const after = clicks(setting, can).unit
   if (before === after) return { ok: true }
   try {
     const said = await setUnitMetronome(slug, after)
     if (said?.ok === false && !said?.unsupported) logDebug('metronome', 'the unit did not take it', JSON.stringify(said))
+    /* And what the unit then says it is at, into the log: "ok" only means it did not object. */
+    if (said?.ok !== false) {
+      readUnitMetronome(slug)
+        .then((value) =>
+          logDebug(
+            'metronome',
+            value === null ? 'the unit did not say where its metronome switch is' : `the unit says its metronome switch is at ${value}`,
+            `asked for ${after ? 'on' : 'off'}`
+          )
+        )
+        .catch(() => {})
+    }
     return said || { ok: true }
   } catch (err) {
     /* A unit (or a link: Bluetooth refuses every setting write) that has no
@@ -82,11 +99,20 @@ export async function setMetronome(patch, slug) {
  * unit, has its own idea of whether it is clicking. If the setting says the
  * unit clicks, this says so to the unit in front of it now.
  */
-export function useUnitMetronome(slug, present) {
+export function useUnitMetronome(slug, present, here = {}) {
+  const bluetooth = Boolean(here.bluetooth)
   useEffect(() => {
-    if (!present || !clicks(setting).unit) return
-    setUnitMetronome(slug, true).catch(() => {})
-  }, [slug, present])
+    if (!present || !clicks(setting, unitClick(slug, { bluetooth }).can).unit) return
+    setUnitMetronome(slug, true).catch((err) => logDebug('metronome', 'could not tell the unit it arrived clicking', String(err?.message || err)))
+  }, [slug, present, bluetooth])
+}
+
+/* Whether this unit's own click can be switched from here: the phone keeps time where it cannot. */
+const ofSlug = (s) => s.deviceSlug
+function useUnitCan() {
+  const slug = useRig(ofSlug)
+  const bluetooth = useBluetoothOn() && !isDemo()
+  return unitClick(slug, { bluetooth }).can
 }
 
 /*
@@ -127,7 +153,8 @@ const click = () => {
  */
 export function usePhoneClick(bpm, onBeat) {
   const s = useMetronome()
-  const on = clicks(s).phone
+  const can = useUnitCan()
+  const on = clicks(s, can).phone
   const beat = beatMs(bpm)
   const running = Boolean(on && beat)
   useEffect(() => {

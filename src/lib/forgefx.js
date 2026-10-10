@@ -709,7 +709,7 @@ export const rawSysex = async (bytes) => {
  */
 export const setUnitMetronome = (slug, on) => {
   const ask = unitMetronomeRequest(slug, on)
-  if (!ask || mock) return Promise.resolve({ ok: false, unsupported: !ask })
+  if (!ask || mock) return Promise.resolve(ask ? { ok: true, simulated: true } : { ok: false, unsupported: true })
   return request(ask.path, { method: ask.method, body: JSON.stringify(ask.body) })
 }
 

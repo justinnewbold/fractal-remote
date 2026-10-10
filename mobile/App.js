@@ -331,7 +331,7 @@ export default function App() {
   const rigSlug = useRig((s) => s.deviceSlug)
   const rigBpm = useRig((s) => s.bpm)
   const unitHere = useRig((s) => s.unit === 'present')
-  useUnitMetronome(rigSlug, unitHere && !demo)
+  useUnitMetronome(rigSlug, unitHere && !demo, { bluetooth })
   const settling =
     auth === 'in' &&
     !demo &&

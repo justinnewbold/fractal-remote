@@ -1,8 +1,8 @@
 import { useEffect, useSyncExternalStore } from 'react'
 
-import { setUnitMetronome } from './forgefx'
+import { currentDeviceSlug, setUnitMetronome } from './forgefx'
 import { logDebug } from './debugLog.js'
-import { DEFAULT_METRONOME, beatMs, clicks, metronomeSetting } from '../../shared/metronome.mjs'
+import { DEFAULT_METRONOME, beatMs, clicks, metronomeSetting, unitClick } from '../../shared/metronome.mjs'
 
 /**
  * THE METRONOME SETTING, in the browser — the phone's lib/metronome.js.
@@ -49,7 +49,9 @@ const ear = () => {
 
 /** Change the setting; tell the unit only if its half changed (see the phone's). */
 export async function setMetronome(patch, slug) {
-  const before = clicks(setting).unit
+  /* An AM4's click is never switched from here: Unit there means this screen keeps time. */
+  const can = unitClick(slug).can
+  const before = clicks(setting, can).unit
   setting = metronomeSetting({ ...setting, ...patch })
   for (const fn of watchers) fn()
   try {
@@ -57,8 +59,8 @@ export async function setMetronome(patch, slug) {
   } catch {
     // Kept for this visit if it cannot be kept for the next.
   }
-  if (clicks(setting).phone) ear()
-  const after = clicks(setting).unit
+  if (clicks(setting, can).phone) ear()
+  const after = clicks(setting, can).unit
   if (before === after) return { ok: true }
   try {
     return (await setUnitMetronome(slug, after)) || { ok: true }
@@ -71,7 +73,7 @@ export async function setMetronome(patch, slug) {
 /** A unit that has just arrived is told, when its click is meant to be on. */
 export function useUnitMetronome(slug, present) {
   useEffect(() => {
-    if (!present || !clicks(setting).unit) return
+    if (!present || !clicks(setting, unitClick(slug).can).unit) return
     setUnitMetronome(slug, true).catch(() => {})
   }, [slug, present])
 }
@@ -83,7 +85,7 @@ export function useUnitMetronome(slug, present) {
  */
 export function useScreenClick(bpm, onBeat) {
   const s = useMetronome()
-  const on = clicks(s).phone
+  const on = clicks(s, unitClick(currentDeviceSlug()).can).phone
   const beat = beatMs(bpm)
   useEffect(() => {
     if (!on || !beat) return undefined

@@ -24,7 +24,7 @@ import {
 import { chooseHost } from '../lib/link'
 import { useRig } from '../lib/rig'
 import { setMetronome, useMetronome } from '../lib/metronome'
-import { PLACES as METRONOME_PLACES, metronomeNote, unitMetronome } from '../lib/metronome-rules'
+import { metronomeNote, placesFor, unitClick } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
 import {
@@ -184,7 +184,7 @@ export default function Settings({
   const [clickSaid, setClickSaid] = useState(null)
   const changeClick = async (patch) => {
     setClickSaid(null)
-    const said = await setMetronome(patch, rigSlug)
+    const said = await setMetronome(patch, rigSlug, clickHere)
     if (said?.ok === false && !said?.unsupported) setClickSaid('The unit didn’t take it. Check it’s connected, then try again.')
   }
   /* What the Stop the looper row last did, in words, in place of its hint. */
@@ -225,16 +225,10 @@ export default function Settings({
    * Each row carries the one fact you would have opened it to learn: which unit
    * and whether it answers, which Mac the phone is on, what size the tiles are.
    */
-  /*
-   * Behind only when the computer SAID a version and it is older. A computer
-   * that says nothing used to be counted as behind — "Still getting the
-   * message saying the Mac version is off, but is definitely on the right
-   * version" — and telling somebody to update an app that is current is worse
-   * than saying nothing. A missing version is its own case, said as such:
-   * the Mac app writes it every few minutes, and since 7.295.0 its own menu
-   * bar line says what the phones hear.
-   */
   const demo = useDemo()
+  /* Where the unit's own click can be switched from here: not over Bluetooth, not on an AM4. */
+  const clickHere = { bluetooth: bluetooth && !demo }
+  const unitCan = unitClick(rigSlug, clickHere)
   /* Which one, and told when it changes. Read as `demoUnit()` this never
      redrew, so the five buttons stayed lit on whichever unit the app started
      as however many times they were pressed. */
@@ -440,7 +434,7 @@ export default function Settings({
             ) : null}
             {/* "A metronome that plays out loud that can be toggled on and
                 off in settings." On the unit, the phone or both. */}
-            <SetupRow title="Metronome" status={metronomeNote(clickSetting, rigSlug, rigBpm)} onPress={() => setPage('metronome')} />
+            <SetupRow title="Metronome" status={metronomeNote(clickSetting, rigSlug, rigBpm, clickHere)} onPress={() => setPage('metronome')} />
           </Group>
 
           <Group title="Help">
@@ -1004,7 +998,8 @@ export default function Settings({
               onPress={() => changeClick({ on: !clickSetting.on })}
             />
             <Section>Where it clicks</Section>
-            {METRONOME_PLACES.map((p) => (
+            {/* Only Phone where the unit's click cannot be switched: Unit and Both would click nowhere. */}
+            {placesFor(unitCan.can).map((p) => (
               <View key={p.key} style={{ gap: space.xs }}>
                 <Press label={p.label} tone="live" on={clickSetting.where === p.key} onPress={() => changeClick({ where: p.key })} />
                 <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{p.note}</Text>
@@ -1013,11 +1008,7 @@ export default function Settings({
             {clickSaid ? <Note tone="fault">{clickSaid}</Note> : null}
             <Note tone="hint">
               {`It keeps the unit’s tempo${Number.isFinite(rigBpm) ? `, ${Math.round(rigBpm)} BPM right now` : ''}: tap tempo changes it. ${
-                bluetooth && !demo
-                  ? 'Over Bluetooth the app can’t switch the unit’s click: pick Phone to hear it here.'
-                  : unitMetronome(rigSlug)
-                    ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.'
-                    : 'This unit has no metronome the app can switch, so only the phone keeps time.'
+                unitCan.can ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.' : unitCan.why
               }`}
             </Note>
             {/* "Same with the watch, metronome that can beep on the watch."
