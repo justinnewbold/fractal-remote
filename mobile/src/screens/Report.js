@@ -111,7 +111,7 @@ export default function Report({ onBack, start = 'bug' }) {
 
         {sent ? (
           <View style={{ gap: space.md }}>
-            <Note tone="hint">Sent — thank you. It goes straight to the person who builds this.</Note>
+            <Note tone="hint">Sent to the developer — thank you.</Note>
             <Press label="Send another" onPress={() => setSent(false)} />
           </View>
         ) : (

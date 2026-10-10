@@ -227,7 +227,7 @@ export default function Log({ onBack, onReport }) {
               pasted somewhere, from a phone, after the thing that went wrong.
               Copy stays — a log pasted into a message to a bandmate is a real
               use — but this is the one that reaches the person who can fix it. */}
-          {onReport ? <Press label="Send this to the person who builds it" tone="signal" onPress={onReport} /> : null}
+          {onReport ? <Press label="Send logs to developer" tone="signal" onPress={onReport} /> : null}
           <Press label="Clear Logs" onPress={() => { clearDebugLog(); setLines([]) }} />
         </View>
       ) : null}
