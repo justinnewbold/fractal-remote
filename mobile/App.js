@@ -38,7 +38,7 @@ import { clearLinkFault, useRig } from './src/lib/rig'
 import { keepLog } from './src/lib/logKeep'
 import { installCrashCapture } from './src/lib/debugLog'
 import { restoreDemo, setDemo, useDemo } from './src/lib/demo'
-import { ALLOW_WORDS, RESTRICTED_WORDS, restoreBluetooth, useBluetoothOn, useBluetoothTrouble } from './src/lib/bluetooth'
+import { ALLOW_WORDS, RESTRICTED_WORDS, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble } from './src/lib/bluetooth'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
@@ -1177,6 +1177,20 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot, onBluetooth }) {
           {'Make sure you’re connected to your computer using '}
           <Text style={{ color: color.silkDim, fontWeight: '700' }}>{email}</Text>.
         </Text>
+      ) : null}
+      {/*
+        THE WAY BACK TO THE COMPUTER, FROM THE FIRST SECOND. "How do I get out
+        of Bluetooth mode so I can go back to connecting to computer?" (10
+        October 2026, on this screen, with the adapter not there.) The only
+        way was the gear, Phone & computer, Bluetooth (beta), Stop — four
+        taps from a screen that offered nothing for fifteen seconds and then
+        only a way to look again. Turning Bluetooth off is what Stop does,
+        and the link starts looking for the computer the moment it is off.
+      */}
+      {bluetooth ? (
+        <View style={{ alignSelf: 'stretch' }}>
+          <Press label="Use the computer instead" onPress={() => setBluetooth(false)} />
+        </View>
       ) : null}
       {long && link.link !== 'connected' ? (
         <View style={{ alignSelf: 'stretch', gap: space.md }}>

@@ -2100,6 +2100,15 @@ export function run(test) {
     assert.match(waking, /trouble === 'bluetooth-off' \? 'Bluetooth is off on this phone\. Turn it on in the phone’s settings\.'/)
     assert.match(waking, /trouble === 'permission' \? `\$\{ALLOW_WORDS\}\.`/, 'the waiting screen words the permission its own way')
     assert.match(waking, /<Press label="Look for the adapter again" onPress=\{\(\) => onRetry\?\.\(\)\} \/>/)
+    /*
+     * And the way back to the computer is there from the first second, not
+     * four taps away behind the gear: "How do I get out of Bluetooth mode so
+     * I can go back to connecting to computer?" Before the fifteen-second
+     * block, so it never waits for it.
+     */
+    assert.match(waking, /\{bluetooth \? \( <View style=\{\{ alignSelf: 'stretch' \}\}> <Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/, 'the Bluetooth waiting screen has no way back to the computer')
+    assert.ok(waking.indexOf('Use the computer instead') < waking.indexOf("{long && link.link !== 'connected' ? ("), 'the way back to the computer waits fifteen seconds')
+    assert.match(app, /import \{ ALLOW_WORDS, RESTRICTED_WORDS, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble \} from '\.\/src\/lib\/bluetooth'/)
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth \(beta\)" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     assert.match(app, /onBluetooth=\{\(\) => openSettings\('bluetooth'\)\}/)
     assert.match(waking, /\{email && link\.link !== 'connected' && !bluetooth \? \(/, 'the waiting screen names the computer’s account over Bluetooth')
