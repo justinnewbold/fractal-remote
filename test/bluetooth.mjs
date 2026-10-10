@@ -1423,6 +1423,37 @@ export function run(test) {
     ['POST', '/preset/blocks/0/bypass', { bypassed: true }]
   ]
 
+  /* "Don't know if you can see any issues from this log." Most of it was "not over Bluetooth", over and over. */
+  test('what Bluetooth never answers is refused every time, and said once a connection', async () => {
+    const t = await onTheLine('am4')
+    for (let i = 0; i < 3; i++) {
+      for (const [path, status] of [
+        ['/store/config/scene-names-am4%3A99', 404],
+        ['/store/config/scene-names-am4%3A98', 404],
+        ['/store/config/preset-names-am4', 404],
+        ['/presets/99/summary', 501],
+        ['/presets/98/summary', 501],
+        ['/device', 404]
+      ]) {
+        await assert.rejects(t.get(path), (e) => e.status === status && e.bluetooth === true, path)
+      }
+      await assert.rejects(drive(t.clock, t.wire.request('/store/config/scene-names-am4%3A42', { method: 'PUT', body: '{}' })), (e) => e.status === 501)
+    }
+    const said = (start) => t.logs.filter((l) => l.startsWith(`not over Bluetooth: ${start}`)).length
+    assert.equal(said('GET /store/config/scene-names'), 1, 'the same refusal was written again')
+    assert.equal(said('GET /store/config/preset-names'), 1)
+    assert.equal(said('GET /presets/'), 1)
+    assert.equal(said('GET /device'), 1)
+    assert.equal(said('PUT /store/config/scene-names'), 1)
+    assert.equal(t.sent.length, 0)
+    t.wire.close()
+    /* A new connection says it again. */
+    const again = await onTheLine('am4')
+    await assert.rejects(again.get('/device'), (e) => e.status === 404)
+    assert.equal(again.logs.filter((l) => l === 'not over Bluetooth: GET /device').length, 1)
+    again.wire.close()
+  })
+
   test('unknown routes, writes to the computer’s store and every PUT are refused with zero bytes sent', async () => {
     const t = await onTheLine('fm3')
     for (const [method, path, status] of REFUSED) {
@@ -2698,11 +2729,12 @@ export function run(test) {
     assert.match(rig, /const kept = await recallSceneNames\(owner, number\) if \(kept\.length && state\.preset\?\.number === number\) set\(\{ sceneNames: kept \}\)/, 'the names already seen are not shown first')
     assert.match(
       rig,
-      /if \(overBluetooth\(state\.capabilities\)\) return kept\.length > 0 && state\.preset\?\.number === number/,
+      /if \(viaBluetooth\(\)\) return kept\.length > 0 && state\.preset\?\.number === number/,
       'a preset whose names are remembered is read again over Bluetooth'
     )
     /* No computer to ask, and no summary of the slots either side, which would be a whole preset each. */
-    assert.match(rig, /function followComputerNames\(\) \{ const number = state\.preset\?\.number \/\*[^*]*\*\/ if \(overBluetooth\(state\.capabilities\)\) return/)
+    assert.match(rig, /function followComputerNames\(\) \{ const number = state\.preset\?\.number \/\*[^*]*\*\/ if \(viaBluetooth\(\)\) return/)
+    assert.match(rig, /const viaBluetooth = \(\) => state\.capabilities\?\.via === 'bluetooth'/)
     assert.match(rig, /if \(!bluetoothAm4\(\)\) \{ const summary = await device\.sceneNames\(number\)/)
     const device = flat('mobile/src/lib/device.js')
     assert.match(device, /export function keepSceneNames\(slug, number, names\) \{ if \(!slug \|\| !Number\.isInteger\(number\) \|\| number < 0 \|\| demoDevice\(\) \|\| bluetoothWire\(\)\) return/)

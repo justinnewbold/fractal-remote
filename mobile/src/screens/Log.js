@@ -6,6 +6,8 @@ import { color, font, mono, radius, space } from '../lib/theme'
 import { clearDebugLog, formatDebugLog, formatLine, getDebugLog, onDebugLog } from '../lib/debugLog'
 import { APP_VERSION } from '../lib/version'
 import { linkState } from '../lib/link'
+import { bluetoothOn } from '../lib/bleSwitch'
+import { isDemo } from '../lib/demo'
 import { pastRuns } from '../lib/logKeep'
 import { useRig } from '../lib/rig'
 import Note from '../components/Note'
@@ -94,20 +96,27 @@ export default function Log({ onBack, onReport }) {
 
   const copy = async () => {
     const link = linkState()
+    /* Over Bluetooth (beta) no computer is in the chain: the far end is the
+       adapter, whose name link.js keeps as macName, and it has no version. */
+    const throughAdapter = bluetoothOn() && !isDemo()
     const text = formatDebugLog({
       app: `Fractal Remote (phone) v${APP_VERSION}`,
       platform: `${Platform.OS} ${Platform.Version}`,
       unit: deviceName || 'not detected',
       preset: Number.isInteger(preset?.number) ? `${preset.number} ${preset.name || ''}`.trim() : 'none',
-      computer: link.macName || 'none',
-      /*
-       * The version at the other end, which is the thing that could not be
-       * answered from a pasted log before: "Does the Mac app need to be updated
-       * to the latest version?" A computer too old to say so is itself the
-       * answer, so that case is named rather than left blank.
-       */
-      'computer app': link.hostVersion || 'did not say (older than 7.205.0, or could not write it)',
-      link: link.link
+      ...(throughAdapter
+        ? { link: `Bluetooth (beta), ${link.link}${link.macName && link.link !== 'off' ? `, through ${link.macName}` : ''}` }
+        : {
+            computer: link.macName || 'none',
+            /*
+             * The version at the other end, which is the thing that could not be
+             * answered from a pasted log before: "Does the Mac app need to be updated
+             * to the latest version?" A computer too old to say so is itself the
+             * answer, so that case is named rather than left blank.
+             */
+            'computer app': link.hostVersion || 'did not say (older than 7.205.0, or could not write it)',
+            link: link.link
+          })
     },
     /*
      * The previous run's tail goes in the same paste, under its own heading.

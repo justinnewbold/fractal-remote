@@ -8,6 +8,7 @@ import chevronIcon from '../../assets/icons/chevron.png'
 import ampIcon from '../../assets/icons/amp.png'
 import laptopIcon from '../../assets/icons/laptop.png'
 import phoneIcon from '../../assets/icons/phone.png'
+import bluetoothIcon from '../../assets/icons/bluetooth.png'
 
 /*
  * THE CARDS FROM HIS "HERE'S THE APP" MOCKUP, for any screen that wants them.
@@ -75,11 +76,12 @@ export function TipCard({ icon, label, body, onPress, right, tile = 64 }) {
   )
 }
 
-const CHAIN_ICONS = { unit: ampIcon, computer: laptopIcon, phone: phoneIcon }
+const CHAIN_ICONS = { unit: ampIcon, computer: laptopIcon, adapter: bluetoothIcon, phone: phoneIcon }
 const LAMP = { good: 'good', busy: 'idle', bad: 'fault', dim: 'idle' }
 
 /**
- * The unit, the computer and the phone, joined by their two wires, each with
+ * The unit, the computer and the phone — or, over Bluetooth (beta), the
+ * adapter in the computer's place — joined by their two wires, each with
  * a lamp. The words come from lib/link-chain (shared/link-chain.mjs), the
  * same ones the browser draws.
  */

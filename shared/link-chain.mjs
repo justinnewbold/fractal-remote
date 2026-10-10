@@ -16,6 +16,13 @@
  *
  * Tones are the browser's vocabulary, the same four link-word.mjs uses:
  * good, busy, bad, dim.
+ *
+ * OVER BLUETOOTH (BETA) THERE IS NO COMPUTER IN IT. The phone talks to the
+ * unit through a Bluetooth MIDI adapter, and the page drew that adapter as a
+ * computer joined to the unit by a USB cable. `via: 'bluetooth'` puts the
+ * adapter in the computer's place, joined to the unit by the MIDI cable (the
+ * C2MIDI Pro the guide names) and to the phone by Bluetooth. A phone's only,
+ * and the demo wins over it, as it does in link.js.
  */
 
 /**
@@ -23,24 +30,30 @@
  * @param {'phone'|'computer'} p.here
  * @param {boolean} [p.demo]
  * @param {{ name?: string|null, firmware?: string|null, state?: 'present'|'missing'|'silent'|'unknown' }} [p.unit]
+ * @param {'computer'|'bluetooth'} [p.via]  how a phone reaches the unit
  * @param {{ name?: string|null, version?: string|null, link?: string }} [p.computer]
  *   link, for a phone: connected, joining, no-answer or anything else for off.
+ * @param {{ name?: string|null, link?: string }} [p.adapter]
+ *   over Bluetooth: the adapter's name, and connected, joining or anything else for off.
  * @param {{ version?: string|null, email?: string|null, remote?: 'on'|'off'|'signed-out' }} [p.phone]
  *   remote, for a computer: whether its phone remote is on.
  */
-export function linkChain({ here, demo = false, unit = {}, computer = {}, phone = {} }) {
+export function linkChain({ here, demo = false, via = 'computer', unit = {}, computer = {}, adapter = {}, phone = {} }) {
   const atPhone = here === 'phone'
-  const reached = atPhone ? computer.link === 'connected' : true
+  const ble = atPhone && !demo && via === 'bluetooth'
+  const reached = ble ? adapter.link === 'connected' : atPhone ? computer.link === 'connected' : true
   const unitName = unit.name || 'Your unit'
 
   const unitCard = demo
     ? { body: `${unit.name || 'FM3'} · simulated`, tone: 'good' }
     : !reached
-      ? { body: 'Reached through your computer', tone: 'dim' }
+      ? { body: ble ? 'Reached through the Bluetooth adapter' : 'Reached through your computer', tone: 'dim' }
       : unit.state === 'present'
         ? { body: [unit.name || 'Connected', unit.firmware ? `firmware ${unit.firmware}` : null].filter(Boolean).join(' · '), tone: 'good' }
         : unit.state === 'missing'
-          ? { body: 'No unit found. Check it is on and its USB cable is in.', tone: 'bad' }
+          ? ble
+            ? { body: `${unitName} isn’t answering through the adapter. Check it is on, and the black plug is in its MIDI IN and the white in MIDI OUT.`, tone: 'bad' }
+            : { body: 'No unit found. Check it is on and its USB cable is in.', tone: 'bad' }
           : unit.state === 'silent'
             ? { body: `${unitName} isn’t answering. Turn it off and on.`, tone: 'bad' }
             : { body: 'Looking for your unit…', tone: 'busy' }
@@ -59,6 +72,13 @@ export function linkChain({ here, demo = false, unit = {}, computer = {}, phone 
             ? { body: `${computerName} isn’t answering`, tone: 'bad' }
             : { body: 'Not connected', tone: 'dim' }
 
+  const adapterCard =
+    adapter.link === 'connected'
+      ? { body: adapter.name || 'Connected', tone: 'good' }
+      : adapter.link === 'joining'
+        ? { body: `Looking for ${adapter.name || 'the adapter'}…`, tone: 'busy' }
+        : { body: 'Not connected', tone: 'dim' }
+
   const phoneCard = atPhone
     ? { body: [phone.version ? `v${phone.version}` : null, phone.email || null].filter(Boolean).join(' · ') || 'This phone', tone: 'good' }
     : phone.remote === 'on'
@@ -68,8 +88,10 @@ export function linkChain({ here, demo = false, unit = {}, computer = {}, phone 
         : { body: 'Phone remote off', tone: 'dim' }
 
   return [
-    { key: 'unit', label: 'YOUR UNIT', ...unitCard, wire: 'USB CABLE' },
-    { key: 'computer', label: atPhone ? 'YOUR COMPUTER' : 'THIS COMPUTER', ...computerCard, wire: 'SECURE LINK' },
+    { key: 'unit', label: 'YOUR UNIT', ...unitCard, wire: ble ? 'MIDI CABLE' : 'USB CABLE' },
+    ble
+      ? { key: 'adapter', label: 'BLUETOOTH ADAPTER', ...adapterCard, wire: 'BLUETOOTH' }
+      : { key: 'computer', label: atPhone ? 'YOUR COMPUTER' : 'THIS COMPUTER', ...computerCard, wire: 'SECURE LINK' },
     { key: 'phone', label: atPhone ? 'THIS PHONE' : 'YOUR PHONE', ...phoneCard }
   ].map((card, i, all) => ({
     ...card,

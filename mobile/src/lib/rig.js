@@ -19,7 +19,6 @@ import { firmwareOf } from './firmware'
 import { faultFrom, withdrawsFault } from './fault-rule'
 
 import * as device from './device'
-import { overBluetooth } from './bleSwitch'
 import { idOf, sameBlock } from './unit.mjs'
 import { TAP_REREAD_MS, keepTaps, tappedBpm, tempoRange, tempoSender } from './tempo'
 import { watchEvery, probeSays, countQuiet, unitGone } from './unit-watch'
@@ -229,6 +228,8 @@ export function reset() {
   judging = null
   staleOwn = false
   chainForBefore = null
+  following = null
+  namesRead = null
   echoes.clear()
   set(initial)
 }
@@ -900,7 +901,22 @@ async function readAll() {
   const simulated = isDemo()
   if (slug !== state.deviceSlug || simulated !== state.simulated) forgetNames()
   const unit = caps?.connected === false ? 'missing' : 'present'
-  if (unit !== state.unit) logDebug('unit', unit === 'missing' ? 'the computer has no unit' : 'the computer has a unit', caps?.short || caps?.name || undefined)
+  /* Over Bluetooth (beta) the answer came through the adapter, not a computer
+     (bleWire's detect carries capabilities.via 'bluetooth'). */
+  const blue = caps?.capabilities?.via === 'bluetooth'
+  if (unit !== state.unit) {
+    logDebug(
+      'unit',
+      blue
+        ? unit === 'missing'
+          ? 'the unit does not answer through the Bluetooth adapter'
+          : 'the unit answers through the Bluetooth adapter'
+        : unit === 'missing'
+          ? 'the computer has no unit'
+          : 'the computer has a unit',
+      caps?.short || caps?.name || undefined
+    )
+  }
   set({
     capabilities: caps?.capabilities ?? null,
     deviceName: caps?.short || caps?.name || '',
@@ -1378,7 +1394,9 @@ function takePreset(fresh) {
    * bar as "unit not answering" rather than a slot -1 under a green word.
    */
   const answered = Number.isInteger(fresh?.number) && fresh.number >= 0
-  if (fresh?.number === -1 && state.unit !== 'silent') logDebug('unit', 'the unit did not answer the computer', 'no preset number')
+  if (fresh?.number === -1 && state.unit !== 'silent') {
+    logDebug('unit', viaBluetooth() ? 'the unit did not answer through the Bluetooth adapter' : 'the unit did not answer the computer', 'no preset number')
+  }
   if (answered && state.unit === 'silent') logDebug('unit', 'the unit is answering again')
   set({ preset: fresh, ...(fresh?.number === -1 ? { unit: 'silent' } : answered && state.unit !== 'missing' ? { unit: 'present' } : {}) })
 }
@@ -1476,8 +1494,11 @@ async function namesOfLoaded(number, copy) {
   return device.unitSceneNames(number)
 }
 
-/* Whether this is an AM4 reached over Bluetooth (beta), whose names are slow to read. */
-const bluetoothAm4 = () => overBluetooth(state.capabilities) && state.deviceSlug === 'am4'
+/* Whether the unit is reached over Bluetooth (beta): no computer, no computer's store.
+   Read off the capabilities, as noteEdited does, so the bench can say so too. */
+const viaBluetooth = () => state.capabilities?.via === 'bluetooth'
+/* An AM4 over Bluetooth, whose names are slow to read. */
+const bluetoothAm4 = () => viaBluetooth() && state.deviceSlug === 'am4'
 
 /**
  * What this preset's scenes are called, when the unit did not volunteer them.
@@ -1487,9 +1508,29 @@ const bluetoothAm4 = () => overBluetooth(state.capabilities) && state.deviceSlug
  * between scenes with a footswitch. Never fails a screen — a unit with no scene
  * names gets numbered tiles, which is what it had before.
  */
+/*
+ * One read of a preset's scene names at a time: a second pass over the same
+ * preset (both out of the one chain read together, refreshBlocks handing the
+ * second the first's promise) waits on the first instead of asking again. On
+ * an AM4 a read is a whole stored preset, four seconds of the line over
+ * Bluetooth, so two at once was eight.
+ */
+let namesRead = null
 export async function refreshSceneNames(copy) {
   const number = state.preset?.number
   if (!Number.isInteger(number)) return
+  const key = keyFor(number)
+  if (namesRead?.key === key) return namesRead.done
+  const done = readNamesOf(number, copy)
+  namesRead = { key, done }
+  try {
+    await done
+  } finally {
+    if (namesRead?.done === done) namesRead = null
+  }
+}
+
+async function readNamesOf(number, copy) {
   const names = await namesOfLoaded(number, copy)
   /* Still the same preset: a slow read that lands after the next tap would
      otherwise put the last song's names on this song's tiles. */
@@ -1557,7 +1598,7 @@ export async function quickSceneNames() {
    * it reads them once, it can go off the remembered names unless they hit
    * refresh." A preset whose names are kept is not read again.
    */
-  if (overBluetooth(state.capabilities)) return kept.length > 0 && state.preset?.number === number
+  if (viaBluetooth()) return kept.length > 0 && state.preset?.number === number
   let held = null
   try {
     held = await device.storedSceneNames(slug, number)
@@ -1589,11 +1630,19 @@ export const COMPUTER_NAMES_AFTER_MS = [4000, 9000, 18000]
 
 const named = () => (state.sceneNames || []).some((n) => (n || '').trim())
 
+/* The preset change whose names are being followed, and when its last ask is due. */
+let following = null
+
 function followComputerNames() {
   const number = state.preset?.number
-  /* Over Bluetooth there is no computer to have them. */
-  if (overBluetooth(state.capabilities)) return
+  /* Over Bluetooth there is no computer to have them: every ask was refused. */
+  if (viaBluetooth()) return
   if (!Number.isInteger(number) || named()) return
+  /* Two passes over one preset change (the settled read, and a pull-down
+     landing meanwhile) are one follow, not two sets of asks in one millisecond. */
+  const key = `${presetRun}:${keyFor(number)}`
+  if (following?.key === key && Date.now() < following.until) return
+  following = { key, until: Date.now() + COMPUTER_NAMES_AFTER_MS[COMPUTER_NAMES_AFTER_MS.length - 1] }
   for (const wait of COMPUTER_NAMES_AFTER_MS) {
     setTimeout(async () => {
       if (state.preset?.number !== number || named()) return

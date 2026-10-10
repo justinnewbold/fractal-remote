@@ -1371,10 +1371,19 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * again on this connection.
    */
   const am4Names = new Map()
+  /* A second ask for a slot already coming is the same read, not another four seconds. */
+  const am4NamesComing = new Map()
   let am4DumpsOff = false
-  async function am4SceneNames(n) {
+  function am4SceneNames(n) {
     presetNumber(n)
-    if (am4Names.has(n)) return { number: n, names: am4Names.get(n) }
+    if (am4Names.has(n)) return Promise.resolve({ number: n, names: am4Names.get(n) })
+    if (!am4NamesComing.has(n)) {
+      const coming = readAm4SceneNames(n).finally(() => am4NamesComing.delete(n))
+      am4NamesComing.set(n, coming)
+    }
+    return am4NamesComing.get(n)
+  }
+  async function readAm4SceneNames(n) {
     if (am4DumpsOff) throw unsupported()
     const frames = []
     let heardHead = false
@@ -1574,6 +1583,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * here with nothing sent. A refusal never falls through to the computer —
    * with Bluetooth on, there is no computer to fall through to.
    */
+  const toldNot = new Set()
   async function request(path, options = {}) {
     if (closed) throw notConnected()
     const method = String(options?.method || 'GET').toUpperCase()
@@ -1587,7 +1597,18 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     const route = method === 'GET' || method === 'POST' ? routeFor(method, clean, part, body) : null
     if (!route) {
-      say(`not over Bluetooth: ${method} ${clean}`)
+      /*
+       * WHAT BLUETOOTH NEVER ANSWERS IS SAID ONCE A CONNECTION. "Don't know if
+       * you can see any issues from this log." Most of it was this line. What
+       * routeFor refuses once it refuses for the whole connection: still
+       * refused every time with nothing sent, but written down for the first
+       * of each kind only (preset 98's and 99's are one kind).
+       */
+      const kind = `${method} ${clean.replace(/(\/|%3A|:)\d+(?=\/|$)/gi, '$1n')}`
+      if (!toldNot.has(kind)) {
+        toldNot.add(kind)
+        say(`not over Bluetooth: ${method} ${clean}`)
+      }
       /* The computer's own documents simply do not exist here, which the app already handles. */
       throw method === 'GET' && (clean === '/device' || clean.startsWith('/store/')) ? notHere() : unsupported()
     }

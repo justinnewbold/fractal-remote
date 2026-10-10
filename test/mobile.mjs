@@ -7002,6 +7002,24 @@ export function run(test) {
       /'computer app': link\.hostVersion \|\| 'did not say \(older than 7\.205\.0, or could not write it\)'/,
       'a pasted log still cannot say what the computer is running'
     )
+    /*
+     * And over Bluetooth (beta), where there is no computer: the pasted log
+     * said "computer: WIDI Uhost Bluetooth" and "computer app: did not say".
+     */
+    const logScreen = read('mobile/src/screens/Log.js').replace(/\s+/g, ' ')
+    assert.match(logScreen, /import \{ bluetoothOn \} from '\.\.\/lib\/bleSwitch'/)
+    assert.match(logScreen, /const throughAdapter = bluetoothOn\(\) && !isDemo\(\)/)
+    assert.match(
+      logScreen,
+      /\.\.\.\(throughAdapter \? \{ link: `Bluetooth \(beta\), \$\{link\.link\}\$\{link\.macName && link\.link !== 'off' \? `, through \$\{link\.macName\}` : ''\}` \} : \{ computer: link\.macName \|\| 'none',/,
+      'over Bluetooth the pasted log still names the adapter as a computer'
+    )
+    const rigLines = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
+    assert.match(rigLines, /const blue = caps\?\.capabilities\?\.via === 'bluetooth'/)
+    assert.match(rigLines, /'the unit answers through the Bluetooth adapter'/, 'over Bluetooth the log says the computer has a unit')
+    assert.match(rigLines, /'the unit does not answer through the Bluetooth adapter'/)
+    assert.match(rigLines, /viaBluetooth\(\) \? 'the unit did not answer through the Bluetooth adapter' : 'the unit did not answer the computer'/)
+    assert.match(read('mobile/src/lib/bleWire.js'), /via: 'bluetooth'/, 'the mark the log wording reads is gone from the Bluetooth detect')
 
     /* And on screen, where somebody can act on it. */
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
@@ -7010,7 +7028,7 @@ export function run(test) {
     assert.match(read('shared/link-chain.mjs'), /\$\{computerName\}\$\{version\(computer\.version\)\}/, 'the computer card forgot its version')
     assert.match(settings, /const behind = !!hostVersion && isOlder\(hostVersion, APP_VERSION\) === true/, 'a computer that did not say its version is told it is behind')
     /* A missing version is said as missing, with where to look, not as "behind". */
-    assert.match(settings, /link === 'connected' && !demo && !hostVersion \? \( <Note> The computer didn’t say which version it is running: its app is older than 7\.205\.0, or it could not write its name for the phone\. If the computer is on 7\.295\.0 or newer, its menu bar icon has a line saying what the phones hear about its version/, 'a missing version does not point at the Mac’s own menu line')
+    assert.match(settings, /link === 'connected' && !demo && !throughAdapter && !hostVersion \? \( <Note> The computer didn’t say which version it is running: its app is older than 7\.205\.0, or it could not write its name for the phone\. If the computer is on 7\.295\.0 or newer, its menu bar icon has a line saying what the phones hear about its version/, 'a missing version does not point at the Mac’s own menu line')
 
     /*
      * The comparison is strict about what it will answer, and that is the
@@ -7678,7 +7696,11 @@ export function run(test) {
      */
     const flat = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
     assert.doesNotMatch(flat, /label="Try now"/, 'the button still says Try now, which says nothing about what it tries')
-    assert.match(flat, /\{link !== 'connected' \? <Press label="Look for the computer again" onPress=\{onReconnect\} \/> : null\}/, 'the reconnect button is shown on a live link')
+    assert.match(
+      flat,
+      /\{link !== 'connected' \? <Press label=\{throughAdapter \? 'Look for the adapter again' : 'Look for the computer again'\} onPress=\{onReconnect\} \/> : null\}/,
+      'the reconnect button is shown on a live link'
+    )
   })
 
   test('the password is asked for from the account line, not left open on the page', () => {
@@ -11180,6 +11202,37 @@ export function run(test) {
     await clock.advance(3000)
     /* And the unit's answer, out of the chain read, still goes over them. */
     assert.deepEqual(rig.getState().sceneNames.slice(0, 2), ['VERSE', 'CHORUS'], 'what the unit says no longer replaces a kept copy')
+  })
+
+  /*
+   * "Don't know if you can see any issues from this log." Over Bluetooth the
+   * phone asked the computer's store for scene names on every preset change
+   * and again at 4, 9 and 18 seconds — a computer that was not there.
+   */
+  test('over Bluetooth a preset change asks no computer’s store, and a preset whose names are kept is not read again', async () => {
+    const BLE = { via: 'bluetooth', scenes: 4, sceneCount: 4, slotModel: 'linear' }
+    const STORE_NAMES = /^GET \/store\/config\/scene-names/
+    const SCENES = /^GET \/presets\/\d+\/scenes$/
+    const fresh = await rigOnTheBench({ capabilities: BLE, namesInChain: false, scenes: ['', '', '', ''] })
+    fresh.rig.loadPreset(40)
+    await fresh.clock.advance(30000)
+    assert.equal(fresh.asked(STORE_NAMES), 0, 'a computer’s store was asked over Bluetooth')
+
+    const kept = await rigOnTheBench({ capabilities: BLE, namesInChain: false, scenes: ['', '', '', ''], keptNames: { 40: ['CLEAN', 'DRIVE', '', ''] } })
+    kept.rig.loadPreset(40)
+    await kept.clock.advance(30000)
+    assert.deepEqual(kept.rig.getState().sceneNames.slice(0, 2), ['CLEAN', 'DRIVE'])
+    assert.equal(kept.asked(SUMMARY), 0, 'remembered names were read again over Bluetooth')
+    assert.equal(kept.asked(SCENES), 0, 'remembered names were read again over Bluetooth')
+    assert.equal(kept.asked(STORE_NAMES), 0)
+  })
+
+  test('two passes that both want a preset’s scene names read them once', async () => {
+    const { rig, clock, asked } = await rigOnTheBench({ namesInChain: false, scenes: ['A', 'B', '', '', '', '', '', ''] })
+    await Promise.all([rig.refreshSceneNames(), rig.refreshSceneNames()])
+    await clock.advance(0)
+    assert.equal(asked(SUMMARY), 1, 'two reads of the same names went to the unit at once')
+    assert.equal(rig.getState().sceneNames[0], 'A')
   })
 
   test('a preset played before is back on the tap, chain and all, and still costs exactly one chain read', async () => {
