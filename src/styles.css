@@ -12341,6 +12341,13 @@ button.walk-card:hover {
   font-size: var(--f-4);
   line-height: 1.45;
 }
+/* The one thing to do about a card, in red: an old computer app. */
+.walk-card-warn {
+  color: var(--fault);
+  font-size: var(--f-4);
+  font-weight: 700;
+  line-height: 1.45;
+}
 .walk-chevron {
   width: 16px;
   height: 16px;

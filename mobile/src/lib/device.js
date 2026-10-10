@@ -67,7 +67,7 @@ import { cableColumns, toWireCable, toWireCell } from './grid-plan'
 import { cleanPresetName, isEmptySlotName } from './unit.mjs'
 import { preferredEncoding, rememberEncoding } from './encoding'
 import { toNormalized } from './scale'
-import { unitMetronomeRequest } from './metronome-rules'
+import { unitMetronome, unitMetronomeRequest } from './metronome-rules'
 import { rememberedRefusal, unsupportedMemo } from './unsupported'
 
 export {
@@ -599,8 +599,32 @@ export const listIrBanks = () => remoteRequest('/cab/irs')
  */
 export const setUnitMetronome = (slug, on) => {
   const ask = unitMetronomeRequest(slug, on)
-  if (!ask || demoDevice()) return Promise.resolve({ ok: false, unsupported: !ask })
+  /* The demo's units click in the demo: "the unit didn't take it" there was a fault nobody had. */
+  if (!ask || demoDevice()) return Promise.resolve(ask ? { ok: true, simulated: true } : { ok: false, unsupported: true })
   return told(`metronome ${on ? 'on' : 'off'}`, put(ask.path, ask.body))
+}
+
+/**
+ * What the unit says its metronome switch is at, for the log only.
+ *
+ * "The unit metronome click is not working." The write is answered "ok"
+ * whenever the unit does not object, so "ok" proves nothing — and nobody has
+ * yet seen an FM3 act on its switch. This reads it straight back, so the next
+ * pasted log says whether it landed. Never shown on screen: reading the
+ * Global block back is as unproven as the switch itself. null when nothing
+ * came back.
+ */
+export async function readUnitMetronome(slug) {
+  const how = unitMetronome(slug)
+  if (!how || how.kind !== 'block' || demoDevice()) return null
+  const eid = how.eid
+  try {
+    const res = await post(`/preset/blocks/${eid}/readrange`, { pids: [how.paramId] })
+    const value = res?.[how.paramId] ?? res?.[String(how.paramId)]
+    return Number.isFinite(value) ? value : null
+  } catch {
+    return null
+  }
 }
 
 /**

@@ -2137,7 +2137,7 @@ export function run(test) {
     assert.match(words, /Connect it in the app, not in the iPhone’s Settings → Bluetooth\./, 'the guide does not say an iPhone connects the adapter in the app')
     assert.match(words, /Nearby devices/, 'the guide does not say what Android 12 and later asks for')
     assert.match(words, /On Android 11 and older it asks for Location instead[^.]*make sure Location is switched on/, 'the guide does not say Android 11 and older need Location on')
-    assert.match(words, /Settings → Phone & computer → Bluetooth \(beta\)/, 'the guide does not say where Bluetooth is in the app')
+    assert.match(words, /Settings → Bluetooth \(beta\)/, 'the guide does not say where Bluetooth is in the app')
     assert.match(words, /The page has two steps, with What you need between them\./, 'the guide does not say What you need sits between the two steps, as it does in the app')
     assert.match(app, /<Heading>1 · [\s\S]*<Heading>What you need<\/Heading>[\s\S]*<Heading>2 · Connect<\/Heading>/, 'What you need no longer sits between the two steps; read the guide against the app again')
     /* Screen Time: the same place to look as the app's own line for it. */
@@ -2146,7 +2146,7 @@ export function run(test) {
     assert.match(words, /blocked by Screen Time[^.]*Settings → Screen Time → Content & Privacy Restrictions, allow Bluetooth Sharing/, 'the guide does not say what to do when Screen Time blocks Bluetooth')
     const settings = read('mobile/src/screens/Settings.js')
     assert.match(settings, /title="Phone & computer"/, 'Settings has no Phone & computer, which the guide sends people to')
-    assert.match(settings, /label="BLUETOOTH \(BETA\)"/, 'Phone & computer has no Bluetooth (beta) card, which the guide sends people to')
+    assert.match(settings, /title="Bluetooth \(beta\)"/, 'Settings has no Bluetooth (beta) row, which the guide sends people to')
 
     /* What's different from USB: the app's list, every line of it. */
     const different = app.match(/const DIFFERENT = \[([\s\S]*?)\n\]/)?.[1] ?? ''
@@ -2216,10 +2216,12 @@ export function run(test) {
 
     assert.match(pasted, /Bluetooth \(beta\)\. This version can also reach the guitar unit with no\s+computer/, 'the 1.87.1 notes do not describe Bluetooth (beta)')
     assert.match(pasted, /for everyone who has unlocked the app/, 'the 1.87.1 notes do not say who Bluetooth is for')
-    assert.match(pasted, /tap the gear at the top right for\s+Settings, then Phone & computer, then BLUETOOTH \(BETA\)/, 'the 1.87.1 notes do not say where Bluetooth is')
+    assert.match(pasted, /tap the gear at the top right for\s+Settings, then Bluetooth \(beta\)\./, 'the 1.87.1 notes do not say where Bluetooth is')
+    /* And where a reviewer's very first launch shows it, before the app has updated itself. */
+    assert.match(pasted, /On the very first launch, before the\s+app has updated itself, it is under Settings, then Phone & computer, then\s+BLUETOOTH \(BETA\)/)
     const settings = read('mobile/src/screens/Settings.js')
     assert.match(settings, /title="Phone & computer"/)
-    assert.match(settings, /label="BLUETOOTH \(BETA\)"/)
+    assert.match(settings, /title="Bluetooth \(beta\)"/)
     assert.match(pasted, /video of it\s+working[\s\S]{0,120}(\[VIDEO LINK[^\]]*\]|https:\/\/\S+)/, 'the 1.87.1 notes promise a video and give neither a link nor the place for one')
     assert.match(pasted, /the demo above still\s+needs no hardware at all/, 'the 1.87.1 notes do not say the demo still needs no hardware')
     assert.ok(pasted.includes('https://fractal.newbold.cloud/bluetooth.html'), 'the 1.87.1 notes do not give the setup guide')
@@ -2372,7 +2374,7 @@ export function run(test) {
       assert.ok(read('shared/onboarding.mjs').includes(label), `the Play reviewer is told to tap "${label}", which the walkthrough no longer says`)
     }
     assert.match(access, /This account has the full version\./)
-    assert.match(access, /^Bluetooth \(beta\): tap the gear at the top right for Settings, then Phone & computer, then BLUETOOTH \(BETA\)\. It needs a Bluetooth MIDI adapter on a Fractal unit; a video of it working is at \[VIDEO LINK\]\.$/m, 'the Play reviewer is not told where Bluetooth is, or given the video')
+    assert.match(access, /^Bluetooth \(beta\): tap the gear at the top right for Settings, then Bluetooth \(beta\) \(on the very first launch, before the app updates itself: Settings, then Phone & computer, then BLUETOOTH \(BETA\)\)\. It needs a Bluetooth MIDI adapter on a Fractal unit; a video of it working is at \[VIDEO LINK\]\.$/m, 'the Play reviewer is not told where Bluetooth is, or given the video')
     assert.match(playHand, /\*\*Short description:\*\* the one under \*Google Play: short description\*/, 'the Play checklist does not say to paste the lower-case short description')
     assert.match(playHand, /paste its \*\*Google Play\s+copy\*\* instead/, 'the Play checklist does not say which copy of the draft Play gets')
     assert.match(playHand, /\*\*The trademark line\*\* at the end has to be the one in this file, which\s+names the VP4/, 'the Play checklist does not say the trademark line must name the VP4')

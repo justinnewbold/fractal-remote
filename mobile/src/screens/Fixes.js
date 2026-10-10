@@ -6,6 +6,8 @@ import { FIXES, FIRMWARE_NOTE, versionsInSync } from '../lib/troubleshooting'
 import { APP_VERSION } from '../lib/version'
 import Note from '../components/Note'
 import Press from '../components/Press'
+import { bluetoothOn } from '../lib/bleSwitch'
+import { isDemo } from '../lib/demo'
 
 /**
  * What to try when it isn't working.
@@ -98,9 +100,14 @@ export default function Fixes({ onBack, open = null, hostVersion = null }) {
                 */}
                 {fix.id === 'versions' ? (
                   <View style={{ gap: space.sm }}>
-                    <Note tone={sync.state === 'ok' ? 'hint' : sync.state === 'unknown' ? 'hint' : 'warn'}>
-                      {sync.says}
-                    </Note>
+                    {/* Over Bluetooth (beta) no computer is in use: nothing to compare with. */}
+                    {bluetoothOn() && !isDemo() ? (
+                      <Note tone="hint">Over Bluetooth (beta) the phone talks to the unit itself, so no computer app is in use.</Note>
+                    ) : (
+                      <Note tone={sync.state === 'ok' ? 'hint' : sync.state === 'unknown' ? 'hint' : 'warn'}>
+                        {sync.says}
+                      </Note>
+                    )}
                     <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>
                       {FIRMWARE_NOTE}
                     </Text>

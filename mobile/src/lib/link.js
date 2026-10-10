@@ -89,6 +89,10 @@ const set = (patch) => {
   if (
     next.link === state.link &&
     next.macName === state.macName &&
+    // The computer's version as well: the red "update the computer app" line
+    // reads it, and an updated computer keeps the same name, so a check
+    // without it left that line up after the update had already happened.
+    next.hostVersion === state.hostVersion &&
     next.clash === state.clash &&
     next.chosenHost === state.chosenHost &&
     next.hosts.length === state.hosts.length &&

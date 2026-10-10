@@ -3,8 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio'
 import clickSound from '../../assets/click.wav'
 
-import { setUnitMetronome } from './device'
-import { DEFAULT_METRONOME, beatMs, clicks, metronomeSetting, nextBeat } from './metronome-rules'
+import { readUnitMetronome, setUnitMetronome } from './device'
+import { DEFAULT_METRONOME, beatMs, clicks, followSwitch, metronomeSetting, nextBeat, unitClick } from './metronome-rules'
+import { useRig } from './rig'
+import { useBluetoothOn } from './bluetooth'
+import { isDemo } from './demo'
 import { tick } from './feedback'
 import { logDebug } from './debugLog'
 import { isUnsupported } from './unsupported'
@@ -48,6 +51,85 @@ export function useMetronome() {
   )
 }
 
+/*
+ * Whether the unit has said its own click is on, since the app last switched
+ * it — for the unit it said it of.
+ *
+ * "It doesn't turn it on the unit on the FM3." The unit answers the write
+ * "ok" whenever it does not object, and nobody has yet seen an FM3 act on its
+ * switch, so "ok" is not taken for a click. Until the switch reads back as on,
+ * Unit keeps the phone clicking as well (shared clicks()), and the phone stops
+ * the moment the unit says it is clicking.
+ */
+let heard = { slug: null, on: false }
+const hear = (slug, on) => {
+  if (heard.slug === slug && heard.on === on) return
+  heard = { slug, on }
+  announce()
+}
+export const unitHeardOn = (slug) => heard.slug === slug && heard.on
+
+/** unitHeardOn as a hook: the Metronome page and the phone's click both follow it. */
+export function useUnitHeardOn(slug) {
+  return useSyncExternalStore(
+    (fn) => {
+      watchers.add(fn)
+      return () => watchers.delete(fn)
+    },
+    () => unitHeardOn(slug),
+    () => unitHeardOn(slug)
+  )
+}
+
+/**
+ * Switch the unit's click, then follow where the unit says its switch is.
+ *
+ * Its answers go into the log — "ok" only means the unit did not object —
+ * and into `heard`, because the phone keeps time until the unit says it is
+ * clicking. Asked again while Unit is picked (shared followSwitch), so a lost
+ * answer, or the switch changed at the unit by hand, is caught. Switching it
+ * off is believed straight away: the phone clicking on through a moment of
+ * silence costs nothing.
+ */
+let unfollow = () => {}
+const stopFollowing = () => {
+  unfollow()
+  unfollow = () => {}
+}
+
+async function switchUnit(slug, on) {
+  stopFollowing()
+  if (!on) hear(slug, false)
+  const said = await setUnitMetronome(slug, on)
+  if (said?.ok === false && !said?.unsupported) logDebug('metronome', 'the unit did not take it', JSON.stringify(said))
+  if (said?.ok === false || said?.simulated) return said
+  const tell = (value) =>
+    logDebug(
+      'metronome',
+      value === null ? 'the unit did not say where its metronome switch is' : `the unit says its metronome switch is at ${value}`,
+      `asked for ${on ? 'on' : 'off'}`
+    )
+  if (!on) {
+    readUnitMetronome(slug).then(tell).catch(() => {})
+    return said
+  }
+  /* Into the log when the answer changes, not every half minute. */
+  let told
+  /* Only while the setting still asks for it: a quick on-then-off must not hear the first answer last. */
+  unfollow = followSwitch({
+    read: () => readUnitMetronome(slug),
+    wanted: () => clicks(setting, true).unit,
+    answer: (heardOn, value) => {
+      if (value !== told) tell(value)
+      told = value
+      hear(slug, heardOn)
+    },
+    wait: (fn, ms) => setTimeout(fn, ms),
+    stop: (t) => clearTimeout(t)
+  })
+  return said
+}
+
 /**
  * Change the setting, and tell the unit if its half changed.
  *
@@ -55,17 +137,17 @@ export function useMetronome() {
  * phone's tap on must not reach out and switch the unit's click off when
  * somebody had turned it on at the unit by hand.
  */
-export async function setMetronome(patch, slug) {
-  const before = clicks(setting).unit
+export async function setMetronome(patch, slug, here = {}) {
+  /* Where the unit's click cannot be switched (an AM4, Bluetooth, the demo), its half never changes. */
+  const can = unitClick(slug, here).can
+  const before = clicks(setting, can).unit
   setting = metronomeSetting({ ...setting, ...patch })
   announce()
   AsyncStorage.setItem(KEY, JSON.stringify(setting)).catch(() => {})
-  const after = clicks(setting).unit
+  const after = clicks(setting, can).unit
   if (before === after) return { ok: true }
   try {
-    const said = await setUnitMetronome(slug, after)
-    if (said?.ok === false && !said?.unsupported) logDebug('metronome', 'the unit did not take it', JSON.stringify(said))
-    return said || { ok: true }
+    return (await switchUnit(slug, after)) || { ok: true }
   } catch (err) {
     /* A unit (or a link: Bluetooth refuses every setting write) that has no
        click to switch is not a unit that failed to take it. */
@@ -80,13 +162,33 @@ export async function setMetronome(patch, slug) {
  *
  * A unit switched on after the phone, or the other unit picked under Which
  * unit, has its own idea of whether it is clicking. If the setting says the
- * unit clicks, this says so to the unit in front of it now.
+ * unit clicks, this says so to the unit in front of it now. A unit that goes
+ * is no longer heard clicking, so the phone covers until the next one says.
  */
-export function useUnitMetronome(slug, present) {
+export function useUnitMetronome(slug, present, here = {}) {
+  const bluetooth = Boolean(here.bluetooth)
   useEffect(() => {
-    if (!present || !clicks(setting).unit) return
-    setUnitMetronome(slug, true).catch(() => {})
-  }, [slug, present])
+    if (!present) {
+      stopFollowing()
+      hear(null, false)
+      return
+    }
+    /* Not asked again where it cannot click any more: Bluetooth turned on, say. */
+    if (!clicks(setting, unitClick(slug, { bluetooth }).can).unit) {
+      stopFollowing()
+      return
+    }
+    switchUnit(slug, true).catch((err) => logDebug('metronome', 'could not tell the unit it arrived clicking', String(err?.message || err)))
+  }, [slug, present, bluetooth])
+}
+
+/* Whether this unit's own click can be switched from here: the phone keeps time where it cannot. */
+const ofSlug = (s) => s.deviceSlug
+function useUnitCan() {
+  const slug = useRig(ofSlug)
+  const demo = isDemo()
+  const bluetooth = useBluetoothOn() && !demo
+  return { can: unitClick(slug, { bluetooth, demo }).can, heard: useUnitHeardOn(slug) }
 }
 
 /*
@@ -127,7 +229,8 @@ const click = () => {
  */
 export function usePhoneClick(bpm, onBeat) {
   const s = useMetronome()
-  const on = clicks(s).phone
+  const { can, heard: heardOn } = useUnitCan()
+  const on = clicks(s, can, heardOn).phone
   const beat = beatMs(bpm)
   const running = Boolean(on && beat)
   useEffect(() => {

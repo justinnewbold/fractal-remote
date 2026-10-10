@@ -55,7 +55,7 @@ export function Tile({ icon, children }) {
  * A card: the tile, an amber label, a line under it, and on the right a
  * chevron when it goes somewhere (or whatever `right` is, such as a lamp).
  */
-export function TipCard({ icon, tile, label, body, onClick, right, small }) {
+export function TipCard({ icon, tile, label, body, warn, onClick, right, small }) {
   const inner = (
     <>
       <span className={small ? 'walk-tile-sm' : undefined}>
@@ -64,6 +64,7 @@ export function TipCard({ icon, tile, label, body, onClick, right, small }) {
       <span className="walk-card-words">
         <span className="walk-card-label">{label}</span>
         {body ? <span className="walk-card-body">{body}</span> : null}
+        {warn ? <span className="walk-card-warn">{warn}</span> : null}
       </span>
       {right || (onClick ? <Pic src={chevronIcon} className="walk-chevron" /> : null)}
     </>
@@ -133,6 +134,7 @@ export function ChainCards({ cards }) {
             icon={CHAIN_ICONS[card.key]}
             label={card.label}
             body={card.body}
+            warn={card.warn}
             right={<span className="walk-lamp" data-tone={card.tone} aria-label={card.tone === 'good' ? 'answering' : card.tone === 'bad' ? 'not answering' : 'waiting'} />}
           />
           {card.wire ? (

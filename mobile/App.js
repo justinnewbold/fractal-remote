@@ -261,7 +261,7 @@ export default function App() {
   /*
    * And whether the phone talks to the unit itself, through a Bluetooth MIDI
    * adapter, rather than through the computer. Off unless somebody turned it
-   * on in Settings → Phone & computer → Bluetooth (beta); see lib/bluetooth.
+   * on in Settings → Bluetooth (beta); see lib/bluetooth.
    * Only the on-or-off, so the page's own goings-on do not redraw the app.
    */
   const bluetooth = useBluetoothOn()
@@ -331,7 +331,7 @@ export default function App() {
   const rigSlug = useRig((s) => s.deviceSlug)
   const rigBpm = useRig((s) => s.bpm)
   const unitHere = useRig((s) => s.unit === 'present')
-  useUnitMetronome(rigSlug, unitHere && !demo)
+  useUnitMetronome(rigSlug, unitHere && !demo, { bluetooth })
   const settling =
     auth === 'in' &&
     !demo &&

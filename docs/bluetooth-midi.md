@@ -6,7 +6,7 @@ with the ForgeFX software?" He already owns a CME WIDI Master, which he uses
 with a mini controller.
 
 Way B below is now built: Bluetooth (beta), in the phone app under Settings →
-Phone & computer → Bluetooth (beta), with a setup guide for customers at
+Bluetooth (beta), with a setup guide for customers at
 public/bluetooth.html. Everything else on this page is what was found on 8
 October, before any of it was built or tried, kept so the next person starts
 from it instead of from nothing.
