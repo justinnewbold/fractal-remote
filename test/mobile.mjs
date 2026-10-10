@@ -170,7 +170,7 @@ async function rigOnTheBench(over = {}) {
     'demo.js': "export const isDemo = () => false\nexport const demoDevice = () => null\nexport const demoUnit = () => 'fm3'\n",
     'demoWire.js': "export const demoRequest = () => { throw new Error('no demo on the bench') }\n",
     /* Bluetooth (beta) off, as it is unless somebody turns it on: every request goes to the pretend computer. */
-    'bleSwitch.js': 'export const bluetoothWire = () => null\nexport const bluetoothOn = () => false\nexport const overBluetooth = () => false\n',
+    'bleSwitch.js': "export const bluetoothWire = () => null\nexport const bluetoothOn = () => false\nexport const overBluetooth = (caps) => caps?.via === 'bluetooth'\n",
     'debugLog.js': 'export const logDebug = () => {}\n',
     'lineage.js': 'export const withLineage = (x) => x\n',
     'presetNames.js': 'export const adopt = async () => 0\nexport const forget = () => {}\nexport const learn = () => {}\nexport const nameOf = () => undefined\n',
@@ -224,7 +224,7 @@ async function rigOnTheBench(over = {}) {
     answer = (method, path, body) => {
       if (method === 'GET') {
         if (path === '/device/detect')
-          return { connected: true, name: 'FM3', short: 'FM3', capabilities: unit.capabilities ?? { scenes: 8, meters: { outputLevels: true } } }
+          return { connected: true, name: unit.short ?? 'FM3', short: unit.short ?? 'FM3', capabilities: unit.capabilities ?? { scenes: 8, meters: { outputLevels: true } } }
         if (path === '/device') return {}
         if (path === '/preset') {
           if (unit.which) return unit.which()
@@ -7554,7 +7554,7 @@ export function run(test) {
        the quick names before it waits for the unit to settle. */
     assert.equal((flat.match(/const quick = names \? await quickSceneNames\(\) : true /g) || []).length, 1, 'the quick read is not taken in the one read of a preset')
     const once = withoutComments(rig.slice(rig.indexOf('async function readChainAndNames'), rig.indexOf('let staleTimer'))).replace(/\s+/g, ' ')
-    assert.match(once, /read = await refreshBlocks\(\) if \(names && read && state\.preset\?\.number === number\) \{ .*?if \(copy !== 'stale' && !quick\) await refreshSceneNames\(copy\)/, 'the slow read still runs when the names were already there, or before the chain, or after a chain read that failed')
+    assert.match(once, /read = await refreshBlocks\(\) if \(names && read && state\.preset\?\.number === number\) \{ .*?if \(copy !== 'stale' && !quick\) \{ (?:\/\*[^*]*\*\/ )?if \(bluetoothAm4\(\)\) namesWhenQuiet\(number, copy\) else await refreshSceneNames\(copy\) \}/, 'the slow read still runs when the names were already there, or before the chain, or after a chain read that failed')
     const loading = withoutComments(rig.slice(rig.indexOf('export async function loadPreset'))).replace(/\s+/g, ' ')
     assert.match(loading, /await quickSceneNames\(\) \} finally \{ presetLoads -= 1 syncChainBusy\(\) \} await readPresetSoon\(settleFrom\(sentAt\), \{ reloaded: true \}\)/, 'a preset load waits for the unit before putting the names it already knows on the tiles')
     assert.match(rig, /const kept = await recallSceneNames\(owner, number\)/, 'the disk is not read first')
@@ -11225,6 +11225,38 @@ export function run(test) {
     assert.equal(kept.asked(SUMMARY), 0, 'remembered names were read again over Bluetooth')
     assert.equal(kept.asked(SCENES), 0, 'remembered names were read again over Bluetooth')
     assert.equal(kept.asked(STORE_NAMES), 0)
+  })
+
+  /*
+   * An AM4's names over Bluetooth are four seconds of the line, and a press
+   * made meanwhile waits. In his log the next press came 2 to 3 seconds after
+   * the song changed, so the read waits for a quiet moment.
+   */
+  test('over Bluetooth an AM4’s first read of a preset’s names waits until nothing has been pressed for a while', async () => {
+    const SCENES = /^GET \/presets\/\d+\/scenes$/
+    const { rig, clock, asked } = await rigOnTheBench({
+      short: 'AM4',
+      capabilities: { via: 'bluetooth', scenes: 4, sceneCount: 4, slotModel: 'linear' },
+      namesInChain: false,
+      scenes: ['CLEAN', 'LEAD', '', '']
+    })
+    assert.equal(rig.getState().deviceSlug, 'am4')
+    rig.loadPreset(40)
+    await clock.advance(3000)
+    assert.equal(asked(SCENES), 0, 'the names were read straight after the preset changed, in the way of the next press')
+    rig.writeScene(1)
+    await clock.advance(rig.AM4_NAMES_QUIET_MS - 1000)
+    assert.equal(asked(SCENES), 0, 'the names were read while the player was still pressing')
+    await clock.advance(2000)
+    assert.equal(asked(SCENES), 1, 'the names were never read once it went quiet')
+    assert.deepEqual(rig.getState().sceneNames.slice(0, 2), ['CLEAN', 'LEAD'])
+    /* And a preset left before the quiet comes is not read at all. */
+    rig.loadPreset(41)
+    await clock.advance(2000)
+    rig.loadPreset(42)
+    await clock.advance(rig.AM4_NAMES_QUIET_MS + 1000)
+    assert.equal(asked(/^GET \/presets\/41\/scenes$/), 0, 'a preset already left was read')
+    assert.equal(asked(/^GET \/presets\/42\/scenes$/), 1)
   })
 
   test('two passes that both want a preset’s scene names read them once', async () => {

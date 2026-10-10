@@ -148,6 +148,8 @@ export default function TapTempo({ onError, onChanged, where = 'bar' }) {
   useEffect(() => {
     dropBurst()
     setTapped(null)
+    /* And its taps: one more press on the new song is not a beat of the old one. */
+    taps.current = []
   }, [going])
 
   const tap = async () => {
@@ -166,7 +168,7 @@ export default function TapTempo({ onError, onChanged, where = 'bar' }) {
      */
     clearTimeout(reread.current)
     haptic()
-    taps.current = keepTaps(taps.current, Date.now())
+    taps.current = keepTaps(taps.current, Date.now(), tempoRange(currentDeviceSlug()))
     /* The unit's own range: an AM4 refuses past 250, and a mis-tap is not a tempo. */
     const guess = tappedBpm(taps.current, tempoRange(currentDeviceSlug()))
     if (guess != null) {

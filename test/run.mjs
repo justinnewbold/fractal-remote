@@ -8359,9 +8359,35 @@ test('a tap faster than the unit takes is a mis-tap: nothing is sent, nothing is
 
   /* Both ends hand the unit's range in. */
   const rigSrc = readSrc(new URL('../mobile/src/lib/rig.js', import.meta.url), 'utf8')
-  assert.match(rigSrc, /const range = tempoRange\(state\.deviceSlug, state\.capabilities\?\.via\)\s+const guess = tappedBpm\(taps, range\)/)
+  assert.match(rigSrc, /const range = tempoRange\(state\.deviceSlug, state\.capabilities\?\.via\)[\s\S]{0,400}?taps = keepTaps\(taps, Date\.now\(\), range\)\s+const guess = tappedBpm\(taps, range\)/)
+  assert.match(rigSrc, /const on = chainKey\(\)\s+if \(on !== tapsOn\) \{\s+taps = \[\]\s+tapsOn = on\s+\}/, 'the last song’s taps count toward the new one')
   const tapSrc = readSrc(new URL('../src/components/TapTempo.jsx', import.meta.url), 'utf8')
   assert.match(tapSrc, /tappedBpm\(taps\.current, tempoRange\(currentDeviceSlug\(\)\)\)/)
+  assert.match(tapSrc, /taps\.current = keepTaps\(taps\.current, Date\.now\(\), tempoRange\(currentDeviceSlug\(\)\)\)/)
+  assert.match(tapSrc, /setTapped\(null\)\s+\/\*[^*]*\*\/\s+taps\.current = \[\]\s+\}, \[going\]\)/, 'the browser keeps the last song’s taps')
+
+  /*
+   * His log replayed, press by press, with the count started again at each
+   * Next as both ends now do. Before: 276, 200, 45, 48, 343 and 361 went to
+   * the AM4, and only 109 and 104 were tempos he played.
+   */
+  const replay = (presses) => {
+    let taps = []
+    return presses.map((p) => {
+      taps = tempo.keepTaps(taps, p, am4)
+      return tempo.tappedBpm(taps, am4)
+    })
+  }
+  assert.deepEqual(replay([31041, 31258]), [null, null], 'the bounce made a tempo')
+  const after = replay([31641, 33940, 34124, 34291])
+  for (const bad of [200, 45, 48, 343]) assert.ok(!after.includes(bad), `${bad} went to the AM4 again`)
+  assert.deepEqual(replay([39759, 39925]), [null, null])
+  assert.deepEqual(replay([2005806, 2006356, 2006956]), [null, 109, 104], 'the tempos he did play are lost')
+  /* A pause then a quick pair is not averaged: the newer gap wins. */
+  assert.equal(tempo.tappedBpm([0, 2300, 2800]), 120, 'a pause was averaged into the tempo')
+  /* A bounce is dropped from the count, so it cannot spoil the next tap either. */
+  assert.deepEqual(tempo.keepTaps([1000], 1217, am4), [1217])
+  assert.deepEqual(tempo.keepTaps([1000], 1500, am4), [1000, 1500])
   assert.match(tapSrc, /<BpmBox [^>]*range=\{tempoRange\(currentDeviceSlug\(\)\)\}/)
   const stageSrc = readSrc(new URL('../mobile/src/screens/Stage.js', import.meta.url), 'utf8')
   assert.match(stageSrc, /<TempoBox[^>]*range=\{tempoRange\(device, caps\?\.via\)\}/)
@@ -11665,7 +11691,7 @@ test('Edit has the same Tap as Play, beside the scene, and a tapped tempo leaves
   assert.match(report, /if \(chainNumberOf\(getSnapshot\(\)\) !== on\) return/, 'taps on the last song are reported against the one just picked, and mark it unsaved')
   assert.ok(report.indexOf('!== on) return') < report.indexOf('said.current'), 'the preset is checked after the report has gone')
   assert.match(tap, /const going = useDevice\(chainNumberOf\)/, 'a preset change is not seen by the Tap button')
-  assert.match(tap, /useEffect\(\(\) => \{\s*dropBurst\(\)\s*setTapped\(null\)\s*\}, \[going\]\)/, 'a burst tapped on the last song survives the switch to the next')
+  assert.match(tap, /useEffect\(\(\) => \{\s*dropBurst\(\)\s*setTapped\(null\)\s*(?:\/\*[^*]*\*\/\s*)?taps\.current = \[\]\s*\}, \[going\]\)/, 'a burst tapped on the last song survives the switch to the next')
   assert.ok(!/preset\?\.number/.test(tap), 'the Tap button waits on preset.number, which moves after Unsaved was already cleared')
   assert.match(report, /said\.current\?\.\(`Tempo → \$\{n\} BPM \(tapped\)`\)/, 'the tapped tempo does not reach the screen that logs it')
   /* A screen switched away from inside the second after the last tap still owes the report. */

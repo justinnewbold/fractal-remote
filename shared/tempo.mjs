@@ -137,12 +137,23 @@ export const TAP_AVERAGE = 3
 /**
  * A gap longer than this starts a new count rather than joining the old one.
  *
- * At 20 BPM — the slowest the unit takes — beats are three seconds apart, so
- * anything past that is not part of the same rhythm. Without this, tapping
- * four times, stopping to listen, then tapping again averages the pause into
- * the tempo and answers with something nobody played.
+ * At 20 BPM — the slowest any unit is asked to take — beats are three
+ * seconds apart, so anything past that is not part of the same rhythm.
+ * Without this, tapping four times, stopping to listen, then tapping again
+ * averages the pause into the tempo and answers with something nobody played.
  */
 export const TAP_GAP_MAX_MS = 3200
+
+/*
+ * TWO GAPS ONLY COUNT TOGETHER WHEN THEY AGREE.
+ *
+ * His log, on an AM4: a bounce (217 ms), then Next pressed by accident, then
+ * one tap — and the app sent 200, a tempo nobody played, to the new song. Then
+ * a pause of 2.3 s averaged with a quick 0.2 s gave 45 and 48. A gap more
+ * than half as long again as the one after it is not the same beat: the count
+ * starts from the newer one.
+ */
+export const TAP_AGREE = 1.5
 
 /**
  * @param {number[]} taps  when each tap happened, oldest first, in ms
@@ -154,11 +165,12 @@ export function tappedBpm(taps = [], range = ANY_BPM) {
   const times = (Array.isArray(taps) ? taps : []).filter((t) => Number.isFinite(t))
   if (times.length < 2) return null
 
-  /* Gaps, newest first, stopping at the first one too long to belong. */
+  /* Gaps, newest first, stopping at the first one too long to belong, or too unlike the newest. */
   const gaps = []
   for (let i = times.length - 1; i > 0 && gaps.length < TAP_AVERAGE - 1; i -= 1) {
     const gap = times[i] - times[i - 1]
     if (gap <= 0 || gap > TAP_GAP_MAX_MS) break
+    if (gaps.length && (gap > gaps[0] * TAP_AGREE || gap * TAP_AGREE < gaps[0])) break
     gaps.push(gap)
   }
   if (!gaps.length) return null
@@ -176,12 +188,16 @@ export function tappedBpm(taps = [], range = ANY_BPM) {
  * The tap list to keep after a press at `now`.
  *
  * Trimmed here rather than by each caller so both ends forget at the same
- * rate, and a pause drops the old rhythm instead of blending into it.
+ * rate, and a pause drops the old rhythm instead of blending into it. So does
+ * a gap no tempo the unit takes could make (a thumb's bounce, 276 BPM on an
+ * AM4): kept, it would spoil the next tap's figure as well.
  */
-export function keepTaps(taps = [], now = Date.now()) {
+export function keepTaps(taps = [], now = Date.now(), range = ANY_BPM) {
+  const { min, max } = usable(range)
   const times = (Array.isArray(taps) ? taps : []).filter((t) => Number.isFinite(t))
   const last = times[times.length - 1]
-  const fresh = last != null && now - last > TAP_GAP_MAX_MS ? [] : times
+  const gap = last == null ? null : now - last
+  const fresh = gap != null && (gap > TAP_GAP_MAX_MS || gap <= 0 || 60000 / gap > max || 60000 / gap < min) ? [] : times
   return [...fresh, now].slice(-TAP_AVERAGE)
 }
 

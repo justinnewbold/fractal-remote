@@ -230,6 +230,9 @@ export function reset() {
   chainForBefore = null
   following = null
   namesRead = null
+  clearTimeout(quietTimer)
+  quietTimer = null
+  pressedAt = 0
   echoes.clear()
   set(initial)
 }
@@ -997,7 +1000,11 @@ async function readChainAndNames({ names = true } = {}) {
       markJudged(number)
       /* The chain this preset had, for the next time it is chosen. */
       keepChain(number)
-      if (copy !== 'stale' && !quick) await refreshSceneNames(copy)
+      if (copy !== 'stale' && !quick) {
+        /* An AM4's over Bluetooth hold the line for seconds: they wait for a quiet moment. */
+        if (bluetoothAm4()) namesWhenQuiet(number, copy)
+        else await refreshSceneNames(copy)
+      }
     }
   } finally {
     if (judging === number) {
@@ -1375,7 +1382,11 @@ export async function refreshPreset() {
   try {
     takePreset(await device.currentPreset())
   } catch (err) {
-    set(faultFrom(err))
+    /* The unit watch asks this on a timer: the same fault again is not news,
+       and raising it again would bring the toast back every few seconds. */
+    const fault = faultFrom(err)
+    if (fault.error === state.error && fault.errorLink === state.errorLink) return
+    set(fault)
   }
 }
 
@@ -1633,6 +1644,39 @@ const named = () => (state.sceneNames || []).some((n) => (n || '').trim())
 /* The preset change whose names are being followed, and when its last ask is due. */
 let following = null
 
+/*
+ * AN AM4'S SCENE NAMES OVER BLUETOOTH WAIT FOR A QUIET MOMENT.
+ *
+ * Reading them is the whole stored preset, about four seconds of the line,
+ * and nothing else is sent to an AM4 while it comes — so a press made then
+ * waits for the end of it. Straight after landing on a preset is exactly when
+ * the next press comes: in his log, two taps and a Next within three seconds
+ * of the song changing. So the first read of a preset's names waits until
+ * nothing has been pressed for AM4_NAMES_QUIET_MS, and is dropped if the
+ * preset changes first. Refresh names does not wait: it was asked for.
+ */
+export const AM4_NAMES_QUIET_MS = 5000
+let pressedAt = 0
+let quietTimer = null
+const pressed = () => {
+  pressedAt = Date.now()
+}
+
+function namesWhenQuiet(number, copy) {
+  clearTimeout(quietTimer)
+  const check = () => {
+    quietTimer = null
+    if (state.preset?.number !== number || named() || !bluetoothAm4()) return
+    const wait = pressedAt + AM4_NAMES_QUIET_MS - Date.now()
+    if (wait > 0) {
+      quietTimer = setTimeout(check, wait)
+      return
+    }
+    refreshSceneNames(copy).catch(() => {})
+  }
+  quietTimer = setTimeout(check, Math.max(AM4_NAMES_QUIET_MS - (Date.now() - pressedAt), 0))
+}
+
 function followComputerNames() {
   const number = state.preset?.number
   /* Over Bluetooth there is no computer to have them: every ask was refused. */
@@ -1784,6 +1828,7 @@ async function readBlocks(quiet) {
  * which is how a refused bypass once restored a chain that never existed.
  */
 async function optimistic(patch, revert, send) {
+  pressed()
   set({ ...patch, error: null, errorLink: false })
   try {
     await send()
@@ -1994,6 +2039,8 @@ async function readTappedTempo() {
    than waited for. Module-level beside `reread` because a burst of taps is one
    rhythm however many screens come and go during it. */
 let taps = []
+/* Which preset they were tapped on: another song starts another count. */
+let tapsOn = null
 
 /*
  * What crosses the network is the NUMBER, not the taps.
@@ -2022,6 +2069,7 @@ const sendTempo = tempoSender(
 )
 
 export async function tapTempo() {
+  pressed()
   clearTimeout(reread)
   /* A unit that has said it has no tempo the app can set: say so, send nothing. */
   if (device.refusedAlready('POST', '/tempo')) {
@@ -2039,9 +2087,16 @@ export async function tapTempo() {
    * which is how the unit's own answer gets to win a moment later — and now
    * that answer is the number this sent, so it agrees.
    */
-  taps = keepTaps(taps, Date.now())
   /* The unit's own range: an AM4 refuses past 250, and a mis-tap is not a tempo. */
   const range = tempoRange(state.deviceSlug, state.capabilities?.via)
+  /* "Press Next by accident, then one tap" sent the new song 200, worked out
+     from the last song's taps. A new preset is a new count. */
+  const on = chainKey()
+  if (on !== tapsOn) {
+    taps = []
+    tapsOn = on
+  }
+  taps = keepTaps(taps, Date.now(), range)
   const guess = tappedBpm(taps, range)
   if (guess != null) {
     /* The tempo lives in the preset, so a tap is a change to it — and a save
@@ -2163,6 +2218,7 @@ export async function writeTuner(on) {
  * inventing "Untitled" for the one round trip it takes to find out.
  */
 export async function loadPreset(number) {
+  pressed()
   const was = state.preset
   /*
    * The control index is about the preset that was loaded, not this one. Slot
