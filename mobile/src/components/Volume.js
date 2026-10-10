@@ -18,6 +18,7 @@ import {
 import { tick } from '../lib/feedback'
 import { logDebug } from '../lib/debugLog'
 import Press from './Press'
+import MetronomeSwitch from './MetronomeSwitch'
 import { at as tint } from '../lib/vivid'
 
 const face = Platform.select(mono)
@@ -431,6 +432,11 @@ export default function Volume({ blocks, open, onClose, onError }) {
         />
       </View>
             )}
+
+            {/* "Make it so the metronome can be turned on and off in the volume
+                section of the app." Outside the level's own reading and no-level
+                notes: a unit with no level to move can still click. */}
+            <MetronomeSwitch />
 
             <Press label="Done" height={TAP} tone="signal" onPress={onClose} />
             <Text style={{ color: color.silkFaint, fontSize: font.micro, textAlign: 'center' }}>

@@ -92,6 +92,107 @@ function* walk(dir, ext = /\.js$/) {
 }
 
 /**
+ * THE PHONE'S METRONOME, RUN RATHER THAN READ: lib/metronome.js beside
+ * stand-ins for React, the phone's disk, its audio players, a unit that
+ * answers where its switch is, and a clock the test turns by hand. `os` is
+ * the phone it believes it is on.
+ */
+async function clickOnTheBench(os = 'ios') {
+  const dir = mkdtempSync(join(tmpdir(), 'click-'))
+  const esm = (src) => src.replace(/from '\.\/([\w.-]+)'/g, (whole, name) => (/\.m?js$/.test(name) ? whole : `from './${name}.js'`))
+  const files = {
+    'package.json': '{ "type": "module" }',
+    'react.js': 'export const useEffect = (fn) => { globalThis.__clickEffect = fn }\nexport const useSyncExternalStore = (sub, get) => get()\n',
+    'storage.js': 'export default { getItem: async () => null, setItem: async () => {} }\n',
+    /* Players that write down what they are told, by which one. */
+    'audio.js': `
+      import { now } from './clock.js'
+      export const made = []
+      export const calls = []
+      const say = (what) => calls.push(what + ' @' + now())
+      export const createAudioPlayer = (src, opts = {}) => {
+        const id = made.length
+        const p = {
+          id, src, opts, isLoaded: true, currentTime: 0,
+          seekTo: async () => { say('seek ' + id) },
+          play() { say('play ' + id) },
+          pause() { say('pause ' + id) }
+        }
+        made.push(p)
+        return p
+      }
+      export const setAudioModeAsync = async () => { say('mode') }
+      export const setIsAudioActiveAsync = async (on) => { say('session ' + on) }
+    `,
+    'rn.js': `export const Platform = { OS: ${JSON.stringify(os)} }\n`,
+    'click.js': 'export default "click"\n',
+    'click-pad.js': 'export default "click-pad"\n',
+    'device.js': `
+      export const writes = []
+      export let switchAt = null
+      export const __answer = (v) => { switchAt = v }
+      export const setUnitMetronome = async (slug, on) => { writes.push(slug + ' ' + (on ? 'on' : 'off')); return { ok: true } }
+      export let reads = 0
+      export const readUnitMetronome = async () => { reads++; return switchAt }
+    `,
+    'rig.js': "export const useRig = (pick) => pick({ deviceSlug: 'fm3' })\n",
+    'bluetooth.js': 'export const useBluetoothOn = () => false\n',
+    'demo.js': 'export const isDemo = () => false\n',
+    'feedback.js': 'export let ticks = 0\nexport const tick = () => { ticks++ }\n',
+    'debugLog.js': 'export const said = []\nexport const logDebug = (...a) => said.push(a.join(" "))\n',
+    'unsupported.js': 'export const isUnsupported = () => false\n',
+    /* A clock the test turns, so "asked again a second later" costs nothing to run. */
+    'clock.js': `
+      let t = 0
+      let seq = 0
+      const timers = new Map()
+      export const now = () => t
+      export const pending = () => timers.size
+      export function setTimeout(fn, ms = 0) { const id = ++seq; timers.set(id, { id, at: t + ms, fn }); return id }
+      export function clearTimeout(id) { timers.delete(id) }
+      const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => globalThis.setImmediate(r)) }
+      export async function advance(ms) {
+        const end = t + ms
+        await flush()
+        for (;;) {
+          let next = null
+          for (const x of timers.values()) if (x.at <= end && (!next || x.at < next.at)) next = x
+          if (!next) break
+          timers.delete(next.id)
+          t = next.at
+          next.fn()
+          await flush()
+        }
+        t = end
+      }
+    `,
+    'metronome-rules.js': read('mobile/src/lib/metronome-rules.js'),
+    'metronome.js': ("import * as __clock from './clock.js'\n" + esm(read('mobile/src/lib/metronome.js')))
+      .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
+      .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
+      .replace(/\bDate\.now\(\)/g, '__clock.now()')
+      .replace("from 'react'", "from './react.js'")
+      .replace("from '@react-native-async-storage/async-storage'", "from './storage.js'")
+      .replace("from 'expo-audio'", "from './audio.js'")
+      .replace("from '../../assets/click.wav'", "from './click.js'")
+      .replace("from '../../assets/click-pad.wav'", "from './click-pad.js'")
+      .replace("from 'react-native'", "from './rn.js'")
+  }
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+  const at = (f) => pathToFileURL(join(dir, f)).href
+  const click = await import(at('metronome.js'))
+  const unitEnd = await import(at('device.js'))
+  const log = await import(at('debugLog.js'))
+  const clock = await import(at('clock.js'))
+  const audio = await import(at('audio.js'))
+  const feedback = await import(at('feedback.js'))
+  const settle = async () => {
+    for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r))
+  }
+  return { dir, click, unitEnd, log, clock, audio, feedback, settle }
+}
+
+/**
  * THE PHONE'S RIG STORE, RUN RATHER THAN READ.
  *
  * rig.js and device.js are copied, as they are, into a folder beside stand-ins
@@ -4102,71 +4203,8 @@ export function run(test) {
     }
 
     /* Run, not read: the phone's metronome.js beside stand-ins for the phone and a unit that answers. */
-    const dir = mkdtempSync(join(tmpdir(), 'click-'))
+    const { dir, click, unitEnd, log, clock, settle } = await clickOnTheBench()
     try {
-      const esm = (src) => src.replace(/from '\.\/([\w.-]+)'/g, (whole, name) => (/\.m?js$/.test(name) ? whole : `from './${name}.js'`))
-      const files = {
-        'package.json': '{ "type": "module" }',
-        'react.js': 'export const useEffect = (fn) => { globalThis.__clickEffect = fn }\nexport const useSyncExternalStore = (sub, get) => get()\n',
-        'storage.js': 'export default { getItem: async () => null, setItem: async () => {} }\n',
-        'audio.js': 'export const createAudioPlayer = () => ({ seekTo() {}, play() {} })\nexport const setAudioModeAsync = async () => {}\n',
-        'click.js': 'export default 0\n',
-        'device.js': `
-          export const writes = []
-          export let switchAt = null
-          export const __answer = (v) => { switchAt = v }
-          export const setUnitMetronome = async (slug, on) => { writes.push(slug + ' ' + (on ? 'on' : 'off')); return { ok: true } }
-          export let reads = 0
-          export const readUnitMetronome = async () => { reads++; return switchAt }
-        `,
-        'rig.js': "export const useRig = (pick) => pick({ deviceSlug: 'fm3' })\n",
-        'bluetooth.js': 'export const useBluetoothOn = () => false\n',
-        'demo.js': 'export const isDemo = () => false\n',
-        'feedback.js': 'export const tick = () => {}\n',
-        'debugLog.js': 'export const said = []\nexport const logDebug = (...a) => said.push(a.join(" "))\n',
-        'unsupported.js': 'export const isUnsupported = () => false\n',
-        /* A clock the test turns, so "asked again a second later" costs nothing to run. */
-        'clock.js': `
-          let t = 0
-          let seq = 0
-          const timers = new Map()
-          export const pending = () => timers.size
-          export function setTimeout(fn, ms = 0) { const id = ++seq; timers.set(id, { id, at: t + ms, fn }); return id }
-          export function clearTimeout(id) { timers.delete(id) }
-          const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => globalThis.setImmediate(r)) }
-          export async function advance(ms) {
-            const end = t + ms
-            await flush()
-            for (;;) {
-              let next = null
-              for (const x of timers.values()) if (x.at <= end && (!next || x.at < next.at)) next = x
-              if (!next) break
-              timers.delete(next.id)
-              t = next.at
-              next.fn()
-              await flush()
-            }
-            t = end
-          }
-        `,
-        'metronome-rules.js': read('mobile/src/lib/metronome-rules.js'),
-        'metronome.js': ("import * as __clock from './clock.js'\n" + esm(read('mobile/src/lib/metronome.js')))
-          .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
-          .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
-          .replace("from 'react'", "from './react.js'")
-          .replace("from '@react-native-async-storage/async-storage'", "from './storage.js'")
-          .replace("from 'expo-audio'", "from './audio.js'")
-          .replace("from '../../assets/click.wav'", "from './click.js'")
-      }
-      for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
-      const at = (f) => pathToFileURL(join(dir, f)).href
-      const click = await import(at('metronome.js'))
-      const unitEnd = await import(at('device.js'))
-      const log = await import(at('debugLog.js'))
-      const clock = await import(at('clock.js'))
-      const settle = async () => {
-        for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r))
-      }
 
       /* Unit picked on an FM3 that says nothing back: written on, and the phone keeps time. */
       await click.setMetronome({ on: true, where: 'unit' }, 'fm3')
@@ -4250,6 +4288,269 @@ export function run(test) {
     }
   })
 
+  test('the phone’s click, flash and tap land together on an iPhone: rewound a beat ahead, the audio kept awake, the flash after the sound', async () => {
+    /*
+     * "The visual edge screen flash is not actually matching up with the sound
+     * that the phone makes." The flash was asked for on the beat; the click,
+     * on an iPhone, waited on a rewind that only runs after the beat's own
+     * code, from an audio session that had been let go after the last click.
+     */
+    const { dir, click, clock, audio, feedback } = await clickOnTheBench('ios')
+    try {
+      await click.setMetronome({ on: true, where: 'phone' }, 'fm3')
+      const flashes = []
+      assert.equal(click.usePhoneClick(120, () => flashes.push(clock.now())), true)
+      const stop = globalThis.__clickEffect()
+      await clock.advance(0)
+      const t0 = Number(audio.calls.find((c) => c.startsWith('play')).split('@')[1])
+
+      /* Two players, both keeping the audio awake, both made before the first beat. */
+      assert.equal(audio.made.length, 2, 'one player rewound on the beat it plays')
+      assert.ok(audio.made.every((p) => p.opts.keepAudioSessionActive === true && p.src === 'click'), 'the audio is let go after every click')
+      assert.ok(audio.calls.indexOf('mode @0') !== -1 && audio.calls.indexOf('mode @0') < audio.calls.findIndex((c) => c.startsWith('play')), 'the first click plays before the audio is set up')
+
+      await clock.advance(1600)
+      /* From the first beat: the rewinds before it are the run's own, every player back at the top. */
+      const first = audio.calls.findIndex((c) => c.startsWith('play'))
+      assert.deepEqual(audio.calls.slice(first - 4, first).map((c) => c.split(' @')[0]), ['pause 0', 'seek 0', 'pause 1', 'seek 1'])
+      const beats = audio.calls.slice(first).filter((c) => /^(play|seek)/.test(c))
+      assert.deepEqual(
+        beats,
+        [`play 0 @${t0}`, `seek 1 @${t0}`, `play 1 @${t0 + 500}`, `seek 0 @${t0 + 500}`, `play 0 @${t0 + 1000}`, `seek 1 @${t0 + 1000}`, `play 1 @${t0 + 1500}`, `seek 0 @${t0 + 1500}`],
+        'the player that sounds is not the one rewound a beat ago'
+      )
+      /* The flash and the tap wait for the sound: FLASH_LEAD, 40 ms on an iPhone. */
+      assert.deepEqual(flashes, [t0 + 40, t0 + 540, t0 + 1040, t0 + 1540], 'the flash does not wait for the click')
+      assert.equal(feedback.ticks, flashes.length, 'the tap is not with the flash')
+
+      /* Flash timing moves it at once, by ear. */
+      click.setFlashTiming(60)
+      assert.equal(click.flashTiming(), 60)
+      await clock.advance(500)
+      assert.equal(flashes.at(-1), t0 + 2100, 'Flash timing does not move the flash')
+      click.setFlashTiming(0)
+
+      /* Stopped between a click and its flash: the flash never comes, nor the tap. */
+      await clock.advance(410)
+      assert.ok(audio.calls.includes(`play 1 @${t0 + 2500}`) && flashes.at(-1) === t0 + 2100, 'the test did not stop between a click and its flash')
+      const seen = flashes.length
+      const tapped = feedback.ticks
+      stop()
+      await clock.advance(1000)
+      assert.equal(flashes.length, seen, 'a flash lands after the click stopped')
+      assert.equal(feedback.ticks, tapped, 'a tap lands after the click stopped')
+
+      /* Started again within two seconds (a tap-tempo press): the audio is not let go under it. */
+      click.usePhoneClick(120, () => flashes.push(clock.now()))
+      const stopAgain = globalThis.__clickEffect()
+      await clock.advance(4000)
+      assert.ok(!audio.calls.some((c) => c.startsWith('session false')), 'a restart lets go of the audio under the new click')
+      /* And every player is back at the top before a new run, whatever turn the last one stopped on. */
+      stopAgain()
+      await clock.advance(1999)
+      assert.ok(!audio.calls.some((c) => c.startsWith('session false')))
+      await clock.advance(1)
+      assert.equal(audio.calls.filter((c) => c.startsWith('session false')).length, 1, 'the audio is held after the click stopped')
+
+      /* How late the click starts, into the log once a run: here it never starts, so the last probe. */
+      const log = await import(pathToFileURL(join(dir, 'debugLog.js')).href)
+      assert.ok(log.said.some((l) => /the click starts about 100 ms after the beat; the flash comes 40 ms after it/.test(l)), 'the click’s real delay never reaches the log')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('on Android the click has silence in front for the fade-in, one player, and the flash waits for it', async () => {
+    const { dir, click, clock, audio, feedback } = await clickOnTheBench('android')
+    try {
+      await click.setMetronome({ on: true, where: 'phone' }, 'fm3')
+      const flashes = []
+      click.usePhoneClick(120, () => flashes.push(clock.now()))
+      const stop = globalThis.__clickEffect()
+      await clock.advance(0)
+      const t0 = Number(audio.calls.find((c) => c.startsWith('play')).split('@')[1])
+      assert.equal(audio.made.length, 1)
+      assert.equal(audio.made[0].src, 'click-pad', 'Android’s fade-in takes the click with it')
+      assert.notEqual(audio.made[0].opts.keepAudioSessionActive, true)
+      await clock.advance(1000)
+      /* Its seek and its play go in order, so the rewind comes first on the beat itself. */
+      const first = audio.calls.findIndex((c) => c.startsWith('play'))
+      const beats = audio.calls.slice(first - 1).filter((c) => /^(play|seek)/.test(c))
+      assert.deepEqual(beats, [`seek 0 @${t0}`, `play 0 @${t0}`, `seek 0 @${t0 + 500}`, `play 0 @${t0 + 500}`, `seek 0 @${t0 + 1000}`, `play 0 @${t0 + 1000}`])
+      assert.deepEqual(flashes, [t0 + 100, t0 + 600], 'the flash does not wait for Android’s click')
+      assert.equal(feedback.ticks, 2)
+      stop()
+      await clock.advance(3000)
+      assert.ok(!audio.calls.some((c) => c.startsWith('session')), 'Android is told to let go of an iPhone’s audio session')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('the padded click is the click with 25 ms of silence in front, and nothing else', () => {
+    const wav = (f) => {
+      const b = readFileSync(new URL(`../mobile/assets/${f}`, import.meta.url))
+      let o = 12
+      const chunks = {}
+      while (o < b.length) {
+        const id = b.toString('ascii', o, o + 4)
+        const n = b.readUInt32LE(o + 4)
+        chunks[id] = b.subarray(o + 8, o + 8 + n)
+        o += 8 + n + (n & 1)
+      }
+      return chunks
+    }
+    const plain = wav('click.wav')
+    const pad = wav('click-pad.wav')
+    assert.deepEqual(pad['fmt '], plain['fmt '], 'the padded click is another format')
+    const rate = plain['fmt '].readUInt32LE(4)
+    const frame = (plain['fmt '].readUInt16LE(2) * plain['fmt '].readUInt16LE(14)) / 8
+    const lead = pad.data.length - plain.data.length
+    assert.ok(Math.abs((lead / frame / rate) * 1000 - 25) < 0.1, `the silence in front is not 25 ms: ${(lead / frame / rate) * 1000}`)
+    assert.ok(pad.data.subarray(0, lead).every((x) => x === 0), 'what is in front of the click is not silence')
+    assert.ok(pad.data.subarray(lead).equals(plain.data), 'the padded click is not the same click')
+    /* And FLASH_LEAD counts it. */
+    const metronome = read('mobile/src/lib/metronome.js')
+    assert.match(metronome, /: \[createAudioPlayer\(clickPadded\)\]/, 'Android plays the click its fade-in swallows')
+  })
+
+  test('the metronome turns on and off in the volume pop-up, the way Settings turns it, at both ends', () => {
+    /* "Make it so the metronome can be turned on and off in the volume section of the app." */
+    const flat = (f) => read(f).replace(/\s+/g, ' ')
+    const volume = flat('mobile/src/components/Volume.js')
+    const sw = volume.indexOf('<MetronomeSwitch />')
+    assert.ok(sw > 0, 'the volume pop-up has no metronome switch')
+    assert.ok(sw > volume.indexOf('Use the knob on the unit.'), 'the switch is inside the level’s own notes, and goes with them')
+    assert.ok(sw < volume.indexOf('<Press label="Done"'), 'the switch is under Done')
+    const phone = flat('mobile/src/components/MetronomeSwitch.js')
+    /* The same "here" as Settings → Metronome, so the unit is written exactly as Settings writes it. */
+    assert.match(phone, /const clickHere = \{ bluetooth: bluetooth && !demo, demo \} const unitCan = unitClick\(slug, clickHere\)/)
+    assert.match(phone, /await setMetronome\(\{ on: !setting\.on \}, slug, clickHere\)/, 'the pop-up writes the unit another way')
+    assert.match(phone, /label=\{setting\.on \? 'Metronome on' : 'Metronome off'\}/)
+    assert.match(phone, /The unit didn’t take it\. Check it’s connected, then try again\./)
+    /* Never a second click: the pop-up only switches it, MetronomeBeat over the app does the clicking. */
+    assert.doesNotMatch(phone, /usePhoneClick|MetronomeBeat/, 'the pop-up starts a second click')
+    const web = flat('src/App.jsx')
+    assert.match(web, /<Volume eid=\{outputEid\} preset=\{preset\} onError=\{setError\} \/> \) : null\} \{\/\*[^*]*\*\/\} \{sheet === 'volume' \? <MetronomeSwitch slug=\{slugOfUnit\(device\)\} \/> : null\} <\/Sheet>/, 'the browser’s Volume sheet has no metronome switch')
+    const browser = flat('src/components/MetronomeSwitch.jsx')
+    assert.match(browser, /const unitCan = unitClick\(slug, \{ demo: isDemo\(\) \}\)/)
+    assert.match(browser, /await setMetronome\(\{ on: !setting\.on \}, slug\)/)
+  })
+
+  test('the green light on Tap lights on the phone’s own click while it clicks, and keeps counted time when it does not', async () => {
+    /* Run, not read: TempoDot beside stand-ins for React, Animated, the phone's beat and a clock the test turns. */
+    const dir = mkdtempSync(join(tmpdir(), 'dot-'))
+    try {
+      const files = {
+        'package.json': '{ "type": "module" }',
+        'react.js': 'export const useEffect = (fn) => { globalThis.__dotEffect = fn }\nexport const useRef = (v) => ({ current: v })\n',
+        'clock.js': `
+          let t = 0
+          let seq = 0
+          const timers = new Map()
+          export const now = () => t
+          export function setTimeout(fn, ms = 0) { const id = ++seq; timers.set(id, { id, at: t + ms, fn }); return id }
+          export function clearTimeout(id) { timers.delete(id) }
+          export function advance(ms) {
+            const end = t + ms
+            for (;;) {
+              let next = null
+              for (const x of timers.values()) if (x.at <= end && (!next || x.at < next.at)) next = x
+              if (!next) break
+              timers.delete(next.id)
+              t = next.at
+              next.fn()
+            }
+            t = end
+          }
+          /* A timer that fires late, as one on a phone does now and then. */
+          export const lateBy = (ms) => { for (const x of timers.values()) x.at += ms }
+        `,
+        'rn.js': `
+          import { now } from './clock.js'
+          export const lit = []
+          class Value { constructor(v) { this.v = v } setValue(v) { this.v = v; if (v === 1) lit.push(now()) } }
+          export const Animated = { Value, View: 'View', timing: () => ({ start() {} }) }
+          export const Easing = { out: (f) => f, quad: (x) => x }
+        `,
+        'metronome.js': `
+          const fns = new Set()
+          export let clicking = false
+          export const __clicking = (on) => { clicking = on }
+          export const usePhoneClicking = () => clicking
+          export const onPhoneBeat = (fn) => (fns.add(fn), () => fns.delete(fn))
+          export const __beat = () => fns.forEach((fn) => fn())
+        `,
+        'metronome-rules.js': read('mobile/src/lib/metronome-rules.js'),
+        'theme.js': "export const color = { ok: 'green' }\n",
+        'TempoDot.js': ("import * as __clock from './clock.js'\n" + read('mobile/src/components/TempoDot.js'))
+          .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
+          .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
+          .replace(/\bDate\.now\(\)/g, '__clock.now()')
+          .replace("from 'react'", "from './react.js'")
+          .replace("from 'react-native'", "from './rn.js'")
+          .replace("from '../lib/metronome'", "from './metronome.js'")
+          .replace("from '../lib/metronome-rules'", "from './metronome-rules.js'")
+          .replace("from '../lib/theme'", "from './theme.js'")
+          /* What it draws is JSX, which Node does not read; what is under test is when it lights. */
+          .replace(/\n  if \(!beat\) return null\n  return \([\s\S]*?\n  \)\n\}/, '\n  return null\n}')
+      }
+      assert.doesNotMatch(files['TempoDot.js'], /<Animated/, 'the bench could not take the drawing out of TempoDot')
+      for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+      const at = (f) => pathToFileURL(join(dir, f)).href
+      const { default: TempoDot } = await import(at('TempoDot.js'))
+      const clock = await import(at('clock.js'))
+      const rn = await import(at('rn.js'))
+      const beat = await import(at('metronome.js'))
+
+      /* Not clicking: counted from the start, so a late timer is late once and the beats after it are not. */
+      TempoDot({ bpm: 120 })
+      const stop = globalThis.__dotEffect()
+      clock.advance(1000)
+      clock.lateBy(30)
+      clock.advance(14000)
+      assert.deepEqual(rn.lit.slice(0, 4), [0, 500, 1000, 1530])
+      assert.deepEqual(rn.lit.slice(4, 8), [2000, 2500, 3000, 3500], 'one late beat drags every beat after it')
+      assert.equal(rn.lit.at(-1), 15000, 'the light drifts off the tempo')
+      assert.equal(rn.lit.length, 31)
+      stop()
+      clock.advance(5000)
+      assert.equal(rn.lit.length, 31, 'the light keeps flashing after it is gone')
+
+      /* Clicking: it lights on the phone's own beat, and only then. */
+      rn.lit.length = 0
+      beat.__clicking(true)
+      TempoDot({ bpm: 120 })
+      const unhook = globalThis.__dotEffect()
+      clock.advance(2000)
+      assert.equal(rn.lit.length, 0, 'the light keeps a clock of its own beside the phone’s click')
+      beat.__beat()
+      beat.__beat()
+      assert.equal(rn.lit.length, 2, 'the light does not light on the phone’s click')
+      unhook()
+      beat.__beat()
+      assert.equal(rn.lit.length, 2)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    const metronome = read('mobile/src/lib/metronome.js').replace(/\s+/g, ' ')
+    assert.match(metronome, /tick\(\) onBeat\?\.\(\) for \(const fn of beatWatchers\) fn\(\)/, 'the light, the flash and the tap are not on the same beat')
+  })
+
+  test('the browser flashes on the beep as it is heard, and takes back beeps not yet heard when it stops', () => {
+    const src = read('src/lib/metronome.js').replace(/\s+/g, ' ')
+    assert.match(src, /const heard = heardAt\(ctx, next\)/, 'the flash is timed to when the beep is made, not heard')
+    assert.match(src, /Math\.max\(0, heard - FLASH_FRAME_MS - performance\.now\(\)\)/)
+    assert.match(src, /ctx\.getOutputTimestamp\?\.\(\)/)
+    assert.match(src, /\(ctx\.baseLatency \|\| 0\) \+ \(ctx\.outputLatency \|\| 0\)/)
+    assert.match(src, /for \(const b of booked\) \{ try \{ b\.osc\.stop\(\) \}/, 'a beep booked before a stop sounds with no flash')
+    assert.match(src, /for \(const t of flashes\) clearTimeout\(t\)/)
+    assert.match(src, /if \(ctx && ctx\.state === 'running'\)/, 'beeps are booked on a clock that is not running')
+    /* Audio that stops mid-run takes back what was booked on its frozen clock, or it doubles when it comes back. */
+    assert.match(withoutComments(read('src/lib/metronome.js')).replace(/\s+/g, ' '), /if \(silentSince === null\) \{ takeBack\(\) silentSince = ctx \? now : now - beat \}/, 'beeps booked before the audio stopped sound beside the new ones')
+    assert.match(read('src/styles.css'), /\.metronome-beat \{[\s\S]{0,700}will-change: opacity;/)
+  })
+
   test('the metronome clicks where it is told, with each unit’s own switch', async () => {
     const m = await import('../shared/metronome.mjs')
     /* Off unless turned on, and on the unit unless told otherwise. */
@@ -4287,6 +4588,30 @@ export function run(test) {
     assert.equal(m.beatMs(10), null)
     assert.equal(m.nextBeat(0, 1250, 500), 1500)
     assert.equal(m.nextBeat(0, 1500, 500), 2000)
+    /* A timer a moment early is still that beat: not booked again a few milliseconds later. */
+    assert.equal(m.nextBeat(0, 923, 60000 / 130), 3 * (60000 / 130), 'a beat a fraction of a millisecond early is played twice')
+    assert.equal(m.nextBeat(0, 1497, 500), 2000, 'an Android timer three milliseconds early plays the beat twice')
+    assert.equal(m.nextBeat(0, 1489, 500), 1500)
+    /* The flash waits for the click by this phone's usual delay, and Flash timing moves it within bounds. */
+    assert.equal(m.flashLead('ios'), 40)
+    assert.equal(m.flashLead('android'), 100)
+    assert.equal(m.flashLead('web'), 0)
+    assert.equal(m.flashLead('ios', 60), 100)
+    assert.equal(m.flashLead('ios', -1000), 0, 'the flash is booked before the beat')
+    assert.equal(m.flashNudge(37), 40)
+    assert.equal(m.flashNudge(1000), 400)
+    assert.equal(m.flashNudge('nonsense'), 0)
+    assert.equal(m.flashTimingNote(0), 'Standard')
+    assert.equal(m.flashTimingNote(60), '60 ms later than standard')
+    assert.equal(m.flashTimingNote(-20), '20 ms earlier than standard')
+    /* As early as it goes is the flash on the click: no press past that moves nothing under a line saying it did. */
+    assert.equal(m.nudgeFloor('ios'), -40)
+    assert.equal(m.nudgeFloor('android'), -100)
+    assert.equal(m.flashNudge(-100, 'ios'), -40, 'Earlier goes on past where the flash can move on an iPhone')
+    assert.equal(m.flashTimingNote(-100, 'ios'), '40 ms earlier than standard')
+    assert.equal(m.flashLead('ios', -40), 0)
+    assert.match(read('mobile/src/screens/Settings.js'), /disabled=\{flashTiming <= nudgeFloor\(Platform\.OS\)\}/, 'Earlier stays live where it moves nothing')
+    assert.match(read('mobile/src/lib/metronome.js'), /nudge = flashNudge\(ms, Platform\.OS\)/)
     assert.match(m.metronomeNote({ on: true, where: 'unit' }, 'fm3', 120), /On, 120 BPM, on the unit/)
     assert.match(m.metronomeNote({ on: true, where: 'unit' }, 'vp4', 120), /no metronome the app can switch/)
     assert.equal(m.metronomeNote({ on: false }, 'fm3', 120), 'Off')
