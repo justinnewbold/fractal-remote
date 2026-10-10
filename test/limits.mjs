@@ -1848,6 +1848,121 @@ export function run(test) {
     }
   })
 
+  test('the privacy policy covers the testers’ list, Justin’s own pages, and Location', () => {
+    /*
+     * THREE THINGS THE POLICY LEFT OUT, found by reading the server rather
+     * than the page, and each one tied to the code that does it so it cannot
+     * quietly drift back out.
+     *
+     * The test above reads the tables the APPS write. These three are written
+     * or read by the server on Justin's behalf, so that test never saw them:
+     *
+     *   - the testers' waiting list, an address kept before its owner has an
+     *     account (migrations/20260924_waiting_grants.sql)
+     *   - the "You have full access" email grant-access sends through Resend
+     *   - what the Developer pages read back about every account: when it
+     *     last signed in, its devices, and what RevenueCat last saw — which
+     *     is what How many people counts. A page that said "Nobody is
+     *     counting your sessions" beside a page that counts people was a
+     *     published claim nobody had checked.
+     */
+    const policy = read('public/privacy.html')
+    const words = policy.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+
+    assert.match(read('supabase/migrations/20260924_waiting_grants.sql'), /create table if not exists public\.waiting_grants/)
+    assert.match(words, /waiting list/, 'the policy never mentions the testers’ waiting list')
+    assert.match(words, /the address and the date it was added, nothing else/, 'the policy does not say what the waiting list holds')
+
+    /* The email, by the subject it is actually sent with. */
+    const grant = read('supabase/functions/grant-access/index.ts')
+    const subject = grant.match(/subject: '([^']+)'/)?.[1]
+    assert.ok(subject, 'grant-access no longer sends a subject this can find')
+    assert.ok(words.includes(subject), `the policy does not name the "${subject}" email`)
+    assert.match(words, /Emails this app sends \([^)]*full access[^)]*\) go through Resend/, 'the list of emails Resend sends leaves the tester’s one out')
+
+    /* What RevenueCat is read for, field by field, and where the policy says so. */
+    for (const [field, said] of [
+      ['last_seen_at', /when the app last asked/],
+      ['last_seen_app_version', /which version of the app/],
+      ['last_seen_platform_version', /of the phone's system/],
+      ['last_seen_country', /which country/]
+    ]) {
+      assert.match(grant, new RegExp(field), `grant-access no longer reads ${field}; the policy should stop saying it`)
+      assert.match(words, said, `grant-access reads RevenueCat's ${field} and the policy does not say so`)
+    }
+    assert.match(read('shared/admin.mjs'), /export function usageSections/)
+    assert.match(words, /How many people/, 'the head count on the Developer pages is not described')
+    assert.match(words, /naming nobody|names nobody/, 'the policy does not say the head count names nobody')
+    assert.ok(!/Nobody\s+is\s+counting/i.test(words), 'the policy says nobody counts while How many people does')
+
+    /*
+     * RECORDED AND SENT ARE TWO DIFFERENT CLAIMS. The debug log is a record
+     * of what the app did, with a line for every button pressed (logTap in
+     * mobile/src/lib/debugLog.js), and the last lines of each run are kept on
+     * the phone (mobile/src/lib/logKeep.js). So the policy can say nobody is
+     * TOLD what you press, but not that nothing RECORDS it: the same page
+     * describes that record a few paragraphs up, and a reader who gets that
+     * far finds the page saying both.
+     */
+    assert.match(read('mobile/src/lib/debugLog.js'), /logDebug\('tap', what, detail\)/, 'the debug log no longer writes a line for each press; the policy can say less')
+    if (words.includes('buttons pressed')) {
+      assert.ok(!/Nothing records[^.]*(what you press|which screens)/.test(words), 'the policy says nothing records what you press, and describes the debug log that does')
+    }
+    assert.match(words, /the debug log described above stays on your phone or computer unless you send it with a report/, 'the policy does not say where the record of what you press stays')
+
+    /*
+     * THE EXCEPTIONS THE OPENING NAMES. "Each one is something you choose to
+     * turn on" has two exceptions, and both happen every time the app opens
+     * without anybody turning them on: the unlock check, and the update
+     * checks (the phone's through Expo, mobile/app.json's updates.url; the
+     * desktop's through GitHub, desktop/main.js). An opening that names one
+     * while the page goes on to describe both is untrue in its first lines.
+     */
+    assert.match(read('mobile/app.json'), /"url": "https:\/\/u\.expo\.dev\//, 'the phone no longer checks Expo for updates; the policy should stop saying it does')
+    assert.match(read('desktop/main.js'), /const LATEST_API_URL = 'https:\/\/api\.github\.com\//, 'the desktop app no longer checks GitHub for updates; the policy should stop saying it does')
+    assert.match(words, /The desktop apps check for their own updates from GitHub, and the phone app checks for updates from Expo/, 'the policy does not describe the update checks')
+    assert.ok(!/except one:/.test(words), 'the opening names one thing that is not turned on, and the page describes two')
+    assert.match(words, /something you choose to turn on, except two: the phone app asking whether it is unlocked[^.]*and the apps checking for updates/, 'the opening does not name both things that happen without being turned on')
+
+    /*
+     * And the one thing the phone fetches from this website: the gear pages'
+     * photographs, the one open and its neighbours either side (GearCard,
+     * from HOSTED_ORIGIN). Nothing about the person goes with them, but the
+     * opening says everything that uses the internet is described here.
+     */
+    assert.match(read('mobile/src/components/GearCard.js'), /photoFor\(entry\.name, `\$\{HOSTED_ORIGIN\}\/gear`\)/, 'the gear photographs no longer come from the website; the policy should stop saying they do')
+    assert.match(words, /the photographs on the gear pages are fetched from this website as you look through them/, 'the policy does not say the phone fetches the gear photographs')
+
+    /*
+     * LOCATION. True on every phone in a store today, and kept true once
+     * Bluetooth (beta) reaches testers: on Android 11 and older, Android
+     * makes any app that looks for a Bluetooth device hold the Location
+     * permission. The Bluetooth module asks for it there, only from the
+     * Bluetooth page's Connect, and never reads where the phone is. So the
+     * policy must not say Location is "never asked for" while the app — or
+     * the waiting Bluetooth work that will become the app — can ask.
+     */
+    const pending = new URL('../docs/pending/bluetooth-beta.patch', import.meta.url)
+    const manifest = new URL('../mobile/modules/fractal-ble-midi/android/src/main/AndroidManifest.xml', import.meta.url)
+    const asks = [pending, manifest].some((f) => existsSync(f) && readFileSync(f, 'utf8').includes('ACCESS_FINE_LOCATION'))
+    assert.match(words, /The app never reads where you are from the phone/, 'the policy stopped saying the app never reads where you are')
+    /*
+     * NOT "NEVER KEPT". This anchor used to be "Where you are is never read,
+     * kept or sent anywhere", and the same page says RevenueCat notes which
+     * country a phone asked from (last_seen_country, which grant-access reads
+     * back, checked above). RevenueCat works that out from the internet
+     * connection, not from the phone. So the page says the APP never reads
+     * where you are, and says where the country comes from, beside it.
+     */
+    assert.ok(!/never read, kept or sent/.test(words), 'the policy says where you are is never kept, and RevenueCat keeps the country')
+    assert.match(words, /The country RevenueCat notes[^.]*is worked out by RevenueCat from the internet connection, not from the phone's location/, 'No location leaves the country RevenueCat notes unexplained')
+    if (asks) {
+      assert.ok(!/Never asked for/.test(words), 'the policy says Location is never asked for, and Bluetooth asks on older Android')
+      assert.match(words, /Android 11 and older/, 'the policy does not say which phones are asked for Location')
+      assert.match(words, /when you tap Connect on the Bluetooth page/, 'the policy does not say when Location is asked for')
+    }
+  })
+
   test('the licences of what we ship travel with it', () => {
     /*
      * THIS IS THE ONE THAT BECOMES A PROBLEM ONLY ONCE MONEY IS INVOLVED, which
