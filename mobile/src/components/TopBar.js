@@ -13,11 +13,12 @@ import { shouldOffer, usePurchase } from '../lib/purchases'
 import setupIcon from '../../assets/icons/setup.png'
 import volumeIcon from '../../assets/icons/volume.png'
 import bluetoothIcon from '../../assets/icons/bluetooth.png'
-import { useBluetoothOn } from '../lib/bluetooth'
+import { setBluetooth, useBluetoothOn } from '../lib/bluetooth'
 import { idOf } from '../lib/device'
 import Lamp from './Lamp'
 import Volume from './Volume'
 import { probeNow } from '../lib/link'
+import { fire } from '../lib/tapped'
 import { useSaveToSlot } from './SaveToSlot'
 import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS } from '../lib/save-wait'
 
@@ -605,8 +606,10 @@ function Which({ link, bluetooth = false, onClose }) {
           : 'Not connected to the Bluetooth adapter.'
     return (
       <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${said} Tap to close.`}
+        /* Not one element to a screen reader, or VoiceOver reads the note as
+           a single button and never reaches Turn off Bluetooth inside it. The
+           word above closes it again. */
+        accessible={false}
         onPress={onClose}
         style={{
           position: 'absolute',
@@ -614,6 +617,7 @@ function Which({ link, bluetooth = false, onClose }) {
           right: 0,
           top: '100%',
           zIndex: 3,
+          gap: space.md,
           padding: space.lg,
           borderBottomWidth: 1,
           borderBottomColor: color.rule,
@@ -621,6 +625,36 @@ function Which({ link, bluetooth = false, onClose }) {
         }}
       >
         <Text style={{ color: color.silk, fontSize: font.body }}>{said}</Text>
+        {/*
+          TURN OFF BLUETOOTH, from the word that says it is on. "Make it so you
+          can click the connected button at the top of the screen and have a
+          button that pop up that says turn off Bluetooth." The same switch as
+          the page's Stop and the waiting screen's Use the computer instead,
+          in every state of the link: the phone goes looking for the computer
+          the moment it is off (App.js).
+        */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Turn off Bluetooth"
+          accessibilityHint="The phone goes back to using the computer"
+          onPress={() => {
+            tick()
+            fire('press Turn off Bluetooth', () => setBluetooth(false))
+            onClose()
+          }}
+          style={({ pressed }) => ({
+            alignSelf: 'flex-start',
+            minHeight: 44,
+            justifyContent: 'center',
+            paddingHorizontal: space.lg,
+            borderRadius: radius.md,
+            borderWidth: 1,
+            borderColor: color.rule,
+            backgroundColor: pressed ? color.panel : color.chassis
+          })}
+        >
+          <Text style={{ color: color.silk, fontSize: font.body }}>Turn off Bluetooth</Text>
+        </Pressable>
       </Pressable>
     )
   }

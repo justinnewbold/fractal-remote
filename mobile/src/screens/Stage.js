@@ -45,7 +45,6 @@ import {
   writeTuner
 } from '../lib/rig'
 import { useDemoUnit } from '../lib/demo'
-import { overBluetooth } from '../lib/bleSwitch'
 import { coachSeen, markCoach, markWatchTip, watchTipSeen } from '../lib/coach'
 import { nope, thud } from '../lib/feedback'
 import { blockColor } from '../lib/blockColors'
@@ -666,13 +665,14 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Label>Scenes</Label>
               {/*
-                Not on an AM4 over Bluetooth (beta), where it could only ever say
-                "Couldn't read them": the AM4 gives its scene names out only in a
-                whole-preset dump, which is never sent to it over Bluetooth (see
-                lib/bleWire's AM4 allowlist). The names this phone has seen
-                through the computer are still shown, from sceneNameCache.
+                On an AM4 over Bluetooth too, now. "It does say refresh names
+                already right above the scenes, so if they click refresh names,
+                it should do it." Its names come in the whole stored preset, a
+                few seconds of it there (lib/bleWire am4SceneNames): read once
+                when a preset is first seen, remembered after, and read again
+                only from here.
               */}
-              {overBluetooth(caps) && device === 'am4' ? null : <RefreshNames />}
+              <RefreshNames />
             </View>
             <View
               onLayout={(e) => {

@@ -1178,7 +1178,7 @@ export function run(test) {
 
     /* A unit mid-switch reports slot -1, and nothing is filed under it. */
     const dev = read('mobile/src/lib/device.js').replace(/\s+/g, ' ')
-    assert.match(dev, /export async function storedSceneNames\(slug, number\) \{ .*?number < 0 \|\| demoDevice\(\)\) return null/)
+    assert.match(dev, /export async function storedSceneNames\(slug, number\) \{ .*?number < 0 \|\| demoDevice\(\) \|\| bluetoothWire\(\)\) return null/)
     assert.match(dev, /export function keepSceneNames\(slug, number, names\) \{ if \(!slug \|\| !Number\.isInteger\(number\) \|\| number < 0/)
   })
 
@@ -2979,11 +2979,11 @@ export function run(test) {
      */
     assert.match(device, /export async function unitSceneNames\(number\) \{[\s\S]*?remoteRequest\(`\/presets\/\$\{number\}\/scenes`\)/, 'the phone has no way to read an AM4\'s scene names itself')
     assert.match(device, /if \(Number\.isInteger\(res\?\.number\) && res\.number !== number\) return null/, 'an answer for another slot is believed')
-    assert.match(rigSrc, /if \(summary\.length \|\| state\.preset\?\.number !== number\) return summary\n  return device\.unitSceneNames\(number\)/, 'a preset with nothing kept does not ask the unit')
+    assert.match(rigSrc, /if \(summary\.length \|\| state\.preset\?\.number !== number\) return summary\n  \}\n  return device\.unitSceneNames\(number\)/, 'a preset with nothing kept does not ask the unit')
     assert.match(rigSrc, /export async function rereadSceneNames\(\)/)
     assert.match(rigSrc, /if \(names === null \|\| state\.preset\?\.number !== number\) return 'failed'\n  if \(!names\.some\(\(n\) => n\)\) return 'none'/, 'Refresh names cannot tell unnamed scenes from a failed read')
     const stage = read('mobile/src/screens/Stage.js')
-    /* Beside the heading; over Bluetooth on an AM4 it is held back (test/bluetooth.mjs says why). */
+    /* Beside the heading, over Bluetooth on an AM4 too (test/bluetooth.mjs says how). */
     assert.match(stage, /<Label>Scenes<\/Label>\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?(?:\{overBluetooth\(caps\) && device === 'am4' \? null : )?<RefreshNames \/>/, 'Refresh names is not beside the Scenes heading')
     assert.match(stage, /await refreshAll\(\)\s*\/\*[^*]*\*\/\s*if \(!arriving\) await rereadSceneNames\(\)/, 'pulling down does not read the scene names fresh')
     assert.match(stage, /none: 'No names on the unit'/)

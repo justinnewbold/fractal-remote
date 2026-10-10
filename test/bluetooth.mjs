@@ -261,6 +261,98 @@ function fakeGen3(sx, o) {
 }
 
 /* ------------------------------------------------------------------ */
+/* A stored AM4 preset, whole, as the unit sends it                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The six frames an AM4 answers "send me stored preset n" with, built here
+ * the long way round: the body with its four scene records, Huffman-coded
+ * behind its own code tree, laid into the 8,192-byte container with its
+ * sizes and CRC, every 16-bit word packed into three wire bytes, and cut
+ * into a header, four 3,082-byte chunks and a footer. The phone's reader
+ * (parseAm4DumpSceneNames) has to undo every step to find a name.
+ *
+ * Checked once against forgefx-midi's decodeAm4PresetDumpBytes, the decoder
+ * ForgeFX runs on real AM4 dumps over USB: it reads the same four names and
+ * the same CRC out of what this makes.
+ */
+function am4DumpOf(sx, location, names, presetName = 'Clean Room') {
+  const ascii32 = (s) => {
+    const b = [...String(s)].map((c) => c.charCodeAt(0) & 0x7f).slice(0, 31)
+    while (b.length < 31) b.push(0x20)
+    return [...b, 0]
+  }
+  /* A body of 0x300 bytes: the four scene records, and something else in between for the code to be about. */
+  const body = Array.from({ length: 0x300 }, (_v, i) => (i * 37 + 11) & 0xff)
+  names.forEach((name, i) => body.splice(4 + i * 0x50, 32, ...ascii32(name)))
+
+  /* Huffman, the way the format has it: a 1 is a leaf and its byte, a 0 a fork, left then right. */
+  const counts = new Map()
+  for (const b of body) counts.set(b, (counts.get(b) || 0) + 1)
+  let nodes = [...counts].map(([value, n]) => ({ value, n }))
+  while (nodes.length > 1) {
+    nodes.sort((a, b) => a.n - b.n || (a.value ?? 999) - (b.value ?? 999))
+    const [l, r] = nodes.splice(0, 2)
+    nodes.push({ l, r, n: l.n + r.n })
+  }
+  const bits = []
+  const codes = new Map()
+  const walk = (node, path) => {
+    if (node.l) {
+      bits.push(0)
+      walk(node.l, [...path, 0])
+      walk(node.r, [...path, 1])
+    } else {
+      bits.push(1)
+      for (let i = 7; i >= 0; i--) bits.push((node.value >> i) & 1)
+      codes.set(node.value, path)
+    }
+  }
+  walk(nodes[0], [])
+  for (const b of body) bits.push(...codes.get(b))
+  const packed = []
+  for (let i = 0; i < bits.length; i += 8) {
+    let v = 0
+    for (let j = 0; j < 8; j++) v = (v << 1) | (bits[i + j] ?? 0)
+    packed.push(v)
+  }
+
+  const raw = new Array(8192).fill(0)
+  const put16 = (o, v) => {
+    raw[o] = v & 0xff
+    raw[o + 1] = (v >> 8) & 0xff
+  }
+  put16(0, 0x0109)
+  put16(2, 0xaa55)
+  ascii32(presetName).forEach((b, i) => (raw[8 + i] = b))
+  put16(0x48, body.length)
+  put16(0x4a, packed.length)
+  packed.forEach((b, i) => (raw[0x4c + i] = b))
+  let crc = 0xaa55
+  for (const b of raw) {
+    crc ^= b << 8
+    for (let i = 0; i < 8; i++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff
+  }
+  put16(4, crc)
+
+  const septets = []
+  let xor = 0
+  for (let i = 0; i < raw.length; i += 2) {
+    const w = raw[i] | (raw[i + 1] << 8)
+    xor ^= w
+    septets.push(w & 0x7f, (w >> 7) & 0x7f, (w >> 14) & 0x03)
+  }
+  const close = (body) => [...body, sx.checksum(body), 0xf7]
+  const at = [0xf0, 0x00, 0x01, 0x74, 0x15]
+  const chunks = [0, 1, 2, 3].map((c) => close([...at, 0x78, 0x00, 0x08, ...septets.slice(c * 3072, (c + 1) * 3072)]))
+  return [
+    close([...at, 0x77, location >> 2, location & 3, 0, 0, 0]),
+    ...chunks,
+    close([...at, 0x79, xor & 0x7f, (xor >> 7) & 0x7f, (xor >> 14) & 0x03])
+  ]
+}
+
+/* ------------------------------------------------------------------ */
 /* A pretend AM4                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -290,6 +382,14 @@ function fakeAm4(sx, o) {
       [7, '<EMPTY>']
     ]),
     tuner: [36, 110, -3, 1],
+    sceneNames: new Map([
+      [5, ['CLEAN', 'CRUNCH', 'LEAD BOOST', '']],
+      [6, ['', '', '', '']]
+    ]),
+    /* Which stored presets were asked for whole, and anything heard while one was still going out. */
+    dumped: [],
+    sendingUntil: -Infinity,
+    heardWhileSending: [],
     frozen: false,
     unknown: []
   }
@@ -328,7 +428,31 @@ function fakeAm4(sx, o) {
       state.frozen = true
       state.unknown.push(b)
     }
+    if (o.clock && o.clock.now() < state.sendingUntil) state.heardWhileSending.push(b)
     if (state.frozen || opt.silent) return
+    /* A stored preset, whole: six frames, about a second for each chunk, as 5-pin MIDI is. */
+    if (b[5] === 0x03) {
+      const n = b[6] * 4 + b[7]
+      state.dumped.push(n)
+      if (opt.noDumps) return
+      const frames = am4DumpOf(sx, n, state.sceneNames.get(n) ?? ['', '', '', ''], state.stored.get(n) ?? '')
+      if (opt.damageDump) {
+        /* A byte changed on the way, its frame's own checksum made good again: only the CRC can tell. */
+        const c = frames[2]
+        c[500] ^= 0x01
+        c[c.length - 2] = sx.checksum(c.slice(0, -2))
+      }
+      let at = 6
+      let last = at
+      for (const f of frames) {
+        last = at
+        say(f, at)
+        at += f.length > 100 ? 1000 : 10
+      }
+      /* Until its last frame has started going out: the phone cannot have heard the end before that. */
+      if (o.clock) state.sendingUntil = o.clock.now() + last
+      return
+    }
     const pidLow = d14(b[6], b[7])
     const pidHigh = d14(b[8], b[9])
     const action = d14(b[10], b[11])
@@ -403,7 +527,7 @@ async function onTheLine(kind, options = {}) {
       i += n
     }
   }
-  const unit = kind === 'am4' ? fakeAm4(sx, { say, ...options }) : fakeGen3(sx, { say, model: sx.MODELS[kind], ...options })
+  const unit = kind === 'am4' ? fakeAm4(sx, { say, clock, ...options }) : fakeGen3(sx, { say, model: sx.MODELS[kind], ...options })
   wire = createBleWire({
     unit: kind,
     catalog,
@@ -750,10 +874,12 @@ export function run(test) {
       ['GET_ALL_PARAMS 0xCE', 'F0 00 01 74 15 1F 4E 01 40 F7'],
       ['GET_ALL_PARAMS drive', 'F0 00 01 74 15 1F 76 00 79 F7'],
       ['GET_ALL_PARAMS second drive', 'F0 00 01 74 15 1F 77 00 78 F7'],
-      ['scene names dump A01', 'F0 00 01 74 15 03 00 00 00 13 F7'],
-      ['scene names dump B02', 'F0 00 01 74 15 03 01 01 00 13 F7'],
-      ['scene names dump Z04', 'F0 00 01 74 15 03 19 03 00 09 F7'],
       ['active buffer dump', 'F0 00 01 74 15 03 7F 7F 00 13 F7'],
+      ['a stored dump past Z', 'F0 00 01 74 15 03 1A 00 00 09 F7'],
+      ['a stored dump of sub 5', 'F0 00 01 74 15 03 00 04 00 17 F7'],
+      ['a stored dump with a byte after it', 'F0 00 01 74 15 03 00 00 01 12 F7'],
+      ['a stored dump one byte long', 'F0 00 01 74 15 03 00 00 00 00 13 F7'],
+      ['a stored dump for an FM3', 'F0 00 01 74 11 03 00 00 00 17 F7'],
       ['edited-bit read', 'F0 00 01 74 15 01 00 00 00 00 1F 00 00 00 00 00 0E F7'],
       ['save to Z04', 'F0 00 01 74 15 01 00 00 00 00 1B 00 00 00 04 00 33 40 00 00 00 7D F7'],
       ['place a drive in slot 1', 'F0 00 01 74 15 01 4E 01 0F 00 01 00 00 00 04 00 00 00 1D 44 10 1D F7'],
@@ -769,6 +895,19 @@ export function run(test) {
       ['gen-3 tap', 'F0 00 01 74 15 10 00 F7']
     ]
     for (const [what, bytes] of never) assert.ok(!sx.isAllowedAm4(H(bytes)), `${what} would be sent to the AM4`)
+    /*
+     * And the one fn 0x03 frame that IS sent: a stored preset, for its scene
+     * names, in exactly the shape the computer app sends the same AM4 over USB.
+     */
+    for (const [n, bytes] of [
+      [0, 'F0 00 01 74 15 03 00 00 00 13 F7'],
+      [5, 'F0 00 01 74 15 03 01 01 00 13 F7'],
+      [103, 'F0 00 01 74 15 03 19 03 00 09 F7']
+    ]) {
+      assert.equal(hex(sx.buildAm4StoredDump(n)), bytes, `stored preset ${n} is asked for in another shape`)
+      assert.equal(sx.am4Allowed(H(bytes))?.name, 'stored preset dump', `stored preset ${n} would not be sent`)
+    }
+    assert.throws(() => sx.buildAm4StoredDump(104))
 
     const made = (fields) => sx.am4Frame(fields)
     const wrongValue = [
@@ -1777,7 +1916,6 @@ export function run(test) {
     const t = await onTheLine('am4')
     const am4Only = [
       ['GET', '/presets/5/summary', 501],
-      ['GET', '/presets/5/scenes', 501],
       ['POST', '/tempo/tap', 501]
     ]
     for (const [method, path, status] of [...REFUSED, ...am4Only]) {
@@ -1787,6 +1925,75 @@ export function run(test) {
       await assert.rejects(drive(t.clock, t.wire.request(path, { method, body: JSON.stringify(body) })), (e) => e.status === 400, `${method} ${path} ${JSON.stringify(body)}`)
     }
     assert.equal(t.sent.length, 0)
+  })
+
+  /*
+   * "Let's make them load even if it's slower on Bluetooth, but it doesn't
+   * have to constantly be rereading them once it reads them once."
+   */
+  test('an AM4’s scene names over Bluetooth: one stored preset, read whole, with nothing sent while it comes', async () => {
+    const t = await onTheLine('am4')
+    const read = t.get('/presets/5/scenes')
+    /* A scene pressed while the preset is still coming waits for it: nothing goes to an AM4 mid-send. */
+    const press = t.post('/scene', { index: 2 })
+    assert.deepEqual(await read, { number: 5, names: ['CLEAN', 'CRUNCH', 'LEAD BOOST', ''] })
+    await press
+    assert.deepEqual(t.unit.state.dumped, [5], 'the stored preset was not asked for, or asked for twice')
+    assert.deepEqual(t.unit.state.heardWhileSending.map(hex), [], 'something was sent to the AM4 while it was sending a preset')
+    assert.equal(t.unit.state.scene, 2, 'the press made while the names came was lost')
+    assert.equal(t.unit.state.frozen, false)
+    assert.ok(t.logs.some((l) => /^read the scene names of B02 in \d+\.\d s$/.test(l)), 'how long it took is not in the log')
+
+    /* Once: the same slot again is not another four seconds. */
+    assert.deepEqual(await t.get('/presets/5/scenes'), { number: 5, names: ['CLEAN', 'CRUNCH', 'LEAD BOOST', ''] })
+    assert.deepEqual(t.unit.state.dumped, [5], 'the names were read again with nothing asking for it')
+    /* Unless Refresh names asks. */
+    t.wire.forgetSceneNames()
+    await t.get('/presets/5/scenes')
+    assert.deepEqual(t.unit.state.dumped, [5, 5], 'Refresh names did not reach the unit')
+    /* Unnamed scenes are an answer too: four blanks, not a failure. */
+    assert.deepEqual(await t.get('/presets/6/scenes'), { number: 6, names: ['', '', '', ''] })
+    /* Never as a summary, which Play asks of the slots either side. */
+    await assert.rejects(t.get('/presets/7/summary'), (e) => e.status === 501)
+    assert.deepEqual(t.unit.state.dumped, [5, 5, 6])
+    t.wire.close()
+  })
+
+  test('an AM4 that never answers for a stored preset is not asked again; a damaged one is not believed', async () => {
+    const quiet = await onTheLine('am4', { noDumps: true })
+    await assert.rejects(quiet.get('/presets/5/scenes'), (e) => e.status === 504)
+    assert.ok(quiet.clock.now() < 5000, 'a unit that never answers held the line for more than its gap')
+    assert.ok(quiet.logs.some((l) => /not asked for again on this connection/.test(l)))
+    await assert.rejects(quiet.get('/presets/6/scenes'), (e) => e.status === 501)
+    assert.deepEqual(quiet.unit.state.dumped, [5], 'a unit that never answers was asked again')
+    /* And the line is free again for everything else. */
+    assert.deepEqual(await quiet.get('/preset'), { number: 5, name: 'Clean Room' })
+    quiet.wire.close()
+
+    const damaged = await onTheLine('am4', { damageDump: true })
+    await assert.rejects(damaged.get('/presets/5/scenes'), (e) => e.status === 504)
+    assert.ok(damaged.logs.some((l) => /scene names of B02 came back damaged/.test(l)))
+    /* Damaged is not silent: the next try still goes to the unit. */
+    await assert.rejects(damaged.get('/presets/5/scenes'), (e) => e.status === 504)
+    assert.deepEqual(damaged.unit.state.dumped, [5, 5])
+    damaged.wire.close()
+  })
+
+  test('the stored preset reader: every part checked, only four names read out', async () => {
+    const sx = await import(SX)
+    const frames = am4DumpOf(sx, 103, ['RHYTHM', 'SOLO', '', 'A NAME OF THIRTY-ONE LETTERS!!!'])
+    assert.deepEqual(frames.map((f) => f.length), [13, 3082, 3082, 3082, 3082, 11])
+    assert.deepEqual(sx.parseAm4DumpSceneNames(frames, 103), { location: 103, names: ['RHYTHM', 'SOLO', '', 'A NAME OF THIRTY-ONE LETTERS!!!'] })
+    assert.equal(sx.parseAm4DumpSceneNames(frames, 102), null, 'another slot’s names were taken for this one')
+    assert.equal(sx.parseAm4DumpSceneNames(frames.filter((_f, i) => i !== 3), 103), null, 'a preset missing a chunk was read')
+    assert.equal(sx.parseAm4DumpSceneNames(frames.slice(0, 5), 103), null, 'a preset with no end was read')
+    const shortChunk = frames.map((f, i) => (i === 2 ? [...f.slice(0, 100), ...f.slice(101)] : f))
+    assert.equal(sx.parseAm4DumpSceneNames(shortChunk, 103), null, 'a chunk with a byte lost was read')
+    const badSum = frames.map((f, i) => (i === 4 ? f.map((b, j) => (j === 40 ? b ^ 1 : b)) : f))
+    assert.equal(sx.parseAm4DumpSceneNames(badSum, 103), null, 'a chunk failing its checksum was read')
+    assert.equal(sx.am4DumpPart(sx.buildAm4Structure()), null, 'a structure read was taken for part of a preset')
+    assert.equal(sx.parseAm4DumpSceneNames(frames, 104), null)
+    assert.equal(sx.parseAm4DumpSceneNames(null, 5), null)
   })
 
   test('the AM4 with nothing answering gives the same sentinels', async () => {
@@ -1906,7 +2113,9 @@ export function run(test) {
     for (const f of frames) {
       assert.equal(f[0], 0xf0, `a short message went to the AM4: ${hex(f)}`)
       assert.ok(t.sx.isAllowedAm4(f), `off the allowlist: ${hex(f)}`)
-      assert.ok(![0x1f, 0x03, 0x00].includes(f[5]), `function ${f[5].toString(16)} went to the AM4: ${hex(f)}`)
+      assert.ok(![0x1f, 0x00].includes(f[5]), `function ${f[5].toString(16)} went to the AM4: ${hex(f)}`)
+      /* fn 0x03 only as a stored preset, never the active buffer. */
+      if (f[5] === 0x03) assert.equal(t.sx.am4Allowed(f).name, 'stored preset dump', `function 3 went to the AM4: ${hex(f)}`)
     }
     assert.equal(t.unit.state.frozen, false, `the AM4 froze on ${t.unit.state.unknown.map(hex).join(', ')}`)
     /* Every kind of frame on the list was actually exercised, so the rule is about something. */
@@ -2432,18 +2641,74 @@ export function run(test) {
     assert.equal(png.readUInt32BE(20), 96, 'the Bluetooth mark is not 96 high like the other icons')
   })
 
-  test('on an AM4 over Bluetooth the Play screen offers no Refresh names, and keeps the names it already has', async () => {
+  test('over Bluetooth, CONNECTED opens a note with Turn off Bluetooth, which does what Stop does', async () => {
+    /* "Make it so you can click the connected button at the top of the screen and have a button that pop up that says turn off Bluetooth." */
+    const bar = flat('mobile/src/components/TopBar.js')
+    assert.match(bar, /import \{ setBluetooth, useBluetoothOn \} from '\.\.\/lib\/bluetooth'/, 'the bar cannot turn Bluetooth off')
+    /* Pressable over Bluetooth whatever the word says; only the demo keeps it a label. */
+    assert.match(bar, /: demo \? null : \{ accessibilityRole: 'button',/, 'the word is not pressable outside the demo')
+    assert.match(bar, /\{saying && !demo \? <Which link=\{link\} bluetooth=\{bluetooth\} onClose=\{\(\) => setSaying\(false\)\} \/> : null\}/)
+    const which = bar.slice(bar.indexOf('function Which('), bar.indexOf('function Saved('))
+    const ble = which.slice(0, which.indexOf("const where = link?.macName || 'your computer'"))
+    assert.ok(ble.length > 0 && ble.includes('if (bluetooth) {'), 'the Bluetooth note is not where this looks')
+    assert.match(ble, />Turn off Bluetooth<\/Text>/, 'the note has no Turn off Bluetooth')
+    assert.match(ble, /accessibilityRole="button" accessibilityLabel="Turn off Bluetooth"/)
+    assert.ok(!/\? \( <Pressable accessibilityRole="button" accessibilityLabel="Turn off Bluetooth"/.test(ble), 'Turn off Bluetooth only shows in some states of the link')
+    assert.match(
+      ble,
+      /onPress=\{\(\) => \{ tick\(\) fire\('press Turn off Bluetooth', \(\) => setBluetooth\(false\)\) onClose\(\) \}\}/,
+      'Turn off Bluetooth does something other than Stop'
+    )
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /<Press label="Stop using Bluetooth" onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
+    assert.match(flat('mobile/App.js'), /<Press label="Use the computer instead" onPress=\{\(\) => setBluetooth\(false\)\} \/>/)
+    assert.match(ble, /accessible=\{false\} onPress=\{onClose\}/, 'VoiceOver cannot reach Turn off Bluetooth inside the note')
+    /* On a bench: off, kept off, unit and adapter kept, said in the log. */
+    const disk = { 'fractal.bluetooth': JSON.stringify({ on: true, unit: 'am4', adapter: { id: '1:2', name: 'WIDI Uhost Bluetooth' } }) }
+    const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk })
+    try {
+      assert.equal(await bench.ble.restoreBluetooth(), true)
+      assert.equal(bench.ble.setBluetooth(false), false)
+      assert.equal(bench.sw.bluetoothOn(), false, 'the switch still sends requests to the adapter')
+      assert.equal(bench.sw.bluetoothWire(), null, 'a Bluetooth wire still answers with it off')
+      await new Promise((r) => setTimeout(r, 0))
+      const kept = JSON.parse(bench.disk.get('fractal.bluetooth'))
+      assert.equal(kept.on, false, 'it comes back on at the next launch')
+      assert.equal(kept.unit, 'am4', 'the unit is forgotten, so Connect asks again')
+      assert.deepEqual(kept.adapter, { id: '1:2', name: 'WIDI Uhost Bluetooth' }, 'the adapter is forgotten, so Connect goes looking again')
+      assert.ok(bench.log.some((l) => /Bluetooth \(beta\) turned off/.test(l)), 'turning it off is not in the log')
+    } finally {
+      bench.done()
+    }
+  })
+
+  test('on an AM4 over Bluetooth the Play screen reads the scene names once, keeps them, and Refresh names reads again', async () => {
     /*
-     * "On the Bluetooth connection is it supposed to read the scene names?"
-     * Not on the AM4: its scene names come only in a whole-preset dump, which
-     * is never sent to it over Bluetooth. So the link that could only fail is
-     * not offered, and the names this phone has seen through the computer
-     * still go up, from the same per-unit store, under the same 'am4' name.
+     * "Can't we just add a thing that loads it the first time, or a button
+     * to reload the names, cause it does say refresh names already right
+     * above the scenes ... let's make them load even if it's slower on
+     * Bluetooth, but it doesn't have to constantly be rereading them once it
+     * reads them once, it can go off the remembered names unless they hit
+     * refresh."
      */
     const stage = flat('mobile/src/screens/Stage.js')
-    assert.match(stage, /\{overBluetooth\(caps\) && device === 'am4' \? null : <RefreshNames \/>\}/, 'Refresh names is offered where it can only fail')
+    assert.match(stage, /<Label>Scenes<\/Label> \{\/\*[\s\S]*?\*\/\} <RefreshNames \/>/, 'Refresh names is held back over Bluetooth')
+    assert.doesNotMatch(code('mobile/src/screens/Stage.js'), /overBluetooth\(caps\) && device === 'am4' \? null : <RefreshNames/)
     const rig = flat('mobile/src/lib/rig.js')
+    /* Remembered first, from the same per-unit store the computer's names went into, under the same 'am4' name. */
     assert.match(rig, /const kept = await recallSceneNames\(owner, number\) if \(kept\.length && state\.preset\?\.number === number\) set\(\{ sceneNames: kept \}\)/, 'the names already seen are not shown first')
+    assert.match(
+      rig,
+      /if \(overBluetooth\(state\.capabilities\)\) return kept\.length > 0 && state\.preset\?\.number === number/,
+      'a preset whose names are remembered is read again over Bluetooth'
+    )
+    /* No computer to ask, and no summary of the slots either side, which would be a whole preset each. */
+    assert.match(rig, /function followComputerNames\(\) \{ const number = state\.preset\?\.number \/\*[^*]*\*\/ if \(overBluetooth\(state\.capabilities\)\) return/)
+    assert.match(rig, /if \(!bluetoothAm4\(\)\) \{ const summary = await device\.sceneNames\(number\)/)
+    const device = flat('mobile/src/lib/device.js')
+    assert.match(device, /export function keepSceneNames\(slug, number, names\) \{ if \(!slug \|\| !Number\.isInteger\(number\) \|\| number < 0 \|\| demoDevice\(\) \|\| bluetoothWire\(\)\) return/)
+    /* Refresh names lets the wire's own copy go, so the press reaches the unit. */
+    assert.match(rig, /export async function rereadSceneNames\(\) \{ const number = state\.preset\?\.number if \(!Number\.isInteger\(number\)\) return 'failed' device\.freshSceneNames\?\.\(\)/)
+    assert.match(device, /export const freshSceneNames = \(\) => bluetoothWire\(\)\?\.forgetSceneNames\?\.\(\)/)
     const { deviceSlug } = await import('../shared/device-slug.mjs')
     assert.equal(deviceSlug({ name: 'AM4', short: 'AM4' }), 'am4', 'Bluetooth files the AM4 under another name, so the computer’s names are not found')
   })

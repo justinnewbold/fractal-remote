@@ -19,6 +19,7 @@ import { firmwareOf } from './firmware'
 import { faultFrom, withdrawsFault } from './fault-rule'
 
 import * as device from './device'
+import { overBluetooth } from './bleSwitch'
 import { idOf, sameBlock } from './unit.mjs'
 import { TAP_REREAD_MS, keepTaps, tappedBpm, tempoRange, tempoSender } from './tempo'
 import { watchEvery, probeSays, countQuiet, unitGone } from './unit-watch'
@@ -1466,10 +1467,17 @@ async function namesOfLoaded(number, copy) {
     return null
   }
   if (here?.length) return here
-  const summary = await device.sceneNames(number)
-  if (summary.length || state.preset?.number !== number) return summary
+  /* An AM4 over Bluetooth has no summary to give: its names are read whole,
+     straight off the unit (lib/bleWire am4SceneNames). */
+  if (!bluetoothAm4()) {
+    const summary = await device.sceneNames(number)
+    if (summary.length || state.preset?.number !== number) return summary
+  }
   return device.unitSceneNames(number)
 }
+
+/* Whether this is an AM4 reached over Bluetooth (beta), whose names are slow to read. */
+const bluetoothAm4 = () => overBluetooth(state.capabilities) && state.deviceSlug === 'am4'
 
 /**
  * What this preset's scenes are called, when the unit did not volunteer them.
@@ -1543,6 +1551,13 @@ export async function quickSceneNames() {
   const owner = device.nameOwner(slug)
   const kept = await recallSceneNames(owner, number)
   if (kept.length && state.preset?.number === number) set({ sceneNames: kept })
+  /*
+   * Over Bluetooth there is no computer's store to ask, and what this phone
+   * kept IS the record. "It doesn't have to constantly be rereading them once
+   * it reads them once, it can go off the remembered names unless they hit
+   * refresh." A preset whose names are kept is not read again.
+   */
+  if (overBluetooth(state.capabilities)) return kept.length > 0 && state.preset?.number === number
   let held = null
   try {
     held = await device.storedSceneNames(slug, number)
@@ -1576,6 +1591,8 @@ const named = () => (state.sceneNames || []).some((n) => (n || '').trim())
 
 function followComputerNames() {
   const number = state.preset?.number
+  /* Over Bluetooth there is no computer to have them. */
+  if (overBluetooth(state.capabilities)) return
   if (!Number.isInteger(number) || named()) return
   for (const wait of COMPUTER_NAMES_AFTER_MS) {
     setTimeout(async () => {
