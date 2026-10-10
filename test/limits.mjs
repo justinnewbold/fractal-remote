@@ -1978,6 +1978,43 @@ export function run(test) {
     assert.match(words, /Over Bluetooth \(beta\) they go from the phone to the adapter on your unit, through no relay and no internet at all/, 'the relay paragraph does not say Bluetooth goes through no relay')
   })
 
+  test('the privacy policy names Expo and GitHub, says what the update check carries, and where an unpaid account is deleted', () => {
+    /*
+     * Apple's 5.1.1(i): the policy must "confirm that any third party with
+     * whom an app shares user data ... will provide the same or equal
+     * protection of user data as stated in the app's privacy policy". The
+     * page named RevenueCat, Supabase and Resend in that sentence and left
+     * out the update checks, calling them "ordinary download requests". But
+     * every check the phone makes carries a number: expo-updates sends an
+     * EAS-Client-ID header, a random UUID made the first time the app runs
+     * and kept for that install. Never a name or an email address. The
+     * desktop's GitHub check asks for the newest release and carries none.
+     */
+    const words = read('public/privacy.html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+    assert.match(words, /RevenueCat, Supabase, Resend, Expo \(the phone app's update checks\) and GitHub \(the desktop app's update checks\) each hold only what is described on this page, use it only to provide their part of the service, and protect it at least as this page describes\./, 'Expo and GitHub are not among those who protect what they hold')
+    assert.match(words, /The phone's update check carries a random number for that install, made up the first time the app runs, so Expo can tell one install from another; never your name or email address\./, 'the policy does not say what the phone’s update check carries')
+    assert.match(words, /The desktop's check carries no number at all\./)
+    assert.ok(!/All of these are ordinary download requests/.test(words), 'the policy calls the update checks ordinary download requests, and the phone’s carries a number')
+    /* Tied to the code: Expo's own updater, with no headers of the app's added, and a desktop check that sends only what it asks for. */
+    assert.ok(JSON.parse(read('mobile/package.json')).dependencies['expo-updates'], 'the phone no longer uses expo-updates; the policy should stop describing its number')
+    const updates = JSON.parse(read('mobile/app.json')).expo.updates
+    assert.equal(updates.requestHeaders, undefined, 'the phone adds its own headers to the update check, and the policy says it carries only the install’s number')
+    assert.match(read('desktop/main.js'), /web\.fetch\(LATEST_API_URL, \{\s+headers: \{ Accept: 'application\/vnd\.github\+json' \}/, 'the desktop update check sends something new; the policy says it carries no number')
+
+    /*
+     * DELETING AN ACCOUNT THAT HAS NOT PAID. Since 1.87.1 an account that
+     * has not bought the full version signs in to the purchase page, with no
+     * way through to Settings, and Delete account is at the bottom of that
+     * page (Paywall.js). The policy only gave Settings → your account.
+     * Google Play's User Data policy wants deletion explained in the app and
+     * on the web, and a path somebody cannot reach is not one.
+     */
+    assert.match(read('mobile/src/screens/Paywall.js'), /label="Delete account"/, 'the purchase page has no Delete account, and the policy says it does')
+    assert.match(words, /If you have not bought the full version, the app opens on the purchase page instead of Settings\. Delete account is at the bottom of that page, and does the same\./, 'the policy does not say where an account that has not paid is deleted')
+    const deleting = words.slice(words.indexOf('Deleting your data'), words.indexOf('Children'))
+    assert.ok(deleting.includes('the app opens on the purchase page'), 'the purchase page’s Delete account is not under Deleting your data')
+  })
+
   test('the Bluetooth (beta) guide says it is a beta, names the parts it was tried with, and links only what was checked', () => {
     /*
      * "We need to provide as much instructions as possible on how to connect
@@ -2214,15 +2251,132 @@ export function run(test) {
     /* The draft Description, held to the rules the live one is. */
     const { fenced } = await import('../scripts/store-text.mjs')
     const { AFFILIATION } = await import('../shared/affiliation.mjs')
-    const draft = fenced(section, '### Description and Subtitle with Bluetooth (beta)')
-    assert.match(draft, /^REQUIRES A COMPUTER\b/, 'the draft no longer opens on the computer, which Justin asked for')
-    assert.match(draft, /beta/i, 'the draft does not say Bluetooth is a beta')
-    assert.match(draft, /may not work correctly with every unit or adapter/, 'the draft does not carry the beta warning')
-    assert.match(draft, /tried on an AM4, from an iPhone,[^.]*not yet from an Android phone\./, 'the draft does not say it was tried only from an iPhone, and Play shows the same text')
-    assert.ok([...draft].length <= 4000, `the draft is ${[...draft].length} characters; both stores take 4000`)
-    assert.ok(draft.includes(AFFILIATION), 'the draft does not end on the shared disclaimer')
-    assert.ok(!/\bfree\b[^.\n]{0,40}\bapp\b|\bapp\b[^.\n]{0,20}\bis free\b/i.test(draft), 'the draft calls an app free')
-    assert.ok(draft.includes('FM3, FM9, Axe-Fx III, AM4 and VP4.'), 'the draft changed the supported units')
+    /*
+     * TWO COPIES NOW, ONE PER STORE. This held the one draft to "and not yet
+     * from an Android phone", because Play was to show the same text. Changed
+     * on purpose: the App Store's Description is metadata, and Apple's 2.3.10
+     * says "don't include names, icons, or imagery of other mobile platforms
+     * ... in your app or metadata". So the App Store copy names no other
+     * phone, the Google Play copy keeps the clause for the people who are on
+     * one, and the two are otherwise the same word for word.
+     */
+    const draftAt = section.indexOf('### Description and Subtitle with Bluetooth (beta)')
+    assert.ok(draftAt > 0, 'the Bluetooth draft is missing')
+    const apple = fenced(section.slice(draftAt), '#### App Store copy')
+    const google = fenced(section.slice(draftAt), '#### Google Play copy')
+    assert.equal(fenced(section, '### Description and Subtitle with Bluetooth (beta)'), apple, 'the first copy under the draft’s heading is not the App Store’s')
+    for (const [store, draft] of [['App Store', apple], ['Google Play', google]]) {
+      assert.match(draft, /^REQUIRES A COMPUTER\b/, `the ${store} draft no longer opens on the computer, which Justin asked for`)
+      assert.match(draft, /beta/i, `the ${store} draft does not say Bluetooth is a beta`)
+      assert.match(draft, /may not work correctly with every unit or adapter/, `the ${store} draft does not carry the beta warning`)
+      assert.match(draft, /so far it has been tried on an AM4, from an iPhone, with a CME WIDI Uhost and a CME C2MIDI Pro cable/, `the ${store} draft does not say what it was tried on`)
+      assert.ok([...draft].length <= 4000, `the ${store} draft is ${[...draft].length} characters; both stores take 4000`)
+      assert.ok(draft.includes(AFFILIATION), `the ${store} draft does not end on the shared disclaimer`)
+      assert.ok(!/\bfree\b[^.\n]{0,40}\bapp\b|\bapp\b[^.\n]{0,20}\bis free\b/i.test(draft), `the ${store} draft calls an app free`)
+      assert.ok(draft.includes('FM3, FM9, Axe-Fx III, AM4 and VP4.'), `the ${store} draft changed the supported units`)
+      /* The sentence the Description at the top lost, kept out of the draft too: over Bluetooth a phone does talk to the unit. */
+      assert.ok(!/cannot talk to a Fractal unit on its own/.test(draft), `the ${store} draft says a phone cannot talk to a unit on its own, and over Bluetooth it does`)
+      /* It names CME's products to say what to buy, so it says whose they are and that the app is not theirs. */
+      assert.ok(draft.trim().endsWith(`${AFFILIATION} WIDI Uhost and C2MIDI Pro are CME products; Fractal Remote is not connected with CME.`), `the ${store} draft names CME’s products without saying the app is not connected with CME`)
+    }
+    assert.ok(!/android|google play|play store|\bapk\b/i.test(apple), 'the App Store copy of the draft names another platform, which Apple’s 2.3.10 rejects in metadata')
+    assert.match(google, /tried on an AM4, from an iPhone,[^.]*and not yet from an Android phone\./, 'the Google Play copy does not say it has not been tried from an Android phone, and everybody reading it is on one')
+    assert.equal(google.replace(', and not yet from an Android phone', ''), apple, 'the two copies of the draft say different things besides the Android clause')
+
+    /*
+     * THE DESCRIPTION THAT GOES WITH 1.87.1 if the draft is not used: the one
+     * at the top. Two of its sentences stopped being true with Bluetooth
+     * (beta), "Controlling your real unit needs the computer described at
+     * the top" and "A phone cannot talk to a Fractal unit on its own", and
+     * Apple's 2.3 asks metadata to "accurately reflect the app's core
+     * experience ... with new versions". So both say a Bluetooth MIDI
+     * adapter can take the computer's place, in beta, and the opening stays
+     * "REQUIRES A COMPUTER." with its full stop (the test above).
+     */
+    const current = fenced(store, '### Description')
+    assert.ok(!/needs the computer described at the top\./.test(current), 'the Description still says only the computer can control a real unit')
+    /*
+     * Both sentences name the units now. They said "a Bluetooth MIDI adapter
+     * on the unit" and "plugged into the unit's MIDI In and MIDI Out", and
+     * these two asserts pinned that wording. Changed on purpose: SUPPORTED
+     * UNITS in the same text lists the VP4, and the Bluetooth page does not
+     * offer the VP4, so a VP4 owner reading the listing would expect it to
+     * work. "May not work with every unit" does not cover a unit the app
+     * never offers (Apple 2.3, and Play's metadata accuracy).
+     */
+    assert.match(current, /Controlling your real unit needs the computer described at the top, or, in beta, a Bluetooth MIDI adapter on an AM4, FM3, FM9 or Axe-Fx III\./, 'the demo paragraph does not say Bluetooth (beta) can take the computer’s place, on which units')
+    assert.ok(!/cannot talk to a Fractal unit on its own/.test(current), 'HOW IT WORKS still says a phone cannot talk to a unit on its own, and over Bluetooth it does')
+    assert.match(current, /Or, in beta, on an AM4, FM3, FM9 or Axe-Fx III \(not the VP4\), a Bluetooth MIDI adapter plugged into the unit's MIDI In and MIDI Out takes the computer's place\. So far that has been tried on an AM4, from an iPhone, and it may not work with every unit or adapter\./, 'HOW IT WORKS does not say what Bluetooth (beta) is, on which units, where it was tried, and that it may not work')
+
+    /*
+     * And the units it names are the Bluetooth page's own, read from the
+     * code rather than copied: every unit BLE_UNITS offers, and every unit
+     * SUPPORTED UNITS lists that it does not offer named as "not the ...".
+     * A unit added to Bluetooth, or one taken off, fails here until the
+     * listing says so too. The drafts are held to the same list.
+     */
+    const { BLE_UNITS } = await import('../mobile/src/lib/bleWire.js')
+    const offeredNames = BLE_UNITS.map((u) => u.name)
+    const offered = `${offeredNames.slice(0, -1).join(', ')} or ${offeredNames.at(-1)}`
+    const supported = (current.match(/^SUPPORTED UNITS\n(.+)\.$/m) || [, ''])[1].split(/, | and /)
+    assert.ok(offeredNames.every((n) => supported.includes(n)), `Bluetooth offers a unit SUPPORTED UNITS does not list: ${offeredNames.filter((n) => !supported.includes(n)).join(', ')}`)
+    const notOffered = supported.filter((n) => !offeredNames.includes(n))
+    const bleSentences = current.split(/(?<=\.)\s+/).filter((s) => /Bluetooth MIDI adapter/.test(s))
+    assert.equal(bleSentences.length, 2, 'the Description no longer has its two Bluetooth sentences, the demo one and the HOW IT WORKS one')
+    for (const sentence of bleSentences) {
+      assert.ok(sentence.includes(`on an ${offered}`), `"${sentence}" does not name the units Bluetooth offers (${offered})`)
+      for (const unit of notOffered) {
+        assert.ok(!new RegExp(`\\b${unit}\\b`).test(sentence.replace(`(not the ${unit})`, '')), `"${sentence}" offers the ${unit} over Bluetooth, and the app does not`)
+      }
+    }
+    const howBle = bleSentences.find((s) => /takes the computer's place/.test(s)) || ''
+    for (const unit of notOffered) assert.ok(howBle.includes(`(not the ${unit})`), `HOW IT WORKS does not say Bluetooth is not for the ${unit}, which SUPPORTED UNITS lists`)
+    for (const [store, draft] of [['App Store', apple], ['Google Play', google]]) {
+      assert.ok(draft.includes(`MIDI Out of an ${offered}, your phone`), `the ${store} draft does not name the units Bluetooth offers (${offered})`)
+    }
+
+    /*
+     * What's New cannot name them: Play's five lines would go past 500. So
+     * it says "most units" rather than "your unit", which to a VP4 owner
+     * promised a unit the Bluetooth page never offers.
+     */
+    const bleNews = play.split('\n').find((l) => /^• Bluetooth \(beta\):/.test(l)) || ''
+    assert.ok(!/\byour unit\b/.test(bleNews), 'What’s New says Bluetooth works through an adapter on "your unit", and it is not offered on every unit')
+    assert.match(bleNews, /through a Bluetooth MIDI adapter on most units\./, 'What’s New does not say Bluetooth is for most units rather than all')
+    assert.ok(!/android|google play|play store|\bapk\b/i.test(current), 'the Description, which goes on the App Store, names another platform')
+    assert.match(store, /\*\*This is the one to paste for 1\.87\.1\.\*\*/, 'the Description does not say it is the one for 1.87.1')
+    assert.match(store, /\*\*On Google Play, paste it the day 1\.87\.1 goes out\s+there, not before:\*\*/, 'nothing stops the Bluetooth Description going on Play before the Play copy has Bluetooth')
+
+    /*
+     * BY HAND IN PLAY CONSOLE. What Google's own review found missing, none
+     * of which a build can carry: the Data safety form leaves out the
+     * purchase record, the account number, the made-up number for a phone
+     * not signed in, and the buttons in a bug report's log; App access has
+     * no record of the demo account; and the live listing is not this
+     * file's.
+     */
+    const playAt = section.indexOf('### By hand in Play Console for 1.87.1')
+    assert.ok(playAt > 0, 'the 1.87.1 section has no Play Console checklist')
+    const playHand = section.slice(playAt)
+    for (const [type, why] of [
+      [/\*\*Financial info → Purchase history\.\*\* Required\./, 'Purchase history'],
+      [/\*\*Personal info → User IDs\.\*\* Optional/, 'User IDs'],
+      [/\*\*Device or other IDs\.\*\* Required\./, 'Device or other IDs'],
+      [/\*\*App activity → App interactions\.\*\* Optional/, 'App interactions']
+    ]) assert.match(playHand, type, `the Play checklist does not add ${why} to Data safety`)
+    assert.match(playHand, /Keep \*\*No data shared with third parties\*\*/, 'the Play checklist does not say to keep "not shared"')
+    assert.match(playHand, /\*\*2\. App access\*\*/, 'the Play checklist leaves out App access')
+    const access = fenced(playHand, '**2. App access**')
+    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ']) {
+      assert.ok(access.includes(label), `the Play reviewer is not told to tap "${label}"`)
+      assert.ok(read('shared/onboarding.mjs').includes(label), `the Play reviewer is told to tap "${label}", which the walkthrough no longer says`)
+    }
+    assert.match(access, /This account has the full version\./)
+    assert.match(access, /^Bluetooth \(beta\): tap the gear at the top right for Settings, then Phone & computer, then BLUETOOTH \(BETA\)\. It needs a Bluetooth MIDI adapter on a Fractal unit; a video of it working is at \[VIDEO LINK\]\.$/m, 'the Play reviewer is not told where Bluetooth is, or given the video')
+    assert.match(playHand, /\*\*Short description:\*\* the one under \*Google Play: short description\*/, 'the Play checklist does not say to paste the lower-case short description')
+    assert.match(playHand, /paste its \*\*Google Play\s+copy\*\* instead/, 'the Play checklist does not say which copy of the draft Play gets')
+    assert.match(playHand, /\*\*The trademark line\*\* at the end has to be the one in this file, which\s+names the VP4/, 'the Play checklist does not say the trademark line must name the VP4')
+    assert.ok(AFFILIATION.includes('“VP4”'), 'the shared trademark line no longer names the VP4, and the Play checklist says it does')
   })
 
   test('the licences of what we ship travel with it', () => {

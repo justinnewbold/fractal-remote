@@ -79,9 +79,27 @@ export const TESTED = ['am4']
  * all of them. "Tried on the AM4" alone would tell them it works on their
  * phone; the website's guide and What's New already say "from an iPhone", so
  * the app says it too. Change it the day an Android phone has driven a unit.
+ *
+ * TWO COPIES, ONE PER PHONE. The Android clause is for Android only. Apple's
+ * guideline 2.3.10: "don't include names, icons, or imagery of other mobile
+ * platforms or alternative app marketplaces in your app or metadata", and
+ * "Your app includes references to Android" is one of the commonest
+ * rejections there is. This note is the first thing on the Bluetooth page,
+ * and the 1.87.1 review notes send the reviewer to exactly that page. So the
+ * iPhone says where it has been tried and stops; Android says the same and
+ * that it has not been tried on a phone like theirs.
+ *
+ * Picked by betaNote(Platform.OS) on the page. This file imports nothing, so
+ * the platform is passed in, and anything that is not Android gets the
+ * iPhone's copy: a phone this has never heard of never shows Android's name.
  */
-export const BETA_NOTE =
+export const BETA_NOTE_IPHONE =
+  'Bluetooth is new (beta), and may not work correctly with every unit or adapter. So far it has been tried on the AM4, from an iPhone. If something doesn’t work, the cable to the computer still does.'
+export const BETA_NOTE_ANDROID =
   'Bluetooth is new (beta), and may not work correctly with every unit or adapter. So far it has been tried on the AM4, from an iPhone, and not yet from an Android phone. If something doesn’t work, the cable to the computer still does.'
+
+/** The beta note for the phone it is shown on, from Platform.OS. */
+export const betaNote = (os) => (os === 'android' ? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE)
 
 /** The same, short enough for the card on Phone & computer that leads to the page. */
 export const BETA_CARD =

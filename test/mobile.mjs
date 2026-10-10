@@ -64,7 +64,13 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 const withoutComments = (t) =>
   t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
 
-/** Every .js under a directory, so a new screen cannot quietly opt out. */
+/**
+ * Every .js under a directory, so a new screen cannot quietly opt out.
+ * `ext` widens it where a check is about the whole bundle: mobile/src also
+ * holds .mjs files (unit.mjs, fractal-sysex.mjs, decode.mjs) that the app
+ * imports and ships, and a check of what the phone can draw has to read them
+ * too. Every other caller keeps .js alone, as before.
+ */
 /*
  * Forward slashes, on every platform.
  *
@@ -77,11 +83,11 @@ const withoutComments = (t) =>
  * Node reads a forward-slash path perfectly well on Windows, so normalising
  * here costs nothing and means no caller has to think about it.
  */
-function* walk(dir) {
+function* walk(dir, ext = /\.js$/) {
   for (const entry of readdirSync(fileURLToPath(dir))) {
     const path = fileURLToPath(new URL(entry, dir))
-    if (statSync(path).isDirectory()) yield* walk(new URL(`${entry}/`, dir))
-    else if (/\.js$/.test(entry)) yield path.replaceAll('\\', '/')
+    if (statSync(path).isDirectory()) yield* walk(new URL(`${entry}/`, dir), ext)
+    else if (ext.test(entry)) yield path.replaceAll('\\', '/')
   }
 }
 
@@ -2711,6 +2717,84 @@ export function run(test) {
     )
   })
 
+  test('an iPhone shows no other phone’s name: every Android, Google Play or APK the app can draw is Android’s alone, or Justin’s', () => {
+    /*
+     * Apple's 2.3.10: "don't include names, icons, or imagery of other mobile
+     * platforms or alternative app marketplaces in your app or metadata".
+     * "Your app includes references to Android" is one of the commonest
+     * rejections there is, and 1.87.1 nearly carried one: the Bluetooth
+     * page's beta note said "not yet from an Android phone" on both phones,
+     * at the top of the page the review notes send the reviewer to.
+     *
+     * So every string the phone app holds — a quoted string, a piece of a
+     * template, the text between JSX tags — that names Android, Google (Play
+     * or an account), the Play Store or an APK is read out of the code here, and each one has
+     * to be on this list with the reason an iPhone never shows it. A new one
+     * fails until somebody has decided. A lower-case key like 'android' or
+     * 'web-android' is a value compared against, never read by anybody.
+     *
+     * Data from the units is not read: a VP4 factory preset is called
+     * "Androids Dream". That is Fractal's name for a sound, in
+     * data/factory-presets.json, not a phone.
+     */
+    const NAMES = /android|google|play store|play console|\bapk\b/i
+    const KNOWN = [
+      ['src/lib/bluetooth.js', /in Android’s settings/, 'ALLOW_WORDS: the iPhone line is picked first, on Platform.OS'],
+      ['src/lib/bluetooth-gear.js', /, and not yet from an Android phone\./, 'BETA_NOTE_ANDROID: betaNote picks it only for Android'],
+      ['src/screens/Bluetooth.js', /If Android asks to pair with it, accept\./, 'the Connect hint, behind ios ? … :'],
+      ['src/screens/Settings.js', /^Google account$/, 'Delete account: Apple ID on an iPhone'],
+      ['src/lib/cloudSetlists.js', /^Android$/, 'deviceName: iPhone on an iPhone'],
+      ['src/lib/admin.js', /Android/, 'Justin’s Developer pages only'],
+      ['src/lib/whats-live.js', /^Android build$/, 'What is live, a Developer page, Justin’s only'],
+      ['src/lib/ways-in.js', /Google Play/, 'the browser’s list of routes; nothing on the phone imports it']
+    ]
+    /*
+     * .mjs as well as .js: unit.mjs, fractal-sysex.mjs and decode.mjs go into
+     * the app too (bleWire.js and bluetooth.js import fractal-sysex.mjs), so
+     * a name written into one of them would reach an iPhone like any other.
+     */
+    const files = [...walk(new URL('../mobile/src/', import.meta.url), /\.m?js$/), fileURLToPath(new URL('../mobile/App.js', import.meta.url))]
+    assert.ok(['src/lib/unit.mjs', 'src/lib/fractal-sysex.mjs', 'src/lib/decode.mjs'].every((f) => files.some((file) => file.endsWith(`/mobile/${f}`))), 'the bundled .mjs files are not read, so a name in one of them would get past this check')
+    const seen = new Set()
+    for (const file of files) {
+      const name = file.split('/mobile/')[1] || file
+      const ast = parse(readFileSync(file, 'utf8'), { sourceType: 'module', plugins: ['jsx'] })
+      traverse(ast, {
+        enter(path) {
+          const n = path.node
+          const text = n.type === 'StringLiteral' || n.type === 'JSXText' ? n.value : n.type === 'TemplateElement' ? n.value.cooked : null
+          if (!text || !NAMES.test(text) || /^[a-z-]+$/.test(text.trim())) return
+          const known = KNOWN.find(([f, words]) => f === name && words.test(text))
+          assert.ok(known, `${name} can draw "${text.trim().slice(0, 120)}" — another platform's name. Show it on Android only (Platform.OS), or add it here with why an iPhone never sees it`)
+          seen.add(known[0])
+        }
+      })
+    }
+    for (const [f] of KNOWN) assert.ok(seen.has(f), `${f} no longer names another platform; take it off this list so the list stays the truth`)
+
+    /* And each reason on the list, checked rather than trusted. */
+    const flat = (f) => withoutComments(read(f)).replace(/\s+/g, ' ')
+    assert.match(flat('mobile/src/lib/bluetooth.js'), /export const ALLOW_WORDS = Platform\.OS === 'ios' \? 'Bluetooth isn’t allowed[^']*' : OLD_ANDROID/)
+    assert.match(flat('mobile/src/screens/Bluetooth.js'), /: ios \? 'Apple’s Bluetooth screen opens\.[^']*' : 'The phone looks for the adapter for ten seconds, then connects to it\. If Android asks/)
+    assert.match(flat('mobile/src/screens/Settings.js'), /\$\{Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'\}/)
+    assert.match(flat('mobile/src/lib/cloudSetlists.js'), /export const deviceName = \(\) => \(Platform\.OS === 'ios' \? 'iPhone' : 'Android'\)/)
+    assert.match(flat('mobile/src/lib/bluetooth-gear.js'), /export const betaNote = \(os\) => \(os === 'android' \? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE\)/)
+    /* The Developer pages: only their own tools import admin.js and whats-live.js, and Settings draws each tool for Justin's account alone. */
+    const settings = flat('mobile/src/screens/Settings.js')
+    for (const file of files) {
+      const name = file.split('/mobile/')[1] || file
+      const code = withoutComments(readFileSync(file, 'utf8'))
+      if (/from '(\.\.\/lib|\.)\/(admin|whats-live)'/.test(code)) {
+        assert.ok(/^src\/components\/\w+Tool\.js$/.test(name) || (name === 'src/screens/Settings.js' && /import \{ isAdmin \} from '\.\.\/lib\/admin'/.test(code)), `${name} uses the Developer pages' words outside the Developer pages`)
+      }
+      assert.ok(!/from '(\.\.\/lib|\.)\/ways-in'/.test(code), `${name} imports the browser's routes, which name Google Play`)
+    }
+    for (const [tool, page] of [['AccessTool', 'access'], ['SalesTool', 'sales'], ['UsageTool', 'usage'], ['LiveTool', 'live'], ['MessagesTool', 'messages'], ['AccountsTool', 'accounts']]) {
+      assert.match(settings, new RegExp(`\\{page === '${page}' && isAdmin\\(account\\?\\.id\\) \\? \\( <> \\{head\\([^)]*\\)\\} <${tool} \\/>`), `${tool} is drawn for somebody other than Justin`)
+      assert.equal(settings.split(`<${tool} `).length - 1, 1, `${tool} is drawn in a second place`)
+    }
+  })
+
   test('every name the phone uses is one that exists', () => {
     /*
      * THE HOLE THIS FILLS, dug twice, and the second one reached a stage.
@@ -5074,7 +5158,15 @@ export function run(test) {
     assert.ok(!/works fully/.test(pasted), 'the 1.87.1 notes say Edit works fully, and its own Beta note says blocks and controls may be missing')
     assert.match(pasted, /Edit \(Beta\)\.[\s\S]{0,200}Everything it shows works, in the demo too\./, 'the 1.87.1 notes do not say Edit works, in the demo too')
     assert.match(pasted, /marked Beta because it does not yet cover every block and control of\s+every unit, and a control may not yet move quite the way it does on the\s+unit itself/, 'the 1.87.1 notes do not say why Edit is a Beta, in the terms its own note uses')
-    assert.match(pasted, /It is still being\s+improved\./, 'the 1.87.1 notes do not say Edit is still being improved')
+    /*
+     * And no "It is still being improved." This pinned that sentence in.
+     * Changed on purpose: Apple's 2.2 keeps "demos, betas, and trial
+     * versions" off the store, and its reviewers ask to "complete, remove, or
+     * fully configure any partially implemented features". The sentence above
+     * already says honestly why Edit is a Beta, in the screen's own terms;
+     * this one only added that it is unfinished.
+     */
+    assert.ok(!/still being\s+improved/.test(pasted), 'the 1.87.1 notes say Edit is still being improved, which reads as unfinished under 2.2')
 
     /*
      * BLUETOOTH (BETA) IS IN, FOR EVERYBODY WHO HAS UNLOCKED THE APP.
@@ -5122,6 +5214,73 @@ export function run(test) {
     const bleLine = whatsNew.split('\n').find((l) => /Bluetooth/.test(l)) || ''
     assert.ok(bleLine, 'Bluetooth (beta) is in this version, and What’s New does not say so')
     assert.match(bleLine, /\(beta\)/, 'What’s New announces Bluetooth without saying it is a beta')
+
+    /*
+     * APPEARANCE ON AUTO FOLLOWS THE IPHONE NOW. mobile/app.json went from
+     * userInterfaceStyle "dark" (build 24) to "automatic", and the phone's
+     * own default is Auto, so a reviewer whose phone is set to light sees the
+     * light theme for the first time. 2.3.1(a): every product change
+     * "described with specificity in the Notes for Review"; 2.3.12: What's
+     * New lists the changes. iPhone only, so it sits after Play's five.
+     */
+    assert.equal(JSON.parse(read('mobile/app.json')).expo.userInterfaceStyle, 'automatic', 'the iPhone no longer follows its own light or dark setting; the notes and What’s New should stop saying it does')
+    assert.match(read('mobile/src/lib/theme.js'), /let mode = 'auto'/, 'Auto is no longer the default, and the notes say it is')
+    assert.match(pasted, /Appearance\. On iPhone, Appearance in Settings set to Auto, which is the\s+default, now follows the phone's own light or dark setting\./, 'the 1.87.1 notes do not say Auto now follows the iPhone’s light or dark setting')
+    const autoLine = whatsNew.split('\n').findIndex((l) => /^• On iPhone, Appearance set to Auto now follows your phone's light or dark setting\.$/.test(l))
+    assert.ok(autoLine >= 5, 'What’s New does not say Auto follows the iPhone, or says it inside the five lines Google Play takes')
+
+    /*
+     * THE THREE LINES APPLE'S HELP PAGE ASKS FOR ("Provide information for a
+     * complete review"): the devices and versions tested, the outside
+     * services the app relies on, and whether anything differs by country.
+     * "Incomplete submissions will be rejected."
+     */
+    assert.match(pasted, /Tested on: iPhone 17 Pro Max, iOS \[version\]; Apple Watch \[model\], watchOS\s+\[version\]\./, 'the 1.87.1 notes do not say what it was tested on')
+    for (const service of ['Supabase', 'RevenueCat', 'Apple in-app purchase', 'Resend', 'Expo']) {
+      assert.match(pasted, new RegExp(`Services the app uses:[\\s\\S]{0,300}${service}`), `the 1.87.1 notes do not name ${service} among the services`)
+    }
+    assert.match(pasted, /Regions: the app works the same in every country\. The View on Amazon\s+buttons on the Bluetooth page open amazon\.com\./, 'the 1.87.1 notes do not say it works the same in every country')
+    /* The Amazon buttons do open amazon.com, every one of them. */
+    const { PARTS } = await import('../shared/bluetooth-gear.mjs')
+    for (const part of Object.values(PARTS)) assert.match(part.amazon, /^https:\/\/www\.amazon\.com\//, `${part.name}'s View on Amazon is not amazon.com, and the notes say it is`)
+    /* The brackets are for Justin, and the section says to fill them before pasting (2.1(a): no placeholder text). */
+    const section = store.slice(at)
+    assert.match(section, /\*\*The three lines Apple's help page asks for\.\*\* Fill in the brackets/, 'nothing says to fill in the tested-on brackets before pasting')
+
+    /*
+     * THE TESTING TOOLS ARE THE DEVELOPER'S ONLY, AND SAID TO BE. The page
+     * draws them for Justin's account alone now (2.2); 2.3.1(a) also asks
+     * for no hidden or undocumented features, so one line says the panel
+     * is there and whose it is.
+     */
+    assert.match(pasted, /A diagnostic panel on that page, which shows the messages sent to the\s+unit, appears only for the developer's own account; customers never see\s+it\./, 'the 1.87.1 notes do not say the diagnostic panel is the developer’s alone')
+    assert.ok(!/Testing tools/.test(pasted), 'the 1.87.1 notes send the reviewer to the testing tools, which only the developer’s account has')
+    assert.match(read('mobile/src/screens/Bluetooth.js').replace(/\s+/g, ' '), /\{admin && b\.unit && tools \?/, 'the notes say the diagnostic panel is the developer’s only, and the page shows it to everybody')
+
+    /*
+     * WHAT THE VIDEO HAS TO SHOW, beside the place for its link. Apple's help
+     * page: "a video (not a screen recording) that shows your app running on
+     * a physical Apple device as it pairs and interacts with the hardware".
+     * One take, both the phone and the unit in frame, on this build, through
+     * every screen the notes name, and a link that opens without signing in.
+     */
+    assert.ok(pasted.includes('[VIDEO LINK — Justin films it on the TestFlight copy]'), 'the place for the Bluetooth video link has gone from the 1.87.1 notes before there is a link')
+    const video = section.slice(section.indexOf('- **The video.**'), section.indexOf('- **The demo account has the full version.**'))
+    assert.ok(video.length > 200, 'the 1.87.1 section no longer says what the video must show')
+    for (const [must, why] of [
+      [/not a screen\s+recording/i, 'that it is a camera recording, not a screen recording'],
+      [/\*\*Filmed with a camera,\*\*/, 'that it is filmed with a camera'],
+      [/\*\*One take,\*\* no cuts\./, 'one take'],
+      [/The iPhone and the AM4, with its adapter plugged in, both in the\s+frame/, 'that the phone and the unit are both in frame'],
+      [/TestFlight copy of this build \(1\.87\.1\)/, 'which build to film'],
+      [/tap Connect → the iPhone asks to allow\s+Bluetooth, tap Allow → Apple's Bluetooth screen opens → tap the adapter\s+and wait until it says Connected → tap Done → the page says "Connected ·\s+AM4 answering" → change a preset and then a scene on the phone, and show\s+each one changing on the AM4 itself/, 'the steps in order'],
+      [/opens without signing in,\*\* for example a YouTube video\s+set to Unlisted/, 'a link that opens without signing in']
+    ]) assert.match(video, must, `the video instructions do not say ${why}`)
+    /* The words the video steps quote are the ones the page draws. */
+    const blePage = read('mobile/src/screens/Bluetooth.js')
+    assert.match(blePage, /Connected · \$\{name\} answering/)
+    assert.match(blePage, /: 'Connect'\}/)
+    assert.match(blePage, /Apple’s Bluetooth screen opens\. Tap your adapter, wait until it says Connected, then tap Done\./)
   })
 
   test('the unlock row is gone once there is nothing left to unlock', () => {

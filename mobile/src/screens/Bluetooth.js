@@ -22,12 +22,12 @@ import {
   useBluetooth
 } from '../lib/bluetooth'
 import {
-  BETA_NOTE,
   FIRST_TIME,
   GEAR_IN_SHORT,
   GUIDE_URL,
   PLUGS_CHECK,
   POWER_LINE,
+  betaNote,
   hookupFor,
   partsFor,
   untriedLine
@@ -66,6 +66,11 @@ import Press from '../components/Press'
  * might not function correctly." It is open to everybody who has unlocked
  * the app; it has been tried on one AM4.
  *
+ * The beta note is the iPhone's or Android's own (betaNote, from
+ * shared/bluetooth-gear.mjs): only Android's says it has not been tried from
+ * an Android phone, because Apple's 2.3.10 keeps other phones' names out of
+ * an iPhone app, and this page is where the review notes send the reviewer.
+ *
  * What it cannot do comes after, and the check, for finding out what a real
  * unit does, is folded away under Testing tools.
  *
@@ -75,12 +80,25 @@ import Press from '../components/Press'
  * back, and remembers what worked. "How each command is sent" can force
  * either. Rough edges are deliberate: it is a bench instrument.
  *
+ * AND ONLY JUSTIN SEES IT (`admin`, which Settings works out with isAdmin
+ * from shared/admin.mjs, the same as his Developer pages). Apple's 2.2:
+ * "Demos, betas, and trial versions of your app don't belong on the App
+ * Store", and a reviewer once called a visible test button a "Beta feature"
+ * not fit for release. A button any customer could open, saying "For
+ * testing." and offering Write checks that change the unit, is that button.
+ * Nothing a customer needs lives in it: every command goes Auto, which
+ * tries the first way, checks, and remembers what worked, in ordinary use
+ * as much as in the check; and an AM4 has one way for each and never had
+ * the choices at all.
+ *
  * Drawn inside Settings' own scroll view, under its head: no scroll view and
  * no Done of its own.
  */
 
 const face = Platform.select(mono)
 const ios = Platform.OS === 'ios'
+/* The iPhone's copy names no other phone; Android's says it has not been tried on one. */
+const BETA_NOTE = betaNote(Platform.OS)
 
 /* What a player loses by leaving the cable at home, in the order it is noticed. */
 const DIFFERENT = [
@@ -147,7 +165,7 @@ function status(b, unitState) {
 /* Blue for the unit answering over Bluetooth, as the bar is; green stays the unit answering through a computer. */
 const TONES = { ok: () => color.ble, fault: () => color.fault, dim: () => color.silkDim }
 
-export default function BluetoothPage({ purchase }) {
+export default function BluetoothPage({ purchase, admin = false }) {
   const b = useBluetooth()
   const unitState = useRig((s) => s.unit)
   const said = status(b, unitState)
@@ -403,11 +421,11 @@ export default function BluetoothPage({ purchase }) {
         ))}
       </View>
 
-      {/* For finding out what a real unit does: out of the way until asked for. */}
-      {b.unit ? (
+      {/* For finding out what a real unit does: Justin's account only, and out of the way until asked for. */}
+      {admin && b.unit ? (
         <Press label={tools ? 'Hide testing tools' : 'Testing tools'} height={44} onPress={() => setTools(!tools)} />
       ) : null}
-      {b.unit && tools ? (
+      {admin && b.unit && tools ? (
         <View style={{ gap: space.md }}>
           <Heading>Check</Heading>
           <Hint>

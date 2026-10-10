@@ -27,7 +27,7 @@
       "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSBluetoothAlwaysUsageDescription": "Fractal Remote uses Bluetooth to talk to your Fractal unit through a Bluetooth MIDI adapter."
+        "NSBluetoothAlwaysUsageDescription": "Fractal Remote uses Bluetooth to connect to the Bluetooth MIDI adapter on your Fractal unit, so you can change presets and scenes from your phone without a computer."
       },
       "appleTeamId": "3KA9RC7YE6",
       "privacyManifests": {

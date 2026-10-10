@@ -2117,7 +2117,8 @@ export function run(test) {
     const one = settings.replace(/\s+/g, ' ')
     assert.match(one, /\{mayDrive\(purchase\) && bluetoothSupported\(\) \? \( <TipCard icon=\{sendIcon\} label="BLUETOOTH \(BETA\)"/, 'the card is not behind the unlock and the build check')
     assert.match(one, /label="BLUETOOTH \(BETA\)"[\s\S]{0,200}onPress=\{\(\) => setPage\('bluetooth'\)\}/, 'the card opens nothing')
-    assert.match(one, /\{page === 'bluetooth' && mayDrive\(purchase\) && bluetoothSupported\(\) \? \( <> \{head\('Bluetooth \(beta\)', 'back'\)\} <BluetoothPage purchase=\{purchase\} \/>/)
+    /* The page itself, through the same gate for everybody. It is told whether this is Justin's account only for its Testing tools (Apple's 2.2), never to let anybody in. */
+    assert.match(one, /\{page === 'bluetooth' && mayDrive\(purchase\) && bluetoothSupported\(\) \? \( <> \{head\('Bluetooth \(beta\)', 'back'\)\} <BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} \/>/)
     /* The card's line says it is a beta, in the gear file's words. */
     assert.match(one, /import \{ BETA_CARD \} from '\.\.\/lib\/bluetooth-gear'/)
     assert.match(one, /label="BLUETOOTH \(BETA\)" body=\{BETA_CARD\}/, 'the card on Phone & computer does not say Bluetooth is a beta')
@@ -2345,8 +2346,33 @@ export function run(test) {
     }
     /* "Use a different adapter" forgets the one in use first, so Connect cannot come back on with it. */
     assert.match(page, /const another = \(\) => \{ if \(!canStart\) return forgetAdapter\(\) find\(\) \}/)
-    /* The check is still there for testing, folded away. */
-    assert.match(page, /\{b\.unit && tools \? \( <View style=\{\{ gap: space\.md \}\}> <Heading>Check<\/Heading>/, 'the testing tools are on the page unasked')
+    /*
+     * The check is still there for testing, folded away — and now for
+     * Justin's account only. This pinned `b.unit && tools`, which showed the
+     * button to every customer once a unit was picked. Changed on purpose:
+     * Apple's 2.2 keeps test versions off the store, a reviewer once called a
+     * visible test button a "Beta feature" not fit for release, and this
+     * panel says "For testing." and offers Write checks that change the unit.
+     */
+    assert.match(page, /\{admin && b\.unit \? \( <Press label=\{tools \? 'Hide testing tools' : 'Testing tools'\}/, 'the Testing tools button shows to every customer again')
+    assert.match(page, /\{admin && b\.unit && tools \? \( <View style=\{\{ gap: space\.md \}\}> <Heading>Check<\/Heading>/, 'the testing tools are on the page unasked, or for every customer')
+    assert.match(page, /export default function BluetoothPage\(\{ purchase, admin = false \}\)/, 'the page shows the testing tools unless told not to')
+    /* No second way in: the button and the panel are each drawn once, both behind admin. */
+    assert.equal(page.split("'Testing tools'").length - 1, 1, 'the Testing tools button is drawn in more than one place')
+    assert.equal(page.split('<Heading>Check</Heading>').length - 1, 1, 'the check is drawn in more than one place')
+    /* Settings works admin out as it does for his Developer pages. */
+    const settingsFlat = flat('mobile/src/screens/Settings.js')
+    assert.match(settingsFlat, /<BluetoothPage purchase=\{purchase\} admin=\{isAdmin\(account\?\.id\)\} \/>/, 'Settings does not tell the Bluetooth page whose account this is')
+    /*
+     * Nothing a customer needs is only in there. Every command goes Auto by
+     * default, and Auto learns what works in ordinary use, not only in the
+     * check: changePreset tries the published way, then the other, and
+     * remembers.
+     */
+    const { DEFAULT_METHODS } = await import(WIRE)
+    for (const key of ['scene', 'channel', 'tempo', 'preset', 'tuner']) assert.equal(DEFAULT_METHODS[key], 'auto', `${key} is not Auto unless somebody opens the testing tools`)
+    const wireSrc = flat('mobile/src/lib/bleWire.js')
+    assert.match(wireSrc, /const found = await trialPreset\(n\) if \(found\) learn\('preset', found\)/, 'a preset change no longer learns the way that works by itself')
 
     /* And one question wakes a new link, its answer not used, before the rig asks the real ones. */
     const link = flat('mobile/src/lib/bleLink.js')
@@ -2457,6 +2483,16 @@ export function run(test) {
 
     const app = JSON.parse(src('mobile/app.json'))
     assert.ok(/Bluetooth MIDI adapter/.test(app.expo.ios.infoPlist.NSBluetoothAlwaysUsageDescription || ''), 'iOS is not told why the app uses Bluetooth')
+    /*
+     * And what the player gets from it, in the sentence the iPhone shows
+     * when it asks. Apple's 5.1.1(ii) help: "Name the specific feature or
+     * outcome the data makes possible", and give "a concrete example".
+     */
+    assert.equal(
+      app.expo.ios.infoPlist.NSBluetoothAlwaysUsageDescription,
+      'Fractal Remote uses Bluetooth to connect to the Bluetooth MIDI adapter on your Fractal unit, so you can change presets and scenes from your phone without a computer.',
+      'the Bluetooth permission no longer says what it is for and what the player gets'
+    )
 
     /* mobile/.gitignore drops android/; the module's own Android code has to be let back in, or EAS builds without it. */
     const ignore = src('mobile/.gitignore').split('\n').map((l) => l.trim())
@@ -2830,20 +2866,41 @@ export function run(test) {
      * function correctly." New, may not work with every unit or adapter,
      * tried so far on what TESTED says, and the cable still works.
      */
-    assert.match(gear.BETA_NOTE, /^Bluetooth is new \(beta\), and may not work correctly with every unit or adapter\./)
-    assert.match(gear.BETA_NOTE, /If something doesn’t work, the cable to the computer still does\./)
+    for (const note of [gear.BETA_NOTE_IPHONE, gear.BETA_NOTE_ANDROID]) {
+      assert.match(note, /^Bluetooth is new \(beta\), and may not work correctly with every unit or adapter\./)
+      assert.match(note, /If something doesn’t work, the cable to the computer still does\./)
+    }
     assert.match(gear.BETA_CARD, /\(beta\)/)
     /*
      * And from an iPhone only. No Android phone has ever run it (the one
      * Android build that carried it stopped on Expo's side), and Android
      * customers read this text on the copy that goes to all of them. The
      * website's guide and What's New say the same.
+     *
+     * TWO NOTES NOW, ONE PER PHONE, and this is changed on purpose. It held
+     * the one note to "and not yet from an Android phone", which an iPhone
+     * drew too, at the top of the very page the 1.87.1 review notes send
+     * Apple's reviewer to. Apple's 2.3.10: "don't include names, icons, or
+     * imagery of other mobile platforms ... in your app or metadata". So the
+     * Android clause is held to Android's copy, and the iPhone's names no
+     * other phone at all.
      */
-    assert.match(gear.BETA_NOTE, /from an iPhone, and not yet from an Android phone/, 'the beta note lets Android customers think it has been tried on their phone')
+    assert.match(gear.BETA_NOTE_ANDROID, /from an iPhone, and not yet from an Android phone/, 'the beta note lets Android customers think it has been tried on their phone')
+    assert.match(gear.BETA_NOTE_IPHONE, /So far it has been tried on the AM4, from an iPhone\. If something/, 'the iPhone’s beta note does not say where it has been tried')
+    assert.ok(!/android|google|play store|\bapk\b/i.test(gear.BETA_NOTE_IPHONE), 'the iPhone’s beta note names another phone, which Apple’s 2.3.10 rejects')
+    assert.ok(!/android|google|play store|\bapk\b/i.test(gear.BETA_CARD), 'the card both phones draw names another phone')
+    assert.equal(gear.BETA_NOTE_ANDROID.replace(', and not yet from an Android phone', ''), gear.BETA_NOTE_IPHONE, 'the two beta notes say different things besides the Android clause')
+    /* Picked by the phone's own platform; anything not Android gets the iPhone's, so no new platform ever shows Android's name. */
+    assert.equal(gear.betaNote('android'), gear.BETA_NOTE_ANDROID)
+    assert.equal(gear.betaNote('ios'), gear.BETA_NOTE_IPHONE)
+    assert.equal(gear.betaNote(undefined), gear.BETA_NOTE_IPHONE)
+    assert.equal(gear.BETA_NOTE, undefined, 'one beta note for both phones is back')
     assert.match(gear.BETA_CARD, /from an iPhone/, 'the card leaves out that it has only been tried from an iPhone')
     for (const unit of gear.TESTED) {
       const name = BLE_UNITS.find((u) => u.key === unit).name
-      assert.ok(gear.BETA_NOTE.includes(`tried on the ${name}`) && gear.BETA_CARD.includes(name), `the beta note does not say it was tried on the ${name}`)
+      for (const note of [gear.BETA_NOTE_IPHONE, gear.BETA_NOTE_ANDROID]) {
+        assert.ok(note.includes(`tried on the ${name}`) && gear.BETA_CARD.includes(name), `the beta note does not say it was tried on the ${name}`)
+      }
     }
     /* The phone carries the same file, generated (the sync test holds it to the source). */
     const { state } = await import('../scripts/sync-relay-rules.mjs')
@@ -2855,6 +2912,9 @@ export function run(test) {
     const drawn = page.slice(page.indexOf('return ( <View style={{ gap: space.xl }}>'))
     /* The beta, before anything else the page draws. */
     assert.match(drawn, /^return \( <View style=\{\{ gap: space\.xl \}\}> \{\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/\} <Note tone="warn">\{BETA_NOTE\}<\/Note>/, 'the page does not open on the beta note')
+    /* The phone's own copy of it: an iPhone never draws the note that names Android. */
+    assert.match(page, /const BETA_NOTE = betaNote\(Platform\.OS\)/, 'the page draws one beta note on both phones, and Android’s names another phone on an iPhone')
+    assert.ok(!/\bBETA_NOTE,|BETA_NOTE_ANDROID/.test(page), 'the page imports a beta note that is not its phone’s own')
     assert.ok(!/For trying out\./.test(page), 'the page still calls a public beta something for trying out')
     /* After the unit, before Connect: read while setting up, and the two steps still read as two. */
     const unitAt = drawn.indexOf('1 · Which unit is the adapter plugged into?')

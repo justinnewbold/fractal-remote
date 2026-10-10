@@ -970,7 +970,8 @@ export default function Settings({
               under the label says it is new, and that so far it has only been
               tried on the AM4, from an iPhone (BETA_CARD, in
               shared/bluetooth-gear.mjs). The
-              page it opens starts with the fuller note (BETA_NOTE).
+              page it opens starts with the fuller note, the iPhone's or
+              Android's own (betaNote).
             */}
             {mayDrive(purchase) && bluetoothSupported() ? (
               <TipCard icon={sendIcon} label="BLUETOOTH (BETA)" body={BETA_CARD} onPress={() => setPage('bluetooth')} />
@@ -1022,11 +1023,13 @@ export default function Settings({
       ) : null}
 
       {/* ------------------------------------------------------- bluetooth */}
-      {/* The page, behind the same gate as its card on Phone & computer. */}
+      {/* The page, behind the same gate as its card on Phone & computer. Its
+          Testing tools are Justin's alone (admin), as the Developer pages are:
+          Apple's 2.2 keeps test benches out of what customers see. */}
       {page === 'bluetooth' && mayDrive(purchase) && bluetoothSupported() ? (
         <>
           {head('Bluetooth (beta)', 'back')}
-          <BluetoothPage purchase={purchase} />
+          <BluetoothPage purchase={purchase} admin={isAdmin(account?.id)} />
         </>
       ) : null}
 
