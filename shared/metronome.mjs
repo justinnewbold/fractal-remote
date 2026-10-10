@@ -75,6 +75,53 @@ export const placeLit = (setting, key, can = true) => (can ? metronomeSetting(se
 export const switchHeardOn = (value) => Number.isFinite(value) && value >= 0.5
 
 /*
+ * How soon a unit's switch is read again: quickly while it has not been heard
+ * on, then every half minute either way.
+ */
+export const ASK_AGAIN_MS = [1000, 3000, 10000]
+export const KEEP_ASKING_MS = 30000
+
+/**
+ * Follow a unit's metronome switch: read it now, and again while it matters.
+ *
+ * One answer used to decide it for the whole evening. A read lost in a busy
+ * moment left the phone clicking over a unit that was clicking too, and a
+ * switch turned on, or off, at the unit by hand was never noticed. So the
+ * switch is read again — soon while it is not heard on (ASK_AGAIN_MS), then
+ * every KEEP_ASKING_MS — for as long as `wanted()` says the setting still asks
+ * that unit to click.
+ *
+ * `read()` resolves the switch's value or null. `answer(on, value)` is handed
+ * every answer. `wait`/`stop` are the timer, passed in so a test can turn the
+ * clock. Returns the function that stops following.
+ */
+export function followSwitch({ read, wanted, answer, wait, stop }) {
+  let timer = null
+  let tries = 0
+  let alive = true
+  const ask = async () => {
+    timer = null
+    if (!alive || !wanted()) return
+    let value = null
+    try {
+      value = await read()
+    } catch {
+      // No answer is an answer: not heard.
+    }
+    if (!alive || !wanted()) return
+    const on = switchHeardOn(value)
+    answer(on, value)
+    timer = wait(ask, on ? KEEP_ASKING_MS : (ASK_AGAIN_MS[tries++] ?? KEEP_ASKING_MS))
+  }
+  ask()
+  return () => {
+    alive = false
+    if (timer) stop(timer)
+    timer = null
+  }
+}
+
+/*
  * The unit's Metronome switch, per unit.
  *
  * On the gen-3 units it is a parameter of the GLOBAL virtual block, effect id

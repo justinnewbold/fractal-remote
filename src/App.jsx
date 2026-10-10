@@ -12,7 +12,7 @@ import { CabPicker, Backup } from './components/Hardware'
 import Gig from './components/Gig'
 import TapTempo from './components/TapTempo'
 import MetronomeBeat from './components/MetronomeBeat'
-import { setMetronome, useMetronome, useUnitHeardOn, useUnitMetronome } from './lib/metronome'
+import { setMetronome, useMetronome, useUnitHeardOn, useUnitMetronome, wakeScreenClick } from './lib/metronome'
 import { metronomeNote, placeLit, placesFor, unitClick } from '../shared/metronome.mjs'
 import { deviceSlug as slugOfUnit } from '../shared/device-slug.mjs'
 import SaveBar, { SaveLate } from './components/SaveBar'
@@ -5918,8 +5918,9 @@ export default function App() {
                   title={`${p.key === 'phone' ? 'This screen' : p.key === 'both' ? 'Both' : p.label}${placeLit(clickSetting, p.key, unitCan.can) ? ' ✓' : ''}`}
                   status={p.key === 'phone' ? 'Beeps and flashes here' : p.key === 'both' ? 'The unit clicks and this screen keeps time with it' : p.note}
                   onClick={async () => {
-                    /* The only row where the unit cannot click: a saved Unit stays for when it can. */
-                    if (!unitCan.can) return
+                    /* The only row where the unit cannot click: a saved Unit stays for when it can,
+                       and the press still lets this screen's beep start. */
+                    if (!unitCan.can) return wakeScreenClick()
                     setClickSaid(null)
                     const said = await setMetronome({ where: p.key }, slugOfUnit(device))
                     if (said?.ok === false && !said?.unsupported) setClickSaid('The unit didn’t take it. Check it’s connected, then try again.')

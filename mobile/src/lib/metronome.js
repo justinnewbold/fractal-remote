@@ -4,7 +4,7 @@ import { createAudioPlayer, setAudioModeAsync } from 'expo-audio'
 import clickSound from '../../assets/click.wav'
 
 import { readUnitMetronome, setUnitMetronome } from './device'
-import { DEFAULT_METRONOME, beatMs, clicks, metronomeSetting, nextBeat, switchHeardOn, unitClick } from './metronome-rules'
+import { DEFAULT_METRONOME, beatMs, clicks, followSwitch, metronomeSetting, nextBeat, unitClick } from './metronome-rules'
 import { useRig } from './rig'
 import { useBluetoothOn } from './bluetooth'
 import { isDemo } from './demo'
@@ -82,30 +82,51 @@ export function useUnitHeardOn(slug) {
 }
 
 /**
- * Switch the unit's click, then ask the unit where its switch is.
+ * Switch the unit's click, then follow where the unit says its switch is.
  *
- * The answer goes into the log, because "ok" only means the unit did not
- * object, and into `heard`, because the phone keeps time until the unit says
- * it is clicking. Switching it off is believed straight away: the phone
- * clicking on through a moment of silence costs nothing.
+ * Its answers go into the log — "ok" only means the unit did not object —
+ * and into `heard`, because the phone keeps time until the unit says it is
+ * clicking. Asked again while Unit is picked (shared followSwitch), so a lost
+ * answer, or the switch changed at the unit by hand, is caught. Switching it
+ * off is believed straight away: the phone clicking on through a moment of
+ * silence costs nothing.
  */
+let unfollow = () => {}
+const stopFollowing = () => {
+  unfollow()
+  unfollow = () => {}
+}
+
 async function switchUnit(slug, on) {
+  stopFollowing()
   if (!on) hear(slug, false)
   const said = await setUnitMetronome(slug, on)
   if (said?.ok === false && !said?.unsupported) logDebug('metronome', 'the unit did not take it', JSON.stringify(said))
-  if (said?.ok !== false && !said?.simulated) {
-    readUnitMetronome(slug)
-      .then((value) => {
-        logDebug(
-          'metronome',
-          value === null ? 'the unit did not say where its metronome switch is' : `the unit says its metronome switch is at ${value}`,
-          `asked for ${on ? 'on' : 'off'}`
-        )
-        /* Only if the setting still asks for it: a quick on-then-off must not hear the first answer last. */
-        if (on && clicks(setting, true).unit) hear(slug, switchHeardOn(value))
-      })
-      .catch(() => {})
+  if (said?.ok === false || said?.simulated) return said
+  const tell = (value) =>
+    logDebug(
+      'metronome',
+      value === null ? 'the unit did not say where its metronome switch is' : `the unit says its metronome switch is at ${value}`,
+      `asked for ${on ? 'on' : 'off'}`
+    )
+  if (!on) {
+    readUnitMetronome(slug).then(tell).catch(() => {})
+    return said
   }
+  /* Into the log when the answer changes, not every half minute. */
+  let told
+  /* Only while the setting still asks for it: a quick on-then-off must not hear the first answer last. */
+  unfollow = followSwitch({
+    read: () => readUnitMetronome(slug),
+    wanted: () => clicks(setting, true).unit,
+    answer: (heardOn, value) => {
+      if (value !== told) tell(value)
+      told = value
+      hear(slug, heardOn)
+    },
+    wait: (fn, ms) => setTimeout(fn, ms),
+    stop: (t) => clearTimeout(t)
+  })
   return said
 }
 
@@ -148,10 +169,15 @@ export function useUnitMetronome(slug, present, here = {}) {
   const bluetooth = Boolean(here.bluetooth)
   useEffect(() => {
     if (!present) {
+      stopFollowing()
       hear(null, false)
       return
     }
-    if (!clicks(setting, unitClick(slug, { bluetooth }).can).unit) return
+    /* Not asked again where it cannot click any more: Bluetooth turned on, say. */
+    if (!clicks(setting, unitClick(slug, { bluetooth }).can).unit) {
+      stopFollowing()
+      return
+    }
     switchUnit(slug, true).catch((err) => logDebug('metronome', 'could not tell the unit it arrived clicking', String(err?.message || err)))
   }, [slug, present, bluetooth])
 }

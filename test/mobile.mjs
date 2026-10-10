@@ -4008,9 +4008,9 @@ export function run(test) {
     const metronome = read('mobile/src/lib/metronome.js').replace(/\s+/g, ' ')
     assert.match(metronome, /const \{ can, heard: heardOn \} = useUnitCan\(\) const on = clicks\(s, can, heardOn\)\.phone/, 'the phone stays silent where the unit cannot click')
     assert.match(metronome, /const can = unitClick\(slug, here\)\.can const before = clicks\(setting, can\)\.unit/)
-    assert.match(metronome, /if \(!clicks\(setting, unitClick\(slug, \{ bluetooth \}\)\.can\)\.unit\) return switchUnit\(slug, true\)/)
+    assert.match(metronome, /if \(!clicks\(setting, unitClick\(slug, \{ bluetooth \}\)\.can\)\.unit\) \{ stopFollowing\(\) return \} switchUnit\(slug, true\)/)
     /* "ok" only means the unit did not object: what it then says it is at goes into the log. */
-    assert.match(metronome, /readUnitMetronome\(slug\) \.then\(/)
+    assert.match(metronome, /read: \(\) => readUnitMetronome\(slug\)/)
     /* And the demo's unit makes no sound, so Unit there is the phone. */
     assert.equal(m.unitClick('fm3', { demo: true }).can, false, 'the demo says the unit clicks, and nothing does')
     assert.match(m.unitClick('fm3', { demo: true }).why, /demo/)
@@ -4023,7 +4023,7 @@ export function run(test) {
     assert.match(settings, /on=\{placeLit\(clickSetting, p\.key, unitCan\.can\)\} onPress=\{\(\) => \(unitCan\.can \? changeClick\(\{ where: p\.key \}\) : null\)\}/, 'tapping the only row wipes a saved Unit')
     const web = read('src/App.jsx').replace(/\s+/g, ' ')
     assert.match(web, /placeLit\(clickSetting, p\.key, unitCan\.can\) \? ' ✓' : ''/)
-    assert.match(web, /if \(!unitCan\.can\) return setClickSaid\(null\)/)
+    assert.match(web, /if \(!unitCan\.can\) return wakeScreenClick\(\) setClickSaid\(null\)/, 'the lit row’s press no longer lets the beep start')
     const device = read('mobile/src/lib/device.js').replace(/\s+/g, ' ')
     assert.match(device, /export async function readUnitMetronome\(slug\) \{ const how = unitMetronome\(slug\) if \(!how \|\| how\.kind !== 'block' \|\| demoDevice\(\)\) return null/)
     assert.match(device, /const eid = how\.eid try \{ const res = await post\(`\/preset\/blocks\/\$\{eid\}\/readrange`, \{ pids: \[how\.paramId\] \}\)/)
@@ -4054,6 +4054,53 @@ export function run(test) {
     assert.match(m.metronomeNote(unit, 'fm3', 120, { heard: false }), /on the phone until the unit says its click is on$/)
     assert.match(m.metronomeNote(unit, 'fm3', 120, { heard: true }), /on the unit$/)
 
+    /* followSwitch: soon while not heard, then every half minute; never once it is not wanted. */
+    {
+      /* Run on a list of due timers, so each wait can be fired by hand. */
+      const due = []
+      const answers = []
+      let value = 0
+      let wanted = true
+      const flush = async () => {
+        for (let i = 0; i < 4; i++) await null
+      }
+      const stopIt = m.followSwitch({
+        read: async () => {
+          if (value === 'throw') throw new Error('no answer')
+          return value
+        },
+        wanted: () => wanted,
+        answer: (on) => answers.push(on),
+        wait: (fn, ms) => (due.push({ fn, ms }), due.length),
+        stop: (id) => {
+          due[id - 1].stopped = true
+        }
+      })
+      const fire = async () => {
+        const next = due.find((d) => !d.fired && !d.stopped)
+        next.fired = true
+        next.fn()
+        await flush()
+        return next.ms
+      }
+      await flush()
+      assert.deepEqual(due.map((d) => d.ms), [1000])
+      assert.equal(await fire(), 1000)
+      assert.equal(await fire(), 3000)
+      value = 'throw'
+      assert.equal(await fire(), 10000)
+      assert.deepEqual(answers, [false, false, false, false], 'a read that threw is taken for a click')
+      value = 1
+      assert.equal(await fire(), 30000)
+      assert.deepEqual(answers.slice(-1), [true])
+      assert.equal(due.at(-1).ms, 30000, 'a switch heard on is not checked every half minute')
+      wanted = false
+      await fire()
+      assert.equal(due.filter((d) => !d.fired && !d.stopped).length, 0, 'a click nobody wants is still asked about')
+      assert.equal(answers.length, 5)
+      stopIt()
+    }
+
     /* Run, not read: the phone's metronome.js beside stand-ins for the phone and a unit that answers. */
     const dir = mkdtempSync(join(tmpdir(), 'click-'))
     try {
@@ -4069,7 +4116,8 @@ export function run(test) {
           export let switchAt = null
           export const __answer = (v) => { switchAt = v }
           export const setUnitMetronome = async (slug, on) => { writes.push(slug + ' ' + (on ? 'on' : 'off')); return { ok: true } }
-          export const readUnitMetronome = async () => switchAt
+          export let reads = 0
+          export const readUnitMetronome = async () => { reads++; return switchAt }
         `,
         'rig.js': "export const useRig = (pick) => pick({ deviceSlug: 'fm3' })\n",
         'bluetooth.js': 'export const useBluetoothOn = () => false\n',
@@ -4077,8 +4125,34 @@ export function run(test) {
         'feedback.js': 'export const tick = () => {}\n',
         'debugLog.js': 'export const said = []\nexport const logDebug = (...a) => said.push(a.join(" "))\n',
         'unsupported.js': 'export const isUnsupported = () => false\n',
+        /* A clock the test turns, so "asked again a second later" costs nothing to run. */
+        'clock.js': `
+          let t = 0
+          let seq = 0
+          const timers = new Map()
+          export const pending = () => timers.size
+          export function setTimeout(fn, ms = 0) { const id = ++seq; timers.set(id, { id, at: t + ms, fn }); return id }
+          export function clearTimeout(id) { timers.delete(id) }
+          const flush = async () => { for (let i = 0; i < 8; i++) await new Promise((r) => globalThis.setImmediate(r)) }
+          export async function advance(ms) {
+            const end = t + ms
+            await flush()
+            for (;;) {
+              let next = null
+              for (const x of timers.values()) if (x.at <= end && (!next || x.at < next.at)) next = x
+              if (!next) break
+              timers.delete(next.id)
+              t = next.at
+              next.fn()
+              await flush()
+            }
+            t = end
+          }
+        `,
         'metronome-rules.js': read('mobile/src/lib/metronome-rules.js'),
-        'metronome.js': esm(read('mobile/src/lib/metronome.js'))
+        'metronome.js': ("import * as __clock from './clock.js'\n" + esm(read('mobile/src/lib/metronome.js')))
+          .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
+          .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
           .replace("from 'react'", "from './react.js'")
           .replace("from '@react-native-async-storage/async-storage'", "from './storage.js'")
           .replace("from 'expo-audio'", "from './audio.js'")
@@ -4089,6 +4163,7 @@ export function run(test) {
       const click = await import(at('metronome.js'))
       const unitEnd = await import(at('device.js'))
       const log = await import(at('debugLog.js'))
+      const clock = await import(at('clock.js'))
       const settle = async () => {
         for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r))
       }
@@ -4099,6 +4174,29 @@ export function run(test) {
       assert.deepEqual(unitEnd.writes, ['fm3 on'])
       assert.equal(click.unitHeardOn('fm3'), false, 'a unit that said nothing is taken to be clicking')
       assert.ok(log.said.some((l) => /did not say where its metronome switch is/.test(l)), 'the log does not say the unit was silent')
+      assert.equal(click.usePhoneClick(120), true, 'Unit with nothing heard leaves the phone silent')
+
+      /*
+       * And asked again. The switch turned on at the FM3 by hand, with no
+       * setting changed here: a second later the phone hears it and stops.
+       */
+      unitEnd.__answer(1)
+      await clock.advance(1000)
+      assert.equal(click.unitHeardOn('fm3'), true, 'a switch turned on at the unit is never noticed')
+      assert.equal(click.usePhoneClick(120), false, 'the phone clicks over a unit that says it is clicking')
+      /* Turned off at the unit: within half a minute the phone takes over again. */
+      unitEnd.__answer(0)
+      await clock.advance(30000)
+      assert.equal(click.unitHeardOn('fm3'), false, 'a switch turned off at the unit leaves nothing clicking')
+      assert.equal(click.usePhoneClick(120), true)
+      /* The log hears each change once, not every half minute. */
+      unitEnd.__answer(1)
+      await clock.advance(10000)
+      assert.equal(click.unitHeardOn('fm3'), true)
+      const before = log.said.length
+      await clock.advance(90000)
+      assert.equal(log.said.length, before, 'the same answer is logged on every read')
+      unitEnd.__answer(null)
 
       /* Picked again once the FM3 does answer: heard on, and only for that unit. */
       unitEnd.__answer(1)
@@ -4113,6 +4211,12 @@ export function run(test) {
       /* Off is believed at once: the phone never goes quiet waiting on an answer. */
       await click.setMetronome({ on: false }, 'fm3')
       assert.equal(click.unitHeardOn('fm3'), false)
+      /* And nothing is asked again once the setting no longer asks for the unit. */
+      await settle()
+      const asked = unitEnd.reads
+      await clock.advance(120000)
+      assert.equal(unitEnd.reads, asked, 'the unit is still asked about a click nobody wants')
+      assert.equal(clock.pending(), 0)
 
       /* An answer of "off" after an "on" is not a click either. */
       unitEnd.__answer(0)
@@ -4129,6 +4233,18 @@ export function run(test) {
       click.useUnitMetronome('fm3', false)
       globalThis.__clickEffect()
       assert.equal(click.unitHeardOn('fm3'), false, 'a unit that went is still heard clicking')
+      const gone = unitEnd.reads
+      await clock.advance(120000)
+      assert.equal(unitEnd.reads, gone, 'a unit that went is still asked where its switch is')
+      /* Bluetooth turned on with Unit picked: the unit is not asked again either. */
+      click.useUnitMetronome('fm3', true)
+      globalThis.__clickEffect()
+      await settle()
+      click.useUnitMetronome('fm3', true, { bluetooth: true })
+      globalThis.__clickEffect()
+      const blue = unitEnd.reads
+      await clock.advance(120000)
+      assert.equal(unitEnd.reads, blue, 'the unit is still asked over Bluetooth, where it cannot be switched')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
