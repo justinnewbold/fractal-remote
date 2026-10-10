@@ -384,6 +384,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
   const lateUntil = new Map()
   let holdTimer = null
+  /* Until when an answer given up on part-way may still be coming (see heardBytes). */
+  let drainUntil = 0
+  let drainCap = 0
+  const draining = () => drainUntil > time.now()
   const lateFor = (fn) => (lateUntil.get(fn) ?? -Infinity) - time.now()
 
   /*
@@ -430,7 +434,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       return opts.priority === 'write' ? Promise.reject(unheard()) : Promise.resolve(null)
     }
     const priority = PRI[opts.priority] ?? PRI.read
-    if (priority === PRI.poll && (current || waiting.length)) return Promise.resolve(SKIPPED)
+    if (priority === PRI.poll && (current || waiting.length || draining())) return Promise.resolve(SKIPPED)
     return new Promise((resolve, reject) => {
       const job = { out, opts, priority, resolve, reject, back: null }
       const at = waiting.findIndex((j) => j.priority > priority)
@@ -441,6 +445,17 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   function pump() {
     if (current || closed || wrongUnit || !waiting.length) return
+    /* An AM4 still sending a preset nobody waited out is sent nothing until it stops. */
+    const still = drainUntil - time.now()
+    if (still > 0) {
+      if (holdTimer === null) {
+        holdTimer = time.setTimeout(() => {
+          holdTimer = null
+          pump()
+        }, still)
+      }
+      return
+    }
     const hold = heldFor(waiting[0])
     if (hold > 0) {
       /* A watch poll is not worth waiting for: the next one asks. Anything else waits it out, and a write still goes ahead of it. */
@@ -475,6 +490,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         if (job.opts.fn !== undefined) lateUntil.set(job.opts.fn, time.now() + LATE_MS)
         if (job.priority !== PRI.poll) say(`no answer to ${job.opts.what || toHex(messages[0])} in ${job.opts.ms} ms`)
       }
+      /* Given up on part-way through: the unit may still be sending the rest of it. */
+      if (job.opts.collect && job.back) {
+        drainUntil = time.now() + job.opts.ms
+        drainCap = drainUntil + (job.opts.cap ?? 0)
+      }
       end(job, null)
     }
     job.timer = time.setTimeout(job.expire, job.opts.ms ?? 0)
@@ -507,6 +527,38 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const rejected = (r) => r !== null && typeof r === 'object' && r.rejected !== undefined
 
   /* ---------------- hearing ---------------- */
+
+  /*
+   * A LONG ANSWER IS TIMED BY ITS BYTES, NOT ITS FRAMES.
+   *
+   * A stored preset is four frames of 3,082 bytes. Timed frame to frame, a
+   * Bluetooth link slower than about 1.2 KB/s could never finish one: the
+   * wait ran out mid-frame, the read gave up, and the next message went to an
+   * AM4 still sending — the one thing it must never be. So every byte that
+   * arrives (not the real-time ones, which a unit may send for ever) starts
+   * the wait again; and an answer given up on part-way holds the line until
+   * the unit has been quiet for as long again, up to the most it may take.
+   */
+  function heardBytes(bytes) {
+    if (closed || bytes == null || typeof bytes.length !== 'number') return
+    let real = false
+    for (let i = 0; i < bytes.length; i++) {
+      if ((bytes[i] & 0xff) < 0xf8) {
+        real = true
+        break
+      }
+    }
+    if (!real) return
+    const now = time.now()
+    const job = current
+    if (job && job.opts.collect && job.timer !== undefined) {
+      time.clearTimeout(job.timer)
+      const left = (job.opts.cap ?? Infinity) - (now - job.started)
+      job.timer = time.setTimeout(job.expire, Math.max(0, Math.min(job.opts.ms, left)))
+    } else if (drainUntil > now) {
+      drainUntil = Math.min(now + WAIT.am4DumpGap, drainCap)
+    }
+  }
 
   /** A whole SysEx frame from the joiner. */
   function heard(f) {
@@ -1996,6 +2048,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     },
     heard,
     heardShort,
+    /** Every chunk of bytes from the adapter, before the joiner: a long answer is timed by them. */
+    heardBytes,
     startPolls,
     stopPolls,
     check,
@@ -2017,6 +2071,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     forgetSceneNames() {
       sceneCache = null
       am4Names.clear()
+      /* Refresh names is asked for: an AM4 that once did not answer is asked again. */
+      am4DumpsOff = false
     },
     close
   }

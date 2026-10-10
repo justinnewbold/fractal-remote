@@ -156,10 +156,11 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
   const faultLink = useRig(ofErrorLink)
   const faultAt = useRig(ofFaultAt)
   /* The fault while it is still news (lib/fault-rule faultLeft). Hidden, never
-     cleared: App tells a rig that failed its first read by the store's copy. */
-  const error = useStillNews(fault, faultAt, faultLeft({ error: fault, errorLink: faultLink, faultAt }, Date.now()))
-    ? fault
-    : null
+     cleared: App tells a rig that failed its first read by the store's copy.
+     And kept up while nothing has been read at all: on an empty screen it is
+     the only thing saying why. */
+  const left = caps ? faultLeft({ error: fault, errorLink: faultLink, faultAt }, Date.now()) : Infinity
+  const error = useStillNews(fault, faultAt, left) ? fault : null
 
   const [refreshing, setRefreshing] = useState(false)
   /*

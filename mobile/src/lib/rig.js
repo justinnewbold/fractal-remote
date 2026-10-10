@@ -25,7 +25,7 @@ import { watchEvery, probeSays, countQuiet, unitGone } from './unit-watch'
 import { DEFAULT_SLUG, deviceSlug } from './device-slug'
 import { adopt as adoptNames, forget as forgetNames, learn as learnName, nameOf } from './presetNames'
 import { forget as forgetControls } from './paramIndex'
-import { forgetSceneNames, recallSceneNames, rememberSceneNames } from './sceneNameCache'
+import { forgetSceneNames, recallSceneNames, rememberSceneNames, sceneNamesKnown } from './sceneNameCache'
 import { subscribeHostSeen, subscribeRemoteEvents, subscribeRemoteState } from './relay'
 import { demoUnit, isDemo } from './demo'
 import { logDebug } from './debugLog'
@@ -1543,6 +1543,11 @@ export async function refreshSceneNames(copy) {
 
 async function readNamesOf(number, copy) {
   const names = await namesOfLoaded(number, copy)
+  /* Over Bluetooth, a slot read and found unnamed is written down too, so
+     it is not read again after the next reconnect. */
+  if (Array.isArray(names) && names.length && !names.some((n) => n) && viaBluetooth() && state.preset?.number === number) {
+    rememberSceneNames(device.nameOwner(state.deviceSlug), number, names, { blank: true })
+  }
   /* Still the same preset: a slow read that lands after the next tap would
      otherwise put the last song's names on this song's tiles. */
   if (!names?.some((n) => n) || state.preset?.number !== number) return
@@ -1609,7 +1614,7 @@ export async function quickSceneNames() {
    * it reads them once, it can go off the remembered names unless they hit
    * refresh." A preset whose names are kept is not read again.
    */
-  if (viaBluetooth()) return kept.length > 0 && state.preset?.number === number
+  if (viaBluetooth()) return (kept.length > 0 || (await sceneNamesKnown(owner, number))) && state.preset?.number === number
   let held = null
   try {
     held = await device.storedSceneNames(slug, number)

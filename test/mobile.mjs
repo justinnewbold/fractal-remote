@@ -178,7 +178,8 @@ async function rigOnTheBench(over = {}) {
     /* `keptNames` is what this phone's disk holds for a slot, from an earlier visit. */
     'sceneNameCache.js':
       `const kept = ${JSON.stringify(over.keptNames || {})}\n` +
-      'export const forgetSceneNames = () => true\nexport const recallSceneNames = async (owner, n) => kept[n] || []\nexport const rememberSceneNames = () => true\n'
+      'export const forgetSceneNames = () => true\nexport const recallSceneNames = async (owner, n) => ((kept[n] || []).some(Boolean) ? kept[n] : [])\nexport const rememberSceneNames = () => true\n' +
+      'export const sceneNamesKnown = async (owner, n) => Object.prototype.hasOwnProperty.call(kept, n)\n'
   }
   /* The catalog the pedals are named from before the chain is read; see lib/chain-outline. */
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
@@ -11257,6 +11258,24 @@ export function run(test) {
     await clock.advance(rig.AM4_NAMES_QUIET_MS + 1000)
     assert.equal(asked(/^GET \/presets\/41\/scenes$/), 0, 'a preset already left was read')
     assert.equal(asked(/^GET \/presets\/42\/scenes$/), 1)
+  })
+
+  test('over Bluetooth a slot already read and found unnamed is not read again after a reconnect', async () => {
+    const { rig, clock, asked } = await rigOnTheBench({
+      short: 'AM4',
+      capabilities: { via: 'bluetooth', scenes: 4, sceneCount: 4, slotModel: 'linear' },
+      namesInChain: false,
+      scenes: ['', '', '', ''],
+      keptNames: { 40: ['', '', '', ''] }
+    })
+    rig.loadPreset(40)
+    await clock.advance(rig.AM4_NAMES_QUIET_MS + 5000)
+    assert.equal(asked(/^GET \/presets\/40\/scenes$/), 0, 'a slot known to be unnamed was read again')
+    const src = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
+    assert.match(src, /rememberSceneNames\(device\.nameOwner\(state\.deviceSlug\), number, names, \{ blank: true \}\)/, 'an unnamed slot read over Bluetooth is not written down')
+    const cache = read('mobile/src/lib/sceneNameCache.js').replace(/\s+/g, ' ')
+    assert.match(cache, /if \(!kept\.some\(\(n\) => n\) && !\(blank && kept\.length\)\) return false/)
+    assert.match(cache, /export async function sceneNamesKnown\(owner, number\)/)
   })
 
   test('two passes that both want a preset’s scene names read them once', async () => {

@@ -442,13 +442,14 @@ function fakeAm4(sx, o) {
         c[500] ^= 0x01
         c[c.length - 2] = sx.checksum(c.slice(0, -2))
       }
+      /* One frame after another, each about a second at 5-pin speed; `stallAfterHead` is a unit that goes quiet after the first. */
       let at = 6
       let last = at
-      for (const f of frames) {
+      frames.forEach((f, i) => {
         last = at
-        say(f, at)
-        at += f.length > 100 ? 1000 : 10
-      }
+        const done = say(f, at)
+        at = Math.max(done + 2, at + (f.length > 100 ? 1000 : 10)) + (i === 0 && opt.stallAfterHead ? opt.stallAfterHead : 0)
+      })
       /* Until its last frame has started going out: the phone cannot have heard the end before that. */
       if (o.clock) state.sendingUntil = o.clock.now() + last
       return
@@ -514,18 +515,28 @@ async function onTheLine(kind, options = {}) {
   let wire = null
   const joiner = sx.createJoiner({ onSysex: (f) => wire.heard(f), onShort: (m) => wire.heardShort(m) })
   const line = { lastDone: 0 }
-  /* What the unit says reaches the phone in pieces, as Bluetooth delivers it, with a timing clock byte here and there. */
+  /*
+   * What the unit says reaches the phone in pieces, as Bluetooth delivers it,
+   * with a timing clock byte here and there — handed to the wire as bytes
+   * first, as bluetooth.js does, then to the joiner. `rate` is a slow link,
+   * in bytes a millisecond. Says when the last piece lands, after `after`.
+   */
   const say = (bytes, after = options.delay ?? 6) => {
     let at = after
     for (let i = 0; i < bytes.length; ) {
       const n = 1 + Math.floor(random() * 9)
       const piece = bytes.slice(i, i + n)
       if (random() < 0.15) piece.splice(Math.floor(random() * (piece.length + 1)), 0, 0xf8)
-      clock.setTimeout(() => joiner.push(piece), at)
+      clock.setTimeout(() => {
+        wire.heardBytes?.(piece)
+        joiner.push(piece)
+      }, at)
       line.lastDone = Math.max(line.lastDone, clock.now() + at)
-      if (random() < 0.5) at += 1
+      if (options.rate) at += n / options.rate
+      else if (random() < 0.5) at += 1
       i += n
     }
+    return at
   }
   const unit = kind === 'am4' ? fakeAm4(sx, { say, clock, ...options }) : fakeGen3(sx, { say, model: sx.MODELS[kind], ...options })
   wire = createBleWire({
@@ -1990,6 +2001,38 @@ export function run(test) {
     t.wire.close()
   })
 
+  /*
+   * The review's case: a Bluetooth link slower than 1.2 KB/s could never
+   * finish a stored preset when the wait ran frame to frame, and the next
+   * message went to an AM4 still sending.
+   */
+  test('a stored preset on a slow link is waited out byte by byte, and one given up on is waited out before anything else is sent', async () => {
+    const slow = await onTheLine('am4', { rate: 0.8 })
+    const read = slow.get('/presets/5/scenes')
+    const press = slow.post('/scene', { index: 2 })
+    assert.deepEqual(await read, { number: 5, names: ['CLEAN', 'CRUNCH', 'LEAD BOOST', ''] }, 'a slow link gave up on the names')
+    await press
+    assert.ok(slow.clock.now() > 12000, `the whole preset took only ${slow.clock.now()} ms at 800 B/s`)
+    assert.deepEqual(slow.unit.state.heardWhileSending.map(hex), [], 'something was sent to the AM4 while it was sending a preset')
+    assert.equal(slow.unit.state.scene, 2)
+    slow.wire.close()
+
+    /* A unit that goes quiet after the first frame, past the wait, then sends the rest. */
+    const stall = await onTheLine('am4', { stallAfterHead: 4000 })
+    const given = stall.get('/presets/5/scenes')
+    const after = stall.post('/scene', { index: 3 })
+    await assert.rejects(given, (e) => e.status === 504, 'a stalled preset was read')
+    await after
+    assert.deepEqual(stall.unit.state.heardWhileSending.map(hex), [], 'the press went to the AM4 while it was still sending the preset given up on')
+    assert.equal(stall.unit.state.scene, 3, 'the press was lost')
+    assert.equal(stall.unit.state.frozen, false)
+    /* Refresh names asks again: one stalled read does not turn the names off. */
+    stall.wire.forgetSceneNames()
+    stall.unit.opt.stallAfterHead = 0
+    assert.deepEqual((await stall.get('/presets/5/scenes')).names, ['CLEAN', 'CRUNCH', 'LEAD BOOST', ''])
+    stall.wire.close()
+  })
+
   test('an AM4 that never answers for a stored preset is not asked again; a damaged one is not believed', async () => {
     const quiet = await onTheLine('am4', { noDumps: true })
     await assert.rejects(quiet.get('/presets/5/scenes'), (e) => e.status === 504)
@@ -1997,6 +2040,10 @@ export function run(test) {
     assert.ok(quiet.logs.some((l) => /not asked for again on this connection/.test(l)))
     await assert.rejects(quiet.get('/presets/6/scenes'), (e) => e.status === 501)
     assert.deepEqual(quiet.unit.state.dumped, [5], 'a unit that never answers was asked again')
+    /* Unless Refresh names asks. */
+    quiet.wire.forgetSceneNames()
+    await assert.rejects(quiet.get('/presets/6/scenes'), (e) => e.status === 504)
+    assert.deepEqual(quiet.unit.state.dumped, [5, 6], 'Refresh names did not ask a unit that once did not answer')
     /* And the line is free again for everything else. */
     assert.deepEqual(await quiet.get('/preset'), { number: 5, name: 'Clean Room' })
     quiet.wire.close()
@@ -2729,7 +2776,7 @@ export function run(test) {
     assert.match(rig, /const kept = await recallSceneNames\(owner, number\) if \(kept\.length && state\.preset\?\.number === number\) set\(\{ sceneNames: kept \}\)/, 'the names already seen are not shown first')
     assert.match(
       rig,
-      /if \(viaBluetooth\(\)\) return kept\.length > 0 && state\.preset\?\.number === number/,
+      /if \(viaBluetooth\(\)\) return \(kept\.length > 0 \|\| \(await sceneNamesKnown\(owner, number\)\)\) && state\.preset\?\.number === number/,
       'a preset whose names are remembered is read again over Bluetooth'
     )
     /* No computer to ask, and no summary of the slots either side, which would be a whole preset each. */

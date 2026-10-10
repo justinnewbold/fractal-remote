@@ -48,11 +48,28 @@ export function forgetSceneNames(owner, number) {
   return true
 }
 
-/** Write a slot's names down. Nothing is written for a slot with no names. */
-export function rememberSceneNames(owner, number, names) {
+/**
+ * Whether this phone has ever written anything down for a slot, its scenes
+ * unnamed included (rememberSceneNames with `blank`).
+ */
+export async function sceneNamesKnown(owner, number) {
+  if (!owner || !Number.isInteger(number)) return false
+  await hydrate()
+  return sceneNameKey(owner, number) in readAll()
+}
+
+/**
+ * Write a slot's names down. Nothing is written for a slot with no names —
+ * unless `blank` says the unit was read and its scenes really are unnamed.
+ * Over Bluetooth an AM4's read is a whole stored preset, four seconds of the
+ * line, and a slot answered with four blanks was read again after every
+ * reconnect: "it doesn't have to constantly be rereading them once it reads
+ * them once."
+ */
+export function rememberSceneNames(owner, number, names, { blank = false } = {}) {
   if (!owner || !Number.isInteger(number)) return false
   const kept = clean(names)
-  if (!kept.some((n) => n)) return false
+  if (!kept.some((n) => n) && !(blank && kept.length)) return false
   const all = readAll()
   all[sceneNameKey(owner, number)] = kept
   sync.setItem(KEY, JSON.stringify(all))

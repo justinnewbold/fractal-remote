@@ -552,7 +552,10 @@ export function openWire() {
   })
   const join = joiner
   hearing = onAdapter('onBytes', (e) => {
-    if (joiner === join) join.push(e?.bytes)
+    if (joiner !== join) return
+    /* Before the joiner: a long answer is timed by its bytes, not only its frames. */
+    mine.heardBytes(e?.bytes)
+    join.push(e?.bytes)
   })
   return wire
 }
