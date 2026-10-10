@@ -65,6 +65,13 @@ let held = false
 let seen = { unit: null, adapter: null }
 /* Whether the module was ever asked to connect, so there is something to let go of. */
 let touched = false
+/*
+ * A 0 the AM4's own tuner is still owed. A wire let go of with the AM4 on
+ * its tuner and the 0 not out (the adapter already gone, or a stored preset
+ * still coming back) says so, and it is kept here, across the drop, until a
+ * connection has closed it. See connected().
+ */
+let unitTunerOwed = false
 
 const say = (line, detail) => logDebug('ble', line, detail)
 
@@ -235,7 +242,16 @@ async function connected(e) {
    */
   if (getState().tunerOn) {
     say('the tuner was open when the adapter went; opening it again')
-    made.request('/tuner', { method: 'POST', body: '{"on":true}' }).catch(() => {})
+    made.request('/tuner', { method: 'POST', body: '{"on":true}' }).then(settledUnitTuner(made), () => {})
+  } else if (unitTunerOwed) {
+    /*
+     * CLOSED WHILE THE ADAPTER WAS AWAY. The phone's tuner went off with no
+     * connection to say so on, and the AM4 was left on its own tuner screen,
+     * which no later press would ever close. So the new connection closes
+     * it: it reads the Tuner setting first, then sends the 0.
+     */
+    say('the phone’s tuner is closed but the AM4 may still be on its own from before; closing it now')
+    made.request('/tuner', { method: 'POST', body: '{"on":false}' }).then(settledUnitTuner(made), () => {})
   }
   if (AppState.currentState !== 'background') {
     watchUnit()
@@ -243,13 +259,26 @@ async function connected(e) {
   }
 }
 
+/*
+ * The owed 0 is settled once THIS connection has had its turn at the AM4's
+ * tuner: opened again, and so its own to close, or closed. Not when the wire
+ * has gone in the meantime: its turn then ends quietly with nothing sent,
+ * and that wire's close() has already said whether the 0 is still owed.
+ */
+const settledUnitTuner = (made) => () => {
+  if (wire === made) unitTunerOwed = false
+}
+
 /* The wire goes, and with it everything waiting on it; the switch goes back to refusing. */
 function letGoOfWire() {
+  const was = wire
   unhear?.()
   unhear = null
   wire?.stopPolls()
   wire = null
   closeWire()
+  /* Asked once it is closed: whether it left the AM4 on its own tuner, its 0 not sent. */
+  if (was?.unitTunerOwed?.()) unitTunerOwed = true
   setSwitch({ on: bluetoothOn(), wire: null })
 }
 
@@ -306,7 +335,11 @@ function settingsMoved(s) {
   clearTimer()
   letGoOfWire()
   stopWatching()
-  if (unitMoved) resetRig()
+  if (unitMoved) {
+    resetRig()
+    /* Another unit: an AM4's owed 0 is not for it. */
+    unitTunerOwed = false
+  }
   if (adapterMoved) {
     say(adapter ? 'a different adapter was chosen' : 'the adapter was forgotten')
     if (touched) releaseAdapter()

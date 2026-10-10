@@ -430,20 +430,30 @@ function fakeAm4(sx, o) {
     raw.splice(8, t.length, ...t)
     return raw
   }
-  /* The Tuner setting's long answer: the number in the first two bytes, the words on its screen from byte 8. */
-  const setting = (whole, text) => {
-    const raw = forty(0, text)
+  /*
+   * A Global setting's long answer, shaped the way his AM4 answered the one
+   * setting of this kind it has been asked (a drive's bypass): 0 in the
+   * whole number, the value in the float, the words on its screen from byte
+   * 8. `unitAnswers: 'old'` is the shape first assumed instead: the value in
+   * the whole number and nothing in the float.
+   */
+  const raw3 = (whole, float, text) => {
+    const raw = forty(float, text)
     raw[0] = whole & 0xff
     raw[1] = whole >> 8
     return raw
   }
+  const setting = (value, text) => (opt.unitAnswers === 'old' ? raw3(value, 0, text) : raw3(0, value, text))
+  /* `unitTunerFrom0` is a list counted from 0, so "CC #20" is 19 in it; `unitTunerAnswer` any answer at all. */
   function tunerSetting() {
-    if (opt.unitTunerAnswer) return setting(opt.unitTunerAnswer.whole, opt.unitTunerAnswer.text)
+    const a = opt.unitTunerAnswer
+    if (a) return raw3(a.whole ?? 0, a.float ?? 0, a.text ?? '')
     if (state.tunerCc === 'none') return setting(128, 'NONE')
-    return setting(state.tunerCc, opt.unitTunerText === 'plain' ? `${state.tunerCc}` : `CC #${state.tunerCc}`)
+    return setting(opt.unitTunerFrom0 ? state.tunerCc - 1 : state.tunerCc, opt.unitTunerText === 'plain' ? `${state.tunerCc}` : `CC #${state.tunerCc}`)
   }
-  /* Its number is a place in a list, 0 for channel 1 and 16 for OMNI: only the words say the channel. */
-  const channelSetting = () => (state.midiChannel === 'OMNI' ? setting(16, 'OMNI') : setting(state.midiChannel - 1, `${state.midiChannel}`))
+  /* Its value is a place in a list, 0 for channel 1 and 16 for OMNI: only the words say the channel ("3", or "CH 3"). */
+  const channelSetting = () =>
+    state.midiChannel === 'OMNI' ? setting(16, 'OMNI') : setting(state.midiChannel - 1, `${opt.unitChannelWords ?? ''}${state.midiChannel}`)
   /* Its tuner's CC, exactly: its number, on its channel (any, on OMNI), at 127 or 0. */
   const mineToTune = (b) =>
     b.length === 3 &&
@@ -1085,9 +1095,11 @@ export function run(test) {
    * "On the AM4 the tuner doesn't activate on the device, it only shows it on
    * the phone." The AM4's own tuner is opened by the CC under its Tuner
    * setting, which has no factory number: so the phone reads it, and sends it
-   * only when the AM4 says the same number twice over.
+   * only on what the AM4 plainly says. The one answer of this kind seen from
+   * his unit put 0 in the whole number, so the words carry it ("CC #20"),
+   * and bare digits need the whole number or the float to agree.
    */
-  test('the AM4’s Tuner setting and MIDI channel: two reads in the tempo read’s shape, believed only when the AM4 says the number twice', async () => {
+  test('the AM4’s Tuner setting and MIDI channel: two reads in the tempo read’s shape, the number taken from the AM4’s own words for it', async () => {
     const sx = await import(SX)
     const check = await import('../shared/am4-check.mjs')
     /* The same 18 bytes the AM4 check's own reader makes: the read his AM4 has answered on this Global block. */
@@ -1118,60 +1130,100 @@ export function run(test) {
       assert.ok(!sx.isAllowedAm4(f), `${what} would be sent to the AM4`)
     }
 
-    /* The answer, unpacked as the tempo's is: the whole number in the first two bytes, the AM4's words from byte 8. */
-    const answer = (pidHigh, whole, text) => {
+    /*
+     * The answer, unpacked as the tempo's is: the whole number in the first
+     * two bytes, the float in bytes 4 to 7, the AM4's words from byte 8.
+     */
+    const answer = (pidHigh, whole, text, float = 0) => {
       const raw = new Array(40).fill(0)
       raw[0] = whole & 0xff
       raw[1] = whole >> 8
+      const bits = sx.floatBits(float)
+      raw.splice(4, 4, bits & 0xff, (bits >>> 8) & 0xff, (bits >>> 16) & 0xff, (bits >>> 24) & 0xff)
       raw.splice(8, text.length, ...[...text].map((c) => c.charCodeAt(0)))
       const body = [...H(`F0 00 01 74 15 01 01 00 ${hex([pidHigh])} 00 0D 00 00 00 28 00`), ...sx.packChunked(raw)]
       return [...body, sx.checksum(body), 0xf7]
     }
     const f = answer(0x49, 20, 'CC #20')
     assert.equal(f.length, 64, 'not the 64 bytes his AM4’s long answers are')
-    assert.deepEqual(sx.parseAm4GlobalLong(f, sx.AM4.TUNER_CC), { whole: 20, text: 'CC #20' })
+    assert.deepEqual(sx.parseAm4GlobalLong(f, sx.AM4.TUNER_CC), { whole: 20, float: 0, text: 'CC #20' })
+    /* The shape his AM4 gave for a drive's bypass: 0 in the whole number, the value in the float. */
+    assert.deepEqual(sx.parseAm4GlobalLong(answer(0x49, 0, 'CC #20', 20), sx.AM4.TUNER_CC), { whole: 0, float: 20, text: 'CC #20' })
     assert.equal(sx.parseAm4GlobalLong(f, sx.AM4.MIDI_CHANNEL), null, 'the Tuner answer was taken for the channel')
     const bad = [...f]
     bad[62] ^= 1
     assert.equal(sx.parseAm4GlobalLong(bad, sx.AM4.TUNER_CC), null, 'a damaged answer was read')
     assert.equal(sx.parseAm4GlobalLong(sx.buildAm4TunerCcRead(), sx.AM4.TUNER_CC), null, 'the question, echoed back by MIDI Thru, was taken for its answer')
 
-    const tunerCc = (whole, text) => sx.am4TunerCcFrom(sx.parseAm4GlobalLong(answer(0x49, whole, text), sx.AM4.TUNER_CC))
-    assert.equal(tunerCc(20, 'CC #20'), 20)
-    assert.equal(tunerCc(20, '20'), 20)
-    assert.equal(tunerCc(100, 'CC #100'), 100)
-    assert.equal(tunerCc(128, 'NONE'), 'none')
-    assert.equal(tunerCc(0, 'NONE'), 'none', 'NONE on its screen, whatever the number')
-    for (const [whole, text, why] of [
-      [20, 'CC #21', 'the number and the words disagree'],
-      [19, 'CC #20', 'a list counted from 0'],
-      [0, 'CC #20', 'the number not where the tempo’s is'],
-      [20, '', 'no words'],
-      [20, 'Tuner 20', 'other words around it'],
-      [0, 'CC #0', 'bank select'],
-      [32, 'CC #32', 'bank select, its second half'],
-      [120, 'CC #120', 'a channel-mode message'],
-      [123, '123', 'all notes off'],
-      [127, 'CC #127', 'a channel-mode message'],
-      [129, 'PEDAL 1', 'a pedal, not a CC']
+    /*
+     * THE NUMBER RULE. "CC #n", the setting's own words for it, says n by
+     * itself, whatever the whole number and the float hold. Bare digits are
+     * believed only when the whole number or the float says the same. NONE,
+     * or 128 with no number in the words, is none.
+     */
+    const tunerCc = (whole, text, float = 0) => sx.am4TunerCcFrom(sx.parseAm4GlobalLong(answer(0x49, whole, text, float), sx.AM4.TUNER_CC))
+    for (const [whole, text, float, n, why] of [
+      [0, 'CC #20', 20, 20, 'the real shape: the value in the float'],
+      [0, 'CC #20', 19, 20, 'the real shape, its list counted from 0'],
+      [20, 'CC #20', 0, 20, 'the shape first assumed: the value in the whole number'],
+      [0, 'cc#20', 0, 20, 'its words, in another case and without the space'],
+      [0, ' CC # 100 ', 0, 100, 'its words, spaced'],
+      [20, '20', 0, 20, 'bare digits, the whole number agreeing'],
+      [0, '20', 20, 20, 'bare digits, the float agreeing'],
+      [0, '20', 19.99999, 20, 'bare digits, the float a count on its way through a float'],
+      [0, 'CC #119', 119, 119, 'the last number that can only mean a function']
     ]) {
-      assert.equal(tunerCc(whole, text), null, `${why}: ${whole} “${text}” was believed`)
+      assert.equal(tunerCc(whole, text, float), n, `${why}: ${whole} / ${float} “${text}”`)
+    }
+    assert.equal(tunerCc(0, 'NONE', 128), 'none')
+    assert.equal(tunerCc(128, 'NONE'), 'none')
+    assert.equal(tunerCc(20, 'none'), 'none', 'NONE on its screen, whatever the number')
+    assert.equal(tunerCc(128, ''), 'none', '128 with no words')
+    for (const [whole, text, float, why] of [
+      [0, '20', 0, 'bare digits nothing else says'],
+      [0, '20', 19, 'bare digits, a float one off'],
+      [0, '20', 20.5, 'bare digits, a float that is not a count'],
+      [128, '20', 0, 'bare digits with 128 in front'],
+      [0, 'CC #0', 0, 'bank select'],
+      [0, 'CC #32', 32, 'bank select, its second half'],
+      [0, 'CC #120', 120, 'a channel-mode message'],
+      [127, 'CC #127', 127, 'a channel-mode message'],
+      [123, '123', 123, 'all notes off'],
+      [20, 'CC 20', 20, 'not the setting’s own words: no #'],
+      [20, 'Tuner 20', 20, 'other words around it'],
+      [20, '', 20, 'no words'],
+      [129, 'PEDAL 1', 0, 'a pedal, not a CC']
+    ]) {
+      assert.equal(tunerCc(whole, text, float), null, `${why}: ${whole} / ${float} “${text}” was believed`)
     }
     assert.equal(sx.am4TunerCcFrom(null), null, 'no answer was believed')
     assert.equal(sx.am4TunerCcFrom({ rejected: 4 }), null, 'a refusal was believed')
+    assert.equal(sx.am4TunerCcFrom({ rejected: 4, text: 'CC #20' }), null, 'a refusal was believed for its words')
 
-    /* The channel from its words alone: here its number is a place in a list, one below. */
-    const channel = (whole, text) => sx.am4ChannelFrom(sx.parseAm4GlobalLong(answer(0x3a, whole, text), sx.AM4.MIDI_CHANNEL))
-    assert.equal(channel(0, '1'), 1)
+    /* The channel from its words alone: its number and its float are places in a list, one below. */
+    const channel = (whole, text, float = 0) => sx.am4ChannelFrom(sx.parseAm4GlobalLong(answer(0x3a, whole, text, float), sx.AM4.MIDI_CHANNEL))
+    for (const [text, ch] of [
+      ['1', 1],
+      ['2', 2],
+      ['CH 2', 2],
+      ['Ch2', 2],
+      ['CH. 2', 2],
+      ['Channel 2', 2],
+      ['channel 16', 16],
+      ['16', 16]
+    ]) {
+      assert.equal(channel(0, text, ch - 1), ch, `“${text}”`)
+    }
     assert.equal(channel(4, '5'), 5, 'the channel was taken from its number, not its words')
-    assert.equal(channel(15, '16'), 16)
     for (const [whole, text] of [
       [16, 'OMNI'],
+      [0, 'Tuner 2'],
       [16, '17'],
+      [0, 'CH 0'],
       [2, ''],
       [0, '0']
     ]) {
-      assert.equal(channel(whole, text), 1, `“${text}” is not channel 1, the AM4’s factory channel`)
+      assert.equal(channel(whole, text, whole), 1, `“${text}” is not channel 1, the AM4’s factory channel`)
     }
     assert.equal(sx.am4ChannelFrom(null), 1)
 
@@ -2366,12 +2418,15 @@ export function run(test) {
   const readingsOf = (t) => t.events.filter((e) => e.type === 'tuner')
 
   test('the AM4 tuner: its own tuner opened by its own CC, then its four readings, as a note', async () => {
-    for (const [options, cc] of [
-      [{ unitTunerCc: 20, unitChannel: 3 }, 'B2 14'],
-      [{ unitTunerCc: 20, unitChannel: 3, unitTunerText: 'plain' }, 'B2 14'],
-      [{ unitTunerCc: 100, unitChannel: 16 }, 'BF 64'],
+    /* Answers shaped like his AM4's (0 in the whole number, the value in the float), and one case in the shape first assumed. */
+    for (const [options, cc, shape] of [
+      [{ unitTunerCc: 20, unitChannel: 3 }, 'B2 14', 'whole number 0, float 20, words “CC #20”'],
+      [{ unitTunerCc: 20, unitChannel: 3, unitTunerText: 'plain' }, 'B2 14', 'whole number 0, float 20, words “20”'],
+      [{ unitTunerCc: 20, unitChannel: 3, unitTunerFrom0: true }, 'B2 14', 'whole number 0, float 19, words “CC #20”'],
+      [{ unitTunerCc: 100, unitChannel: 16, unitChannelWords: 'CH ' }, 'BF 64', 'whole number 0, float 100, words “CC #100”'],
       /* OMNI hears every channel: the AM4's factory 1 is sent. */
-      [{ unitTunerCc: 20, unitChannel: 'OMNI' }, 'B0 14']
+      [{ unitTunerCc: 20, unitChannel: 'OMNI' }, 'B0 14', 'whole number 0, float 20, words “CC #20”'],
+      [{ unitTunerCc: 20, unitChannel: 3, unitAnswers: 'old', unitTunerText: 'plain' }, 'B2 14', 'whole number 20, float 0, words “20”']
     ]) {
       const t = await onTheLine('am4', options)
       const why = JSON.stringify(options)
@@ -2393,7 +2448,18 @@ export function run(test) {
       await advance(t.clock, 1000)
       assert.equal(t.sent.length, before, 'the tuner kept asking after it closed')
       assert.equal(t.unit.state.frozen, false, `the AM4 froze on ${t.unit.state.unknown.map(hex).join(', ')}`)
-      assert.ok(t.logs.some((l) => /^the AM4’s Tuner setting reads “(CC #)?(20|100)” \(number (20|100)\), its MIDI channel “(3|16|OMNI)”/.test(l)), `the log does not say what the AM4 reported: ${why}`)
+      assert.ok(t.logs.some((l) => /^the AM4’s Tuner setting reads “(CC #)?(20|100)”, its MIDI channel “(CH )?(3|16|OMNI)”: CC (20|100) on channel (3|16|1)$/.test(l)), `the log does not say what the AM4 reported: ${why}`)
+      /* And the raw answer, so a pasted log shows the shape his AM4 really uses: once a connection, however often the tuner opens. */
+      await t.post('/tuner', { on: true })
+      await advance(t.clock, 300)
+      await t.post('/tuner', { on: false })
+      assert.deepEqual(
+        t.logs.filter((l) => l.startsWith('the AM4 answered about its Tuner setting: ')),
+        [`the AM4 answered about its Tuner setting: ${shape}`],
+        why
+      )
+      assert.equal(t.logs.filter((l) => l.startsWith('the AM4 answered about its MIDI channel: ')).length, 1, why)
+      assert.equal(t.unit.state.tunerOpen, false)
     }
   })
 
@@ -2406,7 +2472,8 @@ export function run(test) {
     assert.ok(t.frames().every((f) => f[0] === 0xf0), 'a short message went to an AM4 with no Tuner number')
     /* No number, so the channel is not asked about: nothing would be sent on it. */
     assert.deepEqual(besidesReadings(t), [READ_TUNER_CC])
-    assert.ok(t.logs.includes('the AM4’s Tuner setting reads “NONE” (number 128): no MIDI number, so its own tuner is left as it is (SETUP > MIDI/Remote > Tuner)'))
+    assert.ok(t.logs.includes('the AM4’s Tuner setting reads “NONE”: no MIDI number, so its own tuner is left as it is (SETUP > MIDI/Remote > Tuner)'))
+    assert.ok(t.logs.includes('the AM4 answered about its Tuner setting: whole number 0, float 128, words “NONE”'))
     /* Asked again at the next open: he may have set one on the AM4 in between. */
     t.unit.state.tunerCc = 20
     const mark = t.sent.length
@@ -2419,13 +2486,13 @@ export function run(test) {
 
   test('an unclear answer about the Tuner setting sends nothing, is not asked again on that connection, and the phone still tunes', async () => {
     for (const [answer, why] of [
-      [{ whole: 20, text: 'CC #21' }, 'the number and the words disagree'],
-      [{ whole: 0, text: 'CC #20' }, 'the number not where the tempo’s is'],
-      [{ whole: 19, text: 'CC #20' }, 'a list counted from 0'],
-      [{ whole: 0, text: 'CC #0' }, 'bank select'],
-      [{ whole: 32, text: 'CC #32' }, 'bank select, its second half'],
-      [{ whole: 120, text: 'CC #120' }, 'a channel-mode message'],
-      [{ whole: 127, text: 'CC #127' }, 'a channel-mode message'],
+      [{ whole: 0, float: 0, text: '20' }, 'bare digits nothing else says'],
+      [{ whole: 0, float: 19, text: '20' }, 'bare digits, the float one off'],
+      [{ whole: 0, float: 0, text: 'CC #0' }, 'bank select'],
+      [{ whole: 0, float: 32, text: 'CC #32' }, 'bank select, its second half'],
+      [{ whole: 0, float: 120, text: 'CC #120' }, 'a channel-mode message'],
+      [{ whole: 127, float: 127, text: 'CC #127' }, 'a channel-mode message'],
+      [{ whole: 20, float: 20, text: 'Tuner 20' }, 'other words around it'],
       ['silent', 'no answer']
     ]) {
       /* The AM4 itself is on CC 20: anything the phone sent on a number of its own guessing would show. */
@@ -2498,9 +2565,107 @@ export function run(test) {
 
     const link = readFileSync(new URL('../mobile/src/lib/bleLink.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
     const refreshed = link.indexOf('await refreshAll()')
-    const again = link.indexOf("if (getState().tunerOn) { say('the tuner was open when the adapter went; opening it again') made.request('/tuner', { method: 'POST', body: '{\"on\":true}' }).catch(() => {}) }")
+    const again = link.indexOf("if (getState().tunerOn) { say('the tuner was open when the adapter went; opening it again') made.request('/tuner', { method: 'POST', body: '{\"on\":true}' }).then(settledUnitTuner(made), () => {})")
     assert.ok(refreshed > 0 && again > refreshed, 'a connection that comes back with the tuner open does not open it again')
     assert.ok(again < link.indexOf('made.startPolls()', refreshed), 'the tuner is opened again after the watch starts')
+  })
+
+  /*
+   * The review's case: the tuner closed on the phone while Bluetooth was
+   * down. That close had no connection to go on, and the next connection
+   * found the phone's tuner closed and did nothing, so the AM4 stayed on its
+   * own tuner screen for good. Now the wire that was let go of says the 0 is
+   * owed, the link keeps that across the drop, and the next connection
+   * closes it.
+   */
+  test('the AM4 tuner closed on the phone while Bluetooth was down is closed on the unit when the link comes back', async () => {
+    const t = await onTheLine('am4', { unitTunerCc: 20 })
+    await t.post('/tuner', { on: true })
+    await advance(t.clock, 500)
+    assert.equal(t.unit.state.tunerOpen, true)
+    /* The adapter goes with the AM4 on its tuner: the 0 cannot go, so it is owed. */
+    t.line.gone = true
+    const old = t.wire
+    assert.deepEqual(old.close(), { unitTunerOwed: true })
+    assert.equal(old.unitTunerOwed(), true)
+    assert.deepEqual(old.close(), { unitTunerOwed: true }, 'a second close forgot what the first one found')
+    assert.ok(t.logs.includes('the AM4 may still be on its own tuner: it is closed from the next connection'))
+    /* While it is away the phone's tuner is closed: nothing is there to send it on, and nothing is sent. */
+    const mark = t.sent.length
+    await advance(t.clock, 5000)
+    assert.equal(t.sent.length, mark, 'something was sent while the adapter was away')
+    assert.equal(t.unit.state.tunerOpen, true)
+    /* Back: the link sends the owed close on the new connection, which reads first, then sends the 0. */
+    t.line.gone = false
+    t.reconnect()
+    assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true })
+    assert.deepEqual(t.frames().slice(mark).map(hex), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 00'])
+    assert.equal(t.unit.state.tunerOpen, false, 'the AM4 was left on its tuner')
+    assert.equal(t.unit.state.frozen, false)
+    /* That connection let go of cleanly owes nothing. */
+    assert.deepEqual(t.wire.close(), { unitTunerOwed: false })
+
+    /* Dropped again while that close is still reading the setting: still owed, to the connection after. */
+    const r = await onTheLine('am4', { unitTunerCc: 20, delay: 60 })
+    await r.post('/tuner', { on: true })
+    await advance(r.clock, 300)
+    r.line.gone = true
+    r.wire.close()
+    r.line.gone = false
+    r.reconnect()
+    const closing = r.wire.request('/tuner', { method: 'POST', body: JSON.stringify({ on: false }) })
+    await advance(r.clock, 10)
+    assert.equal(hex(r.frames().at(-1)), READ_TUNER_CC, 'the test dropped the link at the wrong moment')
+    r.line.gone = true
+    assert.deepEqual(r.wire.close(), { unitTunerOwed: true }, 'a close still reading was forgotten with the link')
+    await drive(r.clock, closing)
+    r.line.gone = false
+    r.reconnect()
+    assert.deepEqual(await r.post('/tuner', { on: false }), { ok: true })
+    assert.equal(r.unit.state.tunerOpen, false)
+
+    /* Nothing owed when nothing is: never opened, closed on the phone, the 0 sent as it closes, or NONE. */
+    const never = await onTheLine('am4', { unitTunerCc: 20 })
+    assert.deepEqual(never.wire.close(), { unitTunerOwed: false })
+    const shut = await onTheLine('am4', { unitTunerCc: 20 })
+    await shut.post('/tuner', { on: true })
+    await advance(shut.clock, 300)
+    await shut.post('/tuner', { on: false })
+    shut.line.gone = true
+    assert.deepEqual(shut.wire.close(), { unitTunerOwed: false })
+    const live = await onTheLine('am4', { unitTunerCc: 20 })
+    await live.post('/tuner', { on: true })
+    await advance(live.clock, 300)
+    assert.deepEqual(live.wire.close(), { unitTunerOwed: false })
+    assert.equal(live.unit.state.tunerOpen, false)
+    const none = await onTheLine('am4')
+    await none.post('/tuner', { on: true })
+    await advance(none.clock, 300)
+    none.line.gone = true
+    assert.deepEqual(none.wire.close(), { unitTunerOwed: false })
+    /* And a gen-3 wire never owes the AM4 anything. */
+    const fm3 = await onTheLine('fm3')
+    await fm3.post('/tuner', { on: true })
+    fm3.line.gone = true
+    assert.deepEqual(fm3.wire.close(), { unitTunerOwed: false })
+
+    /*
+     * THE LINK'S HALF. bleLink asks the wire it lets go of, keeps the answer
+     * across the drop, and on the next connection, after the rig has read
+     * everything: opens the tuner again if the phone's is open, or else
+     * closes the AM4's if a 0 is owed. Settled only by the connection still
+     * there, and forgotten when the unit is another one.
+     */
+    const link = readFileSync(new URL('../mobile/src/lib/bleLink.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+    assert.match(link, /function letGoOfWire\(\) \{ const was = wire .*?closeWire\(\) .*?if \(was\?\.unitTunerOwed\?\.\(\)\) unitTunerOwed = true/, 'the link does not ask the wire it lets go of whether a 0 is owed')
+    const refreshed = link.indexOf('await refreshAll()')
+    const reopen = link.indexOf('if (getState().tunerOn) {', refreshed)
+    const owed = link.indexOf("} else if (unitTunerOwed) { ", reopen)
+    const close = link.indexOf("made.request('/tuner', { method: 'POST', body: '{\"on\":false}' }).then(settledUnitTuner(made), () => {})", owed)
+    assert.ok(refreshed > 0 && reopen > refreshed && owed > reopen && close > owed, 'a connection that comes back owing the AM4 its 0 does not close it')
+    assert.ok(close < link.indexOf('made.startPolls()', refreshed), 'the owed close is sent after the watch starts')
+    assert.match(link, /const settledUnitTuner = \(made\) => \(\) => \{ if \(wire === made\) unitTunerOwed = false \}/, 'the owed 0 is forgotten by a connection that has already gone')
+    assert.match(link, /if \(unitMoved\) \{ resetRig\(\) .*?unitTunerOwed = false \}/, 'an AM4’s owed 0 is kept for another unit')
   })
 
   test('letting go of the AM4 with its own tuner open closes it, and never into a stored preset coming back', async () => {
@@ -2563,12 +2728,64 @@ export function run(test) {
     await advance(v.clock, 1200)
     assert.ok(v.unit.state.dumped.includes(6), 'the test let go before the preset was asked for')
     const mark = v.sent.length
-    v.wire.close()
+    assert.deepEqual(v.wire.close(), { unitTunerOwed: true }, 'the 0 held back was not owed to the next connection')
     assert.equal(v.sent.length, mark, 'the 0 was sent into a preset coming back')
     await advance(v.clock, 6000)
     assert.deepEqual(v.unit.state.heardWhileSending.map(hex), [])
     assert.equal(v.unit.state.tunerOpen, true)
     assert.equal(v.unit.state.frozen, false)
+
+    /*
+     * A stored preset given up on part-way, the AM4 still sending the rest of
+     * it: nothing is waiting on it any more, but the line is held until it
+     * has finished, and the 0 is held with it.
+     */
+    const g = await onTheLine('am4', { unitTunerCc: 20, stallAfterHead: 4000 })
+    await g.post('/tuner', { on: true })
+    await advance(g.clock, 300)
+    assert.equal(g.unit.state.tunerOpen, true)
+    await assert.rejects(drive(g.clock, g.wire.request('/presets/5/scenes')), (e) => e.status === 504, 'a stalled preset was read')
+    assert.ok(g.logs.includes('gave up on the scene names of B02 part-way; Refresh names asks again'), 'the test did not give up part-way')
+    assert.ok(g.clock.now() < g.unit.state.sendingUntil, 'the test let go after the AM4 had finished sending')
+    const held = g.sent.length
+    assert.deepEqual(g.wire.close(), { unitTunerOwed: true })
+    assert.equal(g.sent.length, held, 'the 0 was sent to an AM4 still sending a preset given up on')
+    await advance(g.clock, 8000)
+    assert.deepEqual(g.unit.state.heardWhileSending.map(hex), [], 'something was sent to the AM4 while it was still sending')
+    assert.equal(g.unit.state.tunerOpen, true)
+    assert.equal(g.unit.state.frozen, false)
+
+    /*
+     * Back from a drop on a slow link, the phone's close reads first, and its
+     * 0 waits behind another read; let go of before it goes, the 0 goes
+     * straight out as the connection closes.
+     */
+    const s = await onTheLine('am4', { unitTunerCc: 20, delay: 300 })
+    await s.post('/tuner', { on: true })
+    await advance(s.clock, 500)
+    s.line.gone = true
+    s.wire.close()
+    s.line.gone = false
+    s.reconnect()
+    const off = s.wire.request('/tuner', { method: 'POST', body: JSON.stringify({ on: false }) })
+    const sentNow = () => s.frames().map(hex)
+    for (let i = 0; i < 2000 && sentNow().at(-1) !== READ_CHANNEL; i++) await advance(s.clock, 1)
+    assert.equal(sentNow().at(-1), READ_CHANNEL, 'the close never read the channel')
+    const tempo = s.wire.request('/tempo').catch(() => null)
+    const read = hex(s.sx.buildAm4TempoRead())
+    for (let i = 0; i < 2000 && sentNow().at(-1) !== read; i++) await advance(s.clock, 1)
+    assert.equal(sentNow().at(-1), read, 'the tempo read did not go ahead of the 0')
+    await advance(s.clock, 5)
+    assert.equal(sentNow().at(-1), read, 'the 0 did not wait behind the read')
+    assert.equal(s.unit.state.tunerOpen, true)
+    assert.deepEqual(s.wire.close(), { unitTunerOwed: false })
+    assert.equal(sentNow().at(-1), 'B0 14 00')
+    assert.equal(s.unit.state.tunerOpen, false, 'let go of with its 0 waiting, the AM4 was left on its tuner')
+    await drive(s.clock, off)
+    await drive(s.clock, tempo)
+    await advance(s.clock, 1000)
+    assert.equal(sentNow().at(-1), 'B0 14 00', 'something was sent after the wire was let go of')
+    assert.equal(s.unit.state.frozen, false)
   })
 
   test('the AM4’s Tuner setting is read at every open, so a number changed on the unit in between is the one sent', async () => {

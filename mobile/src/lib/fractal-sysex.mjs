@@ -861,8 +861,9 @@ function am4Words(raw) {
 
 /**
  * A Global setting's long answer, unpacked the way the tempo's is: {whole,
- * text} — the whole number in the first two raw bytes ("250 BPM" carries
- * 250 there), and the words the AM4's screen shows from byte 8. Null for
+ * float, text} — the whole number in the first two raw bytes ("250 BPM"
+ * carries 250 there), the float in raw bytes 4 to 7 (where the tempo keeps
+ * its 0..1), and the words the AM4's screen shows from byte 8. Null for
  * anything that is not this exact answer.
  */
 export function parseAm4GlobalLong(f, pidHigh) {
@@ -872,42 +873,61 @@ export function parseAm4GlobalLong(f, pidHigh) {
   const size = decode14(f[14], f[15])
   if (size < 8 || f.length - 18 < chunkedLength(size)) return null
   const raw = unpackChunked(f.slice(16, -2), size)
-  return { whole: raw[0] | (raw[1] << 8), text: am4Words(raw) }
+  return { whole: raw[0] | (raw[1] << 8), float: readF32le(raw, 4), text: am4Words(raw) }
 }
 
+/* A float that is a count (20, or 19.99998 on its way through a float), as that count; null for anything else. */
+const countIn = (x) => (Number.isFinite(x) && Math.abs(x - Math.round(x)) < 1e-3 ? Math.round(x) : null)
+
 /*
- * THE TUNER'S NUMBER, BELIEVED ONLY WHEN THE AM4 SAYS IT TWICE.
+ * THE TUNER'S NUMBER, TAKEN FROM THE AM4'S OWN WORDS FOR IT.
  *
- * How the AM4 answers this setting has not been seen on a unit yet: whether
- * the whole number is the CC itself or a place in a list, and whether its
- * list counts from 0 or 1. So the number is taken only when the whole number
- * and the words on its screen agree ("CC #20", or "20", with 20 in front),
- * and only a number that can mean nothing but a function. Anything else is
- * unclear, and nothing is sent: the cost of being wrong is firing whatever
- * else that number does on his rig.
+ * The one setting of this kind his AM4 has answered (a drive's bypass) gave 0
+ * in the whole number, its value in the float and "OFF" in the words. So the
+ * whole number is very likely not the CC at all, and a rule that wanted it
+ * to agree with the words would refuse every real answer: the AM4's tuner
+ * would never open. The setting's own list reads "CC #1" to "CC #127", then
+ * NONE (forgefx-midi's tables), so:
  *
- * n for a usable number, 'none' for NONE (the AM4 stores that as 128), and
- * null for unclear or no answer.
+ *   - "CC #20", exactly that shape, is 20 from the words alone;
+ *   - plain "20" is believed only when the whole number or the float (as a
+ *     count) says 20 as well, since bare digits could be anything;
+ *   - "NONE", or a whole number of 128 with no number in the words, is none;
+ *   - and the number must be one that can mean nothing but a function (see
+ *     am4CcOk). Anything else is unclear, and nothing is sent: the cost of
+ *     being wrong is firing whatever else that number does on his rig.
+ *
+ * n for a usable number, 'none' for NONE, and null for unclear or no answer.
  */
+const CC_WORDS = /^CC\s*#\s*(\d{1,3})$/i
+const BARE_WORDS = /^(\d{1,3})$/
 export function am4TunerCcFrom(a) {
-  if (!a || typeof a !== 'object') return null
+  if (!a || typeof a !== 'object' || a.rejected !== undefined) return null
   const words = typeof a.text === 'string' ? a.text.trim() : ''
-  if (a.whole === 128 || /^none$/i.test(words)) return 'none'
-  const named = /^(?:CC\s*#?\s*)?(\d{1,3})$/i.exec(words)
-  if (!named || Number(named[1]) !== a.whole) return null
-  return am4CcOk(a.whole) ? a.whole : null
+  const named = CC_WORDS.exec(words)
+  const bare = named ? null : BARE_WORDS.exec(words)
+  if (named || bare) {
+    const n = Number((named || bare)[1])
+    if (bare && a.whole !== n && countIn(a.float) !== n) return null
+    return am4CcOk(n) ? n : null
+  }
+  if (/^none$/i.test(words) || a.whole === 128) return 'none'
+  return null
 }
 
 /*
  * THE CHANNEL, FROM THE WORDS ONLY. The two tables that describe this
  * setting disagree about its number (1..16 in one, 0..15 with 16 for OMNI in
- * the other), and the screen's "1" to "16" settle it. OMNI hears every
- * channel, and anything unreadable is the AM4's factory 1: a CC on a channel
- * it is not listening on is ignored, so a wrong guess here fires nothing.
+ * the other), so the screen's words settle it: "2", "CH 2" or "Channel 2".
+ * OMNI hears every channel, and anything else is the AM4's factory 1: a CC
+ * on a channel it is not listening on is ignored, so a wrong guess here
+ * fires nothing.
  */
+const CHANNEL_WORDS = /^(?:ch(?:annel)?\.?\s*)?(\d{1,2})$/i
 export function am4ChannelFrom(a) {
   const words = typeof a?.text === 'string' ? a.text.trim() : ''
-  const n = /^\d{1,2}$/.test(words) ? Number(words) : 0
+  const said = CHANNEL_WORDS.exec(words)
+  const n = said ? Number(said[1]) : 0
   return midiChannelOk(n) ? n : 1
 }
 

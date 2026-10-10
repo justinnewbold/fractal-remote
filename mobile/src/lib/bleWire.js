@@ -1165,13 +1165,15 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* ---- tuner ---- */
 
   /*
-   * The last five are the AM4's own tuner screen, which this phone opens and
+   * The rest are the AM4's own tuner screen, which this phone opens and
    * closes with the CC its MIDI pedal would send. `unitCc` is what THIS
    * connection read of that setting, {cc, channel} or null, and the only CC
    * the AM4 may be sent; `unitOpen` that a 127 went out and its 0 is still
    * owed; `unitRead` that the setting has been asked about on this
    * connection; `unitAsk` false once an answer was missing or unclear, so it
-   * is not asked again; `unitSays` what the last open found.
+   * is not asked again; `unitSays` what the last open found; `unitClosing`
+   * that a close is reading the setting before its 0 can go; `unitShapes`
+   * the AM4's raw answers already put in the log on this connection.
    */
   const tuner = {
     on: false,
@@ -1186,7 +1188,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     unitOpen: false,
     unitRead: false,
     unitAsk: true,
-    unitSays: null
+    unitSays: null,
+    unitClosing: false,
+    unitShapes: new Map()
   }
 
   function reading(event) {
@@ -1628,7 +1632,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     tuner.unitRead = true
     tuner.unitCc = null
     const a = await ask(buildAm4TunerCcRead(), (f) => parseAm4GlobalLong(f, AM4.TUNER_CC), WAIT.am4Tempo, 'the AM4’s Tuner setting')
-    const words = a && !rejected(a) ? `“${a.text ?? ''}” (number ${a.whole})` : ''
+    const heard = a && !rejected(a)
+    if (heard) sayShape('its Tuner setting', a)
+    const words = heard ? `“${a.text ?? ''}”` : ''
     const cc = rejected(a) ? null : am4TunerCcFrom(a)
     if (cc === 'none') {
       say(`the AM4’s Tuner setting reads ${words}: no MIDI number, so its own tuner is left as it is (SETUP > MIDI/Remote > Tuner)`)
@@ -1636,15 +1642,36 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     if (cc === null) {
       tuner.unitAsk = false
-      const why = rejected(a) ? `the AM4 refused the question: ${rejectedWords(a.rejected)}` : a ? `it reads ${words}, which is not plainly one number` : 'no answer'
+      const why = rejected(a)
+        ? `the AM4 refused the question: ${rejectedWords(a.rejected)}`
+        : heard
+          ? `it reads ${words}, which is not a number its tuner may be sent`
+          : 'no answer'
       say(`the AM4’s own tuner is left as it is: about its Tuner setting, ${why}. Not asked again on this connection`)
       return null
     }
     const c = await ask(buildAm4MidiChannelRead(), (f) => parseAm4GlobalLong(f, AM4.MIDI_CHANNEL), WAIT.am4Tempo, 'the AM4’s MIDI channel')
-    const channel = am4ChannelFrom(rejected(c) ? null : c)
+    const told = c && !rejected(c)
+    if (told) sayShape('its MIDI channel', c)
+    const channel = am4ChannelFrom(told ? c : null)
     tuner.unitCc = { cc, channel }
-    say(`the AM4’s Tuner setting reads ${words}, its MIDI channel “${c && !rejected(c) ? c.text ?? '' : 'no answer'}”: CC ${cc} on channel ${channel}`)
+    say(`the AM4’s Tuner setting reads ${words}, its MIDI channel “${told ? c.text ?? '' : 'no answer'}”: CC ${cc} on channel ${channel}`)
     return tuner.unitCc
+  }
+
+  /*
+   * WHAT THE AM4 ACTUALLY SAID, IN FULL. How it answers these two settings
+   * has not been seen on his unit: which of the whole number, the float and
+   * the words carries what. So each answer goes into the log as the three of
+   * them, once a connection (again only if it changes), and a pasted log
+   * shows the real shape rather than what the phone made of it.
+   */
+  function sayShape(what, a) {
+    const f = Number.isFinite(a.float) ? String(Number(a.float.toPrecision(7))) : String(a.float)
+    const shape = `whole number ${a.whole}, float ${f}, words “${a.text ?? ''}”`
+    if (tuner.unitShapes.get(what) === shape) return
+    tuner.unitShapes.set(what, shape)
+    say(`the AM4 answered about ${what}: ${shape}`)
   }
 
   /* The CC as a write: ahead of the polls, and held behind a stored preset coming back rather than sent into it. */
@@ -1677,7 +1704,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   async function closeUnitTuner() {
     let setting = tuner.unitOpen ? tuner.unitCc : null
     if (!setting && !tuner.unitRead) {
-      const read = await readUnitTuner()
+      /* The AM4 may be on its tuner while this reads: let go of meanwhile, the 0 is still owed (see close()). */
+      tuner.unitClosing = true
+      let read = null
+      try {
+        read = await readUnitTuner()
+      } finally {
+        tuner.unitClosing = false
+      }
       if (read && read !== 'none') setting = read
     }
     if (!setting) return
@@ -2189,9 +2223,16 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* Lifetime                                                          */
   /* ================================================================ */
 
-  /** Stop everything and answer anything waiting with "not connected": the adapter has gone. */
+  /* Set as the wire closes: a 0 the AM4's own tuner may still be owed (see close()). */
+  let unitOwed = false
+
+  /**
+   * Stop everything and answer anything waiting with "not connected": the
+   * adapter has gone. Says whether the AM4's own tuner may have been left
+   * open, {unitTunerOwed}, for the link to close it from the next connection.
+   */
   function close() {
-    if (closed) return
+    if (closed) return { unitTunerOwed: unitOwed }
     closed = true
     stopPolls()
     if (holdTimer !== null) time.clearTimeout(holdTimer)
@@ -2202,11 +2243,24 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
      * the adapter is still there. Never into a stored preset still coming
      * back — the AM4 is sent nothing while it is sending — so then it stays
      * on its tuner, for its own footswitch. After a drop the adapter has
-     * already gone and this reaches nothing.
+     * already gone and this reaches nothing: the 0 is then owed (below).
      */
+    let zero = null
     if (am4 && tuner.unitOpen && tuner.unitCc && !current?.opts.collect && !draining()) {
-      say(`the AM4’s own tuner closed as the connection closes: ${sendFrame(buildAm4TunerCc(false, tuner.unitCc))}`)
+      zero = sendFrame(buildAm4TunerCc(false, tuner.unitCc))
+      say(`the AM4’s own tuner closed as the connection closes: ${zero}`)
     }
+    /*
+     * OWED ACROSS THE DROP. When the 0 could not go (the adapter had already
+     * gone, or a stored preset was still coming back), or a close was still
+     * reading the setting, the AM4 may be left on its own tuner. The link
+     * keeps that (unitTunerOwed, below), and if the phone's tuner is closed
+     * by the time the next connection comes up — closed while Bluetooth was
+     * away, say — that connection closes the AM4's. No press on the phone
+     * would ever send that 0 again.
+     */
+    unitOwed = am4 && ((tuner.unitOpen && zero !== 'sent') || tuner.unitClosing)
+    if (unitOwed) say('the AM4 may still be on its own tuner: it is closed from the next connection')
     tuner.unitOpen = false
     tuner.on = false
     tuner.run++
@@ -2221,6 +2275,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     while (waiting.length) waiting.shift().reject(err)
     handlers.clear()
+    return { unitTunerOwed: unitOwed }
   }
 
   return {
@@ -2237,6 +2292,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     heardShort,
     /** Every chunk of bytes from the adapter, before the joiner: a long answer is timed by them. */
     heardBytes,
+    /** Once closed: whether the AM4's own tuner may have been left open, its 0 owed to the next connection. */
+    unitTunerOwed: () => unitOwed,
     startPolls,
     stopPolls,
     check,
