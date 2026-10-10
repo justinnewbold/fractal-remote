@@ -28,7 +28,12 @@ export default function MetronomeSwitch({ slug }) {
       : place === 'both'
         ? 'The unit clicks and this screen keeps time with it'
         : PLACES[0].note
-  const untilHeard = unitCan.can && setting.on && setting.where === 'unit' && !heard ? ' Until the unit says its click is on, this screen keeps time as well.' : ''
+  const untilHeard = unitCan.can && setting.on && setting.where === 'unit' && !heard ? 'Until the unit says its click is on, this screen keeps time as well.' : ''
+  /* Each part a sentence: the place notes are written as labels, with no full stop. */
+  const line = [where, untilHeard]
+    .filter(Boolean)
+    .map((t) => (/[.!?]$/.test(t) ? t : `${t}.`))
+    .join(' ')
 
   return (
     <>
@@ -44,7 +49,7 @@ export default function MetronomeSwitch({ slug }) {
           }}
         />
       </div>
-      <p className="footnote">{`${where}${untilHeard}`}</p>
+      <p className="footnote">{line}</p>
       {said ? (
         <p className="save-error" role="status">
           {said}

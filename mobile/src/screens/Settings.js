@@ -24,7 +24,7 @@ import {
 import { chooseHost } from '../lib/link'
 import { useRig } from '../lib/rig'
 import { setFlashTiming, setMetronome, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
-import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
+import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, nudgeFloor, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
 import {
@@ -1045,7 +1045,7 @@ export default function Settings({
                   <Press
                     label="Earlier"
                     grow
-                    disabled={flashTiming <= FLASH_NUDGE.min}
+                    disabled={flashTiming <= nudgeFloor(Platform.OS)}
                     onPress={() => setFlashTiming(flashTiming - FLASH_NUDGE.step)}
                   />
                   <Press
@@ -1056,7 +1056,7 @@ export default function Settings({
                   />
                 </View>
                 <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
-                  {`${flashTimingNote(flashTiming)}. If the flash comes before the click, tap Later; if it comes after, tap Earlier. Through a Bluetooth speaker or headphones it usually needs Later several times.`}
+                  {`${flashTimingNote(flashTiming, Platform.OS)}. If the flash comes before the click, tap Later; if it comes after, tap Earlier. Through a Bluetooth speaker or headphones it usually needs Later several times.`}
                 </Text>
                 {flashTiming !== 0 ? <Press label="Back to standard" onPress={() => setFlashTiming(0)} /> : null}
               </>

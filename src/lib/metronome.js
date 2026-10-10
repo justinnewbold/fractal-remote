@@ -178,6 +178,19 @@ export function useScreenClick(bpm, onBeat) {
     const flashes = new Set()
     /* While the browser will not let sound start yet: the flash keeps the tempo on its own. */
     let silentSince = null
+    /* A beep stopped before it starts never sounds: none is heard without its flash, nor flashed without its beep. */
+    const takeBack = () => {
+      for (const t of flashes) clearTimeout(t)
+      flashes.clear()
+      for (const b of booked) {
+        try {
+          b.osc.stop()
+        } catch {
+          // Already over.
+        }
+      }
+      booked.length = 0
+    }
     const beep = (at) => {
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
@@ -217,7 +230,17 @@ export function useScreenClick(bpm, onBeat) {
         return
       }
       const now = performance.now()
-      if (silentSince === null) silentSince = now - beat
+      if (silentSince === null) {
+        /*
+         * The audio stopped (or never started): what was booked on its frozen
+         * clock would sound beside the next beeps when it comes back, so it is
+         * taken back now, with its flashes, and this keeps the time alone. A
+         * beat's grace where there is audio to wait for, so a press that is
+         * only starting it does not light a flash with no beep.
+         */
+        takeBack()
+        silentSince = ctx ? now : now - beat
+      }
       if (now - silentSince >= beat) {
         silentSince += beat * Math.floor((now - silentSince) / beat)
         onBeat?.()
@@ -228,17 +251,7 @@ export function useScreenClick(bpm, onBeat) {
     return () => {
       alive = false
       clearInterval(timer)
-      for (const t of flashes) clearTimeout(t)
-      flashes.clear()
-      /* A beep stopped before it starts never sounds: none is heard without its flash. */
-      for (const b of booked) {
-        try {
-          b.osc.stop()
-        } catch {
-          // Already over.
-        }
-      }
-      booked.length = 0
+      takeBack()
     }
   }, [on, beat, onBeat])
 }

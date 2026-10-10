@@ -13,6 +13,8 @@ import { useBluetoothOn } from '../lib/bluetooth'
 const face = Platform.select(mono)
 const ofSlug = (s) => s.deviceSlug
 const ofBpm = (s) => s.bpm
+/* Each part a sentence: the place notes are written as labels, with no full stop. */
+const sentence = (t) => (/[.!?]$/.test(t) ? t : `${t}.`)
 
 /**
  * THE METRONOME, ON AND OFF, IN THE VOLUME POP-UP.
@@ -46,10 +48,9 @@ export default function MetronomeSwitch() {
   }
 
   const where = unitCan.can ? PLACES.find((p) => placeLit(setting, p.key, true))?.note || '' : unitCan.why
-  const untilHeard =
-    unitCan.can && setting.on && setting.where === 'unit' && !heard ? ' Until the unit says its click is on, the phone keeps time as well.' : ''
-  const noTempo =
-    setting.on && clicks(setting, unitCan.can, heard).phone && !beatMs(bpm) ? ' No tempo from the unit yet, so the phone has nothing to click to.' : ''
+  const untilHeard = unitCan.can && setting.on && setting.where === 'unit' && !heard ? 'Until the unit says its click is on, the phone keeps time as well.' : ''
+  const noTempo = setting.on && clicks(setting, unitCan.can, heard).phone && !beatMs(bpm) ? 'No tempo from the unit yet, so the phone has nothing to click to.' : ''
+  const line = [where, untilHeard, noTempo].filter(Boolean).map(sentence).join(' ')
 
   return (
     <View style={{ gap: space.sm }}>
@@ -62,7 +63,7 @@ export default function MetronomeSwitch() {
         ) : null}
       </View>
       <Press label={setting.on ? 'Metronome on' : 'Metronome off'} tone="live" on={setting.on} height={TAP} onPress={toggle} />
-      <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{`${where}${untilHeard}${noTempo}`}</Text>
+      <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{line}</Text>
       {said ? (
         <Note tone="fault" onDismiss={() => setSaid(null)}>
           {said}

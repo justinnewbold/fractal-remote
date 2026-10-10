@@ -203,13 +203,13 @@ let nudge = 0
 AsyncStorage.getItem(FLASH_KEY)
   .then((raw) => {
     if (raw === null) return
-    nudge = flashNudge(Number(raw))
+    nudge = flashNudge(Number(raw), Platform.OS)
     announce()
   })
   .catch(() => {})
 export const flashTiming = () => nudge
 export function setFlashTiming(ms) {
-  nudge = flashNudge(ms)
+  nudge = flashNudge(ms, Platform.OS)
   announce()
   AsyncStorage.setItem(FLASH_KEY, String(nudge)).catch(() => {})
 }
@@ -359,12 +359,15 @@ function releaseLater() {
  * HOW LATE THE CLICK REALLY STARTS, on his phone, into the log. A few beats
  * into each run the iPhone's player is asked where it has got to, a moment
  * after it was told to play and again a little later if it had not started:
- * what it has not yet played is how long it took to start. Said once a run,
- * so "Send logs to developer" brings back a number nobody had to measure by
- * ear.
+ * how long it has really been since the play, less what it has played, is
+ * how long it took to start. (The time since is read, not assumed: a timer
+ * here fires on the next screen frame, which can be most of a click late.)
+ * Said once a run, so "Send logs to developer" brings back a number nobody
+ * had to measure by ear.
  */
-const LAG_PROBES_MS = [20, 50, 80, 120]
-function probeLag(player, lags, lead) {
+const LAG_PROBES_MS = [10, 30, 60, 100]
+const CLICK_S = 0.03
+function probeLag(player, lags, lead, asked) {
   if (!IOS || !player || lags.done) return
   const ask = (i) =>
     setTimeout(() => {
@@ -375,15 +378,17 @@ function probeLag(player, lags, lead) {
       } catch {
         return
       }
+      const since = Date.now() - asked
       if (!(at > 0)) {
         if (i + 1 < LAG_PROBES_MS.length) return ask(i + 1)
-        lags.push(LAG_PROBES_MS[i])
-      } else if (at < 0.03) lags.push(LAG_PROBES_MS[i] - at * 1000)
-      else return
+        /* Not started yet, this long after: at least that late. */
+        lags.push(since)
+      } else if (at < CLICK_S - 0.001) lags.push(since - at * 1000)
+      /* Over already: started sooner than this probe could see. Not counted. */ else return
       if (lags.length < 6) return
       lags.done = true
       const sorted = [...lags].sort((a, b) => a - b)
-      const mid = Math.round((sorted[2] + sorted[3]) / 2)
+      const mid = Math.max(0, Math.round((sorted[2] + sorted[3]) / 2))
       logDebug('metronome', `the click starts about ${mid} ms after the beat; the flash comes ${lead} ms after it`)
     }, LAG_PROBES_MS[i] - (i ? LAG_PROBES_MS[i - 1] : 0))
   ask(0)
@@ -419,8 +424,9 @@ export function usePhoneClick(bpm, onBeat) {
     const lags = []
     const step = () => {
       if (!alive) return
+      const asked = Date.now()
       const sounding = click()
-      if (n++ >= 2) probeLag(sounding, lags, flashLead(Platform.OS, nudge))
+      if (n++ >= 2) probeLag(sounding, lags, flashLead(Platform.OS, nudge), asked)
       /* The flash and the tap wait for the sound: see FLASH_LEAD. Read each beat, so Flash timing moves it at once. */
       const t = setTimeout(() => {
         later.delete(t)

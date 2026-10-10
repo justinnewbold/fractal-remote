@@ -4330,12 +4330,15 @@ export function run(test) {
       assert.equal(flashes.at(-1), t0 + 2100, 'Flash timing does not move the flash')
       click.setFlashTiming(0)
 
-      /* Stopped between a click and its flash: the flash never comes. */
-      await clock.advance(510 - 500 + 490)
+      /* Stopped between a click and its flash: the flash never comes, nor the tap. */
+      await clock.advance(410)
+      assert.ok(audio.calls.includes(`play 1 @${t0 + 2500}`) && flashes.at(-1) === t0 + 2100, 'the test did not stop between a click and its flash')
       const seen = flashes.length
+      const tapped = feedback.ticks
       stop()
       await clock.advance(1000)
       assert.equal(flashes.length, seen, 'a flash lands after the click stopped')
+      assert.equal(feedback.ticks, tapped, 'a tap lands after the click stopped')
 
       /* Started again within two seconds (a tap-tempo press): the audio is not let go under it. */
       click.usePhoneClick(120, () => flashes.push(clock.now()))
@@ -4351,7 +4354,7 @@ export function run(test) {
 
       /* How late the click starts, into the log once a run: here it never starts, so the last probe. */
       const log = await import(pathToFileURL(join(dir, 'debugLog.js')).href)
-      assert.ok(log.said.some((l) => /the click starts about 120 ms after the beat; the flash comes 40 ms after it/.test(l)), 'the click’s real delay never reaches the log')
+      assert.ok(log.said.some((l) => /the click starts about 100 ms after the beat; the flash comes 40 ms after it/.test(l)), 'the click’s real delay never reaches the log')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -4434,13 +4437,102 @@ export function run(test) {
     assert.match(browser, /await setMetronome\(\{ on: !setting\.on \}, slug\)/)
   })
 
-  test('the green light on Tap lights on the phone’s own click while it clicks, and loops natively when it does not', () => {
-    const dot = read('mobile/src/components/TempoDot.js')
-    assert.match(dot, /onPhoneBeat\(\(\) => \{/, 'the light keeps a clock of its own beside the phone’s click')
-    assert.match(dot, /const followsPhone = usePhoneClicking\(\)/)
-    /* A looped sequence goes back to the JavaScript every beat and slides behind the tempo. */
-    assert.doesNotMatch(withoutComments(dot), /Animated\.sequence/, 'the light is looped through the JavaScript')
-    assert.match(dot, /Animated\.loop\(Animated\.timing\(phase, \{ toValue: 1, duration: beat, easing: Easing\.linear, useNativeDriver: true \}\)\)/)
+  test('the green light on Tap lights on the phone’s own click while it clicks, and keeps counted time when it does not', async () => {
+    /* Run, not read: TempoDot beside stand-ins for React, Animated, the phone's beat and a clock the test turns. */
+    const dir = mkdtempSync(join(tmpdir(), 'dot-'))
+    try {
+      const files = {
+        'package.json': '{ "type": "module" }',
+        'react.js': 'export const useEffect = (fn) => { globalThis.__dotEffect = fn }\nexport const useRef = (v) => ({ current: v })\n',
+        'clock.js': `
+          let t = 0
+          let seq = 0
+          const timers = new Map()
+          export const now = () => t
+          export function setTimeout(fn, ms = 0) { const id = ++seq; timers.set(id, { id, at: t + ms, fn }); return id }
+          export function clearTimeout(id) { timers.delete(id) }
+          export function advance(ms) {
+            const end = t + ms
+            for (;;) {
+              let next = null
+              for (const x of timers.values()) if (x.at <= end && (!next || x.at < next.at)) next = x
+              if (!next) break
+              timers.delete(next.id)
+              t = next.at
+              next.fn()
+            }
+            t = end
+          }
+          /* A timer that fires late, as one on a phone does now and then. */
+          export const lateBy = (ms) => { for (const x of timers.values()) x.at += ms }
+        `,
+        'rn.js': `
+          import { now } from './clock.js'
+          export const lit = []
+          class Value { constructor(v) { this.v = v } setValue(v) { this.v = v; if (v === 1) lit.push(now()) } }
+          export const Animated = { Value, View: 'View', timing: () => ({ start() {} }) }
+          export const Easing = { out: (f) => f, quad: (x) => x }
+        `,
+        'metronome.js': `
+          const fns = new Set()
+          export let clicking = false
+          export const __clicking = (on) => { clicking = on }
+          export const usePhoneClicking = () => clicking
+          export const onPhoneBeat = (fn) => (fns.add(fn), () => fns.delete(fn))
+          export const __beat = () => fns.forEach((fn) => fn())
+        `,
+        'metronome-rules.js': read('mobile/src/lib/metronome-rules.js'),
+        'theme.js': "export const color = { ok: 'green' }\n",
+        'TempoDot.js': ("import * as __clock from './clock.js'\n" + read('mobile/src/components/TempoDot.js'))
+          .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
+          .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
+          .replace(/\bDate\.now\(\)/g, '__clock.now()')
+          .replace("from 'react'", "from './react.js'")
+          .replace("from 'react-native'", "from './rn.js'")
+          .replace("from '../lib/metronome'", "from './metronome.js'")
+          .replace("from '../lib/metronome-rules'", "from './metronome-rules.js'")
+          .replace("from '../lib/theme'", "from './theme.js'")
+          /* What it draws is JSX, which Node does not read; what is under test is when it lights. */
+          .replace(/\n  if \(!beat\) return null\n  return \([\s\S]*?\n  \)\n\}/, '\n  return null\n}')
+      }
+      assert.doesNotMatch(files['TempoDot.js'], /<Animated/, 'the bench could not take the drawing out of TempoDot')
+      for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+      const at = (f) => pathToFileURL(join(dir, f)).href
+      const { default: TempoDot } = await import(at('TempoDot.js'))
+      const clock = await import(at('clock.js'))
+      const rn = await import(at('rn.js'))
+      const beat = await import(at('metronome.js'))
+
+      /* Not clicking: counted from the start, so a late timer is late once and the beats after it are not. */
+      TempoDot({ bpm: 120 })
+      const stop = globalThis.__dotEffect()
+      clock.advance(1000)
+      clock.lateBy(30)
+      clock.advance(14000)
+      assert.deepEqual(rn.lit.slice(0, 4), [0, 500, 1000, 1530])
+      assert.deepEqual(rn.lit.slice(4, 8), [2000, 2500, 3000, 3500], 'one late beat drags every beat after it')
+      assert.equal(rn.lit.at(-1), 15000, 'the light drifts off the tempo')
+      assert.equal(rn.lit.length, 31)
+      stop()
+      clock.advance(5000)
+      assert.equal(rn.lit.length, 31, 'the light keeps flashing after it is gone')
+
+      /* Clicking: it lights on the phone's own beat, and only then. */
+      rn.lit.length = 0
+      beat.__clicking(true)
+      TempoDot({ bpm: 120 })
+      const unhook = globalThis.__dotEffect()
+      clock.advance(2000)
+      assert.equal(rn.lit.length, 0, 'the light keeps a clock of its own beside the phone’s click')
+      beat.__beat()
+      beat.__beat()
+      assert.equal(rn.lit.length, 2, 'the light does not light on the phone’s click')
+      unhook()
+      beat.__beat()
+      assert.equal(rn.lit.length, 2)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
     const metronome = read('mobile/src/lib/metronome.js').replace(/\s+/g, ' ')
     assert.match(metronome, /tick\(\) onBeat\?\.\(\) for \(const fn of beatWatchers\) fn\(\)/, 'the light, the flash and the tap are not on the same beat')
   })
@@ -4454,6 +4546,8 @@ export function run(test) {
     assert.match(src, /for \(const b of booked\) \{ try \{ b\.osc\.stop\(\) \}/, 'a beep booked before a stop sounds with no flash')
     assert.match(src, /for \(const t of flashes\) clearTimeout\(t\)/)
     assert.match(src, /if \(ctx && ctx\.state === 'running'\)/, 'beeps are booked on a clock that is not running')
+    /* Audio that stops mid-run takes back what was booked on its frozen clock, or it doubles when it comes back. */
+    assert.match(withoutComments(read('src/lib/metronome.js')).replace(/\s+/g, ' '), /if \(silentSince === null\) \{ takeBack\(\) silentSince = ctx \? now : now - beat \}/, 'beeps booked before the audio stopped sound beside the new ones')
     assert.match(read('src/styles.css'), /\.metronome-beat \{[\s\S]{0,700}will-change: opacity;/)
   })
 
@@ -4510,6 +4604,14 @@ export function run(test) {
     assert.equal(m.flashTimingNote(0), 'Standard')
     assert.equal(m.flashTimingNote(60), '60 ms later than standard')
     assert.equal(m.flashTimingNote(-20), '20 ms earlier than standard')
+    /* As early as it goes is the flash on the click: no press past that moves nothing under a line saying it did. */
+    assert.equal(m.nudgeFloor('ios'), -40)
+    assert.equal(m.nudgeFloor('android'), -100)
+    assert.equal(m.flashNudge(-100, 'ios'), -40, 'Earlier goes on past where the flash can move on an iPhone')
+    assert.equal(m.flashTimingNote(-100, 'ios'), '40 ms earlier than standard')
+    assert.equal(m.flashLead('ios', -40), 0)
+    assert.match(read('mobile/src/screens/Settings.js'), /disabled=\{flashTiming <= nudgeFloor\(Platform\.OS\)\}/, 'Earlier stays live where it moves nothing')
+    assert.match(read('mobile/src/lib/metronome.js'), /nudge = flashNudge\(ms, Platform\.OS\)/)
     assert.match(m.metronomeNote({ on: true, where: 'unit' }, 'fm3', 120), /On, 120 BPM, on the unit/)
     assert.match(m.metronomeNote({ on: true, where: 'unit' }, 'vp4', 120), /no metronome the app can switch/)
     assert.equal(m.metronomeNote({ on: false }, 'fm3', 120), 'Off')

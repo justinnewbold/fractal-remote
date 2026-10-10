@@ -226,16 +226,23 @@ export function nextBeat(startedAt, now, beat) {
 export const FLASH_LEAD = { ios: 40, android: 100 }
 /* What Flash timing may add or take away, and by how much a press. */
 export const FLASH_NUDGE = { min: -100, max: 400, step: 20 }
-export const flashNudge = (ms) => {
+/*
+ * As early as Flash timing goes on this phone: the flash on the click itself.
+ * Earlier than that would be a press that moves nothing under a line saying
+ * it did — on an iPhone, three of them.
+ */
+export const nudgeFloor = (os) => Math.max(FLASH_NUDGE.min, -(FLASH_LEAD[os] ?? 0))
+export const flashNudge = (ms, os) => {
   const n = Math.round(Number(ms) / FLASH_NUDGE.step) * FLASH_NUDGE.step
-  return Number.isFinite(n) ? Math.max(FLASH_NUDGE.min, Math.min(FLASH_NUDGE.max, n)) : 0
+  const floor = os === undefined ? FLASH_NUDGE.min : nudgeFloor(os)
+  return Number.isFinite(n) ? Math.max(floor, Math.min(FLASH_NUDGE.max, n)) : 0
 }
 /** How long after the click is started the flash and the tap come, on this platform. */
-export const flashLead = (os, nudge = 0) => Math.max(0, (FLASH_LEAD[os] ?? 0) + flashNudge(nudge))
+export const flashLead = (os, nudge = 0) => Math.max(0, (FLASH_LEAD[os] ?? 0) + flashNudge(nudge, os))
 
 /** Flash timing in his words: where the flash sits against the standard for this phone. */
-export function flashTimingNote(nudge) {
-  const n = flashNudge(nudge)
+export function flashTimingNote(nudge, os) {
+  const n = flashNudge(nudge, os)
   if (n === 0) return 'Standard'
   return `${Math.abs(n)} ms ${n > 0 ? 'later' : 'earlier'} than standard`
 }
