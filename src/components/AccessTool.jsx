@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { DEFAULT_PROJECT, resendConfirmation, sendPasswordReset, supabaseClient } from '../lib/remote'
-import { accessAction, lookupRows, signInHelp, signInHelpWords } from '../../shared/admin.mjs'
+import { accessAction, confirmNowHint, lookupRows, signInHelp, signInHelpWords } from '../../shared/admin.mjs'
 import Facts from './Facts'
 
 /**
@@ -13,6 +13,19 @@ export default function AccessTool() {
   const [busy, setBusy] = useState(null)
   const [said, setSaid] = useState(null)
   const [helped, setHelped] = useState(null)
+
+  /* One request to grant-access, as the signed-in account. */
+  const ask = async (action, address) => {
+    const client = supabaseClient()
+    const { data } = client ? await client.auth.getSession() : { data: null }
+    return accessAction({
+      url: DEFAULT_PROJECT.url,
+      anonKey: DEFAULT_PROJECT.anonKey,
+      token: data?.session?.access_token,
+      action,
+      email: address
+    })
+  }
 
   /* Help them sign in: the email they are missing, for the address looked up. */
   const help = async (kind) => {
@@ -30,6 +43,20 @@ export default function AccessTool() {
     }
   }
 
+  /* Confirm their account now, then Check again: the phone's, word for word. */
+  const confirmNow = async () => {
+    const address = said.email
+    setBusy('confirmNow')
+    setHelped(null)
+    try {
+      const done = await ask('confirm', address)
+      setHelped(signInHelpWords('confirmNow', address, done.ok ? null : done.message))
+      if (done.ok) setSaid(await ask('check', address))
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const run = async (action) => {
     const address = email.trim()
     if (!address.includes('@')) {
@@ -40,17 +67,7 @@ export default function AccessTool() {
     setSaid(null)
     setHelped(null)
     try {
-      const client = supabaseClient()
-      const { data } = client ? await client.auth.getSession() : { data: null }
-      setSaid(
-        await accessAction({
-          url: DEFAULT_PROJECT.url,
-          anonKey: DEFAULT_PROJECT.anonKey,
-          token: data?.session?.access_token,
-          action,
-          email: address
-        })
-      )
+      setSaid(await ask(action, address))
     } finally {
       setBusy(null)
     }
@@ -100,6 +117,11 @@ export default function AccessTool() {
               {busy === 'confirm' ? 'Sending…' : 'Resend their "confirm your email" link'}
             </button>
           ) : null}
+          {signInHelp(said).confirmNow ? (
+            <button type="button" className="chip" disabled={!!busy} onClick={confirmNow}>
+              {busy === 'confirmNow' ? 'Confirming…' : 'Confirm their account now'}
+            </button>
+          ) : null}
           {signInHelp(said).reset ? (
             <button type="button" className="chip" disabled={!!busy} onClick={() => help('reset')}>
               {busy === 'reset' ? 'Sending…' : 'Send them a password reset'}
@@ -107,6 +129,7 @@ export default function AccessTool() {
           ) : null}
         </div>
       ) : null}
+      {signInHelp(said).confirmNow ? <p className="hint">{confirmNowHint(said)}</p> : null}
       {helped ? (
         <p className={helped.ok ? 'hint access-said' : 'save-error access-said'} role="status">
           {helped.message}

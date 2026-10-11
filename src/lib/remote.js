@@ -58,7 +58,9 @@ export {
   timeoutFor,
   repeatable,
   RELAY_GRACE,
-  explainAuth
+  explainAuth,
+  NOT_IN_INBOX,
+  sentAgain
 } from '../../shared/relay-rules.mjs'
 import {
   forbiddenRemotely,
@@ -66,6 +68,7 @@ import {
   repeatable,
   RELAY_GRACE,
   explainAuth,
+  notConfirmed,
   hostConflict as conflictBetween,
   hostNamesFrom as namesFrom,
   firstUnitHost,
@@ -816,7 +819,8 @@ export async function remoteSignIn({ url, anonKey, email, password }) {
     auth: { persistSession: true, autoRefreshToken: true }
   })
   const { data, error } = await client.auth.signInWithPassword({ email, password })
-  if (error) throw new Error(explainAuth(error.message))
+  /* `notConfirmed`: the email was never confirmed, and the form offers to send it again. */
+  if (error) throw Object.assign(new Error(explainAuth(error.message)), { notConfirmed: notConfirmed(error) })
   userId = data?.user?.id
   if (!userId) throw new Error('Signed in but Supabase returned no user id.')
   return userId

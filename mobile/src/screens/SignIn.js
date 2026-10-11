@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { sendPasswordReset, signIn, signUp } from '../lib/relay'
+import { NOT_IN_INBOX, resendConfirmation, sendPasswordReset, sentAgain, signIn, signUp } from '../lib/relay'
 import Note from '../components/Note'
 import Press from '../components/Press'
 import Connect from './Connect'
@@ -106,10 +106,21 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [note, setNote] = useState(null)
+  /*
+   * An account waiting on its confirmation email: { why: 'made' } just now,
+   * with the note saying so, or { why: 'refused', email } when Sign in was
+   * turned away for it, which offers to send the email again. To that
+   * address, not the box: the box may say another by the time the button is
+   * tapped, and the account service can answer "sent" for an address with no
+   * account, so the "look in Spam" line would follow an email that never went.
+   * Every new try, and every switch of side, starts it again.
+   */
+  const [unconfirmed, setUnconfirmed] = useState(null)
 
   const ready = email.includes('@') && password.length >= 6
 
   const go = async () => {
+    setUnconfirmed(null)
     if (!ready) {
       setError(
         email.includes('@')
@@ -137,6 +148,7 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
               ? 'Account made — confirm it from the email we just sent, then come back to this phone and sign in, so your purchase goes with your account.'
               : 'Account made. Confirm it from the email we just sent, then sign in.'
           )
+          setUnconfirmed({ why: 'made' })
           setMode('in')
           return
         }
@@ -145,6 +157,7 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
       }
       onSignedIn()
     } catch (err) {
+      if (mode === 'in' && err?.notConfirmed) setUnconfirmed({ why: 'refused', email: email.trim() })
       if (mode === 'in' && paid && err?.noMatch) setNoAccount(true)
       else setError(err.message)
     } finally {
@@ -153,6 +166,7 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
   }
 
   const reset = async () => {
+    setUnconfirmed(null)
     if (!email.includes('@')) {
       setError('Type your email address first.')
       return
@@ -169,12 +183,30 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
     }
   }
 
+  /* "Email not confirmed" said to look for the email, and gave no way to get another. */
+  const sendAgain = async () => {
+    const address = unconfirmed?.email
+    if (!address) return
+    setBusy(true)
+    setError(null)
+    try {
+      await resendConfirmation(address)
+      setUnconfirmed(null)
+      setNote(sentAgain(address))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   /* The email stays as typed either way. */
   const switchTo = (next) => {
     setMode(next)
     setError(null)
     setNote(null)
     setNoAccount(false)
+    setUnconfirmed(null)
   }
 
   const fieldText = {
@@ -330,7 +362,11 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
             <Press label="Create account with this email" disabled={busy} onPress={() => switchTo('up')} />
           </View>
         ) : null}
-        {note ? <Note>{note}</Note> : null}
+        {mode === 'in' && unconfirmed?.why === 'refused' && error ? (
+          <Press label="Send the confirmation email again" disabled={busy} onPress={sendAgain} />
+        ) : null}
+        {/* Where else to look, under the note that says to confirm. */}
+        {note ? <Note>{unconfirmed?.why === 'made' ? `${note} ${NOT_IN_INBOX}` : note}</Note> : null}
 
         {/* Amber whether or not the fields are filled in, as drawn: a pale
             button reads as switched off, and the form says what is missing

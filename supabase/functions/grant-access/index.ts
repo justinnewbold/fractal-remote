@@ -11,6 +11,7 @@
  *   check   does this email have an account, and does it have the unlock
  *   grant   give it the unlock for good (a RevenueCat granted entitlement)
  *   revoke  take back an unlock given here — a purchase is not touched
+ *   confirm mark their email confirmed, for the email that never reaches them
  *   sales   every sale so far, for Sales at a glance
  *   usage   how many people used it lately, for How many people
  *
@@ -448,6 +449,40 @@ async function noAccountYet(action: string, email: string): Promise<Record<strin
   }
 }
 
+/*
+ * CONFIRM SOMEBODY'S EMAIL BY HAND.
+ *
+ * "How can I resend a verification email to this person. He said he didn't
+ * get it. Can we set up a way for me to do that myself?" Resend shows the
+ * confirmation emails as delivered, and people still say they never saw them:
+ * most likely Spam or Promotions. Sending it again is already on the page
+ * (signInHelp in shared/admin.mjs); this is for when that does not help. It
+ * marks the address confirmed, as tapping the link would, through the account
+ * service's own admin call, so they sign in with the password they chose.
+ *
+ * Nothing is emailed and nothing else about the account changes. Only an
+ * address that already has an account, and only behind the lock below.
+ */
+async function confirmByHand(found: Record<string, any> | null, email: string): Promise<Response> {
+  const account = found?.id ? String(found.id) : null
+  if (!account) return json({ ok: false, found: false, email, message: `No account uses ${email}, so there is nothing to confirm.` })
+  if (found?.confirmed) return json({ ok: true, found: true, already: true, email, message: `${email} had already confirmed their email.` })
+  const key = env('SUPABASE_SERVICE_ROLE_KEY')
+  const res = await fetch(`${env('SUPABASE_URL')}/auth/v1/admin/users/${encodeURIComponent(account)}`, {
+    method: 'PUT',
+    headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email_confirm: true })
+  })
+  /* Logged by the account's id, never the address, and not the answer's body,
+     which could carry it. */
+  if (!res.ok) {
+    console.error(`grant-access: the account service would not confirm ${account} (${res.status})`)
+    return json({ ok: false, found: true, email, message: `The account service would not confirm it (${res.status}).` }, 502)
+  }
+  console.log(`grant-access: confirmed ${account} by hand`)
+  return json({ ok: true, found: true, confirmed: true, email, message: `${email} is confirmed. They can sign in now.` })
+}
+
 /** The plain sentence for a RevenueCat refusal. */
 async function refusal(res: Response, doing: string): Promise<string> {
   const said = await res.text().catch(() => '')
@@ -484,7 +519,7 @@ Deno.serve(async (req: Request) => {
   }
   const action = String(input.action || 'check')
   const email = String(input.email || '').trim().toLowerCase()
-  if (internal ? action !== 'claim' : !['check', 'grant', 'revoke', 'sales', 'accounts', 'usage'].includes(action)) {
+  if (internal ? action !== 'claim' : !['check', 'grant', 'revoke', 'confirm', 'sales', 'accounts', 'usage'].includes(action)) {
     return json({ ok: false, message: 'Unknown action.' }, 400)
   }
   if (!['sales', 'accounts', 'usage'].includes(action) && !email.includes('@')) return json({ ok: false, message: 'Type the email address they signed up with.' }, 400)
@@ -498,6 +533,8 @@ Deno.serve(async (req: Request) => {
 
     const found = (await rpc('account_details', { address: email })) as Record<string, any> | null
     const account = found?.id ? String(found.id) : null
+    /* Before the waiting list: an address with no account has nothing to confirm. */
+    if (action === 'confirm') return await confirmByHand(found, email)
     if (!account) return json(await noAccountYet(action, email))
 
     /* A claim is only ever for an address Justin put on the list. */
@@ -546,7 +583,19 @@ Deno.serve(async (req: Request) => {
     if (action === 'claim') return json({ ok: true, unlocked: has, emailed: told === true })
 
     /* The Customer lookup. Asked after the change, so it shows the result. */
-    const [bought, seen] = await Promise.all([purchasesOf(account), lastSeen(account)])
+    const [bought, seen, waiting] = await Promise.all([
+      purchasesOf(account),
+      lastSeen(account),
+      /*
+       * Only for an account that never confirmed, which is when Confirm now is
+       * offered. The waiting list is claimed at the first sign-in, and the
+       * confirmation email was the only proof of whose address it is, so
+       * confirming by hand hands the unlock to whoever made the account: the
+       * page says so before he taps it. Unknown is not a reason to fail the
+       * lookup.
+       */
+      found?.confirmed ? false : rpc('is_waiting_grant', { address: email }).then(Boolean, () => null)
+    ])
     const details = {
       signedUp: found?.signed_up ?? null,
       confirmed: found?.confirmed ?? null,
@@ -555,7 +604,8 @@ Deno.serve(async (req: Request) => {
       /* One of the accounts shared/owner-unlock.mjs unlocks without a purchase. */
       owner: found?.unlock?.source === 'owner',
       purchases: bought,
-      seen
+      seen,
+      waiting
     }
     const message =
       action === 'grant'

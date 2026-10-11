@@ -43,7 +43,8 @@ export const isAdmin = (id) => {
 }
 
 /**
- * Ask the server to check, grant or revoke the unlock for an email.
+ * Ask the server to check, grant or revoke the unlock for an email, or to
+ * confirm that email by hand ('confirm').
  *
  * `token` is the signed-in session's access token — the server reads who is
  * asking out of it. Never throws: whatever happens comes back as
@@ -174,7 +175,9 @@ export function lookupRows(answer, now = Date.now()) {
     { label: 'Signed up', value: dayOf(d.signedUp) },
     {
       label: 'Email confirmed',
-      value: d.confirmed ? 'Yes' : 'Not yet. They have not tapped the link in the email we sent.'
+      value: d.confirmed
+        ? 'Yes'
+        : 'Not yet. They have not tapped the link in the email we sent. It may be in their Spam, Junk or Promotions folder.'
     },
     { label: 'Last signed in', value: d.lastSignIn ? ago(d.lastSignIn, now) : 'Never' }
   ]
@@ -550,15 +553,57 @@ export function messageDetail(m, now = Date.now()) {
  * who has does not need the confirmation again. Both are the ordinary emails
  * anyone can ask for from the sign-in screen, so nothing here needs the
  * owner's key; the page only puts them where he is already looking.
+ *
+ * AND CONFIRM NOW, beside the resend. "He said he didn't get it. Can we set
+ * up a way for me to do that myself?" The emails were delivered and still not
+ * seen, most likely in Spam or Promotions, so sending another can land in the
+ * same place. Confirm now marks the address confirmed on the server
+ * (grant-access, action 'confirm'), with no email at all. That one is his
+ * alone, so it goes through accessAction and the server's lock like Give
+ * access does.
  */
 export function signInHelp(answer) {
   const d = answer?.details
-  if (!answer?.found || !d || !answer.email) return { confirm: false, reset: false }
-  return { confirm: !d.confirmed, reset: !!d.confirmed }
+  if (!answer?.found || !d || !answer.email) return { confirm: false, confirmNow: false, reset: false }
+  return { confirm: !d.confirmed, confirmNow: !d.confirmed, reset: !!d.confirmed }
 }
 
-/** What the page says after sending one. */
+/*
+ * The line under Confirm now, which shows beside the resend.
+ *
+ * Resend first: an email that reaches them proves the address is theirs, and
+ * Confirm now proves nothing. It lets in whoever made the account, so it is
+ * only for an address he knows is theirs, and "check it" has to be a check he
+ * can do: they emailed him from it. That also catches the likeliest wrong
+ * one, a typo, which would leave them an account no reset can reach.
+ */
+export const CONFIRM_NOW_HINT =
+  'Try Resend first. If it still isn’t reaching them, Confirm their account now lets them in with no email at all. Only use it if they emailed you from this same address, so you know it’s spelled right and really theirs: it lets whoever made the account sign in.'
+
+/*
+ * And an address on the waiting list: its unlock is claimed at the first
+ * sign-in, on the confirmation email's word that the address is theirs.
+ * Confirming by hand takes that word away, so he hears it before he taps.
+ */
+export const CONFIRM_NOW_WAITING =
+  'This address is on the waiting list for the full version you gave it, so whoever made the account gets that too, the first time they sign in.'
+
+/** The words under Confirm now, for this lookup. */
+export function confirmNowHint(answer) {
+  return answer?.details?.waiting === true ? `${CONFIRM_NOW_HINT} ${CONFIRM_NOW_WAITING}` : CONFIRM_NOW_HINT
+}
+
+/** What the page says after sending one, or after confirming by hand ('confirmNow'). */
 export function signInHelpWords(kind, email, error) {
+  /* Confirming emails nobody, so the line says to tell them: they are still waiting on an email that will not come. */
+  if (kind === 'confirmNow') {
+    return error
+      ? { ok: false, message: `Their account was not confirmed: ${error}` }
+      : {
+          ok: true,
+          message: `${email} is confirmed. Nothing is emailed to them, so let them know they can sign in now with the password they chose. If they have forgotten it, send them a password reset.`
+        }
+  }
   if (error) return { ok: false, message: `It did not send: ${error}` }
   return kind === 'confirm'
     ? { ok: true, message: `A new "confirm your email" link is on its way to ${email}.` }

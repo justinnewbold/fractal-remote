@@ -218,6 +218,21 @@ export function hostConflict() {
   return null
 }
 
+/*
+ * WHERE THE CONFIRMATION EMAIL GOES. A customer signed up, both confirmation
+ * emails were delivered to his Gmail, and he never saw either: most likely
+ * filed under Spam or Promotions. So every place that says "confirm it from
+ * the email" says where else to look, in the same words on both ends.
+ */
+export const NOT_IN_INBOX = 'If it isn’t in your inbox, look in Spam, Junk or Promotions for an email from Fractal Remote.'
+
+/** Sign-in refused because the email was never confirmed: the one a "send it again" button answers. */
+export const notConfirmed = (error) =>
+  error?.code === 'email_not_confirmed' || /not confirmed/i.test(String(error?.message || ''))
+
+/** What both ends say once the confirmation email has gone again. */
+export const sentAgain = (email) => `A new confirmation email is on its way to ${email}. ${NOT_IN_INBOX}`
+
 /**
  * Supabase's auth errors are terse and one of them is actively misleading.
  *
@@ -227,7 +242,7 @@ export function hostConflict() {
 export function explainAuth(message) {
   const m = (message || '').toLowerCase()
   if (m.includes('not confirmed') || m.includes('email not confirmed')) {
-    return 'That email hasn’t been confirmed yet. Look for the confirmation email, then try again.'
+    return `That email hasn’t been confirmed yet. Look for the confirmation email, then try again. ${NOT_IN_INBOX}`
   }
   if (m.includes('invalid login')) {
     return 'Email or password didn’t match.'
