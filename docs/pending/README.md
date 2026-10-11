@@ -25,7 +25,10 @@ beta note, the parts and how they plug in, and the setup guide at
 fractal.newbold.cloud/bluetooth.html. What it carried, and why each part is
 the way it is, is in that change's pull request and in the comments of the
 files themselves (mobile/src/lib/bluetooth.js, bleWire.js, bleLink.js,
-mobile/src/screens/Bluetooth.js, shared/bluetooth-gear.mjs).
+mobile/src/screens/Bluetooth.js, shared/bluetooth-gear.mjs). The next day,
+11 October, it went back to Justin's account alone, by an update ("I just
+feel like it's not ready to have public"); the guide moved to
+bluetooth-guide.html, and CLAUDE.md says how it is gated.
 
 Still true from the work it carried:
 

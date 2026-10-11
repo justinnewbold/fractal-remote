@@ -69,19 +69,16 @@ the people who make that gear.
 Changes only with a new version, so it goes in with the next build. The same
 text goes on Google Play, where it can change any time (see below).
 
-**This is the one to paste for 1.87.1.** Two places in it changed for this
-version, because Bluetooth (beta) made them untrue: the end of the demo
-paragraph ("Controlling your real unit needs the computer described at the
-top") and HOW IT WORKS ("A phone cannot talk to a Fractal unit on its own").
-Both now say that, in beta, a Bluetooth MIDI adapter on the unit can take the
-computer's place, and HOW IT WORKS says where it has been tried. Both name
-the four units the Bluetooth page offers (AM4, FM3, FM9 and Axe-Fx III), and
-HOW IT WORKS says "not the VP4": SUPPORTED UNITS lists the VP4, and the app
-does not offer it over Bluetooth, so a VP4 owner would otherwise expect it.
-The opening still says REQUIRES A COMPUTER, which undersells the app rather
-than overselling a beta; the fuller version is the draft at the very bottom, and
-that one is Justin's call. **On Google Play, paste it the day 1.87.1 goes out
-there, not before:** until then the Play copy of the app has no Bluetooth.
+**This is the one to paste for 1.87.1.** It says nothing about Bluetooth.
+For one day (10 October 2026) it did: the demo paragraph and HOW IT WORKS
+both said that, in beta, a Bluetooth MIDI adapter could take the computer's
+place. Then, on 11 October: "Is there any way to just get the Bluetooth on
+the developers mode for my own phone? I just feel like it's not ready to
+have public." So Bluetooth (beta) shows on Justin's account alone, and a
+listing that promoted it would be promising customers something they cannot
+open (Apple's 2.3, and Google Play's rule that the listing matches the app).
+Both places say the computer again. **On Google Play it can go on whenever
+it suits:** nothing in it waits for 1.87.1 any more.
 
 ```
 REQUIRES A COMPUTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play.
@@ -92,7 +89,7 @@ SUPPORTED UNITS
 FM3, FM9, Axe-Fx III, AM4 and VP4.
 
 TRY THE DEMO, FOR AS LONG AS YOU LIKE
-The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer described at the top, or, in beta, a Bluetooth MIDI adapter on an AM4, FM3, FM9 or Axe-Fx III.
+The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer described at the top.
 
 WHAT IT DOES
 • Switch any of your presets, by name, in slot order or from a setlist
@@ -105,9 +102,9 @@ WHAT IT DOES
 • Colors that match your unit's own screen, so you find things by looking
 
 HOW IT WORKS
-A phone needs something between it and your Fractal unit. Usually that is the desktop app: it runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to it. Get it at fractal.newbold.cloud/downloads. Or, in beta, on an AM4, FM3, FM9 or Axe-Fx III (not the VP4), a Bluetooth MIDI adapter plugged into the unit's MIDI In and MIDI Out takes the computer's place. So far that has been tried on an AM4, from an iPhone, and it may not work with every unit or adapter. Setup guide: fractal.newbold.cloud/bluetooth
+A phone needs something between it and your Fractal unit: the desktop app. It runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to it. Get it at fractal.newbold.cloud/downloads.
 
-Through the computer, once the two are paired, the phone works from anywhere: the same room, the far side of the stage, or a different building. Over Bluetooth, it works within about 30 feet of the adapter.
+Once the two are paired, the phone works from anywhere: the same room, the far side of the stage, or a different building.
 
 ONE PAYMENT, LIFETIME UNLOCK
 Controlling real hardware is a single purchase. It unlocks the full app on every device you own, forever, including every future update, on all supported Fractal units. No subscription.
@@ -122,10 +119,9 @@ Both of these change any time, with no build: Play Console → Fractal Remote �
 them, press **Save**, then **Publishing overview → Send changes for review**.
 Google usually passes a text change within a day.
 
-- **Full description (4000):** the Description above, exactly, from the day
-  1.87.1 goes out on Play (it mentions Bluetooth, which the Play copy has only
-  from 1.87.1). *By hand in Play Console for 1.87.1*, at the bottom, says
-  the rest.
+- **Full description (4000):** the Description above, exactly. It mentions
+  no Bluetooth, so it does not wait for 1.87.1. *By hand in Play Console for
+  1.87.1*, at the bottom, says the rest.
 - **Short description (80):** the line under the app's name. **Not in
   capitals.** Google's help for this one field says "Do not use capitalization
   for emphasis", and its metadata policy lists "ALL CAPS although not part of
@@ -330,23 +326,54 @@ Connect. Until then the notes above stay as they are.
 
 Why the notes change at all: Apple's guideline 2.3.1(a) says every new feature
 "must be described with specificity in the Notes for Review", and 2.3.12 says
-What's New has to list the bigger changes. Four things are new to a reviewer
+What's New has to list the bigger changes. Three things are new to a reviewer
 since 1.86.83 was approved: an account can be made before buying, Edit says
-(Beta), Bluetooth (beta), which goes in this version for every paying
-customer (Justin, 10 October 2026: "If Bluetooth is ready, let's get it
-submitted ... let's just say that Bluetooth is beta though in the app"), and,
-on iPhone, Appearance set to Auto now follows the phone's light or dark
-setting (in 1.86.83 Auto was always dark, so a reviewer whose phone is set to
-light now sees the light theme first). And
+(Beta), and, on iPhone, Appearance set to Auto now follows the phone's light
+or dark setting (in 1.86.83 Auto was always dark, so a reviewer whose phone is
+set to light now sees the light theme first). And
 one sentence in the old notes stopped being true: "An account is used for one
 thing only: joining this phone to a computer". An account also carries the
 full version and the setlists to other devices, and anybody can make one now,
 so it is rewritten below.
 
+**And Bluetooth (beta), which is in the build but not for customers.** On 10
+October 2026 it was to go in this version for every paying customer ("If
+Bluetooth is ready, let's get it submitted ... let's just say that Bluetooth
+is beta though in the app"), and the 1.87.1 builds were made that day with
+the native Bluetooth MIDI module in them. On 11 October Justin took it back:
+"Is there any way to just get the Bluetooth on the developers mode for my own
+phone? I just feel like it's not ready to have public." So it is switched on
+for his account alone, by an update, and the code stays in the binary (taking
+it out is a new build, and the iPhone's Bluetooth permission text has to stay
+with the module or the build is refused). 2.3.1(a) says "Don't include any
+hidden, dormant, or undocumented features in your app", so the notes below
+say in one paragraph that the code is there, whom it is for, and that in
+that build nobody else is shown it or asked for Bluetooth. The same guideline also wants new
+features "accessible for review", and this one is described rather than
+reachable: that is the one place Apple could push back. If it does, the
+choice is Justin's: show it to the review account too, with a video of it
+working, or a build without the module.
+
 ### Notes for App Review, 1.87.1
 
+**Submit a build made from main after 1.87.8 was merged (11 October 2026),
+not the 10 October build 26, whose first launch still shows Bluetooth.**
+
+Why: a fresh install runs the copy of the app built into it on its very first
+launch, and only takes the latest update on the launch after
+(`fallbackToCacheTimeout` is 0 in mobile/app.json, so the app never waits for
+an update before it opens). Build 26's built-in copy is the 10 October one,
+which shows a BLUETOOTH (BETA) card under Settings → Phone & computer to any
+account with the full version, and Apple's demo account has the full
+version. So a reviewer installing build 26 can meet Bluetooth on that first
+launch, and the paragraph about it below would not be true for them. A build
+made from main after 11 October has the hidden version built in, and the
+notes below are written for that build. Making it is one iOS and one Android
+build (they always go together), and that is Justin's call. It carries the
+version number main is on that day, and these notes go with it as they are.
+
 **Paste this into App Review Information → Notes**, in place of the block
-above, when 1.87.1 is sent.
+above, when that build is sent.
 
 ```
 This app is a remote control for Fractal Audio guitar hardware. Normally it
@@ -382,24 +409,13 @@ is marked Beta because it does not yet cover every block and control of
 every unit, and a control may not yet move quite the way it does on the
 unit itself, as the note at the foot of that screen says.
 
-Bluetooth (beta). This version can also reach the guitar unit with no
-computer, through a Bluetooth MIDI adapter plugged into the unit's MIDI In
-and MIDI Out (for example a CME WIDI Uhost with a CME C2MIDI Pro cable). It
-is part of the full version, for everyone who has unlocked the app, and is
-marked beta wherever it appears. Signed in with the demo account in App
-Review Information, it is here: tap the gear at the top right for
-Settings, then Bluetooth (beta). (On the very first launch, before the
-app has updated itself, it is under Settings, then Phone & computer, then
-BLUETOOTH (BETA).) It needs a Fractal
-unit with an adapter on it, which you will not have, so a video of it
-working, filmed on an iPhone with a real AM4, is here:
-[VIDEO LINK — Justin films it on the TestFlight copy]
-The phone asks for Bluetooth permission only when Connect is tapped on
-that page. Bluetooth is not part of the demo, and the demo above still
-needs no hardware at all. The setup guide customers are given is at
-https://fractal.newbold.cloud/bluetooth.html
-A diagnostic panel on that page, which shows the messages sent to the
-unit, appears only for the developer's own account; customers never see
+Bluetooth MIDI code, switched on only for the developer. This build
+contains Bluetooth MIDI code for a feature that lets the phone reach the
+guitar unit through a Bluetooth MIDI adapter instead of a computer. While it
+is tested, it is switched on only for the developer's own account.
+Customers and the review account don't see it in this build, and the app
+doesn't ask them for Bluetooth permission. If it is offered to customers,
+that will be in a later version, sent for review with notes that describe
 it.
 
 Appearance. On iPhone, Appearance in Settings set to Auto, which is the
@@ -435,209 +451,84 @@ the phone and the computer), RevenueCat with Apple in-app purchase (the one
 purchase that unlocks the full version), Resend (account emails), and Expo
 (app updates).
 
-Regions: the app works the same in every country. The View on Amazon
-buttons on the Bluetooth page open amazon.com.
+Regions: the app works the same in every country.
 ```
 
-**Bluetooth is in this version, open to everyone who has unlocked the app.**
-So its paragraph is in the block above, and it names no list of accounts:
-there is none any more. The Bluetooth (beta) row on Settings shows to
-anybody who has paid, the same as the rest of the full version. (Until
-1.87.4 it was a card on Phone & computer; a fresh install of the 1.87.1
-build shows it there until its first update arrives.)
+**Bluetooth is in this build, switched on for Justin's account alone.** The
+Bluetooth (beta) row on Settings, and the page it opens, are drawn only for
+the account that opens his Developer pages, read from the sign-in kept on
+the phone (CLAUDE.md, *Bluetooth (beta) is the developer's only*). The
+review account is not that account, so in a build made after 11 October the
+reviewer is not shown it, and the paragraph above says so instead of telling
+them where it is. No video of Bluetooth goes with this version, because that
+build does not let the reviewer open it. (Build 26 would, on its first
+launch: see the line at the top of these notes. The Hardware paragraph's FM3
+video, which is about the computer, still goes.)
 
-**Four things before that block is pasted:**
+**Never switched on for customers by an update.** When it is ready, it goes
+in a new store version whose review notes describe it, the way this
+section's notes did on 10 October (they are in this file's history), with
+the video and the setup guide. Turning
+it on for everybody over the air instead, after Apple has reviewed a build
+that hides it, is the hidden feature 2.3.1(a) forbids, and a change to what
+the app does that Apple's licence (3.3.1(C)) and Google's rule on features
+activated remotely both keep for reviewed versions.
 
-- **The video.** Replace `[VIDEO LINK — Justin films it on the TestFlight copy]`
-  with the link. Apple's 2.1 asks for a video of hardware a reviewer cannot
-  have, and its 2.3.1(a) wants every new feature "accessible for review", so
-  the video is how Bluetooth is reviewed. Apple's help page for a complete
-  review says what kind: "a video (not a screen recording) that shows your
-  app running on a physical Apple device as it pairs and interacts with the
-  hardware". So:
-  - **Filmed with a camera,** for example a second phone. Not a screen
-    recording.
-  - **One take,** no cuts.
-  - **The iPhone and the AM4, with its adapter plugged in, both in the
-    frame** the whole time, so the reviewer sees the unit answer the phone.
-  - **On the TestFlight copy of this build (1.87.1),** so the screens match
-    these notes. If that iPhone has already allowed Bluetooth for Fractal
-    Remote, delete the app and install it again from TestFlight first, so
-    the question shows.
-  - **In this order:** the Bluetooth (beta) page (Settings, Bluetooth
-    (beta)) → tap Connect → the iPhone asks to allow
-    Bluetooth, tap Allow → Apple's Bluetooth screen opens → tap the adapter
-    and wait until it says Connected → tap Done → the page says "Connected ·
-    AM4 answering" → change a preset and then a scene on the phone, and show
-    each one changing on the AM4 itself.
-  - **A link that opens without signing in,** for example a YouTube video
-    set to Unlisted. Paste that link in place of the placeholder.
+**Two things before that block is pasted:**
+
 - **The three lines Apple's help page asks for.** Fill in the brackets in
   "Tested on" with the iOS version on the iPhone and the watch model and
   watchOS version it was tried with (Settings → General → About on each).
   Apple's 2.1(a) says placeholder text has to be gone before it is sent.
-- **The demo account has the full version.** The card is behind the unlock,
-  so the account Apple signs in with has to have it, or the reviewer finds no
-  Bluetooth card where the notes say there is one. If that account opens on
-  the purchase page instead of Settings, it does not have it yet.
-- **The guide is live.** Open https://fractal.newbold.cloud/bluetooth.html
-  and check that it says "Bluetooth (beta) setup" at the top. Until this
-  change is merged, that address shows the web app instead, and it still
-  loads as if nothing were wrong, so "it loads" is not the check.
+- **The demo account has the full version.** The signed-in screens are
+  behind the unlock, so the account Apple signs in with has to have it, or
+  the reviewer stops at the purchase page. If that account opens on the
+  purchase page instead of Settings, it does not have it yet.
 
 **Marked beta, not a beta app.** Guideline 2.2 keeps test versions of whole
 apps off the store. A finished app with one feature marked beta is what Edit
 (Beta) already is in these notes, and the notes say everything else works
 without it. The Edit paragraph keeps its one honest sentence on why it is a
 Beta, which matches the note on that screen, and no longer adds "It is still
-being improved", which reads as unfinished. And the Bluetooth page's Testing
-tools, a bench that says "For testing." and offers write checks, now show
-only on Justin's own account, so no reviewer or customer meets them; the
-notes say in one line that a diagnostic panel exists for the developer's
-account, so nothing in the app is undescribed.
+being improved", which reads as unfinished. And the Bluetooth page, with its
+Testing tools (a bench that says "For testing." and offers write checks),
+shows only on Justin's own account, so in a build made after 11 October the
+reviewer meets neither; the one Bluetooth paragraph in the notes says the code is there and whose it
+is, so nothing in the app is undescribed.
 
 ### What's New in This Version, 1.87.1
 
 Plain words, one change a line. The App Store takes 4000 characters, and
 all of it fits. Google Play's release notes take only 500, so on Play use the
-first five lines, which come to 496. Bluetooth leads, because it is the one
-customers will ask about, and it carries the beta warning in the line itself
-rather than leaving it for the app to say. It says "from an iPhone" because
-everybody reading Play's copy is on Android, and Bluetooth has never been
-run from an Android phone: "tried on the AM4" alone would read to them as
-tried on a phone like theirs. It says "most units", not "your unit", because
-the VP4 is not offered over Bluetooth; naming the four would take Play's five
-lines past 500, and the setup guide it links names them. The Appearance line
-is the sixth, after Play's five, because it is about the iPhone only.
+first five lines. No Bluetooth line: for one day it led this list, and since
+11 October Bluetooth (beta) is the developer's alone, so What's New does not
+announce what customers cannot open. The Appearance line is the sixth, after
+Play's five, because it is about the iPhone only.
 
 ```
-• Bluetooth (beta): no computer, through a Bluetooth MIDI adapter on most units. Tried so far on an AM4 from an iPhone, and it may not work with every unit or adapter. Setup guide: fractal.newbold.cloud/bluetooth
 • You can now make an account before buying.
 • Delete account is also at the bottom of the purchase page.
 • Edit is marked Beta while more blocks are added. If anything on it looks wrong, tell us with Feedback in Settings.
 • Preset names no longer go blank again after Refresh names.
-• On iPhone, Appearance set to Auto now follows your phone's light or dark setting.
 • With the phone's own metronome click on, the screen stays awake on every screen, so the click no longer stops when the phone would have gone to sleep.
+• On iPhone, Appearance set to Auto now follows your phone's light or dark setting.
 • The metronome's flash follows the rounded corners of your screen.
 • Scrolling the signal chain sideways on Edit no longer swipes you back to Play.
 • The Mac, Windows and Linux icons on Connect a computer open the download page.
 • The demo no longer says NO COMPUTER a moment after it starts.
 ```
 
-### Description and Subtitle with Bluetooth (beta): a draft, for Justin to say yes to
+### The Description with Bluetooth (beta): withdrawn
 
-**Nothing here is in use yet.** The Description and the Subtitle at the top
-of this file are what go with 1.87.1 unless Justin says yes to this draft.
-It is here because the listing opens on REQUIRES A COMPUTER, and from this
-version that is no longer the whole truth: a Bluetooth MIDI adapter on the
-unit can take the computer's place. Said too loudly, though, a beta that has
-been tried on one unit reads as a promise, so the draft keeps the computer
-first and adds Bluetooth beside it, marked beta.
-
-**What changes, in plain words:** the first line becomes "REQUIRES A
-COMPUTER, OR (IN BETA) A BLUETOOTH MIDI ADAPTER." A new BLUETOOTH (BETA)
-paragraph says what it is, that it has been tried on an AM4 from an iPhone,
-that it may not work with every unit or adapter, and where the setup guide
-is. The demo paragraph and HOW IT WORKS each gain half a sentence so they
-don't say the computer is the only way. The last paragraph adds that WIDI
-Uhost and C2MIDI Pro are CME's products and the app is not connected with
-CME. SUPPORTED UNITS, the VP4 and everything else stay as they are.
-
-**Two copies, one per store, and they differ in one clause.** The Google Play
-copy adds "and not yet from an Android phone" to the Bluetooth paragraph,
-because everybody reading it there is on Android. The App Store copy leaves
-it out: Apple's 2.3.10 says "don't include names, icons, or imagery of other
-mobile platforms ... in your app or metadata", and the Description is
-metadata. Everything else in the two is the same, word for word, and a test
-holds them to that.
-
-**The Subtitle: keep it.** "Phone remote, needs a computer" says less than
-the app can now do, which is the safe side for a beta: nobody buys it
-expecting Bluetooth to just work. The one 30-character alternative that stays
-true, "Remote via computer/Bluetooth", loses the word "needs" Justin asked for,
-and reads as if the phone's own Bluetooth were enough.
-
-**If he says yes:** the App Store copy goes over the Description block at the
-top of this file, which is what App Store Connect gets, and the Google Play
-copy goes to Play Console (Store listings, as above), only once 1.87.1 is
-live there. The Play short description and the promotional text can stay as
-they are: both still open on the computer, which is still true. The test
-that holds the listing to opening on the computer reads "REQUIRES A
-COMPUTER." with a full stop, so it would need to accept the comma.
-
-#### App Store copy (no other phone named)
-
-```
-REQUIRES A COMPUTER, OR (IN BETA) A BLUETOOTH MIDI ADAPTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play.
-
-BLUETOOTH (BETA): NO COMPUTER
-With a Bluetooth MIDI adapter plugged into the MIDI In and MIDI Out of an AM4, FM3, FM9 or Axe-Fx III, your phone controls the unit directly, with no computer at all. It is a beta: so far it has been tried on an AM4, from an iPhone, with a CME WIDI Uhost and a CME C2MIDI Pro cable. It may not work correctly with every unit or adapter. On an FM3, read the guide first: adapters that take power from its MIDI Out run hot. There is no editing or saving over Bluetooth. What to buy and how to plug it in: fractal.newbold.cloud/bluetooth
-
-Fractal Remote turns your phone into a remote control for your Fractal Audio rig. Switch presets and scenes, turn blocks on and off, change channels, tune up and tap tempo, without walking back to your unit. Build a setlist for tonight and step through it with two big buttons you can hit in the dark.
-
-SUPPORTED UNITS
-FM3, FM9, Axe-Fx III, AM4 and VP4.
-
-TRY THE DEMO, FOR AS LONG AS YOU LIKE
-The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer, or the Bluetooth adapter, described at the top.
-
-WHAT IT DOES
-• Switch any of your presets, by name, in slot order or from a setlist
-• Scenes, with the names your unit already uses
-• Turn blocks on and off, and pick channels A to D
-• Open a block and change its real parameters on real knobs
-• Tuner, with the note and how far off you are
-• Tap tempo, with the tempo on the button
-• Setlists and starred presets, kept with your account across devices
-• Colors that match your unit's own screen, so you find things by looking
-
-HOW IT WORKS
-A phone needs something between it and your Fractal unit. Usually that is the desktop app: it runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to it. Get it at fractal.newbold.cloud/downloads. In beta, a Bluetooth MIDI adapter on the unit can take the computer's place.
-
-Through the computer, once the two are paired, the phone works from anywhere: the same room, the far side of the stage, or a different building. Over Bluetooth, it works within about 30 feet of the adapter.
-
-ONE PAYMENT, LIFETIME UNLOCK
-Controlling real hardware is a single purchase. It unlocks the full app on every device you own, forever, including every future update, on all supported Fractal units. No subscription.
-
-Fractal Remote is an independent app. It is in no way affiliated with, endorsed by, or sponsored by Fractal Audio Systems, Inc. “Fractal Audio”, “Axe-Fx”, “FM3”, “FM9”, “AM4” and “VP4” are trademarks of Fractal Audio Systems, Inc., used here only to say which hardware this app works with. WIDI Uhost and C2MIDI Pro are CME products; Fractal Remote is not connected with CME.
-```
-
-#### Google Play copy (says it has not been tried from an Android phone)
-
-```
-REQUIRES A COMPUTER, OR (IN BETA) A BLUETOOTH MIDI ADAPTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play.
-
-BLUETOOTH (BETA): NO COMPUTER
-With a Bluetooth MIDI adapter plugged into the MIDI In and MIDI Out of an AM4, FM3, FM9 or Axe-Fx III, your phone controls the unit directly, with no computer at all. It is a beta: so far it has been tried on an AM4, from an iPhone, with a CME WIDI Uhost and a CME C2MIDI Pro cable, and not yet from an Android phone. It may not work correctly with every unit or adapter. On an FM3, read the guide first: adapters that take power from its MIDI Out run hot. There is no editing or saving over Bluetooth. What to buy and how to plug it in: fractal.newbold.cloud/bluetooth
-
-Fractal Remote turns your phone into a remote control for your Fractal Audio rig. Switch presets and scenes, turn blocks on and off, change channels, tune up and tap tempo, without walking back to your unit. Build a setlist for tonight and step through it with two big buttons you can hit in the dark.
-
-SUPPORTED UNITS
-FM3, FM9, Axe-Fx III, AM4 and VP4.
-
-TRY THE DEMO, FOR AS LONG AS YOU LIKE
-The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer, or the Bluetooth adapter, described at the top.
-
-WHAT IT DOES
-• Switch any of your presets, by name, in slot order or from a setlist
-• Scenes, with the names your unit already uses
-• Turn blocks on and off, and pick channels A to D
-• Open a block and change its real parameters on real knobs
-• Tuner, with the note and how far off you are
-• Tap tempo, with the tempo on the button
-• Setlists and starred presets, kept with your account across devices
-• Colors that match your unit's own screen, so you find things by looking
-
-HOW IT WORKS
-A phone needs something between it and your Fractal unit. Usually that is the desktop app: it runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to it. Get it at fractal.newbold.cloud/downloads. In beta, a Bluetooth MIDI adapter on the unit can take the computer's place.
-
-Through the computer, once the two are paired, the phone works from anywhere: the same room, the far side of the stage, or a different building. Over Bluetooth, it works within about 30 feet of the adapter.
-
-ONE PAYMENT, LIFETIME UNLOCK
-Controlling real hardware is a single purchase. It unlocks the full app on every device you own, forever, including every future update, on all supported Fractal units. No subscription.
-
-Fractal Remote is an independent app. It is in no way affiliated with, endorsed by, or sponsored by Fractal Audio Systems, Inc. “Fractal Audio”, “Axe-Fx”, “FM3”, “FM9”, “AM4” and “VP4” are trademarks of Fractal Audio Systems, Inc., used here only to say which hardware this app works with. WIDI Uhost and C2MIDI Pro are CME products; Fractal Remote is not connected with CME.
-```
+There was a draft here, for Justin to say yes to, of a Description and
+Subtitle that opened "REQUIRES A COMPUTER, OR (IN BETA) A BLUETOOTH MIDI
+ADAPTER." and gave Bluetooth a paragraph of its own, in an App Store copy and
+a Google Play copy. It was withdrawn on 11 October 2026, when Bluetooth (beta)
+went back to Justin's account alone: a listing has to describe the app its
+readers get. When Bluetooth goes to customers in a new store version, the
+draft is in this file's history (git log -p docs/app-store.md, the commit
+that withdrew it), and it is checked again against that version before it is
+used.
 
 ### By hand in Play Console for 1.87.1
 
@@ -677,9 +568,8 @@ under "No location". Declaring it here would contradict that page.
 **2. App access** (App content → App access → All or some functionality is
 restricted → Add instructions). Google's reviewer needs the same thing
 Apple's does: the demo account Apple signs in with, which has to have the
-full version, or it stops at the purchase page and never finds Bluetooth.
-Put its email and password in the boxes for them, and this in "Any other
-information":
+full version, or it stops at the purchase page. Put its email and password
+in the boxes for them, and this in "Any other information":
 
 ```
 This account has the full version.
@@ -690,24 +580,52 @@ No hardware? The app has a full demo that needs no account and no gear:
   3. Tap "Start free demo"
   4. Choose any unit, then tap "Play with ..."
 
-Bluetooth (beta): tap the gear at the top right for Settings, then Bluetooth (beta) (on the very first launch, before the app updates itself: Settings, then Phone & computer, then BLUETOOTH (BETA)). It needs a Bluetooth MIDI adapter on a Fractal unit; a video of it working is at [VIDEO LINK].
+This build also contains Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested. Once the app has downloaded its first update, usually from its second launch, this account does not see it. On the first launch after this version is installed or updated, the copy built into it can still show a BLUETOOTH (BETA) card under Settings → Phone & computer; the app asks for Nearby devices (or Location, on Android 11 and older) only if Connect is tapped on the page it opens.
 ```
 
-Use the same video link as Apple's notes.
+The last line is the same disclosure as Apple's notes, in Android's words,
+and says the one thing Apple's does not have to. The Android 1.87.1 build
+went to Google Play production on 10 October, so its built-in copy is the
+one that shows Bluetooth on its first launch after an install or a Play
+update, until the update that hides it has downloaded, usually by the next
+launch (see *Submit a build made after 11
+October 2026* above). The manifest of 1.87.1 declares Nearby devices (and
+Location on Android 11 and older) because the Bluetooth code is in it, and a
+reviewer who sees those declared should be told why, and when they are
+asked for.
+
+**A risk to know about: permissions the listing gives no reason for.** The
+1.87.1 manifest declares Nearby devices, and Location up to Android 11, while
+nothing in the listing promotes a feature that needs them: the Description
+says nothing about Bluetooth, because customers cannot open it. Google asks
+that declared permissions serve something the app offers, and could flag
+that. Nothing in the listing changes for it now. If Google does flag it,
+there are two ways out, and the choice is Justin's:
+
+- **A build without the Android Bluetooth permissions.** That moves the
+  fingerprint, so it is a new build for both phones, one iOS and one Android
+  slot, and Bluetooth stops working on Android for his phone too until it
+  comes back.
+- **Listing Bluetooth, once customers have it.** Only in the version that
+  opens it to them, never before (*Never switched on for customers by an
+  update*, above).
+
+I would wait: answer Google with the App access note above if they ask, and
+take the build only if they insist.
 
 **3. The listing** (Grow users → Store presence → Store listings → the default
-listing), the day 1.87.1 starts going out on Play, not before:
+listing), any time: nothing in it waits for 1.87.1 now.
 
 - **Short description:** the one under *Google Play: short description*,
   which starts "Requires a computer" in ordinary letters. The live one is
   in capitals.
-- **Full description:** the Description at the top of this file, which now
-  says Bluetooth (beta) can take the computer's place. That matters on Play
-  for one more reason: 1.87.1 is the first Play version that asks for Nearby
-  devices (and Location on Android 11 and older) to find the adapter, and
-  Google wants a permission like that to match something the listing
-  promotes. If Justin says yes to the draft above, paste its **Google Play
-  copy** instead.
+- **Full description:** the Description at the top of this file. It says
+  nothing about Bluetooth, because customers cannot open it. It once said
+  Bluetooth (beta) could take the computer's place, partly so that the
+  Nearby devices permission 1.87.1 declares matched something the listing
+  promoted; the App access note above now says why that permission is
+  declared and when it is asked for instead, and the risk that leaves is
+  named under it.
 - **The trademark line** at the end has to be the one in this file, which
   names the VP4 and Fractal Audio. The live one says "FM3, FM9, Axe-Fx and
   AM4 are trademarks of their respective owner" and leaves the VP4 out.

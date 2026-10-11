@@ -13,8 +13,8 @@
  *
  * ONE PLACE FOR EVERY ADDRESS. The phone's Bluetooth page reads this (its
  * generated copy, mobile/src/lib/bluetooth-gear.js), and so does the test
- * that holds the website's guide to it: public/bluetooth.html is plain HTML
- * and cannot import a module, so test/bluetooth.mjs reads every Amazon and
+ * that holds the website's guide to it: public/bluetooth-guide.html is plain
+ * HTML and cannot import a module, so test/bluetooth.mjs reads every Amazon and
  * CME link on that page and fails on any that is not one of these. A link
  * changed here and not there, or there and not here, is a red run rather
  * than a guitarist buying the wrong thing.
@@ -74,8 +74,15 @@
  * Pure data with no imports, so the phone's copy is a plain copy.
  */
 
-/** The full guide on the website, for everything that does not fit on a phone screen. */
-export const GUIDE_URL = 'https://fractal.newbold.cloud/bluetooth.html'
+/**
+ * The full guide on the website, for everything that does not fit on a phone
+ * screen. At bluetooth-guide.html, linked from nowhere on the website, since
+ * Bluetooth (beta) went back to Justin's account alone on 11 October 2026:
+ * /bluetooth itself now tells customers it is not in the app yet, with
+ * nothing to buy. Only the app's Bluetooth page, which only his account can
+ * open, links here.
+ */
+export const GUIDE_URL = 'https://fractal.newbold.cloud/bluetooth-guide.html'
 
 /** The units it has actually been tried on. Every other unit's steps say "not tried yet". */
 export const TESTED = ['am4']

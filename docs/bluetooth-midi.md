@@ -6,10 +6,15 @@ with the ForgeFX software?" He already owns a CME WIDI Master, which he uses
 with a mini controller.
 
 Way B below is now built: Bluetooth (beta), in the phone app under Settings →
-Bluetooth (beta), with a setup guide for customers at
-public/bluetooth.html. Everything else on this page is what was found on 8
-October, before any of it was built or tried, kept so the next person starts
-from it instead of from nothing.
+Bluetooth (beta). It was a public beta for one day (10 October 2026); since
+11 October it shows on Justin's account alone ("I just feel like it's not
+ready to have public"), and its setup guide moved to
+public/bluetooth-guide.html, linked only from that page, while
+public/bluetooth.html tells customers it isn't in the app yet (CLAUDE.md
+says how it is gated, and why it opens to customers only with a new store
+version). Everything else on this page is what was found on 8 October,
+before any of it was built or tried, kept so the next person starts from it
+instead of from nothing.
 
 ## The short answer
 

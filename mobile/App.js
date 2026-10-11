@@ -38,7 +38,7 @@ import { clearLinkFault, useRig } from './src/lib/rig'
 import { keepLog } from './src/lib/logKeep'
 import { installCrashCapture } from './src/lib/debugLog'
 import { restoreDemo, setDemo, useDemo } from './src/lib/demo'
-import { ALLOW_WORDS, RESTRICTED_WORDS, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble } from './src/lib/bluetooth'
+import { ALLOW_WORDS, RESTRICTED_WORDS, allowBluetooth, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble } from './src/lib/bluetooth'
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
@@ -311,6 +311,8 @@ export default function App() {
     setBuying(false)
     setScreen('stage')
     setDemo(false)
+    /* Heading for the sign-in form is a sign-out for Bluetooth (beta): off, and written down (lib/bluetooth). */
+    allowBluetooth(null, { signedOut: true })
     setAuth('out')
   }
   /*
@@ -495,12 +497,76 @@ export default function App() {
     let alive = true
     restoreDemo()
       .then((on) => (on ? true : haveSession()))
-      .then((id) => alive && setAuth(id ? 'in' : 'out'))
+      .then((id) => {
+        if (!alive) return
+        /*
+         * WHOSE PHONE THIS IS, FOR BLUETOOTH (BETA), SETTLED BEFORE THE DOOR
+         * OPENS. The pick-up from last time, above, can already have put the
+         * phone back on Bluetooth, and 'in' starts the link in the same
+         * moment it is set. Asked here, a customer's phone left on Bluetooth
+         * is back on the computer before the link starts, rather than
+         * reaching for the adapter at launch and letting go of it a beat
+         * later. Not in the demo (`true`): the effect below asks once the
+         * demo has let the app in, and the demo plays its simulated unit
+         * whatever this says (lib/link.js puts the demo first).
+         */
+        if (id !== true) allowBluetooth(id)
+        setAuth(id ? 'in' : 'out')
+      })
       .catch(() => alive && setAuth('out'))
     return () => {
       alive = false
     }
   }, [])
+
+  /*
+   * AND BLUETOOTH (BETA) ONLY ON JUSTIN'S ACCOUNT, at every change of who is
+   * signed in.
+   *
+   * "Is there any way to just get the Bluetooth on the developers mode for my
+   * own phone? I just feel like it's not ready to have public." Settings
+   * draws the row and the page only for his account (useBluetoothAllowed);
+   * this is the switch's half. Signed out, signed into another account, or a
+   * customer who turned it on during the day it was public: back to the
+   * computer, and allowBluetooth keeps it from being turned on again
+   * (lib/bluetooth).
+   *
+   * THE SESSION KEPT ON THE PHONE, not the account server. Bluetooth is for
+   * playing with no computer, often somewhere with no signal either, and
+   * currentAccount() asks the server: with no signal it answers nobody, and
+   * his own Bluetooth would be switched off at the gig. haveSession() reads
+   * the same session that let this phone in, and says yes for as long as the
+   * phone is still let in at all. (When that sign-in has run out and cannot
+   * be renewed with no signal, the app opens on the sign-in screen anyway,
+   * over the computer or not, as it always has.)
+   *
+   * Signed out is nobody, at once, without asking anything: a sign-out still
+   * finishing in the background cannot answer for the account it is
+   * removing.
+   *
+   * AND NOBODY IS NOT A NO. Here it only means no session on the phone,
+   * which is also what his own sign-in looks like when it ran out at a gig
+   * with no signal to renew it: Bluetooth goes off for now, and the phone's
+   * storage keeps it on for the next launch that knows it is his. The
+   * sign-outs somebody asked for — Sign out and Delete account in Settings,
+   * the paywall's back, Try the Demo and Delete account, and the way to the
+   * sign-in form (toSignIn) — say so themselves, with `signedOut`, and those
+   * write the off down.
+   */
+  useEffect(() => {
+    if (auth === 'checking') return undefined
+    if (auth === 'out') {
+      allowBluetooth(null)
+      return undefined
+    }
+    let alive = true
+    haveSession()
+      .then((id) => alive && allowBluetooth(id))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [auth, demo])
 
   /*
    * THE LINK, AND IT HAS TO WATCH THE DEMO TOO.
@@ -800,16 +866,19 @@ export default function App() {
                  no unit, so the leftover session goes with it. */
               setDemo(true)
               signOut().catch(() => {})
+              allowBluetooth(null, { signedOut: true })
               setAuth('in')
             }}
             onBack={() => {
               signOut().catch(() => {})
+              allowBluetooth(null, { signedOut: true })
               setAuth('out')
             }}
             /* Apple's 5.1.1(v), on the one page an unpaid account can reach:
                the account is gone, so its session goes with it. */
             onDeleted={() => {
               signOut().catch(() => {})
+              allowBluetooth(null, { signedOut: true })
               setAuth('out')
             }}
           />
@@ -1018,6 +1087,7 @@ export default function App() {
                      phone and signed out of an account keeps what they paid
                      for. */
                   unlinkAccount().catch(() => {})
+                  allowBluetooth(null, { signedOut: true })
                   setScreen('stage')
                   setAuth('out')
                 }}

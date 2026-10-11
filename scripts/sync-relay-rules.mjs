@@ -192,7 +192,7 @@ export const FILES = [
   /*
    * What to buy for Bluetooth (beta), how it plugs in, and the address of the
    * full guide. Only the phone has Bluetooth, but the website's guide
-   * (public/bluetooth.html) names the same parts at the same addresses, and
+   * (public/bluetooth-guide.html) names the same parts at the same addresses, and
    * a test holds that page to this file, so the source lives in shared/
    * where plain Node can read it. Pure data, so a plain copy.
    */

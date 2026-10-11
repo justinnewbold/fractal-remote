@@ -227,6 +227,62 @@ icon now (mobile/assets/watch-icon.png); keep it light.
   holding a build under review). Fixes go out as before; a big new phone
   feature waits until any review in progress is over.
 
+**Bluetooth (beta) is the developer's only, since 11 October 2026.**
+
+> "Is there any way to just get the Bluetooth on the developers mode for my
+> own phone? I just feel like it's not ready to have public."
+
+The day before, it had gone out as a public beta in the 1.87.1 builds, which
+went to TestFlight and to Google Play production on 10 October, never to the
+App Store. The native module stays in those builds, with the iPhone's
+Bluetooth permission text (a module that asks for Bluetooth without it gets
+the build refused), and an update hides it from everybody but him:
+
+- The Settings row and the page wait for `useBluetoothAllowed()` in
+  mobile/src/lib/bluetooth.js: `isAdmin` of the account in the sign-in kept
+  on the phone (`haveSession()`), never `currentAccount()`, which asks the
+  server and would take his own Bluetooth away at a gig with no signal.
+- App.js asks it at launch, before the link starts, and at every change of
+  who is signed in. Anybody else found on Bluetooth goes back to the
+  computer (`setBluetooth(false)`, unit and adapter kept), and
+  `setBluetooth(true)` refuses them.
+- No session on the phone is not a no. It is also what his own sign-in looks
+  like when it ran out at a gig with no signal, so Bluetooth goes off for
+  now in memory and stays on on the phone's storage, and the next launch that
+  knows it is his starts on Bluetooth. Only another real account's id, or a
+  sign-out somebody asked for (`allowBluetooth(null, { signedOut: true })`
+  from Sign out, Delete account, the paywall and `toSignIn`), writes the off
+  down.
+- Nothing touches the phone's Bluetooth before Connect is tapped on the
+  Bluetooth page, so nobody who is not shown that page is asked for the
+  permission.
+- One gap an update cannot close: the 1.87.1 builds run the copy of the app
+  built into them on their first launch after an install OR a store update
+  (`fallbackToCacheTimeout` is 0 in mobile/app.json, and a new store build
+  drops the updates made for the old one), and that copy shows a
+  BLUETOOTH (BETA) card under Settings → Phone & computer to any account
+  with the full version, until its first update has downloaded, usually by
+  the next launch. Only a new build closes it, which is his call (one iOS
+  and one Android build). So the App Store submission has to be a build made
+  from main after 1.87.8 was merged, not build 26 (docs/app-store.md says so above the notes),
+  and the privacy page and Google's App access note say the gap as it is.
+- /bluetooth on the website says it isn't in the app and may be offered in
+  a later version, with no promise and nothing to buy; the guide lives at
+  bluetooth-guide.html, linked only from the app's own Bluetooth page.
+
+**It is switched on for customers only in a new store version whose review
+notes say so, never by an over-the-air update.** Apple's guideline 2.3.1(a)
+bans hidden features and wants every new one described in the Notes for
+Review, its licence (3.3.1(C)) keeps a change to what an app does for a
+version it has reviewed, and Google forbids features activated remotely
+after review. An update is exactly that: opening the gate on main would
+reach every 1.87.1 phone with the reviewed notes still saying customers are
+not shown it. So the day it is ready, the opening rides a build whose
+fingerprint moved (then no update made for it can reach the older
+binaries), with the review notes, What's New, the descriptions,
+support.html and /bluetooth saying so, and the build is asked for like any
+other.
+
 ## Things that cost real time to learn here
 
 **Every change needs a new version number.** The `version` job in
