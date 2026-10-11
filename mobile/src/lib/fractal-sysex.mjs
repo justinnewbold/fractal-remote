@@ -721,7 +721,7 @@ export const isAllowedAm4 = (f) => am4Allowed(f) !== null
  * MIDI/Remote > Tuner, or leaves it at NONE ("It's up to you", Fractal's own
  * answer). So the number is never guessed or defaulted here. It is the one
  * the AM4 itself reported on this connection (am4TunerCcFrom), on the channel
- * it reported (am4ChannelFrom), with 127 to open and 0 to close — and nothing
+ * it reported (am4ChannelSaid), with 127 to open and 0 to close — and nothing
  * else short is ever sent to an AM4. A number some other function might use
  * would fire that function: a volume at 0 is silence on stage.
  *
@@ -938,19 +938,30 @@ export function am4TunerCcFrom(a) {
 /*
  * THE CHANNEL, FROM THE WORDS ONLY. The two tables that describe this
  * setting disagree about its number (1..16 in one, 0..15 with 16 for OMNI in
- * the other), so the screen's words settle it: "2", "CH 2" or "Channel 2",
- * and never the whole number or the float, even with no words beside them.
- * OMNI hears every channel, and anything else is the AM4's factory 1: a CC
- * on a channel it is not listening on is ignored, so a wrong guess here
- * fires nothing.
+ * the other), so the screen's words settle it, and never the whole number or
+ * the float, even with no words beside them.
+ *
+ * am4ChannelSaid is what the words plainly say: "2", "CH 2" or "Channel 2"
+ * is that channel, 1..16, and OMNI is 1 (it hears every channel, so the
+ * AM4's factory 1 reaches it). Anything else, silence included, says
+ * nothing: null. Then the channel already known on this connection is kept
+ * (bleWire's tuner), and only a connection that knows none falls back to 1
+ * (am4ChannelFrom). A CC on a channel the AM4 is not listening on is
+ * ignored, so a wrong guess here fires nothing. The computer's half holds
+ * the same table.
  */
 const CHANNEL_WORDS = /^(?:ch(?:annel)?\.?\s*)?(\d{1,2})$/i
-export function am4ChannelFrom(a) {
-  const words = typeof a?.text === 'string' ? a.text.trim() : ''
+export function am4ChannelSaid(a) {
+  if (!a || typeof a !== 'object' || a.rejected !== undefined) return null
+  const words = typeof a.text === 'string' ? a.text.trim() : ''
+  if (/^omni$/i.test(words)) return 1
   const said = CHANNEL_WORDS.exec(words)
   const n = said ? Number(said[1]) : 0
-  return midiChannelOk(n) ? n : 1
+  return midiChannelOk(n) ? n : null
 }
+
+/** The channel for a connection that knows none yet: what the words say, else the factory 1. */
+export const am4ChannelFrom = (a) => am4ChannelSaid(a) ?? 1
 
 /** One tuner reading, as the float it is: a note index, Hz, cents or a string number. */
 export function parseAm4TunerPoll(f, which) {
