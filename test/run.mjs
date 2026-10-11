@@ -12292,8 +12292,26 @@ test('the computer app carries the server with the AM4 tempo on its own routes',
   assert.match(lock.forgefx.tag, /\+am4tempo(\+|$)/, 'the computer app does not carry the AM4 tempo')
   // "Have it actually show the firmware version here" — /device answered null for an AM4.
   assert.match(lock.forgefx.tag, /\+am4fw(\+|$)/, 'the computer app does not read the AM4 firmware')
-  assert.equal(lock.forgefx.branch, 'claude/am4-tempo')
+  /* The AM4 tempo work now travels on the branch the tuner screen was added to, on top of it. */
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   assert.match(lock.forgefx.commit, /^[0-9a-f]{40}$/, 'the pin is not a full commit')
+})
+
+/*
+ * "On the AM4 the tuner doesn't activate on the device, it only shows it on
+ * the phone ... I know that it has MIDI support for activating and
+ * deactivating a tuner because I have a MIDI device that does it." The server
+ * the computer carries reads the AM4's own Tuner MIDI number and channel and
+ * sends that Control Change, on open and on close, and nothing it cannot read.
+ */
+test('the computer app carries the server that opens the AM4’s own tuner screen', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+am4tunercc(\+|$)/, 'the computer app does not open the AM4’s own tuner')
+  /* Still everything it carried before: the tempo, the firmware and the tempo parameter ride under it. */
+  for (const piece of ['am4tempo', 'am4fw', 'am4tempoparam', 'gridgen', 'looper', 'am4scenes']) {
+    assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
+  }
+  assert.ok(lock._why.some((line) => /AM4's own tuner screen/.test(line) && /never sends its 0 on a number the AM4 no longer names/.test(line)), 'the lock does not say why it moved')
 })
 
 /*
