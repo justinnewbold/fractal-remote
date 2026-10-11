@@ -407,94 +407,64 @@ above, when that build is sent. **Apple's Notes box takes 4000 bytes**
 (App Store Connect's own reference: "The Notes field can contain up to 4000
 bytes"; a dash or an arrow counts as three), and the first draft of these
 notes was over 5000, so the block is cut to what the reviewer needs and the
-reasons stay out here. A test holds it under 3950, so the filled-in
-brackets still fit.
+reasons stay out here. It is one line per paragraph, so the box shows
+paragraphs rather than lines broken where this file wraps them.
+
+**The three videos are in it, at the end.** On 11 October 2026 the notes as
+they stood came to 3897 characters, and the three Google Drive links (the
+FM3, presets, and deleting an account) would not fit after them. So the
+block was cut again, and a test holds it under 3950 bytes with each bracket
+in Videos and Tested on filled in by something as long as a Drive link, so
+it still fits on the day the real ones go in.
 
 ```
-This app is a remote control for Fractal Audio guitar hardware. Normally it
-connects to a computer that has the guitar unit plugged into it over USB.
+This app is a remote control for Fractal Audio guitar units, through a computer the unit is plugged into by USB.
 
-You will not have that hardware, so use the demo. It needs nothing but the
-phone, and no account:
+Without that hardware, use the demo. It needs only the phone, and no account:
 
   1. Tap "Get started"
   2. Tap "Got it"
   3. Tap "Start free demo"
   4. Choose any unit, then tap "Play with ..."
 
-That loads a simulated unit with twelve presets and named scenes. Every
-screen works, and nothing in the demo reaches real hardware.
+That loads a simulated unit. Every screen works, and nothing in the demo reaches real hardware.
 
-The demo is free. An account is what joins this phone to the user's
-computer, and it carries the full version and their setlists to their
-other devices.
+The demo is free. An account joins the phone to the user's computer, and carries the full version and their setlists to their other devices.
 
-The in-app purchase: in the demo, tap Unlock at the top of the Play
-screen. Buying needs no account, and Restore a purchase is the button
-under the price.
+The in-app purchase: in the demo, tap Unlock at the top of the Play screen. Buying needs no account, and Restore a purchase is the button under the price.
 
-New since 1.86.83, the version on the App Store:
+New since 1.86.83:
 
-Accounts before buying. Anybody can now make an account, before buying or
-without buying: Create account is on the sign-in screen. Making one unlocks
-nothing; the full version is still the one in-app purchase. A new account
-is confirmed from its email before it can be signed in to. An account that
-has not bought the full version opens on the purchase page instead of
-Settings, and Delete account is at the foot of that page.
+Accounts before buying. Anybody can now make an account, before buying or without buying: Create account is on the sign-in screen. Making one unlocks nothing. A new account is confirmed from its email before it can be signed in to. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page.
 
-Paying once. With nobody signed in, the purchase page now tells someone who
-bought on another device to sign in instead of buying again, with a button
-for it, and the app checks again just before charging, so nothing is
-charged twice. After a purchase with nobody signed in, the app offers to
-make an account, since an account is what joins the phone to the user's
-computer. Nothing is forced: the demo keeps working, and the purchase waits
-on the phone.
+Paying once. With nobody signed in, the purchase page now tells someone who bought on another device to sign in instead of buying again, and the app checks again just before charging. After a purchase with nobody signed in, the app offers to make an account, since an account is what joins the phone to the user's computer. Nothing is forced: the demo keeps working, and the purchase waits on the phone.
 
-Edit (Beta). Edit, at the bottom of the Play screen, is now marked Beta.
-Everything it shows works, in the demo too. It
-is marked Beta because it does not yet cover every block and control of
-every unit, and a control may not yet move quite the way it does on the
-unit itself.
+Edit (Beta). Edit, at the bottom of the Play screen, is now marked Beta. Everything it shows works, in the demo too. It is marked Beta because it does not yet cover every block and control of every unit, and a control may not yet move quite the way it does on the unit itself.
 
-Bluetooth MIDI code, switched on only for the developer. This build
-contains Bluetooth MIDI code for a feature that lets the phone reach the
-guitar unit through a Bluetooth MIDI adapter instead of a computer. While it
-is tested, it is switched on only for the developer's own account.
-Customers and the review account don't see it in this build, and the app
-doesn't ask them for Bluetooth permission. If it is offered to customers,
-that will be in a later version, sent for review with notes that describe
-it.
+Bluetooth MIDI code, switched on only for the developer. This build contains Bluetooth MIDI code for a feature that lets the phone reach the guitar unit through a Bluetooth MIDI adapter instead of a computer. While it is tested, it is switched on only for the developer's own account. Customers and the review account don't see it in this build, and the app doesn't ask them for Bluetooth permission. If it is offered to customers, that will be in a later version, sent for review with notes that describe it.
 
-Appearance. On iPhone, Appearance in Settings set to Auto, which is the
-default, now follows the phone's own light or dark setting.
+Appearance. On iPhone, Appearance in Settings set to Auto, which is the default, now follows the phone's own light or dark setting.
 
-Metronome. The volume pop-up (the speaker at the top) now has a metronome
-on/off switch, and the flash and the phone's click land on the same beat.
+Metronome. The volume pop-up (the speaker at the top) now has a metronome on/off switch.
 
-A demo account for the signed-in screens is in App Review Information
-(Sign-in required).
+The demo account is under Sign-in required.
 
-Deleting an account (Guideline 5.1.1(v)): tap the gear at the top right for
-Settings, the account card at the top, Delete account, then "Delete my
-account". It deletes the account and everything stored under it at once.
-Please try it on a new account, not the demo account.
+Deleting an account (Guideline 5.1.1(v)): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and everything stored under it at once. Please try it on a new account, not the demo account (video 3).
 
-Hardware (Guideline 2.1): a video filmed on an iPhone with a real FM3 on
-screen, from the first pairing through the whole workflow, is linked in App
-Review Information.
+Hardware (Guideline 2.1): a video filmed on an iPhone with a real FM3 on screen, from the first pairing through the whole workflow, is video 1 below.
 
-Apple Watch: it comes with the iPhone app and works in the demo too. Keep
-the demo's Play screen open on the iPhone, open Fractal on the watch, and
-swipe up or down between Scenes, Pedals, Presets and Tuner.
+Apple Watch, in the demo too: keep the demo's Play screen open on the iPhone, open Fractal on the watch, and swipe up or down between Scenes, Pedals, Presets and Tuner.
 
-Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS
-[version].
+Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].
 
-Services the app uses: Supabase (accounts, setlists, and the link between
-the phone and the computer), RevenueCat with Apple in-app purchase (the full
-version), Resend (account emails), and Expo (app updates).
+Services the app uses: Supabase (accounts, setlists, the phone-to-computer link), RevenueCat with Apple in-app purchase, Resend (account emails), Expo (app updates).
 
 Regions: the app works the same in every country.
+
+Videos:
+1. FM3 hardware: [FM3 video link]
+2. Presets: [presets video link]
+3. Deleting an account: [account deletion video link]
 ```
 
 **Bluetooth is in this build, switched on for Justin's account alone.** The
@@ -547,8 +517,12 @@ because Google asks for an app to be what you see is what you get.
   App Review Information: it should open on Settings, with no Bluetooth
   (beta) row and no Developer section. The same account goes in Google's
   App access.
-- **The FM3 video is still linked** in App Review Information, as it was for
-  1.86.83: the Hardware paragraph points at it.
+- **The three video links replace the brackets under Videos,** at the very
+  end: the FM3 video (the Hardware paragraph calls it video 1), the presets
+  video, and the one of deleting an account (video 3). Each is a Google
+  Drive link whose sharing is set to Anyone with the link: Apple's reviewers
+  are not signed in to Google, and a link that asks them to is the same as
+  no video under 2.1.
 
 **Marked beta, not a beta app.** Guideline 2.2 keeps test versions of whole
 apps off the store. A finished app with one feature marked beta is what Edit
