@@ -2070,15 +2070,31 @@ export function run(test) {
       .replace(/\s+/g, ' ')
 
     assert.match(html, /<title>Bluetooth \(beta\) setup/, 'the guide has lost its title')
-    assert.match(words, /last updated 10 October 2026/i, 'the guide does not say when it was last checked')
+    assert.match(words, /last updated 11 October 2026/i, 'the guide does not say when it was last checked')
 
     /* The disclaimer, in the words the app uses for it. */
     assert.match(words, /Bluetooth is new \(beta\), and it may not work correctly with every unit or adapter\./, 'the guide does not say it is a beta that may not work')
     assert.match(words, /So far it has been tried on one AM4, from an iPhone/, 'the guide does not say an AM4 from an iPhone is what it was tried on')
-    assert.match(words, /not been tried yet on an FM3, FM9 or Axe-Fx III, or from an Android phone/, 'the guide does not say the FM3, FM9, Axe-Fx III and Android are untried')
+    assert.match(words, /not been tried yet on an FM9 or Axe-Fx III, or from an Android phone/, 'the guide does not say the FM9, Axe-Fx III and Android are untried')
+    /*
+     * "The CME C2MIDI Pro got extremely hot on the FM3 and the connection
+     * didn't work." The FM3's MIDI OUT has no current limit and the cable
+     * feeds from it, so the guide says not to plug it straight in, why, and
+     * what owners fit — and lists nothing to buy for it.
+     */
+    assert.match(words, /tried once on an FM3 with the same parts plugged straight in: the cable got very hot and didn’t connect, so don’t do that/, 'the guide does not warn FM3 owners off what overheated')
+    assert.match(words, /FM3 Don’t plug straight in/, 'the FM3 is not marked as one not to plug straight in')
+    assert.match(words, /Don’t plug the C2MIDI Pro’s white plug straight into an FM3’s MIDI OUT\/THRU\./)
+    assert.match(words, /220-ohm resistor on pin 4/, 'the guide does not say what FM3 owners fit')
+    assert.match(words, /Powering the adapter from USB doesn’t stop it/)
+    const fm3 = html.slice(html.indexOf('id="fm3"'), html.indexOf('<h3>FM9 and Axe-Fx III'))
+    assert.ok(fm3.length > 200 && !/amazon\.|cme-pro\.com/.test(fm3), 'the FM3 section gives somewhere to buy what overheated')
+    assert.ok(!/<h3>FM3, FM9/.test(html), 'the FM3 is still grouped with the units the parts suit')
+    assert.match(words, /if any cable or adapter on a MIDI jack gets more than slightly warm, unplug it at once\./i, 'the guide does not say to unplug anything that gets hot')
+    assert.match(words, /Yamaha MD-BT01[^.]*\. It runs only on the MIDI OUT’s power, and on an FM3 it is reported hot about as often as not/, 'the Yamaha is offered to FM3 owners as the way round it')
     assert.match(words, /USB cable to a computer[^.]*keeps working as it always has/, 'the guide does not say the computer way is untouched')
     assert.match(words, /AM4 Tried, works/, 'the AM4 is not marked as the one it was tried on')
-    assert.match(words, /FM3, FM9 and Axe-Fx III Not tried yet/, 'the other units are not marked as untried')
+    assert.match(words, /FM9 and Axe-Fx III Not tried yet/, 'the other units are not marked as untried')
 
     /* And nothing on the page says the reverse. */
     assert.ok(!/\bworks with the AM4, FM3/.test(words), 'the guide says Bluetooth works with units nobody has tried')
@@ -2110,7 +2126,7 @@ export function run(test) {
     /* The hook-up, where a guess goes wrong. */
     assert.match(words, /black plug \[TO MIDI IN\] into the adapter in MIDI IN, and its white plug \[TO MIDI OUT\] into the adapter in MIDI OUT/, 'the AM4 steps do not say which plug goes where')
     assert.match(words, /black plug \[TO MIDI IN\] into the unit’s MIDI IN/, 'the 5-pin steps do not say the black plug goes in MIDI IN')
-    assert.match(words, /white plug \[TO MIDI OUT\] into the unit’s MIDI out\. On an FM3 or FM9 that is the jack marked MIDI OUT\/THRU\. On an Axe-Fx III it is MIDI OUT, not the separate THRU jack/, 'the 5-pin steps do not say which jack the white plug goes in, or keep it out of the Axe-Fx III’s THRU')
+    assert.match(words, /white plug \[TO MIDI OUT\] into the unit’s MIDI out\. On an FM9 that is the jack marked MIDI OUT\/THRU\. On an Axe-Fx III it is MIDI OUT, not the separate THRU jack/, 'the 5-pin steps do not say which jack the white plug goes in, or keep it out of the Axe-Fx III’s THRU')
     assert.match(words, /USB-C plug into the Uhost’s left socket, USB Host\/Device/, 'the guide does not say the cable goes in the Uhost’s left socket')
     assert.match(words, /into the Uhost’s right socket, USB Power\. 5 volts only/, 'the guide does not say the power goes in the right socket, at 5 volts')
     assert.match(words, /Never use anything that puts out more than 5 volts/, 'the guide does not warn against more than 5 volts')

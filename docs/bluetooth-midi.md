@@ -112,6 +112,68 @@ commands.**
 **D. The website through Web MIDI.** Ruled out: no iPhone or iPad browser
 has Web MIDI or Web Bluetooth. On Android it needs a helper app kept running.
 
+## The FM3: the C2MIDI Pro got very hot (October 2026)
+
+> "I tried to use the exact same WIDI host setup on the FM3 as I did on the
+> AM4 and the CME C2MIDI Pro got extremely hot on the FM3 and the connection
+> didn't work. I unplugged it."
+
+The chain that works on his AM4 (WIDI Uhost on a 5 V charger, C2MIDI Pro,
+Type-A 3.5 mm adapters) was plugged straight into the FM3's 5-pin MIDI In and
+MIDI Out/Thru, with the Uhost powered from USB as on the AM4.
+
+**Why, as far as the sources go:**
+- The C2MIDI Pro's white plug [TO MIDI OUT] can power itself from the MIDI
+  Out it goes into. CME's manual: it "can be powered from the MIDI OUT port of
+  most MIDI devices (compatible with 5V or 3.3V MIDI, the MIDI device must
+  comply with the MIDI standard)".
+- The MIDI 1.0 electrical spec (CA-033, 2014) requires a series resistor on
+  each MIDI Out pin (220 ohms at 5 V) to limit current, and lists devices that
+  draw power from pin 4 as "possibly incompatible".
+- FM3 owners measured in 2021 that its MIDI Out is 5 V with no such resistor
+  ("through a 220ohm resistor I get 22mA"). CME's engineer: without it "the IC
+  [gets] hot and could end in a destroyed IC". Reported still the same on the
+  FM3 Turbo (April 2025, April and May 2026). The Axe-Fx III measures 3.3 V,
+  and the FM9 and Axe-Fx III are reported fine. Fractal has published nothing.
+- USB power does not stop it: a WIDI Jack owner reported it hot on USB-C power
+  on an FM3 (February 2022), which matches his result.
+- It is not the extra pins: Fractal says "Only three pins are used", and the
+  AM4's Type-A adapters carry the same pins 2, 4 and 5. What sits behind pin 4
+  is the difference. Nobody has published a measurement of the AM4's.
+- Why it did not connect is not established; an overloaded cable is the
+  likeliest reading.
+
+**What it means:**
+- Every adapter that feeds from MIDI Out runs hot on an FM3: CME's WIDI Master
+  and WIDI Jack, Yamaha's MD-BT01 (its only power is MIDI Out; FM3 owners
+  report it hot about as often as not), and the C2MIDI Pro.
+- The fix owners report, 2021 to 2026, including on an FM3 Turbo: a short
+  adapter with a 220-ohm resistor in series on pin 4, between the FM3's MIDI
+  Out/Thru and the adapter. Not tried with the app yet.
+- Untried alternative with no soldering: CME's U2MIDI Pro (USB-A), which its
+  manual says runs only on USB power, through a USB-A to USB-C adapter into the
+  Uhost. Inference only; feel it in the first minute.
+- The WIDI Uhost cannot use the FM3's USB socket ("The FM3 is NOT a USB MIDI
+  Device").
+- No FM3 has been reported damaged in five years of these reports. A
+  C2MIDI Pro that got hot may be: check it on USB power with both MIDI plugs
+  touching nothing before it goes back on the AM4.
+
+The website's guide and the app's Bluetooth page now warn FM3 owners instead
+of listing parts for it (shared/bluetooth-gear.mjs FM3_WARNING), and the FM3
+stays pickable for anyone who fits the resistor adapter.
+
+Sources: CME C2MIDI Pro manual v03
+(https://www.cme-pro.com/wp-content/uploads/2025/02/C2MIDI-Pro-user-manual_English_v03.pdf),
+U2MIDI Pro manual v06, WIDI Uhost manual v08b; MIDI CA-033
+(https://midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf);
+Yamaha MD-BT01 manual
+(https://usa.yamaha.com/files/download/other_assets/7/722997/mdbt01_en_om_b0.pdf);
+the Fractal forum thread "MIDI output voltage: WIDI Master is getting hot",
+pages 1–8 (https://forum.fractalaudio.com/threads/midi-output-voltage-widi-master-is-getting-hot.171579/)
+and "Does FM3 use all 5 pins of MIDI"
+(https://forum.fractalaudio.com/threads/does-fm3-use-all-5-pins-of-midi.185278/).
+
 ## Dongles
 
 - **CME WIDI Master** (Justin's).
@@ -126,7 +188,8 @@ has Web MIDI or Web Bluetooth. On Android it needs a helper app kept running.
   - Some CME firmware versions mishandled SysEx, so update it with CME's app
     first.
 - **CME WIDI Jack** (about $60): plugs into both In and Out, can run from
-  USB-C, and has cable bundles for TRS (AM4/VP4). The likeliest test dongle.
+  USB-C, and has cable bundles for TRS (AM4/VP4). On an FM3 it runs hot even
+  on USB power, unless a 220-ohm adapter is fitted (see above).
 - **Yamaha MD-BT01** (about $55): the best record with Fractal editing,
   through FracPad. It also runs hot on an FM3, and may be discontinued.
 - **BOSS WM-1 and Quicco mi.1:** no SysEx documented. A Windows tool for the
@@ -136,6 +199,8 @@ has Web MIDI or Web Bluetooth. On Android it needs a helper app kept running.
   lets go.
 
 ## The first test (no code, no build)
+
+Not on an FM3 without a 220-ohm adapter on its MIDI Out: see above.
 
 1. Use a two-plug dongle (a WIDI Jack), or a second WIDI Master alongside
    Justin's. Update the firmware first, and do not rename it: a name

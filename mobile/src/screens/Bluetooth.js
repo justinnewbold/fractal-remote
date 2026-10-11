@@ -30,7 +30,8 @@ import {
   betaNote,
   hookupFor,
   partsFor,
-  untriedLine
+  untriedLine,
+  warningFor
 } from '../lib/bluetooth-gear'
 import { useRig } from '../lib/rig'
 import { mayDrive } from '../lib/unlock-rule'
@@ -107,7 +108,7 @@ const DIFFERENT = [
   'Footswitch changes may take a moment to show.',
   'About 30 feet of range.',
   'The adapter connects to one thing at a time.',
-  'On the AM4, scene names don’t show over Bluetooth.',
+  'On the AM4, scene names take a moment the first time a preset is seen.',
   /* Found by their absence until this line: every one of them is hidden over Bluetooth, not broken. */
   'No looper, volume button, unit metronome click or Footswitches page.'
 ]
@@ -549,6 +550,15 @@ function OpenSettings() {
 function Gear({ unit }) {
   const steps = hookupFor(unit) || []
   const untried = untriedLine(unit)
+  /* The FM3: what happened when the parts went straight in, and what owners do, in place of a list to buy. */
+  const warning = warningFor(unit)
+  if (warning) {
+    return (
+      <View style={{ gap: space.md }}>
+        <Note tone="fault">{warning}</Note>
+      </View>
+    )
+  }
   return (
     <View style={{ gap: space.md }}>
       {partsFor(unit).map((p) => (

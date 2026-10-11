@@ -111,7 +111,7 @@
   <body>
     <main>
       <h1>Bluetooth (beta) setup</h1>
-      <p class="when">Fractal Remote · last updated 10 October 2026</p>
+      <p class="when">Fractal Remote · last updated 11 October 2026</p>
 
       <div class="lead">
         <p>
@@ -120,8 +120,10 @@
           Bluetooth MIDI adapter plugged into the unit.
         </p>
         <p>
-          So far it has been tried on one AM4, from an iPhone, with the three parts below. It has
-          not been tried yet on an FM3, FM9 or Axe-Fx III, or from an Android phone.
+          So far it has been tried on one AM4, from an iPhone, with the three parts below. It was
+          tried once on an FM3 with the same parts plugged straight in: the cable got very hot and
+          didn’t connect, so <strong>don’t do that</strong> (see <a href="#fm3">FM3</a> below). It
+          has not been tried yet on an FM9 or Axe-Fx III, or from an Android phone.
         </p>
         <p>
           The usual way, with your unit on a USB cable to a computer running the desktop app, is
@@ -170,12 +172,13 @@
         <li>Footswitch changes may take a moment to show.</li>
         <li>About 30 feet of range.</li>
         <li>The adapter connects to one thing at a time.</li>
-        <li>On the AM4, scene names don’t show over Bluetooth.</li>
+        <li>On the AM4, scene names take a moment the first time a preset is seen.</li>
         <li>No looper, volume button, unit metronome click or Footswitches page.</li>
       </ul>
       <p class="dim">
-        On the AM4, scene names the phone has already seen through the computer still show. On an
-        FM9 or Axe-Fx III, the extra blocks (Amp 2, Cab 2, Drive 3 and so on) don’t show as pedals
+        On the AM4, the phone reads a preset’s scene names once, a few seconds after you stop
+        pressing things, and remembers them; Refresh names reads them again. On an FM9 or
+        Axe-Fx III, the extra blocks (Amp 2, Cab 2, Drive 3 and so on) don’t show as pedals
         over Bluetooth yet.
       </p>
 
@@ -223,10 +226,32 @@
         </div>
       </div>
 
-      <h3>FM3, FM9 and Axe-Fx III <span class="tag no">Not tried yet</span></h3>
+      <h3 id="fm3">FM3 <span class="tag no">Don’t plug straight in</span></h3>
+      <p class="lead">
+        <strong>Don’t plug the C2MIDI Pro’s white plug straight into an FM3’s MIDI OUT/THRU.</strong>
+        When we tried it, the cable got very hot and the connection didn’t work. If anything on an
+        FM3’s MIDI jack gets hot, unplug it straight away.
+      </p>
+      <p>
+        <strong>Why.</strong> The C2MIDI Pro, like most Bluetooth MIDI adapters, can take its power
+        from the MIDI OUT jack it is plugged into. On most gear a small part inside the unit limits
+        how much power that jack gives. FM3 owners have reported since 2021 that the FM3’s MIDI OUT
+        has no such limit, and that it is still the same on the FM3 Turbo. So adapters that feed
+        from it run hot: CME’s WIDI Master and WIDI Jack, Yamaha’s MD-BT01, and this cable.
+        Powering the adapter from USB doesn’t stop it, because the jack is still feeding it.
+      </p>
+      <p>
+        <strong>What FM3 owners use.</strong> A short MIDI adapter with a 220-ohm resistor on
+        pin 4, plugged between the FM3’s MIDI OUT/THRU and the adapter, with the FM3 switched off
+        while it goes in. We know of none sold ready-made: someone who solders can make one from a
+        few dollars of parts. Never open the FM3 itself. Fractal Remote hasn’t been tried this way
+        yet, so if you do, please tell us how it went.
+      </p>
+
+      <h3>FM9 and Axe-Fx III <span class="tag no">Not tried yet</span></h3>
       <p>
         The same parts without the adapters: these units have full-size 5-pin MIDI jacks, and the
-        C2MIDI Pro’s plugs go straight in.
+        C2MIDI Pro’s plugs go straight in. Owners report CME adapters running cool on these two.
       </p>
       <ul>
         <li>CME WIDI Uhost: <a href="https://www.amazon.com/dp/B09GS326QW">on Amazon</a> ·
@@ -236,8 +261,9 @@
         <li>A USB phone charger or power bank, and a USB-C cable for the Uhost</li>
       </ul>
       <p class="dim">
-        Nobody has tried Fractal Remote over Bluetooth on these three yet. If you do, please tell us
-        how it went (see the end of this page).
+        Nobody has tried Fractal Remote over Bluetooth on these two yet. If you do, please tell us
+        how it went (see the end of this page). Feel the cable in the first minute: it should stay
+        cool.
       </p>
 
       <h3>Before the first time: update the Uhost</h3>
@@ -278,14 +304,15 @@
           waiting for the phone. The C2MIDI Pro’s green light is on.</li>
       </ol>
 
-      <h3>FM3, FM9 and Axe-Fx III</h3>
+      <h3>FM9 and Axe-Fx III</h3>
+      <p class="dim">Not the FM3: see <a href="#fm3">FM3</a> above.</p>
       <ol>
         <li>Turn the unit on and let it finish starting up before the Uhost gets power. People have
           reported a unit freezing while it starts up when a MIDI adapter is already live on it.</li>
         <li>Plug the C2MIDI Pro’s <span class="black">black</span> plug
           <strong>[TO MIDI IN]</strong> into the unit’s <strong>MIDI IN</strong>.</li>
         <li>Plug the <span class="white">white</span> plug <strong>[TO MIDI OUT]</strong> into the
-          unit’s MIDI out. On an FM3 or FM9 that is the jack marked <strong>MIDI OUT/THRU</strong>.
+          unit’s MIDI out. On an FM9 that is the jack marked <strong>MIDI OUT/THRU</strong>.
           On an Axe-Fx III it is <strong>MIDI OUT</strong>, <strong>not</strong> the separate THRU
           jack beside it: THRU only repeats what goes in, so the phone would hear itself and never
           the unit.</li>
@@ -295,6 +322,8 @@
           socket, <strong>USB Power</strong>. 5 volts only.</li>
         <li>Check the lights, as for the AM4: steady green on the Uhost’s right, slow blue flashing
           on its left.</li>
+        <li>Feel the C2MIDI Pro after a minute. It should be cool. If it is more than slightly warm,
+          unplug it at once.</li>
       </ol>
 
       <p class="lead">
@@ -374,6 +403,12 @@
       </ul>
 
       <h2 id="trouble">When it doesn’t work</h2>
+
+      <p class="lead">
+        <strong>Anything getting hot:</strong> if any cable or adapter on a MIDI jack gets more than
+        slightly warm, unplug it at once. On an FM3 that is the known problem described under
+        <a href="#fm3">FM3</a>, not a fault in the app or the phone.
+      </p>
 
       <h3>Check the lights first</h3>
       <ul>
@@ -462,14 +497,17 @@
         <li><strong>CME WIDI Jack, with the TRS-35 cables</strong>, for the AM4: one small box with
           two leads, one for each 3.5 mm jack. Power it from USB-C. It has a Type A/B switch: on the
           AM4 start on A, and try B if nothing gets through.</li>
-        <li><strong>CME WIDI Jack, with the 5-pin cables</strong>, for the FM3, FM9 and Axe-Fx III.</li>
-        <li><strong>CME WIDI Master</strong>, for the FM3, FM9 and Axe-Fx III. It comes in two parts:
+        <li><strong>CME WIDI Jack, with the 5-pin cables</strong>, for the FM9 and Axe-Fx III. On an
+          FM3 it is reported hot even on USB power, unless a 220-ohm adapter is fitted (see
+          <a href="#fm3">FM3</a>).</li>
+        <li><strong>CME WIDI Master</strong>, for the FM9 and Axe-Fx III. It comes in two parts:
           the main plug goes in MIDI OUT and the small second plug on its short lead goes in MIDI
           IN. Both have to be in. It takes its power from the unit’s MIDI OUT, so it may not run on
-          an AM4, and people report it running hot on an FM3.</li>
+          an AM4, and on an FM3 it runs hot.</li>
         <li><strong>Yamaha MD-BT01</strong>: two plugs, In and Out, and used by other people with
-          Fractal units for years. Yamaha supports it on iPhone, not officially on Android, and it is
-          hard to find now.</li>
+          Fractal units for years. It runs only on the MIDI OUT’s power, and on an FM3 it is
+          reported hot about as often as not, so it is no better there than the C2MIDI Pro. Yamaha
+          supports it on iPhone, not officially on Android, and it is hard to find now.</li>
         <li><strong>A WIDI Uhost plugged straight into the unit’s USB socket</strong>, with no MIDI
           cable: not tried. On an FM3 it can’t work at all, because the FM3’s USB socket doesn’t
           carry MIDI.</li>
@@ -477,8 +515,8 @@
 
       <h2>Tell us how it went</h2>
       <p>
-        It is a beta, so every report helps, and most of all one from an FM3, FM9 or Axe-Fx III, or
-        from Android. In the app: <strong>Settings → Feedback</strong>. Or email
+        It is a beta, so every report helps, and most of all one from an FM9 or Axe-Fx III, an FM3
+        with a 220-ohm adapter, or Android. In the app: <strong>Settings → Feedback</strong>. Or email
         <a href="mailto:justinnewbold@gmail.com">justinnewbold@gmail.com</a>, saying which unit,
         which adapter, and which phone. More help is on the <a href="/support">support page</a>.
       </p>

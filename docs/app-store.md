@@ -571,7 +571,7 @@ COMPUTER." with a full stop, so it would need to accept the comma.
 REQUIRES A COMPUTER, OR (IN BETA) A BLUETOOTH MIDI ADAPTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play.
 
 BLUETOOTH (BETA): NO COMPUTER
-With a Bluetooth MIDI adapter plugged into the MIDI In and MIDI Out of an AM4, FM3, FM9 or Axe-Fx III, your phone controls the unit directly, with no computer at all. It is a beta: so far it has been tried on an AM4, from an iPhone, with a CME WIDI Uhost and a CME C2MIDI Pro cable. It may not work correctly with every unit or adapter. There is no editing or saving over Bluetooth. What to buy and how to plug it in: fractal.newbold.cloud/bluetooth
+With a Bluetooth MIDI adapter plugged into the MIDI In and MIDI Out of an AM4, FM3, FM9 or Axe-Fx III, your phone controls the unit directly, with no computer at all. It is a beta: so far it has been tried on an AM4, from an iPhone, with a CME WIDI Uhost and a CME C2MIDI Pro cable. It may not work correctly with every unit or adapter. On an FM3, read the guide first: adapters that take power from its MIDI Out run hot. There is no editing or saving over Bluetooth. What to buy and how to plug it in: fractal.newbold.cloud/bluetooth
 
 Fractal Remote turns your phone into a remote control for your Fractal Audio rig. Switch presets and scenes, turn blocks on and off, change channels, tune up and tap tempo, without walking back to your unit. Build a setlist for tonight and step through it with two big buttons you can hit in the dark.
 
@@ -608,7 +608,7 @@ Fractal Remote is an independent app. It is in no way affiliated with, endorsed 
 REQUIRES A COMPUTER, OR (IN BETA) A BLUETOOTH MIDI ADAPTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play.
 
 BLUETOOTH (BETA): NO COMPUTER
-With a Bluetooth MIDI adapter plugged into the MIDI In and MIDI Out of an AM4, FM3, FM9 or Axe-Fx III, your phone controls the unit directly, with no computer at all. It is a beta: so far it has been tried on an AM4, from an iPhone, with a CME WIDI Uhost and a CME C2MIDI Pro cable, and not yet from an Android phone. It may not work correctly with every unit or adapter. There is no editing or saving over Bluetooth. What to buy and how to plug it in: fractal.newbold.cloud/bluetooth
+With a Bluetooth MIDI adapter plugged into the MIDI In and MIDI Out of an AM4, FM3, FM9 or Axe-Fx III, your phone controls the unit directly, with no computer at all. It is a beta: so far it has been tried on an AM4, from an iPhone, with a CME WIDI Uhost and a CME C2MIDI Pro cable, and not yet from an Android phone. It may not work correctly with every unit or adapter. On an FM3, read the guide first: adapters that take power from its MIDI Out run hot. There is no editing or saving over Bluetooth. What to buy and how to plug it in: fractal.newbold.cloud/bluetooth
 
 Fractal Remote turns your phone into a remote control for your Fractal Audio rig. Switch presets and scenes, turn blocks on and off, change channels, tune up and tap tempo, without walking back to your unit. Build a setlist for tonight and step through it with two big buttons you can hit in the dark.
 
