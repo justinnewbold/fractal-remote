@@ -91,9 +91,10 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
    * come back to this phone and sign in.
    *
    * And `madeHere` is which of those it is when the purchase is on an
-   * account made here: then it is NOT only on this phone, and "Make an
-   * account" sent people off to make a second one, which got nothing. Its
-   * own line says the first has it and to sign in here with it.
+   * account made here: then it is NOT only on this phone, and "only on this
+   * phone so far" was not true of it. Its own line says that account has
+   * it, to sign in here with it, and that an account made again, for an
+   * email that never came, takes it with it (purchases.js, linkNewAccount).
    */
   const paid = start === 'up' || paidHere
   /* Sign in failed on the details, on a phone that paid before any account

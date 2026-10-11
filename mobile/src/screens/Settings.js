@@ -8,7 +8,7 @@ import { setDemo, useDemo, useDemoUnit, setDemoUnit } from '../lib/demo'
 import { UNITS as DEMO_UNITS } from '../lib/demoUnits'
 import { getDebugLog } from '../lib/debugLog'
 import { tick } from '../lib/feedback'
-import { NOT_ACROSS, ONLY_HERE, unlockedFrom, usePurchase } from '../lib/purchases'
+import { NOT_ACROSS, NOT_ACROSS_SIGNED_OUT, ONLY_HERE, unlockedFrom, usePurchase } from '../lib/purchases'
 import { applyNow, checkNow, describeRunning, useUpdates } from '../lib/updates'
 import {
   changePassword,
@@ -581,8 +581,12 @@ export default function Settings({
             )}
 
             {/* Paid on this phone, sent to this account and not arrived yet:
-                said where the account is looked at (purchases.js, stuck). */}
-            {purchase.stuck ? <Note tone="warn">{NOT_ACROSS}</Note> : null}
+                said where the account is looked at (purchases.js, stuck).
+                With nobody signed in, its own line, which offers no Restore:
+                the Sign in above is the way. */}
+            {purchase.stuck ? (
+              <Note tone="warn">{purchase.held === NOT_ACROSS_SIGNED_OUT ? NOT_ACROSS_SIGNED_OUT : NOT_ACROSS}</Note>
+            ) : null}
             {note ? <Note>{note}</Note> : null}
             {error ? <Note tone="fault">{error}</Note> : null}
 

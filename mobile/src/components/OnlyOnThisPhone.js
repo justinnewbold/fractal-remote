@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { View } from 'react-native'
 
 import { space } from '../lib/theme'
-import { NOT_ACROSS, ONLY_HERE, restorePurchase, usePurchase } from '../lib/purchases'
+import { NOT_ACROSS, NOT_ACROSS_SIGNED_OUT, ONLY_HERE, restorePurchase, usePurchase } from '../lib/purchases'
 import Note from './Note'
 import Press from './Press'
 
@@ -21,16 +21,29 @@ import Press from './Press'
  * to say why the computer still sees nothing; this does, with the way to
  * try again now. Its own answer replaces the line when it is not a yes.
  *
+ * Except with nobody signed in (NOT_ACROSS_SIGNED_OUT): there is no account
+ * it has not reached, and Restore after a sign-out would put it on the
+ * phone's nameless id rather than on anybody's account. Signing in, or
+ * making the account, sends it, so that is the button.
+ *
  * NEVER IN THE WAY. A line and one button, put away with the cross for the
  * rest of this run; it comes back next time only while it is still true.
  * Nothing waits on it and nothing is locked behind it.
  */
 export default function OnlyOnThisPhone({ onAccount }) {
-  const { onlyHere, stuck } = usePurchase()
+  const { onlyHere, stuck, held } = usePurchase()
   const [gone, setGone] = useState(false)
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState(null)
   if (gone) return null
+  if (stuck && held === NOT_ACROSS_SIGNED_OUT) {
+    return (
+      <View style={{ gap: space.sm }}>
+        <Note tone="warn" onDismiss={() => setGone(true)}>{NOT_ACROSS_SIGNED_OUT}</Note>
+        {onAccount ? <Press label="Make an account or sign in" onPress={onAccount} /> : null}
+      </View>
+    )
+  }
   if (stuck) {
     return (
       <View style={{ gap: space.sm }}>

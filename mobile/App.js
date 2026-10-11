@@ -850,7 +850,7 @@ export default function App() {
                a confirmation still to come), or one it is on its way to. */
             paidHere={purchase.onlyHere || purchase.madeHere || purchase.stuck}
             /* And when it is that made-here account, the screen says so: it
-               has the purchase, and a second account made would not. */
+               has the purchase, and one made again takes it with it. */
             madeHere={purchase.madeHere}
             onAccountMade={(id) => {
               setSignInSide('in')

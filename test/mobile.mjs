@@ -12130,11 +12130,12 @@ export function run(test) {
         assert.ok(!/website/i.test(bench.p.NOT_ACROSS + bench.p.STILL_STUCK), 'the phone names the website as a place to pay')
 
         /* The words go with the purchase: signed in to another account that
-           has its own, they are not true; signed out, they still are (the
-           sign-out test below). */
+           has its own, they are not true; signed out, they still hold Buy,
+           as the line for nobody signed in (the sign-out tests below). */
         if (os === 'ios') {
+          bench.who.session = null
           await bench.p.unlinkAccount()
-          assert.equal(bench.p.purchaseState().held, bench.p.NOT_ACROSS, 'Buy came back after a sign-out, for a purchase still on its way')
+          assert.equal(bench.p.purchaseState().held, bench.p.NOT_ACROSS_SIGNED_OUT, 'Buy came back after a sign-out, for a purchase still on its way')
           assert.equal(bench.p.purchaseState().stuck, true)
         } else {
           rc.has.set('acct-other', 'RC_BILLING')
@@ -12243,7 +12244,7 @@ export function run(test) {
         await bench.p.startPurchases()
         await benchFlush()
         assert.equal(bench.p.purchaseState().unlocked, true, `${os}: a payer whose sign-in ran out was locked out`)
-        assert.equal(bench.p.purchaseState().held, bench.p.NOT_ACROSS)
+        assert.equal(bench.p.purchaseState().held, bench.p.NOT_ACROSS_SIGNED_OUT, `${os}: with nobody signed in, the line says it has not reached an account`)
         bench.who.session = 'acct-used'
       } finally {
         bench.done()
@@ -12352,7 +12353,7 @@ export function run(test) {
         await benchFlush()
         assert.equal(rc.me, '$RCAnonymousID:after', 'the bench did not sign the store out')
         let s = bench.p.purchaseState()
-        assert.equal(s.held, bench.p.NOT_ACROSS, `${os}: a sign-out gave Buy back for a purchase still on its way`)
+        assert.equal(s.held, bench.p.NOT_ACROSS_SIGNED_OUT, `${os}: a sign-out gave Buy back for a purchase still on its way`)
         assert.equal(s.stuck, true)
         assert.equal(s.unlocked, true, `${os}: a sign-out locked out the phone that paid, with nothing Restore can bring back`)
         assert.deepEqual(JSON.parse(bench.disk.get('fractal.stuck') || 'null'), { account: null, from: rc.NAMELESS }, `${os}: a sign-out threw the note away, or kept the account it was about`)
@@ -12367,7 +12368,7 @@ export function run(test) {
         await bench.p.startPurchases()
         await benchFlush()
         s = bench.p.purchaseState()
-        assert.equal(s.held, bench.p.NOT_ACROSS, `${os}: a relaunch after the sign-out gave Buy back`)
+        assert.equal(s.held, bench.p.NOT_ACROSS_SIGNED_OUT, `${os}: a relaunch after the sign-out gave Buy back`)
         assert.equal(s.unlocked, true)
         rc.tell()
         await benchFlush()
@@ -12478,10 +12479,11 @@ export function run(test) {
       }
       benchHalf.who.session = null
       await benchHalf.p.unlinkAccount()
+      assert.equal(benchHalf.p.purchaseState().held, benchHalf.p.NOT_ACROSS_SIGNED_OUT, 'a half-done sign-out still says the purchase has not reached your account, with nobody signed in')
       benchHalf.p.__reset()
       await benchHalf.p.startPurchases()
       await benchFlush()
-      assert.equal(benchHalf.p.purchaseState().held, benchHalf.p.NOT_ACROSS, 'a relaunch after a half-done sign-out gave Buy back')
+      assert.equal(benchHalf.p.purchaseState().held, benchHalf.p.NOT_ACROSS_SIGNED_OUT, 'a relaunch after a half-done sign-out gave Buy back')
       benchHalf.who.session = 'acct-used'
       await benchHalf.p.linkAccount()
       await benchHalf.p.buyUnlock()
@@ -12510,6 +12512,171 @@ export function run(test) {
     } finally {
       benchPlain.done()
     }
+  })
+
+  test('a sign-out asks first whether the account has the purchase after all, and then leaves it there', async () => {
+    /*
+     * Stuck on the way to account A, but the sync had gone through and only
+     * its answer was lost. Then Settings → Sign out. The sign-out carried
+     * the purchase on as the phone's, about no account, so the next sign-in
+     * to B, or an account made here, was sent it — and took it off A, and
+     * off the computer signed in to A.
+     */
+    const arrivedLate = (rc, id) => {
+      rc.has.set(id, rc.has.get(rc.NAMELESS))
+      rc.has.delete(rc.NAMELESS)
+      rc.receipt = id
+    }
+    for (const next of ['sign-in', 'made here', 'half-done sign-out']) {
+      const rc = pretendRevenueCat({ aliased: ['acct-a', 'acct-b'] })
+      const bench = await benchWith(rc)
+      try {
+        await bench.p.buyUnlock()
+        rc.syncCarries = false
+        bench.who.session = 'acct-a'
+        await bench.p.linkAccount()
+        await benchFlush()
+        assert.equal(bench.p.purchaseState().stuck, true, 'the bench’s purchase is not on its way')
+        arrivedLate(rc, 'acct-a')
+        rc.syncCarries = true
+        /* A logOut that moves the store off the account and then fails: asked before it, so the same. */
+        if (next === 'half-done sign-out') {
+          rc.api.logOut = async () => {
+            rc.me = '$RCAnonymousID:after'
+            throw new Error('Network request failed')
+          }
+        }
+        bench.who.session = null
+        await bench.p.unlinkAccount()
+        await benchFlush()
+        assert.equal(bench.disk.has('fractal.stuck'), false, `${next}: a sign-out carried on a purchase the account already had`)
+        assert.equal(bench.p.purchaseState().stuck, false)
+        assert.equal(bench.p.purchaseState().held, null, `${next}: Buy stays held for a purchase that reached the account`)
+        if (next === 'made here') {
+          assert.equal(await bench.p.linkNewAccount('acct-new'), false, 'an account made after the sign-out took the purchase off the account it had reached')
+        } else {
+          bench.who.session = 'acct-b'
+          await bench.p.linkAccount()
+        }
+        await benchFlush()
+        assert.equal(rc.has.get('acct-a'), 'APP_STORE', `${next}: the purchase was moved off the account it had reached, and off the computer on it`)
+        assert.equal(rc.has.size, 1)
+      } finally {
+        bench.done()
+      }
+    }
+
+    /* A plain sign-out after it, too: the account took it with it, so the phone stops claiming it. */
+    const rcOut = pretendRevenueCat({ aliased: ['acct-a'] })
+    const benchOut = await benchWith(rcOut)
+    try {
+      await benchOut.p.buyUnlock()
+      rcOut.syncCarries = false
+      benchOut.who.session = 'acct-a'
+      await benchOut.p.linkAccount()
+      arrivedLate(rcOut, 'acct-a')
+      benchOut.who.session = null
+      await benchOut.p.unlinkAccount()
+      assert.equal(benchOut.p.purchaseState().unlocked, false, 'a sign-out kept the unlock of an account that has its purchase')
+      assert.equal(benchOut.disk.get('fractal.unlocked'), 'no')
+    } finally {
+      benchOut.done()
+    }
+
+    /* A read that cannot be made is not a no: the purchase is carried, as before. */
+    const rcDark = pretendRevenueCat({ aliased: ['acct-a'] })
+    const benchDark = await benchWith(rcDark)
+    try {
+      await benchDark.p.buyUnlock()
+      rcDark.syncCarries = false
+      benchDark.who.session = 'acct-a'
+      await benchDark.p.linkAccount()
+      const read = rcDark.api.getCustomerInfo
+      rcDark.api.getCustomerInfo = async () => {
+        throw new Error('Network request failed')
+      }
+      benchDark.who.session = null
+      const asked = rcDark.calls.length
+      await benchDark.p.unlinkAccount()
+      rcDark.api.getCustomerInfo = read
+      assert.ok(rcDark.calls.slice(asked).includes('invalidate'), 'the sign-out did not ask the account fresh')
+      assert.deepEqual(JSON.parse(benchDark.disk.get('fractal.stuck') || 'null'), { account: null, from: rcDark.NAMELESS }, 'a read that could not be made dropped a purchase still on its way')
+      assert.equal(benchDark.p.purchaseState().held, benchDark.p.NOT_ACROSS_SIGNED_OUT)
+      assert.equal(benchDark.p.purchaseState().unlocked, true, 'no signal at a sign-out locked out the phone that paid')
+    } finally {
+      benchDark.done()
+    }
+  })
+
+  test('with nobody signed in, a purchase still on its way says to sign in, and offers no Restore', async () => {
+    /*
+     * "It hasn't reached your account yet… or tap Restore a purchase to try
+     * now", with nobody signed in on the phone: there is no account for it
+     * not to have reached, and Restore, with the phone on its own nameless
+     * id, moved the purchase there instead of to anybody's account.
+     */
+    const rc = pretendRevenueCat({ aliased: ['acct-used'] })
+    const bench = await benchWith(rc)
+    try {
+      await bench.p.buyUnlock()
+      rc.syncCarries = false
+      bench.who.session = 'acct-used'
+      await bench.p.linkAccount()
+      assert.equal(bench.p.purchaseState().held, bench.p.NOT_ACROSS, 'signed in, the line is not the one about the account')
+      bench.who.session = null
+      await bench.p.unlinkAccount()
+      assert.equal(bench.p.purchaseState().held, bench.p.NOT_ACROSS_SIGNED_OUT, 'signed out, the line says it has not reached an account')
+      const out = await bench.p.buyUnlock()
+      assert.equal(rc.bought(), 1)
+      assert.equal(out.message, bench.p.NOT_ACROSS_SIGNED_OUT, 'the price page says the account line with nobody signed in')
+      /* Closed and opened with nobody signed in: the same. */
+      bench.p.__reset()
+      await bench.p.startPurchases()
+      await benchFlush()
+      assert.equal(bench.p.purchaseState().held, bench.p.NOT_ACROSS_SIGNED_OUT, 'a relaunch with nobody signed in says the account line')
+      /* Signed in, even with a link that cannot be made: the line about the account. */
+      rc.loginFails = true
+      bench.who.session = 'acct-used'
+      await bench.p.linkAccount()
+      assert.equal(bench.p.purchaseState().held, bench.p.NOT_ACROSS, 'signed in, the phone still says to sign in')
+      assert.equal(bench.p.purchaseState().stuck, true)
+      rc.loginFails = false
+      await bench.p.linkAccount()
+      assert.equal(bench.p.purchaseState().held, bench.p.NOT_ACROSS)
+    } finally {
+      bench.done()
+    }
+
+    /* Stuck on the way to an account just made here, with nobody signed in: the same line. */
+    const rcMade = pretendRevenueCat({ aliased: ['acct-made'] })
+    const benchMade = await benchWith(rcMade)
+    try {
+      await benchMade.p.buyUnlock()
+      rcMade.syncCarries = false
+      await benchMade.p.linkNewAccount('acct-made')
+      assert.equal(benchMade.p.purchaseState().stuck, true, 'the bench’s purchase is not on its way')
+      assert.equal(benchMade.p.purchaseState().held, benchMade.p.NOT_ACROSS_SIGNED_OUT, 'an account made here, with nobody signed in, is told it has not reached their account')
+      assert.equal(benchMade.p.purchaseState().unlocked, true)
+    } finally {
+      benchMade.done()
+    }
+
+    /* The words: what is true, what to do, and nothing about Restore or another place to pay. */
+    assert.match(bench.p.NOT_ACROSS_SIGNED_OUT, /^You paid for the full version on this phone\. Sign in or make an account and it goes with it\. Please don’t pay for it again\.$/)
+    assert.ok(!/Restore|website|your account/i.test(bench.p.NOT_ACROSS_SIGNED_OUT), 'the signed-out line names Restore, the website, or an account')
+
+    /* The stage: the line, and the way to an account, never Restore. */
+    const only = withoutComments(read('mobile/src/components/OnlyOnThisPhone.js')).replace(/\s+/g, ' ')
+    const away = only.indexOf('if (stuck && held === NOT_ACROSS_SIGNED_OUT) {')
+    const near = only.indexOf('if (stuck) {')
+    assert.ok(away > 0 && away < near, 'the stage shows the signed-in line, with Restore, to nobody signed in')
+    const branch = only.slice(away, near)
+    assert.match(branch, /<Note tone="warn" onDismiss=\{\(\) => setGone\(true\)\}>\{NOT_ACROSS_SIGNED_OUT\}<\/Note> \{onAccount \? <Press label="Make an account or sign in" onPress=\{onAccount\} \/> : null\}/)
+    assert.ok(!/Restore|restorePurchase/.test(branch), 'the stage offers Restore with nobody signed in')
+    assert.match(only, /const \{ onlyHere, stuck, held \} = usePurchase\(\)/)
+    /* Settings → Account: its own line there too (pinned with the account note above). */
+    const settings = withoutComments(read('mobile/src/screens/Settings.js')).replace(/\s+/g, ' ')
+    assert.match(settings, /purchase\.held === NOT_ACROSS_SIGNED_OUT \? NOT_ACROSS_SIGNED_OUT : NOT_ACROSS/)
   })
 
   test('another account signed in straight after a stuck one gets the purchase, unless the first has it after all', async () => {
@@ -12631,14 +12798,15 @@ export function run(test) {
     }
   })
 
-  test('a second account made on a paid phone leaves the purchase on the first, and signing in here with the second still brings it', async () => {
+  test('a second account made on a paid phone takes the purchase with it, and signing in here with either still brings it', async () => {
     /*
      * Bought with nobody signed in, then Create account: the purchase went
-     * onto that account at once (linkNewAccount), and its confirmation link
-     * opens the website signed in to it. The sign-in screen then said the
-     * purchase was "only on this phone so far… Make an account", so a second
-     * account was made, and it took the purchase off the first — locking out
-     * the computer the first was already signed in to.
+     * onto that account at once (linkNewAccount). A second account made
+     * here is nearly always made because the first was never usable — a
+     * mistyped email, or a confirmation that never came, as on 8 October —
+     * and the second's confirmation link opens the website signed in to
+     * it, which must already see it as paid, or it sells it again. So the
+     * purchase follows the newest account made here.
      */
     const rc = pretendRevenueCat({ aliased: ['acct-right'] })
     const bench = await benchWith(rc)
@@ -12648,27 +12816,47 @@ export function run(test) {
       const s = bench.p.purchaseState()
       assert.equal(s.onlyHere, false)
       assert.equal(s.madeHere, true, 'nothing tells the sign-in screen the purchase is on an account made here')
-      assert.equal(await bench.p.linkNewAccount('acct-right'), false, 'a second account made here took the purchase off the first')
-      assert.ok(!rc.calls.includes('logIn acct-right'), 'the store was moved to the second account made here')
-      assert.equal(rc.has.get('acct-typo'), 'APP_STORE', 'the first account made here lost its purchase, and the computer signed in to it with it')
-      assert.equal(rc.has.has('acct-right'), false)
-      assert.equal(bench.disk.get('fractal.madeHere'), 'acct-typo')
+      assert.equal(await bench.p.linkNewAccount('acct-right'), true, 'a second account made here, for an email that never came, did not get the purchase')
+      assert.ok(rc.calls.includes('logIn acct-right'), 'the store was never told about the second account made here')
+      assert.equal(rc.has.get('acct-right'), 'APP_STORE', 'the website, opened from the second account’s confirmation, would sell it again')
+      assert.equal(rc.has.has('acct-typo'), false)
+      assert.equal(bench.disk.get('fractal.madeHere'), 'acct-right', 'the newest account made here is not the one noted')
       assert.equal(bench.p.purchaseState().madeHere, true)
+      assert.equal(bench.p.purchaseState().held, null)
+      assert.equal(bench.p.purchaseState().unlocked, true)
       /* Across a relaunch, with nobody signed in. */
       bench.p.__reset()
       await bench.p.startPurchases()
       await benchFlush()
       assert.equal(bench.p.purchaseState().madeHere, true, 'a relaunch forgot the purchase is on an account made here')
       assert.equal(bench.p.purchaseState().unlocked, true)
-      /* Signing in here with the second is a choice somebody made: it comes across then. */
+      /* Signed in here with it, as its confirmation says: nothing moves, and the note goes. */
+      const before = syncs(rc)
       bench.who.session = 'acct-right'
       await bench.p.linkAccount()
-      assert.equal(rc.has.has('acct-right'), true, 'signing in here with the second account did not bring the purchase')
-      assert.equal(rc.has.has('acct-typo'), false)
+      assert.equal(syncs(rc), before, 'signing in to the account the purchase is on sent the receipt again')
+      assert.equal(rc.has.get('acct-right'), 'APP_STORE')
       assert.equal(bench.p.purchaseState().unlocked, true)
       assert.equal(bench.disk.has('fractal.madeHere'), false)
     } finally {
       bench.done()
+    }
+
+    /* The first one's email came after all, and it is signed in to here: the purchase comes back to it. */
+    const rcFirst = pretendRevenueCat({ aliased: ['acct-right', 'acct-typo'] })
+    const benchFirst = await benchWith(rcFirst)
+    try {
+      await benchFirst.p.buyUnlock()
+      await benchFirst.p.linkNewAccount('acct-typo')
+      await benchFirst.p.linkNewAccount('acct-right')
+      assert.equal(rcFirst.has.get('acct-right'), 'APP_STORE')
+      benchFirst.who.session = 'acct-typo'
+      await benchFirst.p.linkAccount()
+      assert.equal(rcFirst.has.get('acct-typo'), 'APP_STORE', 'signing in here with the first account made did not bring the purchase')
+      assert.equal(benchFirst.p.purchaseState().unlocked, true)
+      assert.equal(benchFirst.disk.has('fractal.madeHere'), false)
+    } finally {
+      benchFirst.done()
     }
 
     /* Never with somebody signed in on the phone: their account is theirs. */
@@ -12683,9 +12871,12 @@ export function run(test) {
       bench2.done()
     }
 
-    /* The sign-in screen says the first has it, on either side of the form,
-       and still tells a second account made to come back here and sign in. */
-    assert.match(bench.p.MADE_HERE, /^Your purchase is on the account you made on this phone\. Confirm it from the email, then sign in here with it\.$/)
+    /* The sign-in screen says the account made has it, on either side of
+       the form, and that one made again takes it, for an email that never came. */
+    assert.match(
+      bench.p.MADE_HERE,
+      /^Your purchase is on the account you made on this phone\. Confirm it from the email, then sign in here with it\. If that email never came, make the account again with the right address — your purchase moves to it\.$/
+    )
     assert.ok(!/website|only on this phone/i.test(bench.p.MADE_HERE), 'the made-here line names the website, or says the purchase is on no account')
     const flatApp = withoutComments(read('mobile/App.js')).replace(/\s+/g, ' ')
     assert.match(flatApp, /paidHere=\{purchase\.onlyHere \|\| purchase\.madeHere \|\| purchase\.stuck\} madeHere=\{purchase\.madeHere\}/, 'the sign-in screen is not told the purchase is on an account made here')
@@ -12775,7 +12966,7 @@ export function run(test) {
     }
     /* And Settings → Account says a stuck purchase, where the account is looked at. */
     const settings = withoutComments(read('mobile/src/screens/Settings.js')).replace(/\s+/g, ' ')
-    assert.match(settings, /\{purchase\.stuck \? <Note tone="warn">\{NOT_ACROSS\}<\/Note> : null\}/)
+    assert.match(settings, /\{purchase\.stuck \? \( <Note tone="warn">\{purchase\.held === NOT_ACROSS_SIGNED_OUT \? NOT_ACROSS_SIGNED_OUT : NOT_ACROSS\}<\/Note> \) : null\}/)
   })
 
   test('a sign-in never moves a purchase off an account somebody signed in to', async () => {
