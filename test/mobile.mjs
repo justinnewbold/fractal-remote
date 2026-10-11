@@ -3994,17 +3994,31 @@ export function run(test) {
     assert.match(signInHelpWords('reset', 'a@b.c').message, /a@b\.c/)
     assert.equal(signInHelpWords('confirm', 'a@b.c', 'nope').ok, false)
     assert.match(signInHelpWords('confirm', 'a@b.c').message, /^A new "confirm your email" link is on its way to a@b\.c\.$/)
-    /* Confirmed by hand, in words he can pass on: sign in with the password they chose, or reset it. */
+    /* Confirmed by hand, in words he can pass on, and saying nobody told them: nothing is emailed. */
     assert.deepEqual(signInHelpWords('confirmNow', 'a@b.c'), {
       ok: true,
-      message: 'a@b.c is confirmed. They can sign in now with the password they chose. If they have forgotten it, send them a password reset.'
+      message: 'a@b.c is confirmed. Nothing is emailed to them, so let them know they can sign in now with the password they chose. If they have forgotten it, send them a password reset.'
     })
     const notDone = signInHelpWords('confirmNow', 'a@b.c', 'The account service would not confirm it (500).')
     assert.equal(notDone.ok, false, 'a confirm that failed reads as done')
     assert.match(notDone.message, /^Their account was not confirmed: The account service would not confirm it \(500\)\.$/, 'a failed confirm says an email did not send')
-    const { CONFIRM_NOW_HINT } = await import('../shared/admin.mjs')
-    assert.match(CONFIRM_NOW_HINT, /isn’t reaching them/, 'the line under Confirm now does not say when to use it')
-    assert.match(CONFIRM_NOW_HINT, /really their address/, 'the line under Confirm now does not say to check the address first')
+    /*
+     * The line under Confirm now: Resend first, that Confirm now sends no
+     * email, and a check he can do on the address rather than "make sure".
+     */
+    const { CONFIRM_NOW_HINT, CONFIRM_NOW_WAITING, confirmNowHint } = await import('../shared/admin.mjs')
+    assert.match(CONFIRM_NOW_HINT, /^Try Resend first\. If it still isn’t reaching them, Confirm their account now/, 'the line under Confirm now does not say to try Resend first')
+    assert.match(CONFIRM_NOW_HINT, /with no email at all/, 'the line under Confirm now does not say it sends no email')
+    assert.match(CONFIRM_NOW_HINT, /Only use it if they emailed you from this same address, so you know it’s spelled right and really theirs/, 'the line under Confirm now gives no check he can do on the address')
+    assert.match(CONFIRM_NOW_HINT, /it lets whoever made the account sign in\.$/)
+    /* And an address on the waiting list says so, before he taps: whoever made the account gets the unlock. */
+    assert.equal(CONFIRM_NOW_WAITING, 'This address is on the waiting list for the full version you gave it, so whoever made the account gets that too, the first time they sign in.')
+    const lookedUp = (waiting) => ({ ok: true, found: true, email: 'a@b.c', details: { confirmed: null, waiting } })
+    assert.equal(confirmNowHint(lookedUp(true)), `${CONFIRM_NOW_HINT} ${CONFIRM_NOW_WAITING}`, 'a waiting address is not said to be one')
+    for (const waiting of [false, null, undefined, 'yes']) {
+      assert.equal(confirmNowHint(lookedUp(waiting)), CONFIRM_NOW_HINT, `waiting ${waiting} reads as waiting`)
+    }
+    assert.equal(confirmNowHint(null), CONFIRM_NOW_HINT)
     const listed = messageSections({ ok: true, messages: [{ id: 'x', kind: 'bug', message: 'It broke', contact: 'a@b.c', has_log: true, created_at: Date.now() }] })
     assert.match(listed[0].rows[0].value, /Something broken · today · log attached\nIt broke\nReply to a@b\.c/)
     assert.equal(listed[0].rows[0].id, 'x', 'a message cannot be opened from the list')
@@ -12552,7 +12566,7 @@ export function run(test) {
     /* The paid line only while there is no note to say what to do next, and the failed-details offer cleared on a new try and on switching sides. */
     assert.match(flatSign, /\{paid && !note \? \(/, 'the paid line is drawn over the note that says what to do next')
     assert.match(flatSign, /setError\(null\) setNote\(null\) setNoAccount\(false\) try \{/, 'a new try keeps showing that the last one did not match')
-    assert.match(flatSign, /const switchTo = \(next\) => \{ setMode\(next\) setError\(null\) setNote\(null\) setNoAccount\(false\) \}/, 'switching sides keeps the offer to make an account')
+    assert.match(flatSign, /const switchTo = \(next\) => \{ setMode\(next\) setError\(null\) setNote\(null\) setNoAccount\(false\) setUnconfirmed\(null\) \}/, 'switching sides keeps the offer to make an account')
     /* And relay.js says which failures were the details. */
     assert.match(withoutComments(read('mobile/src/lib/relay.js')).replace(/\s+/g, ' '), /noMatch: error\.code === 'invalid_credentials' \|\| \/invalid login\/i\.test\(error\.message \|\| ''\)/)
 

@@ -30,9 +30,13 @@ const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/
 /*
  * GRANT-ACCESS, RUN. The function loaded as it is, with Deno's two calls
  * stood in for and a fetch that answers as Supabase would: who a token
- * belongs to, what account_details finds, and the Auth admin call. Anything
- * else it asks for is a 500, so a request nobody expected shows up as one.
+ * belongs to, what account_details finds, whether the address is on the
+ * waiting list (`waiting`, or 'fail' for a refusal), and the Auth admin call.
+ * RevenueCat answers as it does for a customer who has bought nothing, which
+ * is what a Check needs. Anything else it asks for is a 500, so a request
+ * nobody expected shows up as one.
  */
+const RC_PROJECT = 'https://api.revenuecat.com/v2/projects/proj827190e9'
 const ADMIN = '7dfe6912-e43b-49bf-84e4-b56afbd442b1'
 const STRANGER = '00000000-0000-4000-8000-000000000000'
 const CUSTOMER = '11111111-2222-4333-8444-555555555555'
@@ -41,7 +45,7 @@ const SERVICE = 'the-service-role-key'
 const ENV = { SUPABASE_URL: PROJECT, SUPABASE_ANON_KEY: 'the-anon-key', SUPABASE_SERVICE_ROLE_KEY: SERVICE, REVENUECAT_SECRET: 'rc' }
 let grantHandler = null
 
-async function grantAccess({ token, body, account = null, refuse = 0 }) {
+async function grantAccess({ token, body, account = null, refuse = 0, waiting = false }) {
   const calls = []
   const logged = []
   const was = { fetch: globalThis.fetch, Deno: globalThis.Deno, log: console.log, error: console.error }
@@ -55,7 +59,9 @@ async function grantAccess({ token, body, account = null, refuse = 0 }) {
       return who ? answer(200, { id: who, email: 'someone@example.com' }) : answer(401, { msg: 'JWT expired' })
     }
     if (call.url === `${PROJECT}/rest/v1/rpc/account_details`) return answer(200, account)
-    if (call.url === `${PROJECT}/rest/v1/rpc/is_waiting_grant`) return answer(200, false)
+    if (call.url === `${PROJECT}/rest/v1/rpc/is_waiting_grant`) return waiting === 'fail' ? answer(500, { msg: 'no' }) : answer(200, waiting)
+    if (call.url === `${RC_PROJECT}/entitlements`) return answer(200, { items: [{ id: 'entl-full', lookup_key: 'full' }] })
+    if (call.url.startsWith(`${RC_PROJECT}/customers/`)) return answer(200, call.url.endsWith(account?.id || '-') ? { id: account.id } : { items: [] })
     if (call.url.startsWith(`${PROJECT}/auth/v1/admin/users/`)) {
       return refuse ? answer(refuse, { msg: 'no' }) : answer(200, { id: CUSTOMER, email_confirmed_at: '2026-10-11T12:00:00Z' })
     }
@@ -366,5 +372,38 @@ export function run(test) {
     /* And Check on an address with no account answers as it always has. */
     const check = await grantAccess({ token: 'his-token', body: { action: 'check', email: 'new@example.com' } })
     assert.match(check.said.message, /^No account uses new@example\.com yet\. Give access puts them on the waiting list/, 'Confirm now changed what Check says')
+  })
+
+  test('Check says whether an account that never confirmed is on the waiting list, so Confirm now can say so first', async () => {
+    /*
+     * The waiting list is claimed at the first sign-in, on the confirmation
+     * email's word that the address is theirs. Confirm now takes that word
+     * away, so whoever made the account would get the unlock: the lookup says
+     * so before he taps it (confirmNowHint in shared/admin.mjs).
+     */
+    const check = (over) => grantAccess({ token: 'his-token', body: { action: 'check', email: 'Fan@Example.com' }, ...over })
+    const unconfirmed = { id: CUSTOMER, email: 'fan@example.com', confirmed: null }
+    const asked = (r) => r.calls.filter((c) => c.url === `${PROJECT}/rest/v1/rpc/is_waiting_grant`)
+
+    const waiting = await check({ account: unconfirmed, waiting: true })
+    assert.equal(waiting.status, 200, waiting.said.message)
+    assert.equal(waiting.said.found, true)
+    assert.equal(waiting.said.details.waiting, true, 'an unconfirmed account on the waiting list is not said to be on it')
+    assert.equal(asked(waiting).length, 1)
+    assert.deepEqual(asked(waiting)[0].body, { address: 'fan@example.com' }, 'the waiting list is asked about some other address')
+
+    const not = await check({ account: unconfirmed, waiting: false })
+    assert.equal(not.said.details.waiting, false, 'an account not on the waiting list is said to be on it')
+
+    /* A waiting list that cannot be asked is not a lookup that failed. */
+    const unknown = await check({ account: unconfirmed, waiting: 'fail' })
+    assert.equal(unknown.status, 200, 'the lookup fails when the waiting list cannot be asked')
+    assert.equal(unknown.said.ok, true)
+    assert.equal(unknown.said.details.waiting, null, 'a waiting list that could not be asked reads as a yes or a no')
+
+    /* Confirmed already: Confirm now is not offered, so it is not asked. */
+    const confirmed = await check({ account: { ...unconfirmed, confirmed: '2026-10-01T09:00:00Z' }, waiting: true })
+    assert.equal(confirmed.said.details.waiting, false)
+    assert.equal(asked(confirmed).length, 0, 'the waiting list is asked about an account that has confirmed')
   })
 }

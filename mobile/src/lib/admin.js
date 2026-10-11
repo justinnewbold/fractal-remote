@@ -553,20 +553,39 @@ export function signInHelp(answer) {
 }
 
 /*
- * The line under Confirm now. It lets whoever made the account in, so an
- * address somebody typed for a stranger becomes theirs: worth a look first.
+ * The line under Confirm now, which shows beside the resend.
+ *
+ * Resend first: an email that reaches them proves the address is theirs, and
+ * Confirm now proves nothing. It lets in whoever made the account, so it is
+ * only for an address he knows is theirs, and "check it" has to be a check he
+ * can do: they emailed him from it. That also catches the likeliest wrong
+ * one, a typo, which would leave them an account no reset can reach.
  */
 export const CONFIRM_NOW_HINT =
-  'Use Confirm their account now when the email isn’t reaching them. Check it’s really their address first: it lets whoever made the account sign in.'
+  'Try Resend first. If it still isn’t reaching them, Confirm their account now lets them in with no email at all. Only use it if they emailed you from this same address, so you know it’s spelled right and really theirs: it lets whoever made the account sign in.'
+
+/*
+ * And an address on the waiting list: its unlock is claimed at the first
+ * sign-in, on the confirmation email's word that the address is theirs.
+ * Confirming by hand takes that word away, so he hears it before he taps.
+ */
+export const CONFIRM_NOW_WAITING =
+  'This address is on the waiting list for the full version you gave it, so whoever made the account gets that too, the first time they sign in.'
+
+/** The words under Confirm now, for this lookup. */
+export function confirmNowHint(answer) {
+  return answer?.details?.waiting === true ? `${CONFIRM_NOW_HINT} ${CONFIRM_NOW_WAITING}` : CONFIRM_NOW_HINT
+}
 
 /** What the page says after sending one, or after confirming by hand ('confirmNow'). */
 export function signInHelpWords(kind, email, error) {
+  /* Confirming emails nobody, so the line says to tell them: they are still waiting on an email that will not come. */
   if (kind === 'confirmNow') {
     return error
       ? { ok: false, message: `Their account was not confirmed: ${error}` }
       : {
           ok: true,
-          message: `${email} is confirmed. They can sign in now with the password they chose. If they have forgotten it, send them a password reset.`
+          message: `${email} is confirmed. Nothing is emailed to them, so let them know they can sign in now with the password they chose. If they have forgotten it, send them a password reset.`
         }
   }
   if (error) return { ok: false, message: `It did not send: ${error}` }

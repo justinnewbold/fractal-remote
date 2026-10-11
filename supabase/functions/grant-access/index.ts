@@ -511,7 +511,19 @@ Deno.serve(async (req: Request) => {
     if (action === 'claim') return json({ ok: true, unlocked: has, emailed: told === true })
 
     /* The Customer lookup. Asked after the change, so it shows the result. */
-    const [bought, seen] = await Promise.all([purchasesOf(account), lastSeen(account)])
+    const [bought, seen, waiting] = await Promise.all([
+      purchasesOf(account),
+      lastSeen(account),
+      /*
+       * Only for an account that never confirmed, which is when Confirm now is
+       * offered. The waiting list is claimed at the first sign-in, and the
+       * confirmation email was the only proof of whose address it is, so
+       * confirming by hand hands the unlock to whoever made the account: the
+       * page says so before he taps it. Unknown is not a reason to fail the
+       * lookup.
+       */
+      found?.confirmed ? false : rpc('is_waiting_grant', { address: email }).then(Boolean, () => null)
+    ])
     const details = {
       signedUp: found?.signed_up ?? null,
       confirmed: found?.confirmed ?? null,
@@ -520,7 +532,8 @@ Deno.serve(async (req: Request) => {
       /* One of the accounts shared/owner-unlock.mjs unlocks without a purchase. */
       owner: found?.unlock?.source === 'owner',
       purchases: bought,
-      seen
+      seen,
+      waiting
     }
     const message =
       action === 'grant'

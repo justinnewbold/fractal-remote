@@ -4,7 +4,7 @@ import { Keyboard, Text, TextInput, View } from 'react-native'
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { DEFAULT_PROJECT } from '../lib/project'
 import { resendConfirmation, sendPasswordReset, supabaseClient } from '../lib/relay'
-import { accessAction, CONFIRM_NOW_HINT, lookupRows, signInHelp, signInHelpWords } from '../lib/admin'
+import { accessAction, confirmNowHint, lookupRows, signInHelp, signInHelpWords } from '../lib/admin'
 import Facts from './Facts'
 import Note from './Note'
 import Press from './Press'
@@ -157,7 +157,7 @@ export default function AccessTool() {
             disabled={!!busy}
             onPress={confirmNow}
           />
-          <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>{CONFIRM_NOW_HINT}</Text>
+          <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>{confirmNowHint(said)}</Text>
         </>
       ) : null}
       {signInHelp(said).reset ? (

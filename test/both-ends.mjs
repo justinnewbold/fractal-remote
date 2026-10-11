@@ -2196,7 +2196,7 @@ export function run(test) {
       assert.match(flat, /\{signInHelp\(said\)\.confirmNow \? \(/, `${file}: Confirm now is not tied to the lookup`)
       assert.match(flat, /busy === 'confirmNow' \? 'Confirming…' : 'Confirm their account now'/)
       assert.match(flat, /disabled=\{!!busy\} (onPress|onClick)=\{confirmNow\}|(onPress|onClick)=\{confirmNow\}/, `${file}: the button does not run Confirm now`)
-      assert.ok(/\{CONFIRM_NOW_HINT\}/.test(ui), `${file}: no line says when to use it`)
+      assert.ok(/\{confirmNowHint\(said\)\}/.test(ui), `${file}: no line says when to use it, or not for the address looked up`)
     }
     /* Both buttons wait for the others, as every button on the page does. */
     assert.match(read('mobile/src/components/AccessTool.js').replace(/\s+/g, ' '), /height=\{TAP\} disabled=\{!!busy\} onPress=\{confirmNow\}/)
@@ -2231,19 +2231,36 @@ export function run(test) {
     const web = read('src/components/SignIn.jsx')
     const flatWeb = web.replace(/\s+/g, ' ')
     assert.match(flatWeb, /Confirm it from the email we just sent, then sign in\. \{NOT_IN_INBOX\}/, 'Account made does not say where else to look')
-    assert.match(flatWeb, /setProblem\(err\.message\) setUnconfirmed\(mode === 'in' && Boolean\(err\?\.notConfirmed\)\)/, 'the website does not notice the email was never confirmed')
-    assert.match(flatWeb, /setNote\(null\) setUnconfirmed\(false\) const address = email\.trim\(\)/, 'a new try still offers to send the email again')
-    assert.match(flatWeb, /await resendConfirmation\(\{ \.\.\.project\(\), email: address \}\) setUnconfirmed\(false\) setNote\(sentAgain\(address\)\)/, 'Send it again sends something else, or does not say it went')
-    assert.match(flatWeb, /const again = unconfirmed && problem \? \( <button type="button" className="chip signin-wide" onClick=\{sendAgain\} disabled=\{off\}> Send the confirmation email again <\/button>/)
+    assert.match(flatWeb, /setProblem\(err\.message\) setUnconfirmed\(mode === 'in' && err\?\.notConfirmed \? address : null\)/, 'the website does not notice the email was never confirmed, or forgets which address was refused')
+    assert.match(flatWeb, /setNote\(null\) setUnconfirmed\(null\) const address = email\.trim\(\)/, 'a new try still offers to send the email again')
+    /* To the address that was refused, not whatever the box says by the time it is tapped. */
+    const webAgain = flatWeb.slice(flatWeb.indexOf('const sendAgain = async () => {'), flatWeb.indexOf('const again ='))
+    assert.match(webAgain, /^const sendAgain = async \(\) => \{ const address = unconfirmed if \(!address\) return setProblem\(null\)/, 'Send it again on the website sends to what is in the box now')
+    assert.doesNotMatch(webAgain, /email\.trim\(\)/, 'Send it again on the website reads the box')
+    assert.match(webAgain, /await resendConfirmation\(\{ \.\.\.project\(\), email: address \}\) setUnconfirmed\(null\) setNote\(sentAgain\(address\)\)/, 'Send it again sends something else, or does not say it went')
+    assert.match(flatWeb, /const again = mode === 'in' && unconfirmed && problem \? \( <button type="button" className="chip signin-wide" onClick=\{sendAgain\} disabled=\{off\}> Send the confirmation email again <\/button>/, 'Send it again shows on the Create account or Forgot side')
     assert.equal(web.split('{again}').length - 1, 2, 'Send it again is missing from one of the two forms')
 
     /* The phone: Account made says where else to look; a refusal offers Send it again. */
     const phone = read('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
-    assert.match(phone, /then sign in\.' \) setUnconfirmed\('made'\) setMode\('in'\)/, 'Account made on the phone does not say where else to look')
-    assert.match(phone, /\{note \? <Note>\{unconfirmed === 'made' \? `\$\{note\} \$\{NOT_IN_INBOX\}` : note\}<\/Note> : null\}/)
-    assert.match(phone, /if \(mode === 'in' && err\?\.notConfirmed\) setUnconfirmed\('refused'\)/, 'the phone does not notice the email was never confirmed')
-    assert.match(phone, /setBusy\(true\) setUnconfirmed\(null\) setError\(null\) setNote\(null\) setNoAccount\(false\)/, 'a new try still offers to send the email again')
-    assert.match(phone, /\{unconfirmed === 'refused' && error \? \( <Press label="Send the confirmation email again" disabled=\{busy\} onPress=\{sendAgain\} \/>/)
-    assert.match(phone, /await resendConfirmation\(email\.trim\(\)\) setUnconfirmed\(null\) setNote\(sentAgain\(email\.trim\(\)\)\)/, 'Send it again on the phone sends something else, or does not say it went')
+    assert.match(phone, /then sign in\.' \) setUnconfirmed\(\{ why: 'made' \}\) setMode\('in'\)/, 'Account made on the phone does not say where else to look')
+    assert.match(phone, /\{note \? <Note>\{unconfirmed\?\.why === 'made' \? `\$\{note\} \$\{NOT_IN_INBOX\}` : note\}<\/Note> : null\}/)
+    assert.match(phone, /if \(mode === 'in' && err\?\.notConfirmed\) setUnconfirmed\(\{ why: 'refused', email: email\.trim\(\) \}\)/, 'the phone does not notice the email was never confirmed, or forgets which address was refused')
+    /*
+     * Every new try, and every switch of side, starts it again, BEFORE
+     * anything can be refused for another reason: a short password on Create
+     * account once showed "Send the confirmation email again" under "Your
+     * password is at least 6 characters."
+     */
+    assert.match(phone, /const go = async \(\) => \{ setUnconfirmed\(null\) if \(!ready\) \{/, 'a try refused for its password still offers the confirmation email')
+    assert.match(phone, /const reset = async \(\) => \{ setUnconfirmed\(null\) if \(!email\.includes\('@'\)\)/, 'Forgot password, refused for its address, still offers the confirmation email')
+    const switchTo = phone.slice(phone.indexOf('const switchTo = (next) => {'))
+    assert.match(switchTo, /^const switchTo = \(next\) => \{ setMode\(next\) setError\(null\) setNote\(null\) setNoAccount\(false\) setUnconfirmed\(null\) \}/, 'Create account still remembers the sign-in that was refused')
+    assert.match(phone, /\{mode === 'in' && unconfirmed\?\.why === 'refused' && error \? \( <Press label="Send the confirmation email again" disabled=\{busy\} onPress=\{sendAgain\} \/>/, 'Send it again shows on the Create account side')
+    /* To the address that was refused, not whatever the box says by the time it is tapped. */
+    const phoneAgain = phone.slice(phone.indexOf('const sendAgain = async () => {'), phone.indexOf('const switchTo ='))
+    assert.match(phoneAgain, /^const sendAgain = async \(\) => \{ const address = unconfirmed\?\.email if \(!address\) return setBusy\(true\)/, 'Send it again on the phone sends to what is in the box now')
+    assert.doesNotMatch(phoneAgain, /email\.(trim|includes)\(/, 'Send it again on the phone reads the box')
+    assert.match(phoneAgain, /await resendConfirmation\(address\) setUnconfirmed\(null\) setNote\(sentAgain\(address\)\)/, 'Send it again on the phone sends something else, or does not say it went')
   })
 }

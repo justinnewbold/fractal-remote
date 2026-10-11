@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { DEFAULT_PROJECT, resendConfirmation, sendPasswordReset, supabaseClient } from '../lib/remote'
-import { accessAction, CONFIRM_NOW_HINT, lookupRows, signInHelp, signInHelpWords } from '../../shared/admin.mjs'
+import { accessAction, confirmNowHint, lookupRows, signInHelp, signInHelpWords } from '../../shared/admin.mjs'
 import Facts from './Facts'
 
 /**
@@ -129,7 +129,7 @@ export default function AccessTool() {
           ) : null}
         </div>
       ) : null}
-      {signInHelp(said).confirmNow ? <p className="hint">{CONFIRM_NOW_HINT}</p> : null}
+      {signInHelp(said).confirmNow ? <p className="hint">{confirmNowHint(said)}</p> : null}
       {helped ? (
         <p className={helped.ok ? 'hint access-said' : 'save-error access-said'} role="status">
           {helped.message}
