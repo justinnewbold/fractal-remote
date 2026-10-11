@@ -1977,15 +1977,15 @@ export function run(test) {
      *
      * AND THE ONE GAP, SAID AS IT IS. For a day this said the app "does not
      * show it to anyone else, and never asks anyone else" for anything. Not
-     * quite true: a fresh install of the 1.87.1 builds runs the copy built
-     * into it on its first launch (fallbackToCacheTimeout 0), and that copy
-     * shows a Bluetooth (beta) card to an account with the full version
-     * until the update takes over on the next launch. Only a new build
+     * quite true: the 1.87.1 builds run the copy built into them on their
+     * first launch after an install or a store update (fallbackToCacheTimeout
+     * 0), and that copy shows a Bluetooth (beta) card to an account with the
+     * full version until the update has downloaded. Only a new build
      * closes that, so the page names the gap, and when anything is asked.
      */
     assert.ok(!/for everyone who has unlocked the app|part of the full version, for/.test(words), 'the policy says Bluetooth (beta) is for everyone who has paid, and it is the developer’s alone')
     assert.match(words, /Bluetooth \(beta\) lets the phone talk to your unit through a Bluetooth MIDI adapter, with no computer\. It is still being tested, so for now it is switched on only for the developer's own account\./, 'the policy does not say Bluetooth (beta) is the developer’s alone')
-    assert.match(words, /There is one gap: the very first time a fresh install of version 1\.87\.1 opens, before its first update has arrived, an account with the full version can still see a Bluetooth \(beta\) card under Settings → Phone &amp; computer\. From the next launch it is gone\. Nothing is asked for unless Connect is tapped on the Bluetooth page\./, 'the policy does not name the first-launch gap of the 1.87.1 builds, or when anything is asked for')
+    assert.match(words, /There is one gap: the first time version 1\.87\.1 opens after it is installed or updated, before its first update has arrived, an account with the full version can still see a Bluetooth \(beta\) card under Settings → Phone &amp; computer\. It goes once the app has downloaded that update, usually from the next time it is opened\. Nothing is asked for unless Connect is tapped on the Bluetooth page\./, 'the policy does not name the first-launch gap of the 1.87.1 builds, or when anything is asked for')
     assert.ok(!/does not show it to anyone else|never asks anyone else/.test(words), 'the policy says nobody else is ever shown Bluetooth or asked, and a fresh 1.87.1 install can show it on its first launch')
     assert.equal(JSON.parse(read('mobile/app.json')).expo.updates.fallbackToCacheTimeout, 0, 'the app now waits for its update before opening; the first-launch gap the policy names may be gone')
     assert.match(read('mobile/src/lib/bluetooth.js'), /export const useBluetoothAllowed = /, 'the app no longer keeps Bluetooth (beta) to one account; the policy should stop saying it does')
@@ -2243,6 +2243,8 @@ export function run(test) {
     assert.match(said, /Your phone connects to your Fractal unit through the desktop app/, '/bluetooth does not say what to use instead')
     assert.match(notice, /href="\/downloads"/, '/bluetooth does not link the desktop app')
     assert.match(said, /There is nothing to buy for it now\./)
+    /* The 1.87.1 copy's own guide button opened this page, so somebody in the first-launch gap can land here with the card in front of them. */
+    assert.match(said, /If you have just installed or updated the app and still see a Bluetooth \(beta\) card, it goes away by itself once the app has updated\./, '/bluetooth does not tell somebody in the first-launch gap that the card goes by itself')
     /* Read with the comment taken out, as the guide is: the comment names what it no longer does. */
     const page = notice.replace(/<!--[\s\S]*?-->/g, '')
     assert.ok(!/amazon\.|cme-pro\.com|lootools/i.test(page), '/bluetooth gives somewhere to buy the parts, and customers cannot use them')
@@ -2316,8 +2318,8 @@ export function run(test) {
      * is. So the notes are written for a build made from main after 11
      * October, and say so where Justin reads it first.
      */
-    assert.match(section, /\*\*Submit a build made after 11 October 2026, not the 10 October build 26,\s+whose first launch still shows Bluetooth\.\*\*/, 'the 1.87.1 section does not tell Justin to submit a build made after 11 October rather than build 26')
-    assert.ok(section.indexOf('Submit a build made after 11 October 2026') < notesAt + 200 && section.indexOf('Submit a build made after 11 October 2026') < open, 'the line about which build to submit is not above the notes')
+    assert.match(section, /\*\*Submit a build made from main after 1\.87\.8 was merged \(11 October 2026\),\s+not the 10 October build 26, whose first launch still shows Bluetooth\.\*\*/, 'the 1.87.1 section does not tell Justin to submit a build made after 1.87.8 rather than build 26')
+    assert.ok(section.indexOf('Submit a build made from main after 1.87.8') < notesAt + 200 && section.indexOf('Submit a build made from main after 1.87.8') < open, 'the line about which build to submit is not above the notes')
     assert.ok(!/anywhere in the app|nothing for the reviewer to\s+reach|reviewer never meets it/.test(section), 'the 1.87.1 section says the reviewer can never meet Bluetooth, and build 26’s first launch shows it')
     const disclosure = pasted.slice(pasted.indexOf('Bluetooth MIDI code, switched on only for the developer.'), pasted.indexOf('\n\n', pasted.indexOf('Bluetooth MIDI code, switched on only for the developer.')))
     assert.ok(!/Bluetooth/.test(pasted.replace(disclosure, '')), 'Bluetooth is mentioned outside the one paragraph that discloses it')
@@ -2434,7 +2436,7 @@ export function run(test) {
      */
     assert.match(
       access,
-      /^This build also contains Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested\. From the app's first update, which takes over on its second launch, this account does not see it\. On the very first launch after a fresh install, the copy built into this version can still show a BLUETOOTH \(BETA\) card under Settings → Phone & computer; the app asks for Nearby devices \(or Location, on Android 11 and older\) only if Connect is tapped on the page it opens\.$/m,
+      /^This build also contains Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested\. Once the app has downloaded its first update, usually from its second launch, this account does not see it\. On the first launch after this version is installed or updated, the copy built into it can still show a BLUETOOTH \(BETA\) card under Settings → Phone & computer; the app asks for Nearby devices \(or Location, on Android 11 and older\) only if Connect is tapped on the page it opens\.$/m,
       'the Play reviewer is not told why Nearby devices and Location are declared, and when they are asked for'
     )
     assert.ok(!/never asks|does not see it, and/.test(access), 'the Play note says the reviewer never meets Bluetooth, and the first launch of 1.87.1 can show it')

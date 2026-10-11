@@ -356,8 +356,8 @@ working, or a build without the module.
 
 ### Notes for App Review, 1.87.1
 
-**Submit a build made after 11 October 2026, not the 10 October build 26,
-whose first launch still shows Bluetooth.**
+**Submit a build made from main after 1.87.8 was merged (11 October 2026),
+not the 10 October build 26, whose first launch still shows Bluetooth.**
 
 Why: a fresh install runs the copy of the app built into it on its very first
 launch, and only takes the latest update on the launch after
@@ -580,14 +580,15 @@ No hardware? The app has a full demo that needs no account and no gear:
   3. Tap "Start free demo"
   4. Choose any unit, then tap "Play with ..."
 
-This build also contains Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested. From the app's first update, which takes over on its second launch, this account does not see it. On the very first launch after a fresh install, the copy built into this version can still show a BLUETOOTH (BETA) card under Settings → Phone & computer; the app asks for Nearby devices (or Location, on Android 11 and older) only if Connect is tapped on the page it opens.
+This build also contains Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested. Once the app has downloaded its first update, usually from its second launch, this account does not see it. On the first launch after this version is installed or updated, the copy built into it can still show a BLUETOOTH (BETA) card under Settings → Phone & computer; the app asks for Nearby devices (or Location, on Android 11 and older) only if Connect is tapped on the page it opens.
 ```
 
 The last line is the same disclosure as Apple's notes, in Android's words,
 and says the one thing Apple's does not have to. The Android 1.87.1 build
 went to Google Play production on 10 October, so its built-in copy is the
-one that shows Bluetooth on a fresh install's first launch, until the update
-that hides it takes over on the next one (see *Submit a build made after 11
+one that shows Bluetooth on its first launch after an install or a Play
+update, until the update that hides it has downloaded, usually by the next
+launch (see *Submit a build made after 11
 October 2026* above). The manifest of 1.87.1 declares Nearby devices (and
 Location on Android 11 and older) because the Bluetooth code is in it, and a
 reviewer who sees those declared should be told why, and when they are

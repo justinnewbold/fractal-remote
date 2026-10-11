@@ -2732,6 +2732,35 @@ export function run(test) {
       }
     }
 
+    /* 3d. Anything else written while the on is held (a unit chosen, say) writes the held on with it, never an off. */
+    {
+      const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk: leftOn() })
+      try {
+        assert.equal(await bench.ble.restoreBluetooth(), false)
+        assert.equal(bench.ble.setBluetoothUnit('fm3'), 'fm3')
+        await settle()
+        assert.equal(kept(bench).on, true, 'choosing a unit while the on was held wrote his Bluetooth off for good')
+        assert.equal(kept(bench).unit, 'fm3')
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        assert.equal(bench.sw.bluetoothOn(), true)
+      } finally {
+        bench.done()
+      }
+    }
+
+    /* 3e. His id on a phone (or a build) without Bluetooth MIDI: the held on stays off, rather than a link that can never connect. */
+    {
+      const { mod } = iphoneModule('allowedAlways')
+      const bench = await bluetoothOnABench({ mod: { ...mod, supported: () => false }, disk: leftOn() })
+      try {
+        assert.equal(await bench.ble.restoreBluetooth(), false)
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        assert.equal(bench.sw.bluetoothOn(), false, 'the held on came on where there is no Bluetooth MIDI')
+      } finally {
+        bench.done()
+      }
+    }
+
     /* 4. Anything that is not his account's id is nobody: the demo's `true`, nothing, a near miss. */
     const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod })
     try {

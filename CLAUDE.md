@@ -256,14 +256,15 @@ the build refused), and an update hides it from everybody but him:
 - Nothing touches the phone's Bluetooth before Connect is tapped on the
   Bluetooth page, so nobody who is not shown that page is asked for the
   permission.
-- One gap an update cannot close: a fresh install of the 1.87.1 builds runs
-  the copy of the app built into it on its very first launch
-  (`fallbackToCacheTimeout` is 0 in mobile/app.json), and that copy shows a
+- One gap an update cannot close: the 1.87.1 builds run the copy of the app
+  built into them on their first launch after an install OR a store update
+  (`fallbackToCacheTimeout` is 0 in mobile/app.json, and a new store build
+  drops the updates made for the old one), and that copy shows a
   BLUETOOTH (BETA) card under Settings → Phone & computer to any account
-  with the full version, until its first update takes over on the next
-  launch. Only a new build closes it, which is his call (one iOS and one
-  Android build). So the App Store submission has to be a build made after
-  11 October 2026, not build 26 (docs/app-store.md says so above the notes),
+  with the full version, until its first update has downloaded, usually by
+  the next launch. Only a new build closes it, which is his call (one iOS
+  and one Android build). So the App Store submission has to be a build made
+  from main after 1.87.8 was merged, not build 26 (docs/app-store.md says so above the notes),
   and the privacy page and Google's App access note say the gap as it is.
 - /bluetooth on the website says it isn't in the app and may be offered in
   a later version, with no promise and nothing to buy; the guide lives at
