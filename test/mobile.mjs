@@ -2847,7 +2847,8 @@ export function run(test) {
       ['src/screens/Settings.js', /^Google account$/, 'Delete account: Apple ID on an iPhone'],
       ['src/lib/purchases.js', /^Google account$/, 'storeAccount, in Restore’s and Buy’s words: Apple ID on an iPhone'],
       ['src/lib/cloudSetlists.js', /^Android$/, 'deviceName: iPhone on an iPhone'],
-      ['src/lib/admin.js', /Android/, 'Justin’s Developer pages only'],
+      /* Sales at a glance names Google Play in Paid twice, as it names Android in Where they bought. */
+      ['src/lib/admin.js', /Android|Google Play/, 'Justin’s Developer pages only'],
       ['src/lib/whats-live.js', /^Android build$/, 'What is live, a Developer page, Justin’s only'],
       ['src/lib/ways-in.js', /Google Play/, 'the browser’s list of routes; nothing on the phone imports it']
     ]
@@ -4941,6 +4942,60 @@ export function run(test) {
     assert.match(read('src/App.jsx'), /\{setupPage === 'usage' && isAdmin\(link\.account\?\.id\) \?/)
     assert.match(read('mobile/src/components/UsageTool.js'), /action: 'usage'/)
     assert.match(read('src/components/UsageTool.jsx'), /action: 'usage'/)
+  })
+
+  test('Sales at a glance names anybody who paid twice, first, and which purchase can be refunded', async () => {
+    /*
+     * A customer paid on his iPhone and again by card on the website, and the
+     * page counted two sales. It names them now: the server lists anybody
+     * with more than one real purchase, and the page puts them on top, in
+     * plain words, with the one RevenueCat can refund.
+     */
+    const { salesSections } = await import('../shared/admin.mjs')
+    const now = new Date(2026, 9, 11, 15, 0).getTime()
+    const at = (y, m, d) => new Date(y, m, d, 12).getTime()
+    const base = { ok: true, accounts: 3, sales: [{ email: 'p@x.com', store: 'app_store', at: at(2026, 9, 8), gross: 9.99 }] }
+    const sections = salesSections(
+      {
+        ...base,
+        twice: [
+          { email: 'p@x.com', stores: ['app_store', 'rc_billing'], at: [at(2026, 9, 8), at(2026, 9, 8)] },
+          { email: 'q@x.com', stores: ['play_store', 'app_store'], at: [at(2026, 9, 1), at(2026, 9, 9)] },
+          { email: 'r@x.com', stores: ['app_store', 'play_store', 'rc_billing'], at: [at(2026, 9, 1), at(2026, 9, 2), at(2026, 9, 3)] }
+        ]
+      },
+      now
+    )
+    assert.equal(sections[0]?.title, 'Paid twice', 'paying twice is not the first thing on the page')
+    assert.deepEqual(sections[0].rows, [
+      { label: 'p@x.com', value: 'Paid on the App Store, Oct 8, 2026, and by card on the website, Oct 8, 2026. The card one can be refunded in RevenueCat.' },
+      { label: 'q@x.com', value: 'Paid on Google Play, Oct 1, 2026, and on the App Store, Oct 9, 2026.' },
+      {
+        label: 'r@x.com',
+        value: 'Paid on the App Store, Oct 1, 2026; on Google Play, Oct 2, 2026; and by card on the website, Oct 3, 2026. The card one can be refunded in RevenueCat.'
+      }
+    ])
+    assert.equal(sections[1].title, 'Sales', 'the rest of the page moved')
+    /* Nobody twice, or a server from before it counted: no section at all. */
+    for (const answer of [{ ...base, twice: [] }, base]) {
+      assert.ok(!salesSections(answer, now).some((s) => s.title === 'Paid twice'), 'an empty Paid twice is drawn')
+    }
+
+    /*
+     * The server counts it per buyer, from what RevenueCat says they bought:
+     * a hand grant, a test purchase and a refund are not money taken. The
+     * list is a new field beside the old ones, so a phone too old to know it
+     * reads the same answer as before.
+     */
+    const server = read('supabase/functions/grant-access/index.ts')
+    const sales = server.slice(server.indexOf('async function sales()'), server.indexOf('async function usage()'))
+    assert.match(sales, /const real = bought\.filter\(\(p\) => p\.store !== 'promotional'\)/)
+    assert.match(
+      sales,
+      /const paid = real\.filter\(\(p\) => !p\.sandbox && !p\.refunded\)\s*if \(paid\.length > 1\) twice\.push\(\{ email: b\.email, stores: paid\.map\(\(p\) => p\.store\), at: paid\.map\(\(p\) => p\.at\) \}\)/,
+      'paying twice is counted from something other than real purchases'
+    )
+    assert.match(sales, /sales: sold,\s*(\/\*[\s\S]*?\*\/\s*)?twice\s*\}/, 'the list is not in the answer, or replaced a field an older phone reads')
   })
 
   test('Customer lookup and Sales at a glance say what happened, in his words', async () => {

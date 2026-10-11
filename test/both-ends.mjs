@@ -24,7 +24,10 @@
  * can, which covers the plain `Move` / `Add` / `Remove` that drift is made of.
  */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 
@@ -1140,6 +1143,339 @@ export function run(test) {
        sign-in, or the new account, comes on the way to the unlock page. */
     /* On the Account page now, with signing in, as on the phone. */
     assert.match(app, /\{paid\.checked && !paid\.unlocked \? \(\s*<div className="setup-rows">\s*<SetupRow\s*key="unlock"[\s\S]{0,260}onClick=\{openUnlock\}/, 'the unlock row hides from somebody signed out, or skips the sign-in')
+  })
+
+  /*
+   * PAID TWICE, AND WHAT THE WEBSITE DOES SO IT IS NOT ASKED AGAIN.
+   *
+   * A customer bought the unlock on his iPhone before he had an account. He
+   * made the account on the website, the website truthfully heard "not paid"
+   * — the phone's purchase was on no account until the phone signed in, two
+   * minutes later — and it sold him the unlock again by card.
+   *
+   * These run webPurchase.js itself, not a description of it: the file with
+   * its two imports pointed at stand-ins for the server's session and for
+   * RevenueCat's library, written beside it.
+   */
+  const webPurchase = async (tweak = (src) => src) => {
+    const dir = mkdtempSync(join(tmpdir(), 'webbuy-'))
+    const src = tweak(read('src/lib/webPurchase.js'))
+      .replace("from './remote'", "from './remote.mjs'")
+      .replace("import('@revenuecat/purchases-js')", "import('./purchases-js.mjs')")
+    assert.doesNotMatch(src, /from '\.\/remote'|import\('@revenuecat/, 'webPurchase.js imports something new; these stand-ins no longer cover it')
+    writeFileSync(
+      join(dir, 'remote.mjs'),
+      `export const DEFAULT_PROJECT = { url: 'https://project.test', anonKey: 'anon' }
+       export const supabaseClient = () => ({ auth: { getSession: async () => ({ data: { session: globalThis.__webSession } }) } })`
+    )
+    /* RevenueCat's own numbers for the two errors, checked against its own file below. */
+    writeFileSync(
+      join(dir, 'purchases-js.mjs'),
+      `export const ErrorCode = { UserCancelledError: 1, ProductAlreadyPurchasedError: 6 }
+       export const Purchases = {
+         configure: ({ appUserId }) => globalThis.__webRevenueCat(appUserId),
+         generateRevenueCatAnonymousAppUserId: () => '$RCAnonymousID:visitor'
+       }`
+    )
+    writeFileSync(join(dir, 'webPurchase.mjs'), src)
+    const mod = await import(pathToFileURL(join(dir, 'webPurchase.mjs')).href)
+    return { mod, done: () => rmSync(dir, { recursive: true, force: true }) }
+  }
+  const reply = (status, body) => async () =>
+    new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+  const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms))
+
+  test('a fault from the server is never read as “not paid” on the website or the computer', async () => {
+    const { mod, done } = await webPurchase()
+    const realFetch = globalThis.fetch
+    try {
+      const ask = (answer) => {
+        globalThis.fetch = answer
+        return mod.checkUnlocked()
+      }
+      globalThis.__webSession = { access_token: 'token' }
+      assert.deepEqual(await ask(reply(200, { unlocked: true })), { unlocked: true, unknown: false })
+      assert.deepEqual(await ask(reply(200, { unlocked: false })), { unlocked: false, unknown: false }, 'a real no is no longer a no')
+      assert.deepEqual(await ask(reply(200, { unlocked: true, unknown: true })), { unlocked: true, unknown: true }, 'the server’s own “could not ask” is lost')
+      /*
+       * Every one of these used to come out a definite "not paid" — and the
+       * browser on a phone puts the $9.99 page in front of a definite no.
+       */
+      for (const [what, answer] of [
+        ['an error page', reply(502, '<html>Bad gateway</html>')],
+        ['an error that says no', reply(500, { unlocked: false })],
+        ['a session the server no longer knows', reply(401, { unlocked: false, why: 'signed out' })],
+        ['a reply that is not JSON', reply(200, 'Service Unavailable')],
+        ['a reply with no answer in it', reply(200, {})],
+        ['an answer that is not a yes or a no', reply(200, { unlocked: 'no' })],
+        ['no reply at all', async () => { throw new TypeError('Failed to fetch') }]
+      ]) {
+        assert.deepEqual(await ask(answer), { unlocked: false, unknown: true }, `${what} reads as a definite “not paid”`)
+      }
+      /* Nobody signed in is still a plain no, and nothing is asked. */
+      let asked = 0
+      globalThis.__webSession = null
+      assert.deepEqual(await ask(async () => { asked += 1; return reply(200, { unlocked: true })() }), { unlocked: false, unknown: false })
+      assert.equal(asked, 0, 'the server is asked about nobody')
+    } finally {
+      globalThis.fetch = realFetch
+      delete globalThis.__webSession
+      done()
+    }
+  })
+
+  test('the website asks RevenueCat itself before the card, and takes none from somebody who has it, or when it cannot ask', async () => {
+    /* The stand-in's error numbers are RevenueCat's own. */
+    const types = read('node_modules/@revenuecat/purchases-js/dist/Purchases.es.d.ts')
+    assert.match(types, /UserCancelledError = 1,/)
+    assert.match(types, /ProductAlreadyPurchasedError = 6,/)
+    assert.match(types, /getCustomerInfo\(\): Promise<CustomerInfo>;/, 'the web library no longer has getCustomerInfo')
+
+    const { mod, done } = await webPurchase()
+    const realFetch = globalThis.fetch
+    const now = { owned: false, cannotAsk: false, checkout: null }
+    let checkouts = 0
+    let told = 0
+    try {
+      globalThis.__webSession = { access_token: 'token' }
+      globalThis.fetch = async () => {
+        told += 1
+        return reply(200, { unlocked: true })()
+      }
+      globalThis.__webRevenueCat = () => ({
+        getOfferings: async () => ({ current: { availablePackages: [{ webBillingProduct: { identifier: mod.PRODUCT_ID } }] }, all: {} }),
+        getCustomerInfo: async () => {
+          if (now.cannotAsk) throw new Error('Network error')
+          return { entitlements: { active: now.owned ? { full: { isActive: true } } : {} } }
+        },
+        purchase: async () => {
+          checkouts += 1
+          return now.checkout()
+        }
+      })
+      const buy = () => mod.buyOnWeb({ accountId: 'account-1', email: 'a@x.com' })
+      const yes = { ok: true, cancelled: false, message: null }
+
+      /* Bought on a phone that has signed in, or a gift: no checkout at all, and the server is told. */
+      now.owned = true
+      assert.deepEqual(await buy(), yes, 'somebody who has it is not told so')
+      assert.equal(checkouts, 0, 'the checkout opened for somebody RevenueCat says has it')
+      await tick(5)
+      assert.ok(told >= 1, 'the server is not told, so its table stays behind')
+
+      /* RevenueCat cannot be asked: no money, and a plain reason. */
+      now.owned = false
+      now.cannotAsk = true
+      assert.deepEqual(await buy(), { ok: false, cancelled: false, message: 'Couldn’t check your purchase just now. Try again in a moment.' })
+      assert.equal(checkouts, 0, 'a card is taken without knowing whether this account has it')
+
+      /* Not bought: the checkout, once. */
+      now.cannotAsk = false
+      now.checkout = async () => ({ customerInfo: { entitlements: { active: { full: { isActive: true } } } } })
+      assert.deepEqual(await buy(), yes)
+      assert.equal(checkouts, 1, 'somebody who has not bought it cannot buy it')
+
+      /* The checkout itself saying "already bought" is bought, not a fault. */
+      now.checkout = async () => {
+        throw Object.assign(new Error('Product already purchased'), { errorCode: 6 })
+      }
+      assert.deepEqual(await buy(), yes, 'RevenueCat’s “already bought” shows as an error')
+      now.checkout = async () => {
+        throw Object.assign(new Error('Cancelled'), { errorCode: 1 })
+      }
+      assert.deepEqual(await buy(), { ok: false, cancelled: true, message: null })
+      now.checkout = async () => {
+        throw new Error('Your card was declined.')
+      }
+      assert.deepEqual(await buy(), { ok: false, cancelled: false, message: 'Your card was declined.' }, 'an error with no code reads as bought or as cancelled')
+    } finally {
+      globalThis.fetch = realFetch
+      delete globalThis.__webSession
+      delete globalThis.__webRevenueCat
+      done()
+    }
+  })
+
+  test('the unlock page asks again until a phone has signed in: often at first, never while hidden, and only a yes ends it', async () => {
+    /* Quick, so the test does not wait on the real seconds; it has to have changed. */
+    const { mod, done } = await webPurchase((src) => {
+      const quick = src
+        .replace(/const ASK_FAST_MS = \d+/, 'const ASK_FAST_MS = 10')
+        .replace(/const ASK_SLOW_MS = \d+/, 'const ASK_SLOW_MS = 5000')
+        .replace(/const FAST_FOR_MS = [^\n]+/, 'const FAST_FOR_MS = 80')
+      assert.match(quick, /ASK_FAST_MS = 10\n[\s\S]*ASK_SLOW_MS = 5000\n[\s\S]*FAST_FOR_MS = 80\n/, 'how often it asks could not be shortened, so this is not testing it')
+      return quick
+    })
+    const real = read('src/lib/webPurchase.js')
+    assert.match(real, /const ASK_FAST_MS = 5000\n/, 'the first two minutes are not every five seconds')
+    assert.match(real, /const ASK_SLOW_MS = 30000\n/, 'after that is not every thirty seconds')
+    assert.match(real, /const FAST_FOR_MS = 2 \* 60 \* 1000\n/, 'the quick asking does not last two minutes')
+
+    const was = { window: Object.getOwnPropertyDescriptor(globalThis, 'window'), document: Object.getOwnPropertyDescriptor(globalThis, 'document') }
+    const heard = { window: {}, document: {} }
+    const target = (bag) => ({
+      addEventListener: (kind, fn) => (bag[kind] = bag[kind] || new Set()).add(fn),
+      removeEventListener: (kind, fn) => bag[kind]?.delete(fn)
+    })
+    const fire = (bag, kind) => [...(bag[kind] || [])].forEach((fn) => fn())
+    const listening = () => [...Object.values(heard.window), ...Object.values(heard.document)].reduce((n, set) => n + set.size, 0)
+    globalThis.window = target(heard.window)
+    globalThis.document = { ...target(heard.document), visibilityState: 'visible' }
+    /* Every one started is stopped at the end, so a failed check cannot leave one asking for ever. */
+    const started = []
+    const start = (onYes, ask) => {
+      const stop = mod.askUntilUnlocked(onYes, ask)
+      started.push(stop)
+      return stop
+    }
+    try {
+      let answer = { unlocked: false, unknown: false }
+      let asks = 0
+      const ask = async () => {
+        asks += 1
+        return answer
+      }
+
+      /* Every few moments at first, then hardly at all. */
+      let yeses = 0
+      let stop = start(() => (yeses += 1), ask)
+      await tick(70)
+      const early = asks
+      assert.ok(early >= 2, `it asked ${early} times in its quick first stretch`)
+      await tick(250)
+      assert.ok(asks - early <= 2, `it went on asking ${asks - early} more times once the quick stretch was over`)
+      /* Coming back to the window asks at once. */
+      const before = asks
+      fire(heard.window, 'focus')
+      await tick()
+      assert.equal(asks, before + 1, 'coming back to the window does not ask straight away')
+      /* A definite yes ends it, once, and it stops listening. */
+      answer = { unlocked: true, unknown: false }
+      fire(heard.window, 'focus')
+      await tick()
+      assert.equal(yeses, 1, 'a yes does not unlock the page')
+      assert.equal(listening(), 0, 'it goes on listening after the yes')
+      const after = asks
+      fire(heard.window, 'focus')
+      await tick(30)
+      assert.equal(asks, after, 'it goes on asking after the yes')
+      stop()
+
+      /* The server's "could not ask RevenueCat" is not a purchase to act on. */
+      asks = 0
+      answer = { unlocked: true, unknown: true }
+      yeses = 0
+      stop = start(() => (yeses += 1), ask)
+      await tick(40)
+      assert.equal(yeses, 0, 'the server failing open reads as bought')
+      assert.ok(asks >= 2, 'it stopped asking after an answer that was not one')
+      stop()
+      assert.equal(listening(), 0, 'stopping leaves it listening')
+      const stopped = asks
+      await tick(40)
+      assert.equal(asks, stopped, 'stopping does not stop it')
+
+      /* Hidden, it asks nothing; shown again, it asks at once. */
+      answer = { unlocked: false, unknown: false }
+      asks = 0
+      globalThis.document.visibilityState = 'hidden'
+      stop = start(() => {}, ask)
+      await tick(50)
+      fire(heard.window, 'focus')
+      await tick()
+      assert.equal(asks, 0, 'it asks while nobody can see the page')
+      globalThis.document.visibilityState = 'visible'
+      fire(heard.document, 'visibilitychange')
+      await tick()
+      assert.equal(asks, 1, 'showing the page again does not ask straight away')
+      /* Hidden again part way through: the next turn does not come. */
+      globalThis.document.visibilityState = 'hidden'
+      fire(heard.document, 'visibilitychange')
+      await tick(50)
+      assert.equal(asks, 1, 'it keeps asking once the page is hidden')
+      stop()
+
+      /* The focus and the visibility change that come together are one question, not two. */
+      globalThis.document.visibilityState = 'visible'
+      asks = 0
+      let answerNow = null
+      const slow = () => {
+        asks += 1
+        return new Promise((r) => (answerNow = () => r({ unlocked: false, unknown: false })))
+      }
+      stop = start(() => {}, slow)
+      fire(heard.window, 'focus')
+      fire(heard.document, 'visibilitychange')
+      await tick()
+      assert.equal(asks, 1, 'two questions are in flight at once')
+      answerNow()
+      stop()
+    } finally {
+      for (const stop of started) stop()
+      for (const name of ['window', 'document']) {
+        if (was[name]) Object.defineProperty(globalThis, name, was[name])
+        else delete globalThis[name]
+      }
+      done()
+    }
+  })
+
+  test('an owner on the website or the computer never reaches an enabled Buy, and the unlock page says how a phone purchase gets there', () => {
+    const app = read('src/App.jsx')
+    /*
+     * The page waits on the phone: named once and asked about while it is up
+     * (a name, so test/structure.mjs still finds each screen by its own
+     * conditional), never while a checkout is open over it, and on a yes it
+     * does exactly what buying does.
+     */
+    assert.match(app, /const unlockOnScreen = mustPay \|\| \(sheet === 'settings' && setupPage === 'unlock'\)/, 'the asking does not follow the unlock page')
+    assert.match(
+      app,
+      /if \(!unlockOnScreen \|\| !accountId \|\| owned \|\| buying\) return undefined\s*return askUntilUnlocked\(nowUnlocked\)/,
+      'the unlock page no longer asks again while it is up, or asks while a checkout is open'
+    )
+    assert.match(app, /if \(out\.ok\) return nowUnlocked\(\)/, 'buying and being found to have bought lead different places')
+
+    /* The Unlock card, the bar and Settings' row all come through openUnlock: an owner goes to the account. */
+    assert.match(app, /setSetupPage\(owned \? 'account' : 'unlock'\)/, 'an owner who presses Unlock is shown the Buy button')
+    assert.match(app, /'Full version — the phone remote is unlocked\.'/, 'the account page no longer says it is unlocked')
+
+    const body = app.slice(app.indexOf('const unlockBody = ('), app.indexOf('{mustPay ? ('))
+    assert.match(body, /disabled=\{buying \|\| !accountId \|\| owned\}/, 'Buy can be pressed by somebody who has it')
+    const line = body.indexOf('Bought it on your iPhone or Android? Don&rsquo;t pay again. Open the phone app and sign in with')
+    assert.ok(line > 0 && line < body.indexOf('className="primary unlock-buy"'), 'the words about a phone purchase are not above Buy')
+    assert.match(
+      body,
+      /\) : signedInHere \? \(\s*<p className="hint unlock-phone">[\s\S]{0,140}sign in with\{' '\}\s*<strong>\{link\.account\.email\}<\/strong> — this page unlocks by itself as soon as you do\./,
+      'the page does not say which email to sign in with on the phone'
+    )
+    assert.match(body, /\{owned \? \(\s*<p className="hint">This account has the full version already\. There is nothing more to pay\.<\/p>/, 'a greyed Buy is not explained')
+
+    /* The walkthrough's phone-remote card knows, and carries an owner on to setting up. */
+    assert.match(app, /<PhoneWalkthrough[\s\S]{0,1600}paid=\{owned\}/, 'the walkthrough is never told who has paid')
+    const walk = read('src/components/PhoneWalkthrough.jsx').replace(/\s+/g, ' ')
+    assert.match(walk, /\{paid \? OWNED\.body : computer \? C3\.phone\.body : P3\.real\.body\}/, 'the card still sells to an owner')
+    assert.match(
+      walk,
+      /\{paid \? \( <button type="button" className="chip pw-go" onClick=\{\(\) => leave\(onAccount\)\}> \{computer \? OWNED\.computerGo : OWNED\.phoneGo\} <\/button> \) : \(/,
+      'an owner is not carried on to setting up'
+    )
+    const ownerCard = walk.slice(walk.indexOf('{paid ? ( <button'), walk.indexOf(') : ( <> <label className="pw-agree">'))
+    assert.ok(ownerCard.length > 0 && !/onUnlock/.test(ownerCard), 'the owner’s card can still open the unlock')
+
+    /* And "hasn't unlocked yet" is said on a definite answer only. */
+    assert.match(app, /paid=\{answeredFor && !paid\.unknown \? paid\.unlocked : null\}/, 'the computer’s steps say “hasn’t unlocked” on a fault')
+
+    /* Signed out, the sign-in on the way to the unlock says which email to use. */
+    assert.match(app, /forUnlock=\{unlockAfterSignIn\}/, 'the sign-in is not told it is on the way to the unlock')
+    const sheet = read('src/components/SignInSheet.jsx')
+    assert.match(
+      sheet,
+      /\{forUnlock \? \(\s*<p className="hint">\s*Bought it on your phone already\? Use the same email you used there, and sign in on the phone first\.\s*<\/p>\s*\) : null\}\s*<SignIn/,
+      'the sign-in on the way to the unlock does not say to use the phone’s email'
+    )
+    const plain = sheet.slice(sheet.indexOf('if (account) {'), sheet.indexOf('  return (\n    <Sheet\n'))
+    assert.ok(plain.includes('{forUnlock ? ('), 'the line is not on the plain sign-in the unlock opens')
   })
 
   /**

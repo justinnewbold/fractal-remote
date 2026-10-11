@@ -202,6 +202,14 @@ async function sales() {
   let unanswered = 0
   let givenByHand = 0
   const sold: (Sale & { email: string })[] = []
+  /*
+   * PAID TWICE. A customer bought it on his iPhone and again by card on the
+   * website, because the website asked before his phone had signed in. Both
+   * are on the one account once it has, so they can be seen here: anybody
+   * holding more than one real purchase, meaning money taken, not a test and
+   * not refunded.
+   */
+  const twice: { email: string; stores: string[]; at: (number | null)[] }[] = []
   const answers = await eachFew(buyers, 5, async (b) => ({ b, bought: await purchasesOf(b.id) }))
   for (const { b, bought } of answers) {
     if (!bought) {
@@ -211,6 +219,8 @@ async function sales() {
     const real = bought.filter((p) => p.store !== 'promotional')
     if (!real.some((p) => !p.refunded)) givenByHand += 1
     for (const p of real) sold.push({ ...p, email: b.email })
+    const paid = real.filter((p) => !p.sandbox && !p.refunded)
+    if (paid.length > 1) twice.push({ email: b.email, stores: paid.map((p) => p.store), at: paid.map((p) => p.at) })
   }
   sold.sort((a, b) => (b.at || 0) - (a.at || 0))
   return {
@@ -222,7 +232,9 @@ async function sales() {
     more: Math.max(0, (overview.buyers || []).length - buyers.length),
     givenByHand,
     unanswered,
-    sales: sold
+    sales: sold,
+    /* New: a phone too old to know it leaves it alone. */
+    twice
   }
 }
 
