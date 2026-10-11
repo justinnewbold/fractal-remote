@@ -5851,7 +5851,7 @@ export function run(test) {
     )
   })
 
-  test('the review notes waiting for 1.87.1 say what is new, and name what the app draws', async () => {
+  test('the review notes waiting for 1.87.11 say what is new, and name what the app draws', async () => {
     /*
      * Apple's 2.3.1(a): every new feature "must be described with specificity
      * in the Notes for Review". The notes for the version in the store stay
@@ -5860,9 +5860,9 @@ export function run(test) {
      * FIRST "## Review notes"), and this one reads nothing else.
      */
     const store = read('docs/app-store.md')
-    const at = store.indexOf('## For the next version (1.87.1, not yet submitted)')
+    const at = store.indexOf('## For the next version (1.87.11, not yet submitted)')
     assert.ok(at > store.indexOf('## Review notes'), 'the next version’s notes are missing, or sit above the live ones the other tests read')
-    const notesAt = store.indexOf('### Notes for App Review, 1.87.1', at)
+    const notesAt = store.indexOf('### Notes for App Review, 1.87.11', at)
     assert.ok(notesAt > at, 'the next version has no review notes')
     const open = store.indexOf('```', notesAt)
     const pasted = store.slice(open + 3, store.indexOf('```', open + 3))
@@ -5870,19 +5870,54 @@ export function run(test) {
 
     /* The same walkthrough the live notes send a reviewer through. */
     for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ']) {
-      assert.ok(pasted.includes(label), `the 1.87.1 notes stopped naming "${label}"`)
-      assert.ok(copy.includes(label), `the 1.87.1 notes name "${label}", which the walkthrough no longer says`)
+      assert.ok(pasted.includes(label), `the 1.87.11 notes stopped naming "${label}"`)
+      assert.ok(copy.includes(label), `the 1.87.11 notes name "${label}", which the walkthrough no longer says`)
     }
 
     /* The sentence that stopped being true is gone from what gets pasted. */
-    assert.ok(!/one thing\s+only/.test(pasted), 'the 1.87.1 notes still say an account is for one thing only')
+    assert.ok(!/one thing\s+only/.test(pasted), 'the 1.87.11 notes still say an account is for one thing only')
 
     /* Accounts before buying, by the buttons the screens actually draw. */
-    assert.match(pasted, /make an account, before buying/, 'the 1.87.1 notes do not say an account can be made before buying')
+    assert.match(pasted, /make an account, before buying/, 'the 1.87.11 notes do not say an account can be made before buying')
     assert.match(read('mobile/src/screens/SignIn.js'), /'Create account'/)
-    assert.ok(pasted.includes('Create account'), 'the 1.87.1 notes do not say where an account is made')
+    assert.ok(pasted.includes('Create account'), 'the 1.87.11 notes do not say where an account is made')
     assert.match(read('mobile/src/screens/Paywall.js'), /label="Delete account"/)
-    assert.match(pasted, /purchase page[\s\S]{0,80}Delete account is at the foot of that page/, 'the 1.87.1 notes do not say where an unpaid account is deleted')
+    assert.match(pasted, /purchase page[\s\S]{0,80}Delete account is at the foot of that page/, 'the 1.87.11 notes do not say where an unpaid account is deleted')
+    assert.match(pasted, /A new account\s+is confirmed from its email before it can be signed in to\./, 'the 1.87.11 notes do not say a new account has to be confirmed from its email')
+
+    /*
+     * THE PURCHASE, WHERE A REVIEWER CAN REACH IT. The demo account has the
+     * full version, so a reviewer signed in to it never sees the price; the
+     * notes send them to the demo's Unlock, which is drawn at the top of the
+     * Play screen for as long as nothing is unlocked (UnlockOffer), and name
+     * Restore under it, by the labels the paywall draws.
+     */
+    assert.match(pasted, /The in-app purchase: in the demo, tap Unlock at the top of the Play\s+screen\. Buying needs no account, and Restore a purchase is the button\s+under the price\./, 'the 1.87.11 notes do not say where the in-app purchase is')
+    const offer = read('mobile/src/components/UnlockOffer.js')
+    assert.match(offer, /purchase\.price \? `Unlock \$\{purchase\.price\}` : 'Unlock'/, 'the demo’s Unlock button is not called Unlock, and the notes send the reviewer to it')
+    assert.match(read('mobile/src/lib/purchases.js'), /export const shouldOffer = \(\{ demo \}\) => Boolean\(demo\) && !shown\.unlocked/, 'the demo’s Unlock no longer shows in the demo, and the notes send the reviewer to it')
+    assert.match(read('mobile/src/screens/Stage.js'), /<UnlockOffer onUnlock=\{onUnlock\} \/>/, 'the Unlock offer is no longer on the Play screen')
+    const paywall = read('mobile/src/screens/Paywall.js')
+    assert.match(paywall, /<Press label="Restore a purchase"/, 'the paywall no longer says Restore a purchase')
+
+    /*
+     * PAYING ONCE (1.87.9), in the notes because a reviewer meets it: the
+     * line above the price for somebody who bought on another device, the
+     * check just before charging, and the account the app asks for after a
+     * purchase with nobody signed in, with why, and that nothing is forced
+     * (5.1.1(v): no sign-up for what does not need one).
+     */
+    assert.match(pasted, /Paying once\. With nobody signed in, the purchase page now tells someone who\s+bought on another device to sign in instead of buying again/, 'the 1.87.11 notes do not describe the pay-once line on the purchase page')
+    assert.match(paywall, /Already bought it on another device\? Don&rsquo;t buy it again here: sign in with the account you/, 'the paywall no longer tells somebody who bought elsewhere to sign in, and the notes say it does')
+    assert.match(pasted, /checks again just before charging/, 'the 1.87.11 notes do not say the app checks again before charging')
+    assert.match(read('mobile/src/lib/purchases.js'), /export const ALREADY_HAD = 'You already have the full version, so nothing was charged\.'/, 'Buy no longer says nothing was charged when the full version was already there')
+    assert.match(pasted, /since an account is what joins the phone to the user's\s+computer\. Nothing is forced: the demo keeps working, and the purchase waits\s+on the phone\./, 'the 1.87.11 notes do not say why an account is asked for after buying, or that nothing is forced')
+    assert.match(read('mobile/App.js'), /if \(purchase\.boughtAlone\) setSignInSide\('up'\)/, 'a purchase with nobody signed in no longer opens sign-in on Create account')
+    assert.match(read('mobile/src/components/OnlyOnThisPhone.js'), /<Press label="Make an account or sign in" onPress=\{onAccount\} \/>/, 'the demo no longer offers an account after a purchase there')
+
+    /* The metronome's switch in the volume pop-up (1.87.5). */
+    assert.match(pasted, /Metronome\. The volume pop-up \(the speaker at the top\) now has a metronome\s+on\/off switch/, 'the 1.87.11 notes do not say the metronome switch is in the volume pop-up')
+    assert.match(read('mobile/src/components/Volume.js'), /<MetronomeSwitch \/>/, 'the volume pop-up has no metronome switch, and the notes say it does')
 
     /*
      * Edit (Beta), as the screen labels itself, and said to work — in words
@@ -5895,10 +5930,10 @@ export function run(test) {
     const edit = read('mobile/src/screens/Edit.js')
     assert.match(edit, /Edit <Text[^>]*>\(Beta\)<\/Text>/)
     assert.match(read('mobile/src/screens/Stage.js'), /label="Edit"/)
-    assert.match(edit, /Some blocks and controls may be missing, or may not change the same way they do on your unit yet\./, 'the Beta note on Edit changed; read the 1.87.1 notes against it again')
-    assert.ok(!/works fully/.test(pasted), 'the 1.87.1 notes say Edit works fully, and its own Beta note says blocks and controls may be missing')
-    assert.match(pasted, /Edit \(Beta\)\.[\s\S]{0,200}Everything it shows works, in the demo too\./, 'the 1.87.1 notes do not say Edit works, in the demo too')
-    assert.match(pasted, /marked Beta because it does not yet cover every block and control of\s+every unit, and a control may not yet move quite the way it does on the\s+unit itself/, 'the 1.87.1 notes do not say why Edit is a Beta, in the terms its own note uses')
+    assert.match(edit, /Some blocks and controls may be missing, or may not change the same way they do on your unit yet\./, 'the Beta note on Edit changed; read the 1.87.11 notes against it again')
+    assert.ok(!/works fully/.test(pasted), 'the 1.87.11 notes say Edit works fully, and its own Beta note says blocks and controls may be missing')
+    assert.match(pasted, /Edit \(Beta\)\.[\s\S]{0,200}Everything it shows works, in the demo too\./, 'the 1.87.11 notes do not say Edit works, in the demo too')
+    assert.match(pasted, /marked Beta because it does not yet cover every block and control of\s+every unit, and a control may not yet move quite the way it does on the\s+unit itself/, 'the 1.87.11 notes do not say why Edit is a Beta, in the terms its own note uses')
     /*
      * And no "It is still being improved." This pinned that sentence in.
      * Changed on purpose: Apple's 2.2 keeps "demos, betas, and trial
@@ -5907,7 +5942,7 @@ export function run(test) {
      * already says honestly why Edit is a Beta, in the screen's own terms;
      * this one only added that it is unfinished.
      */
-    assert.ok(!/still being\s+improved/.test(pasted), 'the 1.87.1 notes say Edit is still being improved, which reads as unfinished under 2.2')
+    assert.ok(!/still being\s+improved/.test(pasted), 'the 1.87.11 notes say Edit is still being improved, which reads as unfinished under 2.2')
 
     /*
      * BLUETOOTH (BETA): THE CODE IS IN THE BUILD, AND THE NOTES SAY WHOSE IT IS.
@@ -5925,11 +5960,11 @@ export function run(test) {
      * anybody else. (Build 26's first launch would show it: the notes say to
      * submit a newer build, and test/limits.mjs holds them to that.)
      */
-    assert.match(pasted, /This build\s+contains Bluetooth MIDI code for a feature/, 'the 1.87.1 notes do not say the build carries Bluetooth code')
-    assert.match(pasted, /switched on only for the developer's own account\./, 'the 1.87.1 notes do not say whom the Bluetooth code is for')
-    assert.match(pasted, /Customers and the review account don't see it in this build, and the app\s+doesn't ask them for Bluetooth permission\./, 'the 1.87.1 notes do not say the reviewer and customers neither see it nor are asked for Bluetooth')
-    assert.ok(!/everyone\s+who\s+has\s+unlocked\s+the\s+app/.test(pasted), 'the 1.87.1 notes say Bluetooth is for everyone who has paid, and it is the developer’s alone')
-    assert.ok(!/Settings,\s+then\s+Bluetooth \(beta\)|marked\s+beta|asks for Bluetooth permission only when Connect/.test(pasted), 'the 1.87.1 notes still tell the reviewer where Bluetooth is and how it asks, and the review account cannot see it')
+    assert.match(pasted, /This build\s+contains Bluetooth MIDI code for a feature/, 'the 1.87.11 notes do not say the build carries Bluetooth code')
+    assert.match(pasted, /switched on only for the developer's own account\./, 'the 1.87.11 notes do not say whom the Bluetooth code is for')
+    assert.match(pasted, /Customers and the review account don't see it in this build, and the app\s+doesn't ask them for Bluetooth permission\./, 'the 1.87.11 notes do not say the reviewer and customers neither see it nor are asked for Bluetooth')
+    assert.ok(!/everyone\s+who\s+has\s+unlocked\s+the\s+app/.test(pasted), 'the 1.87.11 notes say Bluetooth is for everyone who has paid, and it is the developer’s alone')
+    assert.ok(!/Settings,\s+then\s+Bluetooth \(beta\)|marked\s+beta|asks for Bluetooth permission only when Connect/.test(pasted), 'the 1.87.11 notes still tell the reviewer where Bluetooth is and how it asks, and the review account cannot see it')
     const settingsSrc = read('mobile/src/screens/Settings.js')
     assert.match(settingsSrc, /title="Bluetooth \(beta\)"/)
     assert.match(settingsSrc, /head\('Bluetooth \(beta\)', 'back'\)/)
@@ -5940,17 +5975,19 @@ export function run(test) {
     assert.equal(existsSync(new URL('../shared/bluetooth-testers.mjs', import.meta.url)), false, 'the Bluetooth tester list is back, and the notes say only the developer’s account has it')
     assert.ok(!/BLUETOOTH_TESTERS|bluetooth-testers/.test(store), 'the store notes still send somebody to a Bluetooth list that no longer exists')
     /* No video of Bluetooth: the build the notes are for does not let the reviewer open it. The Hardware paragraph's FM3 video stays. */
-    assert.ok(!/VIDEO LINK/.test(pasted), 'the 1.87.1 notes still promise a video of Bluetooth')
+    assert.ok(!/VIDEO LINK/.test(pasted), 'the 1.87.11 notes still promise a video of Bluetooth')
     assert.match(pasted, /Hardware \(Guideline 2\.1\): a video filmed on an iPhone with a real FM3 on\s+screen/, 'the hardware video of the computer way went with the Bluetooth one')
 
     /* And a What's New, which Apple asks for on every version after the first. */
-    const news = store.indexOf("### What's New in This Version, 1.87.1", at)
-    assert.ok(news > at, 'there is no What’s New for 1.87.1')
+    const news = store.indexOf("### What's New in This Version, 1.87.11", at)
+    assert.ok(news > at, 'there is no What’s New for 1.87.11')
     const nOpen = store.indexOf('```', news)
     const whatsNew = store.slice(store.indexOf('\n', nOpen) + 1, store.indexOf('```', nOpen + 3))
     assert.ok([...whatsNew].length <= 4000, 'What’s New is longer than Apple takes')
-    const play = whatsNew.trim().split('\n').slice(0, 5).join('\n')
-    assert.ok([...play].length <= 500, `the five lines for Google Play come to ${[...play].length}; Play takes 500`)
+    /* Google Play has its own list now: what changed since 1.87.1, its version in the store. */
+    const { fenced } = await import('../scripts/store-text.mjs')
+    const play = fenced(store.slice(at), '### Google Play release notes, 1.87.11').trim()
+    assert.ok([...play].length <= 500, `the Play release notes come to ${[...play].length}; Play takes 500`)
     /*
      * And What's New no longer tells anybody about Bluetooth. It did for the
      * one day every customer could open it, and this pinned the line; changed
@@ -5968,9 +6005,9 @@ export function run(test) {
      */
     assert.equal(JSON.parse(read('mobile/app.json')).expo.userInterfaceStyle, 'automatic', 'the iPhone no longer follows its own light or dark setting; the notes and What’s New should stop saying it does')
     assert.match(read('mobile/src/lib/theme.js'), /let mode = 'auto'/, 'Auto is no longer the default, and the notes say it is')
-    assert.match(pasted, /Appearance\. On iPhone, Appearance in Settings set to Auto, which is the\s+default, now follows the phone's own light or dark setting\./, 'the 1.87.1 notes do not say Auto now follows the iPhone’s light or dark setting')
-    const autoLine = whatsNew.split('\n').findIndex((l) => /^• On iPhone, Appearance set to Auto now follows your phone's light or dark setting\.$/.test(l))
-    assert.ok(autoLine >= 5, 'What’s New does not say Auto follows the iPhone, or says it inside the five lines Google Play takes')
+    assert.match(pasted, /Appearance\. On iPhone, Appearance in Settings set to Auto, which is the\s+default, now follows the phone's own light or dark setting\./, 'the 1.87.11 notes do not say Auto now follows the iPhone’s light or dark setting')
+    assert.ok(whatsNew.split('\n').some((l) => /^• On iPhone, Appearance set to Auto now follows your phone's light or dark setting\.$/.test(l)), 'What’s New does not say Auto follows the iPhone')
+    assert.ok(!/Appearance|On iPhone/.test(play), 'the Play release notes carry the iPhone-only Appearance line')
 
     /*
      * THE THREE LINES APPLE'S HELP PAGE ASKS FOR ("Provide information for a
@@ -5978,13 +6015,13 @@ export function run(test) {
      * services the app relies on, and whether anything differs by country.
      * "Incomplete submissions will be rejected."
      */
-    assert.match(pasted, /Tested on: iPhone 17 Pro Max, iOS \[version\]; Apple Watch \[model\], watchOS\s+\[version\]\./, 'the 1.87.1 notes do not say what it was tested on')
+    assert.match(pasted, /Tested on: iPhone 17 Pro Max, iOS \[version\]; Apple Watch \[model\], watchOS\s+\[version\]\./, 'the 1.87.11 notes do not say what it was tested on')
     for (const service of ['Supabase', 'RevenueCat', 'Apple in-app purchase', 'Resend', 'Expo']) {
-      assert.match(pasted, new RegExp(`Services the app uses:[\\s\\S]{0,300}${service}`), `the 1.87.1 notes do not name ${service} among the services`)
+      assert.match(pasted, new RegExp(`Services the app uses:[\\s\\S]{0,300}${service}`), `the 1.87.11 notes do not name ${service} among the services`)
     }
     /* No word of the Amazon buttons: they are on the Bluetooth page, which the reviewer cannot open. */
-    assert.match(pasted, /Regions: the app works the same in every country\.\n/, 'the 1.87.1 notes do not say it works the same in every country')
-    assert.ok(!/Amazon/.test(pasted), 'the 1.87.1 notes describe the Amazon buttons on a page the reviewer cannot open')
+    assert.match(pasted, /Regions: the app works the same in every country\.\n/, 'the 1.87.11 notes do not say it works the same in every country')
+    assert.ok(!/Amazon/.test(pasted), 'the 1.87.11 notes describe the Amazon buttons on a page the reviewer cannot open')
     /* The brackets are for Justin, and the section says to fill them before pasting (2.1(a): no placeholder text). */
     const section = store.slice(at)
     assert.match(section, /\*\*The three lines Apple's help page asks for\.\*\* Fill in the brackets/, 'nothing says to fill in the tested-on brackets before pasting')
@@ -5996,12 +6033,12 @@ export function run(test) {
      * the disclosure covers the page and everything on it. The tools stay
      * behind their own check as well, should the page ever open to more.
      */
-    assert.ok(!/Testing tools|diagnostic panel/.test(pasted), 'the 1.87.1 notes describe tools on a page the reviewer cannot open')
+    assert.ok(!/Testing tools|diagnostic panel/.test(pasted), 'the 1.87.11 notes describe tools on a page the reviewer cannot open')
     assert.match(read('mobile/src/screens/Bluetooth.js').replace(/\s+/g, ' '), /\{admin && b\.unit && tools \?/, 'the Bluetooth page shows its testing tools without asking whose account it is')
 
     /* Nothing left in the section asks for a Bluetooth video before pasting. */
-    assert.ok(!section.includes('- **The video.**'), 'the 1.87.1 section still asks for a Bluetooth video')
-    assert.ok(!/\[VIDEO LINK/.test(section), 'the 1.87.1 section still holds a place for a Bluetooth video link')
+    assert.ok(!section.includes('- **The video.**'), 'the 1.87.11 section still asks for a Bluetooth video')
+    assert.ok(!/\[VIDEO LINK/.test(section), 'the 1.87.11 section still holds a place for a Bluetooth video link')
   })
 
   test('the unlock row is gone once there is nothing left to unlock', () => {
