@@ -65,6 +65,7 @@ import { shortBlock } from '../lib/shortName'
 import { useWatchBridge, watchHow, watchPaired } from '../lib/watchBridge'
 import { findLooper } from '../lib/looper'
 import UnlockOffer from '../components/UnlockOffer'
+import OnlyOnThisPhone from '../components/OnlyOnThisPhone'
 import Toast, { useStillNews } from '../components/Toast'
 import { faultLeft } from '../lib/fault-rule'
 import Note from '../components/Note'
@@ -108,7 +109,7 @@ const ofSlug = (s) => s.deviceSlug
  * button within reach of a stage tap is a hazard, and saving to a slot is
  * refused by the Mac anyway.
  */
-export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpenFix, onUnlock }) {
+export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpenFix, onUnlock, onAccount }) {
   // The screen is the instrument panel for as long as this is open. A phone
   // that locks itself between songs is a phone you have to wake and unlock
   // while the count-in is happening.
@@ -569,6 +570,8 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             an eye starts. A fault is not in here any more: it floats over the
             screen (the Toast at the end), so it never moves what is under it. */}
         <UnlockOffer onUnlock={onUnlock} />
+        {/* Paid in the demo with no account yet: see the component. */}
+        <OnlyOnThisPhone onAccount={onAccount} />
         {conflict ? <Note tone="fault">{conflict}</Note> : null}
 
         {/* ---------------------------------------------------------- preset */}

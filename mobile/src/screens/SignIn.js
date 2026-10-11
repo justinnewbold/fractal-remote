@@ -16,6 +16,7 @@ import Press from '../components/Press'
 import Connect from './Connect'
 import { setDemo } from '../lib/demo'
 import { SETUP } from '../lib/onboarding'
+import { ONLY_HERE } from '../lib/purchases'
 import mailIcon from '../../assets/icons/mail.png'
 import lockIcon from '../../assets/icons/lock.png'
 import externalIcon from '../../assets/icons/external.png'
@@ -43,8 +44,8 @@ import externalIcon from '../../assets/icons/external.png'
  * Nothing here mentions a channel, a relay, or the name of the account
  * service — that part has not changed.
  */
-export default function SignIn({ onSignedIn, onDemo }) {
-  const [mode, setMode] = useState('in') // 'in' | 'up'
+export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = false, onAccountMade }) {
+  const [mode, setMode] = useState(start === 'up' ? 'up' : 'in') // 'in' | 'up'
   /*
    * The instructions, from the one screen that needs them most.
    *
@@ -76,7 +77,19 @@ export default function SignIn({ onSignedIn, onDemo }) {
    * with nothing on this screen able to unlock, that only ever fired late, on
    * a restore finishing behind it, and told a person who already HAS an
    * account to make one.
+   *
+   * It is TOLD two things now, by App.js, and neither moves the form by
+   * itself. `start` is which side it opens on, read once as it appears:
+   * Create account straight after somebody bought with nobody signed in —
+   * the order that cost a customer a second payment on 8 October, when this
+   * screen met him on Sign in and he went off to the website to make the
+   * account instead. `paidHere` is whether the phone holds a purchase no
+   * account has yet (purchases.js, onlyHere), and it only changes the words.
    */
+  const paid = start === 'up' || paidHere
+  /* Sign in failed on the details, on a phone that paid before any account
+     existed: most likely there is no account with that email yet. */
+  const [noAccount, setNoAccount] = useState(false)
   const [helping, setHelping] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -98,11 +111,22 @@ export default function SignIn({ onSignedIn, onDemo }) {
     setBusy(true)
     setError(null)
     setNote(null)
+    setNoAccount(false)
     try {
       if (mode === 'up') {
-        const { needsConfirmation } = await signUp({ email: email.trim(), password })
+        const { needsConfirmation, userId } = await signUp({ email: email.trim(), password })
         if (needsConfirmation) {
-          setNote('Account made. Confirm it from the email we just sent, then sign in.')
+          /* And the purchase goes onto it now, before the email is opened
+             anywhere (purchases.js, linkNewAccount). */
+          if (paid && userId) onAccountMade?.(userId)
+          /* Paid on this phone: the confirmation email opens the website
+             signed in, and until this phone has signed in the website sees
+             an account that has not paid — which is where he paid again. */
+          setNote(
+            paid
+              ? 'Account made — now confirm it from the email we just sent. Then sign in here on this phone before you open the website or the computer app, so your purchase is on your account first.'
+              : 'Account made. Confirm it from the email we just sent, then sign in.'
+          )
           setMode('in')
           return
         }
@@ -111,7 +135,8 @@ export default function SignIn({ onSignedIn, onDemo }) {
       }
       onSignedIn()
     } catch (err) {
-      setError(err.message)
+      if (mode === 'in' && paid && err?.noMatch) setNoAccount(true)
+      else setError(err.message)
     } finally {
       setBusy(false)
     }
@@ -134,10 +159,12 @@ export default function SignIn({ onSignedIn, onDemo }) {
     }
   }
 
+  /* The email stays as typed either way. */
   const switchTo = (next) => {
     setMode(next)
     setError(null)
     setNote(null)
+    setNoAccount(false)
   }
 
   const fieldText = {
@@ -234,6 +261,17 @@ export default function SignIn({ onSignedIn, onDemo }) {
           ))}
         </View>
 
+        {/* Paid on this phone, with no account yet: said where the form is.
+            Making the account is what carries the purchase to the computer.
+            Out of the way of a note, which says what to do next itself. */}
+        {paid && !note ? (
+          <Note strong={mode === 'up'}>
+            {mode === 'up'
+              ? 'You’ve paid — thank you. Now make your account, so the full version goes with you to your computer and any other phone. Use this same email there.'
+              : ONLY_HERE}
+          </Note>
+        ) : null}
+
         <View style={{ gap: space.md }}>
           <Field icon={mailIcon}>
             <TextInput
@@ -270,6 +308,14 @@ export default function SignIn({ onSignedIn, onDemo }) {
         </View>
 
         {error ? <Note tone="fault">{error}</Note> : null}
+        {noAccount ? (
+          <View style={{ gap: space.md }}>
+            <Note tone="warn">
+              Email or password didn’t match. There may not be an account for this email yet — you can make one now.
+            </Note>
+            <Press label="Create account with this email" disabled={busy} onPress={() => switchTo('up')} />
+          </View>
+        ) : null}
         {note ? <Note>{note}</Note> : null}
 
         {/* Amber whether or not the fields are filled in, as drawn: a pale
