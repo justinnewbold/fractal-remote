@@ -2484,7 +2484,12 @@ export function run(test) {
     /* One rule, in lib/bluetooth: his account, by id, through the Developer pages' own check. */
     const lib = code('mobile/src/lib/bluetooth.js').replace(/\s+/g, ' ')
     assert.match(lib, /import \{ isAdmin \} from '\.\/admin'/)
-    assert.match(lib, /export function allowBluetooth\(id\) \{ const was = allowed allowed = isAdmin\(id\)/, 'whose phone this is is decided some other way than his account’s id')
+    assert.match(lib, /import \{ accountId \} from '\.\/owner-unlock'/)
+    assert.match(
+      lib,
+      /export function allowBluetooth\(id, \{ signedOut = false \} = \{\}\) \{ const was = allowed allowed = accountId\(id\) \? isAdmin\(id\) : null/,
+      'whose phone this is is decided some other way than his account’s id, or nobody known is taken for a no'
+    )
     assert.ok(!/relay|currentAccount|getUser/.test(lib), 'lib/bluetooth asks the account server whose phone this is, which answers nobody with no signal')
 
     /* Nothing in the app, or shared with it, asks a list of testers, and only App.js tells lib/bluetooth whose phone it is. */
@@ -2524,7 +2529,22 @@ export function run(test) {
       /useEffect\(\(\) => \{ if \(auth === 'checking'\) return undefined if \(auth === 'out'\) \{ allowBluetooth\(null\) return undefined \} let alive = true haveSession\(\) \.then\(\(id\) => alive && allowBluetooth\(id\)\) \.catch\(\(\) => \{\}\) return \(\) => \{ alive = false \} \}, \[auth, demo\]\)/,
       'signing in, signing out, another account or the demo ending does not ask again whose phone this is'
     )
-    assert.equal((app.match(/allowBluetooth\(/g) || []).length, 3, 'App.js tells lib/bluetooth whose phone it is from somewhere else too')
+    /*
+     * NOBODY IS NOT A NO. The effect above hands over whatever the session
+     * says, and no session is also what his own looks like when it ran out
+     * with no signal to renew it, so that off is held in memory only. The
+     * sign-outs somebody asked for say so, and write the off down: Sign out
+     * (which Delete account in Settings goes through), the paywall's back,
+     * Try the Demo and Delete account, and the way to the sign-in form.
+     */
+    const SIGNED_OUT = 'allowBluetooth\\(null, \\{ signedOut: true \\}\\)'
+    assert.match(app, new RegExp(`const toSignIn = \\(\\) => \\{ setBuying\\(false\\) setScreen\\('stage'\\) setDemo\\(false\\) ${SIGNED_OUT} setAuth\\('out'\\) \\}`), 'the way to the sign-in form does not write Bluetooth’s off down')
+    assert.match(app, new RegExp(`await stopLink\\(\\) await signOut\\(\\) unlinkAccount\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${SIGNED_OUT} setScreen\\('stage'\\) setAuth\\('out'\\)`), 'Sign out in Settings does not write Bluetooth’s off down')
+    assert.match(app, new RegExp(`setDemo\\(true\\) signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${SIGNED_OUT} setAuth\\('in'\\) \\}\\} onBack=\\{\\(\\) => \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${SIGNED_OUT} setAuth\\('out'\\) \\}\\} onDeleted=\\{\\(\\) => \\{ signOut\\(\\)\\.catch\\(\\(\\) => \\{\\}\\) ${SIGNED_OUT} setAuth\\('out'\\) \\}\\}`), 'the paywall’s sign-outs do not write Bluetooth’s off down')
+    /* Delete account in Settings signs out through the same onSignOut. */
+    assert.match(flat('mobile/src/screens/Settings.js'), /await deleteAccount\(\) setDeleting\(false\) Alert\.alert\([^)]*\) onSignOut\?\.\(\)/)
+    assert.equal((app.match(/allowBluetooth\(null, \{ signedOut: true \}\)/g) || []).length, 5, 'a sign-out somebody asked for is missing its flag, or one was added that is not a sign-out')
+    assert.equal((app.match(/allowBluetooth\(/g) || []).length, 8, 'App.js tells lib/bluetooth whose phone it is from somewhere else too')
     /* haveSession is the session on the phone: supabase-js's getSession reads it from storage, where getUser asks the server. */
     const link = code('mobile/src/lib/link.js').replace(/\s+/g, ' ')
     assert.match(link, /export const haveSession = \(\) => restoreSession\(\)/)
@@ -2532,7 +2552,7 @@ export function run(test) {
     assert.match(relay, /export async function restoreSession\(\) \{ try \{ const \{ data \} = await supabase\(\)\.auth\.getSession\(\) userId = data\?\.session\?\.user\?\.id \|\| null return userId \} catch \{ return null \} \}/, 'haveSession no longer reads the session kept on the phone')
   })
 
-  test('on a bench: a customer left on Bluetooth is put back on the computer at launch, and so is his own phone on signing out', async () => {
+  test('on a bench: a customer left on Bluetooth is put back on the computer at launch, his phone starts on it once his id is in, and nobody known is not a no', async () => {
     const { ADMINS } = await import('../shared/admin.mjs')
     const JUSTIN = ADMINS[0]
     const CUSTOMER = '0b6c7a51-8f1e-4c2a-9d3b-5e7f9a1c2d4e'
@@ -2548,11 +2568,24 @@ export function run(test) {
       return { mod, asked }
     }
 
-    /* 1. A customer who turned it on during the public day: the pick-up runs first, the account's answer a moment later, before the link starts. */
+    /*
+     * 1. A customer who turned it on during the public day: the pick-up runs
+     * first, with nobody known yet, then the account's answer, before the
+     * link starts. Held off until then, nothing written, the module asked
+     * nothing; then the no, written down.
+     */
     {
-      const bench = await bluetoothOnABench({ mod: recording().mod, disk: leftOn() })
+      const { mod, asked } = recording()
+      const bench = await bluetoothOnABench({ mod, disk: leftOn() })
       try {
-        assert.equal(await bench.ble.restoreBluetooth(), true, 'with nobody known yet, the pick-up does not wait')
+        assert.equal(await bench.ble.restoreBluetooth(), false, 'with nobody known yet, the pick-up turns Bluetooth on')
+        assert.equal(bench.sw.bluetoothOn(), false, 'a phone not yet known to be his sends to the adapter')
+        assert.equal(bench.ble.useBluetoothOn(), false)
+        /* The launch's own nobody (the sign-in screen's effect, say) on the way: still held, still nothing written. */
+        assert.equal(bench.ble.allowBluetooth(null), false)
+        assert.equal(bench.sw.bluetoothOn(), false)
+        await settle()
+        assert.equal(kept(bench).on, true, 'an off was written before anybody said whose phone this is')
         assert.equal(bench.ble.allowBluetooth(CUSTOMER), false)
         assert.equal(bench.sw.bluetoothOn(), false, 'a customer’s phone left on Bluetooth still sends to the adapter')
         assert.equal(bench.ble.useBluetoothOn(), false)
@@ -2567,6 +2600,10 @@ export function run(test) {
         assert.ok(bench.log.some((l) => /open only to the developer’s account for now, so it is off/.test(l)), 'the log does not say why Bluetooth went off')
         assert.equal(bench.ble.setBluetooth(true), false, 'Connect turns Bluetooth on for a customer')
         assert.equal(bench.sw.bluetoothOn(), false)
+        assert.deepEqual(asked, [], 'a customer’s phone was asked something about Bluetooth')
+        /* And a customer's held on never comes back, even for his account signing in on that phone. */
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        assert.equal(bench.sw.bluetoothOn(), false, 'a customer’s on from the public day came back on')
       } finally {
         bench.done()
       }
@@ -2590,27 +2627,37 @@ export function run(test) {
       }
     }
 
-    /* 3. His phone: left on, it starts on, whichever lands first, and Stop and Connect work. */
+    /*
+     * 3. His phone: left on, it starts on, whichever lands first — the
+     * pick-up holds the on until his id, which the launch gives before the
+     * door opens — and Stop and Connect work.
+     */
     for (const first of ['restore', 'account']) {
       const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk: leftOn() })
       try {
         if (first === 'account') assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
-        assert.equal(await bench.ble.restoreBluetooth(), true, `his phone left on Bluetooth started on the computer (${first} first)`)
-        if (first === 'restore') assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
-        assert.equal(bench.sw.bluetoothOn(), true, 'his own Bluetooth was switched off by his own account')
+        assert.equal(await bench.ble.restoreBluetooth(), first === 'account', `the pick-up (${first} first) did not wait for his id`)
+        if (first === 'restore') {
+          assert.equal(bench.sw.bluetoothOn(), false, 'Bluetooth went on before anybody said whose phone this is')
+          assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        }
+        assert.equal(bench.sw.bluetoothOn(), true, `his phone left on Bluetooth started on the computer (${first} first)`)
+        assert.equal(bench.ble.useBluetoothOn(), true)
         assert.equal(bench.ble.useBluetoothAllowed(), true, 'the Settings row does not show for him')
+        await settle()
+        assert.equal(kept(bench).on, true)
         assert.equal(bench.ble.setBluetooth(false), false)
         assert.equal(bench.ble.setBluetooth(true), true, 'Connect could not turn Bluetooth on for him')
         /* The id as Supabase might hand it, in capitals or with a space: still his. */
         assert.equal(bench.ble.allowBluetooth(` ${JUSTIN.toUpperCase()} `), true)
         assert.equal(bench.sw.bluetoothOn(), true)
 
-        /* Signing out: nobody, so off, kept off, and written down; his unit and adapter kept for next time. */
-        assert.equal(bench.ble.allowBluetooth(null), false)
+        /* Signing out on purpose: off, kept off, and written down; his unit and adapter kept for next time. */
+        assert.equal(bench.ble.allowBluetooth(null, { signedOut: true }), false)
         assert.equal(bench.sw.bluetoothOn(), false, 'signing out leaves Bluetooth on')
         assert.equal(bench.ble.useBluetoothAllowed(), false, 'the Settings row stays after signing out')
         await settle()
-        assert.equal(kept(bench).on, false)
+        assert.equal(kept(bench).on, false, 'signing out on purpose does not write the off down')
         assert.equal(kept(bench).unit, 'am4')
         assert.equal(bench.ble.setBluetooth(true), false, 'Bluetooth turns on with nobody signed in')
 
@@ -2619,9 +2666,67 @@ export function run(test) {
         assert.equal(bench.sw.bluetoothOn(), false, 'signing back in turned Bluetooth on by itself')
         assert.equal(bench.ble.setBluetooth(true), true)
 
-        /* Signed into another account on his phone: off again. */
+        /* Signed into another account on his phone: off again, and written down. */
         assert.equal(bench.ble.allowBluetooth(CUSTOMER), false)
         assert.equal(bench.sw.bluetoothOn(), false, 'another account on his phone keeps his Bluetooth on')
+        await settle()
+        assert.equal(kept(bench).on, false)
+      } finally {
+        bench.done()
+      }
+    }
+
+    /*
+     * 3b. His sign-in ran out at a gig with no signal to renew it: the phone
+     * has no session, which says nobody, and nobody is not a no. Off for now,
+     * in memory only; the disk still says on, so the next launch that knows
+     * it is his is on Bluetooth again, and so is his sign-in coming back.
+     */
+    {
+      const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk: leftOn() })
+      let after
+      try {
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        assert.equal(await bench.ble.restoreBluetooth(), true)
+        assert.equal(bench.ble.allowBluetooth(null), false)
+        assert.equal(bench.sw.bluetoothOn(), false, 'with nobody known, Bluetooth stays on')
+        assert.equal(bench.ble.useBluetoothOn(), false)
+        assert.equal(bench.ble.useBluetoothAllowed(), false)
+        assert.equal(bench.ble.setBluetooth(true), false, 'Bluetooth turns on with nobody known')
+        await settle()
+        assert.equal(kept(bench).on, true, 'a sign-in that ran out wrote his Bluetooth off for good')
+        assert.equal(kept(bench).unit, 'am4')
+        assert.ok(bench.log.some((l) => /off until this phone knows whose account it is/.test(l)))
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        assert.equal(bench.sw.bluetoothOn(), true, 'his sign-in coming back left his Bluetooth off')
+        bench.ble.allowBluetooth(null)
+        await settle()
+        after = Object.fromEntries(bench.disk)
+      } finally {
+        bench.done()
+      }
+      /* The next launch, from what that one left on the phone, with his id. */
+      const next = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk: after })
+      try {
+        assert.equal(await next.ble.restoreBluetooth(), false)
+        assert.equal(next.ble.allowBluetooth(JUSTIN), true)
+        assert.equal(next.sw.bluetoothOn(), true, 'the launch after his sign-in ran out did not start on Bluetooth')
+      } finally {
+        next.done()
+      }
+    }
+
+    /* 3c. Signing out on purpose while the pick-up is still holding the on: written off, and his id does not bring it back. */
+    {
+      const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk: leftOn() })
+      try {
+        assert.equal(await bench.ble.restoreBluetooth(), false)
+        assert.equal(bench.ble.allowBluetooth(null, { signedOut: true }), false)
+        await settle()
+        assert.equal(kept(bench).on, false, 'signing out on purpose left the on held on the phone')
+        assert.equal(kept(bench).unit, 'am4')
+        assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+        assert.equal(bench.sw.bluetoothOn(), false, 'signing back in after signing out turned Bluetooth on by itself')
       } finally {
         bench.done()
       }
@@ -2634,6 +2739,44 @@ export function run(test) {
       for (const id of [true, undefined, '', 'justin', `${JUSTIN}0`, `${JUSTIN.slice(0, -1)}${JUSTIN.endsWith('0') ? '1' : '0'}`]) {
         assert.equal(bench.ble.allowBluetooth(id), false, `${String(id)} is let in`)
       }
+    } finally {
+      bench.done()
+    }
+  })
+
+  test('the Settings row and page redraw when the answer changes, and not when the same answer comes again', async () => {
+    /*
+     * The row and the page come and go with signing in, so the hook that
+     * draws them has to hear the answer change. This listens the way React
+     * does: through the subscribe the hook itself handed over, recorded by
+     * the bench's React.
+     */
+    const { ADMINS } = await import('../shared/admin.mjs')
+    const JUSTIN = ADMINS[0]
+    const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod })
+    try {
+      const before = bench.subscribed.length
+      assert.equal(bench.ble.useBluetoothAllowed(), false)
+      assert.equal(bench.subscribed.length, before + 1, 'useBluetoothAllowed does not go through useSyncExternalStore')
+      let heard = 0
+      const stop = bench.subscribed.at(-1)(() => heard++)
+      assert.equal(typeof stop, 'function', 'the subscribe hands React nothing to unsubscribe with')
+
+      assert.equal(bench.ble.allowBluetooth(JUSTIN), true)
+      assert.equal(heard, 1, 'signing in as him does not redraw the row, so it never appears')
+      assert.equal(bench.ble.useBluetoothAllowed(), true)
+      bench.ble.allowBluetooth(JUSTIN)
+      assert.equal(heard, 1, 'the same answer again redraws the row for nothing')
+
+      assert.equal(bench.ble.allowBluetooth(null), false)
+      assert.equal(heard, 2, 'signing out does not redraw the row, so it stays')
+      assert.equal(bench.ble.useBluetoothAllowed(), false)
+      bench.ble.allowBluetooth(null)
+      assert.equal(heard, 2, 'nobody again redraws the row for nothing')
+
+      stop()
+      bench.ble.allowBluetooth(JUSTIN)
+      assert.equal(heard, 2, 'a screen that has gone is still told')
     } finally {
       bench.done()
     }
@@ -2673,12 +2816,13 @@ export function run(test) {
      * Not on without a unit, not on where it cannot work, and not on for an
      * account it is not open to — at the switch and at launch. The account
      * is asked before the module, so a refused phone's module is never asked
-     * anything. At the switch it has to be a yes; at launch a no that is
-     * already in (the yes may not be in yet, and his phone left on Bluetooth
-     * starts on Bluetooth).
+     * anything. A yes, at the switch and at launch: with no answer yet the
+     * pick-up holds the on (pendingOn) and the yes switches it on, so his
+     * phone left on Bluetooth still starts on Bluetooth.
      */
     assert.match(ble, /const want = on === true && allowed === true && !!saved\.unit && bluetoothSupported\(\)/)
-    assert.match(ble, /saved = \{ \.\.\.was, on: was\.on && !!was\.unit && allowed !== false && bluetoothSupported\(\) \}/, 'a build without the module, or an account it is not open to, comes back with Bluetooth on')
+    assert.match(ble, /saved = \{ \.\.\.was, on: was\.on && !!was\.unit && allowed === true && bluetoothSupported\(\) \}/, 'a build without the module, or an account not yet known to be his, comes back with Bluetooth on')
+    assert.match(ble, /pendingOn = was\.on && !!was\.unit && allowed === null/, 'the pick-up does not hold an on for the answer')
   })
 
   test('the page offers the AM4, FM3, FM9 and Axe-Fx III, in that order, with none of them chosen', async () => {
@@ -2911,6 +3055,8 @@ export function run(test) {
     const disk = { 'fractal.bluetooth': JSON.stringify({ on: true, unit: 'am4', adapter: { id: '1:2', name: 'WIDI Uhost Bluetooth' } }) }
     const bench = await bluetoothOnABench({ mod: iphoneModule('allowedAlways').mod, disk })
     try {
+      /* His account: the only one it is on for (lib/bluetooth, allowBluetooth). */
+      bench.ble.allowBluetooth((await import('../shared/admin.mjs')).ADMINS[0])
       assert.equal(await bench.ble.restoreBluetooth(), true)
       assert.equal(bench.ble.setBluetooth(false), false)
       assert.equal(bench.sw.bluetoothOn(), false, 'the switch still sends requests to the adapter')
@@ -3042,8 +3188,9 @@ export function run(test) {
       ["from './blockCatalog'", "from './blockCatalog.js'"],
       ["from './bleSwitch'", "from './bleSwitch.js'"],
       ["from './debugLog'", "from './debugLog.js'"],
-      /* The real check of whose phone this is: admin.js, which imports nothing that needs a phone. */
-      ["from './admin'", `from '${real('admin.js')}'`]
+      /* The real check of whose phone this is: admin.js and owner-unlock.js, which import nothing that needs a phone. */
+      ["from './admin'", `from '${real('admin.js')}'`],
+      ["from './owner-unlock'", `from '${real('owner-unlock.js')}'`]
     ]
     let lib = src('mobile/src/lib/bluetooth.js')
     for (const [from, to] of swaps) {
@@ -3053,7 +3200,8 @@ export function run(test) {
     const files = {
       'package.json': '{ "type": "module" }',
       'bluetooth.js': lib,
-      'react.js': 'export const useSyncExternalStore = (subscribe, read) => read()\n',
+      /* Every subscribe a hook hands React, kept, so a test can listen the way a screen would. */
+      'react.js': 'export const subscribed = []\nexport const useSyncExternalStore = (subscribe, read) => {\n  subscribed.push(subscribe)\n  return read()\n}\n',
       'react-native.js': `export const Platform = { OS: ${JSON.stringify(os)}, Version: ${JSON.stringify(version)} }\n`,
       'storage.js':
         `export const disk = new Map(Object.entries(${JSON.stringify(disk)}))\n` +
@@ -3069,6 +3217,7 @@ export function run(test) {
     return {
       ble: await import(at('bluetooth.js')),
       sw: await import(at('bleSwitch.js')),
+      subscribed: (await import(at('react.js'))).subscribed,
       disk: (await import(at('storage.js'))).disk,
       log: (await import(at('debugLog.js'))).lines,
       done: () => rmSync(dir, { recursive: true, force: true })

@@ -1971,13 +1971,23 @@ export function run(test) {
      * the app", which this pinned. Then: "Is there any way to just get the
      * Bluetooth on the developers mode for my own phone? I just feel like
      * it's not ready to have public." (11 October.) So it says the
-     * developer's own account is the only one it is switched on for, and
-     * that nobody else is shown it or asked for anything — tied to the gate
-     * in the app, so the policy cannot outlive it. Over it, the commands
-     * still reach the unit through no relay at all.
+     * developer's own account is the only one it is switched on for — tied
+     * to the gate in the app, so the policy cannot outlive it. Over it, the
+     * commands still reach the unit through no relay at all.
+     *
+     * AND THE ONE GAP, SAID AS IT IS. For a day this said the app "does not
+     * show it to anyone else, and never asks anyone else" for anything. Not
+     * quite true: a fresh install of the 1.87.1 builds runs the copy built
+     * into it on its first launch (fallbackToCacheTimeout 0), and that copy
+     * shows a Bluetooth (beta) card to an account with the full version
+     * until the update takes over on the next launch. Only a new build
+     * closes that, so the page names the gap, and when anything is asked.
      */
     assert.ok(!/for everyone who has unlocked the app|part of the full version, for/.test(words), 'the policy says Bluetooth (beta) is for everyone who has paid, and it is the developer’s alone')
-    assert.match(words, /Bluetooth \(beta\) lets the phone talk to your unit through a Bluetooth MIDI adapter, with no computer\. It is still being tested, so for now it is switched on only for the developer's own account: the app does not show it to anyone else, and never asks anyone else for Bluetooth, Nearby devices or Location\./, 'the policy does not say Bluetooth (beta) is the developer’s alone, and asks nobody else for anything')
+    assert.match(words, /Bluetooth \(beta\) lets the phone talk to your unit through a Bluetooth MIDI adapter, with no computer\. It is still being tested, so for now it is switched on only for the developer's own account\./, 'the policy does not say Bluetooth (beta) is the developer’s alone')
+    assert.match(words, /There is one gap: the very first time a fresh install of version 1\.87\.1 opens, before its first update has arrived, an account with the full version can still see a Bluetooth \(beta\) card under Settings → Phone &amp; computer\. From the next launch it is gone\. Nothing is asked for unless Connect is tapped on the Bluetooth page\./, 'the policy does not name the first-launch gap of the 1.87.1 builds, or when anything is asked for')
+    assert.ok(!/does not show it to anyone else|never asks anyone else/.test(words), 'the policy says nobody else is ever shown Bluetooth or asked, and a fresh 1.87.1 install can show it on its first launch')
+    assert.equal(JSON.parse(read('mobile/app.json')).expo.updates.fallbackToCacheTimeout, 0, 'the app now waits for its update before opening; the first-launch gap the policy names may be gone')
     assert.match(read('mobile/src/lib/bluetooth.js'), /export const useBluetoothAllowed = /, 'the app no longer keeps Bluetooth (beta) to one account; the policy should stop saying it does')
     assert.match(words, /Over Bluetooth \(beta\) they go from the phone to the adapter on your unit, through no relay and no internet at all/, 'the relay paragraph does not say Bluetooth goes through no relay')
   })
@@ -2084,9 +2094,19 @@ export function run(test) {
     const { GUIDE_URL } = await import('../shared/bluetooth-gear.mjs')
     assert.equal(GUIDE_URL, 'https://fractal.newbold.cloud/bluetooth-guide.html', 'the app’s Full setup guide opens somewhere other than the guide')
     assert.match(html, /<meta name="robots" content="noindex" \/>/, 'the guide asks to be listed by search engines, and customers cannot use it yet')
-    /* And anybody who does land on it is told it is not in their app yet. */
-    assert.match(words, /Bluetooth \(beta\) isn’t in the app for customers yet\. It is still being tested, and it will come back in a later version of the app, with this guide\. Until then the phone connects through the desktop app\./, 'the guide does not tell a customer who finds it that Bluetooth is not in their app')
+    /* And anybody who does land on it is told it is not in their app, with no promise that it will be. */
+    assert.match(words, /Bluetooth \(beta\) isn’t in the app for customers\. It is still being tested, and may be offered in a later version, with this guide\. For now the phone connects through the desktop app\./, 'the guide does not tell a customer who finds it that Bluetooth is not in their app')
     assert.match(html, /<a href="\/downloads">desktop app<\/a>/)
+    assert.ok(!/will come back|comes back in a later/.test(words), 'the guide promises Bluetooth to customers')
+    /*
+     * Where it is in the app, said for who can see it. It said "part of the
+     * full version, so the Bluetooth (beta) row shows once the app is
+     * unlocked. If you don’t see it, update the app" — which sent a customer
+     * who has unlocked it looking for a row they will never be shown.
+     */
+    assert.match(words, /In the app it is under Settings → Bluetooth \(beta\), which for now shows only on the developer’s own account\./, 'the guide does not say the Bluetooth row is on the developer’s account only')
+    assert.ok(!/shows once the app is unlocked/.test(words), 'the guide says the Bluetooth row shows once the app is unlocked, and it shows on the developer’s account only')
+    assert.ok(!/If you don’t see it, update the app/.test(words), 'the guide tells a customer to update the app to find a Bluetooth row they will not be shown')
 
     /* The disclaimer, in the words the app uses for it. */
     assert.match(words, /Bluetooth is new \(beta\), and it may not work correctly with every unit or adapter\./, 'the guide does not say it is a beta that may not work')
@@ -2209,16 +2229,18 @@ export function run(test) {
      * shopping list for it would be selling them a feature they cannot open.
      *
      * So /bluetooth, which What's New and the 1.87.1 listing may already have
-     * sent people to, still answers, with a short notice: not in the app
-     * yet, being tested, back in a later version with its setup guide, and
-     * the desktop app until then. Nothing to buy, and no way on to the
-     * guide, which moved to bluetooth-guide.html for the day it comes back.
+     * sent people to, still answers, with a short notice: not in the app,
+     * being tested, and the desktop app for now. It promised once that
+     * Bluetooth "will come back in a later version"; it may, and nothing more
+     * is promised. Nothing to buy, and no way on to the guide, which moved to
+     * bluetooth-guide.html.
      */
     const notice = read('public/bluetooth.html')
     const said = notice.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ')
     assert.match(notice, /<title>Bluetooth \(beta\) — Fractal Remote<\/title>/)
-    assert.match(said, /Bluetooth \(beta\) isn’t available in the app yet\. It is still being tested, and it will come back in a later version of the app, with its setup guide\./, '/bluetooth does not say Bluetooth (beta) is not in the app yet, and comes back later')
-    assert.match(said, /Until then, your phone connects to your Fractal unit through the desktop app/, '/bluetooth does not say what to use until then')
+    assert.match(said, /Bluetooth \(beta\) isn’t available in the app\. It is still being tested, and may be offered in a later version of the app\./, '/bluetooth does not say Bluetooth (beta) is not in the app')
+    assert.ok(!/will come back|comes back|until it/i.test(notice.replace(/<!--[\s\S]*?-->/g, '')), '/bluetooth promises Bluetooth to customers')
+    assert.match(said, /Your phone connects to your Fractal unit through the desktop app/, '/bluetooth does not say what to use instead')
     assert.match(notice, /href="\/downloads"/, '/bluetooth does not link the desktop app')
     assert.match(said, /There is nothing to buy for it now\./)
     /* Read with the comment taken out, as the guide is: the comment names what it no longer does. */
@@ -2282,10 +2304,21 @@ export function run(test) {
     /* The disclosure, said once. */
     assert.match(
       pasted,
-      /Bluetooth MIDI code, switched on only for the developer\. This build\s+contains Bluetooth MIDI code for a feature that lets the phone reach the\s+guitar unit through a Bluetooth MIDI adapter instead of a computer\. While it\s+is tested, it is switched on only for the developer's own account\.\s+Customers and the review account don't see it anywhere in the app, and the\s+app never asks them for Bluetooth permission\./,
+      /Bluetooth MIDI code, switched on only for the developer\. This build\s+contains Bluetooth MIDI code for a feature that lets the phone reach the\s+guitar unit through a Bluetooth MIDI adapter instead of a computer\. While it\s+is tested, it is switched on only for the developer's own account\.\s+Customers and the review account don't see it in this build, and the app\s+doesn't ask them for Bluetooth permission\./,
       'the 1.87.1 notes do not say the Bluetooth code is there, whom it is for, and that nobody else sees it or is asked'
     )
-    assert.match(pasted, /It will be offered to\s+customers only in a later version, sent for review with notes that describe\s+it\./, 'the 1.87.1 notes do not say Bluetooth reaches customers only in a reviewed version')
+    assert.match(pasted, /If it is offered to customers,\s+that will be in a later version, sent for review with notes that describe\s+it\./, 'the 1.87.1 notes do not say Bluetooth reaches customers only in a reviewed version, or they promise it will')
+    /*
+     * THOSE WORDS ARE TRUE OF A NEW BUILD ONLY. Build 26, made on 10
+     * October, runs its built-in copy on a fresh install's first launch
+     * (fallbackToCacheTimeout 0), and that copy shows a BLUETOOTH (BETA)
+     * card to an account with the full version — which Apple's demo account
+     * is. So the notes are written for a build made from main after 11
+     * October, and say so where Justin reads it first.
+     */
+    assert.match(section, /\*\*Submit a build made after 11 October 2026, not the 10 October build 26,\s+whose first launch still shows Bluetooth\.\*\*/, 'the 1.87.1 section does not tell Justin to submit a build made after 11 October rather than build 26')
+    assert.ok(section.indexOf('Submit a build made after 11 October 2026') < notesAt + 200 && section.indexOf('Submit a build made after 11 October 2026') < open, 'the line about which build to submit is not above the notes')
+    assert.ok(!/anywhere in the app|nothing for the reviewer to\s+reach|reviewer never meets it/.test(section), 'the 1.87.1 section says the reviewer can never meet Bluetooth, and build 26’s first launch shows it')
     const disclosure = pasted.slice(pasted.indexOf('Bluetooth MIDI code, switched on only for the developer.'), pasted.indexOf('\n\n', pasted.indexOf('Bluetooth MIDI code, switched on only for the developer.')))
     assert.ok(!/Bluetooth/.test(pasted.replace(disclosure, '')), 'Bluetooth is mentioned outside the one paragraph that discloses it')
     /* And none of what told a reviewer where it was, now that there is nothing for them to reach. */
@@ -2302,7 +2335,7 @@ export function run(test) {
     /* Held to the app: the row and the page wait for the developer-only check, so the disclosure is what the build does. */
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
     assert.match(settings, /\{mayDrive\(purchase\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/, 'the notes say Bluetooth is the developer’s only, and the Settings row is not behind that')
-    assert.match(read('mobile/src/lib/bluetooth.js'), /allowed = isAdmin\(id\)/, 'the notes say Bluetooth is the developer’s only, and lib/bluetooth decides it some other way')
+    assert.match(read('mobile/src/lib/bluetooth.js'), /allowed = accountId\(id\) \? isAdmin\(id\) : null/, 'the notes say Bluetooth is the developer’s only, and lib/bluetooth decides it some other way')
 
     /* Around the block: the rule that it never reaches customers by an update, and no step left over for a Bluetooth review. */
     assert.match(section, /\*\*Never switched on for customers by an update\.\*\*/, 'the 1.87.1 section does not say Bluetooth is never opened to customers by an update')
@@ -2393,7 +2426,27 @@ export function run(test) {
     assert.match(access, /This account has the full version\./)
     /* Google's reviewer is told the same as Apple's, in Android's words: the manifest declares Nearby devices and Location for the code that is there. */
     assert.ok(!/tap the gear at the top right for Settings, then Bluetooth|VIDEO LINK/.test(access), 'the Play reviewer is still sent to a Bluetooth row this account cannot see')
-    assert.match(access, /^This build also contains Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested\. This account does not see it, and the app never asks it for Nearby devices or Location\.$/m, 'the Play reviewer is not told why Nearby devices and Location are declared and never asked for')
+    /*
+     * And, unlike Apple's, the build Google has is the 10 October one, in
+     * production since that day: its built-in copy shows the Bluetooth card
+     * on a fresh install's first launch, so the line says so instead of
+     * "never".
+     */
+    assert.match(
+      access,
+      /^This build also contains Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested\. From the app's first update, which takes over on its second launch, this account does not see it\. On the very first launch after a fresh install, the copy built into this version can still show a BLUETOOTH \(BETA\) card under Settings → Phone & computer; the app asks for Nearby devices \(or Location, on Android 11 and older\) only if Connect is tapped on the page it opens\.$/m,
+      'the Play reviewer is not told why Nearby devices and Location are declared, and when they are asked for'
+    )
+    assert.ok(!/never asks|does not see it, and/.test(access), 'the Play note says the reviewer never meets Bluetooth, and the first launch of 1.87.1 can show it')
+    /*
+     * THE RISK THAT LEAVES, NAMED. The manifest declares Nearby devices (and
+     * Location up to Android 11) and the listing promotes nothing they
+     * serve. Not changed for it: no listing text moves. If Google flags it,
+     * the two ways out and what each costs.
+     */
+    assert.match(playHand, /\*\*A risk to know about: permissions the listing gives no reason for\.\*\*/, 'the Play checklist does not name the risk of declared permissions the listing gives no reason for')
+    assert.match(playHand, /\*\*A build without the Android Bluetooth permissions\.\*\* That moves the\s+fingerprint, so it is a new build for both phones, one iOS and one Android\s+slot/, 'the Play checklist does not say what a build without the permissions costs')
+    assert.match(playHand, /\*\*Listing Bluetooth, once customers have it\.\*\*/, 'the Play checklist does not give listing Bluetooth as the other way out')
     assert.match(playHand, /\*\*3\. The listing\*\* \(Grow users → Store presence → Store listings → the default\s+listing\), any time: nothing in it waits for 1\.87\.1 now\./)
     assert.ok(!/paste its \*\*Google Play\s+copy\*\* instead/.test(playHand), 'the Play checklist still offers the withdrawn Bluetooth draft')
     assert.match(playHand, /\*\*Short description:\*\* the one under \*Google Play: short description\*/, 'the Play checklist does not say to paste the lower-case short description')

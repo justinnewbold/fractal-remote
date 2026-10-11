@@ -10,6 +10,7 @@ import { setSwitch } from './bleSwitch'
 import { isAdapter, pickAdapter } from './bleAdapters'
 import { logDebug } from './debugLog'
 import { isAdmin } from './admin'
+import { accountId } from './owner-unlock'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -74,6 +75,14 @@ const UNIT_KEYS = BLE_UNITS.map((u) => u.key)
 const SCAN_SECONDS = 10
 
 let saved = { ...SAVED }
+/*
+ * ON LAST TIME, AND WAITING TO KNOW WHOSE PHONE THIS IS. True while the disk
+ * says Bluetooth was on but nobody has said yet that this is Justin's account
+ * (allowBluetooth, below): it stays off in the meantime, and his id turns it
+ * on. The disk keeps saying on until a real answer, so a launch that never
+ * learned whose phone it was costs nothing.
+ */
+let pendingOn = false
 let now = { ...NOW }
 let snapshot = { ...saved, ...now }
 const watchers = new Set()
@@ -90,7 +99,9 @@ function announce() {
 }
 
 function keep() {
-  AsyncStorage.setItem(KEY, JSON.stringify(saved)).catch(() => {
+  /* An on held for an answer that is not in yet stays on, on disk: only a real no, or Stop, writes it off. */
+  const disk = pendingOn ? { ...saved, on: true } : saved
+  AsyncStorage.setItem(KEY, JSON.stringify(disk)).catch(() => {
     /* Costs the next launch these choices, and nothing else. */
   })
 }
@@ -300,12 +311,23 @@ export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth
  * internet, and with no signal at a gig it answers nobody, which would switch
  * his own Bluetooth off exactly where it is for. Asked at launch, before the
  * link starts, and again whenever who is signed in can have changed: signing
- * in, signing out (nobody, so off), another account, the demo ending.
+ * in, signing out, another account, the demo ending.
  *
- * Null until App.js has an answer, which changes nothing: the pick-up from
- * last time runs at launch a moment before the account is known, and his
- * phone left on Bluetooth should start on Bluetooth. Whichever of the two
- * lands first, a no wins, and the no is written to the phone's storage.
+ * THREE ANSWERS, NOT TWO. Yes is his account's id. No is ANOTHER REAL
+ * ACCOUNT'S id, or a sign-out somebody asked for (Sign out, Delete account,
+ * the paywall's way back and its demo, heading for the sign-in screen: App.js
+ * says so with `signedOut`). Anything else is NOT KNOWN — no session on the
+ * phone, which is also what a sign-in that ran out with no signal to renew it
+ * looks like, or an id that is not an account's — and not known is not a no:
+ *
+ *   - yes: on, if it was on last time (the pick-up holds it until now);
+ *   - no: off, and the off written down, unit and adapter kept;
+ *   - not known: off for now, in memory only. The phone's storage still says
+ *     on, so his phone that lost its sign-in at a gig with no signal is back
+ *     on Bluetooth at the next launch that knows it is his.
+ *
+ * Whichever of the pick-up and the answer lands first, Bluetooth is on only
+ * once the answer is yes.
  *
  * HIDING, NOT A LOCK, and it never needs to be one: over Bluetooth the phone
  * talks to the player's own unit and nothing else, so there is no server to
@@ -321,16 +343,46 @@ export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth
 let allowed = null
 const readAllowed = () => allowed
 
-/** For App.js: the id of the session kept on this phone, or nothing when nobody is signed in. */
-export function allowBluetooth(id) {
+const OFF_FOR_OTHERS = 'Bluetooth (beta) is open only to the developer’s account for now, so it is off'
+
+/* On or off for now, in memory only: the switch, the page, the redraw. Nothing written to the phone's storage. */
+function holdOn(on) {
+  saved = { ...saved, on }
+  setSwitch({ on })
+  now = { ...now, phase: on ? 'idle' : 'off' }
+  announce()
+}
+
+/**
+ * For App.js: the id of the session kept on this phone, or nothing when
+ * nobody is signed in. `signedOut` when somebody has just signed out, so the
+ * off is written down rather than held (see THREE ANSWERS, above).
+ */
+export function allowBluetooth(id, { signedOut = false } = {}) {
   const was = allowed
-  allowed = isAdmin(id)
-  if (!allowed && saved.on) {
-    logDebug('ble', 'Bluetooth (beta) is open only to the developer’s account for now, so it is off')
-    setBluetooth(false)
+  allowed = accountId(id) ? isAdmin(id) : null
+  if (allowed === true) {
+    /* On last time and his: on now, as the pick-up would have, and nothing to write — the disk already says on. */
+    if (pendingOn) {
+      pendingOn = false
+      if (!saved.on && saved.unit && bluetoothSupported()) {
+        logDebug('ble', `Bluetooth (beta) is on, for the ${unitName(saved.unit)}`)
+        holdOn(true)
+      }
+    }
+  } else if (allowed === false || signedOut) {
+    if (saved.on || pendingOn) {
+      logDebug('ble', OFF_FOR_OTHERS)
+      setBluetooth(false)
+    }
+  } else if (saved.on) {
+    /* Not known: off for now, and still on on disk, for the next answer that is his. */
+    logDebug('ble', 'Bluetooth (beta) is off until this phone knows whose account it is')
+    pendingOn = true
+    holdOn(false)
   }
   if (allowed !== was) announce()
-  return allowed
+  return allowed === true
 }
 
 /** Whether the account signed in here may use Bluetooth (beta): true only once App.js has said yes. */
@@ -349,10 +401,12 @@ export const useBluetoothAllowed = () => useSyncExternalStore(subscribeBluetooth
  * and the app would be dead. The module is not asked anything unless the
  * disk says the mode was on.
  *
- * And not on for an account it is not open to, when that answer is already
- * in (see allowBluetooth); then the off is written back, as Stop would. When
- * the answer is not in yet, App.js gives it a moment later, before the link
- * starts, and a no turns it off then.
+ * And on only once the answer is yes (see allowBluetooth). A no that is
+ * already in turns it off and writes the off back, as Stop would. With no
+ * answer yet — the ordinary case, since App.js asks a moment after this
+ * starts — it is held: off for now, nothing written, and the yes switches it
+ * on, before the link starts. Nothing is asked of the module while it is
+ * held, so a phone that turns out not to be his has been asked nothing.
  */
 export async function restoreBluetooth() {
   const before = JSON.stringify(saved)
@@ -361,15 +415,18 @@ export async function restoreBluetooth() {
     const raw = await AsyncStorage.getItem(KEY)
     const was = settle(raw ? JSON.parse(raw) : null)
     refused = was.on && allowed === false
-    saved = { ...was, on: was.on && !!was.unit && allowed !== false && bluetoothSupported() }
+    pendingOn = was.on && !!was.unit && allowed === null
+    saved = { ...was, on: was.on && !!was.unit && allowed === true && bluetoothSupported() }
   } catch {
+    pendingOn = false
     saved = { ...SAVED }
   }
   setSwitch({ on: saved.on })
   if (refused) {
-    logDebug('ble', 'Bluetooth (beta) is open only to the developer’s account for now, so it is off')
+    logDebug('ble', OFF_FOR_OTHERS)
     keep()
   }
+  if (pendingOn) logDebug('ble', 'Bluetooth (beta) was on last time: off until this phone knows whose account it is')
   /* Nothing on disk is the ordinary case, and it changes nothing: no screen is redrawn for it. */
   if (JSON.stringify(saved) === before) return saved.on
   now = { ...now, phase: saved.on ? 'idle' : 'off' }
@@ -392,6 +449,14 @@ export const unitName = (key) => BLE_UNITS.find((u) => u.key === key)?.name || '
  */
 export function setBluetooth(on) {
   const want = on === true && allowed === true && !!saved.unit && bluetoothSupported()
+  /* Off asked for in so many words: an on held for an answer goes too, and the disk is told. */
+  if (on !== true && pendingOn) {
+    pendingOn = false
+    if (!saved.on) {
+      keep()
+      return false
+    }
+  }
   if (want === saved.on) return saved.on
   saved = { ...saved, on: want }
   setSwitch({ on: want })

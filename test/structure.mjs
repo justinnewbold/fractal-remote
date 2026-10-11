@@ -5278,7 +5278,8 @@ export function run(test) {
       'the walkthrough’s sign-in leaves the walkthrough standing again'
     )
     assert.match(app, /const toSignIn = \(\) => \{/, 'the sign-in route is gone')
-    assert.match(app, /const toSignIn = \(\) => \{[^}]*setAuth\('out'\)/, 'it no longer lands on the sign-in screen')
+    /* Bluetooth (beta) is told on the way, with the one brace pair that may sit inside (lib/bluetooth, allowBluetooth). */
+    assert.match(app, /const toSignIn = \(\) => \{(?:[^}]|\{ signedOut: true \})*setAuth\('out'\)/, 'it no longer lands on the sign-in screen')
     /* It leaves the demo, because somebody heading for an account is heading
        for a real rig. */
     assert.match(app, /const toSignIn = \(\) => \{[^}]*setDemo\(false\)/, 'the demo keeps answering after leaving for an account')

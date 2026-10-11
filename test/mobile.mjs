@@ -5826,15 +5826,17 @@ export function run(test) {
      * when the permission is asked. Changed on purpose, with the decision of
      * 11 October 2026: "Is there any way to just get the Bluetooth on the
      * developers mode for my own phone? I just feel like it's not ready to
-     * have public." It is switched on for his account alone, so the reviewer
-     * has nothing to reach, and the paragraph is a disclosure instead — 2.3.1(a)
-     * forbids "hidden, dormant, or undocumented features" — in words that are
-     * what the build does: the row behind the developer-only check, and no
-     * Bluetooth question put to anybody else.
+     * have public." It is switched on for his account alone, so in a build
+     * made after 11 October the reviewer is not shown it, and the paragraph
+     * is a disclosure instead — 2.3.1(a) forbids "hidden, dormant, or
+     * undocumented features" — in words that are what that build does: the
+     * row behind the developer-only check, and no Bluetooth question put to
+     * anybody else. (Build 26's first launch would show it: the notes say to
+     * submit a newer build, and test/limits.mjs holds them to that.)
      */
     assert.match(pasted, /This build\s+contains Bluetooth MIDI code for a feature/, 'the 1.87.1 notes do not say the build carries Bluetooth code')
     assert.match(pasted, /switched on only for the developer's own account\./, 'the 1.87.1 notes do not say whom the Bluetooth code is for')
-    assert.match(pasted, /Customers and the review account don't see it anywhere in the app, and the\s+app never asks them for Bluetooth permission\./, 'the 1.87.1 notes do not say the reviewer and customers neither see it nor are asked for Bluetooth')
+    assert.match(pasted, /Customers and the review account don't see it in this build, and the app\s+doesn't ask them for Bluetooth permission\./, 'the 1.87.1 notes do not say the reviewer and customers neither see it nor are asked for Bluetooth')
     assert.ok(!/everyone\s+who\s+has\s+unlocked\s+the\s+app/.test(pasted), 'the 1.87.1 notes say Bluetooth is for everyone who has paid, and it is the developer’s alone')
     assert.ok(!/Settings,\s+then\s+Bluetooth \(beta\)|marked\s+beta|asks for Bluetooth permission only when Connect/.test(pasted), 'the 1.87.1 notes still tell the reviewer where Bluetooth is and how it asks, and the review account cannot see it')
     const settingsSrc = read('mobile/src/screens/Settings.js')
@@ -5846,7 +5848,7 @@ export function run(test) {
     assert.match(oneLine, /\{page === 'bluetooth' && mayDrive\(purchase\) && bluetoothAllowed && bluetoothSupported\(\) \? \(/)
     assert.equal(existsSync(new URL('../shared/bluetooth-testers.mjs', import.meta.url)), false, 'the Bluetooth tester list is back, and the notes say only the developer’s account has it')
     assert.ok(!/BLUETOOTH_TESTERS|bluetooth-testers/.test(store), 'the store notes still send somebody to a Bluetooth list that no longer exists')
-    /* No video of Bluetooth: there is nothing for the reviewer to reach. The Hardware paragraph's FM3 video stays. */
+    /* No video of Bluetooth: the build the notes are for does not let the reviewer open it. The Hardware paragraph's FM3 video stays. */
     assert.ok(!/VIDEO LINK/.test(pasted), 'the 1.87.1 notes still promise a video of Bluetooth')
     assert.match(pasted, /Hardware \(Guideline 2\.1\): a video filmed on an iPhone with a real FM3 on\s+screen/, 'the hardware video of the computer way went with the Bluetooth one')
 

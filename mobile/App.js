@@ -311,6 +311,8 @@ export default function App() {
     setBuying(false)
     setScreen('stage')
     setDemo(false)
+    /* Heading for the sign-in form is a sign-out for Bluetooth (beta): off, and written down (lib/bluetooth). */
+    allowBluetooth(null, { signedOut: true })
     setAuth('out')
   }
   /*
@@ -541,6 +543,15 @@ export default function App() {
    * Signed out is nobody, at once, without asking anything: a sign-out still
    * finishing in the background cannot answer for the account it is
    * removing.
+   *
+   * AND NOBODY IS NOT A NO. Here it only means no session on the phone,
+   * which is also what his own sign-in looks like when it ran out at a gig
+   * with no signal to renew it: Bluetooth goes off for now, and the phone's
+   * storage keeps it on for the next launch that knows it is his. The
+   * sign-outs somebody asked for — Sign out and Delete account in Settings,
+   * the paywall's back, Try the Demo and Delete account, and the way to the
+   * sign-in form (toSignIn) — say so themselves, with `signedOut`, and those
+   * write the off down.
    */
   useEffect(() => {
     if (auth === 'checking') return undefined
@@ -855,16 +866,19 @@ export default function App() {
                  no unit, so the leftover session goes with it. */
               setDemo(true)
               signOut().catch(() => {})
+              allowBluetooth(null, { signedOut: true })
               setAuth('in')
             }}
             onBack={() => {
               signOut().catch(() => {})
+              allowBluetooth(null, { signedOut: true })
               setAuth('out')
             }}
             /* Apple's 5.1.1(v), on the one page an unpaid account can reach:
                the account is gone, so its session goes with it. */
             onDeleted={() => {
               signOut().catch(() => {})
+              allowBluetooth(null, { signedOut: true })
               setAuth('out')
             }}
           />
@@ -1073,6 +1087,7 @@ export default function App() {
                      phone and signed out of an account keeps what they paid
                      for. */
                   unlinkAccount().catch(() => {})
+                  allowBluetooth(null, { signedOut: true })
                   setScreen('stage')
                   setAuth('out')
                 }}

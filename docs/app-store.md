@@ -347,8 +347,8 @@ for his account alone, by an update, and the code stays in the binary (taking
 it out is a new build, and the iPhone's Bluetooth permission text has to stay
 with the module or the build is refused). 2.3.1(a) says "Don't include any
 hidden, dormant, or undocumented features in your app", so the notes below
-say in one paragraph that the code is there, whom it is for, and that nobody
-else sees it or is asked for Bluetooth. The same guideline also wants new
+say in one paragraph that the code is there, whom it is for, and that in
+that build nobody else is shown it or asked for Bluetooth. The same guideline also wants new
 features "accessible for review", and this one is described rather than
 reachable: that is the one place Apple could push back. If it does, the
 choice is Justin's: show it to the review account too, with a video of it
@@ -356,8 +356,24 @@ working, or a build without the module.
 
 ### Notes for App Review, 1.87.1
 
+**Submit a build made after 11 October 2026, not the 10 October build 26,
+whose first launch still shows Bluetooth.**
+
+Why: a fresh install runs the copy of the app built into it on its very first
+launch, and only takes the latest update on the launch after
+(`fallbackToCacheTimeout` is 0 in mobile/app.json, so the app never waits for
+an update before it opens). Build 26's built-in copy is the 10 October one,
+which shows a BLUETOOTH (BETA) card under Settings → Phone & computer to any
+account with the full version, and Apple's demo account has the full
+version. So a reviewer installing build 26 can meet Bluetooth on that first
+launch, and the paragraph about it below would not be true for them. A build
+made from main after 11 October has the hidden version built in, and the
+notes below are written for that build. Making it is one iOS and one Android
+build (they always go together), and that is Justin's call. It carries the
+version number main is on that day, and these notes go with it as they are.
+
 **Paste this into App Review Information → Notes**, in place of the block
-above, when 1.87.1 is sent.
+above, when that build is sent.
 
 ```
 This app is a remote control for Fractal Audio guitar hardware. Normally it
@@ -397,9 +413,9 @@ Bluetooth MIDI code, switched on only for the developer. This build
 contains Bluetooth MIDI code for a feature that lets the phone reach the
 guitar unit through a Bluetooth MIDI adapter instead of a computer. While it
 is tested, it is switched on only for the developer's own account.
-Customers and the review account don't see it anywhere in the app, and the
-app never asks them for Bluetooth permission. It will be offered to
-customers only in a later version, sent for review with notes that describe
+Customers and the review account don't see it in this build, and the app
+doesn't ask them for Bluetooth permission. If it is offered to customers,
+that will be in a later version, sent for review with notes that describe
 it.
 
 Appearance. On iPhone, Appearance in Settings set to Auto, which is the
@@ -442,11 +458,12 @@ Regions: the app works the same in every country.
 Bluetooth (beta) row on Settings, and the page it opens, are drawn only for
 the account that opens his Developer pages, read from the sign-in kept on
 the phone (CLAUDE.md, *Bluetooth (beta) is the developer's only*). The
-review account is not that account, so the reviewer never meets it, and the
-paragraph above says so instead of telling them where it is. No video of
-Bluetooth goes with this version: there is nothing for the reviewer to
-reach. (The Hardware paragraph's FM3 video, which is about the computer,
-still does.)
+review account is not that account, so in a build made after 11 October the
+reviewer is not shown it, and the paragraph above says so instead of telling
+them where it is. No video of Bluetooth goes with this version, because that
+build does not let the reviewer open it. (Build 26 would, on its first
+launch: see the line at the top of these notes. The Hardware paragraph's FM3
+video, which is about the computer, still goes.)
 
 **Never switched on for customers by an update.** When it is ready, it goes
 in a new store version whose review notes describe it, the way this
@@ -475,8 +492,8 @@ without it. The Edit paragraph keeps its one honest sentence on why it is a
 Beta, which matches the note on that screen, and no longer adds "It is still
 being improved", which reads as unfinished. And the Bluetooth page, with its
 Testing tools (a bench that says "For testing." and offers write checks),
-shows only on Justin's own account, so no reviewer or customer meets either;
-the one Bluetooth paragraph in the notes says the code is there and whose it
+shows only on Justin's own account, so in a build made after 11 October the
+reviewer meets neither; the one Bluetooth paragraph in the notes says the code is there and whose it
 is, so nothing in the app is undescribed.
 
 ### What's New in This Version, 1.87.1
@@ -563,13 +580,37 @@ No hardware? The app has a full demo that needs no account and no gear:
   3. Tap "Start free demo"
   4. Choose any unit, then tap "Play with ..."
 
-This build also contains Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested. This account does not see it, and the app never asks it for Nearby devices or Location.
+This build also contains Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested. From the app's first update, which takes over on its second launch, this account does not see it. On the very first launch after a fresh install, the copy built into this version can still show a BLUETOOTH (BETA) card under Settings → Phone & computer; the app asks for Nearby devices (or Location, on Android 11 and older) only if Connect is tapped on the page it opens.
 ```
 
-The last line is the same disclosure as Apple's notes, in Android's words:
-the manifest of 1.87.1 declares Nearby devices (and Location on Android 11
-and older) because the Bluetooth code is in it, and a reviewer who sees
-those declared and never asked for should be told why.
+The last line is the same disclosure as Apple's notes, in Android's words,
+and says the one thing Apple's does not have to. The Android 1.87.1 build
+went to Google Play production on 10 October, so its built-in copy is the
+one that shows Bluetooth on a fresh install's first launch, until the update
+that hides it takes over on the next one (see *Submit a build made after 11
+October 2026* above). The manifest of 1.87.1 declares Nearby devices (and
+Location on Android 11 and older) because the Bluetooth code is in it, and a
+reviewer who sees those declared should be told why, and when they are
+asked for.
+
+**A risk to know about: permissions the listing gives no reason for.** The
+1.87.1 manifest declares Nearby devices, and Location up to Android 11, while
+nothing in the listing promotes a feature that needs them: the Description
+says nothing about Bluetooth, because customers cannot open it. Google asks
+that declared permissions serve something the app offers, and could flag
+that. Nothing in the listing changes for it now. If Google does flag it,
+there are two ways out, and the choice is Justin's:
+
+- **A build without the Android Bluetooth permissions.** That moves the
+  fingerprint, so it is a new build for both phones, one iOS and one Android
+  slot, and Bluetooth stops working on Android for his phone too until it
+  comes back.
+- **Listing Bluetooth, once customers have it.** Only in the version that
+  opens it to them, never before (*Never switched on for customers by an
+  update*, above).
+
+I would wait: answer Google with the App access note above if they ask, and
+take the build only if they insist.
 
 **3. The listing** (Grow users → Store presence → Store listings → the default
 listing), any time: nothing in it waits for 1.87.1 now.
@@ -578,11 +619,12 @@ listing), any time: nothing in it waits for 1.87.1 now.
   which starts "Requires a computer" in ordinary letters. The live one is
   in capitals.
 - **Full description:** the Description at the top of this file. It says
-  nothing about Bluetooth, because no customer can open it. It once said
+  nothing about Bluetooth, because customers cannot open it. It once said
   Bluetooth (beta) could take the computer's place, partly so that the
   Nearby devices permission 1.87.1 declares matched something the listing
   promoted; the App access note above now says why that permission is
-  declared and never asked for instead.
+  declared and when it is asked for instead, and the risk that leaves is
+  named under it.
 - **The trademark line** at the end has to be the one in this file, which
   names the VP4 and Fractal Audio. The live one says "FM3, FM9, Axe-Fx and
   AM4 are trademarks of their respective owner" and leaves the VP4 out.
