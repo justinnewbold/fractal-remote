@@ -316,6 +316,18 @@ export default function App() {
     setAuth('out')
   }
   /*
+   * AND THE SAME DOOR ON MAKING AN ACCOUNT, for a phone whose purchase is on
+   * no account yet (purchases.js, onlyHere). Their lines on the demo's stage
+   * and in Settings → Account lead here. The form opens on Create account
+   * until somebody signs in; straight after a purchase with nobody signed
+   * in it does that by itself (boughtAlone, below at SignIn).
+   */
+  const [makeAccount, setMakeAccount] = useState(false)
+  const toMakeAccount = () => {
+    toSignIn()
+    setMakeAccount(true)
+  }
+  /*
    * THE TOUR, WHICH THIS END NEVER HAD. "First issue is demo has no
    * tutorial. Very important."
    *
@@ -820,6 +832,11 @@ export default function App() {
         ) : auth === 'out' ? (
           <>
           <SignIn
+            /* Create account, after buying with nobody signed in: he was met
+               with Sign in, which failed four times, and made the account on
+               the website, which then sold it to him again. */
+            start={purchase.boughtAlone || makeAccount ? 'up' : 'in'}
+            paidHere={purchase.onlyHere}
             onSignedIn={() => {
               /* An owner signing in is unlocked from that moment, not from
                  the next launch — the check at startup ran before there was
@@ -850,6 +867,7 @@ export default function App() {
                */
               setAuth('checking')
               linked.then(() => setAuth('in'))
+              setMakeAccount(false)
             }}
             onDemo={() => setAuth('in')}
           />
@@ -1014,6 +1032,7 @@ export default function App() {
                 onPage={setSettingsAt}
                 onUnlock={() => setBuying(true)}
                 onSignIn={toSignIn}
+                onMakeAccount={toMakeAccount}
                 link={link.link}
                 macName={link.macName}
                 hostVersion={link.hostVersion}
@@ -1128,6 +1147,7 @@ export default function App() {
                   BENCH && (demo || link.link === 'connected') && !overBluetooth(caps) ? () => setScreen('edit') : null
                 }
                 onUnlock={() => setBuying(true)}
+                onAccount={toMakeAccount}
               />
             )}
             </EdgeBack>

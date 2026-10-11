@@ -116,7 +116,14 @@ export const supabaseClient = () => supabase()
 
 export async function signIn({ email, password }) {
   const { data, error } = await supabase().auth.signInWithPassword({ email, password })
-  if (error) throw new Error(explainAuth(error.message))
+  /* `noMatch` says it was the details, not the line: on a phone that paid
+     before any account existed, the likeliest reason is that there is no
+     account with that email yet (SignIn says so). */
+  if (error) {
+    throw Object.assign(new Error(explainAuth(error.message)), {
+      noMatch: error.code === 'invalid_credentials' || /invalid login/i.test(error.message || '')
+    })
+  }
   userId = data?.user?.id || null
   if (!userId) throw new Error('Signed in but the account service returned no id.')
   return userId

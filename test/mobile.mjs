@@ -2845,6 +2845,7 @@ export function run(test) {
       ['src/lib/bluetooth-gear.js', /, and not yet from an Android phone\./, 'BETA_NOTE_ANDROID: betaNote picks it only for Android'],
       ['src/screens/Bluetooth.js', /If Android asks to pair with it, accept\./, 'the Connect hint, behind ios ? … :'],
       ['src/screens/Settings.js', /^Google account$/, 'Delete account: Apple ID on an iPhone'],
+      ['src/lib/purchases.js', /^Google account$/, 'storeAccount, in Restore’s and Buy’s words: Apple ID on an iPhone'],
       ['src/lib/cloudSetlists.js', /^Android$/, 'deviceName: iPhone on an iPhone'],
       ['src/lib/admin.js', /Android/, 'Justin’s Developer pages only'],
       ['src/lib/whats-live.js', /^Android build$/, 'What is live, a Developer page, Justin’s only'],
@@ -2879,6 +2880,7 @@ export function run(test) {
     assert.match(flat('mobile/src/lib/bluetooth.js'), /export const ALLOW_WORDS = Platform\.OS === 'ios' \? 'Bluetooth isn’t allowed[^']*' : OLD_ANDROID/)
     assert.match(flat('mobile/src/screens/Bluetooth.js'), /: ios \? 'Apple’s Bluetooth screen opens\.[^']*' : 'The phone looks for the adapter for ten seconds, then connects to it\. If Android asks/)
     assert.match(flat('mobile/src/screens/Settings.js'), /\$\{Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'\}/)
+    assert.match(flat('mobile/src/lib/purchases.js'), /const storeAccount = \(\) => \(Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'\)/)
     assert.match(flat('mobile/src/lib/cloudSetlists.js'), /export const deviceName = \(\) => \(Platform\.OS === 'ios' \? 'iPhone' : 'Android'\)/)
     assert.match(flat('mobile/src/lib/bluetooth-gear.js'), /export const betaNote = \(os\) => \(os === 'android' \? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE\)/)
     /* The Developer pages: only their own tools import admin.js and whats-live.js, and Settings draws each tool for Justin's account alone. */
@@ -11398,7 +11400,7 @@ export function run(test) {
        not show a buy button that cannot take money. */
     const pay = read('mobile/src/screens/Paywall.js')
     assert.match(pay, /asked \? null : \(/, 'the asked-for paywall still offers the demo it was opened from')
-    assert.match(pay, /disabled=\{busy \|\| !available\}/, 'the Unlock button works when purchasing does not')
+    assert.match(pay, /disabled=\{busy \|\| !available(?: \|\| Boolean\(held\))?\}/, 'the Unlock button works when purchasing does not')
     assert.match(pay, /asked \? \(\s*<Sheet/, 'the asked-for paywall replaces the screen instead of sitting over it')
   })
 
@@ -11598,6 +11600,561 @@ export function run(test) {
     const block = src.slice(src.indexOf('let canPay'), src.indexOf('set({\n      available'))
     assert.match(block, /catch/, 'a failed canMakePayments check is not caught')
     assert.match(block, /canPay = true/, 'the unknown case does not default to "can pay"')
+  })
+
+  /*
+   * PAYING TWICE, AND WHAT NOW STANDS IN THE WAY OF IT.
+   *
+   * On 8 October a customer bought the unlock on his iPhone before he had an
+   * account, was sent to Sign in (which failed four times, because there was
+   * no account), made the account on the website, and the website asked
+   * "has this account paid?", was truthfully told no — the purchase was
+   * still the phone's own — and sold it to him again by card. Two minutes
+   * later the phone signed in and the Apple purchase joined the account.
+   *
+   * Everything below is a JS-only fix, so it ships as an update.
+   *
+   * PURCHASES.JS ON A BENCH OF ITS OWN, as lib/bluetooth is in
+   * bluetooth.mjs: the real file, with React Native, the phone's storage,
+   * the account service, the relay pass and RevenueCat's SDK swapped for
+   * pretend ones, so what it does before money moves is run, not read.
+   */
+  async function purchasesOnABench({ os = 'ios', session = null } = {}) {
+    const dir = mkdtempSync(join(tmpdir(), 'purchases-'))
+    const real = (f) => new URL(`../mobile/src/lib/${f}`, import.meta.url).href
+    const swaps = [
+      ["from 'react'", "from './react.js'"],
+      ["from 'react-native'", "from './react-native.js'"],
+      ["from '@react-native-async-storage/async-storage'", "from './storage.js'"],
+      ["from 'expo-constants'", "from './constants.js'"],
+      ["from './debugLog'", "from './debugLog.js'"],
+      ["from './unlock-rule'", `from '${real('unlock-rule.js')}'`],
+      ["from './owner-unlock'", `from '${real('owner-unlock.js')}'`],
+      ["from './relay'", "from './relay.js'"],
+      ["from './demo'", "from './demo.js'"],
+      ["from './relayPass'", "from './relayPass.js'"],
+      ["import('react-native-purchases')", "import('./rnp.js')"]
+    ]
+    let lib = read('mobile/src/lib/purchases.js')
+    for (const [from, to] of swaps) {
+      assert.ok(lib.includes(from), `lib/purchases no longer has ${from}: the bench needs telling`)
+      lib = lib.replace(from, to)
+    }
+    const files = {
+      'package.json': '{ "type": "module" }',
+      'purchases.js': lib,
+      'react.js': 'export const useSyncExternalStore = (subscribe, read) => read()\n',
+      'react-native.js': `export const Platform = { OS: ${JSON.stringify(os)}, select: (o) => (${JSON.stringify(os)} in o ? o[${JSON.stringify(os)}] : o.default) }\n`,
+      'storage.js': 'export const disk = new Map()\nexport default { getItem: async (k) => (disk.has(k) ? disk.get(k) : null), setItem: async (k, v) => { disk.set(k, String(v)) } }\n',
+      'constants.js': "export default { expoConfig: { extra: { revenuecat: { ios: 'appl_bench', android: 'goog_bench' } } } }\n",
+      'debugLog.js': 'export const lines = []\nexport const logDebug = (line) => { lines.push(String(line)) }\n',
+      /* The sign-in kept on the phone, which the test moves by hand. */
+      'relay.js':
+        `export const who = { session: ${JSON.stringify(session)} }\n` +
+        'export const restoreSession = async () => who.session\n' +
+        "export const currentAccount = async () => (who.session ? { id: who.session, email: 'player@example.com' } : null)\n",
+      'demo.js': 'export const demo = { on: false }\nexport const isDemo = () => demo.on\nexport const setDemo = (on) => { demo.on = Boolean(on) }\n',
+      /* The server's catch-up: `grant` runs before it answers, the way the
+         entitlement function claims the waiting list. */
+      'relayPass.js': 'export const pass = { calls: 0, answer: false, grant: null }\nexport const claimRelay = async () => { pass.calls++; pass.grant?.(); return pass.answer }\n',
+      'rnp.js': 'export const holder = { api: null }\nexport default new Proxy({}, { get: (_, key) => holder.api?.[key] })\n'
+    }
+    for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+    const at = (f) => pathToFileURL(join(dir, f)).href
+    return {
+      p: await import(at('purchases.js')),
+      who: (await import(at('relay.js'))).who,
+      pass: (await import(at('relayPass.js'))).pass,
+      demo: (await import(at('demo.js'))).demo,
+      holder: (await import(at('rnp.js'))).holder,
+      log: (await import(at('debugLog.js'))).lines,
+      done: () => rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  /*
+   * A pretend RevenueCat, kept to what the real one is documented to do: a
+   * customer per id; the nameless id a phone starts on; logIn merging a
+   * nameless purchase into an account only when that account has no nameless
+   * alias yet ("No merge or purchase transfer occurs" otherwise); a saved
+   * copy that getCustomerInfo hands back until it is thrown away; and one
+   * receipt in this phone's store account, which Restore or a sync moves to
+   * whoever the phone is now (Transfer, the default).
+   */
+  function pretendRevenueCat({ owns = {}, aliased = [] } = {}) {
+    const NAMELESS = '$RCAnonymousID:bench'
+    const has = new Map(Object.entries(owns)) // id → the store it came from
+    const alias = new Set(aliased)
+    const calls = []
+    const listeners = []
+    let me = NAMELESS
+    let saved = null
+    const infoOf = (id) => ({ entitlements: { active: has.has(id) ? { full: { store: has.get(id) } } : {} } })
+    const tell = () => {
+      saved = infoOf(me)
+      for (const fn of listeners) fn(saved)
+    }
+    const rc = {
+      NAMELESS,
+      calls,
+      has,
+      offline: false,
+      /* Only the link fails: everything else answers. */
+      loginFails: false,
+      /* Whose purchase this phone's store receipt is: null for none. */
+      receipt: null,
+      /* What the store's sheet does: 'ok', 'unconfirmed', or an error to throw. */
+      sell: 'ok',
+      get me() {
+        return me
+      },
+      set me(id) {
+        me = id
+      },
+      /* An old answer, held the way the SDK holds one for five minutes. */
+      stale() {
+        saved = { entitlements: { active: {} } }
+      },
+      bought: () => calls.filter((c) => c === 'purchasePackage' || c === 'purchaseProduct').length
+    }
+    const carry = () => {
+      if (!rc.receipt || rc.receipt === me) return
+      const from = has.get(rc.receipt)
+      has.delete(rc.receipt)
+      has.set(me, from)
+      rc.receipt = me
+    }
+    const sale = async () => {
+      if (rc.sell instanceof Error) throw rc.sell
+      if (rc.sell === 'unconfirmed') return { customerInfo: { entitlements: { active: {} } } }
+      has.set(me, 'APP_STORE')
+      rc.receipt = me
+      tell()
+      return { customerInfo: infoOf(me) }
+    }
+    rc.api = {
+      configure: async () => {},
+      canMakePayments: async () => true,
+      getOfferings: async () => ({
+        current: { availablePackages: [{ product: { identifier: 'cloud.newbold.fractalremote.full', priceString: '$9.99' } }] },
+        all: {}
+      }),
+      getProducts: async () => [],
+      addCustomerInfoUpdateListener: (fn) => listeners.push(fn),
+      isAnonymous: async () => me === NAMELESS,
+      getAppUserID: async () => me,
+      getCustomerInfo: async () => {
+        calls.push('getCustomerInfo')
+        if (rc.offline) throw new Error('Network request failed')
+        return saved || infoOf(me)
+      },
+      invalidateCustomerInfoCache: async () => {
+        calls.push('invalidate')
+        saved = null
+      },
+      logIn: async (id) => {
+        calls.push(`logIn ${id}`)
+        if (rc.offline || rc.loginFails) throw new Error('Network request failed')
+        if (me === NAMELESS && !alias.has(id)) {
+          if (has.has(NAMELESS)) {
+            has.set(id, has.get(NAMELESS))
+            has.delete(NAMELESS)
+            if (rc.receipt === NAMELESS) rc.receipt = id
+          }
+          alias.add(id)
+        }
+        me = id
+        tell()
+        return { customerInfo: infoOf(id), created: false }
+      },
+      syncPurchases: async () => {
+        calls.push('syncPurchases')
+        if (rc.offline) throw new Error('Network request failed')
+        carry()
+      },
+      restorePurchases: async () => {
+        calls.push('restorePurchases')
+        if (rc.offline) throw new Error('Network request failed')
+        /* With a receipt to send, the answer is fresh; with none, it is the saved copy. */
+        if (rc.receipt) {
+          carry()
+          saved = null
+        }
+        return saved || infoOf(me)
+      },
+      purchasePackage: async () => {
+        calls.push('purchasePackage')
+        return sale()
+      },
+      purchaseProduct: async () => {
+        calls.push('purchaseProduct')
+        return sale()
+      }
+    }
+    return rc
+  }
+
+  const benchFlush = async () => {
+    for (let i = 0; i < 12; i++) await new Promise((r) => globalThis.setImmediate(r))
+  }
+
+  /* A bench with RevenueCat in it, started the way App.js starts it. */
+  async function benchWith(rc, { os, session, start = true } = {}) {
+    const bench = await purchasesOnABench({ os, session })
+    bench.holder.api = rc.api
+    if (start) await bench.p.startPurchases()
+    await benchFlush()
+    return bench
+  }
+
+  test('Buy charges nobody the store already says has it, however old the phone’s copy', async () => {
+    /*
+     * Signed in and linked, bought on the website a minute ago: the SDK's
+     * saved copy still says no, and the screen still shows Buy. buyUnlock
+     * asks again, fresh, and unlocks the way a purchase does, with nothing
+     * charged.
+     */
+    const rc = pretendRevenueCat({ owns: {} })
+    rc.me = 'acct-web'
+    const bench = await benchWith(rc, { session: 'acct-web' })
+    try {
+      assert.equal(bench.p.purchaseState().unlocked, false, 'the bench started unlocked')
+      rc.has.set('acct-web', 'RC_BILLING')
+      rc.stale()
+      const out = await bench.p.buyUnlock()
+      assert.equal(rc.bought(), 0, 'somebody who has already paid was charged again')
+      assert.equal(out.ok, true, 'an owner was told the purchase failed')
+      assert.equal(bench.p.purchaseState().unlocked, true, 'an owner found at Buy was not unlocked')
+      assert.ok(rc.calls.indexOf('invalidate') < rc.calls.lastIndexOf('getCustomerInfo'), 'Buy trusted the saved copy')
+      assert.ok(bench.pass.calls > 0, 'the relay was not told')
+    } finally {
+      bench.done()
+    }
+  })
+
+  test('a phone signed in but never linked is linked before Buy, and sells nothing when it cannot be', async () => {
+    /*
+     * The link at sign-in failed on a bad signal, so the SDK is still on the
+     * phone's nameless id, which owns nothing — and the account bought on
+     * another phone. Buy links first and finds it.
+     */
+    const rc = pretendRevenueCat({ owns: { 'acct-droid': 'PLAY_STORE' }, aliased: ['acct-droid'] })
+    const bench = await benchWith(rc, { session: 'acct-droid', start: false })
+    try {
+      const out = await bench.p.buyUnlock()
+      assert.ok(rc.calls.includes('logIn acct-droid'), 'Buy did not put the phone on the signed-in account first')
+      assert.equal(rc.bought(), 0, 'a phone on nobody’s id charged a customer who paid on another phone')
+      assert.equal(out.ok, true)
+      assert.equal(bench.p.purchaseState().unlocked, true)
+    } finally {
+      bench.done()
+    }
+
+    /* And when the link cannot be made, it says so and takes nothing, even
+       though the phone's own nameless id answers (and says no). */
+    const rc2 = pretendRevenueCat({ owns: { 'acct-droid': 'PLAY_STORE' }, aliased: ['acct-droid'] })
+    const bench2 = await benchWith(rc2, { session: 'acct-droid', start: false })
+    try {
+      rc2.loginFails = true
+      const out = await bench2.p.buyUnlock()
+      assert.equal(rc2.bought(), 0, 'Buy sold blind with a session on the phone and no link')
+      assert.equal(out.ok, false)
+      assert.equal(out.message, 'Couldn’t check your purchase just now. Try again in a moment.')
+    } finally {
+      bench2.done()
+    }
+
+    /* A signed-in phone whose link failed, holding a purchase of its own, is
+       not told it has no account: its sign-in is on the phone. */
+    const rc3 = pretendRevenueCat({ owns: { '$RCAnonymousID:bench': 'APP_STORE' } })
+    rc3.loginFails = true
+    const bench3 = await benchWith(rc3, { session: 'acct-signed' })
+    try {
+      assert.equal(bench3.p.purchaseState().unlocked, true)
+      assert.equal(bench3.p.purchaseState().onlyHere, false, 'a signed-in customer is told to make an account')
+    } finally {
+      bench3.done()
+    }
+  })
+
+  test('a check that cannot be made stops the sale and nothing else', async () => {
+    const rc = pretendRevenueCat()
+    const bench = await benchWith(rc)
+    try {
+      const before = bench.p.mayConnect()
+      rc.offline = true
+      const out = await bench.p.buyUnlock()
+      assert.equal(rc.bought(), 0, 'Buy charged without knowing whether this person had paid')
+      assert.equal(out.message, 'Couldn’t check your purchase just now. Try again in a moment.')
+      assert.equal(bench.p.mayConnect(), before, 'a failed check changed whether the app may drive a rig')
+    } finally {
+      bench.done()
+    }
+  })
+
+  test('a first purchase still goes through, opens Create account, and is called this phone’s alone until an account has it', async () => {
+    const rc = pretendRevenueCat()
+    const bench = await benchWith(rc)
+    try {
+      bench.demo.on = true
+      const out = await bench.p.buyUnlock()
+      assert.equal(rc.bought(), 1, 'the guards stopped an honest first purchase, or bought twice')
+      assert.equal(out.ok, true)
+      await benchFlush()
+      const s = bench.p.purchaseState()
+      assert.equal(s.unlocked, true)
+      assert.equal(s.boughtAlone, true, 'a purchase with nobody signed in does not send the sign-in screen to Create account')
+      assert.equal(s.onlyHere, true, 'a purchase on no account is not said to be on this phone alone')
+      assert.equal(bench.demo.on, false, 'the purchase left the app in the demo')
+
+      /* Signed in: the account has it, so none of that is true any more. */
+      bench.who.session = 'acct-new'
+      await bench.p.linkAccount()
+      await benchFlush()
+      const after = bench.p.purchaseState()
+      assert.equal(after.unlocked, true)
+      assert.equal(after.boughtAlone, false, 'a linked phone still opens the sign-in screen on Create account')
+      assert.equal(after.onlyHere, false, 'a linked phone still says its purchase is on this phone alone')
+      assert.ok(!rc.calls.includes('syncPurchases'), 'the receipt was sent again when logIn had already carried it')
+    } finally {
+      bench.done()
+    }
+  })
+
+  test('a purchase made before signing in follows the account even where logIn does not carry it', async () => {
+    /*
+     * The account was already used on another phone, so it has a nameless
+     * alias and logIn merges nothing. The phone sends its receipt again
+     * under the account, and Transfer moves the purchase across.
+     */
+    const rc = pretendRevenueCat({ aliased: ['acct-used'] })
+    const bench = await benchWith(rc)
+    try {
+      await bench.p.buyUnlock()
+      assert.equal(rc.has.get(rc.NAMELESS), 'APP_STORE', 'the bench did not buy on the nameless id')
+      bench.who.session = 'acct-used'
+      await bench.p.linkAccount()
+      await benchFlush()
+      assert.ok(rc.calls.includes('syncPurchases'), 'the phone’s purchase was left on its nameless id')
+      assert.equal(rc.has.has('acct-used'), true, 'the account never got the purchase')
+      assert.equal(bench.p.purchaseState().unlocked, true, 'the account signed in to, which now has it, was left locked')
+    } finally {
+      bench.done()
+    }
+
+    /* And nothing is sent for a phone that owned nothing. */
+    const rc2 = pretendRevenueCat({ aliased: ['acct-used'] })
+    const bench2 = await benchWith(rc2)
+    try {
+      bench2.who.session = 'acct-used'
+      await bench2.p.linkAccount()
+      assert.ok(!rc2.calls.includes('syncPurchases'), 'a phone with nothing of its own sent the store a receipt anyway')
+    } finally {
+      bench2.done()
+    }
+  })
+
+  test('viewing as a new customer charges nothing', async () => {
+    const rc = pretendRevenueCat()
+    const bench = await benchWith(rc)
+    try {
+      bench.p.poseAsNewCustomer(true)
+      const out = await bench.p.buyUnlock()
+      assert.equal(rc.bought(), 0, 'Developer → View as a new customer made a real purchase')
+      assert.match(out.message, /viewing as a new customer/)
+    } finally {
+      bench.done()
+    }
+  })
+
+  test('a payment still waiting, or one the store has not confirmed, holds Buy for the rest of the run', async () => {
+    const rc = pretendRevenueCat()
+    const bench = await benchWith(rc)
+    try {
+      rc.sell = Object.assign(new Error('The payment is pending.'), { code: '20' })
+      const out = await bench.p.buyUnlock()
+      assert.equal(out.ok, false)
+      assert.equal(out.pending, true)
+      assert.equal(out.message, bench.p.PENDING, 'a waiting payment is said in the store’s words, as a fault')
+      assert.match(bench.p.PENDING, /please don’t pay again on the website or another phone/)
+      assert.equal(bench.p.purchaseState().held, bench.p.PENDING, 'the paywall cannot see that Buy is held')
+      rc.sell = 'ok'
+      const again = await bench.p.buyUnlock()
+      assert.equal(rc.bought(), 1, 'a second payment went in behind one still waiting')
+      assert.equal(again.message, bench.p.PENDING)
+    } finally {
+      bench.done()
+    }
+
+    const rc2 = pretendRevenueCat()
+    const bench2 = await benchWith(rc2)
+    try {
+      rc2.sell = 'unconfirmed'
+      const out = await bench2.p.buyUnlock()
+      assert.equal(out.ok, false)
+      assert.match(out.message, /Please don’t pay again/)
+      await bench2.p.buyUnlock()
+      assert.equal(rc2.bought(), 1, 'Buy was live again after the store took a payment it did not confirm')
+    } finally {
+      bench2.done()
+    }
+  })
+
+  test('the store saying it was bought already is not a fault', async () => {
+    /* Google's ITEM_ALREADY_OWNED, after a check that still said no. */
+    const rc = pretendRevenueCat()
+    const bench = await benchWith(rc, { os: 'android' })
+    try {
+      const real = rc.api.getCustomerInfo
+      let asked = 0
+      rc.api.getCustomerInfo = async () => (asked++ === 0 ? { entitlements: { active: {} } } : real())
+      rc.has.set(rc.NAMELESS, 'PLAY_STORE')
+      rc.sell = Object.assign(new Error('This product is already active for the user.'), { code: '6' })
+      const out = await bench.p.buyUnlock()
+      assert.equal(out.ok, true, 'a purchase the store says is already this person’s was shown as a failure')
+      assert.equal(bench.p.purchaseState().unlocked, true)
+
+      /* And when RevenueCat has not got it either, Restore is the way, said plainly. */
+      rc.has.delete(rc.NAMELESS)
+      asked = 0
+      const none = await bench.p.buyUnlock()
+      assert.equal(none.message, 'This Google account has bought it already. Tap Restore a purchase to bring it back.')
+    } finally {
+      bench.done()
+    }
+  })
+
+  test('Restore asks fresh, runs the server’s catch-up, and says what was asked', async () => {
+    /* Signed in, bought on the website a minute ago, the saved copy says no,
+       and this Apple ID has nothing to send. */
+    const rc = pretendRevenueCat()
+    rc.me = 'acct-web'
+    const bench = await benchWith(rc, { session: 'acct-web' })
+    try {
+      rc.has.set('acct-web', 'RC_BILLING')
+      rc.stale()
+      const out = await bench.p.restorePurchase()
+      assert.equal(out.ok, true, 'Restore answered from the saved copy, from before the purchase')
+    } finally {
+      bench.done()
+    }
+
+    /* Signed in, and the server grants it (the waiting list) only when asked. */
+    const rc2 = pretendRevenueCat()
+    rc2.me = 'acct-invited'
+    const bench2 = await benchWith(rc2, { session: 'acct-invited' })
+    try {
+      bench2.pass.answer = true
+      bench2.pass.grant = () => rc2.has.set('acct-invited', 'PROMOTIONAL')
+      const out = await bench2.p.restorePurchase()
+      assert.equal(out.ok, true, 'Restore said nothing was found without asking the server')
+      assert.equal(bench2.p.purchaseState().unlocked, true)
+    } finally {
+      bench2.done()
+    }
+
+    /* Nothing anywhere: the words say what was asked, and what works instead. */
+    for (const [os, store] of [['ios', 'Apple ID'], ['android', 'Google account']]) {
+      const rc3 = pretendRevenueCat()
+      const bench3 = await benchWith(rc3, { os })
+      try {
+        const out = await bench3.p.restorePurchase()
+        assert.equal(out.ok, false)
+        assert.equal(out.message, `No purchase was found for this ${store}. If you bought it on the website or on another phone, sign in with that email instead.`)
+        assert.ok(!/on this account/.test(out.message), 'Restore says the account has nothing, which it did not ask')
+      } finally {
+        bench3.done()
+      }
+    }
+    const rc4 = pretendRevenueCat()
+    rc4.me = 'acct-empty'
+    const bench4 = await benchWith(rc4, { session: 'acct-empty' })
+    try {
+      const out = await bench4.p.restorePurchase()
+      assert.match(out.message, /^No purchase was found for this Apple ID, or on the account you’re signed in to\./)
+    } finally {
+      bench4.done()
+    }
+  })
+
+  test('deleting the account says what it costs, by where the full version came from', async () => {
+    const rc = pretendRevenueCat({ owns: { 'acct-web': 'RC_BILLING' } })
+    rc.me = 'acct-web'
+    const bench = await benchWith(rc, { session: 'acct-web' })
+    try {
+      assert.equal(await bench.p.unlockedFrom(), 'RC_BILLING')
+      rc.has.delete('acct-web')
+      rc.stale()
+      assert.equal(await bench.p.unlockedFrom(), null)
+      rc.offline = true
+      assert.equal(await bench.p.unlockedFrom(), null, 'a store that cannot be asked named a store')
+    } finally {
+      bench.done()
+    }
+
+    /* And the words, run with a pretend Platform. */
+    const src = read('mobile/src/screens/Settings.js')
+    const fn = src.slice(src.indexOf('const deleteCosts'), src.indexOf('/** A heading and the rows'))
+    assert.ok(fn.length > 100, 'deleteCosts moved; this check reads it')
+    const words = async (os) =>
+      (await import(`data:text/javascript,${encodeURIComponent(`const Platform = { OS: '${os}' }\n${fn}\nexport default deleteCosts`)}`)).default
+    const ios = await words('ios')
+    const droid = await words('android')
+    assert.match(ios('RC_BILLING'), /gives it up for good/, 'a website purchase is promised to survive the account it belongs to')
+    assert.match(ios('PROMOTIONAL'), /gives it up for good/, 'a gift is promised to survive the account it was given to')
+    assert.match(ios('APP_STORE'), /stays with your Apple ID\. Restore a purchase brings it back/)
+    assert.match(droid('PLAY_STORE'), /stays with your Google account/)
+    assert.match(ios(null), /stays with your Apple ID/, 'an unknown store lost the old wording')
+    /* Bought on the other store: said without naming it on an iPhone (Apple 2.3.10). */
+    assert.ok(!/Google|Android/.test(ios('PLAY_STORE')), 'an iPhone names another platform')
+    assert.match(ios('PLAY_STORE'), /the store account you paid with/)
+  })
+
+  test('the screens a buyer with no account lands on send them to make one, and never block', () => {
+    const app = read('mobile/App.js')
+    const flatApp = withoutComments(app).replace(/\s+/g, ' ')
+    /* After a purchase with nobody signed in, the sign-in screen opens on Create account. */
+    assert.match(flatApp, /<SignIn start=\{purchase\.boughtAlone \|\| makeAccount \? 'up' : 'in'\} paidHere=\{purchase\.onlyHere\}/, 'the sign-in screen opens on Sign in after a purchase with no account')
+    assert.match(flatApp, /const toMakeAccount = \(\) => \{ toSignIn\(\) setMakeAccount\(true\) \}/)
+    assert.match(flatApp, /linked\.then\(\(\) => setAuth\('in'\)\) setMakeAccount\(false\)/, 'signing in leaves the form set to make an account next time')
+    assert.match(flatApp, /onMakeAccount=\{toMakeAccount\}/, 'Settings → Account has no way to make the account')
+    assert.match(flatApp, /onUnlock=\{\(\) => setBuying\(true\)\} onAccount=\{toMakeAccount\}/, 'the stage has no way to make the account')
+
+    /* The paywall waits for a purchase's own answer before closing, so the
+       screen behind it knows a purchase was made with nobody signed in. */
+    const pay = withoutComments(read('mobile/src/screens/Paywall.js')).replace(/\s+/g, ' ')
+    assert.match(pay, /if \(unlocked && !busy\) onUnlocked\?\.\(\)/, 'the paywall closes on the store’s listener before the purchase has said how it went')
+    /* Nobody signed in: the free way first, above Buy. */
+    assert.match(pay, /const freeFirst = nobody && Boolean\(onSignIn\)/)
+    const free = pay.indexOf('Bought it already — on the website or another phone? Sign in instead. It&rsquo;s free.')
+    const buy = pay.indexOf('Unlock Full Version — ${price}')
+    assert.ok(free > 0 && free < buy, 'the way to sign in for free is not above Buy')
+    assert.match(pay, /restoreSession\(\)\.then\(\(id\) => alive && setNobody\(!id\)\)/, 'who is signed in is asked of the server, which says nobody with no signal')
+    /* A held payment keeps Buy off, and is said. */
+    assert.match(pay, /disabled=\{busy \|\| !available \|\| Boolean\(held\)\}/, 'Buy is live behind a payment still waiting')
+    assert.match(pay, /\{held && !said \? <Note tone="warn">\{held\}<\/Note> : null\}/)
+    assert.match(pay, /tone: out\.held \? 'warn' : 'fault'/, 'a waiting payment is shown as a fault')
+
+    /* The sign-in screen: the line, the offer when Sign in fails, and the confirm-first note. */
+    const signIn = read('mobile/src/screens/SignIn.js')
+    const flatSign = withoutComments(signIn).replace(/\s+/g, ' ')
+    assert.match(flatSign, /const paid = start === 'up' \|\| paidHere/)
+    assert.match(flatSign, /You’ve paid — thank you\. Now make your account, so the full version goes with you to your computer and any other phone\. Use this same email there\./)
+    assert.match(flatSign, /if \(mode === 'in' && paid && err\?\.noMatch\) setNoAccount\(true\)/, 'a failed sign-in on a phone that paid with no account says only that the details did not match')
+    assert.match(flatSign, /label="Create account with this email" disabled=\{busy\} onPress=\{\(\) => switchTo\('up'\)\}/)
+    assert.ok(!/setEmail\(''\)/.test(flatSign.slice(flatSign.indexOf('const switchTo'), flatSign.indexOf('const fieldText'))), 'switching to Create account throws the email away')
+    assert.match(flatSign, /Then sign in here on this phone before you open the website or the computer app, so your purchase is on your account first\./, 'a new account on a paid phone is not told to sign in here first')
+    /* And relay.js says which failures were the details. */
+    assert.match(withoutComments(read('mobile/src/lib/relay.js')).replace(/\s+/g, ' '), /noMatch: error\.code === 'invalid_credentials' \|\| \/invalid login\/i\.test\(error\.message \|\| ''\)/)
+
+    /* Where else they land: the demo's stage, and Settings → Account. Never in the way. */
+    const only = withoutComments(read('mobile/src/components/OnlyOnThisPhone.js')).replace(/\s+/g, ' ')
+    assert.match(only, /if \(gone \|\| !onAccount \|\| !onlyHere\) return null/)
+    assert.match(only, /<Note onDismiss=\{\(\) => setGone\(true\)\}>\{ONLY_HERE\}<\/Note>/, 'the line cannot be put away')
+    assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} \/>/)
+    const settings = withoutComments(read('mobile/src/screens/Settings.js')).replace(/\s+/g, ' ')
+    assert.match(settings, /asked && !account\?\.email && purchase\.onlyHere && onMakeAccount \? \( <> <Note>\{ONLY_HERE\}<\/Note> <Press label="Make an account"/)
+    assert.match(settings, /\{deleteCosts\(from\)\}/, 'the delete sheet promises a store purchase to everybody again')
   })
 
 
