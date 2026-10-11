@@ -11954,6 +11954,39 @@ export function run(test) {
     }
   })
 
+  test('an account made on a phone that paid gets the purchase before its email is opened anywhere', async () => {
+    /*
+     * Made, not confirmed: no sign-in yet, and the confirmation link opens
+     * the website signed in. The purchase is put on the account at once, so
+     * the website is told it has paid.
+     */
+    const rc = pretendRevenueCat()
+    const bench = await benchWith(rc)
+    try {
+      await bench.p.buyUnlock()
+      assert.equal(bench.p.purchaseState().onlyHere, true)
+      assert.equal(await bench.p.linkNewAccount('acct-made'), true)
+      assert.equal(rc.has.has('acct-made'), true, 'the new account was left without the purchase, for the website to sell again')
+      assert.equal(bench.p.purchaseState().onlyHere, false)
+    } finally {
+      bench.done()
+    }
+
+    /* A phone that has not paid on its own is left as it was. */
+    const rc2 = pretendRevenueCat()
+    const bench2 = await benchWith(rc2)
+    try {
+      assert.equal(await bench2.p.linkNewAccount('acct-made'), false)
+      assert.ok(!rc2.calls.some((c) => c.startsWith('logIn')), 'a phone with nothing of its own was put on an account nobody signed in to')
+    } finally {
+      bench2.done()
+    }
+
+    const sign = withoutComments(read('mobile/src/screens/SignIn.js')).replace(/\s+/g, ' ')
+    assert.match(sign, /if \(needsConfirmation\) \{ if \(paid && userId\) onAccountMade\?\.\(userId\)/, 'the sign-in screen does not hand over the new account')
+    assert.match(withoutComments(read('mobile/App.js')).replace(/\s+/g, ' '), /onAccountMade=\{\(id\) => linkNewAccount\(id\)\}/)
+  })
+
   test('viewing as a new customer charges nothing', async () => {
     const rc = pretendRevenueCat()
     const bench = await benchWith(rc)

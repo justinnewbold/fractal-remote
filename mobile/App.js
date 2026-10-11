@@ -42,7 +42,7 @@ import { ALLOW_WORDS, RESTRICTED_WORDS, allowBluetooth, restoreBluetooth, setBlu
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
-import { checkOwner, linkAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
+import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
 import { shouldAskToPay } from './src/lib/unlock-rule'
 
 /**
@@ -837,6 +837,7 @@ export default function App() {
                the website, which then sold it to him again. */
             start={purchase.boughtAlone || makeAccount ? 'up' : 'in'}
             paidHere={purchase.onlyHere}
+            onAccountMade={(id) => linkNewAccount(id)}
             onSignedIn={() => {
               /* An owner signing in is unlocked from that moment, not from
                  the next launch — the check at startup ran before there was

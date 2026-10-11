@@ -44,7 +44,7 @@ import externalIcon from '../../assets/icons/external.png'
  * Nothing here mentions a channel, a relay, or the name of the account
  * service — that part has not changed.
  */
-export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = false }) {
+export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = false, onAccountMade }) {
   const [mode, setMode] = useState(start === 'up' ? 'up' : 'in') // 'in' | 'up'
   /*
    * The instructions, from the one screen that needs them most.
@@ -114,8 +114,11 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
     setNoAccount(false)
     try {
       if (mode === 'up') {
-        const { needsConfirmation } = await signUp({ email: email.trim(), password })
+        const { needsConfirmation, userId } = await signUp({ email: email.trim(), password })
         if (needsConfirmation) {
+          /* And the purchase goes onto it now, before the email is opened
+             anywhere (purchases.js, linkNewAccount). */
+          if (paid && userId) onAccountMade?.(userId)
           /* Paid on this phone: the confirmation email opens the website
              signed in, and until this phone has signed in the website sees
              an account that has not paid — which is where he paid again. */

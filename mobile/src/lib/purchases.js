@@ -439,6 +439,30 @@ const link = async () => {
   }
 }
 
+/*
+ * AN ACCOUNT JUST MADE ON A PHONE THAT HAS PAID, before its email is
+ * confirmed.
+ *
+ * Making an account hands back its id at once, but no sign-in until the
+ * email is confirmed, and the confirmation link opens the WEBSITE signed in.
+ * That is where 8 October's customer was sold it again: the website asked
+ * about an account the phone had not yet signed in to. RevenueCat needs no
+ * sign-in to be told whose phone this is, so the purchase goes onto the new
+ * account now, before the website can ask.
+ *
+ * Only for a phone whose purchase is its alone (onlyHere): anybody else's
+ * phone is left exactly as it was. Never throws, and nothing waits on it.
+ */
+export const linkNewAccount = async (id) => {
+  if (!id || !state.onlyHere) return false
+  const api = await load()
+  if (!api) return false
+  const info = await linkTo(api, id)
+  const yes = entitled(info)
+  logDebug(`purchases: the new account ${yes ? 'has this phone’s purchase' : 'did not get this phone’s purchase yet'}`)
+  return yes
+}
+
 /* NEVER REJECTS: the sign-in screen waits on it behind a spinner, and a
    rejection would leave somebody looking at that spinner for good. */
 export const linkAccount = () => {
