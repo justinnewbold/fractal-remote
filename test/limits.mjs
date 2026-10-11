@@ -2318,9 +2318,37 @@ export function run(test) {
      * three. The first draft of these notes came to over 5000, and Apple's
      * page would have cut it off or refused it on the day of submitting.
      * Held under 3950, so the brackets in "Tested on" still fit once filled.
+     *
+     * AND WITH THE THREE VIDEOS IN IT. On 11 October 2026 the notes came to
+     * 3897 characters and the three Google Drive links (the FM3, presets,
+     * deleting an account) would not fit after them, which the measure above
+     * could not see: it counted the brackets, not the links that replace
+     * them. So each video bracket is filled here with something as long as
+     * a Drive link (85 for "https://drive.google.com/file/d/<33>/view?usp=
+     * drive_link"), each Tested on bracket with 30 characters (longer than
+     * "Series 11 (46mm)" or "26.0.1"), and the total still has to come in
+     * under 3950.
      */
-    const bytes = Buffer.byteLength(pasted.trim(), 'utf8')
-    assert.ok(bytes <= 3950, `the 1.87.11 notes are ${bytes} bytes; Apple's Notes box takes 4000, and the brackets still have to be filled in`)
+    const drive = 'https://drive.google.com/file/d/' + 'x'.repeat(33) + '/view?usp=drive_link'
+    const brackets = pasted.match(/\[[^\]\n]*\]/g) || []
+    assert.equal(brackets.filter((b) => /video link/.test(b)).length, 3, 'the 1.87.11 notes do not hold a place for the three video links')
+    const filled = brackets.reduce((t, b) => t.replace(b, /video link/.test(b) ? drive : 'x'.repeat(30)), pasted.trim())
+    const bytes = Buffer.byteLength(filled, 'utf8')
+    assert.ok(bytes <= 3950, `the 1.87.11 notes are ${bytes} bytes with the links and brackets filled; Apple's Notes box takes 4000`)
+    assert.match(pasted, /\nVideos:\n1\. FM3 hardware: \[FM3 video link\]\n2\. Presets: \[presets video link\]\n3\. Deleting an account: \[account deletion video link\]\s*$/, 'the three videos are not listed at the end of the 1.87.11 notes')
+    assert.match(pasted, /real FM3 on\s+screen, from the first pairing through the whole workflow, is video 1 below\./, 'the Hardware paragraph does not point at the FM3 video')
+    assert.match(pasted, /Deleting an account \(Guideline 5\.1\.1\(v\), video 3 below\):/, 'the Delete account paragraph does not point at its video')
+    /*
+     * AND THE WAY TO DELETE A NEW ACCOUNT IS IN THE DELETION PARAGRAPH. The
+     * notes ask the reviewer to try it on a new account, and a new account
+     * that has not bought opens on the purchase page with no gear, so the
+     * gear-to-Settings path alone sends them looking for a button that is
+     * not there. That page's Delete account was said six paragraphs up, in
+     * Accounts before buying; the 1.86.83 notes Apple approved had it here,
+     * and 1.86.8 was refused under 5.1.1(v).
+     */
+    const deleting = pasted.slice(pasted.indexOf('Deleting an account (Guideline 5.1.1(v)'), pasted.indexOf('\n\n', pasted.indexOf('Deleting an account (Guideline 5.1.1(v)')))
+    assert.match(deleting, /purchase page[\s\S]{0,80}Delete account is at the foot of that page\. Please try it on a new account, not the demo account\./, 'the deletion paragraph does not say where an unpaid new account is deleted')
 
     /* The disclosure, said once. */
     assert.match(

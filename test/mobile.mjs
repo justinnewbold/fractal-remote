@@ -6005,7 +6005,14 @@ export function run(test) {
      */
     assert.equal(JSON.parse(read('mobile/app.json')).expo.userInterfaceStyle, 'automatic', 'the iPhone no longer follows its own light or dark setting; the notes and What’s New should stop saying it does')
     assert.match(read('mobile/src/lib/theme.js'), /let mode = 'auto'/, 'Auto is no longer the default, and the notes say it is')
-    assert.match(pasted, /Appearance\. On iPhone, Appearance in Settings set to Auto, which is the\s+default, now follows the phone's own light or dark setting\./, 'the 1.87.11 notes do not say Auto now follows the iPhone’s light or dark setting')
+    /*
+     * By where it is, not by a name it does not have: Settings draws Auto,
+     * Light and Dark as an unlabelled row under Play screen, with no word
+     * "Appearance" anywhere on it. This pinned "Appearance in Settings set to
+     * Auto"; changed on purpose, so a reviewer looking for it finds it.
+     */
+    assert.match(pasted, /Appearance\. On iPhone, Auto \(Settings, under Play screen\), which is the\s+default, now follows the phone's own light or dark setting\./, 'the 1.87.11 notes do not say Auto now follows the iPhone’s light or dark setting, or where Auto is')
+    assert.match(read('mobile/src/screens/Settings.js').replace(/\s+/g, ' '), /<Group title="Play screen">[\s\S]{0,600}<Appearance \/>/, 'Auto is no longer under Play screen in Settings, and the notes say it is')
     assert.ok(whatsNew.split('\n').some((l) => /^• On iPhone, Appearance set to Auto now follows your phone's light or dark setting\.$/.test(l)), 'What’s New does not say Auto follows the iPhone')
     assert.ok(!/Appearance|On iPhone/.test(play), 'the Play release notes carry the iPhone-only Appearance line')
 
