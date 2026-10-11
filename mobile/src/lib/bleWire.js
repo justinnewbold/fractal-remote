@@ -31,12 +31,13 @@ import {
   MODELS,
   am4Allowed,
   am4Block,
+  am4CcOk,
   am4ChannelFrom,
   am4DumpPart,
   am4LocationCode,
   am4Note,
   am4ShortAllowed,
-  am4TunerCcFrom,
+  am4TunerCcNamed,
   buildAm4Bypass,
   buildAm4BypassRead,
   buildAm4Channel,
@@ -1168,12 +1169,14 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * The rest are the AM4's own tuner screen, which this phone opens and
    * closes with the CC its MIDI pedal would send. `unitCc` is what THIS
    * connection read of that setting, {cc, channel} or null, and the only CC
-   * the AM4 may be sent; `unitOpen` that a 127 went out and its 0 is still
-   * owed; `unitRead` that the setting has been asked about on this
-   * connection; `unitAsk` false once an answer was missing or unclear, so it
-   * is not asked again; `unitSays` what the last open found; `unitClosing`
-   * that a close is reading the setting before its 0 can go; `unitShapes`
-   * the AM4's raw answers already put in the log on this connection.
+   * the AM4 may be sent: a read that names NONE or another number clears
+   * it, and one that is silent or unclear leaves it as it was. `unitOpen`
+   * that a 127 went out on it and its 0 is still owed; `unitRead` that the
+   * setting has been asked about on this connection; `unitAsk` false once an
+   * answer was missing or unclear, so it is not asked again; `unitSays` what
+   * the last open found; `unitClosing` that a close is reading the setting
+   * before its 0 can go; `unitShapes` the AM4's raw answers already put in
+   * the log on this connection.
    */
   const tuner = {
     on: false,
@@ -1622,40 +1625,59 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    */
 
   /*
-   * One read of the setting, fresh: {cc, channel}, 'none', or null when the
-   * answer was missing or unclear — and then it is not asked again on this
-   * connection, so a unit that cannot answer is asked once, not at every
-   * press. The channel is asked only when there is a number to send on it.
+   * ONE READ OF THE TUNER SETTING'S NUMBER, and what it does to what this
+   * connection remembers. A read that names NONE, or any number but the one
+   * remembered (in range or not), means that number is not the tuner's any
+   * more: the player may have given it to Output Volume, and a 0 there
+   * silences the rig. So it is forgotten, and with it the 127 that went out
+   * on it: no 0 ever follows on that number. A read that is silent or
+   * unclear says nothing about it, and what is remembered is kept. A missing
+   * or unclear answer, or a number the tuner may not be sent, is not asked
+   * again on this connection. {named, heard, words, why}: `named` is n,
+   * 'none' or null, as am4TunerCcNamed has it.
+   */
+  async function askTunerNumber() {
+    tuner.unitRead = true
+    const a = await ask(buildAm4TunerCcRead(), (f) => parseAm4GlobalLong(f, AM4.TUNER_CC), WAIT.am4Tempo, 'the AM4’s Tuner setting')
+    const heard = !!a && !rejected(a)
+    if (heard) sayShape('its Tuner setting', a)
+    const words = heard ? `“${a.text ?? ''}”` : ''
+    const named = heard ? am4TunerCcNamed(a) : null
+    const why = rejected(a) ? `the AM4 refused the question: ${rejectedWords(a.rejected)}` : heard ? `it reads ${words}` : 'no answer'
+    const was = tuner.unitCc
+    if (named !== null && was && named !== was.cc) {
+      if (tuner.unitOpen) say(`the AM4’s Tuner setting reads ${words} now, not CC ${was.cc}: no 0 goes out on CC ${was.cc}, which may do something else on the AM4 now`)
+      tuner.unitCc = null
+      tuner.unitOpen = false
+    }
+    if (named === null || (named !== 'none' && !am4CcOk(named))) tuner.unitAsk = false
+    return { named, heard, words, why }
+  }
+
+  /*
+   * The setting read whole, for an open (or a close on a connection that has
+   * never asked): its number, then its MIDI channel only when there is a
+   * number to send on it. {cc, channel}, 'none', or null when the answer was
+   * missing or unclear — and then it is not asked again on this connection,
+   * so a unit that cannot answer is asked once, not at every press.
    */
   async function readUnitTuner() {
     if (!tuner.unitAsk) return null
-    tuner.unitRead = true
-    tuner.unitCc = null
-    const a = await ask(buildAm4TunerCcRead(), (f) => parseAm4GlobalLong(f, AM4.TUNER_CC), WAIT.am4Tempo, 'the AM4’s Tuner setting')
-    const heard = a && !rejected(a)
-    if (heard) sayShape('its Tuner setting', a)
-    const words = heard ? `“${a.text ?? ''}”` : ''
-    const cc = rejected(a) ? null : am4TunerCcFrom(a)
-    if (cc === 'none') {
+    const { named, heard, words, why } = await askTunerNumber()
+    if (named === 'none') {
       say(`the AM4’s Tuner setting reads ${words}: no MIDI number, so its own tuner is left as it is (SETUP > MIDI/Remote > Tuner)`)
       return 'none'
     }
-    if (cc === null) {
-      tuner.unitAsk = false
-      const why = rejected(a)
-        ? `the AM4 refused the question: ${rejectedWords(a.rejected)}`
-        : heard
-          ? `it reads ${words}, which is not a number its tuner may be sent`
-          : 'no answer'
-      say(`the AM4’s own tuner is left as it is: about its Tuner setting, ${why}. Not asked again on this connection`)
+    if (named === null || !am4CcOk(named)) {
+      say(`the AM4’s own tuner is left as it is: about its Tuner setting, ${heard ? `${why}, which is not a number its tuner may be sent` : why}. Not asked again on this connection`)
       return null
     }
     const c = await ask(buildAm4MidiChannelRead(), (f) => parseAm4GlobalLong(f, AM4.MIDI_CHANNEL), WAIT.am4Tempo, 'the AM4’s MIDI channel')
     const told = c && !rejected(c)
     if (told) sayShape('its MIDI channel', c)
     const channel = am4ChannelFrom(told ? c : null)
-    tuner.unitCc = { cc, channel }
-    say(`the AM4’s Tuner setting reads ${words}, its MIDI channel “${told ? c.text ?? '' : 'no answer'}”: CC ${cc} on channel ${channel}`)
+    tuner.unitCc = { cc: named, channel }
+    say(`the AM4’s Tuner setting reads ${words}, its MIDI channel “${told ? c.text ?? '' : 'no answer'}”: CC ${named} on channel ${channel}`)
     return tuner.unitCc
   }
 
@@ -1695,30 +1717,50 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   /*
-   * THE 0, OWED OR NOT. With the number read at the open when this connection
-   * opened it; read first when this connection has never asked, because the
-   * link may have dropped with the AM4 on its tuner and come back as a new
-   * connection. 0 is a level, not a toggle, so a 0 to a tuner already closed
-   * does nothing — and 127 is never sent to close one.
+   * THE 0, OWED OR NOT. 0 is a level, not a toggle, so a 0 to a tuner
+   * already closed does nothing — and 127 is never sent to close one.
+   *
+   *   - A 127 this connection sent and still owes a 0 for: the setting is
+   *     read again first. The 0 goes on that number if the AM4 still names
+   *     it, or says nothing clear; if it now says NONE or another number,
+   *     nothing goes (see askTunerNumber).
+   *   - Nothing open, on a connection that has asked already: nothing at
+   *     all. Its 0, if it had one to send, has gone.
+   *   - A connection that has never asked (a restart, or back from a drop
+   *     with the AM4 still on its tuner): the setting is read, then the 0.
+   *
+   * 'closed' when the 0 went, 'none' for NONE, 'unknown' when nothing was
+   * sent for any other reason. Only 'closed' and 'none' settle a 0 the link
+   * holds owed from an earlier connection (see bleLink): 'unknown' hands it
+   * on to the next one.
    */
   async function closeUnitTuner() {
-    let setting = tuner.unitOpen ? tuner.unitCc : null
-    if (!setting && !tuner.unitRead) {
-      /* The AM4 may be on its tuner while this reads: let go of meanwhile, the 0 is still owed (see close()). */
-      tuner.unitClosing = true
-      let read = null
-      try {
-        read = await readUnitTuner()
-      } finally {
-        tuner.unitClosing = false
+    if (tuner.unitOpen) {
+      if (tuner.unitAsk) {
+        const { named, why } = await askTunerNumber()
+        if (!tuner.unitOpen) return named === 'none' ? 'none' : 'unknown'
+        if (named !== tuner.unitCc.cc) say(`about the AM4’s Tuner setting, ${why}: its 0 goes on CC ${tuner.unitCc.cc}, the number its tuner was opened on. Not asked again on this connection`)
       }
-      if (read && read !== 'none') setting = read
+      /* Still owed until it has gone: let go of while it waits its turn, the wire's close() sends it instead. */
+      await sendUnitTuner(false, tuner.unitCc)
+      tuner.unitOpen = false
+      return 'closed'
     }
-    if (!setting) return
-    /* Still owed until it has gone: let go of while it waits its turn, the wire's close() sends it instead. */
+    if (tuner.unitRead) return 'unknown'
+    /* The AM4 may be on its tuner while this reads: let go of meanwhile, the 0 is still owed (see close()). */
+    tuner.unitClosing = true
+    let read = null
+    try {
+      read = await readUnitTuner()
+    } finally {
+      tuner.unitClosing = false
+    }
+    if (read === 'none') return 'none'
+    if (!read) return 'unknown'
     tuner.unitOpen = true
-    await sendUnitTuner(false, setting)
+    await sendUnitTuner(false, read)
     tuner.unitOpen = false
+    return 'closed'
   }
 
   async function am4TunerOpen() {
@@ -1747,12 +1789,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       tuner.timer = null
     }
     tuner.unitSays = null
+    let says = 'unknown'
     try {
-      await closeUnitTuner()
+      says = await closeUnitTuner()
     } catch (err) {
       say(`the AM4’s own tuner was not closed: ${err?.message || err}`)
     }
-    return { ok: true }
+    return { ok: true, unitTuner: says }
   }
 
   /*

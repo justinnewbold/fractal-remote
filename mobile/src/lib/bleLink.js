@@ -68,8 +68,10 @@ let touched = false
 /*
  * A 0 the AM4's own tuner is still owed. A wire let go of with the AM4 on
  * its tuner and the 0 not out (the adapter already gone, or a stored preset
- * still coming back) says so, and it is kept here, across the drop, until a
- * connection has closed it. See connected().
+ * still coming back) says so, and it is kept here, across the drop and
+ * across any connection that sends nothing, until one has closed it, opened
+ * it again or found its Tuner setting at NONE. See connected() and
+ * settledUnitTuner.
  */
 let unitTunerOwed = false
 
@@ -260,13 +262,19 @@ async function connected(e) {
 }
 
 /*
- * The owed 0 is settled once THIS connection has had its turn at the AM4's
- * tuner: opened again, and so its own to close, or closed. Not when the wire
- * has gone in the meantime: its turn then ends quietly with nothing sent,
- * and that wire's close() has already said whether the 0 is still owed.
+ * The owed 0 is settled only by what THIS connection's turn at the AM4's
+ * tuner really did, as the wire answers it: opened it again ('opened', and
+ * so its own to close), sent the 0 ('closed'), or found the Tuner setting at
+ * NONE ('none': there is no number left to send a 0 on). A turn that sent
+ * nothing — the AM4 silent about the setting, or unclear — leaves it owed to
+ * the next connection: settled on any answer, that 0 was forgotten after one
+ * reconnect, and the AM4 stayed on its tuner for good. Nor is it settled by
+ * a wire that has gone in the meantime: that wire's close() has already
+ * said whether the 0 is still owed.
  */
-const settledUnitTuner = (made) => () => {
-  if (wire === made) unitTunerOwed = false
+const SETTLES_IT = ['opened', 'closed', 'none']
+const settledUnitTuner = (made) => (r) => {
+  if (wire === made && SETTLES_IT.includes(r?.unitTuner)) unitTunerOwed = false
 }
 
 /* The wire goes, and with it everything waiting on it; the switch goes back to refusing. */

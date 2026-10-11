@@ -876,7 +876,11 @@ export function parseAm4GlobalLong(f, pidHigh) {
   return { whole: raw[0] | (raw[1] << 8), float: readF32le(raw, 4), text: am4Words(raw) }
 }
 
-/* A float that is a count (20, or 19.99998 on its way through a float), as that count; null for anything else. */
+/*
+ * A float that is a count (20, or 19.99998 on its way through a float), as
+ * that count: within 1e-3 of a whole number and no further, so 19.6 is not
+ * 20. Null for anything else. The computer's half holds the same line.
+ */
 const countIn = (x) => (Number.isFinite(x) && Math.abs(x - Math.round(x)) < 1e-3 ? Math.round(x) : null)
 
 /*
@@ -890,35 +894,52 @@ const countIn = (x) => (Number.isFinite(x) && Math.abs(x - Math.round(x)) < 1e-3
  * NONE (forgefx-midi's tables), so:
  *
  *   - "CC #20", exactly that shape, is 20 from the words alone;
+ *   - "NONE" is none, whatever the numbers say;
+ *   - a whole number of 128 is the AM4's own NONE: none when there are no
+ *     words beside it, and unclear when there are other words (bare digits
+ *     included), since then the two disagree;
  *   - plain "20" is believed only when the whole number or the float (as a
  *     count) says 20 as well, since bare digits could be anything;
- *   - "NONE", or a whole number of 128 with no number in the words, is none;
- *   - and the number must be one that can mean nothing but a function (see
- *     am4CcOk). Anything else is unclear, and nothing is sent: the cost of
- *     being wrong is firing whatever else that number does on his rig.
+ *   - anything else is unclear.
  *
- * n for a usable number, 'none' for NONE, and null for unclear or no answer.
+ * am4TunerCcNamed says which number the AM4 named, whether or not the
+ * tuner may be sent it: a close needs to know that its number has gone, even
+ * to one out of range. n, 'none', or null for unclear or no answer. The
+ * computer's half (forgefx) is held to the same rules, case for case, so the
+ * phone and the computer never disagree about one answer.
  */
 const CC_WORDS = /^CC\s*#\s*(\d{1,3})$/i
 const BARE_WORDS = /^(\d{1,3})$/
-export function am4TunerCcFrom(a) {
+export function am4TunerCcNamed(a) {
   if (!a || typeof a !== 'object' || a.rejected !== undefined) return null
   const words = typeof a.text === 'string' ? a.text.trim() : ''
   const named = CC_WORDS.exec(words)
-  const bare = named ? null : BARE_WORDS.exec(words)
-  if (named || bare) {
-    const n = Number((named || bare)[1])
-    if (bare && a.whole !== n && countIn(a.float) !== n) return null
-    return am4CcOk(n) ? n : null
-  }
-  if (/^none$/i.test(words) || a.whole === 128) return 'none'
-  return null
+  if (named) return Number(named[1])
+  if (/^none$/i.test(words)) return 'none'
+  if (a.whole === 128) return words === '' ? 'none' : null
+  const bare = BARE_WORDS.exec(words)
+  if (!bare) return null
+  const n = Number(bare[1])
+  return a.whole === n || countIn(a.float) === n ? n : null
+}
+
+/*
+ * The number the tuner may be SENT: the one named, only when it can mean
+ * nothing but a function (see am4CcOk). Anything else is unclear, and nothing
+ * is sent: the cost of being wrong is firing whatever else that number does
+ * on his rig. n for a usable number, 'none' for NONE, and null for unclear or
+ * no answer.
+ */
+export function am4TunerCcFrom(a) {
+  const n = am4TunerCcNamed(a)
+  return n === 'none' ? 'none' : am4CcOk(n) ? n : null
 }
 
 /*
  * THE CHANNEL, FROM THE WORDS ONLY. The two tables that describe this
  * setting disagree about its number (1..16 in one, 0..15 with 16 for OMNI in
- * the other), so the screen's words settle it: "2", "CH 2" or "Channel 2".
+ * the other), so the screen's words settle it: "2", "CH 2" or "Channel 2",
+ * and never the whole number or the float, even with no words beside them.
  * OMNI hears every channel, and anything else is the AM4's factory 1: a CC
  * on a channel it is not listening on is ignored, so a wrong guess here
  * fires nothing.

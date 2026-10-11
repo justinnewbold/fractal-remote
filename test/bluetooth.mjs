@@ -666,6 +666,118 @@ async function onTheLine(kind, options = {}) {
   }
 }
 
+/*
+ * THE LINK ON A BENCH: lib/bleLink.js itself, run rather than read. It is
+ * copied beside stand-ins for React Native, the switch, the rig, the unlock,
+ * the log and lib/bluetooth.js, and its timers run on the line's clock. The
+ * wire it connects is a real one on the line `t`: each connection it makes
+ * is `t.reconnect()`, a fresh wire to the same pretend unit, as openWire
+ * makes one. What the test plays is the rest of the phone:
+ *
+ *   - `away()` keeps the adapter from coming back, and hands back the
+ *     function that brings it back (the line working again);
+ *   - `drop()` is the adapter going, as the module says it: the line gone,
+ *     then 'disconnected';
+ *   - `settings(s)` is the Bluetooth page changing the unit or the adapter;
+ *   - `rig.tunerOn` is the phone's tuner, and `refreshAll` the rig's read of
+ *     everything on connecting, which a test may hold.
+ */
+async function linkOnABench(t) {
+  const dir = mkdtempSync(join(tmpdir(), 'ble-link-'))
+  const swaps = [
+    ["from 'react-native'", "from './react-native.js'"],
+    ["from './bleSwitch'", "from './bleSwitch.js'"],
+    ["from './bluetooth'", "from './bluetooth.js'"],
+    ["from './rig'", "from './rig.js'"],
+    ["from './purchases'", "from './purchases.js'"],
+    ["from './debugLog'", "from './debugLog.js'"]
+  ]
+  let lib = readFileSync(new URL('../mobile/src/lib/bleLink.js', import.meta.url), 'utf8')
+  for (const [from, to] of swaps) {
+    assert.ok(lib.includes(from), `lib/bleLink no longer imports ${from}: the bench needs telling`)
+    lib = lib.replace(from, to)
+  }
+  const unswapped = [...lib.matchAll(/^import[\s\S]*?from\s+'([^']+)'/gm)].map((m) => m[1]).filter((m) => !swaps.some(([, to]) => to.includes(`'${m}'`)))
+  assert.deepEqual(unswapped, [], 'lib/bleLink imports something the bench has no stand-in for')
+  lib = "import { bench as __bench } from './bench.js'\n" + lib.replace(/\bsetTimeout\(/g, '__bench.clock.setTimeout(').replace(/\bclearTimeout\(/g, '__bench.clock.clearTimeout(')
+  const files = {
+    'package.json': '{ "type": "module" }',
+    'bleLink.js': lib,
+    'bench.js': `export const bench = {
+      clock: null,
+      settings: { unit: 'am4', adapter: { id: 'adapter-1', name: 'the adapter' } },
+      rig: { tunerOn: false },
+      open: () => null,
+      connect: async () => true,
+      refreshAll: async () => {},
+      current: null,
+      listeners: new Map(),
+      watchers: [],
+      said: [],
+      resets: 0
+    }
+`,
+    'react-native.js': "export const Platform = { OS: 'android' }\nexport const AppState = { currentState: 'active', addEventListener: () => ({ remove() {} }) }\n",
+    'bleSwitch.js': 'export const bluetoothOn = () => true\nexport const setSwitch = () => {}\n',
+    'bluetooth.js': `import { bench } from './bench.js'
+      export const adapterDevices = () => []
+      export const bluetoothSettings = () => bench.settings
+      export const bluetoothSupported = () => true
+      export function closeWire() { const was = bench.current; bench.current = null; was?.close() }
+      export function openWire() { closeWire(); bench.current = bench.open(); return bench.current }
+      export const connectAdapter = (id) => bench.connect(id)
+      export const noteBluetooth = () => {}
+      export const onAdapter = (name, fn) => { bench.listeners.set(name, fn); return () => bench.listeners.delete(name) }
+      export const releaseAdapter = () => {}
+      export const subscribeBluetooth = (fn) => { bench.watchers.push(fn); return () => {} }
+      export const unitName = (u) => (u === 'am4' ? 'AM4' : 'FM3')
+`,
+    'rig.js': `import { bench } from './bench.js'
+      export const getState = () => bench.rig
+      export const handleEvent = () => {}
+      export const refreshAll = () => bench.refreshAll()
+      export const reset = () => { bench.resets++ }
+      export const stopWatching = () => {}
+      export const watchUnit = () => {}
+`,
+    'purchases.js': 'export const mayConnect = () => true\n',
+    'debugLog.js': "import { bench } from './bench.js'\nexport const logDebug = (where, line) => { bench.said.push(line) }\n"
+  }
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+  const at = (f) => pathToFileURL(join(dir, f)).href
+  const { bench } = await import(at('bench.js'))
+  bench.clock = t.clock
+  bench.open = () => t.reconnect()
+  const link = await import(at('bleLink.js'))
+  return {
+    link,
+    bench,
+    rig: bench.rig,
+    said: bench.said,
+    away() {
+      let back = null
+      bench.connect = () => new Promise((resolve) => (back = resolve))
+      return () => {
+        t.line.gone = false
+        bench.connect = async () => true
+        back?.(true)
+      }
+    },
+    drop() {
+      t.line.gone = true
+      bench.listeners.get('onState')?.({ id: bench.settings.adapter.id, state: 'disconnected' })
+    },
+    settings(next) {
+      bench.settings = { ...bench.settings, ...next }
+      for (const fn of bench.watchers) fn(bench.settings)
+    },
+    done() {
+      link.stopBluetoothLink()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+}
+
 const sameFrame = (a, b) => hex(a) === hex(b)
 
 /* ================================================================== */
@@ -1178,12 +1290,22 @@ export function run(test) {
     assert.equal(tunerCc(0, 'NONE', 128), 'none')
     assert.equal(tunerCc(128, 'NONE'), 'none')
     assert.equal(tunerCc(20, 'none'), 'none', 'NONE on its screen, whatever the number')
+    /* 128 is the AM4's own NONE: none with no words beside it, words that are not plain text included. */
     assert.equal(tunerCc(128, ''), 'none', '128 with no words')
+    assert.equal(sx.am4TunerCcFrom({ whole: 128, float: 0, text: null }), 'none', '128 with no text at all')
+    assert.equal(tunerCc(128, 'CC #20'), 20, 'the setting’s own words, whatever the whole number')
     for (const [whole, text, float, why] of [
       [0, '20', 0, 'bare digits nothing else says'],
       [0, '20', 19, 'bare digits, a float one off'],
       [0, '20', 20.5, 'bare digits, a float that is not a count'],
+      /* A count is within 1e-3 of a whole number, no further: rounded, these two would be 20. */
+      [0, '20', 19.6, 'bare digits, a float 0.4 under'],
+      [0, '20', 20.4, 'bare digits, a float 0.4 over'],
       [128, '20', 0, 'bare digits with 128 in front'],
+      /* 128 says NONE, its words say something else: the two disagree, so nothing is believed, not even NONE. */
+      [128, '20', 20, 'bare digits with 128 in front, the float agreeing'],
+      [128, 'PEDAL 1', 0, '128 with other words'],
+      [128, 'OFF', 0, '128 with other words'],
       [0, 'CC #0', 0, 'bank select'],
       [0, 'CC #32', 32, 'bank select, its second half'],
       [0, 'CC #120', 120, 'a channel-mode message'],
@@ -1199,6 +1321,28 @@ export function run(test) {
     assert.equal(sx.am4TunerCcFrom(null), null, 'no answer was believed')
     assert.equal(sx.am4TunerCcFrom({ rejected: 4 }), null, 'a refusal was believed')
     assert.equal(sx.am4TunerCcFrom({ rejected: 4, text: 'CC #20' }), null, 'a refusal was believed for its words')
+    /*
+     * WHICH NUMBER IT NAMES, sendable or not: a close needs to know that the
+     * number its tuner was opened on has gone, even to one out of range.
+     */
+    const named = (whole, text, float = 0) => sx.am4TunerCcNamed(sx.parseAm4GlobalLong(answer(0x49, whole, text, float), sx.AM4.TUNER_CC))
+    for (const [whole, text, float, n] of [
+      [0, 'CC #20', 20, 20],
+      [0, 'CC #120', 120, 120],
+      [0, 'CC #0', 0, 0],
+      [0, 'CC #32', 32, 32],
+      [0, '30', 30, 30],
+      [0, 'NONE', 128, 'none'],
+      [128, '', 0, 'none'],
+      [0, '20', 0, null],
+      [0, '20', 19.6, null],
+      [128, 'PEDAL 1', 0, null],
+      [20, '', 20, null]
+    ]) {
+      assert.equal(named(whole, text, float), n, `${whole} / ${float} “${text}”`)
+    }
+    assert.equal(sx.am4TunerCcNamed(null), null)
+    assert.equal(sx.am4TunerCcNamed({ rejected: 4, text: 'CC #20' }), null)
 
     /* The channel from its words alone: its number and its float are places in a list, one below. */
     const channel = (whole, text, float = 0) => sx.am4ChannelFrom(sx.parseAm4GlobalLong(answer(0x3a, whole, text, float), sx.AM4.MIDI_CHANNEL))
@@ -1215,6 +1359,10 @@ export function run(test) {
       assert.equal(channel(0, text, ch - 1), ch, `“${text}”`)
     }
     assert.equal(channel(4, '5'), 5, 'the channel was taken from its number, not its words')
+    /* Never from the number, even with no words to go on: a place in a list, one below, or OMNI's 16. */
+    assert.equal(sx.am4ChannelFrom({ whole: 4, float: 4, text: null }), 1, 'the channel was taken from its number with no words')
+    assert.equal(channel(4, '', 4), 1, 'the channel was taken from its number with no words')
+    assert.equal(channel(16, 'OMNI', 16), 1, 'OMNI was taken for channel 16')
     for (const [whole, text] of [
       [16, 'OMNI'],
       [0, 'Tuner 2'],
@@ -2440,8 +2588,10 @@ export function run(test) {
       t.unit.state.tuner = [36, 0, 0, 0]
       await advance(t.clock, 800)
       assert.deepEqual(t.events.at(-1), { type: 'tuner', note: '', octave: undefined, cents: null }, 'silence is not shown as silence')
-      assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true })
-      assert.equal(hex(t.frames().at(-1)), `${cc} 00`, `the AM4’s own tuner was not closed: ${why}`)
+      /* The close reads the setting again, and its 0 goes on the number the AM4 still names. */
+      const shut = t.sent.length
+      assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true, unitTuner: 'closed' })
+      assert.deepEqual(besidesReadings(t, shut), [READ_TUNER_CC, `${cc} 00`], `the AM4’s own tuner was not closed: ${why}`)
       assert.equal(t.unit.state.tunerOpen, false)
       assert.deepEqual(t.unit.state.tunerHeard.map(hex), [`${cc} 7F`, `${cc} 00`], 'the AM4 heard its tuner’s CC more than once each way')
       const before = t.sent.length
@@ -2479,7 +2629,7 @@ export function run(test) {
     const mark = t.sent.length
     assert.deepEqual(await t.post('/tuner', { on: true }), { ok: true, unitTuner: 'opened' })
     await t.post('/tuner', { on: false })
-    assert.deepEqual(besidesReadings(t, mark), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F', 'B0 14 00'])
+    assert.deepEqual(besidesReadings(t, mark), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F', READ_TUNER_CC, 'B0 14 00'])
     assert.equal(t.unit.state.tunerOpen, false)
     assert.equal(t.unit.state.frozen, false)
   })
@@ -2517,7 +2667,7 @@ export function run(test) {
     const press = (on) => t.wire.request('/tuner', { method: 'POST', body: JSON.stringify({ on }) })
     await drive(t.clock, Promise.all([press(true), press(false), press(true), press(false)]))
     await advance(t.clock, 1000)
-    assert.deepEqual(besidesReadings(t), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F', 'B0 14 00', READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F', 'B0 14 00'])
+    assert.deepEqual(besidesReadings(t), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F', READ_TUNER_CC, 'B0 14 00', READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F', READ_TUNER_CC, 'B0 14 00'])
     assert.equal(t.unit.state.tunerOpen, false, 'a late open left the AM4 on its tuner')
     const before = t.sent.length
     await advance(t.clock, 1000)
@@ -2537,12 +2687,18 @@ export function run(test) {
     t.reconnect()
     /* The player closes it on the phone. This connection has read nothing, so it reads first, then the 0. */
     let mark = t.sent.length
-    assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true })
+    assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true, unitTuner: 'closed' })
     assert.deepEqual(t.frames().slice(mark).map(hex), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 00'])
     assert.equal(t.unit.state.tunerOpen, false, 'the AM4 was left on its tuner')
-    /* A second close knows it is closed, and sends nothing. */
-    await t.post('/tuner', { on: false })
+    /* A second close knows it is closed, and sends nothing: no read, and no 0 again from what the first one found. */
+    assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true, unitTuner: 'unknown' })
     assert.equal(t.sent.length, mark + 3)
+    /* And nor does a third, after an open that found NONE: nothing is open, and this connection has asked. */
+    t.unit.state.tunerCc = 'none'
+    assert.deepEqual(await t.post('/tuner', { on: true }), { ok: true, unitTuner: 'none' })
+    await t.post('/tuner', { on: false })
+    assert.deepEqual(besidesReadings(t, mark + 3), [READ_TUNER_CC], 'a close with nothing open sent a 0 from a verdict kept')
+    t.unit.state.tunerCc = 20
 
     /* Back with the app's tuner still open, the link opens it again (bleLink): the needle moves and the AM4 is on its tuner. */
     await t.post('/tuner', { on: true })
@@ -2559,15 +2715,9 @@ export function run(test) {
     assert.ok(readingsOf(t).length >= 2, 'the needle stayed frozen after the adapter came back')
     await t.post('/tuner', { on: false })
     /* 127 again to a tuner already open: a level, so it stays open, and the one 0 closes it. */
-    assert.deepEqual(besidesReadings(t, mark), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F', 'B0 14 00'])
+    assert.deepEqual(besidesReadings(t, mark), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F', READ_TUNER_CC, 'B0 14 00'])
     assert.equal(t.unit.state.tunerOpen, false)
     assert.equal(t.unit.state.frozen, false)
-
-    const link = readFileSync(new URL('../mobile/src/lib/bleLink.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
-    const refreshed = link.indexOf('await refreshAll()')
-    const again = link.indexOf("if (getState().tunerOn) { say('the tuner was open when the adapter went; opening it again') made.request('/tuner', { method: 'POST', body: '{\"on\":true}' }).then(settledUnitTuner(made), () => {})")
-    assert.ok(refreshed > 0 && again > refreshed, 'a connection that comes back with the tuner open does not open it again')
-    assert.ok(again < link.indexOf('made.startPolls()', refreshed), 'the tuner is opened again after the watch starts')
   })
 
   /*
@@ -2598,7 +2748,7 @@ export function run(test) {
     /* Back: the link sends the owed close on the new connection, which reads first, then sends the 0. */
     t.line.gone = false
     t.reconnect()
-    assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true })
+    assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true, unitTuner: 'closed' })
     assert.deepEqual(t.frames().slice(mark).map(hex), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 00'])
     assert.equal(t.unit.state.tunerOpen, false, 'the AM4 was left on its tuner')
     assert.equal(t.unit.state.frozen, false)
@@ -2621,7 +2771,7 @@ export function run(test) {
     await drive(r.clock, closing)
     r.line.gone = false
     r.reconnect()
-    assert.deepEqual(await r.post('/tuner', { on: false }), { ok: true })
+    assert.deepEqual(await r.post('/tuner', { on: false }), { ok: true, unitTuner: 'closed' })
     assert.equal(r.unit.state.tunerOpen, false)
 
     /* Nothing owed when nothing is: never opened, closed on the phone, the 0 sent as it closes, or NONE. */
@@ -2648,24 +2798,152 @@ export function run(test) {
     await fm3.post('/tuner', { on: true })
     fm3.line.gone = true
     assert.deepEqual(fm3.wire.close(), { unitTunerOwed: false })
+  })
 
-    /*
-     * THE LINK'S HALF. bleLink asks the wire it lets go of, keeps the answer
-     * across the drop, and on the next connection, after the rig has read
-     * everything: opens the tuner again if the phone's is open, or else
-     * closes the AM4's if a 0 is owed. Settled only by the connection still
-     * there, and forgotten when the unit is another one.
-     */
-    const link = readFileSync(new URL('../mobile/src/lib/bleLink.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
-    assert.match(link, /function letGoOfWire\(\) \{ const was = wire .*?closeWire\(\) .*?if \(was\?\.unitTunerOwed\?\.\(\)\) unitTunerOwed = true/, 'the link does not ask the wire it lets go of whether a 0 is owed')
-    const refreshed = link.indexOf('await refreshAll()')
-    const reopen = link.indexOf('if (getState().tunerOn) {', refreshed)
-    const owed = link.indexOf("} else if (unitTunerOwed) { ", reopen)
-    const close = link.indexOf("made.request('/tuner', { method: 'POST', body: '{\"on\":false}' }).then(settledUnitTuner(made), () => {})", owed)
-    assert.ok(refreshed > 0 && reopen > refreshed && owed > reopen && close > owed, 'a connection that comes back owing the AM4 its 0 does not close it')
-    assert.ok(close < link.indexOf('made.startPolls()', refreshed), 'the owed close is sent after the watch starts')
-    assert.match(link, /const settledUnitTuner = \(made\) => \(\) => \{ if \(wire === made\) unitTunerOwed = false \}/, 'the owed 0 is forgotten by a connection that has already gone')
-    assert.match(link, /if \(unitMoved\) \{ resetRig\(\) .*?unitTunerOwed = false \}/, 'an AM4’s owed 0 is kept for another unit')
+  /*
+   * THE LINK'S HALF, RUN. bleLink asks each wire it lets go of whether the
+   * AM4 was left on its own tuner, keeps that across the drop, and on the
+   * next connection, once the rig has read everything: opens the tuner again
+   * if the phone's is open, or else closes the AM4's, reading first. Only a
+   * turn that really did something settles it — opened, closed, or NONE — so
+   * a connection that drops before its turn, or whose turn sent nothing,
+   * hands it on to the one after. Another unit forgets it.
+   */
+  const tunerFrames = (t, from = 0, to = t.sent.length) =>
+    t
+      .frames()
+      .slice(from, to)
+      .map(hex)
+      .filter((h) => h === READ_TUNER_CC || h === READ_CHANNEL || !h.startsWith('F0'))
+
+  test('the link: a 0 owed by a wire let go of is sent by the next connection, after the rig has read everything', async () => {
+    const t = await onTheLine('am4', { unitTunerCc: 20 })
+    const b = await linkOnABench(t)
+    try {
+      b.link.startBluetoothLink(() => {})
+      await advance(t.clock, 2000)
+      assert.ok(b.bench.current, 'the link did not connect')
+      b.rig.tunerOn = true
+      assert.deepEqual(await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' })), { ok: true, unitTuner: 'opened' })
+      assert.equal(t.unit.state.tunerOpen, true)
+
+      /* Dropped with the phone's tuner still open: back, it opens again once the rig has read everything. */
+      let back = b.away()
+      b.drop()
+      assert.equal(t.unit.state.tunerOpen, true, 'the test’s adapter was not gone')
+      /* The rig's read takes its time; where the line stood when it ended is kept. */
+      let refreshedAt = null
+      b.bench.refreshAll = async () => {
+        await new Promise((resolve) => t.clock.setTimeout(resolve, 200))
+        refreshedAt = t.sent.length
+      }
+      let mark = t.sent.length
+      back()
+      await advance(t.clock, 3000)
+      assert.ok(refreshedAt !== null, 'the rig was not asked to read everything')
+      assert.deepEqual(tunerFrames(t, mark, refreshedAt), [], 'the tuner was opened before the rig had read everything')
+      assert.deepEqual(tunerFrames(t, mark), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F'])
+      assert.equal(t.unit.state.tunerOpen, true)
+
+      /* Dropped again, and the phone's tuner closed while it is away: back, the owed 0 goes, read first. */
+      back = b.away()
+      b.drop()
+      b.rig.tunerOn = false
+      refreshedAt = null
+      mark = t.sent.length
+      back()
+      await advance(t.clock, 3000)
+      assert.ok(refreshedAt !== null)
+      assert.deepEqual(tunerFrames(t, mark, refreshedAt), [], 'the 0 was sent before the rig had read everything')
+      assert.deepEqual(tunerFrames(t, mark), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 00'], 'the owed 0 was not sent')
+      assert.equal(t.unit.state.tunerOpen, false, 'the AM4 was left on its tuner')
+      assert.ok(b.said.includes('the phone’s tuner is closed but the AM4 may still be on its own from before; closing it now'))
+
+      /* Sent, it is settled: the connection after owes nothing, and asks nothing. */
+      back = b.away()
+      b.drop()
+      mark = t.sent.length
+      back()
+      await advance(t.clock, 3000)
+      assert.deepEqual(tunerFrames(t, mark), [], 'a 0 already sent was owed again')
+      assert.equal(t.unit.state.frozen, false, `the AM4 froze on ${t.unit.state.unknown.map(hex).join(', ')}`)
+    } finally {
+      b.done()
+    }
+  })
+
+  test('the link: an owed 0 outlasts a connection that drops before its turn, and one whose turn sent nothing', async () => {
+    const t = await onTheLine('am4', { unitTunerCc: 20 })
+    const b = await linkOnABench(t)
+    try {
+      b.link.startBluetoothLink(() => {})
+      await advance(t.clock, 2000)
+      b.rig.tunerOn = true
+      await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+      let back = b.away()
+      b.drop()
+      b.rig.tunerOn = false
+
+      /* Back, but gone again while the rig is still reading everything: that connection never had its turn. */
+      let release = null
+      b.bench.refreshAll = () => new Promise((resolve) => (release = resolve))
+      let mark = t.sent.length
+      back()
+      await advance(t.clock, 2000)
+      assert.ok(release, 'the test did not hold the rig’s read')
+      back = b.away()
+      b.drop()
+      release()
+      await advance(t.clock, 500)
+      assert.deepEqual(tunerFrames(t, mark), [], 'a connection let go of before its turn still had one')
+
+      /* Back, and the AM4 says nothing about its Tuner setting: the turn sends nothing, and the 0 is still owed. */
+      b.bench.refreshAll = async () => {}
+      t.unit.opt.unitTunerAnswer = 'silent'
+      mark = t.sent.length
+      back()
+      await advance(t.clock, 3000)
+      assert.deepEqual(tunerFrames(t, mark), [READ_TUNER_CC], 'the silent connection did more than ask')
+      assert.equal(t.unit.state.tunerOpen, true)
+
+      /* The next one, answering: the 0 at last. */
+      delete t.unit.opt.unitTunerAnswer
+      back = b.away()
+      b.drop()
+      mark = t.sent.length
+      back()
+      await advance(t.clock, 3000)
+      assert.deepEqual(tunerFrames(t, mark), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 00'], 'the owed 0 was forgotten on the way')
+      assert.equal(t.unit.state.tunerOpen, false, 'the AM4 was left on its tuner')
+      assert.equal(t.unit.state.frozen, false, `the AM4 froze on ${t.unit.state.unknown.map(hex).join(', ')}`)
+    } finally {
+      b.done()
+    }
+  })
+
+  test('the link: another unit picked forgets the AM4’s owed 0', async () => {
+    const t = await onTheLine('am4', { unitTunerCc: 20 })
+    const b = await linkOnABench(t)
+    try {
+      b.link.startBluetoothLink(() => {})
+      await advance(t.clock, 2000)
+      b.rig.tunerOn = true
+      await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+      const back = b.away()
+      b.drop()
+      b.rig.tunerOn = false
+      /* Another unit picked while it is away, and then the AM4 again: the rig is cleared each time, and the 0 with it. */
+      b.settings({ unit: 'fm3' })
+      b.settings({ unit: 'am4' })
+      assert.equal(b.bench.resets, 2, 'the unit change did not clear the rig')
+      const mark = t.sent.length
+      back()
+      await advance(t.clock, 3000)
+      assert.ok(b.bench.current, 'the link did not connect again')
+      assert.deepEqual(tunerFrames(t, mark), [], 'an owed 0 outlived a change of unit')
+    } finally {
+      b.done()
+    }
   })
 
   test('letting go of the AM4 with its own tuner open closes it, and never into a stored preset coming back', async () => {
@@ -2800,7 +3078,7 @@ export function run(test) {
     await advance(t.clock, 300)
     assert.equal(t.unit.state.tunerOpen, true, 'the new number was not read')
     await t.post('/tuner', { on: false })
-    assert.deepEqual(besidesReadings(t), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F', 'B0 14 00', READ_TUNER_CC, READ_CHANNEL, 'B1 1E 7F', 'B1 1E 00'])
+    assert.deepEqual(besidesReadings(t), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F', READ_TUNER_CC, 'B0 14 00', READ_TUNER_CC, READ_CHANNEL, 'B1 1E 7F', READ_TUNER_CC, 'B1 1E 00'])
     /* And NONE set in between: nothing at the next open, and the answer says so. */
     t.unit.state.tunerCc = 'none'
     const mark = t.sent.length
@@ -2809,6 +3087,91 @@ export function run(test) {
     assert.deepEqual(besidesReadings(t, mark), [READ_TUNER_CC])
     assert.equal(t.unit.state.tunerOpen, false)
     assert.equal(t.unit.state.frozen, false, `the AM4 froze on ${t.unit.state.unknown.map(hex).join(', ')}`)
+  })
+
+  /*
+   * NEVER A 0 ON A NUMBER THE AM4 NO LONGER NAMES. The player may change the
+   * Tuner setting with the tuner up, and give its old number to something
+   * else: Output Volume, say, where a 0 is silence on stage. So a close reads
+   * the setting again before its 0. Still that number, or no clear answer:
+   * the 0 goes on it. NONE, or any other number, sendable or not: nothing
+   * goes, and nothing is owed either, not even as the connection closes.
+   */
+  test('a close reads the Tuner setting again, and sends no 0 on a number the AM4 no longer names', async () => {
+    for (const [change, why] of [
+      [(u) => (u.state.tunerCc = 'none'), 'NONE now'],
+      [(u) => (u.state.tunerCc = 30), 'another number now'],
+      [(u) => (u.opt.unitTunerAnswer = { whole: 0, float: 120, text: 'CC #120' }), 'a number out of range now'],
+      [(u) => (u.opt.unitTunerAnswer = { whole: 0, float: 0, text: 'CC #0' }), 'bank select now']
+    ]) {
+      const t = await onTheLine('am4', { unitTunerCc: 20 })
+      assert.deepEqual(await t.post('/tuner', { on: true }), { ok: true, unitTuner: 'opened' }, why)
+      await advance(t.clock, 300)
+      change(t.unit)
+      const mark = t.sent.length
+      const r = await t.post('/tuner', { on: false })
+      assert.deepEqual(r, { ok: true, unitTuner: why === 'NONE now' ? 'none' : 'unknown' }, why)
+      assert.deepEqual(besidesReadings(t, mark), [READ_TUNER_CC], `${why}: a 0 went out on the old number`)
+      assert.ok(t.logs.some((l) => /^the AM4’s Tuner setting reads “.*” now, not CC 20: no 0 goes out on CC 20, which may do something else on the AM4 now$/.test(l)), why)
+      /* Forgotten: let go of now, the connection sends nothing and owes nothing. */
+      assert.deepEqual(t.wire.close(), { unitTunerOwed: false }, why)
+      assert.ok(t.frames().slice(mark).every((f) => f[0] === 0xf0), `${why}: a 0 went out as the connection closed`)
+      assert.equal(t.unit.state.frozen, false, `${why}: the AM4 froze on ${t.unit.state.unknown.map(hex).join(', ')}`)
+    }
+    /* The same number, or nothing clear about it: the 0 goes on the number the tuner was opened on. */
+    for (const [change, why] of [
+      [() => {}, 'still CC 20'],
+      [(u) => (u.opt.unitTunerAnswer = 'silent'), 'no answer'],
+      [(u) => (u.opt.unitTunerAnswer = { whole: 0, float: 0, text: '25' }), 'bare digits nothing else says'],
+      [(u) => (u.opt.unitTunerAnswer = { whole: 128, float: 0, text: 'PEDAL 1' }), '128 with other words']
+    ]) {
+      const t = await onTheLine('am4', { unitTunerCc: 20 })
+      await t.post('/tuner', { on: true })
+      await advance(t.clock, 300)
+      change(t.unit)
+      const mark = t.sent.length
+      assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true, unitTuner: 'closed' }, why)
+      assert.deepEqual(besidesReadings(t, mark), [READ_TUNER_CC, 'B0 14 00'], why)
+      assert.equal(t.unit.state.tunerOpen, false, `${why}: the AM4 was left on its tuner`)
+      assert.equal(t.unit.state.frozen, false, why)
+    }
+    /* And let go of while that read is still out, the 0 goes on the number remembered as the connection closes. */
+    const q = await onTheLine('am4', { unitTunerCc: 20, delay: 300 })
+    await q.post('/tuner', { on: true })
+    await advance(q.clock, 1000)
+    const closing = q.wire.request('/tuner', { method: 'POST', body: JSON.stringify({ on: false }) })
+    for (let i = 0; i < 2000 && hex(q.frames().at(-1)) !== READ_TUNER_CC; i++) await advance(q.clock, 1)
+    assert.equal(hex(q.frames().at(-1)), READ_TUNER_CC, 'the close did not read the setting again')
+    assert.deepEqual(q.wire.close(), { unitTunerOwed: false })
+    assert.equal(hex(q.frames().at(-1)), 'B0 14 00')
+    assert.equal(q.unit.state.tunerOpen, false)
+    await drive(q.clock, closing).catch(() => {})
+  })
+
+  /*
+   * THE 127'S OWN SETTLE. The open counts its 127 as owing a 0 from before it
+   * goes, not once its 40 ms have passed: let go of in between, the 0 still
+   * goes as the connection closes (or is owed, with the adapter gone).
+   */
+  test('let go of while its 127 is still settling, the AM4’s own tuner is closed as the connection closes', async () => {
+    const { WAIT } = await import(WIRE)
+    for (const gone of [false, true]) {
+      const t = await onTheLine('am4', { unitTunerCc: 20 })
+      const opening = t.wire.request('/tuner', { method: 'POST', body: JSON.stringify({ on: true }) })
+      for (let i = 0; i < 2000 && hex(t.frames().at(-1) ?? []) !== 'B0 14 7F'; i++) await advance(t.clock, 1)
+      assert.equal(hex(t.frames().at(-1)), 'B0 14 7F', 'the 127 never went')
+      assert.ok(t.clock.now() - t.sent.at(-1).at < WAIT.am4Settle, 'the test let go after the 127 had settled')
+      assert.equal(t.unit.state.tunerOpen, true)
+      t.line.gone = gone
+      if (gone) {
+        assert.deepEqual(t.wire.close(), { unitTunerOwed: true }, 'let go of with the adapter gone, the 0 was not owed')
+      } else {
+        assert.deepEqual(t.wire.close(), { unitTunerOwed: false })
+        assert.equal(hex(t.frames().at(-1)), 'B0 14 00', 'let go of in the 127’s settle, the AM4 was left on its tuner')
+        assert.equal(t.unit.state.tunerOpen, false)
+      }
+      await drive(t.clock, opening).catch(() => {})
+    }
   })
 
   test('the AM4 check panel: reads and writes, each putting things back', async () => {
