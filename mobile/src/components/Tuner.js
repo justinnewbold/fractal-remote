@@ -7,6 +7,11 @@ import { color, font, mono, radius, space, TAP } from '../lib/theme'
 import Note from './Note'
 import Press from './Press'
 import { useBluetoothOn } from '../lib/bluetooth'
+import { useRig } from '../lib/rig'
+
+const ofUnitTuner = (s) => s.unitTuner
+/* In the words on the AM4's own menus, so he can find the setting from here. */
+const NO_UNIT_TUNER = 'The AM4’s own tuner stays as it is: its Tuner setting has no MIDI number (SETUP > MIDI/Remote > Tuner).'
 
 const face = Platform.select(mono)
 
@@ -39,6 +44,13 @@ export default function Tuner({ reading, on, onClose }) {
   const [stalled, setStalled] = useState(false)
   /* Over Bluetooth there is no computer to blame: the unit itself is quiet. */
   const bluetooth = useBluetoothOn()
+  /*
+   * Whether the AM4's own tuner screen came up with this one. The phone opens
+   * it with the number set under the AM4's Tuner setting, the one a MIDI
+   * pedal uses; with none set there, the AM4 stays on its preset and this
+   * says where to set one.
+   */
+  const unitTuner = useRig(ofUnitTuner)
   const lastAt = useRef(0)
   const { width } = useWindowDimensions()
 
@@ -195,6 +207,8 @@ export default function Tuner({ reading, on, onClose }) {
                 the computer.
               </Note>
             ) : null}
+
+            {on && unitTuner === 'none' ? <Note>{NO_UNIT_TUNER}</Note> : null}
 
             <Press label="Stop tuner" height={TAP} tone="live" onPress={onClose} style={{ alignSelf: 'stretch' }} />
             <Text style={{ color: color.silkFaint, fontSize: font.micro }}>Tap anywhere to close</Text>

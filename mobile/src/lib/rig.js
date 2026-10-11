@@ -89,6 +89,12 @@ const initial = {
   bpm: null,
   tunerOn: false,
   tuning: null,
+  /*
+   * What the unit's own tuner screen did when this tuner opened: 'opened',
+   * 'none' (its Tuner setting has no MIDI number, so it stayed on its
+   * preset) or 'unknown'. Only the AM4 says; null for everything else.
+   */
+  unitTuner: null,
   /** 'idle' | 'reading' | 'ok' | 'failed' — a failed read and an empty preset are not the same. */
   chain: 'idle',
   /*
@@ -2172,6 +2178,19 @@ function startDemoTuner() {
   tunerTimer = setInterval(() => handleEvent(source.next()), 400)
 }
 
+/*
+ * What the unit's own screen did, in the answer to the tuner opening: the
+ * phone's Bluetooth wire says `unitTuner`, the computer `screen`. Only the
+ * three words the tuner can show something for.
+ */
+const UNIT_TUNER = ['opened', 'none', 'unknown']
+const unitTunerOf = (res) => {
+  const said = res?.unitTuner ?? res?.screen
+  return UNIT_TUNER.includes(said) ? said : null
+}
+/* Which press of the tuner this is, so a slow answer to an earlier one is not shown under a later one. */
+let tunerPress = 0
+
 /**
  * Turn the tuner on or off.
  *
@@ -2180,10 +2199,13 @@ function startDemoTuner() {
  */
 export async function writeTuner(on) {
   pressed()
-  set({ tunerOn: on, tuning: on ? state.tuning : null, error: null, errorLink: false })
+  const press = ++tunerPress
+  set({ tunerOn: on, tuning: on ? state.tuning : null, unitTuner: null, error: null, errorLink: false })
   if (!on) stopDemoTuner()
   try {
-    await device.setTuner(on)
+    const res = await device.setTuner(on)
+    /* Kept only while it is still the open tuner it is about. */
+    if (on && press === tunerPress && state.tunerOn) set({ unitTuner: unitTunerOf(res) })
     /* Only once the unit has agreed, and only in the demo — on a real rig the
        readings come off the relay and a second source would fight them. */
     if (on) startDemoTuner()
