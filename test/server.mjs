@@ -12,6 +12,10 @@
  * Read as text rather than imported: it is Deno TypeScript, which node will not
  * load, and standing up a Deno runtime to check three properties would be a
  * heavier answer than the question deserves. The properties are the point.
+ *
+ * Except grant-access's Confirm now, at the bottom, which is run: node strips
+ * TypeScript's types itself now (22.18 on; CI runs 24), and a lock is worth
+ * more tried than read.
  */
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -22,6 +26,61 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
    the prose taken out. This repository has failed on its own explanation
    seven times; that is enough times to make it the default here. */
 const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ')
+
+/*
+ * GRANT-ACCESS, RUN. The function loaded as it is, with Deno's two calls
+ * stood in for and a fetch that answers as Supabase would: who a token
+ * belongs to, what account_details finds, whether the address is on the
+ * waiting list (`waiting`, or 'fail' for a refusal), and the Auth admin call.
+ * RevenueCat answers as it does for a customer who has bought nothing, which
+ * is what a Check needs. Anything else it asks for is a 500, so a request
+ * nobody expected shows up as one.
+ */
+const RC_PROJECT = 'https://api.revenuecat.com/v2/projects/proj827190e9'
+const ADMIN = '7dfe6912-e43b-49bf-84e4-b56afbd442b1'
+const STRANGER = '00000000-0000-4000-8000-000000000000'
+const CUSTOMER = '11111111-2222-4333-8444-555555555555'
+const PROJECT = 'https://project.test'
+const SERVICE = 'the-service-role-key'
+const ENV = { SUPABASE_URL: PROJECT, SUPABASE_ANON_KEY: 'the-anon-key', SUPABASE_SERVICE_ROLE_KEY: SERVICE, REVENUECAT_SECRET: 'rc' }
+let grantHandler = null
+
+async function grantAccess({ token, body, account = null, refuse = 0, waiting = false }) {
+  const calls = []
+  const logged = []
+  const was = { fetch: globalThis.fetch, Deno: globalThis.Deno, log: console.log, error: console.error }
+  const answer = (status, value) => new Response(value === undefined ? '' : JSON.stringify(value), { status })
+  globalThis.Deno = { serve: (h) => (grantHandler = h), env: { get: (name) => ENV[name] } }
+  globalThis.fetch = async (url, init = {}) => {
+    const call = { url: String(url), method: init.method || 'GET', headers: init.headers || {}, body: init.body ? JSON.parse(init.body) : null }
+    calls.push(call)
+    if (call.url === `${PROJECT}/auth/v1/user`) {
+      const who = { 'Bearer his-token': ADMIN, 'Bearer a-strangers-token': STRANGER }[call.headers.Authorization]
+      return who ? answer(200, { id: who, email: 'someone@example.com' }) : answer(401, { msg: 'JWT expired' })
+    }
+    if (call.url === `${PROJECT}/rest/v1/rpc/account_details`) return answer(200, account)
+    if (call.url === `${PROJECT}/rest/v1/rpc/is_waiting_grant`) return waiting === 'fail' ? answer(500, { msg: 'no' }) : answer(200, waiting)
+    if (call.url === `${RC_PROJECT}/entitlements`) return answer(200, { items: [{ id: 'entl-full', lookup_key: 'full' }] })
+    if (call.url.startsWith(`${RC_PROJECT}/customers/`)) return answer(200, call.url.endsWith(account?.id || '-') ? { id: account.id } : { items: [] })
+    if (call.url.startsWith(`${PROJECT}/auth/v1/admin/users/`)) {
+      return refuse ? answer(refuse, { msg: 'no' }) : answer(200, { id: CUSTOMER, email_confirmed_at: '2026-10-11T12:00:00Z' })
+    }
+    return answer(500, { msg: `nothing answers ${call.url} here` })
+  }
+  console.log = (...a) => logged.push(a.join(' '))
+  console.error = (...a) => logged.push(a.join(' '))
+  try {
+    if (!grantHandler) await import(new URL('../supabase/functions/grant-access/index.ts', import.meta.url).href)
+    const headers = { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+    const res = await grantHandler(new Request('https://functions.test/grant-access', { method: 'POST', headers, body: JSON.stringify(body) }))
+    return { status: res.status, said: await res.json(), calls, logged }
+  } finally {
+    globalThis.fetch = was.fetch
+    globalThis.Deno = was.Deno
+    console.log = was.log
+    console.error = was.error
+  }
+}
 
 export function run(test) {
   test('who is asking is never the caller’s word', () => {
@@ -331,5 +390,106 @@ export function run(test) {
       delete globalThis.Deno
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  test('only Justin can confirm somebody’s email by hand: no token, a stale one, a stranger’s and the server’s own key are all turned away', async () => {
+    /*
+     * "How can I resend a verification email to this person. He said he
+     * didn't get it. Can we set up a way for me to do that myself?" Confirm
+     * now lets an account in without its email, so it is the one action here
+     * that must never run for anybody but him: a stranger who could ask it
+     * would confirm any address they liked onto an account they made.
+     */
+    const account = { id: CUSTOMER, email: 'fan@example.com', confirmed: null }
+    const body = { action: 'confirm', email: 'fan@example.com' }
+    for (const [who, token, status] of [
+      ['nobody signed in', undefined, 403],
+      ['a token that has run out', 'an-expired-token', 403],
+      ['somebody else', 'a-strangers-token', 403],
+      /* The entitlement function's key may only claim a waiting grant. */
+      ['the server’s own key', SERVICE, 400]
+    ]) {
+      const { status: got, said, calls } = await grantAccess({ token, body, account })
+      assert.equal(got, status, `${who} was answered ${got}`)
+      assert.equal(said.ok, false, `${who} was told it worked`)
+      assert.ok(!calls.some((c) => c.url.includes('/admin/users/')), `${who} confirmed an account`)
+      assert.ok(!calls.some((c) => c.url.includes('/rest/v1/rpc/')), `${who} had an account looked up for them`)
+    }
+  })
+
+  test('Confirm now marks the email confirmed with one admin call, as the service role, and logs no address', async () => {
+    const asHim = (over) => grantAccess({ token: 'his-token', body: { action: 'confirm', email: 'Fan@Example.com ' }, ...over })
+
+    /* An address that never confirmed: one PUT, the shape supabase-js's updateUserById sends. */
+    const done = await asHim({ account: { id: CUSTOMER, email: 'fan@example.com', confirmed: null } })
+    assert.equal(done.status, 200)
+    assert.deepEqual([done.said.ok, done.said.found, done.said.confirmed], [true, true, true], 'a confirmed account is not said to be')
+    const admin = done.calls.filter((c) => c.url.includes('/auth/v1/admin/'))
+    assert.equal(admin.length, 1, 'the account service was asked more or less than once')
+    assert.equal(admin[0].url, `${PROJECT}/auth/v1/admin/users/${CUSTOMER}`, 'it confirmed some other account, or by its address')
+    assert.equal(admin[0].method, 'PUT')
+    assert.deepEqual(admin[0].body, { email_confirm: true }, 'the account service is asked for something other than confirming the email')
+    assert.equal(admin[0].headers.Authorization, `Bearer ${SERVICE}`, 'the admin call is not made as the service role')
+    assert.equal(admin[0].headers.apikey, SERVICE)
+    assert.ok(!done.calls.some((c) => c.url.includes('revenuecat')), 'confirming an email asks RevenueCat about the unlock')
+    assert.equal(done.logged.length, 1, 'confirming is not logged in one line')
+    assert.ok(done.logged[0].includes(CUSTOMER) && !/fan@example\.com/i.test(done.logged[0]), `the log names the address: ${done.logged[0]}`)
+
+    /* Confirmed already: nothing to do, and nothing done. */
+    const already = await asHim({ account: { id: CUSTOMER, email: 'fan@example.com', confirmed: '2026-10-01T09:00:00Z' } })
+    assert.deepEqual([already.said.ok, already.said.already], [true, true])
+    assert.ok(!already.calls.some((c) => c.url.includes('/admin/users/')), 'an account already confirmed is confirmed again')
+
+    /* No account: nothing to confirm, and the address is NOT put on the waiting list. */
+    const nobody = await asHim({ account: null })
+    assert.deepEqual([nobody.said.ok, nobody.said.found], [false, false], 'an address with no account is said to be confirmed')
+    assert.deepEqual(nobody.calls.map((c) => c.url), [`${PROJECT}/auth/v1/user`, `${PROJECT}/rest/v1/rpc/account_details`], 'confirming an address with no account did more than look it up')
+
+    /* Refused: said, and still no address in the log. */
+    const refused = await asHim({ account: { id: CUSTOMER, email: 'fan@example.com', confirmed: null }, refuse: 500 })
+    assert.equal(refused.status, 502)
+    assert.equal(refused.said.ok, false, 'a refusal reads as done')
+    assert.match(refused.said.message, /500/)
+    assert.ok(refused.logged.length === 1 && !/fan@example\.com/i.test(refused.logged[0]), 'a refusal logs the address')
+
+    const blank = await grantAccess({ token: 'his-token', body: { action: 'confirm' } })
+    assert.equal(blank.status, 400, 'confirm with no address goes ahead')
+
+    /* And Check on an address with no account answers as it always has. */
+    const check = await grantAccess({ token: 'his-token', body: { action: 'check', email: 'new@example.com' } })
+    assert.match(check.said.message, /^No account uses new@example\.com yet\. Give access puts them on the waiting list/, 'Confirm now changed what Check says')
+  })
+
+  test('Check says whether an account that never confirmed is on the waiting list, so Confirm now can say so first', async () => {
+    /*
+     * The waiting list is claimed at the first sign-in, on the confirmation
+     * email's word that the address is theirs. Confirm now takes that word
+     * away, so whoever made the account would get the unlock: the lookup says
+     * so before he taps it (confirmNowHint in shared/admin.mjs).
+     */
+    const check = (over) => grantAccess({ token: 'his-token', body: { action: 'check', email: 'Fan@Example.com' }, ...over })
+    const unconfirmed = { id: CUSTOMER, email: 'fan@example.com', confirmed: null }
+    const asked = (r) => r.calls.filter((c) => c.url === `${PROJECT}/rest/v1/rpc/is_waiting_grant`)
+
+    const waiting = await check({ account: unconfirmed, waiting: true })
+    assert.equal(waiting.status, 200, waiting.said.message)
+    assert.equal(waiting.said.found, true)
+    assert.equal(waiting.said.details.waiting, true, 'an unconfirmed account on the waiting list is not said to be on it')
+    assert.equal(asked(waiting).length, 1)
+    assert.deepEqual(asked(waiting)[0].body, { address: 'fan@example.com' }, 'the waiting list is asked about some other address')
+
+    const not = await check({ account: unconfirmed, waiting: false })
+    assert.equal(not.said.details.waiting, false, 'an account not on the waiting list is said to be on it')
+
+    /* A waiting list that cannot be asked is not a lookup that failed. */
+    const unknown = await check({ account: unconfirmed, waiting: 'fail' })
+    assert.equal(unknown.status, 200, 'the lookup fails when the waiting list cannot be asked')
+    assert.equal(unknown.said.ok, true)
+    assert.equal(unknown.said.details.waiting, null, 'a waiting list that could not be asked reads as a yes or a no')
+
+    /* Confirmed already: Confirm now is not offered, so it is not asked. */
+    const confirmed = await check({ account: { ...unconfirmed, confirmed: '2026-10-01T09:00:00Z' }, waiting: true })
+    assert.equal(confirmed.said.details.waiting, false)
+    assert.equal(asked(confirmed).length, 0, 'the waiting list is asked about an account that has confirmed')
   })
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { loadRemoteConfig, sendPasswordReset } from '../lib/remote'
+import { loadRemoteConfig, NOT_IN_INBOX, resendConfirmation, sendPasswordReset, sentAgain } from '../lib/remote'
 
 /**
  * The one sign-in form.
@@ -58,6 +58,13 @@ export default function SignIn({
   const [working, setWorking] = useState(false)
   const [note, setNote] = useState(null)
   const [problem, setProblem] = useState(null)
+  /*
+   * The address Sign in was refused for because its email was never
+   * confirmed: Send it again shows, and sends to it rather than to whatever
+   * the box says by then. The account service can answer "sent" for an
+   * address with no account, and the "look in Spam" line would follow it.
+   */
+  const [unconfirmed, setUnconfirmed] = useState(null)
 
   const off = busy || working
   const project = () => {
@@ -69,6 +76,7 @@ export default function SignIn({
     e?.preventDefault?.()
     setProblem(null)
     setNote(null)
+    setUnconfirmed(null)
     const address = email.trim()
     if (!address) return setProblem('Enter your email.')
     if (mode !== 'forgot' && password.length < 6) return setProblem('Your password is at least 6 characters.')
@@ -93,10 +101,39 @@ export default function SignIn({
       }
     } catch (err) {
       setProblem(err.message)
+      setUnconfirmed(mode === 'in' && err?.notConfirmed ? address : null)
     } finally {
       setWorking(false)
     }
   }
+
+  /*
+   * SEND IT AGAIN, from the refusal itself. "Email not confirmed" said to
+   * look for the email and offered no way to get another one.
+   */
+  const sendAgain = async () => {
+    const address = unconfirmed
+    if (!address) return
+    setProblem(null)
+    setNote(null)
+    setWorking(true)
+    try {
+      await resendConfirmation({ ...project(), email: address })
+      setUnconfirmed(null)
+      setNote(sentAgain(address))
+    } catch (err) {
+      setProblem(err.message)
+    } finally {
+      setWorking(false)
+    }
+  }
+  /* On the Sign in side only: Create account and Forgot keep the refusal on screen, not its button. */
+  const again =
+    mode === 'in' && unconfirmed && problem ? (
+      <button type="button" className="chip signin-wide" onClick={sendAgain} disabled={off}>
+        Send the confirmation email again
+      </button>
+    ) : null
 
   if (mode === 'sent') {
     return (
@@ -106,7 +143,7 @@ export default function SignIn({
         </span>
         <p className="signin-sent-head">Account made.</p>
         <p className="signin-sent-body">
-          Confirm it from the email we just sent, then sign in.
+          Confirm it from the email we just sent, then sign in. {NOT_IN_INBOX}
         </p>
         <p className="signin-sent-to">
           <strong>{email.trim()}</strong>
@@ -154,6 +191,7 @@ export default function SignIn({
             {problem}
           </p>
         ) : null}
+        {again}
         {note ? <p className="hint">{note}</p> : null}
         <button className="primary signin-wide signin-go" type="submit" disabled={off}>
           {working
@@ -257,6 +295,7 @@ export default function SignIn({
           {problem}
         </p>
       ) : null}
+      {again}
       {note ? <p className="hint">{note}</p> : null}
     </form>
   )

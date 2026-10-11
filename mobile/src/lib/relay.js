@@ -29,8 +29,11 @@ import { withRetry } from './retry'
 import { notForever } from './notForever'
 import {
   RELAY_GRACE,
+  NOT_IN_INBOX,
   explainAuth,
   forbiddenRemotely,
+  notConfirmed,
+  sentAgain,
   hostConflict as conflictBetween,
   hostNamesFrom as namesFrom,
   firstUnitHost,
@@ -40,7 +43,7 @@ import {
   timeoutFor
 } from './relay-rules'
 
-export { DEFAULT_PROJECT, RELAY_GRACE, forbiddenRemotely, explainAuth }
+export { DEFAULT_PROJECT, RELAY_GRACE, forbiddenRemotely, explainAuth, NOT_IN_INBOX, sentAgain }
 
 let client = null
 let channel = null // the joined channel, and null the moment it stops being joined
@@ -118,10 +121,12 @@ export async function signIn({ email, password }) {
   const { data, error } = await supabase().auth.signInWithPassword({ email, password })
   /* `noMatch` says it was the details, not the line: on a phone that paid
      before any account existed, the likeliest reason is that there is no
-     account with that email yet (SignIn says so). */
+     account with that email yet (SignIn says so). `notConfirmed` is the
+     email never confirmed, which SignIn offers to send again. */
   if (error) {
     throw Object.assign(new Error(explainAuth(error.message)), {
-      noMatch: error.code === 'invalid_credentials' || /invalid login/i.test(error.message || '')
+      noMatch: error.code === 'invalid_credentials' || /invalid login/i.test(error.message || ''),
+      notConfirmed: notConfirmed(error)
     })
   }
   userId = data?.user?.id || null
