@@ -3978,16 +3978,33 @@ export function run(test) {
        above it (sales, usage) only run when the handler calls them. */
     const handler = server.slice(server.indexOf('Deno.serve('))
     const lock = handler.indexOf('ADMINS.includes(me.id)')
-    for (const step of ["rpc('account_details'", 'await sales()', 'await usage()', "rpc('owner_accounts'"]) {
+    for (const step of ["rpc('account_details'", 'await sales()', 'await usage()', "rpc('owner_accounts'", 'confirmByHand(']) {
       assert.ok(lock > 0 && handler.includes(step) && lock < handler.indexOf(step), `the server does ${step} before checking who is asking`)
     }
-    /* Help someone sign in: the one email they are missing, never both. */
+    /*
+     * Help someone sign in: the one email they are missing, never both — and,
+     * for an address that never confirmed, Confirm now beside the resend.
+     * "He said he didn't get it. Can we set up a way for me to do that myself?"
+     */
     const { signInHelp, signInHelpWords, messageSections } = await import('../shared/admin.mjs')
-    assert.deepEqual(signInHelp({ found: true, email: 'a@b.c', details: { confirmed: false } }), { confirm: true, reset: false }, 'an unconfirmed address is offered a reset it cannot use')
-    assert.deepEqual(signInHelp({ found: true, email: 'a@b.c', details: { confirmed: true } }), { confirm: false, reset: true })
-    assert.deepEqual(signInHelp({ found: false, email: 'a@b.c' }), { confirm: false, reset: false }, 'an address with no account is offered an email')
+    assert.deepEqual(signInHelp({ found: true, email: 'a@b.c', details: { confirmed: null } }), { confirm: true, confirmNow: true, reset: false }, 'an unconfirmed address is offered a reset it cannot use, or no way past the email')
+    assert.deepEqual(signInHelp({ found: true, email: 'a@b.c', details: { confirmed: '2026-10-01T09:00:00Z' } }), { confirm: false, confirmNow: false, reset: true }, 'a confirmed address is offered confirming again')
+    assert.deepEqual(signInHelp({ found: false, email: 'a@b.c' }), { confirm: false, confirmNow: false, reset: false }, 'an address with no account is offered an email, or confirming')
+    assert.deepEqual(signInHelp({ ok: false, message: 'Not allowed.' }), { confirm: false, confirmNow: false, reset: false })
     assert.match(signInHelpWords('reset', 'a@b.c').message, /a@b\.c/)
     assert.equal(signInHelpWords('confirm', 'a@b.c', 'nope').ok, false)
+    assert.match(signInHelpWords('confirm', 'a@b.c').message, /^A new "confirm your email" link is on its way to a@b\.c\.$/)
+    /* Confirmed by hand, in words he can pass on: sign in with the password they chose, or reset it. */
+    assert.deepEqual(signInHelpWords('confirmNow', 'a@b.c'), {
+      ok: true,
+      message: 'a@b.c is confirmed. They can sign in now with the password they chose. If they have forgotten it, send them a password reset.'
+    })
+    const notDone = signInHelpWords('confirmNow', 'a@b.c', 'The account service would not confirm it (500).')
+    assert.equal(notDone.ok, false, 'a confirm that failed reads as done')
+    assert.match(notDone.message, /^Their account was not confirmed: The account service would not confirm it \(500\)\.$/, 'a failed confirm says an email did not send')
+    const { CONFIRM_NOW_HINT } = await import('../shared/admin.mjs')
+    assert.match(CONFIRM_NOW_HINT, /isn’t reaching them/, 'the line under Confirm now does not say when to use it')
+    assert.match(CONFIRM_NOW_HINT, /really their address/, 'the line under Confirm now does not say to check the address first')
     const listed = messageSections({ ok: true, messages: [{ id: 'x', kind: 'bug', message: 'It broke', contact: 'a@b.c', has_log: true, created_at: Date.now() }] })
     assert.match(listed[0].rows[0].value, /Something broken · today · log attached\nIt broke\nReply to a@b\.c/)
     assert.equal(listed[0].rows[0].id, 'x', 'a message cannot be opened from the list')
@@ -5042,6 +5059,7 @@ export function run(test) {
     assert.match(row(refunded, 'Unlock'), /^Not unlocked\. Refunded \(bought on Android/)
     const unconfirmed = lookupRows({ found: true, unlocked: false, details: details({ confirmed: null, devices: [] }) }, now)
     assert.match(row(unconfirmed, 'Email confirmed'), /^Not yet/)
+    assert.match(row(unconfirmed, 'Email confirmed'), /Spam, Junk or Promotions/, 'the lookup does not say where the email may have gone')
     assert.match(row(unconfirmed, 'Signed in on'), /signed out everywhere/)
     assert.deepEqual(lookupRows({ found: false, message: 'No account uses x' }), [], 'no account still draws a lookup')
     assert.deepEqual(lookupRows({ ok: false, message: 'Not allowed.' }), [])

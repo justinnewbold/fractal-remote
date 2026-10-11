@@ -4,7 +4,7 @@ import { Keyboard, Text, TextInput, View } from 'react-native'
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { DEFAULT_PROJECT } from '../lib/project'
 import { resendConfirmation, sendPasswordReset, supabaseClient } from '../lib/relay'
-import { accessAction, lookupRows, signInHelp, signInHelpWords } from '../lib/admin'
+import { accessAction, CONFIRM_NOW_HINT, lookupRows, signInHelp, signInHelpWords } from '../lib/admin'
 import Facts from './Facts'
 import Note from './Note'
 import Press from './Press'
@@ -29,6 +29,18 @@ export default function AccessTool() {
   const [said, setSaid] = useState(null)
   const [helped, setHelped] = useState(null)
 
+  /* One request to grant-access, as the signed-in account. */
+  const ask = async (action, address) => {
+    const { data } = await supabaseClient().auth.getSession()
+    return accessAction({
+      url: DEFAULT_PROJECT.url,
+      anonKey: DEFAULT_PROJECT.anonKey,
+      token: data?.session?.access_token,
+      action,
+      email: address
+    })
+  }
+
   /* Help them sign in: the email they are missing, for the address looked up. */
   const help = async (kind) => {
     const address = said.email
@@ -40,6 +52,23 @@ export default function AccessTool() {
       setHelped(signInHelpWords(kind, address))
     } catch (err) {
       setHelped(signInHelpWords(kind, address, err?.message || String(err)))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /*
+   * Confirm their account now: no email, the server marks it confirmed. Then
+   * Check again, so the lookup says Yes and offers the password reset.
+   */
+  const confirmNow = async () => {
+    const address = said.email
+    setBusy('confirmNow')
+    setHelped(null)
+    try {
+      const done = await ask('confirm', address)
+      setHelped(signInHelpWords('confirmNow', address, done.ok ? null : done.message))
+      if (done.ok) setSaid(await ask('check', address))
     } finally {
       setBusy(null)
     }
@@ -57,16 +86,7 @@ export default function AccessTool() {
     setSaid(null)
     setHelped(null)
     try {
-      const { data } = await supabaseClient().auth.getSession()
-      setSaid(
-        await accessAction({
-          url: DEFAULT_PROJECT.url,
-          anonKey: DEFAULT_PROJECT.anonKey,
-          token: data?.session?.access_token,
-          action,
-          email: address
-        })
-      )
+      setSaid(await ask(action, address))
     } finally {
       setBusy(null)
     }
@@ -128,6 +148,17 @@ export default function AccessTool() {
           disabled={!!busy}
           onPress={() => help('confirm')}
         />
+      ) : null}
+      {signInHelp(said).confirmNow ? (
+        <>
+          <Press
+            label={busy === 'confirmNow' ? 'Confirming…' : 'Confirm their account now'}
+            height={TAP}
+            disabled={!!busy}
+            onPress={confirmNow}
+          />
+          <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>{CONFIRM_NOW_HINT}</Text>
+        </>
       ) : null}
       {signInHelp(said).reset ? (
         <Press

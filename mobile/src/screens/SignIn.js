@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { sendPasswordReset, signIn, signUp } from '../lib/relay'
+import { NOT_IN_INBOX, resendConfirmation, sendPasswordReset, sentAgain, signIn, signUp } from '../lib/relay'
 import Note from '../components/Note'
 import Press from '../components/Press'
 import Connect from './Connect'
@@ -96,6 +96,12 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [note, setNote] = useState(null)
+  /*
+   * An account waiting on its confirmation email: 'made' just now, with the
+   * note saying so, or 'refused' when Sign in was turned away for it, which
+   * offers to send the email again.
+   */
+  const [unconfirmed, setUnconfirmed] = useState(null)
 
   const ready = email.includes('@') && password.length >= 6
 
@@ -109,6 +115,7 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
       return
     }
     setBusy(true)
+    setUnconfirmed(null)
     setError(null)
     setNote(null)
     setNoAccount(false)
@@ -127,6 +134,7 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
               ? 'Account made — confirm it from the email we just sent, then come back to this phone and sign in, so your purchase goes with your account.'
               : 'Account made. Confirm it from the email we just sent, then sign in.'
           )
+          setUnconfirmed('made')
           setMode('in')
           return
         }
@@ -135,6 +143,7 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
       }
       onSignedIn()
     } catch (err) {
+      if (mode === 'in' && err?.notConfirmed) setUnconfirmed('refused')
       if (mode === 'in' && paid && err?.noMatch) setNoAccount(true)
       else setError(err.message)
     } finally {
@@ -148,10 +157,30 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
       return
     }
     setBusy(true)
+    setUnconfirmed(null)
     setError(null)
     try {
       await sendPasswordReset(email.trim())
       setNote('Check your email for a link to set a new password.')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /* "Email not confirmed" said to look for the email, and gave no way to get another. */
+  const sendAgain = async () => {
+    if (!email.includes('@')) {
+      setError('Type your email address first.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await resendConfirmation(email.trim())
+      setUnconfirmed(null)
+      setNote(sentAgain(email.trim()))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -316,7 +345,11 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
             <Press label="Create account with this email" disabled={busy} onPress={() => switchTo('up')} />
           </View>
         ) : null}
-        {note ? <Note>{note}</Note> : null}
+        {unconfirmed === 'refused' && error ? (
+          <Press label="Send the confirmation email again" disabled={busy} onPress={sendAgain} />
+        ) : null}
+        {/* Where else to look, under the note that says to confirm. */}
+        {note ? <Note>{unconfirmed === 'made' ? `${note} ${NOT_IN_INBOX}` : note}</Note> : null}
 
         {/* Amber whether or not the fields are filled in, as drawn: a pale
             button reads as switched off, and the form says what is missing

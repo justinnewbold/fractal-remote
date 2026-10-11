@@ -2169,4 +2169,81 @@ export function run(test) {
     /* And the old paragraph is gone from the link page, not left beside the card. */
     assert.ok(!/<Section>Playing with no internet<\/Section>/.test(settings), 'the small-print version is still on Phone & computer')
   })
+
+  /*
+   * "How can I resend a verification email to this person. He said he didn't
+   * get it. Can we set up a way for me to do that myself?" Resend was already
+   * on Give someone access; Confirm their account now sits beside it, at
+   * both ends, asks the server (grant-access, 'confirm'), then Checks again so
+   * the lookup says Yes and the password reset takes the resend's place.
+   */
+  test('Confirm their account now is beside the resend on Give someone access, at both ends, and Checks again after', () => {
+    for (const file of ['mobile/src/components/AccessTool.js', 'src/components/AccessTool.jsx']) {
+      const ui = read(file)
+      const flat = ui.replace(/\s+/g, ' ')
+      /* One way to the server, as the signed-in account, for every button. */
+      assert.match(flat, /const ask = async \(action, address\) => \{[\s\S]{0,200}?return accessAction\(\{ url: DEFAULT_PROJECT\.url, anonKey: DEFAULT_PROJECT\.anonKey, token: data\?\.session\?\.access_token, action, email: address \}\)/, `${file}: the buttons no longer ask as the signed-in account`)
+      assert.match(flat, /setSaid\(await ask\(action, address\)\)/, `${file}: Check, Give and Take it back no longer go through ask`)
+      const confirm = flat.slice(flat.indexOf('const confirmNow = async () => {'), flat.indexOf('const run = async'))
+      assert.ok(confirm.length > 0, `${file}: there is no Confirm now`)
+      assert.match(confirm, /const address = said\.email setBusy\('confirmNow'\) setHelped\(null\)/, `${file}: Confirm now is not busy while it works, or not for the address looked up`)
+      assert.match(confirm, /const done = await ask\('confirm', address\) setHelped\(signInHelpWords\('confirmNow', address, done\.ok \? null : done\.message\)\)/, `${file}: Confirm now asks for something else, or does not say how it went`)
+      assert.match(confirm, /if \(done\.ok\) setSaid\(await ask\('check', address\)\)/, `${file}: the page still says "Not yet" after confirming`)
+      assert.match(confirm, /finally \{ setBusy\(null\) \}/)
+      /* Drawn only for an address that has not confirmed, between the resend and the reset. */
+      const button = ui.indexOf("'Confirm their account now'")
+      assert.ok(button > ui.indexOf('Resend their "confirm your email" link') && button < ui.indexOf('Send them a password reset'), `${file}: Confirm now is not beside the resend`)
+      assert.match(flat, /\{signInHelp\(said\)\.confirmNow \? \(/, `${file}: Confirm now is not tied to the lookup`)
+      assert.match(flat, /busy === 'confirmNow' \? 'Confirming…' : 'Confirm their account now'/)
+      assert.match(flat, /disabled=\{!!busy\} (onPress|onClick)=\{confirmNow\}|(onPress|onClick)=\{confirmNow\}/, `${file}: the button does not run Confirm now`)
+      assert.ok(/\{CONFIRM_NOW_HINT\}/.test(ui), `${file}: no line says when to use it`)
+    }
+    /* Both buttons wait for the others, as every button on the page does. */
+    assert.match(read('mobile/src/components/AccessTool.js').replace(/\s+/g, ' '), /height=\{TAP\} disabled=\{!!busy\} onPress=\{confirmNow\}/)
+    assert.match(read('src/components/AccessTool.jsx'), /disabled=\{!!busy\} onClick=\{confirmNow\}/)
+  })
+
+  /*
+   * Where the confirmation email went. A customer signed up, both emails were
+   * delivered to his Gmail, and he never saw either. Everywhere that says to
+   * confirm from the email now says where else to look, and a sign-in turned
+   * away for it offers to send the email again.
+   */
+  test('the confirmation email: where else to look, and Send it again when Sign in is turned away, at both ends', async () => {
+    const { NOT_IN_INBOX, explainAuth, notConfirmed, sentAgain } = await import('../shared/relay-rules.mjs')
+    assert.equal(NOT_IN_INBOX, 'If it isn’t in your inbox, look in Spam, Junk or Promotions for an email from Fractal Remote.')
+    const refused = explainAuth('Email not confirmed')
+    assert.ok(refused.endsWith(NOT_IN_INBOX), 'the "not confirmed" sign-in error does not say where else to look')
+    assert.doesNotMatch(refused, /password/i, 'an unconfirmed account reads as a bad password again')
+    assert.ok(!explainAuth('Invalid login credentials').includes('Spam'), 'a wrong password is told to look in Spam')
+    assert.equal(sentAgain('a@b.c'), `A new confirmation email is on its way to a@b.c. ${NOT_IN_INBOX}`)
+    /* Which refusal is which: by the service's code, or its words on an older one. */
+    assert.equal(notConfirmed({ code: 'email_not_confirmed', message: 'Email not confirmed' }), true)
+    assert.equal(notConfirmed({ message: 'Email not confirmed' }), true)
+    assert.equal(notConfirmed({ code: 'invalid_credentials', message: 'Invalid login credentials' }), false, 'a wrong password is offered the confirmation email')
+    assert.equal(notConfirmed(null), false)
+
+    /* Each end's sign-in says which refusal it was. */
+    assert.match(read('mobile/src/lib/relay.js').replace(/\s+/g, ' '), /noMatch: [^}]*, notConfirmed: notConfirmed\(error\) \}/, 'the phone cannot tell an unconfirmed email from any other refusal')
+    assert.match(read('src/lib/remote.js'), /if \(error\) throw Object\.assign\(new Error\(explainAuth\(error\.message\)\), \{ notConfirmed: notConfirmed\(error\) \}\)/, 'the website cannot tell an unconfirmed email from any other refusal')
+
+    /* The website: the Account made screen, and Send it again under the refusal on both forms. */
+    const web = read('src/components/SignIn.jsx')
+    const flatWeb = web.replace(/\s+/g, ' ')
+    assert.match(flatWeb, /Confirm it from the email we just sent, then sign in\. \{NOT_IN_INBOX\}/, 'Account made does not say where else to look')
+    assert.match(flatWeb, /setProblem\(err\.message\) setUnconfirmed\(mode === 'in' && Boolean\(err\?\.notConfirmed\)\)/, 'the website does not notice the email was never confirmed')
+    assert.match(flatWeb, /setNote\(null\) setUnconfirmed\(false\) const address = email\.trim\(\)/, 'a new try still offers to send the email again')
+    assert.match(flatWeb, /await resendConfirmation\(\{ \.\.\.project\(\), email: address \}\) setUnconfirmed\(false\) setNote\(sentAgain\(address\)\)/, 'Send it again sends something else, or does not say it went')
+    assert.match(flatWeb, /const again = unconfirmed && problem \? \( <button type="button" className="chip signin-wide" onClick=\{sendAgain\} disabled=\{off\}> Send the confirmation email again <\/button>/)
+    assert.equal(web.split('{again}').length - 1, 2, 'Send it again is missing from one of the two forms')
+
+    /* The phone: Account made says where else to look; a refusal offers Send it again. */
+    const phone = read('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
+    assert.match(phone, /then sign in\.' \) setUnconfirmed\('made'\) setMode\('in'\)/, 'Account made on the phone does not say where else to look')
+    assert.match(phone, /\{note \? <Note>\{unconfirmed === 'made' \? `\$\{note\} \$\{NOT_IN_INBOX\}` : note\}<\/Note> : null\}/)
+    assert.match(phone, /if \(mode === 'in' && err\?\.notConfirmed\) setUnconfirmed\('refused'\)/, 'the phone does not notice the email was never confirmed')
+    assert.match(phone, /setBusy\(true\) setUnconfirmed\(null\) setError\(null\) setNote\(null\) setNoAccount\(false\)/, 'a new try still offers to send the email again')
+    assert.match(phone, /\{unconfirmed === 'refused' && error \? \( <Press label="Send the confirmation email again" disabled=\{busy\} onPress=\{sendAgain\} \/>/)
+    assert.match(phone, /await resendConfirmation\(email\.trim\(\)\) setUnconfirmed\(null\) setNote\(sentAgain\(email\.trim\(\)\)\)/, 'Send it again on the phone sends something else, or does not say it went')
+  })
 }
