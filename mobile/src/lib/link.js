@@ -458,7 +458,7 @@ function enterDemo() {
 }
 
 export async function stopLink() {
-  /* First, and synchronously: Bluetooth lets go of the adapter before the link and the rig are reset. */
+  /* First: Bluetooth lets go of the adapter before the link and the rig are reset; with the AM4 on its own tuner, a second at most after (bleLink). */
   stopBluetoothLink()
   running = false
   if (timer) clearTimeout(timer)

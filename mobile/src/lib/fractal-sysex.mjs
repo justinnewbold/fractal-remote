@@ -24,7 +24,8 @@
  *   - AM4: its own parameter protocol, and ONLY the frames on AM4_ALLOWED.
  *     The AM4 has frozen twice on messages it was not expecting, so the list
  *     is data here and every AM4 frame is checked against it before it is
- *     sent (isAllowedAm4).
+ *     sent (isAllowedAm4). Plus one Control Change, its tuner's, on the
+ *     number it reported itself (am4ShortAllowed).
  */
 
 /* ------------------------------------------------------------------ */
@@ -472,6 +473,10 @@ export const AM4 = {
   TEMPO_LOW: 0x0002,
   TEMPO_HIGH: 0x001c,
   TUNER: 0x0023,
+  /* The Global block, and in it the Tuner's MIDI number (SETUP > MIDI/Remote > Tuner) and the MIDI channel. */
+  GLOBAL: 0x0001,
+  TUNER_CC: 0x0049,
+  MIDI_CHANNEL: 0x003a,
   SET: 0x0001,
   SET_NORM: 0x0002,
   READ_LONG: 0x000d,
@@ -561,6 +566,14 @@ export const buildAm4BypassRead = (code) => am4Frame({ pidLow: am4Code(code), pi
 /** Read from 0x07DD. Reading 0x07D2, where the channel is written, answers stale numbers. */
 export const buildAm4ChannelRead = (code) => am4Frame({ pidLow: am4Code(code), pidHigh: AM4.CHANNEL_READ, action: AM4.READ_LONG })
 export const buildAm4TempoRead = () => am4Frame({ pidLow: AM4.TEMPO_LOW, pidHigh: AM4.TEMPO_HIGH, action: AM4.READ_LONG })
+/*
+ * The two settings that say how the AM4's own tuner is opened from outside:
+ * the number under SETUP > MIDI/Remote > Tuner, which is what his MIDI pedal
+ * sends, and the MIDI channel the AM4 listens on. Asked with the same long
+ * read as the tempo, and only ever read: the phone never sets either.
+ */
+export const buildAm4TunerCcRead = () => am4Frame({ pidLow: AM4.GLOBAL, pidHigh: AM4.TUNER_CC, action: AM4.READ_LONG })
+export const buildAm4MidiChannelRead = () => am4Frame({ pidLow: AM4.GLOBAL, pidHigh: AM4.MIDI_CHANNEL, action: AM4.READ_LONG })
 /** One of the tuner's four readings: 1 note, 2 frequency, 3 cents, 4 string. */
 export function buildAm4TunerPoll(which) {
   if (!Number.isInteger(which) || which < 1 || which > 4) throw new Error(`tuner reading ${which} is not 1..4`)
@@ -610,6 +623,10 @@ export const buildAm4Tempo = (bpm) =>
  * way an AM4 hands over its scene names. It is the exact request the
  * computer app sends the same AM4 over USB for the same names, and it reads
  * a slot without loading it.
+ *
+ * And one message that is not SysEx at all, held to a rule of its own
+ * (am4ShortAllowed): the tuner's Control Change, on the number and channel
+ * the AM4 itself reported on this connection. Nothing else short, ever.
  */
 export const AM4_ALLOWED = [
   { name: 'structure read', fn: 0x01, pidLow: 0x00ce, pidHigh: 0x0000, action: 0x001f, hdr4: 0, size: 18 },
@@ -617,6 +634,16 @@ export const AM4_ALLOWED = [
   { name: 'block on/off read', fn: 0x01, pidLow: 'block', pidHigh: 0x0003, action: 0x000d, hdr4: 0, size: 18 },
   { name: 'block channel read', fn: 0x01, pidLow: 'block', pidHigh: 0x07dd, action: 0x000d, hdr4: 0, size: 18 },
   { name: 'tempo read', fn: 0x01, pidLow: 0x0002, pidHigh: 0x001c, action: 0x000d, hdr4: 0, size: 18 },
+  /*
+   * "On the AM4 the tuner doesn't activate on the device, it only shows it on
+   * the phone ... I know that it has MIDI support for activating and
+   * deactivating a tuner because I have a MIDI device that does it." Two
+   * reads, in the tempo read's exact shape on the Global block his AM4 has
+   * already answered: which number its Tuner setting listens for, and on which
+   * MIDI channel. Asked only when the tuner is opened or closed.
+   */
+  { name: 'tuner MIDI number read', fn: 0x01, pidLow: 0x0001, pidHigh: 0x0049, action: 0x000d, hdr4: 0, size: 18 },
+  { name: 'MIDI channel read', fn: 0x01, pidLow: 0x0001, pidHigh: 0x003a, action: 0x000d, hdr4: 0, size: 18 },
   { name: 'tuner note', fn: 0x01, pidLow: 0x0023, pidHigh: 0x0001, action: 0x0010, hdr4: 0, size: 18 },
   { name: 'tuner frequency', fn: 0x01, pidLow: 0x0023, pidHigh: 0x0002, action: 0x0010, hdr4: 0, size: 18 },
   { name: 'tuner cents', fn: 0x01, pidLow: 0x0023, pidHigh: 0x0003, action: 0x0010, hdr4: 0, size: 18 },
@@ -684,6 +711,44 @@ export function am4Allowed(f) {
 
 /** Whether the AM4 may be sent these bytes. */
 export const isAllowedAm4 = (f) => am4Allowed(f) !== null
+
+/*
+ * THE AM4'S ONE SHORT MESSAGE: its own tuner, opened and closed by the same
+ * Control Change his MIDI pedal sends it. Not SysEx and not a setting, so
+ * nothing on the AM4 is written or saved by it.
+ *
+ * There is no factory number for it: the player picks one under SETUP >
+ * MIDI/Remote > Tuner, or leaves it at NONE ("It's up to you", Fractal's own
+ * answer). So the number is never guessed or defaulted here. It is the one
+ * the AM4 itself reported on this connection (am4TunerCcFrom), on the channel
+ * it reported (am4ChannelSaid), with 127 to open and 0 to close — and nothing
+ * else short is ever sent to an AM4. A number some other function might use
+ * would fire that function: a volume at 0 is silence on stage.
+ *
+ * Never 0 or 32 (bank select, the first half of a preset change) and never
+ * 120..127 (MIDI's channel-mode messages, which are not functions at all).
+ */
+export const am4CcOk = (cc) => Number.isInteger(cc) && cc >= 1 && cc <= 119 && cc !== 32
+const midiChannelOk = (ch) => Number.isInteger(ch) && ch >= 1 && ch <= 16
+
+/** The tuner's CC, open (127) or closed (0), for {cc, channel} as the AM4 reported them. */
+export function buildAm4TunerCc(on, learned) {
+  if (!am4CcOk(learned?.cc)) throw new Error(`CC ${learned?.cc} is not a number the AM4's tuner is sent on`)
+  if (!midiChannelOk(learned?.channel)) throw new Error(`MIDI channel ${learned?.channel} is not 1..16`)
+  return [0xb0 | (learned.channel - 1), learned.cc, on ? 0x7f : 0x00]
+}
+
+/**
+ * 'tuner on' or 'tuner off' when these are exactly the three bytes of the
+ * tuner's CC at 127 or 0 for what the AM4 reported; null for anything else,
+ * and for everything while nothing has been reported.
+ */
+export function am4ShortAllowed(msg, learned) {
+  if (!learned || !am4CcOk(learned.cc) || !midiChannelOk(learned.channel)) return null
+  if (!Array.isArray(msg) || msg.length !== 3) return null
+  if (msg[0] !== (0xb0 | (learned.channel - 1)) || msg[1] !== learned.cc) return null
+  return msg[2] === 0x7f ? 'tuner on' : msg[2] === 0x00 ? 'tuner off' : null
+}
 
 /*
  * THE ONE NON-PARAMETER FRAME: "send me stored preset n", eleven bytes,
@@ -784,6 +849,119 @@ export function parseAm4Tempo(f) {
   if (Number.isFinite(norm) && norm >= 0 && norm <= 1) return Math.round(AM4.TEMPO_MIN + norm * (AM4.TEMPO_MAX - AM4.TEMPO_MIN))
   return null
 }
+
+/* The AM4's own words for a setting in a long answer: bytes 8 on, up to a zero, or null when they are not plain text. */
+function am4Words(raw) {
+  if (raw.length <= 8) return null
+  const end = raw.indexOf(0, 8)
+  const text = raw.slice(8, end === -1 ? raw.length : end)
+  if (!text.length || text.some((b) => b < 0x20 || b > 0x7e)) return null
+  return String.fromCharCode(...text).trim()
+}
+
+/**
+ * A Global setting's long answer, unpacked the way the tempo's is: {whole,
+ * float, text} — the whole number in the first two raw bytes ("250 BPM"
+ * carries 250 there), the float in raw bytes 4 to 7 (where the tempo keeps
+ * its 0..1), and the words the AM4's screen shows from byte 8. Null for
+ * anything that is not this exact answer.
+ */
+export function parseAm4GlobalLong(f, pidHigh) {
+  if (!isFrom(f, MODELS.am4, FN.PARAM) || f.length < 23 || !checksumOk(f)) return null
+  if (decode14(f[6], f[7]) !== AM4.GLOBAL || decode14(f[8], f[9]) !== pidHigh) return null
+  if (decode14(f[10], f[11]) !== AM4.READ_LONG) return null
+  const size = decode14(f[14], f[15])
+  if (size < 8 || f.length - 18 < chunkedLength(size)) return null
+  const raw = unpackChunked(f.slice(16, -2), size)
+  return { whole: raw[0] | (raw[1] << 8), float: readF32le(raw, 4), text: am4Words(raw) }
+}
+
+/*
+ * A float that is a count (20, or 19.99998 on its way through a float), as
+ * that count: within 1e-3 of a whole number and no further, so 19.6 is not
+ * 20. Null for anything else. The computer's half holds the same line.
+ */
+const countIn = (x) => (Number.isFinite(x) && Math.abs(x - Math.round(x)) < 1e-3 ? Math.round(x) : null)
+
+/*
+ * THE TUNER'S NUMBER, TAKEN FROM THE AM4'S OWN WORDS FOR IT.
+ *
+ * The one setting of this kind his AM4 has answered (a drive's bypass) gave 0
+ * in the whole number, its value in the float and "OFF" in the words. So the
+ * whole number is very likely not the CC at all, and a rule that wanted it
+ * to agree with the words would refuse every real answer: the AM4's tuner
+ * would never open. The setting's own list reads "CC #1" to "CC #127", then
+ * NONE (forgefx-midi's tables), so:
+ *
+ *   - "CC #20", exactly that shape, is 20 from the words alone;
+ *   - "NONE" is none, whatever the numbers say;
+ *   - a whole number of 128 is the AM4's own NONE: none when there are no
+ *     words beside it, and unclear when there are other words (bare digits
+ *     included), since then the two disagree;
+ *   - plain "20" is believed only when the whole number or the float (as a
+ *     count) says 20 as well, since bare digits could be anything;
+ *   - anything else is unclear.
+ *
+ * am4TunerCcNamed says which number the AM4 named, whether or not the
+ * tuner may be sent it: a close needs to know that its number has gone, even
+ * to one out of range. n, 'none', or null for unclear or no answer. The
+ * computer's half (forgefx) is held to the same rules, case for case, so the
+ * phone and the computer never disagree about one answer.
+ */
+const CC_WORDS = /^CC\s*#\s*(\d{1,3})$/i
+const BARE_WORDS = /^(\d{1,3})$/
+export function am4TunerCcNamed(a) {
+  if (!a || typeof a !== 'object' || a.rejected !== undefined) return null
+  const words = typeof a.text === 'string' ? a.text.trim() : ''
+  const named = CC_WORDS.exec(words)
+  if (named) return Number(named[1])
+  if (/^none$/i.test(words)) return 'none'
+  if (a.whole === 128) return words === '' ? 'none' : null
+  const bare = BARE_WORDS.exec(words)
+  if (!bare) return null
+  const n = Number(bare[1])
+  return a.whole === n || countIn(a.float) === n ? n : null
+}
+
+/*
+ * The number the tuner may be SENT: the one named, only when it can mean
+ * nothing but a function (see am4CcOk). Anything else is unclear, and nothing
+ * is sent: the cost of being wrong is firing whatever else that number does
+ * on his rig. n for a usable number, 'none' for NONE, and null for unclear or
+ * no answer.
+ */
+export function am4TunerCcFrom(a) {
+  const n = am4TunerCcNamed(a)
+  return n === 'none' ? 'none' : am4CcOk(n) ? n : null
+}
+
+/*
+ * THE CHANNEL, FROM THE WORDS ONLY. The two tables that describe this
+ * setting disagree about its number (1..16 in one, 0..15 with 16 for OMNI in
+ * the other), so the screen's words settle it, and never the whole number or
+ * the float, even with no words beside them.
+ *
+ * am4ChannelSaid is what the words plainly say: "2", "CH 2" or "Channel 2"
+ * is that channel, 1..16, and OMNI is 1 (it hears every channel, so the
+ * AM4's factory 1 reaches it). Anything else, silence included, says
+ * nothing: null. Then the channel already known on this connection is kept
+ * (bleWire's tuner), and only a connection that knows none falls back to 1
+ * (am4ChannelFrom). A CC on a channel the AM4 is not listening on is
+ * ignored, so a wrong guess here fires nothing. The computer's half holds
+ * the same table.
+ */
+const CHANNEL_WORDS = /^(?:ch(?:annel)?\.?\s*)?(\d{1,2})$/i
+export function am4ChannelSaid(a) {
+  if (!a || typeof a !== 'object' || a.rejected !== undefined) return null
+  const words = typeof a.text === 'string' ? a.text.trim() : ''
+  if (/^omni$/i.test(words)) return 1
+  const said = CHANNEL_WORDS.exec(words)
+  const n = said ? Number(said[1]) : 0
+  return midiChannelOk(n) ? n : null
+}
+
+/** The channel for a connection that knows none yet: what the words say, else the factory 1. */
+export const am4ChannelFrom = (a) => am4ChannelSaid(a) ?? 1
 
 /** One tuner reading, as the float it is: a note index, Hz, cents or a string number. */
 export function parseAm4TunerPoll(f, which) {

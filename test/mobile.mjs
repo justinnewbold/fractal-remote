@@ -366,6 +366,8 @@ async function rigOnTheBench(over = {}) {
       }
       if (method === 'POST' && /^\/preset\/blocks\/\d+\/bypass$/.test(path)) return unit.hold ? unit.hold() : { ok: true }
       if (method === 'DELETE' && path === '/device/cache') return { ok: true, deleted: true }
+      /* The tuner; `tunerAnswer` is what the answer says of the unit's own tuner screen. */
+      if (method === 'POST' && path === '/tuner') return unit.tunerAnswer ? unit.tunerAnswer(body) : { ok: true }
       throw new Error(`the bench unit has no ${method} ${path}`)
     }
     /* Connected, read once, and the log cleared: what follows is what a tap costs. */
@@ -13405,6 +13407,55 @@ export function run(test) {
   const SUMMARY = /^GET \/presets\/\d+\/summary$/
   const STATE = 'GET /preset/scene-state'
   const WHICH = 'GET /preset'
+
+  /*
+   * "On the AM4 the tuner doesn't activate on the device, it only shows it
+   * on the phone." The phone now opens the AM4's own tuner with the number
+   * set under its Tuner setting, and the answer says what happened, so the
+   * tuner can say where to set one when there is none.
+   */
+  test('the tuner keeps what the unit’s own tuner screen did, and only for the tuner it is about', async () => {
+    const { rig, clock, unit } = await rigOnTheBench({ tunerAnswer: (body) => (body.on ? { ok: true, unitTuner: unit.says } : { ok: true }) })
+    unit.says = 'none'
+    assert.equal(await rig.writeTuner(true), true)
+    assert.equal(rig.getState().unitTuner, 'none')
+    await rig.writeTuner(false)
+    assert.equal(rig.getState().unitTuner, null, 'the note outlived the tuner')
+    unit.says = 'opened'
+    await rig.writeTuner(true)
+    assert.equal(rig.getState().unitTuner, 'opened')
+    await rig.writeTuner(false)
+    /* The computer says the same in its own word. */
+    unit.tunerAnswer = (body) => (body.on ? { ok: true, screen: 'none' } : { ok: true, screen: 'closed' })
+    await rig.writeTuner(true)
+    assert.equal(rig.getState().unitTuner, 'none', 'the computer’s answer was not read')
+    await rig.writeTuner(false)
+    /* Anything else is nothing to show, and an older unit's plain ok is no word at all. */
+    for (const answer of [{ ok: true, unitTuner: 'B0 14 7F' }, { ok: true }, null]) {
+      unit.tunerAnswer = () => answer
+      await rig.writeTuner(true)
+      assert.equal(rig.getState().unitTuner, null, JSON.stringify(answer))
+      await rig.writeTuner(false)
+    }
+    /* A slow answer to an open since closed and opened again is not shown under the new one. */
+    const lags = [900, 10, 10]
+    const said = ['opened', 'none']
+    unit.lag = (line) => (line === 'POST /tuner' ? lags.shift() ?? 0 : 0)
+    unit.tunerAnswer = (body) => (body.on ? { ok: true, unitTuner: said.shift() } : { ok: true })
+    const first = rig.writeTuner(true)
+    rig.writeTuner(false)
+    const second = rig.writeTuner(true)
+    await clock.advance(1000)
+    await Promise.all([first, second])
+    assert.equal(rig.getState().tunerOn, true)
+    assert.equal(rig.getState().unitTuner, 'opened', 'the first open’s late answer was shown under the second')
+    await rig.writeTuner(false)
+
+    /* And the line on the tuner itself, in the AM4's own menu words, only while it is open. */
+    const tuner = read('mobile/src/components/Tuner.js').replace(/\s+/g, ' ')
+    assert.match(tuner, /const NO_UNIT_TUNER = 'The AM4’s own tuner stays as it is: its Tuner setting has no MIDI number \(SETUP > MIDI\/Remote > Tuner\)\.'/)
+    assert.match(tuner, /\{on && unitTuner === 'none' \? <Note>\{NO_UNIT_TUNER\}<\/Note> : null\}/)
+  })
 
   test('a scene tapped on the phone costs one small read and no preset dump', async () => {
     const { rig, clock, asked } = await rigOnTheBench()
