@@ -12,8 +12,9 @@ notes*. Read that one even if you skip the rest.
 
 **The version in the store and the next one are kept apart.** Everything down
 to the end of *Review notes* is for the version in the store now, except where
-it says it waits for the next build. What goes with the next version, 1.87.1,
-is at the very bottom, under *For the next version*.
+it says it waits for the next build. What goes with the next version, 1.87.11,
+is near the bottom, under *For the next version*. The 1.87.1 texts it
+replaces are kept at the very end, for the record, and are not for pasting.
 
 ---
 
@@ -69,7 +70,7 @@ the people who make that gear.
 Changes only with a new version, so it goes in with the next build. The same
 text goes on Google Play, where it can change any time (see below).
 
-**This is the one to paste for 1.87.1.** It says nothing about Bluetooth.
+**This is the one to paste for 1.87.11.** It says nothing about Bluetooth.
 For one day (10 October 2026) it did: the demo paragraph and HOW IT WORKS
 both said that, in beta, a Bluetooth MIDI adapter could take the computer's
 place. Then, on 11 October: "Is there any way to just get the Bluetooth on
@@ -78,7 +79,7 @@ have public." So Bluetooth (beta) shows on Justin's account alone, and a
 listing that promoted it would be promising customers something they cannot
 open (Apple's 2.3, and Google Play's rule that the listing matches the app).
 Both places say the computer again. **On Google Play it can go on whenever
-it suits:** nothing in it waits for 1.87.1 any more.
+it suits:** nothing in it waits for 1.87.11 any more.
 
 ```
 REQUIRES A COMPUTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play.
@@ -120,8 +121,8 @@ them, press **Save**, then **Publishing overview → Send changes for review**.
 Google usually passes a text change within a day.
 
 - **Full description (4000):** the Description above, exactly. It mentions
-  no Bluetooth, so it does not wait for 1.87.1. *By hand in Play Console for
-  1.87.1*, at the bottom, says the rest.
+  no Bluetooth, so it does not wait for 1.87.11. *By hand in Play Console for
+  1.87.11*, at the bottom, says the rest.
 - **Short description (80):** the line under the app's name. **Not in
   capitals.** Google's help for this one field says "Do not use capitalization
   for emphasis", and its metadata policy lists "ALL CAPS although not part of
@@ -178,6 +179,7 @@ Tracking Transparency entirely.
 | Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you |
 | Diagnostics → **Other Diagnostic Data** | Yes | Yes | The debug log, and only when somebody presses Send on a bug report |
 | Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices |
+| Diagnostics → **Crash Data** | Yes | No | After a launch that crashed, the phone's update check sends Expo the error message the app stopped on, so a broken update can be found and taken back. The privacy page says so. Added 11 October 2026: the live label does not have it yet, and it can be added any time in App Store Connect → App Privacy, with no build |
 
 Do **not** declare location, contacts, photos, audio, search history, browsing
 history or advertising data. None are collected — and the
@@ -248,7 +250,7 @@ question automatically on every submission rather than asking you each time.
 decides whether the app is rejected as non-functional.
 
 **This block is the one for the version in the store now (1.86.83).** For
-1.87.1, use the notes under *For the next version* at the bottom instead.
+1.87.11, use the notes under *For the next version* at the bottom instead.
 
 ```
 This app is a remote control for Fractal Audio guitar hardware. Normally it
@@ -315,26 +317,49 @@ a search of the whole file finds the explanation rather than the instruction.
 
 ---
 
-## For the next version (1.87.1, not yet submitted)
+## For the next version (1.87.11, not yet submitted)
+
+**These are the texts to use for the 1.87.11 build,** made on 11 October
+2026 from main 3e7ffbf (mobile.yml run 38162666072, one iOS build to
+TestFlight and one Android build straight to Google Play production): the
+Notes for App Review and What's New for Apple, and the App access note and
+release notes for Google. The 1.87.1 texts they replace are kept at the very
+end, under *Kept for the record*, and are not for pasting.
 
 **Everything above this heading is for the version in the store now** (1.86.83,
 build 24, and the updates it has had since), except the Description and the
 Subtitle, which are already the new ones and wait for this version (Apple
-changes both only with a new version). **Everything under it is for 1.87.1,**
+changes both only with a new version). **Everything under it is for 1.87.11,**
 the next store build, and is pasted when that version is set up in App Store
 Connect. Until then the notes above stay as they are.
 
 Why the notes change at all: Apple's guideline 2.3.1(a) says every new feature
 "must be described with specificity in the Notes for Review", and 2.3.12 says
-What's New has to list the bigger changes. Three things are new to a reviewer
-since 1.86.83 was approved: an account can be made before buying, Edit says
-(Beta), and, on iPhone, Appearance set to Auto now follows the phone's light
-or dark setting (in 1.86.83 Auto was always dark, so a reviewer whose phone is
-set to light now sees the light theme first). And
-one sentence in the old notes stopped being true: "An account is used for one
-thing only: joining this phone to a computer". An account also carries the
-full version and the setlists to other devices, and anybody can make one now,
-so it is rewritten below.
+What's New has to list the bigger changes. Five things are new to a reviewer
+since 1.86.83 was approved: an account can be made before buying; Edit says
+(Beta); on iPhone, Appearance set to Auto now follows the phone's light or
+dark setting (in 1.86.83 Auto was always dark, so a reviewer whose phone is
+set to light now sees the light theme first); paying once, which is what the
+purchase page now says to somebody who bought on another device, and the
+account the app asks for after a purchase made with nobody signed in; and
+the metronome's switch in the volume pop-up. And one sentence in the old
+notes stopped being true: "An account is used for one thing only: joining
+this phone to a computer". An account also carries the full version and the
+setlists to other devices, and anybody can make one now, so it is rewritten
+below.
+
+The one of those most likely to draw a question is the account after a
+purchase. Read quickly, "we paid and were then asked to make an account"
+can look like a breach of 5.1.1(v), which says an app may not make you sign
+up for what does not need an account. So the notes say why (an account is
+what joins the phone to the computer the unit is plugged into) and that
+nothing is forced: the demo keeps working and the purchase waits on the
+phone. (What the app does after such a purchase: bought from the
+walkthrough, the sign-in screen opens on Create account; bought in the
+demo, the Play screen says the purchase is only on this phone so far, with
+a button to make an account or sign in.) And the reviewer's demo account
+already has the full version, so they would never see the price at all
+unless the notes say where it is: they do, in the demo.
 
 **And Bluetooth (beta), which is in the build but not for customers.** On 10
 October 2026 it was to go in this version for every paying customer ("If
@@ -354,10 +379,15 @@ reachable: that is the one place Apple could push back. If it does, the
 choice is Justin's: show it to the review account too, with a video of it
 working, or a build without the module.
 
-### Notes for App Review, 1.87.1
+### Notes for App Review, 1.87.11
+
+**These are the ones to use for this build.**
 
 **Submit a build made from main after 1.87.8 was merged (11 October 2026),
 not the 10 October build 26, whose first launch still shows Bluetooth.**
+That build is the 1.87.11 one made from main 3e7ffbf on 11 October (run
+38162666072). In App Store Connect, make the new version 1.87.11 and pick
+the 1.87.11 build, not build 26.
 
 Why: a fresh install runs the copy of the app built into it on its very first
 launch, and only takes the latest update on the launch after
@@ -368,19 +398,24 @@ account with the full version, and Apple's demo account has the full
 version. So a reviewer installing build 26 can meet Bluetooth on that first
 launch, and the paragraph about it below would not be true for them. A build
 made from main after 11 October has the hidden version built in, and the
-notes below are written for that build. Making it is one iOS and one Android
-build (they always go together), and that is Justin's call. It carries the
-version number main is on that day, and these notes go with it as they are.
+notes below are written for that build. The 1.87.11 pair is that build: one
+iOS and one Android, agreed by Justin on 11 October ("Yes spend the
+builds").
 
 **Paste this into App Review Information → Notes**, in place of the block
-above, when that build is sent.
+above, when that build is sent. **Apple's Notes box takes 4000 bytes**
+(App Store Connect's own reference: "The Notes field can contain up to 4000
+bytes"; a dash or an arrow counts as three), and the first draft of these
+notes was over 5000, so the block is cut to what the reviewer needs and the
+reasons stay out here. A test holds it under 3950, so the filled-in
+brackets still fit.
 
 ```
 This app is a remote control for Fractal Audio guitar hardware. Normally it
 connects to a computer that has the guitar unit plugged into it over USB.
 
-You will not have that hardware, so the app includes a full demo mode that
-needs nothing but the phone, and no account:
+You will not have that hardware, so use the demo. It needs nothing but the
+phone, and no account:
 
   1. Tap "Get started"
   2. Tap "Got it"
@@ -388,26 +423,38 @@ needs nothing but the phone, and no account:
   4. Choose any unit, then tap "Play with ..."
 
 That loads a simulated unit with twelve presets and named scenes. Every
-screen works — presets, scenes, the signal chain, the tuner, tap tempo,
-setlists, settings. Nothing in the demo reaches real hardware.
+screen works, and nothing in the demo reaches real hardware.
 
-The demo is free and needs no account. An account is what joins this phone
-to a computer that has the guitar unit plugged into it, and it carries the
-full version and the user's setlists to their other devices.
+The demo is free. An account is what joins this phone to the user's
+computer, and it carries the full version and their setlists to their
+other devices.
 
-New in this version:
+The in-app purchase: in the demo, tap Unlock at the top of the Play
+screen. Buying needs no account, and Restore a purchase is the button
+under the price.
+
+New since 1.86.83, the version on the App Store:
 
 Accounts before buying. Anybody can now make an account, before buying or
 without buying: Create account is on the sign-in screen. Making one unlocks
-nothing; the full version is still the one in-app purchase. An account that
+nothing; the full version is still the one in-app purchase. A new account
+is confirmed from its email before it can be signed in to. An account that
 has not bought the full version opens on the purchase page instead of
 Settings, and Delete account is at the foot of that page.
 
-Edit (Beta). The Edit screen, opened with Edit at the bottom of the Play
-screen, is now marked Beta. Everything it shows works, in the demo too. It
+Paying once. With nobody signed in, the purchase page now tells someone who
+bought on another device to sign in instead of buying again, with a button
+for it, and the app checks again just before charging, so nothing is
+charged twice. After a purchase with nobody signed in, the app offers to
+make an account, since an account is what joins the phone to the user's
+computer. Nothing is forced: the demo keeps working, and the purchase waits
+on the phone.
+
+Edit (Beta). Edit, at the bottom of the Play screen, is now marked Beta.
+Everything it shows works, in the demo too. It
 is marked Beta because it does not yet cover every block and control of
 every unit, and a control may not yet move quite the way it does on the
-unit itself, as the note at the foot of that screen says.
+unit itself.
 
 Bluetooth MIDI code, switched on only for the developer. This build
 contains Bluetooth MIDI code for a feature that lets the phone reach the
@@ -419,37 +466,33 @@ that will be in a later version, sent for review with notes that describe
 it.
 
 Appearance. On iPhone, Appearance in Settings set to Auto, which is the
-default, now follows the phone's own light or dark setting. Earlier
-versions stayed dark on Auto, so on a phone set to light the app now opens
-in its light theme.
+default, now follows the phone's own light or dark setting.
+
+Metronome. The volume pop-up (the speaker at the top) now has a metronome
+on/off switch, and the flash and the phone's click land on the same beat.
 
 A demo account for the signed-in screens is in App Review Information
 (Sign-in required).
 
 Deleting an account (Guideline 5.1.1(v)): tap the gear at the top right for
-Settings, tap the account card at the top, then Delete account, then
-"Delete my account". It deletes the account and everything stored under it
-straight away. To try it, please create a new account rather than deleting
-the demo account, which the rest of the review needs. A new account that has
-not bought the full version opens on the purchase page instead of Settings;
-Delete account is at the foot of that page, and does the same.
+Settings, the account card at the top, Delete account, then "Delete my
+account". It deletes the account and everything stored under it at once.
+Please try it on a new account, not the demo account.
 
 Hardware (Guideline 2.1): a video filmed on an iPhone with a real FM3 on
 screen, from the first pairing through the whole workflow, is linked in App
 Review Information.
 
-Apple Watch: the watch app comes with the iPhone app. It works in the demo
-too. Start the demo as above, keep the Play screen open on the iPhone, then
-open Fractal on the watch. Swipe up or down between Scenes, Pedals, Presets
-and Tuner.
+Apple Watch: it comes with the iPhone app and works in the demo too. Keep
+the demo's Play screen open on the iPhone, open Fractal on the watch, and
+swipe up or down between Scenes, Pedals, Presets and Tuner.
 
 Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS
 [version].
 
 Services the app uses: Supabase (accounts, setlists, and the link between
-the phone and the computer), RevenueCat with Apple in-app purchase (the one
-purchase that unlocks the full version), Resend (account emails), and Expo
-(app updates).
+the phone and the computer), RevenueCat with Apple in-app purchase (the full
+version), Resend (account emails), and Expo (app updates).
 
 Regions: the app works the same in every country.
 ```
@@ -463,7 +506,9 @@ reviewer is not shown it, and the paragraph above says so instead of telling
 them where it is. No video of Bluetooth goes with this version, because that
 build does not let the reviewer open it. (Build 26 would, on its first
 launch: see the line at the top of these notes. The Hardware paragraph's FM3
-video, which is about the computer, still goes.)
+video, which is about the computer, still goes.) The AM4's own tuner screen
+over Bluetooth, new in 1.87.11, works only over that Bluetooth link, so the
+notes say nothing of it either.
 
 **Never switched on for customers by an update.** When it is ready, it goes
 in a new store version whose review notes describe it, the way this
@@ -472,9 +517,21 @@ the video and the setup guide. Turning
 it on for everybody over the air instead, after Apple has reviewed a build
 that hides it, is the hidden feature 2.3.1(a) forbids, and a change to what
 the app does that Apple's licence (3.3.1(C)) and Google's rule on features
-activated remotely both keep for reviewed versions.
+activated remotely both keep for reviewed versions. **And while Apple is
+reviewing 1.87.11,** nothing is merged that changes what these notes
+describe (the purchase page, Bluetooth, Delete account): from its second
+launch, the reviewer's copy runs whatever is on main.
 
-**Two things before that block is pasted:**
+**Left out on purpose: the Developer pages.** Justin's own account also has
+Settings → Developer (accounts, sales, messages, account help with its
+Confirm button, What's live). No other account is shown it, the review
+account included, and the server checks which account is asking. They were
+already there when Apple approved 1.86.83 with nothing said about them, and
+nobody but Justin can reach them. If Apple asks, they are the developer's
+own support tools. Google's App access note does name them, in one line,
+because Google asks for an app to be what you see is what you get.
+
+**Four things before that block is pasted:**
 
 - **The three lines Apple's help page asks for.** Fill in the brackets in
   "Tested on" with the iOS version on the iPhone and the watch model and
@@ -484,6 +541,14 @@ activated remotely both keep for reviewed versions.
   behind the unlock, so the account Apple signs in with has to have it, or
   the reviewer stops at the purchase page. If that account opens on the
   purchase page instead of Settings, it does not have it yet.
+- **The demo account is not Justin's own.** His is the only account that
+  shows Bluetooth (beta) and the Developer pages, and those pages show
+  customers' email addresses. Sign in once on a phone with the account in
+  App Review Information: it should open on Settings, with no Bluetooth
+  (beta) row and no Developer section. The same account goes in Google's
+  App access.
+- **The FM3 video is still linked** in App Review Information, as it was for
+  1.86.83: the Hardware paragraph points at it.
 
 **Marked beta, not a beta app.** Guideline 2.2 keeps test versions of whole
 apps off the store. A finished app with one feature marked beta is what Edit
@@ -496,26 +561,53 @@ shows only on Justin's own account, so in a build made after 11 October the
 reviewer meets neither; the one Bluetooth paragraph in the notes says the code is there and whose it
 is, so nothing in the app is undescribed.
 
-### What's New in This Version, 1.87.1
+### What's New in This Version, 1.87.11
 
-Plain words, one change a line. The App Store takes 4000 characters, and
-all of it fits. Google Play's release notes take only 500, so on Play use the
-first five lines. No Bluetooth line: for one day it led this list, and since
-11 October Bluetooth (beta) is the developer's alone, so What's New does not
-announce what customers cannot open. The Appearance line is the sixth, after
-Play's five, because it is about the iPhone only.
+App Store Connect → the 1.87.11 version → What's New in This Version. Plain
+words, one change a line, everything since 1.86.83, the version on the App
+Store now. Apple takes 4000 characters, and all of it fits. No Bluetooth
+line: since 11 October Bluetooth (beta) is the developer's alone, so What's
+New does not announce what customers cannot open. Google Play gets its own
+shorter list, under *Google Play release notes* below.
 
 ```
+• Bought it on another device? The purchase page now says to sign in with that account instead of buying again.
+• Paid before you had an account? The app now points you straight to making one, and your purchase goes with it.
+• Turn the metronome on and off from the volume pop-up.
+• The metronome's flash and click now land on the same beat.
+• With an AM4, the tuner can now open on the AM4 itself too, once its Tuner setting has a MIDI number (SETUP > MIDI/Remote > Tuner). Needs the newest desktop app.
+• No confirmation email? The app now says to look in Spam, Junk or Promotions.
+• On iPhone, Appearance set to Auto now follows your phone's light or dark setting.
 • You can now make an account before buying.
 • Delete account is also at the bottom of the purchase page.
 • Edit is marked Beta while more blocks are added. If anything on it looks wrong, tell us with Feedback in Settings.
+• Tap tempo ignores stray taps outside the tempos your unit can use.
+• A message about a problem now floats over the screen instead of pushing it down.
+• Phone & computer in Settings says in red when the desktop app needs updating.
 • Preset names no longer go blank again after Refresh names.
 • With the phone's own metronome click on, the screen stays awake on every screen, so the click no longer stops when the phone would have gone to sleep.
-• On iPhone, Appearance set to Auto now follows your phone's light or dark setting.
 • The metronome's flash follows the rounded corners of your screen.
 • Scrolling the signal chain sideways on Edit no longer swipes you back to Play.
 • The Mac, Windows and Linux icons on Connect a computer open the download page.
 • The demo no longer says NO COMPUTER a moment after it starts.
+```
+
+### Google Play release notes, 1.87.11
+
+Play Console → Test and release → Production → the 1.87.11 release → Edit
+release → Release notes (en-US). Play takes 500 characters. These are the
+changes since 1.87.1, the version on Google Play now, and say nothing about
+Bluetooth. The build reaches Play with no release notes, because EAS cannot
+send them. If Play will not let the release be edited while it is in
+review, leave it: release notes are optional, and Google does not turn an
+update down for missing them.
+
+```
+• Bought it on another device? The purchase page now says to sign in with that account instead of buying again.
+• Paid before you had an account? The app now points you straight to making one, and your purchase goes with it.
+• Turn the metronome on and off from the volume pop-up. Its flash and click now land on the same beat.
+• No confirmation email? The app now says to look in Spam, Junk or Promotions.
+• Tap tempo ignores stray taps outside the tempos your unit can use.
 ```
 
 ### The Description with Bluetooth (beta): withdrawn
@@ -530,17 +622,18 @@ draft is in this file's history (git log -p docs/app-store.md, the commit
 that withdrew it), and it is checked again against that version before it is
 used.
 
-### By hand in Play Console for 1.87.1
+### By hand in Play Console for 1.87.11
 
 None of this needs a build. It is all typed into Play Console, and each part
 ends with **Save**, then **Publishing overview → Send changes for review**.
-Google usually passes it within a day. Do the first two before 1.87.1 goes to
-Google, or the same day: Google can hold back any update over them, this one
-included.
+Google usually passes it within a day. Do the first two today, before
+Google's reviewer picks up 1.87.11: Google can hold back any update over
+them, this one included.
 
-**1. Data safety** (App content → Data safety → Manage). The live form lists
-only Email address, Other user-generated content, Crash logs and Diagnostics.
-Add these four, each **collected** and **not shared**:
+**1. Data safety** (App content → Data safety → Manage). **Still not done on
+11 October 2026:** Google Play's public Data safety page for the app lists
+only Email address, Other user-generated content, Crash logs and
+Diagnostics. Add these four, each **collected** and **not shared**:
 
 - **Financial info → Purchase history.** Required. For App functionality and
   Analytics. RevenueCat keeps the purchase record, the app reads it every
@@ -566,10 +659,13 @@ internet connection, not read from the phone, and the privacy page says so
 under "No location". Declaring it here would contradict that page.
 
 **2. App access** (App content → App access → All or some functionality is
-restricted → Add instructions). Google's reviewer needs the same thing
-Apple's does: the demo account Apple signs in with, which has to have the
-full version, or it stops at the purchase page. Put its email and password
-in the boxes for them, and this in "Any other information":
+restricted → the instruction with the review account, or Add instructions).
+Google's reviewer needs the same thing Apple's does: the demo account Apple
+signs in with, which has to have the full version for good, with nothing
+that runs out, or it stops at the purchase page. Its email and password go
+in their own boxes. Replace whatever is in "Any other information" now (the
+1.87.1 note, if it was pasted: it described a first-launch Bluetooth card
+that this build does not have) with this:
 
 ```
 This account has the full version.
@@ -580,22 +676,34 @@ No hardware? The app has a full demo that needs no account and no gear:
   3. Tap "Start free demo"
   4. Choose any unit, then tap "Play with ..."
 
-This build also contains Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested. Once the app has downloaded its first update, usually from its second launch, this account does not see it. On the first launch after this version is installed or updated, the copy built into it can still show a BLUETOOTH (BETA) card under Settings → Phone & computer; the app asks for Nearby devices (or Location, on Android 11 and older) only if Connect is tapped on the page it opens.
+Delete account: Settings (the gear, top right) → the account card at the top → Delete account → "Delete my account". Please try it on a new account, not this one.
+
+This build contains Bluetooth MIDI code for a feature (reaching the guitar unit through a Bluetooth MIDI adapter instead of a computer) that is switched on only for the developer's own account while it is tested. No other account sees it, this one included. That code is why the app declares Nearby devices, and Location on Android 11 and older, where Android needs it to find a Bluetooth device; it never reads where the phone is. They are asked for only after Connect is tapped on the Bluetooth page, which this account cannot open. If it is offered to everyone, that will be in a later version, sent for review with a description of it.
+
+Settings also has Developer pages (accounts, sales, messages) that open only for the developer's own account; the server checks which account is asking.
 ```
 
-The last line is the same disclosure as Apple's notes, in Android's words,
-and says the one thing Apple's does not have to. The Android 1.87.1 build
-went to Google Play production on 10 October, so its built-in copy is the
-one that shows Bluetooth on its first launch after an install or a Play
-update, until the update that hides it has downloaded, usually by the next
-launch (see *Submit a build made after 11
-October 2026* above). The manifest of 1.87.1 declares Nearby devices (and
-Location on Android 11 and older) because the Bluetooth code is in it, and a
-reviewer who sees those declared should be told why, and when they are
-asked for.
+If the box will not take all of it, drop the last paragraph first. If it is
+still too long, use this short version instead:
+
+```
+This account has the full version. No hardware? Demo, no account needed: Get started → Got it → Start free demo → any unit → Play with ...
+
+This build has Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested; this account never sees it. It is why Nearby devices (Location on Android 11 and older) is declared. They are asked for only after Connect on the Bluetooth page, which this account can't open.
+```
+
+The Bluetooth paragraph is the same disclosure as Apple's notes, in
+Android's words, and says the one thing Apple's does not have to: why the
+manifest declares Nearby devices (and Location on Android 11 and older),
+and when they are asked for. The 1.87.1 note said the first launch after an
+install or a Play update could still show a BLUETOOTH (BETA) card. That was
+true of the 1.87.1 build, whose built-in copy was made on 10 October; the
+1.87.11 build carries the hidden version inside it, so it never shows the
+card, and 1.87.11 is the build Google's reviewer now has.
 
 **A risk to know about: permissions the listing gives no reason for.** The
-1.87.1 manifest declares Nearby devices, and Location up to Android 11, while
+manifest (1.87.1's, and 1.87.11's, which is the same) declares Nearby
+devices, and Location up to Android 11, while
 nothing in the listing promotes a feature that needs them: the Description
 says nothing about Bluetooth, because customers cannot open it. Google asks
 that declared permissions serve something the app offers, and could flag
@@ -614,7 +722,10 @@ I would wait: answer Google with the App access note above if they ask, and
 take the build only if they insist.
 
 **3. The listing** (Grow users → Store presence → Store listings → the default
-listing), any time: nothing in it waits for 1.87.1 now.
+listing), any time: nothing in it waits for 1.87.11 now. Checked on 11
+October 2026, the live listing still has both faults below, and Google
+reviews the listing along with the build, so this is cheapest done in the
+same sitting.
 
 - **Short description:** the one under *Google Play: short description*,
   which starts "Requires a computer" in ordinary letters. The live one is
@@ -630,6 +741,55 @@ listing), any time: nothing in it waits for 1.87.1 now.
   names the VP4 and Fractal Audio. The live one says "FM3, FM9, Axe-Fx and
   AM4 are trademarks of their respective owner" and leaves the VP4 out.
 
-The build itself reaches Play with no release notes: EAS cannot send them.
-The first five lines of *What's New* above are the Play copy, for anywhere
-Play Console offers a place to paste them.
+**4. Old testing tracks** (Test and release → Testing → Closed testing, and
+Internal testing). Google Play's public page for the app lists the camera,
+USB storage and "draw over other apps" among its permissions, and neither
+1.87.1 nor 1.87.11 asks for any of them (the camera was taken out in
+1.86.8, the other three in 1.87.1), while the privacy page says the camera is never
+used. The likeliest reason is an old release still live on a testing
+track, which Google's page counts too. Everything is production now ("I
+don't do any close testing anymore"), so pause any testing track that still
+has a release live. Once 1.87.11 is processed, App bundle explorer → 1.87.11
+→ Permissions should show none of the three.
+
+---
+
+## Kept for the record: the 1.87.1 texts (not for pasting)
+
+These were written for the 1.87.1 builds of 10 October 2026, and the 1.87.11
+texts above replace them. Apple never got them: build 26 went to TestFlight
+only, and is not to be submitted. The App access note may be in Play Console
+now, if it was pasted for 1.87.1; the 1.87.11 note above goes in its place.
+They are quoted here rather than fenced, so nothing in this part is mistaken
+for a block to paste.
+
+**The 1.87.1 Notes for App Review** were the 1.87.11 notes above without
+three paragraphs (*The in-app purchase*, *Paying once* and *Metronome*) and
+the sentence on the confirmation email, and with "New in this version:"
+where the 1.87.11 notes say which version they are new since. The full text
+is in this file's history (git log -p docs/app-store.md).
+
+**The 1.87.1 What's New** (the first five lines were the Play copy):
+
+> - You can now make an account before buying.
+> - Delete account is also at the bottom of the purchase page.
+> - Edit is marked Beta while more blocks are added. If anything on it looks wrong, tell us with Feedback in Settings.
+> - Preset names no longer go blank again after Refresh names.
+> - With the phone's own metronome click on, the screen stays awake on every screen, so the click no longer stops when the phone would have gone to sleep.
+> - On iPhone, Appearance set to Auto now follows your phone's light or dark setting.
+> - The metronome's flash follows the rounded corners of your screen.
+> - Scrolling the signal chain sideways on Edit no longer swipes you back to Play.
+> - The Mac, Windows and Linux icons on Connect a computer open the download page.
+> - The demo no longer says NO COMPUTER a moment after it starts.
+
+**The 1.87.1 App access note for Google** ("Any other information"):
+
+> This account has the full version.
+>
+> No hardware? The app has a full demo that needs no account and no gear:
+> 1. Tap "Get started"
+> 2. Tap "Got it"
+> 3. Tap "Start free demo"
+> 4. Choose any unit, then tap "Play with ..."
+>
+> This build also contains Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested. Once the app has downloaded its first update, usually from its second launch, this account does not see it. On the first launch after this version is installed or updated, the copy built into it can still show a BLUETOOTH (BETA) card under Settings → Phone & computer; the app asks for Nearby devices (or Location, on Android 11 and older) only if Connect is tapped on the page it opens.

@@ -1982,10 +1982,13 @@ export function run(test) {
      * 0), and that copy shows a Bluetooth (beta) card to an account with the
      * full version until the update has downloaded. Only a new build
      * closes that, so the page names the gap, and when anything is asked.
+     * And now that the new build exists (1.87.11, 11 October 2026, made
+     * with the hidden version inside it), the page says that version and
+     * later do not show it at all.
      */
     assert.ok(!/for everyone who has unlocked the app|part of the full version, for/.test(words), 'the policy says Bluetooth (beta) is for everyone who has paid, and it is the developer’s alone')
     assert.match(words, /Bluetooth \(beta\) lets the phone talk to your unit through a Bluetooth MIDI adapter, with no computer\. It is still being tested, so for now it is switched on only for the developer's own account\./, 'the policy does not say Bluetooth (beta) is the developer’s alone')
-    assert.match(words, /There is one gap: the first time version 1\.87\.1 opens after it is installed or updated, before its first update has arrived, an account with the full version can still see a Bluetooth \(beta\) card under Settings → Phone &amp; computer\. It goes once the app has downloaded that update, usually from the next time it is opened\. Nothing is asked for unless Connect is tapped on the Bluetooth page\./, 'the policy does not name the first-launch gap of the 1.87.1 builds, or when anything is asked for')
+    assert.match(words, /There is one gap: the first time version 1\.87\.1 opens after it is installed or updated, before its first update has arrived, an account with the full version can still see a Bluetooth \(beta\) card under Settings → Phone &amp; computer\. It goes once the app has downloaded that update, usually from the next time it is opened\. Version 1\.87\.11 and later do not show it at all\. Nothing is asked for unless Connect is tapped on the Bluetooth page\./, 'the policy does not name the first-launch gap of the 1.87.1 builds, that 1.87.11 closes it, or when anything is asked for')
     assert.ok(!/does not show it to anyone else|never asks anyone else/.test(words), 'the policy says nobody else is ever shown Bluetooth or asked, and a fresh 1.87.1 install can show it on its first launch')
     assert.equal(JSON.parse(read('mobile/app.json')).expo.updates.fallbackToCacheTimeout, 0, 'the app now waits for its update before opening; the first-launch gap the policy names may be gone')
     assert.match(read('mobile/src/lib/bluetooth.js'), /export const useBluetoothAllowed = /, 'the app no longer keeps Bluetooth (beta) to one account; the policy should stop saying it does')
@@ -2276,7 +2279,7 @@ export function run(test) {
     }
   })
 
-  test('the 1.87.1 store notes disclose the Bluetooth code in one paragraph, and nothing a customer reads offers Bluetooth', async () => {
+  test('the 1.87.11 store notes disclose the Bluetooth code in one paragraph, and nothing a customer reads offers Bluetooth', async () => {
     /*
      * This held the 1.87.1 notes to describing Bluetooth (beta) "for everyone
      * who has unlocked the app", with where to find it, a video and the
@@ -2294,22 +2297,38 @@ export function run(test) {
      * the Play summary — says nothing about Bluetooth at all, because a
      * listing that offered it would be promising what they cannot open
      * (Apple's 2.3, Google Play's metadata policy).
+     *
+     * Moved on from 1.87.1 to 1.87.11 on 11 October 2026, when the 1.87.11
+     * pair was built: build 26 (1.87.1) never went to Apple, and the 1.87.11
+     * build carries the hidden version inside it, so its notes are the ones
+     * to paste and the 1.87.1 texts are kept at the end for the record.
      */
     const store = read('docs/app-store.md')
-    const at = store.indexOf('## For the next version (1.87.1, not yet submitted)')
-    assert.ok(at > 0, 'the 1.87.1 section is missing')
+    const at = store.indexOf('## For the next version (1.87.11, not yet submitted)')
+    assert.ok(at > 0, 'the 1.87.11 section is missing')
     const section = store.slice(at)
-    const notesAt = section.indexOf('### Notes for App Review, 1.87.1')
+    const notesAt = section.indexOf('### Notes for App Review, 1.87.11')
     const open = section.indexOf('```', notesAt)
     const pasted = section.slice(open + 3, section.indexOf('```', open + 3))
+    assert.match(section.slice(notesAt, open), /\*\*These are the ones to use for this build\.\*\*/, 'the 1.87.11 notes do not say they are the ones to use')
+
+    /*
+     * AND THEY FIT THE BOX. App Store Connect's reference: "The Notes field
+     * can contain up to 4000 bytes." Bytes, so a dash or an arrow counts as
+     * three. The first draft of these notes came to over 5000, and Apple's
+     * page would have cut it off or refused it on the day of submitting.
+     * Held under 3950, so the brackets in "Tested on" still fit once filled.
+     */
+    const bytes = Buffer.byteLength(pasted.trim(), 'utf8')
+    assert.ok(bytes <= 3950, `the 1.87.11 notes are ${bytes} bytes; Apple's Notes box takes 4000, and the brackets still have to be filled in`)
 
     /* The disclosure, said once. */
     assert.match(
       pasted,
       /Bluetooth MIDI code, switched on only for the developer\. This build\s+contains Bluetooth MIDI code for a feature that lets the phone reach the\s+guitar unit through a Bluetooth MIDI adapter instead of a computer\. While it\s+is tested, it is switched on only for the developer's own account\.\s+Customers and the review account don't see it in this build, and the app\s+doesn't ask them for Bluetooth permission\./,
-      'the 1.87.1 notes do not say the Bluetooth code is there, whom it is for, and that nobody else sees it or is asked'
+      'the 1.87.11 notes do not say the Bluetooth code is there, whom it is for, and that nobody else sees it or is asked'
     )
-    assert.match(pasted, /If it is offered to customers,\s+that will be in a later version, sent for review with notes that describe\s+it\./, 'the 1.87.1 notes do not say Bluetooth reaches customers only in a reviewed version, or they promise it will')
+    assert.match(pasted, /If it is offered to customers,\s+that will be in a later version, sent for review with notes that describe\s+it\./, 'the 1.87.11 notes do not say Bluetooth reaches customers only in a reviewed version, or they promise it will')
     /*
      * THOSE WORDS ARE TRUE OF A NEW BUILD ONLY. Build 26, made on 10
      * October, runs its built-in copy on a fresh install's first launch
@@ -2318,9 +2337,9 @@ export function run(test) {
      * is. So the notes are written for a build made from main after 11
      * October, and say so where Justin reads it first.
      */
-    assert.match(section, /\*\*Submit a build made from main after 1\.87\.8 was merged \(11 October 2026\),\s+not the 10 October build 26, whose first launch still shows Bluetooth\.\*\*/, 'the 1.87.1 section does not tell Justin to submit a build made after 1.87.8 rather than build 26')
+    assert.match(section, /\*\*Submit a build made from main after 1\.87\.8 was merged \(11 October 2026\),\s+not the 10 October build 26, whose first launch still shows Bluetooth\.\*\*/, 'the 1.87.11 section does not tell Justin to submit a build made after 1.87.8 rather than build 26')
     assert.ok(section.indexOf('Submit a build made from main after 1.87.8') < notesAt + 200 && section.indexOf('Submit a build made from main after 1.87.8') < open, 'the line about which build to submit is not above the notes')
-    assert.ok(!/anywhere in the app|nothing for the reviewer to\s+reach|reviewer never meets it/.test(section), 'the 1.87.1 section says the reviewer can never meet Bluetooth, and build 26’s first launch shows it')
+    assert.ok(!/anywhere in the app|nothing for the reviewer to\s+reach|reviewer never meets it/.test(section), 'the 1.87.11 section says the reviewer can never meet Bluetooth, and build 26’s first launch shows it')
     const disclosure = pasted.slice(pasted.indexOf('Bluetooth MIDI code, switched on only for the developer.'), pasted.indexOf('\n\n', pasted.indexOf('Bluetooth MIDI code, switched on only for the developer.')))
     assert.ok(!/Bluetooth/.test(pasted.replace(disclosure, '')), 'Bluetooth is mentioned outside the one paragraph that discloses it')
     /* And none of what told a reviewer where it was, now that there is nothing for them to reach. */
@@ -2331,8 +2350,8 @@ export function run(test) {
       [/bluetooth\.html|bluetooth-guide/, 'give the setup guide'],
       [/Amazon|amazon\.com/, 'mention the Amazon buttons on the Bluetooth page'],
       [/diagnostic panel/, 'describe a panel on a page the reviewer cannot open']
-    ]) assert.ok(!gone.test(pasted), `the 1.87.1 notes still ${why}`)
-    assert.match(pasted, /Regions: the app works the same in every country\.\n/, 'the 1.87.1 notes do not say it works the same in every country')
+    ]) assert.ok(!gone.test(pasted), `the 1.87.11 notes still ${why}`)
+    assert.match(pasted, /Regions: the app works the same in every country\.\n/, 'the 1.87.11 notes do not say it works the same in every country')
 
     /* Held to the app: the row and the page wait for the developer-only check, so the disclosure is what the build does. */
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
@@ -2340,25 +2359,28 @@ export function run(test) {
     assert.match(read('mobile/src/lib/bluetooth.js'), /allowed = accountId\(id\) \? isAdmin\(id\) : null/, 'the notes say Bluetooth is the developer’s only, and lib/bluetooth decides it some other way')
 
     /* Around the block: the rule that it never reaches customers by an update, and no step left over for a Bluetooth review. */
-    assert.match(section, /\*\*Never switched on for customers by an update\.\*\*/, 'the 1.87.1 section does not say Bluetooth is never opened to customers by an update')
-    assert.match(section, /3\.3\.1\(C\)/, 'the 1.87.1 section does not name Apple’s licence on changing a reviewed app')
-    assert.match(section, /activated remotely/, 'the 1.87.1 section does not name Google’s rule on features activated remotely')
-    assert.match(section, /2\.3\.1\(a\) says "Don't include any\s+hidden, dormant, or undocumented features in your app"/, 'the 1.87.1 section does not say why the code is disclosed at all')
-    assert.match(section, /"accessible for review"/, 'the 1.87.1 section hides the one place Apple could push back')
-    assert.ok(!/- \*\*The video\.\*\*|\*\*The guide is live\.\*\*/.test(section), 'the 1.87.1 section still asks for a Bluetooth video or a live guide before pasting')
-    assert.match(section, /\*\*Two things before that block is pasted:\*\*/)
-    assert.ok(!/BLUETOOTH_TESTERS|Only if Bluetooth goes in/.test(section), 'the 1.87.1 section still says to check a list of accounts, or that Bluetooth may not go in')
+    assert.match(section, /\*\*Never switched on for customers by an update\.\*\*/, 'the 1.87.11 section does not say Bluetooth is never opened to customers by an update')
+    assert.match(section, /3\.3\.1\(C\)/, 'the 1.87.11 section does not name Apple’s licence on changing a reviewed app')
+    assert.match(section, /activated remotely/, 'the 1.87.11 section does not name Google’s rule on features activated remotely')
+    assert.match(section, /2\.3\.1\(a\) says "Don't include any\s+hidden, dormant, or undocumented features in your app"/, 'the 1.87.11 section does not say why the code is disclosed at all')
+    assert.match(section, /"accessible for review"/, 'the 1.87.11 section hides the one place Apple could push back')
+    assert.ok(!/- \*\*The video\.\*\*|\*\*The guide is live\.\*\*/.test(section), 'the 1.87.11 section still asks for a Bluetooth video or a live guide before pasting')
+    assert.match(section, /\*\*Four things before that block is pasted:\*\*/)
+    assert.ok(!/BLUETOOTH_TESTERS|Only if Bluetooth goes in/.test(section), 'the 1.87.11 section still says to check a list of accounts, or that Bluetooth may not go in')
     /* The history stays true: what was decided on the 10th is still said, beside what changed on the 11th. */
-    assert.match(section, /On 10\s+October 2026 it was to go in this version for every paying customer \("If\s+Bluetooth is ready, let's get it submitted/, 'the 1.87.1 section no longer says what was decided on 10 October')
-    assert.match(section, /On 11 October Justin took it back:\s+"Is there any way to just get the Bluetooth on the developers mode for my own\s+phone\? I just feel like it's not ready to have public\."/, 'the 1.87.1 section does not say why Bluetooth went back to his account')
+    assert.match(section, /On 10\s+October 2026 it was to go in this version for every paying customer \("If\s+Bluetooth is ready, let's get it submitted/, 'the 1.87.11 section no longer says what was decided on 10 October')
+    assert.match(section, /On 11 October Justin took it back:\s+"Is there any way to just get the Bluetooth on the developers mode for my own\s+phone\? I just feel like it's not ready to have public\."/, 'the 1.87.11 section does not say why Bluetooth went back to his account')
 
     /* What's New: no Bluetooth line, Play's five lines, and the iPhone's Appearance line after them. */
-    const news = section.indexOf("### What's New in This Version, 1.87.1")
+    const news = section.indexOf("### What's New in This Version, 1.87.11")
     const nOpen = section.indexOf('```', news)
     const whatsNew = section.slice(section.indexOf('\n', nOpen) + 1, section.indexOf('```', nOpen + 3))
-    const play = whatsNew.trim().split('\n').slice(0, 5).join('\n')
     assert.ok(!/bluetooth|adapter/i.test(whatsNew), 'What’s New announces Bluetooth, and customers cannot open it')
-    assert.ok([...play].length <= 500, `the five lines for Google Play come to ${[...play].length}; Play takes 500`)
+    /* Google Play gets its own list now, of what changed since its own 1.87.1. */
+    const { fenced: fencedBlock } = await import('../scripts/store-text.mjs')
+    const play = fencedBlock(section, '### Google Play release notes, 1.87.11').trim()
+    assert.ok(!/bluetooth|adapter/i.test(play), 'the Play release notes announce Bluetooth, and customers cannot open it')
+    assert.ok([...play].length <= 500, `the Play release notes come to ${[...play].length}; Play takes 500`)
     assert.ok([...whatsNew].length <= 4000, 'What’s New is longer than Apple takes')
 
     /*
@@ -2380,8 +2402,8 @@ export function run(test) {
     assert.match(current, /HOW IT WORKS\nA phone needs something between it and your Fractal unit: the desktop app\. It runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to it\. Get it at fractal\.newbold\.cloud\/downloads\.\n/, 'HOW IT WORKS does not say the desktop app is what sits between the phone and the unit')
     assert.match(current, /^SUPPORTED UNITS\nFM3, FM9, Axe-Fx III, AM4 and VP4\.$/m, 'the supported units changed')
     assert.ok(current.includes(AFFILIATION), 'the Description no longer ends on the shared disclaimer')
-    assert.match(store, /\*\*This is the one to paste for 1\.87\.1\.\*\* It says nothing about Bluetooth\./, 'the Description does not say it is the one for 1.87.1, with no Bluetooth')
-    assert.match(store, /\*\*On Google Play it can go on whenever\s+it suits:\*\* nothing in it waits for 1\.87\.1 any more\./)
+    assert.match(store, /\*\*This is the one to paste for 1\.87\.11\.\*\* It says nothing about Bluetooth\./, 'the Description does not say it is the one for 1.87.11, with no Bluetooth')
+    assert.match(store, /\*\*On Google Play it can go on whenever\s+it suits:\*\* nothing in it waits for 1\.87\.11 any more\./)
 
     /* The draft that gave Bluetooth the opening line is withdrawn, with no copy left to paste. */
     const withdrawn = section.indexOf('### The Description with Bluetooth (beta): withdrawn')
@@ -2389,7 +2411,7 @@ export function run(test) {
     assert.ok(!/#### App Store copy|#### Google Play copy/.test(store), 'a copy of the Bluetooth Description draft is still in the file to be pasted')
     /*
      * And EVERY block in this file that gets pasted anywhere mentions
-     * Bluetooth only to disclose it: the 1.87.1 notes for Apple and the App
+     * Bluetooth only to disclose it: the 1.87.11 notes for Apple and the App
      * access note for Google. A description, a What's New or a summary that
      * offers it fails here, whichever heading it sits under.
      */
@@ -2397,9 +2419,15 @@ export function run(test) {
     assert.ok(blocks.length >= 8, 'the blocks to paste could not be read')
     const offering = blocks.filter((b) => /bluetooth/i.test(b) && !/switched on only for the developer's own account/.test(b))
     assert.deepEqual(offering, [], 'a block to paste offers Bluetooth (beta), and customers cannot open it')
-    assert.equal(blocks.filter((b) => /bluetooth/i.test(b)).length, 2, 'Bluetooth is disclosed in some other block than Apple’s notes and Google’s App access')
-    const draftNote = section.slice(withdrawn, section.indexOf('### By hand in Play Console for 1.87.1'))
+    /* Apple's notes, Google's App access note, and its short version for a box that will not take the long one. */
+    assert.equal(blocks.filter((b) => /bluetooth/i.test(b)).length, 3, 'Bluetooth is disclosed in some other block than Apple’s notes and Google’s App access (long and short)')
+    const draftNote = section.slice(withdrawn, section.indexOf('### By hand in Play Console for 1.87.11'))
     assert.ok(!/```/.test(draftNote), 'the withdrawn draft still has a block to paste')
+    /* The 1.87.1 texts are kept at the end for the record, quoted rather than fenced, so none of them is a block to paste. */
+    const record = store.indexOf('## Kept for the record: the 1.87.1 texts (not for pasting)')
+    assert.ok(record > at, 'the 1.87.1 texts are not kept for the record after the 1.87.11 ones')
+    assert.ok(!/```/.test(store.slice(record)), 'a 1.87.1 text kept for the record is fenced, as though it were to be pasted')
+    assert.match(store.slice(record), /build 26 went to TestFlight\s+only, and is not to be submitted/, 'the record does not say build 26 is not to be submitted')
 
     /*
      * BY HAND IN PLAY CONSOLE. What Google's own review found missing, none
@@ -2409,8 +2437,8 @@ export function run(test) {
      * no record of the demo account; and the live listing is not this
      * file's.
      */
-    const playAt = section.indexOf('### By hand in Play Console for 1.87.1')
-    assert.ok(playAt > 0, 'the 1.87.1 section has no Play Console checklist')
+    const playAt = section.indexOf('### By hand in Play Console for 1.87.11')
+    assert.ok(playAt > 0, 'the 1.87.11 section has no Play Console checklist')
     const playHand = section.slice(playAt)
     for (const [type, why] of [
       [/\*\*Financial info → Purchase history\.\*\* Required\./, 'Purchase history'],
@@ -2429,17 +2457,27 @@ export function run(test) {
     /* Google's reviewer is told the same as Apple's, in Android's words: the manifest declares Nearby devices and Location for the code that is there. */
     assert.ok(!/tap the gear at the top right for Settings, then Bluetooth|VIDEO LINK/.test(access), 'the Play reviewer is still sent to a Bluetooth row this account cannot see')
     /*
-     * And, unlike Apple's, the build Google has is the 10 October one, in
-     * production since that day: its built-in copy shows the Bluetooth card
-     * on a fresh install's first launch, so the line says so instead of
-     * "never".
+     * And the 1.87.1 note's line about the first launch is gone. It said the
+     * copy built into the build could show the Bluetooth card on a fresh
+     * install's first launch, which was true of 1.87.1, made on 10 October.
+     * 1.87.11 carries the hidden version inside it, so a note that still
+     * said it would describe an app Google's reviewer does not have.
      */
     assert.match(
       access,
-      /^This build also contains Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested\. Once the app has downloaded its first update, usually from its second launch, this account does not see it\. On the first launch after this version is installed or updated, the copy built into it can still show a BLUETOOTH \(BETA\) card under Settings → Phone & computer; the app asks for Nearby devices \(or Location, on Android 11 and older\) only if Connect is tapped on the page it opens\.$/m,
+      /^This build contains Bluetooth MIDI code for a feature \(reaching the guitar unit through a Bluetooth MIDI adapter instead of a computer\) that is switched on only for the developer's own account while it is tested\. No other account sees it, this one included\. That code is why the app declares Nearby devices, and Location on Android 11 and older, where Android needs it to find a Bluetooth device; it never reads where the phone is\. They are asked for only after Connect is tapped on the Bluetooth page, which this account cannot open\./m,
       'the Play reviewer is not told why Nearby devices and Location are declared, and when they are asked for'
     )
-    assert.ok(!/never asks|does not see it, and/.test(access), 'the Play note says the reviewer never meets Bluetooth, and the first launch of 1.87.1 can show it')
+    assert.ok(!/first launch|BLUETOOTH \(BETA\)|card under Settings/.test(access), 'the Play note still describes the first-launch Bluetooth card of 1.87.1, which 1.87.11 does not have')
+    assert.match(access, /Delete account: Settings \(the gear, top right\) → the account card at the top → Delete account → "Delete my account"\./, 'the Play reviewer is not told where Delete account is')
+    assert.match(access, /Developer pages \(accounts, sales, messages\) that open only for the developer's own account; the server checks which account is asking\./, 'the Play note does not say the Developer pages are there, and whose they are')
+    /* And the short version, for a box that will not take the long one, says the same in fewer words. */
+    const short = fencedBlock(playHand, 'use this short version instead')
+    for (const label of ['Get started', 'Got it', 'Start free demo', 'Play with ']) {
+      assert.ok(short.includes(label), `the short Play note does not name "${label}"`)
+    }
+    assert.match(short, /switched on only for the developer's own account while it is tested; this account never sees it\./)
+    assert.ok(!/first launch|BLUETOOTH \(BETA\)/.test(short), 'the short Play note describes the 1.87.1 first-launch card')
     /*
      * THE RISK THAT LEAVES, NAMED. The manifest declares Nearby devices (and
      * Location up to Android 11) and the listing promotes nothing they
@@ -2449,7 +2487,7 @@ export function run(test) {
     assert.match(playHand, /\*\*A risk to know about: permissions the listing gives no reason for\.\*\*/, 'the Play checklist does not name the risk of declared permissions the listing gives no reason for')
     assert.match(playHand, /\*\*A build without the Android Bluetooth permissions\.\*\* That moves the\s+fingerprint, so it is a new build for both phones, one iOS and one Android\s+slot/, 'the Play checklist does not say what a build without the permissions costs')
     assert.match(playHand, /\*\*Listing Bluetooth, once customers have it\.\*\*/, 'the Play checklist does not give listing Bluetooth as the other way out')
-    assert.match(playHand, /\*\*3\. The listing\*\* \(Grow users → Store presence → Store listings → the default\s+listing\), any time: nothing in it waits for 1\.87\.1 now\./)
+    assert.match(playHand, /\*\*3\. The listing\*\* \(Grow users → Store presence → Store listings → the default\s+listing\), any time: nothing in it waits for 1\.87\.11 now\./)
     assert.ok(!/paste its \*\*Google Play\s+copy\*\* instead/.test(playHand), 'the Play checklist still offers the withdrawn Bluetooth draft')
     assert.match(playHand, /\*\*Short description:\*\* the one under \*Google Play: short description\*/, 'the Play checklist does not say to paste the lower-case short description')
     assert.match(playHand, /\*\*The trademark line\*\* at the end has to be the one in this file, which\s+names the VP4/, 'the Play checklist does not say the trademark line must name the VP4')
