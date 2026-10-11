@@ -16,7 +16,7 @@ import Press from '../components/Press'
 import Connect from './Connect'
 import { setDemo } from '../lib/demo'
 import { SETUP } from '../lib/onboarding'
-import { ONLY_HERE } from '../lib/purchases'
+import { MADE_HERE, ONLY_HERE } from '../lib/purchases'
 import mailIcon from '../../assets/icons/mail.png'
 import lockIcon from '../../assets/icons/lock.png'
 import externalIcon from '../../assets/icons/external.png'
@@ -44,7 +44,7 @@ import externalIcon from '../../assets/icons/external.png'
  * Nothing here mentions a channel, a relay, or the name of the account
  * service — that part has not changed.
  */
-export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = false, onAccountMade }) {
+export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = false, madeHere = false, onAccountMade }) {
   const [mode, setMode] = useState(start === 'up' ? 'up' : 'in') // 'in' | 'up'
   /*
    * The instructions, from the one screen that needs them most.
@@ -89,6 +89,11 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
    * first account made here, so a second one, made because the first
    * email was mistyped or its confirmation never came, is still told to
    * come back to this phone and sign in.
+   *
+   * And `madeHere` is which of those it is when the purchase is on an
+   * account made here: then it is NOT only on this phone, and "Make an
+   * account" sent people off to make a second one, which got nothing. Its
+   * own line says the first has it and to sign in here with it.
    */
   const paid = start === 'up' || paidHere
   /* Sign in failed on the details, on a phone that paid before any account
@@ -267,12 +272,16 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
 
         {/* Paid on this phone, with no account yet: said where the form is.
             Making the account is what carries the purchase to the computer.
-            Out of the way of a note, which says what to do next itself. */}
+            On an account made here already, that one has it, on either side
+            of the form. Out of the way of a note, which says what to do next
+            itself. */}
         {paid && !note ? (
           <Note strong={mode === 'up'}>
-            {mode === 'up'
-              ? 'You’ve paid — thank you. Now make your account, so the full version goes with you to your computer and any other phone. Use this same email there.'
-              : ONLY_HERE}
+            {madeHere
+              ? MADE_HERE
+              : mode === 'up'
+                ? 'You’ve paid — thank you. Now make your account, so the full version goes with you to your computer and any other phone. Use this same email there.'
+                : ONLY_HERE}
           </Note>
         ) : null}
 
