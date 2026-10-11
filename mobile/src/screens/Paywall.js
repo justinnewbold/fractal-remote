@@ -54,6 +54,13 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
    * phone's own sign-in, not the account server, and asked only on a page
    * opened from the demo or the walkthrough: the imposed one is always
    * signed in.
+   *
+   * The line names no other place to pay (Apple 3.1.3, Google Play's
+   * payments policy) and calls nothing free: "Sign in instead. It's free."
+   * sat over the price on App Review's own path, and read as if the full
+   * version cost nothing. It names Restore too, the free way for somebody
+   * whose other phone, on this same Apple ID or Google account, had no
+   * account.
    */
   const [nobody, setNobody] = useState(false)
   useEffect(() => {
@@ -161,15 +168,17 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
         <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 18 }}>{detail}</Text>
       ) : null}
 
-      {/* A payment the store is still waiting on, or one it has not
-          confirmed: said for as long as Buy is held behind it. */}
+      {/* A payment the store is still waiting on, one it has not confirmed,
+          or a purchase here that has not reached the account: said for as
+          long as Buy is held behind it. */}
       {held && !said ? <Note tone="warn">{held}</Note> : null}
 
       <View style={{ gap: space.md }}>
         {freeFirst ? (
           <>
             <Text style={{ color: color.silk, fontSize: font.body, lineHeight: font.body * 1.45 }}>
-              Bought it already — on the website or another phone? Sign in instead. It&rsquo;s free.
+              Already bought it on another device? Sign in with the account you used there, or tap Restore a
+              purchase. You won&rsquo;t be charged again.
             </Text>
             <Press
               label={ALREADY_UNLOCKED}

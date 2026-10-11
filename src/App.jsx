@@ -2065,6 +2065,10 @@ export default function App() {
 
   const answeredFor = accountId && paid.checked && paid.for === accountId
   const owned = Boolean(answeredFor && paid.unlocked)
+  /* Owned, and known to be: `owned` also counts the server's "could not ask
+     RevenueCat", which is right for holding Buy back and wrong for telling
+     anybody they have it. Every "nothing more to pay" goes by this one. */
+  const ownedSure = owned && !paid.unknown
   const mustPay = Boolean(link.role === 'remote' && !isDemo() && answeredFor && !paid.unlocked && !paid.unknown)
   /* Either of the two places the unlock is drawn (unlockBody), on screen now.
      A name, so the asking below does not spell out their conditionals. */
@@ -2123,7 +2127,7 @@ export default function App() {
       /* Somebody who has paid is shown that it is unlocked, never a Buy
          button. The walkthrough's Unlock card used to open the page for
          anybody signed in. */
-      setSetupPage(owned ? 'account' : 'unlock')
+      setSetupPage(ownedSure ? 'account' : 'unlock')
       return
     }
     setUnlockAfterSignIn(true)
@@ -2199,12 +2203,22 @@ export default function App() {
    * so now (unlockBody), and keeps asking until that has happened — see
    * askUntilUnlocked for how often. Not while a checkout is open over it:
    * that is RevenueCat's, and nothing here can take it down.
+   *
+   * And while the answer is the server's "could not ask", which holds Buy
+   * back: the first definite no gives it back.
    */
   useEffect(() => {
-    if (!unlockOnScreen || !accountId || owned || buying) return undefined
-    return askUntilUnlocked(nowUnlocked)
+    if (!unlockOnScreen || !accountId || ownedSure || buying) return undefined
+    const ask = async () => {
+      const out = await checkUnlocked()
+      if (!out.unknown && !out.unlocked) {
+        setPaid((p) => (p.for === accountId && p.unknown ? { checked: true, unlocked: false, unknown: false, for: accountId } : p))
+      }
+      return out
+    }
+    return askUntilUnlocked(nowUnlocked, ask)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unlockOnScreen, accountId, owned, buying])
+  }, [unlockOnScreen, accountId, ownedSure, buying])
 
   const linkAction = useCallback(
     async (kind) => {
@@ -3877,8 +3891,8 @@ export default function App() {
    * has not paid sees in place of connecting (mustPay, above).
    *
    * Every sentence here is copied from mobile/src/screens/Paywall.js, and
-   * test/both-ends.mjs holds them to it — but for the one above Buy about a
-   * purchase made on a phone, which says why it is there.
+   * test/both-ends.mjs holds them to it — but for the lines above Buy about
+   * what this account has, which say why they are there.
    */
   const unlockBody = (
     <>
@@ -3894,17 +3908,23 @@ export default function App() {
         tuner, tap tempo, setlists, and so much more.
       </p>
       {/*
-        THE ONE SENTENCE HERE THAT IS NOT THE PHONE'S: only this end can be
-        looking at an account that a phone's purchase has not reached yet,
-        because that phone has not signed in. The page keeps asking while it
-        is up (see ASK AGAIN), so "unlocks by itself" is what it does.
+        THE LINES HERE THAT ARE NOT THE PHONE'S: only this end can be looking
+        at an account that a phone's purchase has not reached yet, because
+        that phone has not signed in. The page keeps asking while it is up
+        (see ASK AGAIN), so "unlocks by itself" is what it does — for the
+        email named, which is why a phone on another one is told apart. And
+        Buy held back on a question that could not be put says so, rather
+        than that this account has paid.
       */}
-      {owned ? (
+      {ownedSure ? (
         <p className="hint">This account has the full version already. There is nothing more to pay.</p>
+      ) : owned ? (
+        <p className="hint">Couldn&rsquo;t check your purchase just now, so Buy is off for a moment. This page asks again by itself.</p>
       ) : signedInHere ? (
         <p className="hint unlock-phone">
           Bought it on your iPhone or Android? Don&rsquo;t pay again. Open the phone app and sign in with{' '}
-          <strong>{link.account.email}</strong> — this page unlocks by itself as soon as you do.
+          <strong>{link.account.email}</strong> — this page unlocks by itself as soon as you do. If your phone is
+          signed in with a different email, sign in here with that one instead.
         </p>
       ) : null}
       {buySaid ? <p className="hint tone-bad">{buySaid}</p> : null}
@@ -4809,7 +4829,7 @@ export default function App() {
         }
         onUnlock={openUnlock}
         /* So its phone-remote card says an owner has it, rather than selling it. */
-        paid={owned}
+        paid={ownedSure}
         onHere={() => setComputerSetup(true)}
       />
       <Onboarding
@@ -5840,8 +5860,10 @@ export default function App() {
                   <p className="hint">
                     This deletes your account for good: your sign-in, your set lists, bug reports you sent from it and
                     everything else stored under it. It happens straight away and cannot be undone. Any computer or
-                    phone signed in to this account is signed out. A full version you bought stays with the account you
-                    paid with, and Restore a purchase brings it back on a new account.
+                    phone signed in to this account is signed out. A full version bought in the App Store or on Google
+                    Play stays with that Apple ID or Google account, and Restore a purchase in the phone app brings it
+                    back on a new account. One bought with a card on the website or in the computer app, or given to
+                    you, belongs to this account and goes with it for good.
                   </p>
                   {typeof deleting === 'object' ? (
                     <p className="save-error" role="status">

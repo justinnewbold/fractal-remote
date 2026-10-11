@@ -316,16 +316,25 @@ export default function App() {
     setAuth('out')
   }
   /*
-   * AND THE SAME DOOR ON MAKING AN ACCOUNT, for a phone whose purchase is on
-   * no account yet (purchases.js, onlyHere). Their lines on the demo's stage
-   * and in Settings → Account lead here. The form opens on Create account
-   * until somebody signs in; straight after a purchase with nobody signed
-   * in it does that by itself (boughtAlone, below at SignIn).
+   * AND WHICH SIDE OF THE FORM IT OPENS ON: Sign in, unless something said
+   * otherwise. Create account straight after a purchase with nobody signed
+   * in (purchases.js, boughtAlone), and from "Make an account", the door
+   * for a phone whose purchase is on no account yet (onlyHere) — its lines
+   * on the demo's stage and in Settings → Account. Only for the form it
+   * opened: leaving it, any way, puts it back to Sign in, so a later "Sign
+   * in" never opens on "now make your account" for somebody who has made
+   * one, or has walked away from making one.
    */
-  const [makeAccount, setMakeAccount] = useState(false)
+  const [signInSide, setSignInSide] = useState('in')
+  useEffect(() => {
+    if (purchase.boughtAlone) setSignInSide('up')
+  }, [purchase.boughtAlone])
+  useEffect(() => {
+    if (auth !== 'out') setSignInSide('in')
+  }, [auth])
   const toMakeAccount = () => {
     toSignIn()
-    setMakeAccount(true)
+    setSignInSide('up')
   }
   /*
    * THE TOUR, WHICH THIS END NEVER HAD. "First issue is demo has no
@@ -835,9 +844,12 @@ export default function App() {
             /* Create account, after buying with nobody signed in: he was met
                with Sign in, which failed four times, and made the account on
                the website, which then sold it to him again. */
-            start={purchase.boughtAlone || makeAccount ? 'up' : 'in'}
+            start={signInSide}
             paidHere={purchase.onlyHere}
-            onAccountMade={(id) => linkNewAccount(id)}
+            onAccountMade={(id) => {
+              setSignInSide('in')
+              linkNewAccount(id)
+            }}
             onSignedIn={() => {
               /* An owner signing in is unlocked from that moment, not from
                  the next launch — the check at startup ran before there was
@@ -868,7 +880,6 @@ export default function App() {
                */
               setAuth('checking')
               linked.then(() => setAuth('in'))
-              setMakeAccount(false)
             }}
             onDemo={() => setAuth('in')}
           />

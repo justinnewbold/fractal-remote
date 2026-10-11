@@ -19,8 +19,9 @@
  * time it refreshes. The few rows keyed by an email address go first, below.
  *
  * The RevenueCat customer named after the account is deleted as well, when the
- * key is set. A purchase itself belongs to the buyer's Apple ID or Google
+ * key is set. A store purchase belongs to the buyer's Apple ID or Google
  * account rather than to us: Restore Purchases on a new account brings it back.
+ * A website purchase or a grant lives on that customer, and goes with it.
  *
  * The body must say {"confirm":"delete"}, so a stray or replayed call with a
  * valid token cannot delete anything by accident.

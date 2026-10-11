@@ -39,13 +39,18 @@ export default function SignInSheet({ open, role, account = false, startIn = 'in
           )}
           {/*
             ON THE WAY TO THE UNLOCK, on either side of the form. Somebody who
-            bought it on a phone has it already under the email they used
-            there, once that phone has signed in; an account made here with
-            another email is a second account, and it would be sold again.
+            bought it on a phone has it already under the email they sign in
+            with there, once that phone has signed in; an account made here
+            with another email is a second account, and it would be sold
+            again. And the phone may have no account yet at all — the buyer
+            this was written for had none — so making one here says which
+            email to make it with, not "the one you used there".
           */}
           {forUnlock ? (
             <p className="hint">
-              Bought it on your phone already? Use the same email you used there, and sign in on the phone first.
+              {making
+                ? 'Bought it on your phone already? Make the account with the email you’ll sign in with on the phone, then sign in with it on the phone before you pay here. Once you have, it unlocks here by itself.'
+                : 'Bought it on your phone already? Sign in with the same email as on the phone. If the phone isn’t signed in yet, sign in there first, before you pay here. Once you have, it unlocks here by itself.'}
             </p>
           ) : null}
           <SignIn

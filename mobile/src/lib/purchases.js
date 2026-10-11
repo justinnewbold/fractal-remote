@@ -58,6 +58,10 @@ export const PRODUCT_ID = 'cloud.newbold.fractalremote.full'
 /** Where the remembered answer lives between launches. */
 const KEY = 'fractal.unlocked'
 
+/* And the account this phone's purchase was put on as it was made here,
+   before anybody had signed in to it (linkNewAccount), until somebody does. */
+const MADE_KEY = 'fractal.madeHere'
+
 /*
  * The publishable keys, which are not secret.
  *
@@ -117,8 +121,9 @@ let state = {
      screen opens on making the account that carries it (App.js). */
   boughtAlone: false,
   /* What the Buy button is held behind for the rest of this run — a payment
-     the store is still waiting on, or one it took and has not confirmed.
-     Null nearly always. */
+     the store is still waiting on, one it took and has not confirmed, or a
+     purchase made here that has not reached the account signed in to
+     (NOT_ACROSS, until another sign-in). Null nearly always. */
   held: null
 }
 
@@ -128,9 +133,19 @@ export const ONLY_HERE =
   'Your purchase is only on this phone so far. Make an account or sign in, and it works on your computer too.'
 
 /* What a payment the store is still waiting on is called: Ask to Buy, a bank
-   that wants its own approval, cash at a shop on Google Play. */
+   that wants its own approval, cash at a shop on Google Play. Buy waits with
+   it for the rest of the run, so one turned down is tried again from a fresh
+   start. */
 export const PENDING =
-  'Your payment is still waiting to go through. The app unlocks by itself when it does, so please don’t pay again on the website or another phone.'
+  'Your payment is still waiting to go through. The app unlocks by itself when it does, so please don’t pay for it again anywhere else. If it’s turned down, close the app fully and open it again to try once more.'
+
+/* What a purchase made on this phone before signing in is called when it
+   could not be sent across to the account (bringAcross, below). */
+export const NOT_ACROSS =
+  'You paid for the full version on this phone, and it hasn’t reached your account yet. Please don’t pay again: tap Restore a purchase.'
+
+/* The hold, less that one: once the account changes, or has the purchase, its words are not true. */
+const notStuck = () => (state.held === NOT_ACROSS ? null : state.held)
 
 /* The store account a purchase on this phone belongs to, by the name its owner knows it by. */
 const storeAccount = () => (Platform.OS === 'ios' ? 'Apple ID' : 'Google account')
@@ -212,6 +227,24 @@ const remember = async (yes) => {
     await AsyncStorage.setItem(KEY, yes ? 'yes' : 'no')
   } catch {
     /* A phone that cannot write this still runs; it just re-asks next launch. */
+  }
+}
+
+const madeHere = async () => {
+  try {
+    return (await AsyncStorage.getItem(MADE_KEY)) || null
+  } catch {
+    return null
+  }
+}
+
+const noteMade = async (id) => {
+  try {
+    if (id) await AsyncStorage.setItem(MADE_KEY, id)
+    else await AsyncStorage.removeItem(MADE_KEY)
+  } catch {
+    /* Unwritten, a later sign-in elsewhere only misses the receipt being
+       sent again; Restore still brings it. */
   }
 }
 
@@ -345,25 +378,36 @@ let claiming = Promise.resolve()
  * occurs": somebody who bought on a second phone before signing in signed in
  * to an account without it, met the price again, and could pay again.
  *
- * So the phone notes, just before logIn, whether its own nameless customer
- * held the full version, and if the account comes back without it, sends the
- * phone's store receipt again under the account. RevenueCat's default
+ * So the phone notes, just before logIn, whether the full version it holds
+ * is its own (phonesOwn), and if the account comes back without it, sends
+ * the phone's store receipt again under the account. RevenueCat's default
  * (Transfer) moves the purchase across. It is silent — no Apple or Google
  * sign-in is asked for — and it never throws or holds a sign-in up beyond
  * the time the sign-in already allows (LINK_WAIT_MS).
+ *
+ * Its own means on no account anybody has signed in to here: the phone's
+ * nameless id, or an account made here and not signed in to since
+ * (linkNewAccount), which may never be — a mistyped email, or a
+ * confirmation that never came, as on 8 October. Never an account somebody
+ * signed in to: that purchase is theirs, and moving it would take it off
+ * them.
  */
-const heldHere = async (api) => {
+const phonesOwn = async (api, id, made) => {
   try {
-    return (await nameless(api)) && entitled(await api.getCustomerInfo())
+    const parked = Boolean(made) && made !== id && (await api.getAppUserID?.()) === made
+    if (!parked && !(await nameless(api))) return false
+    return entitled(await api.getCustomerInfo())
   } catch {
     return false
   }
 }
 
+/* The answer the sync itself hands back, once the receipt is posted.
+   syncPurchases returns before anything is sent and never reports a
+   failure, so a read straight after it raced the post and lost. */
 const bringAcross = async (api) => {
   try {
-    await api.syncPurchases()
-    const info = await freshInfo(api)
+    const info = (await api.syncPurchasesForResult())?.customerInfo || null
     logDebug(`purchases: sent this phone’s purchase to the account (${entitled(info) ? 'it has it now' : 'it still does not'})`)
     return info
   } catch (err) {
@@ -372,19 +416,28 @@ const bringAcross = async (api) => {
   }
 }
 
-/* And tell the relay. logIn is the moment a handset's purchase becomes an
-   account's, so it is the moment the relay's table can first be right about
-   it. Not awaited here: at launch nothing waits on the answer. A sign-in does
-   (linkAccount), and reads it from `claiming`. Neither half ever throws. */
-const linkTo = async (api, id) => {
+/* `made`: the account was just made here, not signed in to (linkNewAccount). */
+const linkTo = async (api, id, { made = false } = {}) => {
   if (!api?.logIn || !id) return null
   try {
-    const had = await heldHere(api)
+    const before = await madeHere()
+    const had = await phonesOwn(api, id, before)
     const out = await api.logIn(id)
     logDebug('purchases: linked to the account')
-    set({ boughtAlone: false, onlyHere: false })
+    /* Noted until somebody signs in; a sign-in, to it or any other, ends it. */
+    if (made) await noteMade(id)
+    else if (before) await noteMade(null)
+    set({ boughtAlone: false, onlyHere: false, held: notStuck() })
     let info = out?.customerInfo || null
     if (had && !entitled(info)) info = (await bringAcross(api)) || info
+    /* Still not there: a sync that failed, or a receipt the store will not
+       send twice. The phone took the money, so it takes none again. */
+    if (had && !entitled(info)) set({ held: NOT_ACROSS })
+    /* And tell the relay. logIn is the moment a handset's purchase becomes an
+       account's, so it is the moment the relay's table can first be right
+       about it. Not awaited here: at launch nothing waits on the answer. A
+       sign-in does (linkAccount), and reads it from `claiming`. Neither half
+       ever throws. */
     claiming = claimRelay().then((yes) => (yes ? catchUp(api) : null))
     return info
   } catch (err) {
@@ -452,12 +505,18 @@ const link = async () => {
  *
  * Only for a phone whose purchase is its alone (onlyHere): anybody else's
  * phone is left exactly as it was. Never throws, and nothing waits on it.
+ *
+ * And the account is noted, because it may never be signed in to: made
+ * with a mistyped email, or a confirmation that never came. Signing in to
+ * the right one later still brings the purchase across (phonesOwn). Not a
+ * second account made here, though: nobody has signed in to ask for that
+ * move, and a sync that failed halfway would leave this phone locked.
  */
 export const linkNewAccount = async (id) => {
   if (!id || !state.onlyHere) return false
   const api = await load()
   if (!api) return false
-  const info = await linkTo(api, id)
+  const info = await linkTo(api, id, { made: true })
   const yes = entitled(info)
   logDebug(`purchases: the new account ${yes ? 'has this phone’s purchase' : 'did not get this phone’s purchase yet'}`)
   return yes
@@ -510,7 +569,7 @@ export const unlinkAccount = async () => {
      * requires that button to exist anyway.
      */
     const yes = entitled(info)
-    set({ boughtAlone: false, onlyHere: await aloneHere(api, info) })
+    set({ boughtAlone: false, onlyHere: await aloneHere(api, info), held: notStuck() })
     await remember(yes)
     set({ unlocked: yes })
     logDebug(`purchases: unlinked from the account (unlocked ${yes})`)
@@ -772,6 +831,8 @@ export const buyUnlock = async () => {
   try {
     const now = await ownedNow(api, who)
     if (!now) return { ok: false, cancelled: false, message: 'Couldn’t check your purchase just now. Try again in a moment.' }
+    /* The link just made can find this phone's own purchase stuck short of the account (linkTo). */
+    if (state.held && !entitled(now)) return { ok: false, cancelled: false, held: true, message: state.held }
     /* Already theirs: unlocked the way a purchase is, and nothing charged. */
     const owned = entitled(now)
     if (owned) logDebug('purchases: already bought, so nothing was charged')
@@ -877,20 +938,22 @@ export const restorePurchase = async () => {
     }
     set({ onlyHere: await aloneHere(api, info) })
     await remember(yes)
-    set({ unlocked: yes })
+    set({ unlocked: yes, held: yes ? notStuck() : state.held })
     if (yes) claimRelay()
     if (yes) return { ok: true, message: null }
     /*
      * "No previous purchase was found on this account" read as "you have not
      * paid", with Buy right above it, to somebody who had — on the website,
      * or on another phone. What was asked is this Apple ID or Google account,
-     * so that is what is said, with the way that works for the rest.
+     * so that is what is said, with the way that works for the rest. Said
+     * without naming the website: a phone app may not point anybody at
+     * another way to pay (Apple 3.1.3, Google Play's payments policy).
      */
     return {
       ok: false,
       message: who
         ? `No purchase was found for this ${storeAccount()}, or on the account you’re signed in to. If you bought it with a different email, sign in with that one instead.`
-        : `No purchase was found for this ${storeAccount()}. If you bought it on the website or on another phone, sign in with that email instead.`
+        : `No purchase was found for this ${storeAccount()}. If you bought it on another device, sign in with the account you used there.`
     }
   } catch (err) {
     logDebug(`purchases: restore failed (${err?.message || err})`)

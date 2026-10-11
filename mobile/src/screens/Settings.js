@@ -1624,22 +1624,29 @@ function Section({ children }) {
  * What deleting the account does to the full version, by where it came from
  * (RevenueCat's store name; see purchases.js, unlockedFrom). A store purchase
  * stays with the Apple ID or Google account that paid; a website purchase and
- * a gift belong to the account, and go with it.
+ * a gift belong to the account, and go with it. Said without naming the
+ * website, as the phone's other words about paying are (Apple 3.1.3).
  */
 const deleteCosts = (from) => {
-  if (from === 'RC_BILLING' || from === 'STRIPE') {
-    return 'You bought the full version on the website, so it belongs to this account. Deleting the account gives it up for good: Restore can’t bring it back.'
+  const mine = Platform.OS === 'ios' ? 'Apple ID' : 'Google account'
+  if (['RC_BILLING', 'STRIPE', 'PADDLE'].includes(from)) {
+    return `Your full version belongs to this account, not to your ${mine}, so deleting the account gives it up for good: Restore can’t bring it back.`
   }
   if (from === 'PROMOTIONAL') {
     return 'The full version was given to this account, so deleting the account gives it up for good.'
   }
+  /* Not known yet, or not known at all: both ways, rather than the store's
+     promise to somebody it may not be true for. */
+  if (!from) {
+    return `If you paid for the full version with your ${mine}, it stays with your ${mine}, and Restore a purchase brings it back on a new account. If it came to this account any other way, deleting the account gives it up for good.`
+  }
   /* Bought through the other phone's store: said without naming it, which
      an iPhone may not do (Apple 2.3.10). */
   const here = Platform.OS === 'ios' ? ['APP_STORE', 'MAC_APP_STORE'] : ['PLAY_STORE']
-  if (from && !here.includes(from)) {
+  if (!here.includes(from)) {
     return 'The full version you bought stays with the store account you paid with. Restore a purchase on the phone you bought it on brings it back on a new account.'
   }
-  return `The full version you bought stays with your ${Platform.OS === 'ios' ? 'Apple ID' : 'Google account'}. Restore a purchase brings it back on a new account.`
+  return `The full version you bought stays with your ${mine}. Restore a purchase brings it back on a new account.`
 }
 
 /** A heading and the rows under it — one group of Settings. */

@@ -119,12 +119,12 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
           /* And the purchase goes onto it now, before the email is opened
              anywhere (purchases.js, linkNewAccount). */
           if (paid && userId) onAccountMade?.(userId)
-          /* Paid on this phone: the confirmation email opens the website
-             signed in, and until this phone has signed in the website sees
-             an account that has not paid — which is where he paid again. */
+          /* Paid on this phone: said that this phone is where to sign in.
+             Not "before you open the website": the confirmation link itself
+             opens the website, so that could not be followed. */
           setNote(
             paid
-              ? 'Account made — now confirm it from the email we just sent. Then sign in here on this phone before you open the website or the computer app, so your purchase is on your account first.'
+              ? 'Account made — confirm it from the email we just sent, then come back to this phone and sign in, so your purchase goes with your account.'
               : 'Account made. Confirm it from the email we just sent, then sign in.'
           )
           setMode('in')

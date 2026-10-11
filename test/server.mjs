@@ -239,7 +239,7 @@ export function run(test) {
     assert.match(pass, /Authorization: `Bearer \$\{token\}`/, 'the relay pass is sent without the session, so it proves nothing')
     assert.match(pass, /const token = data\?\.session\?\.access_token/, 'the relay pass does not use the signed-in session')
     /* Linking (launch and sign-in), buying, restoring. */
-    const link = purchases.slice(purchases.indexOf('const linkTo = async'), purchases.indexOf('const linkTo = async') + 700)
+    const link = purchases.slice(purchases.indexOf('const linkTo = async'), purchases.indexOf('const LINK_WAIT_MS'))
     assert.match(link, /await api\.logIn\(id\)[\s\S]*claimRelay\(\)/, 'linking an account does not tell the relay')
     const buy = purchases.slice(purchases.indexOf('export const buyUnlock'), purchases.indexOf('export const restorePurchase'))
     assert.match(buy, /if \(yes\) claimRelay\(\)/, 'buying does not open the relay')
