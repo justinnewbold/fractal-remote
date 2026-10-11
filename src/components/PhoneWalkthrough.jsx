@@ -26,6 +26,19 @@ import { Cta, FootRow, Steps, TipCard } from './Walk'
 
 const PIECES = { unit: pieceUnit, computer: pieceComputer, phone: piecePhone }
 
+/*
+ * FOR SOMEBODY WHO HAS IT ALREADY, the last card stops selling. The
+ * walkthrough is opened again from Settings by people who have paid, and its
+ * Unlock went straight to the unlock page and an enabled Buy. This end's
+ * words alone, so not in shared/onboarding.mjs, which the phone's copy is
+ * made from.
+ */
+const OWNED = {
+  body: 'Already unlocked on this account. Nothing more to pay.',
+  computerGo: 'Set up phone remote',
+  phoneGo: 'Connect'
+}
+
 /**
  * THE PHONE APP'S WALKTHROUGH, for the browser on a phone.
  *
@@ -64,7 +77,7 @@ const PIECES = { unit: pieceUnit, computer: pieceComputer, phone: piecePhone }
  * three cards (C3): use it here — which hands over to the computer's own
  * plug-in steps, `onHere` — the demo, and the phone remote's unlock.
  */
-export default function PhoneWalkthrough({ open, replay = false, computer = false, onClose, onAccount, onUnlock, onHere }) {
+export default function PhoneWalkthrough({ open, replay = false, computer = false, paid = false, onClose, onAccount, onUnlock, onHere }) {
   const [at, setAt] = useState('welcome')
   const [unit, setUnit] = useState(UNITS[0].key)
   /* The box under Connect my real rig. Unlock stays grey until it is ticked. */
@@ -222,17 +235,27 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
                 <div className="pw-choice-words">
                   <p className="pw-choice-eyebrow">{computer ? C3.phone.eyebrow : P3.real.eyebrow}</p>
                   <p className="pw-choice-title">{computer ? C3.phone.title : P3.real.title}</p>
-                  <p className="pw-choice-body">{computer ? C3.phone.body : P3.real.body}</p>
+                  <p className="pw-choice-body">{paid ? OWNED.body : computer ? C3.phone.body : P3.real.body}</p>
                 </div>
-                <span className="pw-lock" aria-hidden="true" />
+                {paid ? null : <span className="pw-lock" aria-hidden="true" />}
               </div>
-              <label className="pw-agree">
-                <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-                <span>{P3.real.agree}</span>
-              </label>
-              <button type="button" className="chip pw-go" disabled={!agreed} onClick={() => agreed && leave(onUnlock)}>
-                {computer ? C3.phone.go : P3.real.go}
-              </button>
+              {/* Paid: on to setting it up — the sign-in that turns the phone
+                  remote on, or connecting — with no box to tick and no sale. */}
+              {paid ? (
+                <button type="button" className="chip pw-go" onClick={() => leave(onAccount)}>
+                  {computer ? OWNED.computerGo : OWNED.phoneGo}
+                </button>
+              ) : (
+                <>
+                  <label className="pw-agree">
+                    <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+                    <span>{P3.real.agree}</span>
+                  </label>
+                  <button type="button" className="chip pw-go" disabled={!agreed} onClick={() => agreed && leave(onUnlock)}>
+                    {computer ? C3.phone.go : P3.real.go}
+                  </button>
+                </>
+              )}
             </div>
 
             <div className="pw-foot">

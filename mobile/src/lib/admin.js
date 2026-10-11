@@ -123,6 +123,16 @@ export const STORES = {
   promotional: 'Given by hand'
 }
 export const storeName = (store) => STORES[store] || 'Somewhere else'
+/* How somebody paid, for Paid twice: the card is the one RevenueCat can refund. */
+const CARD = ['rc_billing', 'stripe', 'paddle']
+const paidBy = (store) =>
+  store === 'app_store'
+    ? 'on the App Store'
+    : store === 'play_store'
+      ? 'on Google Play'
+      : CARD.includes(store)
+        ? 'by card on the website'
+        : `on ${storeName(store)}`
 
 /** Where somebody has signed in, from the kinds supabase/migrations/20260923_owner_lookup.sql sorts sessions into. */
 export const DEVICES = {
@@ -231,7 +241,22 @@ export function salesSections(answer, now = Date.now()) {
     { label: 'New today', value: String(answer.accountsDay || 0) }
   ]
 
+  /*
+   * PAID TWICE, first, because each one is money to give back. A customer
+   * bought it on his iPhone and again by card on the website, and nothing
+   * here said so. The server names anybody with more than one real
+   * purchase; an older server sends no list, and then there is no section.
+   */
+  const twice = Array.isArray(answer.twice) ? answer.twice : []
+  const paidTwice = twice.map((t) => {
+    const ways = (t.stores || []).map((store, i) => `${paidBy(store)}, ${dayOf(t.at?.[i])}`)
+    const card = (t.stores || []).some((store) => CARD.includes(store))
+    const said = ways.length > 2 ? `${ways.slice(0, -1).join('; ')}; and ${ways[ways.length - 1]}` : ways.join(', and ')
+    return { label: t.email, value: `Paid ${said}.${card ? ' The card one can be refunded in RevenueCat.' : ''}` }
+  })
+
   const sections = [
+    ...(paidTwice.length ? [{ title: 'Paid twice', rows: paidTwice }] : []),
     { title: 'Sales', rows: totals },
     { title: 'Where they bought', rows: where },
     { title: 'Not sales', rows: other },

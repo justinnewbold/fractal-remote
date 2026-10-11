@@ -9,7 +9,7 @@ import SignIn from './SignIn'
  * it is "Connect to your Mac", because that is what the person is doing —
  * the account is the means. At the Mac it is "Set up phone remote", once.
  */
-export default function SignInSheet({ open, role, account = false, startIn = 'in', email, busy, onClose, onSubmit, onCreate }) {
+export default function SignInSheet({ open, role, account = false, startIn = 'in', forUnlock = false, email, busy, onClose, onSubmit, onCreate }) {
   const phone = role !== 'mac'
   /*
    * WHICH SIDE THE FORM IS ON, so the title says what is being done. Opened
@@ -37,6 +37,17 @@ export default function SignInSheet({ open, role, account = false, startIn = 'in
               and starred presets follow you to any device.
             </p>
           )}
+          {/*
+            ON THE WAY TO THE UNLOCK, on either side of the form. Somebody who
+            bought it on a phone has it already under the email they used
+            there, once that phone has signed in; an account made here with
+            another email is a second account, and it would be sold again.
+          */}
+          {forUnlock ? (
+            <p className="hint">
+              Bought it on your phone already? Use the same email you used there, and sign in on the phone first.
+            </p>
+          ) : null}
           <SignIn
             key={startIn}
             email={email}
