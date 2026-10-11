@@ -2887,7 +2887,15 @@ export function run(test) {
       const name = file.split('/mobile/')[1] || file
       const code = withoutComments(readFileSync(file, 'utf8'))
       if (/from '(\.\.\/lib|\.)\/(admin|whats-live)'/.test(code)) {
-        assert.ok(/^src\/components\/\w+Tool\.js$/.test(name) || (name === 'src/screens/Settings.js' && /import \{ isAdmin \} from '\.\.\/lib\/admin'/.test(code)), `${name} uses the Developer pages' words outside the Developer pages`)
+        /*
+         * lib/bluetooth.js too, since Bluetooth (beta) went back to Justin's
+         * account alone (11 October 2026): it asks isAdmin whose phone this
+         * is, as Settings does, and draws none of the pages' words.
+         */
+        const asksOnlyWho =
+          (name === 'src/screens/Settings.js' && /import \{ isAdmin \} from '\.\.\/lib\/admin'/.test(code)) ||
+          (name === 'src/lib/bluetooth.js' && /import \{ isAdmin \} from '\.\/admin'/.test(code))
+        assert.ok(/^src\/components\/\w+Tool\.js$/.test(name) || asksOnlyWho, `${name} uses the Developer pages' words outside the Developer pages`)
       }
       assert.ok(!/from '(\.\.\/lib|\.)\/ways-in'/.test(code), `${name} imports the browser's routes, which name Google Play`)
     }
@@ -5811,33 +5819,36 @@ export function run(test) {
     assert.ok(!/still being\s+improved/.test(pasted), 'the 1.87.1 notes say Edit is still being improved, which reads as unfinished under 2.2')
 
     /*
-     * BLUETOOTH (BETA) IS IN, FOR EVERYBODY WHO HAS UNLOCKED THE APP.
+     * BLUETOOTH (BETA): THE CODE IS IN THE BUILD, AND THE NOTES SAY WHOSE IT IS.
      *
-     * This held Bluetooth OUT of the block that gets pasted while it was
-     * Justin's call, and then held the paragraph to a list of tester accounts
-     * with the demo account on it. He has decided: "If Bluetooth is ready,
-     * let's get it submitted… let's just say that Bluetooth is beta though in
-     * the app and give like a disclaimer." The list is gone with that, so the
-     * assertions that pinned "not yet" and "only the listed accounts" are
-     * changed on purpose, not to get them to pass: the paragraph is now in
-     * the pasted block, and what it says has to be what the build does.
+     * This held the paragraph to saying where Bluetooth is, that it is for
+     * everyone who has unlocked the app, that it is marked beta, a video, and
+     * when the permission is asked. Changed on purpose, with the decision of
+     * 11 October 2026: "Is there any way to just get the Bluetooth on the
+     * developers mode for my own phone? I just feel like it's not ready to
+     * have public." It is switched on for his account alone, so the reviewer
+     * has nothing to reach, and the paragraph is a disclosure instead — 2.3.1(a)
+     * forbids "hidden, dormant, or undocumented features" — in words that are
+     * what the build does: the row behind the developer-only check, and no
+     * Bluetooth question put to anybody else.
      */
-    assert.match(pasted, /Bluetooth \(beta\)\./, 'Bluetooth (beta) is in this version, and the notes that get pasted do not describe it')
-    /* Where it is, by the words the screens draw: the gear, then the Bluetooth (beta) row. */
+    assert.match(pasted, /This build\s+contains Bluetooth MIDI code for a feature/, 'the 1.87.1 notes do not say the build carries Bluetooth code')
+    assert.match(pasted, /switched on only for the developer's own account\./, 'the 1.87.1 notes do not say whom the Bluetooth code is for')
+    assert.match(pasted, /Customers and the review account don't see it anywhere in the app, and the\s+app never asks them for Bluetooth permission\./, 'the 1.87.1 notes do not say the reviewer and customers neither see it nor are asked for Bluetooth')
+    assert.ok(!/everyone\s+who\s+has\s+unlocked\s+the\s+app/.test(pasted), 'the 1.87.1 notes say Bluetooth is for everyone who has paid, and it is the developer’s alone')
+    assert.ok(!/Settings,\s+then\s+Bluetooth \(beta\)|marked\s+beta|asks for Bluetooth permission only when Connect/.test(pasted), 'the 1.87.1 notes still tell the reviewer where Bluetooth is and how it asks, and the review account cannot see it')
     const settingsSrc = read('mobile/src/screens/Settings.js')
     assert.match(settingsSrc, /title="Bluetooth \(beta\)"/)
     assert.match(settingsSrc, /head\('Bluetooth \(beta\)', 'back'\)/)
-    assert.match(pasted, /Settings,\s+then\s+Bluetooth \(beta\)/, 'the 1.87.1 notes do not say where Bluetooth is')
-    /* Open to everybody who has unlocked the app, which is the gate the row and the page are behind, and no list. */
-    assert.match(settingsSrc.replace(/\s+/g, ' '), /\{mayDrive\(purchase\) && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/)
-    assert.match(pasted, /everyone\s+who\s+has\s+unlocked\s+the\s+app/, 'the 1.87.1 notes do not say who Bluetooth is for')
-    assert.ok(!/selected\s+accounts|chosen\s+accounts|shown\s+only\s+to/i.test(pasted), 'the 1.87.1 notes say Bluetooth is shown only to some accounts, and there is no such list')
-    assert.equal(existsSync(new URL('../shared/bluetooth-testers.mjs', import.meta.url)), false, 'the Bluetooth tester list is back, and the notes say there is none')
+    /* The gate the disclosure describes: the developer's account, read from the session on the phone, on the row and on the page. */
+    const oneLine = settingsSrc.replace(/\s+/g, ' ')
+    assert.match(oneLine, /\{mayDrive\(purchase\) && bluetoothAllowed && bluetoothSupported\(\) \? \( <SetupRow title="Bluetooth \(beta\)"/)
+    assert.match(oneLine, /\{page === 'bluetooth' && mayDrive\(purchase\) && bluetoothAllowed && bluetoothSupported\(\) \? \(/)
+    assert.equal(existsSync(new URL('../shared/bluetooth-testers.mjs', import.meta.url)), false, 'the Bluetooth tester list is back, and the notes say only the developer’s account has it')
     assert.ok(!/BLUETOOTH_TESTERS|bluetooth-testers/.test(store), 'the store notes still send somebody to a Bluetooth list that no longer exists')
-    /* A beta, said as one, on hardware the reviewer will not have: so a video (2.1). */
-    assert.match(pasted, /marked\s+beta/, 'the 1.87.1 notes do not say Bluetooth is marked beta')
-    assert.match(pasted, /video/, 'the 1.87.1 notes give the reviewer no video of Bluetooth working on hardware they do not have')
-    assert.match(pasted, /asks for Bluetooth permission only when Connect is\s+tapped/, 'the 1.87.1 notes do not say when Bluetooth permission is asked')
+    /* No video of Bluetooth: there is nothing for the reviewer to reach. The Hardware paragraph's FM3 video stays. */
+    assert.ok(!/VIDEO LINK/.test(pasted), 'the 1.87.1 notes still promise a video of Bluetooth')
+    assert.match(pasted, /Hardware \(Guideline 2\.1\): a video filmed on an iPhone with a real FM3 on\s+screen/, 'the hardware video of the computer way went with the Bluetooth one')
 
     /* And a What's New, which Apple asks for on every version after the first. */
     const news = store.indexOf("### What's New in This Version, 1.87.1", at)
@@ -5848,14 +5859,11 @@ export function run(test) {
     const play = whatsNew.trim().split('\n').slice(0, 5).join('\n')
     assert.ok([...play].length <= 500, `the five lines for Google Play come to ${[...play].length}; Play takes 500`)
     /*
-     * And now What's New does tell every customer, since every customer who
-     * has unlocked the app can open it — this used to forbid the line while
-     * only testers could. Changed on purpose with the decision above. The
-     * line says beta in itself, because What's New is read without the app.
+     * And What's New no longer tells anybody about Bluetooth. It did for the
+     * one day every customer could open it, and this pinned the line; changed
+     * on purpose with the decision above, since no customer can open it now.
      */
-    const bleLine = whatsNew.split('\n').find((l) => /Bluetooth/.test(l)) || ''
-    assert.ok(bleLine, 'Bluetooth (beta) is in this version, and What’s New does not say so')
-    assert.match(bleLine, /\(beta\)/, 'What’s New announces Bluetooth without saying it is a beta')
+    assert.ok(!whatsNew.split('\n').some((l) => /Bluetooth/.test(l)), 'What’s New announces Bluetooth, and customers cannot open it')
 
     /*
      * APPEARANCE ON AUTO FOLLOWS THE IPHONE NOW. mobile/app.json went from
@@ -5881,48 +5889,26 @@ export function run(test) {
     for (const service of ['Supabase', 'RevenueCat', 'Apple in-app purchase', 'Resend', 'Expo']) {
       assert.match(pasted, new RegExp(`Services the app uses:[\\s\\S]{0,300}${service}`), `the 1.87.1 notes do not name ${service} among the services`)
     }
-    assert.match(pasted, /Regions: the app works the same in every country\. The View on Amazon\s+buttons on the Bluetooth page open amazon\.com\./, 'the 1.87.1 notes do not say it works the same in every country')
-    /* The Amazon buttons do open amazon.com, every one of them. */
-    const { PARTS } = await import('../shared/bluetooth-gear.mjs')
-    for (const part of Object.values(PARTS)) assert.match(part.amazon, /^https:\/\/www\.amazon\.com\//, `${part.name}'s View on Amazon is not amazon.com, and the notes say it is`)
+    /* No word of the Amazon buttons: they are on the Bluetooth page, which the reviewer cannot open. */
+    assert.match(pasted, /Regions: the app works the same in every country\.\n/, 'the 1.87.1 notes do not say it works the same in every country')
+    assert.ok(!/Amazon/.test(pasted), 'the 1.87.1 notes describe the Amazon buttons on a page the reviewer cannot open')
     /* The brackets are for Justin, and the section says to fill them before pasting (2.1(a): no placeholder text). */
     const section = store.slice(at)
     assert.match(section, /\*\*The three lines Apple's help page asks for\.\*\* Fill in the brackets/, 'nothing says to fill in the tested-on brackets before pasting')
 
     /*
-     * THE TESTING TOOLS ARE THE DEVELOPER'S ONLY, AND SAID TO BE. The page
-     * draws them for Justin's account alone now (2.2); 2.3.1(a) also asks
-     * for no hidden or undocumented features, so one line says the panel
-     * is there and whose it is.
+     * THE TESTING TOOLS ARE THE DEVELOPER'S ONLY. The page draws them for
+     * Justin's account alone (2.2), and the whole page is his alone now, so
+     * the notes' one line about a diagnostic panel on it went with the rest:
+     * the disclosure covers the page and everything on it. The tools stay
+     * behind their own check as well, should the page ever open to more.
      */
-    assert.match(pasted, /A diagnostic panel on that page, which shows the messages sent to the\s+unit, appears only for the developer's own account; customers never see\s+it\./, 'the 1.87.1 notes do not say the diagnostic panel is the developer’s alone')
-    assert.ok(!/Testing tools/.test(pasted), 'the 1.87.1 notes send the reviewer to the testing tools, which only the developer’s account has')
-    assert.match(read('mobile/src/screens/Bluetooth.js').replace(/\s+/g, ' '), /\{admin && b\.unit && tools \?/, 'the notes say the diagnostic panel is the developer’s only, and the page shows it to everybody')
+    assert.ok(!/Testing tools|diagnostic panel/.test(pasted), 'the 1.87.1 notes describe tools on a page the reviewer cannot open')
+    assert.match(read('mobile/src/screens/Bluetooth.js').replace(/\s+/g, ' '), /\{admin && b\.unit && tools \?/, 'the Bluetooth page shows its testing tools without asking whose account it is')
 
-    /*
-     * WHAT THE VIDEO HAS TO SHOW, beside the place for its link. Apple's help
-     * page: "a video (not a screen recording) that shows your app running on
-     * a physical Apple device as it pairs and interacts with the hardware".
-     * One take, both the phone and the unit in frame, on this build, through
-     * every screen the notes name, and a link that opens without signing in.
-     */
-    assert.ok(pasted.includes('[VIDEO LINK — Justin films it on the TestFlight copy]'), 'the place for the Bluetooth video link has gone from the 1.87.1 notes before there is a link')
-    const video = section.slice(section.indexOf('- **The video.**'), section.indexOf('- **The demo account has the full version.**'))
-    assert.ok(video.length > 200, 'the 1.87.1 section no longer says what the video must show')
-    for (const [must, why] of [
-      [/not a screen\s+recording/i, 'that it is a camera recording, not a screen recording'],
-      [/\*\*Filmed with a camera,\*\*/, 'that it is filmed with a camera'],
-      [/\*\*One take,\*\* no cuts\./, 'one take'],
-      [/The iPhone and the AM4, with its adapter plugged in, both in the\s+frame/, 'that the phone and the unit are both in frame'],
-      [/TestFlight copy of this build \(1\.87\.1\)/, 'which build to film'],
-      [/tap Connect → the iPhone asks to allow\s+Bluetooth, tap Allow → Apple's Bluetooth screen opens → tap the adapter\s+and wait until it says Connected → tap Done → the page says "Connected ·\s+AM4 answering" → change a preset and then a scene on the phone, and show\s+each one changing on the AM4 itself/, 'the steps in order'],
-      [/opens without signing in,\*\* for example a YouTube video\s+set to Unlisted/, 'a link that opens without signing in']
-    ]) assert.match(video, must, `the video instructions do not say ${why}`)
-    /* The words the video steps quote are the ones the page draws. */
-    const blePage = read('mobile/src/screens/Bluetooth.js')
-    assert.match(blePage, /Connected · \$\{name\} answering/)
-    assert.match(blePage, /: 'Connect'\}/)
-    assert.match(blePage, /Apple’s Bluetooth screen opens\. Tap your adapter, wait until it says Connected, then tap Done\./)
+    /* Nothing left in the section asks for a Bluetooth video before pasting. */
+    assert.ok(!section.includes('- **The video.**'), 'the 1.87.1 section still asks for a Bluetooth video')
+    assert.ok(!/\[VIDEO LINK/.test(section), 'the 1.87.1 section still holds a place for a Bluetooth video link')
   })
 
   test('the unlock row is gone once there is nothing left to unlock', () => {

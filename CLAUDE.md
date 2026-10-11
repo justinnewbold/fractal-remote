@@ -227,6 +227,42 @@ icon now (mobile/assets/watch-icon.png); keep it light.
   holding a build under review). Fixes go out as before; a big new phone
   feature waits until any review in progress is over.
 
+**Bluetooth (beta) is the developer's only, since 11 October 2026.**
+
+> "Is there any way to just get the Bluetooth on the developers mode for my
+> own phone? I just feel like it's not ready to have public."
+
+The day before, it had gone out as a public beta in the 1.87.1 builds. The
+native module stays in those builds, with the iPhone's Bluetooth permission
+text (a module that asks for Bluetooth without it gets the build refused),
+and an update hides it from everybody but him:
+
+- The Settings row and the page wait for `useBluetoothAllowed()` in
+  mobile/src/lib/bluetooth.js: `isAdmin` of the account in the sign-in kept
+  on the phone (`haveSession()`), never `currentAccount()`, which asks the
+  server and would take his own Bluetooth away at a gig with no signal.
+- App.js asks it at launch, before the link starts, and at every change of
+  who is signed in. Anybody else found on Bluetooth goes back to the
+  computer (`setBluetooth(false)`, unit and adapter kept), and
+  `setBluetooth(true)` refuses them.
+- Nothing touches the phone's Bluetooth before Connect is tapped, so no
+  customer is ever asked for the permission.
+- /bluetooth on the website says it isn't in the app yet, with nothing to
+  buy; the guide lives at bluetooth-guide.html, linked only from the app's
+  own Bluetooth page.
+
+**It is switched on for customers only in a new store version whose review
+notes say so, never by an over-the-air update.** Apple's guideline 2.3.1(a)
+bans hidden features and wants every new one described in the Notes for
+Review, its licence (3.3.1(C)) keeps a change to what an app does for a
+version it has reviewed, and Google forbids features activated remotely
+after review. An update is exactly that: opening the gate on main would
+reach every 1.87.1 phone with the reviewed notes still saying nobody sees
+it. So the day it is ready, the opening rides a build whose fingerprint
+moved (then no update made for it can reach the older binaries), with the
+review notes, What's New, the descriptions, support.html and /bluetooth
+saying so, and the build is asked for like any other.
+
 ## Things that cost real time to learn here
 
 **Every change needs a new version number.** The `version` job in

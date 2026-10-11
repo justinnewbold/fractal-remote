@@ -62,10 +62,12 @@ import Press from '../components/Press'
  * Folded away once an adapter has been used, so coming back to Connect is
  * still two steps and one button.
  *
- * A PUBLIC BETA, and it says so first. "Let's just say that Bluetooth is
- * beta though in the app and give like a disclaimer saying that Bluetooth
- * might not function correctly." It is open to everybody who has unlocked
- * the app; it has been tried on one AM4.
+ * A BETA, and it says so first. "Let's just say that Bluetooth is beta
+ * though in the app and give like a disclaimer saying that Bluetooth might
+ * not function correctly." It was a public beta for one day; since 11
+ * October 2026 it is Justin's account's alone ("I just feel like it's not
+ * ready to have public"), and Settings draws this page for nobody else
+ * (useBluetoothAllowed, lib/bluetooth.js). It has been tried on one AM4.
  *
  * The beta note is the iPhone's or Android's own (betaNote, from
  * shared/bluetooth-gear.mjs): only Android's says it has not been tried from

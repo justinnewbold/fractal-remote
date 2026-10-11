@@ -9,6 +9,7 @@ import { blockCatalog } from './blockCatalog'
 import { setSwitch } from './bleSwitch'
 import { isAdapter, pickAdapter } from './bleAdapters'
 import { logDebug } from './debugLog'
+import { isAdmin } from './admin'
 
 /**
  * BLUETOOTH (BETA): WHAT THE PLAYER CHOSE, THE ADAPTER, AND THE ONE DOOR TO
@@ -23,8 +24,9 @@ import { logDebug } from './debugLog'
  *     the store builds made before the module went into one, or in any build
  *     the module failed to load in, the answer is null, and every function
  *     here then does nothing. That is what keeps Bluetooth invisible to
- *     anybody whose app cannot do it. Everybody else who has unlocked the
- *     app sees it, as a public beta (the gate is in Settings.js);
+ *     anybody whose app cannot do it. And for now it is Justin's account
+ *     alone that sees it at all, wherever it can work (allowBluetooth, below;
+ *     the row and the page are gated in Settings.js);
  *   - the wire: the bytes coming in are put back into whole messages here
  *     (createJoiner) and handed to the wire from bleWire.js, which does all
  *     the thinking about what they mean.
@@ -279,6 +281,64 @@ export const useBluetoothOn = () => useSyncExternalStore(subscribeBluetooth, rea
 /** What stands between the phone and the adapter, or null: for the waiting screen. A word, so it redraws only when it changes. */
 export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth, readTrouble, readTrouble)
 
+/*
+ * WHO MAY USE IT: JUSTIN'S ACCOUNT, AND NOBODY ELSE, FOR NOW.
+ *
+ * "Is there any way to just get the Bluetooth on the developers mode for my
+ * own phone? I just feel like it's not ready to have public." (11 October
+ * 2026.) The day before, it had gone out as a public beta for everybody who
+ * had unlocked the app. Now the Settings row and the page are drawn only for
+ * the account that opens his Developer pages (isAdmin, lib/admin.js), and
+ * this is the switch's half: for anybody else Bluetooth goes off and STAYS
+ * off. setBluetooth will not turn it on, and the pick-up from last time will
+ * not either, so a customer who turned it on during that one day is put back
+ * on the computer at their next launch, with the unit and the adapter they
+ * chose still kept for the day it comes back.
+ *
+ * Asked by App.js, with the id of THE SESSION KEPT ON THE PHONE (haveSession),
+ * never currentAccount(): that one asks the account server over the
+ * internet, and with no signal at a gig it answers nobody, which would switch
+ * his own Bluetooth off exactly where it is for. Asked at launch, before the
+ * link starts, and again whenever who is signed in can have changed: signing
+ * in, signing out (nobody, so off), another account, the demo ending.
+ *
+ * Null until App.js has an answer, which changes nothing: the pick-up from
+ * last time runs at launch a moment before the account is known, and his
+ * phone left on Bluetooth should start on Bluetooth. Whichever of the two
+ * lands first, a no wins, and the no is written to the phone's storage.
+ *
+ * HIDING, NOT A LOCK, and it never needs to be one: over Bluetooth the phone
+ * talks to the player's own unit and nothing else, so there is no server to
+ * keep anybody out of. What it decides is who is shown a feature that is not
+ * finished. And nothing in here touches the native module for anybody it
+ * says no to: no Bluetooth question is ever put to a customer's phone.
+ *
+ * NOT TO BE OPENED TO CUSTOMERS BY AN UPDATE. Switching it on for everybody
+ * is a new store version whose review notes say so, never an over-the-air
+ * update (CLAUDE.md says why: Apple's 2.3.1(a) and its licence 3.3.1(C), and
+ * Google's rule on features activated remotely).
+ */
+let allowed = null
+const readAllowed = () => allowed
+
+/** For App.js: the id of the session kept on this phone, or nothing when nobody is signed in. */
+export function allowBluetooth(id) {
+  const was = allowed
+  allowed = isAdmin(id)
+  if (!allowed && saved.on) {
+    logDebug('ble', 'Bluetooth (beta) is open only to the developer’s account for now, so it is off')
+    setBluetooth(false)
+  }
+  if (allowed !== was) announce()
+  return allowed
+}
+
+/** Whether the account signed in here may use Bluetooth (beta): true only once App.js has said yes. */
+export const bluetoothAllowed = () => allowed === true
+
+/** The same, redrawn when it changes: for the Settings row and the page, which appear and go with signing in. */
+export const useBluetoothAllowed = () => useSyncExternalStore(subscribeBluetooth, readAllowed, readAllowed) === true
+
 /**
  * Pick the settings up from last time.
  *
@@ -288,17 +348,28 @@ export const useBluetoothTrouble = () => useSyncExternalStore(subscribeBluetooth
  * every request would be refused by a Bluetooth wire that can never connect,
  * and the app would be dead. The module is not asked anything unless the
  * disk says the mode was on.
+ *
+ * And not on for an account it is not open to, when that answer is already
+ * in (see allowBluetooth); then the off is written back, as Stop would. When
+ * the answer is not in yet, App.js gives it a moment later, before the link
+ * starts, and a no turns it off then.
  */
 export async function restoreBluetooth() {
   const before = JSON.stringify(saved)
+  let refused = false
   try {
     const raw = await AsyncStorage.getItem(KEY)
     const was = settle(raw ? JSON.parse(raw) : null)
-    saved = { ...was, on: was.on && !!was.unit && bluetoothSupported() }
+    refused = was.on && allowed === false
+    saved = { ...was, on: was.on && !!was.unit && allowed !== false && bluetoothSupported() }
   } catch {
     saved = { ...SAVED }
   }
   setSwitch({ on: saved.on })
+  if (refused) {
+    logDebug('ble', 'Bluetooth (beta) is open only to the developer’s account for now, so it is off')
+    keep()
+  }
   /* Nothing on disk is the ordinary case, and it changes nothing: no screen is redrawn for it. */
   if (JSON.stringify(saved) === before) return saved.on
   now = { ...now, phase: saved.on ? 'idle' : 'off' }
@@ -313,12 +384,14 @@ export const unitName = (key) => BLE_UNITS.find((u) => u.key === key)?.name || '
 /**
  * Turn Bluetooth (beta) on or off.
  *
- * Not on without a unit: see SAVED. The switch moves at once, so from this
- * moment nothing goes to the computer while it is on; App.js sees the change
- * and restarts the link, which is what connects (bleLink.js).
+ * Not on without a unit: see SAVED. Not on for an account it is not open to,
+ * nor before App.js has said whose phone this is: see allowBluetooth. Off is
+ * always allowed. The switch moves at once, so from this moment nothing goes
+ * to the computer while it is on; App.js sees the change and restarts the
+ * link, which is what connects (bleLink.js).
  */
 export function setBluetooth(on) {
-  const want = on === true && !!saved.unit && bluetoothSupported()
+  const want = on === true && allowed === true && !!saved.unit && bluetoothSupported()
   if (want === saved.on) return saved.on
   saved = { ...saved, on: want }
   setSwitch({ on: want })

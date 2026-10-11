@@ -50,7 +50,7 @@ import { useComputerElsewhere } from '../lib/useComputerElsewhere'
 import { quitEditor } from '../lib/editors'
 import { isAdmin } from '../lib/admin'
 import { watchHow, watchPaired, watchSupported } from '../lib/watchBridge'
-import { bluetoothSupported, useBluetoothOn } from '../lib/bluetooth'
+import { bluetoothSupported, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage from './Bluetooth'
 import AccessTool from '../components/AccessTool'
@@ -194,6 +194,15 @@ export default function Settings({
   const switchesReadable = fcReadable(caps)
   /* Bluetooth (beta): whether the phone is talking to the unit itself. */
   const bluetooth = useBluetoothOn()
+  /*
+   * And whether it is open to the account signed in here at all: Justin's,
+   * and nobody else's, for now (lib/bluetooth.js, allowBluetooth). Decided in
+   * App.js from the session kept on the phone rather than from `account`
+   * above: that one asks the account server, and Bluetooth is for playing
+   * where there may be no signal. A row that vanished offline would take the
+   * page, and its Stop button, with it while Bluetooth was still on.
+   */
+  const bluetoothAllowed = useBluetoothAllowed()
   const [looperSaid, setLooperSaid] = useState(null)
   async function stopTheLooper() {
     const looper = findLooper(allBlocks)
@@ -410,8 +419,16 @@ export default function Settings({
               the Bluetooth code on a phone that can do it: anybody else never
               sees it. The page it opens starts with the beta note, the
               iPhone's or Android's own (betaNote).
+
+              AND ONLY ON JUSTIN'S ACCOUNT. "Is there any way to just get the
+              Bluetooth on the developers mode for my own phone? I just feel
+              like it's not ready to have public." So the row also waits for
+              bluetoothAllowed, and is asked that before the build check, so a
+              customer's phone is never even asked whether it can do
+              Bluetooth. It is opened to customers only in a new store version
+              whose review notes say so, never by an update (CLAUDE.md).
             */}
-            {mayDrive(purchase) && bluetoothSupported() ? (
+            {mayDrive(purchase) && bluetoothAllowed && bluetoothSupported() ? (
               <SetupRow
                 title="Bluetooth (beta)"
                 status={bluetooth ? 'On · the phone talks to the unit itself' : 'Off · play without a computer'}
@@ -984,10 +1001,11 @@ export default function Settings({
       ) : null}
 
       {/* ------------------------------------------------------- bluetooth */}
-      {/* The page, behind the same gate as its row on Settings. Its
-          Testing tools are Justin's alone (admin), as the Developer pages are:
-          Apple's 2.2 keeps test benches out of what customers see. */}
-      {page === 'bluetooth' && mayDrive(purchase) && bluetoothSupported() ? (
+      {/* The page, behind the same gate as its row on Settings, his account
+          included. Its Testing tools are Justin's alone (admin), as the
+          Developer pages are: Apple's 2.2 keeps test benches out of what
+          customers see. */}
+      {page === 'bluetooth' && mayDrive(purchase) && bluetoothAllowed && bluetoothSupported() ? (
         <>
           {head('Bluetooth (beta)', 'back')}
           <BluetoothPage purchase={purchase} admin={isAdmin(account?.id)} />
