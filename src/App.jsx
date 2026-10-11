@@ -255,6 +255,8 @@ import { watchEvery, probeSays, countQuiet, unitGone } from '../shared/unit-watc
 
 /* Session-only: "open the unlock page once the demo has ended" — see afterAccount. */
 const UNLOCK_NEXT = 'fractal.unlockNext'
+/* "Nothing was charged", carried across the reload that ends the demo after an unlock (nowUnlocked). */
+const PAID_SAID = 'fractal.paidSaid'
 
 
 /**
@@ -1322,6 +1324,16 @@ export default function App() {
   const [webPriceText, setWebPriceText] = useState(null)
   const [buying, setBuying] = useState(false)
   const [buySaid, setBuySaid] = useState(null)
+  /* What Buy found, when it took no money: said after the page unlocks and goes. */
+  const [paidSaid, setPaidSaid] = useState(() => {
+    try {
+      const said = sessionStorage.getItem(PAID_SAID)
+      sessionStorage.removeItem(PAID_SAID)
+      return said || null
+    } catch {
+      return null
+    }
+  })
   /* Which fix the guide opens on, when an error notice sent you there. Null is
      the guide with everything folded shut, which is what Setup opens on. */
   const [fix, setFix] = useState(null)
@@ -2145,9 +2157,11 @@ export default function App() {
   }, [unlockAfterSignIn, accountId, paid])
 
   /* Bought here, or found to have been bought on a phone while the unlock
-     page was up (the asking below): the same next step either way. */
-  const nowUnlocked = async () => {
+     page was up (the asking below): the same next step either way. `said`
+     is Buy finding it bought already, which took no money and says so. */
+  const nowUnlocked = async (said = null) => {
     setPaid({ checked: true, unlocked: true, for: accountId })
+    if (said) setPaidSaid(said)
     /*
      * On the computer, what was bought is the phone remote, so it comes on
      * now. The server is asked first, which writes the purchase where the
@@ -2177,6 +2191,13 @@ export default function App() {
      * afterAccount).
      */
     if (isDemo()) {
+      if (said) {
+        try {
+          sessionStorage.setItem(PAID_SAID, said)
+        } catch {
+          /* Unsaid after the reload; the page still says it has the full version. */
+        }
+      }
       setDemo(false)
       window.location.reload()
       return
@@ -2189,7 +2210,7 @@ export default function App() {
     setBuySaid(null)
     const out = await buyOnWeb({ accountId, email: link.account?.email })
     setBuying(false)
-    if (out.ok) return nowUnlocked()
+    if (out.ok) return nowUnlocked(out.message)
     if (!out.cancelled) setBuySaid(out.message)
   }
 
@@ -4322,6 +4343,23 @@ export default function App() {
             </button>
           ))}
         </nav>
+      ) : null}
+
+      {/*
+        BUY FOUND IT BOUGHT ALREADY, and took nothing. The page it was on
+        unlocks and goes, so this is said out here, where it is still on
+        screen once it has: somebody who pressed the price and watched it
+        unlock otherwise reads it as a second charge.
+      */}
+      {paidSaid ? (
+        <div className="notice" data-kind="did" role="status">
+          <h2>{paidSaid}</h2>
+          <div className="history-actions">
+            <button className="chip" onClick={() => setPaidSaid(null)}>
+              Got it
+            </button>
+          </div>
+        </div>
       ) : null}
 
       {/*

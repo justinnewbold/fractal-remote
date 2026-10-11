@@ -244,6 +244,92 @@ export function run(test) {
     const buy = purchases.slice(purchases.indexOf('export const buyUnlock'), purchases.indexOf('export const restorePurchase'))
     assert.match(buy, /if \(yes\) claimRelay\(\)/, 'buying does not open the relay')
     const restore = purchases.slice(purchases.indexOf('export const restorePurchase'))
-    assert.match(restore, /if \(yes\) claimRelay\(\)/, 'restoring does not open the relay')
+    assert.match(restore, /if \(yes\) \{[\s\S]*?claimRelay\(\)\s*return \{ ok: true/, 'restoring does not open the relay')
+  })
+
+  test('Sales names a purchase on an account nobody ever confirmed, and a card sale beside it the same day', async () => {
+    /*
+     * A phone that paid before it had an account puts the purchase on the
+     * account made on it, before its email is confirmed. Never confirmed —
+     * a mistyped address, a confirmation that never came — nothing ever
+     * signs in to it, so the relay's table has no row and Sales never asked.
+     * If the same person then paid by card under the right address, each
+     * account held one purchase and Paid twice could not see it.
+     *
+     * The function itself, run: its TypeScript stripped by esbuild (which
+     * Vite already brings), Deno and the network stood in for.
+     */
+    const { transformSync } = await import('esbuild')
+    const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { pathToFileURL } = await import('node:url')
+    const src = read('supabase/functions/grant-access/index.ts')
+    const admin = src.match(/const ADMINS = \['([0-9a-f-]{36})'\]/)?.[1]
+    assert.ok(admin, 'the owner id moved; this test reads it')
+    const dir = mkdtempSync(join(tmpdir(), 'grant-'))
+    const DAY = 86400000
+    const now = Date.now()
+    const asked = []
+    const users = [
+      { id: 'acct-typo', email: 'typo@x.com', created_at: new Date(now - 2 * DAY).toISOString(), email_confirmed_at: null },
+      { id: 'acct-right', email: 'right@x.com', created_at: new Date(now - 2 * DAY).toISOString(), email_confirmed_at: new Date(now - 2 * DAY).toISOString() },
+      { id: 'acct-empty', email: 'empty@x.com', created_at: new Date(now - 3 * DAY).toISOString(), email_confirmed_at: null },
+      /* Confirmed, and not on the buyers list: none of this section's business. */
+      { id: 'acct-fine', email: 'fine@x.com', created_at: new Date(now - 3 * DAY).toISOString(), email_confirmed_at: new Date(now - 3 * DAY).toISOString() },
+      { id: 'acct-old', email: 'old@x.com', created_at: new Date(now - 40 * DAY).toISOString(), email_confirmed_at: null }
+    ]
+    const bought = {
+      'acct-right': [{ store: 'rc_billing', purchased_at: now - 2 * DAY + 3600000, environment: 'production', status: 'owned' }],
+      'acct-typo': [{ store: 'app_store', purchased_at: now - 2 * DAY, environment: 'production', status: 'owned' }],
+      'acct-empty': [],
+      'acct-fine': [{ store: 'play_store', purchased_at: now - 3 * DAY, environment: 'production', status: 'owned' }]
+    }
+    const reply = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+    const realFetch = globalThis.fetch
+    let handler = null
+    globalThis.Deno = {
+      env: { get: (k) => ({ SUPABASE_URL: 'https://sb.test', SUPABASE_SERVICE_ROLE_KEY: 'service', SUPABASE_ANON_KEY: 'anon', REVENUECAT_SECRET: 'sk_test' })[k] },
+      serve: (fn) => {
+        handler = fn
+      }
+    }
+    globalThis.fetch = async (url) => {
+      const u = String(url)
+      asked.push(u)
+      if (u === 'https://sb.test/auth/v1/user') return reply({ id: admin, email: 'owner@x.com' })
+      if (u === 'https://sb.test/rest/v1/rpc/owner_overview') return reply({ accounts: 4, buyers: [{ id: 'acct-right', email: 'right@x.com' }] })
+      if (u.startsWith('https://sb.test/auth/v1/admin/users?page=1&')) return reply({ users })
+      const who = u.match(/\/customers\/([^/]+)\/purchases/)?.[1]
+      if (who) return reply({ items: bought[decodeURIComponent(who)] || [] })
+      return reply({}, 404)
+    }
+    try {
+      writeFileSync(join(dir, 'grant.mjs'), transformSync(src, { loader: 'ts', format: 'esm' }).code)
+      await import(pathToFileURL(join(dir, 'grant.mjs')).href)
+      assert.ok(handler, 'the function no longer starts with Deno.serve')
+      const res = await handler(new Request('https://fn.test/', { method: 'POST', headers: { Authorization: 'Bearer owner-token' }, body: JSON.stringify({ action: 'sales' }) }))
+      const answer = await res.json()
+      assert.equal(answer.ok, true)
+      assert.deepEqual(answer.unconfirmed, [{ email: 'typo@x.com', stores: ['app_store'], at: [now - 2 * DAY], near: ['right@x.com'] }], 'a purchase on an account never confirmed is not named, or not beside the card sale that day')
+      assert.ok(answer.sales.some((s) => s.email === 'typo@x.com' && s.store === 'app_store'), 'the purchase on the unconfirmed account is not counted as a sale')
+      assert.ok(!asked.some((u) => u.includes('/customers/acct-old/')), 'an unconfirmed account from over a month ago was asked about')
+      assert.ok(!asked.some((u) => u.includes('/customers/acct-fine/')), 'a confirmed account was asked about as one never confirmed')
+      assert.equal(asked.filter((u) => u.includes('/customers/acct-right/')).length, 1, 'a confirmed buyer was asked about twice')
+      /* The old fields are all still there, for a phone too old to know the new one. */
+      for (const field of ['accounts', 'unlocked', 'sales', 'twice', 'givenByHand', 'unanswered']) assert.ok(field in answer, `the answer lost ${field}`)
+
+      /* And the page says it, in plain words, right after Paid twice. */
+      const { salesSections } = await import('../shared/admin.mjs')
+      const sections = salesSections(answer, now)
+      assert.equal(sections[0]?.title, 'Paid, account never confirmed')
+      assert.equal(sections[0].rows[0].label, 'typo@x.com')
+      assert.match(sections[0].rows[0].value, /^Paid on the App Store, .+, but never confirmed this account, so the computer and the website can’t see the purchase\. A card sale on the website that day went to right@x\.com: maybe the same person, who paid twice\.$/)
+      assert.ok(!salesSections({ ...answer, unconfirmed: undefined }, now).some((s) => s.title === 'Paid, account never confirmed'), 'an older server’s answer draws an empty section')
+    } finally {
+      globalThis.fetch = realFetch
+      delete globalThis.Deno
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 }

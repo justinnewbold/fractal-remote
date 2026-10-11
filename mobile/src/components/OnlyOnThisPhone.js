@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { View } from 'react-native'
 
 import { space } from '../lib/theme'
-import { ONLY_HERE, usePurchase } from '../lib/purchases'
+import { NOT_ACROSS, ONLY_HERE, restorePurchase, usePurchase } from '../lib/purchases'
 import Note from './Note'
 import Press from './Press'
 
@@ -16,14 +16,39 @@ import Press from './Press'
  * app see an account that has not paid and offer to sell it again — which
  * is how one customer paid twice.
  *
+ * AND ONE SENT TO THE ACCOUNT THAT HAS NOT ARRIVED (purchases.js, stuck).
+ * The phone keeps itself unlocked for them, so no price page ever comes up
+ * to say why the computer still sees nothing; this does, with the way to
+ * try again now. Its own answer replaces the line when it is not a yes.
+ *
  * NEVER IN THE WAY. A line and one button, put away with the cross for the
  * rest of this run; it comes back next time only while it is still true.
  * Nothing waits on it and nothing is locked behind it.
  */
 export default function OnlyOnThisPhone({ onAccount }) {
-  const { onlyHere } = usePurchase()
+  const { onlyHere, stuck } = usePurchase()
   const [gone, setGone] = useState(false)
-  if (gone || !onAccount || !onlyHere) return null
+  const [busy, setBusy] = useState(false)
+  const [said, setSaid] = useState(null)
+  if (gone) return null
+  if (stuck) {
+    return (
+      <View style={{ gap: space.sm }}>
+        <Note tone="warn" onDismiss={() => setGone(true)}>{said || NOT_ACROSS}</Note>
+        <Press
+          label={busy ? 'Trying…' : 'Restore a purchase'}
+          disabled={busy}
+          onPress={async () => {
+            setBusy(true)
+            const out = await restorePurchase()
+            setBusy(false)
+            setSaid(out.ok ? null : out.message)
+          }}
+        />
+      </View>
+    )
+  }
+  if (!onAccount || !onlyHere) return null
   return (
     <View style={{ gap: space.sm }}>
       <Note onDismiss={() => setGone(true)}>{ONLY_HERE}</Note>

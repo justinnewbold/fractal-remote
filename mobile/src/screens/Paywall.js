@@ -58,9 +58,17 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
    * The line names no other place to pay (Apple 3.1.3, Google Play's
    * payments policy) and calls nothing free: "Sign in instead. It's free."
    * sat over the price on App Review's own path, and read as if the full
-   * version cost nothing. It names Restore too, the free way for somebody
-   * whose other phone, on this same Apple ID or Google account, had no
-   * account.
+   * version cost nothing. "You won't be charged again." did the same thing
+   * from the line above Buy, to somebody who bought it in another store,
+   * which would charge them. So what costs nothing is the signing in, said
+   * of the signing in.
+   *
+   * AND NOT RESTORE, which with nobody signed in moves the purchase to this
+   * phone's nameless id — off the account it is on, and off every other
+   * phone and computer signed in to it. Its button stays below, as Apple
+   * requires. Signing in moves nothing off anybody. For the buyer this was
+   * written for — paid on a phone before he had any account — there is no
+   * account to sign in with yet, so it says to make one there first.
    */
   const [nobody, setNobody] = useState(false)
   useEffect(() => {
@@ -108,6 +116,10 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
     setSaid(null)
     const out = await buyUnlock()
     setBusy(false)
+    /* Found already bought: the page closes, so the "nothing was charged"
+       goes with it as an alert, or somebody who just pressed the price
+       thinks they paid twice. */
+    if (out.ok && out.message) Alert.alert('Already unlocked', out.message)
     if (out.ok) return onUnlocked?.()
     /* A cancel is not a fault and is not worth a sentence. A payment still
        waiting is not one either: it is said calmly, and Buy stays off. */
@@ -177,8 +189,9 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
         {freeFirst ? (
           <>
             <Text style={{ color: color.silk, fontSize: font.body, lineHeight: font.body * 1.45 }}>
-              Already bought it on another device? Sign in with the account you used there, or tap Restore a
-              purchase. You won&rsquo;t be charged again.
+              Already bought it on another device? Don&rsquo;t buy it again here: sign in with the account you
+              used there. Signing in never charges you. If that device has no account yet, make one on it first,
+              then sign in here with it.
             </Text>
             <Press
               label={ALREADY_UNLOCKED}

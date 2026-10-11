@@ -1255,10 +1255,13 @@ export function run(test) {
       })
       const buy = () => mod.buyOnWeb({ accountId: 'account-1', email: 'a@x.com' })
       const yes = { ok: true, cancelled: false, message: null }
+      /* Found bought already: unlocked, nothing taken, and said so — the page unlocks and goes. */
+      const had = { ok: true, cancelled: false, message: 'You already have the full version, so nothing was charged.' }
+      assert.equal(mod.ALREADY_HAD, had.message)
 
       /* Bought on a phone that has signed in, or a gift: no checkout at all, and the server is told. */
       now.owned = true
-      assert.deepEqual(await buy(), yes, 'somebody who has it is not told so')
+      assert.deepEqual(await buy(), had, 'somebody who has it is not told nothing was charged')
       assert.equal(checkouts, 0, 'the checkout opened for somebody RevenueCat says has it')
       await tick(5)
       assert.ok(told >= 1, 'the server is not told, so its table stays behind')
@@ -1279,7 +1282,7 @@ export function run(test) {
       now.checkout = async () => {
         throw Object.assign(new Error('Product already purchased'), { errorCode: 6 })
       }
-      assert.deepEqual(await buy(), yes, 'RevenueCat’s “already bought” shows as an error')
+      assert.deepEqual(await buy(), had, 'RevenueCat’s “already bought” shows as an error, or unlocks without saying nothing was charged')
       now.checkout = async () => {
         throw Object.assign(new Error('Cancelled'), { errorCode: 1 })
       }
@@ -1310,6 +1313,27 @@ export function run(test) {
       delete globalThis.__webRevenueCat
       done()
     }
+  })
+
+  test('the website says nothing was charged when Buy finds the account has it, after the page has gone', () => {
+    /*
+     * Buy finding it bought already unlocks the page and puts it away. Said
+     * on the page, it went with it; said nowhere, somebody who had just
+     * pressed the price and watched it unlock believed he was charged again.
+     */
+    const app = read('src/App.jsx').replace(/\s+/g, ' ')
+    assert.match(app, /const out = await buyOnWeb\(\{ accountId, email: link\.account\?\.email \}\) setBuying\(false\) if \(out\.ok\) return nowUnlocked\(out\.message\)/, 'what Buy found is thrown away')
+    assert.match(app, /const nowUnlocked = async \(said = null\) => \{ setPaid\(\{ checked: true, unlocked: true, for: accountId \}\) if \(said\) setPaidSaid\(said\)/)
+    /* Through the reload that ends the demo, too. */
+    assert.match(app, /if \(isDemo\(\)\) \{ if \(said\) \{ try \{ sessionStorage\.setItem\(PAID_SAID, said\) \}/, 'the demo’s reload loses “nothing was charged”')
+    assert.match(app, /const said = sessionStorage\.getItem\(PAID_SAID\) sessionStorage\.removeItem\(PAID_SAID\) return said \|\| null/)
+    /* Drawn outside every page, so the page going does not take it with it. */
+    const notice = app.indexOf('{paidSaid ? ( <div className="notice" data-kind="did" role="status"> <h2>{paidSaid}</h2>')
+    assert.ok(notice > app.indexOf('{mustPay ? ('), 'the line is drawn inside a page that goes when it unlocks')
+    assert.ok(notice < app.indexOf('{justDid ? ('), 'the line is not with the other things said outside the pages')
+    /* The asking that finds a phone's purchase is not Buy, and says nothing of a charge. */
+    assert.match(app, /return askUntilUnlocked\(nowUnlocked, ask\)/)
+    assert.match(read('src/lib/webPurchase.js'), /if \(out\?\.unlocked === true && !out\.unknown\) \{\s*stop\(\)\s*onYes\(\)/, 'the asking hands its own answer on as something Buy said')
   })
 
   test('the unlock page asks again until a phone has signed in: often at first, never while hidden, and only a yes ends it', async () => {
@@ -1474,7 +1498,7 @@ export function run(test) {
       /if \(!out\.unknown && !out\.unlocked\) \{\s*setPaid\(\(p\) => \(p\.for === accountId && p\.unknown \? \{ checked: true, unlocked: false, unknown: false, for: accountId \} : p\)\)/,
       'a page held back on a question that could not be put stays held after a definite no'
     )
-    assert.match(app, /if \(out\.ok\) return nowUnlocked\(\)/, 'buying and being found to have bought lead different places')
+    assert.match(app, /if \(out\.ok\) return nowUnlocked\(out\.message\)/, 'buying and being found to have bought lead different places')
 
     /* The Unlock card, the bar and Settings' row all come through openUnlock: an owner goes to the account. */
     assert.match(app, /setSetupPage\(ownedSure \? 'account' : 'unlock'\)/, 'an owner who presses Unlock is shown the Buy button, or a fault is sent to “unlocked”')
@@ -1533,9 +1557,22 @@ export function run(test) {
      */
     assert.match(
       sheet,
-      /\{forUnlock \? \(\s*<p className="hint">\s*\{making\s*\? 'Bought it on your phone already\? Make the account with the email you’ll sign in with on the phone, then sign in with it on the phone before you pay here\. Once you have, it unlocks here by itself\.'\s*: 'Bought it on your phone already\? Sign in with the same email as on the phone\. If the phone isn’t signed in yet, sign in there first, before you pay here\. Once you have, it unlocks here by itself\.'\}\s*<\/p>\s*\) : null\}\s*<SignIn/,
+      /\{forUnlock \? \(\s*<p className="hint">\s*\{side === 'sent'\s*\? 'Bought it on your phone already\? Don’t pay again here\. Once you’ve confirmed the account, sign in with this email on the phone, and this unlocks by itself\.'\s*: making\s*\? 'Bought it on your phone already\? Don’t pay again here\. Make the account with the email you’ll use on the phone, then sign in with it on the phone, and this unlocks by itself\.'\s*: 'Bought it on your phone already\? Don’t pay again here\. Sign in with the same email as on the phone\. If the phone isn’t signed in yet, sign in there too, and this unlocks by itself\.'\}\s*<\/p>\s*\) : null\}\s*<SignIn/,
       'the sign-in on the way to the unlock does not say which email to use'
     )
+    /*
+     * Said as "don't pay", and never as a step before paying: "…on the
+     * phone before you pay here" read, to somebody who had paid on the
+     * phone, as sign in there and then pay here. And once the account is
+     * made, the line is about the phone, not about making the account.
+     */
+    const lines = [...sheet.matchAll(/'(Bought it on your phone already\?[^']*)'/g)].map((m) => m[1])
+    assert.equal(lines.length, 3, 'one line for each side of the form: making, made, signing in')
+    for (const line of lines) {
+      assert.match(line, /^Bought it on your phone already\? Don’t pay again here\./, `the line does not say not to pay first: ${line}`)
+      assert.ok(!/before you pay|pay here\./.test(line.replace('Don’t pay again here.', '')), `the line reads as an order to pay here after the phone: ${line}`)
+    }
+    assert.ok(!/Make the account/.test(lines[0]), 'once the account is made, the line still says to make it')
     const plain = sheet.slice(sheet.indexOf('if (account) {'), sheet.indexOf('  return (\n    <Sheet\n'))
     assert.ok(plain.includes('{forUnlock ? ('), 'the line is not on the plain sign-in the unlock opens')
   })
@@ -1636,7 +1673,7 @@ export function run(test) {
     assert.ok(!/visitorId/.test(buyer), 'a purchase can be filed under an anonymous visitor')
 
     /* And buying in the demo ends it, as on the phone. */
-    assert.match(app, /if \(isDemo\(\)\) \{\s*setDemo\(false\)\s*window\.location\.reload\(\)/, 'buying in the browser leaves the person in the demo')
+    assert.match(app, /if \(isDemo\(\)\) \{\s*(?:if \(said\) \{[\s\S]{0,300}?\}\s*)?setDemo\(false\)\s*window\.location\.reload\(\)/, 'buying in the browser leaves the person in the demo')
   })
 
   /**

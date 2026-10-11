@@ -201,6 +201,11 @@ export async function webPrice(accountId) {
   }
 }
 
+/* Said when Buy finds the account has it already. The page unlocks and goes
+   either way, and unlocking without a word, straight after somebody pressed
+   "$9.99", reads as having been charged again. */
+export const ALREADY_HAD = 'You already have the full version, so nothing was charged.'
+
 /**
  * Buy it. Opens RevenueCat's own checkout over the page and resolves when the
  * card has been taken, declined, or the window closed.
@@ -221,7 +226,7 @@ export async function buyOnWeb({ accountId, email }) {
   if (!accountId) return { ok: false, cancelled: false, message: 'Sign in first, so the unlock has an account to belong to.' }
   const hasIt = () => {
     checkUnlocked()
-    return { ok: true, cancelled: false, message: null }
+    return { ok: true, cancelled: false, message: ALREADY_HAD }
   }
   try {
     const p = await purchasesFor(accountId)

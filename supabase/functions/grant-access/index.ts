@@ -191,6 +191,53 @@ async function eachFew<T, R>(items: T[], few: number, job: (item: T) => Promise<
  */
 const MOST_BUYERS = 500
 
+/*
+ * PAID, ACCOUNT NEVER CONFIRMED. A phone that paid before it had an account
+ * puts the purchase on the account made on it at once, before its email is
+ * confirmed — and if that account is never confirmed (a mistyped address, a
+ * confirmation that never came), nothing ever signs in to it. RevenueCat
+ * sends no webhook for that move and no app ever asks about the account, so
+ * the relay's table has no row for it and the buyers list above never
+ * names it. If the same person then paid by card on the website, under the
+ * right address, each account holds one purchase and Paid twice cannot see
+ * it: the very case it was built for. So recent unconfirmed accounts are
+ * asked about too, and any card sale on the website within a day of one of
+ * their purchases is named beside it.
+ */
+const UNCONFIRMED_DAYS = 30
+const MOST_UNCONFIRMED = 100
+const PAGE = 200
+const DAY = 86400000
+/* The ways to pay by card, as RevenueCat names the store: shared/admin.mjs calls these "by card on the website". */
+const CARD = ['rc_billing', 'stripe', 'paddle']
+
+/* The recent accounts that never confirmed their email, from the account
+   service itself. Every page is read, whichever order it answers in: there
+   are a few hundred accounts, not millions. */
+async function unconfirmedAccounts(): Promise<{ id: string; email: string }[]> {
+  const key = env('SUPABASE_SERVICE_ROLE_KEY')
+  const since = Date.now() - UNCONFIRMED_DAYS * DAY
+  const found: { id: string; email: string }[] = []
+  try {
+    for (let page = 1; page <= 10 && found.length < MOST_UNCONFIRMED; page++) {
+      const res = await fetch(`${env('SUPABASE_URL')}/auth/v1/admin/users?page=${page}&per_page=${PAGE}`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` }
+      })
+      if (!res.ok) break
+      const users = ((await res.json())?.users || []) as { id?: string; email?: string; created_at?: string; email_confirmed_at?: string | null }[]
+      for (const u of users) {
+        const made = Date.parse(String(u?.created_at || ''))
+        if (!(made >= since)) continue
+        if (u?.id && !u.email_confirmed_at) found.push({ id: String(u.id), email: String(u.email || '') })
+      }
+      if (users.length < PAGE) break
+    }
+  } catch {
+    /* Not asked is not none: the rest of the page still stands. */
+  }
+  return found.slice(0, MOST_UNCONFIRMED)
+}
+
 async function sales() {
   const overview = ((await rpc('owner_overview', {})) || {}) as {
     accounts?: number
@@ -222,6 +269,29 @@ async function sales() {
     const paid = real.filter((p) => !p.sandbox && !p.refunded)
     if (paid.length > 1) twice.push({ email: b.email, stores: paid.map((p) => p.store), at: paid.map((p) => p.at) })
   }
+  /* And the accounts nothing has asked about (see PAID, ACCOUNT NEVER CONFIRMED). */
+  const known = new Set(buyers.map((b) => b.id))
+  const quiet = (await unconfirmedAccounts()).filter((u) => !known.has(u.id))
+  const quietAnswers = await eachFew(quiet, 5, async (u) => ({ u, bought: await purchasesOf(u.id) }))
+  const neverConfirmed: { email: string; stores: string[]; at: (number | null)[] }[] = []
+  for (const { u, bought } of quietAnswers) {
+    const real = (bought || []).filter((p) => p.store !== 'promotional')
+    for (const p of real) sold.push({ ...p, email: u.email })
+    const paid = real.filter((p) => !p.sandbox && !p.refunded)
+    if (paid.length) neverConfirmed.push({ email: u.email, stores: paid.map((p) => p.store), at: paid.map((p) => p.at) })
+  }
+  /* A card sale on the website within a day of one of theirs, to another address: maybe the same person, twice. */
+  const unconfirmed = neverConfirmed.map((n) => ({
+    ...n,
+    near: [
+      ...new Set(
+        sold
+          .filter((s) => CARD.includes(s.store) && !s.sandbox && !s.refunded && s.email !== n.email && s.at !== null)
+          .filter((s) => n.at.some((at) => at !== null && Math.abs((s.at as number) - at) <= DAY))
+          .map((s) => s.email)
+      )
+    ]
+  }))
   sold.sort((a, b) => (b.at || 0) - (a.at || 0))
   return {
     ok: true,
@@ -234,7 +304,9 @@ async function sales() {
     unanswered,
     sales: sold,
     /* New: a phone too old to know it leaves it alone. */
-    twice
+    twice,
+    /* Newer still, and the same: a purchase on an account nobody ever confirmed. */
+    unconfirmed
   }
 }
 

@@ -845,7 +845,10 @@ export default function App() {
                with Sign in, which failed four times, and made the account on
                the website, which then sold it to him again. */
             start={signInSide}
-            paidHere={purchase.onlyHere}
+            /* Paid here and on no account somebody has signed in to: the
+               phone's nameless id, an account made here (a mistyped email,
+               a confirmation still to come), or one it is on its way to. */
+            paidHere={purchase.onlyHere || purchase.madeHere || purchase.stuck}
             onAccountMade={(id) => {
               setSignInSide('in')
               linkNewAccount(id)
@@ -893,21 +896,29 @@ export default function App() {
             onUnlocked={() => setAuth('in')}
             onDemo={() => {
               /* Out of the paid path entirely: the demo needs no account and
-                 no unit, so the leftover session goes with it. */
+                 no unit, so the leftover session goes with it — and the
+                 store stops answering as that account, the way Settings →
+                 Sign out does. Left on it, a purchase made in the demo went
+                 to the account just left, and the one made next got none. */
               setDemo(true)
               signOut().catch(() => {})
+              unlinkAccount().catch(() => {})
               allowBluetooth(null, { signedOut: true })
               setAuth('in')
             }}
             onBack={() => {
               signOut().catch(() => {})
+              unlinkAccount().catch(() => {})
               allowBluetooth(null, { signedOut: true })
               setAuth('out')
             }}
             /* Apple's 5.1.1(v), on the one page an unpaid account can reach:
-               the account is gone, so its session goes with it. */
+               the account is gone, so its session goes with it, and the
+               store's link to it — a purchase put on a deleted account is
+               one nobody can ever sign in to. */
             onDeleted={() => {
               signOut().catch(() => {})
+              unlinkAccount().catch(() => {})
               allowBluetooth(null, { signedOut: true })
               setAuth('out')
             }}

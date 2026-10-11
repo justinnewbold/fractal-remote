@@ -84,7 +84,11 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
    * the order that cost a customer a second payment on 8 October, when this
    * screen met him on Sign in and he went off to the website to make the
    * account instead. `paidHere` is whether the phone holds a purchase no
-   * account has yet (purchases.js, onlyHere), and it only changes the words.
+   * account anybody signed in to has yet (purchases.js: onlyHere, madeHere,
+   * stuck), and it only changes the words — and keeps saying so after a
+   * first account made here, so a second one, made because the first
+   * email was mistyped or its confirmation never came, is still told to
+   * come back to this phone and sign in.
    */
   const paid = start === 'up' || paidHere
   /* Sign in failed on the details, on a phone that paid before any account

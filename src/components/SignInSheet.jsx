@@ -45,12 +45,20 @@ export default function SignInSheet({ open, role, account = false, startIn = 'in
             again. And the phone may have no account yet at all — the buyer
             this was written for had none — so making one here says which
             email to make it with, not "the one you used there".
+
+            SAID AS "DON'T PAY", FIRST. "…on the phone before you pay here"
+            read, to somebody who had paid on the phone, as the order to do
+            things in: sign in there, then pay here — the double payment this
+            is here to stop. And once the account is made (`sent`), not
+            "make the account" again: the next step is the phone.
           */}
           {forUnlock ? (
             <p className="hint">
-              {making
-                ? 'Bought it on your phone already? Make the account with the email you’ll sign in with on the phone, then sign in with it on the phone before you pay here. Once you have, it unlocks here by itself.'
-                : 'Bought it on your phone already? Sign in with the same email as on the phone. If the phone isn’t signed in yet, sign in there first, before you pay here. Once you have, it unlocks here by itself.'}
+              {side === 'sent'
+                ? 'Bought it on your phone already? Don’t pay again here. Once you’ve confirmed the account, sign in with this email on the phone, and this unlocks by itself.'
+                : making
+                  ? 'Bought it on your phone already? Don’t pay again here. Make the account with the email you’ll use on the phone, then sign in with it on the phone, and this unlocks by itself.'
+                  : 'Bought it on your phone already? Don’t pay again here. Sign in with the same email as on the phone. If the phone isn’t signed in yet, sign in there too, and this unlocks by itself.'}
             </p>
           ) : null}
           <SignIn
