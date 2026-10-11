@@ -413,51 +413,62 @@ paragraphs rather than lines broken where this file wraps them.
 **The three videos are in it, at the end.** On 11 October 2026 the notes as
 they stood came to 3897 characters, and the three Google Drive links (the
 FM3, presets, and deleting an account) would not fit after them. So the
-block was cut again, and a test holds it under 3950 bytes with each bracket
-in Videos and Tested on filled in by something as long as a Drive link, so
-it still fits on the day the real ones go in.
+block was cut again, and a test holds it under 3950 bytes with each Videos
+bracket filled in by something as long as a Drive link and each Tested on
+bracket by 30 characters, so it still fits on the day the real ones go in
+(about 3835 with real values).
+
+**And the way to delete a new account is in the deletion paragraph.** The
+notes ask the reviewer to try Delete account on a new account, and one that
+has not bought opens on the purchase page, with no gear: its Delete account
+is at the foot of that page. That used to be said six paragraphs earlier,
+under Accounts before buying, so a reviewer following the deletion steps
+alone would look for a gear that is not there. The 1.86.83 notes Apple
+approved had it in the deletion paragraph, and 1.86.8 was refused under
+5.1.1(v), so it is back there. Auto is named by where it is (Settings, under
+Play screen), since nothing on that row says Appearance.
 
 ```
 This app is a remote control for Fractal Audio guitar units, through a computer the unit is plugged into by USB.
 
 Without that hardware, use the demo. It needs only the phone, and no account:
 
-  1. Tap "Get started"
-  2. Tap "Got it"
-  3. Tap "Start free demo"
-  4. Choose any unit, then tap "Play with ..."
+1. Tap "Get started"
+2. Tap "Got it"
+3. Tap "Start free demo"
+4. Choose any unit, then tap "Play with ..."
 
-That loads a simulated unit. Every screen works, and nothing in the demo reaches real hardware.
+Every screen works in the demo, and nothing in it reaches real hardware.
 
 The demo is free. An account joins the phone to the user's computer, and carries the full version and their setlists to their other devices.
 
 The in-app purchase: in the demo, tap Unlock at the top of the Play screen. Buying needs no account, and Restore a purchase is the button under the price.
 
+For the signed-in screens, use the demo account in App Review Information. It has the full version.
+
 New since 1.86.83:
 
-Accounts before buying. Anybody can now make an account, before buying or without buying: Create account is on the sign-in screen. Making one unlocks nothing. A new account is confirmed from its email before it can be signed in to. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page.
+Accounts before buying. Anybody can now make an account, before buying: Create account is on the sign-in screen. Making one unlocks nothing. A new account is confirmed from its email before it can be signed in to.
 
-Paying once. With nobody signed in, the purchase page now tells someone who bought on another device to sign in instead of buying again, and the app checks again just before charging. After a purchase with nobody signed in, the app offers to make an account, since an account is what joins the phone to the user's computer. Nothing is forced: the demo keeps working, and the purchase waits on the phone.
+Paying once. With nobody signed in, the purchase page now tells someone who bought on another device to sign in instead of buying again, and the app checks again just before charging, so nothing is charged twice. After a purchase with nobody signed in, the app offers to make an account, since an account is what joins the phone to the user's computer. Nothing is forced: the demo keeps working, and the purchase waits on the phone.
 
 Edit (Beta). Edit, at the bottom of the Play screen, is now marked Beta. Everything it shows works, in the demo too. It is marked Beta because it does not yet cover every block and control of every unit, and a control may not yet move quite the way it does on the unit itself.
 
 Bluetooth MIDI code, switched on only for the developer. This build contains Bluetooth MIDI code for a feature that lets the phone reach the guitar unit through a Bluetooth MIDI adapter instead of a computer. While it is tested, it is switched on only for the developer's own account. Customers and the review account don't see it in this build, and the app doesn't ask them for Bluetooth permission. If it is offered to customers, that will be in a later version, sent for review with notes that describe it.
 
-Appearance. On iPhone, Appearance in Settings set to Auto, which is the default, now follows the phone's own light or dark setting.
+Appearance. On iPhone, Auto (Settings, under Play screen), which is the default, now follows the phone's own light or dark setting.
 
 Metronome. The volume pop-up (the speaker at the top) now has a metronome on/off switch.
 
-The demo account is under Sign-in required.
-
-Deleting an account (Guideline 5.1.1(v)): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and everything stored under it at once. Please try it on a new account, not the demo account (video 3).
+Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and everything stored under it at once. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page. Please try it on a new account, not the demo account.
 
 Hardware (Guideline 2.1): a video filmed on an iPhone with a real FM3 on screen, from the first pairing through the whole workflow, is video 1 below.
 
-Apple Watch, in the demo too: keep the demo's Play screen open on the iPhone, open Fractal on the watch, and swipe up or down between Scenes, Pedals, Presets and Tuner.
+Apple Watch (it comes with the iPhone app): keep the demo's Play screen open on the iPhone, open Fractal on the watch, and swipe up or down between Scenes, Pedals, Presets and Tuner.
 
 Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].
 
-Services the app uses: Supabase (accounts, setlists, the phone-to-computer link), RevenueCat with Apple in-app purchase, Resend (account emails), Expo (app updates).
+Services the app uses: Supabase (accounts, setlists, the phone-to-computer link), RevenueCat with Apple in-app purchase, Resend (emails), Expo (updates).
 
 Regions: the app works the same in every country.
 

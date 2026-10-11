@@ -2337,7 +2337,18 @@ export function run(test) {
     assert.ok(bytes <= 3950, `the 1.87.11 notes are ${bytes} bytes with the links and brackets filled; Apple's Notes box takes 4000`)
     assert.match(pasted, /\nVideos:\n1\. FM3 hardware: \[FM3 video link\]\n2\. Presets: \[presets video link\]\n3\. Deleting an account: \[account deletion video link\]\s*$/, 'the three videos are not listed at the end of the 1.87.11 notes')
     assert.match(pasted, /real FM3 on\s+screen, from the first pairing through the whole workflow, is video 1 below\./, 'the Hardware paragraph does not point at the FM3 video')
-    assert.match(pasted, /not the demo account \(video 3\)\./, 'the Delete account paragraph does not point at its video')
+    assert.match(pasted, /Deleting an account \(Guideline 5\.1\.1\(v\), video 3 below\):/, 'the Delete account paragraph does not point at its video')
+    /*
+     * AND THE WAY TO DELETE A NEW ACCOUNT IS IN THE DELETION PARAGRAPH. The
+     * notes ask the reviewer to try it on a new account, and a new account
+     * that has not bought opens on the purchase page with no gear, so the
+     * gear-to-Settings path alone sends them looking for a button that is
+     * not there. That page's Delete account was said six paragraphs up, in
+     * Accounts before buying; the 1.86.83 notes Apple approved had it here,
+     * and 1.86.8 was refused under 5.1.1(v).
+     */
+    const deleting = pasted.slice(pasted.indexOf('Deleting an account (Guideline 5.1.1(v)'), pasted.indexOf('\n\n', pasted.indexOf('Deleting an account (Guideline 5.1.1(v)')))
+    assert.match(deleting, /purchase page[\s\S]{0,80}Delete account is at the foot of that page\. Please try it on a new account, not the demo account\./, 'the deletion paragraph does not say where an unpaid new account is deleted')
 
     /* The disclosure, said once. */
     assert.match(
