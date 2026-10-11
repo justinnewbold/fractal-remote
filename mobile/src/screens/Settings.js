@@ -8,7 +8,7 @@ import { setDemo, useDemo, useDemoUnit, setDemoUnit } from '../lib/demo'
 import { UNITS as DEMO_UNITS } from '../lib/demoUnits'
 import { getDebugLog } from '../lib/debugLog'
 import { tick } from '../lib/feedback'
-import { usePurchase } from '../lib/purchases'
+import { NOT_ACROSS, NOT_ACROSS_SIGNED_OUT, ONLY_HERE, unlockedFrom, usePurchase } from '../lib/purchases'
 import { applyNow, checkNow, describeRunning, useUpdates } from '../lib/updates'
 import {
   changePassword,
@@ -112,6 +112,8 @@ export default function Settings({
   onOpenFixes,
   onOpenReport,
   onSignIn,
+  /* Making an account, for a phone whose purchase is on no account yet. */
+  onMakeAccount,
   /* The page to open on, and who to tell when it changes — see App.js's
      openSettings. */
   startPage = null,
@@ -154,6 +156,17 @@ export default function Settings({
   /* Delete account: Apple's 5.1.1(v). A sheet that says what goes, then one
      more tap — never one tap from the page. */
   const [deleting, setDeleting] = useState(false)
+  /* Where the full version came from, asked as the sheet opens: what
+     deleting costs depends on it (purchases.js, unlockedFrom). */
+  const [from, setFrom] = useState(null)
+  useEffect(() => {
+    if (!deleting) return undefined
+    let alive = true
+    unlockedFrom().then((store) => alive && setFrom(store))
+    return () => {
+      alive = false
+    }
+  }, [deleting])
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState(null)
   const [error, setError] = useState(null)
@@ -544,6 +557,14 @@ export default function Settings({
                       ? 'Paired with your computer, no account. What you save stays on this phone.'
                       : 'Not signed in on this device.'}
                 </Text>
+                {/* Paid on this phone with no account yet: until there is one,
+                    the computer and the website see nothing bought. */}
+                {asked && !account?.email && purchase.onlyHere && onMakeAccount ? (
+                  <>
+                    <Note>{ONLY_HERE}</Note>
+                    <Press label="Make an account" tone="signal" onPress={onMakeAccount} />
+                  </>
+                ) : null}
                 {asked && onSignIn ? <Press label="Sign in with an email and password" onPress={onSignIn} /> : null}
               </>
             ) : (
@@ -559,6 +580,13 @@ export default function Settings({
               />
             )}
 
+            {/* Paid on this phone, sent to this account and not arrived yet:
+                said where the account is looked at (purchases.js, stuck).
+                With nobody signed in, its own line, which offers no Restore:
+                the Sign in above is the way. */}
+            {purchase.stuck ? (
+              <Note tone="warn">{purchase.held === NOT_ACROSS_SIGNED_OUT ? NOT_ACROSS_SIGNED_OUT : NOT_ACROSS}</Note>
+            ) : null}
             {note ? <Note>{note}</Note> : null}
             {error ? <Note tone="fault">{error}</Note> : null}
 
@@ -589,8 +617,15 @@ export default function Settings({
               everything else stored under it. It happens straight away and cannot be undone. Any computer signed in
               to this account is signed out.
             </Text>
+            {/*
+              TRUE ONLY OF A STORE PURCHASE, and it was said to everybody.
+              Deleting the account deletes the customer that holds a website
+              purchase or a gift, and no Restore brings either back — so
+              somebody who bought on the website was told it would survive,
+              made the account again, and could have paid again.
+            */}
             <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 21 }}>
-              {`The full version you bought stays with your ${Platform.OS === 'ios' ? 'Apple ID' : 'Google account'}. Restore a purchase brings it back on a new account.`}
+              {deleteCosts(from)}
             </Text>
             <Press
               label={busy ? 'Deleting…' : 'Delete my account'}
@@ -1590,6 +1625,35 @@ function Section({ children }) {
       {children}
     </Text>
   )
+}
+
+/**
+ * What deleting the account does to the full version, by where it came from
+ * (RevenueCat's store name; see purchases.js, unlockedFrom). A store purchase
+ * stays with the Apple ID or Google account that paid; a website purchase and
+ * a gift belong to the account, and go with it. Said without naming the
+ * website, as the phone's other words about paying are (Apple 3.1.3).
+ */
+const deleteCosts = (from) => {
+  const mine = Platform.OS === 'ios' ? 'Apple ID' : 'Google account'
+  if (['RC_BILLING', 'STRIPE', 'PADDLE'].includes(from)) {
+    return `Your full version belongs to this account, not to your ${mine}, so deleting the account gives it up for good: Restore can’t bring it back.`
+  }
+  if (from === 'PROMOTIONAL') {
+    return 'The full version was given to this account, so deleting the account gives it up for good.'
+  }
+  /* Not known yet, or not known at all: both ways, rather than the store's
+     promise to somebody it may not be true for. */
+  if (!from) {
+    return `If you paid for the full version with your ${mine}, it stays with your ${mine}, and Restore a purchase brings it back on a new account. If it came to this account any other way, deleting the account gives it up for good.`
+  }
+  /* Bought through the other phone's store: said without naming it, which
+     an iPhone may not do (Apple 2.3.10). */
+  const here = Platform.OS === 'ios' ? ['APP_STORE', 'MAC_APP_STORE'] : ['PLAY_STORE']
+  if (!here.includes(from)) {
+    return 'The full version you bought stays with the store account you paid with. Restore a purchase on the phone you bought it on brings it back on a new account.'
+  }
+  return `The full version you bought stays with your ${mine}. Restore a purchase brings it back on a new account.`
 }
 
 /** A heading and the rows under it — one group of Settings. */

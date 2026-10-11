@@ -9,7 +9,7 @@ import SignIn from './SignIn'
  * it is "Connect to your Mac", because that is what the person is doing —
  * the account is the means. At the Mac it is "Set up phone remote", once.
  */
-export default function SignInSheet({ open, role, account = false, startIn = 'in', email, busy, onClose, onSubmit, onCreate }) {
+export default function SignInSheet({ open, role, account = false, startIn = 'in', forUnlock = false, email, busy, onClose, onSubmit, onCreate }) {
   const phone = role !== 'mac'
   /*
    * WHICH SIDE THE FORM IS ON, so the title says what is being done. Opened
@@ -37,6 +37,30 @@ export default function SignInSheet({ open, role, account = false, startIn = 'in
               and starred presets follow you to any device.
             </p>
           )}
+          {/*
+            ON THE WAY TO THE UNLOCK, on either side of the form. Somebody who
+            bought it on a phone has it already under the email they sign in
+            with there, once that phone has signed in; an account made here
+            with another email is a second account, and it would be sold
+            again. And the phone may have no account yet at all — the buyer
+            this was written for had none — so making one here says which
+            email to make it with, not "the one you used there".
+
+            SAID AS "DON'T PAY", FIRST. "…on the phone before you pay here"
+            read, to somebody who had paid on the phone, as the order to do
+            things in: sign in there, then pay here — the double payment this
+            is here to stop. And once the account is made (`sent`), not
+            "make the account" again: the next step is the phone.
+          */}
+          {forUnlock ? (
+            <p className="hint">
+              {side === 'sent'
+                ? 'Bought it on your phone already? Don’t pay again here. Once you’ve confirmed the account, sign in with this email on the phone, and this unlocks by itself.'
+                : making
+                  ? 'Bought it on your phone already? Don’t pay again here. Make the account with the email you’ll use on the phone, then sign in with it on the phone, and this unlocks by itself.'
+                  : 'Bought it on your phone already? Don’t pay again here. Sign in with the same email as on the phone. If the phone isn’t signed in yet, sign in there too, and this unlocks by itself.'}
+            </p>
+          ) : null}
           <SignIn
             key={startIn}
             email={email}

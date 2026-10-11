@@ -8,7 +8,7 @@ import Sheet from '../components/Sheet'
 import { buyUnlock, restorePurchase, usePurchase } from '../lib/purchases'
 import { UNITS } from '../lib/demoUnits'
 import { ALREADY_UNLOCKED } from '../lib/onboarding'
-import { currentAccount, deleteAccount } from '../lib/relay'
+import { currentAccount, deleteAccount, restoreSession } from '../lib/relay'
 import { isPairAccount } from '../lib/pairing'
 
 /*
@@ -41,9 +41,45 @@ const supportedWords =
  * behind the thing that charges them again would be a poor way to treat them.
  */
 export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDeleted, asked = false }) {
-  const { price, unlocked, available, why, detail } = usePurchase()
+  const { price, unlocked, available, why, detail, held } = usePurchase()
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState(null)
+  /*
+   * NOBODY SIGNED IN, AND THE FREE WAY FIRST.
+   *
+   * Somebody who bought on the website or another phone is still on
+   * nobody's account here, so this phone cannot know they paid, and Buy
+   * would charge them again. Signing in costs nothing and unlocks it. So for
+   * them the sign-in comes ABOVE Buy, with a line saying why. Read from the
+   * phone's own sign-in, not the account server, and asked only on a page
+   * opened from the demo or the walkthrough: the imposed one is always
+   * signed in.
+   *
+   * The line names no other place to pay (Apple 3.1.3, Google Play's
+   * payments policy) and calls nothing free: "Sign in instead. It's free."
+   * sat over the price on App Review's own path, and read as if the full
+   * version cost nothing. "You won't be charged again." did the same thing
+   * from the line above Buy, to somebody who bought it in another store,
+   * which would charge them. So what costs nothing is the signing in, said
+   * of the signing in.
+   *
+   * AND NOT RESTORE, which with nobody signed in moves the purchase to this
+   * phone's nameless id — off the account it is on, and off every other
+   * phone and computer signed in to it. Its button stays below, as Apple
+   * requires. Signing in moves nothing off anybody. For the buyer this was
+   * written for — paid on a phone before he had any account — there is no
+   * account to sign in with yet, so it says to make one there first.
+   */
+  const [nobody, setNobody] = useState(false)
+  useEffect(() => {
+    if (!asked) return undefined
+    let alive = true
+    restoreSession().then((id) => alive && setNobody(!id))
+    return () => {
+      alive = false
+    }
+  }, [asked])
+  const freeFirst = nobody && Boolean(onSignIn)
   /*
    * DELETE ACCOUNT, FOR SOMEBODY WHO MADE ONE AND HAS NOT PAID.
    *
@@ -70,16 +106,24 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
   }, [canDelete])
   const signedInAs = account?.email && !isPairAccount(account.email) ? account.email : null
 
-  if (unlocked) onUnlocked?.()
+  /* Not while a purchase or restore is under way: its own answer closes the
+     page a moment later, once it has said how it went (purchases.js sets
+     boughtAlone for the sign-in screen behind). */
+  if (unlocked && !busy) onUnlocked?.()
 
   const buy = async () => {
     setBusy(true)
     setSaid(null)
     const out = await buyUnlock()
     setBusy(false)
+    /* Found already bought: the page closes, so the "nothing was charged"
+       goes with it as an alert, or somebody who just pressed the price
+       thinks they paid twice. */
+    if (out.ok && out.message) Alert.alert('Already unlocked', out.message)
     if (out.ok) return onUnlocked?.()
-    /* A cancel is not a fault and is not worth a sentence. */
-    if (!out.cancelled) setSaid({ tone: 'fault', text: out.message })
+    /* A cancel is not a fault and is not worth a sentence. A payment still
+       waiting is not one either: it is said calmly, and Buy stays off. */
+    if (!out.cancelled) setSaid({ tone: out.held ? 'warn' : 'fault', text: out.message })
   }
 
   const restore = async () => {
@@ -136,11 +180,31 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
         <Text style={{ color: color.silkFaint, fontSize: font.small, lineHeight: 18 }}>{detail}</Text>
       ) : null}
 
+      {/* A payment the store is still waiting on, one it has not confirmed,
+          or a purchase here that has not reached the account: said for as
+          long as Buy is held behind it. */}
+      {held && !said ? <Note tone="warn">{held}</Note> : null}
+
       <View style={{ gap: space.md }}>
+        {freeFirst ? (
+          <>
+            <Text style={{ color: color.silk, fontSize: font.body, lineHeight: font.body * 1.45 }}>
+              Already bought it on another device? Don&rsquo;t buy it again here: sign in with the account you
+              used there. Signing in never charges you. If that device has no account yet, make one on it first,
+              then sign in here with it.
+            </Text>
+            <Press
+              label={ALREADY_UNLOCKED}
+              disabled={busy}
+              onPress={onSignIn}
+              style={{ borderColor: color.signal }}
+            />
+          </>
+        ) : null}
         <Press
           label={price ? `Unlock Full Version — ${price}` : 'Unlock Full Version'}
           tone="signal"
-          disabled={busy || !available}
+          disabled={busy || !available || Boolean(held)}
           onPress={buy}
         />
         <Press label="Restore a purchase" disabled={busy} onPress={restore} />
@@ -151,7 +215,7 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
           here — which left somebody looking at a locked app, holding an
           account that unlocks it, with nothing on screen to say so.
         */}
-        {onSignIn ? (
+        {onSignIn && !freeFirst ? (
           <Press
             /* "I'm already unlocked, sign in" — his words, and the browser's
                unlock page says the same (shared/onboarding.mjs). */

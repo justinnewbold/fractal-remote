@@ -76,6 +76,13 @@ function theUnlockIn(offerings) {
  *
  * Never throws. `unknown` means the question could not be put, and the page
  * treats that the way the phone does — as not a no.
+ *
+ * A FAULT IS NOT A NO, whatever shape it comes in. Only the request throwing
+ * used to count: an error page from the server, or a reply that was not JSON,
+ * came out as a definite "not paid", and the browser on a phone puts the
+ * $9.99 page in front of a definite no. So only a good reply that says yes
+ * or no in so many words is an answer. Nobody signed in is still a plain no:
+ * there is no account for a purchase to be on.
  */
 export async function checkUnlocked() {
   try {
@@ -87,11 +94,69 @@ export async function checkUnlocked() {
       headers: { 'Content-Type': 'application/json', apikey: DEFAULT_PROJECT.anonKey, Authorization: `Bearer ${token}` },
       body: '{}'
     })
-    const body = await res.json().catch(() => ({}))
-    return { unlocked: Boolean(body?.unlocked), unknown: Boolean(body?.unknown) }
+    const body = res.ok ? await res.json().catch(() => null) : null
+    if (typeof body?.unlocked !== 'boolean') return { unlocked: false, unknown: true }
+    return { unlocked: body.unlocked, unknown: Boolean(body.unknown) }
   } catch {
     return { unlocked: false, unknown: true }
   }
+}
+
+/*
+ * HOW OFTEN THE UNLOCK PAGE ASKS AGAIN. Often at first, because the person
+ * reading it has just been told to go and sign in on their phone, and that
+ * takes a minute; less often after, for a page left open on a computer.
+ */
+const ASK_FAST_MS = 5000
+const ASK_SLOW_MS = 30000
+const FAST_FOR_MS = 2 * 60 * 1000
+
+/**
+ * Ask checkUnlocked again and again, and call `onYes` once it says yes —
+ * for the unlock page, which waits on a phone to sign in (App's unlockBody).
+ *
+ * Every five seconds for two minutes, then every thirty, and at once when the
+ * window comes back to the front. Nothing while the page is hidden: nobody is
+ * looking, and coming back asks straight away. Only a definite yes counts —
+ * the server's "could not ask RevenueCat" is not a purchase to act on.
+ *
+ * Returns the function that stops it, for the effect that started it.
+ */
+export function askUntilUnlocked(onYes, ask = checkUnlocked) {
+  let live = true
+  let asking = false
+  let timer = null
+  const began = Date.now()
+  const hidden = () => document.visibilityState === 'hidden'
+  const later = () => {
+    clearTimeout(timer)
+    if (live && !hidden()) timer = setTimeout(now, Date.now() - began < FAST_FOR_MS ? ASK_FAST_MS : ASK_SLOW_MS)
+  }
+  async function now() {
+    clearTimeout(timer)
+    if (!live || asking || hidden()) return
+    asking = true
+    const out = await ask()
+    asking = false
+    if (!live) return
+    if (out?.unlocked === true && !out.unknown) {
+      stop()
+      onYes()
+    } else later()
+  }
+  const back = () => {
+    if (!hidden()) now()
+  }
+  function stop() {
+    live = false
+    clearTimeout(timer)
+    window.removeEventListener('focus', back)
+    document.removeEventListener('visibilitychange', back)
+  }
+  window.addEventListener('focus', back)
+  document.addEventListener('visibilitychange', back)
+  later()
+  return stop
 }
 
 /*
@@ -136,19 +201,43 @@ export async function webPrice(accountId) {
   }
 }
 
+/* Said when Buy finds the account has it already. The page unlocks and goes
+   either way, and unlocking without a word, straight after somebody pressed
+   "$9.99", reads as having been charged again. */
+export const ALREADY_HAD = 'You already have the full version, so nothing was charged.'
+
 /**
  * Buy it. Opens RevenueCat's own checkout over the page and resolves when the
  * card has been taken, declined, or the window closed.
  *
  * Resolves, never rejects, with `{ ok, cancelled, message }` — the same shape
  * the phone's buyUnlock returns, so the two screens can say the same things.
+ *
+ * NEVER TO SOMEBODY WHO HAS IT. An owner can still get here through a page
+ * drawn on an old answer, or on one the server could not give. So RevenueCat
+ * is asked once more, itself, the moment before the card: it holds what this
+ * account bought in every store, so it answers even when the server in front
+ * of it cannot. Owned — or the checkout saying it is already bought — takes
+ * no money, and the server is told so its table catches up. Not being able
+ * to ask takes no money either. What it cannot see is a phone's purchase
+ * made before that phone signed in; the unlock page's words are for that.
  */
 export async function buyOnWeb({ accountId, email }) {
   if (!accountId) return { ok: false, cancelled: false, message: 'Sign in first, so the unlock has an account to belong to.' }
+  const hasIt = () => {
+    checkUnlocked()
+    return { ok: true, cancelled: false, message: ALREADY_HAD }
+  }
   try {
     const p = await purchasesFor(accountId)
     const pkg = theUnlockIn(await p.getOfferings())
     if (!pkg) return { ok: false, cancelled: false, message: 'Couldn’t get the price just now. Check your connection and try again.' }
+    const already = await p.getCustomerInfo().then(
+      (info) => Boolean(info?.entitlements?.active?.[ENTITLEMENT]),
+      () => null
+    )
+    if (already === null) return { ok: false, cancelled: false, message: 'Couldn’t check your purchase just now. Try again in a moment.' }
+    if (already) return hasIt()
     const { customerInfo } = await p.purchase({ rcPackage: pkg, customerEmail: email || undefined })
     const yes = Boolean(customerInfo?.entitlements?.active?.[ENTITLEMENT])
     /* Tell the relay now, rather than waiting for the webhook to land. */
@@ -158,7 +247,10 @@ export async function buyOnWeb({ accountId, email }) {
       : { ok: false, cancelled: false, message: 'The store did not confirm the purchase.' }
   } catch (err) {
     const { ErrorCode } = await load().catch(() => ({ ErrorCode: {} }))
-    if (err?.errorCode === ErrorCode?.UserCancelledError) return { ok: false, cancelled: true, message: null }
+    /* No code is no match: a library that would not load leaves ErrorCode empty. */
+    const code = err?.errorCode
+    if (code !== undefined && code === ErrorCode?.UserCancelledError) return { ok: false, cancelled: true, message: null }
+    if (code !== undefined && code === ErrorCode?.ProductAlreadyPurchasedError) return hasIt()
     return { ok: false, cancelled: false, message: err?.message || 'The purchase did not go through.' }
   }
 }

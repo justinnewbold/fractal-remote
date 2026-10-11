@@ -1679,7 +1679,7 @@ export function run(test) {
     assert.match(paywall, /const canDelete = !asked && Boolean\(onDeleted\)/, 'the purchase page offers to delete an account to somebody in the demo')
     assert.match(paywall, /\}, \[canDelete\]\)/, 'the purchase page asks the account server who is signed in on every render')
     const phoneApp = read('mobile/App.js')
-    assert.match(phoneApp, /<Paywall\s+onSignIn=\{toSignIn\}[\s\S]{0,900}onDeleted=\{\(\) => \{\s*signOut\(\)/, 'the purchase page an unpaid account signs in to cannot delete it')
+    assert.match(phoneApp, /<Paywall\s+onSignIn=\{toSignIn\}[\s\S]{0,1800}onDeleted=\{\(\) => \{\s*signOut\(\)/, 'the purchase page an unpaid account signs in to cannot delete it')
 
     /* And the browser and Mac app, for anybody who signed up there. */
     const web = read('src/App.jsx')

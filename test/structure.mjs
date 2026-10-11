@@ -4007,7 +4007,15 @@ export function run(test) {
      */
     assert.ok(!/canMakeAccount/.test(native), 'the phone hides Create account until the unlock again')
     assert.match(native, /onPress=\{\(\) =>\s*switchTo\(mode === 'up' \? 'in' : 'up'\)\s*\}/, 'Create account does something other than open the form')
-    assert.match(native, /const \[mode, setMode\] = useState\('in'\)/, 'the form is held on something other than its own choice again')
+    /*
+     * It opens on the side it is told to, once, and is its own after that:
+     * Create account straight after somebody bought with nobody signed in
+     * (App.js, boughtAlone) — "the user should be required to either sign in
+     * if they already have a sign in or sign up right after they unlock it" —
+     * and Sign in otherwise. Nothing moves it later.
+     */
+    assert.match(native, /const \[mode, setMode\] = useState\(start === 'up' \? 'up' : 'in'\)/, 'the form is held on something other than its own choice again')
+    assert.ok(!/useEffect/.test(native), 'the form watches something and can change sides by itself again')
     /* Nothing on this screen can unlock, so it has no business watching the
        purchase: the last time it did, a restore landing late told somebody
        with an account to go and make one. */

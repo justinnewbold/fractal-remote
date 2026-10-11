@@ -42,7 +42,7 @@ import { ALLOW_WORDS, RESTRICTED_WORDS, allowBluetooth, restoreBluetooth, setBlu
 import { overBluetooth } from './src/lib/bleSwitch'
 import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
-import { checkOwner, linkAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
+import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
 import { shouldAskToPay } from './src/lib/unlock-rule'
 
 /**
@@ -314,6 +314,27 @@ export default function App() {
     /* Heading for the sign-in form is a sign-out for Bluetooth (beta): off, and written down (lib/bluetooth). */
     allowBluetooth(null, { signedOut: true })
     setAuth('out')
+  }
+  /*
+   * AND WHICH SIDE OF THE FORM IT OPENS ON: Sign in, unless something said
+   * otherwise. Create account straight after a purchase with nobody signed
+   * in (purchases.js, boughtAlone), and from "Make an account", the door
+   * for a phone whose purchase is on no account yet (onlyHere) — its lines
+   * on the demo's stage and in Settings → Account. Only for the form it
+   * opened: leaving it, any way, puts it back to Sign in, so a later "Sign
+   * in" never opens on "now make your account" for somebody who has made
+   * one, or has walked away from making one.
+   */
+  const [signInSide, setSignInSide] = useState('in')
+  useEffect(() => {
+    if (purchase.boughtAlone) setSignInSide('up')
+  }, [purchase.boughtAlone])
+  useEffect(() => {
+    if (auth !== 'out') setSignInSide('in')
+  }, [auth])
+  const toMakeAccount = () => {
+    toSignIn()
+    setSignInSide('up')
   }
   /*
    * THE TOUR, WHICH THIS END NEVER HAD. "First issue is demo has no
@@ -820,6 +841,21 @@ export default function App() {
         ) : auth === 'out' ? (
           <>
           <SignIn
+            /* Create account, after buying with nobody signed in: he was met
+               with Sign in, which failed four times, and made the account on
+               the website, which then sold it to him again. */
+            start={signInSide}
+            /* Paid here and on no account somebody has signed in to: the
+               phone's nameless id, an account made here (a mistyped email,
+               a confirmation still to come), or one it is on its way to. */
+            paidHere={purchase.onlyHere || purchase.madeHere || purchase.stuck}
+            /* And when it is that made-here account, the screen says so: it
+               has the purchase, and one made again takes it with it. */
+            madeHere={purchase.madeHere}
+            onAccountMade={(id) => {
+              setSignInSide('in')
+              linkNewAccount(id)
+            }}
             onSignedIn={() => {
               /* An owner signing in is unlocked from that moment, not from
                  the next launch — the check at startup ran before there was
@@ -863,21 +899,29 @@ export default function App() {
             onUnlocked={() => setAuth('in')}
             onDemo={() => {
               /* Out of the paid path entirely: the demo needs no account and
-                 no unit, so the leftover session goes with it. */
+                 no unit, so the leftover session goes with it — and the
+                 store stops answering as that account, the way Settings →
+                 Sign out does. Left on it, a purchase made in the demo went
+                 to the account just left, and the one made next got none. */
               setDemo(true)
               signOut().catch(() => {})
+              unlinkAccount().catch(() => {})
               allowBluetooth(null, { signedOut: true })
               setAuth('in')
             }}
             onBack={() => {
               signOut().catch(() => {})
+              unlinkAccount().catch(() => {})
               allowBluetooth(null, { signedOut: true })
               setAuth('out')
             }}
             /* Apple's 5.1.1(v), on the one page an unpaid account can reach:
-               the account is gone, so its session goes with it. */
+               the account is gone, so its session goes with it, and the
+               store's link to it — a purchase put on a deleted account is
+               one nobody can ever sign in to. */
             onDeleted={() => {
               signOut().catch(() => {})
+              unlinkAccount().catch(() => {})
               allowBluetooth(null, { signedOut: true })
               setAuth('out')
             }}
@@ -1014,6 +1058,7 @@ export default function App() {
                 onPage={setSettingsAt}
                 onUnlock={() => setBuying(true)}
                 onSignIn={toSignIn}
+                onMakeAccount={toMakeAccount}
                 link={link.link}
                 macName={link.macName}
                 hostVersion={link.hostVersion}
@@ -1128,6 +1173,7 @@ export default function App() {
                   BENCH && (demo || link.link === 'connected') && !overBluetooth(caps) ? () => setScreen('edit') : null
                 }
                 onUnlock={() => setBuying(true)}
+                onAccount={toMakeAccount}
               />
             )}
             </EdgeBack>

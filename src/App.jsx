@@ -179,7 +179,7 @@ import {
 import { isDemo, setDemo, demoUnit, setDemoUnit } from './lib/forgefx'
 import { UNITS as DEMO_UNITS, demoSentence, unitByKey } from './lib/demoUnits'
 import blockCatalog from './data/blocks.json' with { type: 'json' }
-import { buyOnWeb, checkUnlocked, webPrice } from './lib/webPurchase'
+import { askUntilUnlocked, buyOnWeb, checkUnlocked, webPrice } from './lib/webPurchase'
 import {
   detect,
   currentPreset,
@@ -255,6 +255,8 @@ import { watchEvery, probeSays, countQuiet, unitGone } from '../shared/unit-watc
 
 /* Session-only: "open the unlock page once the demo has ended" — see afterAccount. */
 const UNLOCK_NEXT = 'fractal.unlockNext'
+/* "Nothing was charged", carried across the reload that ends the demo after an unlock (nowUnlocked). */
+const PAID_SAID = 'fractal.paidSaid'
 
 
 /**
@@ -1322,6 +1324,16 @@ export default function App() {
   const [webPriceText, setWebPriceText] = useState(null)
   const [buying, setBuying] = useState(false)
   const [buySaid, setBuySaid] = useState(null)
+  /* What Buy found, when it took no money: said after the page unlocks and goes. */
+  const [paidSaid, setPaidSaid] = useState(() => {
+    try {
+      const said = sessionStorage.getItem(PAID_SAID)
+      sessionStorage.removeItem(PAID_SAID)
+      return said || null
+    } catch {
+      return null
+    }
+  })
   /* Which fix the guide opens on, when an error notice sent you there. Null is
      the guide with everything folded shut, which is what Setup opens on. */
   const [fix, setFix] = useState(null)
@@ -2065,7 +2077,14 @@ export default function App() {
 
   const answeredFor = accountId && paid.checked && paid.for === accountId
   const owned = Boolean(answeredFor && paid.unlocked)
+  /* Owned, and known to be: `owned` also counts the server's "could not ask
+     RevenueCat", which is right for holding Buy back and wrong for telling
+     anybody they have it. Every "nothing more to pay" goes by this one. */
+  const ownedSure = owned && !paid.unknown
   const mustPay = Boolean(link.role === 'remote' && !isDemo() && answeredFor && !paid.unlocked && !paid.unknown)
+  /* Either of the two places the unlock is drawn (unlockBody), on screen now.
+     A name, so the asking below does not spell out their conditionals. */
+  const unlockOnScreen = mustPay || (sheet === 'settings' && setupPage === 'unlock')
 
   /* Carried across the reload that ends the demo (see afterAccount), so the
      computer still lands on the unlock page it was heading for. */
@@ -2117,7 +2136,10 @@ export default function App() {
   const openUnlock = () => {
     if (accountId) {
       setSheet('settings')
-      setSetupPage('unlock')
+      /* Somebody who has paid is shown that it is unlocked, never a Buy
+         button. The walkthrough's Unlock card used to open the page for
+         anybody signed in. */
+      setSetupPage(ownedSure ? 'account' : 'unlock')
       return
     }
     setUnlockAfterSignIn(true)
@@ -2134,51 +2156,90 @@ export default function App() {
     setSetupPage('unlock')
   }, [unlockAfterSignIn, accountId, paid])
 
+  /* Bought here, or found to have been bought on a phone while the unlock
+     page was up (the asking below): the same next step either way. `said`
+     is Buy finding it bought already, which took no money and says so. */
+  const nowUnlocked = async (said = null) => {
+    setPaid({ checked: true, unlocked: true, for: accountId })
+    if (said) setPaidSaid(said)
+    /*
+     * On the computer, what was bought is the phone remote, so it comes on
+     * now. The server is asked first, which writes the purchase where the
+     * relay reads it; then the host is switched on. If this computer's
+     * device server was never signed in, the one sheet that does that opens
+     * instead — "Set up phone remote", with the email filled in.
+     */
+    if (!isDemo() && linkState().role === 'mac') {
+      await checkUnlocked()
+      try {
+        await setMacRemote(true)
+        record('remote', 'Phone remote turned on after the unlock')
+        setSetupPage(null)
+        setSheet(null)
+      } catch {
+        setSetupPage(null)
+        setSheet(null)
+        setSignIn(true)
+      }
+      return
+    }
+    /*
+     * Buying ends the demo, as it does on the phone. A reload, because
+     * which end this is was decided when the page loaded — see leave-demo.
+     * Before the page is put away, not after: moving the sheet steps the
+     * browser's history, and a step in flight cancels the reload (see
+     * afterAccount).
+     */
+    if (isDemo()) {
+      if (said) {
+        try {
+          sessionStorage.setItem(PAID_SAID, said)
+        } catch {
+          /* Unsaid after the reload; the page still says it has the full version. */
+        }
+      }
+      setDemo(false)
+      window.location.reload()
+      return
+    }
+    setSetupPage(null)
+  }
+
   const buyHere = async () => {
     setBuying(true)
     setBuySaid(null)
     const out = await buyOnWeb({ accountId, email: link.account?.email })
     setBuying(false)
-    if (out.ok) {
-      setPaid({ checked: true, unlocked: true, for: accountId })
-      /*
-       * On the computer, what was bought is the phone remote, so it comes on
-       * now. The server is asked first, which writes the purchase where the
-       * relay reads it; then the host is switched on. If this computer's
-       * device server was never signed in, the one sheet that does that opens
-       * instead — "Set up phone remote", with the email filled in.
-       */
-      if (!isDemo() && linkState().role === 'mac') {
-        await checkUnlocked()
-        try {
-          await setMacRemote(true)
-          record('remote', 'Phone remote turned on after the unlock')
-          setSetupPage(null)
-          setSheet(null)
-        } catch {
-          setSetupPage(null)
-          setSheet(null)
-          setSignIn(true)
-        }
-        return
-      }
-      /*
-       * Buying ends the demo, as it does on the phone. A reload, because
-       * which end this is was decided when the page loaded — see leave-demo.
-       * Before the page is put away, not after: moving the sheet steps the
-       * browser's history, and a step in flight cancels the reload (see
-       * afterAccount).
-       */
-      if (isDemo()) {
-        setDemo(false)
-        window.location.reload()
-        return
-      }
-      setSetupPage(null)
-      return
-    }
+    if (out.ok) return nowUnlocked(out.message)
     if (!out.cancelled) setBuySaid(out.message)
   }
+
+  /*
+   * ASK AGAIN WHILE THE UNLOCK IS ON SCREEN, until it says yes.
+   *
+   * A customer paid on his iPhone before he had an account, made the account
+   * here, and was sold it again by card two minutes before his phone signed
+   * in. Asked once per account, this page could not have known: a phone's
+   * purchase reaches the account only when the phone signs in. The page says
+   * so now (unlockBody), and keeps asking until that has happened — see
+   * askUntilUnlocked for how often. Not while a checkout is open over it:
+   * that is RevenueCat's, and nothing here can take it down.
+   *
+   * And while the answer is the server's "could not ask", which holds Buy
+   * back: the first definite no gives it back.
+   */
+  useEffect(() => {
+    if (!unlockOnScreen || !accountId || ownedSure || buying) return undefined
+    const ask = async () => {
+      const out = await checkUnlocked()
+      if (!out.unknown && !out.unlocked) {
+        setPaid((p) => (p.for === accountId && p.unknown ? { checked: true, unlocked: false, unknown: false, for: accountId } : p))
+      }
+      return out
+    }
+    return askUntilUnlocked(nowUnlocked, ask)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unlockOnScreen, accountId, ownedSure, buying])
 
   const linkAction = useCallback(
     async (kind) => {
@@ -3851,7 +3912,8 @@ export default function App() {
    * has not paid sees in place of connecting (mustPay, above).
    *
    * Every sentence here is copied from mobile/src/screens/Paywall.js, and
-   * test/both-ends.mjs holds them to it.
+   * test/both-ends.mjs holds them to it — but for the lines above Buy about
+   * what this account has, which say why they are there.
    */
   const unlockBody = (
     <>
@@ -3866,8 +3928,28 @@ export default function App() {
         You&rsquo;ll be able to control and switch presets, scenes, amp &amp; effects blocks,
         tuner, tap tempo, setlists, and so much more.
       </p>
+      {/*
+        THE LINES HERE THAT ARE NOT THE PHONE'S: only this end can be looking
+        at an account that a phone's purchase has not reached yet, because
+        that phone has not signed in. The page keeps asking while it is up
+        (see ASK AGAIN), so "unlocks by itself" is what it does — for the
+        email named, which is why a phone on another one is told apart. And
+        Buy held back on a question that could not be put says so, rather
+        than that this account has paid.
+      */}
+      {ownedSure ? (
+        <p className="hint">This account has the full version already. There is nothing more to pay.</p>
+      ) : owned ? (
+        <p className="hint">Couldn&rsquo;t check your purchase just now, so Buy is off for a moment. This page asks again by itself.</p>
+      ) : signedInHere ? (
+        <p className="hint unlock-phone">
+          Bought it on your iPhone or Android? Don&rsquo;t pay again. Open the phone app and sign in with{' '}
+          <strong>{link.account.email}</strong> — this page unlocks by itself as soon as you do. If your phone is
+          signed in with a different email, sign in here with that one instead.
+        </p>
+      ) : null}
       {buySaid ? <p className="hint tone-bad">{buySaid}</p> : null}
-      <button type="button" className="primary unlock-buy" disabled={buying || !accountId} onClick={buyHere}>
+      <button type="button" className="primary unlock-buy" disabled={buying || !accountId || owned} onClick={buyHere}>
         {webPriceText ? `Unlock Full Version — ${webPriceText}` : 'Unlock Full Version'}
       </button>
       {/*
@@ -4261,6 +4343,23 @@ export default function App() {
             </button>
           ))}
         </nav>
+      ) : null}
+
+      {/*
+        BUY FOUND IT BOUGHT ALREADY, and took nothing. The page it was on
+        unlocks and goes, so this is said out here, where it is still on
+        screen once it has: somebody who pressed the price and watched it
+        unlock otherwise reads it as a second charge.
+      */}
+      {paidSaid ? (
+        <div className="notice" data-kind="did" role="status">
+          <h2>{paidSaid}</h2>
+          <div className="history-actions">
+            <button className="chip" onClick={() => setPaidSaid(null)}>
+              Got it
+            </button>
+          </div>
+        </div>
       ) : null}
 
       {/*
@@ -4767,6 +4866,8 @@ export default function App() {
               : null
         }
         onUnlock={openUnlock}
+        /* So its phone-remote card says an owner has it, rather than selling it. */
+        paid={ownedSure}
         onHere={() => setComputerSetup(true)}
       />
       <Onboarding
@@ -4783,7 +4884,8 @@ export default function App() {
         link={link}
         onLookAgain={() => read()}
         onSignIn={() => linkAction('mac-setup')}
-        paid={answeredFor ? paid.unlocked : null}
+        /* Only a definite answer: "hasn't unlocked yet" is not said on a fault. */
+        paid={answeredFor && !paid.unknown ? paid.unlocked : null}
         onUnlock={openUnlock}
       />
 
@@ -4791,6 +4893,7 @@ export default function App() {
         open={Boolean(signIn)}
         account={signIn === 'account'}
         startIn={signInStart}
+        forUnlock={unlockAfterSignIn}
         onCreate={async (details) => {
           const out = await createAccount(details)
           if (out.needsConfirmation) return out
@@ -5795,8 +5898,10 @@ export default function App() {
                   <p className="hint">
                     This deletes your account for good: your sign-in, your set lists, bug reports you sent from it and
                     everything else stored under it. It happens straight away and cannot be undone. Any computer or
-                    phone signed in to this account is signed out. A full version you bought stays with the account you
-                    paid with, and Restore a purchase brings it back on a new account.
+                    phone signed in to this account is signed out. A full version bought in the App Store or on Google
+                    Play stays with that Apple ID or Google account, and Restore a purchase in the phone app brings it
+                    back on a new account. One bought with a card on the website or in the computer app, or given to
+                    you, belongs to this account and goes with it for good.
                   </p>
                   {typeof deleting === 'object' ? (
                     <p className="save-error" role="status">

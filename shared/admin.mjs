@@ -119,6 +119,16 @@ export const STORES = {
   promotional: 'Given by hand'
 }
 export const storeName = (store) => STORES[store] || 'Somewhere else'
+/* How somebody paid, for Paid twice: the card is the one RevenueCat can refund. */
+const CARD = ['rc_billing', 'stripe', 'paddle']
+const paidBy = (store) =>
+  store === 'app_store'
+    ? 'on the App Store'
+    : store === 'play_store'
+      ? 'on Google Play'
+      : CARD.includes(store)
+        ? 'by card on the website'
+        : `on ${storeName(store)}`
 
 /** Where somebody has signed in, from the kinds supabase/migrations/20260923_owner_lookup.sql sorts sessions into. */
 export const DEVICES = {
@@ -227,7 +237,42 @@ export function salesSections(answer, now = Date.now()) {
     { label: 'New today', value: String(answer.accountsDay || 0) }
   ]
 
+  /*
+   * PAID TWICE, first, because each one is money to give back. A customer
+   * bought it on his iPhone and again by card on the website, and nothing
+   * here said so. The server names anybody with more than one real
+   * purchase; an older server sends no list, and then there is no section.
+   */
+  const twice = Array.isArray(answer.twice) ? answer.twice : []
+  const paidTwice = twice.map((t) => {
+    const ways = (t.stores || []).map((store, i) => `${paidBy(store)}, ${dayOf(t.at?.[i])}`)
+    const card = (t.stores || []).some((store) => CARD.includes(store))
+    const said = ways.length > 2 ? `${ways.slice(0, -1).join('; ')}; and ${ways[ways.length - 1]}` : ways.join(', and ')
+    return { label: t.email, value: `Paid ${said}.${card ? ' The card one can be refunded in RevenueCat.' : ''}` }
+  })
+
+  /*
+   * AND A PURCHASE ON AN ACCOUNT NEVER CONFIRMED, next, for the same
+   * reason: a phone that paid before it had an account puts the purchase on
+   * the account made on it, and if that one is never confirmed, nothing
+   * else ever sees the purchase. A card sale on the website the same day,
+   * to another address, is named beside it: maybe the same person, twice.
+   * An older server sends no list, and then there is no section.
+   */
+  const quiet = (Array.isArray(answer.unconfirmed) ? answer.unconfirmed : []).map((u) => {
+    const ways = (u.stores || []).map((store, i) => `${paidBy(store)}, ${dayOf(u.at?.[i])}`)
+    const near = Array.isArray(u.near) ? u.near : []
+    return {
+      label: u.email,
+      value:
+        `Paid ${ways.join(', and ')}, but never confirmed this account, so the computer and the website can’t see the purchase.` +
+        (near.length ? ` A card sale on the website that day went to ${near.join(' and ')}: maybe the same person, who paid twice.` : '')
+    }
+  })
+
   const sections = [
+    ...(paidTwice.length ? [{ title: 'Paid twice', rows: paidTwice }] : []),
+    ...(quiet.length ? [{ title: 'Paid, account never confirmed', rows: quiet }] : []),
     { title: 'Sales', rows: totals },
     { title: 'Where they bought', rows: where },
     { title: 'Not sales', rows: other },
