@@ -25,10 +25,24 @@
  * change, and a price in the app is wrong the day it does.
  *
  * WHAT IS KNOWN TO WORK is one rig: his AM4, through the WIDI Uhost, the
- * C2MIDI Pro and the two 3.5 mm adapters, on an iPhone. The FM3, FM9 and
- * Axe-Fx III have the same 5-pin MIDI jacks the C2MIDI Pro was made for, so
- * the same chain without the adapters should work on them — but nobody has
- * tried it, and the page says so rather than promising it.
+ * C2MIDI Pro and the two 3.5 mm adapters, on an iPhone. The FM9 and
+ * Axe-Fx III have the 5-pin MIDI jacks the C2MIDI Pro was made for, so the
+ * same chain without the adapters should work on them — but nobody has tried
+ * it, and the page says so rather than promising it.
+ *
+ * NOT THE FM3, PLUGGED STRAIGHT IN. "I tried to use the exact same WIDI host
+ * setup on the FM3 as I did on the AM4 and the CME C2MIDI Pro got extremely
+ * hot on the FM3 and the connection didn't work." The C2MIDI Pro's white plug
+ * can feed itself from the MIDI OUT it goes into (CME's manual: "can be
+ * powered from the MIDI OUT port of most MIDI devices ... the MIDI device must
+ * comply with the MIDI standard"). The standard puts a 220-ohm resistor behind
+ * that pin; FM3 owners measured in 2021 that the FM3 has none, and report the
+ * same on the Turbo in 2025 and 2026. So every adapter that feeds from it runs
+ * hot there — CME's WIDI Master and WIDI Jack, Yamaha's MD-BT01, this cable —
+ * and USB power does not stop it. What owners fit is a short adapter with a
+ * 220-ohm resistor on pin 4. The FM3 stays one you can pick, for whoever has
+ * that adapter; it gets a warning in place of a shopping list, and no buy
+ * links (docs/bluetooth-midi.md has the sources).
  *
  * THE PLUGS, from CME's own manual for the C2MIDI Pro: the BLACK plug, marked
  * TO MIDI IN, goes INTO the unit's MIDI IN; the WHITE plug, marked TO MIDI
@@ -135,8 +149,22 @@ export const ALL_LINKS = [GUIDE_URL, ...Object.values(PARTS).flatMap((p) => [p.a
 
 const UNITS = { am4: 'AM4', fm3: 'FM3', fm9: 'FM9', axefx3: 'Axe-Fx III' }
 
-/** What to buy for one unit, in the order it plugs together. */
+/*
+ * THE FM3 WARNING, in place of its parts and its steps: what happened, why,
+ * and what owners do about it, in the fewest words that still say all three.
+ */
+export const FM3_WARNING =
+  'Don’t plug the C2MIDI Pro straight into an FM3. When we tried it, the cable got very hot and didn’t connect. The FM3’s MIDI OUT gives power with nothing to limit it, so adapters that feed from it run hot, the Yamaha MD-BT01 and CME’s other adapters too, even on USB power. FM3 owners fit a short adapter with a 220-ohm resistor on pin 4 between the FM3’s MIDI OUT/THRU and the cable. The full setup guide has more.'
+
+/** The units the parts list must not be bought for as it is. */
+export const NOT_STRAIGHT_IN = ['fm3']
+
+/** The warning to show for a unit instead of its parts and steps, or null. */
+export const warningFor = (unit) => (unit === 'fm3' ? FM3_WARNING : null)
+
+/** What to buy for one unit, in the order it plugs together. None for a unit that is warned about. */
 export function partsFor(unit) {
+  if (NOT_STRAIGHT_IN.includes(unit)) return []
   const keys = unit === 'am4' ? ['uhost', 'c2midi', 'adapters'] : ['uhost', 'c2midi']
   return keys.map((key) => ({ key, ...PARTS[key] }))
 }
@@ -169,7 +197,7 @@ export const PLUGS_CHECK =
 
 /** Before a unit is picked: the whole of it in two lines. */
 export const GEAR_IN_SHORT =
-  'A CME WIDI Uhost, a CME C2MIDI Pro, and a phone charger or power bank with a USB-C cable for the Uhost. For an AM4, also two Type-A MIDI to 3.5 mm adapters. Pick your unit above for where to buy them and how they plug in.'
+  'A CME WIDI Uhost, a CME C2MIDI Pro, and a phone charger or power bank with a USB-C cable for the Uhost. For an AM4, also two Type-A MIDI to 3.5 mm adapters. Not for an FM3 as it is: the cable gets hot there. Pick your unit above for where to buy them and how they plug in.'
 
 /**
  * How it plugs together, for one unit, in at most five short steps.
@@ -179,7 +207,7 @@ export const GEAR_IN_SHORT =
  */
 export function hookupFor(unit) {
   const name = UNITS[unit]
-  if (!name) return null
+  if (!name || NOT_STRAIGHT_IN.includes(unit)) return null
   const usb = 'Plug the C2MIDI Pro’s USB-C plug into the Uhost’s left socket, marked USB Host/Device.'
   const power = `With the ${name} already on, plug a phone charger or power bank into the Uhost’s right socket, marked USB Power (5 volts, nothing stronger). The Uhost needs this power to work.`
   if (unit === 'am4') {
@@ -208,6 +236,6 @@ export function hookupFor(unit) {
   ]
 }
 
-/** Said under the steps for a unit nobody has tried it on yet. */
+/** Said under the steps for a unit nobody has tried it on yet. The FM3 has its warning instead. */
 export const untriedLine = (unit) =>
-  triedOn(unit) || !UNITS[unit] ? null : `Not tried on the ${UNITS[unit]} yet. It should work the same way.`
+  triedOn(unit) || !UNITS[unit] || warningFor(unit) ? null : `Not tried on the ${UNITS[unit]} yet. It should work the same way.`

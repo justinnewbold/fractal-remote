@@ -2552,7 +2552,7 @@ export function run(test) {
       'Footswitch changes may take a moment to show.',
       'About 30 feet of range.',
       'The adapter connects to one thing at a time.',
-      'On the AM4, scene names don’t show over Bluetooth.',
+      'On the AM4, scene names take a moment the first time a preset is seen.',
       'No looper, volume button, unit metronome click or Footswitches page.'
     ]) {
       assert.ok(page.includes(`'${line}'`), `the page does not say: ${line}`)
@@ -3191,12 +3191,28 @@ export function run(test) {
     }
     /* The 3.5 mm adapters are for the AM4 alone: the others have the 5-pin jacks the C2MIDI Pro plugs into. */
     assert.deepEqual(gear.partsFor('am4').map((p) => p.key), ['uhost', 'c2midi', 'adapters'])
-    for (const unit of ['fm3', 'fm9', 'axefx3']) assert.deepEqual(gear.partsFor(unit).map((p) => p.key), ['uhost', 'c2midi'])
+    for (const unit of ['fm9', 'axefx3']) assert.deepEqual(gear.partsFor(unit).map((p) => p.key), ['uhost', 'c2midi'])
+    /*
+     * "The CME C2MIDI Pro got extremely hot on the FM3 and the connection
+     * didn't work." Nothing to buy for an FM3 and no steps: a warning that
+     * says what happened, why, and what owners fit. It stays one you can pick.
+     */
+    assert.deepEqual(gear.partsFor('fm3'), [], 'the FM3 is given a shopping list for what overheated on it')
+    assert.equal(gear.hookupFor('fm3'), null, 'the FM3 is told to plug it straight in')
+    assert.equal(gear.untriedLine('fm3'), null)
+    assert.equal(gear.warningFor('fm3'), gear.FM3_WARNING)
+    for (const unit of ['am4', 'fm9', 'axefx3']) assert.equal(gear.warningFor(unit), null)
+    assert.match(gear.FM3_WARNING, /^Don’t plug the C2MIDI Pro straight into an FM3\. When we tried it, the cable got very hot and didn’t connect\./)
+    assert.match(gear.FM3_WARNING, /220-ohm resistor on pin 4/)
+    assert.match(gear.FM3_WARNING, /Yamaha MD-BT01/, 'the warning leaves the Yamaha looking like the way round it')
+    assert.ok(BLE_UNITS.some((u) => u.key === 'fm3'), 'the FM3 can no longer be picked, so an owner with the adapter is shut out')
+    const page = readFileSync(new URL('../mobile/src/screens/Bluetooth.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+    assert.match(page, /const warning = warningFor\(unit\) if \(warning\) \{ return \( <View style=\{\{ gap: space\.md \}\}> <Note tone="fault">\{warning\}<\/Note> <\/View> \) \}/, 'the FM3 is shown its parts and steps')
     assert.match(gear.PARTS.adapters.does, /Type A/)
     for (const p of Object.values(gear.PARTS)) assert.ok(p.name && p.does, 'a part with no name or no line saying what it is for')
 
-    /* The hookup, for every unit the page offers, in at most five short steps. */
-    for (const { key, name } of BLE_UNITS) {
+    /* The hookup, for every unit the page offers bar the FM3, in at most five short steps. */
+    for (const { key, name } of BLE_UNITS.filter((u) => u.key !== 'fm3')) {
       const steps = gear.hookupFor(key)
       assert.ok(Array.isArray(steps) && steps.length >= 3 && steps.length <= 5, `${name}: ${steps?.length} steps`)
       const all = steps.join(' ')
@@ -3217,7 +3233,7 @@ export function run(test) {
       }
       if (key === 'am4') assert.match(all, /Push one 3\.5 mm adapter into the AM4’s MIDI IN, and the other into its MIDI OUT\./)
       else assert.ok(!/3\.5 mm/.test(all), `${name} is told to use the AM4’s adapters`)
-      if (key === 'fm3' || key === 'fm9') assert.match(all, /MIDI OUT\/THRU jack/)
+      if (key === 'fm9') assert.match(all, /MIDI OUT\/THRU jack/)
       /* Tried on the AM4 only; the rest say so rather than promise. */
       assert.equal(gear.untriedLine(key), key === 'am4' ? null : `Not tried on the ${name} yet. It should work the same way.`)
     }
@@ -3225,6 +3241,7 @@ export function run(test) {
     assert.equal(gear.hookupFor('vp4'), null, 'steps for a unit the page does not offer')
     assert.match(gear.GEAR_IN_SHORT, /CME WIDI Uhost, a CME C2MIDI Pro, and a phone charger or power bank/)
     assert.match(gear.GEAR_IN_SHORT, /For an AM4, also two Type-A MIDI to 3\.5 mm adapters\./)
+    assert.match(gear.GEAR_IN_SHORT, /Not for an FM3 as it is: the cable gets hot there\./, 'the short list leaves an FM3 owner to buy what overheats')
 
     /*
      * THE BETA, IN PLAIN WORDS. "Let's just say that Bluetooth is beta though
