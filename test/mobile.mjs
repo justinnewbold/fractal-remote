@@ -5851,7 +5851,7 @@ export function run(test) {
     )
   })
 
-  test('the review notes waiting for 1.87.11 say what is new, and name what the app draws', async () => {
+  test('the review notes Apple approved for 1.87.11 say what is new, and name what the app draws', async () => {
     /*
      * Apple's 2.3.1(a): every new feature "must be described with specificity
      * in the Notes for Review". The notes for the version in the store stay
@@ -5860,7 +5860,7 @@ export function run(test) {
      * FIRST "## Review notes"), and this one reads nothing else.
      */
     const store = read('docs/app-store.md')
-    const at = store.indexOf('## For the next version (1.87.11, not yet submitted)')
+    const at = store.indexOf('## 1.87.11, the version in the store now (approved 12 October 2026)')
     assert.ok(at > store.indexOf('## Review notes'), 'the next version’s notes are missing, or sit above the live ones the other tests read')
     const notesAt = store.indexOf('### Notes for App Review, 1.87.11', at)
     assert.ok(notesAt > at, 'the next version has no review notes')

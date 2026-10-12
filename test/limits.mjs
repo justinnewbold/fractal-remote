@@ -2092,7 +2092,7 @@ export function run(test) {
       .replace(/\s+/g, ' ')
 
     assert.match(html, /<title>Bluetooth \(beta\) setup/, 'the guide has lost its title')
-    assert.match(words, /last updated 11 October 2026/i, 'the guide does not say when it was last checked')
+    assert.match(words, /last updated 12 October 2026/i, 'the guide does not say when it was last checked')
     /* Where the app's Full setup guide goes, and nowhere a search engine sends a customer. */
     const { GUIDE_URL } = await import('../shared/bluetooth-gear.mjs')
     assert.equal(GUIDE_URL, 'https://fractal.newbold.cloud/bluetooth-guide.html', 'the app’s Full setup guide opens somewhere other than the guide')
@@ -2200,7 +2200,7 @@ export function run(test) {
     assert.ok(restricted.includes('Settings → Screen Time → Content & Privacy Restrictions'), 'the app’s Screen Time line no longer says where to look; read the guide against it again')
     assert.match(words, /blocked by Screen Time[^.]*Settings → Screen Time → Content & Privacy Restrictions, allow Bluetooth Sharing/, 'the guide does not say what to do when Screen Time blocks Bluetooth')
     const settings = read('mobile/src/screens/Settings.js')
-    assert.match(settings, /title="Phone & computer"/, 'Settings has no Phone & computer, which the guide sends people to')
+    assert.match(settings, /title="Phone & computer"/, 'Settings has no Phone & computer, which the guide names as the row above Bluetooth (beta)')
     assert.match(settings, /title="Bluetooth \(beta\)"/, 'Settings has no Bluetooth (beta) row, which the guide sends people to')
 
     /* What's different from USB: the app's list, every line of it. */
@@ -2304,13 +2304,13 @@ export function run(test) {
      * to paste and the 1.87.1 texts are kept at the end for the record.
      */
     const store = read('docs/app-store.md')
-    const at = store.indexOf('## For the next version (1.87.11, not yet submitted)')
+    const at = store.indexOf('## 1.87.11, the version in the store now (approved 12 October 2026)')
     assert.ok(at > 0, 'the 1.87.11 section is missing')
     const section = store.slice(at)
     const notesAt = section.indexOf('### Notes for App Review, 1.87.11')
     const open = section.indexOf('```', notesAt)
     const pasted = section.slice(open + 3, section.indexOf('```', open + 3))
-    assert.match(section.slice(notesAt, open), /\*\*These are the ones to use for this build\.\*\*/, 'the 1.87.11 notes do not say they are the ones to use')
+    assert.match(section.slice(notesAt, open), /\*\*These are the ones Apple approved with this build,\*\* and the ones the next\s+version's notes start from\./, 'the 1.87.11 notes do not say they are the ones Apple approved, and where the next ones start')
 
     /*
      * AND THEY FIT THE BOX. App Store Connect's reference: "The Notes field
@@ -2364,9 +2364,14 @@ export function run(test) {
      * card to an account with the full version — which Apple's demo account
      * is. So the notes are written for a build made from main after 11
      * October, and say so where Justin reads it first.
+     *
+     * This pinned "Submit a build made from main after 1.87.8"; changed on
+     * purpose on 12 October 2026, when Apple approved that build. The line
+     * now says it was sent and approved, and that build 26 never is.
      */
-    assert.match(section, /\*\*Submit a build made from main after 1\.87\.8 was merged \(11 October 2026\),\s+not the 10 October build 26, whose first launch still shows Bluetooth\.\*\*/, 'the 1.87.11 section does not tell Justin to submit a build made after 1.87.8 rather than build 26')
-    assert.ok(section.indexOf('Submit a build made from main after 1.87.8') < notesAt + 200 && section.indexOf('Submit a build made from main after 1.87.8') < open, 'the line about which build to submit is not above the notes')
+    assert.match(section, /\*\*Sent and approved: the 1\.87\.11 build, made from main 3e7ffbf on 11 October\s+2026 \(run 38162666072\), not the 10 October build 26, whose first launch still\s+shows Bluetooth\.\*\*/, 'the 1.87.11 section does not say the build made after 1.87.8 was the one sent, rather than build 26')
+    assert.match(section, /Build 26 stays on TestFlight and is never sent for review\./, 'the 1.87.11 section does not say build 26 is never sent for review')
+    assert.ok(section.indexOf('Sent and approved: the 1.87.11 build') < notesAt + 200 && section.indexOf('Sent and approved: the 1.87.11 build') < open, 'the line about which build was sent is not above the notes')
     assert.ok(!/anywhere in the app|nothing for the reviewer to\s+reach|reviewer never meets it/.test(section), 'the 1.87.11 section says the reviewer can never meet Bluetooth, and build 26’s first launch shows it')
     const disclosure = pasted.slice(pasted.indexOf('Bluetooth MIDI code, switched on only for the developer.'), pasted.indexOf('\n\n', pasted.indexOf('Bluetooth MIDI code, switched on only for the developer.')))
     assert.ok(!/Bluetooth/.test(pasted.replace(disclosure, '')), 'Bluetooth is mentioned outside the one paragraph that discloses it')
@@ -2393,7 +2398,7 @@ export function run(test) {
     assert.match(section, /2\.3\.1\(a\) says "Don't include any\s+hidden, dormant, or undocumented features in your app"/, 'the 1.87.11 section does not say why the code is disclosed at all')
     assert.match(section, /"accessible for review"/, 'the 1.87.11 section hides the one place Apple could push back')
     assert.ok(!/- \*\*The video\.\*\*|\*\*The guide is live\.\*\*/.test(section), 'the 1.87.11 section still asks for a Bluetooth video or a live guide before pasting')
-    assert.match(section, /\*\*Four things before that block is pasted:\*\*/)
+    assert.match(section, /\*\*Four things every time that block is pasted\*\*/, 'the 1.87.11 section no longer lists what to check each time the notes are pasted')
     assert.ok(!/BLUETOOTH_TESTERS|Only if Bluetooth goes in/.test(section), 'the 1.87.11 section still says to check a list of accounts, or that Bluetooth may not go in')
     /* The history stays true: what was decided on the 10th is still said, beside what changed on the 11th. */
     assert.match(section, /On 10\s+October 2026 it was to go in this version for every paying customer \("If\s+Bluetooth is ready, let's get it submitted/, 'the 1.87.11 section no longer says what was decided on 10 October')
@@ -2430,7 +2435,7 @@ export function run(test) {
     assert.match(current, /HOW IT WORKS\nA phone needs something between it and your Fractal unit: the desktop app\. It runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to it\. Get it at fractal\.newbold\.cloud\/downloads\.\n/, 'HOW IT WORKS does not say the desktop app is what sits between the phone and the unit')
     assert.match(current, /^SUPPORTED UNITS\nFM3, FM9, Axe-Fx III, AM4 and VP4\.$/m, 'the supported units changed')
     assert.ok(current.includes(AFFILIATION), 'the Description no longer ends on the shared disclaimer')
-    assert.match(store, /\*\*This is the one to paste for 1\.87\.11\.\*\* It says nothing about Bluetooth\./, 'the Description does not say it is the one for 1.87.11, with no Bluetooth')
+    assert.match(store, /\*\*This is the one written for 1\.87\.11, and the one the next version keeps\.\*\*\s+It says nothing about Bluetooth\./, 'the Description does not say it is the one for 1.87.11 and the next version, with no Bluetooth')
     assert.match(store, /\*\*On Google Play it can go on whenever\s+it suits:\*\* nothing in it waits for 1\.87\.11 any more\./)
 
     /* The draft that gave Bluetooth the opening line is withdrawn, with no copy left to paste. */

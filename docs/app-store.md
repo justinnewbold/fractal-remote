@@ -1,6 +1,7 @@
 # Getting onto the App Store
 
-**Live on the App Store since 8 October 2026** (build 24, 1.86.83):
+**Live on the App Store since 8 October 2026**, first as 1.86.83 (build 24),
+and as 1.87.11 (build 27) since Apple approved it on 12 October 2026:
 https://apps.apple.com/app/id6812916461. Everything below still applies to
 every new version sent for review.
 
@@ -10,11 +11,13 @@ across; the notes say why an answer is what it is where that matters.
 **The one that gets apps like this rejected** is near the bottom, under *Review
 notes*. Read that one even if you skip the rest.
 
-**The version in the store and the next one are kept apart.** Everything down
-to the end of *Review notes* is for the version in the store now, except where
-it says it waits for the next build. What goes with the next version, 1.87.11,
-is near the bottom, under *For the next version*. The 1.87.1 texts it
-replaces are kept at the very end, for the record, and are not for pasting.
+**The version in the store and the next one are kept apart.** The store has
+had 1.87.11 since 12 October 2026, and everything down to *Review notes* (the
+listing, the privacy answers and the rest) is for it. The texts it was
+reviewed with are near the bottom, under *1.87.11, the version in the store
+now*, and the next version's notes start from those. The *Review notes* block
+is the 1.86.83 one Apple approved on 8 October, and the 1.87.1 texts are at
+the very end. Both are kept for the record and are not for pasting.
 
 ---
 
@@ -47,8 +50,10 @@ The paragraph at the very top of the listing, and the one part of it that
 changes without a build or a review. It is not pasted: Actions → store-text →
 Run workflow, tick **Write it**, and it goes straight to the live version.
 Unticked, it only shows what is there now. **Run it again after each new
-version is released:** a version already in review keeps its own copy of the
-paragraph, and the run warns about any it could not change.
+version is released:** a version in review keeps its own copy of the
+paragraph, and that copy can be empty. 1.87.11 came out on 12 October 2026
+with no promotional text at all. The run warns about any version it could not
+change.
 
 ```
 REQUIRES A COMPUTER. Your Fractal plugs by USB into a Mac, PC or Linux computer running our desktop app, and your phone controls it from there. The demo needs no gear.
@@ -70,7 +75,9 @@ the people who make that gear.
 Changes only with a new version, so it goes in with the next build. The same
 text goes on Google Play, where it can change any time (see below).
 
-**This is the one to paste for 1.87.11.** It says nothing about Bluetooth.
+**This is the one written for 1.87.11, and the one the next version keeps.**
+It says nothing about Bluetooth. If the live App Store page does not show it,
+it goes in with the next version, since Apple changes it only with one.
 For one day (10 October 2026) it did: the demo paragraph and HOW IT WORKS
 both said that, in beta, a Bluetooth MIDI adapter could take the computer's
 place. Then, on 11 October: "Is there any way to just get the Bluetooth on
@@ -246,11 +253,13 @@ question automatically on every submission rather than asking you each time.
 
 ## Review notes
 
-**Paste this into App Review Information → Notes.** This is the paragraph that
-decides whether the app is rejected as non-functional.
+**The notes Apple approved for 1.86.83 on 8 October 2026, kept as they were
+sent.** This is the paragraph that decides whether the app is rejected as
+non-functional, and every later version's notes open on the same four taps.
 
-**This block is the one for the version in the store now (1.86.83).** For
-1.87.11, use the notes under *For the next version* at the bottom instead.
+**This block is no longer the one to paste.** The store has 1.87.11 now, and
+the notes Apple approved for it are at the bottom, under *1.87.11, the version
+in the store now*. The next version's notes start from those.
 
 ```
 This app is a remote control for Fractal Audio guitar hardware. Normally it
@@ -317,21 +326,23 @@ a search of the whole file finds the explanation rather than the instruction.
 
 ---
 
-## For the next version (1.87.11, not yet submitted)
+## 1.87.11, the version in the store now (approved 12 October 2026)
 
-**These are the texts to use for the 1.87.11 build,** made on 11 October
+**These are the texts that went with the 1.87.11 build,** made on 11 October
 2026 from main 3e7ffbf (mobile.yml run 38162666072, one iOS build to
 TestFlight and one Android build straight to Google Play production): the
-Notes for App Review and What's New for Apple, and the App access note and
-release notes for Google. The 1.87.1 texts they replace are kept at the very
-end, under *Kept for the record*, and are not for pasting.
+Notes for App Review and What's New that Apple approved, and the App access
+note and release notes for Google. The next version's texts start from these.
+The 1.87.1 texts they replaced are kept at the very end, under *Kept for the
+record*, and are not for pasting.
 
-**Everything above this heading is for the version in the store now** (1.86.83,
-build 24, and the updates it has had since), except the Description and the
-Subtitle, which are already the new ones and wait for this version (Apple
-changes both only with a new version). **Everything under it is for 1.87.11,**
-the next store build, and is pasted when that version is set up in App Store
-Connect. Until then the notes above stay as they are.
+**Since 12 October 2026 this is the version in the store** (1.87.11, build
+27). The *Review notes* block above is the 1.86.83 one, kept as Apple approved
+it on 8 October. The next version's notes start from the block below, with
+*New since 1.87.11* in place of *New since 1.86.83*. The Description and the
+Subtitle above were written to go in with 1.87.11 (Apple changes both only
+with a new version). If the live listing does not show them, they go in with
+the next one.
 
 Why the notes change at all: Apple's guideline 2.3.1(a) says every new feature
 "must be described with specificity in the Notes for Review", and 2.3.12 says
@@ -373,21 +384,23 @@ it out is a new build, and the iPhone's Bluetooth permission text has to stay
 with the module or the build is refused). 2.3.1(a) says "Don't include any
 hidden, dormant, or undocumented features in your app", so the notes below
 say in one paragraph that the code is there, whom it is for, and that in
-that build nobody else is shown it or asked for Bluetooth. The same guideline also wants new
-features "accessible for review", and this one is described rather than
-reachable: that is the one place Apple could push back. If it does, the
+that build nobody else is shown it or asked for Bluetooth. The same guideline also wants new features "accessible for review", and this
+one is described rather than reachable. That was the one place Apple could
+have pushed back, and with 1.87.11 it did not: the build was approved with the
+paragraph below as it stands. A later review could still ask. If one does, the
 choice is Justin's: show it to the review account too, with a video of it
 working, or a build without the module.
 
 ### Notes for App Review, 1.87.11
 
-**These are the ones to use for this build.**
+**These are the ones Apple approved with this build,** and the ones the next
+version's notes start from.
 
-**Submit a build made from main after 1.87.8 was merged (11 October 2026),
-not the 10 October build 26, whose first launch still shows Bluetooth.**
-That build is the 1.87.11 one made from main 3e7ffbf on 11 October (run
-38162666072). In App Store Connect, make the new version 1.87.11 and pick
-the 1.87.11 build, not build 26.
+**Sent and approved: the 1.87.11 build, made from main 3e7ffbf on 11 October
+2026 (run 38162666072), not the 10 October build 26, whose first launch still
+shows Bluetooth.** Build 26 stays on TestFlight and is never sent for review.
+Every later version is a build made from main after 1.87.8 was merged, so it
+has the hidden version built in too.
 
 Why: a fresh install runs the copy of the app built into it on its very first
 launch, and only takes the latest update on the launch after
@@ -402,8 +415,8 @@ notes below are written for that build. The 1.87.11 pair is that build: one
 iOS and one Android, agreed by Justin on 11 October ("Yes spend the
 builds").
 
-**Paste this into App Review Information → Notes**, in place of the block
-above, when that build is sent. **Apple's Notes box takes 4000 bytes**
+**This is what went into App Review Information → Notes** for 1.87.11, in
+place of the block above. **Apple's Notes box takes 4000 bytes**
 (App Store Connect's own reference: "The Notes field can contain up to 4000
 bytes"; a dash or an arrow counts as three), and the first draft of these
 notes was over 5000, so the block is cut to what the reviewer needs and the
@@ -415,8 +428,8 @@ they stood came to 3897 characters, and the three Google Drive links (the
 FM3, presets, and deleting an account) would not fit after them. So the
 block was cut again, and a test holds it under 3950 bytes with each Videos
 bracket filled in by something as long as a Drive link and each Tested on
-bracket by 30 characters, so it still fits on the day the real ones go in
-(about 3835 with real values).
+bracket by 30 characters, so it fits with the real ones in (about 3835 with
+real values). The brackets here stay empty, for the next version to fill.
 
 **And the way to delete a new account is in the deletion paragraph.** The
 notes ask the reviewer to try Delete account on a new account, and one that
@@ -498,10 +511,13 @@ the video and the setup guide. Turning
 it on for everybody over the air instead, after Apple has reviewed a build
 that hides it, is the hidden feature 2.3.1(a) forbids, and a change to what
 the app does that Apple's licence (3.3.1(C)) and Google's rule on features
-activated remotely both keep for reviewed versions. **And while Apple is
-reviewing 1.87.11,** nothing is merged that changes what these notes
-describe (the purchase page, Bluetooth, Delete account): from its second
-launch, the reviewer's copy runs whatever is on main.
+activated remotely both keep for reviewed versions. **And while a version is in review,** nothing is merged that changes what its
+notes describe (the purchase page, Bluetooth, Delete account): from its second
+launch, the reviewer's copy runs whatever is on main. Apple has finished with
+1.87.11, so nothing waits on Apple now. Whether Google has finished with the
+1.87.11 Android build was not known on 12 October, and Google's reviewer takes
+updates from main the same way, so keep the same care until Play Console shows
+1.87.11 out in production.
 
 **Left out on purpose: the Developer pages.** Justin's own account also has
 Settings → Developer (accounts, sales, messages, account help with its
@@ -512,7 +528,8 @@ nobody but Justin can reach them. If Apple asks, they are the developer's
 own support tools. Google's App access note does name them, in one line,
 because Google asks for an app to be what you see is what you get.
 
-**Four things before that block is pasted:**
+**Four things every time that block is pasted** (done for 1.87.11; the
+brackets here are still empty, so the next version needs them again):
 
 - **The three lines Apple's help page asks for.** Fill in the brackets in
   "Tested on" with the iOS version on the iPhone and the watch model and
@@ -550,7 +567,7 @@ is, so nothing in the app is undescribed.
 
 App Store Connect → the 1.87.11 version → What's New in This Version. Plain
 words, one change a line, everything since 1.86.83, the version on the App
-Store now. Apple takes 4000 characters, and all of it fits. No Bluetooth
+Store before it. Apple takes 4000 characters, and all of it fits. No Bluetooth
 line: since 11 October Bluetooth (beta) is the developer's alone, so What's
 New does not announce what customers cannot open. Google Play gets its own
 shorter list, under *Google Play release notes* below.
@@ -581,7 +598,8 @@ shorter list, under *Google Play release notes* below.
 
 Play Console → Test and release → Production → the 1.87.11 release → Edit
 release → Release notes (en-US). Play takes 500 characters. These are the
-changes since 1.87.1, the version on Google Play now, and say nothing about
+changes since 1.87.1, the version on Google Play before it (and still the one
+there until Google has finished with 1.87.11), and say nothing about
 Bluetooth. The build reaches Play with no release notes, because EAS cannot
 send them. If Play will not let the release be edited while it is in
 review, leave it: release notes are optional, and Google does not turn an
@@ -611,9 +629,10 @@ used.
 
 None of this needs a build. It is all typed into Play Console, and each part
 ends with **Save**, then **Publishing overview → Send changes for review**.
-Google usually passes it within a day. Do the first two today, before
-Google's reviewer picks up 1.87.11: Google can hold back any update over
-them, this one included.
+Google usually passes it within a day. Do the first two first, at the next
+sitting: Google can hold back any update over them, 1.87.11 included, and
+whether Google had finished reviewing 1.87.11 was not known on 12 October
+2026.
 
 **1. Data safety** (App content → Data safety → Manage). **Still not done on
 11 October 2026:** Google Play's public Data safety page for the app lists
