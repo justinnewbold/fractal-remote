@@ -72,7 +72,9 @@ import Press from '../components/Press'
  * The beta note is the iPhone's or Android's own (betaNote, from
  * shared/bluetooth-gear.mjs): only Android's says it has not been tried from
  * an Android phone, because Apple's 2.3.10 keeps other phones' names out of
- * an iPhone app, and this page is where the review notes send the reviewer.
+ * an iPhone app, and this is the page the review notes will send Apple's
+ * reviewer to on the day Bluetooth goes to customers. (The 1.87.11 notes
+ * Apple approved say only the developer's account sees it.)
  *
  * What it cannot do comes after, and the check, for finding out what a real
  * unit does, is folded away under Testing tools.

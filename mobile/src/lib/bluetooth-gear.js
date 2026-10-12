@@ -106,7 +106,11 @@ export const TESTED = ['am4']
  * platforms or alternative app marketplaces in your app or metadata", and
  * "Your app includes references to Android" is one of the commonest
  * rejections there is. This note is the first thing on the Bluetooth page,
- * and the 1.87.1 review notes send the reviewer to exactly that page. So the
+ * and the version that opens Bluetooth to customers will have review notes
+ * that send Apple's reviewer to exactly that page. (The 1.87.1 notes that
+ * would have done it never reached Apple: build 26 stayed on TestFlight, and
+ * the 1.87.11 notes Apple approved say only the developer's account sees
+ * it.) So the
  * iPhone says where it has been tried and stops; Android says the same and
  * that it has not been tried on a phone like theirs.
  *

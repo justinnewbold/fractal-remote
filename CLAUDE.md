@@ -262,10 +262,14 @@ the build refused), and an update hides it from everybody but him:
   drops the updates made for the old one), and that copy shows a
   BLUETOOTH (BETA) card under Settings → Phone & computer to any account
   with the full version, until its first update has downloaded, usually by
-  the next launch. Only a new build closes it, which is his call (one iOS
-  and one Android build). So the App Store submission has to be a build made
-  from main after 1.87.8 was merged, not build 26 (docs/app-store.md says so above the notes),
-  and the privacy page and Google's App access note say the gap as it is.
+  the next launch. The 1.87.11 builds closed it (11 October, one iOS and one Android, made from
+  main after 1.87.8 was merged): they carry the hidden version inside them.
+  Apple approved 1.87.11 for the App Store on 12 October, and the App Store
+  never had 1.87.1, so no App Store copy shows the card. It is left only in
+  build 26 on TestFlight, which is never sent for review, and in the 1.87.1
+  Android copies from Google Play that have not yet taken the 1.87.11 store
+  update. The privacy page says the gap as it is, and Google's 1.87.11 App
+  access note leaves it out, because that build does not have it.
 - /bluetooth on the website says it isn't in the app and may be offered in
   a later version, with no promise and nothing to buy; the guide lives at
   bluetooth-guide.html, linked only from the app's own Bluetooth page.
@@ -276,8 +280,8 @@ bans hidden features and wants every new one described in the Notes for
 Review, its licence (3.3.1(C)) keeps a change to what an app does for a
 version it has reviewed, and Google forbids features activated remotely
 after review. An update is exactly that: opening the gate on main would
-reach every 1.87.1 phone with the reviewed notes still saying customers are
-not shown it. So the day it is ready, the opening rides a build whose
+reach every 1.87.1 and 1.87.11 phone (the two builds share one fingerprint),
+with the notes Apple approved for 1.87.11 saying customers are not shown it. So the day it is ready, the opening rides a build whose
 fingerprint moved (then no update made for it can reach the older
 binaries), with the review notes, What's New, the descriptions,
 support.html and /bluetooth saying so, and the build is asked for like any
