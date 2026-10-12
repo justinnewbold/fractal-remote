@@ -151,7 +151,9 @@ nsis:
   oneClick: true
   perMachine: false
   # It is a service you leave running: starting it after the install is what
-  # somebody expects, and it goes to the tray rather than opening a window.
+  # somebody expects. It opens its window, the same as opening it from the
+  # Start menu. (This said it went to the tray instead. It never did: only a
+  # start with --hidden skips the window, and the installer does not pass it.)
   runAfterFinish: true
   # Removing it should remove it. The app keeps nothing a person would miss
   # that is not in their account.

@@ -131,7 +131,8 @@ export const WAYS = [
      * OS Lite on its own has none, and the app opens a window: with the
      * packages it gets one error further and stops at "Missing X server or
      * $DISPLAY". Nothing here says Lite alone can run it until the app can
-     * run without a window.
+     * run with no desktop at all. (Since 1.87.16 it can start with no
+     * window, but it still starts inside a desktop, so that has not changed.)
      */
     steps: [
       'On an ordinary PC, take the Linux PC AppImage from the download page below. The AppImage is the one that keeps itself up to date.',
@@ -141,7 +142,22 @@ export const WAYS = [
       "Or take the .deb for your machine (Linux PC or Raspberry Pi) instead. In Terminal, type cd Downloads, then sudo apt install ./the-file.deb with the file's own name in place of the-file.deb. The .deb updates itself too, but only when you quit the app, and it may ask for your password, so the AppImage is the easier one. If the phone says the computer app needs updating, quit the app, or install the new .deb the same way.",
       'Plug your unit into the machine with its USB cable.',
       'You may need permission to use the USB port. If the app says it cannot find your unit, run: sudo usermod -aG dialout $USER — then log out and back in. Most distributions keep serial ports behind that group, and it catches nearly everybody once.',
-      'In the app, choose Set up phone remote and sign in, then sign in on the phone with that same account.'
+      'In the app, choose Set up phone remote and sign in, then sign in on the phone with that same account.',
+      /*
+       * Added 12 October 2026, with the switch it names. A Pi on a pedalboard
+       * has no screen, so the one-time setup needs one plugged in (or the
+       * Pi's own screen sharing), and after that the app starts itself with
+       * no window. It still needs the desktop: Raspberry Pi OS logs itself in
+       * to it at power-on by default, which is what Desktop Autologin is.
+       *
+       * The AppImage, said outright, because a pedalboard is switched off at
+       * the wall: the AppImage installs its updates just after power-on with
+       * nobody there, and the .deb waits for somebody to quit it and type a
+       * password, which on a box with no screen never happens. And the file
+       * stays where it is, because a downloaded file looks like an installer
+       * to tidy away and here it is the app itself.
+       */
+      'For a Raspberry Pi that lives on your pedalboard with no screen, take the Raspberry Pi AppImage, not the .deb: the AppImage updates itself with nobody there, and the .deb only updates when somebody quits it and types a password. Plug a screen in once (or use Raspberry Pi Connect or VNC), open the app and sign in as above, then in the app go to Settings, then About, and switch on Start when this computer turns on. From then on the app starts by itself, with no window, every time the Pi is switched on. Leave the AppImage file where it is, because it is the app itself; if you move it, open it once from its new place. It needs the 64-bit Raspberry Pi OS with the desktop, with Desktop Autologin left on, which it is unless you changed it.'
     ],
     links: [{ label: 'Download Fractal Remote for Linux', url: 'https://fractal.newbold.cloud/downloads' }]
   },

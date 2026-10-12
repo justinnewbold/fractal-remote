@@ -10,6 +10,10 @@
  * status. Closing its window quits it — "the app does not close out all the
  * way when you click the close button" was the report, and an app that looks
  * closed while still holding the unit is worse than one you have to reopen.
+ * The one exception is a computer that runs it with nobody in front of it: a
+ * Raspberry Pi on a pedalboard, started when it turns on, with no window. That
+ * one stays running in the tray when its window is closed; see the
+ * window-all-closed handler and lib/autostart.mjs.
  *
  * ForgeFX runs as a child process rather than in-process. Importing it is the
  * path it documents, and Axis takes it — but it opens a serial port through
@@ -19,8 +23,10 @@
  */
 const { app, BrowserWindow, Tray, Menu, shell, nativeImage, dialog, ipcMain } = require('electron')
 const { spawn, execFile, execFileSync } = require('node:child_process')
-const { join, sep } = require('node:path')
-const { existsSync, readFileSync, writeFileSync, unlinkSync } = require('node:fs')
+const { join, sep, dirname } = require('node:path')
+const { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, renameSync } = require('node:fs')
+const { homedir } = require('node:os')
+const { performance } = require('node:perf_hooks')
 const net = require('node:net')
 
 /** Where the new version can always be fetched by hand. */
@@ -58,6 +64,174 @@ let quitting = false
 /** The shared logic is ESM; this shell is CommonJS, so it is imported lazily. */
 const host = () => import('./lib/host.mjs')
 
+/*
+ * STARTED WITH NO WINDOW, BECAUSE NOBODY IS THERE TO SEE ONE.
+ *
+ * "Make the computer app start by itself when the Pi turns on, and run with
+ * no window." A Raspberry Pi on a pedalboard has no screen, and still runs a
+ * desktop on the screen that is not there — so the app starts in it, and a
+ * window would be drawn for nobody. `--hidden` is what the entry that starts
+ * it at power-on passes (see lib/autostart.mjs). With it there is no window
+ * at launch, and nothing ever waits on a dialog: a box with no screen cannot
+ * click OK, and an app stopped at a dialog is a pedalboard with no remote.
+ * The tray's Open, and opening the app a second time, still show the window.
+ *
+ * TWO FACTS, KEPT APART. `startHidden` is "nobody is there": no dialog ever,
+ * a server that stops is started again, the phone remote and updates are
+ * asked about again. `windowAtLaunch` is only whether a window opens. They
+ * agree at power-on and part company once: somebody who plugs a screen in to
+ * the pedalboard, opens the window and presses Restart to update is there,
+ * and wants the window back, on a box that is still set up for nobody.
+ *
+ * The environment variable is a note the app leaves itself just before an
+ * update restarts it: that this copy is the update's, and how to come back —
+ * "hidden" (nobody there, no window), "window-unattended" (a window for the
+ * person who pressed the button, on a box set up for nobody) or "window" (an
+ * ordinary copy). An environment variable because the AppImage updater
+ * starts the new file with no arguments at all, so an argument could not
+ * carry it — and the .deb's updater restarts the app with the arguments it
+ * had, --hidden included, which is why "window-unattended" has to win over
+ * that. It is read once and taken out of the environment, so the device
+ * server and anything after it do not inherit it.
+ */
+const AFTER_UPDATE = 'FRACTAL_REMOTE_AFTER_UPDATE'
+const afterUpdate = process.env[AFTER_UPDATE] || ''
+delete process.env[AFTER_UPDATE]
+const relaunched = ['hidden', 'window', 'window-unattended'].includes(afterUpdate)
+const startHidden = process.argv.includes('--hidden') || afterUpdate === 'hidden' || afterUpdate === 'window-unattended'
+const windowAtLaunch = !startHidden || afterUpdate === 'window' || afterUpdate === 'window-unattended'
+
+/*
+ * How long since this copy started, on a clock that only goes forward.
+ *
+ * Not the time of day. A Raspberry Pi has no clock that runs while it is
+ * off: it comes up on the time it last saved and jumps forward, by however
+ * long it was unplugged, the moment the network tells it the real time —
+ * often a few seconds into this app's start. Every "how long ago" measured
+ * with the time of day jumps with it, and an update ready ten seconds after
+ * power-on looked fifteen hours late.
+ */
+const uptime = () => performance.now()
+const launchedAt = uptime()
+
+/*
+ * And nothing that goes wrong inside the app later puts a box up either.
+ * Electron's own answer to an error nobody caught is a dialog that waits for
+ * OK, on a screen that is not there, with everything else in the app
+ * stopped behind it. With nobody there it is said in the log instead, and
+ * the app carries on serving.
+ */
+if (startHidden) {
+  process.on('uncaughtException', (err) => {
+    console.error('[unattended] something went wrong inside the app; carrying on:', err?.stack || err)
+  })
+}
+
+/*
+ * ONE COPY AT A TIME, on every computer.
+ *
+ * There was no such rule, and on Linux a second launch found the first copy's
+ * device server on the port, took it for one left behind by a Force Quit and
+ * stopped it (or, where lsof is missing, put up a box and waited). With the
+ * app starting itself at power-on, a second launch is simply somebody
+ * clicking the menu icon — so now the second copy steps aside at once, and
+ * the first one is told and opens its window instead. macOS already kept to
+ * one copy itself; this makes it true everywhere.
+ *
+ * The copy an update restarts is the one exception that waits. The AppImage
+ * updater starts the new file while the old one is still on its way out, and
+ * a new copy that quit on finding the old one's lock would leave nothing
+ * running at all — after Restart to update as much as after an install with
+ * nobody there. See lockAfterUpdate.
+ */
+/* What the copy that steps aside tells this one: whether it wanted a window. */
+const knock = { hidden: !windowAtLaunch }
+let primary = app.requestSingleInstanceLock(knock)
+if (!primary && !relaunched) app.quit()
+
+/** The start-at-power-on rules and the entry's text; loaded at launch. See lib/autostart.mjs. */
+let boot = null
+/** Whether the entry that starts the app at power-on is there and ours. Linux only. */
+let bootOn = false
+/** A line for the menu when something is wrong and nobody saw a box about it. */
+let notice = null
+/* The device server's restarts, for the waits between them. See restartPlan. */
+let serverSince = 0
+let serverFailures = 0
+/** Ask about the phone remote again now — set by start(), used after a restart. */
+let rearm = () => {}
+/** Whether this run has already installed an update with nobody there. */
+let installedUnattended = false
+/** A look for updates waiting to be tried again, after one that failed. See retryUpdateCheck. */
+let updateRetry = null
+/**
+ * Somebody opened the app again before there was anything to show — the
+ * server still waiting for its port, say. Remembered, and the window opens
+ * as soon as there is a page to put in it. See 'second-instance'.
+ */
+let wantWindow = false
+
+/*
+ * Timers that end with the app.
+ *
+ * Everything a windowless start does again later — a port to ask about, a
+ * server to restart, the phone remote, the twice-a-day update check — goes
+ * through this, so none of it can hold a quit up or run after the server has
+ * been stopped. stopServing clears the lot.
+ */
+const timers = new Set()
+function later(fn, ms) {
+  const timer = setTimeout(() => {
+    timers.delete(timer)
+    if (!quitting) fn()
+  }, ms)
+  timer.unref?.()
+  timers.add(timer)
+  return timer
+}
+function cancel(timer) {
+  if (!timer) return
+  clearTimeout(timer)
+  timers.delete(timer)
+}
+const pause = (ms) => new Promise((resolve) => later(resolve, ms))
+
+/**
+ * Said where a person can find it later, never in a box that waits for them.
+ *
+ * The log, for anybody who looks, and one line at the top of the tray's
+ * menu, for anybody who plugs a screen in to find out why the phone cannot
+ * reach the unit.
+ */
+function unattended(line, detail = '') {
+  console.error(`[unattended] ${line}${detail ? `\n${detail}` : ''}`)
+  notice = line
+  drawTray()
+}
+function settled() {
+  if (!notice) return
+  notice = null
+  if (tray) drawTray()
+}
+
+/*
+ * Draw the menu, and never take down whatever asked for it.
+ *
+ * The menu is drawn again from everywhere something in it changes — an
+ * update's progress, the phone remote's answer, the start-at-power-on switch
+ * — and those callers have work of their own to finish afterwards: an update
+ * to install, a switch to report back to the page. A menu that failed to draw
+ * once cancelled all of that, silently (see phonesHearLine below). So a
+ * failure to draw is said in the log, and everything else carries on.
+ */
+function drawTray() {
+  try {
+    buildTray()
+  } catch (err) {
+    console.error('[tray] could not draw the menu:', err?.stack || err)
+  }
+}
+
 /**
  * The update wording, needed synchronously while building the menu.
  *
@@ -65,6 +239,14 @@ const host = () => import('./lib/host.mjs')
  * is nothing to say anyway, which is exactly what the null it returns means.
  */
 let updateLine = () => null
+/**
+ * And what the phones hear, the same way: filled in by start() once
+ * lib/host.mjs has loaded. It used to be a name only start() could see, and
+ * the menu — drawn from outside start() — threw on it the moment the phone
+ * remote was on and the phones had been told, every time it was drawn after
+ * that.
+ */
+let phonesHearLine = () => null
 
 /**
  * The watchdog the server runs inside, as a real file on disk.
@@ -105,12 +287,14 @@ async function start() {
     readFirewall,
     serverEnv,
     tellPhonesChecked,
-    phonesHearLine,
+    phonesHearLine: hearLine,
     TELL_PHONES_MS,
     waitForServer,
     whoHasPort,
     PORT_TAKEN
   } = await host()
+  // For the menu, which is drawn from outside this function. See phonesHearLine.
+  phonesHearLine = hearLine
 
   const port = Number(process.env.PORT || DEFAULT_PORT)
   // Per machine, not a constant: two Macs both asking for `fractal.local`
@@ -122,56 +306,80 @@ async function start() {
    * Nothing else may already be on the port. ForgeFX moves itself when the port
    * is taken — quietly, by design — and an app that then opens a window on the
    * port it asked for is showing whatever else is there. Better to say so.
+   *
+   * WITH NOBODY THERE, IT WAITS INSTEAD. A box with no screen cannot answer
+   * the dialog, and quitting would leave a pedalboard with no remote until
+   * somebody pulled the plug. Whatever holds the port is far likelier to let
+   * go of it than to be closed by a person, so a windowless start says so in
+   * the log and the menu and asks again every 30 seconds.
    */
-  const held = await whoHasPort({
-    port,
-    connect: (p, done) => {
-      const socket = net.connect({ port: p, host: '127.0.0.1' })
-      const settle = (answer) => {
-        socket.destroy()
-        done(answer)
-      }
-      socket.once('connect', () => settle(true))
-      socket.once('error', () => settle(false))
-      socket.setTimeout(1000, () => settle(false))
-    }
-  })
-  if (held.forgefx) {
-    /*
-     * Ours, left behind by a Force Quit? Then it is nobody's, and it goes.
-     * Force Quit is SIGKILL: no quit handler, no chance to stop the server we
-     * started, and the next launch used to find it holding the port, say so,
-     * and quit — "the only way to get around it was to restart the Mac."
-     * Somebody's own ForgeFX in a Terminal still gets the message below.
-     */
-    const { reclaimPort } = await host()
-    const took = await reclaimPort({
+  for (;;) {
+    const held = await whoHasPort({
       port,
-      run: (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', timeout: 4000 })
+      connect: (p, done) => {
+        const socket = net.connect({ port: p, host: '127.0.0.1' })
+        const settle = (answer) => {
+          socket.destroy()
+          done(answer)
+        }
+        socket.once('connect', () => settle(true))
+        socket.once('error', () => settle(false))
+        socket.setTimeout(1000, () => settle(false))
+      }
     })
-    if (took !== 'reclaimed') {
-      dialog.showErrorBox('ForgeFX is already running', PORT_TAKEN(port))
-      app.quit()
-      return
+    let busy = null
+    if (held.forgefx) {
+      /*
+       * Ours, left behind by a Force Quit? Then it is nobody's, and it goes.
+       * Force Quit is SIGKILL: no quit handler, no chance to stop the server we
+       * started, and the next launch used to find it holding the port, say so,
+       * and quit — "the only way to get around it was to restart the Mac."
+       * Somebody's own ForgeFX in a Terminal still gets the message below.
+       */
+      const { reclaimPort } = await host()
+      const took = await reclaimPort({
+        port,
+        run: (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', timeout: 4000 })
+      })
+      if (took !== 'reclaimed') {
+        if (!startHidden) {
+          dialog.showErrorBox('ForgeFX is already running', PORT_TAKEN(port))
+          app.quit()
+          return
+        }
+        busy = { line: 'Another copy of the part that talks to your unit is already running', detail: PORT_TAKEN(port) }
+      }
+    } else if (!held.free) {
+      if (!startHidden) {
+        dialog.showErrorBox(
+          'Something else is using this port',
+          `Port ${port} is in use by another program, so the app cannot serve from it.\n\n` +
+            'Quit whatever is using it and open this again.'
+        )
+        app.quit()
+        return
+      }
+      busy = {
+        line: 'Another program on this computer is using what Fractal Remote needs',
+        detail: `port ${port} is in use by another program`
+      }
     }
-  } else if (!held.free) {
-    dialog.showErrorBox(
-      'Something else is using this port',
-      `Port ${port} is in use by another program, so the app cannot serve from it.\n\n` +
-        'Quit whatever is using it and open this again.'
-    )
-    app.quit()
-    return
+    if (!busy) break
+    unattended(`${busy.line} — trying again every 30 seconds`, busy.detail)
+    await pause(boot.PORT_RETRY_MS)
   }
+  settled()
 
   const forgefx = findForgeFX({ extra: [vendored()] })
   if (!forgefx) {
     /*
      * Said in a dialog rather than a log, because the whole point of this app
      * is that nobody is looking at a terminal. Still the same text the script
-     * prints — one explanation, not two that drift.
+     * prints — one explanation, not two that drift. With no window, the log is
+     * all there is, and an installed app never gets here: it carries its own.
      */
-    dialog.showErrorBox('ForgeFX is not installed', MISSING_FORGEFX)
+    if (startHidden) console.error('[unattended] ForgeFX is not installed.', MISSING_FORGEFX)
+    else dialog.showErrorBox('ForgeFX is not installed', MISSING_FORGEFX)
     app.quit()
     return
   }
@@ -195,23 +403,81 @@ async function start() {
    * Through lib/child.cjs rather than directly, so the server leaves when this
    * process does — however this process goes. See that file.
    */
-  server = spawn(process.execPath, [wrapperPath(), join(forgefx, 'server', 'dist', 'index.js')], {
-    env: serverEnv({ port, dist: distPath(), asNode: true }),
-    stdio: 'inherit'
-  })
-  server.on('exit', (code) => {
+  const runServer = () => {
+    serverSince = uptime()
+    const child = spawn(process.execPath, [wrapperPath(), join(forgefx, 'server', 'dist', 'index.js')], {
+      env: serverEnv({ port, dist: distPath(), asNode: true }),
+      stdio: 'inherit'
+    })
+    server = child
     /*
-     * Not while quitting. Stopping the server is the first thing the quit does,
-     * and a ForgeFX that exits non-zero on SIGINT would then put a modal box on
-     * screen mid-quit — one belonging to an app whose window has gone and whose
-     * dock icon is on its way out, so it can land behind everything with no
-     * obvious way to reach it. The app looks like it is refusing to close, and
-     * the only way out is the one nobody should need.
+     * A server that could not be started at all — out of memory on a 1 GB
+     * Pi, say, or the AppImage's folder gone from under it — never sends
+     * 'exit', only this. With nobody listening it would be an error nobody
+     * caught, which is a box on a screen that is not there; so with nobody
+     * there, it is one more stop, and the server is started again like any
+     * other. Elsewhere it is what it always was.
      */
-    if (code && !quitting) {
-      dialog.showErrorBox('The device server stopped', `ForgeFX exited with code ${code}.`)
+    if (startHidden) {
+      child.on('error', (err) => {
+        if (server !== child || quitting) return
+        if (!String(err?.syscall || '').startsWith('spawn')) {
+          console.error('[server]', err?.message || err)
+          return
+        }
+        restartServer(`could not be started (${err?.code || err?.message || err})`)
+      })
     }
-  })
+    child.on('exit', (code, signal) => {
+      // A server this app has already replaced or put down is not news.
+      if (server !== child) return
+      /*
+       * With nobody there, a server that stops is started again, after a
+       * wait that grows if it keeps stopping. Nobody would ever see the box,
+       * and without a server the unit is gone until somebody pulls the plug.
+       */
+      if (startHidden && !quitting) {
+        restartServer(code === null ? signal : `code ${code}`)
+        return
+      }
+      /*
+       * Not while quitting. Stopping the server is the first thing the quit does,
+       * and a ForgeFX that exits non-zero on SIGINT would then put a modal box on
+       * screen mid-quit — one belonging to an app whose window has gone and whose
+       * dock icon is on its way out, so it can land behind everything with no
+       * obvious way to reach it. The app looks like it is refusing to close, and
+       * the only way out is the one nobody should need.
+       */
+      if (code && !quitting) {
+        dialog.showErrorBox('The device server stopped', `ForgeFX exited with code ${code}.`)
+      }
+    })
+  }
+  const restartServer = (how) => {
+    server = null
+    // ForgeFX forgets the phone remote's switch every time it starts.
+    phone = null
+    const plan = boot.restartPlan({ failures: serverFailures, ranForMs: uptime() - serverSince })
+    serverFailures = plan.failures
+    unattended(
+      `The part that talks to your unit stopped — starting it again in ${Math.round(plan.wait / 1000)} seconds`,
+      `the device server: ${how}`
+    )
+    later(async () => {
+      // One that cannot even be started is one more stop, not the last one.
+      try {
+        runServer()
+      } catch (err) {
+        restartServer(`could not be started (${err?.code || err?.message || err})`)
+        return
+      }
+      if ((await waitForServer({ port })) && !quitting) {
+        settled()
+        rearm()
+      }
+    }, plan.wait)
+  }
+  runServer()
 
   /*
    * Turn the phone remote on once the server is up, and say so in the menu.
@@ -224,16 +490,54 @@ async function start() {
    * phone reads it, so the menu can say what they hear. See tellPhonesChecked.
    */
   const tell = async () => {
+    if (quitting) return
     told = await tellPhonesChecked({ port, version: app.getVersion(), log: phoneLog })
-    if (tray) buildTray()
+    if (tray) drawTray()
   }
-  armHost({ port, version: app.getVersion(), log: phoneLog })
-    .then((result) => {
-      phone = result
-      if (tray) buildTray()
-      return tell()
-    })
-    .catch(() => {})
+  /*
+   * AND AGAIN, WITH NOBODY THERE, until it is on. armHost asks the account
+   * service, and a Pi that boots faster than its wifi hears "signed out" from
+   * a service it simply cannot reach yet. With a window, the page makes the
+   * same attempt when it opens; with none, nothing ever would. So a windowless
+   * start asks again every minute for half an hour, then every five minutes —
+   * never when the answer was on, and never when somebody turned it off. See
+   * phoneRetryDelay.
+   */
+  const phoneSince = uptime()
+  let arming = false
+  // Asked for while a run was still going — after a server restart, say,
+  // when that run may have read the server that has since stopped.
+  let armAgain = false
+  let phoneTimer = null
+  const arm = () => {
+    if (quitting) return
+    if (arming) {
+      armAgain = true
+      return
+    }
+    arming = true
+    cancel(phoneTimer)
+    armHost({ port, version: app.getVersion(), log: phoneLog })
+      .then((result) => {
+        const cameOn = Boolean(result?.on) && !phone?.on
+        phone = result
+        const again = startHidden ? boot.phoneRetryDelay(result, uptime() - phoneSince) : null
+        if (again) phoneTimer = later(arm, again)
+        if (cameOn) networkIsUp()
+        if (tray) drawTray()
+        return tell()
+      })
+      .catch(() => {})
+      .finally(() => {
+        arming = false
+        if (armAgain) {
+          armAgain = false
+          arm()
+        }
+      })
+  }
+  rearm = arm
+  arm()
   /*
    * And again every few minutes, for the phone's "which app is on the
    * computer" line: a write that failed once at launch used to leave an older
@@ -346,6 +650,21 @@ app.on('activate', () => {
 })
 
 /*
+ * And opening it again on any computer, now that there is only ever one copy:
+ * the copy that steps aside tells this one, which opens its window — the same
+ * as the tray's Open. Not while quitting (an update's new copy, waiting for
+ * the old one to go, knocks too), and not for a launch that itself asked for
+ * no window. Asked before there is a page to show — a Pi still waiting for
+ * whatever holds its port — it is remembered rather than dropped, and the
+ * window opens the moment there is one.
+ */
+app.on('second-instance', (_event, argv, _cwd, asked) => {
+  if (quitting || asked?.hidden || argv.includes('--hidden')) return
+  if (where) openWindow()
+  else wantWindow = true
+})
+
+/*
  * Draw the menu, and make the icon the first time only.
  *
  * This runs twice — once at launch and again when armHost answers, because the
@@ -383,11 +702,12 @@ function buildTray() {
    * you@example.com" is the whole status; when it is off, the line says the
    * one thing to do about it.
    */
+  const hear = told ? phonesHearLine(told, app.getVersion()) : null
   const phoneLine = !phone
     ? 'Phone remote: starting…'
     : phone.on
       ? `Phone remote: on${phone.email ? ` — ${phone.email}` : ''} · this app is v${app.getVersion()}${
-          told ? ` · ${phonesHearLine(told, app.getVersion())}` : ''
+          hear ? ` · ${hear}` : ''
         }`
       : phone.reason === 'signed-out'
         ? 'Phone remote: off — open the app and sign in once'
@@ -398,6 +718,12 @@ function buildTray() {
   const menu = Menu.buildFromTemplate([
     { label: 'Open', click: openWindow },
     { type: 'separator' },
+    /*
+     * What went wrong while nobody was looking — a port somebody else has, a
+     * server being started again — said here because a windowless start has
+     * nowhere else to say it. See unattended().
+     */
+    ...(notice ? [{ label: notice, enabled: false }, { type: 'separator' }] : []),
     { label: phoneLine, enabled: false },
     { type: 'separator' },
     { label: 'On your phone — same wifi, nothing to sign into:', enabled: false },
@@ -446,6 +772,22 @@ function buildTray() {
       enabled: Boolean(updates) && update?.kind !== 'checking',
       click: () => updates?.check()
     },
+    /*
+     * The same switch as the one in the app's Settings, and the same function
+     * behind it. On Linux only, where the app makes the entry itself; see
+     * setStartAtBoot.
+     */
+    ...(startAtBootState({ read: false }).supported
+      ? [
+          { type: 'separator' },
+          {
+            label: 'Start when this computer turns on',
+            type: 'checkbox',
+            checked: bootOn,
+            click: (item) => setStartAtBoot(item.checked)
+          }
+        ]
+      : []),
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() }
   ])
@@ -522,24 +864,180 @@ function wireUpdateChannel() {
   })
   ipcMain.handle('updates:move', async () => ({ ok: moveToApplications() }))
 
-  ipcMain.handle('updates:install', async () => {
-    if (!updates?.install) return { ok: false, reason: 'no-updater' }
-    if (update?.kind !== 'ready') return { ok: false, reason: 'nothing-ready' }
-    /*
-     * Written before anything else, so that whatever happens next the next
-     * launch can tell whether it worked. See installOutcome in lib/updates.mjs.
-     */
-    writeMarker({ version: update.version || null, from: app.getVersion(), at: Date.now() })
-    await stopServing()
-    /*
-     * If the install has not taken the process by now it is not going to, and
-     * an app with no window and no server is worse than a closed one. The
-     * download is staged either way, so reopening tries again.
-     */
-    setTimeout(() => app.exit(0), INSTALL_DEADLINE_MS)
-    updates.install()
-    return { ok: true }
+  ipcMain.handle('updates:install', async () => installNow())
+
+  /*
+   * "Start when this computer turns on", for the switch in Settings. The
+   * page asks whether this computer can do it at all — only the Linux app
+   * can, see startAtBootState — and draws nothing when it cannot.
+   */
+  ipcMain.handle('login:get', () => startAtBootState())
+  ipcMain.handle('login:set', (_event, on) => setStartAtBoot(on === true))
+}
+
+/*
+ * Install what is downloaded, now, and come back on it.
+ *
+ * Two callers and one path, so they cannot drift: a person pressing Restart
+ * to update, and a windowless start that finds an update ready just after
+ * power-on (see installIfUnattended). The marker, the teardown and the
+ * backstop are the same for both.
+ */
+async function installNow() {
+  if (!updates?.install) return { ok: false, reason: 'no-updater' }
+  if (update?.kind !== 'ready') return { ok: false, reason: 'nothing-ready' }
+  /*
+   * Written before anything else, so that whatever happens next the next
+   * launch can tell whether it worked. See installOutcome in lib/updates.mjs.
+   * It is also what stops an install that does not take from being tried
+   * again and again: the copy that comes back on the same version reads
+   * 'stuck' and does not look for the update again by itself.
+   */
+  writeMarker({ version: update.version || null, from: app.getVersion(), at: Date.now() })
+  /*
+   * How to come back, decided now: the teardown hides the window first
+   * thing, and after it nobody would appear to be looking.
+   */
+  const comeBack = boot.comeBackAs({
+    unattended: startHidden,
+    looking: Boolean(win && !win.isDestroyed() && win.isVisible())
   })
+  await stopServing()
+  /*
+   * If the install has not taken the process by now it is not going to, and
+   * an app with no window and no server is worse than a closed one. The
+   * download is staged either way, so reopening tries again.
+   *
+   * On a box set up for nobody, closed is not good enough either — whether
+   * the install was started by the box itself or by somebody who plugged a
+   * screen in, pressed the button and then left: nobody would reopen it, and
+   * the pedalboard would have no remote until it was unplugged. So that copy
+   * starts itself again, on the version it has, and the note above makes it
+   * say "didn't install" rather than try the same install again. The
+   * AppImage is restarted from its file, because the program it runs lives
+   * in a folder that goes when this process does.
+   */
+  setTimeout(() => {
+    if (startHidden) app.relaunch({ execPath: process.env.APPIMAGE || process.execPath, args: process.argv.slice(1) })
+    app.exit(0)
+  }, INSTALL_DEADLINE_MS)
+  /*
+   * Come back the way it is now. electron-updater restarts the AppImage by
+   * starting the new file with no arguments and this process's environment,
+   * and the .deb with app.relaunch(), which keeps both — so the environment
+   * is what tells the new copy it is the update's, to wait for this one to
+   * go, and how to come back: still set up for nobody or not, and with a
+   * window if somebody is looking at one. See startHidden.
+   */
+  process.env[AFTER_UPDATE] = comeBack
+  updates.install()
+  return { ok: true }
+}
+
+/*
+ * "START WHEN THIS COMPUTER TURNS ON", on Linux.
+ *
+ * The setting IS the file: the entry in ~/.config/autostart is there and ours,
+ * or it is not. Nothing else stores it, so nothing else can disagree with it —
+ * and somebody who deletes the file by hand has turned it off. The text and
+ * the rules are in lib/autostart.mjs; this is the reading and the writing.
+ *
+ * Linux only, and only the installed app. macOS and Windows have their own
+ * login items, and this change does not touch them; a checkout has nothing
+ * worth starting.
+ */
+const bootPath = () => boot.entryPath({ env: process.env, home: homedir() })
+const bootTarget = () =>
+  boot && process.platform === 'linux'
+    ? boot.launchTarget({ env: process.env, execPath: process.execPath, packaged: app.isPackaged })
+    : null
+
+/** What the entry on disk says, or null when there is none. */
+function bootEntry() {
+  try {
+    return boot.readEntry(readFileSync(bootPath(), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Write the entry for `target`, unless it already says exactly that.
+ *
+ * Synchronous, because one caller is electron-updater's rename event, which
+ * fires in the middle of the quit. Written beside the real file and renamed
+ * over it, so a Pi unplugged mid-write keeps the old entry rather than half
+ * of a new one.
+ */
+function writeBootEntry(target) {
+  const text = boot.entryText(target)
+  if (!text) throw new Error(`this app's location cannot go in a start-up entry: ${target}`)
+  const path = bootPath()
+  try {
+    if (readFileSync(path, 'utf8') === text) return
+  } catch {
+    // Not there yet, which is the ordinary case.
+  }
+  mkdirSync(dirname(path), { recursive: true })
+  const next = `${path}.new`
+  writeFileSync(next, text)
+  renameSync(next, path)
+}
+
+/** { supported, on } — `read: false` for the menu, which uses the copy kept in bootOn. */
+function startAtBootState({ read = true } = {}) {
+  if (!bootTarget()) return { supported: false, on: false }
+  if (read) bootOn = Boolean(bootEntry()?.on)
+  return { supported: true, on: bootOn }
+}
+
+/** Turn it on or off — for the switch in Settings and the tray's checkbox alike. */
+function setStartAtBoot(on) {
+  const target = bootTarget()
+  if (!target) return { supported: false, on: false }
+  let error = null
+  try {
+    if (on) writeBootEntry(target)
+    else if (bootEntry()?.ours) unlinkSync(bootPath())
+  } catch (err) {
+    error = err?.message || String(err)
+    console.error('[start at power-on] could not change it:', error)
+  }
+  const state = startAtBootState()
+  if (tray) drawTray()
+  return error ? { ...state, error } : state
+}
+
+/*
+ * Kept pointing at this app. At every launch while it is on, the entry is
+ * written again with where this app is now — so an AppImage that was moved,
+ * or a .deb that replaced it, is what starts next time.
+ */
+function healStartAtBoot() {
+  const target = bootTarget()
+  if (!target || !startAtBootState().on) return
+  try {
+    writeBootEntry(target)
+  } catch (err) {
+    console.error('[start at power-on] could not bring the entry up to date:', err?.message || err)
+  }
+}
+
+/*
+ * AND THE APPIMAGE MOVES WHEN IT UPDATES. The updater deletes the running
+ * file and puts the new one beside it under the new version's name, so an
+ * entry naming the old file starts nothing after the first update — and the
+ * next launch, which would have mended it, is the launch that never happens.
+ * So it is mended here, the moment the updater says where the new one went.
+ */
+function followTheAppImage(path) {
+  if (!bootEntry()?.on) return
+  try {
+    writeBootEntry(path)
+    console.error('[start at power-on] now starts', path)
+  } catch (err) {
+    console.error('[start at power-on] could not follow the update:', err?.message || err)
+  }
 }
 
 /*
@@ -600,7 +1098,7 @@ function shipItLog() {
 
 function publish(state) {
   update = state
-  if (tray) buildTray()
+  if (tray) drawTray()
   if (win && !win.isDestroyed()) {
     win.webContents.send('updates:state', { ...state, line: updateLine(state) })
   }
@@ -610,7 +1108,14 @@ async function beginUpdates() {
   if (!app.isPackaged) return
   try {
     const { autoUpdater } = require('electron-updater')
-    const { autoUpdater: native } = require('electron')
+    /*
+     * Electron's own updater, on the Mac only, because it is a Mac updater.
+     * It was handed in everywhere, and on Linux and Windows it never says a
+     * word — so a download stayed "Preparing…" for ever there, and Restart to
+     * update never appeared. Without it the library's own "downloaded" is
+     * the ready signal, which on those two is the true one. See wireUpdates.
+     */
+    const native = process.platform === 'darwin' ? require('electron').autoUpdater : null
     const mod = await import('./lib/updates.mjs')
     const { wireUpdates, installOutcome } = mod
     updateLine = mod.updateLine
@@ -635,12 +1140,22 @@ async function beginUpdates() {
     const outcome = installOutcome({ marker, version: app.getVersion() })
     if (marker) clearMarker()
 
+    if (typeof autoUpdater.on === 'function') {
+      autoUpdater.on('appimage-filename-updated', (path) => followTheAppImage(path))
+    }
+
     updates = wireUpdates({
       updater: autoUpdater,
       native,
       onState: (state) => {
         update = state
-        if (tray) buildTray()
+        /*
+         * What to do about it first, and only then the drawing: a menu that
+         * failed to draw once took the install-at-power-on down with it.
+         */
+        if (state.kind === 'ready' && outcome !== 'stuck') installIfUnattended()
+        if (state.kind === 'trouble' && outcome !== 'stuck') retryUpdateCheck()
+        if (tray) drawTray()
         /*
          * And the window, which until now was never told anything. The line is
          * built here rather than in the page so the menu and the window cannot
@@ -676,9 +1191,81 @@ async function beginUpdates() {
       return
     }
     await updates.check()
+    /*
+     * A windowless app is left on for weeks, and checked only at launch it
+     * would hear about nothing. So it asks twice a day. What it finds waits
+     * for a quit, or for the next time the computer is turned on.
+     */
+    if (startHidden) {
+      const again = () =>
+        later(async () => {
+          await updates.check()
+          again()
+        }, boot.RECHECK_MS)
+      again()
+    }
   } catch (err) {
     console.error('[updates] not available', err?.message || err)
   }
+}
+
+/*
+ * An update ready just after a windowless start is installed there and then.
+ *
+ * electron-updater installs at a clean quit, and a Pi on a pedalboard never
+ * has one: it is unplugged. So the update would wait for a quit that never
+ * comes, and the box would stay on its first version for ever. The download
+ * from an earlier run is still on disk, though, and makes the update ready
+ * within seconds of the next power-on — before anybody is playing, which is
+ * the one moment an app restarting itself interrupts nothing. Later than that
+ * it waits for a quit, like everywhere else. The rules are in
+ * unattendedInstall, lib/autostart.mjs.
+ */
+function installIfUnattended() {
+  if (installedUnattended || !boot) return
+  const verdict = boot.unattendedInstall({
+    hidden: startHidden,
+    sinceLaunchMs: uptime() - launchedAt,
+    platform: process.platform,
+    env: process.env
+  })
+  if (!verdict.install) {
+    if (startHidden) console.error(`[updates] ${update?.version || 'An update'} is ready; ${verdict.why}.`)
+    return
+  }
+  installedUnattended = true
+  console.error(`[updates] installing ${update?.version || 'the update'} now, while nobody is playing`)
+  installNow().catch((err) => console.error('[updates] could not install', err?.message || err))
+}
+
+/*
+ * A look for updates that failed just after a windowless start is tried
+ * again, half a minute later, for as long as an install could still follow
+ * it. A Pi often boots before its wifi — the reason the phone remote is
+ * asked for again, too — and the one look it takes at power-on lands in
+ * exactly that gap. With no answer there is no download, and with no
+ * download nothing installs, at this power-on or any later one. The rules
+ * are updateRetryDelay in lib/autostart.mjs.
+ */
+function retryUpdateCheck() {
+  if (updateRetry || !updates || !boot) return
+  const wait = boot.updateRetryDelay({ hidden: startHidden, kind: update?.kind, sinceLaunchMs: uptime() - launchedAt })
+  if (!wait) return
+  updateRetry = later(() => {
+    updateRetry = null
+    updates.check()
+  }, wait)
+}
+
+/*
+ * And once more when the network turns out to be there after all. The phone
+ * remote coming on means the account service answered, so a look for updates
+ * that failed for want of a network is worth taking again — later than the
+ * retries above, which stop with the install window. What it finds downloads,
+ * and installs at the next power-on.
+ */
+function networkIsUp() {
+  if (startHidden && update?.kind === 'trouble' && updates) updates.check()
 }
 
 /**
@@ -703,6 +1290,14 @@ async function settleInPlace() {
   }
   const place = installPlace({ exePath: app.getPath('exe'), inApplications })
   if (place.ok) return true
+  /*
+   * Nobody there to answer, and this box waits until somebody does. The menu
+   * and the Updates page still say what to do about it.
+   */
+  if (startHidden) {
+    misplaced = true
+    return true
+  }
   const choice = dialog.showMessageBoxSync({
     type: 'question',
     buttons: ['Move to Applications', 'Not now'],
@@ -729,30 +1324,75 @@ function moveToApplications() {
   }
 }
 
+/*
+ * The copy an update has just started, waiting for the one it replaces.
+ *
+ * The AppImage updater starts the new file a moment BEFORE the old copy has
+ * finished quitting, and the old one still holds the lock — so the new one,
+ * finding it, would quit too, and the box would be left with nothing running
+ * at all. It asks again for ten seconds instead, which is far longer than an
+ * old copy with its server already stopped takes to go.
+ */
+async function lockAfterUpdate() {
+  for (let i = 0; i < 40; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    if (app.requestSingleInstanceLock(knock)) return true
+  }
+  return false
+}
+
 app.whenReady().then(async () => {
+  // Another copy is running: it has been told, and opens its window.
+  if (!primary) primary = relaunched && (await lockAfterUpdate())
+  if (!primary) {
+    app.quit()
+    return
+  }
   // A service, not a document: no dock icon, no window until asked.
   showInDock(false)
+  boot = await import('./lib/autostart.mjs')
+  healStartAtBoot()
   if (!(await settleInPlace())) return // reopening from Applications
   const answering = await start()
   if (!where) return
-  buildTray()
+  drawTray()
   wireUpdateChannel()
   await beginUpdates()
   if (!answering) {
-    /*
-     * A minute is long enough that this is not slowness. Said out loud,
-     * because the alternative is a window showing nothing and a person with no
-     * idea whether the app is broken or their unit is.
-     */
-    dialog.showErrorBox(
-      'The device server did not start',
-      'It was started but never answered, so there is nothing to show yet.\n\n' +
-        'Quit and open the app again. If it keeps happening, the log is in\n' +
-        'Console.app under "Fractal Remote".'
-    )
-    return
+    if (startHidden) {
+      /*
+       * Nobody to tell in a box, so it says so in the menu and keeps waiting:
+       * a slow first start on a Pi 3 is still a start, and a server that dies
+       * instead is started again by its exit handler.
+       */
+      unattended("The part that talks to your unit hasn't started yet — still waiting for it")
+      const { waitForServer } = await host()
+      while (!(await waitForServer({ port: hostAt.port }))) {
+        if (quitting) return
+      }
+      settled()
+    } else {
+      /*
+       * A minute is long enough that this is not slowness. Said out loud,
+       * because the alternative is a window showing nothing and a person with no
+       * idea whether the app is broken or their unit is.
+       */
+      dialog.showErrorBox(
+        'The device server did not start',
+        'It was started but never answered, so there is nothing to show yet.\n\n' +
+          'Quit and open the app again. If it keeps happening, the log is in\n' +
+          'Console.app under "Fractal Remote".'
+      )
+      return
+    }
   }
-  openWindow()
+  // A window somebody opened from the tray before there was a server to show.
+  const blank = win && !win.isDestroyed() && !win.webContents.getURL().startsWith(where.local)
+  if (windowAtLaunch || wantWindow) openWindow()
+  if (blank) win.loadURL(where.local)
+  wantWindow = false
+  // For whoever reads the log, and for the check in CI that no window opened.
+  console.error(`[launch] done, ${win ? 'with a window' : 'no window'}`)
 })
 
 /*
@@ -765,9 +1405,24 @@ app.whenReady().then(async () => {
  * happen to this app, because it skips the quit that installs updates and
  * leaves the device server holding the port. So the close button quits, the
  * ordinary way, through the same shutdown as ⌘Q.
+ *
+ * EXCEPT ON A COMPUTER SET UP TO RUN IT WITH NOBODY THERE — started with no
+ * window, or with "Start when this computer turns on" switched on. That
+ * computer is a pedalboard or a rack, the window was opened to check on it,
+ * and closing it must not take the phone remote down with it. The app stays
+ * in the tray, and the tray's Quit still quits. Everywhere else, closing
+ * still quits exactly as it did.
  */
+/*
+ * The switch read afresh, not remembered: somebody who turned it off in their
+ * desktop's own Startup Applications, or deleted the file, has turned it off,
+ * and closing the window should then quit like anywhere else.
+ */
+const stayInTray = () => startHidden || startAtBootState().on
 app.on('window-all-closed', () => {
-  if (!quitting) app.quit()
+  if (quitting) return
+  if (stayInTray()) return
+  app.quit()
 })
 
 /*
@@ -798,7 +1453,8 @@ const QUIT_DEADLINE_MS = 6000
 const INSTALL_DEADLINE_MS = 20000
 
 app.on('before-quit', (e) => {
-  if (quitting) return
+  // A second copy stepping aside started nothing, so it has nothing to stop.
+  if (quitting || !primary) return
   e.preventDefault()
 
   /*
@@ -831,6 +1487,9 @@ app.on('before-quit', (e) => {
 async function stopServing() {
   if (quitting) return
   quitting = true
+  // Nothing that was waiting to try again does, from here on.
+  for (const timer of timers) clearTimeout(timer)
+  timers.clear()
 
   /*
    * Say so on screen straight away. Tearing down can take a couple of seconds

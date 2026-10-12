@@ -1,6 +1,6 @@
 # The desktop apps
 
-Mac and Windows, one codebase. Each one opens, serves the app from that
+Mac, Windows and Linux, one codebase. Each one opens, serves the app from that
 machine, and puts a name on the network. A phone on the same wifi opens that
 address and reaches the unit — no account, no relay, nothing to install on the
 phone.
@@ -27,12 +27,82 @@ gives you a black square on a black taskbar. So there are two: `trayTemplate.png
 and `trayWin.png`, both generated from `public/icon.svg` by `npm run icon` at
 the repository root, and `main.js` picks by `process.platform`.
 
+## Starting when the computer turns on (Linux)
+
+For a computer that lives on a pedalboard or in a rack — a Raspberry Pi with
+no screen, most of all. Settings → About → **Start when this computer turns
+on**, or the same item in the tray's menu. Switched on, the app starts by
+itself whenever the computer does, with no window: it serves the phone and
+talks to the unit, and its tray icon is there for anybody who plugs a screen
+in. Clicking the icon, or opening the app again, shows the window; closing
+the window leaves it running; the tray's Quit quits.
+
+What it does underneath, for whoever has to look:
+
+- **The switch is one file**, `~/.config/autostart/fractal-remote.desktop`
+  (or under `$XDG_CONFIG_HOME`). On means the file is there and is ours; off
+  deletes it. Raspberry Pi OS starts what is in that folder when its desktop
+  logs in, and so do GNOME, KDE and XFCE. The text and the rules are in
+  [`lib/autostart.mjs`](lib/autostart.mjs). Electron's own login-item switch
+  does nothing on Linux, which is why the app writes the file itself.
+- **It starts the app with `--hidden`.** No window at launch, and no dialog
+  ever: a problem is a line in the log and at the top of the tray's menu.
+  Something else on port 5056 is asked about again every 30 seconds, a device
+  server that stops is started again (after 2, 5, 15 and 30 seconds, then
+  once a minute), and the phone remote is asked for again every minute for
+  half an hour and then every five, because a Pi often boots before its wifi.
+- **It follows the app.** Every launch writes the entry again with where the
+  app is now, and an AppImage update — which moves the file to a new name —
+  rewrites it the moment the new file is in place.
+- **Updates install just after power-on.** A pedalboard is unplugged, never
+  quit, and an update that waits for a quit would wait for ever. So with no
+  window, an update that is ready within three minutes of starting (one
+  downloaded on an earlier run is ready in seconds) installs there and then,
+  and the app comes back on the new version, still with no window. Later than
+  that it waits for a quit, as everywhere else. A look that fails just after
+  power-on (a Pi often boots before its wifi) is taken again every 30 seconds
+  while an install could still follow it, and once more when the phone
+  remote comes on; after that it looks every 12 hours. Not the .deb: its
+  update asks for a password, which nobody is there to type, so on a .deb it
+  waits for a quit.
+- **Somebody looking is not the same as somebody there.** Plug a screen in,
+  open the window and press Restart to update, and the new version comes
+  back with its window for you — and still behaves as a box nobody is
+  watching once you unplug the screen.
+
+Only one copy of the app runs at a time, on every computer: opening it again
+shows the running one's window instead.
+
+### A Raspberry Pi on a pedalboard
+
+1. Put **Raspberry Pi OS (64-bit)** on it, the version with the desktop (not
+   Lite). Leave **Desktop Autologin** on — it is on unless you changed it.
+   That is what makes the desktop, and so the app, start with nobody there.
+   (To check: Control Centre → System, or `sudo raspi-config` → System
+   Options → Boot / Auto Login.)
+2. Once, with a screen plugged in (or over Raspberry Pi Connect or VNC),
+   download the **Raspberry Pi AppImage** (not the `.deb`), make it
+   executable, open it, and sign in to the phone remote. The AppImage,
+   because a pedalboard is switched off at the wall: the AppImage installs
+   its updates just after power-on with nobody there, and the `.deb` only
+   updates when somebody quits the app and types a password.
+3. In the app, go to Settings → About and switch on **Start when this
+   computer turns on**.
+
+From then on, plug the Pi in and the phone finds the unit. Leave the
+AppImage file where it is — it is the app itself, and the start-up entry
+names it. If you move it, open it once from its new place and the entry
+follows it.
+
 ## Building it
 
-**Not from a Linux machine, and not from the other platform.** Each installer
-needs a runner of its own kind, and the native serial and MIDI modules compile
-per platform. `.github/workflows/desktop.yml` has a job for each; run the
-workflow and take the `.dmg` or the `.exe` from the artifacts.
+**Each one on its own kind of machine.** The native serial and MIDI modules
+compile per platform and per processor. `.github/workflows/desktop.yml` has a
+job for each — and two for Linux, a PC one and an arm64 one for the Pi; run
+the workflow and take the `.dmg`, the `.exe` or the AppImage and `.deb` from
+the artifacts. The Linux jobs also start the packaged app with no window on
+a virtual screen and check that it serves, stays one copy, and stops when
+told.
 
 Locally, on the matching machine:
 

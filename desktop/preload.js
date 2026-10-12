@@ -29,6 +29,11 @@
  * The wording comes from the main process rather than being rebuilt here,
  * because the menu and the window saying different things about the same
  * download is the kind of drift nobody notices until it is confusing.
+ *
+ * Since then, two more small things, each one question and nothing wider: the
+ * wifi address for the QR code, and the "Start when this computer turns on"
+ * switch on Linux — whether this computer can, whether it is on, and turning
+ * it on or off. The main process decides all of it; see setStartAtBoot.
  */
 const { contextBridge, ipcRenderer } = require('electron')
 
@@ -42,6 +47,16 @@ contextBridge.exposeInMainWorld('fractalDesktop', {
    * computer is on no network at all.
    */
   wifi: () => ipcRenderer.invoke('host:wifi'),
+
+  /**
+   * "Start when this computer turns on". get answers {supported, on} —
+   * supported only in the Linux app — and set takes true or false and
+   * answers the same, with `error` when the change could not be made.
+   */
+  startAtBoot: {
+    get: () => ipcRenderer.invoke('login:get'),
+    set: (on) => ipcRenderer.invoke('login:set', on === true)
+  },
 
   updates: {
     /** What is happening now, as {kind, line, version}. Null before anything has. */
