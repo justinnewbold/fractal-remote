@@ -543,8 +543,11 @@ export function run(test) {
 
     /*
      * BOTH FORMATS, AND THEY ARE NOT INTERCHANGEABLE. AppImage is the one that
-     * runs anywhere without an install step, and it is the ONLY Linux format
-     * electron-updater knows how to update — a .deb can never replace itself.
+     * runs anywhere without an install step, and the one that updates itself
+     * with no password. (This said a .deb can never replace itself. Not so:
+     * electron-updater 6's DebUpdater reads resources/package-type and runs
+     * dpkg -i through pkexec or sudo at a clean quit — so it updates only
+     * when somebody can give it a password, which is still the difference.)
      * The .deb is for the box in a rack that stays on, where `apt install
      * ./file.deb` is a thing somebody already knows. Drop either and a real
      * person loses something.
@@ -1450,7 +1453,16 @@ export function run(test) {
     assert.match(code, /button\(linuxArm, \(lead \? 'Download for ' : ''\) \+ 'Raspberry Pi and other ARM &mdash; AppImage', !lead\)/, 'the Pi AppImage leads on a system it cannot run on')
 
     /* The steps, and the words a Pi owner needs to check for themselves. */
-    for (const word of ['dpkg --print-architecture', 'arm64', 'armhf', 'libfuse2t64', 'chmod +x', 'keeps itself up to date']) {
+    /*
+     * The .deb's line was "the .deb does not" update itself. Changed on
+     * purpose, 12 October 2026: electron-updater 6 has a DebUpdater, the
+     * shipped .deb carries resources/package-type=deb and the feed lists the
+     * .deb, so it does update, at a clean quit, through pkexec or sudo. What
+     * is true is that it may need a password, which is why the AppImage
+     * still leads.
+     */
+    assert.ok(!/the \.deb does not\./.test(code), 'the Linux card says the .deb never updates, and it does, with a password')
+    for (const word of ['dpkg --print-architecture', 'arm64', 'armhf', 'libfuse2t64', 'chmod +x', 'keeps itself up to date', 'may ask for your password']) {
       assert.ok(code.includes(word), `the Linux card no longer says ${word}`)
     }
     /* The old hint sent ARM to the releases page, which is what hid it. */
@@ -1466,7 +1478,7 @@ export function run(test) {
     const linux = wayById('linux-app')
     const steps = linux.steps.join(' ')
     assert.ok(!/works on any Linux|a Raspberry Pi works/i.test(steps), 'the Linux route promises a Pi more than it can run again')
-    for (const word of ['arm64', 'dpkg --print-architecture', 'armhf', '64-bit Raspberry Pi OS', 'libfuse2t64', 'keeps itself up to date', 'does not update itself', 'dialout']) {
+    for (const word of ['arm64', 'dpkg --print-architecture', 'armhf', '64-bit Raspberry Pi OS', 'libfuse2t64', 'keeps itself up to date', 'may ask for your password', 'dialout']) {
       assert.ok(steps.includes(word), `the Linux route no longer says ${word}`)
     }
     /* Lite on its own has no desktop, and the app opens a window, so the two

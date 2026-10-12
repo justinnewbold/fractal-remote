@@ -368,9 +368,11 @@
            * offers the files for afterwards, none of them in green: the big
            * button is the click that fails.
            *
-           * The AppImage leads each pair because it updates itself and the
-           * .deb does not: a .deb install falls behind the phone at the next
-           * release, and the phone says so in red.
+           * The AppImage leads each pair because it updates itself with no
+           * password. The .deb updates too (electron-updater's DebUpdater),
+           * but only at a clean quit and through pkexec or sudo running
+           * dpkg -i, so on a box nobody is sitting at it can fall behind the
+           * phone, and the phone then says so in red.
            */
           function linuxCard(arch) {
             var lead = arch === 'arm'
@@ -418,7 +420,8 @@
                   'choose Properties, and on the Permissions tab set Execute to Anyone (on other computers, ' +
                   'tick the box that lets it run as a program). Or in Terminal, type <code>cd Downloads</code>, ' +
                   'then ' + typed('chmod +x ') + '. Then double-click it. ' +
-                  'The AppImage keeps itself up to date; the .deb does not.'
+                  'The AppImage keeps itself up to date. The .deb updates itself too, but only when you ' +
+                  'quit the app, and it may ask for your password, so the AppImage is the easier one.'
               ]
                 .concat(
                   arch
