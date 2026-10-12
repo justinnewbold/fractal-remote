@@ -109,7 +109,18 @@ const ofSlug = (s) => s.deviceSlug
  * button within reach of a stage tap is a hazard, and saving to a slot is
  * refused by the Mac anyway.
  */
-export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpenFix, onUnlock, onAccount }) {
+export default function Stage({
+  onOpenPresets,
+  onOpenSetlists,
+  onOpenEdit,
+  onOpenFix,
+  onUnlock,
+  onAccount,
+  lost = false,
+  lostAway = false,
+  onPutAway,
+  onLookAgain
+}) {
   // The screen is the instrument panel for as long as this is open. A phone
   // that locks itself between songs is a phone you have to wake and unlock
   // while the count-in is happening.
@@ -161,7 +172,18 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
      And kept up while nothing has been read at all: on an empty screen it is
      the only thing saying why. */
   const left = caps ? faultLeft({ error: fault, errorLink: faultLink, faultAt }, Date.now()) : Infinity
-  const error = useStillNews(fault, faultAt, left) ? fault : null
+  const news = useStillNews(fault, faultAt, left)
+  /*
+   * THE COMPUTER GONE FOR FIFTEEN SECONDS (`lost`, from App: a rig on this
+   * screen, the link down that long, not over Bluetooth). A complaint about
+   * the link itself gives way to the advice card (the second Toast, below),
+   * which says the same thing and what to do about it; anything else wrong is
+   * still said first, and the advice waits behind it.
+   */
+  const error = news && !(lost && faultLink) ? fault : null
+  /* Put away with its ✕ until the computer has answered again (`lostAway`).
+     Held by App, not here: a look at Setlists or Settings takes this screen
+     away, and the card came straight back with it. */
 
   const [refreshing, setRefreshing] = useState(false)
   /*
@@ -1077,6 +1099,25 @@ export default function Stage({ onOpenPresets, onOpenSetlists, onOpenEdit, onOpe
             onPress={() => onOpenFix(fixFor(error))}
           />
         ) : null}
+      </Toast>
+
+      {/*
+        AND WHAT TO CHECK WHEN THE COMPUTER HAS GONE, over the screen like the
+        fault and never in it. "App keeps jumping back-and-forth from this
+        page every few seconds instead of offering suggestions on what to
+        check." The waiting screen used to cover this screen at every drop;
+        now this one stays, DISCONNECTED says the link is down, and after
+        fifteen seconds of it the waiting screen's own advice and buttons
+        float here, until the computer answers or the ✕ puts them away.
+        Never with the fault up: one card at a time, in the same place.
+      */}
+      <Toast open={lost && !lostAway && !error}>
+        <Note tone="warn" onDismiss={() => onPutAway?.()}>
+          The phone can’t reach your computer. Open the Fractal app on the computer and make sure the computer is
+          awake. This keeps trying on its own.
+        </Note>
+        <Press label="Look for the computer again" height={44} onPress={() => onLookAgain?.()} />
+        {onOpenFix ? <Press label="Troubleshooting" height={44} onPress={() => onOpenFix('connect')} /> : null}
       </Toast>
     </View>
   )

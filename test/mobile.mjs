@@ -3456,7 +3456,11 @@ export function run(test) {
     /* Flattened, because the props wrapped onto their own lines the day the
        unit name learned to go two places. The rule is that the bar is drawn
        with the link and a way into Setup, not that it fits on one line. */
-    assert.match(app, /<TopBar link=\{link\} onOpenSettings=/, 'the app does not draw the header')
+    /* Changed on purpose, 12 October 2026 (1.87.17): `shownLink` rather than
+       `link`, the same link held through a stretch of no answer so the word
+       in the corner stops swinging between CONNECTING and DISCONNECTED
+       (useHeldLink in App.js). */
+    assert.match(app, /<TopBar link=\{shownLink\} onOpenSettings=/, 'the app does not draw the header')
     assert.ok(!/function LinkBar/.test(app), 'the old sentence bar is still there, under the new one')
     assert.ok(!/Connected to \$\{/.test(app), 'the app still writes out which computer it found')
 
@@ -3736,25 +3740,47 @@ export function run(test) {
 
     /* Capabilities is the gate: the first thing the unit answers with, and the
        thing the shape of every other answer depends on. */
+    /*
+     * Changed on purpose, 12 October 2026 (1.87.17). This pinned
+     * `link.link === 'joining' || (link.link === 'connected' && !caps &&
+     * !readFailed)`, which waited through 'joining' only: 'no-answer' drew
+     * the empty play screen, and a channel dropping a few seconds after
+     * every join flipped the two every six and a half seconds — "App keeps
+     * jumping back-and-forth from this page every few seconds instead of
+     * offering suggestions on what to check". It also put the spinner over
+     * a rig already on screen at every 'joining'. Now the wait is for as
+     * long as there is no rig (`!caps`) and the link is out looking,
+     * 'joining' and 'no-answer' alike — except over Bluetooth (beta), where
+     * a lost adapter still brings it back over a rig, because that is where
+     * the adapter's own help is; see 'the waiting screen holds through the
+     * flip' below for the same rule run rather than read.
+     */
+    assert.match(flat, /const looking = link\.link === 'joining' \|\| link\.link === 'no-answer'/, 'no-answer is not part of looking')
     assert.match(
       flat,
-      /const settling = auth === 'in' && !demo && \(link\.link === 'joining' \|\| \(link\.link === 'connected' && !caps && !readFailed\)\)/,
+      /const settling = auth === 'in' && !demo && \(\(looking && \(!caps \|\| bluetooth\)\) \|\| \(link\.link === 'connected' && !caps && !readFailed\)\)/,
       'the play screen is drawn before the unit has said what it is'
     )
     /* The demo has nothing to wait for — it answers from memory — so waiting on
        it would be a spinner in front of a unit that is already there. */
     assert.match(flat, /!demo &&/, 'the demo is made to wait for a computer it does not have')
+    /* Changed on purpose with the gate above (1.87.17): Waking is handed
+       App's fifteen-second clock (`long`), and a way to Setlists
+       (`onSetlists`), whose only other door is on the play screen this
+       stands in front of. Look again is still probeNow and nothing else: it
+       asks at once and leaves the advice up. */
     assert.match(
       flat,
-      /\{settling && screen === 'stage' \? \( <Waking link=\{link\} onRetry=\{probeNow\} onSwitch=\{\(\) => openSettings\('link'\)\} onTroubleshoot=\{openConnectFix\} onBluetooth=\{\(\) => openSettings\('bluetooth'\)\} \/>/,
+      /\{settling && screen === 'stage' \? \( <Waking link=\{link\} long=\{lookedLong\} onRetry=\{probeNow\} onSwitch=\{\(\) => openSettings\('link'\)\} onTroubleshoot=\{openConnectFix\} onBluetooth=\{\(\) => openSettings\('bluetooth'\)\} onSetlists=\{\(\) => setScreen\('setlists'\)\} \/>/,
       'nothing is shown while the app waits'
     )
 
     /*
-     * BOUNDED ON BOTH SIDES. A waiting screen that can wait forever is worse
-     * than the empty one it replaced: joining ends by itself when the relay
-     * gives up, and a read that fails sets an error, which is worth showing
-     * rather than waiting through.
+     * BOUNDED, but by advice now rather than by giving up. A read that fails
+     * sets an error, which is worth showing rather than waiting through. A
+     * computer that never answers used to end the wait too, by dropping to
+     * the empty play screen; that was the flip, so it holds the wait instead,
+     * and after fifteen seconds says what to check (the test below).
      */
     assert.match(flat, /!readFailed/, 'a failed read leaves the app waiting on a spinner with the error behind it')
     assert.ok(
@@ -3762,8 +3788,10 @@ export function run(test) {
       'the wait covers Setup as well, so a computer that never answers cannot be fixed from here'
     )
     /* And the bar stays up through it, which is what makes the wait safe at
-       all: whatever happens, the gear is one tap away. */
-    const bar = flat.indexOf('<TopBar link={link}')
+       all: whatever happens, the gear is one tap away. Changed on purpose,
+       12 October 2026 (1.87.17): the bar is handed `shownLink`, the link
+       held through the flip (useHeldLink), not `link`. */
+    const bar = flat.indexOf('<TopBar link={shownLink}')
     const wait = flat.indexOf('{settling && screen')
     assert.ok(bar > 0 && wait > bar, 'the waiting screen is drawn over the bar, so Setup cannot be reached')
 
@@ -3907,8 +3935,13 @@ export function run(test) {
 
     const phone = read('mobile/App.js').replace(/\s+/g, ' ')
     const waking = phone.slice(phone.indexOf('function Waking('))
-    /* Not over Bluetooth (beta), where no computer is being looked for. */
-    assert.match(waking, /useComputerElsewhere\(long && link\.link !== 'connected' && !bluetooth\)/, 'the phone never asks while it waits')
+    /* Not over Bluetooth (beta), where no computer is being looked for.
+       Changed on purpose, 12 October 2026 (1.87.17): this pinned `long &&` in
+       front, which asked only once the advice was up, so the advice opened on
+       "make sure the computer is awake" and turned into the account warning
+       a moment later, and again after every trip to Settings. It asks from
+       the first second of looking now; the note still waits for `long`. */
+    assert.match(waking, /useComputerElsewhere\(link\.link !== 'connected' && !bluetooth\)/, 'the phone never asks while it waits')
     assert.match(waking, /This phone is signed in as \$\{email\}/, 'the phone does not say which account it is on')
     assert.match(waking, /Switch account on this phone/, 'the phone gives no way to change account')
     assert.match(read('mobile/src/screens/Settings.js'), /useComputerElsewhere\(link === 'no-answer'\)/, 'Setup never asks')
@@ -5562,9 +5595,23 @@ export function run(test) {
      */
     const flat = read('mobile/App.js').replace(/\s+/g, ' ')
     assert.match(flat, /const WAKING_LONG_MS = 15000/, 'the phone never says more than "Finding your computer"')
+    /*
+     * Changed on purpose, 12 October 2026 (1.87.17). These two looked for the
+     * timer inside Waking, where it was started again at every change of
+     * link.link and thrown away with the screen at every 'no-answer': in his
+     * flip the fifteen seconds never came, and the advice never showed. It
+     * lives in App's useLookedLong now, above both screens, and Waking is
+     * handed `long` with no timer of its own.
+     */
+    const clock = flat.slice(flat.indexOf('function useLookedLong('), flat.indexOf('function Waking('))
+    assert.ok(clock.startsWith('function useLookedLong('), 'the fifteen-second clock is not where this looks')
+    assert.match(clock, /setTimeout\(\(\) => setLong\(true\), WAKING_LONG_MS\)/, 'the phone never says more')
+    assert.match(clock, /clearTimeout\(t\)/, 'the timer outlives the stretch of looking')
+    assert.match(clock, /\}, \[looking, again, back\]\)/, 'the clock starts again on something other than a new stretch of looking')
+    assert.ok(!/link\.link/.test(clock), 'the fifteen seconds start again at every change of link.link')
     const waking = flat.slice(flat.indexOf('function Waking('))
-    assert.match(waking, /setTimeout\(\(\) => setLong\(true\), WAKING_LONG_MS\)/, 'the phone never says more')
-    assert.match(waking, /clearTimeout\(t\)/, 'the timer outlives the waiting screen')
+    assert.match(waking, /^function Waking\(\{ link, long, onRetry, /, 'the waiting screen is not handed the clock')
+    assert.ok(!/setTimeout|setLong|\[link\.link\]/.test(waking), 'the waiting screen keeps a clock of its own again')
     assert.match(
       waking,
       /\{long && link\.link !== 'connected' \?/,
@@ -5579,6 +5626,364 @@ export function run(test) {
     assert.match(joining, /\{long \?/, 'the browser shows its help at once rather than after a wait')
     assert.match(joining, /Make sure the Fractal app is open on the computer and the computer is awake\./, 'no advice in the browser')
     assert.match(joining, /onClick=\{onRetry\}[^>]*>\s*Try now/, 'no button in the browser')
+  })
+
+  test('the waiting screen holds through the flip, and never covers a rig on screen over the computer', () => {
+    /*
+     * "App keeps jumping back-and-forth from this page every few seconds
+     * instead of offering suggestions on what to check, which I think we had
+     * previously set up right?" (12 October 2026, the phone on 1.87.16, his
+     * computer asleep.) His log, for minutes: no-answer → joining, 1.4
+     * seconds later joining → no-answer, 5.3 seconds later back again. The
+     * waiting screen was up for 'joining' only, so every swing of the link
+     * swapped it for the empty play screen and back.
+     *
+     * The gate, lifted out of App.js as it is and run over his log, and over
+     * a rig that loses its computer mid-song.
+     */
+    const app = read('mobile/App.js')
+    const looking = app.match(/^ {2}const looking = (.+)$/m)
+    const settling = app.match(/^ {2}const settling = (.+)$/m)
+    assert.ok(looking && settling, 'the gate is not where this looks')
+    const gate = new Function('auth', 'demo', 'caps', 'link', 'readFailed', 'bluetooth', `const looking = ${looking[1]}\nreturn ${settling[1]}`)
+    const waits = (link, { auth = 'in', demo = false, caps = null, readFailed = null, bluetooth = false } = {}) =>
+      gate(auth, demo, caps, { link }, readFailed, bluetooth)
+    const fm3 = { model: 'FM3' }
+    const flip = ['joining', 'no-answer', 'joining', 'no-answer', 'joining', 'no-answer', 'joining']
+
+    /* Nothing read yet: the waiting screen, from the first swing to the last. */
+    assert.deepEqual(flip.map((l) => waits(l)), flip.map(() => true), 'no-answer drops to the empty play screen again')
+    /* A rig on screen: the play screen, from the first swing to the last. */
+    assert.deepEqual(flip.map((l) => waits(l, { caps: fm3 })), flip.map(() => false), 'a dropped link puts the spinner over a rig on screen')
+    /* The computer answered and the unit is being asked: still waiting, with "Asking your unit what it is…". */
+    assert.equal(waits('connected'), true, 'the empty play screen shows while the unit is asked what it is')
+    /* That read failed: the play screen, with the error on it. */
+    assert.equal(waits('connected', { readFailed: 'The unit did not answer.' }), false, 'a failed read is waited through')
+    assert.equal(waits('connected', { caps: fm3 }), false)
+    /* Not looking: Bluetooth (beta) with no adapter picked, or between links. */
+    assert.equal(waits('off'), false, 'an adapter nobody has picked is waited for')
+    assert.equal(waits('off', { bluetooth: true, caps: fm3 }), false, 'an adapter nobody has picked is waited for')
+    /*
+     * OVER BLUETOOTH (BETA), A LOST ADAPTER BRINGS THE WAITING SCREEN BACK
+     * OVER A RIG, as it always has: that is where "Use the computer
+     * instead", what to check on the phone and the adapter, and the
+     * Bluetooth (beta) page are. The card over the play screen is the
+     * computer's alone (`lost` leaves Bluetooth out), so without this a
+     * dropped adapter with a rig on screen said nothing at all.
+     */
+    assert.equal(waits('joining', { bluetooth: true, caps: fm3 }), true, 'a lost adapter with a rig on screen says nothing about what to check')
+    assert.equal(waits('joining', { bluetooth: true }), true)
+    assert.equal(waits('connected', { bluetooth: true, caps: fm3 }), false, 'the waiting screen stays over a rig the adapter is answering for')
+    /* The demo answers from memory, and nobody signed in has nothing to wait for. */
+    for (const l of [...flip, 'connected']) {
+      assert.equal(waits(l, { demo: true }), false, 'the demo waits for a computer it does not have')
+      assert.equal(waits(l, { demo: true, bluetooth: true }), false, 'the demo waits for an adapter it does not use')
+      assert.equal(waits(l, { auth: 'out' }), false)
+      assert.equal(waits(l, { auth: 'paywall' }), false)
+    }
+
+    /* And App wires the rest: the clock to both screens, the account warning first. */
+    const flat = app.replace(/\s+/g, ' ')
+    assert.match(flat, /const lookedLong = useLookedLong\(auth === 'in' && !demo && looking, bluetooth \? 'adapter' : 'computer'\)/, 'the clock is not started by a stretch of looking, or not again by Bluetooth')
+    /*
+     * Look for the computer again asks at once and leaves the advice up. It
+     * used to start the fifteen seconds again, which took the advice and its
+     * Troubleshooting away after a tap that, with the computer asleep,
+     * changed nothing.
+     */
+    assert.ok(!/lookedAgain|lookAgain/.test(flat), 'Look for the computer again takes the advice away for fifteen seconds')
+    assert.match(flat, /lost=\{lookedLong && !bluetooth && !elsewhereSaid\} lostAway=\{lostAway\} onPutAway=\{\(\) => setLostAway\(true\)\} onLookAgain=\{probeNow\}/, 'the play screen is never told the computer has gone')
+    /* Put away until the computer has answered again, and kept by App so a look at Setlists does not bring it back. */
+    assert.match(flat, /const \[lostAway, setLostAway\] = useState\(false\) useEffect\(\(\) => \{ if \(!lookedLong\) setLostAway\(false\) \}, \[lookedLong\]\)/, 'put away once is put away for good, or only until Stage is drawn again')
+    assert.match(flat, /onTroubleshoot=\{openConnectFix\} onSaying=\{setElsewhereSaid\} \/>/, 'the account warning does not say when it is up')
+    const wrong = read('mobile/src/components/WrongAccount.js').replace(/\s+/g, ' ')
+    assert.match(wrong, /const saying = Boolean\(active && elsewhere\) useEffect\(\(\) => \{ onSaying\?\.\(saying\)/, 'the account warning does not say when it is up')
+
+    /*
+     * SETLISTS FROM THE WAITING SCREEN. Their only door is the play screen,
+     * which this stands in front of for as long as nothing answers, so with
+     * the computer shut tonight's running order could not be fixed on the
+     * sofa. With the advice, for the computer and the adapter alike.
+     */
+    const waking = flat.slice(flat.indexOf('function Waking('))
+    assert.match(waking, /^function Waking\(\{[^}]*\bonSetlists \}\)/, 'the waiting screen has no way to Setlists')
+    const advice = waking.slice(waking.indexOf("{long && link.link !== 'connected' ? ("))
+    assert.match(advice, /\{onSetlists \? <Press label="Setlists" sub="These work with nothing connected" onPress=\{onSetlists\} \/> : null\}/, 'the waiting screen has no way to Setlists')
+    assert.ok(!/bluetooth && onSetlists|!bluetooth && onSetlists/.test(waking), 'Setlists are offered for one link and not the other')
+  })
+
+  test('the fifteen seconds count from when looking began, through the flip, and not in a pocket', () => {
+    /*
+     * The clock behind the waiting screen's advice, run rather than read:
+     * App.js's useLookedLong lifted out as it is, against one component's
+     * worth of React and a clock driven by hand.
+     */
+    const app = read('mobile/App.js')
+    const ast = parse(app, { sourceType: 'module', plugins: ['jsx'] })
+    const node = ast.program.body.find((n) => n.type === 'FunctionDeclaration' && n.id?.name === 'useLookedLong')
+    assert.ok(node, 'App.js has no useLookedLong')
+    const LONG = Number(app.match(/const WAKING_LONG_MS = (\d+)/)[1])
+    assert.equal(LONG, 15000)
+
+    let now = 0
+    let id = 0
+    const timers = new Map()
+    const later = (fn, ms) => (timers.set(++id, { at: now + ms, fn }), id)
+    const cancel = (t) => timers.delete(t)
+    let onApp = null
+    const AppState = {
+      addEventListener: (type, fn) => {
+        assert.equal(type, 'change')
+        onApp = fn
+        return { remove: () => (onApp = null) }
+      }
+    }
+    const slots = []
+    let at = 0
+    let dirty = false
+    let queued = []
+    const useState = (init) => {
+      const slot = (slots[at++] ||= { value: init })
+      return [slot.value, (next) => {
+        const v = typeof next === 'function' ? next(slot.value) : next
+        if (!Object.is(v, slot.value)) (slot.value = v), (dirty = true)
+      }]
+    }
+    const useRef = (init) => (slots[at++] ||= { current: init })
+    const useEffect = (fn, deps) => {
+      const k = at++
+      const was = slots[k]
+      if (was && deps.every((d, i) => Object.is(d, was.deps[i]))) return
+      queued.push(() => {
+        was?.cleanup?.()
+        slots[k] = { deps, cleanup: fn() }
+      })
+    }
+    const useLookedLong = new Function(
+      'useState', 'useRef', 'useEffect', 'AppState', 'setTimeout', 'clearTimeout', 'WAKING_LONG_MS',
+      `${app.slice(node.start, node.end)}\nreturn useLookedLong`
+    )(useState, useRef, useEffect, AppState, later, cancel, LONG)
+    let props = [false, 'computer']
+    let long = null
+    /* Draw again until nothing changes, as React does after a state change. */
+    const draw = (...next) => {
+      if (next.length) props = next
+      for (let i = 0; i < 10; i++) {
+        at = 0
+        dirty = false
+        queued = []
+        long = useLookedLong(...props)
+        for (const run of queued) run()
+        if (!dirty) return long
+      }
+      throw new Error('useLookedLong never settles')
+    }
+    const wait = (ms) => {
+      const end = now + ms
+      for (;;) {
+        const due = [...timers].filter(([, t]) => t.at <= end).sort((a, b) => a[1].at - b[1].at)[0]
+        if (!due) break
+        timers.delete(due[0])
+        now = due[1].at
+        due[1].fn()
+        draw()
+      }
+      now = end
+      return draw()
+    }
+
+    assert.equal(draw(false, 'computer'), false)
+    assert.equal(wait(60000), false, 'the advice shows with nothing being looked for')
+    assert.equal(timers.size, 0, 'a clock runs with nothing being looked for')
+
+    /* His flip: the link swings every 1.4 and 5.3 seconds, and App draws again each time. Looking throughout. */
+    draw(true, 'computer')
+    for (const ms of [1400, 5300, 1400, 5300]) {
+      assert.equal(wait(ms), false, 'the advice shows before fifteen seconds')
+      draw(true, 'computer')
+    }
+    assert.equal(wait(LONG - 13400 - 1), false, 'the advice shows before fifteen seconds')
+    assert.equal(wait(1), true, 'fifteen seconds of looking, through the flip, and still no advice')
+    assert.equal(wait(120000), true, 'the advice goes while the computer is still not found')
+
+    /* The computer answers: the stretch is over, and a new one starts from nothing. */
+    assert.equal(draw(false, 'computer'), false, 'the advice stays up once the computer has answered')
+    assert.equal(timers.size, 0)
+    draw(true, 'computer')
+    assert.equal(wait(LONG - 1), false)
+    assert.equal(wait(1), true)
+
+    /* Bluetooth (beta) on: a different thing looked for, from nothing. And off again, the same. */
+    assert.equal(draw(true, 'adapter'), false, 'turning Bluetooth on carries the computer’s fifteen seconds over')
+    assert.equal(wait(LONG), true)
+    assert.equal(draw(true, 'computer'), false, 'turning Bluetooth off carries the adapter’s fifteen seconds over')
+    assert.equal(wait(LONG), true)
+    /* The same thing looked for, drawn again (Look for the computer again does not reach this clock): the advice stays. */
+    assert.equal(draw(true, 'computer'), true, 'drawing again takes the advice away')
+
+    /*
+     * A pocket. A phone put to sleep holds its timers, and wakes with one
+     * that is overdue: here it fires while the phone is away, the same thing
+     * seen from the clock's side. Coming back starts the fifteen seconds
+     * again, so a play screen about to reconnect is not given the advice.
+     */
+    draw(false, 'computer')
+    draw(true, 'computer')
+    assert.equal(long, false)
+    onApp('inactive')
+    onApp('background')
+    assert.equal(wait(60000), true)
+    /* iOS on the way back passes through 'inactive' too. */
+    onApp('inactive')
+    onApp('active')
+    assert.equal(draw(), false, 'a minute in a pocket counts as a minute of looking')
+    assert.equal(wait(LONG - 1), false)
+    assert.equal(wait(1), true)
+    /* But advice already up when the phone went away is still up when it comes back. */
+    onApp('inactive')
+    onApp('background')
+    wait(60000)
+    onApp('active')
+    assert.equal(draw(), true, 'the advice is taken away by a trip to another app')
+
+    /*
+     * iOS's 'inactive' alone is not away: Control Center or Notification
+     * Center pulled down, the app switcher's first peek, a system alert. The
+     * app runs on under all of them. A swipe down to check the wifi ten
+     * seconds in, closed at eighteen, keeps the advice that came up under it
+     * at fifteen, and a quick look before fifteen moves nothing.
+     */
+    draw(false, 'computer')
+    draw(true, 'computer')
+    wait(10000)
+    onApp('inactive')
+    assert.equal(wait(8000), true, 'the advice waits for Control Center to close')
+    onApp('active')
+    assert.equal(draw(), true, 'closing Control Center takes the advice away')
+    draw(false, 'computer')
+    draw(true, 'computer')
+    wait(10000)
+    onApp('inactive')
+    wait(2000)
+    onApp('active')
+    draw()
+    assert.equal(wait(LONG - 12000 - 1), false)
+    assert.equal(wait(1), true, 'a look at Control Center starts the fifteen seconds again')
+  })
+
+  test('the word in the corner holds through the flip, and starts again when the computer answers', () => {
+    /*
+     * The flip was in the top bar too: amber CONNECTING for a second and a
+     * half, red DISCONNECTED for five, for minutes, with its Try now coming
+     * and going in the pop-up under it, and read out again each time to a
+     * screen reader. App.js's useHeldLink lifted out as it is and run over
+     * his log, against one component's worth of React.
+     */
+    const app = read('mobile/App.js')
+    const ast = parse(app, { sourceType: 'module', plugins: ['jsx'] })
+    const node = ast.program.body.find((n) => n.type === 'FunctionDeclaration' && n.id?.name === 'useHeldLink')
+    assert.ok(node, 'App.js has no useHeldLink')
+    const slots = []
+    let at = 0
+    let dirty = false
+    let queued = []
+    const useState = (init) => {
+      const slot = (slots[at++] ||= { value: init })
+      return [slot.value, (next) => {
+        const v = typeof next === 'function' ? next(slot.value) : next
+        if (!Object.is(v, slot.value)) (slot.value = v), (dirty = true)
+      }]
+    }
+    const useEffect = (fn, deps) => {
+      const k = at++
+      const was = slots[k]
+      if (was && deps.every((d, i) => Object.is(d, was.deps[i]))) return
+      queued.push(() => {
+        was?.cleanup?.()
+        slots[k] = { deps, cleanup: fn() }
+      })
+    }
+    const useHeldLink = new Function('useState', 'useEffect', `${app.slice(node.start, node.end)}\nreturn useHeldLink`)(useState, useEffect)
+    const looks = (l) => l === 'joining' || l === 'no-answer'
+    /* What the bar is handed on the first draw for this link, then once things settle. */
+    const draw = (l, what = 'computer') => {
+      const link = { link: l, macName: 'Studio Mac' }
+      let first = null
+      for (let i = 0; i < 10; i++) {
+        at = 0
+        dirty = false
+        queued = []
+        const shown = useHeldLink(link, looks(l), what)
+        first ??= shown
+        for (const run of queued) run()
+        if (!dirty) {
+          assert.equal(shown.link, first.link, `the bar says ${first.link} for a moment and then ${shown.link}`)
+          assert.equal(shown.macName, 'Studio Mac', 'the bar loses the name of the computer')
+          if (shown.link === l) assert.equal(shown, link, 'the link is copied when nothing is held')
+          return shown.link
+        }
+      }
+      throw new Error('useHeldLink never settles')
+    }
+
+    assert.equal(draw('off'), 'off')
+    /* The first join of a stretch is CONNECTING, as it always was: nothing has gone unanswered yet. */
+    assert.equal(draw('joining'), 'joining', 'the first join of a stretch says DISCONNECTED')
+    assert.equal(draw('no-answer'), 'no-answer')
+    /* His log: every swing after that says the same. */
+    for (const l of ['joining', 'no-answer', 'joining', 'no-answer', 'joining']) {
+      assert.equal(draw(l), 'no-answer', 'the word in the corner follows the flip')
+    }
+    /* The computer answers: the stretch is over, and the next one starts from nothing. */
+    assert.equal(draw('connected'), 'connected', 'the bar says DISCONNECTED over a computer that has answered')
+    assert.equal(draw('joining'), 'joining', 'a new stretch is held against the last one')
+    assert.equal(draw('no-answer'), 'no-answer')
+    assert.equal(draw('joining'), 'no-answer')
+    /* Bluetooth (beta) on, mid-stretch: the adapter is being found, not missed, from the first frame. */
+    assert.equal(draw('joining', 'adapter'), 'joining', 'a computer that did not answer is held against the adapter')
+    assert.equal(draw('connected', 'adapter'), 'connected')
+    /* Signed out, or between links. */
+    assert.equal(draw('no-answer'), 'no-answer')
+    assert.equal(draw('off'), 'off')
+    assert.equal(draw('joining'), 'joining')
+
+    /* And the bar and Setup are both handed it; the waiting screen keeps the link as it is. */
+    const flat = app.replace(/\s+/g, ' ')
+    assert.match(flat, /const shownLink = useHeldLink\(link, looking, bluetooth \? 'adapter' : 'computer'\)/, 'the bar is not handed the held link')
+    assert.match(flat, /<TopBar link=\{shownLink\}/, 'the top bar follows the flip')
+    assert.match(flat, /link=\{shownLink\.link\} macName=\{link\.macName\}/, 'Setup follows the flip')
+    /* Held in App, never in the generated word. */
+    assert.ok(!/useHeldLink|missed/.test(read('mobile/src/lib/link-word.js')))
+  })
+
+  test('with a rig on screen the play screen stays, and after fifteen seconds says what to check over it', () => {
+    /*
+     * The other half of the flip. A rig already on screen used to be covered
+     * by the waiting screen at every 'joining', mid-song. Now it stays, the
+     * top bar says DISCONNECTED, and after fifteen seconds the waiting
+     * screen's advice and buttons float over it, the way its faults do: "an
+     * overlay toast notification that doesn't move the screen at all".
+     */
+    const stage = read('mobile/src/screens/Stage.js').replace(/\s+/g, ' ')
+    assert.match(stage, /export default function Stage\(\{[^}]*\blost = false, lostAway = false, onPutAway, onLookAgain \}\)/, 'the play screen is not told the computer has gone')
+    const end = stage.indexOf('</ScrollView>')
+    const card = stage.indexOf('<Toast open={lost && !lostAway && !error}>')
+    /* Two questions, so a card that has gone is not reported as a card that has moved. */
+    assert.ok(card > 0, 'the play screen has no card saying what to check')
+    assert.ok(end > 0 && card > end, 'the advice is in the scrolling content, where it pushes the foot under a thumb')
+    assert.ok(card > stage.indexOf('<Toast open={!!error}>'), 'the advice is not behind the fault')
+    const advice = stage.slice(card, stage.indexOf('</Toast>', card))
+    assert.match(advice, /<Note tone="warn" onDismiss=\{\(\) => onPutAway\?\.\(\)\}>/, 'the advice cannot be put away')
+    assert.match(advice, /Open the Fractal app on the computer and make sure the computer is awake\. This keeps trying on its own\./, 'the play screen does not say what to check')
+    assert.match(advice, /<Press label="Look for the computer again" height=\{44\} onPress=\{\(\) => onLookAgain\?\.\(\)\} \/>/, 'no way to look again from the play screen')
+    assert.match(advice, /<Press label="Troubleshooting" height=\{44\} onPress=\{\(\) => onOpenFix\('connect'\)\} \/>/, 'no way to Troubleshooting from the play screen')
+    /* Put away until the computer has answered again, not for ever — and
+       held by App (see the gate test), not here, where a look at Setlists or
+       Settings unmounted it and brought the card straight back. */
+    assert.ok(!/setLostAway/.test(stage), 'the play screen keeps its own put-away again, which a trip to Setlists forgets')
+    /* A complaint about the link gives way to the advice, which says it better; any other fault is still said first. */
+    assert.match(stage, /const news = useStillNews\(fault, faultAt, left\)/)
+    assert.match(stage, /const error = news && !\(lost && faultLink\) \? fault : null/, 'a red "not connected" stands in front of the advice')
   })
 
   test('the phone can teach somebody how to connect a computer', async () => {

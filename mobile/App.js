@@ -1,5 +1,5 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
-import { ActivityIndicator, Alert, Appearance, BackHandler, Linking, Text, View } from 'react-native'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { ActivityIndicator, Alert, AppState, Appearance, BackHandler, Linking, Text, View } from 'react-native'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 
@@ -243,12 +243,21 @@ export default function App() {
    * shape depends on, which makes it the honest gate: before it, this app knows
    * nothing about the rig at all.
    *
-   * BOUNDED ON BOTH SIDES, because a waiting screen that can wait forever is
-   * worse than the empty one it replaced. Joining ends by itself — the relay
-   * gives up after twelve seconds and says so — and a read that fails sets an
-   * error, which is a thing worth showing rather than waiting through. Either
-   * way this falls through to the ordinary screen, where the top bar says NO
-   * MAC and the gear is a tap away.
+   * A READ THAT FAILS ENDS IT, because a failure is a thing worth showing
+   * rather than waiting through: the play screen comes up with the error on
+   * it, and the top bar and the gear are a tap away.
+   *
+   * A COMPUTER THAT NEVER ANSWERS DOES NOT. It used to: the wait ended when
+   * the link stopped saying 'joining', and the play screen came up empty with
+   * DISCONNECTED in the corner. "App keeps jumping back-and-forth from this
+   * page every few seconds instead of offering suggestions on what to check"
+   * (12 October 2026, his computer asleep). Every join passes through
+   * 'no-answer' before the computer has had a chance to answer, and a relay
+   * channel that drops a few seconds after each join turns that into a flip
+   * every six and a half seconds — and each flip took the waiting screen
+   * away, with its fifteen-second clock, before the advice could show. So the
+   * wait now holds through 'joining' and 'no-answer' alike, and what bounds it
+   * is that advice, on a clock that lives up here (useLookedLong, below).
    */
   /*
    * The demo, picked up before anything decides whether to ask for a sign-in.
@@ -355,10 +364,69 @@ export default function App() {
   const rigBpm = useRig((s) => s.bpm)
   const unitHere = useRig((s) => s.unit === 'present')
   useUnitMetronome(rigSlug, unitHere && !demo, { bluetooth })
-  const settling =
-    auth === 'in' &&
-    !demo &&
-    (link.link === 'joining' || (link.link === 'connected' && !caps && !readFailed))
+  /*
+   * Out looking and not yet answered: the computer (over Bluetooth (beta),
+   * the adapter). 'joining' and 'no-answer' are one stretch of looking, not
+   * two. A relay channel that drops a few seconds after every join swaps
+   * between them every six and a half seconds while the computer stays
+   * silent (his log, 12 October 2026), and nothing on screen may follow it.
+   */
+  const looking = link.link === 'joining' || link.link === 'no-answer'
+  /*
+   * ONLY WHILE THERE IS NO RIG (`!caps`), over the computer. Before this, a
+   * link that went to 'joining' put the waiting screen over a rig already on
+   * screen, mid-song: the scenes, the pedals and Tap swapped out for a
+   * spinner, and back, at every drop — every return from sleep on Android
+   * among them. Once the unit has said what it is, the play screen stays, the
+   * top bar says the link is down, and after fifteen seconds the advice
+   * floats over it (`lost`, on Stage below).
+   *
+   * OVER BLUETOOTH (BETA) A LOST ADAPTER STILL BRINGS IT BACK, rig or no rig,
+   * as it always has. Its link does not flip — it says 'joining' until the
+   * adapter is there again — and the waiting screen is where its own help
+   * is: "Use the computer instead" from the first second, then what to check
+   * on the phone and the adapter, Look for the adapter again and the
+   * Bluetooth (beta) page. The card over the play screen has none of that.
+   */
+  const settling = auth === 'in' && !demo && ((looking && (!caps || bluetooth)) || (link.link === 'connected' && !caps && !readFailed))
+  /*
+   * THE FIFTEEN SECONDS, counted from when this stretch of looking began —
+   * not from the last change of link.link, which during the flip was never
+   * more than five seconds ago. A stretch ends when the computer answers, or
+   * on signing out or going into the demo (the first argument), and a new
+   * one starts when Bluetooth goes on or off (the second).
+   *
+   * NOT AGAIN at Look for the computer again. That took the advice and its
+   * Troubleshooting away for fifteen seconds after a tap that, with the
+   * computer still asleep, changed nothing: the help he was reading gone,
+   * and back only if he stood there long enough. The button asks at once
+   * (probeNow), and if the computer answers the advice goes because the
+   * looking is over.
+   */
+  const lookedLong = useLookedLong(auth === 'in' && !demo && looking, bluetooth ? 'adapter' : 'computer')
+  /*
+   * And put away with its ✕ on the play screen until the computer has
+   * answered again. Kept up here, with the clock, rather than in Stage: a
+   * look at Setlists or Settings takes Stage off the screen, and the card
+   * came straight back with it.
+   */
+  const [lostAway, setLostAway] = useState(false)
+  useEffect(() => {
+    if (!lookedLong) setLostAway(false)
+  }, [lookedLong])
+  /*
+   * THE LINK AS THE TOP BAR AND SETUP SAY IT. The flip under the waiting
+   * screen was in the corner too: amber CONNECTING for a second and a half,
+   * red DISCONNECTED for five, for minutes, with Try now coming and going
+   * under it, and read out again each time to anybody using TalkBack or
+   * VoiceOver. Once this stretch of looking has gone unanswered it stays
+   * unanswered until the computer is back (useHeldLink, below).
+   */
+  const shownLink = useHeldLink(link, looking, bluetooth ? 'adapter' : 'computer')
+  /* Whether the stage is already saying the computer is on another account
+     (WrongAccount): then "make sure the computer is awake" would be the wrong
+     advice, and Waking keeps the same order. */
+  const [elsewhereSaid, setElsewhereSaid] = useState(false)
 
   /*
    * THE BAR AND THE RED NOTE, TOLD THE SAME NEWS.
@@ -940,7 +1008,7 @@ export default function App() {
               <Press label="Viewing as a new customer · tap to stop" tone="signal" on onPress={() => poseAsNewCustomer(false)} />
             ) : null}
             <TopBar
-              link={link}
+              link={shownLink}
               onOpenSettings={() => openSettings()}
               onUnlock={() => setBuying(true)}
               onOpenUnit={() => (demo ? setPickUnit(true) : link.hosts?.length > 1 ? setPickLive(true) : openSettings('link'))}
@@ -977,6 +1045,7 @@ export default function App() {
               active={auth === 'in' && !demo && !settling && screen === 'stage' && link.link !== 'connected' && !bluetooth}
               onSwitch={() => openSettings('link')}
               onTroubleshoot={openConnectFix}
+              onSaying={setElsewhereSaid}
             />
             {/*
               The bar stays up while this waits, which is what makes the wait
@@ -1002,10 +1071,12 @@ export default function App() {
             {settling && screen === 'stage' ? (
               <Waking
                 link={link}
+                long={lookedLong}
                 onRetry={probeNow}
                 onSwitch={() => openSettings('link')}
                 onTroubleshoot={openConnectFix}
                 onBluetooth={() => openSettings('bluetooth')}
+                onSetlists={() => setScreen('setlists')}
               />
             ) : screen === 'presets' ? (
               <Presets onBack={() => setScreen('stage')} />
@@ -1059,7 +1130,8 @@ export default function App() {
                 onUnlock={() => setBuying(true)}
                 onSignIn={toSignIn}
                 onMakeAccount={toMakeAccount}
-                link={link.link}
+                /* As the top bar says it, so the page under it does not flip either (useHeldLink). */
+                link={shownLink.link}
                 macName={link.macName}
                 hostVersion={link.hostVersion}
                 onBack={() => setScreen('stage')}
@@ -1174,6 +1246,19 @@ export default function App() {
                 }
                 onUnlock={() => setBuying(true)}
                 onAccount={toMakeAccount}
+                /*
+                 * THE COMPUTER GONE FOR FIFTEEN SECONDS WITH A RIG ON SCREEN:
+                 * the waiting screen's advice and its two buttons, floated
+                 * over the play screen the way its faults are, so nothing
+                 * under a thumb moves. Not over Bluetooth (beta), where a
+                 * lost adapter brings the waiting screen back over the rig
+                 * with its own words (`settling`, above), and not while the
+                 * stage is already saying the computer is on another account.
+                 */
+                lost={lookedLong && !bluetooth && !elsewhereSaid}
+                lostAway={lostAway}
+                onPutAway={() => setLostAway(true)}
+                onLookAgain={probeNow}
               />
             )}
             </EdgeBack>
@@ -1213,16 +1298,98 @@ const ofCaps = (s) => s.capabilities
 const ofError = (s) => s.error
 
 /**
+ * The link as the top bar and Setup say it, through a stretch of looking.
+ *
+ * The same as the link, except at one point: once this stretch of looking
+ * has heard nothing back ('no-answer'), the rejoins in between say so too,
+ * rather than amber CONNECTING for a second and a half before the next red
+ * DISCONNECTED. His log on 12 October 2026 swung between the two every six
+ * and a half seconds for minutes, with the computer asleep the whole time.
+ *
+ * `looking` going false ends it: the computer answered, or the app is
+ * signed out, in the demo, or between links. A new `what` — the computer or
+ * the adapter — starts again from nothing, so a computer that did not
+ * answer is never held against an adapter being found. Over Bluetooth
+ * (beta) there is no 'no-answer' to hold.
+ */
+function useHeldLink(link, looking, what) {
+  const [missed, setMissed] = useState(null)
+  useEffect(() => {
+    if (!looking) setMissed(null)
+    else if (link.link === 'no-answer') setMissed(what)
+  }, [looking, link.link, what])
+  return looking && link.link === 'joining' && missed === what ? { ...link, link: 'no-answer' } : link
+}
+
+/* How long "Finding your computer…" stands on its own before it says more. */
+const WAKING_LONG_MS = 15000
+
+/**
+ * Whether the link has been out looking for WAKING_LONG_MS with no answer:
+ * the waiting screen's advice, and the same advice over the play screen.
+ *
+ * HELD UP HERE, ABOVE BOTH SCREENS, rather than inside Waking. Inside, it was
+ * started again at every change of link.link, which during the flip was
+ * every few seconds, and Waking itself was taken off the screen at every
+ * 'no-answer', which threw the clock away with it. Fifteen seconds never
+ * came, so the advice never showed.
+ *
+ * `looking` going false ends the stretch: the computer answered, or the app
+ * is signed out, in the demo, or between links. A new `again` starts a new
+ * one: what is looked for changing, the computer or the adapter.
+ *
+ * TIME AWAY FROM THE SCREEN DOES NOT COUNT. A phone put to sleep holds its
+ * timers, and Android drops the connection as it goes, so coming back after
+ * a minute in a pocket would fire the clock at once and float the advice over
+ * a play screen that reconnects a second later. Coming back starts the
+ * fifteen seconds again, unless the advice was already up when the phone
+ * went away: that was for a reason a pocket has not fixed.
+ *
+ * AWAY MEANS 'background', NOT iOS's 'inactive'. That is Control Center or
+ * Notification Center pulled down, the app switcher's first peek, a system
+ * alert: the app keeps running under all of them. Counted as away, a swipe
+ * down to check the wifi — the natural thing to do when the phone cannot
+ * find the computer — started the fifteen seconds again, and took away
+ * advice that had come up underneath while it was open.
+ */
+function useLookedLong(looking, again) {
+  const [long, setLong] = useState(false)
+  const shown = useRef(false)
+  useEffect(() => {
+    shown.current = long
+  }, [long])
+  const [back, setBack] = useState(0)
+  useEffect(() => {
+    let away = false
+    let shownWhenLeft = false
+    const sub = AppState.addEventListener('change', (status) => {
+      if (status === 'background') {
+        if (!away) shownWhenLeft = shown.current
+        away = true
+      } else if (status === 'active') {
+        if (away && !shownWhenLeft) setBack((n) => n + 1)
+        away = false
+      }
+    })
+    return () => sub.remove()
+  }, [])
+  useEffect(() => {
+    setLong(false)
+    if (!looking) return undefined
+    const t = setTimeout(() => setLong(true), WAKING_LONG_MS)
+    return () => clearTimeout(t)
+  }, [looking, again, back])
+  return long
+}
+
+/**
  * The few seconds before there is a rig to show, said out loud.
  *
  * One line, in the words of the thing actually happening, because "Loading…"
  * over a spinner tells somebody standing in front of a silent rig nothing they
  * can act on — and what they can act on is usually the Mac.
  */
-/* How long "Finding your computer…" stands on its own before it says more. */
-const WAKING_LONG_MS = 15000
-
-function Waking({ link, onRetry, onSwitch, onTroubleshoot, onBluetooth }) {
+function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, onSetlists }) {
   /*
    * OVER BLUETOOTH (BETA) THERE IS NO COMPUTER TO FIND. What is being looked
    * for is the adapter on the unit — the link names it, so the line below
@@ -1264,13 +1431,13 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot, onBluetooth }) {
    *
    * That night the phone was signed in as one account and the computer as
    * another, and the line above names the one this phone is using.
+   *
+   * `long` is App's clock (useLookedLong), not this screen's own. This one
+   * restarted at every change of link.link and died with the screen at every
+   * 'no-answer', so on 12 October 2026 the fifteen seconds never came: "App
+   * keeps jumping back-and-forth from this page every few seconds instead of
+   * offering suggestions on what to check".
    */
-  const [long, setLong] = useState(false)
-  useEffect(() => {
-    setLong(false)
-    const t = setTimeout(() => setLong(true), WAKING_LONG_MS)
-    return () => clearTimeout(t)
-  }, [link.link])
   /*
    * AND WHEN THE ACCOUNTS DON'T MATCH, IT SAYS SO. "I was signed into the
    * wrong account, but it didn't notify me at all… Please be clear which
@@ -1279,8 +1446,14 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot, onBluetooth }) {
    * hears this phone, and until now that looked exactly like a computer that
    * was off. The account server can tell: a computer on this wifi, signed
    * into a different account, is a yes (lib/useComputerElsewhere.js).
+   *
+   * Asked from the first second of looking, not when the advice comes up.
+   * Asked then, the advice opened on "make sure the computer is awake" and
+   * turned into the account warning a moment later when the answer came,
+   * and did it again after every trip to Settings and back, because the
+   * answer went with the screen. The note itself still waits for `long`.
    */
-  const elsewhere = useComputerElsewhere(long && link.link !== 'connected' && !bluetooth)
+  const elsewhere = useComputerElsewhere(link.link !== 'connected' && !bluetooth)
   return (
     <View
       accessibilityLiveRegion="polite"
@@ -1354,6 +1527,13 @@ function Waking({ link, onRetry, onSwitch, onTroubleshoot, onBluetooth }) {
           {/* "Open the troubleshooting if it doesn't connect" — the browser's
               connecting screen has the same button. */}
           {onTroubleshoot && !bluetooth ? <Press label="Troubleshooting" onPress={onTroubleshoot} /> : null}
+          {/*
+            SETLISTS, which never needed the rig. Their only door is on the
+            play screen, and this screen stands in front of it for as long as
+            nothing answers, so tonight's running order could not be fixed on
+            the sofa with the computer shut. Back from them is back here.
+          */}
+          {onSetlists ? <Press label="Setlists" sub="These work with nothing connected" onPress={onSetlists} /> : null}
         </View>
       ) : null}
     </View>

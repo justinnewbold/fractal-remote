@@ -368,6 +368,14 @@ export const AREAS = [
         web: 'Try again',
         phone: null,
         why: 'only in the browser — nobody has decided whether the phone should offer it'
+      },
+      {
+        /* 1.87.17: "App keeps jumping back-and-forth from this page every
+           few seconds instead of offering suggestions on what to check." */
+        does: 'open Troubleshooting once the computer has been gone fifteen seconds with a rig on screen',
+        web: null,
+        phone: 'Troubleshooting',
+        why: 'the browser leaves its Play screen for its connecting screen once the computer has been gone ten seconds, and the Troubleshooting there is listed under getting connected; the phone keeps its Play screen and floats the waiting screen’s advice and buttons over it'
       }
     ]
   },

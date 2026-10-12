@@ -483,10 +483,18 @@ async function joinChannel() {
       reject(new Error('Finding your computer timed out.'))
     }, 12000)
 
-    chan.subscribe((status) => {
+    /*
+     * AND WHY IT DROPPED, IN THE LOG. On 12 October 2026 a phone's channel
+     * dropped about five seconds after every rejoin, for minutes, and the log
+     * could only show the link flipping: this callback threw away the reason
+     * realtime-js hands it as the second argument. A drop and a rejoin are now
+     * both written down, with that reason, so the next log names the cause.
+     */
+    chan.subscribe((status, err) => {
       if (session?.chan !== chan) return // a channel we've already replaced
 
       if (status === 'SUBSCRIBED') {
+        if (settled && channel !== chan) logDebug('relay', 'channel back')
         channel = chan
         chan.track({ at: Date.now() }).catch(() => {})
         if (!settled) {
@@ -499,6 +507,7 @@ async function joinChannel() {
       }
 
       if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        if (channel === chan || !settled) logDebug('relay', `channel ${status.toLowerCase().replace('_', ' ')}`, err?.message)
         if (channel === chan) {
           channel = null
           seen(false)

@@ -4756,7 +4756,10 @@ export function run(test) {
     assert.match(waking, /trouble === 'restricted' \? `\$\{RESTRICTED_WORDS\}\.`/, 'the waiting screen does not say a blocked iPhone is blocked')
     assert.match(waking, /\{bluetooth && trouble === 'permission' \? \( <Press label="Open Settings" onPress=\{\(\) => Linking\.openSettings\(\)\.catch\(\(\) => \{\}\)\} \/> \) : null\}/, 'the waiting screen says Tap Open Settings and has no such button')
     assert.equal((waking.match(/label="Open Settings"/g) || []).length, 1)
-    assert.match(flat('mobile/App.js'), /import \{ ActivityIndicator, Alert, Appearance, BackHandler, Linking, Text, View \} from 'react-native'/)
+    /* Changed on purpose, 12 October 2026 (1.87.17): AppState joined the line, for the
+       waiting screen's fifteen-second clock, which does not count time away from the screen
+       (useLookedLong). What this holds is Linking, for Open Settings, and that is unchanged. */
+    assert.match(flat('mobile/App.js'), /import \{ ActivityIndicator, Alert, AppState, Appearance, BackHandler, Linking, Text, View \} from 'react-native'/)
   })
 
   test('the iPhone module answers whether Bluetooth is allowed without asking, and the build links CoreBluetooth for it', () => {
