@@ -94,6 +94,15 @@
       .hint { margin: 12px 0 0; font-size: 14px; color: var(--silk-dim); }
       .hint strong { color: var(--silk); font-weight: 600; }
       .bad { color: var(--fault); }
+      /* `.card p` outranks the two rules above, so inside a card they are
+         said again at the card's own weight. */
+      .card .hint { margin: 12px 0 0; }
+      .card .bad { color: var(--fault); }
+      /* The Pi's check, above the Pi's buttons rather than under them. */
+      .card .check { margin: 0 0 14px; }
+      .check strong { color: var(--silk); font-weight: 600; }
+      /* A file name is one long word; let it break on a phone. */
+      .hint code, .check code { overflow-wrap: anywhere; }
       ul { padding-left: 20px; margin: 0; }
       li { margin: 7px 0; color: var(--silk-dim); }
       li strong { color: var(--silk); font-weight: 600; }
@@ -204,6 +213,53 @@
         }
       }
 
+      /*
+       * A Raspberry Pi or an ordinary PC, where the browser will say — and as
+       * a HINT, like the Mac one above, never as a decision.
+       *
+       * A customer on a Pi 3 took the only Linux button there was, the PC
+       * AppImage. A Pi cannot run that file; the file manager handed it to
+       * the shell instead and an empty, oddly named file appeared next to it.
+       * The user agent could not have warned him: Chromium (the Pi's own
+       * browser) and Firefox both say "X11; Linux x86_64" on every Linux
+       * computer whatever is inside it. Firefox and Safari have no answer at
+       * all, which is why the Raspberry Pi files are on the card for
+       * everybody and only their ORDER moves.
+       *
+       * Chromium has a better answer, "arm" or "x86" and "64" or "32", and
+       * only half of it is the answer wanted here. The "64" or "32" is the
+       * KERNEL's, not the system's: on Linux, Chromium reads it off
+       * uname().machine (GetCpuBitness in
+       * components/embedder_support/user_agent_utils.cc). A Pi 4, 400, 5 or
+       * Compute Module 4 starts a 64-bit kernel by default even under the
+       * 32-bit Raspberry Pi OS, so a 32-bit system on one of those says "64"
+       * too. A "32" is firm, because a 32-bit kernel only ever runs a 32-bit
+       * system; a "64" is not. So a "64" comes back as plain 'arm', ARM of
+       * either kind, and the card puts the dpkg check right above the Pi's
+       * button for it.
+       *
+       * It resolves, never rejects, and the page is drawn before it is asked:
+       * a browser that is slow to say, or refuses, leaves the page as it was.
+       * 'arm32' (a 32-bit system for certain), 'arm' (ARM, either kind) or
+       * null.
+       */
+      function armGuess() {
+        try {
+          var ua = navigator.userAgentData
+          if (!ua || typeof ua.getHighEntropyValues !== 'function') return Promise.resolve(null)
+          return Promise.resolve(ua.getHighEntropyValues(['architecture', 'bitness']))
+            .then(function (v) {
+              if (!v || v.architecture !== 'arm') return null
+              return v.bitness === '32' ? 'arm32' : 'arm'
+            })
+            .catch(function () {
+              return null
+            })
+        } catch (e) {
+          return Promise.resolve(null)
+        }
+      }
+
       function find(assets, test) {
         for (var i = 0; i < assets.length; i++) if (test(assets[i].name)) return assets[i]
         return null
@@ -217,13 +273,16 @@
         )
       }
 
+      /* `hint` is one sentence, or a list of short paragraphs. */
       function card(id, title, blurb, body, hint) {
         return (
           '<div class="card" id="card-' + id + '">' +
           '<h3>' + title + '</h3>' +
           '<p>' + blurb + '</p>' +
           body +
-          (hint ? '<p class="hint">' + hint + '</p>' : '') +
+          [].concat(hint || []).map(function (h) {
+            return '<p class="hint">' + h + '</p>'
+          }).join('') +
           '</div>'
         )
       }
@@ -254,8 +313,13 @@
           var macArm = find(a, function (n) { return /-arm64\.dmg$/i.test(n) })
           var macIntel = find(a, function (n) { return /\.dmg$/i.test(n) && !/arm64/i.test(n) })
           var win = find(a, function (n) { return /Setup-.*\.exe$/i.test(n) })
-          var linux = find(a, function (n) { return /\.AppImage$/i.test(n) && !/arm64/i.test(n) })
-          var deb = find(a, function (n) { return /_amd64\.deb$/i.test(n) })
+          /* The PC files refuse anything with "arm" in its name, not only
+             "arm64", so no ARM file that is ever added can be offered to a
+             PC under the PC's label. */
+          var linux = find(a, function (n) { return /\.AppImage$/i.test(n) && !/arm/i.test(n) })
+          var deb = find(a, function (n) { return /_amd64\.deb$/i.test(n) && !/arm/i.test(n) })
+          var linuxArm = find(a, function (n) { return /-arm64\.AppImage$/i.test(n) })
+          var debArm = find(a, function (n) { return /_arm64\.deb$/i.test(n) })
 
           var built = rel.published_at ? new Date(rel.published_at) : null
           say(
@@ -291,20 +355,99 @@
             id: 'windows',
             html: card('windows', 'Windows', 'Windows 10 or 11, 64-bit.', button(win, 'Download for Windows'))
           })
-          cards.push({
-            id: 'linux',
-            html: card(
+          /*
+           * Linux: the PC pair and the Raspberry Pi pair, both, always.
+           *
+           * `arch` is armGuess's answer. With none, which is every Firefox,
+           * the PC pair leads and the Pi pair sits labelled underneath it,
+           * with the Pi's check among the hints. When Chromium says ARM, the
+           * Pi pair goes on top with that check right above it, because
+           * 'arm' can still be the 32-bit Raspberry Pi OS (see armGuess).
+           * When it says a 32-bit ARM system for certain, the card says first
+           * that no file here runs on it and how to change that, and still
+           * offers the files for afterwards, none of them in green: the big
+           * button is the click that fails.
+           *
+           * The AppImage leads each pair because it updates itself and the
+           * .deb does not: a .deb install falls behind the phone at the next
+           * release, and the phone says so in red.
+           */
+          function linuxCard(arch) {
+            var lead = arch === 'arm'
+            var pc =
+              button(linux, (arch ? '' : 'Download for ') + 'Linux PC (Intel or AMD) &mdash; AppImage', !!arch) +
+              button(deb, 'Linux PC &mdash; Debian / Ubuntu package (.deb)', true)
+            var pi =
+              button(linuxArm, (lead ? 'Download for ' : '') + 'Raspberry Pi and other ARM &mdash; AppImage', !lead) +
+              button(debArm, 'Raspberry Pi and other ARM &mdash; .deb package', true)
+            var only32 =
+              arch === 'arm32'
+                ? '<p class="bad"><strong>This looks like a Raspberry Pi running the 32-bit Raspberry Pi OS, ' +
+                  'and Fractal Remote needs the 64-bit one.</strong> ' +
+                  'Use <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> to put ' +
+                  'Raspberry Pi OS (64-bit) on the Pi&rsquo;s memory card. That wipes the card, so copy off ' +
+                  'anything you want to keep first. A Pi 3, 4, 5 or Zero 2 W can run it.</p>'
+                : ''
+            var check = lead
+              ? '<p class="check"><strong>Before you download, check the Pi can run it.</strong> Open Terminal ' +
+                'and type <code>dpkg --print-architecture</code>. <strong>arm64</strong> means take the ' +
+                'Raspberry Pi AppImage below. <strong>armhf</strong> means the Pi is running the 32-bit ' +
+                'Raspberry Pi OS, which none of these files run on: put Raspberry Pi OS (64-bit) on it with ' +
+                '<a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> first. That wipes the ' +
+                'memory card, so copy off anything you want to keep. A Pi 3, 4, 5 or Zero 2 W can run it.</p>'
+              : ''
+            /* A command with the file's name in it. One name once the browser
+               has said ARM; both when it has said nothing, so a Pi owner on
+               Firefox is not handed the PC file's name to type. */
+            var one = arch ? linuxArm || linux : null
+            function typed(cmd) {
+              if (one) return '<code>' + cmd + one.name + '</code>'
+              if (linux && linuxArm) {
+                return '<code>' + cmd + linux.name + '</code> (on a Raspberry Pi, <code>' + cmd + linuxArm.name + '</code>)'
+              }
+              var f = linux || linuxArm
+              return '<code>' + cmd + (f ? f.name : 'the-file.AppImage') + '</code>'
+            }
+            return card(
               'linux',
               'Linux',
               'Any 64-bit desktop.',
-              button(linux, 'Download for Linux &mdash; AppImage') +
-                button(deb, 'Debian / Ubuntu package (.deb)', true),
-              'An AppImage runs as it is &mdash; mark it executable and open it. ' +
-                'Other builds, including ARM, are on the <a href="' + ALL + '">releases page</a>.'
+              only32 + check + (arch ? pi + pc : pc + pi),
+              [
+                '<strong>To open the AppImage</strong>, first let it run as a program: right-click it, ' +
+                  'choose Properties, and on the Permissions tab set Execute to Anyone (on other computers, ' +
+                  'tick the box that lets it run as a program). Or in Terminal, type <code>cd Downloads</code>, ' +
+                  'then ' + typed('chmod +x ') + '. Then double-click it. ' +
+                  'The AppImage keeps itself up to date; the .deb does not.'
+              ]
+                .concat(
+                  arch
+                    ? []
+                    : [
+                        '<strong>On a Raspberry Pi</strong>, take the Raspberry Pi AppImage (its file name has ' +
+                          'arm64 in it). To check the Pi can run it, open Terminal and type ' +
+                          '<code>dpkg --print-architecture</code>. <strong>arm64</strong> means you are set. ' +
+                          '<strong>armhf</strong> means it is running the 32-bit Raspberry Pi OS, which none of ' +
+                          'these files run on: put Raspberry Pi OS (64-bit) on it with Raspberry Pi Imager. ' +
+                          'That wipes the memory card, so copy off anything you want to keep first. A Pi 3, 4, 5 ' +
+                          'or Zero 2 W can run it.'
+                      ]
+                )
+                .concat([
+                  '<strong>If double-clicking does nothing</strong>, open Terminal and type ' +
+                    '<code>cd Downloads</code>, then ' + typed('./') + ', and it says what is wrong. ' +
+                    'On a trimmed-down system, such as Raspberry Pi OS Lite with a desktop added, first run ' +
+                    '<code>sudo apt install libfuse2t64 zlib1g-dev</code> (on the older Bookworm release, ' +
+                    '<code>libfuse2</code> in place of <code>libfuse2t64</code>).'
+                ])
             )
-          })
+          }
+          cards.push({ id: 'linux', html: linuxCard(null) })
 
           /* Yours first, and marked. The rest stay, in their usual order. */
+          function marked(id, html) {
+            return id === me ? html.replace('class="card"', 'class="card yours"') : html
+          }
           var order = cards
             .slice()
             .sort(function (x, y) {
@@ -312,9 +455,17 @@
             })
           document.getElementById('downloads').innerHTML = order
             .map(function (c) {
-              return c.id === me ? c.html.replace('class="card"', 'class="card yours"') : c.html
+              return marked(c.id, c.html)
             })
             .join('')
+
+          /* Drawn first, then re-drawn if the browser says this is a Pi. */
+          if (me === 'linux') {
+            armGuess().then(function (arch) {
+              var el = document.getElementById('card-linux')
+              if (arch && el) el.outerHTML = marked('linux', linuxCard(arch))
+            })
+          }
 
           /* A phone reading this page wants the phone app, and an iPhone's is
              on the App Store — not the Android page it used to be sent to. */
