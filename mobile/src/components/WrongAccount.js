@@ -20,8 +20,19 @@ import Press from './Press'
  * DISCONNECTED in the corner and nothing saying why. The same question and the
  * same sentence as Waking, asked while the link is down.
  */
-export default function WrongAccount({ active, onSwitch, onTroubleshoot }) {
+export default function WrongAccount({ active, onSwitch, onTroubleshoot, onSaying }) {
   const elsewhere = useComputerElsewhere(active)
+  /*
+   * And App is told whether this is up, so the advice that floats over the
+   * play screen once the computer has been gone fifteen seconds ("make sure
+   * the computer is awake") does not contradict it. Waking puts the account
+   * first in the same way.
+   */
+  const saying = Boolean(active && elsewhere)
+  useEffect(() => {
+    onSaying?.(saying)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saying])
   const [email, setEmail] = useState(null)
   useEffect(() => {
     if (!elsewhere) return undefined
