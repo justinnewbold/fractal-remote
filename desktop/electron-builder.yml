@@ -168,8 +168,12 @@ nsis:
 # APPIMAGE FIRST because it is the format with no install step: download,
 # make it executable, run it. It works on every distribution rather than
 # asking which one somebody has, and — the part that matters here —
-# electron-updater only knows how to update AppImage on Linux. A .deb cannot
-# update itself, which is why AppImage is the one the update feed points at.
+# the AppImage is the Linux format that updates itself with no password.
+# (This said a .deb cannot update itself. It can: electron-updater 6's
+# DebUpdater reads resources/package-type, which electron-builder writes into
+# the .deb, and at a clean quit runs dpkg -i through pkexec or sudo. So it
+# updates only when somebody can give it a password, which is why the
+# AppImage is the one to recommend.)
 #
 # The .deb is there for the machine this is most likely to end up on. A box
 # that sits in a rack with a USB cable in it and stays on is Debian or Ubuntu

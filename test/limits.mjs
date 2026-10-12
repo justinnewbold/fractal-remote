@@ -543,8 +543,11 @@ export function run(test) {
 
     /*
      * BOTH FORMATS, AND THEY ARE NOT INTERCHANGEABLE. AppImage is the one that
-     * runs anywhere without an install step, and it is the ONLY Linux format
-     * electron-updater knows how to update — a .deb can never replace itself.
+     * runs anywhere without an install step, and the one that updates itself
+     * with no password. (This said a .deb can never replace itself. Not so:
+     * electron-updater 6's DebUpdater reads resources/package-type and runs
+     * dpkg -i through pkexec or sudo at a clean quit — so it updates only
+     * when somebody can give it a password, which is still the difference.)
      * The .deb is for the box in a rack that stays on, where `apt install
      * ./file.deb` is a thing somebody already knows. Drop either and a real
      * person loses something.
@@ -1387,6 +1390,103 @@ export function run(test) {
         `${source} is routed to ${destination}, which does not exist in public/`
       )
     }
+  })
+
+  /*
+   * A RASPBERRY PI IS OFFERED ITS OWN FILE, AND A PC NEVER IS.
+   *
+   * A customer on a Pi 3 took the page's only Linux button, the PC AppImage.
+   * A Pi cannot run it: the file manager handed it to the shell, and an empty,
+   * oddly named file appeared next to it. The Pi build was there all along,
+   * behind a link to the releases page.
+   *
+   * The user agent cannot tell the two apart — Chromium and Firefox both say
+   * "X11; Linux x86_64" on every Linux computer — so the Pi pair is on the
+   * card for everybody, and only Chromium's own answer moves it to the top.
+   *
+   * And that answer is only half an answer. Chromium's "64" or "32" is the
+   * KERNEL's, read off uname, and a Pi 4, 400, 5 or CM4 starts a 64-bit
+   * kernel even under the 32-bit Raspberry Pi OS. So "32" is firm and "64"
+   * is not: a "64" Pi still gets the dpkg check, above its button.
+   */
+  test('the download page offers a Raspberry Pi the file it can run', async () => {
+    const page = read('public/downloads.html')
+    const code = page.slice(page.lastIndexOf('<script>'))
+
+    /* Always offered, through the same button as every other file. */
+    assert.match(code, /find\(a, function \(n\) \{ return \/-arm64\\\.AppImage\$\/i\.test\(n\) \}\)/, 'the Raspberry Pi AppImage is not looked for')
+    assert.match(code, /find\(a, function \(n\) \{ return \/_arm64\\\.deb\$\/i\.test\(n\) \}\)/, 'the Raspberry Pi .deb is not looked for')
+    assert.match(code, /button\(linuxArm, [^\n]{0,40}'Raspberry Pi and other ARM &mdash; AppImage'/, 'the Pi AppImage has no button, or not a labelled one')
+    assert.match(code, /button\(debArm, [^\n]{0,40}'Raspberry Pi and other ARM/, 'the Pi .deb has no button, or not a labelled one')
+    /* Both orders carry both pairs: the guess moves them, never removes one. */
+    assert.match(code, /arch \? pi \+ pc : pc \+ pi/, 'one of the two orders leaves a pair out')
+
+    /* The PC files refuse anything named arm, not only arm64, so a future
+       ARM file can never be offered to a PC under the PC's label. */
+    assert.match(code, /var linux = find\(a, function \(n\) \{ return \/\\\.AppImage\$\/i\.test\(n\) && !\/arm\/i\.test\(n\) \}\)/, 'the PC AppImage could be an ARM file')
+    assert.match(code, /var deb = find\(a, function \(n\) \{ return \/_amd64\\\.deb\$\/i\.test\(n\) && !\/arm\/i\.test\(n\) \}\)/, 'the PC .deb could be an ARM file')
+
+    /* Asked of the browser inside a try, so a browser that refuses, or has
+       no answer, leaves the page drawn as it was. */
+    const guess = code.slice(code.indexOf('function armGuess()'), code.indexOf('function find('))
+    assert.ok(guess.length > 100, 'armGuess moved; this check reads it')
+    const ask = guess.indexOf("getHighEntropyValues(['architecture', 'bitness'])")
+    assert.ok(ask > -1, 'the page does not ask the browser for its processor and bitness')
+    assert.ok(guess.indexOf('try {') > -1 && guess.indexOf('try {') < ask && guess.indexOf('catch') > ask, 'the question is not inside a try')
+    assert.match(guess, /\.catch\(function \(\) \{\s*return null/, 'a refusal from the browser is not caught')
+    /* And the page is drawn before the answer, then re-drawn, only on Linux. */
+    assert.ok(
+      code.indexOf("innerHTML = order") < code.indexOf('armGuess().then'),
+      'the page waits for the browser before drawing anything'
+    )
+    assert.match(code, /if \(me === 'linux'\) \{\s*armGuess\(\)\.then/, 'the guess is asked off Linux too')
+    /* A 32-bit Pi is told what to change, because no file here runs on it. */
+    assert.match(code, /arch === 'arm32'[\s\S]{0,200}32-bit Raspberry Pi OS[\s\S]{0,300}Raspberry Pi Imager/, 'a 32-bit Pi is not told it needs the 64-bit Raspberry Pi OS')
+    /* Only a "32" is taken as settled. A "64" is a 64-bit kernel, which a
+       32-bit Pi 4 or Pi 5 has too, so it is plain ARM, not arm64... */
+    assert.match(guess, /return v\.bitness === '32' \? 'arm32' : 'arm'\s/, 'a 64-bit kernel is read as a 64-bit system again')
+    /* ...and that Pi is asked to check before the button, not after it. */
+    assert.match(code, /var check = lead\s*\?[\s\S]{0,200}dpkg --print-architecture[\s\S]{0,200}armhf/, 'a Pi the browser calls ARM is not asked to check its system')
+    assert.match(code, /only32 \+ check \+ \(arch \? pi \+ pc : pc \+ pi\)/, 'the check is not above the Pi buttons')
+    /* And with a 32-bit Pi, nothing on the card is the big green button. */
+    assert.match(code, /var lead = arch === 'arm'\n/, 'the Pi AppImage leads on a system it cannot run on')
+    assert.match(code, /button\(linuxArm, \(lead \? 'Download for ' : ''\) \+ 'Raspberry Pi and other ARM &mdash; AppImage', !lead\)/, 'the Pi AppImage leads on a system it cannot run on')
+
+    /* The steps, and the words a Pi owner needs to check for themselves. */
+    /*
+     * The .deb's line was "the .deb does not" update itself. Changed on
+     * purpose, 12 October 2026: electron-updater 6 has a DebUpdater, the
+     * shipped .deb carries resources/package-type=deb and the feed lists the
+     * .deb, so it does update, at a clean quit, through pkexec or sudo. What
+     * is true is that it may need a password, which is why the AppImage
+     * still leads.
+     */
+    assert.ok(!/the \.deb does not\./.test(code), 'the Linux card says the .deb never updates, and it does, with a password')
+    for (const word of ['dpkg --print-architecture', 'arm64', 'armhf', 'libfuse2t64', 'chmod +x', 'keeps itself up to date', 'may ask for your password']) {
+      assert.ok(code.includes(word), `the Linux card no longer says ${word}`)
+    }
+    /* The old hint sent ARM to the releases page, which is what hid it. */
+    assert.ok(!/including ARM, are on the/.test(code), 'the Linux card sends a Pi to the releases page again')
+
+    /*
+     * AND THE BROWSER'S Connect a computer SAYS THE SAME. Its Linux steps
+     * said the AppImage "works on any Linux" and that "a Raspberry Pi
+     * works", which is how the wrong file reads as the right one. Read off
+     * the data, not the source, because the source explains the old words.
+     */
+    const { wayById } = await import('../shared/ways-in.mjs')
+    const linux = wayById('linux-app')
+    const steps = linux.steps.join(' ')
+    assert.ok(!/works on any Linux|a Raspberry Pi works/i.test(steps), 'the Linux route promises a Pi more than it can run again')
+    for (const word of ['arm64', 'dpkg --print-architecture', 'armhf', '64-bit Raspberry Pi OS', 'libfuse2t64', 'keeps itself up to date', 'may ask for your password', 'dialout']) {
+      assert.ok(steps.includes(word), `the Linux route no longer says ${word}`)
+    }
+    /* Lite on its own has no desktop, and the app opens a window, so the two
+       packages are for a trimmed system that has one, on both. */
+    for (const [where, words] of [['the download page', code], ['the Linux route', steps]]) {
+      assert.ok(words.includes('Raspberry Pi OS Lite with a desktop added'), `${where} tells Lite alone that two packages are all it needs`)
+    }
+    assert.deepEqual(linux.links.map((l) => l.url), ['https://fractal.newbold.cloud/downloads'], 'the Linux route goes somewhere other than the download page, which is the one that labels the Pi files')
   })
 
   /*

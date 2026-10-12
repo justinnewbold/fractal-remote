@@ -16,8 +16,9 @@
  * for exactly that reason — so nobody is sent looking for a download that was
  * never built. What is left is the honest difference between them: the Mac app
  * is signed by Apple and opens without argument, the Windows app is not signed
- * yet and Windows says so in a blue box, and Linux gets an AppImage that runs
- * anywhere plus a .deb for the box in the rack.
+ * yet and Windows says so in a blue box, and Linux gets an AppImage that
+ * updates itself plus a .deb that does not, each for an ordinary PC and for a
+ * Raspberry Pi on the 64-bit Raspberry Pi OS.
  *
  * THE TWO TERMINAL ROUTES ARE GONE, and the reason is worth keeping because it
  * is the reason not to write them again.
@@ -119,16 +120,34 @@ export const WAYS = [
     title: 'The Linux app',
     status: 'ready',
     note: 'Ready now — and the one to use on a box that lives in the rack',
+    /*
+     * Changed on purpose, 12 October 2026. These said the AppImage "works on
+     * any Linux" and that "a Raspberry Pi works", and a customer on a Pi 3
+     * took the PC AppImage on the strength of it. A Pi cannot run that file,
+     * and there is no build at all for the 32-bit Raspberry Pi OS. What is
+     * true is narrower, and it is what these say now: the Raspberry Pi
+     * AppImage (arm64 in its name), on the 64-bit Raspberry Pi OS. The link
+     * goes to the download page rather than the GitHub list, because that
+     * page labels the Pi files and the list does not, and the steps name the
+     * files by those labels for the same reason.
+     *
+     * The packages are for a trimmed-down system WITH a desktop. Raspberry Pi
+     * OS Lite on its own has none, and the app opens a window: with the
+     * packages it gets one error further and stops at "Missing X server or
+     * $DISPLAY". Nothing here says Lite alone can run it until the app can
+     * run without a window.
+     */
     steps: [
-      'On the download page below, take either the file ending in .AppImage (works on any Linux) or the one ending in .deb (Debian, Ubuntu, Raspberry Pi OS).',
-      'For the AppImage: make it executable and run it. In a file manager that is Properties then a tick marked "allow executing"; in a terminal it is chmod +x on the file.',
-      'For the .deb: sudo apt install ./the-file.deb',
+      'On an ordinary PC, take the Linux PC AppImage from the download page below. The AppImage is the one that keeps itself up to date.',
+      'On a Raspberry Pi, take the Raspberry Pi AppImage (its file name has arm64 in it). It needs the 64-bit Raspberry Pi OS: open Terminal and type dpkg --print-architecture. If it says arm64, you are set. If it says armhf, the Pi is running the 32-bit one, which none of the files run on — put Raspberry Pi OS (64-bit) on it with Raspberry Pi Imager. That wipes the memory card, so copy off anything you want to keep first. A Pi 3, 4, 5 or Zero 2 W can run it.',
+      'On a trimmed-down system, such as Raspberry Pi OS Lite with a desktop added, install two packages first: sudo apt install libfuse2t64 zlib1g-dev (on the older Bookworm release, libfuse2 in place of libfuse2t64).',
+      "Make the AppImage executable and open it. Right-click it, choose Properties, and on the Permissions tab set Execute to Anyone (on other computers, tick the box that lets it run as a program). Or in Terminal, type cd Downloads, then chmod +x followed by the file's name. If double-clicking it does nothing, type ./ followed by the file's name in that same Terminal, and it says why.",
+      "Or take the .deb for your machine (Linux PC or Raspberry Pi) instead. In Terminal, type cd Downloads, then sudo apt install ./the-file.deb with the file's own name in place of the-file.deb. The .deb updates itself too, but only when you quit the app, and it may ask for your password, so the AppImage is the easier one. If the phone says the computer app needs updating, quit the app, or install the new .deb the same way.",
       'Plug your unit into the machine with its USB cable.',
       'You may need permission to use the USB port. If the app says it cannot find your unit, run: sudo usermod -aG dialout $USER — then log out and back in. Most distributions keep serial ports behind that group, and it catches nearly everybody once.',
-      'In the app, choose Set up phone remote and sign in, then sign in on the phone with that same account.',
-      'There are builds for both ordinary PCs and ARM machines, so a Raspberry Pi works — which makes a cheap box that sits in the rack and stays on a genuinely good answer.'
+      'In the app, choose Set up phone remote and sign in, then sign in on the phone with that same account.'
     ],
-    links: [{ label: 'Download Fractal Remote for Linux', url: RELEASES }]
+    links: [{ label: 'Download Fractal Remote for Linux', url: 'https://fractal.newbold.cloud/downloads' }]
   },
 ]
 
