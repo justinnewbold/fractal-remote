@@ -40,6 +40,37 @@ export async function wifiAddress() {
 }
 
 /**
+ * "Start when this computer turns on", as {supported, on}, or null outside
+ * the computer app (and in one too old to have the switch). Only the Linux
+ * app says supported; see login:get in desktop/main.js.
+ */
+export async function startAtBootState() {
+  const api = desktopBridge()
+  if (!api || typeof api.startAtBoot?.get !== 'function') return null
+  try {
+    return await api.startAtBoot.get()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Turn it on or off. Answers {supported, on} as it now stands — with `error`
+ * when the computer could not make the change — or null when it cannot be
+ * asked at all.
+ */
+export async function setStartAtBoot(on) {
+  const api = desktopBridge()
+  if (!api || typeof api.startAtBoot?.set !== 'function') return null
+  try {
+    return await api.startAtBoot.set(on === true)
+  } catch (err) {
+    // Not known what happened, so not guessed: the caller asks again.
+    return { error: err?.message || String(err) }
+  }
+}
+
+/**
  * Whether this browser is on a phone or a tablet rather than a computer.
  *
  * "Is there a way to detect if they're on a desktop versus a phone so that…

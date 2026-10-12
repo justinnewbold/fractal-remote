@@ -32,6 +32,12 @@ import { readFileSync as readSrc } from 'node:fs'
  * value the same way asks about the behaviour rather than about separators.
  */
 import { join as joinPath } from 'node:path'
+/*
+ * For running desktop/main.js itself, with Electron and the disk stood in for:
+ * see loadDesktopMain. Its start-up entry's paths are POSIX on every system.
+ */
+import { posix as posixPath } from 'node:path'
+import { createRequire } from 'node:module'
 import {
   patchSchemaValue,
   invalidateSchema,
@@ -8470,7 +8476,24 @@ console.log('\nthe computer app closes, updates, and reopens')
 
 test('closing the window quits the app, through the same shutdown as ⌘Q', () => {
   const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
-  assert.match(main, /app\.on\('window-all-closed', \(\) => \{\s*\n\s*if \(!quitting\) app\.quit\(\)/, 'closing the window leaves the app running with nothing on screen')
+  /*
+   * Changed on purpose, 12 October 2026 (1.87.16). This pinned the handler's
+   * first line as `if (!quitting) app.quit()`. A computer set up to run the
+   * app with nobody there — started with no window, or with "Start when this
+   * computer turns on" switched on — now keeps running in the tray when its
+   * window is closed, so the handler asks that first. Everywhere else closing
+   * still quits, and that is what this still holds: the quit is the last
+   * word, and the only thing that can stop it is stayInTray — which reads
+   * the switch afresh from the disk, so one turned off outside the app is
+   * off here too.
+   */
+  const handler = main.slice(main.indexOf("app.on('window-all-closed'"), main.indexOf("app.on('before-quit'"))
+  assert.match(
+    handler,
+    /app\.on\('window-all-closed', \(\) => \{\s*\n\s*if \(quitting\) return\s*\n\s*if \(stayInTray\(\)\) return\s*\n\s*app\.quit\(\)/,
+    'closing the window leaves the app running with nothing on screen'
+  )
+  assert.match(main, /const stayInTray = \(\) => startHidden \|\| startAtBootState\(\)\.on/, 'something other than a windowless start or the start-at-power-on switch keeps the app open')
   assert.ok(!/app\.on\('window-all-closed', \(\) => \{\}\)/.test(main), 'the window-close no-op is back')
 })
 
@@ -8563,7 +8586,16 @@ test('an install that did not take is said so, with why', async () => {
 
   // The note is written before the app starts shutting anything down.
   const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
-  const install = main.slice(main.indexOf("ipcMain.handle('updates:install'"), main.indexOf('updates.install()'))
+  /*
+   * Changed on purpose, 12 October 2026 (1.87.16). This read from the
+   * updates:install handler to the first `updates.install()`. The handler's
+   * body moved into installNow, so a windowless start installing just after
+   * power-on goes through exactly the same steps as the button, and this
+   * reads installNow itself — and checks the button still goes through it.
+   */
+  assert.match(main, /ipcMain\.handle\('updates:install', async \(\) => installNow\(\)\)/, 'the button no longer goes through the one install path')
+  const install = main.slice(main.indexOf('async function installNow('), main.indexOf('updates.install()'))
+  assert.ok(install.length > 0, 'there is no installNow to read')
   assert.match(install, /writeMarker\(\{ version: update\.version/, 'nothing records which version the install was meant to reach')
   assert.ok(install.indexOf('writeMarker(') < install.indexOf('await stopServing()'), 'the note is written after the server is already going down')
   // And read back on the way in, before any new download is started.
@@ -8602,7 +8634,21 @@ test('ready means macOS has the update, not merely that we downloaded it', async
   assert.equal(plain.at(-1).kind, 'ready')
   // main.js hands the native updater in.
   const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
-  assert.match(main, /const \{ autoUpdater: native \} = require\('electron'\)/, 'the native updater is never listened to')
+  /*
+   * Changed on purpose, 12 October 2026 (1.87.16). This pinned
+   * `const { autoUpdater: native } = require('electron')`, handed in on every
+   * computer. Electron's own updater is a Mac updater: on Linux and Windows
+   * it never says a word, so an update there stayed "Preparing…" for ever
+   * and Restart to update never appeared. It is handed in on the Mac only
+   * now, and everywhere else the library's own "downloaded" is the ready
+   * signal — the case just above.
+   */
+  assert.match(
+    main,
+    /const native = process\.platform === 'darwin' \? require\('electron'\)\.autoUpdater : null/,
+    'the native updater is not listened to on the Mac, or is handed in where it never answers'
+  )
+  assert.ok(!/const \{ autoUpdater: native \} = require\('electron'\)/.test(main), 'the Mac updater is handed in on every computer again')
   assert.match(main, /wireUpdates\(\{\s*\n\s*updater: autoUpdater,\s*\n\s*native,/, 'the native updater is not handed to wireUpdates')
 })
 
@@ -8706,6 +8752,712 @@ test('an app run from Downloads is offered a home in Applications first', () => 
   assert.match(ui, /state\?\.detail[\s\S]*?Technical details/, 'what macOS wrote about the failed install is not shown anywhere')
 })
 
+
+console.log('\nthe computer app starts when the computer turns on, with nobody there')
+/*
+ * "Make the computer app start by itself when the Pi turns on, and run with no
+ * window." A customer's Raspberry Pi 3 lives on his pedalboard with no screen.
+ * Raspberry Pi OS logs itself in to its desktop at power-on, and the desktop
+ * runs on a screen that is not there; what it starts from ~/.config/autostart
+ * starts with it. So the switch writes one file, and the app that file starts
+ * has to run with nobody at all in front of it.
+ */
+const autostart = await import('../desktop/lib/autostart.mjs')
+
+test('the start-up entry lives where Raspberry Pi OS and every other desktop look', () => {
+  assert.equal(autostart.entryPath({ env: {}, home: '/home/pi' }), '/home/pi/.config/autostart/fractal-remote.desktop')
+  assert.equal(
+    autostart.entryPath({ env: { XDG_CONFIG_HOME: '/srv/cfg' }, home: '/home/pi' }),
+    '/srv/cfg/autostart/fractal-remote.desktop',
+    'a computer that moved its settings folder is not followed'
+  )
+  // The XDG rule: a relative XDG_CONFIG_HOME is not one at all.
+  assert.equal(autostart.entryPath({ env: { XDG_CONFIG_HOME: 'cfg' }, home: '/home/pi' }), '/home/pi/.config/autostart/fractal-remote.desktop')
+})
+
+test('the entry starts the AppImage file, the installed .deb, and never a checkout', () => {
+  /* Inside an AppImage the running program is in a temporary mount that goes
+     with the process; the file somebody downloaded is in APPIMAGE. */
+  assert.equal(
+    autostart.launchTarget({ env: { APPIMAGE: '/home/pi/Fractal-Remote-1.87.16-arm64.AppImage' }, execPath: '/tmp/.mount_FracXy/fractal-remote-desktop', packaged: true }),
+    '/home/pi/Fractal-Remote-1.87.16-arm64.AppImage',
+    'the entry would start a program from a mount that is gone after the app quits'
+  )
+  assert.equal(
+    autostart.launchTarget({ env: {}, execPath: '/opt/Fractal Remote/fractal-remote-desktop', packaged: true }),
+    '/opt/Fractal Remote/fractal-remote-desktop'
+  )
+  assert.equal(autostart.launchTarget({ env: { APPIMAGE: '/x.AppImage' }, execPath: '/usr/bin/electron', packaged: false }), null, 'a checkout offers to start a bare Electron at power-on')
+  // Nothing the entry cannot carry, rather than an entry that is on and starts nothing.
+  assert.equal(autostart.launchTarget({ env: {}, execPath: 'relative/app', packaged: true }), null)
+  assert.equal(autostart.launchTarget({ env: {}, execPath: '/home/pi/bad\nname', packaged: true }), null)
+  assert.equal(autostart.launchTarget({ env: {}, execPath: '/home/pi/100%/app', packaged: true }), null, 'a path with % in it is written, and no desktop reads it back right')
+})
+
+test('the entry quotes the path the way the Desktop Entry spec and GLib both read it', () => {
+  // A space, as in the .deb's own install folder: quoted, nothing else.
+  assert.equal(autostart.execArg('/opt/Fractal Remote/fractal-remote-desktop'), '"/opt/Fractal Remote/fractal-remote-desktop"')
+  /*
+   * " ` $ and \\ each take a backslash inside the quotes, and then every
+   * backslash is doubled for the file's own string rule — so $ is \\\\$ in the
+   * file. GLib refuses a value holding \\$ outright, and Raspberry Pi OS reads
+   * the file with GLib.
+   */
+  assert.equal(autostart.execArg('/a$b'), '"/a\\\\$b"')
+  assert.equal(autostart.execArg('/a"b'), '"/a\\\\"b"')
+  assert.equal(autostart.execArg('/a`b'), '"/a\\\\`b"')
+  assert.equal(autostart.execArg('/a\\b'), '"/a\\\\\\\\b"')
+  // And a literal % is %%, as the spec says (which is why launchTarget refuses one).
+  assert.equal(autostart.execArg('/a%b'), '"/a%%b"')
+
+  const text = autostart.entryText('/opt/Fractal Remote/fractal-remote-desktop')
+  const lines = text.trim().split('\n')
+  assert.equal(lines[0], '[Desktop Entry]')
+  for (const want of [
+    'Type=Application',
+    'Name=Fractal Remote',
+    'Exec="/opt/Fractal Remote/fractal-remote-desktop" --hidden',
+    'Terminal=false',
+    'X-GNOME-Autostart-enabled=true'
+  ]) {
+    assert.ok(lines.includes(want), `the entry has no ${want}`)
+  }
+  assert.ok(lines.some((l) => /^Comment=\S/.test(l)), 'the entry says nothing about what it is')
+  /* Raspberry Pi OS calls its desktop by more than one name; a list naming the
+     wrong one is an entry that never runs. */
+  assert.ok(!/OnlyShowIn|NotShowIn/.test(text), 'the entry is limited to desktops by name')
+  assert.equal(autostart.entryText('relative/app'), null)
+})
+
+test('an entry already on disk is read back: whether it is ours, on, and what it starts', () => {
+  // Every awkward path survives the round trip.
+  for (const path of [
+    '/opt/Fractal Remote/fractal-remote-desktop',
+    '/home/pi/Fractal-Remote-1.87.16-arm64.AppImage',
+    '/home/a$b "c" `d` e\\f/x.AppImage'
+  ]) {
+    assert.deepEqual(autostart.readEntry(autostart.entryText(path)), { ours: true, on: true, target: path }, `${path} does not come back as itself`)
+  }
+  const ours = autostart.entryText('/opt/Fractal Remote/fractal-remote-desktop')
+  // Switched off by the desktop's own settings: still ours, not on.
+  assert.deepEqual(autostart.readEntry(ours + 'Hidden=true\n'), { ours: true, on: false, target: '/opt/Fractal Remote/fractal-remote-desktop' })
+  assert.equal(autostart.readEntry(ours.replace('X-GNOME-Autostart-enabled=true', 'X-GNOME-Autostart-enabled=false')).on, false)
+  // A menu entry somebody copied in — no --hidden — or another app's, is not ours.
+  assert.equal(autostart.readEntry(ours.replace(' --hidden', '')).ours, false, 'an entry that opens a window is taken for the start-up one')
+  assert.equal(autostart.readEntry(ours.replace('Name=Fractal Remote', 'Name=Something Else')).ours, false)
+  assert.deepEqual(autostart.readEntry(''), { ours: false, on: false, target: null })
+  // Comments and other groups do not count; field codes are not arguments.
+  assert.equal(
+    autostart.readEntry('# hi\n[Other]\nName=Fractal Remote\n[Desktop Entry]\nName=Fractal Remote\nExec=/usr/bin/fractal-remote-desktop --hidden %U\n').target,
+    '/usr/bin/fractal-remote-desktop'
+  )
+  assert.deepEqual(autostart.execArgs('"/opt/Fractal Remote/x" --hidden %U'), ['/opt/Fractal Remote/x', '--hidden'])
+})
+
+test('with nobody there, a stopped server is started again, sooner first and then once a minute', () => {
+  const waits = []
+  let failures = 0
+  for (let i = 0; i < 7; i++) {
+    const plan = autostart.restartPlan({ failures, ranForMs: 1000 })
+    waits.push(plan.wait)
+    failures = plan.failures
+  }
+  assert.deepEqual(waits, [2000, 5000, 15000, 30000, 60000, 60000, 60000])
+  // One that ran five minutes had settled: the count starts again.
+  assert.deepEqual(autostart.restartPlan({ failures: 6, ranForMs: 5 * 60 * 1000 }), { wait: 2000, failures: 1 })
+  assert.equal(autostart.PORT_RETRY_MS, 30 * 1000, 'a port somebody else holds is asked about at a different pace')
+})
+
+test('with nobody there, the phone remote is asked for again until it is on, and never against somebody turning it off', () => {
+  assert.equal(autostart.phoneRetryDelay({ on: true }, 0), null)
+  assert.equal(autostart.phoneRetryDelay({ on: false, reason: 'turned-off' }, 0), null, 'a remote somebody turned off is turned back on')
+  for (const reason of ['signed-out', 'failed', 'no-server']) {
+    assert.equal(autostart.phoneRetryDelay({ on: false, reason }, 0), 60 * 1000, `${reason} is not asked again`)
+  }
+  assert.equal(autostart.phoneRetryDelay({ on: false, reason: 'signed-out' }, 29 * 60 * 1000), 60 * 1000)
+  assert.equal(autostart.phoneRetryDelay({ on: false, reason: 'signed-out' }, 31 * 60 * 1000), 5 * 60 * 1000, 'after half an hour it is still asked every minute')
+})
+
+test('an update ready just after a windowless start installs then, and never on a .deb or later on', () => {
+  const appImage = { APPIMAGE: '/home/pi/Fractal-Remote-1.87.16-arm64.AppImage' }
+  assert.deepEqual(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 5000, platform: 'linux', env: appImage }), { install: true })
+  assert.equal(autostart.unattendedInstall({ hidden: false, sinceLaunchMs: 5000, platform: 'linux', env: appImage }).install, false, 'an app somebody opened restarts itself')
+  assert.equal(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 3 * 60 * 1000 + 1, platform: 'linux', env: appImage }).install, false, 'an app restarts itself mid-set')
+  /* The .deb's install asks for a password through pkexec or sudo, and the
+     updater waits on it without a deadline, with the server already down. */
+  const deb = autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 5000, platform: 'linux', env: {} })
+  assert.equal(deb.install, false, 'a .deb update is started where nobody can type its password')
+  assert.match(deb.why, /password/)
+  assert.equal(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 5000, platform: 'darwin', env: {} }).install, true)
+  assert.equal(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 5000, platform: 'win32', env: {} }).install, true)
+  assert.equal(autostart.RECHECK_MS, 12 * 60 * 60 * 1000)
+  // And the menu can be drawn before the updater has said anything at all.
+  assert.equal(updates.updateLine(null), null, 'the menu throws before the updater has spoken')
+})
+
+test('a look for updates that failed just after a windowless start is taken again, while an install could still follow', () => {
+  // A Pi often boots before its wifi; its one look at power-on lands in that gap.
+  assert.equal(autostart.updateRetryDelay({ hidden: true, kind: 'trouble', sinceLaunchMs: 20 * 1000 }), 30 * 1000)
+  assert.equal(autostart.updateRetryDelay({ hidden: true, kind: 'trouble', sinceLaunchMs: 3 * 60 * 1000 - 1 }), 30 * 1000)
+  assert.equal(autostart.updateRetryDelay({ hidden: true, kind: 'trouble', sinceLaunchMs: 3 * 60 * 1000 }), null, 'the retries outlast the install window, and the box looks every half minute for ever')
+  assert.equal(autostart.updateRetryDelay({ hidden: false, kind: 'trouble', sinceLaunchMs: 0 }), null, 'an app somebody opened looks again by itself')
+  for (const kind of ['current', 'found', 'downloading', 'ready', 'building', 'checking', null]) {
+    assert.equal(autostart.updateRetryDelay({ hidden: true, kind, sinceLaunchMs: 0 }), null, `${kind} is looked at again as if it had failed`)
+  }
+})
+
+test('the copy an update starts is told how to come back: set up for nobody or not, and with a window if somebody is looking', () => {
+  assert.equal(autostart.comeBackAs({ unattended: false, looking: true }), 'window')
+  assert.equal(autostart.comeBackAs({ unattended: false, looking: false }), 'window')
+  assert.equal(autostart.comeBackAs({ unattended: true, looking: false }), 'hidden')
+  /* Somebody plugged a screen into the pedalboard and pressed Restart to
+     update: the window comes back for them, and the box stays one nobody is
+     watching. */
+  assert.equal(autostart.comeBackAs({ unattended: true, looking: true }), 'window-unattended')
+})
+
+/*
+ * desktop/main.js, run for real — with Electron, the disk and the timers
+ * stood in for, and nothing started.
+ *
+ * Every other check on main.js reads it as text, which is right for its shape
+ * and blind to one kind of mistake: a name used where it cannot be seen.
+ * buildTray called phonesHearLine, a name only start() could see, from
+ * 7.295.0 on, and every text check passed while every menu drawn with the
+ * phone remote on threw. So these run the file's own functions. The launch
+ * itself (app.whenReady) never fires here, so nothing is spawned, served or
+ * written outside the stand-in disk; `run` evaluates code inside the file,
+ * where its own names are in scope, with `__given` as the one value handed in.
+ */
+function loadDesktopMain({
+  platform = 'linux',
+  argv = [],
+  env = {},
+  packaged = true,
+  execPath = '/opt/Fractal Remote/fractal-remote-desktop',
+  home = '/home/pi',
+  files = {}
+} = {}) {
+  const disk = new Map(Object.entries(files))
+  const dirs = new Set(['/', '/userdata'])
+  const addDirs = (path) => {
+    for (let d = path; !dirs.has(d); d = posixPath.dirname(d)) dirs.add(d)
+  }
+  addDirs(home)
+  for (const path of disk.keys()) addDirs(posixPath.dirname(path))
+  const missing = (path) => Object.assign(new Error(`ENOENT: no such file or directory, '${path}'`), { code: 'ENOENT' })
+  // A disk that refuses a file in a folder nobody made, as a real one does.
+  const fs = {
+    existsSync: (p) => disk.has(p) || dirs.has(p),
+    readFileSync: (p) => {
+      if (!disk.has(p)) throw missing(p)
+      return disk.get(p)
+    },
+    writeFileSync: (p, text) => {
+      if (!dirs.has(posixPath.dirname(p))) throw missing(p)
+      disk.set(p, String(text))
+    },
+    renameSync: (from, to) => {
+      if (!disk.has(from)) throw missing(from)
+      if (!dirs.has(posixPath.dirname(to))) throw missing(to)
+      disk.set(to, disk.get(from))
+      disk.delete(from)
+    },
+    unlinkSync: (p) => {
+      if (!disk.delete(p)) throw missing(p)
+    },
+    mkdirSync: (p, options) => {
+      if (!options?.recursive && !dirs.has(posixPath.dirname(p))) throw missing(p)
+      addDirs(p)
+    }
+  }
+
+  const events = {}
+  const menus = []
+  const windows = []
+  const dialogs = []
+  const exits = []
+  const logs = []
+  const timers = []
+  class BrowserWindow {
+    constructor(options) {
+      this.options = options
+      this.urls = []
+      this.visible = true
+      this.webContents = { on() {}, send() {}, getURL: () => this.urls.at(-1) || '' }
+      windows.push(this)
+    }
+    loadURL(url) {
+      this.urls.push(url)
+    }
+    show() {
+      this.visible = true
+    }
+    hide() {
+      this.visible = false
+    }
+    focus() {}
+    on() {}
+    isVisible() {
+      return this.visible
+    }
+    isDestroyed() {
+      return false
+    }
+  }
+  class Tray {
+    setToolTip() {}
+    on() {}
+    setContextMenu(menu) {
+      menus.push(menu)
+    }
+  }
+  const electron = {
+    app: {
+      isPackaged: packaged,
+      dock: undefined,
+      requestSingleInstanceLock: () => true,
+      on: (event, fn) => {
+        events[event] = fn
+      },
+      whenReady: () => new Promise(() => {}),
+      quit: () => exits.push('quit'),
+      exit: (code) => exits.push(`exit ${code}`),
+      relaunch: (options) => exits.push({ relaunch: options }),
+      getVersion: () => '1.87.16',
+      getPath: () => '/userdata'
+    },
+    BrowserWindow,
+    Tray,
+    Menu: { buildFromTemplate: (template) => template },
+    shell: { openExternal: async () => {} },
+    nativeImage: { createFromPath: () => ({ setTemplateImage() {} }) },
+    dialog: {
+      showErrorBox: (title) => dialogs.push(title),
+      showMessageBox: async (options) => dialogs.push(options?.message),
+      showMessageBoxSync: (options) => dialogs.push(options?.message)
+    },
+    ipcMain: { handle() {} },
+    autoUpdater: {}
+  }
+  const listeners = {}
+  const proc = {
+    platform,
+    argv: [execPath, ...argv],
+    env: { ...env },
+    execPath,
+    resourcesPath: '/opt/Fractal Remote/resources',
+    on: (event, fn) => {
+      ;(listeners[event] ||= []).push(fn)
+    }
+  }
+  const real = createRequire(new URL('../desktop/main.js', import.meta.url))
+  const stand = { electron, 'node:fs': fs, 'node:os': { homedir: () => home } }
+  const timer = (fn, ms) => {
+    const t = { fn, ms, unref() {} }
+    timers.push(t)
+    return t
+  }
+  const quiet = { error: (...a) => logs.push(a.map(String).join(' ')), log: (...a) => logs.push(a.map(String).join(' ')), warn: () => {} }
+  const src = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  const run = new Function(
+    'require',
+    '__dirname',
+    'process',
+    'console',
+    'setTimeout',
+    'clearTimeout',
+    'setInterval',
+    `${src}\n;return (__code, __given) => eval(__code)`
+  )((id) => stand[id] || real(id), '/opt/Fractal Remote/resources/app.asar', proc, quiet, timer, () => {}, timer)
+  return { run, disk, dirs, events, menus, windows, dialogs, exits, logs, timers, listeners, process: proc }
+}
+const ENTRY = '/home/pi/.config/autostart/fractal-remote.desktop'
+const trayItem = (menu, label) => (menu || []).find((item) => typeof item.label === 'string' && item.label.startsWith(label))
+
+test('the menu draws with the phone remote on and the phones told — main.js’s own buildTray, run', () => {
+  const main = loadDesktopMain()
+  main.run('phone = { on: true, email: "pi@example.com" }; told = { at: 1, wrote: true, heard: { name: "Pedalboard", version: "1.87.16" }, why: null }')
+  // This threw "phonesHearLine is not defined" on every draw once the remote was on.
+  main.run('buildTray()')
+  assert.match(trayItem(main.menus.at(-1), 'Phone remote: on').label, /^Phone remote: on — pi@example\.com · this app is v1\.87\.16$/)
+  // And with what start() fills in once lib/host.mjs is loaded, it says what the phones hear.
+  assert.match(readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8'), /phonesHearLine: hearLine,[\s\S]*?\n\s*phonesHearLine = hearLine/, 'start() never hands the menu what the phones hear')
+  main.run('phonesHearLine = __given', host.phonesHearLine)
+  main.run('buildTray()')
+  assert.match(trayItem(main.menus.at(-1), 'Phone remote: on').label, / · phones hear v1\.87\.16$/)
+
+  // A menu that cannot be drawn is said in the log, and whatever asked for it carries on.
+  const broken = loadDesktopMain()
+  broken.run('boot = __given', autostart)
+  broken.run('tray = {}; buildTray = () => { throw new Error("no menu today") }')
+  assert.deepEqual(broken.run('setStartAtBoot(true)'), { supported: true, on: true }, 'the switch reports a failure because the menu could not be redrawn')
+  assert.ok(broken.disk.has(ENTRY))
+  assert.ok(broken.logs.some((l) => l.includes('could not draw the menu') && l.includes('no menu today')), 'a menu that failed to draw is not said anywhere')
+})
+
+test('the switch on disk: written where it belongs, for the AppImage file, and only ever ours removed', () => {
+  const appImage = '/home/pi/Apps/Fractal-Remote-1.87.16-arm64.AppImage'
+  // A fresh Pi: no ~/.config/autostart, and the AppImage running from its temporary mount.
+  const main = loadDesktopMain({ env: { APPIMAGE: appImage }, execPath: '/tmp/.mount_FracAb/fractal-remote-desktop' })
+  main.run('boot = __given', autostart)
+  assert.deepEqual(main.run('startAtBootState()'), { supported: true, on: false })
+  // A launch with the switch off writes nothing at all.
+  main.run('healStartAtBoot()')
+  assert.equal(main.disk.size, 0, 'opening the app switched "Start when this computer turns on" on by itself')
+
+  assert.deepEqual(main.run('setStartAtBoot(true)'), { supported: true, on: true })
+  assert.ok(main.dirs.has('/home/pi/.config/autostart'), 'the folder is not made, so a fresh Pi gets an error instead of the switch')
+  assert.equal(main.disk.get(ENTRY), autostart.entryText(appImage), 'the entry starts something other than the AppImage file')
+  assert.ok(![...main.disk.keys()].some((p) => p.endsWith('.new')), 'the half-written copy is left behind')
+
+  // Closing the window keeps it running while the switch is on — read from the disk, not remembered.
+  main.events['window-all-closed']()
+  assert.deepEqual(main.exits, [], 'closing the window quit a box set to start when the computer turns on')
+  main.disk.delete(ENTRY)
+  main.events['window-all-closed']()
+  assert.deepEqual(main.exits, ['quit'], 'a switch turned off outside the app still keeps the app running when its window is closed')
+
+  // Moved: the next launch mends the entry to name where it is now.
+  main.run('setStartAtBoot(true)')
+  main.process.env.APPIMAGE = '/home/pi/Fractal-Remote-1.87.16-arm64.AppImage'
+  main.run('healStartAtBoot()')
+  assert.equal(main.disk.get(ENTRY), autostart.entryText('/home/pi/Fractal-Remote-1.87.16-arm64.AppImage'), 'a moved AppImage leaves the entry starting nothing')
+  // Renamed by an update: followed at once, while on.
+  main.run('followTheAppImage(__given)', '/home/pi/Fractal-Remote-1.87.17-arm64.AppImage')
+  assert.equal(autostart.readEntry(main.disk.get(ENTRY)).target, '/home/pi/Fractal-Remote-1.87.17-arm64.AppImage')
+
+  assert.deepEqual(main.run('setStartAtBoot(false)'), { supported: true, on: false })
+  assert.equal(main.disk.has(ENTRY), false, 'turning it off leaves the entry in place')
+  main.run('followTheAppImage(__given)', '/home/pi/Fractal-Remote-1.87.18-arm64.AppImage')
+  assert.equal(main.disk.has(ENTRY), false, 'an update switched the entry back on')
+
+  // Somebody else's file by that name is not ours to delete.
+  const theirs = '[Desktop Entry]\nType=Application\nName=Something Else\nExec=/usr/bin/something\n'
+  const other = loadDesktopMain({ files: { [ENTRY]: theirs } })
+  other.run('boot = __given', autostart)
+  assert.deepEqual(other.run('setStartAtBoot(false)'), { supported: true, on: false })
+  assert.equal(other.disk.get(ENTRY), theirs, 'turning the switch off deleted a file this app did not write')
+
+  // The .deb: the installed binary, quoted for its space.
+  const deb = loadDesktopMain()
+  deb.run('boot = __given', autostart)
+  deb.run('setStartAtBoot(true)')
+  assert.match(deb.disk.get(ENTRY), /^Exec="\/opt\/Fractal Remote\/fractal-remote-desktop" --hidden$/m)
+
+  // And in the tray, the same switch, on Linux only.
+  deb.run('buildTray()')
+  const item = trayItem(deb.menus.at(-1), 'Start when this computer turns on')
+  assert.equal(item?.type, 'checkbox', 'the tray has no start-at-power-on switch on Linux')
+  assert.equal(item.checked, true)
+  item.click({ checked: false })
+  assert.equal(deb.disk.has(ENTRY), false, 'the tray switch does not turn it off')
+})
+
+test('the switch is the Linux app’s alone: a Mac, Windows or a checkout writes nothing and offers nothing', () => {
+  for (const options of [{ platform: 'darwin' }, { platform: 'win32' }, { platform: 'linux', packaged: false }]) {
+    const main = loadDesktopMain(options)
+    main.run('boot = __given', autostart)
+    const where = JSON.stringify(options)
+    assert.deepEqual(main.run('startAtBootState()'), { supported: false, on: false }, `${where} says it can start at power-on`)
+    assert.deepEqual(main.run('setStartAtBoot(true)'), { supported: false, on: false })
+    main.run('healStartAtBoot()')
+    assert.equal(main.disk.size, 0, `${where} wrote a start-up entry`)
+    main.run('buildTray()')
+    assert.equal(trayItem(main.menus.at(-1), 'Start when this computer turns on'), undefined, `${where} shows the switch in the tray`)
+    // And closing the window quits there, exactly as it always did.
+    main.events['window-all-closed']()
+    assert.deepEqual(main.exits, ['quit'], `${where} keeps running when its window is closed`)
+  }
+})
+
+test('how a copy starts: nobody there, a window, and what an update said to come back as', () => {
+  const cases = [
+    { argv: [], env: undefined, hidden: false, window: true, relaunched: false },
+    { argv: ['--hidden'], env: undefined, hidden: true, window: false, relaunched: false },
+    // The AppImage's updater starts the new file with no arguments at all.
+    { argv: [], env: 'hidden', hidden: true, window: false, relaunched: true },
+    { argv: [], env: 'window-unattended', hidden: true, window: true, relaunched: true },
+    // The .deb's restarts it with the arguments it had, --hidden included.
+    { argv: ['--hidden'], env: 'window-unattended', hidden: true, window: true, relaunched: true },
+    { argv: [], env: 'window', hidden: false, window: true, relaunched: true }
+  ]
+  for (const c of cases) {
+    const main = loadDesktopMain({ argv: c.argv, env: c.env ? { FRACTAL_REMOTE_AFTER_UPDATE: c.env } : {} })
+    const name = `${c.argv.join(' ') || 'no arguments'} with ${c.env || 'no note'}`
+    assert.equal(main.run('startHidden'), c.hidden, `${name}: nobody there?`)
+    assert.equal(main.run('windowAtLaunch'), c.window, `${name}: a window at launch?`)
+    assert.equal(main.run('relaunched'), c.relaunched, `${name}: an update's copy?`)
+    assert.ok(!('FRACTAL_REMOTE_AFTER_UPDATE' in main.process.env), `${name}: the note leaks into the device server`)
+    // With nobody there, an error nobody caught is a log line, not Electron's box.
+    assert.equal((main.listeners.uncaughtException || []).length, c.hidden ? 1 : 0, `${name}: who handles an error nobody caught`)
+  }
+  // Every note comeBackAs can leave is one this file reads the way it was meant.
+  for (const unattended of [false, true]) {
+    for (const looking of [false, true]) {
+      const note = autostart.comeBackAs({ unattended, looking })
+      for (const argv of unattended ? [[], ['--hidden']] : [[]]) {
+        const main = loadDesktopMain({ argv, env: { FRACTAL_REMOTE_AFTER_UPDATE: note } })
+        assert.equal(main.run('startHidden'), unattended, `${note}: the box forgets it is set up for nobody`)
+        assert.equal(main.run('windowAtLaunch'), looking || !unattended, `${note}: the window does not come back for the person who asked`)
+      }
+    }
+  }
+})
+
+test('Restart to update leaves the new copy the right note, and a box set up for nobody always comes back', async () => {
+  const appImage = '/home/pi/Fractal-Remote-1.87.16-arm64.AppImage'
+  const press = async ({ argv, looking }) => {
+    const main = loadDesktopMain({ argv, env: { APPIMAGE: appImage } })
+    main.run('boot = __given', autostart)
+    let installs = 0
+    main.run('update = { kind: "ready", version: "1.87.17" }; updates = { install: __given, check: async () => {} }', () => installs++)
+    if (looking) main.run('openWindow()')
+    assert.deepEqual(await main.run('installNow()'), { ok: true })
+    assert.equal(installs, 1)
+    return main
+  }
+  // Somebody plugged a screen into the pedalboard Pi and pressed the button.
+  const pedalboard = await press({ argv: ['--hidden'], looking: true })
+  assert.equal(pedalboard.process.env.FRACTAL_REMOTE_AFTER_UPDATE, 'window-unattended')
+  // The box itself, just after power-on, with nobody looking.
+  const nobody = await press({ argv: ['--hidden'], looking: false })
+  assert.equal(nobody.process.env.FRACTAL_REMOTE_AFTER_UPDATE, 'hidden')
+  // An ordinary computer.
+  const desk = await press({ argv: [], looking: true })
+  assert.equal(desk.process.env.FRACTAL_REMOTE_AFTER_UPDATE, 'window')
+
+  // An install that never takes: the pedalboard comes back on its own, from the AppImage file.
+  const backstop = (main) => main.timers.find((t) => t.ms === 20000)
+  backstop(pedalboard).fn()
+  assert.deepEqual(pedalboard.exits, [{ relaunch: { execPath: appImage, args: ['--hidden'] } }, 'exit 0'], 'a pedalboard whose install did not take is left with nothing running')
+  backstop(desk).fn()
+  assert.deepEqual(desk.exits, ['exit 0'], 'an ordinary computer restarts itself after an install that did not take')
+})
+
+test('opening the app again before there is anything to show is remembered, not dropped', () => {
+  const main = loadDesktopMain({ argv: ['--hidden'] })
+  // Still waiting for whatever holds its port: no page yet.
+  main.events['second-instance']({}, ['/usr/bin/fractal-remote-desktop'], '/home/pi', { hidden: false })
+  assert.equal(main.windows.length, 0)
+  assert.equal(main.run('wantWindow'), true, 'somebody opening the app while it waits for its port is forgotten')
+  // Once there is a page, opening it again opens it.
+  main.run('where = { local: "http://localhost:5056", all: [] }')
+  main.events['second-instance']({}, ['/usr/bin/fractal-remote-desktop'], '/home/pi', { hidden: false })
+  assert.deepEqual(main.windows[0]?.urls, ['http://localhost:5056'])
+  // A launch that itself asked for no window — the start-up entry, run twice — opens nothing.
+  const quiet = loadDesktopMain({ argv: ['--hidden'] })
+  quiet.events['second-instance']({}, ['/usr/bin/fractal-remote-desktop', '--hidden'], '/home/pi', { hidden: true })
+  assert.equal(quiet.run('wantWindow'), false)
+  // And the launch opens what was asked for, once there is a page to show.
+  const launch = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8').split('app.whenReady()')[1]
+  assert.match(launch, /if \(windowAtLaunch \|\| wantWindow\) openWindow\(\)/, 'a remembered request to open the app is never acted on')
+})
+
+test('only one copy runs, and opening it again opens the running one', () => {
+  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  const lock = main.indexOf('let primary = app.requestSingleInstanceLock(knock)')
+  assert.notEqual(lock, -1, 'nothing keeps a second copy from starting')
+  assert.ok(lock < main.indexOf('app.whenReady()'), 'the lock is asked for after the startup work has begun')
+  assert.match(main, /if \(!primary && !relaunched\) app\.quit\(\)/, 'a second copy carries on')
+  // It quits before starting anything: no server, no tray, no dialog.
+  const launch = main.slice(main.indexOf('app.whenReady()'))
+  assert.ok(launch.indexOf('if (!primary) {') < launch.indexOf('const answering = await start()'), 'a second copy starts a server before it steps aside')
+  assert.match(main, /if \(quitting \|\| !primary\) return/, 'a second copy runs the whole shutdown for a server it never started')
+  // The running copy is told and opens its window — the same as the tray's Open.
+  assert.match(
+    main,
+    /app\.on\('second-instance', \(_event, argv, _cwd, asked\) => \{\s*\n\s*if \(quitting \|\| asked\?\.hidden \|\| argv\.includes\('--hidden'\)\) return\s*\n\s*if \(where\) openWindow\(\)/,
+    'opening the app again does not bring the running copy forward'
+  )
+  // The copy an update restarts waits for the old one instead of quitting on it.
+  assert.match(main, /primary = relaunched && \(await lockAfterUpdate\(\)\)/, 'the copy an update starts quits on finding the old one still going')
+})
+
+test('a start with --hidden opens no window and never waits on a dialog', () => {
+  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  assert.match(main, /const startHidden = process\.argv\.includes\('--hidden'\) \|\| afterUpdate === 'hidden' \|\| afterUpdate === 'window-unattended'/)
+  // The flag an update carries is read once and goes no further.
+  assert.match(main, /const afterUpdate = process\.env\[AFTER_UPDATE\] \|\| ''\s*\n\s*delete process\.env\[AFTER_UPDATE\]/, 'the update flag leaks into the device server and everything after it')
+  const launch = main.slice(main.indexOf('app.whenReady()'))
+  assert.match(launch, /if \(windowAtLaunch \|\| wantWindow\) openWindow\(\)/, 'a start with no window opens one')
+  assert.equal((launch.match(/openWindow\(\)/g) || []).length, 1, 'the launch opens the window somewhere else as well')
+
+  /*
+   * Every box the app can put up while starting or serving, and what stands
+   * in front of each one. A box on a computer with no screen waits for ever.
+   * Counted, so a new one has to be added here, with its guard.
+   */
+  assert.equal((main.match(/dialog\.show(ErrorBox|MessageBox|MessageBoxSync)\(/g) || []).length, 6, 'a dialog was added or removed: give it a guard for a start with no window, and count it here')
+  const guarded = [
+    /if \(!startHidden\) \{\s*\n\s*dialog\.showErrorBox\('ForgeFX is already running'/,
+    /if \(!startHidden\) \{\s*\n\s*dialog\.showErrorBox\(\s*\n\s*'Something else is using this port'/,
+    /if \(startHidden\) console\.error\('\[unattended\] ForgeFX is not installed\.', MISSING_FORGEFX\)\s*\n\s*else dialog\.showErrorBox\('ForgeFX is not installed', MISSING_FORGEFX\)/,
+    /if \(startHidden && !quitting\) \{\s*\n\s*restartServer\([\s\S]{0,700}?dialog\.showErrorBox\('The device server stopped'/,
+    /if \(startHidden\) \{[\s\S]{0,900}?\} else \{[\s\S]{0,400}?dialog\.showErrorBox\(\s*\n\s*'The device server did not start'/,
+    /if \(startHidden\) \{\s*\n\s*misplaced = true\s*\n\s*return true\s*\n\s*\}\s*\n\s*const choice = dialog\.showMessageBoxSync/
+  ]
+  for (const guard of guarded) assert.match(main, guard, `a dialog is shown with nobody there: ${guard}`)
+
+  // Something else on the port is asked about again, not quit over.
+  assert.match(main, /unattended\(`\$\{busy\.line\} — trying again every 30 seconds`, busy\.detail\)\s*\n\s*await pause\(boot\.PORT_RETRY_MS\)/)
+  // A server that stops is started again, with the waits from restartPlan.
+  assert.match(main, /boot\.restartPlan\(\{ failures: serverFailures, ranForMs: uptime\(\) - serverSince \}\)/)
+  /* And one that cannot even be started — out of memory on a 1 GB Pi — is one
+     more stop rather than the last: a spawn that throws is caught, and one
+     that fails later says so on 'error', with no 'exit' ever coming. */
+  assert.match(main, /later\(async \(\) => \{[^\n]*\n(\s*\/\/[^\n]*\n)?\s*try \{\s*\n\s*runServer\(\)\s*\n\s*\} catch \(err\) \{\s*\n\s*restartServer\(/, 'a stopped server is never started again, or one that cannot be spawned ends the restarts')
+  assert.match(main, /if \(startHidden\) \{\s*\n\s*child\.on\('error', \(err\) => \{\s*\n\s*if \(server !== child \|\| quitting\) return/, "a server that cannot be spawned, with nobody there, is an error nobody caught")
+  /* And an error nobody caught anywhere else in the app is a line in the log,
+     not Electron's own box on a screen that is not there. */
+  assert.match(main, /if \(startHidden\) \{\s*\n\s*process\.on\('uncaughtException'/, 'an error inside the app puts a box up with nobody there')
+})
+
+test('with nobody there, the phone remote is asked for again, in the same words as before', () => {
+  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  const arm = main.slice(main.indexOf('const arm = () => {'), main.indexOf('rearm = arm'))
+  assert.ok(arm, 'there is no retry around armHost')
+  // The call text the version test above pins, inside the retry.
+  assert.match(arm, /armHost\(\{ port, version: app\.getVersion\(\), log: phoneLog \}\)/)
+  assert.match(arm, /const again = startHidden \? boot\.phoneRetryDelay\(result, uptime\(\) - phoneSince\) : null/, 'the retry is not limited to a start with no window, or ignores its rules')
+  assert.match(arm, /if \(again\) phoneTimer = later\(arm, again\)/)
+  assert.match(arm, /if \(quitting\) return\s*\n\s*if \(arming\) \{\s*\n\s*armAgain = true/, 'two retries can run at once, or one runs during the quit')
+  assert.match(arm, /if \(armAgain\) \{\s*\n\s*armAgain = false\s*\n\s*arm\(\)/, 'a run asked for during another one is dropped, so a restarted server can be left with the remote off')
+  // And again after the server is started again, because ForgeFX forgets the switch.
+  assert.match(main, /settled\(\)\s*\n\s*rearm\(\)/, 'a restarted server leaves the phone remote off')
+})
+
+test('nothing a windowless start does later can hold up a quit or outlive the server', () => {
+  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  const timer = main.slice(main.indexOf('function later(fn, ms)'), main.indexOf('function cancel('))
+  assert.match(timer, /if \(!quitting\) fn\(\)/, 'a retry runs after the quit has begun')
+  assert.match(timer, /timer\.unref\?\.\(\)/, 'a retry keeps the app alive')
+  const stop = main.slice(main.indexOf('async function stopServing()'))
+  assert.match(stop, /quitting = true\s*\n[\s\S]{0,120}for \(const timer of timers\) clearTimeout\(timer\)/, 'the retries are not stopped with the server')
+  assert.ok(!/setInterval\((?!tell, TELL_PHONES_MS)/.test(main), 'a new repeating timer goes around the ones that end with the app')
+})
+
+test('an update ready just after a windowless start installs through the same path as the button', () => {
+  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  const unattended = main.slice(main.indexOf('function installIfUnattended()'), main.indexOf('async function settleInPlace'))
+  assert.match(unattended, /boot\.unattendedInstall\(\{\s*\n\s*hidden: startHidden,\s*\n\s*sinceLaunchMs: uptime\(\) - launchedAt,/)
+  assert.match(unattended, /installNow\(\)\.catch\(/, 'an unattended install goes around the marker and the teardown')
+  assert.match(unattended, /if \(installedUnattended \|\| !boot\) return/, 'one run can install twice')
+  // Only once the update is really ready, and never after one that did not take.
+  assert.match(main, /if \(state\.kind === 'ready' && outcome !== 'stuck'\) installIfUnattended\(\)/, 'an install that did not take is tried again and again')
+  /* And decided before the menu is drawn: a menu that failed to draw once
+     took the install at power-on down with it, quietly. */
+  const onState = main.slice(main.indexOf('onState: (state) => {'), main.indexOf("log: (err) => console.error('[updates]'"))
+  assert.ok(onState.indexOf('installIfUnattended()') < onState.indexOf('drawTray()'), 'the menu is drawn before the install is decided, so a menu that fails cancels it')
+  assert.ok(!/buildTray\(\)/.test(onState), 'the menu is drawn where a failure can cancel what comes after it')
+  // The new copy is told how to come back: the environment is what the AppImage updater passes on.
+  const install = main.slice(main.indexOf('async function installNow('))
+  const note = install.indexOf('process.env[AFTER_UPDATE] = comeBack')
+  assert.ok(note !== -1 && note < install.indexOf('updates.install()'), 'the new copy is not told it is the update’s, or how to come back')
+  // Decided before the teardown, which hides the window and would make nobody look to be there.
+  assert.ok(install.indexOf('const comeBack = boot.comeBackAs({') < install.indexOf('await stopServing()'), 'how to come back is decided after the window has been hidden')
+  assert.match(install, /if \(startHidden\) app\.relaunch\(\{ execPath: process\.env\.APPIMAGE \|\| process\.execPath/, 'a windowless install that did not take leaves the pedalboard with nothing running')
+  // A look that failed just after power-on is taken again; see updateRetryDelay.
+  assert.match(main, /if \(state\.kind === 'trouble' && outcome !== 'stuck'\) retryUpdateCheck\(\)/, 'a look for updates that failed at power-on is not taken again until twelve hours later')
+  assert.match(main, /if \(cameOn\) networkIsUp\(\)/, 'the network arriving after the retries is never used to look again')
+  /* Every "how long since" on a clock that only goes forward. A Pi has no
+     clock while it is off, and its time of day jumps by hours when the
+     network sets it — a few seconds into the app's start. */
+  assert.match(main, /const uptime = \(\) => performance\.now\(\)/)
+  assert.ok(!/Date\.now\(\) -/.test(main), 'a wait is measured with the time of day, which a Raspberry Pi gets wrong until its network sets it')
+  // And a windowless app left on for weeks still looks twice a day.
+  assert.match(main, /if \(startHidden\) \{\s*\n\s*const again = \(\) =>\s*\n\s*later\(async \(\) => \{\s*\n\s*await updates\.check\(\)/)
+})
+
+test('the start-up entry follows the AppImage when an update renames it', () => {
+  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  assert.match(main, /autoUpdater\.on\('appimage-filename-updated', \(path\) => followTheAppImage\(path\)\)/, 'an AppImage update leaves the entry naming a file that was deleted')
+  const follow = main.slice(main.indexOf('function followTheAppImage('))
+  assert.match(follow, /if \(!bootEntry\(\)\?\.on\) return\s*\n\s*try \{\s*\n\s*writeBootEntry\(path\)/, 'the entry is not rewritten, or is written when it was off')
+  // Written synchronously: the rename event fires in the middle of the quit.
+  const write = main.slice(main.indexOf('function writeBootEntry('), main.indexOf('function startAtBootState('))
+  assert.match(write, /writeFileSync\(next, text\)\s*\n\s*renameSync\(next, path\)/, 'the entry is written in place, so a Pi unplugged mid-write keeps half of one')
+  assert.ok(!/await|\.then\(/.test(write), 'the entry is written asynchronously, after the quit has finished')
+  // And mended at every launch while it is on.
+  assert.match(main, /boot = await import\('\.\/lib\/autostart\.mjs'\)\s*\n\s*healStartAtBoot\(\)/, 'a moved app leaves the entry starting nothing')
+})
+
+test('the switch is in Settings and the tray, and the page reaches it only through the bridge', () => {
+  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  const preload = readSrc(new URL('../desktop/preload.js', import.meta.url), 'utf8')
+  const desktop = readSrc(new URL('../src/lib/desktop.js', import.meta.url), 'utf8')
+  const ui = readSrc(new URL('../src/components/StartAtBoot.jsx', import.meta.url), 'utf8')
+  const appSrc = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const builder = readSrc(new URL('../desktop/electron-builder.yml', import.meta.url), 'utf8')
+
+  assert.match(main, /ipcMain\.handle\('login:get', \(\) => startAtBootState\(\)\)/)
+  assert.match(main, /ipcMain\.handle\('login:set', \(_event, on\) => setStartAtBoot\(on === true\)\)/, 'anything but true turns it on')
+  // Registered with the others, once.
+  const channel = main.slice(main.indexOf('function wireUpdateChannel()'), main.indexOf('async function installNow('))
+  assert.ok(channel.includes("'login:get'") && channel.includes("'login:set'"), 'the switch is answered from somewhere other than the one channel')
+  assert.match(preload, /get: \(\) => ipcRenderer\.invoke\('login:get'\)/)
+  assert.match(preload, /set: \(on\) => ipcRenderer\.invoke\('login:set', on === true\)/)
+  assert.match(desktop, /export async function startAtBootState\(\)/)
+  assert.match(desktop, /export async function setStartAtBoot\(on\)/)
+
+  // Linux only, and only the installed app.
+  assert.match(main, /boot && process\.platform === 'linux'\s*\n\s*\? boot\.launchTarget\(\{ env: process\.env, execPath: process\.execPath, packaged: app\.isPackaged \}\)/)
+  // The words, the same in both places.
+  assert.match(ui, /Start when this computer turns on/)
+  assert.match(ui, /For a computer that lives on your pedalboard or in a rack/)
+  assert.match(ui, /if \(!state\?\.supported\) return null/, 'the switch is shown on a computer that cannot do it')
+  // It shows what the computer said, and sends what was ticked — not the opposite.
+  assert.match(ui, /checked=\{Boolean\(state\.on\)\}/, 'the switch does not show what the computer says')
+  assert.match(ui, /onChange=\{\(e\) => change\(e\.target\.checked\)\}/, 'the switch sends something other than what was ticked')
+  // And a failure in plain words, not the computer's own ("EACCES: permission denied, …").
+  assert.ok(!/The computer said: \{state\.error\}/.test(ui), 'the page shows the computer’s raw error to a guitarist')
+  assert.match(main, /label: 'Start when this computer turns on',\s*\n\s*type: 'checkbox',\s*\n\s*checked: bootOn,\s*\n\s*click: \(item\) => setStartAtBoot\(item\.checked\)/, 'the tray item does not call the same function')
+  // On the About page, beside Updates.
+  const about = appSrc.slice(appSrc.indexOf('<SetupRow key="updates"'))
+  assert.ok(about.indexOf('<StartAtBoot />') !== -1 && about.indexOf('<StartAtBoot />') < about.indexOf('key="small-print"'), 'the switch is not on the About page under Updates')
+  // And the module it needs is packaged: lib/** carries it.
+  assert.match(main, /import\('\.\/lib\/autostart\.mjs'\)/)
+  assert.match(builder, /^\s*- lib\/\*\*$/m, 'lib/ is not packaged, so the installed app has no autostart module')
+})
+
+test('CI starts the packaged Linux app the way a pedalboard Pi does', () => {
+  const wf = readSrc(new URL('../.github/workflows/desktop.yml', import.meta.url), 'utf8')
+  const linux = wf.slice(wf.indexOf('\n  linux:\n'), wf.indexOf('\n  complete:\n'))
+  const step = linux.slice(linux.indexOf('- name: The app starts with no window, once, and stops when told'))
+  assert.ok(linux.indexOf('- name: Package') < linux.indexOf('- name: The app starts with no window'), 'the app is started before it is packaged')
+  for (const want of [
+    'release/linux*-unpacked',
+    'fractal-remote-desktop',
+    'xvfb-run',
+    '--no-sandbox --hidden',
+    'http://localhost:5056/healthz',
+    'xwininfo -root -tree',
+    "grep -q '\\[launch\\] done'",
+    'timeout -k 5 30',
+    'timeout-minutes: 10',
+    'kill -TERM'
+  ]) {
+    assert.ok(step.includes(want), `the start-up check no longer does ${want}`)
+  }
+})
+
+test('the Linux steps tell a pedalboard Pi about the switch', async () => {
+  const { wayById } = await import('../shared/ways-in.mjs')
+  const steps = wayById('linux-app').steps.join(' ')
+  assert.match(steps, /Start when this computer turns on/, 'the Linux route never names the switch')
+  assert.match(steps, /Desktop Autologin/, 'nothing says the Pi has to log itself in to its desktop')
+  /* The AppImage, said outright: the .deb on a box switched off at the wall
+     never updates, and a downloaded file looks like one to tidy away. */
+  assert.match(steps, /pedalboard with no screen, take the Raspberry Pi AppImage, not the \.deb/, 'the pedalboard step does not say which file can update itself with nobody there')
+  assert.match(steps, /Leave the AppImage file where it is/, 'nothing says the AppImage file is the app itself')
+  const readme = readSrc(new URL('../desktop/README.md', import.meta.url), 'utf8')
+  assert.match(readme, /Start when this computer\s+turns\s+on/)
+  assert.match(readme, /Desktop Autologin/)
+  assert.match(readme, /\*\*Raspberry Pi AppImage\*\* \(not the `\.deb`\)/, 'the README’s Pi steps leave the .deb as an equal choice')
+  // The NSIS comment said the installer's start went to the tray. It never did.
+  const builder = readSrc(new URL('../desktop/electron-builder.yml', import.meta.url), 'utf8')
+  assert.ok(!/goes to the tray rather than opening a window/.test(builder), 'electron-builder.yml says the Windows installer starts the app in the tray again')
+})
 
 console.log('\nasking for less volume')
 

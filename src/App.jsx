@@ -81,6 +81,7 @@ import {
 import ParamSearch from './components/ParamSearch'
 import UpdateNotice from './components/UpdateNotice'
 import Updates, { UpdateReadyNotice } from './components/Updates'
+import StartAtBoot from './components/StartAtBoot'
 import Am4Check from './components/Am4Check'
 import RenamePreset from './components/RenamePreset'
 import { countFromRefusal, slotCount, slotOutside, slotProblem, slotsForChat, timeLeft } from './lib/slots'
@@ -6129,6 +6130,10 @@ export default function App() {
                 <SetupRow key="updates" title="Updates" status="This app, not your unit" onClick={() => setSetupPage('updates')} />
               ) : null}
             </div>
+            {/* The pedalboard computer's switch, under Updates because both are
+                about this app rather than the unit. Draws nothing unless the
+                computer can do it, which is the Linux app only. */}
+            <StartAtBoot />
             {/* Reachable from inside the app, which is the point of writing
                 them. Same two links as the phone's About page. */}
             <Section key="small-print" title="The small print" note="Worth knowing, once">

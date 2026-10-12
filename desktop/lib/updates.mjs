@@ -11,6 +11,14 @@
  * downloads quietly and is installed when the person quits — which they do
  * when they are finished, by definition.
  *
+ * ONE EXCEPTION, AND IT IS NARROW. A computer started with no window — a
+ * Raspberry Pi on a pedalboard, set to start when it turns on — is never
+ * quit: it is unplugged. An update that waits for a quit would wait for ever
+ * there. So in the first three minutes after such a start, before anybody is
+ * playing, an update already downloaded is installed and the app comes back
+ * on it. After that it waits for a quit like everywhere else. The rule is
+ * unattendedInstall in autostart.mjs; nothing here changes.
+ *
  * Nothing here ever opens a dialog. A failed update check is not news: the
  * network was down, or GitHub was slow, and the app works regardless. It shows
  * as a line in the menu that says so and nothing more.
@@ -23,8 +31,15 @@
  * be told a percentage of a download they did not ask for, but they do need to
  * know why the app is about to be a different version next time they open it.
  */
-export function updateLine(state = { kind: 'idle' }) {
-  switch (state.kind) {
+export function updateLine(state) {
+  /*
+   * Null as well as missing: the menu asks before the updater has said
+   * anything at all, and on a Linux build the updater cannot run in (an
+   * AppImage's updater outside an AppImage) it never says anything. This
+   * threw there, and took the menu — and the start-at-power-on switch, which
+   * redraws it — down with it.
+   */
+  switch (state?.kind) {
     case 'checking':
       return 'Checking for updates…'
     case 'found':
@@ -259,7 +274,9 @@ export function wireUpdates({ updater, native = null, onState, log = () => {}, l
      * quit and a quit that never finishes is a loop with no exit, and the fix
      * for the quit is inside the version that cannot be installed.
      *
-     * Never called by anything but a person pressing a button.
+     * Called by a person pressing a button, and by one other thing: a start
+     * with no window, in its first three minutes (see unattendedInstall in
+     * autostart.mjs). Never mid-set.
      */
     install: () => {
       try {
