@@ -633,6 +633,140 @@ jobs:
           for f in release/*.deb; do [ -e "$f" ] && seen=1; done
           [ "$seen" = 1 ] || { echo "no .deb was produced"; exit 1; }
 
+      # THE PACKAGED APP, STARTED THE WAY A PI ON A PEDALBOARD STARTS IT.
+      #
+      # "Start when this computer turns on" runs the app with --hidden, on a
+      # Pi with no screen, and nobody is there to see it fail. So it is run
+      # that way here, on a virtual screen (Xvfb), from the folder the .deb
+      # and the AppImage are both made from — on both processors, which is
+      # the only place the Pi's arm64 build is ever actually started by
+      # anybody but a customer.
+      #
+      # WHEN IT CAN STOP ANYTHING. On a pull request, a red result here is
+      # before anything is released. On a push to main or a tag it is not:
+      # Package above has already published these files to the release by
+      # the time this runs, so a failure there says the Linux build that just
+      # went out is broken — worth knowing at once, but it kept nothing back.
+      # What it proves:
+      #
+      #   - with --hidden it serves: the device server answers /healthz;
+      #   - with --hidden it opens no window;
+      #   - a second launch steps aside by itself, cleanly, and the server
+      #     the first copy started is still answering after it (before the
+      #     single-instance lock, a second copy on Linux stopped that server);
+      #   - the first copy then opens its window, because it was asked to;
+      #   - SIGTERM, which is what a proper shutdown sends, ends it promptly,
+      #     and the device server goes with it.
+      #
+      # The folder is linux-unpacked on x64 and linux-arm64-unpacked on arm64
+      # (electron-builder adds the processor's name when it is not x64), and
+      # the binary is named after the package, the same file the .deb puts at
+      # /opt/Fractal Remote/fractal-remote-desktop. --no-sandbox because
+      # Chromium's sandbox helper is only usable once installed as root,
+      # which an unpacked folder never is.
+      #
+      # It cannot update itself mid-test, but not because nobody is there to
+      # type a password: this folder carries the .deb's update marker, and
+      # sudo on a runner asks for none. It is because this build is never
+      # older than the newest release — on a pull request it is the next
+      # version, and on main it is the release just published — so there is
+      # nothing newer to download, let alone install.
+      #
+      # Bounded twice: every wait in the script has its own limit (about six
+      # minutes at the very worst), and the step's own timeout catches
+      # anything that hangs in a way the script did not foresee, rather than
+      # holding both runners until GitHub's six-hour limit.
+      - name: The app starts with no window, once, and stops when told
+        working-directory: desktop
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          if ! command -v xvfb-run >/dev/null 2>&1 || ! command -v xwininfo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y xvfb x11-utils
+          fi
+          app_dir="$(ls -d release/linux*-unpacked | head -n 1)"
+          bin="$PWD/$app_dir/fractal-remote-desktop"
+          [ -x "$bin" ] || { echo "no app at $bin"; ls -la "$app_dir"; exit 1; }
+          echo "running $bin"
+
+          cat > "$RUNNER_TEMP/hidden-start.sh" <<'SCRIPT'
+          set -u
+          bin="$1"
+          log="$RUNNER_TEMP/first.log"
+          healthy() { curl -fsS --max-time 2 http://localhost:5056/healthz >/dev/null 2>&1; }
+          windows() { xwininfo -root -tree | grep -E '^[[:space:]]*0x[0-9a-f]+ "[^"]*Fractal Remote[^"]*":' || true; }
+          fail() {
+            echo "::error::$1"
+            echo "---- the app said:"; cat "$log" || true
+            [ -f "$RUNNER_TEMP/second.log" ] && { echo "---- the second launch said:"; cat "$RUNNER_TEMP/second.log"; }
+            kill -KILL "$first" 2>/dev/null || true
+            exit 1
+          }
+
+          "$bin" --no-sandbox --hidden >"$log" 2>&1 &
+          first=$!
+
+          up=0
+          for _ in $(seq 1 90); do
+            if healthy; then up=1; break; fi
+            kill -0 "$first" 2>/dev/null || fail "the app quit before the device server answered"
+            sleep 1
+          done
+          [ "$up" = 1 ] || fail "the device server did not answer /healthz within 90 seconds"
+          echo "the device server answers"
+
+          # Watched, not glanced at. The app decides about its window only
+          # once its first look for updates is over, which asks GitHub and can
+          # take longer than any fixed wait — so this watches for a window
+          # every second until the app says its launch is done (or for 30
+          # seconds, if it never says so), and one more look after that.
+          for _ in $(seq 1 30); do
+            [ -z "$(windows)" ] || { windows; fail "a start with --hidden opened a window"; }
+            grep -q '\[launch\] done' "$log" && break
+            sleep 1
+          done
+          grep -q '\[launch\] done' "$log" || echo "::warning::the app never said its launch was done; watched for a window for 30 seconds instead"
+          sleep 1
+          [ -z "$(windows)" ] || { windows; fail "a start with --hidden opened a window"; }
+          echo "no window"
+
+          # -k: a second copy stuck where SIGTERM cannot reach it is killed
+          # five seconds later, rather than holding the step for ever.
+          started=$(date +%s)
+          timeout -k 5 30 "$bin" --no-sandbox >"$RUNNER_TEMP/second.log" 2>&1
+          code=$?
+          [ "$code" = 0 ] || fail "the second launch did not step aside cleanly within 30 seconds (exit $code)"
+          echo "the second launch left by itself after $(( $(date +%s) - started ))s"
+          kill -0 "$first" 2>/dev/null || fail "the second launch took the first copy down with it"
+          healthy || fail "the device server stopped answering after a second launch"
+          echo "the first copy and its server are still there"
+
+          shown=0
+          for _ in $(seq 1 20); do
+            if [ -n "$(windows)" ]; then shown=1; break; fi
+            sleep 1
+          done
+          [ "$shown" = 1 ] || fail "the second launch did not bring the first copy's window up"
+          echo "the first copy opened its window"
+
+          kill -TERM "$first"
+          gone=0
+          for _ in $(seq 1 15); do
+            if ! kill -0 "$first" 2>/dev/null; then gone=1; break; fi
+            sleep 1
+          done
+          [ "$gone" = 1 ] || fail "SIGTERM did not end the app within 15 seconds"
+          echo "SIGTERM ended it"
+          for _ in $(seq 1 10); do
+            healthy || { echo "and the device server went with it"; cat "$log"; exit 0; }
+            sleep 1
+          done
+          fail "the device server outlived the app"
+          SCRIPT
+
+          xvfb-run -a --server-args="-screen 0 1280x800x24" bash "$RUNNER_TEMP/hidden-start.sh" "$bin"
+
       - uses: actions/upload-artifact@v4
         with:
           name: fractal-remote-linux-${{ matrix.arch }}
