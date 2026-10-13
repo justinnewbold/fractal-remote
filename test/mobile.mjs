@@ -14973,7 +14973,7 @@ export function run(test) {
     /* The confirm-first note for a paid phone only, and one that can be followed: the email's own link opens the website. */
     assert.match(
       flatSign,
-      /paid \? 'Account made — confirm it from the email we just sent, then come back to this phone and sign in, so your purchase goes with your account\.' : 'Account made\. Confirm it from the email we just sent, then sign in\.'/,
+      /paid \? 'Account made — type the code from the email we just sent in the box below\. Or tap the link in that email, then come back to this phone and sign in, so your purchase goes with your account\.' : 'Account made\. Type the code from the email we just sent in the box below, or tap the link in that email and then sign in\.'/,
       'a new account on a paid phone is not told to come back here and sign in, or everybody is'
     )
     assert.ok(!/before you open the website/.test(flatSign), 'the phone says to sign in before opening the website, which the email itself opens')

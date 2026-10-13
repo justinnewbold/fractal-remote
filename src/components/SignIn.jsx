@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { loadRemoteConfig, NOT_IN_INBOX, resendConfirmation, sendPasswordReset, sentAgain } from '../lib/remote'
+import { confirmWithCode, loadRemoteConfig, NOT_IN_INBOX, resendConfirmation, sendPasswordReset, sentAgain } from '../lib/remote'
+import { CONFIRMED_SIGN_IN } from '../../shared/confirm-code.mjs'
 
 /**
  * The one sign-in form.
@@ -63,8 +64,15 @@ export default function SignIn({
    * confirmed: Send it again shows, and sends to it rather than to whatever
    * the box says by then. The account service can answer "sent" for an
    * address with no account, and the "look in Spam" line would follow it.
+   *
+   * And the address an account was just made for, on the Account made
+   * screen, because the box for the email's CODE waits on both: the phone's
+   * second way past the confirmation email, for the one new customer in
+   * seven who never tapped its link. See confirm, below.
    */
   const [unconfirmed, setUnconfirmed] = useState(null)
+  const [code, setCode] = useState('')
+  const [confirming, setConfirming] = useState(false)
 
   const off = busy || working
   const project = () => {
@@ -93,7 +101,10 @@ export default function SignIn({
          * line under the buttons, below a phone's keyboard. Now the form gives
          * way to it. The words are still the phone's.
          */
-        if (needsConfirmation) setMode('sent')
+        if (needsConfirmation) {
+          setUnconfirmed(address)
+          setMode('sent')
+        }
       } else {
         await sendPasswordReset({ ...project(), email: address, redirectTo: window.location.origin })
         setNote('If that address has an account, a reset link is on its way.')
@@ -117,9 +128,11 @@ export default function SignIn({
     setProblem(null)
     setNote(null)
     setWorking(true)
+    /* Still waiting once it has gone, on a new email with a new code: the
+       box for it stays, and the old code goes out of it. */
     try {
       await resendConfirmation({ ...project(), email: address })
-      setUnconfirmed(null)
+      setCode('')
       setNote(sentAgain(address))
     } catch (err) {
       setProblem(err.message)
@@ -127,13 +140,89 @@ export default function SignIn({
       setWorking(false)
     }
   }
-  /* On the Sign in side only: Create account and Forgot keep the refusal on screen, not its button. */
+
+  /*
+   * THE CODE FROM THE EMAIL, the second way past it, as on the phone.
+   *
+   * A good code confirms the account, and then this is a sign-in like any
+   * other: the caller's own onSubmit, with the email it was confirmed for
+   * and the password still in the form, so whatever errand the form was
+   * opened for — connect this phone, turn the computer's phone remote on —
+   * is done exactly as Sign in does it. With no password left in the form
+   * there is nothing to sign in with, and it says so.
+   */
+  const confirm = async () => {
+    const address = unconfirmed
+    if (!address) return
+    setProblem(null)
+    setNote(null)
+    setWorking(true)
+    setConfirming(true)
+    try {
+      await confirmWithCode({ ...project(), email: address, code })
+    } catch (err) {
+      setProblem(err.message)
+      setConfirming(false)
+      setWorking(false)
+      return
+    }
+    setConfirming(false)
+    setUnconfirmed(null)
+    setCode('')
+    setEmail(address)
+    setMode('in')
+    try {
+      if (password.length >= 6) await onSubmit({ email: address, password })
+      else setNote(CONFIRMED_SIGN_IN)
+    } catch (err) {
+      setProblem(err.message)
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  /* On the Sign in side and on Account made: Create account and Forgot keep the refusal on screen, not its button. */
+  const waiting = (mode === 'in' || mode === 'sent') && unconfirmed
   const again =
-    mode === 'in' && unconfirmed && problem ? (
+    waiting && problem ? (
       <button type="button" className="chip signin-wide" onClick={sendAgain} disabled={off}>
         Send the confirmation email again
       </button>
     ) : null
+  /*
+   * The box for the code, wherever an account waits. Enter confirms rather
+   * than submitting the form around it, which would try the sign-in that
+   * was just refused. On Account made it is the main thing to do; under
+   * a refusal, Sign in still is.
+   */
+  const codeBox = waiting ? (
+    <div className="signin-code">
+      <label className="signin-field">
+        <span>Code from the email</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            e.preventDefault()
+            if (!off) confirm()
+          }}
+          disabled={off}
+        />
+      </label>
+      <button
+        type="button"
+        className={mode === 'sent' ? 'primary signin-wide' : 'chip signin-wide'}
+        onClick={confirm}
+        disabled={off}
+      >
+        {confirming ? 'Confirming…' : 'Confirm account'}
+      </button>
+    </div>
+  ) : null
 
   if (mode === 'sent') {
     return (
@@ -143,12 +232,20 @@ export default function SignIn({
         </span>
         <p className="signin-sent-head">Account made.</p>
         <p className="signin-sent-body">
-          Confirm it from the email we just sent, then sign in. {NOT_IN_INBOX}
+          Type the code from the email we just sent in the box below, or tap the link in that email and then sign in. {NOT_IN_INBOX}
         </p>
         <p className="signin-sent-to">
           <strong>{email.trim()}</strong>
         </p>
-        <button className="primary signin-wide" type="button" onClick={() => setMode('in')}>
+        {problem ? (
+          <p className="problem" role="alert">
+            {problem}
+          </p>
+        ) : null}
+        {again}
+        {note ? <p className="hint">{note}</p> : null}
+        {codeBox}
+        <button className="chip signin-wide" type="button" onClick={() => setMode('in')} disabled={off}>
           Sign in
         </button>
       </div>
@@ -193,6 +290,7 @@ export default function SignIn({
         ) : null}
         {again}
         {note ? <p className="hint">{note}</p> : null}
+        {codeBox}
         <button className="primary signin-wide signin-go" type="submit" disabled={off}>
           {working
             ? 'One moment…'
@@ -297,6 +395,7 @@ export default function SignIn({
       ) : null}
       {again}
       {note ? <p className="hint">{note}</p> : null}
+      {codeBox}
     </form>
   )
 }

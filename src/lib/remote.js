@@ -75,6 +75,7 @@ import {
   unitChoices,
   unitFrom
 } from '../../shared/relay-rules.mjs'
+import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, cleanCode, codeRefused } from '../../shared/confirm-code.mjs'
 
 export const loadRemoteConfig = () => {
   try {
@@ -807,6 +808,33 @@ export async function resendConfirmation({ url, anonKey, email } = {}) {
   const c = createClient(url || DEFAULT_PROJECT.url, anonKey || DEFAULT_PROJECT.anonKey)
   const { error } = await c.auth.resend({ type: 'signup', email })
   if (error) throw new Error(explainAuth(error.message))
+}
+
+/**
+ * Confirm a new account with the code in its email: the phone's
+ * confirmWithCode (mobile/src/lib/relay.js), by the same rules and in the
+ * same words (shared/confirm-code.mjs). The email's link keeps working as it
+ * always has; this is the second way past it.
+ *
+ * WHAT IT DOES NOT DO is sign this browser in, and on purpose. Signing in
+ * here is more than a session — it is whatever errand the form was opened
+ * for (connect this phone, or sign the computer's device server in with the
+ * same password), and the form's caller does that. So this confirms the
+ * account on a client of its own that keeps nothing, and the form then
+ * signs in through its caller exactly as Sign in does, with the password
+ * still in it (SignIn.jsx, confirm). Nothing is left half signed in if that
+ * second step fails: the account is confirmed, and Sign in works.
+ */
+export async function confirmWithCode({ url, anonKey, email, code } = {}) {
+  const token = cleanCode(code)
+  if (!token) throw new Error(CODE_NOT_DIGITS)
+  const { createClient } = await import('@supabase/supabase-js')
+  const c = createClient(url || DEFAULT_PROJECT.url, anonKey || DEFAULT_PROJECT.anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  })
+  const { data, error } = await c.auth.verifyOtp({ email, token, type: 'email' })
+  if (error) throw new Error(codeRefused(error) ? CODE_DIDNT_WORK : explainAuth(error.message))
+  return data?.session?.user?.id || data?.user?.id || null
 }
 
 export async function remoteSignIn({ url, anonKey, email, password }) {

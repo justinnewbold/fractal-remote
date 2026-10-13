@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { NOT_IN_INBOX, resendConfirmation, sendPasswordReset, sentAgain, signIn, signUp } from '../lib/relay'
+import { NOT_IN_INBOX, confirmWithCode, resendConfirmation, sendPasswordReset, sentAgain, signIn, signUp } from '../lib/relay'
 import Note from '../components/Note'
 import Press from '../components/Press'
 import Connect from './Connect'
@@ -19,6 +19,7 @@ import { SETUP } from '../lib/onboarding'
 import { MADE_HERE, ONLY_HERE } from '../lib/purchases'
 import mailIcon from '../../assets/icons/mail.png'
 import lockIcon from '../../assets/icons/lock.png'
+import checkIcon from '../../assets/icons/check.png'
 import externalIcon from '../../assets/icons/external.png'
 
 /**
@@ -107,15 +108,25 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
   const [error, setError] = useState(null)
   const [note, setNote] = useState(null)
   /*
-   * An account waiting on its confirmation email: { why: 'made' } just now,
-   * with the note saying so, or { why: 'refused', email } when Sign in was
-   * turned away for it, which offers to send the email again. To that
-   * address, not the box: the box may say another by the time the button is
-   * tapped, and the account service can answer "sent" for an address with no
-   * account, so the "look in Spam" line would follow an email that never went.
-   * Every new try, and every switch of side, starts it again.
+   * An account waiting on its confirmation email: { why: 'made', email } just
+   * now, with the note saying so, or { why: 'refused', email } when Sign in
+   * was turned away for it, which offers to send the email again — and
+   * { why: 'again', email } once it has been, which keeps waiting on the new
+   * one. To that address, not the box: the box may say another by the time
+   * the button is tapped, and the account service can answer "sent" for an
+   * address with no account, so the "look in Spam" line would follow an
+   * email that never went. Every new try, and every switch of side, starts
+   * it again.
+   *
+   * AND WHILE IT WAITS, THE CODE. About one new customer in seven never
+   * tapped the email's link — it opens a browser, the browser opens the
+   * website, and then they have to find their way back here to sign in. The
+   * same email carries a code, and the box for it shows in every one of
+   * those states, so the link is no longer the only way past it.
    */
   const [unconfirmed, setUnconfirmed] = useState(null)
+  const [code, setCode] = useState('')
+  const [confirming, setConfirming] = useState(false)
 
   const ready = email.includes('@') && password.length >= 6
 
@@ -142,13 +153,14 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
           if (paid && userId) onAccountMade?.(userId)
           /* Paid on this phone: said that this phone is where to sign in.
              Not "before you open the website": the confirmation link itself
-             opens the website, so that could not be followed. */
+             opens the website, so that could not be followed. The code is
+             typed here, on this phone, so only the link needs saying so. */
           setNote(
             paid
-              ? 'Account made — confirm it from the email we just sent, then come back to this phone and sign in, so your purchase goes with your account.'
-              : 'Account made. Confirm it from the email we just sent, then sign in.'
+              ? 'Account made — type the code from the email we just sent in the box below. Or tap the link in that email, then come back to this phone and sign in, so your purchase goes with your account.'
+              : 'Account made. Type the code from the email we just sent in the box below, or tap the link in that email and then sign in.'
           )
-          setUnconfirmed({ why: 'made' })
+          setUnconfirmed({ why: 'made', email: email.trim() })
           setMode('in')
           return
         }
@@ -189,13 +201,40 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
     if (!address) return
     setBusy(true)
     setError(null)
+    /* Still waiting once it has gone, on a new email with a new code: the
+       box for it stays, and the old code goes out of it. */
     try {
       await resendConfirmation(address)
-      setUnconfirmed(null)
+      setUnconfirmed({ why: 'again', email: address })
+      setCode('')
       setNote(sentAgain(address))
     } catch (err) {
       setError(err.message)
     } finally {
+      setBusy(false)
+    }
+  }
+
+  /*
+   * THE CODE FROM THE EMAIL, the other way past it. A good code signs the
+   * account in as well as confirming it, so from here it is the way a
+   * successful Sign in goes: onSignedIn, and nothing else. A purchase made
+   * on this phone went onto the account when it was made (onAccountMade
+   * above), so it is not handed over a second time.
+   */
+  const confirm = async () => {
+    const address = unconfirmed?.email
+    if (!address) return
+    setBusy(true)
+    setConfirming(true)
+    setError(null)
+    try {
+      await confirmWithCode({ email: address, code })
+      onSignedIn()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setConfirming(false)
       setBusy(false)
     }
   }
@@ -362,11 +401,37 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
             <Press label="Create account with this email" disabled={busy} onPress={() => switchTo('up')} />
           </View>
         ) : null}
-        {mode === 'in' && unconfirmed?.why === 'refused' && error ? (
+        {/* Under any refusal while an account waits: Sign in turned away for
+            it, or a code that did not work — whose words say to send a new
+            one, from Account made as much as from a refusal. */}
+        {mode === 'in' && unconfirmed?.email && error ? (
           <Press label="Send the confirmation email again" disabled={busy} onPress={sendAgain} />
         ) : null}
         {/* Where else to look, under the note that says to confirm. */}
         {note ? <Note>{unconfirmed?.why === 'made' ? `${note} ${NOT_IN_INBOX}` : note}</Note> : null}
+        {mode === 'in' && unconfirmed?.email ? (
+          <View style={{ gap: space.md }}>
+            <Field icon={checkIcon}>
+              <TextInput
+                style={{ ...fieldText, letterSpacing: 2 }}
+                value={code}
+                onChangeText={setCode}
+                placeholder="Code from the email"
+                placeholderTextColor={color.silkFaint}
+                accessibilityLabel="Code from the email"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="one-time-code"
+                textContentType="oneTimeCode"
+                inputMode="numeric"
+                keyboardType="number-pad"
+                returnKeyType="done"
+                onSubmitEditing={() => !busy && confirm()}
+              />
+            </Field>
+            <Press label={confirming ? 'Confirming…' : 'Confirm account'} disabled={busy} onPress={confirm} />
+          </View>
+        ) : null}
 
         {/* Amber whether or not the fields are filled in, as drawn: a pale
             button reads as switched off, and the form says what is missing
