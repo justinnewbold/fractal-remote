@@ -65,6 +65,47 @@ and the app keeps the computer's link to it up by itself:
   the app's own retry asks again only after the failures it can tell are
   safe.
 
+## Looking for updates, and staying awake
+
+**Every start looks for a new version by itself** (since 1.87.23 — before
+that, an ordinary start looked only at launch): six hours after its last
+look, a quarter of an hour after one that found the new version still being
+built, an hour after one that could not reach GitHub, and half a minute after
+the computer wakes. What it finds downloads quietly and goes in when the app
+quits, or when somebody presses Restart to update — never by the app
+restarting itself. Each computer waits only for its own files on a release
+(`updateFiles` in [`lib/updates.mjs`](lib/updates.mjs)), so a Mac build that
+failed no longer leaves every PC and Pi saying "still being built".
+
+One update per run, still: once one is downloaded and waiting, a later look
+does not fetch a newer one. On a Mac, macOS's updater takes one per run; on
+Linux, electron-updater deletes the waiting download as soon as it starts a
+newer one, and a quit in that gap would delete the AppImage itself. The next
+launch looks again and finds the newest.
+
+**The computer stays awake while a phone is using it**, so a laptop at a gig
+does not idle-sleep under the song. While one has in the last half hour, the
+app holds Electron's `powerSaveBlocker` with `prevent-app-suspension`: the
+computer keeps running, and the screen may still go dark. Half an hour after
+the last use it lets go. Once a minute it looks two ways, because the
+computer cannot see a phone any one way:
+
+- **The phone app** never connects to the computer at all, on the same wifi
+  or not: everything it asks goes through the relay, and arrives inside the
+  device server where this app cannot see it. So while its link is up, the
+  phone app (and the website, when a phone uses it through the account)
+  writes a small note, `phone.seen`, into the device server's own store
+  every couple of minutes ([`shared/phone-note.mjs`](../shared/phone-note.mjs)),
+  and a note that changed since the last look is a phone using it. A phone
+  app older than 1.87.23 writes none, until its next update.
+- **A phone's web browser on the same wifi**, on the computer's own page,
+  talks straight to the device server's port and writes no note, so a
+  connection to that port from another machine counts too.
+
+The rules are in [`lib/awake.mjs`](lib/awake.mjs). One limit, said plainly:
+**a closed lid still sleeps most laptops.** That is the computer's own
+setting, and nothing an app asks for changes it. Leave the lid open at a gig.
+
 ## Starting when the computer turns on (Linux)
 
 For a computer that lives on a pedalboard or in a rack — a Raspberry Pi with
@@ -100,7 +141,8 @@ What it does underneath, for whoever has to look:
   that it waits for a quit, as everywhere else. A look that fails just after
   power-on (a Pi often boots before its wifi) is taken again every 30 seconds
   while an install could still follow it, and once more when the phone
-  remote comes on; after that it looks every 12 hours. Not the .deb: its
+  remote comes on; after that it looks every six hours, as every start does
+  (see below). Not the .deb: its
   update asks for a password, which nobody is there to type, so on a .deb it
   waits for a quit.
 - **Somebody looking is not the same as somebody there.** Plug a screen in,
@@ -174,6 +216,25 @@ produces a working unsigned build when they don't:
 Unsigned, macOS says "unidentified developer" and the first launch needs
 right-click → Open. That is why a Mac release only ever publishes signed: an
 unsigned `.dmg` on the download page is a support ticket, not a download.
+
+**Apple's approval stops a release; Apple's stamp never does.** Every app and
+disk image is sent to Apple to be notarised ([`notarise.js`](notarise.js),
+electron-builder's `afterSign` hook for the app, with its own notarising
+switched off), and anything but Accepted fails the build before it is
+published. The stamp — Apple's ticket stapled onto the file, so it opens with
+no internet — is then asked for five times over two and a half minutes, and
+if Apple's ticket service cannot be reached the release goes out without it,
+with a warning on the run. From 1.87.14 to 1.87.22 that service kept dropping
+the line to GitHub's Mac machines, and on 1.87.21 it took the Mac files off
+the release. Without the stamp, macOS looks the approval up with Apple the
+first time the app is opened and shows the same single prompt, so opening it
+is unchanged for anybody with internet. The check after the build follows
+suit: a file with a stamp has to pass Gatekeeper (`spctl`) on the build
+machine; one without has to pass Gatekeeper or, when Gatekeeper's own lookup
+cannot get through either, Apple's notary record of that very submission
+(`node notarise.js --confirm`). Either way something from Apple has to say
+yes, and a stamp that could not be fetched no longer turns the run red after
+the release has gone out.
 
 **Windows.** `WIN_CERT_P12` and `WIN_CERT_PASSWORD` sign it if they exist, and
 **the unsigned build publishes anyway**. SmartScreen shows a blue "Windows

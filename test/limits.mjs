@@ -18,8 +18,10 @@
  * went with the AI, and so did the tests that held them together.
  */
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
@@ -371,47 +373,321 @@ export function run(test) {
     /*
      * And it is checked. Three questions, and an artefact can pass one while
      * failing another: is the signature intact and complete, would Gatekeeper
-     * open it, and did notarisation actually attach a ticket. The last is the
-     * one nobody can answer by reading configuration — which is the whole point
+     * open it (which, for a Developer ID app, it does only once Apple has
+     * notarised it), and is the stamp on the file. The last two are the ones
+     * nobody can answer by reading configuration — which is the whole point
      * of asking the build instead of guessing.
      */
     for (const [cmd, why] of [
       ['codesign --verify', 'nothing checks the signature covers what it should'],
-      ['spctl --assess', "nothing asks whether Gatekeeper would open it"],
-      ['stapler validate', 'nothing proves notarisation happened — a signed but un-notarised .dmg is still quarantined on a stranger\'s Mac']
+      ['spctl --assess', "nothing asks whether Gatekeeper would open it, which is the proof Apple notarised it"],
+      ['stapler validate', 'nothing says whether the stamp made it onto the file']
     ]) {
       assert.ok(wf.includes(cmd), `${cmd} is gone: ${why}`)
     }
 
     /*
-     * And the disk image gets its own ticket.
+     * Changed on purpose, 13 October 2026 (1.87.23). This held every stapler
+     * call to the again() retry and let none of them fail quietly, so a stamp
+     * Apple's ticket service would not hand over failed the release. From
+     * 1.87.14 on it would not, from GitHub's Mac machines: "The network
+     * connection was lost" from api.apple-cloudkit.com after Apple had said
+     * Accepted, all five tries on 1.87.22. On 1.87.21 the same failure came
+     * from INSIDE electron-builder's own notarise-and-staple, so no Mac files
+     * reached the release and every computer said "still being built" for
+     * about three hours.
      *
-     * electron-builder notarises the app and stops: `notarizeIfProvided` takes
-     * the app path and runs during signing, before a .dmg exists. The first
-     * build to reach the check above said so in one line — "does not have a
-     * ticket stapled to it" — with the app beside it already "accepted,
-     * source=Notarized Developer ID".
-     *
-     * The image is what macOS assesses first, so without this the download
-     * still warns however well signed the app inside it is.
+     * So what is held now is the line between approval and stamp. Justin's
+     * condition, 13 October 2026: "Right now users just have to click the
+     * button about being from an unknown developer and that's all to install.
+     * Just wanna make sure that's not gonna change." Approval still happens on
+     * every release and still fails it when Apple says no; only the stamp may
+     * be missing, and a Mac with internet then looks the approval up itself
+     * and shows the same prompt.
      */
-    assert.ok(
-      wf.includes('notarytool submit'),
-      'the disk image is no longer notarised — electron-builder only ever does the app, and the image is what someone downloads'
-    )
-    assert.ok(
-      wf.includes('stapler staple'),
-      'the disk image is notarised but its ticket is never attached, so the check only passes with a network and a stranger offline still sees a warning'
-    )
-    /* And the stapler asks Apple again when the line drops: every Mac run from
-       1.87.14 to 1.87.19 went red on "The network connection was lost" with
-       the file already accepted, and 1.87.19's never sent its Intel image. */
-    assert.equal(wf.match(/^\s*again\(\) \{$/gm)?.length, 2, 'a stapler step asks Apple only once, and one dropped line fails the release')
-    for (const call of ['again xcrun stapler staple "$dmg"', 'again xcrun stapler validate "$app"', 'again xcrun stapler validate "$dmg"']) {
-      assert.ok(wf.includes(call), `${call.replace('again ', '')} is asked only once, and one dropped line fails the release`)
+    const code = (text) => text.split('\n').filter((line) => !/^\s*#/.test(line)).join('\n')
+    const macJob = wf.slice(wf.indexOf('\n  mac:\n'), wf.indexOf('\n  windows:\n'))
+    assert.ok(macJob.length > 100, 'the mac job is not where this reads it')
+    const step = (name) => {
+      const at = macJob.indexOf(`- name: ${name}\n`)
+      assert.notEqual(at, -1, `the mac job has no step "${name}"`)
+      const rest = macJob.slice(at + 1)
+      const next = rest.search(/\n {6}- (name|uses):/)
+      return code(next === -1 ? rest : rest.slice(0, next))
     }
-    assert.ok(!/^\s*xcrun stapler (staple|validate)/m.test(wf), 'a stapler call goes straight to Apple, and one dropped line fails the release')
-    assert.match(wf, /"\$@" && return 0[\s\S]{0,120}return 1/, 'a stapler that never answers no longer fails the step')
+
+    // electron-builder's own notarise-and-staple is off, and notarise.js does it instead, between signing and the zip.
+    const yml = read('desktop/electron-builder.yml')
+    const macConfig = yml.slice(yml.indexOf('\nmac:'), yml.indexOf('\nwin:'))
+    assert.match(macConfig, /^ {2}notarize: false$/m, "electron-builder notarises and staples by itself again, and a staple that fails takes the Mac files off the release")
+    assert.match(yml, /^afterSign: notarise\.js$/m, 'nothing notarises the app between signing and the zip, so the Mac release is not approved by Apple')
+    const pack = step('Package, signed and notarised')
+    for (const name of ['CSC_LINK', 'APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID']) {
+      assert.ok(pack.includes(`${name}:`), `the package step no longer hands notarise.js ${name}, so the app is not notarised`)
+    }
+
+    // The disk images go through the same rules: approval checked, stamp best effort.
+    const dmg = step('Notarise the disk image too')
+    assert.match(dmg, /node notarise\.js "\$dmg"/, 'the disk image is no longer sent to Apple through notarise.js')
+    assert.ok(!/notarytool submit/.test(dmg), 'the disk image is sent to Apple by a bare notarytool, whose answer nobody reads')
+    for (const name of ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID']) {
+      assert.ok(dmg.includes(`${name}:`), `the disk image step does not hand notarise.js ${name}`)
+    }
+    assert.ok(!/stapler staple/.test(code(wf)), 'something in the workflow staples by itself, where a failure stops the run')
+
+    // Proof: the signature and Gatekeeper fail the run; the stamp is a warning.
+    const prove = step('Prove the artefact is what it claims')
+    assert.match(prove, /set -euo pipefail/, 'a failed check in the proof step no longer fails it')
+    assert.match(prove, /^\s*codesign --verify --deep --strict --verbose=2 "\$app"$/m, 'the signature check can no longer fail the run')
+    assert.match(prove, /^\s*again spctl --assess --type exec --verbose=4 "\$app"$/m, 'Gatekeeper is not asked, or its no can no longer fail the run')
+    assert.match(prove, /"\$@" && return 0[\s\S]{0,120}return 1/, 'a Gatekeeper that says no five times no longer fails the step')
+    assert.equal((code(wf).match(/^\s*again\(\) \{$/gm) || []).length, 1, 'the retry is defined somewhere it is not used, or twice')
+    assert.ok(!/^\s*(again )?xcrun stapler validate/m.test(prove), 'a stamp that cannot be fetched fails the run again')
+
+    /*
+     * And the proof of approval follows the stamp. With one, Gatekeeper answers
+     * from the file and its no fails the run. Without one, Gatekeeper asks
+     * Apple online through the same ticket service that would not hand the
+     * stamp over, and a dropped lookup reads "rejected, source=Unnotarized
+     * Developer ID" — so its no is put to Apple's notary (notarise.js
+     * --confirm), and only the notary's no, or its silence, fails the run.
+     * Before this, a release whose stamp could not be fetched went red here
+     * after it had gone out, for a lookup and not for a refusal.
+     */
+    assert.match(prove, /if xcrun stapler validate "\$app"; then\s*\n\s*again spctl --assess --type exec --verbose=4 "\$app"\s*\n\s*else\b/, 'Gatekeeper saying no to a stamped app no longer fails the run')
+    assert.match(
+      prove,
+      /else\s*\n\s*if ! again spctl --assess --type exec --verbose=4 "\$app"; then\s*\n\s*node notarise\.js --confirm "\$app"\s*\n\s*fi\s*\n\s*nostamp "\$app"\s*\n\s*fi/,
+      'an app with no stamp that Gatekeeper cannot vouch for is let through without asking Apple’s notary'
+    )
+    assert.match(prove, /if ! xcrun stapler validate "\$dmg"; then\s*\n\s*node notarise\.js --confirm "\$dmg"\s*\n\s*nostamp "\$dmg"\s*\n\s*fi/, 'a disk image with no stamp is let through without asking Apple’s notary')
+    assert.match(prove, /nostamp\(\) \{\s*\n\s*echo "::warning::/, 'a missing stamp is not said on the run')
+    assert.ok(!/notarise\.js --confirm[^\n]*(\|\||; *true|&& *true)/.test(prove), 'a no from Apple’s notary is swallowed')
+    for (const name of ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID']) {
+      assert.ok(prove.includes(`${name}:`), `the proof step does not hand notarise.js ${name}, so it cannot ask Apple's notary`)
+    }
+
+    /*
+     * Run, on stand-ins for codesign, the stapler, Gatekeeper and the notary,
+     * for every way it can go. Bash's own rules about when `set -e` stops a
+     * script are the part reading the text cannot prove.
+     */
+    if (process.platform !== 'win32') {
+      const script = (() => {
+        const raw = wf.slice(wf.indexOf('- name: Prove the artefact is what it claims'))
+        const body = raw.slice(raw.indexOf('run: |\n') + 'run: |\n'.length)
+        const lines = []
+        for (const line of body.split('\n')) {
+          if (line.trim() && !line.startsWith('          ')) break
+          lines.push(line.slice(10))
+        }
+        return lines.join('\n')
+      })()
+      const proveWith = ({ appStamp, dmgStamp = true, gatekeeper, notary }) => {
+        const root = mkdtempSync(join(tmpdir(), 'prove-'))
+        try {
+          const bin = join(root, 'bin')
+          const work = join(root, 'desktop')
+          mkdirSync(bin)
+          mkdirSync(join(work, 'release', 'mac-arm64', 'Fractal Remote.app'), { recursive: true })
+          writeFileSync(join(work, 'release', 'Fractal-Remote-1.87.23-arm64.dmg'), '')
+          const stub = (name, body) => {
+            writeFileSync(join(bin, name), `#!/bin/sh\necho "$0 $*" >> "${join(root, 'asked')}"\n${body}\n`)
+            chmodSync(join(bin, name), 0o755)
+          }
+          stub('sleep', 'exit 0')
+          stub('codesign', 'exit 0')
+          stub('spctl', `exit ${gatekeeper ? 0 : 3}`)
+          stub('xcrun', `case "$3" in *.app) exit ${appStamp ? 0 : 65};; *.dmg) exit ${dmgStamp ? 0 : 65};; esac; exit 1`)
+          stub('node', `exit ${notary ? 0 : 1}`)
+          const out = spawnSync('bash', ['-c', script], { cwd: work, env: { PATH: `${bin}:/usr/bin:/bin` }, encoding: 'utf8' })
+          let asked = ''
+          try {
+            asked = readFileSync(join(root, 'asked'), 'utf8')
+          } catch {
+            asked = ''
+          }
+          return { code: out.status, out: out.stdout, asked: asked.split('\n').filter(Boolean).map((l) => l.replace(/^.*\/bin\//, '')) }
+        } finally {
+          rmSync(root, { recursive: true, force: true })
+        }
+      }
+      const notaryAsked = (r) => r.asked.filter((l) => l.startsWith('node notarise.js --confirm'))
+      // Stamped and approved: green, nothing asked of the notary.
+      const fine = proveWith({ appStamp: true, gatekeeper: true })
+      assert.equal(fine.code, 0, fine.out)
+      assert.deepEqual(notaryAsked(fine), [])
+      // Stamped and refused by Gatekeeper: red, and the notary is not asked to overrule it.
+      const refused = proveWith({ appStamp: true, gatekeeper: false, notary: true })
+      assert.notEqual(refused.code, 0, 'Gatekeeper refusing a stamped app no longer fails the run')
+      assert.deepEqual(notaryAsked(refused), [], 'the notary overrules Gatekeeper on a stamped app')
+      assert.equal(refused.asked.filter((l) => l.startsWith('spctl')).length, 5)
+      // No stamp, and Gatekeeper's lookup got through: green, with a warning.
+      const looked = proveWith({ appStamp: false, gatekeeper: true })
+      assert.equal(looked.code, 0, looked.out)
+      assert.match(looked.out, /::warning::release\/mac-arm64\/Fractal Remote\.app is notarised but carries no stamp/)
+      assert.deepEqual(notaryAsked(looked), [])
+      // No stamp, Gatekeeper cannot get through, Apple's notary says Accepted: green, with a warning.
+      const vouched = proveWith({ appStamp: false, gatekeeper: false, notary: true })
+      assert.equal(vouched.code, 0, `a release whose stamp could not be fetched turns the run red after it went out:\n${vouched.out}`)
+      assert.deepEqual(notaryAsked(vouched), ['node notarise.js --confirm release/mac-arm64/Fractal Remote.app'])
+      assert.match(vouched.out, /::warning::.*carries no stamp/)
+      // No stamp, and neither Gatekeeper nor the notary says yes: red.
+      const unproven = proveWith({ appStamp: false, gatekeeper: false, notary: false })
+      assert.notEqual(unproven.code, 0, 'an app nothing proves Apple approved passes the proof')
+      // A disk image with no stamp that the notary does not vouch for: red.
+      const image = proveWith({ appStamp: true, gatekeeper: true, dmgStamp: false, notary: false })
+      assert.notEqual(image.code, 0, 'a disk image nothing proves Apple approved passes the proof')
+      assert.deepEqual(notaryAsked(image), ['node notarise.js --confirm release/Fractal-Remote-1.87.23-arm64.dmg'])
+      const imageOk = proveWith({ appStamp: true, gatekeeper: true, dmgStamp: false, notary: true })
+      assert.equal(imageOk.code, 0, imageOk.out)
+    }
+  })
+
+  test('Apple saying no stops the Mac release; Apple’s stamp never does', async () => {
+    /*
+     * desktop/notarise.js, run with Apple stood in for. It is electron-builder's
+     * afterSign hook for each .app and the workflow's command for each .dmg, so
+     * this is the whole of what decides whether a Mac release goes out.
+     */
+    const { createRequire } = await import('node:module')
+    const n = createRequire(import.meta.url)('../desktop/notarise.js')
+    const env = { APPLE_ID: 'justin@example.com', APPLE_APP_SPECIFIC_PASSWORD: 'secret-pw', APPLE_TEAM_ID: 'TEAM123' }
+    const apple = ({ answer = { status: 'Accepted', id: 'sub-1' }, exit = 0, stamps = [] } = {}) => {
+      const calls = []
+      const lines = []
+      const slept = []
+      const removed = []
+      let tries = 0
+      const run = async (cmd, args, options = {}) => {
+        calls.push({ line: [cmd, ...args].join(' '), cwd: options.cwd })
+        if (cmd === 'ditto') return { code: 0, stdout: '' }
+        if (args[0] === 'notarytool' && args[1] === 'submit') return { code: exit, stdout: answer ? JSON.stringify(answer) : 'Error: the network connection was lost.' }
+        if (args[0] === 'notarytool' && args[1] === 'log') return { code: 0, stdout: '{"issues":[{"message":"The binary is not signed with a valid Developer ID certificate."}]}' }
+        if (args[0] === 'stapler') return { code: stamps[tries++] ? 0 : 65, stdout: '' }
+        throw new Error(`nothing else is run: ${cmd}`)
+      }
+      const options = { env, run, log: (l) => lines.push(l), sleep: async (ms) => slept.push(ms), tmp: () => '/tmp/notarise-1', remove: (d) => removed.push(d) }
+      return { options, calls, lines, slept, removed }
+    }
+    assert.deepEqual(n.STAPLE_WAITS_S, [0, 10, 20, 40, 80], 'the stamp is asked for with less patience than before')
+
+    // Accepted, and the ticket service never answers: notarised, no stamp, a warning, and the release goes on.
+    const offline = apple()
+    const out = await n.notarise('/r/Fractal-Remote-1.87.23.dmg', offline.options)
+    assert.deepEqual(out, { id: 'sub-1', stapled: false }, 'a stamp that could not be fetched stops the release')
+    assert.equal(offline.calls.filter((c) => c.line.startsWith('xcrun stapler staple')).length, 5)
+    assert.deepEqual(offline.slept, [10000, 20000, 40000, 80000])
+    assert.ok(offline.lines.some((l) => l.startsWith('::warning::') && /no stamp/.test(l)), 'a missing stamp is not said on the run')
+    assert.ok(!offline.lines.some((l) => l.includes('secret-pw')), 'the Apple password is printed in the log')
+    const submit = offline.calls.find((c) => c.line.startsWith('xcrun notarytool submit'))
+    assert.match(submit.line, /--wait --output-format json$/, 'notarytool is not waited on, or its answer cannot be read')
+    assert.match(submit.line, /--apple-id justin@example\.com --password secret-pw --team-id TEAM123/)
+
+    // Accepted, and the stamp comes back on the second try.
+    const later = apple({ stamps: [false, true] })
+    assert.deepEqual(await n.notarise('/r/Fractal-Remote-1.87.23.dmg', later.options), { id: 'sub-1', stapled: true })
+    assert.deepEqual(later.slept, [10000])
+
+    // Refused: the release stops, with Apple's reasons, and nothing is stamped.
+    const refused = apple({ answer: { status: 'Invalid', id: 'sub-2', message: 'Processing complete' } })
+    await assert.rejects(n.notarise('/r/Fractal-Remote-1.87.23.dmg', refused.options), /Apple did not accept Fractal-Remote-1\.87\.23\.dmg \(Invalid[\s\S]*not signed with a valid Developer ID/, 'a refusal from Apple lets the release go out')
+    assert.ok(!refused.calls.some((c) => c.line.startsWith('xcrun stapler')), 'a refused file is stamped')
+    // No answer at all, or an answer with a failed exit, is not an approval either.
+    await assert.rejects(n.notarise('/r/x.dmg', apple({ answer: null }).options), /no answer/)
+    await assert.rejects(n.notarise('/r/x.dmg', apple({ exit: 1 }).options), /exited 1/)
+    assert.equal(n.readAnswer('Conducting pre-submission checks…\n{"status":"Accepted","id":"sub-9"}').status, 'Accepted')
+    assert.equal(n.readAnswer('not json'), null)
+
+    // A .app is zipped beside itself to send, sent as the zip, stamped where it sits, and the zip cleaned up.
+    const app = apple()
+    await n.notarise('/out/mac-arm64/Fractal Remote.app', app.options)
+    assert.deepEqual(app.calls[0], { line: 'ditto -c -k --sequesterRsrc --keepParent Fractal Remote.app /tmp/notarise-1/Fractal Remote.zip', cwd: '/out/mac-arm64' })
+    assert.match(app.calls[1].line, /^xcrun notarytool submit \/tmp\/notarise-1\/Fractal Remote\.zip /)
+    assert.deepEqual(app.calls.at(-1), { line: 'xcrun stapler staple Fractal Remote.app', cwd: '/out/mac-arm64' })
+    assert.deepEqual(app.removed, ['/tmp/notarise-1'])
+
+    // As electron-builder's hook: Mac builds with a real certificate only, and those must have an Apple ID.
+    const hook = apple()
+    const context = { electronPlatformName: 'darwin', appOutDir: '/out/mac', packager: { appInfo: { productFilename: 'Fractal Remote' } } }
+    assert.equal(await n.afterSign({ ...context, electronPlatformName: 'win32' }, { ...hook.options, env: { ...env, CSC_LINK: 'p12' } }), null)
+    assert.equal(await n.afterSign(context, hook.options), null, 'an ad-hoc signed build is sent to Apple, which notarises nothing ad hoc')
+    assert.equal(hook.calls.length, 0)
+    await assert.rejects(n.afterSign(context, { ...hook.options, env: { CSC_LINK: 'p12' } }), /APPLE_ID/, 'a Developer ID app goes out without being notarised')
+    assert.deepEqual(await n.afterSign(context, { ...hook.options, env: { ...env, CSC_LINK: 'p12' } }), { id: 'sub-1', stapled: false })
+    assert.match(hook.calls[0].line, /^ditto .* Fractal Remote\.app /)
+    assert.equal(n.default, n.afterSign, 'electron-builder finds no hook in notarise.js')
+    assert.throws(() => n.credentials({ APPLE_ID: 'a@b.c' }), /APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID/)
+    assert.equal(n.credentials({}), null)
+
+    /*
+     * Every approval is written down for the proof step: which submission,
+     * for which file, in the runner's own temporary folder. A file with no
+     * stamp is proven from that record by asking Apple's notary, because
+     * Gatekeeper's online answer goes through the ticket service that would
+     * not hand the stamp over (see "Prove the artefact" in desktop.yml).
+     */
+    const book = []
+    const onRunner = { ...env, RUNNER_TEMP: '/runner/tmp' }
+    const real = (f) => `/real${f}`
+    const written = apple()
+    await n.notarise('/r/x.dmg', { ...written.options, env: onRunner, append: (path, text) => book.push([path, text]), real })
+    assert.deepEqual(book, [['/runner/tmp/notarised.tsv', 'sub-1\t/real/r/x.dmg\n']], 'an approval is not written down for the proof step')
+    await assert.rejects(n.notarise('/r/x.dmg', { ...apple({ answer: { status: 'Invalid', id: 'sub-2' } }).options, env: onRunner, append: (path, text) => book.push([path, text]), real }))
+    assert.equal(book.length, 1, 'a refusal is written down as an approval')
+    // A record that cannot be written is a warning: the approval happened, and the release goes on.
+    const unwritten = apple()
+    const kept = await n.notarise('/r/x.dmg', { ...unwritten.options, env: onRunner, append: () => { throw new Error('disk full') }, real })
+    assert.equal(kept.id, 'sub-1')
+    assert.ok(unwritten.lines.some((l) => l.startsWith('::warning::could not write down')))
+    assert.equal(n.recordFile({}), null)
+    assert.equal(n.recordFile({ NOTARISED_RECORD: '/x/r.tsv', RUNNER_TEMP: '/t' }), '/x/r.tsv')
+
+    const notary = (answers) => {
+      const calls = []
+      const slept = []
+      let i = 0
+      const run = async (cmd, args) => {
+        calls.push([cmd, ...args].join(' '))
+        const a = answers[Math.min(i++, answers.length - 1)]
+        return a ? { code: 0, stdout: JSON.stringify({ id: 'sub-7', name: 'Fractal Remote.zip', ...a }) } : { code: 69, stdout: 'Error: The network connection was lost.' }
+      }
+      const record = 'sub-0\t/real/r/other.dmg\nsub-7\t/real/out/mac-arm64/Fractal Remote.app\n'
+      const options = {
+        env: onRunner,
+        run,
+        real,
+        log: () => {},
+        sleep: async (ms) => slept.push(ms),
+        readText: (path) => {
+          assert.equal(path, '/runner/tmp/notarised.tsv')
+          return record
+        }
+      }
+      return { options, calls, slept }
+    }
+    const app7 = '/out/mac-arm64/Fractal Remote.app'
+    assert.deepEqual(n.CONFIRM_WAITS_S, [0, 10, 30])
+    const yes = notary([{ status: 'Accepted' }])
+    assert.deepEqual(await n.confirm(app7, yes.options), { id: 'sub-7' })
+    assert.deepEqual(yes.calls, ['xcrun notarytool info sub-7 --apple-id justin@example.com --password secret-pw --team-id TEAM123 --output-format json'], 'the notary is asked about some other submission, or not by its record')
+    // Apple's own record saying anything but Accepted fails at once: that is an answer, not a dropped line.
+    const no = notary([{ status: 'Invalid', message: 'Processing complete' }])
+    await assert.rejects(n.confirm(app7, no.options), /submission sub-7 for Fractal Remote\.app is Invalid/, 'a submission Apple refused passes the proof')
+    assert.equal(no.calls.length, 1)
+    // No answer is asked again, and an answer that never comes fails.
+    const late = notary([null, { status: 'Accepted' }])
+    assert.deepEqual(await n.confirm(app7, late.options), { id: 'sub-7' })
+    assert.deepEqual(late.slept, [10000])
+    const silent = notary([null])
+    await assert.rejects(n.confirm(app7, silent.options), /did not answer about Fractal Remote\.app \(submission sub-7\) after 3 tries/, 'a notary that never answers passes the proof')
+    assert.equal(silent.calls.length, 3)
+    // No record of the file on this run: nothing proves it, and nothing is asked.
+    const none = notary([{ status: 'Accepted' }])
+    await assert.rejects(n.confirm('/out/mac/Fractal Remote.app', none.options), /No record that Apple accepted Fractal Remote\.app/, 'a file nobody sent to Apple passes the proof')
+    assert.equal(none.calls.length, 0)
+    await assert.rejects(n.confirm(app7, { ...none.options, readText: () => { throw new Error('ENOENT') } }), /No record/)
+    await assert.rejects(n.confirm(app7, { ...none.options, env: { RUNNER_TEMP: '/runner/tmp' } }), /APPLE_ID/)
   })
 
   test('the Windows app is built, and ships both halves of a release', async () => {
@@ -1539,6 +1815,12 @@ export function run(test) {
     }
     for (const kind of ['.dmg', 'Setup-$v.exe', '.AppImage', '_amd64.deb', '_arm64.deb']) {
       assert.ok(job.includes(kind), `the check does not look for ${kind}`)
+    }
+    /* A Mac updates from its zip, not the disk image, and the app now waits
+       for the zip for its own processor before it says an update is ready —
+       so a release without one is a release no Mac can take. */
+    for (const zip of ['Fractal-Remote-$v-mac.zip', 'Fractal-Remote-$v-arm64-mac.zip']) {
+      assert.ok(job.includes(zip), `the check does not look for ${zip}`)
     }
     /* It has to actually fail, rather than printing and carrying on. */
     assert.match(job, /exit 1/, 'the check reports a gap without failing, so nobody sees it')

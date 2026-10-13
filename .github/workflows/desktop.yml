@@ -25,6 +25,15 @@
 #
 # Without the secrets this still builds, and macOS then reports an unidentified
 # developer on first launch.
+#
+# APPLE'S APPROVAL STOPS A RELEASE; APPLE'S STAMP NEVER DOES. Notarising (Apple
+# checking the signed app and saying yes) happens on every Mac release and a
+# no fails the build. Stapling (pinning that yes to the file) is asked for
+# patiently and is allowed to be missing, because from 1.87.14 on Apple's
+# ticket service kept dropping the line to GitHub's Mac machines — and on
+# 1.87.21 that took the Mac files off the release altogether. A Mac opening an
+# app with no stamp asks Apple itself, and shows the same single prompt; see
+# desktop/notarise.js for the whole of it.
 name: desktop
 
 on:
@@ -238,6 +247,17 @@ jobs:
           # commit to tag, so GitHub tags the default branch's head — a release
           # published from anywhere else would carry that name and someone
           # else's code.
+          #
+          # NOTARISED BY desktop/notarise.js, not by electron-builder itself
+          # (`notarize: false` and `afterSign: notarise.js` in
+          # electron-builder.yml). The Apple ID below is what it signs in to
+          # Apple with. It sends each .app to Apple after signing and before
+          # the zip and the disk image are made, and a refusal fails this
+          # step before anything is published, exactly as before. What it no
+          # longer does is fail this step when Apple's ticket service cannot
+          # be reached for the stamp afterwards: on 1.87.21 electron-builder's
+          # own staple threw here, after Apple had said Accepted, and no Mac
+          # files reached the release at all.
           PUBLISH: >-
             ${{ (startsWith(github.ref, 'refs/tags/desktop-v')
                  || (((inputs.publish || github.event_name == 'push') && github.ref == 'refs/heads/main')))
@@ -250,17 +270,19 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run dist
 
-      # electron-builder notarises the app and stops there. Its
-      # `notarizeIfProvided` takes the app path, and it runs during signing —
-      # before a disk image exists at all. So the .dmg a person actually
-      # downloads carried no ticket of its own, which is exactly what the step
-      # below caught the first time it got far enough to ask:
-      # "does not have a ticket stapled to it".
+      # The app inside is notarised during packaging (notarise.js, as
+      # electron-builder's afterSign hook) — before a disk image exists at
+      # all. So the image gets its own trip to Apple here.
       #
-      # That matters because the image is the first thing macOS assesses. It
-      # quarantines the download and checks the container before anything
-      # inside it is reachable, and a stapled ticket is what lets that succeed
-      # with no network.
+      # Through the same notarise.js, and so by the same rules: a refusal from
+      # Apple fails this step (it reads notarytool's answer and believes only
+      # Accepted — a bare `notarytool submit --wait` was trusted to fail on
+      # its own here before), and a stamp Apple's ticket service will not
+      # hand over is a warning. That stamp only ever reached the copy kept
+      # with this run, in any case: electron-builder uploads each file to the
+      # release the moment it is made, so the image on the release is the one
+      # it made. Notarising it still counts — a Mac that opens it asks Apple,
+      # and Apple knows it.
       #
       # Deliberately not signed. electron-builder offers `dmg.sign` and
       # documents it as "Signing is not required and will lead to unwanted
@@ -277,29 +299,9 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          # Apple's ticket service drops the line now and then. Every Mac run
-          # from 1.87.14 to 1.87.19 went red on "The network connection was
-          # lost" from api.apple-cloudkit.com, after Apple had already said
-          # Accepted, and the 1.87.19 one never sent the Intel image at all.
-          # The ticket was there; it only had to be asked for again. So the
-          # stapler asks up to five times over about two and a half minutes.
-          # A file Apple really refused fails all five and still goes red.
-          again() {
-            for wait in 0 10 20 40 80; do
-              sleep "$wait"
-              "$@" && return 0
-              echo "::warning::$* did not answer; asking again"
-            done
-            return 1
-          }
           for dmg in release/*.dmg; do
             echo "── $dmg"
-            xcrun notarytool submit "$dmg" \
-              --apple-id "$APPLE_ID" \
-              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-              --team-id "$APPLE_TEAM_ID" \
-              --wait
-            again xcrun stapler staple "$dmg"
+            node notarise.js "$dmg"
           done
 
       # What the steps above claim, checked against what macOS will actually do
@@ -309,25 +311,58 @@ jobs:
       #   codesign --verify   is the signature intact, and does it cover
       #                       everything inside — the vendored server's native
       #                       modules included
-      #   spctl --assess      would Gatekeeper let a person open this
-      #   stapler validate    did notarisation actually happen, and is the
-      #                       ticket attached so it works with no network
+      #   stapler validate    is the stamp on the file, so it opens with no
+      #                       network at all
+      #   spctl --assess      would Gatekeeper let a person open this — and it
+      #                       says yes to a Developer ID app only once Apple
+      #                       has notarised it: "accepted, source=Notarized
+      #                       Developer ID". This is the proof of approval.
       #
-      # The last one is why this step exists rather than a comment guessing at
-      # whether electron-builder notarises on the strength of credentials alone.
-      # If it does not, this goes red and names the missing piece, which beats
-      # shipping a .dmg that Gatekeeper quarantines on someone else's Mac.
+      # The signature fails the run, always. A missing stamp is a warning,
+      # because the stamp comes from the ticket service that dropped the line
+      # on every Mac run from 1.87.14 to 1.87.22, and because it changes
+      # nothing for anybody with internet: macOS looks the approval up with
+      # Apple on the first open and shows the same single prompt. Justin:
+      # "Right now users just have to click the button about being from an
+      # unknown developer and that's all to install. Just wanna make sure
+      # that's not gonna change."
+      #
+      # And the proof of approval depends on the stamp, because Gatekeeper's
+      # answer does:
+      #
+      #   - Stamped: spctl answers from the file, on this machine, and its no
+      #     fails the run, as it always has.
+      #   - Not stamped: spctl has to ask Apple online, through the SAME ticket
+      #     service that would not hand the stamp over — and a lookup that
+      #     drops the line comes back "rejected, source=Unnotarized Developer
+      #     ID", exactly like a real no. So when it still says no after five
+      #     tries, the proof is asked of Apple's notary instead (notarise.js
+      #     --confirm: `notarytool info` on the submission written down when
+      #     Apple accepted the file, which has answered on every run). Accepted
+      #     there is a warning; anything else, or no record at all, fails the
+      #     run. Without that, a release whose stamp could not be fetched went
+      #     red here after it had gone out, for a lookup and not for a no.
+      #
+      # On a run that publishes, the files are already on the release by the
+      # time this runs (electron-builder uploads as it goes), so nothing here
+      # can hold a release back either way: a red here says the one that just
+      # went out needs looking at. An app Apple refused never gets this far:
+      # notarise.js fails the package step before anything is published.
       - name: Prove the artefact is what it claims
         if: ${{ github.event_name != 'pull_request' && env.SIGNABLE == 'true' }}
         working-directory: desktop
+        env:
+          # For notarise.js --confirm, which asks Apple's notary about a file
+          # with no stamp.
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           # Globs rather than `find | for`: the product name has spaces in it.
           shopt -s nullglob
-          # The same patience as the step above: stapler validate asks the
-          # same ticket service, and 1.87.14's and 1.87.18's runs went red
-          # here on the same dropped line with the app already "accepted,
-          # source=Notarized Developer ID" one command earlier.
+          # Patience for Gatekeeper's question, which asks Apple online when
+          # there is no stamp. A real "no" fails all five tries.
           again() {
             for wait in 0 10 20 40 80; do
               sleep "$wait"
@@ -336,32 +371,43 @@ jobs:
             done
             return 1
           }
+          nostamp() {
+            echo "::warning::$1 is notarised but carries no stamp; a Mac opening it looks the approval up with Apple, and shows the same prompt"
+          }
 
           seen=0
           for app in release/mac*/*.app; do
             seen=1
             echo "── $app"
             codesign --verify --deep --strict --verbose=2 "$app"
-            spctl --assess --type exec --verbose=4 "$app"
-            again xcrun stapler validate "$app"
+            if xcrun stapler validate "$app"; then
+              # Stamped: Gatekeeper answers from the file, and a no is a no.
+              again spctl --assess --type exec --verbose=4 "$app"
+            else
+              if ! again spctl --assess --type exec --verbose=4 "$app"; then
+                # No stamp, and Gatekeeper's lookup did not get through: Apple's notary decides.
+                node notarise.js --confirm "$app"
+              fi
+              nostamp "$app"
+            fi
           done
           [ "$seen" = 1 ] || { echo "no .app was produced to check"; exit 1; }
 
-          # The disk image gets one question, not the app's three. `codesign
-          # --verify` was asked of it once and cannot ever pass: a .dmg is a
-          # disk image, not a code object, and the first build to reach this
-          # said so — "code object is not signed at all" — while the app inside
-          # it had already come back "accepted, source=Notarized Developer ID".
-          #
-          # What matters for a file someone downloads is the stapled ticket:
-          # macOS quarantines the download and checks the image itself before
-          # anything inside it is reachable, and a stapled ticket is what makes
-          # that work with no network.
+          # The disk image gets no Gatekeeper question and no signature check.
+          # `codesign --verify` was asked of it once and cannot ever pass: a
+          # .dmg is a disk image, not a code object, and the first build to
+          # reach this said so — "code object is not signed at all" — while
+          # the app inside it had already come back "accepted,
+          # source=Notarized Developer ID". Stamped, it is proven; not
+          # stamped, Apple's notary is asked about it, as for the app.
           seen=0
           for dmg in release/*.dmg; do
             seen=1
             echo "── $dmg"
-            again xcrun stapler validate "$dmg"
+            if ! xcrun stapler validate "$dmg"; then
+              node notarise.js --confirm "$dmg"
+              nostamp "$dmg"
+            fi
           done
           [ "$seen" = 1 ] || { echo "no .dmg was produced to check"; exit 1; }
 
@@ -852,6 +898,8 @@ jobs:
           cat > want.txt <<WANT
           Fractal-Remote-$v.dmg
           Fractal-Remote-$v-arm64.dmg
+          Fractal-Remote-$v-mac.zip
+          Fractal-Remote-$v-arm64-mac.zip
           latest-mac.yml
           Fractal-Remote-Setup-$v.exe
           latest.yml

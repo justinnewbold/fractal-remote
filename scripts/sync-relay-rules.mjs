@@ -117,6 +117,12 @@ export const FILES = [
    */
   { source: '../shared/link-word.mjs', target: '../mobile/src/lib/link-word.js' },
   /*
+   * The note a connected phone leaves on the computer, so the computer stays
+   * awake under it. The phone and the website write the same document on the
+   * same rhythm, and the computer app reads it by the same name.
+   */
+  { source: '../shared/phone-note.mjs', target: '../mobile/src/lib/phone-note.js' },
+  /*
    * Which end is behind. Both apps carry the same version by construction, so
    * the comparison has to mean the same thing at both ends of it.
    */

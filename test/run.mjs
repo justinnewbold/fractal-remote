@@ -9086,6 +9086,98 @@ test('a check asks GitHub what is there now, and says when the Mac version is st
   assert.match(main, /running: app\.getVersion\(\),\s*\n\s*lookup: async/)
 })
 
+test('each computer waits only for its own files, so one computer’s failed build stalls no other', async () => {
+  /*
+   * 1.87.21: the Mac job failed, and the release went out with every file but
+   * the Mac's. Every computer read that as "still being built" — the Windows
+   * PCs and the Pis too, with their own files sitting right there — for about
+   * three hours, because the check waited for latest-mac.yml and a Mac zip
+   * whatever computer it ran on.
+   */
+  const v = '1.87.21'
+  const release = (names) => ({
+    tag_name: `v${v}`,
+    html_url: `https://github.com/justinnewbold/fractal-remote/releases/tag/v${v}`,
+    assets: names.map((name) => ({ name }))
+  })
+  // What each job puts on a release, as the complete job in desktop.yml lists it.
+  const mac = ['latest-mac.yml', `Fractal-Remote-${v}-arm64-mac.zip`, `Fractal-Remote-${v}-mac.zip`, `Fractal-Remote-${v}.dmg`, `Fractal-Remote-${v}-arm64.dmg`]
+  const win = ['latest.yml', `Fractal-Remote-Setup-${v}.exe`, `Fractal-Remote-Setup-${v}.exe.blockmap`]
+  const pc = ['latest-linux.yml', `Fractal-Remote-${v}.AppImage`, `fractal-remote-desktop_${v}_amd64.deb`]
+  const pi = ['latest-linux-arm64.yml', `Fractal-Remote-${v}-arm64.AppImage`, `fractal-remote-desktop_${v}_arm64.deb`]
+  const computers = {
+    'an Apple Silicon Mac': { platform: 'darwin', arch: 'arm64' },
+    'an Intel Mac': { platform: 'darwin', arch: 'x64' },
+    'a Windows PC': { platform: 'win32', arch: 'x64' },
+    'a Windows PC on Arm': { platform: 'win32', arch: 'arm64' },
+    'a Linux PC on the AppImage': { platform: 'linux', arch: 'x64', appImage: true },
+    'a Linux PC on the .deb': { platform: 'linux', arch: 'x64', appImage: false },
+    'a Pi on the AppImage': { platform: 'linux', arch: 'arm64', appImage: true },
+    'a Pi on the .deb': { platform: 'linux', arch: 'arm64', appImage: false }
+  }
+  const kind = (names, target) => updates.releaseVerdict(release(names), '1.87.20', target)?.kind
+  for (const [who, target] of Object.entries(computers)) {
+    assert.equal(kind([...mac, ...win, ...pc, ...pi], target), 'newer', `${who} waits on a release with everything on it`)
+    assert.equal(
+      kind([...win, ...pc, ...pi], target),
+      target.platform === 'darwin' ? 'building' : 'newer',
+      `${who}, on a release with no Mac files: ${target.platform === 'darwin' ? 'goes ahead with nothing to download' : 'waits for the Mac'}`
+    )
+  }
+  // Each waits for its own list AND its own download, and takes nobody else's for it.
+  const building = [
+    ['a Linux PC on the AppImage', [...mac, ...win, ...pi], 'goes ahead on the Pi’s files'],
+    ['a Pi on the .deb', [...mac, ...win, ...pc], 'goes ahead on the PC’s files'],
+    ['a Linux PC on the AppImage', ['latest-linux.yml', `fractal-remote-desktop_${v}_amd64.deb`], 'goes ahead with only a .deb to download'],
+    ['a Linux PC on the .deb', ['latest-linux.yml', `Fractal-Remote-${v}.AppImage`], 'goes ahead with only an AppImage to download'],
+    ['a Linux PC on the AppImage', ['latest-linux.yml', `Fractal-Remote-${v}-arm64.AppImage`], 'takes the Pi’s AppImage for its own'],
+    ['a Pi on the AppImage', ['latest-linux-arm64.yml', `Fractal-Remote-${v}.AppImage`], 'takes the PC’s AppImage for its own'],
+    ['an Apple Silicon Mac', ['latest-mac.yml', `Fractal-Remote-${v}-mac.zip`], 'goes ahead with only the Intel zip'],
+    ['an Intel Mac', ['latest-mac.yml', `Fractal-Remote-${v}-arm64-mac.zip`], 'takes the Apple Silicon zip for its own'],
+    ['an Intel Mac', [`Fractal-Remote-${v}-mac.zip`, `Fractal-Remote-${v}.dmg`], 'goes ahead with no latest-mac.yml'],
+    ['a Windows PC', [`Fractal-Remote-Setup-${v}.exe`], 'goes ahead with no latest.yml'],
+    ['a Windows PC', ['latest.yml', `Fractal-Remote-Setup-${v}.exe.blockmap`], 'takes the blockmap for the installer']
+  ]
+  for (const [who, names, wrong] of building) assert.equal(kind(names, computers[who]), 'building', `${who} ${wrong}`)
+  // The lists, spelled as electron-updater looks for them (the processor's name added on Linux unless it is x64).
+  assert.equal(updates.updateFiles({ platform: 'linux', arch: 'arm64', appImage: true }).manifest, 'latest-linux-arm64.yml')
+  assert.equal(updates.updateFiles({ platform: 'linux', arch: 'x64' }).manifest, 'latest-linux.yml')
+  assert.equal(updates.updateFiles({ platform: 'win32', arch: 'arm64' }).manifest, 'latest.yml')
+  assert.equal(updates.updateFiles({ platform: 'darwin', arch: 'arm64' }).manifest, 'latest-mac.yml')
+  assert.equal(updates.updateFiles({ platform: 'freebsd', arch: 'x64' }), null)
+  assert.equal(updates.releaseVerdict(release([...win, ...pc]), '1.87.20', { platform: 'freebsd' }), null, 'a computer this app is not built for is told something about a release')
+  // Left out, it is an Intel Mac: what every computer was, before.
+  assert.equal(updates.releaseVerdict(release([...win, ...pc, ...pi]), '1.87.20')?.kind, 'building')
+
+  // A check goes by its own computer's files.
+  const u = fakeUpdater()
+  u.setFeedURL = () => {}
+  await updates.wireUpdates({ updater: u, onState: () => {}, running: '1.87.20', lookup: async () => release([...win, ...pc, ...pi]), target: computers['a Windows PC'] }).check()
+  assert.equal(u.checked, 1, 'a Windows PC waited for the Mac’s files')
+  const m = fakeUpdater()
+  const said = []
+  await updates.wireUpdates({ updater: m, onState: (s) => said.push(s), running: '1.87.20', lookup: async () => release([...win, ...pc, ...pi]), target: computers['an Apple Silicon Mac'] }).check()
+  assert.equal(m.checked, 0)
+  assert.deepEqual(said.at(-1), { kind: 'building', version: v })
+
+  // And main.js says which computer this is.
+  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  assert.match(main, /target: \{ platform: process\.platform, arch: process\.arch, appImage: Boolean\(process\.env\.APPIMAGE\) \}/, 'the updater is not told which computer it is on, so every computer waits for the Mac')
+
+  /*
+   * And the window says it in words true on every computer. Until 1.87.23 it
+   * said "A new Mac version …" and to press the button again, which was right
+   * only by accident, while every computer waited on the Mac; now a PC or a
+   * Pi says "still being built" about its own files, and the app looks again
+   * by itself.
+   */
+  const { updateAdvice } = await import('../src/lib/desktop.js')
+  const advice = updateAdvice({ kind: 'building', version: v })
+  assert.doesNotMatch(advice, /\bMac\b/, 'a Windows PC or a Pi is told about a new Mac version')
+  assert.match(advice, /looks again by itself in a quarter of an hour/, 'the window does not say the app looks again by itself')
+  assert.equal(updates.nextLookMs({ kind: 'building', version: v }), 15 * 60 * 1000, 'the window says a quarter of an hour and the app waits some other time')
+})
+
 test('an app run from Downloads is offered a home in Applications first', () => {
   assert.deepEqual(updates.installPlace({ exePath: '/private/var/folders/zz/T/AppTranslocation/ABC/d/Fractal Remote.app/Contents/MacOS/Fractal Remote', inApplications: false }), { ok: false, reason: 'translocated' })
   assert.deepEqual(updates.installPlace({ exePath: '/Users/j/Downloads/Fractal Remote.app/Contents/MacOS/Fractal Remote', inApplications: false }), { ok: false, reason: 'not-applications' })
@@ -9243,7 +9335,14 @@ test('an update ready just after a windowless start installs then, and never on 
   assert.match(deb.why, /password/)
   assert.equal(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 5000, platform: 'darwin', env: {} }).install, true)
   assert.equal(autostart.unattendedInstall({ hidden: true, sinceLaunchMs: 5000, platform: 'win32', env: {} }).install, true)
-  assert.equal(autostart.RECHECK_MS, 12 * 60 * 60 * 1000)
+  /*
+   * Changed on purpose, 13 October 2026 (1.87.23). This pinned the twice-a-day
+   * look here, for a start with no window only. Every start now looks every
+   * six hours, so the number lives with the rest of the update rules, in
+   * lib/updates.mjs — held by its own test below.
+   */
+  assert.equal(autostart.RECHECK_MS, undefined, 'the look for updates is decided in two places')
+  assert.equal(updates.RECHECK_MS, 6 * 60 * 60 * 1000)
   // And the menu can be drawn before the updater has said anything at all.
   assert.equal(updates.updateLine(null), null, 'the menu throws before the updater has spoken')
 })
@@ -9334,6 +9433,8 @@ function loadDesktopMain({
   const timers = []
   // What the app listens for from the operating system: the computer waking, its screen unlocked.
   const power = {}
+  // And what it asks of it: the computer kept awake, and let go again.
+  const awake = { started: [], stopped: [] }
   class BrowserWindow {
     constructor(options) {
       this.options = options
@@ -9398,6 +9499,15 @@ function loadDesktopMain({
       on: (event, fn) => {
         ;(power[event] ||= []).push(fn)
       }
+    },
+    powerSaveBlocker: {
+      start: (type) => {
+        awake.started.push(type)
+        return awake.started.length
+      },
+      stop: (id) => {
+        awake.stopped.push(id)
+      }
     }
   }
   const listeners = {}
@@ -9430,7 +9540,7 @@ function loadDesktopMain({
     'setInterval',
     `${src}\n;return (__code, __given) => eval(__code)`
   )((id) => stand[id] || real(id), '/opt/Fractal Remote/resources/app.asar', proc, quiet, timer, () => {}, timer)
-  return { run, disk, dirs, events, menus, windows, dialogs, exits, logs, timers, listeners, power, process: proc }
+  return { run, disk, dirs, events, menus, windows, dialogs, exits, logs, timers, listeners, power, awake, process: proc }
 }
 const ENTRY = '/home/pi/.config/autostart/fractal-remote.desktop'
 const trayItem = (menu, label) => (menu || []).find((item) => typeof item.label === 'string' && item.label.startsWith(label))
@@ -10010,8 +10120,377 @@ test('an update ready just after a windowless start installs through the same pa
      network sets it — a few seconds into the app's start. */
   assert.match(main, /const uptime = \(\) => performance\.now\(\)/)
   assert.ok(!/Date\.now\(\) -/.test(main), 'a wait is measured with the time of day, which a Raspberry Pi gets wrong until its network sets it')
-  // And a windowless app left on for weeks still looks twice a day.
-  assert.match(main, /if \(startHidden\) \{\s*\n\s*const again = \(\) =>\s*\n\s*later\(async \(\) => \{\s*\n\s*await updates\.check\(\)/)
+  /*
+   * Changed on purpose, 13 October 2026 (1.87.23). This pinned the
+   * twice-a-day look to a start with no window. Every start looks again now
+   * — see the test of lookForUpdates below — and a windowless one is still
+   * among them.
+   */
+  const begin = main.slice(main.indexOf('async function beginUpdates'), main.indexOf('function lookForUpdatesIn('))
+  assert.match(begin, /await updates\.check\(\)\s*\n[\s\S]*?lookingForUpdates = true\s*\n\s*lookForUpdatesIn\(mod\.nextLookMs\(update\)\)/, 'a windowless app left on for weeks never looks for updates again')
+  assert.ok(!/if \(startHidden\) \{\s*\n\s*const again = /.test(main), 'the look again is limited to a start with no window again')
+})
+
+test('every computer looks for updates by itself: six hours on, sooner while it is being built, and after a wake', async () => {
+  /*
+   * Until 1.87.23 an ordinary start looked once, at launch. "A computer that
+   * stays open for days falls behind", the phone's steps for updating it
+   * said. Now every start looks again, quietly, and what it finds still goes
+   * in only at a quit or a press of Restart to update.
+   */
+  assert.equal(updates.RECHECK_MS, 6 * 60 * 60 * 1000)
+  for (const state of [null, { kind: 'current' }, { kind: 'ready', version: '1.87.24' }, { kind: 'checking' }, { kind: 'stuck', version: '1.87.24' }]) {
+    assert.equal(updates.nextLookMs(state), 6 * 60 * 60 * 1000, `after ${state?.kind || 'nothing'} the next look is not six hours on`)
+  }
+  assert.equal(updates.nextLookMs({ kind: 'building', version: '1.87.24' }), 15 * 60 * 1000, 'a version still being built is not looked for again until hours after it is ready')
+  /* A download under way is left to finish: a look then adds nothing but a
+     menu flipping back to "Checking…", and on a Mac still preparing the
+     update it asks macOS for it twice. */
+  for (const kind of ['found', 'downloading', 'staging']) {
+    assert.equal(updates.downloading({ kind }), true, `${kind} is not a download under way`)
+    assert.equal(updates.nextLookMs({ kind }), 15 * 60 * 1000)
+  }
+  for (const kind of ['current', 'ready', 'checking', 'building', 'trouble']) assert.equal(updates.downloading({ kind }), false, kind)
+  assert.equal(updates.downloading(null), false)
+  assert.equal(updates.nextLookMs({ kind: 'trouble' }), 60 * 60 * 1000)
+  assert.equal(updates.WAKE_LOOK_MS, 30 * 1000)
+
+  // main.js's own loop, run, on an ordinary Mac with a window.
+  const main = loadDesktopMain({ platform: 'darwin' })
+  let found = { kind: 'current' }
+  let looks = 0
+  main.run('updateRules = __given', updates)
+  main.run('updates = { check: async () => { update = __given() }, install() {} }', () => {
+    looks += 1
+    return found
+  })
+  main.run('lookingForUpdates = true; update = { kind: "current" }')
+  main.run('lookForUpdatesIn(updateRules.nextLookMs(update))')
+  const waiting = () => {
+    assert.equal(main.run('timers.size'), 1, 'more than one look for updates is waiting, or none is')
+    const t = main.timers.at(-1)
+    assert.ok(main.run('timers.has(__given)', t), 'the look goes around later(), so a quit does not clear it')
+    return t
+  }
+  assert.equal(waiting().ms, 6 * 60 * 60 * 1000)
+  found = { kind: 'building', version: '1.87.24' }
+  waiting().fn()
+  await ticks()
+  assert.equal(looks, 1)
+  assert.equal(waiting().ms, 15 * 60 * 1000, 'the look after "still being built" is six hours away')
+  found = { kind: 'current' }
+  waiting().fn()
+  await ticks()
+  assert.equal(looks, 2)
+  assert.equal(waiting().ms, 6 * 60 * 60 * 1000)
+  // A wake: the look that was waiting is replaced by one half a minute on, not added to.
+  main.run('updatesAfterWake()')
+  assert.equal(waiting().ms, 30 * 1000)
+  main.run('updatesAfterWake()')
+  assert.equal(waiting().ms, 30 * 1000)
+  waiting().fn()
+  await ticks()
+  assert.equal(looks, 3)
+  assert.equal(waiting().ms, 6 * 60 * 60 * 1000)
+  // A look that comes round mid-download leaves it alone and comes back later.
+  main.run('update = { kind: "downloading", percent: 40 }')
+  main.run('updatesAfterWake()')
+  waiting().fn()
+  await ticks()
+  assert.equal(looks, 3, 'a look by itself went ahead over a download in progress')
+  assert.equal(waiting().ms, 15 * 60 * 1000)
+  main.run('update = { kind: "ready", version: "1.87.24" }')
+  found = { kind: 'ready', version: '1.87.24' }
+  waiting().fn()
+  await ticks()
+  assert.equal(looks, 4)
+  assert.equal(waiting().ms, 6 * 60 * 60 * 1000)
+  /*
+   * A look taken out of turn sets the waiting one from what it found, too.
+   * Check for updates, pressed in the menu, found the new version still being
+   * built: the next look by itself is a quarter of an hour on, not the six
+   * hours that were waiting before the press.
+   */
+  main.run('update = { kind: "current" }; lookForUpdatesIn(updateRules.nextLookMs(update))')
+  assert.equal(waiting().ms, 6 * 60 * 60 * 1000)
+  found = { kind: 'building', version: '1.87.25' }
+  main.run('buildTray()')
+  trayItem(main.menus.at(-1), 'Check for updates').click()
+  await ticks()
+  assert.equal(looks, 5, 'Check for updates in the menu does not look')
+  assert.equal(waiting().ms, 15 * 60 * 1000, 'Check for updates found it still being built, and the next look by itself is still hours away')
+  // The same for a retry after a look that failed, and for the window's own button: both go through lookNow.
+  found = { kind: 'trouble', message: 'offline' }
+  await main.run('lookNow()')
+  assert.equal(looks, 6)
+  assert.equal(waiting().ms, 60 * 60 * 1000)
+  {
+    const src = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+    assert.equal((src.match(/updates\??\.check\(/g) || []).length, 3, 'a look for updates is taken somewhere other than the first look, the loop and lookNow, and leaves the next look where it was')
+    assert.match(src, /ipcMain\.handle\('updates:check', async \(\) => \{[\s\S]{0,120}await lookNow\(\)/, "the window's Check for updates does not set the next look")
+    assert.match(src.slice(src.indexOf('function retryUpdateCheck()'), src.indexOf('function networkIsUp()')), /lookNow\(\)/)
+    assert.match(src.slice(src.indexOf('function networkIsUp()')), /^\s*if \(startHidden && update\?\.kind === 'trouble' && updates\) lookNow\(\)$/m)
+  }
+  // Nothing during the quit.
+  const made = main.timers.length
+  main.run('quitting = true')
+  main.run('updatesAfterWake(); lookForUpdatesIn(1000)')
+  assert.equal(main.timers.length, made, 'a look for updates is scheduled during the quit')
+
+  // A copy that does not look by itself — its last install did not take, or macOS will not update it where it sits — does not after a wake either.
+  const stuck = loadDesktopMain({ platform: 'darwin' })
+  stuck.run('updateRules = __given', updates)
+  stuck.run('updates = { check: async () => {}, install() {} }')
+  stuck.run('updatesAfterWake()')
+  assert.equal(stuck.run('timers.size'), 0, 'a copy whose install did not take looks for the same update again after a wake')
+
+  // Started on every computer, after the first look, and never before the early returns.
+  const src = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  const begin = src.slice(src.indexOf('async function beginUpdates'), src.indexOf('function lookForUpdatesIn('))
+  const loop = begin.indexOf('lookingForUpdates = true')
+  assert.ok(loop > begin.indexOf("if (outcome === 'stuck') {") && loop > begin.indexOf('if (misplaced) {'), 'a copy that should not look for updates by itself does')
+  assert.ok(loop > begin.lastIndexOf('await updates.check()'), 'the loop starts before the first look')
+  assert.match(begin, /lookForUpdatesIn\(mod\.nextLookMs\(update\)\)\s*\n\s*powerMonitor\.on\('resume', updatesAfterWake\)/, 'nothing looks for updates after the computer wakes')
+  assert.ok(!/startHidden/.test(begin.slice(loop)), 'the look again is for a start with no window only')
+  const lookFn = src.slice(src.indexOf('async function lookForUpdates()'), src.indexOf('function updatesAfterWake()'))
+  assert.ok(!/install|relaunch|quit/.test(lookFn), 'the look for updates restarts the app')
+})
+
+const awake = await import('../desktop/lib/awake.mjs')
+
+test('the computer stays awake while a phone is using it, and for half an hour after', async () => {
+  /*
+   * Laptops idle-sleep at gigs: nobody touches the laptop, because the
+   * playing happens on the phone. So while a phone has used the computer in
+   * the last half hour, the app asks it not to idle-sleep — and never asks
+   * for the screen to stay on.
+   */
+  const at = (min) => min * 60 * 1000
+  assert.equal(awake.AWAKE_FOR_MS, at(30))
+  assert.equal(awake.awakeChange({ holding: false, lastPhoneAt: null, now: at(5) }), null, 'a computer no phone has used is kept awake')
+  assert.equal(awake.awakeChange({ holding: false, lastPhoneAt: at(1), now: at(2) }), 'start')
+  assert.equal(awake.awakeChange({ holding: true, lastPhoneAt: at(1), now: at(30) }), null, 'let go before half an hour was up')
+  assert.equal(awake.awakeChange({ holding: true, lastPhoneAt: at(1), now: at(31) }), 'stop', 'kept awake more than half an hour after the last use')
+  assert.equal(awake.awakeChange({ holding: false, lastPhoneAt: at(1), now: at(40) }), null)
+  assert.equal(awake.awakeChange({ holding: true, lastPhoneAt: at(10), now: at(5) }), 'stop', 'a use that seems to come from the future keeps the computer awake for ever')
+
+  // What a phone looks like from the computer: a connection to the device server's port from another machine.
+  const mac = [
+    'Active Internet connections (including servers)',
+    'Proto Recv-Q Send-Q  Local Address          Foreign Address        (state)',
+    'tcp4       0      0  192.168.1.10.5056      192.168.1.23.53122     ESTABLISHED',
+    'tcp4       0      0  192.168.1.10.5056      192.168.1.24.53000     TIME_WAIT',
+    'tcp4       0      0  127.0.0.1.5056         127.0.0.1.60001        ESTABLISHED',
+    'tcp4       0      0  192.168.1.10.5056      192.168.1.10.60002     ESTABLISHED',
+    'tcp6       0      0  fe80::1%lo0.5056       fe80::1%lo0.60000      ESTABLISHED',
+    'tcp4       0      0  192.168.1.10.60100     140.82.112.5.443       ESTABLISHED',
+    'tcp46      0      0  *.5056                 *.*                    LISTEN'
+  ].join('\n')
+  const own = ['127.0.0.1', '192.168.1.10', '::1', 'fe80::1']
+  const phones = (platform, text, port = 5056) => [...awake.phonesOn({ connections: awake.readConnections({ platform, text }), port, own })].sort()
+  assert.deepEqual(phones('darwin', mac), ['192.168.1.23', '192.168.1.24'], 'the Mac’s own window, its own browser or its own traffic out is taken for a phone, or a phone is missed')
+  assert.deepEqual(phones('darwin', mac, 5057), [], 'a connection to another port is taken for a phone')
+  // Windows, in another language: the state column is never read.
+  const win = [
+    '',
+    'Aktive Verbindungen',
+    '',
+    '  Proto  Lokale Adresse         Remoteadresse          Status',
+    '  TCP    0.0.0.0:5056           0.0.0.0:0              ABHÖREN',
+    '  TCP    192.168.1.10:5056      192.168.1.23:53122     HERGESTELLT',
+    '  TCP    [::]:5056              [::]:0                 ABHÖREN',
+    '  TCP    [fe80::1c:2%12]:5056   [fe80::9a:3%12]:50000  HERGESTELLT',
+    '  TCP    [::1]:5056             [::1]:50001            HERGESTELLT',
+    '  UDP    0.0.0.0:5353           *:*'
+  ].join('\r\n')
+  assert.deepEqual(phones('win32', win), ['192.168.1.23', 'fe80:0000:0000:0000:0000:0000:009a:0003'])
+  // Linux, from /proc/net/tcp and tcp6: addresses in little-endian hex, a phone over IPv6 included.
+  const tcp = [
+    '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode',
+    '   0: 00000000:13C0 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 1 1',
+    '   1: 0A01A8C0:13C0 1701A8C0:D2F2 01 00000000:00000000 00:00000000 00000000  1000        0 2 1',
+    '   2: 0100007F:13C0 0100007F:E000 01 00000000:00000000 00:00000000 00000000  1000        0 3 1'
+  ].join('\n')
+  const tcp6 = [
+    '  sl  local_address                         remote_address                        st',
+    '   0: 0000000000000000FFFF00000A01A8C0:13C0 0000000000000000FFFF00002101A8C0:C350 06 0',
+    '   1: 00000000000000000000000001000000:13C0 00000000000000000000000001000000:C351 01 0'
+  ].join('\n')
+  assert.deepEqual(phones('linux', `${tcp}\n${tcp6}`), ['192.168.1.23', '192.168.1.33'])
+  assert.equal(awake.plainAddress('[::ffff:192.168.1.5]'), '192.168.1.5')
+  assert.equal(awake.plainAddress('FE80::1%en0'), awake.plainAddress('fe80:0:0:0:0:0:0:1'))
+  assert.deepEqual(awake.ownAddresses({ lo0: [{ address: '127.0.0.1' }, { address: '::1' }], en0: [{ address: '192.168.1.10' }] }), ['127.0.0.1', '::1', '192.168.1.10'])
+
+  // Asked of the computer's own tools, and never throws.
+  const asked = []
+  const run = async (cmd, args) => {
+    asked.push([cmd, ...args].join(' '))
+    return cmd === 'netstat' ? mac : ''
+  }
+  assert.deepEqual([...(await awake.phonesUsing({ platform: 'darwin', port: 5056, run, own }))].sort(), ['192.168.1.23', '192.168.1.24'])
+  assert.deepEqual(asked, ['netstat -an -p tcp'])
+  await awake.phonesUsing({ platform: 'win32', port: 5056, run, own })
+  assert.equal(asked.at(-1), 'netstat -an')
+  const files = { '/proc/net/tcp': tcp }
+  const read = (p) => {
+    if (!(p in files)) throw new Error('ENOENT')
+    return files[p]
+  }
+  assert.deepEqual([...(await awake.phonesUsing({ platform: 'linux', port: 5056, read, own }))], ['192.168.1.23'], 'a computer with no IPv6 cannot look for phones')
+  assert.equal(await awake.phonesUsing({ platform: 'linux', port: 5056, read: () => { throw new Error('no /proc') } }), null)
+  assert.equal(await awake.phonesUsing({ platform: 'darwin', port: 5056, run: async () => { throw new Error('no netstat') } }), null)
+  assert.equal(await awake.phonesUsing({ platform: 'aix', port: 5056, run }), null)
+
+  // main.js's own look, run, on a Linux laptop: a phone's browser comes, and the computer is kept awake.
+  const main = loadDesktopMain({ platform: 'linux', files: { '/proc/net/tcp': tcp } })
+  // No note from a phone app in this part: the device server has none to give.
+  main.run('awakeRules = __given', { ...awake, readPhoneNote: async () => null })
+  main.run('hostAt = { port: 5056, name: "studio" }')
+  main.run('watchForPhones()')
+  const look = () => {
+    const t = main.timers.at(-1)
+    assert.equal(t.ms, 60 * 1000, 'the next look for phones is not a minute on')
+    assert.ok(main.run('timers.has(__given)', t), 'the look for phones goes around later(), so a quit does not clear it')
+    return t
+  }
+  look().fn()
+  await ticks()
+  assert.deepEqual(main.awake.started, ['prevent-app-suspension'], 'a phone using the computer does not keep it awake, or keeps its screen on too')
+  main.run('buildTray()')
+  assert.ok(trayItem(main.menus.at(-1), 'Staying awake while your phone uses it'), 'the menu does not say why the laptop has not gone to sleep')
+  // Still there a minute later: held once, not again.
+  look().fn()
+  await ticks()
+  assert.deepEqual(main.awake.started, ['prevent-app-suspension'])
+  // The phone goes, and half an hour later the computer may sleep.
+  main.disk.set('/proc/net/tcp', tcp.split('\n').slice(0, 2).join('\n'))
+  look().fn()
+  await ticks()
+  assert.deepEqual(main.awake.stopped, [], 'let go the moment the phone went quiet')
+  main.run('phoneSeenAt = uptime() - 31 * 60 * 1000')
+  look().fn()
+  await ticks()
+  assert.deepEqual(main.awake.stopped, [1], 'kept awake for more than half an hour after the last use')
+  main.run('buildTray()')
+  assert.equal(trayItem(main.menus.at(-1), 'Staying awake'), undefined)
+  // And let go when the app quits.
+  main.disk.set('/proc/net/tcp', tcp)
+  look().fn()
+  await ticks()
+  assert.equal(main.awake.started.length, 2)
+  main.run('quitting = true; stayAwakeWhileUsed()')
+  assert.deepEqual(main.awake.stopped, [1, 2], 'a computer stays held awake after the app has quit')
+
+  /*
+   * THE PHONE APP, which is what every customer plays from, never connects to
+   * the computer at all: everything it asks goes through the relay and lands
+   * inside the device server. So the list of connections above never sees it,
+   * and what keeps the computer awake under it is the note it leaves in the
+   * device server's store every couple of minutes while its link is up.
+   */
+  const notes = await import('../shared/phone-note.mjs')
+  const { hostAllows } = await import('../shared/relay-rules.mjs')
+  assert.equal(awake.PHONE_NOTE_ID, notes.PHONE_NOTE_ID, 'the computer reads a note under another name than the phone writes it')
+  assert.equal(notes.PHONE_NOTE_PATH, `/store/config/${notes.PHONE_NOTE_ID}`)
+  assert.ok(hostAllows('PUT', notes.PHONE_NOTE_PATH), 'the device server refuses the note from a phone, so the phone app never keeps the computer awake')
+  assert.equal(notes.TELL_COMPUTER_MS, 2 * 60 * 1000)
+  assert.ok(notes.TELL_COMPUTER_MS * 10 <= awake.AWAKE_FOR_MS, 'a phone says it is there so seldom that one note lost lets the computer sleep')
+  assert.deepEqual(notes.phoneNote(5), { data: { at: 5 }, origin: 'fractal' })
+  // When a phone says so: connected, not two computers clashing, and every couple of minutes.
+  const every = notes.TELL_COMPUTER_MS
+  assert.equal(notes.timeToTell({ link: 'connected', toldAt: 0, now: 1 }), true, 'a phone that has just connected does not say so')
+  assert.equal(notes.timeToTell({ link: 'connected', toldAt: 1000, now: 1000 + every - 1 }), false, 'a phone says so on every turn of its link')
+  assert.equal(notes.timeToTell({ link: 'connected', toldAt: 1000, now: 1000 + every }), true)
+  assert.equal(notes.timeToTell({ link: 'connected', toldAt: 5000, now: 1000 }), true, 'a phone whose clock went back never says so again')
+  for (const link of ['joining', 'no-answer', 'off', 'signed-out', null]) {
+    assert.equal(notes.timeToTell({ link, toldAt: 0, now: 1 }), false, `a phone that is ${link} writes to a computer it cannot reach`)
+  }
+  assert.equal(notes.timeToTell({ link: 'connected', clash: 'Two computers are answering', toldAt: 0, now: 1 }), false, 'a phone writes while two computers clash, where every write is refused')
+
+  // How the computer reads it: the store's own document, compared by value.
+  const doc = { id: 'phone.seen', collection: 'config', data: { at: 5 }, updatedAt: 1000, rev: 7 }
+  const first = awake.phoneNoteChange(undefined, doc)
+  assert.equal(first.used, false, 'a note left days ago keeps the computer awake from the moment the app opens')
+  assert.equal(awake.phoneNoteChange(first.mark, { ...doc }).used, false, 'the same note read twice is taken for a phone')
+  assert.equal(awake.phoneNoteChange(first.mark, { ...doc, rev: 8, updatedAt: 1001, data: { at: 6 } }).used, true, 'a new note is not taken for a phone')
+  assert.equal(awake.phoneNoteChange(first.mark, { ...doc, rev: 8 }).used, true, 'a note written again in the same millisecond is missed')
+  assert.equal(awake.phoneNoteChange(first.mark, { ...doc, updatedAt: 5 }).used, true, 'a note is read as a time')
+  assert.deepEqual(awake.phoneNoteChange(first.mark, undefined), { used: false, mark: first.mark }, 'a look that could not ask forgets the last note, and takes the same one for new')
+  assert.deepEqual(awake.phoneNoteChange(first.mark, null), { used: false, mark: null })
+  assert.equal(awake.phoneNoteChange(null, doc).used, true, 'the first note a phone ever writes here is missed')
+  const fetched = []
+  const fetchOf = (res) => async (url) => {
+    fetched.push(url)
+    if (res instanceof Error) throw res
+    return res
+  }
+  assert.deepEqual(await awake.readPhoneNote({ port: 5056, fetch: fetchOf({ ok: true, status: 200, json: async () => doc }) }), doc)
+  assert.deepEqual(fetched, ['http://localhost:5056/store/config/phone.seen'], 'the note is asked of somewhere other than this computer’s own device server')
+  assert.equal(await awake.readPhoneNote({ port: 5056, fetch: fetchOf({ ok: false, status: 404, json: async () => ({ error: 'not found' }) }) }), null)
+  assert.equal(await awake.readPhoneNote({ port: 5056, fetch: fetchOf({ ok: false, status: 500 }) }), undefined)
+  assert.equal(await awake.readPhoneNote({ port: 5056, fetch: fetchOf(new Error('ECONNREFUSED')) }), undefined)
+  assert.equal(await awake.readPhoneNote({ port: undefined, fetch: fetchOf(new Error('asked')) }), undefined)
+  assert.equal(fetched.length, 4, 'the note is asked for with no device server to ask')
+
+  // main.js's own look, run, with no phone on the wifi at all and the phone app connected from anywhere.
+  {
+    let note
+    const quiet = tcp.split('\n').slice(0, 2).join('\n')
+    const app = loadDesktopMain({ platform: 'linux', files: { '/proc/net/tcp': quiet } })
+    app.run('awakeRules = __given', { ...awake, readPhoneNote: async () => note })
+    app.run('hostAt = { port: 5056, name: "studio" }')
+    app.run('watchForPhones()')
+    const next = async () => {
+      app.timers.at(-1).fn()
+      await ticks()
+    }
+    note = { ...doc }
+    await next()
+    assert.deepEqual(app.awake.started, [], 'a note already there when the app opened keeps the computer awake')
+    await next()
+    assert.deepEqual(app.awake.started, [])
+    note = { ...doc, rev: 8, updatedAt: 121000, data: { at: 125 } }
+    await next()
+    assert.deepEqual(app.awake.started, ['prevent-app-suspension'], 'the phone app using the computer does not keep it awake')
+    // A look that could not ask the device server changes nothing, and the same note is not counted again after it.
+    note = undefined
+    await next()
+    note = { ...doc, rev: 8, updatedAt: 121000, data: { at: 125 } }
+    app.run('phoneSeenAt = uptime() - 31 * 60 * 1000')
+    await next()
+    assert.deepEqual(app.awake.stopped, [1], 'the phone app’s last note keeps the computer awake for more than half an hour')
+    note = { ...doc, rev: 9, updatedAt: 241000, data: { at: 245 } }
+    await next()
+    assert.deepEqual(app.awake.started, ['prevent-app-suspension', 'prevent-app-suspension'])
+  }
+
+  // And the two ends that write it: the phone app's link and the website's, while connected, never waiting on it.
+  {
+    const phone = readSrc(new URL('../mobile/src/lib/link.js', import.meta.url), 'utf8')
+    assert.match(phone, /import \{ PHONE_NOTE_PATH, phoneNote, timeToTell \} from '\.\/phone-note'/)
+    const tick = phone.slice(phone.indexOf('async function tick()'), phone.indexOf('async function join()'))
+    assert.match(tick, /\n {2}if \(running\) tellComputer\(\)\n/, 'the phone app never tells the computer it is using it')
+    const tell = phone.slice(phone.indexOf('function tellComputer()'), phone.indexOf('/** Said once'))
+    assert.match(tell, /if \(state\.link !== 'connected'\) toldAt = 0/, 'a phone whose link came back waits two minutes to say so')
+    assert.match(tell, /timeToTell\(\{ link: state\.link, clash: state\.clash, toldAt, now \}\)/)
+    assert.match(tell, /remoteRequest\(PHONE_NOTE_PATH, \{ method: 'PUT', body: JSON\.stringify\(phoneNote\(now\)\) \}\)\.catch\(\(\) => \{\}\)/)
+    assert.ok(!/await remoteRequest\(PHONE_NOTE_PATH/.test(phone), 'the link waits on the note, and a slow one holds up the keepalive')
+    assert.match(phone.slice(phone.indexOf('export async function stopLink()')), /toldAt = 0/)
+    const web = readSrc(new URL('../src/lib/link.js', import.meta.url), 'utf8')
+    assert.match(web, /import \{ PHONE_NOTE_ID, phoneNote, timeToTell \} from '\.\.\/\.\.\/shared\/phone-note\.mjs'/)
+    const webTick = web.slice(web.indexOf('async function tick()'), web.indexOf('function tellComputer()'))
+    assert.match(webTick, /\n {2}tellComputer\(\)\n/, 'the website, used from a phone through the account, never tells the computer')
+    const webTell = web.slice(web.indexOf('function tellComputer()'))
+    assert.match(webTell.slice(0, 600), /writeHostDoc\(PHONE_NOTE_ID, phoneNote\(now\)\.data\)/)
+    assert.match(webTell.slice(0, 600), /timeToTell\(\{ link: state\.link, clash: state\.clash, toldAt, now \}\)/)
+  }
+
+  const src = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  assert.equal((src.match(/powerSaveBlocker\.start\(/g) || []).length, 1)
+  assert.match(src, /powerSaveBlocker\.start\('prevent-app-suspension'\)/, 'the computer is kept awake some other way — the screen kept on, say')
+  assert.match(src.slice(src.indexOf('async function stopServing()')), /quitting = true\s*\n[\s\S]{0,300}stayAwakeWhileUsed\(\)/, 'a quit leaves the computer held awake')
+  assert.match(src, /windowsHide: true/, 'netstat flashes a window on Windows every minute')
+  assert.match(readSrc(new URL('../desktop/README.md', import.meta.url), 'utf8'), /closed lid/i, 'the README does not say a closed lid still sleeps')
 })
 
 test('the start-up entry follows the AppImage when an update renames it', () => {
