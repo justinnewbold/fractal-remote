@@ -12348,6 +12348,27 @@ button.walk-card:hover {
   font-weight: 700;
   line-height: 1.45;
 }
+/* …and when it has steps, a link to them. */
+.walk-card-warn-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.walk-help-steps {
+  margin: 0;
+  padding-left: 1.4em;
+  display: grid;
+  gap: var(--s-3);
+  color: var(--silk);
+  font-size: var(--f-4);
+  line-height: 1.5;
+}
 .walk-chevron {
   width: 16px;
   height: 16px;

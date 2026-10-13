@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
 import { at as tint } from '../lib/vivid'
 import { tick } from '../lib/feedback'
 import Lamp from './Lamp'
+import Sheet from './Sheet'
 import chevronIcon from '../../assets/icons/chevron.png'
 import ampIcon from '../../assets/icons/amp.png'
 import laptopIcon from '../../assets/icons/laptop.png'
@@ -41,9 +43,10 @@ export function Tile({ icon, size = 64 }) {
 /**
  * A card: the tile, an amber label, a line under it, and on the right a
  * chevron when it goes somewhere (or whatever `right` is, such as a lamp).
- * `warn` is a short line in red under that, for the one thing to do about it.
+ * `warn` is a short line in red under that, for the one thing to do about it;
+ * with `onWarn` it is a link that opens how to do it.
  */
-export function TipCard({ icon, label, body, warn, onPress, right, tile = 64 }) {
+export function TipCard({ icon, label, body, warn, onWarn, onPress, right, tile = 64 }) {
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
@@ -71,7 +74,21 @@ export function TipCard({ icon, label, body, warn, onPress, right, tile = 64 }) 
       <View style={{ flex: 1, gap: space.xs }}>
         <Text style={{ color: color.signal, fontSize: font.lead, fontWeight: '800', letterSpacing: 1 }}>{label}</Text>
         {body ? <Text style={{ color: color.silkDim, fontSize: font.body + 1, lineHeight: 22 }}>{body}</Text> : null}
-        {warn ? <Text style={{ color: color.fault, fontSize: font.body, fontWeight: '700', lineHeight: 20 }}>{warn}</Text> : null}
+        {warn ? <Text style={{ color: color.fault, fontSize: font.body, fontWeight: '700', lineHeight: 20, ...(onWarn ? { textDecorationLine: 'underline' } : null) }}
+            accessibilityRole={onWarn ? 'link' : undefined}
+            accessibilityHint={onWarn ? 'Shows how' : undefined}
+            suppressHighlighting={!onWarn}
+            onPress={
+              onWarn
+                ? () => {
+                    tick()
+                    onWarn()
+                  }
+                : undefined
+            }
+          >
+            {onWarn ? `${warn} ›` : warn}
+          </Text> : null}
       </View>
       {right || (onPress ? <Image source={chevronIcon} style={{ width: 16, height: 16, tintColor: color.silkDim }} /> : null)}
     </Pressable>
@@ -88,6 +105,8 @@ const LAMP = { good: 'good', busy: 'idle', bad: 'fault', dim: 'idle' }
  * same ones the browser draws.
  */
 export function ChainCards({ cards }) {
+  /* A red line that comes with steps (an old computer app) opens them. */
+  const [help, setHelp] = useState(null)
   return (
     <View>
       {cards.map((card) => (
@@ -98,11 +117,33 @@ export function ChainCards({ cards }) {
             label={card.label}
             body={card.body}
             warn={card.warn}
+            onWarn={card.help ? () => setHelp(card.help) : undefined}
             right={<Lamp state={LAMP[card.tone] || 'idle'} size={12} />}
           />
           {card.wire ? <ChainWire label={card.wire} lit={card.lit} /> : null}
         </View>
       ))}
+      <Sheet open={!!help} onClose={() => setHelp(null)} title={help?.title} note={help?.note}>
+        {(help?.steps || []).map((step, i) => (
+          <View key={i} style={{ flexDirection: 'row', gap: space.md, alignItems: 'flex-start' }}>
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: tint(color.signal, 0.14),
+                borderWidth: 1,
+                borderColor: tint(color.signal, 0.35)
+              }}
+            >
+              <Text style={{ color: color.signal, fontSize: font.body, fontWeight: '800' }}>{i + 1}</Text>
+            </View>
+            <Text style={{ flex: 1, color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>{step}</Text>
+          </View>
+        ))}
+      </Sheet>
     </View>
   )
 }

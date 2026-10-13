@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import Sheet from './Sheet'
 import arrowIcon from '../../mobile/assets/icons/arrow.png'
 import chevronIcon from '../../mobile/assets/icons/chevron.png'
 import gearIcon from '../../mobile/assets/icons/setup.png'
@@ -54,8 +56,9 @@ export function Tile({ icon, children }) {
 /**
  * A card: the tile, an amber label, a line under it, and on the right a
  * chevron when it goes somewhere (or whatever `right` is, such as a lamp).
+ * `warn` is a line in red; with `onWarn` it is a link that opens how to fix it.
  */
-export function TipCard({ icon, tile, label, body, warn, onClick, right, small }) {
+export function TipCard({ icon, tile, label, body, warn, onWarn, onClick, right, small }) {
   const inner = (
     <>
       <span className={small ? 'walk-tile-sm' : undefined}>
@@ -64,7 +67,15 @@ export function TipCard({ icon, tile, label, body, warn, onClick, right, small }
       <span className="walk-card-words">
         <span className="walk-card-label">{label}</span>
         {body ? <span className="walk-card-body">{body}</span> : null}
-        {warn ? <span className="walk-card-warn">{warn}</span> : null}
+        {warn ? (
+          onWarn ? (
+            <button type="button" className="walk-card-warn walk-card-warn-link" onClick={onWarn}>
+              {warn} ›
+            </button>
+          ) : (
+            <span className="walk-card-warn">{warn}</span>
+          )
+        ) : null}
       </span>
       {right || (onClick ? <Pic src={chevronIcon} className="walk-chevron" /> : null)}
     </>
@@ -125,8 +136,17 @@ const CHAIN_ICONS = { unit: ampIcon, computer: laptopIcon, phone: phoneIcon }
  * same words (mobile/src/components/Walk.js).
  */
 export function ChainCards({ cards }) {
+  /* A red line that comes with steps (an old computer app) opens them. */
+  const [help, setHelp] = useState(null)
   return (
     <div className="walk-chain">
+      <Sheet open={!!help} onClose={() => setHelp(null)} title={help?.title} note={help?.note}>
+        <ol className="walk-help-steps">
+          {(help?.steps || []).map((step, i) => (
+            <li key={i}>{step}</li>
+          ))}
+        </ol>
+      </Sheet>
       {cards.map((card) => (
         <div key={card.key}>
           <TipCard
@@ -135,6 +155,7 @@ export function ChainCards({ cards }) {
             label={card.label}
             body={card.body}
             warn={card.warn}
+            onWarn={card.help ? () => setHelp(card.help) : undefined}
             right={<span className="walk-lamp" data-tone={card.tone} aria-label={card.tone === 'good' ? 'answering' : card.tone === 'bad' ? 'not answering' : 'waiting'} />}
           />
           {card.wire ? (

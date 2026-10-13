@@ -43,6 +43,24 @@ import { isOlder } from './versions.js'
  */
 export const UPDATE_COMPUTER = 'Update the computer app to the latest version'
 
+/**
+ * WHAT TAPPING THAT RED LINE OPENS. "Change the update your computer to the
+ * latest to be an actual link that then pops up and shows the instructions on
+ * how to update it." Worded once here so the phone and the browser say the
+ * same steps; the names match the computer app's own Settings → Updates page
+ * (src/components/Updates.jsx).
+ */
+export const UPDATE_COMPUTER_HELP = {
+  title: 'Update the computer app',
+  note: 'Your phone has a newer version than the app on your computer.',
+  steps: [
+    'On the computer, open Fractal Remote and go to Settings, then Updates.',
+    'Click Check for updates. It downloads the new version by itself.',
+    'When it’s ready, click Restart to update. The app closes and opens again on the new version in a few seconds.',
+    'No Updates page, or it won’t update? Download the newest version from fractal.newbold.cloud/downloads and install it over the old one.'
+  ]
+}
+
 
 /**
  * @param {object} p
@@ -119,7 +137,7 @@ export function linkChain({ here, demo = false, via = 'computer', unit = {}, com
     { key: 'unit', label: 'YOUR UNIT', ...unitCard, wire: ble ? 'MIDI CABLE' : 'USB CABLE' },
     ble
       ? { key: 'adapter', label: 'BLUETOOTH ADAPTER', ...adapterCard, wire: 'BLUETOOTH' }
-      : { key: 'computer', label: atPhone ? 'YOUR COMPUTER' : 'THIS COMPUTER', ...computerCard, ...(computerWarn ? { warn: computerWarn } : {}), wire: 'SECURE LINK' },
+      : { key: 'computer', label: atPhone ? 'YOUR COMPUTER' : 'THIS COMPUTER', ...computerCard, ...(computerWarn ? { warn: computerWarn, help: UPDATE_COMPUTER_HELP } : {}), wire: 'SECURE WIRELESS LINK' },
     { key: 'phone', label: atPhone ? 'THIS PHONE' : 'YOUR PHONE', ...phoneCard }
   ].map((card, i, all) => ({
     ...card,

@@ -64,8 +64,8 @@ export const CHAIN = [
     body: 'USB host. Live control. Permanent saving.',
     phoneTitle: 'YOUR COMPUTER',
     phoneBody: 'USB host + permanent saving',
-    wire: 'SECURE LINK',
-    phoneWire: 'SECURE LINK'
+    wire: 'SECURE WIRELESS LINK',
+    phoneWire: 'SECURE WIRELESS LINK'
   },
   {
     key: 'phone',

@@ -8361,8 +8361,25 @@ export function run(test) {
     assert.match(walk, /\{warn \? <Text style=\{\{ color: color\.fault,/)
     assert.match(walk, /warn=\{card\.warn\}/)
     const web = read('src/components/Walk.jsx').replace(/\s+/g, ' ')
-    assert.match(web, /\{warn \? <span className="walk-card-warn">\{warn\}<\/span> : null\}/)
+    /*
+     * Changed on purpose, 13 October 2026 (1.87.20). This pinned the browser's
+     * red line as a plain span. "Change the update your computer to the latest
+     * to be an actual link that then pops up and shows the instructions on how
+     * to update it if they tap it." With steps it is a button; without, the
+     * span it always was.
+     */
+    assert.match(web, /\{warn \? \( onWarn \? \( <button type="button" className="walk-card-warn walk-card-warn-link" onClick=\{onWarn\}>/)
+    assert.match(web, /: \( <span className="walk-card-warn">\{warn\}<\/span> \) \) : null\}/)
     assert.match(web, /warn=\{card\.warn\}/)
+    /* The line comes with the steps, and both ends open them. */
+    const { UPDATE_COMPUTER_HELP } = await import('../shared/link-chain.mjs')
+    assert.equal(card({ name: 'MacBook Pro', version: '1.86.69', link: 'connected' }).help, UPDATE_COMPUTER_HELP, 'the red line has no steps to open')
+    assert.equal(card({ name: 'MacBook Pro', version: '1.87.4', link: 'connected' }).help, undefined, 'a current computer gets update steps')
+    assert.ok(UPDATE_COMPUTER_HELP.steps.length >= 3 && UPDATE_COMPUTER_HELP.steps.some((s) => /Check for updates/.test(s)) && UPDATE_COMPUTER_HELP.steps.some((s) => /Restart to update/.test(s)), 'the steps do not name the computer app’s own buttons')
+    assert.match(walk, /onWarn=\{card\.help \? \(\) => setHelp\(card\.help\) : undefined\}/, 'the phone’s red line opens nothing')
+    assert.match(walk, /<Sheet open=\{!!help\}/)
+    assert.match(web, /onWarn=\{card\.help \? \(\) => setHelp\(card\.help\) : undefined\}/, 'the browser’s red line opens nothing')
+    assert.match(web, /<Sheet open=\{!!help\}/)
     assert.match(read('src/styles.css'), /\.walk-card-warn \{\s*color: var\(--fault\);/)
     /* The phone's copy imports the version rule by the name Metro can find. */
     assert.match(read('mobile/src/lib/link-chain.js'), /import \{ isOlder \} from '\.\/versions\.js'/)
