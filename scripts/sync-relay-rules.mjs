@@ -123,6 +123,13 @@ export const FILES = [
    */
   { source: '../shared/phone-note.mjs', target: '../mobile/src/lib/phone-note.js' },
   /*
+   * What counts as the code in a confirmation email, and what is said about
+   * one that is not, or that the account service turned down. The phone and
+   * the website both take it, and the same code has to be refused the same
+   * way at both.
+   */
+  { source: '../shared/confirm-code.mjs', target: '../mobile/src/lib/confirm-code.js' },
+  /*
    * Which end is behind. Both apps carry the same version by construction, so
    * the comparison has to mean the same thing at both ends of it.
    */

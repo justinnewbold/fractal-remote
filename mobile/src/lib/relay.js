@@ -42,6 +42,7 @@ import {
   repeatable,
   timeoutFor
 } from './relay-rules'
+import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, CONFIRMED_SIGN_IN, cleanCode, codeRefused } from './confirm-code'
 
 export { DEFAULT_PROJECT, RELAY_GRACE, forbiddenRemotely, explainAuth, NOT_IN_INBOX, sentAgain }
 
@@ -259,6 +260,30 @@ export async function changePassword(password) {
 export async function resendConfirmation(email) {
   const { error } = await supabase().auth.resend({ type: 'signup', email })
   if (error) throw new Error(explainAuth(error.message))
+}
+
+/**
+ * Confirm a new account with the code in its email, and be signed in by it.
+ *
+ * The second way past the confirmation email, beside its link: the same
+ * email carries a code, and typing it here confirms the account without
+ * leaving the app (shared/confirm-code.mjs says why). The account service
+ * answers a good code with a session, so this is a sign-in as much as
+ * signIn is, and it ends the same way — the id kept, and returned.
+ *
+ * What was typed is checked first, so a letter or a short code is said
+ * without a round trip; a code the service turns down is said in plain
+ * words rather than as "Token has expired or is invalid".
+ */
+export async function confirmWithCode({ email, code }) {
+  const token = cleanCode(code)
+  if (!token) throw new Error(CODE_NOT_DIGITS)
+  const { data, error } = await supabase().auth.verifyOtp({ email, token, type: 'email' })
+  if (error) throw new Error(codeRefused(error) ? CODE_DIDNT_WORK : explainAuth(error.message))
+  userId = data?.session?.user?.id || null
+  /* Confirmed but not signed in: unheard of, and the password still works. */
+  if (!userId) throw new Error(CONFIRMED_SIGN_IN)
+  return userId
 }
 
 export async function sendPasswordReset(email) {

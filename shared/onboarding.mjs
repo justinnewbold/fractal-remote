@@ -99,7 +99,7 @@ export const D1 = {
 export const D2 = {
   step: 'STEP 1 OF 3',
   head: 'Plug your unit into this computer.',
-  sub: 'Use a USB cable. No driver is required.',
+  sub: 'Use a USB data cable. On Windows, install Fractal’s free USB driver first.',
   /** Named by the unit that answered, never typed out. */
   found: (name) => `${name} found`,
   /** USB · firmware 8.02 · 512 presets — whichever of those is known. */

@@ -504,6 +504,14 @@ export const AREAS = [
       },
       { does: 'sign in to an account you have', web: 'Sign in', phone: 'Sign in' },
       {
+        /* The confirmation email carries a code as well as its link, for the
+           one new customer in seven who never tapped the link. Both ends take
+           it, under the same two words. */
+        does: 'confirm a new account with the code from its email',
+        web: 'Confirm account',
+        phone: 'Confirm account'
+      },
+      {
         does: 'email yourself the computer download link',
         web: null,
         phone: 'Send link',
@@ -2514,20 +2522,22 @@ export function run(test) {
     /* The website: the Account made screen, and Send it again under the refusal on both forms. */
     const web = read('src/components/SignIn.jsx')
     const flatWeb = web.replace(/\s+/g, ' ')
-    assert.match(flatWeb, /Confirm it from the email we just sent, then sign in\. \{NOT_IN_INBOX\}/, 'Account made does not say where else to look')
+    assert.match(flatWeb, /or tap the link in that email and then sign in\. \{NOT_IN_INBOX\}/, 'Account made does not say where else to look')
     assert.match(flatWeb, /setProblem\(err\.message\) setUnconfirmed\(mode === 'in' && err\?\.notConfirmed \? address : null\)/, 'the website does not notice the email was never confirmed, or forgets which address was refused')
     assert.match(flatWeb, /setNote\(null\) setUnconfirmed\(null\) const address = email\.trim\(\)/, 'a new try still offers to send the email again')
     /* To the address that was refused, not whatever the box says by the time it is tapped. */
-    const webAgain = flatWeb.slice(flatWeb.indexOf('const sendAgain = async () => {'), flatWeb.indexOf('const again ='))
+    const webAgain = flatWeb.slice(flatWeb.indexOf('const sendAgain = async () => {'), flatWeb.indexOf('const confirm = async () => {'))
     assert.match(webAgain, /^const sendAgain = async \(\) => \{ const address = unconfirmed if \(!address\) return setProblem\(null\)/, 'Send it again on the website sends to what is in the box now')
     assert.doesNotMatch(webAgain, /email\.trim\(\)/, 'Send it again on the website reads the box')
-    assert.match(webAgain, /await resendConfirmation\(\{ \.\.\.project\(\), email: address \}\) setUnconfirmed\(null\) setNote\(sentAgain\(address\)\)/, 'Send it again sends something else, or does not say it went')
-    assert.match(flatWeb, /const again = mode === 'in' && unconfirmed && problem \? \( <button type="button" className="chip signin-wide" onClick=\{sendAgain\} disabled=\{off\}> Send the confirmation email again <\/button>/, 'Send it again shows on the Create account or Forgot side')
-    assert.equal(web.split('{again}').length - 1, 2, 'Send it again is missing from one of the two forms')
+    assert.match(webAgain, /await resendConfirmation\(\{ \.\.\.project\(\), email: address \}\) setCode\(''\) setNote\(sentAgain\(address\)\)/, 'Send it again sends something else, or does not say it went')
+    /* And it keeps waiting, now on the new email and its new code. */
+    assert.doesNotMatch(webAgain, /setUnconfirmed\(/, 'Send it again on the website takes the box for the code away')
+    assert.match(flatWeb, /const waiting = \(mode === 'in' \|\| mode === 'sent'\) && unconfirmed const again = waiting && problem \? \( <button type="button" className="chip signin-wide" onClick=\{sendAgain\} disabled=\{off\}> Send the confirmation email again <\/button>/, 'Send it again shows on the Create account or Forgot side')
+    assert.equal(web.split('{again}').length - 1, 3, 'Send it again is missing from one of the two forms, or from Account made')
 
     /* The phone: Account made says where else to look; a refusal offers Send it again. */
     const phone = read('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
-    assert.match(phone, /then sign in\.' \) setUnconfirmed\(\{ why: 'made' \}\) setMode\('in'\)/, 'Account made on the phone does not say where else to look')
+    assert.match(phone, /then sign in\.' \) setUnconfirmed\(\{ why: 'made', email: email\.trim\(\) \}\) setMode\('in'\)/, 'Account made on the phone does not say where else to look, or forgets which address the code is for')
     assert.match(phone, /\{note \? <Note>\{unconfirmed\?\.why === 'made' \? `\$\{note\} \$\{NOT_IN_INBOX\}` : note\}<\/Note> : null\}/)
     assert.match(phone, /if \(mode === 'in' && err\?\.notConfirmed\) setUnconfirmed\(\{ why: 'refused', email: email\.trim\(\) \}\)/, 'the phone does not notice the email was never confirmed, or forgets which address was refused')
     /*
@@ -2540,11 +2550,283 @@ export function run(test) {
     assert.match(phone, /const reset = async \(\) => \{ setUnconfirmed\(null\) if \(!email\.includes\('@'\)\)/, 'Forgot password, refused for its address, still offers the confirmation email')
     const switchTo = phone.slice(phone.indexOf('const switchTo = (next) => {'))
     assert.match(switchTo, /^const switchTo = \(next\) => \{ setMode\(next\) setError\(null\) setNote\(null\) setNoAccount\(false\) setUnconfirmed\(null\) \}/, 'Create account still remembers the sign-in that was refused')
-    assert.match(phone, /\{mode === 'in' && unconfirmed\?\.why === 'refused' && error \? \( <Press label="Send the confirmation email again" disabled=\{busy\} onPress=\{sendAgain\} \/>/, 'Send it again shows on the Create account side')
+    /* Under a refusal, and under a code that did not work, whose words say to send a new one. */
+    assert.match(phone, /\{mode === 'in' && unconfirmed\?\.email && error \? \( <Press label="Send the confirmation email again" disabled=\{busy\} onPress=\{sendAgain\} \/>/, 'Send it again shows on the Create account side')
     /* To the address that was refused, not whatever the box says by the time it is tapped. */
-    const phoneAgain = phone.slice(phone.indexOf('const sendAgain = async () => {'), phone.indexOf('const switchTo ='))
+    const phoneAgain = phone.slice(phone.indexOf('const sendAgain = async () => {'), phone.indexOf('const confirm = async () => {'))
     assert.match(phoneAgain, /^const sendAgain = async \(\) => \{ const address = unconfirmed\?\.email if \(!address\) return setBusy\(true\)/, 'Send it again on the phone sends to what is in the box now')
     assert.doesNotMatch(phoneAgain, /email\.(trim|includes)\(/, 'Send it again on the phone reads the box')
-    assert.match(phoneAgain, /await resendConfirmation\(address\) setUnconfirmed\(null\) setNote\(sentAgain\(address\)\)/, 'Send it again on the phone sends something else, or does not say it went')
+    assert.match(phoneAgain, /await resendConfirmation\(address\) setUnconfirmed\(\{ why: 'again', email: address \}\) setCode\(''\) setNote\(sentAgain\(address\)\)/, 'Send it again on the phone sends something else, does not say it went, or takes the box for the code away')
+  })
+
+  /*
+   * THE CODE IN THE CONFIRMATION EMAIL, a second way past it.
+   *
+   * About one new customer in seven never tapped the email's link: on a
+   * phone it opens a browser, the browser opens the website, and then they
+   * have to find their way back to the app and sign in. So the same email
+   * carries a code, and both ends take it where the person already is. The
+   * link is untouched — the last test here holds it to that.
+   */
+  test('the code from a confirmation email: spaces and dashes out, six to ten digits, and the same words at both ends', async () => {
+    const { cleanCode, codeRefused, CODE_NOT_DIGITS, CODE_DIDNT_WORK, CONFIRMED_SIGN_IN } = await import('../shared/confirm-code.mjs')
+    assert.equal(cleanCode('123456'), '123456')
+    assert.equal(cleanCode(' 123 456 '), '123456', 'a code typed with a space in it is refused')
+    assert.equal(cleanCode('123-456'), '123456', 'a code typed with a dash in it is refused')
+    assert.equal(cleanCode('123–456'), '123456', 'a code pasted with a long dash in it is refused')
+    assert.equal(cleanCode('12 34-56 78'), '12345678', 'an eight-digit code in pairs is refused')
+    assert.equal(cleanCode('1234567890'), '1234567890', 'the longest code the account service can send is refused')
+    /* Pasted out of a mail app, with what came along that nobody can see. */
+    for (const [pasted, what] of [
+      ['906\u200B921', 'a zero-width space'],
+      ['\u2060906921\u2060', 'word joiners'],
+      ['906\u00AD921', 'a soft hyphen'],
+      ['\u200E906921\u200F', 'direction marks'],
+      ['\u202A906921\u202C', 'a direction embedding'],
+      ['906\u00A0921', 'a non-breaking space'],
+      ['\uFEFF906921', 'a byte-order mark'],
+      ['906921\n', 'the line it was copied from']
+    ]) {
+      assert.equal(cleanCode(pasted), '906921', `a code pasted with ${what} in it is refused`)
+    }
+    for (const [typed, what] of [
+      ['12345', 'too few digits'],
+      ['12345678901', 'too many digits'],
+      ['12a456', 'a letter in it'],
+      ['abcdef', 'letters for digits'],
+      ['123.456', 'a full stop in it'],
+      ['', 'nothing in it'],
+      [null, 'nothing at all'],
+      [undefined, 'nothing at all']
+    ]) {
+      assert.equal(cleanCode(typed), null, `a code with ${what} would be sent to the account service`)
+    }
+    /* The words, once, for both ends. */
+    assert.equal(CODE_NOT_DIGITS, 'Type the code from the email — it is all numbers.')
+    assert.equal(CODE_DIDNT_WORK, 'That code didn’t work. Check it against the email, or send a new one.')
+    assert.equal(CONFIRMED_SIGN_IN, 'Your account is confirmed. Sign in with your email and password.')
+    /* A wrong code and an old one, by the service's code or its words on an older one; anything else is not the code's fault. */
+    assert.equal(codeRefused({ code: 'otp_expired', message: 'Token has expired or is invalid' }), true)
+    assert.equal(codeRefused({ message: 'Token has expired or is invalid' }), true)
+    assert.equal(codeRefused({ message: 'Failed to fetch' }), false, 'no signal is called a wrong code')
+    assert.equal(codeRefused({ code: 'email_not_confirmed', message: 'Email not confirmed' }), false)
+    assert.equal(codeRefused(null), false)
+    /* One rule: the phone's is a generated copy, and each end's sign-in takes it from there. */
+    const { FILES } = await import('../scripts/sync-relay-rules.mjs')
+    assert.ok(
+      FILES.some((f) => f.source === '../shared/confirm-code.mjs' && f.target === '../mobile/src/lib/confirm-code.js' && !f.render),
+      'the phone has no plain copy of the code rule'
+    )
+    assert.match(read('mobile/src/lib/relay.js'), /import \{ CODE_DIDNT_WORK, CODE_NOT_DIGITS, CONFIRMED_SIGN_IN, cleanCode, codeRefused \} from '\.\/confirm-code'/)
+    assert.match(read('src/lib/remote.js'), /import \{ CODE_DIDNT_WORK, CODE_NOT_DIGITS, cleanCode, codeRefused \} from '\.\.\/\.\.\/shared\/confirm-code\.mjs'/)
+    assert.match(read('src/components/SignIn.jsx'), /import \{ CONFIRMED_SIGN_IN \} from '\.\.\/\.\.\/shared\/confirm-code\.mjs'/)
+  })
+
+  /*
+   * Each end's confirmWithCode, run rather than read: the file itself, beside
+   * a pretend account service that writes down what it was asked and answers
+   * what the test tells it to. Everything else either file imports is the
+   * real thing, copied in, or nothing at all where nothing is used.
+   */
+  const confirmBench = async (end) => {
+    const dir = mkdtempSync(join(tmpdir(), 'confirm-'))
+    const files = {
+      'package.json': '{ "type": "module" }',
+      'service.mjs': `export const made = []
+        export const asked = []
+        export const said = { answer: () => ({ data: {}, error: { message: 'the bench was not told what to say' } }) }
+        export const createClient = (url, key, options) => {
+          made.push({ url, key, options })
+          return { auth: { verifyOtp: async (params) => { asked.push(params); return said.answer(params) } } }
+        }`,
+      'nothing.mjs': 'export const logDebug = () => {}\nexport const decode = () => null\nexport const withRetry = (fn) => fn()\nexport const notForever = (...a) => fetch(...a)\nexport default {}\n',
+      'confirm-code.mjs': read('shared/confirm-code.mjs'),
+      'relay-rules.mjs': read('shared/relay-rules.mjs'),
+      'project.mjs': end === 'phone' ? read('mobile/src/lib/project.js') : read('desktop/lib/project.mjs')
+    }
+    const swaps =
+      end === 'phone'
+        ? [
+            ["from '@react-native-async-storage/async-storage'", "from './nothing.mjs'"],
+            ["from '@supabase/supabase-js'", "from './service.mjs'"],
+            ["from './debugLog'", "from './nothing.mjs'"],
+            ["from './project'", "from './project.mjs'"],
+            ["from './decode'", "from './nothing.mjs'"],
+            ["from './retry'", "from './nothing.mjs'"],
+            ["from './notForever'", "from './nothing.mjs'"],
+            ["from './relay-rules'", "from './relay-rules.mjs'"],
+            ["from './confirm-code'", "from './confirm-code.mjs'"]
+          ]
+        : [
+            ["from '../../desktop/lib/project.mjs'", "from './project.mjs'"],
+            ["from '../../shared/relay-rules.mjs'", "from './relay-rules.mjs'"],
+            ["from '../../shared/confirm-code.mjs'", "from './confirm-code.mjs'"],
+            ["import('@supabase/supabase-js')", "import('./service.mjs')"]
+          ]
+    let src = read(end === 'phone' ? 'mobile/src/lib/relay.js' : 'src/lib/remote.js')
+    for (const [from, to] of swaps) {
+      assert.ok(src.includes(from), `${end}: no longer has ${from}; the bench needs telling`)
+      src = src.replaceAll(from, to)
+    }
+    const left = [...src.matchAll(/^\s*(?:import|export)\b[^'\n]*from '([^']+)'|import\('([^']+)'\)/gm)]
+      .map((m) => m[1] ?? m[2])
+      .filter((p) => !(p.startsWith('./') && p.slice(2) in files))
+    assert.deepEqual(left, [], `${end}: imports something new; the bench does not cover it`)
+    files['under-test.mjs'] = src
+    for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+    const at = (f) => pathToFileURL(join(dir, f)).href
+    return {
+      mod: await import(at('under-test.mjs')),
+      service: await import(at('service.mjs')),
+      done: () => rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  /* What both ends must do with the same answers from the account service. */
+  const sameRulesAtEach = async (mod, service, end) => {
+    const email = 'player@example.com'
+    /* Not a code: said at once, and nothing asked. */
+    for (const code of ['12345', '12a456', '', 'abcdef']) {
+      await assert.rejects(mod.confirmWithCode({ email, code }), { message: 'Type the code from the email — it is all numbers.' }, `${end}: “${code}” is taken for a code`)
+    }
+    assert.equal(service.asked.length, 0, `${end}: something that is not a code went to the account service`)
+    /* A code turned down, in plain words, wrong or old alike. */
+    service.said.answer = () => ({ data: { user: null, session: null }, error: { code: 'otp_expired', status: 403, message: 'Token has expired or is invalid' } })
+    await assert.rejects(mod.confirmWithCode({ email, code: '654321' }), { message: 'That code didn’t work. Check it against the email, or send a new one.' }, `${end}: a code turned down is said in the service's words`)
+    /* No signal is not the code: said the way every sign-in says it. */
+    service.said.answer = () => ({ data: {}, error: { message: 'Failed to fetch' } })
+    await assert.rejects(mod.confirmWithCode({ email, code: '654321' }), { message: /^Couldn’t reach the account service\./ }, `${end}: no signal is called a wrong code`)
+    /* And each that was asked was asked as an email code. */
+    assert.deepEqual(service.asked, [
+      { email, token: '654321', type: 'email' },
+      { email, token: '654321', type: 'email' }
+    ])
+    service.asked.length = 0
+  }
+
+  test('the phone sends the code as an email code, cleaned, and is signed in by the answer', async () => {
+    const { mod, service, done } = await confirmBench('phone')
+    try {
+      await sameRulesAtEach(mod, service, 'phone')
+      service.said.answer = () => ({ data: { user: { id: 'acct-1' }, session: { access_token: 't', user: { id: 'acct-1' } } }, error: null })
+      assert.equal(await mod.confirmWithCode({ email: 'player@example.com', code: ' 123-456 ' }), 'acct-1', 'a good code does not hand back the account')
+      assert.deepEqual(service.asked, [{ email: 'player@example.com', token: '123456', type: 'email' }], 'the code was not sent as an email code, cleaned of its space and dash')
+      /* Signed in, the way signIn leaves it: the id the link and everything after it reads. */
+      assert.equal(mod.remoteUserId(), 'acct-1', 'a good code leaves the phone signed in as nobody')
+      /* The one client for the life of the app, the one Sign in uses, so the session is where the rest of the app looks. */
+      assert.equal(service.made.length, 1, 'the code was checked on a client of its own, which the rest of the app never sees')
+      /* Confirmed but handed no session: told to sign in, and nobody is taken for signed in. */
+      service.said.answer = () => ({ data: { user: { id: 'acct-1' }, session: null }, error: null })
+      await assert.rejects(mod.confirmWithCode({ email: 'player@example.com', code: '123456' }), { message: 'Your account is confirmed. Sign in with your email and password.' })
+      assert.equal(mod.remoteUserId(), null, 'an answer with no session left somebody signed in')
+    } finally {
+      done()
+    }
+  })
+
+  test('the website sends the code the same way, keeps no session from it, and leaves the sign-in to the form', async () => {
+    const { mod, service, done } = await confirmBench('web')
+    try {
+      await sameRulesAtEach(mod, service, 'website')
+      service.said.answer = () => ({ data: { user: { id: 'acct-2' }, session: { access_token: 't', user: { id: 'acct-2' } } }, error: null })
+      assert.equal(await mod.confirmWithCode({ email: 'fan@example.com', code: '98 76 54' }), 'acct-2')
+      assert.deepEqual(service.asked, [{ email: 'fan@example.com', token: '987654', type: 'email' }], 'the code was not sent as an email code, cleaned of its spaces')
+      const { DEFAULT_PROJECT } = await import('../desktop/lib/project.mjs')
+      const client = service.made.at(-1)
+      assert.equal(client.url, DEFAULT_PROJECT.url, 'the code was checked against another project')
+      assert.equal(client.options?.auth?.persistSession, false, 'the website keeps a session from the code that nothing signed in with')
+      /* Not signed in by it: the form's own Sign in does that, with the errand it was opened for. */
+      assert.equal(mod.remoteUserId(), null, 'the code signed the website in behind the form’s back')
+      /* A project of its own when one is set, as Send it again does. */
+      await mod.confirmWithCode({ url: 'https://other.test', anonKey: 'k', email: 'fan@example.com', code: '987654' })
+      assert.equal(service.made.at(-1).url, 'https://other.test')
+    } finally {
+      done()
+    }
+  })
+
+  test('the box for the code shows wherever an account waits on its email, at both ends, and a good code goes the way Sign in goes', () => {
+    const flat = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ').replace(/\s+/g, ' ')
+
+    /* The phone: every waiting state carries the address, and the box waits on that alone. */
+    const phone = flat(read('mobile/src/screens/SignIn.js'))
+    assert.match(phone, /setUnconfirmed\(\{ why: 'made', email: email\.trim\(\) \}\)/, 'Account made forgets which address the code is for')
+    assert.match(phone, /setUnconfirmed\(\{ why: 'refused', email: email\.trim\(\) \}\)/, 'a refused sign-in forgets which address the code is for')
+    const opens = phone.indexOf("{mode === 'in' && unconfirmed?.email ? ( <View")
+    assert.ok(opens > 0, 'the phone has no box for the code, or it waits on one waiting state rather than any')
+    const phoneBox = phone.slice(opens, phone.indexOf(') : null}', opens))
+    for (const needed of [
+      'placeholder="Code from the email"',
+      'accessibilityLabel="Code from the email"',
+      'textContentType="oneTimeCode"',
+      'autoComplete="one-time-code"',
+      'keyboardType="number-pad"',
+      'onSubmitEditing={() => !busy && confirm()}',
+      "<Press label={confirming ? 'Confirming…' : 'Confirm account'} disabled={busy} onPress={confirm} />"
+    ]) {
+      assert.ok(phoneBox.includes(needed), `the phone's box for the code lost ${needed}`)
+    }
+    /* A good code: confirmed, then exactly what a good Sign in does, and nothing it does not. */
+    const confirm = phone.slice(phone.indexOf('const confirm = async () => {'), phone.indexOf('const switchTo ='))
+    assert.match(confirm, /^const confirm = async \(\) => \{ const address = unconfirmed\?\.email if \(!address\) return/, 'the code goes to whatever the box says now, not the address that is waiting')
+    assert.match(confirm, /try \{ await confirmWithCode\(\{ email: address, code \}\) onSignedIn\(\) \} catch \(err\) \{ setError\(err\.message\) \}/, 'a good code does not go the way a good Sign in goes')
+    assert.ok(!/onAccountMade|linkNewAccount|signIn\(/.test(confirm), 'a good code hands a purchase over a second time, or signs in again')
+    assert.match(phone, /import \{ NOT_IN_INBOX, confirmWithCode, resendConfirmation, sendPasswordReset, sentAgain, signIn, signUp \} from '\.\.\/lib\/relay'/)
+
+    /* The website: the same box on Account made and under a refusal, on both of its forms. */
+    const raw = read('src/components/SignIn.jsx')
+    const web = flat(raw)
+    assert.match(web, /if \(needsConfirmation\) \{ setUnconfirmed\(address\) setMode\('sent'\) \}/, 'Account made forgets which address the code is for')
+    assert.match(web, /setUnconfirmed\(mode === 'in' && err\?\.notConfirmed \? address : null\)/)
+    assert.match(web, /const waiting = \(mode === 'in' \|\| mode === 'sent'\) && unconfirmed/, 'the box waits on something other than an address, on Account made and the Sign in side')
+    const webBox = web.slice(web.indexOf('const codeBox = waiting ? ('), web.indexOf("if (mode === 'sent') {"))
+    for (const needed of [
+      '<span>Code from the email</span>',
+      'inputMode="numeric"',
+      'autoComplete="one-time-code"',
+      "if (e.key !== 'Enter') return e.preventDefault() if (!off) confirm()",
+      "className={mode === 'sent' ? 'primary signin-wide' : 'chip signin-wide'} onClick={confirm} disabled={off}",
+      "{confirming ? 'Confirming…' : 'Confirm account'}"
+    ]) {
+      assert.ok(webBox.includes(needed), `the website's box for the code lost ${needed}`)
+    }
+    assert.equal(raw.split('{codeBox}').length - 1, 3, 'the box for the code is missing from Account made or one of the two forms')
+    const sent = web.slice(web.indexOf("if (mode === 'sent') {"), web.indexOf('if (stage) {'))
+    assert.ok(sent.includes('{codeBox}'), 'Account made has no box for the code')
+    assert.ok(sent.includes('{problem}'), 'a code that did not work says nothing on Account made')
+    /* A good code: the form's own sign-in, for the address that was waiting, with the password still in it. */
+    const webConfirm = web.slice(web.indexOf('const confirm = async () => {'), web.indexOf('const waiting ='))
+    assert.match(webConfirm, /^const confirm = async \(\) => \{ const address = unconfirmed if \(!address\) return/)
+    assert.match(webConfirm, /await confirmWithCode\(\{ \.\.\.project\(\), email: address, code \}\)/)
+    assert.match(webConfirm, /if \(password\.length >= 6\) await onSubmit\(\{ email: address, password \}\) else setNote\(CONFIRMED_SIGN_IN\)/, 'a good code does not go the way the form’s Sign in goes')
+
+    /* The same sentence at both ends for an account made with nothing bought. */
+    const said = 'Type the code from the email we just sent in the box below, or tap the link in that email and then sign in.'
+    assert.ok(phone.includes(`'Account made. ${said}'`), 'the phone’s Account made says something else')
+    assert.ok(web.includes(`${said} {NOT_IN_INBOX}`), 'the website’s Account made says something else')
+  })
+
+  test('the email’s link still works exactly as it did, at both ends', () => {
+    const phone = read('mobile/src/lib/relay.js')
+    const web = read('src/lib/remote.js')
+    for (const [end, src, client] of [['phone', phone, 'supabase()'], ['website', web, 'c']]) {
+      /* The email is the same email: made by the same sign-up, sent again the same way. */
+      assert.ok(src.includes(`await ${client}.auth.signUp({ email, password })`), `${end}: the sign-up that sends the email changed`)
+      assert.ok(src.includes(`await ${client}.auth.resend({ type: 'signup', email })`), `${end}: Send it again sends something other than the confirmation email`)
+      /* And the code is the only thing checked in the app: one verifyOtp, in confirmWithCode, never the link's token. */
+      assert.equal(src.split('.verifyOtp(').length - 1, 1, `${end}: the code is checked in more than one place`)
+      const fn = src.slice(src.indexOf('export async function confirmWithCode('))
+      assert.ok(fn.slice(0, fn.indexOf('\n}\n')).includes(".verifyOtp({ email, token, type: 'email' })"), `${end}: the code is checked outside confirmWithCode`)
+      assert.ok(!/token_hash|emailRedirectTo/.test(src), `${end}: the link's route was moved into the app`)
+    }
+    /* The website still reads a session out of the address the link opens; the phone never had one to read. */
+    assert.ok(!/detectSessionInUrl/.test(web), 'the website stopped picking up the session the link brings')
+    assert.match(phone, /detectSessionInUrl: false/)
+    /* And after the link, Sign in is where it was at both ends. */
+    const webForm = read('src/components/SignIn.jsx').replace(/\s+/g, ' ')
+    assert.match(webForm, /<button className="chip signin-wide" type="button" onClick=\{\(\) => setMode\('in'\)\} disabled=\{off\}> Sign in <\/button>/, 'Account made lost its way to Sign in after the link')
+    const phoneForm = read('mobile/src/screens/SignIn.js').replace(/\s+/g, ' ')
+    assert.match(phoneForm, /\} else \{ await signIn\(\{ email: email\.trim\(\), password \}\) \} onSignedIn\(\)/, 'Sign in after the link no longer signs in')
+    assert.match(phoneForm, /label=\{busy \? 'Working…' : mode === 'up' \? 'Create account' : 'Sign in'\}/)
   })
 }

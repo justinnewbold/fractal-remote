@@ -8237,7 +8237,14 @@ export function run(test) {
        * are held to "computer" in 'the red line on the computer card opens
        * how to update it, at both ends'.
        */
-      if (file.endsWith('/screens/Connect.js') || file.endsWith('/lib/ways-in.js') || file.endsWith('/lib/computer-update.js')) continue
+      /*
+       * And on 13 October 2026 (1.87.25) the guide for when it will not connect
+       * (lib/troubleshooting.js, from shared/troubleshooting.mjs) joined it,
+       * for the same reason: "it lives in the menu bar, not the Dock" was the
+       * Mac's answer given to everybody, and a Windows PC keeps the app by the
+       * clock. Where to look differs by computer, so the step names each.
+       */
+      if (file.endsWith('/screens/Connect.js') || file.endsWith('/lib/ways-in.js') || file.endsWith('/lib/computer-update.js') || file.endsWith('/lib/troubleshooting.js')) continue
       const text = readFileSync(file, 'utf8')
         .replace(/\/\*[\s\S]*?\*\//g, ' ')
         .replace(/^\s*\/\/.*$/gm, ' ')
@@ -14966,7 +14973,7 @@ export function run(test) {
     /* The confirm-first note for a paid phone only, and one that can be followed: the email's own link opens the website. */
     assert.match(
       flatSign,
-      /paid \? 'Account made — confirm it from the email we just sent, then come back to this phone and sign in, so your purchase goes with your account\.' : 'Account made\. Confirm it from the email we just sent, then sign in\.'/,
+      /paid \? 'Account made — type the code from the email we just sent in the box below\. Or tap the link in that email, then come back to this phone and sign in, so your purchase goes with your account\.' : 'Account made\. Type the code from the email we just sent in the box below, or tap the link in that email and then sign in\.'/,
       'a new account on a paid phone is not told to come back here and sign in, or everybody is'
     )
     assert.ok(!/before you open the website/.test(flatSign), 'the phone says to sign in before opening the website, which the email itself opens')
