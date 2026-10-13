@@ -3980,8 +3980,8 @@ export function run(test) {
      */
     assert.match(connectScreen, /<button className="primary" onClick=\{onCreateAccount\}/, 'Create Account is not the big button on the first screen')
     assert.match(webForm, /className="chip signin-wide" onClick=\{\(\) => setMode\('up'\)\}/, 'the form’s Create Account is link-sized again')
-    assert.match(webForm, /if \(needsConfirmation\) \{\s*setUnconfirmed\(address\)\s*setMode\('sent'\)/, 'a new account is told to check its email in a line under the buttons again, or its screen forgets which address the code is for')
-    assert.match(webForm, /if \(mode === 'sent'\) \{[\s\S]{0,400}Account made\.[\s\S]{0,200}Type the code from the email we just sent in the box below, or tap the link in that email and then sign in\./, 'the check-your-email screen lost the phone’s words')
+    assert.match(webForm, /if \(needsConfirmation\) setMode\('sent'\)/, 'a new account is told to check its email in a line under the buttons again')
+    assert.match(webForm, /if \(mode === 'sent'\) \{[\s\S]{0,400}Account made\.[\s\S]{0,200}Confirm it from the email we just sent, then sign in\./, 'the check-your-email screen lost the phone’s words')
     assert.match(sheet, /title=\{making \? 'Create Account' : 'Sign in'\}/, 'the sheet says Sign in over a form making an account')
     /* Create Account pressed by somebody who already has one signs them in —
        never "Account made, check your email" for an email that will not come. */

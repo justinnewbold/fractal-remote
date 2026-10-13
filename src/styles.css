@@ -10342,19 +10342,6 @@ button.signin-link {
   word-break: break-all;
 }
 
-/* The code from the confirmation email, and Confirm account under it: the
-   form's full width, even on the centred Account made screen. */
-.signin-code {
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  text-align: left;
-}
-.signin-code input {
-  letter-spacing: 0.14em;
-}
-
 .signin .problem {
   margin: 0;
   color: var(--fault);
