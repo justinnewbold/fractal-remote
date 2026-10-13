@@ -8044,7 +8044,18 @@ export function run(test) {
        * exception moved with the words — Connect.js is now only the phone's
        * way of drawing them.
        */
-      if (file.endsWith('/screens/Connect.js') || file.endsWith('/lib/ways-in.js')) continue
+      /*
+       * Changed on purpose, 13 October 2026 (1.87.21). The steps for updating
+       * the computer app (lib/computer-update.js, from
+       * shared/computer-update.mjs) join that exception for the same reason:
+       * where a Mac and a Windows PC do it differently — the icon in the menu
+       * bar or by the clock, dragging into Applications — the step has to
+       * say which, because the phone cannot tell what is on the desk. Their
+       * title, opening and closing lines, which are about every computer,
+       * are held to "computer" in 'the red line on the computer card opens
+       * how to update it, at both ends'.
+       */
+      if (file.endsWith('/screens/Connect.js') || file.endsWith('/lib/ways-in.js') || file.endsWith('/lib/computer-update.js')) continue
       const text = readFileSync(file, 'utf8')
         .replace(/\/\*[\s\S]*?\*\//g, ' ')
         .replace(/^\s*\/\/.*$/gm, ' ')
@@ -8511,6 +8522,41 @@ export function run(test) {
     assert.equal(isOlder(null, '7.265.0'), null, 'a version nobody sent is being treated as a number')
     assert.equal(isOlder('v7.265.0', '7.265.0'), null, 'a version this cannot parse still gets an opinion')
     assert.equal(isOlder('7.265', '7.265.0'), null)
+  })
+
+  test('the phone’s red update line is a link to the steps, and the card is pressable only while it shows', () => {
+    /*
+     * "Change red text about updating computer to a link that shows
+     * instructions when tapped on how to update it." (13 October 2026,
+     * 1.87.21) The words of the steps, and the browser's half, are held in
+     * test/both-ends.mjs; this is the phone's card and page.
+     */
+    const walk = read('mobile/src/components/Walk.js')
+    const flatWalk = walk.replace(/\s+/g, ' ')
+    /* The whole card takes the tap, and only when it has a red line and somewhere to go. */
+    assert.match(flatWalk, /export function TipCard\(\{ icon, label, body, warn, onWarn, hint, onPress, right, tile = 64 \}\)/)
+    assert.match(flatWalk, /const press = onPress \|\| \(warnLink \? onWarn : null\)/, 'a card without a red line became pressable')
+    assert.match(flatWalk, /disabled=\{!press\}/)
+    assert.match(flatWalk, /onPress=\{ press \? \(\) => \{ tick\(\) press\(\) \} : undefined \}/, 'the tap does not reach what the card was given')
+    /* The style object stays the first thing on the red line, with the underline inside it. */
+    assert.match(flatWalk, /\{warn \? <Text style=\{\{ color: color\.fault, fontSize: font\.body, fontWeight: '700', lineHeight: 20, textDecorationLine: warnLink \? 'underline' : 'none' \}\}>\{warn\}<\/Text> : null\}/)
+    /* ChainCards hands it on after `cards=`, which the page's own checks read first. */
+    assert.match(flatWalk, /<TipCard icon=\{CHAIN_ICONS\[card\.key\]\} tile=\{52\} label=\{card\.label\} body=\{card\.body\} warn=\{card\.warn\} onWarn=\{onWarn\}/)
+
+    const settings = read('mobile/src/screens/Settings.js')
+    /* Back from the steps names the page it goes to. */
+    assert.match(settings, /const UP_LABEL = \{ link: '‹ Phone & computer'/)
+    /* A page of its own, after Playing with no internet and before the watch: outside the slices the Bluetooth checks read. */
+    const at = settings.indexOf("{page === 'updating' ? (")
+    assert.ok(at > settings.indexOf("{page === 'offline' && mayDrive(purchase) ? (") && at < settings.indexOf("{page === 'watch' ? ("), 'the steps moved into a slice another test reads')
+    assert.ok(at > settings.indexOf("{page === 'metronome' ? ("), 'the steps are inside the link-to-metronome slice')
+    const page = settings.slice(at, settings.indexOf("{page === 'watch' ? ("))
+    /* Big type, as on Playing with no internet: the body size or larger, never the small one. */
+    assert.ok(!/font\.small/.test(page), 'the steps are in the small type')
+    assert.match(page, /<Note key=\{entry\.says\} size=\{font\.body\}>/, 'what the computer can say instead is in the small type')
+    assert.match(page, /icon=\{\[laptopIcon, setupIcon, sendIcon\]\[i\]\}/, 'a step has no picture')
+    /* Never the long notes that used to sit under the cards. */
+    assert.doesNotMatch(settings, /The app on the computer is behind this one|didn’t say which version/)
   })
 
   test('the log survives the run that needed reading', () => {
@@ -11126,8 +11172,11 @@ export function run(test) {
       /onPress=\{\(\) => setPage\(upFrom\(page\)\)\}/,
       'the Back button and the swipe can disagree about where one step up is'
     )
-    /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer. */
-    assert.match(set, /const PARENT = \{ offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' \}/, 'a page goes back somewhere it did not come from')
+    /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer.
+       Changed on purpose, 13 October 2026 (1.87.21): 'updating', the steps the
+       red line on the computer card opens, is a child of Phone & computer
+       beside 'offline'. */
+    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')
