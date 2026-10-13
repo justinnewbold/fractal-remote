@@ -1672,14 +1672,104 @@ test('a hostname reads like a name', () => {
 })
 
 /**
- * A ForgeFX to arm: answers the routes armHost calls, records what was asked,
- * and can be told to be slow to start, signed out, already on, or refusing.
+ * A ForgeFX to arm: answers the routes armHost and checkRelay call, records
+ * what was asked, and behaves as ForgeFX's relay host does, in both its ages.
+ *
+ * Changed on purpose, 12 October 2026 (1.87.18). This answered /remote/status
+ * with `connected: enabled`, and a failed enable never left the switch on —
+ * which is the device server everybody wished they had, and hid the one that
+ * left a phone with no answer that day. Now it tells the truth:
+ *
+ *   build 'new' — reports a `state`, and its `connected` is whether the link
+ *     is up; an enable is a clean start, whatever was there before.
+ *   build 'old' — ForgeFX before that: no `state`, and `connected` only says a
+ *     link was made once. It stays true after the account service closes the
+ *     link (`drop()`), a failed enable leaves the switch on, and a link that
+ *     was refused is left half-made, so the next enable adds a second request
+ *     handler to it rather than replacing it.
+ *
+ * `answers()` is how many times one tap on the phone would be carried out:
+ * 0 is the 12 October report, 2 is the defect that makes a careless retry
+ * worse than none. `failAs` is how an enable fails: 'no-session' (the account
+ * service did not answer) or 'join' (the link itself refused). The old build
+ * answers the first with a yes and an error, leaving nothing made, and the
+ * second with HTTP 503, leaving the link half-made. The new one answers both
+ * with a yes, its switch on, its reason, and state 'retrying' — it pulls
+ * every link down and tries again by itself, which `heal()` stands for
+ * landing. `joinsAfter` is a new one still making its link when it answers,
+ * for that many reads of its status. `offDuring` is somebody pressing Turn
+ * off in the app while the first enable is still making its link: a new
+ * build answers that enable with a yes and its switch off, and the page
+ * writes down "off" after.
  */
-function fakeForgeFX({ healthzFails = 0, cloud = { enabled: true, user: { email: 'j@x.com' } }, enabled = false, doc = null, enableFails = 0 } = {}) {
+function fakeForgeFX({
+  healthzFails = 0,
+  cloud = { enabled: true, user: { email: 'j@x.com' } },
+  enabled = false,
+  doc = null,
+  enableFails = 0,
+  failAs = 'no-session',
+  build = 'new',
+  joinsAfter = 0,
+  offDuring = false
+} = {}) {
   const calls = []
   let health = 0
   let enables = 0
+  const old = build === 'old'
+  // What ForgeFX's relay host holds: the switch, whether it made a link, whether that link is up, and a half-made one.
+  const rh = { enabled, made: enabled, live: enabled, handlers: enabled ? 1 : 0, leftover: false, joining: 0, retrying: false, lastError: null }
+  const status = () =>
+    old
+      ? { enabled: rh.enabled, connected: rh.made, userId: 'u' }
+      : {
+          enabled: rh.enabled,
+          connected: rh.live,
+          state: !rh.enabled ? 'off' : rh.live ? 'joined' : rh.joining ? 'connecting' : rh.retrying ? 'retrying' : 'errored',
+          since: 1,
+          lastError: rh.lastError,
+          userId: 'u'
+        }
   const reply = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body })
+  const enable = () => {
+    rh.enabled = true
+    rh.retrying = false
+    const failing = enables++ < enableFails
+    if (offDuring && enables === 1) {
+      rh.enabled = rh.made = rh.live = false
+      rh.handlers = 0
+      doc = { wanted: false, at: 2 }
+      return reply(200, status())
+    }
+    if (failing && failAs === 'no-session' && old) return reply(200, { ...status(), error: 'cloud not enabled or not signed in' })
+    if (old && rh.leftover) {
+      // The half-made link is the one the library hands back, and it takes another handler.
+      rh.handlers++
+      return reply(503, { error: 'cannot add `presence` callbacks for realtime:remote:u after `subscribe()`.' })
+    }
+    // Pulled down before the new one is made: the old build its own link, the new one every link.
+    rh.made = false
+    rh.live = false
+    rh.handlers = 0
+    rh.leftover = false
+    if (failing && !old) {
+      rh.retrying = true
+      rh.lastError = failAs === 'no-session' ? 'cloud not enabled or not signed in' : 'no answer to the join in 12 s'
+      return reply(200, { ...status(), error: rh.lastError })
+    }
+    if (failing) {
+      rh.leftover = true
+      rh.handlers = 1
+      rh.lastError = 'realtime TIMED_OUT'
+      return reply(503, { error: 'realtime TIMED_OUT' })
+    }
+    rh.made = true
+    rh.handlers = 1
+    rh.lastError = null
+    if (!old && joinsAfter) rh.joining = joinsAfter
+    else rh.live = true
+    return reply(200, status())
+  }
   const fetch = async (url, init = {}) => {
     const path = new URL(url).pathname
     const method = init.method || 'GET'
@@ -1687,15 +1777,38 @@ function fakeForgeFX({ healthzFails = 0, cloud = { enabled: true, user: { email:
     if (path === '/healthz') return health++ < healthzFails ? reply(503, {}) : reply(200, { ok: true })
     if (path === '/store/config/host.name' && method === 'PUT') return reply(200, {})
     if (path === '/cloud/status') return reply(200, cloud)
-    if (path === '/remote/status') return reply(200, { enabled, connected: enabled, userId: 'u' })
+    if (path === '/remote/status') {
+      if (rh.joining && --rh.joining === 0) rh.live = true
+      return reply(200, status())
+    }
     if (path === '/store/config/remote.host') return doc ? reply(200, { data: doc }) : reply(404, { error: 'not found' })
     if (path === '/remote/enable') {
-      if (enables++ < enableFails) return reply(200, { enabled: true, connected: false, error: 'realtime TIMED_OUT' })
-      return reply(200, { enabled: true, connected: true, userId: 'u' })
+      if (JSON.parse(init.body || '{}').on) return enable()
+      rh.enabled = rh.made = rh.live = rh.retrying = false
+      rh.joining = 0
+      return reply(200, status())
     }
     return reply(404, {})
   }
-  return { fetch, calls }
+  return {
+    fetch,
+    calls,
+    status,
+    // Times it was asked to turn on.
+    posts: () => calls.filter((c) => c.startsWith('POST /remote/enable {"on":true}')).length,
+    // The account service closing the link. An old build goes on saying connected.
+    drop: () => {
+      rh.live = false
+    },
+    // A new build's own retry landing.
+    heal: () => {
+      rh.retrying = false
+      rh.made = rh.live = true
+      rh.handlers = 1
+    },
+    // A half-made link that the library finished by itself answers too.
+    answers: () => (rh.live || rh.leftover ? rh.handlers : 0)
+  }
 }
 const arm = (unit, extra = {}) =>
   host.armHost({ port: 5056, fetch: unit.fetch, hostname: 'Studio computer', sleep: async () => {}, ...extra })
@@ -1741,10 +1854,72 @@ test('already on is left alone', async () => {
 })
 
 test('a slow account service gets a few tries', async () => {
-  const unit = fakeForgeFX({ enableFails: 2 })
+  /*
+   * Changed on purpose, 12 October 2026 (1.87.18): this is an older device
+   * server now. A newer one keeps trying by itself, and is asked once — see
+   * the next test.
+   */
+  const unit = fakeForgeFX({ build: 'old', enableFails: 2 })
   const result = await arm(unit)
   assert.equal(result.on, true)
   assert.equal(unit.calls.filter((c) => c.startsWith('POST /remote/enable')).length, 3)
+})
+
+test('a device server that keeps trying by itself is asked once, and the app’s retry leaves it to it', async () => {
+  /*
+   * Every "turn it on" starts its waits between tries over from one second.
+   * Asked three times by armHost and again every minute by the app, a
+   * device server in an outage would never get past its first waits — on
+   * every computer the outage reaches.
+   */
+  const lines = []
+  const unit = fakeForgeFX({ enableFails: 99 })
+  const result = await arm(unit, { log: (l) => lines.push(l) })
+  assert.deepEqual(result, { on: false, reason: 'retrying', email: 'j@x.com', error: 'cloud not enabled or not signed in' })
+  assert.equal(unit.posts(), 1, 'a device server that is trying by itself was asked to start again')
+  assert.match(lines.at(-1), /keeps trying by itself/)
+  // Imported here, as below: this file's own copy is declared further down.
+  const { phoneRetryDelay } = await import('../desktop/lib/autostart.mjs')
+  assert.equal(phoneRetryDelay(result, 0), null, 'the app’s retry asks it again every minute')
+  assert.equal(phoneRetryDelay(result, 60 * 60 * 1000), null)
+  // And it gets there on its own.
+  unit.heal()
+  assert.equal(unit.status().connected, true)
+  assert.equal(unit.answers(), 1)
+  // A refused link, the same.
+  const refused = fakeForgeFX({ enableFails: 99, failAs: 'join' })
+  assert.equal((await arm(refused)).reason, 'retrying')
+  assert.equal(refused.posts(), 1)
+})
+
+test('turned off in the app while it was being turned on: left off', async () => {
+  /*
+   * The menu said "reconnecting…", and he pressed Turn off in the window
+   * while armHost's own enable was still making its link. The device server
+   * answers that enable with a yes and its switch off — and the page writes
+   * down "off" only after, too late for a retry five seconds on.
+   */
+  const lines = []
+  const unit = fakeForgeFX({ offDuring: true })
+  const result = await arm(unit, { log: (l) => lines.push(l) })
+  assert.deepEqual(result, { on: false, reason: 'turned-off', email: 'j@x.com' })
+  assert.equal(unit.posts(), 1, 'it turned the remote back on against somebody who had just turned it off')
+  assert.equal(unit.status().enabled, false)
+  assert.match(lines.at(-1), /turned off in the app/)
+  const { phoneRetryDelay } = await import('../desktop/lib/autostart.mjs')
+  assert.equal(phoneRetryDelay(result, 0), null)
+
+  // Pressed while it was still being waited for, a second at a time: the same.
+  const slow = fakeForgeFX({ joinsAfter: 5 })
+  const pressed = async (url, init = {}) => {
+    if (new URL(url).pathname === '/remote/status' && slow.posts() === 1 && slow.status().enabled) {
+      await slow.fetch('http://localhost:5056/remote/enable', { method: 'POST', body: JSON.stringify({ on: false }) })
+    }
+    return slow.fetch(url, init)
+  }
+  assert.equal((await arm({ fetch: pressed })).reason, 'turned-off')
+  assert.equal(slow.posts(), 1)
+  assert.equal(slow.status().enabled, false)
 })
 
 test('a server that never comes up does not take the launcher with it', async () => {
@@ -1752,6 +1927,180 @@ test('a server that never comes up does not take the launcher with it', async ()
   const result = await arm(unit, { attempts: 3 })
   assert.equal(result.reason, 'no-server')
   assert.equal(unit.calls.length, 3)
+})
+
+/*
+ * "No answer" on the phone, 12 October 2026, from a MacBook whose Fractal
+ * Remote app was open and signed in; quitting and reopening it fixed it. The
+ * account service had closed the computer's link, and everything on the
+ * computer went on calling that on.
+ */
+test('switched on with its link down is not on: armHost makes the link again', async () => {
+  // A device server that says how its link is.
+  const fresh = fakeForgeFX({ enabled: true })
+  fresh.drop()
+  assert.equal(fresh.answers(), 0, 'the fake does not lose its link')
+  assert.deepEqual(await arm(fresh), { on: true, email: 'j@x.com' })
+  assert.equal(fresh.posts(), 1, 'a link that is down was taken for on, as it was on 12 October')
+  assert.equal(fresh.answers(), 1)
+
+  // An older one whose enable failed for want of the account service: the
+  // switch stays on with no link, and "already on" used to stop there for good.
+  const older = fakeForgeFX({ build: 'old', enableFails: 3 })
+  assert.equal((await arm(older)).reason, 'failed')
+  assert.deepEqual(older.status(), { enabled: true, connected: false, userId: 'u' }, 'the fake leaves the switch off after a failed enable, which ForgeFX does not')
+  assert.deepEqual(await arm(older), { on: true, email: 'j@x.com' }, 'a second try took the switch for the link')
+  assert.equal(older.posts(), 4)
+  assert.equal(older.answers(), 1)
+
+  // Still never against somebody turning it off, or with nobody signed in.
+  const off = fakeForgeFX({ enabled: true, doc: { wanted: false, at: 1 } })
+  off.drop()
+  assert.equal((await arm(off)).reason, 'turned-off')
+  const out = fakeForgeFX({ enabled: true, cloud: { enabled: true, user: null } })
+  out.drop()
+  assert.equal((await arm(out)).reason, 'signed-out')
+  assert.equal(off.posts() + out.posts(), 0, 'it overruled somebody, or enabled with nobody signed in')
+})
+
+test('a device server still making its link is waited for, not asked to start again', async () => {
+  const unit = fakeForgeFX({ joinsAfter: 2 })
+  assert.deepEqual(await arm(unit), { on: true, email: 'j@x.com' })
+  assert.equal(unit.posts(), 1, 'asked to start again, which undoes the link it was making')
+  assert.equal(unit.status().connected, true)
+})
+
+test('a refused link: a new device server is left to try again by itself, an older one asked once, and every tap still happens once', async () => {
+  // A new one pulls the refused link down entirely and tries again by itself; see 'keeps trying by itself' above.
+  const fresh = fakeForgeFX({ enableFails: 2, failAs: 'join' })
+  assert.equal((await arm(fresh)).reason, 'retrying')
+  assert.equal(fresh.posts(), 1)
+  assert.equal(fresh.answers(), 0, 'a refused link answers the phone')
+  fresh.heal()
+  assert.equal(fresh.answers(), 1)
+
+  /*
+   * An older one leaves the refused link half-made, and the library may yet
+   * finish it by itself. Asked again, it adds a second handler to that link
+   * instead of replacing it — and from then on one tap on the phone is
+   * carried out twice. So it is asked once, said to be stuck, and never
+   * asked again by the app's own retry.
+   */
+  const older = fakeForgeFX({ build: 'old', enableFails: 99, failAs: 'join' })
+  const lines = []
+  const result = await arm(older, { log: (l) => lines.push(l) })
+  assert.equal(result.reason, 'stuck')
+  assert.equal(result.error, 'realtime TIMED_OUT')
+  assert.equal(older.posts(), 1, 'an older device server was asked again after its link was refused')
+  assert.equal(older.answers(), 1)
+  assert.match(lines.at(-1), /Quit Fractal Remote and open it again/)
+  // Imported here: this file's own copy is declared further down, after the awaits this test may run during.
+  const { phoneRetryDelay } = await import('../desktop/lib/autostart.mjs')
+  assert.equal(phoneRetryDelay(result, 0), null, 'the retry asks a stuck device server again')
+  // Which is what the retry must not do: asked again, it would do every tap twice.
+  await arm(older)
+  assert.equal(older.answers(), 2, 'the fake no longer shows why a stuck one is left alone')
+})
+
+test('a look at the link: one that is down is pushed once, straight after a wake, and otherwise left to mend itself', async () => {
+  const look = (unit, extra = {}) => host.checkRelay({ port: 5056, fetch: unit.fetch, ...extra })
+  const unit = fakeForgeFX({ enabled: true })
+  assert.deepEqual(await look(unit), { seen: { enabled: true, connected: true, sure: true, state: 'joined' }, nudged: false, rearm: false })
+  unit.drop()
+  /*
+   * Changed on purpose, 12 October 2026 (1.87.18), before it shipped: a link
+   * down for two looks running was made again, every two minutes for as long
+   * as it stayed down. A device server that reports its state is trying by
+   * itself all that time, waiting longer each time, and every push starts
+   * those waits over — so through an outage at the account service every
+   * computer it reached would have been at it about nine times in two
+   * minutes, for ever.
+   */
+  let nudged = false
+  for (let i = 0; i < 5; i++) {
+    const out = await look(unit, { nudged })
+    assert.equal(out.seen.connected, false)
+    assert.equal(out.rearm, false, `an ordinary look number ${i + 1} at a link that is mending itself pushed it`)
+    nudged = out.nudged
+  }
+  // Straight after a wake, or a move to another network: once.
+  const woke = await look(unit, { nudged, wake: true })
+  assert.deepEqual([woke.rearm, woke.nudged], [true, true], 'a link down after a wake waits out its minute')
+  const again = await look(unit, { nudged: woke.nudged, wake: true })
+  assert.deepEqual([again.rearm, again.nudged], [false, true], 'one outage was pushed twice')
+  // Up again: the next outage may have its push.
+  unit.heal()
+  const up = await look(unit, { nudged: again.nudged })
+  assert.equal(up.nudged, false)
+  unit.drop()
+  assert.equal((await look(unit, { nudged: up.nudged, wake: true })).rearm, true)
+  assert.equal(unit.posts(), 0, 'a look makes the link itself; that is armHost’s job')
+
+  /*
+   * An older device server switched on with no link is left as it is, after
+   * a wake too: that is what a failed try leaves, and when the try was a
+   * refused link — the page's, say — turning it on again adds a second
+   * handler to it, and every tap on the phone happens twice.
+   */
+  const older = fakeForgeFX({ build: 'old', enabled: true, enableFails: 1, failAs: 'join' })
+  await older.fetch('http://localhost:5056/remote/enable', { method: 'POST', body: JSON.stringify({ on: true }) })
+  assert.deepEqual(older.status(), { enabled: true, connected: false, userId: 'u' })
+  for (const wake of [false, false, true]) assert.equal((await look(older, { wake })).rearm, false, 'an older device server’s half-made link was pushed')
+  assert.equal(older.answers(), 1, 'the fake no longer shows why')
+
+  // Switched off is somebody's choice, or a remote never on; neither is a link to mend.
+  const off = await look(fakeForgeFX(), { nudged: true, wake: true })
+  assert.deepEqual([off.nudged, off.rearm], [false, false])
+  // And a device server that does not answer is being started again by the app.
+  const gone = await host.checkRelay({ port: 5056, fetch: async () => { throw new Error('ECONNREFUSED') }, nudged: true })
+  assert.deepEqual(gone, { seen: null, nudged: true, rearm: false })
+})
+
+test('after a wake an older device server is asked for a fresh link once; one that reports its state is believed', async () => {
+  const look = (unit, extra = {}) => host.checkRelay({ port: 5056, fetch: unit.fetch, ...extra })
+  // The 12 October shape: closed by the account service, and still saying connected.
+  const older = fakeForgeFX({ build: 'old', enabled: true })
+  older.drop()
+  assert.equal(older.status().connected, true, 'the fake old build says what it should not')
+  assert.equal((await look(older)).rearm, false)
+  assert.equal(older.posts(), 0, 'an ordinary look tore a link down')
+  const lines = []
+  const rebuilt = await look(older, { rebuild: true, log: (l) => lines.push(l) })
+  assert.equal(rebuilt.rebuilt, 'done')
+  assert.equal(older.posts(), 1)
+  assert.equal(older.answers(), 1, 'the fresh link does not answer, or answers twice')
+  assert.match(lines[0], /made its link again/)
+
+  // One that reports its state is believed, and its link is not pulled down.
+  const fresh = fakeForgeFX({ enabled: true })
+  assert.equal((await look(fresh, { rebuild: true })).rebuilt, undefined)
+  assert.equal(fresh.posts(), 0, 'a link that says it is up, and is, was made again')
+
+  // The wifi not back yet: nothing changes, and it is still owed.
+  const early = fakeForgeFX({ build: 'old', enabled: true, enableFails: 1 })
+  assert.equal((await look(early, { rebuild: true })).rebuilt, 'not yet')
+  assert.equal(early.status().connected, true)
+  assert.equal((await look(early, { rebuild: true })).rebuilt, 'done')
+
+  // Refused: stuck, for the same reason as armHost's.
+  const refused = fakeForgeFX({ build: 'old', enabled: true, enableFails: 1, failAs: 'join' })
+  const stuck = await look(refused, { rebuild: true })
+  assert.equal(stuck.rebuilt, 'stuck')
+  assert.equal(stuck.seen.connected, false)
+  assert.equal(stuck.error, 'realtime TIMED_OUT')
+})
+
+test('the link read the same way from a device server of either age', () => {
+  assert.deepEqual(host.relayState({ enabled: true, connected: true, userId: 'u' }), { enabled: true, connected: true, sure: false, state: null })
+  assert.deepEqual(
+    host.relayState({ enabled: true, connected: false, state: 'errored', since: 1, lastError: 'Token has expired', userId: 'u' }),
+    { enabled: true, connected: false, sure: true, state: 'errored' }
+  )
+  // Not switched on is not connected, whatever else it says.
+  assert.equal(host.relayState({ enabled: false, connected: true }).connected, false)
+  for (const junk of [null, undefined, 'on', 7, []]) {
+    assert.deepEqual(host.relayState(junk), { enabled: false, connected: false, sure: false, state: null })
+  }
 })
 
 test('a preset can be renamed by hand, and the save sheet follows a rename', () => {
@@ -8871,6 +9220,10 @@ test('with nobody there, a stopped server is started again, sooner first and the
 test('with nobody there, the phone remote is asked for again until it is on, and never against somebody turning it off', () => {
   assert.equal(autostart.phoneRetryDelay({ on: true }, 0), null)
   assert.equal(autostart.phoneRetryDelay({ on: false, reason: 'turned-off' }, 0), null, 'a remote somebody turned off is turned back on')
+  // An older device server whose link was refused: asked again, every tap on the phone happens twice. See armHost.
+  assert.equal(autostart.phoneRetryDelay({ on: false, reason: 'stuck' }, 0), null, 'a stuck device server is asked again')
+  // One switched on and trying by itself: asked again, its waits between tries start over. See armHost.
+  assert.equal(autostart.phoneRetryDelay({ on: false, reason: 'retrying' }, 0), null, 'a device server trying by itself is asked again every minute')
   for (const reason of ['signed-out', 'failed', 'no-server']) {
     assert.equal(autostart.phoneRetryDelay({ on: false, reason }, 0), 60 * 1000, `${reason} is not asked again`)
   }
@@ -8979,6 +9332,8 @@ function loadDesktopMain({
   const exits = []
   const logs = []
   const timers = []
+  // What the app listens for from the operating system: the computer waking, its screen unlocked.
+  const power = {}
   class BrowserWindow {
     constructor(options) {
       this.options = options
@@ -9038,7 +9393,12 @@ function loadDesktopMain({
       showMessageBoxSync: (options) => dialogs.push(options?.message)
     },
     ipcMain: { handle() {} },
-    autoUpdater: {}
+    autoUpdater: {},
+    powerMonitor: {
+      on: (event, fn) => {
+        ;(power[event] ||= []).push(fn)
+      }
+    }
   }
   const listeners = {}
   const proc = {
@@ -9070,7 +9430,7 @@ function loadDesktopMain({
     'setInterval',
     `${src}\n;return (__code, __given) => eval(__code)`
   )((id) => stand[id] || real(id), '/opt/Fractal Remote/resources/app.asar', proc, quiet, timer, () => {}, timer)
-  return { run, disk, dirs, events, menus, windows, dialogs, exits, logs, timers, listeners, process: proc }
+  return { run, disk, dirs, events, menus, windows, dialogs, exits, logs, timers, listeners, power, process: proc }
 }
 const ENTRY = '/home/pi/.config/autostart/fractal-remote.desktop'
 const trayItem = (menu, label) => (menu || []).find((item) => typeof item.label === 'string' && item.label.startsWith(label))
@@ -9313,13 +9673,23 @@ test('a start with --hidden opens no window and never waits on a dialog', () => 
   assert.match(main, /if \(startHidden\) \{\s*\n\s*process\.on\('uncaughtException'/, 'an error inside the app puts a box up with nobody there')
 })
 
-test('with nobody there, the phone remote is asked for again, in the same words as before', () => {
+test('the phone remote is asked for again, in the same words as before, with or without a window', () => {
   const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
   const arm = main.slice(main.indexOf('const arm = () => {'), main.indexOf('rearm = arm'))
   assert.ok(arm, 'there is no retry around armHost')
   // The call text the version test above pins, inside the retry.
   assert.match(arm, /armHost\(\{ port, version: app\.getVersion\(\), log: phoneLog \}\)/)
-  assert.match(arm, /const again = startHidden \? boot\.phoneRetryDelay\(result, uptime\(\) - phoneSince\) : null/, 'the retry is not limited to a start with no window, or ignores its rules')
+  /*
+   * Changed on purpose, 12 October 2026 (1.87.18). This pinned the retry to
+   * a start with no window (`startHidden ? … : null`), on the grounds that a
+   * page open at the computer makes the same attempt. It does, once, when it
+   * opens — so a MacBook opened a few seconds before its wifi came back was
+   * left with the phone remote off until the app was quit. Every start now
+   * asks again, on phoneRetryDelay's rules, which still never undo somebody
+   * turning it off.
+   */
+  assert.match(arm, /const again = boot\.phoneRetryDelay\(result, uptime\(\) - phoneSince\)\n/, 'a start somebody opened by hand never asks again, or the retry ignores its rules')
+  assert.ok(!/startHidden/.test(arm), 'the retry is limited to a start with no window again')
   assert.match(arm, /if \(again\) phoneTimer = later\(arm, again\)/)
   assert.match(arm, /if \(quitting\) return\s*\n\s*if \(arming\) \{\s*\n\s*armAgain = true/, 'two retries can run at once, or one runs during the quit')
   assert.match(arm, /if \(armAgain\) \{\s*\n\s*armAgain = false\s*\n\s*arm\(\)/, 'a run asked for during another one is dropped, so a restarted server can be left with the remote off')
@@ -9335,6 +9705,281 @@ test('nothing a windowless start does later can hold up a quit or outlive the se
   const stop = main.slice(main.indexOf('async function stopServing()'))
   assert.match(stop, /quitting = true\s*\n[\s\S]{0,120}for \(const timer of timers\) clearTimeout\(timer\)/, 'the retries are not stopped with the server')
   assert.ok(!/setInterval\((?!tell, TELL_PHONES_MS)/.test(main), 'a new repeating timer goes around the ones that end with the app')
+})
+
+/*
+ * main.js's own looks at the phone remote's link, run, with a ForgeFX stood
+ * in for: the remote on, the menu drawn, and the looks' tools handed over as
+ * start() hands them. `rearm` only counts, so what a look asks for can be
+ * seen without an armHost behind it.
+ */
+const linkedMain = ({ unit, ip = '192.168.1.10', phone = { on: true, email: 'j@x.com' } } = {}) => {
+  const main = loadDesktopMain({ platform: 'darwin' })
+  const net = { ip }
+  const rearms = []
+  main.run('boot = __given', autostart)
+  main.run('hostAt = { port: 5056, name: "fractal-studio" }; where = __given', host.addresses({ port: 5056, name: 'fractal-studio', ip }))
+  main.run('phone = __given', phone)
+  main.run('linkTools = __given', { checkRelay: (o) => host.checkRelay({ ...o, fetch: unit.fetch }), addresses: host.addresses, lanAddress: () => net.ip })
+  main.run('rearm = __given', () => rearms.push(1))
+  main.run('buildTray()')
+  return { main, net, rearms, line: () => trayItem(main.menus.at(-1), 'Phone remote').label }
+}
+const ticks = async () => {
+  for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve))
+}
+
+test('after the computer wakes, its link is looked at twice — 5 and 30 seconds on — through the timers that end with the app', async () => {
+  const unit = fakeForgeFX({ enabled: true })
+  const { main, rearms, line } = linkedMain({ unit })
+  main.run('watchForWake()')
+  assert.equal(main.power.resume?.length, 1, 'nothing listens for the computer waking')
+  assert.equal(main.power['unlock-screen']?.length, 1, 'nothing listens for the screen being unlocked')
+  const before = main.timers.length
+  main.power.resume[0]()
+  const first = main.timers.slice(before)
+  assert.deepEqual(first.map((t) => t.ms), [5000, 30000], 'a Mac’s wifi comes back after it does, so one look straight away is too soon')
+  assert.equal(main.run('timers.size'), 2, 'the looks after a wake go around later(), so a quit does not clear them')
+  // Unlocked straight after waking: one pair of looks, not two.
+  main.power['unlock-screen'][0]()
+  assert.equal(main.run('timers.size'), 2, 'a second wake piles its looks on top of the first')
+  assert.ok(!main.run('timers.has(__given)', first[0]), 'the first wake’s looks are still waiting')
+  const [soon, late] = main.timers.slice(-2)
+
+  soon.fn()
+  await ticks()
+  assert.equal(rearms.length, 0, 'a link that is up was made again')
+  assert.match(line(), /^Phone remote: on — j@x\.com/)
+  // Closed while the computer slept: made again at once, and the menu says so meanwhile.
+  unit.drop()
+  late.fn()
+  await ticks()
+  assert.equal(rearms.length, 1, 'a link found down after a wake is left down')
+  assert.equal(line(), 'Phone remote: reconnecting…', 'the menu says on while the link is down')
+  assert.equal(trayItem(main.menus.at(-1), 'Or from anywhere'), undefined, 'the relay is offered while it does not work')
+  assert.equal(unit.posts(), 0, 'the look made the link itself instead of asking armHost to')
+  // And on again, once it is back.
+  await host.armHost({ port: 5056, fetch: unit.fetch, hostname: 'Studio computer', sleep: async () => {} })
+  main.run('lookAtLink()')
+  await ticks()
+  assert.match(line(), /^Phone remote: on — j@x\.com/)
+
+  // One at a time with armHost, and nothing at all once the app is on its way out.
+  const asked = unit.calls.length
+  main.run('arming = true')
+  await main.run('lookAtLink({ wake: true })')
+  assert.equal(unit.calls.length, asked, 'a look ran alongside armHost')
+  main.run('arming = false; quitting = true')
+  main.power.resume[0]()
+  assert.equal(main.run('timers.size'), 0, 'a wake during the quit schedules looks')
+})
+
+test('once a minute: a link mending itself is left to it, pushed once when the computer moves network, and a computer on another network gets its new address', async () => {
+  const unit = fakeForgeFX({ enabled: true })
+  const { main, net, rearms, line } = linkedMain({ unit })
+  main.run('lookEveryMinute()')
+  const next = () => {
+    const t = main.timers.at(-1)
+    assert.equal(t.ms, 60000, 'the next minute’s look is not waiting')
+    assert.ok(main.run('timers.has(__given)', t), 'the minute look goes around later(), so a quit does not clear it')
+    return t
+  }
+  next().fn()
+  await ticks()
+  assert.equal(rearms.length, 0)
+  /*
+   * Changed on purpose, 12 October 2026 (1.87.18), before it shipped: this
+   * pushed a link down for two looks running, every two minutes. A device
+   * server that reports its state is mending it by itself, and each push
+   * starts its waits over; see checkRelay.
+   */
+  unit.drop()
+  for (let i = 0; i < 5; i++) {
+    next().fn()
+    await ticks()
+  }
+  assert.equal(rearms.length, 0, 'a link the device server is mending by itself was pushed by the minute looks')
+  assert.equal(line(), 'Phone remote: reconnecting…')
+  // Moved to another network: pushed once, and only once in the same outage however often it moves.
+  net.ip = '10.0.0.7'
+  next().fn()
+  await ticks()
+  assert.equal(rearms.length, 1, 'a link down after a move to another network waits out its minute')
+  net.ip = '10.0.0.8'
+  next().fn()
+  await ticks()
+  assert.equal(rearms.length, 1, 'a computer flitting between networks pushed one outage over and over')
+  // A real wake may push once more; then the link comes back, and the next outage has its push.
+  const minute = next()
+  main.run('afterWake()')
+  const [soon, late] = main.timers.slice(-2)
+  soon.fn()
+  await ticks()
+  late.fn()
+  await ticks()
+  assert.equal(rearms.length, 2, 'a wake in a long outage waits out the device server’s minute')
+  unit.heal()
+  minute.fn()
+  await ticks()
+  assert.match(line(), /^Phone remote: on — j@x\.com/)
+  unit.drop()
+  net.ip = '192.168.1.10'
+  next().fn()
+  await ticks()
+  assert.equal(rearms.length, 3)
+  // Never during the quit: the waiting look does nothing, and nothing new waits.
+  main.run('quitting = true')
+  next().fn()
+  main.run('lookEveryMinute()')
+  assert.equal(main.run('timers.size'), 0, 'the minute look goes on during the quit')
+
+  // Moved to another network: the menu's same-wifi address follows, and an
+  // older device server — whose word on its link cannot be taken — is given a fresh one.
+  const older = fakeForgeFX({ build: 'old', enabled: true })
+  const moving = linkedMain({ unit: older })
+  moving.main.run('lookEveryMinute()')
+  moving.main.timers.at(-1).fn()
+  await ticks()
+  assert.equal(older.posts(), 0, 'an ordinary minute pulled a link down')
+  moving.net.ip = '10.0.0.7'
+  moving.main.timers.at(-1).fn()
+  await ticks()
+  assert.equal(moving.main.run('where.lan'), 'http://10.0.0.7:5056')
+  assert.equal(moving.main.run('where.local'), 'http://localhost:5056', 'the window’s own address moved')
+  const menu = moving.main.menus.at(-1)
+  assert.ok(trayItem(menu, 'http://10.0.0.7:5056'), 'the menu offers the old network’s address')
+  assert.equal(trayItem(menu, 'http://192.168.1.10:5056'), undefined, 'the menu still offers the old network’s address')
+  assert.equal(older.posts(), 1, 'a move to another network leaves an older device server’s link as it was')
+  assert.equal(older.answers(), 1)
+  moving.main.timers.at(-1).fn()
+  await ticks()
+  assert.equal(older.posts(), 1, 'the link is made again every minute after a move')
+})
+
+test('after a wake an older device server gets one fresh link, and one that is stuck is left for a quit', async () => {
+  // The 12 October shape: closed while the Mac slept, and still saying connected.
+  const unit = fakeForgeFX({ build: 'old', enabled: true })
+  const { main, rearms, line } = linkedMain({ unit })
+  unit.drop()
+  main.run('afterWake()')
+  const [soon, late] = main.timers.slice(-2)
+  soon.fn()
+  await ticks()
+  assert.equal(unit.posts(), 1, 'an older device server’s word on its link was taken after a sleep')
+  assert.equal(unit.answers(), 1, 'the fresh link does not answer the phone, or answers it twice')
+  late.fn()
+  await ticks()
+  assert.equal(unit.posts(), 1, 'one wake made the link twice')
+  assert.equal(rearms.length, 0)
+  assert.match(line(), /^Phone remote: on/)
+
+  // Its wifi not back at five seconds: asked again at thirty.
+  const early = fakeForgeFX({ build: 'old', enabled: true, enableFails: 1 })
+  const slow = linkedMain({ unit: early })
+  slow.main.run('afterWake()')
+  const [a, b] = slow.main.timers.slice(-2)
+  a.fn()
+  await ticks()
+  b.fn()
+  await ticks()
+  assert.equal(early.posts(), 2, 'a fresh link the wifi was not ready for is never asked for again')
+  assert.equal(early.answers(), 1)
+
+  // Refused: said to be stuck, in words that say what to do, and asked nothing more.
+  const refused = fakeForgeFX({ build: 'old', enabled: true, enableFails: 99, failAs: 'join' })
+  const stuck = linkedMain({ unit: refused })
+  stuck.main.run('afterWake()')
+  const [c, d] = stuck.main.timers.slice(-2)
+  c.fn()
+  await ticks()
+  assert.equal(stuck.main.run('phone.reason'), 'stuck')
+  assert.equal(stuck.line(), 'Phone remote: stuck — quit Fractal Remote and open it again')
+  const asked = refused.calls.length
+  d.fn()
+  await ticks()
+  await stuck.main.run('lookAtLink({ wake: true })')
+  assert.equal(refused.calls.length, asked, 'a stuck device server was asked again')
+  assert.equal(stuck.rearms.length, 0)
+  assert.equal(refused.answers(), 1, 'one tap on the phone would be carried out more than once')
+})
+
+test('a remote that never came on is asked for again straight after a wake — never one somebody turned off', async () => {
+  const failed = linkedMain({ unit: fakeForgeFX(), phone: { on: false, reason: 'failed', email: 'j@x.com', error: 'cloud not enabled or not signed in' } })
+  await failed.main.run('lookAtLink({ wake: true })')
+  assert.equal(failed.rearms.length, 1, 'a remote the wifi was not ready for at launch waits for its next minute after a wake')
+  await failed.main.run('lookAtLink()')
+  assert.equal(failed.rearms.length, 1, 'an ordinary look asks for it too, which is the retry’s job')
+
+  const off = linkedMain({ unit: fakeForgeFX(), phone: { on: false, reason: 'turned-off', email: 'j@x.com' } })
+  await off.main.run('lookAtLink({ wake: true })')
+  assert.equal(off.rearms.length, 0, 'a wake turned back on a remote somebody turned off')
+  assert.equal(off.line(), 'Phone remote: off — turn it on in the app')
+
+  // On at launch and turned off in the app since: the menu says so, and stops offering the relay.
+  const since = linkedMain({ unit: fakeForgeFX() })
+  assert.ok(trayItem(since.main.menus.at(-1), 'Or from anywhere'))
+  await since.main.run('lookAtLink()')
+  assert.equal(since.line(), 'Phone remote: off — turn it on in the app')
+  assert.equal(trayItem(since.main.menus.at(-1), 'Or from anywhere'), undefined, 'the relay is offered while it is switched off')
+})
+
+test('start() hands the looks their tools and starts them, after the phone remote is first asked for', () => {
+  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
+  const start = main.slice(main.indexOf('async function start()'), main.indexOf('function showInDock('))
+  assert.match(start, /linkTools = \{ checkRelay, addresses, lanAddress \}\s*\n\s*watchForWake\(\)\s*\n\s*lookEveryMinute\(\)/, 'the looks are never started')
+  assert.ok(start.indexOf('watchForWake()') > start.indexOf('rearm = arm'), 'a wake can ask for the remote before there is anything to ask with')
+  // What a look says goes into the menu, and armHost's own answer puts it back to what armHost found — see armAnswered.
+  assert.match(main, /relay = out\.seen/)
+  assert.match(start, /const cameOn = Boolean\(result\?\.on\) && !phone\?\.on\s*\n\s*armAnswered\(result\)\s*\n\s*const again = /, 'armHost’s answer does not reach the menu')
+  assert.match(start, /phone = null\s*\n\s*relay = null\s*\n\s*linkNudged = false/, 'a restarted device server leaves the old link in the menu, or its outage’s push spent')
+})
+
+test('straight after a wake, an account service not reachable yet does not tell somebody signed in to sign in', async () => {
+  /*
+   * A look after a wake finds the link down and asks armHost for it, before
+   * the wifi is back — and the device server reads an account service it
+   * cannot reach as nobody signed in. The menu said "open the app and sign
+   * in once", then "reconnecting…", then sign in again, to somebody who was
+   * signed in all along.
+   */
+  const unit = fakeForgeFX({ enabled: true })
+  const { main, line } = linkedMain({ unit })
+  unit.drop()
+  await main.run('lookAtLink()')
+  assert.equal(line(), 'Phone remote: reconnecting…')
+  main.run('armAnswered(__given); buildTray()', { on: false, reason: 'signed-out' })
+  assert.equal(line(), 'Phone remote: reconnecting…', 'a switched-on remote whose wifi is not back yet was told to sign in')
+  main.run('armAnswered(__given); buildTray()', { on: false, reason: 'failed', error: 'fetch failed' })
+  assert.equal(line(), 'Phone remote: reconnecting…')
+  // Back: on, under the account it last named.
+  unit.heal()
+  await main.run('lookAtLink()')
+  assert.match(line(), /^Phone remote: on — j@x\.com/, 'the account was forgotten across a blip')
+
+  // Signed out for real: the app switches the remote off first, and the menu says so.
+  const out = fakeForgeFX()
+  const real = linkedMain({ unit: out })
+  await real.main.run('lookAtLink()')
+  real.main.run('armAnswered(__given); buildTray()', { on: false, reason: 'signed-out' })
+  assert.equal(real.line(), 'Phone remote: off — open the app and sign in once')
+})
+
+test('a device server trying by itself reads as reconnecting, and as on once its link is up', async () => {
+  const unit = fakeForgeFX({ enabled: true })
+  unit.drop()
+  const { main, line } = linkedMain({ unit, phone: { on: false, reason: 'retrying', email: 'j@x.com', error: 'no answer to the join in 12 s' } })
+  assert.equal(line(), 'Phone remote: reconnecting…', 'a remote switched on and trying was called off')
+  await main.run('lookAtLink({ wake: true })')
+  assert.equal(line(), 'Phone remote: reconnecting…')
+  unit.heal()
+  await main.run('lookAtLink()')
+  assert.match(line(), /^Phone remote: on — j@x\.com/)
+  assert.deepEqual(main.run('phone'), { on: true, email: 'j@x.com' }, 'the remote it found on is still put down as trying')
+  // And switched off in the app since.
+  await unit.fetch('http://localhost:5056/remote/enable', { method: 'POST', body: JSON.stringify({ on: false }) })
+  main.run('phone = __given', { on: false, reason: 'retrying', email: 'j@x.com' })
+  await main.run('lookAtLink()')
+  assert.equal(line(), 'Phone remote: off — turn it on in the app')
 })
 
 test('an update ready just after a windowless start installs through the same path as the button', () => {

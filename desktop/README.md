@@ -27,6 +27,44 @@ gives you a black square on a black taskbar. So there are two: `trayTemplate.png
 and `trayWin.png`, both generated from `public/icon.svg` by `npm run icon` at
 the repository root, and `main.js` picks by `process.platform`.
 
+## Keeping the phone remote's link up
+
+A phone away from home reaches the computer through the account service,
+and the app keeps the computer's link to it up by itself:
+
+- **At launch it turns the phone remote on** (`armHost` in
+  [`lib/host.mjs`](lib/host.mjs)) and, until it is on, asks again every
+  minute for half an hour and then every five — on every start since 1.87.18,
+  not only one with no window, because a laptop's wifi often comes back a few
+  seconds after the app does. Never against somebody turning it off, even
+  when they press Turn off while it is still being turned on.
+- **On means the link is up, not only switched on.** The account service can
+  close the link — a sign-in that ran out while the Mac slept, say — and the
+  device server stays switched on with nothing listening. That is what a
+  phone found on 12 October 2026, from a MacBook whose menu said on.
+- **So it looks again:** 5 and 30 seconds after the computer wakes or its
+  screen is unlocked, and once a minute (`checkRelay`, and `lookAtLink` in
+  `main.js`), and the menu says "Phone remote: reconnecting…" while the link
+  is down — not "sign in", when straight after a wake the account service
+  just cannot be reached yet. A computer that moved to another network gets
+  its new same-wifi address in the menu as well.
+- **A device server that reports its state mends its own link.** Switched
+  on, it keeps trying by itself, waiting a little longer each time — up to
+  ten seconds between tries, or a minute when the account service itself
+  closed the link — and the app leaves it to that: it pushes once, straight
+  after a wake or a move to another network, to save waiting that out, and
+  not again until the link has been up. Every push starts
+  those waits over, so pushing every minute, from every computer an outage
+  reaches, would be the app hammering the account service while it is down.
+- **An older device server** (one whose `/remote/status` has no `state`)
+  cannot say whether its link is really up, so after a wake or a network move
+  it is asked once for a fresh link. One whose link was refused is never asked
+  twice — that makes every tap on the phone happen twice — and the menu says
+  "Phone remote: stuck — quit Fractal Remote and open it again". Nor is one
+  found switched on with no link, which is what a refused link leaves behind;
+  the app's own retry asks again only after the failures it can tell are
+  safe.
+
 ## Starting when the computer turns on (Linux)
 
 For a computer that lives on a pedalboard or in a rack — a Raspberry Pi with
