@@ -86,22 +86,21 @@ struct PedalsPage: View {
     @EnvironmentObject private var link: PhoneLink
     @State private var pending: [Int: Bool] = [:]
     @State private var pendingChannel: [Int: String] = [:]
-    /** Whose channels are open, by id: looked up in each new picture, so never an old copy. */
-    @State private var picking: Int?
+    /*
+     * Whose channels are open, by id: looked up in each new picture, so never
+     * an old copy. The sheet is opened BY this (sheet(item:)), not by a
+     * separate yes-or-no beside it: with the two apart, the sheet was drawn
+     * from the picture before the hold had said whose it was, and CI's
+     * picture of it came out as a blurred page with nothing on it. Handed in
+     * with the sheet, the pedal is there when the sheet is.
+     */
+    @State private var picking: Picked?
     /** A hold has just opened them; the tap that letting go can make is not a switch. */
     @State private var held = false
-    /*
-     * Whether the sheet is up, kept apart from whose it is. Closing it used
-     * to clear `picking`, which emptied the sheet while it was still sliding
-     * away: a blank sheet after every pick. Now a pick only lowers it, and
-     * `picking` is let go once it is down.
-     */
-    @State private var presented = false
 
-    /** The pedal whose channels are open, while it is still here and still has them. */
-    private var pickingPedal: WatchPedal? {
-        guard let picking else { return nil }
-        return state.pedals.first { $0.id == picking && $0.canPickChannel }
+    /** This picture's copy of a pedal whose channels can be picked. */
+    private func offered(_ id: Int) -> WatchPedal? {
+        state.pedals.first { $0.id == id && $0.canPickChannel }
     }
 
     var body: some View {
@@ -129,14 +128,8 @@ struct PedalsPage: View {
         }
         /* Looked up afresh from each picture: it closes itself when the pedal
            or its channels go, and lights what the phone says it is on. */
-        .sheet(
-            isPresented: $presented,
-            onDismiss: {
-                held = false
-                picking = nil
-            }
-        ) {
-            if let pedal = pickingPedal {
+        .sheet(item: $picking, onDismiss: { held = false }) { picked in
+            if let pedal = offered(picked.id) {
                 ChannelsSheet(pedal: pedal, lit: pendingChannel[pedal.id] ?? pedal.channel) { name in
                     choose(name, for: pedal)
                 }
@@ -147,10 +140,10 @@ struct PedalsPage: View {
             pending = [:]
             pendingChannel = [:]
             /* The pedal held, or its channels, gone from the new picture. */
-            if presented && pickingPedal == nil { presented = false }
+            if let picking, offered(picking.id) == nil { self.picking = nil }
         }
         /* Another preset: its block of the same number is not the one that was held. */
-        .onChange(of: state.preset.number) { _, _ in presented = false }
+        .onChange(of: state.preset.number) { _, _ in picking = nil }
         /* CI's picture of a pedal held (screens.sh: -page 1 -pick 50), in the demo only. */
         .onAppear {
             guard link.demo, let id = Int(Launch.value("pick") ?? "") else { return }
@@ -182,14 +175,13 @@ struct PedalsPage: View {
 
     /** Open a pedal's channels, if this picture still offers them. */
     private func show(_ id: Int) {
-        guard state.pedals.contains(where: { $0.id == id && $0.canPickChannel }) else {
+        guard offered(id) != nil else {
             /* Gone in the moment between the hold and now: nothing opens, so
                nothing will close it, and the hold must not eat the next tap. */
             held = false
             return
         }
-        picking = id
-        presented = true
+        picking = Picked(id: id)
     }
 
     /** A channel picked: lit at once, sent, and closed, as the phone's own sheet does. */
@@ -201,8 +193,13 @@ struct PedalsPage: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             if pendingChannel[id] == name { pendingChannel[id] = nil }
         }
-        presented = false
+        picking = nil
     }
+}
+
+/** Which pedal's channels are open: what sheet(item:) needs, an id of its own. */
+private struct Picked: Identifiable {
+    let id: Int
 }
 
 /*
