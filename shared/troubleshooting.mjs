@@ -39,12 +39,15 @@ export const FIXES = [
       quitEditor(null),
       /* The one a new Windows user can hit before any of the above. */
       WINDOWS_DRIVER,
-      'Make sure the computer app is actually running. It lives in the menu bar, not the Dock.',
+      'Make sure the computer app is actually running. On a Mac it lives in the menu bar at the top of the screen, not the Dock. On Windows it sits by the clock, sometimes behind the ^ arrow. On Linux it is an ordinary window.',
       /* "I think it's connected to a different account on the computer." A
          computer on another account never hears this app, and looks exactly
          like one that is switched off. */
       'Make sure the Fractal Remote app is signed into the same account here and on the computer with your unit. Settings on each one shows which account it is using.',
-      'If the phone cannot reach the computer, check both are on the same wifi, and that a firewall or a VPN on the computer is not blocking it.'
+      /* Over the internet the wifi is not the question: the phone and the
+         computer can be in different cities. What stops it is a computer that
+         is asleep or offline, or something on it blocking the app. */
+      'If the phone still cannot reach the computer, check the computer is awake and online (a closed laptop lid usually puts it to sleep), and that a firewall or a VPN on the computer is not blocking the Fractal Remote app. The phone and the computer do not need to be on the same wifi.'
     ]
   },
   {
