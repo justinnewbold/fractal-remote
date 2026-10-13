@@ -5,6 +5,11 @@ and as 1.87.11 (build 27) since Apple approved it on 12 October 2026:
 https://apps.apple.com/app/id6812916461. Everything below still applies to
 every new version sent for review.
 
+**When a new version goes live in either store**, its number goes into
+`public/store-versions.json` that day, and not before (docs/expo-builds.md
+says how). It is what tells a phone on an older store copy that a newer one
+is in the store, and it is a change to the website, made like any other.
+
 Everything App Store Connect asks for, answered. Copy the fields straight
 across; the notes say why an answer is what it is where that matters.
 

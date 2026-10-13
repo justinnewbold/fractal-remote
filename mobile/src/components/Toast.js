@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { AccessibilityInfo, Platform, View } from 'react-native'
 
 import { color, radius, space } from '../lib/theme'
@@ -17,9 +17,16 @@ import { color, radius, space } from '../lib/theme'
  * So this floats, inside its parent's bounds (unlike TopBar's strips, which
  * hang below the bar), over the top of the screen. It is only as big as what
  * is in it, so a press anywhere else still reaches the screen beneath.
+ *
+ * ONE CARD AT A TIME, IN THE SAME PLACE. The play screen's fault and its
+ * advice already take turns (Stage says so). A toast that `yields` — the
+ * new-version note, which App floats over the play screen from outside it —
+ * stands aside while any other toast is up, rather than being drawn on top of
+ * it or under it, and comes back when that one goes.
  */
-export default function Toast({ open, children }) {
-  if (!open) return null
+export default function Toast({ open, yields = false, children }) {
+  const others = useSlot(open && !yields)
+  if (!open || (yields && others)) return null
   return (
     <View
       style={{
@@ -42,6 +49,30 @@ export default function Toast({ open, children }) {
       {children}
     </View>
   )
+}
+
+/* The toasts up now that do not yield. Never the rig store: hiding a card must not touch what it says. */
+const up = new Set()
+const slotWatchers = new Set()
+const slotTaken = () => up.size > 0
+const watchSlot = (fn) => {
+  slotWatchers.add(fn)
+  return () => slotWatchers.delete(fn)
+}
+
+/** Holds the place while `claim` is true; says whether anything holds it. */
+function useSlot(claim) {
+  useEffect(() => {
+    if (!claim) return undefined
+    const mine = {}
+    up.add(mine)
+    for (const fn of slotWatchers) fn()
+    return () => {
+      up.delete(mine)
+      for (const fn of slotWatchers) fn()
+    }
+  }, [claim])
+  return useSyncExternalStore(watchSlot, slotTaken, slotTaken)
 }
 
 function useScreenReader() {

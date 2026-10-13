@@ -14,6 +14,7 @@ import TopBar from './src/components/TopBar'
 import WrongAccount from './src/components/WrongAccount'
 import UpdateReady from './src/components/UpdateReady'
 import { watchForUpdates } from './src/lib/updates'
+import { watchStoreVersion } from './src/lib/storeVersion'
 import DemoUnit from './src/components/DemoUnit'
 import LiveUnit from './src/components/LiveUnit'
 import MetronomeBeat from './src/components/MetronomeBeat'
@@ -389,6 +390,16 @@ export default function App() {
    * Bluetooth (beta) page. The card over the play screen has none of that.
    */
   const settling = auth === 'in' && !demo && ((looking && (!caps || bluetooth)) || (link.link === 'connected' && !caps && !readFailed))
+  /* The play screen itself is up: not the waiting screen standing in for it. */
+  const playOnScreen = screen === 'stage' && !settling
+  /*
+   * And the new-version note only floats over it while the phone is off the
+   * rig. Over a connected rig a download can land mid-song, and the note's
+   * Restart now would come up where the preset button is, under a thumb on
+   * its way to it. There it waits: the app takes the version by itself after
+   * a break (lib/update-rule.js), and Settings offers the restart meanwhile.
+   */
+  const readyOverPlay = playOnScreen && link.link !== 'connected'
   /*
    * THE FIFTEEN SECONDS, counted from when this stretch of looking began —
    * not from the last change of link.link, which during the flip was never
@@ -568,9 +579,14 @@ export default function App() {
    */
   useEffect(() => installCrashCapture(), [])
 
-  /* Ask about updates in the background, and offer a downloaded one as a
-     restart — see watchForUpdates and components/UpdateReady. */
+  /* Ask about updates in the background, offer a downloaded one as a
+     restart, and take it by itself only on coming back after two hours off
+     the rig — see watchForUpdates, lib/update-rule and components/UpdateReady. */
   useEffect(() => watchForUpdates(), [])
+
+  /* And whether the copy on this phone is older than the store's, asked of
+     the website at most once a day — see lib/storeVersion. */
+  useEffect(() => watchStoreVersion(), [])
 
   /* Bluetooth (beta), picked up from last time. First, so that a phone left
      on Bluetooth starts on Bluetooth; one read of the phone's own storage. */
@@ -1036,8 +1052,10 @@ export default function App() {
               />
             ) : null}
             {picked ? <Arrived picked={picked} /> : null}
-            {/* A downloaded update, offered as a restart — never taken on its own. */}
-            <UpdateReady />
+            {/* A downloaded update, offered as a restart. Here, in the column,
+                on every screen but Play; on Play it floats (below). When the
+                app takes it by itself instead, see lib/update-rule.js. */}
+            {playOnScreen ? null : <UpdateReady />}
             {/* A computer on another account, said on the stage too and not
                 only in Setup — Waking says it for itself while it is up.
                 Not over Bluetooth, where no computer is being looked for. */}
@@ -1261,6 +1279,9 @@ export default function App() {
                 onLookAgain={probeNow}
               />
             )}
+            {/* Over the play screen and never in it, where the fault floats,
+                and out of the way while the fault or the advice is up. */}
+            {readyOverPlay ? <UpdateReady over /> : null}
             </EdgeBack>
           </>
         )}

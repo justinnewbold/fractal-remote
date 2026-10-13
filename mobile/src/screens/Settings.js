@@ -10,6 +10,8 @@ import { getDebugLog } from '../lib/debugLog'
 import { tick } from '../lib/feedback'
 import { NOT_ACROSS, NOT_ACROSS_SIGNED_OUT, ONLY_HERE, unlockedFrom, usePurchase } from '../lib/purchases'
 import { applyNow, checkNow, describeRunning, useUpdates } from '../lib/updates'
+import { openStore, useStoreNote } from '../lib/storeVersion'
+import NewerInStore from '../components/NewerInStore'
 import {
   changePassword,
   currentAccount,
@@ -273,6 +275,8 @@ export default function Settings({
   }, [page, onPage])
   const purchase = usePurchase()
   const updates = useUpdates()
+  /* This phone's copy older than the store's: the card at the top, once, and the line under Updates. See lib/store-rule.js. */
+  const newer = useStoreNote()
   /* Which bundle is running, asked once when Setup opens. It settles "did an
      update ever land" without anybody comparing numbers off two screens. */
   useEffect(() => {
@@ -375,6 +379,8 @@ export default function Settings({
       {page === null ? (
         <>
           {head('Settings')}
+          {/* A newer version in the store, said once for each store version. Here, never on Play. */}
+          <NewerInStore />
           {/*
             SETTINGS, IN GROUPS.
 
@@ -1397,6 +1403,13 @@ export default function Settings({
             }
             onPress={() => (updates.phase === 'ready' ? applyNow() : checkNow())}
           />
+          {/*
+            AND WHEN THE COPY ITSELF IS OLD. An update changes what the app
+            does; only the store changes the copy it runs in, and once a new
+            store version changes what an update needs, the older copies stop
+            getting updates. Said here, quietly, for as long as it is true.
+          */}
+          {newer.note ? <SetupRow title={newer.note.row} status={newer.note.line} onPress={() => openStore(newer.note)} /> : null}
           </View>
 
           {/*

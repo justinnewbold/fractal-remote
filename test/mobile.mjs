@@ -381,6 +381,145 @@ async function rigOnTheBench(over = {}) {
   }
 }
 
+/**
+ * THE PHONE'S UPDATE WATCHER, RUN RATHER THAN READ.
+ *
+ * lib/updates.js and the rule it asks (lib/update-rule.js) are copied as they
+ * are beside stand-ins for React Native's AppState, expo-updates, the link and
+ * Bluetooth, with a clock the test turns by hand — so "back after two hours"
+ * and "ten hours on screen" cost nothing to run, and what is counted is the
+ * one thing that matters: how many times the app restarted itself.
+ *
+ * `rig` is the link and Bluetooth as the watcher reads them, changed by the
+ * test; `tell()` is a change of either, heard the way link.js says one.
+ * `heardAt` is when the computer last answered (relay.js lastAnswerAt): set
+ * by every tell() that says connected, and by hand for an answer that came
+ * with no change of word.
+ */
+async function updatesOnTheBench({ available = true } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'updates-'))
+  const lib = (f) => read(`mobile/src/lib/${f}`)
+  const esm = (src) =>
+    src
+      .replace(/from 'react'/g, "from './react.js'")
+      .replace(/from 'react-native'/g, "from './react-native.js'")
+      .replace("import('expo-updates')", "import('./expo-updates.js')")
+      .replace(/from '\.\/([\w.-]+)'/g, (whole, name) => (/\.m?js$/.test(name) ? whole : `from './${name}.js'`))
+  const clocked = (src) =>
+    "import * as __clock from './clock.js'\n" +
+    src
+      .replace(/\bDate\.now\(\)/g, '__clock.now()')
+      .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
+      .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
+      .replace(/\bsetInterval\(/g, '__clock.setInterval(')
+  const bench = {
+    rig: { link: 'no-answer', joining: false, bluetooth: 'off', btJoining: false, via: 'computer', heardAt: 0 },
+    listeners: new Set(),
+    appState: [],
+    reloads: 0,
+    log: [],
+    available
+  }
+  globalThis.__updatesBench = bench
+  const files = {
+    'package.json': '{ "type": "module" }',
+    'clock.js': `
+      let t = 1000000
+      let seq = 0
+      const timers = new Map()
+      export const now = () => t
+      export function setTimeout(fn, ms = 0, ...args) {
+        const id = ++seq
+        timers.set(id, { id, at: t + Math.max(0, Number(ms) || 0), fn, args })
+        return id
+      }
+      export function setInterval(fn, ms = 0) {
+        const id = ++seq
+        const again = () => { timers.set(id, { id, at: t + ms, fn: () => { fn(); again() }, args: [] }) }
+        again()
+        return id
+      }
+      export function clearTimeout(id) { timers.delete(id) }
+      const flush = async () => { for (let i = 0; i < 12; i++) await new Promise((r) => globalThis.setImmediate(r)) }
+      export async function advance(ms) {
+        const end = t + ms
+        await flush()
+        for (;;) {
+          let next = null
+          for (const x of timers.values()) if (x.at <= end && (!next || x.at < next.at || (x.at === next.at && x.id < next.id))) next = x
+          if (!next) break
+          timers.delete(next.id)
+          t = next.at
+          next.fn(...next.args)
+          await flush()
+        }
+        t = end
+        await flush()
+      }
+    `,
+    'react.js': 'export const useSyncExternalStore = (sub, get) => get()\n',
+    'react-native.js': `
+      const b = globalThis.__updatesBench
+      export const AppState = {
+        currentState: 'active',
+        addEventListener: (type, fn) => {
+          b.appState.push(fn)
+          return { remove: () => { b.appState = b.appState.filter((f) => f !== fn) } }
+        }
+      }
+    `,
+    'expo-updates.js': `
+      const b = globalThis.__updatesBench
+      export const checkForUpdateAsync = async () => ({ isAvailable: b.available })
+      export const fetchUpdateAsync = async () => ({})
+      export const reloadAsync = async () => { b.reloads += 1 }
+      export const isEmbeddedLaunch = false
+      export const createdAt = null
+    `,
+    'debugLog.js': 'const b = globalThis.__updatesBench\nexport const logDebug = (...parts) => b.log.push(parts.join(" "))\n',
+    'link.js': `
+      const b = globalThis.__updatesBench
+      export const linkState = () => ({ link: b.rig.link })
+      export const joiningNow = () => b.rig.joining
+      export const linkVia = () => b.rig.via
+      export const lastHeardAt = () => b.rig.heardAt
+      export const subscribeLink = (fn) => { b.listeners.add(fn); return () => b.listeners.delete(fn) }
+    `,
+    'bluetooth.js': `
+      const b = globalThis.__updatesBench
+      export const bluetoothPhase = () => b.rig.bluetooth
+      export const subscribeBluetooth = (fn) => { b.listeners.add(fn); return () => b.listeners.delete(fn) }
+    `,
+    'bleLink.js': 'const b = globalThis.__updatesBench\nexport const bluetoothJoining = () => b.rig.btJoining\n',
+    'update-rule.js': esm(lib('update-rule.js')),
+    'updates.js': clocked(esm(lib('updates.js')))
+  }
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+  const at = (f) => pathToFileURL(join(dir, f)).href
+  try {
+    const clock = await import(at('clock.js'))
+    const updates = await import(at('updates.js'))
+    const stop = updates.watchForUpdates()
+    /* The app going away and coming back, the way React Native says it: every AppState listener, in turn. */
+    const screen = async (status) => {
+      for (const fn of [...bench.appState]) fn(status)
+      await clock.advance(0)
+    }
+    /* A link that says connected has just heard the computer answer, the way relay.js's seen() keeps lastAnswerAt. */
+    const tell = async (patch) => {
+      Object.assign(bench.rig, patch)
+      if (patch.link === 'connected' && !('heardAt' in patch)) bench.rig.heardAt = clock.now()
+      for (const fn of [...bench.listeners]) fn()
+      await clock.advance(0)
+    }
+    /* The first ask, five seconds in: a new version is downloaded (when there is one) and waiting. */
+    await clock.advance(6000)
+    return { bench, clock, updates, screen, tell, stop }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 export function run(test) {
   /**
    * A unit that answers like an FM3 and never touches a port.
@@ -2853,7 +2992,9 @@ export function run(test) {
       /* Sales at a glance names Google Play in Paid twice, as it names Android in Where they bought. */
       ['src/lib/admin.js', /Android|Google Play/, 'Justin’s Developer pages only'],
       ['src/lib/whats-live.js', /^Android build$/, 'What is live, a Developer page, Justin’s only'],
-      ['src/lib/ways-in.js', /Google Play/, 'the browser’s list of routes; nothing on the phone imports it']
+      ['src/lib/ways-in.js', /Google Play/, 'the browser’s list of routes; nothing on the phone imports it'],
+      /* "A newer version is on Google Play", the store's page and its button: each looked up by the platform passed in. */
+      ['src/lib/store-rule.js', /Google Play|play\.google\.com/, 'storeNote: picked by the platform storeVersion.js passes, Platform.OS']
     ]
     /*
      * .mjs as well as .js: unit.mjs, fractal-sysex.mjs and decode.mjs go into
@@ -2887,6 +3028,8 @@ export function run(test) {
     assert.match(flat('mobile/src/lib/purchases.js'), /const storeAccount = \(\) => \(Platform\.OS === 'ios' \? 'Apple ID' : 'Google account'\)/)
     assert.match(flat('mobile/src/lib/cloudSetlists.js'), /export const deviceName = \(\) => \(Platform\.OS === 'ios' \? 'iPhone' : 'Android'\)/)
     assert.match(flat('mobile/src/lib/bluetooth-gear.js'), /export const betaNote = \(os\) => \(os === 'android' \? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE\)/)
+    assert.match(flat('mobile/src/lib/storeVersion.js'), /const platform = Platform\.OS === 'ios' \|\| Platform\.OS === 'android' \? Platform\.OS : null/)
+    assert.match(flat('mobile/src/lib/store-rule.js'), /title: `A newer version of Fractal Remote is \$\{STORE_WHERE\[platform\]\}`/)
     /* The Developer pages: only their own tools import admin.js and whats-live.js, and Settings draws each tool for Justin's account alone. */
     const settings = flat('mobile/src/screens/Settings.js')
     for (const file of files) {
@@ -8116,26 +8259,673 @@ export function run(test) {
     assert.match(read('shared/link-word.mjs'), /'no computer' : 'no phone'/, 'the bar still says NO MAC')
   })
 
-  test('a downloaded update is offered as a restart, and never taken on its own', () => {
+  test('a downloaded update is offered as a restart, and floats over the play screen rather than pushing it down', () => {
     /*
      * "Is it possible to do that once the phone actually downloads an update
      * so that they could just click that to restart it?" — and before it, "I
      * don't want it to pause for a few seconds every time they open the app."
      */
+    /*
+     * Changed on purpose, 13 October 2026. This said "and never taken on its
+     * own". It is taken on its own now, at one moment only, by the rule in
+     * lib/update-rule.js — see the tests after this one. The background
+     * check itself still never restarts anything.
+     */
     const updates = read('mobile/src/lib/updates.js')
-    const watch = updates.slice(updates.indexOf('const askQuietly'), updates.indexOf('export const updateState'))
-    assert.ok(watch.length > 100, 'watchForUpdates is gone')
-    assert.ok(!/applyNow|reloadAsync/.test(watch), 'the background check restarts the app by itself')
-    assert.match(watch, /status === 'active' && Date\.now\(\) - lastAsked > ASK_AGAIN_MS/, 'coming back from the background never asks again')
+    const ask = updates.slice(updates.indexOf('const askQuietly'), updates.indexOf('const rigNow'))
+    assert.ok(ask.length > 100, 'the background check is gone')
+    assert.ok(!/applyNow|reloadAsync|switchIfDue/.test(ask), 'the background check restarts the app by itself')
+    assert.match(updates, /if \(Date\.now\(\) - lastAsked > ASK_AGAIN_MS\) askQuietly\(\)/, 'coming back from the background never asks again')
     assert.match(read('mobile/app.json'), /"fallbackToCacheTimeout": 0/, 'the app waits on a download at launch')
 
     const banner = read('mobile/src/components/UpdateReady.js')
-    assert.match(banner, /updates\.phase !== 'ready'/, 'the banner offers an update that has not downloaded')
-    assert.match(banner, /onPress=\{\(\) => applyNow\(\)\}/, 'the banner has no restart')
-    assert.match(banner, /onDismiss=\{dismissReady\}/, 'the banner cannot be put away')
+    assert.match(banner, /const open = updates\.phase === 'ready' && !updates\.dismissed/, 'the banner offers an update that has not downloaded')
+    assert.equal((banner.match(/onPress=\{\(\) => applyNow\(\)\}/g) || []).length, 2, 'the banner has no restart, floating or in the column')
+    assert.equal((banner.match(/onDismiss=\{dismissReady\}/g) || []).length, 2, 'the banner cannot be put away')
+    assert.match(banner, /<Toast open=\{open\} yields>/, 'over the play screen the note is not the floating toast, or it sits on top of the fault')
+    assert.match(banner, /label="Restart now" tone="signal" height=\{44\}/, 'the floating note is taller than the fault with its fix button')
+    /*
+     * And short. The column's sentence ran to three lines at 320 wide in a
+     * wide font and put Restart now over the top of scenes 1 and 2. This one
+     * was measured there: two lines, clear of the scene row.
+     */
+    const floating = banner.match(/const FLOATING = '([^']+)'/)
+    assert.ok(floating, 'the floating note says something other than its one short line')
+    assert.ok(floating[1].length <= 42, `the floating note grew to ${floating[1].length} characters; at 320 wide it covers the scenes`)
+    assert.match(banner, /<Toast open=\{open\} yields>\s+<Note tone="warn" onDismiss=\{dismissReady\}>\s+\{FLOATING\}\s+<\/Note>/, 'the floating note does not say its short line')
+
+    /*
+     * AND ON THE PLAY SCREEN IT FLOATS. "Can we just have it be like an
+     * overlay toast notification that doesn't move the screen at all?" was
+     * about the fault; the new-version note was the other row that slid the
+     * play screen down under a thumb. Inside EdgeBack, beside the screens,
+     * so it lies over the play screen where its fault does; in the column
+     * under the bar everywhere else, where a floating card would cover Back
+     * and Done.
+     */
     const app = read('mobile/App.js')
     assert.match(app, /useEffect\(\(\) => watchForUpdates\(\), \[\]\)/, 'nothing starts the background check')
-    assert.match(app, /<UpdateReady \/>/, 'the banner is drawn nowhere')
+    assert.match(app, /const playOnScreen = screen === 'stage' && !settling/)
+    assert.match(app, /\{playOnScreen \? null : <UpdateReady \/>\}/, 'the note still pushes the play screen down, or is drawn nowhere else')
+    const inside = app.slice(app.indexOf('<EdgeBack onBack={backFrom}>'), app.indexOf('</EdgeBack>'))
+    assert.match(inside, /\{readyOverPlay \? <UpdateReady over \/> : null\}/, 'the note does not float over the play screen')
+    /* Never over a connected rig, where a download can land mid-song and Restart now would come up under a thumb. */
+    assert.match(app, /const readyOverPlay = playOnScreen && link\.link !== 'connected'\n/, 'the note floats over the play screen while it is steering a rig')
+    assert.ok(inside.indexOf('<UpdateReady over />') > inside.indexOf('<Stage'), 'the note is drawn under the play screen rather than over it')
+
+    /* One card at a time: the yielding toast stands aside while the fault or the advice is up. */
+    const toast = read('mobile/src/components/Toast.js')
+    assert.match(toast, /export default function Toast\(\{ open, yields = false, children \}\) \{\s+const others = useSlot\(open && !yields\)\s+if \(!open \|\| \(yields && others\)\) return null/, 'a yielding toast is drawn over another')
+  })
+
+  test('the switch to a new version waits for every rule: downloaded, back after two hours, and off the rig then and now', async () => {
+    /*
+     * "How can I be sure it would never do it midsong?" Each rule is its own
+     * case here, so loosening any one of them fails on its own line.
+     */
+    const { AWAY_MS, shouldApplyNow } = await import('../mobile/src/lib/update-rule.js')
+    assert.equal(AWAY_MS, 2 * 60 * 60 * 1000, 'the time away is not two hours')
+    const off = { link: 'no-answer', joining: false, bluetooth: 'off' }
+    const ok = { phase: 'ready', back: true, awayMs: AWAY_MS, left: off, now: off }
+    const ask = (patch) => shouldApplyNow({ ...ok, ...patch })
+    const no = (patch, why) => {
+      const d = ask(patch)
+      assert.equal(d.yes, false, why)
+      assert.ok(typeof d.why === 'string' && d.why.length > 5, `no reason for the log: ${why}`)
+    }
+
+    /* All true: away two hours, not on the rig then or now, a version waiting. */
+    assert.equal(ask({}).yes, true, 'everything is true and it still waits')
+    assert.match(ask({}).why, /away 2 h 0 min/)
+    assert.equal(ask({ awayMs: 9 * AWAY_MS }).yes, true)
+    /* Signed out: the link is off and nothing is being looked for. */
+    assert.equal(ask({ left: { link: 'off', joining: false, bluetooth: 'off' }, now: { link: 'off', joining: false, bluetooth: 'off' } }).yes, true)
+
+    /* Downloaded: nothing else will do. */
+    for (const phase of ['idle', 'checking', 'downloading', 'current', 'off', undefined]) no({ phase }, `it switches with the phase at ${phase}`)
+
+    /* Coming back, never on screen. */
+    no({ back: false }, 'it switches while the app is on screen')
+    no({ back: undefined }, 'it switches when nobody said the app was coming back')
+    no({ back: 'yes' }, 'anything but true counts as coming back')
+
+    /* Two hours, not a minute less. */
+    no({ awayMs: AWAY_MS - 60 * 1000 }, 'it switches after 1 h 59 min away')
+    no({ awayMs: AWAY_MS - 1 }, 'it switches a millisecond short of two hours')
+    no({ awayMs: 25 * 60 * 1000 }, 'it switches after a set break')
+    assert.match(ask({ awayMs: AWAY_MS - 60 * 1000 }).why, /away 1 h 59 min, under 2 h/)
+    for (const awayMs of [0, -1, NaN, undefined, Infinity, '7200000']) no({ awayMs }, `it switches with the time away at ${String(awayMs)}`)
+
+    /* On the rig now: connected to the computer, joining it, or on Bluetooth. */
+    no({ now: { ...off, link: 'connected' } }, 'it switches while connected to the computer')
+    no({ now: { ...off, joining: true } }, 'it switches in the middle of joining the computer')
+    no({ now: { ...off, bluetooth: 'connected' } }, 'it switches while connected over Bluetooth')
+    no({ now: { ...off, link: 'joining', joining: true } }, 'it switches while a join is under way')
+    no({ now: null }, 'it switches when the rig cannot be read')
+
+    /* On the rig when it went away: the rig may still be there, mid-song. */
+    no({ left: { ...off, link: 'connected' } }, 'a phone put away connected switches on the way back')
+    no({ left: { ...off, link: 'joining' } }, 'a phone put away while joining switches on the way back')
+    no({ left: { ...off, joining: true } }, 'a phone put away with a join under way switches on the way back')
+    no({ left: { ...off, bluetooth: 'connected' } }, 'a phone put away on Bluetooth switches on the way back')
+    no({ left: { ...off, bluetooth: 'connecting' } }, 'a phone put away looking for the adapter switches on the way back')
+    no({ left: null }, 'it switches with nothing written down about when it went away')
+
+    /* The demo says connected, and is taken at its word. */
+    no({ left: { ...off, link: 'connected' }, now: { ...off, link: 'connected' } }, 'the demo switches by itself')
+
+    /*
+     * THE ONE 'joining' THAT DOES NOT COUNT, on purpose: the word NOW, with no
+     * join under way. Android cuts the connection while the app is put away,
+     * so a phone that left 'no-answer' (the computer off, say) comes back
+     * saying 'joining' with nothing being joined until it is on screen. If
+     * that word counted, no Android phone signed in to a computer would ever
+     * switch. A phone that left connected or joining is held by `left`.
+     */
+    assert.equal(ask({ now: { ...off, link: 'joining' } }).yes, true, 'the word a sleep leaves behind holds the switch for ever')
+    assert.equal(ask({ now: { ...off, bluetooth: 'connecting' } }).yes, true)
+    no({ left: { ...off, link: 'connected' }, now: { ...off, link: 'joining' } }, 'a phone that was on the rig when its connection was cut in its sleep switches')
+
+    /*
+     * BUT THE RIG AS IT WAS HOLDS IT FOR A NIGHT, NOT FOR EVER. A computer
+     * that is always on answers every time the phone is put down; held for
+     * ever, that phone would never switch by itself. Eight hours from the
+     * last time it was on the rig, and not a minute less — counted from a
+     * watch tap while away, not from when it went away.
+     */
+    const { NIGHT_MS } = await import('../mobile/src/lib/update-rule.js')
+    assert.equal(NIGHT_MS, 8 * 60 * 60 * 1000, 'the night is not eight hours')
+    const night = { awayMs: 9 * 60 * 60 * 1000 }
+    for (const [left, why] of [
+      [{ ...off, link: 'connected' }, 'connected'],
+      [{ ...off, link: 'joining' }, 'joining'],
+      [{ ...off, joining: true }, 'with a join under way'],
+      [{ ...off, bluetooth: 'connected' }, 'on Bluetooth'],
+      [{ ...off, bluetooth: 'connecting' }, 'looking for the adapter']
+    ]) {
+      no({ ...night, left, leftAgoMs: NIGHT_MS - 60 * 1000 }, `a phone put away ${why} switches after 7 h 59 min`)
+      no({ ...night, left, leftAgoMs: NIGHT_MS - 1 }, `a phone put away ${why} switches a millisecond short of eight hours`)
+      assert.equal(ask({ ...night, left, leftAgoMs: NIGHT_MS }).yes, true, `a phone put away ${why} waits for ever`)
+    }
+    assert.match(ask({ ...night, left: { ...off, link: 'connected' }, leftAgoMs: NIGHT_MS }).why, /last on the rig 8 h 0 min ago, and not on it now/)
+    assert.match(ask({ ...night, left: { ...off, link: 'connected' }, leftAgoMs: NIGHT_MS - 60 * 1000 }).why, /7 h 59 min ago \(under 8 h\)/)
+    /* Never further back than it went away, never a missing number taken as long ago. */
+    no({ awayMs: 3 * 60 * 60 * 1000, left: { ...off, link: 'connected' }, leftAgoMs: NIGHT_MS }, 'the rig was heard before the phone went away')
+    for (const leftAgoMs of [undefined, NaN, -1, -Infinity, '28800000']) no({ ...night, left: { ...off, link: 'connected' }, leftAgoMs }, `the rig as it was is let go with its time at ${String(leftAgoMs)}`)
+    /* And the rig NOW holds it whatever the hour: a link the computer answered seconds ago, a join, the adapter. */
+    const live = { ...off, link: 'connected', via: 'computer', heardAgoMs: 8000 }
+    for (const now of [{ ...off, link: 'connected' }, live, { ...off, joining: true }, { ...off, bluetooth: 'connected' }]) {
+      no({ ...night, left: { ...off, link: 'connected' }, leftAgoMs: 24 * 60 * 60 * 1000, now }, 'a night away let the rig now go too')
+    }
+    no({ ...night, left: null, leftAgoMs: 24 * 60 * 60 * 1000 }, 'a night away switches with nothing written down about when it went away')
+
+    /*
+     * EXCEPT THE 'connected' AN IPHONE WAKES UP WITH. An iPhone freezes the
+     * app while it is put away, so it comes back with the word it had before
+     * the freeze. Taken at its word, an iPhone always put away connected never
+     * switches, which is the bug this whole change was for. Over the computer,
+     * after a night away, with nothing heard from the computer for a night,
+     * the word is not a link — and not a minute sooner on either count.
+     */
+    const H = 60 * 60 * 1000
+    const woke = { ...off, link: 'connected', via: 'computer', heardAgoMs: NIGHT_MS }
+    const putAway = { ...night, left: { ...off, link: 'connected' }, leftAgoMs: 24 * H }
+    assert.equal(ask({ ...putAway, now: woke }).yes, true, 'an iPhone put away connected never switches: the word from before its freeze holds it for ever')
+    assert.match(ask({ ...putAway, now: { ...woke, heardAgoMs: 9 * H } }).why, /last on the rig 9 h 0 min ago, and not on it now \(it says connected, but the computer has not answered for 9 h 0 min/)
+    /* Heard within the night — a watch tap with the phone locked brings answers — and it is a link. */
+    no({ ...putAway, now: { ...woke, heardAgoMs: NIGHT_MS - 60 * 1000 } }, 'the computer answered 7 h 59 min ago and its connected was let go')
+    no({ ...putAway, now: { ...woke, heardAgoMs: NIGHT_MS - 1 } }, 'the computer answered a millisecond short of eight hours ago and its connected was let go')
+    /* An answer a minute ago is itself a time on the rig, and the night counts from it. */
+    assert.match(ask({ ...putAway, now: { ...woke, heardAgoMs: 60 * 1000 } }).why, /^it was connected when it went away, or while it was away, 0 h 1 min ago \(under 8 h\)$/)
+    /* A night away as well: under that, the word stands, whatever was heard. */
+    no({ awayMs: NIGHT_MS - 60 * 1000, left: off, now: { ...woke, heardAgoMs: 24 * H } }, 'a connected word let go after less than a night away')
+    no({ awayMs: 3 * H, left: off, now: { ...woke, heardAgoMs: 24 * H } }, 'a connected word let go after three hours away')
+    /* Only over the computer: the phone's own Bluetooth holds the adapter while the app sleeps, and the demo is taken at its word. */
+    for (const via of ['bluetooth', 'demo', undefined, null, 'Computer']) no({ ...putAway, now: { ...woke, via } }, `a connected word let go over ${String(via)}`)
+    /* A time it cannot read is a link. */
+    for (const heardAgoMs of [undefined, null, NaN, -1, Infinity, '28800000']) no({ ...putAway, now: { ...woke, heardAgoMs } }, `a connected word let go with nothing heard for ${String(heardAgoMs)}`)
+    /* And the rest of the rig now still holds it. */
+    no({ ...putAway, now: { ...woke, joining: true } }, 'a join under way was let go with the word')
+    no({ ...putAway, now: { ...woke, bluetooth: 'connected' } }, 'Bluetooth connected was let go with the word')
+    /* The word the phone went away with still holds it for its eight hours. */
+    no({ ...putAway, leftAgoMs: NIGHT_MS - 60 * 1000, now: woke }, 'a phone put away connected 7 h 59 min ago switched because its word was old')
+
+    /*
+     * THE COMPUTER'S LAST ANSWER IS A TIME ON THE RIG. The words only move
+     * when the link changes its word; an answer moves nothing. So a phone
+     * whose word dropped a minute before it was picked up, or that was put
+     * down during a missed keepalive, is still held by when the computer
+     * last answered — and only over the computer, and only for that answer's
+     * night.
+     */
+    const { LEFT_GRACE_MS } = await import('../mobile/src/lib/update-rule.js')
+    assert.equal(LEFT_GRACE_MS, 20 * 1000, 'the twenty seconds before the phone went away are not twenty seconds')
+    const quiet = { ...off, via: 'computer' }
+    no({ ...night, left: off, now: { ...quiet, heardAgoMs: 60 * 1000 } }, 'the computer answered a minute ago and the phone switched')
+    no({ ...night, left: off, now: { ...quiet, heardAgoMs: NIGHT_MS - 60 * 1000 } }, 'the computer answered 7 h 59 min ago and the phone switched')
+    assert.equal(ask({ ...night, left: off, now: { ...quiet, heardAgoMs: NIGHT_MS } }).yes, true, 'an answer a night ago still holds the switch')
+    assert.match(ask({ ...night, left: off, now: { ...quiet, heardAgoMs: 60 * 1000 } }).why, /^the computer answered it just before it went away, or while it was away, 0 h 1 min ago \(under 8 h\)$/)
+    /* Put down in a missed keepalive: heard ten seconds before it went, not thirty. */
+    no({ left: off, now: { ...quiet, heardAgoMs: AWAY_MS + 10 * 1000 } }, 'a phone put down ten seconds after the computer answered switched')
+    no({ left: off, now: { ...quiet, heardAgoMs: AWAY_MS + LEFT_GRACE_MS } }, 'a phone put down twenty seconds after the computer answered switched')
+    assert.equal(ask({ left: off, now: { ...quiet, heardAgoMs: AWAY_MS + LEFT_GRACE_MS + 1 } }).yes, true, 'an answer from before the phone went away holds it')
+    /* Only the computer's answers: Bluetooth and the demo are read from their own words. */
+    for (const via of ['bluetooth', 'demo', undefined]) assert.equal(ask({ ...night, left: off, now: { ...quiet, via, heardAgoMs: 60 * 1000 } }).yes, true, `an answer over ${String(via)} held the switch`)
+    /* A time it cannot read is not an answer. */
+    for (const heardAgoMs of [undefined, null, NaN, -1, '60000']) assert.equal(ask({ ...night, left: off, now: { ...quiet, heardAgoMs } }).yes, true, `an answer ${String(heardAgoMs)} ago held the switch`)
+    /* And a newer answer moves the night on from an older connection. */
+    no({ ...night, left: { ...off, link: 'connected' }, leftAgoMs: NIGHT_MS + 60 * 60 * 1000, now: { ...quiet, heardAgoMs: 60 * 60 * 1000 } }, 'the night counted from the first connection, not the last answer')
+  })
+
+  test('on a bench: the app switches by itself only in the moment it comes back, and no timer ever reaches the restart', async () => {
+    /* All true: put away with the computer off, back after two hours. */
+    {
+      const { bench, clock, screen, updates } = await updatesOnTheBench()
+      assert.equal(updates.updateState().phase, 'ready', 'the bench has no version waiting')
+      assert.ok(bench.log.some((l) => /a new version has downloaded/.test(l)), 'the download is not said in the log')
+      await screen('background')
+      await clock.advance(2 * 60 * 60 * 1000)
+      await screen('active')
+      assert.equal(bench.reloads, 1, 'back after two hours, off the rig, and it did not switch')
+      assert.ok(bench.log.some((l) => /^updates switching to the new version: away 2 h 0 min/.test(l)), 'the switch is not in the log with its reason')
+    }
+
+    /* Ten hours on screen, every timer run: never. */
+    {
+      const { bench, clock } = await updatesOnTheBench()
+      await clock.advance(10 * 60 * 60 * 1000)
+      assert.equal(bench.reloads, 0, 'a timer restarted the app while it was on screen')
+    }
+
+    /* 1 h 59 away: not yet, and said why. */
+    {
+      const { bench, clock, screen } = await updatesOnTheBench()
+      await screen('background')
+      await clock.advance(2 * 60 * 60 * 1000 - 60 * 1000)
+      await screen('active')
+      assert.equal(bench.reloads, 0, 'it switched after 1 h 59 min away')
+      assert.ok(bench.log.some((l) => /not switching to the new version yet: away 1 h 59 min, under 2 h/.test(l)), 'the wait is not in the log with its reason')
+      /* And on screen after that, for as long as anybody likes: still never. */
+      await clock.advance(5 * 60 * 60 * 1000)
+      assert.equal(bench.reloads, 0, 'it switched on screen after coming back too early')
+    }
+
+    /* Put away connected; Android cut the link in its sleep, so it comes back 'joining'. */
+    {
+      const { bench, clock, screen, tell } = await updatesOnTheBench()
+      await tell({ link: 'connected' })
+      await screen('background')
+      await tell({ link: 'joining' })
+      await clock.advance(3 * 60 * 60 * 1000)
+      await screen('active')
+      assert.equal(bench.reloads, 0, 'a phone put away on the rig switched on the way back')
+      assert.ok(bench.log.some((l) => /it was connected when it went away/.test(l)))
+    }
+
+    /* The same, after a night: 7 h 59 waits, 8 h switches — the computer is always on, not always being played. */
+    for (const [awayMs, reloads] of [
+      [8 * 60 * 60 * 1000 - 60 * 1000, 0],
+      [8 * 60 * 60 * 1000, 1]
+    ]) {
+      const { bench, clock, screen, tell } = await updatesOnTheBench()
+      await tell({ link: 'connected' })
+      await screen('background')
+      await tell({ link: 'joining' })
+      await clock.advance(awayMs)
+      await screen('active')
+      assert.equal(bench.reloads, reloads, reloads ? 'a phone put away connected never switches, however long it was away' : 'a phone put away connected switched after 7 h 59 min')
+      if (reloads) assert.ok(bench.log.some((l) => /^updates switching to the new version: away 8 h 0 min, last on the rig 8 h 0 min ago, and not on it now/.test(l)), 'the switch after a night is not in the log with its reason')
+    }
+
+    /* A night after it was put down, but a watch tap reached the rig 90 minutes ago: still on the rig. */
+    {
+      const { bench, clock, screen, tell } = await updatesOnTheBench()
+      await tell({ link: 'connected' })
+      await screen('background')
+      await tell({ link: 'joining' })
+      await clock.advance(7 * 60 * 60 * 1000)
+      await tell({ link: 'connected' })
+      await tell({ link: 'joining' })
+      await clock.advance(90 * 60 * 1000)
+      await screen('active')
+      assert.equal(bench.reloads, 0, 'the eight hours count from when the phone was put down, not from the last time it was on the rig')
+      assert.ok(bench.log.some((l) => /it was connected when it went away, or while it was away, 1 h 30 min ago \(under 8 h\)/.test(l)))
+    }
+
+    /*
+     * AN IPHONE: put away connected, the app frozen with its word, so the
+     * link still says connected the moment it is back. After a night with
+     * nothing heard from the computer it switches; 7 h 59 waits. Changed on
+     * purpose, 13 October 2026: this used to wait, and so an iPhone always
+     * put away connected — Justin's — never switched by itself at all.
+     */
+    for (const [awayMs, reloads] of [
+      [8 * 60 * 60 * 1000 - 60 * 1000, 0],
+      [8 * 60 * 60 * 1000, 1],
+      [12 * 60 * 60 * 1000, 1]
+    ]) {
+      const { bench, clock, screen, tell } = await updatesOnTheBench()
+      await tell({ link: 'connected' })
+      await screen('inactive')
+      await screen('background')
+      await clock.advance(awayMs)
+      await screen('active')
+      assert.equal(bench.reloads, reloads, reloads ? 'an iPhone put away connected never switches: the word from before its freeze holds it' : 'an iPhone put away connected switched after 7 h 59 min')
+      if (reloads) assert.ok(bench.log.some((l) => /^updates switching to the new version: away \d+ h 0 min, last on the rig \d+ h 0 min ago, and not on it now \(it says connected, but the computer has not answered for/.test(l)), 'the switch on a word from before the freeze is not in the log with its reason')
+    }
+
+    /* The same iPhone, but a watch tap 30 minutes ago was answered with the word never changing: still on the rig. */
+    {
+      const { bench, clock, screen, tell } = await updatesOnTheBench()
+      await tell({ link: 'connected' })
+      await screen('background')
+      await clock.advance(11 * 60 * 60 * 1000 + 30 * 60 * 1000)
+      bench.rig.heardAt = clock.now()
+      await clock.advance(30 * 60 * 1000)
+      await screen('active')
+      assert.equal(bench.reloads, 0, 'an answer from the computer 30 minutes ago was taken as a word from before the freeze')
+      assert.ok(bench.log.some((l) => /not switching to the new version yet: it was connected when it went away, or while it was away, 0 h 30 min ago \(under 8 h\)$/.test(l)))
+    }
+
+    /* Over Bluetooth, and in the demo, the word is taken as it is, however long it was away. */
+    for (const [rig, why] of [
+      [{ link: 'connected', bluetooth: 'connected', via: 'bluetooth' }, 'over Bluetooth'],
+      [{ link: 'connected', via: 'demo' }, 'in the demo']
+    ]) {
+      const { bench, clock, screen, tell } = await updatesOnTheBench()
+      await tell({ ...rig, heardAt: 0 })
+      await screen('background')
+      await clock.advance(24 * 60 * 60 * 1000)
+      await screen('active')
+      assert.equal(bench.reloads, 0, `a day away ${why} let the connected word go`)
+    }
+
+    /* Put away off the rig, then a watch tap reached the rig with the phone locked. */
+    {
+      const { bench, clock, screen, tell } = await updatesOnTheBench()
+      await screen('inactive')
+      await screen('background')
+      await clock.advance(60 * 60 * 1000)
+      await tell({ link: 'connected' })
+      await tell({ link: 'joining' })
+      await clock.advance(2 * 60 * 60 * 1000)
+      await screen('active')
+      assert.equal(bench.reloads, 0, 'a phone that reached the rig while it was away switched on the way back')
+    }
+
+    /* Connected, joining, or on Bluetooth at the moment it comes back. */
+    for (const [now, why] of [
+      [{ link: 'connected' }, 'connected to the computer'],
+      [{ joining: true }, 'in the middle of joining the computer'],
+      [{ bluetooth: 'connected' }, 'on Bluetooth'],
+      [{ btJoining: true }, 'in the middle of joining the adapter']
+    ]) {
+      const { bench, clock, screen } = await updatesOnTheBench()
+      await screen('background')
+      await clock.advance(3 * 60 * 60 * 1000)
+      Object.assign(bench.rig, now)
+      await screen('active')
+      assert.equal(bench.reloads, 0, `it switched while ${why}`)
+    }
+
+    /* Put away looking for the Bluetooth adapter. */
+    {
+      const { bench, clock, screen, tell } = await updatesOnTheBench()
+      await tell({ bluetooth: 'connecting' })
+      await screen('background')
+      await tell({ bluetooth: 'idle' })
+      await clock.advance(3 * 60 * 60 * 1000)
+      await screen('active')
+      assert.equal(bench.reloads, 0, 'a phone put away looking for the adapter switched on the way back')
+    }
+
+    /* Nothing downloaded: nothing to switch to, and coming back asks again. */
+    {
+      const { bench, clock, screen, updates } = await updatesOnTheBench({ available: false })
+      assert.equal(updates.updateState().phase, 'current')
+      await screen('background')
+      await clock.advance(3 * 60 * 60 * 1000)
+      await screen('active')
+      assert.equal(bench.reloads, 0, 'it restarted with nothing downloaded')
+      assert.ok(!bench.log.some((l) => /switching/.test(l)), 'a line on every unlock that says nothing downloaded')
+    }
+  })
+
+  test('on a bench: the computer answering counts as the rig, even when the word never changes', async () => {
+    /*
+     * Found in review, 13 October 2026. The words only move when the link
+     * changes its word, so a computer that kept answering under one
+     * 'connected' left the night counting from the first connection — and a
+     * phone whose word dropped to 'no-answer' a minute before it was picked
+     * up switched, though the computer had answered a minute before.
+     */
+    {
+      const { bench, clock, screen, tell } = await updatesOnTheBench()
+      await screen('background')
+      await clock.advance(60 * 60 * 1000)
+      /* A watch tap with the phone locked: connected, and the computer answers every half hour for eight and a half hours. */
+      await tell({ link: 'connected' })
+      for (let i = 0; i < 17; i++) {
+        await clock.advance(30 * 60 * 1000)
+        bench.rig.heardAt = clock.now()
+      }
+      await tell({ link: 'no-answer' })
+      await clock.advance(60 * 1000)
+      await screen('active')
+      assert.equal(bench.reloads, 0, 'the computer answered a minute ago and the phone switched to the new version')
+      assert.ok(bench.log.some((l) => /not switching to the new version yet: .*0 h 1 min ago \(under 8 h\)$/.test(l)), 'the log does not count the night from the last answer')
+    }
+    /* Put down in a missed keepalive: the word 'no-answer' for a few seconds, the computer heard ten seconds before. */
+    {
+      const { bench, clock, screen, tell } = await updatesOnTheBench()
+      await tell({ link: 'connected' })
+      await clock.advance(10 * 1000)
+      await tell({ link: 'no-answer' })
+      await screen('background')
+      await tell({ link: 'joining' })
+      await clock.advance(2 * 60 * 60 * 1000)
+      await screen('active')
+      assert.equal(bench.reloads, 0, 'a phone put down in a missed keepalive was taken as off the rig and switched')
+    }
+    /* And the same phone put down a minute after the computer last answered is off the rig, as before. */
+    {
+      const { bench, clock, screen, tell } = await updatesOnTheBench()
+      await tell({ link: 'connected' })
+      await clock.advance(60 * 1000)
+      await tell({ link: 'no-answer' })
+      await screen('background')
+      await clock.advance(2 * 60 * 60 * 1000)
+      await screen('active')
+      assert.equal(bench.reloads, 1, 'a phone put down a minute after the computer went quiet waits for ever')
+    }
+  })
+
+  test('on a bench: a flicker on screen is a trip away of its own, never the last one counted again', async () => {
+    /*
+     * An iPhone's Control Centre, or a notification pulled down: 'inactive',
+     * and 'active' a second later, with the app on screen all along. The time
+     * away is wiped the moment the app is back, so a flicker after a long
+     * trip away — one that came back to a rig and so did not switch — is a
+     * second away, not three hours.
+     */
+    {
+      const { bench, clock, screen, tell } = await updatesOnTheBench()
+      await screen('background')
+      await clock.advance(3 * 60 * 60 * 1000)
+      bench.rig.link = 'connected'
+      await screen('active')
+      assert.equal(bench.reloads, 0, 'back to a connected rig, and it switched')
+      await tell({ link: 'no-answer' })
+      await clock.advance(60 * 1000)
+      await screen('inactive')
+      await clock.advance(2000)
+      await screen('active')
+      assert.equal(bench.reloads, 0, 'a Control Centre flicker after a long time away switched while on screen')
+    }
+
+    /* Three hours on screen, then the same flicker: a second away. */
+    {
+      const { bench, clock, screen } = await updatesOnTheBench()
+      await clock.advance(3 * 60 * 60 * 1000)
+      await screen('inactive')
+      await clock.advance(1000)
+      await screen('active')
+      assert.equal(bench.reloads, 0, 'time on screen counted as time away')
+    }
+  })
+
+  test('only the moment of coming back on screen calls the restart, and nothing on a timer can reach it', () => {
+    const file = 'mobile/src/lib/updates.js'
+    const ast = parse(read(file), { sourceType: 'module', plugins: ['jsx'] })
+    const calls = (name) => {
+      const found = []
+      traverse(ast, {
+        CallExpression(path) {
+          const c = path.node.callee
+          const called = c.type === 'Identifier' ? c.name : c.type === 'MemberExpression' && !c.computed ? c.property.name : null
+          if (called === name) found.push(path)
+        }
+      })
+      return found
+    }
+    const within = (path) => {
+      const fns = []
+      for (let p = path.parentPath; p; p = p.parentPath) {
+        if (p.isFunctionDeclaration()) fns.push(p.node.id.name)
+        else if ((p.isArrowFunctionExpression() || p.isFunctionExpression()) && p.parentPath.isVariableDeclarator()) fns.push(p.parentPath.node.id.name)
+        else if (p.isArrowFunctionExpression() || p.isFunctionExpression()) {
+          /* `AppState.addEventListener?.(…)` is an optional call: the same question. */
+          const call = p.parentPath.isCallExpression() || p.parentPath.isOptionalCallExpression() ? p.parentPath.node.callee : null
+          const member = call?.type === 'MemberExpression' || call?.type === 'OptionalMemberExpression'
+          fns.push(member ? `${call.object.name}.${call.property.name}` : call?.name || '(inline)')
+        }
+      }
+      return fns
+    }
+
+    /* The restart is applyNow's, and only applyNow's. */
+    const reloads = calls('reloadAsync')
+    assert.equal(reloads.length, 1, 'updates.js restarts the app from more than one place')
+    assert.deepEqual(within(reloads[0]), ['applyNow'], 'the restart is not inside applyNow')
+
+    /* applyNow, in this file, from switchIfDue alone; switchIfDue from the AppState listener alone. */
+    const apply = calls('applyNow')
+    assert.equal(apply.length, 1, 'updates.js calls applyNow from somewhere new')
+    assert.equal(within(apply[0])[0], 'switchIfDue', 'applyNow is called outside the one function the rule guards')
+    const due = calls('switchIfDue')
+    assert.equal(due.length, 1, 'switchIfDue is called from somewhere new')
+    assert.deepEqual(within(due[0]), ['AppState.addEventListener', 'watchForUpdates'], 'the switch is reached from somewhere other than the AppState listener')
+    const fn = read(file).replace(/\s+/g, ' ')
+    assert.match(fn, /const leftAgoMs = left \? Date\.now\(\) - left\.at : 0 const decision = shouldApplyNow\(\{ phase: state\.phase, back: true, awayMs, left, leftAgoMs, now: rigNow\(\) \}\)/, 'the switch does not ask the rule, or asks it something else')
+    assert.match(fn, /if \(!decision\.yes\) return false applyNow\(\)/)
+    assert.match(fn, /logDebug\('updates', decision\.yes \? `switching to the new version: \$\{decision\.why\}` : `not switching to the new version yet: \$\{decision\.why\}`\)/, 'the decision is not in the log')
+    /* At 'active', and only after a time away was written down. */
+    assert.match(fn, /const goingAway = \(\) => \{ leftAt = Date\.now\(\) leftWith = \{ \.\.\.rigNow\(\), at: leftAt \} \}/)
+    /* And wiped the moment it is back, so a flicker on screen is never read as the last trip away. */
+    assert.match(fn, /if \(status !== 'active'\) \{ if \(!leftAt\) goingAway\(\) return \} const awayMs = leftAt \? Date\.now\(\) - leftAt : 0 const left = leftWith leftAt = 0 leftWith = null/, 'the time away is not wiped at the moment the app is back')
+    assert.match(fn, /if \(awayMs > 0 && switchIfDue\(awayMs, left\)\) return/)
+
+    /* No timer anywhere in it reaches the restart, and there is no interval at all. */
+    assert.equal(calls('setInterval').length, 0, 'updates.js runs something on an interval')
+    const reach = new Set(['applyNow', 'switchIfDue', 'reloadAsync', 'shouldApplyNow'])
+    for (const t of calls('setTimeout')) {
+      traverse(t.node, {
+        Identifier(p) {
+          assert.ok(!reach.has(p.node.name), `a timer in updates.js reaches ${p.node.name}`)
+        }
+      }, t.scope, null, t)
+      assert.ok(t.node.arguments[0]?.type === 'Identifier' && t.node.arguments[0].name === 'askQuietly', 'a timer in updates.js does something other than ask')
+    }
+
+    /* Everywhere else, a restart is a button somebody pressed: applyNow from an onPress, and no other reload. */
+    const files = [...walk(new URL('../mobile/src/', import.meta.url), /\.m?js$/), fileURLToPath(new URL('../mobile/App.js', import.meta.url))]
+    for (const f of files) {
+      if (f.endsWith('/lib/updates.js')) continue
+      const text = readFileSync(f, 'utf8')
+      const name = f.split('/mobile/')[1]
+      assert.ok(!/reloadAsync|reloadAppAsync|DevSettings\.reload/.test(withoutComments(text)), `${name} restarts the app itself`)
+      if (!/applyNow/.test(text)) continue
+      traverse(parse(text, { sourceType: 'module', plugins: ['jsx'] }), {
+        CallExpression(path) {
+          if (path.node.callee.type !== 'Identifier' || path.node.callee.name !== 'applyNow') return
+          const attr = path.findParent((p) => p.isJSXAttribute())
+          assert.ok(attr && attr.node.name.name === 'onPress', `${name} restarts into the new version from something other than a button`)
+        }
+      })
+    }
+  })
+
+  test('the rule reads the rig as it is: joins under way counted at both links, and the rig while away kept', () => {
+    const link = withoutComments(read('mobile/src/lib/link.js')).replace(/\s+/g, ' ')
+    assert.match(link, /export const joiningNow = \(\) => turns > 0 && state\.link !== 'connected'/)
+    assert.match(link, /function tick\(\) \{ turns \+= 1 return turn\(\)\.finally\(\(\) => \{ turns -= 1 \}\) \}/, 'a turn of the loop is not counted while it is out')
+    assert.match(link, /timer = setTimeout\(tick, ms\)/, 'the loop turns without being counted')
+    assert.match(withoutComments(read('mobile/src/lib/bleLink.js')), /export const bluetoothJoining = \(\) => inFlight/)
+    assert.match(withoutComments(read('mobile/src/lib/bluetooth.js')), /export const bluetoothPhase = \(\) => now\.phase/)
+    const updates = withoutComments(read('mobile/src/lib/updates.js')).replace(/\s+/g, ' ')
+    assert.match(updates, /const rigNow = \(\) => \(\{ link: linkState\(\)\.link, joining: joiningNow\(\) \|\| bluetoothJoining\(\), bluetooth: bluetoothPhase\(\), via: linkVia\(\), heardAgoMs: Date\.now\(\) - lastHeardAt\(\) \}\)/)
+    /* What the link is to, decided as startLink decides it, and the computer's last answer as relay.js keeps it. */
+    assert.match(link, /export const linkVia = \(\) => \(isDemo\(\) \? 'demo' : bluetoothOn\(\) \? 'bluetooth' : 'computer'\)/)
+    assert.match(link, /export const lastHeardAt = \(\) => lastAnswerAt\(\)/)
+    assert.match(link, /if \(bluetoothOn\(\) && !isDemo\(\)\) \{ running = false startBluetoothLink\(set\)/, 'startLink no longer puts the demo before Bluetooth, and linkVia says the other')
+    const relay = withoutComments(read('mobile/src/lib/relay.js')).replace(/\s+/g, ' ')
+    assert.match(relay, /function seen\(v\) \{ const now = !!v if \(now\) answeredAt = Date\.now\(\)/, 'an answer from the computer no longer moves lastAnswerAt')
+    assert.match(link, /\} else if \(Date\.now\(\) - lastAnswerAt\(\) > KEEPALIVE\) \{ await hostResponds\(\) refresh\(\) \}/, 'a link that says connected is no longer asked every eight seconds, so a word left from a freeze looks like a link')
+    assert.match(updates, /if \(rig\.link === 'connected' \|\| rig\.bluetooth === 'connected'\) leftWith = \{ \.\.\.leftWith, link: 'connected', at: Date\.now\(\) \}/, 'a rig reached while away is forgotten, or its eight hours count from when the phone went away')
+    assert.match(updates, /const offLink = subscribeLink\(heardWhileAway\) const offBluetooth = subscribeBluetooth\(heardWhileAway\)/)
+    /* And the reason a switch outside a song is safe, said where the rule is. */
+    assert.match(read('mobile/src/lib/update-rule.js'), /the sound never depends on this\s+\* app\. The unit plays on its own/)
+  })
+
+  test('a phone on an older store copy is told once, at the top of Settings, and quietly under Updates', async () => {
+    /*
+     * "After the next build, copies on an older store version stop getting
+     * updates and nothing tells them" — some Android phones were still on
+     * 1.87.1 with 1.87.11 on Google Play.
+     */
+    const rule = await import('../mobile/src/lib/store-rule.js')
+    const { storeNote, newestFrom, cardDue, askDue, ASK_EVERY_MS, STORE_PAGE, STORE_VERSIONS_URL } = rule
+
+    /* Older than the store's: told, in that store's words. */
+    const ios = storeNote({ platform: 'ios', installed: '1.87.11', newest: '1.87.30' })
+    assert.equal(ios.title, 'A newer version of Fractal Remote is in the App Store')
+    assert.equal(ios.page, 'https://apps.apple.com/app/id6812916461')
+    assert.equal(ios.button, 'Open the App Store')
+    assert.equal(ios.newest, '1.87.30')
+    assert.ok(!/android|google|play/i.test(JSON.stringify(ios)), 'an iPhone is told about another store')
+    const android = storeNote({ platform: 'android', installed: '1.87.1', newest: '1.87.11' })
+    assert.equal(android.title, 'A newer version of Fractal Remote is on Google Play')
+    assert.equal(android.page, 'https://play.google.com/store/apps/details?id=cloud.newbold.fractalremote')
+    assert.equal(android.row, 'Google Play')
+    /* Short, and without the store's name: the row's title says it, and a longer line is cut off at 320 wide. */
+    assert.equal(android.line, 'A newer version is out · tap to get it')
+    assert.equal(ios.line, android.line)
+    assert.ok(android.line.length <= 40, 'the quiet line under Updates is cut off at 320 wide')
+    assert.equal(STORE_PAGE.ios, read('vercel.json').match(/"destination": "(https:\/\/apps\.apple\.com\/app\/id\d+)"/)[1], 'the App Store page is not the one the website sends iPhones to')
+    assert.equal(JSON.parse(read('mobile/app.json')).expo.android.package, 'cloud.newbold.fractalremote')
+
+    /* The same, newer, or anything unreadable: nothing at all. */
+    assert.equal(storeNote({ platform: 'ios', installed: '1.87.11', newest: '1.87.11' }), null, 'a current copy is told to update')
+    assert.equal(storeNote({ platform: 'ios', installed: '1.88.0', newest: '1.87.11' }), null, 'a copy ahead of the store (TestFlight) is told to update')
+    for (const [installed, newest] of [[null, '1.87.11'], ['1.87.1', null], ['', '1.87.11'], ['1.87', '1.87.11'], ['1.87.1', 'soon'], ['v1.87.1', '1.87.11'], [undefined, undefined]]) {
+      assert.equal(storeNote({ platform: 'android', installed, newest }), null, `told on ${installed} and ${newest}`)
+    }
+    assert.equal(storeNote({ platform: 'web', installed: '1.0.0', newest: '2.0.0' }), null)
+    assert.equal(newestFrom({ ios: '1.87.11', android: '1.87.11' }, 'android'), '1.87.11')
+    assert.equal(newestFrom({ ios: 1.87 }, 'ios'), null)
+    assert.equal(newestFrom(null, 'ios'), null)
+
+    /* Once for each store version. */
+    assert.equal(cardDue(android, null), true)
+    assert.equal(cardDue(android, '1.87.11'), false, 'the card comes back for a store version it was shown for')
+    assert.equal(cardDue(android, '1.87.10'), true, 'a newer store version is not said')
+    assert.equal(cardDue(null, null), false)
+
+    /* At most once a day. */
+    assert.equal(ASK_EVERY_MS, 24 * 60 * 60 * 1000)
+    assert.equal(askDue(0, 5), true)
+    assert.equal(askDue(1000, 1000 + ASK_EVERY_MS - 1), false, 'the website is asked more than once a day')
+    assert.equal(askDue(1000, 1000 + ASK_EVERY_MS), true)
+    assert.equal(askDue(5000, 1000), true, 'a clock put back stops it asking for good')
+
+    /* The file it reads, on the website, kept to versions that exist. */
+    assert.equal(STORE_VERSIONS_URL, 'https://fractal.newbold.cloud/store-versions.json')
+    const file = JSON.parse(read('public/store-versions.json'))
+    const { readLedger } = await import('../shared/whats-live.mjs')
+    const { isOlder } = await import('../shared/versions.mjs')
+    const built = readLedger(read('docs/expo-builds.md'))
+    for (const platform of ['ios', 'android']) {
+      assert.ok(newestFrom(file, platform), `store-versions.json has no plain ${platform} version`)
+      assert.equal(isOlder(built[platform].version, file[platform]), false, `store-versions.json says ${platform} ${file[platform]}, newer than any build in the ledger`)
+    }
+    assert.match(read('docs/expo-builds.md'), /move its number in\s+`public\/store-versions\.json`/, 'the build checklist forgets the store versions file')
+
+    /* The phone side: the version built into the copy, asked of the website with a timeout, failing silent. */
+    const phone = withoutComments(read('mobile/src/lib/storeVersion.js')).replace(/\s+/g, ' ')
+    assert.match(phone, /const native = requireOptionalNativeModule\('ExponentConstants'\) let config = native\?\.manifest if \(typeof config === 'string'\) config = JSON\.parse\(config\)/, 'the installed version is not read off the build')
+    assert.ok(!/expoConfig|nativeAppVersion/.test(phone), 'the installed version is read from something an update changes')
+    assert.match(phone, /notForever\(STORE_VERSIONS_URL, \{ headers: \{ Accept: 'application\/json' \}, cache: 'no-store' \}, ASK_MS\)/, 'the ask has no timeout')
+    assert.match(phone, /const ASK_MS = 8000/)
+    assert.match(phone, /if \(!platform \|\| !installed \|\| !askDue\(lastAskedAt, Date\.now\(\)\)\) return lastAskedAt = Date\.now\(\)/, 'a failed ask is retried before the day is out')
+    assert.match(read('mobile/App.js'), /useEffect\(\(\) => watchStoreVersion\(\), \[\]\)/)
+
+    /* Where it is said: the top of Settings and under Updates, never on Play. */
+    const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
+    assert.match(settings, /\{head\('Settings'\)\} \{\/\*[^*]*\*\/\} <NewerInStore \/>/, 'the card is not at the top of Settings')
+    const about = settings.slice(settings.indexOf('title="Updates"'), settings.indexOf('The small print'))
+    assert.match(about, /\{newer\.note \? <SetupRow title=\{newer\.note\.row\} status=\{newer\.note\.line\} onPress=\{\(\) => openStore\(newer\.note\)\} \/> : null\}/, 'the quiet line is not under Updates')
+    for (const f of ['mobile/src/screens/Stage.js', 'mobile/App.js', 'mobile/src/components/Toast.js']) {
+      assert.ok(!/NewerInStore|useStoreNote/.test(read(f)), `${f} shows the store card, where it is never meant to be`)
+    }
+    const card = read('mobile/src/components/NewerInStore.js')
+    assert.match(card, /setShowing\(note\.newest\)\s+markCardSeen\(note\.newest\)/, 'the card is not put away for good once shown')
+    /* Not under the new-version note: two cards in nearly the same words, and the one said once spent on the moment they blur. */
+    assert.match(card, /const readyAbove = updates\.phase === 'ready' && !updates\.dismissed/, 'the store card does not know the new-version note is up')
+    assert.match(card, /if \(!card \|\| !note \|\| readyAbove\) return\s+setShowing/, 'the store card is shown, and spent, under the new-version note')
+
+    /* Nothing that needs a build. */
+    const deps = JSON.parse(read('mobile/package.json')).dependencies
+    for (const pkg of ['expo-application', 'expo-store-review', 'react-native-device-info']) assert.ok(!deps[pkg], `${pkg} is a new package, and a new build`)
   })
 
   test('a new version number does not cost a build', async () => {
