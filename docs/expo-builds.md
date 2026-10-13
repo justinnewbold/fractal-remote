@@ -7,6 +7,18 @@ built together.
 Add a row every time a build is started, including one that fails after
 being queued: it still used a slot.
 
+**And on the day a build goes live in a store, move its number in
+`public/store-versions.json`** (`ios` for the App Store, `android` for Google
+Play), in its own pull request, that day and not before: live means
+"Ready for Distribution" on the App Store, and rolled out on Google Play's
+production track, not just sent for review. The phone app reads that file
+once a day and tells a phone whose store copy is older that a newer one is
+in the store (mobile/src/lib/store-rule.js). A number moved early sends
+people to a store that does not have it yet; one never moved leaves the old
+copies, which stop getting updates once the new build changes what an update
+needs, with nothing telling them. It says 1.87.11 for both since 13 October
+2026.
+
 ## October 2026
 
 | Date | Version | iOS | Android | What it was for |

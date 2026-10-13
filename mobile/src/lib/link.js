@@ -184,6 +184,41 @@ function schedule(ms) {
   timer = setTimeout(tick, ms)
 }
 
+/*
+ * HOW MANY TURNS OF THE LOOP ARE OUT ON THE NETWORK, for one question:
+ * whether the phone is in the middle of reaching the computer.
+ *
+ * lib/updates.js asks it before switching to a downloaded version by itself
+ * (see lib/update-rule.js), and the link's own word cannot answer it. The
+ * word says 'joining' whenever the phone is not joined, and that is also what
+ * it says after a phone's sleep: Android cuts the connection while the app is
+ * put away, so a phone coming back after a night reads 'joining' with nothing
+ * being joined at all until it is back on screen. This counts the attempts
+ * actually under way instead. A count rather than a flag, because Look again
+ * can start a turn while another is still waiting on the network.
+ */
+let turns = 0
+
+/** True while a turn is out finding the computer: joining, or asking whether it is there. */
+export const joiningNow = () => turns > 0 && state.link !== 'connected'
+
+/*
+ * WHAT THE LINK IS TO, AND WHEN THE COMPUTER LAST ANSWERED, for the same
+ * question. An iPhone freezes the app while it is put away, so the word comes
+ * back as it was before the freeze, 'connected' included; these two are what
+ * tell a link from a word left over from the night (lib/update-rule.js). In
+ * the order startLink decides it: the demo first, then Bluetooth.
+ */
+export const linkVia = () => (isDemo() ? 'demo' : bluetoothOn() ? 'bluetooth' : 'computer')
+export const lastHeardAt = () => lastAnswerAt()
+
+function tick() {
+  turns += 1
+  return turn().finally(() => {
+    turns -= 1
+  })
+}
+
 /**
  * One turn of the loop.
  *
@@ -192,7 +227,7 @@ function schedule(ms) {
  *   - answering          → a keepalive only if nothing has been heard for a
  *     while; ordinary traffic is proof enough and costs nothing extra
  */
-async function tick() {
+async function turn() {
   if (!running) return
   /* A real loop has no business running under the demo. See startLink. */
   if (isDemo()) return enterDemo()

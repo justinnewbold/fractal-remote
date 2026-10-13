@@ -2,6 +2,10 @@ import { useSyncExternalStore } from 'react'
 import { AppState } from 'react-native'
 
 import { logDebug } from './debugLog'
+import { shouldApplyNow } from './update-rule'
+import { joiningNow, lastHeardAt, linkState, linkVia, subscribeLink } from './link'
+import { bluetoothPhase, subscribeBluetooth } from './bluetooth'
+import { bluetoothJoining } from './bleLink'
 
 /**
  * Whether this app is running the newest code, and a way to make it so.
@@ -147,7 +151,7 @@ export const applyNow = async () => {
 export const dismissReady = () => set({ dismissed: true })
 
 /*
- * ASKED WITHOUT BEING ASKED, AND OFFERED RATHER THAN FORCED.
+ * ASKED WITHOUT BEING ASKED, AND TAKEN ONLY WHEN NOBODY CAN BE PLAYING.
  *
  * "On the web app it actually will pop up a banner at the top of the screen
  * that says update available. Is it possible to do that once the phone
@@ -160,8 +164,24 @@ export const dismissReady = () => set({ dismissed: true })
  * while — the case of somebody who never closes an app, who would otherwise
  * carry an old version for as long as the phone keeps it alive. A download
  * that lands turns the phase to 'ready', and the banner (UpdateReady) offers
- * the restart. It never restarts on its own: a reload mid-song is the one
- * thing worse than an old version.
+ * the restart.
+ *
+ * AND, SINCE 13 OCTOBER 2026, IT ALSO SWITCHES BY ITSELF — at one moment
+ * only. The offer alone left Justin's own phone on 1.87.12 while 1.87.21 was
+ * out. The rule is lib/update-rule.js's shouldApplyNow, and this is the one
+ * place it is asked: the moment the app comes back on screen ('active'),
+ * after two hours away, with the phone on no rig now, and on none when it
+ * went away unless that was a night (eight hours) ago. (An iPhone comes back
+ * from a night saying 'connected' if that is what it said when it froze; with
+ * nothing heard from the computer all night, that word is not a rig — the
+ * rule says why.) Never on a timer, never while the app is on screen. Every answer goes in the log with
+ * its reason, so a report says why it did or did not switch. After a switch
+ * the app starts again from the top, and its first ask, five seconds in, is
+ * what brings it on to anything newer that came out in between.
+ *
+ * The sound never depends on the app: the unit plays on its own, and the
+ * phone only tells it which preset and scene to be on. That is why a switch
+ * outside a song is safe, and the rule is what keeps it outside one.
  */
 const FIRST_ASK_MS = 5000
 const ASK_AGAIN_MS = 30 * 60 * 1000
@@ -170,18 +190,97 @@ let lastAsked = 0
 const askQuietly = () => {
   if (['checking', 'downloading', 'ready', 'off'].includes(state.phase)) return
   lastAsked = Date.now()
-  checkNow().catch(() => {})
+  checkNow()
+    .then((got) => {
+      if (got === 'ready') logDebug('updates', 'a new version has downloaded; it goes in when the app is next opened after two hours away from the rig, or with Restart now')
+    })
+    .catch(() => {})
+}
+
+/**
+ * The rig in the words the rule reads (see lib/update-rule.js). Read, never
+ * changed. `via` and `heardAgoMs` are for the 'connected' an iPhone wakes up
+ * with: the word from before the freeze, with nothing heard since.
+ */
+const rigNow = () => ({
+  link: linkState().link,
+  joining: joiningNow() || bluetoothJoining(),
+  bluetooth: bluetoothPhase(),
+  via: linkVia(),
+  heardAgoMs: Date.now() - lastHeardAt()
+})
+
+/*
+ * WHEN THE APP LEFT THE SCREEN, AND THE RIG AS IT WAS THEN. Written at the
+ * first change away from 'active' (an iPhone passes through 'inactive' on
+ * its way to the background, and the moment it left is the first of them).
+ * And kept up to date while it is away: a watch tap reaches the rig with the
+ * phone locked, so a connection made while away counts as one it went away
+ * with — and `at` moves to it, because the eight hours after which the rule
+ * lets that go count from the last time the phone was on the rig, not from
+ * when it went away. A phone picked up just after a watch tap mid-song is
+ * still on the rig, however long ago it was put down.
+ *
+ * Both are wiped the moment it is back, whatever the rule said: a time away
+ * is one trip off the screen. Left standing, the next flicker on screen — an
+ * iPhone's Control Centre or a notification pulled down, 'inactive' and
+ * back a second later — would be read as the whole of the last trip away.
+ */
+let leftAt = 0
+let leftWith = null
+
+const goingAway = () => {
+  leftAt = Date.now()
+  leftWith = { ...rigNow(), at: leftAt }
+}
+
+const heardWhileAway = () => {
+  if (!leftAt || !leftWith) return
+  const rig = rigNow()
+  if (rig.link === 'connected' || rig.bluetooth === 'connected') leftWith = { ...leftWith, link: 'connected', at: Date.now() }
+}
+
+/**
+ * The one way the app switches to a downloaded version by itself: called at
+ * 'active', with how long it was away and the rig as it was. True when it is
+ * switching.
+ */
+function switchIfDue(awayMs, left) {
+  const leftAgoMs = left ? Date.now() - left.at : 0
+  const decision = shouldApplyNow({ phase: state.phase, back: true, awayMs, left, leftAgoMs, now: rigNow() })
+  /* Only with a version waiting: a line on every unlock that says nothing has downloaded is noise. */
+  if (state.phase === 'ready') {
+    logDebug('updates', decision.yes ? `switching to the new version: ${decision.why}` : `not switching to the new version yet: ${decision.why}`)
+  }
+  if (!decision.yes) return false
+  applyNow()
+  return true
 }
 
 /** Start asking. Returns the stop, for the effect that calls it. */
 export function watchForUpdates() {
   const first = setTimeout(askQuietly, FIRST_ASK_MS)
   const sub = AppState.addEventListener?.('change', (status) => {
-    if (status === 'active' && Date.now() - lastAsked > ASK_AGAIN_MS) askQuietly()
+    if (status !== 'active') {
+      if (!leftAt) goingAway()
+      return
+    }
+    const awayMs = leftAt ? Date.now() - leftAt : 0
+    const left = leftWith
+    leftAt = 0
+    leftWith = null
+    if (awayMs > 0 && switchIfDue(awayMs, left)) return
+    if (Date.now() - lastAsked > ASK_AGAIN_MS) askQuietly()
   })
+  /* Started in the background (a watch tap can wake the app with the phone locked): away from the start. */
+  if (AppState.currentState && AppState.currentState !== 'active' && !leftAt) goingAway()
+  const offLink = subscribeLink(heardWhileAway)
+  const offBluetooth = subscribeBluetooth(heardWhileAway)
   return () => {
     clearTimeout(first)
     sub?.remove?.()
+    offLink?.()
+    offBluetooth?.()
   }
 }
 

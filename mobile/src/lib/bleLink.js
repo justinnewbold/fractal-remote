@@ -433,6 +433,9 @@ function screen(status) {
   wire?.stopPolls()
 }
 
+/** True while an attempt to connect to the adapter is under way: the Bluetooth half of link.js's joiningNow. */
+export const bluetoothJoining = () => inFlight
+
 /**
  * Look again NOW: the waiting screen's button, the page's Connect, a watch
  * tap that woke the phone. Starts the loop again if it was stopped at the
