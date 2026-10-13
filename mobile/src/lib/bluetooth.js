@@ -262,6 +262,9 @@ export function releaseAdapter() {
 /** What is kept, as it is now. Read by bleLink; the page uses useBluetooth. */
 export const bluetoothSettings = () => saved
 
+/** Where the link to the adapter stands ('connected', 'connecting', …), for lib/updates.js, which reads it outside a screen. */
+export const bluetoothPhase = () => now.phase
+
 /** For bleLink, which owns the link: what is happening, told to the page. */
 export function noteBluetooth(patch) {
   now = { ...now, ...patch }
