@@ -150,7 +150,7 @@ export default function ConnectScreen({
             <>
               {mismatch || (
                 <p className="hint">
-                  Make sure the Fractal app is open on the computer and the computer is awake. This keeps
+                  Make sure the Fractal Remote app is open on the computer and the computer is awake. This keeps
                   trying on its own.
                 </p>
               )}
@@ -177,7 +177,7 @@ export default function ConnectScreen({
           <h2>Your computer isn&rsquo;t answering</h2>
           {mismatch || (
             <p>
-              Make sure the Fractal app is open on the computer and the computer is awake. This keeps trying on
+              Make sure the Fractal Remote app is open on the computer and the computer is awake. This keeps trying on
               its own.
             </p>
           )}
@@ -587,7 +587,7 @@ function Mismatch({ email }) {
   return (
     <p className="connect-mismatch" role="alert">
       {email
-        ? `The computer on this wifi is signed into a different account. This browser is signed in as ${email}. Sign the Fractal app on the computer in with ${email}, or sign this browser into the computer’s account.`
+        ? `The computer on this wifi is signed into a different account. This browser is signed in as ${email}. On the computer, sign in to the Fractal Remote app with ${email}, or sign this browser into the computer’s account.`
         : 'The computer on this wifi is signed into a different account than this browser. Sign both into the same account.'}
     </p>
   )

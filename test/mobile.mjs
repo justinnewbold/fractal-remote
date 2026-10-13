@@ -2910,6 +2910,150 @@ export function run(test) {
     }
   })
 
+  test('nothing anybody reads calls this app "the Fractal app": it is the Fractal Remote app', () => {
+    /*
+     * "You shouldn't call it fractal app. It should be fractal remote app
+     * because a fractal app is probably gonna confuse people to think it's
+     * made by fractal, which would be like the FM3 edit." (12 October 2026,
+     * about the phone's "Open the Fractal app on the computer and make sure
+     * the computer is awake.")
+     *
+     * Fractal Audio Systems makes the units and FM3-Edit. This app is not
+     * theirs, and its listings say so (Apple 4.1(c) and 5.2.1) — while about
+     * thirty lines in the phone, the browser and the computer's own pages
+     * called it "the Fractal app", which says the opposite. Where Fractal
+     * means the unit or the company it stays: a Fractal unit, Fractal Audio,
+     * Fractal's own editor. What is held here is the app's own name with
+     * "Remote" dropped out of it.
+     *
+     * TEXT, NOT COMMENTS, as the other word tests read it: a quoted string,
+     * a piece of a template, the words between JSX tags, a web page, an
+     * email, a store text still to be pasted, the watch's lines. A comment
+     * may quote the old line, as this one does, to say why it went.
+     *
+     * Not read: docs/ outside the store texts (notes for whoever works on
+     * the app, which quote what was said), and node_modules. Read beside
+     * the screens: the native modules (mobile/modules), whose Swift and
+     * Kotlin messages reach the Bluetooth page, and the website's own
+     * index.html.
+     */
+    const OLD = /\bfractal\s+(?:(?:desktop|computer|mac|windows|linux|pc|phone|watch)\s+)?app(?:s|lication|lications)?\b/i
+    for (const said of ['the Fractal app', 'Open the FRACTAL APP', 'the Fractal app’s Settings', 'the Fractal\n    app', 'a Fractal desktop app', 'Fractal apps']) {
+      assert.ok(OLD.test(said), `"${said}" got past the check`)
+    }
+    for (const fine of ['the Fractal Remote app', 'the Fractal Remote computer app', 'a Fractal unit', 'Fractal Audio Systems', 'FM3-Edit', 'Fractal’s own editor', 'Fractal Apple Watch']) {
+      assert.ok(!OLD.test(fine), `"${fine}" is refused, and it says nothing wrong`)
+    }
+
+    /* What each kind of file says to a person, and nothing a comment says. */
+    const ast = (plugins) => (src) => {
+      const out = []
+      const visit = (node) => {
+        if (Array.isArray(node)) return node.forEach(visit)
+        if (!node || typeof node !== 'object' || typeof node.type !== 'string') return
+        if (node.type === 'StringLiteral' || node.type === 'JSXText') out.push(node.value)
+        else if (node.type === 'TemplateElement') out.push(node.value.cooked ?? node.value.raw)
+        for (const key of Object.keys(node)) if (!/^(loc|extra|leadingComments|trailingComments|innerComments)$/.test(key)) visit(node[key])
+      }
+      visit(parse(src, { sourceType: 'unambiguous', plugins, attachComment: false }).program)
+      return out
+    }
+    /* A string is taken before the comment pattern can look inside it, so "https://" inside one stays whole. */
+    const quoted = (pattern) => (src) => [...src.matchAll(pattern)].map((m) => m[1]).filter((s) => s !== undefined)
+    const swift = quoted(/("(?:[^"\\\n]|\\.)*")|\/\/[^\n]*|\/\*[\s\S]*?\*\//g)
+    const sql = quoted(/('(?:[^']|'')*')|--[^\n]*|\/\*[\s\S]*?\*\//g)
+    const markup = (src) => {
+      const page = src.replace(/<!--[\s\S]*?-->/g, ' ')
+      const scripts = [...page.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].flatMap((m) => ast([])(m[1]))
+      const rest = page.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ').replace(/&nbsp;|&#160;/g, ' ')
+      return [...scripts, rest, rest.replace(/<[^>]+>/g, ' ')]
+    }
+    const json = (src) => {
+      const out = []
+      const visit = (v) => (typeof v === 'string' ? out.push(v) : v && typeof v === 'object' ? Object.values(v).forEach(visit) : null)
+      visit(JSON.parse(src))
+      return out
+    }
+    const yaml = (src) => [src.replace(/(^|\s)#[^\n]*/g, ' ')]
+    const READERS = [
+      [/\.(js|jsx|mjs|cjs)$/, ast(['jsx'])],
+      [/\.ts$/, ast(['typescript'])],
+      /* Kotlin's strings and comments are written as Swift's are: the Bluetooth module's Android messages reach the Bluetooth page. */
+      [/\.(swift|kt)$/, swift],
+      [/\.sql$/, sql],
+      [/\.(html|plist)$/, markup],
+      [/\.(json|webmanifest)$/, json],
+      [/\.ya?ml$/, yaml],
+      [/\.txt$/, (src) => [src]]
+    ]
+
+    /* The readers themselves, so a check that reads nothing cannot pass for one that found nothing. */
+    const js = ast(['jsx'])("// the Fractal app\n/* the Fractal app */\nconst a = 'the Fractal app'\nconst b = <p>the Fractal\n  app</p>\nconst c = `the Fractal app ${x}`")
+    assert.equal(js.filter((s) => OLD.test(s)).length, 3, 'the code reader misses a string, or reads a comment')
+    assert.deepEqual(swift('// the Fractal app\nText("Open the Fractal app") /* "the Fractal app" */ Link("https://fractal.newbold.cloud")'), ['"Open the Fractal app"', '"https://fractal.newbold.cloud"'])
+    assert.equal(markup('<!-- the Fractal app --><p>Open the Fractal <b>app</b></p>').filter((s) => OLD.test(s)).length, 1, 'the page reader reads a comment, or misses words split by a tag')
+
+    const root = new URL('../', import.meta.url)
+    const SKIP = /^(node_modules|release|dist|build|out|\..*)$/
+    function* files(dir) {
+      for (const entry of readdirSync(fileURLToPath(dir))) {
+        const path = fileURLToPath(new URL(entry, dir))
+        if (statSync(path).isDirectory()) {
+          if (!SKIP.test(entry)) yield* files(new URL(`${entry}/`, dir))
+        } else yield path.replaceAll('\\', '/')
+      }
+    }
+    const rel = (file) => file.slice(fileURLToPath(root).replaceAll('\\', '/').length)
+    const sources = [
+      ...['mobile/src/', 'mobile/targets/', 'mobile/modules/', 'src/', 'shared/', 'public/', 'desktop/', 'supabase/'].flatMap((d) => [...files(new URL(d, root))]),
+      ...['mobile/App.js', 'mobile/app.json', 'index.html'].map((f) => fileURLToPath(new URL(f, root)).replaceAll('\\', '/'))
+    ]
+    const wrong = []
+    const heard = new Map()
+    for (const file of sources) {
+      const reader = READERS.find(([ext]) => ext.test(file))?.[1]
+      if (!reader) continue
+      const texts = reader(readFileSync(file, 'utf8'))
+      heard.set(rel(file), texts)
+      for (const t of texts) if (OLD.test(t)) wrong.push(`${rel(file)}: "${t.trim().replace(/\s+/g, ' ').slice(0, 160)}"`)
+    }
+    /* The store texts, which are the fenced blocks of docs/app-store.md: the words that get pasted. */
+    const store = [...readFileSync(new URL('docs/app-store.md', root), 'utf8').matchAll(/^```[^\n]*\n([\s\S]*?)^```/gm)].map((m) => m[1])
+    assert.ok(store.length >= 10, 'the store texts in docs/app-store.md were not found')
+    for (const t of store) if (OLD.test(t)) wrong.push(`docs/app-store.md: "${t.match(OLD)[0]}" in a store text`)
+    assert.deepEqual(wrong, [], 'these call the app "the Fractal app", which reads as Fractal Audio’s own. Say "the Fractal Remote app"')
+
+    /* Every kind of place was read, and read where the words are. */
+    for (const f of ['mobile/App.js', 'mobile/app.json', 'mobile/src/screens/Stage.js', 'mobile/targets/watch/Pages.swift', 'mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift', 'mobile/modules/fractal-ble-midi/android/src/main/java/cloud/newbold/fractalremote/blemidi/FractalBleMidiModule.kt', 'index.html', 'src/lib/link.js', 'src/components/ConnectScreen.jsx', 'shared/troubleshooting.mjs', 'public/support.html', 'public/manifest.webmanifest', 'desktop/main.js', 'desktop/electron-builder.yml', 'supabase/functions/grant-access/index.ts']) {
+      assert.ok(heard.has(f), `${f} was not read`)
+    }
+    for (const f of ['mobile/src/screens/Stage.js', 'mobile/App.js', 'src/lib/link.js', 'src/components/ConnectScreen.jsx', 'shared/troubleshooting.mjs', 'src/lib/forgefx.js']) {
+      assert.ok(heard.get(f).some((t) => /\bFractal Remote app\b/.test(t.replace(/\s+/g, ' '))), `${f} no longer says "the Fractal Remote app" where it tells somebody what to open — read again what it says now`)
+    }
+
+    /*
+     * THE TWO NAMES WITH NO "APP" AFTER THEM, which the pattern above cannot
+     * see. The label Android puts under the website's icon on a home screen
+     * is the manifest's short_name, and it said plain "Fractal" — Fractal
+     * Audio's own, to anybody looking at the icon.
+     *
+     * The watch's name is the other, and it is still plain "Fractal", because
+     * changing it is native: it reaches nobody until an iPhone build. So it
+     * waits in docs/pending/watch-name.patch, with the phone's watch tips that
+     * name it, and this holds the patch there until the name has changed.
+     */
+    const manifest = JSON.parse(readFileSync(new URL('public/manifest.webmanifest', root), 'utf8'))
+    assert.equal(manifest.short_name ?? manifest.name, 'Fractal Remote', 'the label under the website’s home-screen icon is not Fractal Remote')
+    const watchName = readFileSync(new URL('mobile/targets/watch/expo-target.config.js', root), 'utf8').match(/displayName:\s*'([^']*)'/)?.[1]
+    assert.ok(watchName, 'the watch’s name was not found')
+    if (watchName !== 'Fractal Remote') {
+      assert.ok(existsSync(new URL('docs/pending/watch-name.patch', root)), `the watch is still called "${watchName}" and nothing is waiting to rename it`)
+    }
+    /* The phone's tip says which row to tap in the iPhone's Watch app, so it names the watch as the watch is named, whichever that is. */
+    const keep = readFileSync(new URL('mobile/src/screens/Settings.js', root), 'utf8')
+    assert.ok(keep.includes(`Scroll down, tap ${watchName},`) || keep.includes(`Scroll down, tap ${watchName} (`), `the watch tips do not say "tap ${watchName}", the watch’s name`)
+  })
+
   test('every name the phone uses is one that exists', () => {
     /*
      * THE HOLE THIS FILLS, dug twice, and the second one reached a stage.
@@ -5617,14 +5761,15 @@ export function run(test) {
       /\{long && link\.link !== 'connected' \?/,
       'the help shows while the unit is being asked, when the computer has already answered'
     )
-    assert.match(waking, /Open the Fractal app on the computer and make sure the computer is awake\./, 'no advice on the phone')
+    /* Changed on purpose, 12 October 2026: "the Fractal Remote app", not "the Fractal app", which reads as Fractal Audio's own (FM3-Edit). */
+    assert.match(waking, /Open the Fractal Remote app on the computer and make sure the computer is awake\./, 'no advice on the phone')
     assert.match(waking, /<Press label="Look for the computer again" onPress=\{\(\) => onRetry\?\.\(\)\} \/>/, 'no button on the phone')
 
     const web = read('src/components/ConnectScreen.jsx').replace(/\s+/g, ' ')
     assert.match(web, /if \(state !== 'joining'\) return undefined const t = setTimeout\(\(\) => setLong\(true\), 15000\)/, 'the browser never says more than Connecting')
     const joining = web.slice(web.indexOf('<h2>Connecting…</h2>'), web.indexOf("state === 'no-answer'", web.indexOf('<h2>Connecting…</h2>')))
     assert.match(joining, /\{long \?/, 'the browser shows its help at once rather than after a wait')
-    assert.match(joining, /Make sure the Fractal app is open on the computer and the computer is awake\./, 'no advice in the browser')
+    assert.match(joining, /Make sure the Fractal Remote app is open on the computer and the computer is awake\./, 'no advice in the browser') // Changed on purpose, 12 October 2026: the same rename.
     assert.match(joining, /onClick=\{onRetry\}[^>]*>\s*Try now/, 'no button in the browser')
   })
 
@@ -5974,7 +6119,8 @@ export function run(test) {
     assert.ok(card > stage.indexOf('<Toast open={!!error}>'), 'the advice is not behind the fault')
     const advice = stage.slice(card, stage.indexOf('</Toast>', card))
     assert.match(advice, /<Note tone="warn" onDismiss=\{\(\) => onPutAway\?\.\(\)\}>/, 'the advice cannot be put away')
-    assert.match(advice, /Open the Fractal app on the computer and make sure the computer is awake\. This keeps trying on its own\./, 'the play screen does not say what to check')
+    /* Changed on purpose, 12 October 2026: "the Fractal Remote app", not "the Fractal app", which reads as Fractal Audio's own (FM3-Edit). */
+    assert.match(advice, /Open the Fractal Remote app on the computer and make sure the computer is awake\. This keeps trying on its own\./, 'the play screen does not say what to check')
     assert.match(advice, /<Press label="Look for the computer again" height=\{44\} onPress=\{\(\) => onLookAgain\?\.\(\)\} \/>/, 'no way to look again from the play screen')
     assert.match(advice, /<Press label="Troubleshooting" height=\{44\} onPress=\{\(\) => onOpenFix\('connect'\)\} \/>/, 'no way to Troubleshooting from the play screen')
     /* Put away until the computer has answered again, not for ever — and

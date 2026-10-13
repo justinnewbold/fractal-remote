@@ -5578,7 +5578,7 @@ const retry = await import('../src/lib/retry.js')
 test('the words the codec uses for a garbled dump are recognised, and nothing else is', () => {
   assert.ok(retry.isGarbledDump('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78'))
   assert.ok(retry.isGarbledDump('expected func 0x77 at offset 0, got 0x78'))
-  assert.ok(!retry.isGarbledDump('Can’t reach the Fractal app on your computer.'))
+  assert.ok(!retry.isGarbledDump('Can’t reach the Fractal Remote app on your computer.'))
   assert.ok(!retry.isGarbledDump('No unit'))
   assert.ok(!retry.isGarbledDump(undefined))
 })
@@ -10994,7 +10994,7 @@ test('an Undo whose every write threw says nothing was sent, and keeps the way b
   const snap = modelSnapshot(await bench.read(), { channel: 'A' })
   await bench.io().setType(1)
   const cut = () => {
-    throw new Error("Can't reach the Fractal app")
+    throw new Error("Can't reach the Fractal Remote app")
   }
   const r = await restoreModel(snap, { ...bench.io('A'), write: cut, writeChecked: cut, writeEnum: cut })
   assert.equal(r.unsent, true, 'writes that all threw were counted as sent')
@@ -11059,7 +11059,7 @@ test('a model write that threw is not said to have been sent', async () => {
   const r = await restoreModel(snap, {
     ...bench.io('A'),
     setType: () => {
-      throw new Error("Can't reach the Fractal app")
+      throw new Error("Can't reach the Fractal Remote app")
     },
     read: blind
   })
@@ -11635,7 +11635,7 @@ test('a snapshot that has gone, moved, or belongs to another unit is refused bef
   const unread = restoreBench()
   unread.api.listVersions = async () => {
     unread.calls.push('list')
-    throw new Error('Can’t reach the Fractal app on your computer.')
+    throw new Error('Can’t reach the Fractal Remote app on your computer.')
   }
   await assert.rejects(restoreMod.restoreNow({ versionId: 'v1', mode: 'put', slot: 12 }, unread.api), { message: restoreMod.RESTORE_NO_LIST })
   assert.notEqual(restoreMod.RESTORE_NO_LIST, restoreMod.RESTORE_GONE)
@@ -12661,7 +12661,7 @@ test('one view is read one switch at a time, with a breath between, and stops wh
   let tries = 0
   const refused = await readView(async () => {
     tries++
-    throw new Error('The Fractal app on your computer has lost its connection to the unit')
+    throw new Error('The Fractal Remote app on your computer has lost its connection to the unit')
   }, { layout: 0, view: 0, wait: async () => {} })
   assert.equal(tries, 1, 'a failed read went on asking')
   assert.match(refused.error, /lost its connection/)

@@ -47,7 +47,7 @@ export const FIXES = [
       /* "I think it's connected to a different account on the computer." A
          computer on another account never hears this app, and looks exactly
          like one that is switched off. */
-      'Make sure this app and the Fractal app on the computer with your unit are signed into the same account. Settings on each one shows which account it is using.',
+      'Make sure the Fractal Remote app is signed into the same account here and on the computer with your unit. Settings on each one shows which account it is using.',
       'If the phone cannot reach the computer, check both are on the same wifi, and that a firewall or a VPN on the computer is not blocking it.'
     ]
   },

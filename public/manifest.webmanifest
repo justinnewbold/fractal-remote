@@ -1,6 +1,6 @@
 {
   "name": "Fractal Remote",
-  "short_name": "Fractal",
+  "short_name": "Fractal Remote",
   "description": "Design and edit tones on a Fractal Audio unit.",
   "start_url": ".",
   "scope": ".",

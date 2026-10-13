@@ -381,7 +381,7 @@ export default function Gig({
       // up, forever.
       const res = await writeTuner(next)
       if (next && res && res.ok === false) {
-        onError('The unit refused the tuner — the Fractal app on the computer may need updating.')
+        onError('The unit refused the tuner — the Fractal Remote app on the computer may need updating.')
       }
     } catch (err) {
       onError(err.message)
@@ -860,7 +860,7 @@ export default function Gig({
             <>
               No readings are arriving from the unit. Some units only send them while their own tuner
               is engaged &mdash; on an AM4 that is holding the footswitch down rather than tapping
-              it. If it is already engaged and making sound, the Fractal app on the computer may need
+              it. If it is already engaged and making sound, the Fractal Remote app on the computer may need
               updating.
             </>
           )}

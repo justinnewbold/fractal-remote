@@ -916,12 +916,12 @@ export default function Settings({
             {link === 'no-answer' && elsewhere ? (
               <Note tone="fault">
                 {account?.email && !isPairAccount(account.email)
-                  ? `The computer on this wifi is signed into a different account. This phone is signed in as ${account.email}. Sign the Fractal app on the computer in with ${account.email}, or sign this phone out below and into the computer’s account.`
+                  ? `The computer on this wifi is signed into a different account. This phone is signed in as ${account.email}. On the computer, sign in to the Fractal Remote app with ${account.email}, or sign this phone out below and into the computer’s account.`
                   : 'The computer on this wifi is signed into a different account than this phone. Sign both into the same account.'}
               </Note>
             ) : link === 'no-answer' ? (
               <Note tone="warn">
-                Open the Fractal app on the computer and make sure the computer is awake. This keeps trying on
+                Open the Fractal Remote app on the computer and make sure the computer is awake. This keeps trying on
                 its own.
               </Note>
             ) : null}
@@ -1126,7 +1126,7 @@ export default function Settings({
                   onPress={() => changeClick({ watch: !clickSetting.watch })}
                 />
                 <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>
-                  A tap and a tick on every beat, while the Fractal app is open on the watch.
+                  A tap and a tick on every beat, while the Fractal Remote app is open on the watch.
                 </Text>
               </>
             ) : null}
@@ -1209,7 +1209,7 @@ export default function Settings({
             <TipCard
               icon={laptopIcon}
               label="2  OPEN THE CODE"
-              body="On the computer, open the Fractal app’s Settings → Phone & computer → Playing with no internet."
+              body="On the computer, open the Fractal Remote app’s Settings → Phone & computer → Playing with no internet."
             />
             <TipCard
               icon={phoneIcon}
@@ -1219,7 +1219,7 @@ export default function Settings({
             <TipCard
               icon={setupIcon}
               label="OR TYPE THE ADDRESS"
-              body="The same address is in the computer’s menu bar (the system tray on Windows), next to the Fractal icon, to type instead."
+              body="The same address is in the computer’s menu bar (the system tray on Windows), next to the Fractal Remote icon, to type instead."
             />
           </View>
           <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>
