@@ -14,6 +14,7 @@
  * App.jsx, and import the plain modules where they can.
  */
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -3052,6 +3053,44 @@ export function run(test) {
     /* The phone's tip says which row to tap in the iPhone's Watch app, so it names the watch as the watch is named, whichever that is. */
     const keep = readFileSync(new URL('mobile/src/screens/Settings.js', root), 'utf8')
     assert.ok(keep.includes(`Scroll down, tap ${watchName},`) || keep.includes(`Scroll down, tap ${watchName} (`), `the watch tips do not say "tap ${watchName}", the watch’s name`)
+  })
+
+  test('every patch waiting for a build still applies, and the list says what each one moves', () => {
+    /*
+     * A patch in docs/pending is finished work kept off main because it needs
+     * a build, and a build is the day it is applied. A file it touches can
+     * move under it in the meantime, and nothing noticed until that day, with
+     * the build slot already agreed. So each one is tried against the tree on
+     * every change, on its own, as git apply will be asked to take it.
+     *
+     * And each is in the README's table, which says what it moves — the
+     * question Justin asks before any build: "as long as it's not gonna make
+     * it so it holds off on future over-the-air updates".
+     */
+    const root = new URL('../', import.meta.url)
+    const dir = new URL('docs/pending/', root)
+    const readme = readFileSync(new URL('README.md', dir), 'utf8')
+    const patches = readdirSync(dir).filter((f) => f.endsWith('.patch'))
+    for (const name of patches) {
+      try {
+        execFileSync('git', ['apply', '--check', join('docs/pending', name)], { cwd: fileURLToPath(root), stdio: 'pipe' })
+      } catch (err) {
+        assert.fail(`docs/pending/${name} no longer applies to the tree: ${String(err.stderr || err.message).trim()}`)
+      }
+      assert.ok(readme.includes(`| \`${name}\` |`), `docs/pending/${name} is not in the README's table, so nobody can see what it moves`)
+    }
+    for (const [, name] of readme.matchAll(/^\| `([^`]+\.patch)` \|/gm)) {
+      assert.ok(patches.includes(name), `the README lists ${name}, and it is not there`)
+    }
+    /* The watch's channels move only the watch, which is why they could be built without stopping updates. */
+    const channels = readFileSync(new URL('watch-channels.patch', dir), 'utf8')
+    const touched = [...channels.matchAll(/^diff --git a\/(\S+)/gm)].map((m) => m[1])
+    for (const file of touched) {
+      assert.ok(
+        !/expo-target\.config\.js$|^mobile\/modules\/|^mobile\/app\.json$|package(-lock)?\.json$/.test(file),
+        `watch-channels.patch touches ${file}, which moves the phones' fingerprint: a build with it would stop updates reaching the phones already out there`
+      )
+    }
   })
 
   test('every name the phone uses is one that exists', () => {
