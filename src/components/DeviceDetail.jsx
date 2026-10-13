@@ -125,7 +125,7 @@ export default function DeviceDetail({ status, device, onRetry, busy }) {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && save()}
-              aria-label="Address of the Fractal app on your computer"
+              aria-label="Address of the Fractal Remote app on your computer"
             />
             <button onClick={save}>Use this address</button>
           </>

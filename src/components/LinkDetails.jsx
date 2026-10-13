@@ -52,7 +52,7 @@ export default function LinkDetails() {
       lines.push(
         answered
           ? `The computer answered in ${Date.now() - began} ms.`
-          : `No answer from the computer in ${Math.round((Date.now() - began) / 1000)}s. Is the Fractal app open there, signed in as this same account?`
+          : `No answer from the computer in ${Math.round((Date.now() - began) / 1000)}s. Is the Fractal Remote app open there, signed in as this same account?`
       )
       if (!answered) return
       const { detect } = await import('../lib/forgefx')

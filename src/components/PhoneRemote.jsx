@@ -58,7 +58,7 @@ function MacSide({ link, email, onAction, busy, error }) {
   if (cloud && !cloud.enabled) {
     return (
       <p className="hint">
-        Quit and reopen the Fractal app on this computer to turn this on.
+        Quit and reopen the Fractal Remote app on this computer to turn this on.
       </p>
     )
   }
@@ -156,7 +156,7 @@ function PhoneSide({ link, email, onAction, busy }) {
     return (
       <>
         <p className="hint">
-          Make sure the Fractal app is open on the computer and the computer is awake. This keeps trying on
+          Make sure the Fractal Remote app is open on the computer and the computer is awake. This keeps trying on
           its own.
         </p>
         <div className="history-actions">

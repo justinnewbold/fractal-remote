@@ -177,7 +177,7 @@ const PORT_GONE = /\bport\s+(is\s+)?(not|isn['’]?t)\s+open\b|\bport\s+closed\b
 export const unitUnreachable = (message) => PORT_GONE.test(String(message || ''))
 
 const UNIT_GONE_SAYS =
-  'The Fractal app on your computer has lost its connection to the unit — nothing sent from here is reaching it. Check the unit is on and its cable is in, then tap Try again.'
+  'The Fractal Remote app on your computer has lost its connection to the unit — nothing sent from here is reaching it. Check the unit is on and its cable is in, then tap Try again.'
 
 class ForgeError extends Error {
   constructor(message, { status, cause } = {}) {
@@ -327,8 +327,8 @@ async function directRequest(path, options = {}) {
      */
     throw new ForgeError(
       mock
-        ? 'This is the demo, so there is no Fractal app to reach. Switch to a real device to connect.'
-        : 'Can’t reach the Fractal app on your computer. Check that it is open and the Fractal unit is connected.',
+        ? 'This is the demo, so there is no Fractal Remote app to reach. Switch to a real device to connect.'
+        : 'Can’t reach the Fractal Remote app on your computer. Check that it is open and the Fractal unit is connected.',
       { cause }
     )
   }

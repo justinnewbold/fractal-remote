@@ -1496,12 +1496,12 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           ) : elsewhere ? (
             <Note tone="fault">
               {email
-                ? `The computer on this wifi is signed into a different account. This phone is signed in as ${email}. Sign the Fractal app on the computer in with ${email}, or sign this phone into the computer’s account.`
+                ? `The computer on this wifi is signed into a different account. This phone is signed in as ${email}. On the computer, sign in to the Fractal Remote app with ${email}, or sign this phone into the computer’s account.`
                 : 'The computer on this wifi is signed into a different account than this phone. Sign both into the same account.'}
             </Note>
           ) : (
             <Note tone="warn">
-              Open the Fractal app on the computer and make sure the computer is awake. This keeps trying on
+              Open the Fractal Remote app on the computer and make sure the computer is awake. This keeps trying on
               its own.
             </Note>
           )}

@@ -17,8 +17,29 @@ then bump the version, delete the patch file in the same change, and build.
 
 | Patch | What it does | Moves |
 |---|---|---|
+| `watch-name.patch` | The Apple Watch app is called **Fractal Remote** instead of plain "Fractal", under its icon and in the iPhone's Watch app, and the phone's watch tips (Settings, WATCH_KEEP: "tap Fractal Remote", "comes back to Fractal Remote", "Fractal Remote stays on screen") name it the same way. | Android, iOS and watch (tried on 13 October 2026: changing `displayName` in mobile/targets/watch/expo-target.config.js moves all three) |
 
-Nothing is waiting. The last patch here, `bluetooth-beta.patch`, went into
+**watch-name.patch, and why it waits.** Justin, 12 October 2026, about "the
+Fractal app": "a fractal app is probably gonna confuse people to think it's
+made by fractal, which would be like the FM3 edit." The phone, the browser
+and the computer were renamed by an update that day; the watch could not
+be, because its name is built into the iPhone app. Because the change moves
+the fingerprint, the new tips reach only the build that carries the new
+name, and the copies already on phones keep "tap Fractal", which is what
+their watch still says. Settings' metronome line already says "while the
+Fractal Remote app is open on the watch", so it needs nothing.
+
+One thing goes with it that is not in the patch, because the text it would
+change is a record of what was sent: the next version's Notes for App Review
+start from the 1.87.11 block in docs/app-store.md, which says "open Fractal
+on the watch" (as the 1.86.83 block does). The new notes say **open Fractal
+Remote on the watch**.
+
+test/mobile.mjs fails while the watch is called anything but Fractal Remote
+and this patch is not here, and holds the tip's "tap …" to the watch's name
+either way.
+
+The last patch before this one, `bluetooth-beta.patch`, went into
 1.87.1 on 10 October 2026, when Justin said "If Bluetooth is ready, let's get
 it submitted": Bluetooth (beta) for everyone who has unlocked the app, with a
 beta note, the parts and how they plug in, and the setup guide at

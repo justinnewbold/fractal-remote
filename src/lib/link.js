@@ -291,7 +291,7 @@ export function describeUnit({ demo, role, status, device, link, reason = null }
 /**
  * The one sentence about Safari, only where it is true.
  *
- * A page served over https cannot talk to the plain-http Fractal app on the
+ * A page served over https cannot talk to the plain-http Fractal Remote app on the
  * same Mac from Safari; Chrome can. That is the whole fact, and it is only a
  * fact at the Mac, in Safari, on an https page. The sentence used to be shown
  * everywhere the unit could not be read — to phones, where Chrome is Safari
@@ -302,7 +302,7 @@ export function whySafari({ secure, userAgent }) {
   const ua = String(userAgent || '')
   const webkit =
     /Safari/i.test(ua) && !/Chrome|CriOS|Chromium|Edg|OPR|FxiOS|Android|iPhone|iPad|iPod/i.test(ua)
-  return webkit ? 'Using Safari? Try Chrome — Safari won’t let this page talk to the Fractal app on your computer.' : ''
+  return webkit ? 'Using Safari? Try Chrome — Safari won’t let this page talk to the Fractal Remote app on your computer.' : ''
 }
 
 /**
@@ -336,7 +336,7 @@ export function faultCopy({
 }) {
   /* Which program is likeliest to have the unit: its own editor when the
      unit is known, every editor by name when it is not (editors.mjs). */
-  const others = `${holders(device?.short || device?.name)}, or a second copy of the Fractal app`
+  const others = `${holders(device?.short || device?.name)}, or a second copy of the Fractal Remote app`
   /*
    * The reason comes first, because the two failures it separates were being
    * told apart by a variable that cannot tell them apart.
@@ -365,18 +365,18 @@ export function faultCopy({
     if (role === 'remote' || role === 'wifi') {
       return {
         title: 'Your computer has lost the unit',
-        body: `The Fractal app on your computer is running, but nothing it sends is reaching your unit, so what was on screen can no longer be trusted. At the computer: check the unit is switched on and its cable is in, and that nothing else has taken it — ${others}.`
+        body: `The Fractal Remote app on your computer is running, but nothing it sends is reaching your unit, so what was on screen can no longer be trusted. At the computer: check the unit is switched on and its cable is in, and that nothing else has taken it — ${others}.`
       }
     }
     return {
       title: 'Lost the unit',
-      body: `The Fractal app is running but nothing it sends is reaching the unit. Check the unit is switched on and its cable is in, and that nothing else is using it — ${others}.`
+      body: `The Fractal Remote app is running but nothing it sends is reaching the unit. Check the unit is switched on and its cable is in, and that nothing else is using it — ${others}.`
     }
   }
   if (role === 'remote' && reason === 'no-answer') {
     return {
       title: 'Your computer stopped answering',
-      body: 'The phone is on the line but the computer is not replying. Check the Fractal app is still open on the computer and that it hasn’t gone to sleep — nothing needs unplugging at the unit.'
+      body: 'The phone is on the line but the computer is not replying. Check the Fractal Remote app is still open on the computer and that it hasn’t gone to sleep — nothing needs unplugging at the unit.'
     }
   }
   if (role === 'remote' && reason === 'unreadable') {
@@ -418,19 +418,19 @@ export function faultCopy({
     const safari = whySafari({ secure, userAgent })
     return {
       title: 'Can’t find your Fractal',
-      body: `Open the Fractal app on this computer — it’s what talks to the unit.${safari ? ` ${safari}` : ''}`
+      body: `Open the Fractal Remote app on this computer — it’s what talks to the unit.${safari ? ` ${safari}` : ''}`
     }
   }
   if (role === 'wifi') {
     return {
       title: 'Lost the computer',
-      body: 'Make sure the Fractal app is still open on the computer and this phone is on the same wifi, then tap Try again.'
+      body: 'Make sure the Fractal Remote app is still open on the computer and this phone is on the same wifi, then tap Try again.'
     }
   }
   if (role === 'remote') {
     return {
       title: 'Your computer answered, but the unit didn’t',
-      body: 'Check the Fractal app is open on the computer and the unit is plugged in and switched on, then tap Try again.'
+      body: 'Check the Fractal Remote app is open on the computer and the unit is plugged in and switched on, then tap Try again.'
     }
   }
   return null
@@ -759,9 +759,9 @@ export async function bootLink() {
    * makes the app explorable without hardware, and it should stay. But on a
    * phone it left someone holding a screen headed "Set up phone remote —
    * once, on this Mac", above a button whose first act is to call a helper on
-   * localhost. There is none, and there never can be, so it failed with
-   * "Can't reach the Fractal app on your Mac" and sent them to check a Mac
-   * that was working perfectly. Tapping "Try the demo" once made it a one-way
+   * localhost. There is none, and there never can be, so it failed, saying it
+   * could not reach the app on the Mac, and sent them to check a Mac that was
+   * working perfectly. Tapping "Try the demo" once made it a one-way
    * door.
    *
    * So the role still says Mac and the demo still works everywhere, and the
@@ -873,8 +873,8 @@ export async function connectPhone({ email, password }) {
  * the demo there was not: the browser's two sign-ins are both errands, and
  * the demo cannot run either. connectPhone joins a computer's line, and
  * setUpMac turns this computer's phone remote on through a helper that a
- * website does not have — so from fractal.newbold.cloud it failed with
- * "Can't reach the Fractal app on your Mac".
+ * website does not have — so from fractal.newbold.cloud it failed, saying
+ * it could not reach the app on the Mac.
  *
  * What the demo needs an account for is the account itself: buying the
  * unlock, which has to belong to somebody. So this is the sign-in with no

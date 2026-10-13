@@ -80,7 +80,7 @@ export function linkChain({ here, demo = false, via = 'computer', unit = {}, com
   const computerName = computer.name || 'Your computer'
   const version = (v) => (v ? ` · v${v}` : '')
   const computerCard = !atPhone
-    ? { body: `${computer.name || 'Fractal app'}${version(computer.version)}`, tone: 'good' }
+    ? { body: `${computer.name || 'Fractal Remote app'}${version(computer.version)}`, tone: 'good' }
     : demo
       ? { body: 'Not needed in the demo', tone: 'dim' }
       : computer.link === 'connected'

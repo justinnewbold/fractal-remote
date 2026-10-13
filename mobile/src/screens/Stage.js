@@ -1113,7 +1113,7 @@ export default function Stage({
       */}
       <Toast open={lost && !lostAway && !error}>
         <Note tone="warn" onDismiss={() => onPutAway?.()}>
-          The phone can’t reach your computer. Open the Fractal app on the computer and make sure the computer is
+          The phone can’t reach your computer. Open the Fractal Remote app on the computer and make sure the computer is
           awake. This keeps trying on its own.
         </Note>
         <Press label="Look for the computer again" height={44} onPress={() => onLookAgain?.()} />
