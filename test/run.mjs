@@ -13836,21 +13836,14 @@ test('the computer app carries the server that opens the AM4’s own tuner scree
 /*
  * THE APPLE WATCH. "Maybe three different screens that you can swipe between
  * … just simple actions from the watch." The phone sends the whole picture;
- * the watch asks for one of six things, and anything else is dropped.
- *
- * Changed on purpose, 13 October 2026: five things became six, and each pedal
- * carries its channel and what a hold may switch it to. Justin: "Can I add the
- * tap to hold on the effects switches on the watch where you can switch
- * through the channels?" The fixture's pedals got the two new fields and the
- * watch's fixture was written again from this input; nothing that was there
- * before moved.
+ * the watch asks for one of five things, and anything else is dropped.
  */
-test('the watch is sent the stage as one small picture, and may ask for only six things', async () => {
+test('the watch is sent the stage as one small picture, and may ask for only five things', async () => {
   const { watchState, watchCommand, sameWatchState, WATCH_PEDALS_MAX } = await import('../shared/watch-link.mjs')
   const fixture = JSON.parse(readSrc(new URL('../mobile/watch-ci/Tests/WatchModelTests/state.json', import.meta.url), 'utf8'))
   const again = watchState({ at: 1759363200000, linked: true, preset: { number: 12, name: 'Crunch Rhythm' }, label: '012', scene: 1,
     sceneNames: ['Clean', 'Crunch', 'Lead'], sceneCount: 8, canPrevious: true, canNext: false,
-    pedals: [{ id: 50, name: 'Drive 1', short: 'DRV', on: true, fill: '#c0392b', ink: '#ffffff', channel: 'B', channels: ['A', 'B', 'C', 'D'] }, { id: 70, name: 'Delay 1', short: 'DLY', on: false, fill: 'nope', ink: '#ffffff', channel: 'A', channels: ['A'] }],
+    pedals: [{ id: 50, name: 'Drive 1', short: 'DRV', on: true, fill: '#c0392b', ink: '#ffffff' }, { id: 70, name: 'Delay 1', short: 'DLY', on: false, fill: 'nope', ink: '#ffffff' }],
     tunerOn: true, tuning: { note: 'E', octave: 2, cents: -2.4 }, metronome: { on: true, bpm: 120 } })
   assert.deepEqual(again, fixture, 'the watch’s test fixture is not what the phone sends any more — write it again')
 
@@ -13877,7 +13870,7 @@ test('the watch is sent the stage as one small picture, and may ask for only six
   assert.equal(watchState({ tunerOn: true, tuning: { note: 'A', cents: 300 } }).tuner.cents, 50)
   assert.equal(watchState({ pedals: Array.from({ length: 30 }, (_, i) => ({ id: i, name: 'x' })) }).pedals.length, WATCH_PEDALS_MAX)
 
-  /* The six requests, and only the ones the watch could have been shown. */
+  /* The five requests, and only the ones the watch could have been shown. */
   const shown = watchState({ sceneCount: 4, pedals: [{ id: 50, name: 'Drive' }] })
   assert.deepEqual(watchCommand({ do: 'scene', index: 3 }, shown), { do: 'scene', index: 3 })
   assert.equal(watchCommand({ do: 'scene', index: 4 }, shown), null)
@@ -13889,26 +13882,8 @@ test('the watch is sent the stage as one small picture, and may ask for only six
   assert.deepEqual(watchCommand({ do: 'hello' }, null), { do: 'hello' })
   for (const bad of [null, 'scene', { do: 'save' }, { do: 'select', number: 5 }, { do: 'tuner', on: 'yes' }]) assert.equal(watchCommand(bad, shown), null)
 
-  /* A pedal held: only a channel that pedal was offered in the last picture,
-     which is none where the Play screen's own hold does nothing. */
-  assert.deepEqual(fixture.pedals.map((p) => p.channels), [['A', 'B', 'C', 'D'], []], 'one channel was offered as a choice')
-  const held = watchState({ pedals: [{ id: 50, name: 'Drive', channel: 'A', channels: ['A', 'B', 'C', 'D'] }, { id: 70, name: 'Delay', channel: 'B', channels: [] }] })
-  assert.deepEqual(watchCommand({ do: 'channel', id: 50, channel: 'C' }, held), { do: 'channel', id: 50, channel: 'C' })
-  assert.equal(watchCommand({ do: 'channel', id: 70, channel: 'A' }, held), null, 'a channel was switched where the phone’s own hold does nothing')
-  for (const bad of [{ id: 50, channel: 'E' }, { id: 50, channel: 'c' }, { id: 50, channel: 2 }, { id: 50 }, { id: 51, channel: 'B' }, { id: '50', channel: 'B' }]) {
-    assert.equal(watchCommand({ do: 'channel', ...bad }, held), null, JSON.stringify(bad))
-  }
-  assert.equal(watchCommand({ do: 'channel', id: 50, channel: 'B' }, shown), null, 'a pedal sent with no channels took one')
-  assert.equal(watchCommand({ do: 'channel', id: 50, channel: 'B' }, null), null, 'a channel was taken with no picture sent')
-  /* What is sent: one capital letter or none, and at most four to choose, each once. */
-  const one = (p) => watchState({ pedals: [{ id: 1, name: 'x', ...p }] }).pedals[0]
-  assert.deepEqual(one({ channel: 'A', channels: ['A', 'B', 'A', 'b', 7, 'C', 'D', 'E'] }).channels, ['A', 'B', 'C', 'D'])
-  for (const channel of [null, undefined, 'b', 'AB', 3]) assert.equal(one({ channel }).channel, '', String(channel))
-  assert.deepEqual(one({}).channels, [], 'a pedal with no channels went without the field, for the watch to guess at')
-  assert.deepEqual(one({ channels: 'ABCD' }).channels, [])
-
-  /* The watch's own words for them are these same six. */
-  for (const [msg] of [[{ do: 'hello' }], [{ do: 'scene', index: 2 }], [{ do: 'pedal', id: 50, on: false }], [{ do: 'channel', id: 50, channel: 'B' }], [{ do: 'preset', step: -1 }], [{ do: 'tuner', on: true }]]) {
+  /* The watch's own words for them are these same five. */
+  for (const [msg] of [[{ do: 'hello' }], [{ do: 'scene', index: 2 }], [{ do: 'pedal', id: 50, on: false }], [{ do: 'preset', step: -1 }], [{ do: 'tuner', on: true }]]) {
     assert.ok(swift.includes(`"do":"${msg.do}"`), `the watch cannot ask for ${msg.do}`)
   }
   assert.equal(sameWatchState({ ...fixture, at: 1 }, { ...fixture, at: 2 }), true)
@@ -13972,11 +13947,6 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.match(bridge, /requireOptionalNativeModule\('FractalWatch'\)/, 'a build without the watch would fail to start')
   assert.match(bridge, /const watch = link\(\) if \(!watch\) return undefined/)
   assert.match(bridge, /if \(cmd\.do === 'scene'\) return writeScene\(cmd\.index\) if \(cmd\.do === 'pedal'\) return writeBypass\(cmd\.id, !cmd\.on\) if \(cmd\.do === 'preset'\) return stepRef\.current\?\.\(cmd\.step\)/)
-  /* A channel from the wrist: the Play screen's channel sheet's own write, for
-     a block on the screen now, offered only where the tile's own hold works. */
-  assert.match(bridge, /if \(cmd\.do === 'channel'\) \{ const here = getState\(\)\.blocks\.some\(\(b\) => sameBlock\(b, cmd\.id\)\) return here \? writeChannel\(cmd\.id, cmd\.channel\) : undefined \}/, 'a channel from the watch lands on a block that is not on the screen')
-  assert.match(bridge, /channel: b\.channel, channels \}\)\)/, 'the watch is not told each pedal’s channel')
-  assert.match(stage, /chain: chainNow\.elsewhere \? \[\] : blocks, \/\*[^*]*\*\/ channels: channels\?\.length > 1 && !chainNow\.outline && !chainNow\.elsewhere \? channels : \[\],/, 'the watch offers a channel the Play screen would not')
   /* Wake on tap: a tap that woke the phone rejoins the computer before it is
      sent, and the phone holds the app up long enough to send it. */
   assert.match(bridge, /AppState\.currentState !== 'active'/, 'a tap that woke a locked phone is sent into a sleeping connection')
@@ -13985,15 +13955,6 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   const pages = readSrc(new URL('../mobile/targets/watch/Pages.swift', import.meta.url), 'utf8')
   assert.match(pages, /\.onDisappear \{\s*if state\.tuner\.on \{ link\.send\(\.tuner\(on: false\)\) \}/)
   assert.ok(!/onAppear[^}]*tuner\(on: true\)/.test(pages), 'the tuner turns on by being swiped to')
-  /* The hold is the phone's hold, and only the watch says so: the phone's tips
-     reach every phone by an update, a watch from before this build cannot do it. */
-  const tile = readSrc(new URL('../mobile/src/components/Tile.js', import.meta.url), 'utf8')
-  assert.match(tile, /delayLongPress=\{450\}/)
-  assert.match(pages, /LongPressGesture\(minimumDuration: 0\.45\)/, 'the watch’s hold is not the phone’s 450 ms')
-  assert.match(pages, /including: pedal\.canPickChannel \? \.all : \.subviews/, 'a pedal with nothing to choose can be held')
-  assert.ok(pages.includes('Text("Hold a pedal for its channels.")'), 'the watch does not say a pedal can be held')
-  const tips = bridge.slice(bridge.indexOf('export const WATCH_HOW_OPEN'), bridge.indexOf('export function watchWakes'))
-  assert.ok(tips.length > 100 && !/\bhold/i.test(tips), 'the phone’s watch tips promise a hold that a watch from before this build cannot do')
   const wf = readSrc(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')
   for (const step of ['swift test', 'xcodegen generate', '-sdk watchsimulator', 'screens.sh', 'watch-screens']) assert.ok(wf.includes(step), `the watch check has no ${step}`)
 })

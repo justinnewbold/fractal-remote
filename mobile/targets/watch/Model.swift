@@ -5,7 +5,7 @@ import Foundation
  *
  * The Swift reading of shared/watch-link.mjs, field for field. The phone sends
  * the whole picture each time (watchState there), so a watch that missed a
- * message is right again on the next; the watch asks for one of six things
+ * message is right again on the next; the watch asks for one of five things
  * (watchCommand there), and the phone drops anything else.
  *
  * No SwiftUI and no WatchConnectivity in this file, on purpose: it is the part
@@ -26,19 +26,6 @@ struct WatchPedal: Codable, Equatable, Identifiable {
     var on: Bool
     var fill: String
     var ink: String
-    /*
-     * The channel it is on ("B"), and the ones a hold may switch it to (A to
-     * D). Optional, like the metronome: a phone that has not had the update
-     * that sends them sends neither, and that is "none to choose", so a hold
-     * does nothing. Optional rather than given a default, because a field
-     * with a default is still required when the picture is read, and one
-     * missing would lose the whole picture.
-     */
-    var channel: String? = nil
-    var channels: [String]? = nil
-
-    /** Whether a hold offers a choice: two channels or more, as on the phone. */
-    var canPickChannel: Bool { (channels?.count ?? 0) > 1 }
 }
 
 struct WatchTuner: Codable, Equatable {
@@ -90,9 +77,6 @@ struct WatchState: Codable, Equatable {
         return name.isEmpty ? "Untitled" : name
     }
 
-    /** The four channels each demo pedal has, as on an FM3. */
-    private static let abcd = ["A", "B", "C", "D"]
-
     /** The picture the screenshots and the demo draw. */
     static let sample = WatchState(
         v: 1,
@@ -104,26 +88,24 @@ struct WatchState: Codable, Equatable {
         scene: 1,
         scenes: ["Clean", "Crunch", "Lead", "Solo", "Ambient", "Scene 6", "Scene 7", "Scene 8"],
         pedals: [
-            WatchPedal(id: 46, short: "CMP", name: "Compressor 1", on: true, fill: "#3f7fbf", ink: "#ffffff", channel: "A", channels: abcd),
-            WatchPedal(id: 50, short: "DRV", name: "Drive 1", on: true, fill: "#c0392b", ink: "#ffffff", channel: "B", channels: abcd),
-            WatchPedal(id: 58, short: "AMP", name: "Amp 1", on: true, fill: "#b8860b", ink: "#ffffff", channel: "A", channels: abcd),
-            WatchPedal(id: 62, short: "CAB", name: "Cab 1", on: true, fill: "#5a8a5f", ink: "#ffffff", channel: "A", channels: abcd),
-            WatchPedal(id: 70, short: "DLY", name: "Delay 1", on: false, fill: "#2e86ab", ink: "#ffffff", channel: "C", channels: abcd),
-            WatchPedal(id: 66, short: "REV", name: "Reverb 1", on: true, fill: "#8e44ad", ink: "#ffffff", channel: "A", channels: abcd)
+            WatchPedal(id: 46, short: "CMP", name: "Compressor 1", on: true, fill: "#3f7fbf", ink: "#ffffff"),
+            WatchPedal(id: 50, short: "DRV", name: "Drive 1", on: true, fill: "#c0392b", ink: "#ffffff"),
+            WatchPedal(id: 58, short: "AMP", name: "Amp 1", on: true, fill: "#b8860b", ink: "#ffffff"),
+            WatchPedal(id: 62, short: "CAB", name: "Cab 1", on: true, fill: "#5a8a5f", ink: "#ffffff"),
+            WatchPedal(id: 70, short: "DLY", name: "Delay 1", on: false, fill: "#2e86ab", ink: "#ffffff"),
+            WatchPedal(id: 66, short: "REV", name: "Reverb 1", on: true, fill: "#8e44ad", ink: "#ffffff")
         ],
         tuner: WatchTuner(on: false, note: "", octave: -1, cents: 0, inTune: false)
     )
 }
 
-/** The six things the watch may ask. watchCommand in shared/watch-link.mjs. */
+/** The five things the watch may ask. watchCommand in shared/watch-link.mjs. */
 enum WatchCommand: Equatable {
     case hello
     case scene(Int)
     case pedal(id: Int, on: Bool)
     case preset(step: Int)
     case tuner(on: Bool)
-    /** That block onto that channel, by the letter the phone sent ("B"). */
-    case channel(id: Int, channel: String)
 
     /** Written by hand, so the order of the keys never changes under the tests. */
     var json: String {
@@ -133,20 +115,8 @@ enum WatchCommand: Equatable {
         case .pedal(let id, let on): return #"{"do":"pedal","id":\#(id),"on":\#(on)}"#
         case .preset(let step): return #"{"do":"preset","step":\#(step < 0 ? -1 : 1)}"#
         case .tuner(let on): return #"{"do":"tuner","on":\#(on)}"#
-        case .channel(let id, let channel): return #"{"do":"channel","id":\#(id),"channel":\#(jsonText(channel))}"#
         }
     }
-}
-
-/*
- * A string as JSON, in its quotes, escaped. The channel is the phone's own
- * word sent back, a single letter today; written through the encoder rather
- * than pasted between quotes, so whatever the phone ever sends, what goes
- * back is still one piece of JSON the phone can read, and refuse.
- */
-func jsonText(_ s: String) -> String {
-    guard let data = try? JSONEncoder().encode(s), let out = String(data: data, encoding: .utf8) else { return "\"\"" }
-    return out
 }
 
 /** Where the tuner's needle sits, -1 (50 cents flat) to 1 (50 sharp). */
@@ -175,19 +145,7 @@ extension WatchState {
         case .scene(let index):
             if index >= 0 && index < scenes.count { next.scene = index }
         case .pedal(let id, let on):
-            /* Changed in place, so a pedal switched on or off keeps its channels. */
-            next.pedals = pedals.map { p in
-                var q = p
-                if q.id == id { q.on = on }
-                return q
-            }
-        case .channel(let id, let channel):
-            /* Only a channel that pedal offers, as the phone takes only those. */
-            next.pedals = pedals.map { p in
-                var q = p
-                if q.id == id, q.channels?.contains(channel) == true { q.channel = channel }
-                return q
-            }
+            next.pedals = pedals.map { p in p.id == id ? WatchPedal(id: p.id, short: p.short, name: p.name, on: on, fill: p.fill, ink: p.ink) : p }
         case .preset(let step):
             next.preset.number = max(0, preset.number + (step < 0 ? -1 : 1))
             next.preset.label = String(format: "%03d", next.preset.number)
