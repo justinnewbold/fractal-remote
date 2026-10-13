@@ -30,9 +30,19 @@ export const CODE_DIGITS = { min: 6, max: 10 }
 /**
  * The code as the account service wants it, or null when what was typed is
  * not one: spaces and dashes out, then nothing but six to ten digits.
+ *
+ * And the characters nobody can see. "It doesn't even let me copy the code
+ * from the email directly" (13 October 2026): most people copy a code
+ * rather than type it, and text copied out of a mail app can carry
+ * invisible ones with it — a soft hyphen, a zero-width space or joiner, the
+ * marks that set the direction of text. Left in, a pasted code that looks
+ * exactly right would be refused as "not all numbers". Written as escapes,
+ * so the rule can be read. (Non-breaking and other wide spaces are already
+ * \s.)
  */
+const UNSEEN = /[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069]/g
 export function cleanCode(typed) {
-  const token = String(typed ?? '').replace(/[\s‐-―-]/g, '')
+  const token = String(typed ?? '').replace(UNSEEN, '').replace(/[\s‐-―-]/g, '')
   const { min, max } = CODE_DIGITS
   return new RegExp(`^\\d{${min},${max}}$`).test(token) ? token : null
 }

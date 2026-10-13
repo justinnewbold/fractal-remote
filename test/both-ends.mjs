@@ -2576,6 +2576,19 @@ export function run(test) {
     assert.equal(cleanCode('123–456'), '123456', 'a code pasted with a long dash in it is refused')
     assert.equal(cleanCode('12 34-56 78'), '12345678', 'an eight-digit code in pairs is refused')
     assert.equal(cleanCode('1234567890'), '1234567890', 'the longest code the account service can send is refused')
+    /* Pasted out of a mail app, with what came along that nobody can see. */
+    for (const [pasted, what] of [
+      ['906\u200B921', 'a zero-width space'],
+      ['\u2060906921\u2060', 'word joiners'],
+      ['906\u00AD921', 'a soft hyphen'],
+      ['\u200E906921\u200F', 'direction marks'],
+      ['\u202A906921\u202C', 'a direction embedding'],
+      ['906\u00A0921', 'a non-breaking space'],
+      ['\uFEFF906921', 'a byte-order mark'],
+      ['906921\n', 'the line it was copied from']
+    ]) {
+      assert.equal(cleanCode(pasted), '906921', `a code pasted with ${what} in it is refused`)
+    }
     for (const [typed, what] of [
       ['12345', 'too few digits'],
       ['12345678901', 'too many digits'],
