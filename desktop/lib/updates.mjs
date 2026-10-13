@@ -141,6 +141,46 @@ export function shortReason(err) {
  * error anyone has to handle.
  */
 /**
+ * The two files THIS computer's updater reads from a release: the list it
+ * looks for (`manifest`) and the download it then fetches (`file`).
+ *
+ *   { manifest, file: RegExp }, or null for a computer this app is not built for
+ *
+ * The same choices electron-updater 6 makes, so a release is only called
+ * ready here when the library will find what it needs in it:
+ *
+ *   Mac      latest-mac.yml, and the zip for this processor — the -arm64-mac.zip
+ *            on Apple Silicon, the plain -mac.zip on Intel (MacUpdater never
+ *            downloads the disk image)
+ *   Windows  latest.yml, and the Setup .exe, which carries both processors
+ *            (NsisUpdater downloads the installer, not the zip)
+ *   Linux    latest-linux.yml on a PC and latest-linux-arm64.yml on a Pi
+ *            (the library adds the processor's name unless it is x64), and the
+ *            AppImage when this copy is one (APPIMAGE is set), the .deb when it
+ *            is not — AppImageUpdater and DebUpdater respectively
+ *
+ * Until 1.87.23 every computer waited for the MAC files. So when the Mac job
+ * failed on 1.87.21 and the release went out without them, every Windows PC
+ * and every Pi said "still being built" too, for about three hours, with its
+ * own files sitting on the release.
+ */
+export function updateFiles({ platform = 'darwin', arch = 'x64', appImage = false } = {}) {
+  if (platform === 'darwin') {
+    return { manifest: 'latest-mac.yml', file: arch === 'arm64' ? /-arm64-mac\.zip$/ : /^(?!.*-arm64-).*-mac\.zip$/ }
+  }
+  if (platform === 'win32') return { manifest: 'latest.yml', file: /\.exe$/i }
+  if (platform === 'linux') {
+    const manifest = `latest-linux${arch === 'x64' ? '' : `-${arch}`}.yml`
+    if (appImage) {
+      return { manifest, file: arch === 'x64' ? /^(?!.*-(arm64|armv7l|arm)\.AppImage$).*\.AppImage$/ : new RegExp(`-${arch}\\.AppImage$`) }
+    }
+    const debArch = { x64: 'amd64', arm64: 'arm64', arm: 'armhf', ia32: 'i386' }[arch] || arch
+    return { manifest, file: new RegExp(`_${debArch}\\.deb$`) }
+  }
+  return null
+}
+
+/**
  * What GitHub's API says the newest release is, against the version running.
  *
  * "I keep clicking check for updates and it says no updates available. The
@@ -149,28 +189,83 @@ export function shortReason(err) {
  *
  * - The library asks github.com's web pages which release is newest, and
  *   those can answer from a copy minutes old.
- * - A release appears on GitHub about ten minutes BEFORE its Mac files do,
+ * - A release appears on GitHub about ten minutes BEFORE its files do,
  *   because every computer's build uploads into it as it finishes. A check in
- *   that gap found the release, could not find the Mac file list, and failed.
+ *   that gap found the release, could not find the file list, and failed.
  *
  * So a check first asks GitHub's API (api.github.com), which says what is
- * there now, and reads the answer here:
+ * there now, and reads the answer here, for the computer `target` describes
+ * (see updateFiles; left out, it is an Intel Mac, which is what this answered
+ * for every computer before 1.87.23):
  *
- *   { kind: 'newer', version, feed } — newer, and its Mac files are in
- *   { kind: 'building', version }    — newer, but the Mac files are not in yet
+ *   { kind: 'newer', version, feed } — newer, and this computer's files are in
+ *   { kind: 'building', version }    — newer, but this computer's files are not in yet
  *   { kind: 'same', version }        — nothing newer than this
  *   null                             — no answer worth acting on
  */
-export function releaseVerdict(release, running) {
+export function releaseVerdict(release, running, target = {}) {
   const tag = typeof release?.tag_name === 'string' ? release.tag_name : null
   if (!tag || release.draft || release.prerelease) return null
   const version = tag.replace(/^v/, '')
   if (!newerThan(version, running)) return { kind: 'same', version }
-  const names = (Array.isArray(release.assets) ? release.assets : []).map((a) => a?.name)
-  const macFile = names.some((n) => typeof n === 'string' && /-mac\.zip$/.test(n))
-  if (!names.includes('latest-mac.yml') || !macFile) return { kind: 'building', version }
+  const need = updateFiles(target)
+  if (!need) return null
+  const names = (Array.isArray(release.assets) ? release.assets : []).map((a) => a?.name).filter((n) => typeof n === 'string')
+  if (!names.includes(need.manifest) || !names.some((n) => need.file.test(n))) return { kind: 'building', version }
   const feed = String(release.html_url || '').replace('/releases/tag/', '/releases/download/')
   return feed.includes('/releases/download/') ? { kind: 'newer', version, feed } : null
+}
+
+/*
+ * LOOKING AGAIN, BY ITSELF, ON EVERY COMPUTER.
+ *
+ * Until 1.87.23 an ordinary start looked for a new version once, at launch,
+ * and never again; only a start with no window looked twice a day. So a
+ * computer left open for days fell behind every phone update until somebody
+ * quit it. Now every start looks again:
+ *
+ *   - six hours after its last look;
+ *   - a quarter of an hour after one that found the new version still being
+ *     built for this computer, because that is minutes, not hours, on a
+ *     good day — or that left a download under way (see downloading);
+ *   - an hour after one that could not reach GitHub at all;
+ *   - and half a minute after the computer wakes (WAKE_LOOK_MS), because the
+ *     clocks these waits run on stop while a computer sleeps, so a laptop
+ *     that sleeps most of the day would otherwise hardly ever reach six hours.
+ *     Half a minute, not at once: a laptop's wifi comes back a little after
+ *     the laptop does — the same reason the phone remote's link is looked at
+ *     after a wake.
+ *
+ * Quietly, and the rest is as it was: what a look finds downloads by itself
+ * and goes in only when the app quits or somebody presses Restart to update.
+ * Nothing restarts itself.
+ */
+export const RECHECK_MS = 6 * 60 * 60 * 1000
+export const BUILDING_RECHECK_MS = 15 * 60 * 1000
+export const TROUBLE_RECHECK_MS = 60 * 60 * 1000
+export const WAKE_LOOK_MS = 30 * 1000
+
+/**
+ * Whether a download is under way, so a look by itself now has nothing to add.
+ *
+ * The library carries on with a download it has started rather than starting
+ * another, so a look mid-download fetches nothing new — it only flips the
+ * menu from "Downloading an update… 40%" back to "Checking for updates…". And
+ * on a Mac, while macOS is still taking its copy ('staging'), a look would ask
+ * macOS for the update a second time, which is the "Preparing…" for ever that
+ * `held` below exists to prevent. So a look that comes round mid-download
+ * waits, and comes back a quarter of an hour later. Check for updates, pressed
+ * by hand, is not held back by this.
+ */
+export function downloading(state) {
+  return state?.kind === 'found' || state?.kind === 'downloading' || state?.kind === 'staging'
+}
+
+/** How long until the next look, from what the last one left the menu saying. */
+export function nextLookMs(state) {
+  if (state?.kind === 'building' || downloading(state)) return BUILDING_RECHECK_MS
+  if (state?.kind === 'trouble') return TROUBLE_RECHECK_MS
+  return RECHECK_MS
 }
 
 /** Whether version a is newer than b, both "1.2.3". Anything unreadable is not newer. */
@@ -185,7 +280,7 @@ export function newerThan(a, b) {
   return false
 }
 
-export function wireUpdates({ updater, native = null, onState, log = () => {}, lookup = null, running = null }) {
+export function wireUpdates({ updater, native = null, onState, log = () => {}, lookup = null, running = null, target = undefined }) {
   if (!updater) return { check: async () => {} }
 
   updater.autoDownload = true
@@ -206,6 +301,32 @@ export function wireUpdates({ updater, native = null, onState, log = () => {}, l
    * quit by force. So once something is held, a check says so and stops:
    * restart, and the new run checks again on its way up, newer versions
    * included.
+   *
+   * KEPT, ON PURPOSE, NOW THAT THE APP LOOKS EVERY SIX HOURS (1.87.23). The
+   * wish was that a computer left open for days should end one quit from the
+   * newest version rather than two — that a look after one update is held
+   * should still fetch a newer one. Read against electron-updater 6.8 it is
+   * not safe on any of the three:
+   *
+   *   - Mac: macOS's updater takes one update per run, as above. A newer
+   *     download would sit at "Preparing…" for ever, which is the bug this
+   *     rule was written to fix.
+   *   - Linux AppImage: the library deletes the update it is holding the
+   *     moment it starts fetching a newer one (validateDownloadedPath empties
+   *     its pending folder when the checksum differs), but still points at
+   *     it until the new one is in. A quit in that gap runs the AppImage
+   *     install, which deletes the running AppImage FIRST and then moves the
+   *     download into its place — a download that is no longer there. The
+   *     computer is left with no app at all, and a Pi set to start at
+   *     power-on starts nothing.
+   *   - Windows and the .deb: the same deletion, without the lost app — a
+   *     quit in the gap, or a newer download that fails, installs nothing
+   *     where it would have installed the held update.
+   *
+   * So a held update is still the end of this run's updating, and the next
+   * launch, on the version it held, looks again and finds the newest. Two
+   * quits from a long way behind, still — which is what "IT CAN TAKE TWO
+   * ROUNDS" in shared/computer-update.mjs tells people.
    */
   let held = null
 
@@ -295,7 +416,7 @@ export function wireUpdates({ updater, native = null, onState, log = () => {}, l
       if (lookup && running) {
         let verdict = null
         try {
-          verdict = releaseVerdict(await lookup(), running)
+          verdict = releaseVerdict(await lookup(), running, target)
         } catch (err) {
           // No API answer: the library's own check below is still worth having.
           log(err)

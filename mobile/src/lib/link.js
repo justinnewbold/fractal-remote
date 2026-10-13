@@ -39,6 +39,7 @@ import {
   subscribeRemoteState
 } from './relay'
 import { listen, refreshAll, reset as resetRig, watchUnit, stopWatching } from './rig'
+import { PHONE_NOTE_PATH, phoneNote, timeToTell } from './phone-note'
 
 export const PROBE_FIRST = 3000
 export const PROBE_CAP = 30000
@@ -210,6 +211,8 @@ async function tick() {
   // A computer that was updated while this phone watched says so within a
   // couple of minutes, rather than at the next join.
   if (running && state.link === 'connected' && Date.now() - namedAt > NAME_AGAIN) await readMacName()
+  // And the computer hears that a phone is using it, so it does not go to sleep under the song.
+  if (running) tellComputer()
 
   /* Stopped while this turn was waiting on the network: no next turn. A turn
      that rescheduled itself after stopLink is a loop nobody can see running. */
@@ -360,6 +363,32 @@ async function readMacName() {
   }
 }
 
+/** When the computer was last told a phone is using it; 0 for not yet on this link. */
+let toldAt = 0
+
+/**
+ * Tell the computer this phone is using it, every couple of minutes while
+ * connected.
+ *
+ * Laptops idle-sleep at gigs, and the computer app keeps one awake while a
+ * phone is using it — but it cannot see this app's requests at all: they
+ * come through the relay, from inside the computer's device server. So the
+ * phone leaves a note in the computer's store instead, and the computer
+ * stays awake for half an hour after the last one. See shared/phone-note.mjs.
+ *
+ * Not awaited, and nothing said if it fails: a note that missed is the next
+ * one two minutes later, and nothing on screen depends on it. relay.js
+ * already writes a failed request into the log.
+ */
+function tellComputer() {
+  const now = Date.now()
+  // A link that dropped and came back — a computer that slept, say — says so at once.
+  if (state.link !== 'connected') toldAt = 0
+  if (!timeToTell({ link: state.link, clash: state.clash, toldAt, now })) return
+  toldAt = now
+  remoteRequest(PHONE_NOTE_PATH, { method: 'PUT', body: JSON.stringify(phoneNote(now)) }).catch(() => {})
+}
+
 /** Said once, and again only when the answer is a different one. */
 function say(line) {
   if (line === namedSaid) return
@@ -473,6 +502,7 @@ export async function stopLink() {
   unbind = []
   namedAt = 0
   namedSaid = null
+  toldAt = 0
   /* Reset first, then wait: see enterDemo. */
   resetRig()
   set({ ...initial })

@@ -62,6 +62,7 @@ import {
  * a code, and nothing makes one any more.
  */
 import { isPairAccount } from '../../shared/pairing.mjs'
+import { PHONE_NOTE_ID, phoneNote, timeToTell } from '../../shared/phone-note.mjs'
 import { holders } from '../../shared/editors.mjs'
 import { D4 } from '../../shared/onboarding.mjs'
 export { isPairAccount, HOSTED_ORIGIN } from '../../shared/pairing.mjs'
@@ -647,8 +648,35 @@ async function tick() {
    * that already wakes up every few seconds.
    */
   refresh()
+  // And the computer hears that a phone is using it, so it does not go to sleep under the song.
+  tellComputer()
   delay = state.link === 'connected' ? KEEPALIVE : nextDelay(delay)
   schedule(delay)
+}
+
+/** When the computer was last told a phone is using it; 0 for not since the link last came up. */
+let toldAt = 0
+
+/**
+ * Tell the computer this browser is using it, every couple of minutes while
+ * connected through the account — the same note, on the same rhythm, as the
+ * phone app. A browser on the computer's own wifi page is seen by the
+ * computer anyway; one reaching it through the relay is not, because the
+ * relay's requests arrive inside the device server. See shared/phone-note.mjs.
+ *
+ * Only from tick, which runs for a remote with its page in front of
+ * somebody. Never awaited and never said: writeHostDoc does not throw, and a
+ * note that missed is the next one two minutes later.
+ */
+function tellComputer() {
+  const now = Date.now()
+  // A link that dropped and came back says so at once.
+  if (state.link !== 'connected') toldAt = 0
+  if (!timeToTell({ link: state.link, clash: state.clash, toldAt, now })) return
+  toldAt = now
+  device()
+    .then((d) => d.writeHostDoc(PHONE_NOTE_ID, phoneNote(now).data))
+    .catch(() => {})
 }
 
 /**
@@ -1080,6 +1108,7 @@ export function _resetLink() {
   joining = false
   restoring = false
   booted = false
+  toldAt = 0
   state = { role: 'unknown', link: 'off', account: null, hostOn: false, macName: null, macVersion: null, since: Date.now(), cloud: null, clash: null, hosts: [], units: {}, chosenHost: null, pairError: null }
   watchers.clear()
 }

@@ -46,6 +46,11 @@ extraResources:
 # there is no certificate, because Apple Silicon refuses to run a binary with
 # no signature at all and calls it "damaged".
 afterPack: afterPack.js
+# Runs on the .app once it is signed, and before the zip and the disk image
+# are made from it: Apple notarises it here, and a refusal stops the build.
+# The stamp (stapling Apple's ticket on) is asked for afterwards and can no
+# longer stop a release. See notarise.js, and `notarize: false` under mac.
+afterSign: notarise.js
 
 # Where a new version comes from, and where a release build puts one.
 #
@@ -101,6 +106,17 @@ mac:
   gatekeeperAssess: false
   entitlements: entitlements.mac.plist
   entitlementsInherit: entitlements.mac.plist
+  # electron-builder's own notarising off, and notarise.js (the afterSign
+  # hook above) doing the same job instead.
+  #
+  # Its own one notarises and then staples inside the same step, and a staple
+  # that fails throws. On 1.87.21 Apple's ticket service dropped the line
+  # after Apple had already said Accepted, so the throw took the whole package
+  # step down: no Mac files were published, and every computer's update check
+  # said "still being built" for about three hours. notarise.js still sends
+  # every app to Apple and still stops the build if Apple says no; only the
+  # stamp afterwards is allowed to be missing.
+  notarize: false
 # No `dmg.title` on purpose. That string is the volume name the disk image
 # mounts under, and it was set to a constant — so both architectures asked for
 # /Volumes/Fractal AI Builder at the same time, and the second build spent six

@@ -259,8 +259,11 @@ export function phoneRetryDelay(result, sinceMs = 0) {
  * never restart mid-set.
  */
 export const INSTALL_WINDOW_MS = 3 * 60 * 1000
-/** And a windowless app, left on for weeks, still looks for one twice a day. */
-export const RECHECK_MS = 12 * 60 * 60 * 1000
+/*
+ * And a windowless app, left on for weeks, still looks for one — every six
+ * hours now, like every other start (RECHECK_MS in lib/updates.mjs, since
+ * 1.87.23; it was twice a day, and for a start with no window only).
+ */
 
 /**
  * Whether to install a ready update now, with nobody there.
@@ -296,7 +299,8 @@ export const UPDATE_RETRY_MS = 30 * 1000
  *
  * Only with nobody there, only after a look that failed ('trouble'), and only
  * while an update it found could still be installed straight away — after
- * the install window the twice-a-day look takes over again.
+ * the install window the look every few hours takes over again (nextLookMs
+ * in lib/updates.mjs).
  */
 export function updateRetryDelay({ hidden = false, kind = null, sinceLaunchMs = 0 } = {}) {
   if (!hidden || kind !== 'trouble') return null

@@ -21,11 +21,11 @@
  * app with it. A child can die and be reported. Worth revisiting once this has
  * run on real hardware for a while; not worth guessing at from a container.
  */
-const { app, BrowserWindow, Tray, Menu, shell, nativeImage, dialog, ipcMain, powerMonitor } = require('electron')
+const { app, BrowserWindow, Tray, Menu, shell, nativeImage, dialog, ipcMain, powerMonitor, powerSaveBlocker } = require('electron')
 const { spawn, execFile, execFileSync } = require('node:child_process')
 const { join, sep, dirname } = require('node:path')
 const { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, renameSync } = require('node:fs')
-const { homedir } = require('node:os')
+const { homedir, networkInterfaces } = require('node:os')
 const { performance } = require('node:perf_hooks')
 const net = require('node:net')
 
@@ -190,10 +190,11 @@ let wantWindow = false
 /*
  * Timers that end with the app.
  *
- * Everything a windowless start does again later — a port to ask about, a
- * server to restart, the phone remote, the twice-a-day update check — goes
- * through this, so none of it can hold a quit up or run after the server has
- * been stopped. stopServing clears the lot.
+ * Everything the app does again later — a port to ask about, a server to
+ * restart, the phone remote, the look for updates every few hours, the look
+ * for phones that keeps the computer awake — goes through this, so none of
+ * it can hold a quit up or run after the server has been stopped.
+ * stopServing clears the lot.
  */
 const timers = new Set()
 function later(fn, ms) {
@@ -409,6 +410,109 @@ function lookEveryMinute() {
       lookEveryMinute()
     }
   }, LOOK_EVERY_MS)
+}
+
+/*
+ * STAYING AWAKE WHILE A PHONE IS USING THE COMPUTER.
+ *
+ * Laptops idle-sleep at gigs: nobody touches the laptop, because the playing
+ * happens on the phone, and a laptop asleep is a phone with no unit in the
+ * middle of a song. So once a minute the app looks for a phone using the
+ * device server, two ways (lib/awake.mjs says why it takes both):
+ *
+ *   - the note a connected phone app leaves in the device server's store
+ *     every couple of minutes (readPhoneNote and phoneNoteChange) — the only
+ *     way to see the phone app, which reaches this computer through the
+ *     relay and never connects to it;
+ *   - a connection to the device server's port from another machine
+ *     (phonesUsing) — a phone's web browser on the same wifi.
+ *
+ * While either has seen one in the last half hour it asks the computer not
+ * to idle-sleep — 'prevent-app-suspension', which keeps the computer running
+ * and still lets the screen go dark. Never 'prevent-display-sleep'. Half an
+ * hour after the last use it lets go, and the computer sleeps on its own
+ * settings again. A closed lid still sleeps most laptops: that is the
+ * computer's own setting, and nothing an app asks for changes it.
+ */
+/** lib/awake.mjs, once start() has loaded it. */
+let awakeRules = null
+/** The powerSaveBlocker id while the computer is being kept awake, else null. */
+let awakeHold = null
+/** When a phone was last seen using this computer, on uptime()'s clock; null for never. */
+let phoneSeenAt = null
+let phoneLook = null
+/** The phone's note as last read, to tell a new one from it (phoneNoteChange); undefined before the first look. */
+let phoneNoteMark
+
+/*
+ * What the computer's own tools print, for phonesUsing. Hidden on Windows,
+ * or netstat would flash a console window up every minute.
+ */
+const askComputer = (cmd, args) =>
+  new Promise((resolve, reject) => {
+    execFile(cmd, args, { encoding: 'utf8', timeout: 4000, windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (err, out) =>
+      err ? reject(err) : resolve(out)
+    )
+  })
+
+/** Start or stop keeping the computer awake, as awakeChange says. Never throws. */
+function stayAwakeWhileUsed() {
+  if (!awakeRules || !powerSaveBlocker) return
+  // On the way out, let go whatever the last phone said: nothing is serving it any more.
+  const holding = awakeHold !== null
+  const change = quitting
+    ? holding
+      ? 'stop'
+      : null
+    : awakeRules.awakeChange({ holding, lastPhoneAt: phoneSeenAt, now: uptime() })
+  try {
+    if (change === 'start') {
+      awakeHold = powerSaveBlocker.start('prevent-app-suspension')
+      console.error('[awake] a phone is using this computer; keeping it from going to sleep')
+    } else if (change === 'stop') {
+      const id = awakeHold
+      awakeHold = null
+      powerSaveBlocker.stop(id)
+      console.error(quitting ? '[awake] quitting; the computer may sleep again' : '[awake] no phone for half an hour; the computer may sleep again')
+    }
+  } catch (err) {
+    console.error('[awake] could not change it:', err?.message || err)
+  }
+  if (change && tray && !quitting) drawTray()
+}
+
+/* Once a minute, through later(), so it ends with the app. */
+function watchForPhones() {
+  if (quitting || !awakeRules) return
+  cancel(phoneLook)
+  phoneLook = later(async () => {
+    try {
+      let own = []
+      try {
+        own = awakeRules.ownAddresses(networkInterfaces())
+      } catch {
+        // Without its own addresses the app may take its own browser for a phone; it only stays awake longer.
+      }
+      const [seen, note] = await Promise.all([
+        awakeRules.phonesUsing({
+          platform: process.platform,
+          port: hostAt?.port,
+          run: askComputer,
+          read: (path) => readFileSync(path, 'utf8'),
+          own
+        }),
+        awakeRules.readPhoneNote({ port: hostAt?.port, fetch: (url, init) => fetch(url, init) })
+      ])
+      const told = awakeRules.phoneNoteChange(phoneNoteMark, note)
+      phoneNoteMark = told.mark
+      if (seen?.size || told.used) phoneSeenAt = uptime()
+      stayAwakeWhileUsed()
+    } catch (err) {
+      console.error('[awake] the look for phones failed:', err?.message || err)
+    } finally {
+      watchForPhones()
+    }
+  }, awakeRules.PHONE_LOOK_MS)
 }
 
 /**
@@ -718,6 +822,17 @@ async function start() {
   lookEveryMinute()
 
   /*
+   * And the computer kept awake while a phone is using it, so a laptop at a
+   * gig does not idle-sleep under the song. See stayAwakeWhileUsed.
+   */
+  try {
+    awakeRules = await import('./lib/awake.mjs')
+    watchForPhones()
+  } catch (err) {
+    console.error('[awake] not available:', err?.message || err)
+  }
+
+  /*
    * The address in the menu works here and fails from a phone when macOS has
    * not been told to accept connections from other machines. Asked once, and
    * quietly: it only adds a line to a menu.
@@ -908,6 +1023,8 @@ function buildTray() {
      */
     ...(notice ? [{ label: notice, enabled: false }, { type: 'separator' }] : []),
     { label: phoneLine, enabled: false },
+    // While a phone is using it, so nobody wonders why the laptop has not gone to sleep. See stayAwakeWhileUsed.
+    ...(awakeHold !== null ? [{ label: 'Staying awake while your phone uses it', enabled: false }] : []),
     { type: 'separator' },
     { label: 'On your phone — same wifi, nothing to sign into:', enabled: false },
     ...(where?.all || []).map((u) => ({
@@ -953,7 +1070,8 @@ function buildTray() {
     {
       label: 'Check for updates…',
       enabled: Boolean(updates) && update?.kind !== 'checking',
-      click: () => updates?.check()
+      // Through lookNow, so what it finds sets when the next look by itself is.
+      click: () => lookNow()
     },
     /*
      * The same switch as the one in the app's Settings, and the same function
@@ -1018,7 +1136,7 @@ function wireUpdateChannel() {
   )
   ipcMain.handle('updates:check', async () => {
     if (!updates) return { ok: false, reason: 'no-updater' }
-    await updates.check()
+    await lookNow()
     return { ok: true }
   })
 
@@ -1360,8 +1478,16 @@ async function beginUpdates() {
         })
         if (!res.ok) throw new Error(`GitHub said ${res.status}`)
         return res.json()
-      }
+      },
+      /*
+       * Which files this computer's updater needs from a release, so it waits
+       * for its own and nobody else's. Until 1.87.23 every computer waited
+       * for the Mac's, and a Mac build that failed left every PC and Pi
+       * saying "still being built". See updateFiles in lib/updates.mjs.
+       */
+      target: { platform: process.platform, arch: process.arch, appImage: Boolean(process.env.APPIMAGE) }
     })
+    updateRules = mod
     if (outcome === 'stuck') {
       // Said at once; the reason follows when macOS's log has been read, which
       // can take a few seconds and must not hold the window up.
@@ -1375,21 +1501,86 @@ async function beginUpdates() {
     }
     await updates.check()
     /*
-     * A windowless app is left on for weeks, and checked only at launch it
-     * would hear about nothing. So it asks twice a day. What it finds waits
-     * for a quit, or for the next time the computer is turned on.
+     * And again, by itself, on every computer — not only one started with no
+     * window, as until 1.87.23. Six hours after the last look, sooner after
+     * one that found the new version still being built or could not reach
+     * GitHub, and half a minute after the computer wakes. What it finds
+     * downloads, and goes in at a quit or a press of Restart to update; it
+     * never restarts the app. See nextLookMs in lib/updates.mjs.
      */
-    if (startHidden) {
-      const again = () =>
-        later(async () => {
-          await updates.check()
-          again()
-        }, boot.RECHECK_MS)
-      again()
-    }
+    lookingForUpdates = true
+    lookForUpdatesIn(mod.nextLookMs(update))
+    powerMonitor.on('resume', updatesAfterWake)
   } catch (err) {
     console.error('[updates] not available', err?.message || err)
   }
+}
+
+/*
+ * THE LOOK FOR UPDATES, AGAIN AND AGAIN.
+ *
+ * "A computer that stays open for days falls behind", the phone's own steps
+ * for updating it said — because an ordinary start looked once, at launch.
+ * One look waits at a time: a wake replaces the look that was waiting with
+ * one half a minute on, and every look, however it was started, schedules
+ * the next from what it found — the loop's own here, and every other one
+ * through lookNow below. All through later(), so none of it outlives
+ * the app or holds up a quit. Not at all on a copy whose last install did not
+ * take, or one macOS will not update where it sits: beginUpdates returns
+ * before it starts this.
+ */
+/** lib/updates.mjs, once beginUpdates has loaded it. */
+let updateRules = null
+/** Whether this run looks for updates by itself at all. */
+let lookingForUpdates = false
+let updateLook = null
+
+function lookForUpdatesIn(ms) {
+  if (quitting || !lookingForUpdates || !updates || !Number.isFinite(ms)) return
+  cancel(updateLook)
+  updateLook = later(lookForUpdates, ms)
+}
+
+async function lookForUpdates() {
+  updateLook = null
+  // Not over a download in progress: see downloading in lib/updates.mjs.
+  if (!updateRules.downloading(update)) {
+    try {
+      // Never rejects (see wireUpdates); a look that went wrong is a line in the menu.
+      await updates.check()
+    } catch (err) {
+      console.error('[updates] the look for updates failed:', err?.message || err)
+    }
+  }
+  lookForUpdatesIn(updateRules.nextLookMs(update))
+}
+
+/*
+ * A look taken out of turn: Check for updates, in the menu or the window, a
+ * look tried again after one that failed, and the network turning out to be
+ * there. Afterwards the waiting look is set again from what this one found,
+ * exactly as after one the loop took itself. Without that, a press of Check
+ * for updates that found the new version "still being built" left the next
+ * look by itself up to six hours away, rather than a quarter of an hour, and
+ * the download landed hours after it could have.
+ *
+ * Unlike the loop, this goes ahead over a download in progress, as Check for
+ * updates always has: somebody asked.
+ */
+async function lookNow() {
+  if (!updates) return
+  try {
+    // Never rejects (see wireUpdates); a look that went wrong is a line in the menu.
+    await updates.check()
+  } catch (err) {
+    console.error('[updates] the look for updates failed:', err?.message || err)
+  }
+  if (updateRules) lookForUpdatesIn(updateRules.nextLookMs(update))
+}
+
+/* The computer woke: look half a minute on, once its wifi is back. */
+function updatesAfterWake() {
+  if (updateRules) lookForUpdatesIn(updateRules.WAKE_LOOK_MS)
 }
 
 /*
@@ -1436,7 +1627,7 @@ function retryUpdateCheck() {
   if (!wait) return
   updateRetry = later(() => {
     updateRetry = null
-    updates.check()
+    lookNow()
   }, wait)
 }
 
@@ -1448,7 +1639,7 @@ function retryUpdateCheck() {
  * and installs at the next power-on.
  */
 function networkIsUp() {
-  if (startHidden && update?.kind === 'trouble' && updates) updates.check()
+  if (startHidden && update?.kind === 'trouble' && updates) lookNow()
 }
 
 /**
@@ -1673,6 +1864,8 @@ async function stopServing() {
   // Nothing that was waiting to try again does, from here on.
   for (const timer of timers) clearTimeout(timer)
   timers.clear()
+  // And the computer may sleep again: nothing is serving a phone any more.
+  stayAwakeWhileUsed()
 
   /*
    * Say so on screen straight away. Tearing down can take a couple of seconds

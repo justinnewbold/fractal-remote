@@ -11,10 +11,11 @@
  *
  * WHY QUIT-AND-OPEN COMES FIRST. The computer app looks for a new version
  * when it opens and when somebody asks it to, and it puts a downloaded one in
- * when it is quit (autoInstallOnAppQuit in desktop/lib/updates.mjs). An
- * ordinary start never looks again by itself (the twice-a-day look in
- * desktop/main.js is only for a start with no window), so a computer left open
- * for days falls behind every phone update. And a quit does not reopen it,
+ * when it is quit (autoInstallOnAppQuit in desktop/lib/updates.mjs). Since
+ * 1.87.23 every start looks again by itself, every six hours and after the
+ * computer wakes (nextLookMs in desktop/lib/updates.mjs), but what it finds
+ * still waits for a quit — so a computer left open for days is still behind
+ * every phone update until somebody quits it. And a quit does not reopen it,
  * which is why every step says to open it again: a guitarist who only quits
  * has no phone remote until he does.
  *
@@ -86,8 +87,10 @@ export const UPDATE_STEPS = {
       body: 'A Mac only updates an app in its Applications folder. Open Fractal Remote and choose Move to Applications when it asks, or in its window go to ⚙ → About → Updates → Move to Applications.'
     },
     {
-      /* For about ten minutes after a release the Mac files are still being
-         made, and every computer's check says so until they land. */
+      /* For about ten minutes after a release a computer's own files are
+         still being made, and its check says so until they land. Since
+         1.87.23 each computer waits only for its own, not the Mac's, and
+         looks again by itself a quarter of an hour later. */
       says: '“Version … is still being built”',
       body: 'A new version is a few minutes from ready. Choose Check for updates… again in ten minutes.'
     },

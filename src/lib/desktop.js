@@ -125,7 +125,14 @@ export function updateAdvice(state) {
     case 'current':
       return 'This is the newest version.'
     case 'building':
-      return 'A new Mac version takes about ten minutes to appear after a change. Press Check for updates again in a few minutes and it downloads by itself.'
+      /*
+       * Every computer, not only a Mac: since 1.87.23 each one waits for its
+       * own files (releaseVerdict in desktop/lib/updates.mjs), so a Windows PC
+       * or a Pi says this while ITS files are being made. And it looks again
+       * by itself a quarter of an hour on (BUILDING_RECHECK_MS), so nobody
+       * has to sit pressing the button.
+       */
+      return 'A new version for this computer takes about ten minutes to appear after a change. The app looks again by itself in a quarter of an hour and downloads it then — or press Check for updates in a few minutes.'
     case 'checking':
       return null
     default:
