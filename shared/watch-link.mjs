@@ -8,7 +8,7 @@
  * relay is, so every tap goes watch → phone → computer → unit, over Apple's
  * own watch-to-phone link (WatchConnectivity). The phone is the only thing
  * that knows the rig; the watch draws what it is told and asks for one of
- * four things.
+ * six things.
  *
  * This file is both halves of that conversation, in words the watch's Swift
  * can read without knowing anything about the app: `watchState` is what the
@@ -36,8 +36,27 @@ export const WATCH_STATE_MS = 250
 /** Within this many cents the watch draws the note green, as the phone's tuner does. */
 export const WATCH_IN_TUNE_CENTS = 3
 
+/** The most channels a pedal offers on the watch: A to D, as on every unit today. */
+export const WATCH_CHANNELS_MAX = 4
+
 const int = (n) => Number.isInteger(n)
 const text = (s, max = 40) => (typeof s === 'string' ? s.slice(0, max) : '')
+/** A channel as the phone's own channel write takes it: one capital letter, or '' for none said. */
+const letter = (c) => (typeof c === 'string' && /^[A-Z]$/.test(c) ? c : '')
+
+/*
+ * WHAT HOLDING A PEDAL OFFERS. Justin, 13 October 2026: "Can I add the tap to
+ * hold on the effects switches on the watch where you can switch through the
+ * channels?" The letters the Play screen's own hold offers (Stage.js, the
+ * channel sheet), and only while that hold does something there: none on the
+ * outline, where a channel waits for the chain read (see chain-view.mjs), and
+ * none on a unit with one channel or none. Fewer than two is nothing to
+ * choose between, so it is sent as none, and the watch's hold does nothing.
+ */
+const channelChoices = (list) => {
+  const out = Array.isArray(list) ? [...new Set(list.map(letter).filter(Boolean))].slice(0, WATCH_CHANNELS_MAX) : []
+  return out.length > 1 ? out : []
+}
 
 /**
  * The picture the watch draws, from the phone's store and the few things the
@@ -87,7 +106,14 @@ export function watchState({
         name: text(p.name, 24),
         on: p.on === true,
         fill: /^#[0-9a-f]{6}$/i.test(p.fill || '') ? p.fill : '#7d8591',
-        ink: /^#[0-9a-f]{6}$/i.test(p.ink || '') ? p.ink : '#ffffff'
+        ink: /^#[0-9a-f]{6}$/i.test(p.ink || '') ? p.ink : '#ffffff',
+        /* The letter in the tile's corner, as on the phone; '' when the unit
+           has not said. */
+        channel: letter(p.channel),
+        /* What a hold may switch it to; [] and a hold does nothing. A watch
+           older than this reads neither field, and is none the worse: the
+           link's version stays 1, because nothing it knows changed meaning. */
+        channels: channelChoices(p.channels)
       })),
     tuner: {
       on: !!tunerOn,
@@ -109,16 +135,19 @@ function metronomeForWatch(m) {
 }
 
 /**
- * A message from the watch, as one of the four things it may ask, or null.
+ * A message from the watch, as one of the six things it may ask, or null.
  *
  *   { do: 'scene', index }      — switch to that scene (0-based)
  *   { do: 'pedal', id, on }     — that block on or off
+ *   { do: 'channel', id, channel } — that block onto that channel, a letter ('B')
  *   { do: 'preset', step }      — Previous (-1) or Next (+1), as the stage screen steps
  *   { do: 'tuner', on }         — the tuner page opened or closed
  *   { do: 'hello' }             — the watch app opened: send the picture now
  *
  * `state` is the last picture sent, so a scene or a pedal the watch could not
- * have been shown is refused rather than sent to the unit.
+ * have been shown is refused rather than sent to the unit — and so is a
+ * channel that pedal was not offered in it, which is every channel while the
+ * Play screen's own hold would do nothing.
  */
 export function watchCommand(msg, state) {
   if (!msg || typeof msg !== 'object') return null
@@ -132,6 +161,13 @@ export function watchCommand(msg, state) {
     case 'pedal': {
       const shown = (state?.pedals || []).some((p) => p.id === msg.id)
       return int(msg.id) && shown && typeof msg.on === 'boolean' ? { do: 'pedal', id: msg.id, on: msg.on } : null
+    }
+    case 'channel': {
+      const pedal = int(msg.id) ? (state?.pedals || []).find((p) => p.id === msg.id) : null
+      const offered = Array.isArray(pedal?.channels) ? pedal.channels : []
+      return pedal && typeof msg.channel === 'string' && offered.includes(msg.channel)
+        ? { do: 'channel', id: msg.id, channel: msg.channel }
+        : null
     }
     case 'preset':
       return msg.step === 1 || msg.step === -1 ? { do: 'preset', step: msg.step } : null

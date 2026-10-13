@@ -25,6 +25,10 @@ for page in 0 1 2 3; do
 done
 shoot -page 3 -tunerDemo YES
 xcrun simctl io "$UDID" screenshot "screens/tuner-on.png"
+# A pedal held: Drive 1's channels, B lit (-pick takes a demo pedal's id). For
+# looking at a pull request only; watch.yml's App Store list does not take it.
+shoot -page 1 -pick 50
+xcrun simctl io "$UDID" screenshot "screens/channels.png"
 # And with no phone: what it says when the iPhone app is not open.
 xcrun simctl launch --terminate-running-process "$UDID" "$ID" -demo NO
 sleep 5

@@ -562,6 +562,10 @@ export default function Stage({
       sceneCount: scenes.hasScenes ? scenes.count : 0,
       /* Not another preset's: a tap would switch whatever shares the id. */
       chain: chainNow.elsewhere ? [] : blocks,
+      /* What holding a pedal offers on the wrist: what holding its tile does
+         here, so none on the outline (see the tiles' onLongPress) and none
+         while another preset's chain is up. */
+      channels: channels?.length > 1 && !chainNow.outline && !chainNow.elsewhere ? channels : [],
       tunerOn,
       tuning,
       linked: Number.isInteger(preset?.number),
