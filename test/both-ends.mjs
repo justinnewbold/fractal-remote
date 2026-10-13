@@ -1880,7 +1880,9 @@ export function run(test) {
     assert.deepEqual(cards.map((c) => c.wire), ['MIDI CABLE', 'BLUETOOTH', undefined])
     assert.deepEqual(cards.map((c) => c.body), ['AM4', 'WIDI Uhost Bluetooth', 'v1.87.3'])
     assert.deepEqual(cards.map((c) => c.lit), [true, true, undefined])
-    for (const c of cards) assert.doesNotMatch(`${c.label} ${c.body} ${c.wire || ''}`, /computer|USB|SECURE LINK/i, `a computer is still in the Bluetooth chain: ${c.label}`)
+    /* Changed on purpose, 13 October 2026 (1.87.21): the computer's wire is
+       SECURE WIRELESS LINK now, and either name of it is a computer leaking in. */
+    for (const c of cards) assert.doesNotMatch(`${c.label} ${c.body} ${c.wire || ''}`, /computer|USB|SECURE( WIRELESS)? LINK/i, `a computer is still in the Bluetooth chain: ${c.label}`)
 
     const finding = blue({ name: 'WIDI Uhost Bluetooth', link: 'joining' })
     assert.deepEqual([finding[0].body, finding[0].tone], ['Reached through the Bluetooth adapter', 'dim'])
@@ -1910,6 +1912,243 @@ export function run(test) {
     const walk = read('mobile/src/components/Walk.js').replace(/\s+/g, ' ')
     assert.match(walk, /import bluetoothIcon from '\.\.\/\.\.\/assets\/icons\/bluetooth\.png'/)
     assert.match(walk, /const CHAIN_ICONS = \{ unit: ampIcon, computer: laptopIcon, adapter: bluetoothIcon, phone: phoneIcon \}/)
+  })
+
+  /*
+   * "Change red text about updating computer to a link that shows
+   * instructions when tapped on how to update it." (13 October 2026, 1.87.21)
+   *
+   * The red line said what to do and never how. Now the card it sits on is
+   * the link, at both ends, and it opens one page of steps worded once in
+   * shared/computer-update.mjs. The steps name things on the computer — a
+   * menu item, a line in its menu, a button — so they are held here to the
+   * computer app's own words for them: if the updater's wording moves, this
+   * fails until the steps move with it.
+   */
+  test('the red line on the computer card opens how to update it, at both ends', async () => {
+    const { UPDATE_STEPS } = await import('../shared/computer-update.mjs')
+    assert.deepEqual(UPDATE_STEPS, {
+      title: 'Updating the computer app',
+      intro: 'The computer app downloads new versions by itself, but it only puts one in when you quit it and open it again. A computer that stays open for days falls behind.',
+      steps: [
+        {
+          label: '1  QUIT, THEN OPEN IT AGAIN',
+          body: 'On the computer, click the Fractal Remote icon — in the menu bar at the top of a Mac’s screen, or by the clock on Windows (it may be behind the ^ arrow; right-click it) — and choose Quit. Then open Fractal Remote again. Any update it has already downloaded goes in.'
+        },
+        {
+          label: '2  CHECK FOR UPDATES',
+          body: 'Click the icon again (right-click on Windows) and choose Check for updates…. When it says “Update … installs when you quit”, quit and open it once more. It can take two rounds.'
+        },
+        {
+          label: '3  STILL BEHIND? DOWNLOAD IT',
+          body: 'On the computer, quit Fractal Remote as in step 1, then go to fractal.newbold.cloud/downloads and install the newest version over the old one. On a Mac, drag it into Applications and choose Replace. Then open Fractal Remote again. Your settings and sign-in stay.'
+        }
+      ],
+      after: 'The red line under YOUR COMPUTER goes away by itself a couple of minutes after the computer is up to date.',
+      ifItSays: [
+        {
+          says: '“Move Fractal Remote to Applications to get updates”',
+          body: 'A Mac only updates an app in its Applications folder. Open Fractal Remote and choose Move to Applications when it asks, or in its window go to ⚙ → About → Updates → Move to Applications.'
+        },
+        { says: '“Version … is still being built”', body: 'A new version is a few minutes from ready. Choose Check for updates… again in ten minutes.' },
+        { says: 'A password box, on Linux', body: 'The .deb package asks for your computer’s password when it installs. Type it to finish. The AppImage never asks.' }
+      ]
+    })
+    /* The lines about every computer say "computer". Only a step that differs by platform names one. */
+    for (const line of [UPDATE_STEPS.title, UPDATE_STEPS.intro, UPDATE_STEPS.after, ...UPDATE_STEPS.steps.map((s) => s.label)]) {
+      assert.doesNotMatch(line, /\bMac\b/, `"${line}" calls every computer a Mac`)
+    }
+
+    /* The phone carries a generated copy, listed with the others. */
+    const { FILES } = await import('../scripts/sync-relay-rules.mjs')
+    assert.ok(
+      FILES.some((f) => f.source === '../shared/computer-update.mjs' && f.target === '../mobile/src/lib/computer-update.js' && !f.raw),
+      'the phone has no copy of the steps'
+    )
+    assert.match(read('mobile/src/lib/computer-update.js'), /Generated from shared\/computer-update\.mjs/, 'the phone words the steps for itself')
+
+    /* HELD TO THE COMPUTER APP'S OWN WORDS. */
+    const { updateLine } = await import('../desktop/lib/updates.mjs')
+    /* A quoted line, with … standing for the version the menu puts there. */
+    const quoted = (says) => {
+      const escaped = says.replace(/[“”]/g, '').replace(/[.*+?^$()|[\]\\{}]/g, '\\$&')
+      return new RegExp('^' + escaped.replace(/…/g, '\\S+') + '$')
+    }
+    const ready = UPDATE_STEPS.steps[1].body.match(/“([^”]+)”/)[1]
+    assert.match(updateLine({ kind: 'ready', version: '1.87.21' }), quoted(ready), 'step 2 quotes a line the computer’s menu does not say')
+    assert.equal(updateLine({ kind: 'misplaced' }), UPDATE_STEPS.ifItSays[0].says.replace(/[“”]/g, ''), 'the steps quote a Mac line the menu does not say')
+    assert.match(updateLine({ kind: 'building', version: '1.87.21' }), quoted(UPDATE_STEPS.ifItSays[1].says), 'the steps quote a building line the menu does not say')
+    const main = read('desktop/main.js')
+    assert.match(main, /label: 'Check for updates…',/, 'the steps send somebody to a menu item that is not there')
+    assert.match(main, /\{ label: 'Quit', click: \(\) => app\.quit\(\) \}/, 'the menu has no Quit')
+    /*
+     * A click opens the window on Windows, so every step that goes to the
+     * icon's menu says right-click there: step 2 once said only "Click the
+     * icon again", which on Windows opens the window and no menu. And Windows
+     * 10 and 11 tuck a new app's icon behind the ^ arrow by the clock, and the
+     * app does nothing to bring it out, so step 1 says to look there.
+     */
+    assert.match(main, /tray\.on\('click', openWindow\)/)
+    assert.match(main, /tray\.setContextMenu\(menu\)/)
+    assert.match(UPDATE_STEPS.steps[0].body, /on Windows \(it may be behind the \^ arrow; right-click it\)/, 'step 1 does not say where the icon hides on Windows')
+    assert.match(UPDATE_STEPS.steps[1].body, /^Click the icon again \(right-click on Windows\) and choose Check for updates…/, 'step 2 opens the window on Windows, not the menu')
+    assert.match(main, /buttons: \['Move to Applications', 'Not now'\]/, 'the Mac does not ask to move itself any more')
+    assert.match(read('src/components/Updates.jsx'), /Move to Applications\s*<\/button>/, 'the Updates page has no Move to Applications')
+    assert.match(read('src/components/TopBar.jsx'), /<span aria-hidden="true">⚙<\/span>/, 'the window’s gear is not ⚙')
+    const app = read('src/App.jsx')
+    assert.match(app, /<SetupRow key="about" title="About"/)
+    assert.match(app, /<SetupRow key="updates" title="Updates"/)
+    assert.match(read('desktop/electron-builder.yml'), /deleteAppDataOnUninstall: false/, 'a reinstall on Windows throws the settings away')
+    /* Step 3 quits first and opens after: Finder will not replace an app that
+       is open, and only the Windows installer starts the app when it is done. */
+    assert.match(UPDATE_STEPS.steps[2].body, /^On the computer, quit Fractal Remote as in step 1, then go to [\s\S]*choose Replace\. Then open Fractal Remote again\./)
+    assert.match(read('desktop/electron-builder.yml'), /runAfterFinish: true/)
+    assert.doesNotMatch(read('desktop/electron-builder.yml'), /^dmg:/m, 'the Mac image has settings of its own now: check whether it reopens the app')
+    /* Read rather than imported: downloadLink.js imports './project' the way Metro resolves it, which Node does not. */
+    const downloads = read('mobile/src/lib/downloadLink.js').match(/export const DOWNLOADS_URL = '([^']+)'/)[1]
+    assert.ok(UPDATE_STEPS.steps[2].body.includes(`go to ${downloads} `), 'step 3 sends somebody to a page the phone does not')
+    assert.match(read('public/downloads.html'), /Download Fractal Remote/)
+
+    /* THE PHONE: the computer card's tap opens the page, and the page draws the shared words. */
+    const settings = read('mobile/src/screens/Settings.js')
+    const flat = settings.replace(/\s+/g, ' ')
+    assert.match(settings, /import \{ UPDATE_STEPS \} from '\.\.\/lib\/computer-update'/)
+    assert.match(flat, /<ChainCards cards=\{linkChain\(\{[\s\S]*?\}\)\} onWarn=\{\(\) => setPage\('updating'\)\} \/>/, 'the red line on the phone opens nothing')
+    assert.match(settings, /const PARENT = \{ offline: 'link', updating: 'link',/, 'back from the steps does not go to Phone & computer')
+    const phonePage = settings.slice(settings.indexOf("{page === 'updating' ? ("), settings.indexOf("{page === 'watch' ? ("))
+    assert.ok(phonePage.length > 200, 'the phone has no page of steps')
+    for (const drawn of ["head(UPDATE_STEPS.title, 'back')", 'UPDATE_STEPS.intro', 'UPDATE_STEPS.steps.map', 'UPDATE_STEPS.after', 'UPDATE_STEPS.ifItSays.map']) {
+      assert.ok(phonePage.includes(drawn), `the phone’s page does not draw ${drawn}`)
+    }
+    assert.match(phonePage, /<View key=\{step\.label\} style=\{\{ gap: space\.sm \}\}>\s*<TipCard icon=/, 'the phone’s steps are not numbered cards')
+    assert.ok(!/font\.small/.test(phonePage), 'the steps are in the small type')
+    assert.ok(!/mayDrive|purchase/.test(phonePage), 'the steps are kept from somebody who has not paid, whose computer is just as behind')
+
+    /* THE BROWSER: the same, from the same file. */
+    assert.match(app, /import \{ UPDATE_STEPS \} from '\.\.\/shared\/computer-update\.mjs'/)
+    assert.match(app.replace(/\s+/g, ' '), /\}\)\} onWarn=\{\(\) => setSetupPage\('updating'\)\} \/>/, 'the red line in the browser opens nothing')
+    assert.match(app, /updating: UPDATE_STEPS\.title,/)
+    assert.match(app, /const SETUP_PARENT = \{[^}]*updating: 'link'/, 'back from the browser’s steps does not go to Phone & computer')
+    const webAt = app.indexOf("{setupPage === 'updating' ? (")
+    const webPage = app.slice(webAt, app.indexOf("setupPage === '", webAt + 5))
+    assert.ok(webPage.length > 200, 'the browser has no page of steps')
+    for (const drawn of ['SETUP_PAGES.updating', "upLabel('updating')", 'UPDATE_STEPS.intro', 'UPDATE_STEPS.steps.map', 'UPDATE_STEPS.after', 'UPDATE_STEPS.ifItSays.map', '<Fragment key={step.label}>', '<TipCard icon=']) {
+      assert.ok(webPage.includes(drawn), `the browser’s page does not draw ${drawn}`)
+    }
+    assert.ok(!/<Section/.test(webPage), 'a folded section on the steps page (and structure.mjs would count it)')
+    /* And neither end types the steps out for itself. */
+    for (const [end, text] of [['phone', settings], ['browser', app]]) {
+      assert.ok(!text.includes('QUIT, THEN OPEN IT AGAIN') && !text.includes('install the newest version over the old one'), `the ${end} has its own copy of the steps`)
+    }
+
+    /*
+     * THE ADDRESS AGAIN, in a box of its own under the step that gives it. In the
+     * step card's narrow column it broke as "…cloud/download" and "s" at the
+     * commonest phone widths, and "/download" is the web app, not the
+     * downloads page. Both ends draw it again in the Connect a computer
+     * page's box, and a tap copies it.
+     *
+     * Both ends break it only after the slash, in the card and in the box.
+     * On one line the box shrank it under the page's body size on most
+     * phones (11.5pt at 320 wide, 14.4pt at 375 on the phone; 10.8px and
+     * 13.7px in the browser), and in the browser the card did not break it at
+     * all, so it ran out of a 320-wide screen. The card gets a place to break
+     * that adds nothing to the text (a zero-width space on the phone, whose
+     * card text cannot be selected; <wbr> in the browser, so a copied
+     * sentence holds the address as it is), and the box draws two lines.
+     */
+    assert.equal(UPDATE_STEPS.steps.filter((s) => s.body.includes(downloads)).length, 1, 'more than one step, or none, gives the address')
+    assert.match(settings, /import CopyAddress, \{ breakableAddress \} from '\.\.\/components\/CopyAddress'/)
+    assert.match(phonePage, /\{step\.body\.includes\(DOWNLOADS_URL\) \? <CopyAddress row split size=\{font\.lead\} saidSize=\{font\.body\} \/> : null\}/, 'the phone’s address is only inside the card, where it breaks')
+    assert.match(phonePage, /<TipCard icon=\{\[laptopIcon, setupIcon, sendIcon\]\[i\]\} label=\{step\.label\} body=\{breakableAddress\(step\.body\)\} \/>/, 'the phone’s card breaks the address wherever its line runs out')
+    const phoneCopy = read('mobile/src/components/CopyAddress.js')
+    assert.match(phoneCopy, /const CUT = DOWNLOADS_URL\.indexOf\('\/'\) \+ 1\n/)
+    assert.match(phoneCopy, /export const breakableAddress = \(text\) =>\s+text\.replace\(DOWNLOADS_URL, `\$\{DOWNLOADS_URL\.slice\(0, CUT\)\}\\u200B\$\{DOWNLOADS_URL\.slice\(CUT\)\}`\)/, 'the phone’s card has nowhere to break the address but anywhere')
+    /* Two lines that shrink together only once the first no longer fits: a line end, not a place the phone may choose. */
+    assert.match(phoneCopy, /<Text\s+numberOfLines=\{split \? 2 : 1\}\s+adjustsFontSizeToFit\s+minimumFontScale=\{0\.6\}/, 'the phone’s address box can break the address again')
+    assert.match(phoneCopy, /\{split \? `\$\{DOWNLOADS_URL\.slice\(0, CUT\)\}\\n\$\{DOWNLOADS_URL\.slice\(CUT\)\}` : DOWNLOADS_URL\}/, 'the phone’s box does not break the address after its slash')
+    assert.ok(downloads.indexOf('/') > 0 && downloads.indexOf('/') === downloads.lastIndexOf('/'), 'the address has no slash to break after, or more than one')
+    /* And its "Copied." line in the page's own size, not the small type. */
+    assert.match(phoneCopy, /\{ size = font\.body, row = false, saidSize = font\.small, split = false \}/)
+    assert.match(phoneCopy, /fontSize: saidSize, fontWeight: '700' \}\}>\{P6\.copied\}/)
+    assert.match(app, /import CopyAddress, \{ withAddressBreak \} from '\.\/components\/CopyAddress'/)
+    assert.match(webPage, /<TipCard icon=\{\[laptopIcon, setupIcon, sendIcon\]\[i\]\} label=\{step\.label\} body=\{withAddressBreak\(step\.body\)\} \/>/, 'the browser’s card runs the address out of a narrow screen')
+    assert.match(webPage, /\{step\.body\.includes\(DOWNLOADS_URL\) \? <CopyAddress \/> : null\}/, 'the browser’s address is only inside the card, where it breaks')
+    const webCopy = read('src/components/CopyAddress.jsx')
+    assert.match(webCopy, /navigator\.clipboard\.writeText\(`https:\/\/\$\{DOWNLOADS_URL\}`\)/, 'a tap does not copy the address in the browser')
+    assert.match(webCopy, /<div className="updating-address">\s*<button type="button" className="cc-address"/)
+    assert.match(webCopy, /const CUT = DOWNLOADS_URL\.indexOf\('\/'\) \+ 1\n/)
+    assert.match(webCopy, /\{text\.slice\(0, at \+ CUT\)\}\s*<wbr \/>\s*\{text\.slice\(at \+ CUT\)\}/, 'the browser’s card has nowhere to break the address')
+    assert.match(webCopy, /<span className="mono">\s*<span className="updating-address-line">\{DOWNLOADS_URL\.slice\(0, CUT\)\}<\/span>\s*<span className="updating-address-line">\{DOWNLOADS_URL\.slice\(CUT\)\}<\/span>\s*<\/span>/, 'the browser’s box does not break the address after its slash')
+    assert.ok(!/window\.open|location\.href|<a /.test(webCopy), 'the address opens the downloads page on the phone')
+    const css = read('src/styles.css')
+    const box = css.slice(css.indexOf('.cc-address .mono {'), css.indexOf('}', css.indexOf('.cc-address .mono {')))
+    assert.match(box, /white-space: nowrap;/, 'the address box lets the address break')
+    const fit = css.slice(css.indexOf('.updating-address .mono {'), css.indexOf('}', css.indexOf('.updating-address .mono {')))
+    /* 13.6em holds the 22 characters of "fractal.newbold.cloud/", the longer line. */
+    assert.match(fit, /font-size: min\(var\(--f-4\), calc\(\(100cqi - 80px\) \/ 13\.6\)\);/, 'the browser’s address does not shrink to its column')
+    assert.equal(downloads.slice(0, downloads.indexOf('/') + 1).length, 22, 'the address’s first line changed length: work out the 13.6 in .updating-address .mono again')
+    assert.match(css.slice(css.indexOf('.updating-address-line {'), css.indexOf('}', css.indexOf('.updating-address-line {'))), /display: block;/, 'the browser’s address is on one line again')
+    assert.match(css.slice(css.indexOf('.updating-address {'), css.indexOf('}', css.indexOf('.updating-address {'))), /container-type: inline-size;/)
+    assert.match(css.slice(css.indexOf('.updating-address .cc-copied {')), /^\.updating-address \.cc-copied \{\s*font-size: var\(--f-4\);/)
+
+    /* THE CARD AT BOTH ENDS: pressable only while it shows the red line, underlined then. */
+    const walk = read('mobile/src/components/Walk.js').replace(/\s+/g, ' ')
+    assert.match(walk, /const warnLink = Boolean\(warn && onWarn\) const press = onPress \|\| \(warnLink \? onWarn : null\)/)
+    assert.match(walk, /accessibilityRole=\{press \? 'button' : undefined\} accessibilityHint=\{warnLink \? hint : undefined\} disabled=\{!press\}/, 'a card with no red line can be pressed')
+    assert.match(walk, /textDecorationLine: warnLink \? 'underline' : 'none'/, 'the red line does not read as a link')
+    assert.match(walk, /export function ChainCards\(\{ cards, onWarn \}\)/)
+    assert.match(walk, /warn=\{card\.warn\} onWarn=\{onWarn\} hint="Shows how to update the computer app"/)
+    /* The lamp stays on the right; no chevron joins it. */
+    assert.match(walk, /\{right \|\| \(onPress \? <Image source=\{chevronIcon\}/)
+    const webWalk = read('src/components/Walk.jsx').replace(/\s+/g, ' ')
+    assert.match(webWalk, /const warnLink = Boolean\(warn && onWarn\) const press = onClick \|\| \(warnLink \? onWarn : null\)/)
+    assert.match(webWalk, /return press \? \( <button type="button" className=\{warnLink \? 'walk-card walk-card-link' : 'walk-card'\} onClick=\{press\}>/, 'the browser’s card is not the button')
+    assert.match(webWalk, /export function ChainCards\(\{ cards, onWarn \}\)/)
+    assert.match(webWalk, /warn=\{card\.warn\} onWarn=\{onWarn\}/)
+    /* One button: the red line inside it stays a span. */
+    assert.match(webWalk, /\{warn \? <span className="walk-card-warn">\{warn\}<\/span> : null\}/, 'a button inside the card’s button')
+    assert.match(read('src/styles.css'), /\.walk-card-link \.walk-card-warn \{\s*text-decoration: underline;/, 'the browser’s red line does not read as a link')
+    /* A card with no red line, given onWarn, is not a link: only the computer card shows the line. */
+    const { linkChain } = await import('../shared/link-chain.mjs')
+    const old = linkChain({ here: 'phone', unit: { name: 'FM3', state: 'present' }, computer: { name: 'MacBook Pro', version: '1.86.69', link: 'connected' }, phone: { version: '1.87.21' } })
+    assert.deepEqual(old.filter((c) => c.warn).map((c) => c.key), ['computer'], 'a card other than the computer’s carries the red line')
+  })
+
+  /*
+   * "Also, where it says secure link, change that to say secure wireless
+   * link." (13 October 2026, 1.87.21) The one wire between the computer and
+   * the phone, wherever it is drawn: Phone & computer at both ends, How it
+   * works on the phone and in a phone's browser, and the computer's welcome.
+   */
+  test('the wire between the computer and the phone says SECURE WIRELESS LINK everywhere it is drawn', async () => {
+    const { linkChain } = await import('../shared/link-chain.mjs')
+    for (const here of ['phone', 'computer']) {
+      const wires = linkChain({ here, unit: { name: 'FM3', state: 'present' }, computer: { name: 'MacBook Pro', link: 'connected' } }).map((c) => c.wire)
+      assert.deepEqual(wires, ['USB CABLE', 'SECURE WIRELESS LINK', undefined], `Phone & computer at the ${here} end`)
+    }
+    const { CHAIN } = await import('../shared/onboarding.mjs')
+    const computer = CHAIN.find((b) => b.key === 'computer')
+    assert.equal(computer.wire, 'SECURE WIRELESS LINK', 'the computer’s welcome still says SECURE LINK')
+    assert.equal(computer.phoneWire, 'SECURE WIRELESS LINK', 'How it works still says SECURE LINK')
+    for (const file of ['shared/link-chain.mjs', 'shared/onboarding.mjs', 'mobile/src/lib/link-chain.js', 'mobile/src/lib/onboarding.js']) {
+      assert.ok(!read(file).includes("'SECURE LINK'"), `${file} still says SECURE LINK`)
+    }
+    /* Each end draws the wire from those words rather than its own. */
+    assert.match(read('mobile/src/screens/Onboarding.js'), /\{box\.phoneWire \? <Wire label=\{box\.phoneWire\} \/> : null\}/)
+    assert.match(read('src/components/PhoneWalkthrough.jsx'), /<span className="pw-wire-label">\{box\.phoneWire\}<\/span>/)
+    assert.match(read('src/components/Onboarding.jsx'), /<span className="onb-wire mono">\{box\.wire\}<\/span>/)
+    /*
+     * The computer's welcome holds its three boxes in one row between two
+     * labels. On one line the longer label would have pushed the row onto two
+     * at windows that held it before, leaving the label at the end of the
+     * first row pointing at nothing. One word to a line, it is narrower than
+     * SECURE LINK was.
+     */
+    const css = read('src/styles.css')
+    const onbWire = css.slice(css.indexOf('.onb-wire {'), css.indexOf('}', css.indexOf('.onb-wire {')))
+    assert.match(onbWire, /width: min-content;/, 'the welcome’s wire label is one long line again')
+    assert.ok(!/white-space: nowrap/.test(onbWire), 'the welcome’s wire label is held to one line again')
   })
 
   /*

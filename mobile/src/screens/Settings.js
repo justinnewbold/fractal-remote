@@ -62,6 +62,9 @@ import UsageTool from '../components/UsageTool'
 import Lamp from '../components/Lamp'
 import { ChainCards, TipCard } from '../components/Walk'
 import { linkChain } from '../lib/link-chain'
+import { UPDATE_STEPS } from '../lib/computer-update'
+import { DOWNLOADS_URL } from '../lib/downloadLink'
+import CopyAddress, { breakableAddress } from '../components/CopyAddress'
 import playIcon from '../../assets/icons/play.png'
 import laptopIcon from '../../assets/icons/laptop.png'
 import mailIcon from '../../assets/icons/mail.png'
@@ -322,7 +325,7 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' }
+  const PARENT = { offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' }
   const UP_LABEL = { link: '‹ Phone & computer', developer: '‹ Developer' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
@@ -808,6 +811,11 @@ export default function Settings({
               lib/link-chain, the same file the browser's page draws from.
               The unit's firmware and both version numbers live on the cards
               now; they were three separate lines under a lamp.
+
+              The computer card's red "Update the computer app" line is a
+              link: "change red text about updating computer to a link that
+              shows instructions when tapped on how to update it." The card
+              takes the tap and opens page 'updating'.
             */}
             <ChainCards
               cards={linkChain({
@@ -827,6 +835,7 @@ export default function Settings({
                   email: account?.email && !isPairAccount(account.email) ? account.email : null
                 }
               })}
+              onWarn={() => setPage('updating')}
             />
 
             {/* What to do about a unit that is missing or silent, under the
@@ -1229,6 +1238,56 @@ export default function Settings({
             What you change there is kept by that browser rather than in your account, so it does not
             follow you to this app or to another phone.
           </Note>
+        </>
+      ) : null}
+
+      {/* -------------------------------------------------------- updating */}
+      {/*
+        HOW TO UPDATE THE COMPUTER APP, the page the red line on the YOUR
+        COMPUTER card opens. "Change red text about updating computer to a
+        link that shows instructions when tapped on how to update it."
+
+        In the shape of Playing with no internet beside it — numbered cards,
+        in type that can be read — because that is what he asked for on these
+        pages. The words are lib/computer-update's (shared/computer-update.mjs),
+        the same ones the browser's page draws, and each name in them is the
+        computer app's own word for the thing.
+
+        Not behind the purchase: a computer can be behind whoever is holding
+        the phone.
+      */}
+      {page === 'updating' ? (
+        <>
+          {head(UPDATE_STEPS.title, 'back')}
+          <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>{UPDATE_STEPS.intro}</Text>
+          {/*
+            The address again under the step that gives it, and a tap copies
+            it. In the card's narrow column it could split as "…cloud/download"
+            and "s", and "/download" sends somebody to the web app instead of
+            the downloads page, so both the card and the box break it only
+            after the slash: the card where its line runs out
+            (breakableAddress), the box always, on two lines in type no
+            smaller than the page's (split). CopyAddress is the Connect a
+            computer page's box, so a Mac on the same Apple account pastes it.
+          */}
+          <View style={{ gap: space.md }}>
+            {UPDATE_STEPS.steps.map((step, i) => (
+              <View key={step.label} style={{ gap: space.sm }}>
+                <TipCard icon={[laptopIcon, setupIcon, sendIcon][i]} label={step.label} body={breakableAddress(step.body)} />
+                {step.body.includes(DOWNLOADS_URL) ? <CopyAddress row split size={font.lead} saidSize={font.body} /> : null}
+              </View>
+            ))}
+          </View>
+          <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>{UPDATE_STEPS.after}</Text>
+          {/* What the computer's menu can say instead, each with the one thing to do. */}
+          <View style={{ gap: space.md }}>
+            {UPDATE_STEPS.ifItSays.map((entry) => (
+              <Note key={entry.says} size={font.body}>
+                <Text style={{ color: color.silk, fontWeight: '700' }}>{entry.says}</Text>
+                {`\n${entry.body}`}
+              </Note>
+            ))}
+          </View>
         </>
       ) : null}
 
