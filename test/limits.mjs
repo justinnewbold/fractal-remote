@@ -403,6 +403,15 @@ export function run(test) {
       wf.includes('stapler staple'),
       'the disk image is notarised but its ticket is never attached, so the check only passes with a network and a stranger offline still sees a warning'
     )
+    /* And the stapler asks Apple again when the line drops: every Mac run from
+       1.87.14 to 1.87.19 went red on "The network connection was lost" with
+       the file already accepted, and 1.87.19's never sent its Intel image. */
+    assert.equal(wf.match(/^\s*again\(\) \{$/gm)?.length, 2, 'a stapler step asks Apple only once, and one dropped line fails the release')
+    for (const call of ['again xcrun stapler staple "$dmg"', 'again xcrun stapler validate "$app"', 'again xcrun stapler validate "$dmg"']) {
+      assert.ok(wf.includes(call), `${call.replace('again ', '')} is asked only once, and one dropped line fails the release`)
+    }
+    assert.ok(!/^\s*xcrun stapler (staple|validate)/m.test(wf), 'a stapler call goes straight to Apple, and one dropped line fails the release')
+    assert.match(wf, /"\$@" && return 0[\s\S]{0,120}return 1/, 'a stapler that never answers no longer fails the step')
   })
 
   test('the Windows app is built, and ships both halves of a release', async () => {

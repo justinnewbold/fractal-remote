@@ -277,6 +277,21 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
+          # Apple's ticket service drops the line now and then. Every Mac run
+          # from 1.87.14 to 1.87.19 went red on "The network connection was
+          # lost" from api.apple-cloudkit.com, after Apple had already said
+          # Accepted, and the 1.87.19 one never sent the Intel image at all.
+          # The ticket was there; it only had to be asked for again. So the
+          # stapler asks up to five times over about two and a half minutes.
+          # A file Apple really refused fails all five and still goes red.
+          again() {
+            for wait in 0 10 20 40 80; do
+              sleep "$wait"
+              "$@" && return 0
+              echo "::warning::$* did not answer; asking again"
+            done
+            return 1
+          }
           for dmg in release/*.dmg; do
             echo "── $dmg"
             xcrun notarytool submit "$dmg" \
@@ -284,7 +299,7 @@ jobs:
               --password "$APPLE_APP_SPECIFIC_PASSWORD" \
               --team-id "$APPLE_TEAM_ID" \
               --wait
-            xcrun stapler staple "$dmg"
+            again xcrun stapler staple "$dmg"
           done
 
       # What the steps above claim, checked against what macOS will actually do
@@ -309,6 +324,18 @@ jobs:
           set -euo pipefail
           # Globs rather than `find | for`: the product name has spaces in it.
           shopt -s nullglob
+          # The same patience as the step above: stapler validate asks the
+          # same ticket service, and 1.87.14's and 1.87.18's runs went red
+          # here on the same dropped line with the app already "accepted,
+          # source=Notarized Developer ID" one command earlier.
+          again() {
+            for wait in 0 10 20 40 80; do
+              sleep "$wait"
+              "$@" && return 0
+              echo "::warning::$* did not answer; asking again"
+            done
+            return 1
+          }
 
           seen=0
           for app in release/mac*/*.app; do
@@ -316,7 +343,7 @@ jobs:
             echo "── $app"
             codesign --verify --deep --strict --verbose=2 "$app"
             spctl --assess --type exec --verbose=4 "$app"
-            xcrun stapler validate "$app"
+            again xcrun stapler validate "$app"
           done
           [ "$seen" = 1 ] || { echo "no .app was produced to check"; exit 1; }
 
@@ -334,7 +361,7 @@ jobs:
           for dmg in release/*.dmg; do
             seen=1
             echo "── $dmg"
-            xcrun stapler validate "$dmg"
+            again xcrun stapler validate "$dmg"
           done
           [ "$seen" = 1 ] || { echo "no .dmg was produced to check"; exit 1; }
 

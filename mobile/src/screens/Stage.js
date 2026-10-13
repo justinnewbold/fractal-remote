@@ -875,13 +875,23 @@ export default function Stage({
               STAGE_HIDDEN, which still keeps the looper out of the on/off
               tiles — but the door to Record, Play and Stop. Tapping it opens
               the looper's buttons; it never bypasses the block.
+
+              Rec in the top left and Play in the top right, the two corners
+              an effect uses for On/Off and its channel, with the picture
+              between them. "Looks like we need to fix the overlapping play
+              word on the looper": the whole phrase in one corner reached past
+              the middle of the tile at three and four across, and the picture
+              sat on top of Play. They are one phrase, so they are a pair:
+              where either has no room beside the picture, neither is drawn.
             */}
             {looperTile ? (
               <Tile
                 key="looper"
                 label={shortBlock(looperHere)}
                 icon={showIcons ? blockIcon('looper') : undefined}
-                topLeft="Rec · Play"
+                topLeft="Rec"
+                topRight="Play"
+                pair
                 fill={blockColor('looper').fill}
                 ink={blockColor('looper').ink}
                 on={!looperHere.bypassed}

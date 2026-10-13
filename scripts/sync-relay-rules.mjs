@@ -69,6 +69,8 @@ export const FILES = [
   { source: '../shared/own-echo.mjs', target: '../mobile/src/lib/own-echo.js' },
   /* The looper's buttons: which latch, which are a quick press, and what Stop sends. */
   { source: '../shared/looper.mjs', target: '../mobile/src/lib/looper.js' },
+  /* When a tile's corner words fit beside its picture, so both ends hide the same words rather than one drawing them over it. */
+  { source: '../shared/tile-corners.mjs', target: '../mobile/src/lib/tile-corners.js' },
   /* "Swipe left to remove a song": the words, and where a swipe lands. */
   { source: '../shared/swipe-hint.mjs', target: '../mobile/src/lib/swipe-hint.js' },
   /* More than one row: the joins between them, and the writes that add or take away a parallel path. */

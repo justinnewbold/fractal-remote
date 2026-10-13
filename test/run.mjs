@@ -13161,6 +13161,128 @@ test('Play says where the looper went, and still never draws one', async () => {
   assert.match(gig, /allBlocks\.filter\(\(b\) => b\.slug && !STAGE_HIDDEN\.includes\(b\.slug\)\)/, 'Play draws a tile for the looper, input or output')
 })
 
+test('the looper’s Rec and Play sit in the two top corners, and no corner word is drawn on a picture', async () => {
+  /*
+   * "Looks like we need to fix the overlapping play word on the looper." The
+   * browser draws the phone's tile and had the phone's fault at its default
+   * size: the corner row costs no height, the picture is centred in the
+   * rest, and "Rec · Play" in one corner ran under the picture. Now Rec is
+   * where an effect says On, Play is where it keeps its channel, and a word
+   * with no room beside the picture is not drawn — by the rule the phone
+   * uses, shared/tile-corners.mjs, which test/mobile.mjs holds to numbers.
+   */
+  const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+  const gig = bare(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8'))
+  assert.match(gig, /import \{ cornerFit \} from '\.\.\/\.\.\/shared\/tile-corners\.mjs'/, 'the browser has its own idea of when a corner word fits')
+  const tile = gig.slice(gig.indexOf('function BlockTile('), gig.indexOf('function ChannelSheet('))
+  assert.ok(tile.length > 0, 'BlockTile is not where this test reads it')
+  assert.ok(!/Rec · Play/.test(gig), 'the whole phrase is back in one corner, on the picture')
+  /* The looper's own names for the two buttons the door opens. */
+  const { LOOPER_LABEL } = await import('../shared/looper.mjs')
+  assert.equal(LOOPER_LABEL.record, 'Rec')
+  assert.equal(LOOPER_LABEL.play, 'Play')
+  assert.match(gig, /import \{ findLooper, LOOPER_LABEL \} from '\.\.\/\.\.\/shared\/looper\.mjs'/)
+  /* On and Off stay written in the tile, where test/both-ends.mjs reads them. */
+  assert.match(
+    tile,
+    /<span className="gig-block-word" ref=\{wordRef\} data-crowded=\{shows\.left \? undefined : 'yes'\}>\s*\{door \? LOOPER_LABEL\.record : unknown \? '\\u00a0' : block\.bypassed \? 'Off' : 'On'\}/,
+    'the door’s top left does not say Rec, or the top-left word is drawn whether or not it has room'
+  )
+  /* Play looks like the word it finishes, not like the channel's pill. */
+  assert.match(
+    tile,
+    /\{door \? \(\s*<span className="gig-block-word gig-block-word-end" ref=\{acrossRef\} data-crowded=\{shows\.right \? undefined : 'yes'\}>\s*\{LOOPER_LABEL\.play\}/,
+    'the door has no Play in its top right, or Play is drawn whether or not it has room'
+  )
+  /* An effect is unchanged: On or Off on the left, its channel on the right, and the same rule. */
+  assert.match(tile, /\{block\.channel && !door \? \(\s*<span className="gig-block-channel" ref=\{acrossRef\} data-crowded=\{shows\.right \? undefined : 'yes'\}>/, 'the channel letter is drawn on the picture')
+  /* The door's two words are one phrase; an effect's are two facts. */
+  assert.match(tile, /useCornerFit\(\s*\{ tile: tileRef, picture: pictureRef, band: bandRef, left: wordRef, right: acrossRef \},\s*door,/, 'Rec and Play are not held together, or an effect’s corners are')
+  /* A hidden word is not read out, so the label carries the words. */
+  assert.match(tile, /\[block\.name \|\| block\.slug, unknown \? null : block\.bypassed \? 'Off' : 'On', block\.channel\]\.filter\(Boolean\)\.join\(', '\)/, 'a hidden On or channel letter is lost to a screen reader')
+  assert.match(tile, /'Looper — open Record, Play and Stop'/)
+
+  const hook = gig.slice(gig.indexOf('function useCornerFit('), gig.indexOf('function BlockTile('))
+  assert.ok(hook.length > 0, 'the corner measure is not where this test reads it')
+  assert.match(hook, /const next = cornerFit\(\{[\s\S]{0,400}?pair\s*\}\)/, 'the browser does not ask the rule')
+  /* The row's own gap, read from the row, so two words that each fit but not
+     together are not squeezed into it and cut to "R… Pl…". */
+  assert.match(hook, /parseFloat\(getComputedStyle\(band\.current\)\.columnGap\)/, 'the space between the two corner words is not measured')
+  assert.match(hook, /between: Number\.isFinite\(between\) \? between : 0,/, 'the rule is not told the space between the corner words')
+  /* The text, not the box. A hidden word hands its room to the word across
+     from it (styles.css below), so its box can be narrower than it is; and
+     scrollWidth, which read it whole here once, leaves out the right-hand
+     padding of an overflowing box in some browsers, which would have the
+     channel's pill drawn, hidden and drawn again every frame. */
+  assert.match(hook, /text\.selectNodeContents\(el\)/, 'a word is measured by its box, after its ellipsis, rather than whole')
+  assert.match(hook, /px\(s\.paddingLeft\) \+ px\(s\.paddingRight\) \+ px\(s\.borderLeftWidth\) \+ px\(s\.borderRightWidth\)/, 'the channel’s pill is measured without its padding or border')
+  assert.ok(!/el\.scrollWidth/.test(hook), 'a word is measured by a box a hidden word gives away')
+  assert.match(hook, /new ResizeObserver\(look\)/, 'a tile that changes size keeps the last answer')
+  assert.match(hook, /document\.fonts\?\.ready\?\.then\(now\)/, 'a word measured in the fallback face keeps that answer')
+  /*
+   * And on the frame it changes size, not the one after. A state set from a
+   * ResizeObserver is drawn a frame late, and a window narrowed from wide to
+   * phone-width drew that frame with the wide answer: Play on the looper's
+   * picture. flushSync puts the answer in before the paint — but only for the
+   * tile's own change, since a word's box changes when the answer does, and a
+   * box that changes at the depth the observer was just told about, in the
+   * same frame, is the browser's loop error, which the crash log keeps.
+   */
+  assert.match(gig, /import \{ flushSync \} from 'react-dom'/, 'a tile that changes size is drawn once with the old answer')
+  assert.match(hook, /const now = \(\) => \{\s*if \(!gone\) flushSync\(\(\) => measure\.current\(\)\)\s*\}/, 'a tile that changes size is drawn once with the old answer')
+  assert.match(hook, /if \(seen\.some\(\(e\) => e\.target === tile\.current\)\) now\(\)\s*else measure\.current\(\)/, 'a word that changes size is answered inside the frame that moved it')
+  assert.match(hook, /watch\?\.disconnect\(\)/, 'a tile that goes keeps being watched')
+  assert.match(hook, /useLayoutEffect\(\(\) => \{\s*measure\.current\(\)\s*\}, again\)/, 'a word that changes is not measured again before it is drawn')
+  /* Only when the answer changes, so a measure cannot set off another. */
+  assert.match(hook, /setFit\(\(was\) => \(was && was\.left === next\.left && was\.right === next\.right \? was : next\)\)/, 'every measure sets state')
+  /* Hidden until measured, so a word that will not fit never flashes over the picture. */
+  assert.match(hook, /return fit \|\| \{ left: false, right: false \}/, 'the corner words are drawn before they are measured')
+
+  /*
+   * The stylesheet: hidden, not removed, so a word keeps its place and can be
+   * measured again; at the top level of the sheet, so the compact layout's
+   * short tiles get it too; and nothing anywhere draws a crowded word again.
+   */
+  const css = readSrc(new URL('../src/styles.css', import.meta.url), 'utf8')
+  const rule = (sel) => css.slice(css.indexOf(sel + ' {'), css.indexOf('}', css.indexOf(sel + ' {')))
+  assert.ok(css.includes('\n.gig-block-state [data-crowded] {'), 'the hidden corner word is styled only at some sizes, or not at all')
+  assert.match(rule('.gig-block-state [data-crowded]'), /visibility: hidden/, 'a word with no room is drawn')
+  assert.ok(!/display: none/.test(rule('.gig-block-state [data-crowded]')), 'a hidden word takes its place with it, so it cannot be measured again')
+  assert.ok(![...css.matchAll(/[^\n}]*data-crowded[^{]*\{[^}]*\}/g)].some((m) => /visibility: visible|opacity/.test(m[0])), 'a crowded word is drawn again somewhere')
+  /* A hidden word gives its room to the one that is drawn, and the one that
+     is drawn keeps all of it: with pictures off, Small, on a 320 phone, the
+     hidden channel pill held its place and cut the Off beside it to "O…". */
+  assert.match(rule('.gig-block-state [data-crowded]'), /min-width: 0;/, 'a hidden word keeps its room and cuts short the word beside it')
+  assert.match(rule('.gig-block-state [data-crowded]'), /overflow: hidden;/, 'a hidden word that gave up its room spills out of the tile')
+  assert.match(rule('.gig-block-state [data-crowded]'), /text-overflow: clip;/, 'a hidden word is ellipsized, and some browsers then measure it short')
+  assert.match(rule('.gig-block-state > :not([data-crowded])'), /flex-shrink: 0;/, 'a word that is drawn can still be squeezed short')
+  assert.ok(css.indexOf('\n.gig-block-state > :not([data-crowded]) {') > css.indexOf('\n.gig-block-state [data-crowded] {'), 'the drawn word’s rule is not with the hidden word’s')
+  assert.match(rule('.gig-block-word-end'), /margin-left: auto/, 'Play is not across in the top right')
+  assert.ok(!/border|padding/.test(rule('.gig-block-word-end')), 'Play is drawn in the channel’s pill')
+
+  /*
+   * And at the default size the words have the room the rule asks for.
+   *
+   * Smallest is the compact layout, four across on a phone, and its picture
+   * is up in the corner row on every tile. Set 8px in at 12px with the
+   * channel in a pill 8px either side, every channel letter and every Off
+   * was hidden on a 360 to 390 wide phone. 4px in, at 11px, with a pill 4px
+   * either side: back beside the picture from 360 up.
+   */
+  const compactState = rule('.gig[data-compact] .gig-block-state')
+  assert.match(compactState, /left: var\(--s-1\);\s*right: var\(--s-1\);/, 'the smallest tiles’ corner words are 8px in again, and every Off on a phone is hidden')
+  assert.match(compactState, /font-size: var\(--f-1\)/, 'the smallest tiles’ corner words are a size up again, and every Off on a phone is hidden')
+  assert.match(rule('.gig[data-compact] .gig-block-channel'), /padding: 0 var\(--s-1\)/, 'the smallest tiles’ channel pill is wide again, and every channel letter on a phone is hidden')
+  /* Small on a phone is four across too, without being compact. */
+  const phoneSmall = css.slice(css.indexOf('.gig[data-fx-abbr] .gig-block-state {'))
+  assert.ok(css.lastIndexOf('@media (max-width: 620px) {', css.indexOf('.gig[data-fx-abbr] .gig-block-state {')) > css.indexOf('.gig[data-compact] .gig-block-channel {'), 'four across at Small on a phone is not given the tighter corners')
+  assert.match(rule('.gig[data-fx-abbr] .gig-block-state'), /left: var\(--s-1\);\s*right: var\(--s-1\);\s*font-size: var\(--f-1\);/, 'at Small on a phone the corner words are 8px in at 12px again, and every channel letter is hidden')
+  assert.match(phoneSmall, /\.gig\[data-fx-abbr\] \.gig-block-channel \{\s*padding: 0 var\(--s-1\);/, 'at Small on a phone the channel pill is wide again, and every channel letter is hidden')
+  /* Overrides, not the rules themselves: the tests that read .gig-block-state and .gig-block-channel take the first match. */
+  assert.ok(css.indexOf('.gig-block-state {') === css.indexOf('\n.gig-block-state {') + 1, 'something above the corner row’s own rule now answers to its name')
+  assert.ok(css.indexOf('.gig-block-channel {') === css.indexOf('\n.gig-block-channel {') + 1, 'something above the channel’s own rule now answers to its name')
+})
+
 console.log('\nwhat the footswitches do')
 
 test('the footswitch panel is only for a unit that says its switches can be read', async () => {
