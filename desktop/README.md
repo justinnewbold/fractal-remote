@@ -34,7 +34,7 @@ and the app keeps the computer's link to it up by itself:
 
 - **At launch it turns the phone remote on** (`armHost` in
   [`lib/host.mjs`](lib/host.mjs)) and, until it is on, asks again every
-  minute for half an hour and then every five — on every start since 1.87.18,
+  minute for half an hour and then every five — on every start since 1.87.19,
   not only one with no window, because a laptop's wifi often comes back a few
   seconds after the app does. Never against somebody turning it off, even
   when they press Turn off while it is still being turned on.

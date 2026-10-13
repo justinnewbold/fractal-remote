@@ -1675,7 +1675,7 @@ test('a hostname reads like a name', () => {
  * A ForgeFX to arm: answers the routes armHost and checkRelay call, records
  * what was asked, and behaves as ForgeFX's relay host does, in both its ages.
  *
- * Changed on purpose, 12 October 2026 (1.87.18). This answered /remote/status
+ * Changed on purpose, 12 October 2026 (1.87.19). This answered /remote/status
  * with `connected: enabled`, and a failed enable never left the switch on —
  * which is the device server everybody wished they had, and hid the one that
  * left a phone with no answer that day. Now it tells the truth:
@@ -1855,7 +1855,7 @@ test('already on is left alone', async () => {
 
 test('a slow account service gets a few tries', async () => {
   /*
-   * Changed on purpose, 12 October 2026 (1.87.18): this is an older device
+   * Changed on purpose, 12 October 2026 (1.87.19): this is an older device
    * server now. A newer one keeps trying by itself, and is asked once — see
    * the next test.
    */
@@ -2008,7 +2008,7 @@ test('a look at the link: one that is down is pushed once, straight after a wake
   assert.deepEqual(await look(unit), { seen: { enabled: true, connected: true, sure: true, state: 'joined' }, nudged: false, rearm: false })
   unit.drop()
   /*
-   * Changed on purpose, 12 October 2026 (1.87.18), before it shipped: a link
+   * Changed on purpose, 12 October 2026 (1.87.19), before it shipped: a link
    * down for two looks running was made again, every two minutes for as long
    * as it stayed down. A device server that reports its state is trying by
    * itself all that time, waiting longer each time, and every push starts
@@ -9680,7 +9680,7 @@ test('the phone remote is asked for again, in the same words as before, with or 
   // The call text the version test above pins, inside the retry.
   assert.match(arm, /armHost\(\{ port, version: app\.getVersion\(\), log: phoneLog \}\)/)
   /*
-   * Changed on purpose, 12 October 2026 (1.87.18). This pinned the retry to
+   * Changed on purpose, 12 October 2026 (1.87.19). This pinned the retry to
    * a start with no window (`startHidden ? … : null`), on the grounds that a
    * page open at the computer makes the same attempt. It does, once, when it
    * opens — so a MacBook opened a few seconds before its wifi came back was
@@ -9788,7 +9788,7 @@ test('once a minute: a link mending itself is left to it, pushed once when the c
   await ticks()
   assert.equal(rearms.length, 0)
   /*
-   * Changed on purpose, 12 October 2026 (1.87.18), before it shipped: this
+   * Changed on purpose, 12 October 2026 (1.87.19), before it shipped: this
    * pushed a link down for two looks running, every two minutes. A device
    * server that reports its state is mending it by itself, and each push
    * starts its waits over; see checkRelay.

@@ -667,7 +667,7 @@ async function start() {
    * only when it opens. So the app asks again every minute for half an hour,
    * then every five minutes — never when the answer was on, never when
    * somebody turned it off, and never at an older device server that is
-   * stuck. See phoneRetryDelay. (Until 1.87.18 only a start with no window
+   * stuck. See phoneRetryDelay. (Until 1.87.19 only a start with no window
    * did this.)
    */
   const phoneSince = uptime()

@@ -407,7 +407,7 @@ export async function armHost({
  * Look at the phone remote's link again, and say whether it needs making
  * again.
  *
- * armHost runs at launch and after a restart, and until 1.87.18 nothing
+ * armHost runs at launch and after a restart, and until 1.87.19 nothing
  * looked again after that — so a link the account service closed while the
  * Mac slept stayed closed until the app was quit, with the menu saying on
  * the whole time. This is the look the app takes between: twice after the

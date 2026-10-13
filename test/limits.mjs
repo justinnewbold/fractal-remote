@@ -185,7 +185,7 @@ export function run(test) {
     const main = read('desktop/main.js')
     assert.match(main, /firewall\.known && firewall\.on && firewall\.blocked !== false/, 'the menu never mentions the firewall, or mentions it when it is not the problem')
     /*
-     * Changed on purpose, 12 October 2026 (1.87.18). This pinned the offer to
+     * Changed on purpose, 12 October 2026 (1.87.19). This pinned the offer to
      * `phone?.on`, which is what armHost found at launch — and on 12 October
      * a phone got no answer through the relay while that still said on,
      * because the device server's link had been closed since. So the offer

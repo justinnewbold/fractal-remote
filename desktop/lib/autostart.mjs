@@ -218,7 +218,7 @@ export function restartPlan({ failures = 0, ranForMs = 0 } = {}) {
  * its wifi reads "signed out" from an account service it cannot reach yet,
  * and with no window there is nobody to open the app and try again.
  *
- * And since 1.87.18 a computer somebody opened by hand is asked again too. A
+ * And since 1.87.19 a computer somebody opened by hand is asked again too. A
  * page open at the computer used to make the same attempt, which is why only
  * a start with no window did this — but the page only tries when it opens,
  * and a MacBook that found its wifi a few seconds after the app was left
