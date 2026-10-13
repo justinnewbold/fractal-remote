@@ -217,6 +217,12 @@ export function restartPlan({ failures = 0, ranForMs = 0 } = {}) {
  * The phone remote, asked again until it is on. A Pi that boots faster than
  * its wifi reads "signed out" from an account service it cannot reach yet,
  * and with no window there is nobody to open the app and try again.
+ *
+ * And since 1.87.18 a computer somebody opened by hand is asked again too. A
+ * page open at the computer used to make the same attempt, which is why only
+ * a start with no window did this — but the page only tries when it opens,
+ * and a MacBook that found its wifi a few seconds after the app was left
+ * with the remote off for the rest of the day.
  */
 export const PHONE_RETRY_MS = 60 * 1000
 export const PHONE_RETRY_FOR_MS = 30 * 60 * 1000
@@ -226,12 +232,18 @@ export const PHONE_RETRY_SLOW_MS = 5 * 60 * 1000
  * How long to wait before asking again, or null for "don't".
  *
  * On is done. Turned off is somebody's decision, and asking again would undo
- * it. Anything else — no network yet, the server still waking up — is asked
- * again every minute for half an hour, then every five minutes for as long as
- * the app runs.
+ * it. Stuck is an older device server whose own try at the link failed, and
+ * asking it again makes every tap on the phone happen twice (see armHost in
+ * lib/host.mjs). Retrying is a device server that is switched on and keeps
+ * trying by itself, waiting longer each time; asking it again starts those
+ * waits over, which every minute across every computer an outage reaches
+ * would be the app hammering the account service while it is down. Anything
+ * else — no network yet, the server still waking up — is asked again every
+ * minute for half an hour, then every five minutes for as long as the app
+ * runs.
  */
 export function phoneRetryDelay(result, sinceMs = 0) {
-  if (!result || result.on || result.reason === 'turned-off') return null
+  if (!result || result.on || ['turned-off', 'stuck', 'retrying'].includes(result.reason)) return null
   return sinceMs < PHONE_RETRY_FOR_MS ? PHONE_RETRY_MS : PHONE_RETRY_SLOW_MS
 }
 

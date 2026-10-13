@@ -184,7 +184,17 @@ export function run(test) {
      */
     const main = read('desktop/main.js')
     assert.match(main, /firewall\.known && firewall\.on && firewall\.blocked !== false/, 'the menu never mentions the firewall, or mentions it when it is not the problem')
-    assert.match(main, /phone\?\.on\n?\s*\?/, 'the relay is offered whether or not it works')
+    /*
+     * Changed on purpose, 12 October 2026 (1.87.18). This pinned the offer to
+     * `phone?.on`, which is what armHost found at launch — and on 12 October
+     * a phone got no answer through the relay while that still said on,
+     * because the device server's link had been closed since. So the offer
+     * follows `remoteOn`: the link as the device server last said it was,
+     * and armHost's answer only until there has been a look. Still never
+     * offered when it does not work.
+     */
+    assert.match(main, /\.\.\.\(remoteOn\n?\s*\?/, 'the relay is offered whether or not it works')
+    assert.match(main, /const remoteOn = relay \? relay\.connected : Boolean\(phone\?\.on\)/, 'the offer does not follow the link as it is now')
     assert.match(main, /fractal\.newbold\.cloud/, 'the other way in is not offered at all')
   })
 
