@@ -40,6 +40,11 @@ import { isOlder } from './versions.js'
  * its version is older still (from before it could). Not until the computer
  * has said its name, so the line never flashes up in the moment between
  * connecting and the first read.
+ *
+ * AND THE LINE SAYS HOW. "Change red text about updating computer to a link
+ * that shows instructions when tapped on how to update it." The words stay;
+ * each end makes the card the link (an `onWarn` on ChainCards), and the steps
+ * it opens are in computer-update.mjs.
  */
 export const UPDATE_COMPUTER = 'Update the computer app to the latest version'
 
@@ -119,7 +124,8 @@ export function linkChain({ here, demo = false, via = 'computer', unit = {}, com
     { key: 'unit', label: 'YOUR UNIT', ...unitCard, wire: ble ? 'MIDI CABLE' : 'USB CABLE' },
     ble
       ? { key: 'adapter', label: 'BLUETOOTH ADAPTER', ...adapterCard, wire: 'BLUETOOTH' }
-      : { key: 'computer', label: atPhone ? 'YOUR COMPUTER' : 'THIS COMPUTER', ...computerCard, ...(computerWarn ? { warn: computerWarn } : {}), wire: 'SECURE LINK' },
+      : /* "Where it says secure link, change that to say secure wireless link" (13 October 2026), here and in How it works (onboarding.mjs). */
+        { key: 'computer', label: atPhone ? 'YOUR COMPUTER' : 'THIS COMPUTER', ...computerCard, ...(computerWarn ? { warn: computerWarn } : {}), wire: 'SECURE WIRELESS LINK' },
     { key: 'phone', label: atPhone ? 'THIS PHONE' : 'YOUR PHONE', ...phoneCard }
   ].map((card, i, all) => ({
     ...card,

@@ -11,6 +11,23 @@ import checkIcon from '../../assets/icons/check.png'
 
 const face = Platform.select(mono)
 
+/* Just after the address's slash: "fractal.newbold.cloud/" and "downloads". */
+const CUT = DOWNLOADS_URL.indexOf('/') + 1
+
+/*
+ * THE ADDRESS IN A SENTENCE, given one place to break: after its slash.
+ *
+ * Read as one long word, the address in a narrow card can split wherever
+ * the line runs out, as "…cloud/download" and "s", and "/download" is the
+ * web app rather than the downloads page. A zero-width space after the
+ * slash is a place to break that draws nothing, and only a line too short
+ * for the whole address uses it. The card's text cannot be selected, so
+ * nobody copies the space along with it; the box below copies the address
+ * itself.
+ */
+export const breakableAddress = (text) =>
+  text.replace(DOWNLOADS_URL, `${DOWNLOADS_URL.slice(0, CUT)}\u200B${DOWNLOADS_URL.slice(CUT)}`)
+
 /**
  * THE DOWNLOADS ADDRESS, AND A TAP COPIES IT.
  *
@@ -32,7 +49,22 @@ const face = Platform.select(mono)
  * that turns into a tick once it has copied. The card version stays for the
  * walkthrough, where the whole card is the button.
  */
-export default function CopyAddress({ size = font.body, row = false }) {
+/*
+ * `saidSize` is the size of the "Copied." line under the row. Small on
+ * Connect a computer; body size on Updating the computer app, where every
+ * line is in type that can be read at arm's length.
+ *
+ * `split` draws the row's address on two lines, broken after the slash, for
+ * the same page. On one line the 31 characters at 18pt need about 336pt
+ * beside the copy button, so it shrank to fit: to about 14pt on a 375-wide
+ * iPhone and 11.5pt on a 320-wide one, under the page's 15pt. Its first line
+ * alone is 22 characters, about 238pt, so it stays at 18pt from 360 wide
+ * and goes no smaller than about 16pt at 320. The break is a line end of its
+ * own rather than a place the phone may choose, because a phone that cannot
+ * fit the first line breaks it wherever the line runs out and calls two
+ * lines a fit, while a line end leaves it only the one way to fit: smaller.
+ */
+export default function CopyAddress({ size = font.body, row = false, saidSize = font.small, split = false }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
     try {
@@ -64,12 +96,12 @@ export default function CopyAddress({ size = font.body, row = false }) {
           })}
         >
           <Text
-            numberOfLines={1}
+            numberOfLines={split ? 2 : 1}
             adjustsFontSizeToFit
             minimumFontScale={0.6}
             style={{ flex: 1, color: color.silk, fontSize: size, fontFamily: face }}
           >
-            {DOWNLOADS_URL}
+            {split ? `${DOWNLOADS_URL.slice(0, CUT)}\n${DOWNLOADS_URL.slice(CUT)}` : DOWNLOADS_URL}
           </Text>
           <View
             style={{
@@ -88,7 +120,7 @@ export default function CopyAddress({ size = font.body, row = false }) {
           </View>
         </Pressable>
         {copied ? (
-          <Text style={{ color: color.signal, fontSize: font.small, fontWeight: '700' }}>{P6.copied}</Text>
+          <Text style={{ color: color.signal, fontSize: saidSize, fontWeight: '700' }}>{P6.copied}</Text>
         ) : null}
       </View>
     )

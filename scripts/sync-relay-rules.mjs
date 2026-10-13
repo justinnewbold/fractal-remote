@@ -128,6 +128,8 @@ export const FILES = [
     target: '../mobile/src/lib/link-chain.js',
     render: (text) => banner('../shared/link-chain.mjs') + text.replace("from './versions.mjs'", "from './versions.js'")
   },
+  /* How to update the computer app, the page the red line on its card opens — one set of steps at both ends. */
+  { source: '../shared/computer-update.mjs', target: '../mobile/src/lib/computer-update.js' },
   /* Which picture each kind of effect wears on Play, so the two ends agree. */
   { source: '../shared/block-icons.mjs', target: '../mobile/src/lib/block-icons.js' },
   /*

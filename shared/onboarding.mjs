@@ -64,8 +64,14 @@ export const CHAIN = [
     body: 'USB host. Live control. Permanent saving.',
     phoneTitle: 'YOUR COMPUTER',
     phoneBody: 'USB host + permanent saving',
-    wire: 'SECURE LINK',
-    phoneWire: 'SECURE LINK'
+    /*
+     * Asked, 13 October 2026: "Where it says secure link, change that to say
+     * secure wireless link." Both wires, the computer's welcome and the
+     * phone's How it works, and the same word on Phone & computer
+     * (link-chain.mjs), which draws the same two wires.
+     */
+    wire: 'SECURE WIRELESS LINK',
+    phoneWire: 'SECURE WIRELESS LINK'
   },
   {
     key: 'phone',

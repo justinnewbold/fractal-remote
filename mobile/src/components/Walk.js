@@ -42,17 +42,28 @@ export function Tile({ icon, size = 64 }) {
  * A card: the tile, an amber label, a line under it, and on the right a
  * chevron when it goes somewhere (or whatever `right` is, such as a lamp).
  * `warn` is a short line in red under that, for the one thing to do about it.
+ *
+ * `onWarn` makes that red line a link. "Change red text about updating
+ * computer to a link that shows instructions when tapped on how to update
+ * it." The WHOLE card takes the tap, because the line on its own is 20 points
+ * tall and a thumb misses it; the line is underlined so it reads as the
+ * thing to press. Only while there is a red line: a card without one is not
+ * pressable at all, exactly as before. `hint` is what VoiceOver and TalkBack
+ * say it does.
  */
-export function TipCard({ icon, label, body, warn, onPress, right, tile = 64 }) {
+export function TipCard({ icon, label, body, warn, onWarn, hint, onPress, right, tile = 64 }) {
+  const warnLink = Boolean(warn && onWarn)
+  const press = onPress || (warnLink ? onWarn : null)
   return (
     <Pressable
-      accessibilityRole={onPress ? 'button' : undefined}
-      disabled={!onPress}
+      accessibilityRole={press ? 'button' : undefined}
+      accessibilityHint={warnLink ? hint : undefined}
+      disabled={!press}
       onPress={
-        onPress
+        press
           ? () => {
               tick()
-              onPress()
+              press()
             }
           : undefined
       }
@@ -71,7 +82,7 @@ export function TipCard({ icon, label, body, warn, onPress, right, tile = 64 }) 
       <View style={{ flex: 1, gap: space.xs }}>
         <Text style={{ color: color.signal, fontSize: font.lead, fontWeight: '800', letterSpacing: 1 }}>{label}</Text>
         {body ? <Text style={{ color: color.silkDim, fontSize: font.body + 1, lineHeight: 22 }}>{body}</Text> : null}
-        {warn ? <Text style={{ color: color.fault, fontSize: font.body, fontWeight: '700', lineHeight: 20 }}>{warn}</Text> : null}
+        {warn ? <Text style={{ color: color.fault, fontSize: font.body, fontWeight: '700', lineHeight: 20, textDecorationLine: warnLink ? 'underline' : 'none' }}>{warn}</Text> : null}
       </View>
       {right || (onPress ? <Image source={chevronIcon} style={{ width: 16, height: 16, tintColor: color.silkDim }} /> : null)}
     </Pressable>
@@ -86,8 +97,12 @@ const LAMP = { good: 'good', busy: 'idle', bad: 'fault', dim: 'idle' }
  * adapter in the computer's place — joined by their two wires, each with
  * a lamp. The words come from lib/link-chain (shared/link-chain.mjs), the
  * same ones the browser draws.
+ *
+ * `onWarn` is what tapping a card's red line does: on Phone & computer it
+ * opens the steps for updating the computer app (lib/computer-update). The
+ * lamp stays on the right, with no chevron beside it.
  */
-export function ChainCards({ cards }) {
+export function ChainCards({ cards, onWarn }) {
   return (
     <View>
       {cards.map((card) => (
@@ -98,6 +113,8 @@ export function ChainCards({ cards }) {
             label={card.label}
             body={card.body}
             warn={card.warn}
+            onWarn={onWarn}
+            hint="Shows how to update the computer app"
             right={<Lamp state={LAMP[card.tone] || 'idle'} size={12} />}
           />
           {card.wire ? <ChainWire label={card.wire} lit={card.lit} /> : null}

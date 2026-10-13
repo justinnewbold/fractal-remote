@@ -54,8 +54,15 @@ export function Tile({ icon, children }) {
 /**
  * A card: the tile, an amber label, a line under it, and on the right a
  * chevron when it goes somewhere (or whatever `right` is, such as a lamp).
+ *
+ * `onWarn` makes the red `warn` line a link, as on the phone: the whole card
+ * becomes the button (the line alone is a small thing to hit), and the line
+ * is underlined. The card is the one button — never a button inside it. A
+ * card with no red line stays a plain card.
  */
-export function TipCard({ icon, tile, label, body, warn, onClick, right, small }) {
+export function TipCard({ icon, tile, label, body, warn, onWarn, onClick, right, small }) {
+  const warnLink = Boolean(warn && onWarn)
+  const press = onClick || (warnLink ? onWarn : null)
   const inner = (
     <>
       <span className={small ? 'walk-tile-sm' : undefined}>
@@ -69,8 +76,8 @@ export function TipCard({ icon, tile, label, body, warn, onClick, right, small }
       {right || (onClick ? <Pic src={chevronIcon} className="walk-chevron" /> : null)}
     </>
   )
-  return onClick ? (
-    <button type="button" className="walk-card" onClick={onClick}>
+  return press ? (
+    <button type="button" className={warnLink ? 'walk-card walk-card-link' : 'walk-card'} onClick={press}>
       {inner}
     </button>
   ) : (
@@ -123,8 +130,11 @@ const CHAIN_ICONS = { unit: ampIcon, computer: laptopIcon, phone: phoneIcon }
  * a lamp: the top of Phone & computer. The words come from
  * shared/link-chain.mjs, and the phone draws the same three cards from the
  * same words (mobile/src/components/Walk.js).
+ *
+ * `onWarn` is what pressing a card's red line does: on Phone & computer it
+ * opens the steps for updating the computer app (shared/computer-update.mjs).
  */
-export function ChainCards({ cards }) {
+export function ChainCards({ cards, onWarn }) {
   return (
     <div className="walk-chain">
       {cards.map((card) => (
@@ -135,6 +145,7 @@ export function ChainCards({ cards }) {
             label={card.label}
             body={card.body}
             warn={card.warn}
+            onWarn={onWarn}
             right={<span className="walk-lamp" data-tone={card.tone} aria-label={card.tone === 'good' ? 'answering' : card.tone === 'bad' ? 'not answering' : 'waiting'} />}
           />
           {card.wire ? (

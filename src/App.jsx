@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import TopBar from './components/TopBar'
 import { ChangeLog } from './components/ChangeLog'
 import Diagnostics from './components/Diagnostics'
@@ -212,8 +212,14 @@ import ConnectScreen, { AccountCheck } from './components/ConnectScreen'
 import PhoneRemote from './components/PhoneRemote'
 import WifiQr from './components/WifiQr'
 import PhoneWalkthrough from './components/PhoneWalkthrough'
-import { ChainCards } from './components/Walk'
+import { ChainCards, TipCard } from './components/Walk'
 import { linkChain } from '../shared/link-chain.mjs'
+import { UPDATE_STEPS } from '../shared/computer-update.mjs'
+import { DOWNLOADS_URL } from '../mobile/src/lib/downloadLink'
+import CopyAddress, { withAddressBreak } from './components/CopyAddress'
+import laptopIcon from '../mobile/assets/icons/laptop.png'
+import setupIcon from '../mobile/assets/icons/setup.png'
+import sendIcon from '../mobile/assets/icons/send.png'
 import { firmwareOf } from '../shared/firmware.mjs'
 import LinkDetails from './components/LinkDetails'
 import SignInSheet from './components/SignInSheet'
@@ -497,6 +503,8 @@ const SETUP_PAGES = {
   link: 'Phone & computer',
   phone: 'Get it on your phone',
   demo: 'Demo Unit',
+  /* What the red line on the computer's card opens — see shared/computer-update.mjs. */
+  updating: UPDATE_STEPS.title,
   account: 'Account',
   appearance: 'Tiles & scenes',
   help: 'Troubleshooting',
@@ -532,7 +540,7 @@ const SETUP_PAGES = {
  * A map rather than an `if`, so the next nested page is a line rather than a
  * branch.
  */
-const SETUP_PARENT = { updates: 'about', demo: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', am4check: 'developer' }
+const SETUP_PARENT = { updates: 'about', demo: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', am4check: 'developer' }
 const upFrom = (page) => SETUP_PARENT[page] || null
 const upLabel = (page) => `\u2039 ${SETUP_PAGES[upFrom(page)] || 'Settings'}`
 /** What the chat says when a request needed the model and the model is off. */
@@ -5495,6 +5503,42 @@ export default function App() {
           </div>
         ) : null}
 
+        {/*
+          HOW TO UPDATE THE COMPUTER APP, a child of Phone & computer like the
+          demo picker above, opened by the red line on the computer's card.
+          "Change red text about updating computer to a link that shows
+          instructions when tapped on how to update it." Every word is
+          shared/computer-update.mjs's, the same steps the phone's page draws,
+          in the same numbered cards. Only a browser reaching the computer
+          through the phone remote is ever shown that line (linkChain wants the
+          computer's name and version), so this is a phone's page in practice.
+        */}
+        {setupPage === 'updating' ? (
+          <div className="setup-page">
+            <button type="button" className="setup-back" onClick={() => setSetupPage(upFrom('updating'))}>
+              {upLabel('updating')}
+            </button>
+            <p className="setup-page-title">{SETUP_PAGES.updating}</p>
+            <div className="updating">
+              <p className="updating-lead">{UPDATE_STEPS.intro}</p>
+              {/* The address again under the step that gives it, to copy. Card and box both break it only after the slash. */}
+              {UPDATE_STEPS.steps.map((step, i) => (
+                <Fragment key={step.label}>
+                  <TipCard icon={[laptopIcon, setupIcon, sendIcon][i]} label={step.label} body={withAddressBreak(step.body)} />
+                  {step.body.includes(DOWNLOADS_URL) ? <CopyAddress /> : null}
+                </Fragment>
+              ))}
+              <p className="updating-lead">{UPDATE_STEPS.after}</p>
+              {UPDATE_STEPS.ifItSays.map((entry) => (
+                <p key={entry.says} className="updating-says">
+                  <strong>{entry.says}</strong>
+                  {entry.body}
+                </p>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {setupPage === 'link' ? (
           <div className="setup-page">
             <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
@@ -5507,6 +5551,9 @@ export default function App() {
               are shared/link-chain.mjs's, so the two ends cannot word the
               same chain two ways; which card is "this" follows which end the
               browser is.
+
+              The red "Update the computer app" line is a link here too: the
+              card becomes the button and opens the steps, as on the phone.
             */}
             <ChainCards
               cards={linkChain({
@@ -5531,6 +5578,7 @@ export default function App() {
                         email: signedInHere ? link.account.email : null
                       }
               })}
+              onWarn={() => setSetupPage('updating')}
             />
             {/*
               The unit's own state leads, because it is the far end of the

@@ -11148,6 +11148,60 @@ button.setup-back {
   background: transparent;
 }
 
+/* Updating the computer app: the page the red line on the computer's card
+   opens. Body-size type throughout, as the phone's page is, because these are
+   steps to be read and followed at arm's length. */
+.updating {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.updating-lead {
+  margin: 0;
+  color: var(--silk);
+  font-size: var(--f-4);
+  line-height: 1.5;
+}
+.updating-says {
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  border-left: 3px solid var(--rule);
+  border-radius: var(--r-1);
+  background: var(--panel);
+  color: var(--silk-dim);
+  font-size: var(--f-4);
+  line-height: 1.5;
+}
+.updating-says strong {
+  display: block;
+  color: var(--silk);
+}
+/* The downloads address under the step that gives it (CopyAddress.jsx), in
+   the Connect a computer page's box. Two lines broken after the slash, never
+   inside the address, in type that shrinks only once the longer line no
+   longer fits the column: "fractal.newbold.cloud/" is 22 characters of a
+   monospace face, about 13.2em, and the box spends 74px on its border,
+   padding, gap and copy button. That keeps it at the page's 15px down to a
+   320-wide phone, where all 31 characters on one line came to 10.8px. An old
+   browser without container units keeps the box's own size, each line cut
+   short with an ellipsis rather than split. */
+.updating-address {
+  container-type: inline-size;
+  display: grid;
+  gap: var(--s-2);
+}
+.updating-address .mono {
+  font-size: min(var(--f-4), calc((100cqi - 80px) / 13.6));
+}
+.updating-address-line {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.updating-address .cc-copied {
+  font-size: var(--f-4);
+}
+
 /* ---------- fixes: the troubleshooting guide ---------- */
 
 /* One list of things to try, each folded shut until it is the one you want.
@@ -11609,12 +11663,18 @@ button.setup-back {
 }
 
 /* The line between two boxes. Hidden when they stack, where it would point
-   sideways at nothing. */
+   sideways at nothing.
+   One word to a line, centred, since the middle one became SECURE WIRELESS
+   LINK (13 October 2026). On one line it was nearly twice as wide as SECURE
+   LINK, and the three boxes would have wrapped at windows that held them
+   before, leaving the label hanging at the end of the first row. Stacked, it
+   is no wider than its longest word, which is narrower than SECURE LINK was. */
 .onb-wire {
   font-size: var(--onb-label);
   letter-spacing: 0.12em;
   color: var(--silk-faint);
-  white-space: nowrap;
+  width: min-content;
+  text-align: center;
 }
 
 @media (max-width: 720px) {
@@ -12347,6 +12407,12 @@ button.walk-card:hover {
   font-size: var(--f-4);
   font-weight: 700;
   line-height: 1.45;
+}
+/* And underlined when pressing the card says how: "change red text about
+   updating computer to a link that shows instructions when tapped". */
+.walk-card-link .walk-card-warn {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 .walk-chevron {
   width: 16px;
