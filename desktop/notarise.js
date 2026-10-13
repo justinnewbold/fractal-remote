@@ -51,7 +51,11 @@
 const { spawn } = require('node:child_process')
 const { mkdtempSync, rmSync, appendFileSync, readFileSync, realpathSync } = require('node:fs')
 const { tmpdir } = require('node:os')
-const { join, basename, dirname, extname, parse, resolve } = require('node:path')
+/* The Mac's own spelling of a path, on every computer. This only ever runs on
+   a Mac, where the two are the same thing; the tests also run on Windows,
+   where join() would turn /tmp/x into \tmp\x and ditto would be handed a
+   path no Mac has. */
+const { join, basename, dirname, extname, parse, resolve } = require('node:path').posix
 
 /** Seconds to wait before each try at the stamp: five tries, about two and a half minutes. */
 const STAPLE_WAITS_S = [0, 10, 20, 40, 80]
