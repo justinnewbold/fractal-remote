@@ -18,6 +18,31 @@ then bump the version, delete the patch file in the same change, and build.
 | Patch | What it does | Moves |
 |---|---|---|
 | `watch-name.patch` | The Apple Watch app is called **Fractal Remote** instead of plain "Fractal", under its icon and in the iPhone's Watch app, and the phone's watch tips (Settings, WATCH_KEEP: "tap Fractal Remote", "comes back to Fractal Remote", "Fractal Remote stays on screen") name it the same way. | Android, iOS and watch (tried on 13 October 2026: changing `displayName` in mobile/targets/watch/expo-target.config.js moves all three) |
+| `watch-channels.patch` | On the Apple Watch's Pedals page, **holding a pedal opens its channels** (A, B, C, D, the one it is on lit), as holding an effect on the phone's Play screen does; a tap still switches it on or off. Each pedal shows its channel letter in its corner, and a line under them says "Hold a pedal for its channels." The phone sends each pedal's channels and carries out the pick with the Play screen's own channel switch. | **Watch only** (tried on 13 October 2026: Swift under mobile/targets/watch and the phone's JavaScript move only the watch line of the fingerprint; Android and iOS stay the same, so every update keeps reaching every phone, before and after the build) |
+
+**watch-channels.patch, and why it waits.** Justin, 13 October 2026: "Can
+I add the tap to hold on the effects switches on the watch where you can
+switch through the channels?" — and, before agreeing to it, "as long as it's
+not gonna make it so it holds off on future over-the-air updates". It does
+not: the watch app is native, so the hold reaches a wrist only with the next
+iPhone build, but nothing in this patch moves the Android or iOS
+fingerprint, so a build carrying it takes the same updates as the copies
+already on phones, and so do they. It was compiled and its pictures taken on
+GitHub's Mac before it was parked here (draft pull request #702, closed
+unmerged): the watch app, the iPhone app with the watch inside it for the
+simulator and for a real device, the watch's own tests, and a picture of a
+pedal's channels open (mobile/watch-ci/screens.sh, channels.png).
+
+**The two patches together move the phones.** watch-name.patch changes the
+watch's displayName in mobile/targets/watch/expo-target.config.js, which both
+phones' fingerprints include. A build with both is a build whose updates no
+longer reach the copies already on phones until they take the store update.
+A build with only this one keeps every phone on the same updates. They share
+no file and apply in either order.
+
+One thing goes with it that is not in the patch: the next version's Notes
+for App Review and What's New say that holding a pedal on the watch opens
+its channels (Apple's 2.3.1(a): a new feature is described in the notes).
 
 **watch-name.patch, and why it waits.** Justin, 12 October 2026, about "the
 Fractal app": "a fractal app is probably gonna confuse people to think it's

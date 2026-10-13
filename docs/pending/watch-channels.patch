@@ -1,0 +1,886 @@
+diff --git a/mobile/src/lib/watch-link.js b/mobile/src/lib/watch-link.js
+index d69ca56..d68e47e 100644
+--- a/mobile/src/lib/watch-link.js
++++ b/mobile/src/lib/watch-link.js
+@@ -12,7 +12,7 @@
+  * relay is, so every tap goes watch → phone → computer → unit, over Apple's
+  * own watch-to-phone link (WatchConnectivity). The phone is the only thing
+  * that knows the rig; the watch draws what it is told and asks for one of
+- * four things.
++ * six things.
+  *
+  * This file is both halves of that conversation, in words the watch's Swift
+  * can read without knowing anything about the app: `watchState` is what the
+@@ -40,8 +40,27 @@ export const WATCH_STATE_MS = 250
+ /** Within this many cents the watch draws the note green, as the phone's tuner does. */
+ export const WATCH_IN_TUNE_CENTS = 3
+ 
++/** The most channels a pedal offers on the watch: A to D, as on every unit today. */
++export const WATCH_CHANNELS_MAX = 4
++
+ const int = (n) => Number.isInteger(n)
+ const text = (s, max = 40) => (typeof s === 'string' ? s.slice(0, max) : '')
++/** A channel as the phone's own channel write takes it: one capital letter, or '' for none said. */
++const letter = (c) => (typeof c === 'string' && /^[A-Z]$/.test(c) ? c : '')
++
++/*
++ * WHAT HOLDING A PEDAL OFFERS. Justin, 13 October 2026: "Can I add the tap to
++ * hold on the effects switches on the watch where you can switch through the
++ * channels?" The letters the Play screen's own hold offers (Stage.js, the
++ * channel sheet), and only while that hold does something there: none on the
++ * outline, where a channel waits for the chain read (see chain-view.mjs), and
++ * none on a unit with one channel or none. Fewer than two is nothing to
++ * choose between, so it is sent as none, and the watch's hold does nothing.
++ */
++const channelChoices = (list) => {
++  const out = Array.isArray(list) ? [...new Set(list.map(letter).filter(Boolean))].slice(0, WATCH_CHANNELS_MAX) : []
++  return out.length > 1 ? out : []
++}
+ 
+ /**
+  * The picture the watch draws, from the phone's store and the few things the
+@@ -91,7 +110,14 @@ export function watchState({
+         name: text(p.name, 24),
+         on: p.on === true,
+         fill: /^#[0-9a-f]{6}$/i.test(p.fill || '') ? p.fill : '#7d8591',
+-        ink: /^#[0-9a-f]{6}$/i.test(p.ink || '') ? p.ink : '#ffffff'
++        ink: /^#[0-9a-f]{6}$/i.test(p.ink || '') ? p.ink : '#ffffff',
++        /* The letter in the tile's corner, as on the phone; '' when the unit
++           has not said. */
++        channel: letter(p.channel),
++        /* What a hold may switch it to; [] and a hold does nothing. A watch
++           older than this reads neither field, and is none the worse: the
++           link's version stays 1, because nothing it knows changed meaning. */
++        channels: channelChoices(p.channels)
+       })),
+     tuner: {
+       on: !!tunerOn,
+@@ -113,16 +139,19 @@ function metronomeForWatch(m) {
+ }
+ 
+ /**
+- * A message from the watch, as one of the four things it may ask, or null.
++ * A message from the watch, as one of the six things it may ask, or null.
+  *
+  *   { do: 'scene', index }      — switch to that scene (0-based)
+  *   { do: 'pedal', id, on }     — that block on or off
++ *   { do: 'channel', id, channel } — that block onto that channel, a letter ('B')
+  *   { do: 'preset', step }      — Previous (-1) or Next (+1), as the stage screen steps
+  *   { do: 'tuner', on }         — the tuner page opened or closed
+  *   { do: 'hello' }             — the watch app opened: send the picture now
+  *
+  * `state` is the last picture sent, so a scene or a pedal the watch could not
+- * have been shown is refused rather than sent to the unit.
++ * have been shown is refused rather than sent to the unit — and so is a
++ * channel that pedal was not offered in it, which is every channel while the
++ * Play screen's own hold would do nothing.
+  */
+ export function watchCommand(msg, state) {
+   if (!msg || typeof msg !== 'object') return null
+@@ -137,6 +166,13 @@ export function watchCommand(msg, state) {
+       const shown = (state?.pedals || []).some((p) => p.id === msg.id)
+       return int(msg.id) && shown && typeof msg.on === 'boolean' ? { do: 'pedal', id: msg.id, on: msg.on } : null
+     }
++    case 'channel': {
++      const pedal = int(msg.id) ? (state?.pedals || []).find((p) => p.id === msg.id) : null
++      const offered = Array.isArray(pedal?.channels) ? pedal.channels : []
++      return pedal && typeof msg.channel === 'string' && offered.includes(msg.channel)
++        ? { do: 'channel', id: msg.id, channel: msg.channel }
++        : null
++    }
+     case 'preset':
+       return msg.step === 1 || msg.step === -1 ? { do: 'preset', step: msg.step } : null
+     case 'tuner':
+diff --git a/mobile/src/lib/watchBridge.js b/mobile/src/lib/watchBridge.js
+index b4959c0..d968284 100644
+--- a/mobile/src/lib/watchBridge.js
++++ b/mobile/src/lib/watchBridge.js
+@@ -4,17 +4,17 @@ import { requireOptionalNativeModule } from 'expo'
+ 
+ import { blockColor } from './blockColors'
+ import { logDebug } from './debugLog'
+-import { idOf } from './device'
++import { idOf, sameBlock } from './device'
+ import { probeNow, untilConnected } from './link'
+ import { shortBlock } from './shortName'
+-import { getState, writeBypass, writeScene, writeTuner } from './rig'
++import { getState, writeBypass, writeChannel, writeScene, writeTuner } from './rig'
+ import { createWatchSender, watchCommand, watchState } from './watch-link'
+ import { metronome } from './metronome'
+ 
+ /*
+  * THE APPLE WATCH, FROM THE PHONE'S SIDE.
+  *
+- * The watch draws what the phone tells it and asks for one of four things —
++ * The watch draws what the phone tells it and asks for one of six things —
+  * see lib/watch-link (shared/watch-link.mjs) for both halves of that. This is
+  * the phone keeping its end: a fresh picture whenever the stage screen's
+  * changes, and each request carried out with the same calls the stage
+@@ -116,6 +116,20 @@ export function useWatchBridge(picture, step) {
+         if (cmd.do === 'scene') return writeScene(cmd.index)
+         if (cmd.do === 'pedal') return writeBypass(cmd.id, !cmd.on)
+         if (cmd.do === 'preset') return stepRef.current?.(cmd.step)
++        /*
++         * A pedal held on the wrist, and a channel picked: the Play screen's
++         * channel sheet's own write, which turns down the outline and another
++         * preset's chain by itself. And only for a block the chain on screen
++         * still has: a phone woken by the tap checks the request against the
++         * picture it sent before it locked, so this at least refuses an id the
++         * chain no longer has. (An id names a kind of block, Drive 1 or Delay
++         * 2, so a newer preset with the same block still takes it — as a
++         * switch on or off from the wrist does today.)
++         */
++        if (cmd.do === 'channel') {
++          const here = getState().blocks.some((b) => sameBlock(b, cmd.id))
++          return here ? writeChannel(cmd.id, cmd.channel) : undefined
++        }
+         if (cmd.do === 'tuner' && getState().tunerOn !== cmd.on) return writeTuner(cmd.on)
+         return undefined
+       }
+@@ -153,8 +167,10 @@ export function useWatchBridge(picture, step) {
+   /* Every render of the stage screen is a chance the picture moved. */
+   useEffect(() => {
+     if (!sender.current) return
+-    const { chain, ...rest } = picture
+-    const pedals = (chain || []).map((b) => ({ id: idOf(b), name: b.name, short: shortBlock(b), on: !b.bypassed, ...blockColor(b.slug) }))
++    const { chain, channels, ...rest } = picture
++    /* Each pedal with its channel and what a hold may switch it to: the
++       stage screen's own list, empty wherever its own hold does nothing. */
++    const pedals = (chain || []).map((b) => ({ id: idOf(b), name: b.name, short: shortBlock(b), on: !b.bypassed, ...blockColor(b.slug), channel: b.channel, channels }))
+     /* The metronome's tap, when the watch's switch is on: see lib/metronome. */
+     const beat = metronome()
+     const state = watchState({ ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm } })
+diff --git a/mobile/src/screens/Stage.js b/mobile/src/screens/Stage.js
+index b6786d5..1122fb5 100644
+--- a/mobile/src/screens/Stage.js
++++ b/mobile/src/screens/Stage.js
+@@ -562,6 +562,10 @@ export default function Stage({
+       sceneCount: scenes.hasScenes ? scenes.count : 0,
+       /* Not another preset's: a tap would switch whatever shares the id. */
+       chain: chainNow.elsewhere ? [] : blocks,
++      /* What holding a pedal offers on the wrist: what holding its tile does
++         here, so none on the outline (see the tiles' onLongPress) and none
++         while another preset's chain is up. */
++      channels: channels?.length > 1 && !chainNow.outline && !chainNow.elsewhere ? channels : [],
+       tunerOn,
+       tuning,
+       linked: Number.isInteger(preset?.number),
+diff --git a/mobile/targets/watch/Model.swift b/mobile/targets/watch/Model.swift
+index def3d85..ef6f652 100644
+--- a/mobile/targets/watch/Model.swift
++++ b/mobile/targets/watch/Model.swift
+@@ -5,7 +5,7 @@ import Foundation
+  *
+  * The Swift reading of shared/watch-link.mjs, field for field. The phone sends
+  * the whole picture each time (watchState there), so a watch that missed a
+- * message is right again on the next; the watch asks for one of five things
++ * message is right again on the next; the watch asks for one of six things
+  * (watchCommand there), and the phone drops anything else.
+  *
+  * No SwiftUI and no WatchConnectivity in this file, on purpose: it is the part
+@@ -26,6 +26,19 @@ struct WatchPedal: Codable, Equatable, Identifiable {
+     var on: Bool
+     var fill: String
+     var ink: String
++    /*
++     * The channel it is on ("B"), and the ones a hold may switch it to (A to
++     * D). Optional, like the metronome: a phone that has not had the update
++     * that sends them sends neither, and that is "none to choose", so a hold
++     * does nothing. Optional rather than given a default, because a field
++     * with a default is still required when the picture is read, and one
++     * missing would lose the whole picture.
++     */
++    var channel: String? = nil
++    var channels: [String]? = nil
++
++    /** Whether a hold offers a choice: two channels or more, as on the phone. */
++    var canPickChannel: Bool { (channels?.count ?? 0) > 1 }
+ }
+ 
+ struct WatchTuner: Codable, Equatable {
+@@ -77,6 +90,9 @@ struct WatchState: Codable, Equatable {
+         return name.isEmpty ? "Untitled" : name
+     }
+ 
++    /** The four channels each demo pedal has, as on an FM3. */
++    private static let abcd = ["A", "B", "C", "D"]
++
+     /** The picture the screenshots and the demo draw. */
+     static let sample = WatchState(
+         v: 1,
+@@ -88,24 +104,26 @@ struct WatchState: Codable, Equatable {
+         scene: 1,
+         scenes: ["Clean", "Crunch", "Lead", "Solo", "Ambient", "Scene 6", "Scene 7", "Scene 8"],
+         pedals: [
+-            WatchPedal(id: 46, short: "CMP", name: "Compressor 1", on: true, fill: "#3f7fbf", ink: "#ffffff"),
+-            WatchPedal(id: 50, short: "DRV", name: "Drive 1", on: true, fill: "#c0392b", ink: "#ffffff"),
+-            WatchPedal(id: 58, short: "AMP", name: "Amp 1", on: true, fill: "#b8860b", ink: "#ffffff"),
+-            WatchPedal(id: 62, short: "CAB", name: "Cab 1", on: true, fill: "#5a8a5f", ink: "#ffffff"),
+-            WatchPedal(id: 70, short: "DLY", name: "Delay 1", on: false, fill: "#2e86ab", ink: "#ffffff"),
+-            WatchPedal(id: 66, short: "REV", name: "Reverb 1", on: true, fill: "#8e44ad", ink: "#ffffff")
++            WatchPedal(id: 46, short: "CMP", name: "Compressor 1", on: true, fill: "#3f7fbf", ink: "#ffffff", channel: "A", channels: abcd),
++            WatchPedal(id: 50, short: "DRV", name: "Drive 1", on: true, fill: "#c0392b", ink: "#ffffff", channel: "B", channels: abcd),
++            WatchPedal(id: 58, short: "AMP", name: "Amp 1", on: true, fill: "#b8860b", ink: "#ffffff", channel: "A", channels: abcd),
++            WatchPedal(id: 62, short: "CAB", name: "Cab 1", on: true, fill: "#5a8a5f", ink: "#ffffff", channel: "A", channels: abcd),
++            WatchPedal(id: 70, short: "DLY", name: "Delay 1", on: false, fill: "#2e86ab", ink: "#ffffff", channel: "C", channels: abcd),
++            WatchPedal(id: 66, short: "REV", name: "Reverb 1", on: true, fill: "#8e44ad", ink: "#ffffff", channel: "A", channels: abcd)
+         ],
+         tuner: WatchTuner(on: false, note: "", octave: -1, cents: 0, inTune: false)
+     )
+ }
+ 
+-/** The five things the watch may ask. watchCommand in shared/watch-link.mjs. */
++/** The six things the watch may ask. watchCommand in shared/watch-link.mjs. */
+ enum WatchCommand: Equatable {
+     case hello
+     case scene(Int)
+     case pedal(id: Int, on: Bool)
+     case preset(step: Int)
+     case tuner(on: Bool)
++    /** That block onto that channel, by the letter the phone sent ("B"). */
++    case channel(id: Int, channel: String)
+ 
+     /** Written by hand, so the order of the keys never changes under the tests. */
+     var json: String {
+@@ -115,10 +133,22 @@ enum WatchCommand: Equatable {
+         case .pedal(let id, let on): return #"{"do":"pedal","id":\#(id),"on":\#(on)}"#
+         case .preset(let step): return #"{"do":"preset","step":\#(step < 0 ? -1 : 1)}"#
+         case .tuner(let on): return #"{"do":"tuner","on":\#(on)}"#
++        case .channel(let id, let channel): return #"{"do":"channel","id":\#(id),"channel":\#(jsonText(channel))}"#
+         }
+     }
+ }
+ 
++/*
++ * A string as JSON, in its quotes, escaped. The channel is the phone's own
++ * word sent back, a single letter today; written through the encoder rather
++ * than pasted between quotes, so whatever the phone ever sends, what goes
++ * back is still one piece of JSON the phone can read, and refuse.
++ */
++func jsonText(_ s: String) -> String {
++    guard let data = try? JSONEncoder().encode(s), let out = String(data: data, encoding: .utf8) else { return "\"\"" }
++    return out
++}
++
+ /** Where the tuner's needle sits, -1 (50 cents flat) to 1 (50 sharp). */
+ func needleOffset(cents: Int) -> Double {
+     Double(max(-50, min(50, cents))) / 50
+@@ -145,7 +175,19 @@ extension WatchState {
+         case .scene(let index):
+             if index >= 0 && index < scenes.count { next.scene = index }
+         case .pedal(let id, let on):
+-            next.pedals = pedals.map { p in p.id == id ? WatchPedal(id: p.id, short: p.short, name: p.name, on: on, fill: p.fill, ink: p.ink) : p }
++            /* Changed in place, so a pedal switched on or off keeps its channels. */
++            next.pedals = pedals.map { p in
++                var q = p
++                if q.id == id { q.on = on }
++                return q
++            }
++        case .channel(let id, let channel):
++            /* Only a channel that pedal offers, as the phone takes only those. */
++            next.pedals = pedals.map { p in
++                var q = p
++                if q.id == id, q.channels?.contains(channel) == true { q.channel = channel }
++                return q
++            }
+         case .preset(let step):
+             next.preset.number = max(0, preset.number + (step < 0 ? -1 : 1))
+             next.preset.label = String(format: "%03d", next.preset.number)
+diff --git a/mobile/targets/watch/Pages.swift b/mobile/targets/watch/Pages.swift
+index 2a2e612..22b4763 100644
+--- a/mobile/targets/watch/Pages.swift
++++ b/mobile/targets/watch/Pages.swift
+@@ -66,11 +66,42 @@ struct ScenesPage: View {
+ /*
+  * The stage screen's pedals: lit in the block's own colour when on, an outline
+  * in it when off. A tap switches it, as on the phone.
++ *
++ * HOLD ONE FOR ITS CHANNELS. Justin, 13 October 2026: "Can I add the tap to
++ * hold on the effects switches on the watch where you can switch through the
++ * channels?" As on the phone's Play screen: a hold (the phone's 450 ms) opens
++ * the pedal's channels, the one it is on lit, and a tap on one switches it
++ * and closes them. The letter it is on sits in the tile's corner, as on the
++ * phone. Only where the phone offers them (canPickChannel): none while its
++ * chain is still an outline, and none from a phone that has not had the
++ * update that sends them, where a hold does nothing, as it always did.
++ *
++ * The line under the pedals that says so is here rather than in the phone's
++ * watch tips: the phone's words reach every phone by an update, and a watch
++ * from before this build cannot do it. This line is only ever on a watch
++ * that can.
+  */
+ struct PedalsPage: View {
+     let state: WatchState
+     @EnvironmentObject private var link: PhoneLink
+     @State private var pending: [Int: Bool] = [:]
++    @State private var pendingChannel: [Int: String] = [:]
++    /*
++     * Whose channels are open, by id: looked up in each new picture, so never
++     * an old copy. The sheet is opened BY this (sheet(item:)), not by a
++     * separate yes-or-no beside it: with the two apart, the sheet was drawn
++     * from the picture before the hold had said whose it was, and CI's
++     * picture of it came out as a blurred page with nothing on it. Handed in
++     * with the sheet, the pedal is there when the sheet is.
++     */
++    @State private var picking: Picked?
++    /** A hold has just opened them; the tap that letting go can make is not a switch. */
++    @State private var held = false
++
++    /** This picture's copy of a pedal whose channels can be picked. */
++    private func offered(_ id: Int) -> WatchPedal? {
++        state.pedals.first { $0.id == id && $0.canPickChannel }
++    }
+ 
+     var body: some View {
+         ScrollView {
+@@ -78,33 +109,205 @@ struct PedalsPage: View {
+                 Text("PEDALS").font(.caption2).foregroundStyle(.secondary)
+                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 3), spacing: 4) {
+                     ForEach(state.pedals) { pedal in
+-                        let on = pending[pedal.id] ?? pedal.on
+-                        let hue = Color(hex: pedal.fill, fallback: .gray)
++                        PedalTile(
++                            pedal: pedal,
++                            on: pending[pedal.id] ?? pedal.on,
++                            channel: pendingChannel[pedal.id] ?? pedal.channel,
++                            press: { press(pedal) },
++                            hold: { hold(pedal) },
++                            open: { show(pedal.id) }
++                        )
++                    }
++                }
++                if state.pedals.isEmpty {
++                    Text("No pedals to show yet.").font(.footnote).foregroundStyle(.secondary)
++                } else if state.pedals.contains(where: { $0.canPickChannel }) {
++                    Text("Hold a pedal for its channels.").font(.footnote).foregroundStyle(.secondary)
++                }
++            }
++        }
++        /* Looked up afresh from each picture: it closes itself when the pedal
++           or its channels go, and lights what the phone says it is on. */
++        .sheet(item: $picking, onDismiss: { held = false }) { picked in
++            if let pedal = offered(picked.id) {
++                ChannelsSheet(pedal: pedal, lit: pendingChannel[pedal.id] ?? pedal.channel) { name in
++                    choose(name, for: pedal)
++                }
++                .environmentObject(link)
++            }
++        }
++        .onChange(of: state.pedals) { _, _ in
++            pending = [:]
++            pendingChannel = [:]
++            /* The pedal held, or its channels, gone from the new picture. */
++            if let picking, offered(picking.id) == nil { self.picking = nil }
++        }
++        /* Another preset: its block of the same number is not the one that was held. */
++        .onChange(of: state.preset.number) { _, _ in picking = nil }
++        /* CI's picture of a pedal held (screens.sh: -page 1 -pick 50), in the demo only. */
++        .onAppear {
++            guard link.demo, let id = Int(Launch.value("pick") ?? "") else { return }
++            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { show(id) }
++        }
++    }
++
++    /** A tap: on or off at once on the wrist, and the phone's answer confirms it. */
++    private func press(_ pedal: WatchPedal) {
++        /* Letting go of a hold can count as a tap as well; that one is not a switch. */
++        if held {
++            held = false
++            return
++        }
++        let on = pending[pedal.id] ?? pedal.on
++        tap()
++        pending[pedal.id] = !on
++        link.send(.pedal(id: pedal.id, on: !on))
++        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { pending[pedal.id] = nil }
++    }
++
++    /** A hold: its channels, with the same small buzz the phone gives its own hold. */
++    private func hold(_ pedal: WatchPedal) {
++        guard pedal.canPickChannel else { return }
++        held = true
++        tap()
++        show(pedal.id)
++    }
++
++    /** Open a pedal's channels, if this picture still offers them. */
++    private func show(_ id: Int) {
++        guard offered(id) != nil else {
++            /* Gone in the moment between the hold and now: nothing opens, so
++               nothing will close it, and the hold must not eat the next tap. */
++            held = false
++            return
++        }
++        picking = Picked(id: id)
++    }
++
++    /** A channel picked: lit at once, sent, and closed, as the phone's own sheet does. */
++    private func choose(_ name: String, for pedal: WatchPedal) {
++        let id = pedal.id
++        tap()
++        pendingChannel[id] = name
++        link.send(.channel(id: id, channel: name))
++        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
++            if pendingChannel[id] == name { pendingChannel[id] = nil }
++        }
++        picking = nil
++    }
++}
++
++/** Which pedal's channels are open: what sheet(item:) needs, an id of its own. */
++private struct Picked: Identifiable {
++    let id: Int
++}
++
++/*
++ * One pedal. The hold rides beside the button rather than replacing it, so a
++ * tap is still the system's own button (VoiceOver, the pressed look, the page
++ * held off while the phone is out of reach), and a swipe up or down still
++ * turns the page: a hold that moves gives way. A pedal with nothing to choose
++ * has no hold on it at all.
++ */
++private struct PedalTile: View {
++    let pedal: WatchPedal
++    let on: Bool
++    /** What the phone said it is on, or the one just picked. */
++    let channel: String?
++    let press: () -> Void
++    let hold: () -> Void
++    let open: () -> Void
++
++    /** The phone says "" for a channel the unit has not told it: no letter, rather than an empty one. */
++    private var letter: String? {
++        guard let channel, !channel.isEmpty else { return nil }
++        return channel
++    }
++
++    /** What VoiceOver says: "Drive 1, on, channel B". */
++    private var said: String {
++        let base = "\(pedal.name), \(on ? "on" : "off")"
++        guard let letter else { return base }
++        return "\(base), channel \(letter)"
++    }
++
++    var body: some View {
++        let hue = Color(hex: pedal.fill, fallback: .gray)
++        let ink = on ? Color(hex: pedal.ink, fallback: .white) : hue
++        Button(action: press) {
++            Text(pedal.short)
++                .font(.system(size: 13, weight: .bold, design: .monospaced))
++                .lineLimit(1)
++                .minimumScaleFactor(0.6)
++                .frame(maxWidth: .infinity, minHeight: 40)
++                .foregroundStyle(ink)
++                .background(on ? hue : Color.clear, in: RoundedRectangle(cornerRadius: 8))
++                .overlay(RoundedRectangle(cornerRadius: 8).stroke(hue, lineWidth: on ? 0 : 2))
++                .overlay(alignment: .topTrailing) {
++                    if let letter {
++                        Text(letter)
++                            .font(.system(size: 9, weight: .bold))
++                            .foregroundStyle(ink)
++                            .padding(.top, 3)
++                            .padding(.trailing, 5)
++                    }
++                }
++        }
++        .buttonStyle(.plain)
++        .simultaneousGesture(
++            LongPressGesture(minimumDuration: 0.45).onEnded { _ in hold() },
++            including: pedal.canPickChannel ? .all : .subviews
++        )
++        .accessibilityLabel(said)
++        .accessibilityActions {
++            if pedal.canPickChannel {
++                Button("Channels", action: open)
++            }
++        }
++    }
++}
++
++/*
++ * A pedal's channels, opened by holding it: the one it is on lit, as the
++ * scenes are, and a tap on another switches it and closes. Each channel keeps
++ * its own settings, as on the phone. A sheet is its own window, so the link
++ * is handed in again, and its buttons wait while the phone is out of reach,
++ * as the pages under it do.
++ */
++private struct ChannelsSheet: View {
++    let pedal: WatchPedal
++    let lit: String?
++    let pick: (String) -> Void
++    @EnvironmentObject private var link: PhoneLink
++
++    var body: some View {
++        ScrollView {
++            VStack(alignment: .leading, spacing: 4) {
++                Text("CHANNEL").font(.caption2).foregroundStyle(.secondary)
++                Text(pedal.name)
++                    .font(.system(size: 15, weight: .semibold))
++                    .lineLimit(1)
++                    .minimumScaleFactor(0.7)
++                LazyVGrid(columns: [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)], spacing: 4) {
++                    ForEach(pedal.channels ?? [], id: \.self) { name in
+                         Button {
+-                            tap()
+-                            pending[pedal.id] = !on
+-                            link.send(.pedal(id: pedal.id, on: !on))
+-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { pending[pedal.id] = nil }
++                            pick(name)
+                         } label: {
+-                            Text(pedal.short)
+-                                .font(.system(size: 13, weight: .bold, design: .monospaced))
+-                                .lineLimit(1)
+-                                .minimumScaleFactor(0.6)
+-                                .frame(maxWidth: .infinity, minHeight: 40)
+-                                .foregroundStyle(on ? Color(hex: pedal.ink, fallback: .white) : hue)
+-                                .background(on ? hue : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(hue, lineWidth: on ? 0 : 2))
++                            Text(name)
++                                .font(.system(size: 20, weight: .bold, design: .rounded))
++                                .frame(maxWidth: .infinity, minHeight: 44)
++                                .foregroundStyle(name == lit ? Color.black : Color.white)
++                                .background(name == lit ? signal : Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+                         }
+                         .buttonStyle(.plain)
+-                        .accessibilityLabel("\(pedal.name), \(on ? "on" : "off")")
++                        .accessibilityLabel("Channel \(name)")
++                        .accessibilityAddTraits(name == lit ? .isSelected : [])
+                     }
+                 }
+-                if state.pedals.isEmpty {
+-                    Text("No pedals to show yet.").font(.footnote).foregroundStyle(.secondary)
+-                }
+             }
+         }
+-        .onChange(of: state.pedals) { _, _ in pending = [:] }
++        .disabled(!link.reachable)
++        .opacity(link.reachable ? 1 : 0.55)
+     }
+ }
+ 
+diff --git a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
+index 7777f48..a747149 100644
+--- a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
++++ b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
+@@ -31,6 +31,13 @@ final class WatchModelTests: XCTestCase {
+         XCTAssertEqual(state.tuner.cents, -2)
+         XCTAssertTrue(state.tuner.inTune)
+         XCTAssertEqual(state.metronome, WatchMetronome(on: true, bpm: 120))
++        /* A pedal held: Drive's four channels, and Delay's one, which is nothing to choose. */
++        XCTAssertEqual(state.pedals[0].channel, "B")
++        XCTAssertEqual(state.pedals[0].channels, ["A", "B", "C", "D"])
++        XCTAssertTrue(state.pedals[0].canPickChannel)
++        XCTAssertEqual(state.pedals[1].channel, "A")
++        XCTAssertEqual(state.pedals[1].channels, [])
++        XCTAssertFalse(state.pedals[1].canPickChannel, "one channel was offered as a choice")
+     }
+ 
+     func testAPhoneWithNoMetronomeIsReadAsOff() throws {
+@@ -41,6 +48,45 @@ final class WatchModelTests: XCTestCase {
+         XCTAssertNil(state.metronome)
+     }
+ 
++    /* The fixture's picture as a dictionary, changed by `edit`, back as the JSON a phone would send. */
++    private func picture(_ edit: (inout [String: Any]) -> Void) throws -> String {
++        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(try fixture().utf8)) as? [String: Any])
++        edit(&object)
++        return try XCTUnwrap(String(data: try JSONSerialization.data(withJSONObject: object), encoding: .utf8))
++    }
++
++    /*
++     * A phone that has not had the update that sends channels: the pedals are
++     * still drawn, and a hold offers nothing. Fields that are not Optional
++     * would lose this whole picture, and the watch would draw nothing at all.
++     */
++    func testAPhoneWithNoChannelsIsReadAsNoneToChoose() throws {
++        let raw = try picture { p in
++            p["pedals"] = (p["pedals"] as? [[String: Any]] ?? []).map { (pedal: [String: Any]) -> [String: Any] in
++                var bare = pedal
++                bare.removeValue(forKey: "channel")
++                bare.removeValue(forKey: "channels")
++                return bare
++            }
++        }
++        let state = try XCTUnwrap(WatchState.decode(raw), "a picture with no channels was not drawn at all")
++        XCTAssertEqual(state.pedals.count, 2)
++        XCTAssertNil(state.pedals[0].channel)
++        XCTAssertNil(state.pedals[0].channels)
++        XCTAssertFalse(state.pedals[0].canPickChannel)
++    }
++
++    /* What lets the phone send more, by an update, than a watch already on a wrist knows to read. */
++    func testAFieldTheWatchDoesNotKnowIsLeftAlone() throws {
++        let raw = try picture { p in
++            p["somethingNewer"] = ["x": 1]
++            var pedals = p["pedals"] as? [[String: Any]] ?? []
++            pedals[0]["somethingNewer"] = "x"
++            p["pedals"] = pedals
++        }
++        XCTAssertNotNil(WatchState.decode(raw))
++    }
++
+     func testAPictureItCannotReadIsNotDrawn() {
+         XCTAssertNil(WatchState.decode("not json"))
+         XCTAssertNil(WatchState.decode(#"{"v":1}"#))
+@@ -59,6 +105,8 @@ final class WatchModelTests: XCTestCase {
+         XCTAssertEqual(WatchCommand.preset(step: -1).json, #"{"do":"preset","step":-1}"#)
+         XCTAssertEqual(WatchCommand.preset(step: 5).json, #"{"do":"preset","step":1}"#)
+         XCTAssertEqual(WatchCommand.tuner(on: true).json, #"{"do":"tuner","on":true}"#)
++        XCTAssertEqual(WatchCommand.channel(id: 50, channel: "B").json, #"{"do":"channel","id":50,"channel":"B"}"#)
++        XCTAssertEqual(WatchCommand.channel(id: 50, channel: #"a"b"#).json, #"{"do":"channel","id":50,"channel":"a\"b"}"#, "a channel is sent as JSON, not pasted in")
+     }
+ 
+     func testTheNeedleAndTheColours() {
+@@ -78,5 +126,14 @@ final class WatchModelTests: XCTestCase {
+         XCTAssertEqual(s.answering(.pedal(id: 70, on: true)).pedals.first { $0.id == 70 }?.on, true)
+         XCTAssertEqual(s.answering(.preset(step: 1)).preset.label, "013")
+         XCTAssertTrue(s.answering(.tuner(on: true)).tuner.on)
++        /* A pedal held in the demo: a channel it has, and not one it has not. */
++        let drive = { (state: WatchState) in state.pedals.first { $0.id == 50 } }
++        XCTAssertEqual(drive(s)?.channel, "B")
++        XCTAssertTrue(drive(s)?.canPickChannel == true)
++        XCTAssertEqual(drive(s.answering(.channel(id: 50, channel: "C")))?.channel, "C")
++        XCTAssertEqual(drive(s.answering(.channel(id: 50, channel: "Z")))?.channel, "B", "a channel the pedal does not have")
++        XCTAssertEqual(s.answering(.channel(id: 99, channel: "C")), s, "a pedal that is not there")
++        XCTAssertEqual(drive(s.answering(.pedal(id: 50, on: false)))?.channels, drive(s)?.channels, "switching a pedal lost its channels")
++        XCTAssertEqual(drive(s.answering(.pedal(id: 50, on: false)))?.channel, "B")
+     }
+ }
+diff --git a/mobile/watch-ci/Tests/WatchModelTests/state.json b/mobile/watch-ci/Tests/WatchModelTests/state.json
+index df4048b..30117c9 100644
+--- a/mobile/watch-ci/Tests/WatchModelTests/state.json
++++ b/mobile/watch-ci/Tests/WatchModelTests/state.json
+@@ -27,7 +27,14 @@
+       "name": "Drive 1",
+       "on": true,
+       "fill": "#c0392b",
+-      "ink": "#ffffff"
++      "ink": "#ffffff",
++      "channel": "B",
++      "channels": [
++        "A",
++        "B",
++        "C",
++        "D"
++      ]
+     },
+     {
+       "id": 70,
+@@ -35,7 +42,9 @@
+       "name": "Delay 1",
+       "on": false,
+       "fill": "#7d8591",
+-      "ink": "#ffffff"
++      "ink": "#ffffff",
++      "channel": "A",
++      "channels": []
+     }
+   ],
+   "tuner": {
+diff --git a/mobile/watch-ci/screens.sh b/mobile/watch-ci/screens.sh
+index 7a428f9..2ff29e6 100755
+--- a/mobile/watch-ci/screens.sh
++++ b/mobile/watch-ci/screens.sh
+@@ -25,6 +25,14 @@ for page in 0 1 2 3; do
+ done
+ shoot -page 3 -tunerDemo YES
+ xcrun simctl io "$UDID" screenshot "screens/tuner-on.png"
++# A pedal held: Drive 1's channels, B lit (-pick takes a demo pedal's id). For
++# looking at a pull request only; watch.yml's App Store list does not take it.
++# Three seconds more than the others: the sheet opens 0.8 s after the page
++# does and slides in after that, and at five seconds the first picture caught
++# it on its way, the page blurred and nothing yet in front of it.
++shoot -page 1 -pick 50
++sleep 3
++xcrun simctl io "$UDID" screenshot "screens/channels.png"
+ # And with no phone: what it says when the iPhone app is not open.
+ xcrun simctl launch --terminate-running-process "$UDID" "$ID" -demo NO
+ sleep 5
+diff --git a/shared/watch-link.mjs b/shared/watch-link.mjs
+index 6ebe491..de74149 100644
+--- a/shared/watch-link.mjs
++++ b/shared/watch-link.mjs
+@@ -8,7 +8,7 @@
+  * relay is, so every tap goes watch → phone → computer → unit, over Apple's
+  * own watch-to-phone link (WatchConnectivity). The phone is the only thing
+  * that knows the rig; the watch draws what it is told and asks for one of
+- * four things.
++ * six things.
+  *
+  * This file is both halves of that conversation, in words the watch's Swift
+  * can read without knowing anything about the app: `watchState` is what the
+@@ -36,8 +36,27 @@ export const WATCH_STATE_MS = 250
+ /** Within this many cents the watch draws the note green, as the phone's tuner does. */
+ export const WATCH_IN_TUNE_CENTS = 3
+ 
++/** The most channels a pedal offers on the watch: A to D, as on every unit today. */
++export const WATCH_CHANNELS_MAX = 4
++
+ const int = (n) => Number.isInteger(n)
+ const text = (s, max = 40) => (typeof s === 'string' ? s.slice(0, max) : '')
++/** A channel as the phone's own channel write takes it: one capital letter, or '' for none said. */
++const letter = (c) => (typeof c === 'string' && /^[A-Z]$/.test(c) ? c : '')
++
++/*
++ * WHAT HOLDING A PEDAL OFFERS. Justin, 13 October 2026: "Can I add the tap to
++ * hold on the effects switches on the watch where you can switch through the
++ * channels?" The letters the Play screen's own hold offers (Stage.js, the
++ * channel sheet), and only while that hold does something there: none on the
++ * outline, where a channel waits for the chain read (see chain-view.mjs), and
++ * none on a unit with one channel or none. Fewer than two is nothing to
++ * choose between, so it is sent as none, and the watch's hold does nothing.
++ */
++const channelChoices = (list) => {
++  const out = Array.isArray(list) ? [...new Set(list.map(letter).filter(Boolean))].slice(0, WATCH_CHANNELS_MAX) : []
++  return out.length > 1 ? out : []
++}
+ 
+ /**
+  * The picture the watch draws, from the phone's store and the few things the
+@@ -87,7 +106,14 @@ export function watchState({
+         name: text(p.name, 24),
+         on: p.on === true,
+         fill: /^#[0-9a-f]{6}$/i.test(p.fill || '') ? p.fill : '#7d8591',
+-        ink: /^#[0-9a-f]{6}$/i.test(p.ink || '') ? p.ink : '#ffffff'
++        ink: /^#[0-9a-f]{6}$/i.test(p.ink || '') ? p.ink : '#ffffff',
++        /* The letter in the tile's corner, as on the phone; '' when the unit
++           has not said. */
++        channel: letter(p.channel),
++        /* What a hold may switch it to; [] and a hold does nothing. A watch
++           older than this reads neither field, and is none the worse: the
++           link's version stays 1, because nothing it knows changed meaning. */
++        channels: channelChoices(p.channels)
+       })),
+     tuner: {
+       on: !!tunerOn,
+@@ -109,16 +135,19 @@ function metronomeForWatch(m) {
+ }
+ 
+ /**
+- * A message from the watch, as one of the four things it may ask, or null.
++ * A message from the watch, as one of the six things it may ask, or null.
+  *
+  *   { do: 'scene', index }      — switch to that scene (0-based)
+  *   { do: 'pedal', id, on }     — that block on or off
++ *   { do: 'channel', id, channel } — that block onto that channel, a letter ('B')
+  *   { do: 'preset', step }      — Previous (-1) or Next (+1), as the stage screen steps
+  *   { do: 'tuner', on }         — the tuner page opened or closed
+  *   { do: 'hello' }             — the watch app opened: send the picture now
+  *
+  * `state` is the last picture sent, so a scene or a pedal the watch could not
+- * have been shown is refused rather than sent to the unit.
++ * have been shown is refused rather than sent to the unit — and so is a
++ * channel that pedal was not offered in it, which is every channel while the
++ * Play screen's own hold would do nothing.
+  */
+ export function watchCommand(msg, state) {
+   if (!msg || typeof msg !== 'object') return null
+@@ -133,6 +162,13 @@ export function watchCommand(msg, state) {
+       const shown = (state?.pedals || []).some((p) => p.id === msg.id)
+       return int(msg.id) && shown && typeof msg.on === 'boolean' ? { do: 'pedal', id: msg.id, on: msg.on } : null
+     }
++    case 'channel': {
++      const pedal = int(msg.id) ? (state?.pedals || []).find((p) => p.id === msg.id) : null
++      const offered = Array.isArray(pedal?.channels) ? pedal.channels : []
++      return pedal && typeof msg.channel === 'string' && offered.includes(msg.channel)
++        ? { do: 'channel', id: msg.id, channel: msg.channel }
++        : null
++    }
+     case 'preset':
+       return msg.step === 1 || msg.step === -1 ? { do: 'preset', step: msg.step } : null
+     case 'tuner':
+diff --git a/test/run.mjs b/test/run.mjs
+index 742101c..0d49c0a 100644
+--- a/test/run.mjs
++++ b/test/run.mjs
+@@ -13836,14 +13836,21 @@ test('the computer app carries the server that opens the AM4’s own tuner scree
+ /*
+  * THE APPLE WATCH. "Maybe three different screens that you can swipe between
+  * … just simple actions from the watch." The phone sends the whole picture;
+- * the watch asks for one of five things, and anything else is dropped.
++ * the watch asks for one of six things, and anything else is dropped.
++ *
++ * Changed on purpose, 13 October 2026: five things became six, and each pedal
++ * carries its channel and what a hold may switch it to. Justin: "Can I add the
++ * tap to hold on the effects switches on the watch where you can switch
++ * through the channels?" The fixture's pedals got the two new fields and the
++ * watch's fixture was written again from this input; nothing that was there
++ * before moved.
+  */
+-test('the watch is sent the stage as one small picture, and may ask for only five things', async () => {
++test('the watch is sent the stage as one small picture, and may ask for only six things', async () => {
+   const { watchState, watchCommand, sameWatchState, WATCH_PEDALS_MAX } = await import('../shared/watch-link.mjs')
+   const fixture = JSON.parse(readSrc(new URL('../mobile/watch-ci/Tests/WatchModelTests/state.json', import.meta.url), 'utf8'))
+   const again = watchState({ at: 1759363200000, linked: true, preset: { number: 12, name: 'Crunch Rhythm' }, label: '012', scene: 1,
+     sceneNames: ['Clean', 'Crunch', 'Lead'], sceneCount: 8, canPrevious: true, canNext: false,
+-    pedals: [{ id: 50, name: 'Drive 1', short: 'DRV', on: true, fill: '#c0392b', ink: '#ffffff' }, { id: 70, name: 'Delay 1', short: 'DLY', on: false, fill: 'nope', ink: '#ffffff' }],
++    pedals: [{ id: 50, name: 'Drive 1', short: 'DRV', on: true, fill: '#c0392b', ink: '#ffffff', channel: 'B', channels: ['A', 'B', 'C', 'D'] }, { id: 70, name: 'Delay 1', short: 'DLY', on: false, fill: 'nope', ink: '#ffffff', channel: 'A', channels: ['A'] }],
+     tunerOn: true, tuning: { note: 'E', octave: 2, cents: -2.4 }, metronome: { on: true, bpm: 120 } })
+   assert.deepEqual(again, fixture, 'the watch’s test fixture is not what the phone sends any more — write it again')
+ 
+@@ -13870,7 +13877,7 @@ test('the watch is sent the stage as one small picture, and may ask for only fiv
+   assert.equal(watchState({ tunerOn: true, tuning: { note: 'A', cents: 300 } }).tuner.cents, 50)
+   assert.equal(watchState({ pedals: Array.from({ length: 30 }, (_, i) => ({ id: i, name: 'x' })) }).pedals.length, WATCH_PEDALS_MAX)
+ 
+-  /* The five requests, and only the ones the watch could have been shown. */
++  /* The six requests, and only the ones the watch could have been shown. */
+   const shown = watchState({ sceneCount: 4, pedals: [{ id: 50, name: 'Drive' }] })
+   assert.deepEqual(watchCommand({ do: 'scene', index: 3 }, shown), { do: 'scene', index: 3 })
+   assert.equal(watchCommand({ do: 'scene', index: 4 }, shown), null)
+@@ -13882,8 +13889,26 @@ test('the watch is sent the stage as one small picture, and may ask for only fiv
+   assert.deepEqual(watchCommand({ do: 'hello' }, null), { do: 'hello' })
+   for (const bad of [null, 'scene', { do: 'save' }, { do: 'select', number: 5 }, { do: 'tuner', on: 'yes' }]) assert.equal(watchCommand(bad, shown), null)
+ 
+-  /* The watch's own words for them are these same five. */
+-  for (const [msg] of [[{ do: 'hello' }], [{ do: 'scene', index: 2 }], [{ do: 'pedal', id: 50, on: false }], [{ do: 'preset', step: -1 }], [{ do: 'tuner', on: true }]]) {
++  /* A pedal held: only a channel that pedal was offered in the last picture,
++     which is none where the Play screen's own hold does nothing. */
++  assert.deepEqual(fixture.pedals.map((p) => p.channels), [['A', 'B', 'C', 'D'], []], 'one channel was offered as a choice')
++  const held = watchState({ pedals: [{ id: 50, name: 'Drive', channel: 'A', channels: ['A', 'B', 'C', 'D'] }, { id: 70, name: 'Delay', channel: 'B', channels: [] }] })
++  assert.deepEqual(watchCommand({ do: 'channel', id: 50, channel: 'C' }, held), { do: 'channel', id: 50, channel: 'C' })
++  assert.equal(watchCommand({ do: 'channel', id: 70, channel: 'A' }, held), null, 'a channel was switched where the phone’s own hold does nothing')
++  for (const bad of [{ id: 50, channel: 'E' }, { id: 50, channel: 'c' }, { id: 50, channel: 2 }, { id: 50 }, { id: 51, channel: 'B' }, { id: '50', channel: 'B' }]) {
++    assert.equal(watchCommand({ do: 'channel', ...bad }, held), null, JSON.stringify(bad))
++  }
++  assert.equal(watchCommand({ do: 'channel', id: 50, channel: 'B' }, shown), null, 'a pedal sent with no channels took one')
++  assert.equal(watchCommand({ do: 'channel', id: 50, channel: 'B' }, null), null, 'a channel was taken with no picture sent')
++  /* What is sent: one capital letter or none, and at most four to choose, each once. */
++  const one = (p) => watchState({ pedals: [{ id: 1, name: 'x', ...p }] }).pedals[0]
++  assert.deepEqual(one({ channel: 'A', channels: ['A', 'B', 'A', 'b', 7, 'C', 'D', 'E'] }).channels, ['A', 'B', 'C', 'D'])
++  for (const channel of [null, undefined, 'b', 'AB', 3]) assert.equal(one({ channel }).channel, '', String(channel))
++  assert.deepEqual(one({}).channels, [], 'a pedal with no channels went without the field, for the watch to guess at')
++  assert.deepEqual(one({ channels: 'ABCD' }).channels, [])
++
++  /* The watch's own words for them are these same six. */
++  for (const [msg] of [[{ do: 'hello' }], [{ do: 'scene', index: 2 }], [{ do: 'pedal', id: 50, on: false }], [{ do: 'channel', id: 50, channel: 'B' }], [{ do: 'preset', step: -1 }], [{ do: 'tuner', on: true }]]) {
+     assert.ok(swift.includes(`"do":"${msg.do}"`), `the watch cannot ask for ${msg.do}`)
+   }
+   assert.equal(sameWatchState({ ...fixture, at: 1 }, { ...fixture, at: 2 }), true)
+@@ -13947,6 +13972,11 @@ test('the stage screen keeps the watch, which is inert until the watch is built
+   assert.match(bridge, /requireOptionalNativeModule\('FractalWatch'\)/, 'a build without the watch would fail to start')
+   assert.match(bridge, /const watch = link\(\) if \(!watch\) return undefined/)
+   assert.match(bridge, /if \(cmd\.do === 'scene'\) return writeScene\(cmd\.index\) if \(cmd\.do === 'pedal'\) return writeBypass\(cmd\.id, !cmd\.on\) if \(cmd\.do === 'preset'\) return stepRef\.current\?\.\(cmd\.step\)/)
++  /* A channel from the wrist: the Play screen's channel sheet's own write, for
++     a block on the screen now, offered only where the tile's own hold works. */
++  assert.match(bridge, /if \(cmd\.do === 'channel'\) \{ const here = getState\(\)\.blocks\.some\(\(b\) => sameBlock\(b, cmd\.id\)\) return here \? writeChannel\(cmd\.id, cmd\.channel\) : undefined \}/, 'a channel from the watch lands on a block that is not on the screen')
++  assert.match(bridge, /channel: b\.channel, channels \}\)\)/, 'the watch is not told each pedal’s channel')
++  assert.match(stage, /chain: chainNow\.elsewhere \? \[\] : blocks, \/\*[^*]*\*\/ channels: channels\?\.length > 1 && !chainNow\.outline && !chainNow\.elsewhere \? channels : \[\],/, 'the watch offers a channel the Play screen would not')
+   /* Wake on tap: a tap that woke the phone rejoins the computer before it is
+      sent, and the phone holds the app up long enough to send it. */
+   assert.match(bridge, /AppState\.currentState !== 'active'/, 'a tap that woke a locked phone is sent into a sleeping connection')
+@@ -13955,6 +13985,15 @@ test('the stage screen keeps the watch, which is inert until the watch is built
+   const pages = readSrc(new URL('../mobile/targets/watch/Pages.swift', import.meta.url), 'utf8')
+   assert.match(pages, /\.onDisappear \{\s*if state\.tuner\.on \{ link\.send\(\.tuner\(on: false\)\) \}/)
+   assert.ok(!/onAppear[^}]*tuner\(on: true\)/.test(pages), 'the tuner turns on by being swiped to')
++  /* The hold is the phone's hold, and only the watch says so: the phone's tips
++     reach every phone by an update, a watch from before this build cannot do it. */
++  const tile = readSrc(new URL('../mobile/src/components/Tile.js', import.meta.url), 'utf8')
++  assert.match(tile, /delayLongPress=\{450\}/)
++  assert.match(pages, /LongPressGesture\(minimumDuration: 0\.45\)/, 'the watch’s hold is not the phone’s 450 ms')
++  assert.match(pages, /including: pedal\.canPickChannel \? \.all : \.subviews/, 'a pedal with nothing to choose can be held')
++  assert.ok(pages.includes('Text("Hold a pedal for its channels.")'), 'the watch does not say a pedal can be held')
++  const tips = bridge.slice(bridge.indexOf('export const WATCH_HOW_OPEN'), bridge.indexOf('export function watchWakes'))
++  assert.ok(tips.length > 100 && !/\bhold/i.test(tips), 'the phone’s watch tips promise a hold that a watch from before this build cannot do')
+   const wf = readSrc(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')
+   for (const step of ['swift test', 'xcodegen generate', '-sdk watchsimulator', 'screens.sh', 'watch-screens']) assert.ok(wf.includes(step), `the watch check has no ${step}`)
+ })
