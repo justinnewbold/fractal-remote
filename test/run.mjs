@@ -10468,7 +10468,9 @@ test('the computer stays awake while a phone is using it, and for half an hour a
   {
     const phone = readSrc(new URL('../mobile/src/lib/link.js', import.meta.url), 'utf8')
     assert.match(phone, /import \{ PHONE_NOTE_PATH, phoneNote, timeToTell \} from '\.\/phone-note'/)
-    const tick = phone.slice(phone.indexOf('async function tick()'), phone.indexOf('async function join()'))
+    /* The loop's body is turn() since 1.87.24; tick() only counts the turns under way, for lib/updates.js. */
+    const tick = phone.slice(phone.indexOf('async function turn()'), phone.indexOf('async function join()'))
+    assert.ok(tick.length > 100, 'the phone link has no turn of its loop to read')
     assert.match(tick, /\n {2}if \(running\) tellComputer\(\)\n/, 'the phone app never tells the computer it is using it')
     const tell = phone.slice(phone.indexOf('function tellComputer()'), phone.indexOf('/** Said once'))
     assert.match(tell, /if \(state\.link !== 'connected'\) toldAt = 0/, 'a phone whose link came back waits two minutes to say so')
