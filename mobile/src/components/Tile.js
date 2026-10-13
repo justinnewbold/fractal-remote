@@ -1,9 +1,11 @@
-import { Image, Platform, Pressable, Text, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 
 import { color, font, isDark, radius, space, TAP } from '../lib/theme'
 import { at, inkOn, lighter, vivid } from '../lib/vivid'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
+import { cornerFit } from '../lib/tile-corners'
 
 /**
  * A coloured tile, for the two things on this screen that have an identity.
@@ -44,6 +46,15 @@ export default function Tile({
    */
   topLeft,
   topRight,
+  /*
+   * Two corner words that are one phrase, shown together or not at all.
+   *
+   * The looper's tile says Rec in one corner and Play in the other, and
+   * either one alone would read as the only thing a tap on it does. On/Off
+   * and a channel letter are two separate facts, so an effect tile leaves
+   * this off and each of its corners shows on its own.
+   */
+  pair = false,
   /*
    * The picture above the letters, cut from Justin's mockup of this screen.
    * White in the file and tinted here, so one copy serves every hue — see
@@ -135,6 +146,75 @@ export default function Tile({
   const picture = icon ? Math.max(14, Math.min(28, Math.round(height * 0.32))) : 0
   const cornered = !!(topLeft || topRight)
 
+  /*
+   * A CORNER WORD IS NEVER DRAWN ON THE PICTURE.
+   *
+   * "Looks like we need to fix the overlapping play word on the looper." The
+   * corners cost the tile no height, and the picture is centred in the rest,
+   * so on a short tile the picture rises into the corner row. There is no
+   * height to push them apart with — Fit owns it — so a word sits beside the
+   * picture or it is not drawn, and cornerFit decides which from what was
+   * actually laid out. See shared/tile-corners.mjs for the rule.
+   *
+   * Kept only when a measurement moves by half a point or more, so a layout
+   * that lands where it was does not draw the tile again. A word that is not
+   * drawn keeps its place, so it can still be measured, and it is still in
+   * the accessibility label below, so a screen reader still says it.
+   */
+  const [laid, setLaid] = useState({})
+  const keep = (key, value, at) =>
+    setLaid((was) =>
+      was[key] != null && Math.abs(was[key] - value) < 0.5 && was.at?.[key] === at
+        ? was
+        : { ...was, [key]: value, at: { ...was.at, [key]: at } }
+    )
+  /*
+   * AND ONLY AT THE SIZE THEY WERE TAKEN AT.
+   *
+   * A tile on screen that gets smaller — a preset that takes the chain from
+   * three across to four, Fit shrinking the rows — is drawn at its new size
+   * before onLayout says what that size is, and the looper keeps its key, so
+   * it is never drawn afresh. For a frame or two the old width said Play had
+   * room, while the picture had already moved up under it. So the tile's
+   * width and the picture's top are each marked with the size they were
+   * measured at, and a frame drawn at any other size has no measurements at
+   * all: the words wait, hidden, for the layout that says where they go.
+   *
+   * A size that moves nothing gets no layout: at the floor a tile is as tall
+   * as what is in it, and a little more height asked for leaves it where it
+   * was. Nothing moved, so what was measured is still true, and it is taken
+   * as the new size's once the layout it would have brought has had time to
+   * come and has not.
+   */
+  const sized = `${height}|${picture}|${StyleSheet.flatten(style)?.width}`
+  const current = laid.at?.width === sized && laid.at?.top === sized
+  useEffect(() => {
+    if (!cornered) return undefined
+    const still = setTimeout(
+      () =>
+        setLaid((was) =>
+          was.width == null || was.top == null || (was.at?.width === sized && was.at?.top === sized)
+            ? was
+            : { ...was, at: { ...was.at, width: sized, top: sized } }
+        ),
+      200
+    )
+    return () => clearTimeout(still)
+  }, [sized, cornered])
+  const shows = cornerFit({
+    width: current ? laid.width : undefined,
+    picture,
+    pictureTop: current ? laid.top : undefined,
+    bandBottom: laid.band,
+    inset: laid.inset,
+    left: topLeft ? laid.left : 0,
+    right: topRight ? laid.right : 0,
+    pair
+  })
+  const cornerInk = on ? lit : color.silkDim
+  const leftWord = { color: cornerInk, fontSize: font.micro, fontWeight: '600', opacity: shows.left ? 1 : 0 }
+  const rightWord = { color: cornerInk, fontSize: font.micro, fontWeight: '700', opacity: shows.right ? 1 : 0 }
+
   const glow = on
     ? Platform.select({
         ios: {
@@ -165,6 +245,8 @@ export default function Tile({
           : undefined
       }
       delayLongPress={450}
+      /* The tile's outer width, which the picture is centred in. */
+      onLayout={cornered ? (e) => keep('width', e.nativeEvent.layout.width, sized) : undefined}
       style={({ pressed }) => [
         {
           minHeight: height,
@@ -215,6 +297,15 @@ export default function Tile({
       {cornered ? (
         <View
           pointerEvents="none"
+          /* Where the corner words start, and where their row ends. The row
+             sits 5pt inside the 2pt border, so its words start 7pt in from
+             the tile's edge — measured here rather than written down, so
+             the number cannot drift from where Yoga actually put them. */
+          onLayout={(e) => {
+            const { x, y, height: tall } = e.nativeEvent.layout
+            keep('inset', x)
+            keep('band', y + tall)
+          }}
           style={{
             position: 'absolute',
             left: 5,
@@ -224,15 +315,20 @@ export default function Tile({
             justifyContent: 'space-between'
           }}
         >
-          <Text numberOfLines={1} style={{ color: on ? lit : color.silkDim, fontSize: font.micro, fontWeight: '600' }}>
+          <Text numberOfLines={1} onLayout={(e) => keep('left', e.nativeEvent.layout.width)} style={leftWord}>
             {topLeft || ''}
           </Text>
-          <Text numberOfLines={1} style={{ color: on ? lit : color.silkDim, fontSize: font.micro, fontWeight: '700' }}>
+          <Text numberOfLines={1} onLayout={(e) => keep('right', e.nativeEvent.layout.width)} style={rightWord}>
             {topRight || ''}
           </Text>
         </View>
       ) : null}
-      <View style={{ alignItems: 'center' }}>
+      <View
+        /* The picture is this column's first child, so its top is the
+           picture's top. */
+        onLayout={cornered ? (e) => keep('top', e.nativeEvent.layout.y, sized) : undefined}
+        style={{ alignItems: 'center' }}
+      >
         {picture ? (
           <Image
             source={icon}

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { liveMeters, setChannel, setMetersWanted } from '../lib/forgefx'
 import {
   useDevice,
@@ -21,7 +22,8 @@ import {
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import { remoteActive } from '../lib/remote'
 import { STAGE_HIDDEN } from '../lib/guardrails'
-import { findLooper } from '../../shared/looper.mjs'
+import { findLooper, LOOPER_LABEL } from '../../shared/looper.mjs'
+import { cornerFit } from '../../shared/tile-corners.mjs'
 import Looper from './Looper'
 import { blockColor } from '../lib/blockColors'
 import { blockIcon } from '../lib/blockIcons'
@@ -1133,6 +1135,129 @@ export default function Gig({
 }
 
 /**
+ * Which of a tile's corner words have room beside its picture, measured.
+ *
+ * "Looks like we need to fix the overlapping play word on the looper." The
+ * browser draws the phone's tile and had the phone's fault: the corner row
+ * costs the tile no height, the picture is centred in the rest, and at the
+ * default size the picture rose into the corner row under the words. The
+ * rule is the phone's too, in shared/tile-corners.mjs. This is only the
+ * measuring, in the tile's own pixels from its outer edge.
+ *
+ * Measured again whenever the tile, its picture or a corner word changes
+ * size — a resize, a step of the size control, the compact layout's shorter
+ * tiles and smaller picture, On turning into Off — and once the fonts have
+ * arrived, since a word measured in the fallback face is a different width.
+ * A word that is not drawn keeps its place in the row but gives its room to
+ * the one that is (styles.css), so its box can come out narrower than its
+ * text; what is measured is the text, which no answer changes, so a second
+ * measure gets the same answer. And the answer is only set when it changes.
+ */
+function useCornerFit({ tile, picture, band, left, right }, pair, again) {
+  const [fit, setFit] = useState(null)
+  const measure = useRef(null)
+  measure.current = () => {
+    const box = tile.current
+    if (!box || !box.offsetWidth) return
+    const at = box.getBoundingClientRect()
+    /* A tile under a finger is drawn at 97% (the press rule in styles.css),
+       and a rect is measured as drawn. Every distance is put back at full
+       size, so the tap that turns On into Off is measured like a tile at
+       rest. */
+    const k = at.width / box.offsetWidth || 1
+    const rel = (el) => {
+      const r = el.getBoundingClientRect()
+      return {
+        left: (r.left - at.left) / k,
+        right: (at.right - r.right) / k,
+        top: (r.top - at.top) / k,
+        bottom: (r.bottom - at.top) / k,
+        width: r.width / k
+      }
+    }
+    /* The whole word, not what is left of its box: .gig-block-word cuts
+       itself to its box, a hidden word hands its room to the word across
+       from it, and the question is whether all of it fits. So the text is
+       measured on its own and the pill's padding and border are put back
+       from the stylesheet — not read from scrollWidth, which in some
+       browsers leaves out the right-hand padding of a box its text overflows,
+       and a pill measured short would be drawn, measured whole, hidden, and
+       round again every frame. */
+    const whole = (el) => {
+      const s = getComputedStyle(el)
+      const px = (v) => parseFloat(v) || 0
+      const text = document.createRange()
+      text.selectNodeContents(el)
+      return text.getBoundingClientRect().width / k + px(s.paddingLeft) + px(s.paddingRight) + px(s.borderLeftWidth) + px(s.borderRightWidth)
+    }
+    const icon = picture.current ? rel(picture.current) : null
+    const row = band.current ? rel(band.current) : null
+    const l = left.current
+    const r = right.current
+    /* The two edges the words start from are the same distance in by the
+       stylesheet; the larger of the two is the careful one to use. */
+    const insets = [l ? rel(l).left : null, r ? rel(r).right : null].filter((n) => n !== null)
+    /* The row's own gap between its two words, which the rule keeps clear
+       too: two words that only fit by being squeezed into it are cut short. */
+    const between = band.current ? parseFloat(getComputedStyle(band.current).columnGap) : NaN
+    const next = cornerFit({
+      width: box.offsetWidth,
+      picture: icon ? icon.width : 0,
+      pictureTop: icon?.top,
+      bandBottom: row?.bottom,
+      inset: insets.length ? Math.max(...insets) : undefined,
+      left: l ? whole(l) : null,
+      right: r ? whole(r) : null,
+      between: Number.isFinite(between) ? between : 0,
+      pair
+    })
+    setFit((was) => (was && was.left === next.left && was.right === next.right ? was : next))
+  }
+  /* Before the first paint, so the words are never drawn in the wrong place
+     even for a frame. */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    measure.current()
+  }, again)
+  useEffect(() => {
+    let gone = false
+    /* Answered before the frame is drawn, not after. A ResizeObserver is
+       told between the layout and the paint, but a state set there is drawn
+       a frame later — and a window going from wide to phone-width drew that
+       frame with the wide answer, Play on the looper's picture: "the
+       overlapping play word on the looper", for one frame on every resize.
+       flushSync puts the answer on the screen before the paint. */
+    const now = () => {
+      if (!gone) flushSync(() => measure.current())
+    }
+    /* Only when the tile itself changed size. Hiding a word changes the size
+       of the word boxes (it hands its room across), and a browser that sees
+       a box change size at the depth it was just told about, inside the same
+       frame, gives up with an error — which the crash log would keep. Words
+       are deeper in the tile than the tile, so a tile's change is safe to
+       answer at once; a word's or the picture's alone is answered in the
+       ordinary way, a frame later, where nothing moves under it. */
+    const look = (seen) => {
+      if (gone) return
+      if (seen.some((e) => e.target === tile.current)) now()
+      else measure.current()
+    }
+    const watch = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(look)
+    for (const ref of [tile, picture, left, right]) if (watch && ref.current) watch.observe(ref.current)
+    /* Outside the frame's own work, so at once is always safe here. */
+    document.fonts?.ready?.then(now)
+    return () => {
+      gone = true
+      watch?.disconnect()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, again)
+  /* Hidden until measured: a word that will not fit never flashes over the
+     picture on the first frame. */
+  return fit || { left: false, right: false }
+}
+
+/**
  * One block on the stage screen: tap to switch it, hold to change its channel.
  *
  * "If you can hold one of the effects for a few seconds, it would be cool to
@@ -1172,9 +1297,32 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
    */
   const unknown = !door && outline && typeof block.bypassed !== 'boolean'
 
+  /*
+   * THE TWO CORNERS. An effect says On or Off at the top left and its channel
+   * at the top right; the looper's door says Rec at the top left and Play at
+   * the top right, with its picture between them. "Looks like we need to fix
+   * the overlapping play word on the looper": the whole of "Rec · Play" in
+   * one corner reached past the middle of the tile, under the picture. The
+   * door's two words are one phrase, so they show together or not at all.
+   *
+   * Measured again when what they say changes — On to Off, a channel arriving
+   * — as well as when anything changes size.
+   */
+  const tileRef = useRef(null)
+  const pictureRef = useRef(null)
+  const bandRef = useRef(null)
+  const wordRef = useRef(null)
+  const acrossRef = useRef(null)
+  const shows = useCornerFit(
+    { tile: tileRef, picture: pictureRef, band: bandRef, left: wordRef, right: acrossRef },
+    door,
+    [door, unknown, block.bypassed, block.channel, !!icon]
+  )
+
   return (
     <div className="gig-block-cell">
       <button
+        ref={tileRef}
         className={`gig-block ${unknown || block.bypassed ? 'off' : 'on'}`}
         style={{
           '--block-fill': blockColor(block.slug).fill,
@@ -1185,7 +1333,14 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
         /* The looper pedal opens its buttons rather than switching it, so it
            is not a toggle and does not say it is one. */
         aria-pressed={door || unknown ? undefined : !block.bypassed}
-        aria-label={door ? 'Looper — open Record, Play and Stop' : undefined}
+        /* Said in words rather than left to the corners: a corner word with
+           no room is hidden, and a hidden word is not read out either. The
+           same three things the tile read before, in the order it drew them. */
+        aria-label={
+          door
+            ? 'Looper — open Record, Play and Stop'
+            : [block.name || block.slug, unknown ? null : block.bypassed ? 'Off' : 'On', block.channel].filter(Boolean).join(', ')
+        }
         /* The phone says "Hold to switch channels" beside CHAIN; this screen
            has no heading there to carry it, so the tile says it when a mouse
            rests on it. */
@@ -1209,6 +1364,7 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
           */}
           {icon ? (
             <span
+              ref={pictureRef}
               className="gig-block-icon"
               aria-hidden="true"
               style={{ WebkitMaskImage: `url(${icon})`, maskImage: `url(${icon})` }}
@@ -1219,10 +1375,22 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
             {shortBlock(block)}
           </span>
         </span>
-        <span className="gig-block-state">
-          {/* One line, always: "Rec · Play" on a narrow tile wrapped down into
-              the looper's picture. */}
-          <span className="gig-block-word">{door ? 'Rec · Play' : unknown ? '\u00a0' : block.bypassed ? 'Off' : 'On'}</span>
+        <span className="gig-block-state" ref={bandRef}>
+          {/* One line, always, and never cut short: a word with no room
+              beside the picture is not drawn at all (data-crowded). The
+              door's words are the looper's own names for the two buttons
+              it opens, so the tile and the sheet cannot disagree. */}
+          <span className="gig-block-word" ref={wordRef} data-crowded={shows.left ? undefined : 'yes'}>
+            {door ? LOOPER_LABEL.record : unknown ? '\u00a0' : block.bypassed ? 'Off' : 'On'}
+          </span>
+          {/* The door's other half, in the corner an effect keeps for its
+              channel — set like the word across from it, not like the
+              channel's pill, because it is the rest of the same phrase. */}
+          {door ? (
+            <span className="gig-block-word gig-block-word-end" ref={acrossRef} data-crowded={shows.right ? undefined : 'yes'}>
+              {LOOPER_LABEL.play}
+            </span>
+          ) : null}
           {/*
             The channel, in the top right corner, across from the on/off in
             the top left.
@@ -1236,9 +1404,13 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
             bare letter on something without channels would be a lie about the
             hardware.
           */}
-          {/* Not on the looper's door: it opens Record and Play, and a letter
-              in its corner crowded the words out. The phone's has none either. */}
-          {block.channel && !door ? <span className="gig-block-channel">{block.channel}</span> : null}
+          {/* Not on the looper's door: its top right says Play, and a looper
+              has no channel worth a letter. The phone's has none either. */}
+          {block.channel && !door ? (
+            <span className="gig-block-channel" ref={acrossRef} data-crowded={shows.right ? undefined : 'yes'}>
+              {block.channel}
+            </span>
+          ) : null}
         </span>
       </button>
     </div>

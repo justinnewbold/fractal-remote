@@ -6485,6 +6485,14 @@ button.gig-block {
   text-overflow: ellipsis;
 }
 
+/* The looper's Play, in the top right where an effect keeps its channel.
+   Pushed across by its own margin, as the channel is, but set like the Rec
+   it finishes rather than in the channel's pill: it is the second half of
+   one phrase, not a letter about the hardware. */
+.gig-block-word-end {
+  margin-left: auto;
+}
+
 /* The channel this block is on in this scene.
    Quieter than the on/off beside it: which channel a block is on matters, but
    whether it is making a sound at all matters more, and the two sit together. */
@@ -6496,6 +6504,35 @@ button.gig-block {
   font-size: var(--f-1);
   letter-spacing: 0.1em;
   color: var(--silk-dim);
+}
+
+/*
+ * A corner word with no room beside the picture is not drawn.
+ *
+ * "Looks like we need to fix the overlapping play word on the looper." The
+ * corner row costs the tile no height and the picture is centred in the
+ * rest, so on a short tile the two meet; Gig.jsx measures, and the rule in
+ * shared/tile-corners.mjs says which words fit. Hidden rather than removed,
+ * so the word keeps its place and can be measured again, and at every size,
+ * the compact one included. The button's label still says it.
+ *
+ * And it gives its room to the word that is drawn. Hidden but still as wide
+ * as its text, the channel's pill held its space in the row and squeezed the
+ * Off beside it to "O…" — with pictures off, Small, on a 320 phone — though
+ * the rule had hidden the pill so that Off could be whole. So a hidden word
+ * may shrink to nothing, clipped rather than ellipsized (Gig.jsx measures
+ * its text, not its box), and the word that is drawn never shrinks: the rule
+ * only draws a word that fits.
+ */
+.gig-block-state [data-crowded] {
+  visibility: hidden;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.gig-block-state > :not([data-crowded]) {
+  flex-shrink: 0;
 }
 
 /*
@@ -10708,6 +10745,47 @@ button.view-tab {
 .gig[data-compact] .gig-block-icon {
   width: 1.15em;
   height: 1.15em;
+}
+
+/*
+ * The corner words, nearer their corners and a size down, on the smallest
+ * tiles.
+ *
+ * A word with no room beside the picture is not drawn (Gig.jsx and
+ * shared/tile-corners.mjs), and at this size, four across on a phone, the
+ * picture is up in the corner row on every tile. Set 8px in from the sides
+ * at 12px, with the channel in a pill 8px wide either side of its letter,
+ * Off and the channel came within a few pixels of the picture on a 360 to
+ * 390 wide phone — and so every channel letter and every Off went. 4px in,
+ * as they already are from the top, at 11px, the size the phone draws these
+ * same words and the channel letter already is, and a pill 4px either side:
+ * the words of an effect are back beside the picture on every phone from 360
+ * up, and the looper's Rec and Play from a 430.
+ */
+.gig[data-compact] .gig-block-state {
+  left: var(--s-1);
+  right: var(--s-1);
+  font-size: var(--f-1);
+}
+
+.gig[data-compact] .gig-block-channel {
+  padding: 0 var(--s-1);
+}
+
+/* And the same at Small on a phone, which is four across too but not the
+   compact layout: its 62px tiles put the picture up in the corner row as
+   well, and at 8px in and 12px the channel letter went from every effect
+   and Off from every phone under 430 wide. */
+@media (max-width: 620px) {
+  .gig[data-fx-abbr] .gig-block-state {
+    left: var(--s-1);
+    right: var(--s-1);
+    font-size: var(--f-1);
+  }
+
+  .gig[data-fx-abbr] .gig-block-channel {
+    padding: 0 var(--s-1);
+  }
 }
 
 .gig[data-compact] .gig-block-name {

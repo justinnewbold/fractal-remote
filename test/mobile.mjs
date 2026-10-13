@@ -6794,6 +6794,136 @@ export function run(test) {
     assert.match(rule('.gig-block-icon'), /display: block/, 'the browser’s picture is beside the name again')
   })
 
+  test('a corner word is drawn beside the picture or not at all, by one rule at both ends', async () => {
+    /*
+     * "Looks like we need to fix the overlapping play word on the looper."
+     * The corner words cost the tile no height and the picture is centred in
+     * what is left, so on a short tile the picture rises into the corner row;
+     * "Rec · Play" in one corner reached past the middle of every three- and
+     * four-across tile, and the picture sat on Play. The numbers here are the
+     * screenshot's: a 440pt iPhone on Smallest with Fit, four across.
+     */
+    const { cornerFit } = await import('../shared/tile-corners.mjs')
+    const shot = { width: 95.67, picture: 17, pictureTop: 7.5 + 2, bandBottom: 18, inset: 7 }
+    assert.equal(cornerFit({ ...shot, left: 54, right: 0 }).left, false, '"Rec · Play" in one corner is drawn over the picture')
+    assert.deepEqual(cornerFit({ ...shot, left: 21, right: 24, pair: true }), { left: true, right: true }, 'Rec and Play have room in their own corners and are not drawn')
+
+    /* A 375pt phone four across: a bigger picture, and Play has no room. Rec
+       and Play are one phrase, so neither is drawn. */
+    const narrow = { width: 79.33, picture: 26, pictureTop: 5, bandBottom: 18, inset: 7 }
+    assert.equal(cornerFit({ ...narrow, left: 21, right: 24 }).right, false, 'Play is drawn on the picture')
+    assert.deepEqual(cornerFit({ ...narrow, left: 21, right: 24, pair: true }), { left: false, right: false }, 'half of Rec · Play is drawn on its own')
+    /* Two facts rather than one phrase: On fits and shows, whatever its channel does. */
+    assert.deepEqual(cornerFit({ ...narrow, left: 14, right: 24 }), { left: true, right: false }, 'an effect’s On waits for its channel')
+    assert.deepEqual(cornerFit({ ...narrow, left: 14, right: 24, pair: true }), { left: false, right: false })
+
+    /* A tall tile's picture starts below the corner row: words far too long
+       to sit beside the picture fit, because there is no picture beside them. */
+    assert.deepEqual(cornerFit({ ...narrow, pictureTop: 19, bandBottom: 18, left: 30, right: 30, pair: true }), { left: true, right: true }, 'a tall tile hides words that cannot touch its picture')
+    /* Pictures switched off: nothing to collide with. */
+    assert.deepEqual(cornerFit({ ...narrow, picture: 0, left: 30, right: 30 }), { left: true, right: true }, 'a tile with no picture hides its corners')
+
+    /*
+     * But a word is never cut short either, picture or none. A 360 wide
+     * browser on Fit: a 76px tile whose picture starts below the corner row,
+     * so nothing to touch, and Rec, the row's 8px and Play came to more than
+     * the row. Both were drawn, each squeezed to "R…" and "Pl…".
+     */
+    const fit360 = { width: 76, inset: 9, left: 22, right: 29, between: 8, picture: 17, pictureTop: 20.25, bandBottom: 18.8 }
+    assert.deepEqual(cornerFit({ ...fit360, pair: true }), { left: false, right: false }, 'Rec and Play are drawn cut short to share a row too narrow for both')
+    assert.deepEqual(cornerFit({ ...fit360, width: 66, picture: 0, pair: true }), { left: false, right: false }, 'with pictures off, Rec and Play are cut short')
+    /* Two facts rather than one phrase: the channel goes and On or Off stays. */
+    assert.deepEqual(cornerFit({ ...fit360, width: 66, picture: 0 }), { left: true, right: false }, 'an effect’s Off and channel are both cut short, or Off goes before its channel')
+    assert.deepEqual(cornerFit({ ...fit360, width: 66, picture: 0, left: 50 }), { left: false, right: true }, 'a word too long for the row on its own is drawn cut short, or takes the word across from it with it')
+    /* Exactly: 9 + 22 + 8 + 29 + 9 is 77. */
+    assert.deepEqual(cornerFit({ ...fit360, width: 77, pair: true }), { left: true, right: true })
+    /* The phone's row has no gap of its own, so the room it keeps between the words is the gap to the picture. */
+    assert.deepEqual(cornerFit({ width: 61, inset: 7, left: 21, right: 24, picture: 0 }), { left: true, right: true })
+    assert.deepEqual(cornerFit({ width: 60.9, inset: 7, left: 21, right: 24, picture: 0, pair: true }), { left: false, right: false }, 'the phone’s Rec and Play are drawn into each other')
+    /* Still hidden until measured, pictures or none: the row has to hold the word whole, and that takes a measure. */
+    assert.deepEqual(cornerFit({ picture: 0, left: undefined, right: undefined }), { left: false, right: false }, 'a word is drawn before it is known to fit its row')
+    assert.deepEqual(cornerFit({ picture: 0, left: null, right: null }), { left: true, right: true })
+    /* No word on a side is a side that fits. */
+    assert.equal(cornerFit({ ...narrow, left: null, right: 24 }).left, true)
+    assert.equal(cornerFit({ ...narrow, left: 14, right: 0 }).right, true)
+    assert.deepEqual(cornerFit({ ...shot, left: 21, right: null, pair: true }), { left: true, right: true }, 'a pair with one word is never drawn')
+
+    /* Hidden until measured, so a word that will not fit never flashes over the picture on the first frame. */
+    assert.deepEqual(cornerFit({ picture: 17, left: 21, right: 24 }), { left: false, right: false }, 'a word is drawn before the tile is measured')
+    assert.equal(cornerFit({ ...shot, left: undefined, right: 24 }).left, false, 'a word not measured yet is drawn')
+    assert.equal(cornerFit({ ...shot, width: undefined, left: 21, right: 24 }).left, false)
+
+    /* Clear by two points, exactly: 8 + 30 + 2 is the picture's left edge at 40. */
+    const even = { width: 100, picture: 20, pictureTop: 4, bandBottom: 18, inset: 8 }
+    assert.deepEqual(cornerFit({ ...even, left: 30, right: 30 }), { left: true, right: true })
+    assert.deepEqual(cornerFit({ ...even, left: 31, right: 31 }), { left: false, right: false }, 'a word one point into the gap is drawn')
+    assert.deepEqual(cornerFit({ ...even, left: 32, right: 32, gap: 0 }), { left: true, right: true })
+
+    /* The phone's copy is the generated one, and it gives the same answers. */
+    const phone = await import('../mobile/src/lib/tile-corners.js')
+    for (const c of [{ ...shot, left: 54, right: 0 }, { ...shot, left: 21, right: 24, pair: true }, { ...narrow, left: 14, right: 24 }, { ...narrow, left: 21, right: 24, pair: true }, { ...fit360, pair: true }, { ...fit360, width: 66, picture: 0 }]) {
+      assert.deepEqual(phone.cornerFit(c), cornerFit(c), 'the phone and the browser disagree about a corner word')
+    }
+    assert.match(
+      read('scripts/sync-relay-rules.mjs'),
+      /\{ source: '\.\.\/shared\/tile-corners\.mjs', target: '\.\.\/mobile\/src\/lib\/tile-corners\.js' \}/,
+      'the phone’s copy of the corner rule is not generated'
+    )
+
+    /*
+     * THE PHONE'S TILE measures what it drew and asks the rule. Read as code,
+     * so a sentence about the fix cannot stand in for it.
+     */
+    const tile = withoutComments(read('mobile/src/components/Tile.js'))
+    assert.match(tile, /import \{ cornerFit \} from '\.\.\/lib\/tile-corners'/, 'the tile has its own idea of when a corner word fits')
+    assert.match(tile, /const shows = cornerFit\(\{[\s\S]{0,260}?picture,[\s\S]{0,260}?pair\s*\}\)/, 'the tile does not ask the rule, or not about this tile’s picture')
+    assert.match(tile, /\n\s*pair = false,/, 'an effect tile’s two corners are held together like the looper’s')
+    assert.match(tile, /opacity: shows\.left \? 1 : 0/, 'a top-left word with no room is still drawn')
+    assert.match(tile, /opacity: shows\.right \? 1 : 0/, 'a top-right word with no room is still drawn')
+    assert.match(tile, /onLayout=\{\(e\) => keep\('left', e\.nativeEvent\.layout\.width\)\}/, 'the top-left word is not measured')
+    assert.match(tile, /onLayout=\{\(e\) => keep\('right', e\.nativeEvent\.layout\.width\)\}/, 'the top-right word is not measured')
+    assert.match(tile, /keep\('band', y \+ tall\)/, 'the bottom of the corner row is not measured')
+    assert.match(tile, /keep\('top', e\.nativeEvent\.layout\.y, sized\)/, 'the picture’s top is not measured, or not marked with the size it was measured at')
+    assert.match(tile, /keep\('width', e\.nativeEvent\.layout\.width, sized\)/, 'the tile’s width is not measured, or not marked with the size it was measured at')
+    /* Half a point, so a layout that lands where it was does not draw the tile again. */
+    assert.match(tile, /was\[key\] != null && Math\.abs\(was\[key\] - value\) < 0\.5 && was\.at\?\.\[key\] === at\s*\? was\s*:/, 'every layout sets state, and a tile can draw itself for ever')
+
+    /*
+     * A tile that changes size on screen. A preset that takes the chain from
+     * three across to four, or Fit shrinking the rows, draws the looper at its
+     * new size before onLayout has said what that is — and it keeps its key,
+     * so it is never drawn afresh. In a page that drew it frame by frame,
+     * Play sat over the picture for the two frames before the layout came in,
+     * measured at the old, wider size. A measurement counts only at the size
+     * it was taken at: the height asked for, the picture, the width.
+     */
+    assert.match(tile, /const sized = `\$\{height\}\|\$\{picture\}\|\$\{StyleSheet\.flatten\(style\)\?\.width\}`/, 'the tile does not know what size it was measured at')
+    assert.match(tile, /const current = laid\.at\?\.width === sized && laid\.at\?\.top === sized/, 'a measurement from the old size is used at the new one')
+    assert.match(tile, /width: current \? laid\.width : undefined,/, 'the old width is used at the new size')
+    assert.match(tile, /pictureTop: current \? laid\.top : undefined,/, 'the picture’s old top is used at the new size')
+    /* A size that moves nothing gets no layout, so the words come back without one rather than staying hidden. */
+    const still = tile.slice(tile.indexOf('useEffect(() => {'), tile.indexOf('}, [sized, cornered])'))
+    assert.ok(still.length > 0, 'a tile whose size moved nothing waits for a layout that never comes')
+    assert.match(still, /setTimeout\(/)
+    assert.match(still, /at: \{ \.\.\.was\.at, width: sized, top: sized \}/, 'the words stay hidden after a size that moved nothing')
+    assert.match(still, /was\.width == null \|\| was\.top == null/, 'a tile that has never been measured is taken as measured')
+    assert.match(still, /return \(\) => clearTimeout\(still\)/, 'a tile that goes leaves its timer running')
+    /* What stays exactly as it was: the corners cost no height, the picture is always drawn, and the label says every word. */
+    assert.match(tile, /position: 'absolute',\s*left: 5,\s*right: 5,\s*top: 3,/, 'the corners take a line of the tile’s height again')
+    assert.match(tile, /\{picture \? \(\s*<Image/, 'the picture waits on the corners')
+    assert.match(tile, /accessibilityLabel=\{\[label, topLeft, topRight, sub, caption\]\.filter\(Boolean\)\.join\(', '\)\}/, 'a hidden corner word is not read out')
+
+    /* And the stage hands the looper its two words, as a pair; the effects keep theirs apart. */
+    const stage = withoutComments(read('mobile/src/screens/Stage.js'))
+    const looper = stage.slice(stage.indexOf('key="looper"'), stage.indexOf('/>', stage.indexOf('key="looper"')))
+    assert.ok(looper.length > 0, 'the looper tile is not where this test reads it')
+    assert.match(looper, /topLeft="Rec"\s*\n\s*topRight="Play"\s*\n\s*pair\n/, 'the looper’s Rec and Play are not in their own corners as one phrase')
+    assert.ok(!/Rec · Play/.test(stage), 'the whole phrase is back in one corner, on the picture')
+    const effects = stage.slice(stage.indexOf('blocks.map((block) =>'), stage.indexOf('{looperTile ?'))
+    assert.ok(effects.length > 0, 'the effect tiles are not where this test reads them')
+    assert.ok(!/\n\s*pair\n/.test(effects), 'an effect’s On waits for its channel letter')
+  })
+
   test('the letters on a lit tile are black on a light colour and white on a dark one, from the colour drawn', async () => {
     /*
      * "Fix the text so when it's on lighter icons, it's black and when it's
