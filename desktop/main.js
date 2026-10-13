@@ -21,7 +21,7 @@
  * app with it. A child can die and be reported. Worth revisiting once this has
  * run on real hardware for a while; not worth guessing at from a container.
  */
-const { app, BrowserWindow, Tray, Menu, shell, nativeImage, dialog, ipcMain } = require('electron')
+const { app, BrowserWindow, Tray, Menu, shell, nativeImage, dialog, ipcMain, powerMonitor } = require('electron')
 const { spawn, execFile, execFileSync } = require('node:child_process')
 const { join, sep, dirname } = require('node:path')
 const { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, renameSync } = require('node:fs')
@@ -45,6 +45,12 @@ let where = null
 let hostAt = null
 /** What armHost found: null until it answers, then { on, email, reason }. */
 let phone = null
+/**
+ * What the device server last said about the phone remote's link, after
+ * armHost answered: { enabled, connected, sure }, or null for "what armHost
+ * found". See lookAtLink.
+ */
+let relay = null
 /* What the phones were last told, and what they hear when they read it back. */
 let told = null
 /** Whether macOS is likely stopping a phone from reaching us. Best effort. */
@@ -160,6 +166,16 @@ let serverSince = 0
 let serverFailures = 0
 /** Ask about the phone remote again now — set by start(), used after a restart. */
 let rearm = () => {}
+/*
+ * armHost, or a look at its link, under way: one at a time, because two
+ * device-server enables at once are two links. And whether one was asked for
+ * meanwhile — after a server restart, say, when the run under way may have
+ * read the server that has since stopped.
+ */
+let arming = false
+let armAgain = false
+/** Said in the log, as everything about the phone remote is. */
+const phoneLog = (line) => console.error('[phone]', line)
 /** Whether this run has already installed an update with nobody there. */
 let installedUnattended = false
 /** A look for updates waiting to be tried again, after one that failed. See retryUpdateCheck. */
@@ -248,6 +264,153 @@ let updateLine = () => null
  */
 let phonesHearLine = () => null
 
+/*
+ * LOOKING AGAIN AT THE PHONE REMOTE'S LINK.
+ *
+ * "No answer" on the phone, on 12 October 2026, from a MacBook whose
+ * Fractal Remote app was open and signed in — and quitting and reopening the
+ * app fixed it. A phone away from home reaches the computer through the
+ * account service, and the account service had closed this computer's link
+ * to it, most likely around the Mac's sleep that evening. Nothing on the
+ * computer looked again after launch, so nothing made the link again, and
+ * the menu said "on" the whole time.
+ *
+ * So it looks: twice after the computer wakes or its screen is unlocked —
+ * five seconds after and half a minute after, because a Mac's wifi comes
+ * back a little after the Mac does — and once a minute for as long as it
+ * runs. A link found down is made again (checkRelay in lib/host.mjs says
+ * when), the menu says "reconnecting…" meanwhile, and a computer that moved
+ * to another network has its same-wifi addresses in the menu brought up to
+ * date. All of it through later(), so none of it outlives the server or
+ * holds up a quit.
+ */
+const WAKE_LOOKS_MS = [5 * 1000, 30 * 1000]
+const LOOK_EVERY_MS = 60 * 1000
+/** checkRelay, addresses and lanAddress, handed over by start() once lib/host.mjs has loaded. */
+let linkTools = null
+/** Whether this outage has had its push already. See checkRelay. */
+let linkNudged = false
+/*
+ * An older device server's "connected" cannot be believed after a sleep or
+ * a move to another network, so either leaves it owed one fresh link, until
+ * one is made. One that reports its state is believed. See checkRelay.
+ */
+let rebuildOwed = false
+let wakeLooks = []
+let minuteLook = null
+
+/**
+ * The computer woke, or its screen was unlocked: look twice. A second wake
+ * starts the pair again, and each wake may push a link that is down once —
+ * a device server that has been retrying through a long outage may be
+ * waiting up to a minute between tries by then, and the wifi a wake brings
+ * back is the moment to try now. See checkRelay.
+ */
+function afterWake() {
+  if (quitting) return
+  rebuildOwed = true
+  linkNudged = false
+  for (const timer of wakeLooks) cancel(timer)
+  wakeLooks = WAKE_LOOKS_MS.map((ms) => later(() => lookAtLink({ wake: true }), ms))
+}
+
+/* Electron says so only once the app is ready, which start() always is. */
+function watchForWake() {
+  powerMonitor.on('resume', afterWake)
+  powerMonitor.on('unlock-screen', afterWake)
+}
+
+/**
+ * One look at the link, and what it says to do. Taken in turn with armHost,
+ * never alongside it — see `arming` — and not at all before armHost has
+ * answered, while the device server is being started again, or once an
+ * older device server is stuck (see armHost), which only a quit clears.
+ */
+async function lookAtLink({ wake = false } = {}) {
+  if (quitting || arming || !phone || !linkTools || !hostAt || phone.reason === 'stuck') return
+  arming = true
+  try {
+    const out = await linkTools.checkRelay({
+      port: hostAt.port,
+      nudged: linkNudged,
+      wake,
+      rebuild: rebuildOwed,
+      log: phoneLog
+    })
+    linkNudged = out.nudged
+    relay = out.seen
+    // Still owed only while the device server could not be reached, or could not make it yet.
+    if (out.seen && out.rebuilt !== 'not yet') rebuildOwed = false
+    if (out.rebuilt === 'stuck') phone = { on: false, reason: 'stuck', email: phone.email, error: out.error }
+    // Switched on and trying by itself when armHost asked, and on the account service now: that is on.
+    if (phone.reason === 'retrying' && out.seen?.connected) {
+      phone = { on: true, email: phone.email }
+      networkIsUp()
+    }
+    /*
+     * And a remote that was never on — no network when the app opened, say —
+     * is asked for again straight after a wake, not at its next minute.
+     */
+    const retry = !phone.on && boot?.phoneRetryDelay(phone, 0)
+    if (out.rearm || (wake && retry)) armAgain = true
+    if (tray) drawTray()
+  } catch (err) {
+    console.error('[phone] could not look at the link:', err?.message || err)
+  } finally {
+    arming = false
+    if (armAgain) {
+      armAgain = false
+      rearm()
+    }
+  }
+}
+
+/**
+ * What armHost found, for the menu — which says it until the next look at
+ * the link.
+ *
+ * Except an answer that never reached the switch, which says nothing about
+ * it. Straight after a wake or a move to another network — just when a look
+ * finds the link down and asks for it again — the account service is often
+ * not reachable yet, and the device server reads that as nobody signed in.
+ * One the last look found switched on is still switched on, and still
+ * trying: the menu goes on saying "reconnecting…", with the account it last
+ * named, rather than telling somebody who is signed in to sign in. (Signing
+ * out in the app switches the remote off first, so the next look puts that
+ * one right.)
+ */
+function armAnswered(result) {
+  const unseen = (result?.reason === 'signed-out' || result?.reason === 'failed') && Boolean(relay?.enabled)
+  phone = unseen ? { ...result, email: result.email || phone?.email || null } : result
+  if (!unseen) relay = null
+}
+
+/*
+ * Once a minute. A laptop that moved to another network has a new wifi
+ * address, so the menu's same-wifi addresses are made again with it — they
+ * were made once, at launch — and its link is looked at as after a wake.
+ */
+function lookEveryMinute() {
+  if (quitting) return
+  cancel(minuteLook)
+  minuteLook = later(async () => {
+    try {
+      const now = linkTools.addresses({ ...hostAt, ip: linkTools.lanAddress() })
+      const moved = now.lan !== where?.lan
+      if (moved) {
+        where = now
+        rebuildOwed = true
+        if (tray) drawTray()
+      }
+      await lookAtLink({ wake: moved })
+    } catch (err) {
+      console.error('[phone] the minute look failed:', err?.message || err)
+    } finally {
+      lookEveryMinute()
+    }
+  }, LOOK_EVERY_MS)
+}
+
 /**
  * The watchdog the server runs inside, as a real file on disk.
  *
@@ -281,6 +444,7 @@ async function start() {
     MISSING_FORGEFX,
     addresses,
     armHost,
+    checkRelay,
     findForgeFX,
     lanAddress,
     publish,
@@ -457,6 +621,8 @@ async function start() {
     server = null
     // ForgeFX forgets the phone remote's switch every time it starts.
     phone = null
+    relay = null
+    linkNudged = false
     const plan = boot.restartPlan({ failures: serverFailures, ranForMs: uptime() - serverSince })
     serverFailures = plan.failures
     unattended(
@@ -484,7 +650,6 @@ async function start() {
    * Not awaited: the window and tray should not wait on the account service,
    * and the line in the menu updates when the answer lands.
    */
-  const phoneLog = (line) => console.error('[phone]', line)
   /*
    * Which app this is, for the phones — written, then read back the way a
    * phone reads it, so the menu can say what they hear. See tellPhonesChecked.
@@ -495,19 +660,17 @@ async function start() {
     if (tray) drawTray()
   }
   /*
-   * AND AGAIN, WITH NOBODY THERE, until it is on. armHost asks the account
-   * service, and a Pi that boots faster than its wifi hears "signed out" from
-   * a service it simply cannot reach yet. With a window, the page makes the
-   * same attempt when it opens; with none, nothing ever would. So a windowless
-   * start asks again every minute for half an hour, then every five minutes —
-   * never when the answer was on, and never when somebody turned it off. See
-   * phoneRetryDelay.
+   * AND AGAIN, until it is on. armHost asks the account service, and a Pi
+   * that boots faster than its wifi hears "signed out" from a service it
+   * simply cannot reach yet — as does a MacBook opened a few seconds before
+   * its wifi came back. The page at the computer makes the same attempt, but
+   * only when it opens. So the app asks again every minute for half an hour,
+   * then every five minutes — never when the answer was on, never when
+   * somebody turned it off, and never at an older device server that is
+   * stuck. See phoneRetryDelay. (Until 1.87.19 only a start with no window
+   * did this.)
    */
   const phoneSince = uptime()
-  let arming = false
-  // Asked for while a run was still going — after a server restart, say,
-  // when that run may have read the server that has since stopped.
-  let armAgain = false
   let phoneTimer = null
   const arm = () => {
     if (quitting) return
@@ -520,8 +683,8 @@ async function start() {
     armHost({ port, version: app.getVersion(), log: phoneLog })
       .then((result) => {
         const cameOn = Boolean(result?.on) && !phone?.on
-        phone = result
-        const again = startHidden ? boot.phoneRetryDelay(result, uptime() - phoneSince) : null
+        armAnswered(result)
+        const again = boot.phoneRetryDelay(result, uptime() - phoneSince)
         if (again) phoneTimer = later(arm, again)
         if (cameOn) networkIsUp()
         if (tray) drawTray()
@@ -544,6 +707,15 @@ async function start() {
    * launcher's answer standing for good. See tellPhones.
    */
   setInterval(tell, TELL_PHONES_MS)
+
+  /*
+   * And the link itself, looked at again after the computer wakes and once a
+   * minute — see lookAtLink. Nothing did, after launch, and a link closed
+   * while the Mac slept stayed closed until somebody quit the app.
+   */
+  linkTools = { checkRelay, addresses, lanAddress }
+  watchForWake()
+  lookEveryMinute()
 
   /*
    * The address in the menu works here and fails from a phone when macOS has
@@ -701,19 +873,30 @@ function buildTray() {
    * One line about the phone remote, in words a person would use. "On for
    * you@example.com" is the whole status; when it is off, the line says the
    * one thing to do about it.
+   *
+   * From what the device server last said as well as from what armHost
+   * found: switched on with its link down is not on, and a menu that said
+   * "on" through exactly that was the 12 October report. See lookAtLink.
    */
   const hear = told ? phonesHearLine(told, app.getVersion()) : null
+  // armHost's "retrying" is switched on with its link down, from before there was a look.
+  const linkDown = relay ? Boolean(relay.enabled && !relay.connected) : phone?.reason === 'retrying'
+  const remoteOn = relay ? relay.connected : Boolean(phone?.on)
   const phoneLine = !phone
     ? 'Phone remote: starting…'
-    : phone.on
-      ? `Phone remote: on${phone.email ? ` — ${phone.email}` : ''} · this app is v${app.getVersion()}${
-          hear ? ` · ${hear}` : ''
-        }`
-      : phone.reason === 'signed-out'
-        ? 'Phone remote: off — open the app and sign in once'
-        : phone.reason === 'turned-off'
-          ? 'Phone remote: off — turn it on in the app'
-          : 'Phone remote: off'
+    : phone.reason === 'stuck'
+      ? 'Phone remote: stuck — quit Fractal Remote and open it again'
+      : linkDown
+        ? 'Phone remote: reconnecting…'
+        : remoteOn
+          ? `Phone remote: on${phone.email ? ` — ${phone.email}` : ''} · this app is v${app.getVersion()}${
+              hear ? ` · ${hear}` : ''
+            }`
+          : phone.reason === 'signed-out'
+            ? 'Phone remote: off — open the app and sign in once'
+            : phone.reason === 'turned-off' || phone.reason === 'retrying' || phone.on
+              ? 'Phone remote: off — turn it on in the app'
+              : 'Phone remote: off'
 
   const menu = Menu.buildFromTemplate([
     { label: 'Open', click: openWindow },
@@ -750,7 +933,7 @@ function buildTray() {
      * account on both ends, and in exchange it does not care which network the
      * phone is on.
      */
-    ...(phone?.on
+    ...(remoteOn
       ? [
           { type: 'separator' },
           { label: 'Or from anywhere, signed in on both:', enabled: false },

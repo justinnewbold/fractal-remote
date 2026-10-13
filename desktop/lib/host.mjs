@@ -161,6 +161,38 @@ export function prettyHostname(name = osHostname()) {
 }
 
 /**
+ * What the device server says about the phone remote's link, read the same
+ * way whichever ForgeFX answers.
+ *
+ *   relayState(body) → { enabled, connected, sure, state }
+ *
+ * `enabled` is the switch. `connected` is the link to the account service
+ * that a phone away from home talks through — and what it means depends on
+ * the device server's age, which is what `sure` says.
+ *
+ * A device server that reports a `state` says how its link really is, from
+ * moment to moment: `connected` is true only while the link is up. One that
+ * does not is older, and its `connected` only ever meant "a link was made
+ * once". On 12 October 2026 a phone got no answer from a MacBook whose
+ * Fractal Remote app was open and signed in: the account service had closed
+ * the link, the device server never noticed, and it went on saying
+ * connected for as long as it ran. Quitting and reopening the app fixed it.
+ * So on an older one, a `connected` is believed only so far — see
+ * checkRelay — and its absence while switched on means the last attempt to
+ * make the link failed.
+ */
+export function relayState(body) {
+  const s = body && typeof body === 'object' ? body : {}
+  const sure = typeof s.state === 'string'
+  return {
+    enabled: s.enabled === true,
+    connected: s.enabled === true && s.connected === true,
+    sure,
+    state: sure ? s.state : null
+  }
+}
+
+/**
  * Turn the phone remote on, every launch, with nobody touching anything.
  *
  * ForgeFX remembers being signed in across restarts — that lives in its own
@@ -177,12 +209,20 @@ export function prettyHostname(name = osHostname()) {
  *   - No account support in this ForgeFX → nothing to do, say so.
  *   - Not signed in → nothing to do, say so. Signing in happens once, in the
  *     app; it is the only step a person ever takes.
- *   - Already on → done.
+ *   - Already on, AND its link up → done. Switched on is not the same as
+ *     on: a device server whose link the account service closed stays
+ *     switched on, and a phone gets no answer from it. That one is turned on
+ *     again below, which makes the link afresh.
  *   - Someone turned it off on purpose → respect that. "Off" is a decision
  *     the app records; the absence of a record means on.
  *   - Otherwise turn it on, and try a few times: the first call after boot
  *     has to reach the account service, and a Mac waking up is sometimes a
- *     few seconds ahead of its wifi.
+ *     few seconds ahead of its wifi. Except on an older device server whose
+ *     try at the link itself failed — see 'stuck' below — and on one that
+ *     reports its state, which keeps trying by itself once it is switched
+ *     on — see 'retrying'.
+ *   - Turned off while it was being turned on → that was somebody's
+ *     decision too, and it is not undone.
  *
  * Never throws. A launcher must not fall over because a network was slow —
  * the unit still works at the Mac either way, and the browser at the Mac
@@ -256,9 +296,9 @@ export async function armHost({
     }
     const email = cloud.user.email || null
 
-    // 4. Already on.
-    const status = (await call('/remote/status')).body || {}
-    if (status.enabled) {
+    // 4. Already on — switched on, and its link up.
+    const link = relayState((await call('/remote/status')).body)
+    if (link.enabled && link.connected) {
       log(`Phone remote: on for ${email || 'this account'}.`)
       return { on: true, email }
     }
@@ -270,16 +310,86 @@ export async function armHost({
       return { on: false, reason: 'turned-off', email }
     }
 
+    /*
+     * A device server that says yes and is still making its link: asked
+     * how it is going, a second at a time, rather than asked to start
+     * again — which would undo the link it is making. One that waits for
+     * its link before it answers never gets here. Says what it last read.
+     */
+    const joined = async () => {
+      let now = null
+      for (let i = 0; i < 15; i++) {
+        now = relayState((await call('/remote/status')).body)
+        if (now.connected || !now.enabled) return now
+        await sleep(1000)
+      }
+      return now
+    }
+    /*
+     * TURNED OFF while this was turning it on: somebody pressed Turn off in
+     * the app, or signed out there, while the device server was still
+     * making the link this asked for. It answers yes with its switch off,
+     * and asking again would turn the remote back on against them — the
+     * page writes down "off" a moment after, which is too late for a retry
+     * that is already on its way.
+     */
+    const turnedOff = () => {
+      log('Phone remote: off — it was turned off in the app while it was being turned on.')
+      return { on: false, reason: 'turned-off', email }
+    }
+    /*
+     * RETRYING: a device server that reports its state, switched on and not
+     * on the account service yet. It keeps trying by itself, waiting a
+     * little longer each time (ForgeFX's relay host: 1, 2 and 5 seconds, then
+     * every 10 — or on to every minute when the account service itself put
+     * it out) — and every "turn it on" starts that over from one second, so
+     * asking again here, or every minute from the app's retry, would only
+     * hammer an account service that is already struggling. Left to it; the
+     * app's looks at the link see it come up.
+     */
+    const retrying = (why) => {
+      log(`Phone remote: switched on, not on the account service yet (${why}); the device server keeps trying by itself.`)
+      return { on: false, reason: 'retrying', email, error: why }
+    }
+
     // 6. Turn it on.
     let last = null
     for (let i = 0; i < 3; i++) {
       try {
         const res = await json('POST', '/remote/enable', { on: true })
-        if (res.ok && !res.body?.error) {
-          log(`Phone remote: on for ${email || 'this account'}.`)
-          return { on: true, email }
+        const said = res.body && typeof res.body === 'object' ? res.body : {}
+        const sure = link.sure || relayState(said).sure
+        if (res.ok && !said.error) {
+          if (said.enabled === false) return turnedOff()
+          const now = said.connected === false ? await joined() : null
+          if (!now || now.connected) {
+            log(`Phone remote: on for ${email || 'this account'}.`)
+            return { on: true, email }
+          }
+          if (!now.enabled) return turnedOff()
+          last = said.lastError || 'its link never came up'
+          if (sure) return retrying(last)
+        } else {
+          last = said.error || `HTTP ${res.status}`
+          if (res.ok && sure && said.enabled === true) return retrying(last)
+          /*
+           * STUCK: an older device server that tried to make the link and
+           * failed. It leaves the half-made link behind, and the library
+           * underneath may yet finish it by itself — so asking again does
+           * not replace it, it adds a second one, and every tap on the
+           * phone is then carried out twice. (Its "no answer from the
+           * account service" is a plain yes-with-an-error, which leaves
+           * nothing behind and is asked again as before.) One that reports
+           * its state cleans up after itself: a link it could not make is a
+           * yes with its reason, left to its own retry (RETRYING above), and
+           * anything worse is asked again here, three times at most.
+           * Quitting and reopening the app clears it either way.
+           */
+          if (!res.ok && !link.sure) {
+            log(`Phone remote: couldn't turn it on (${last}), and this device server can't be asked twice. Quit Fractal Remote and open it again.`)
+            return { on: false, reason: 'stuck', email, error: last }
+          }
         }
-        last = res.body?.error || `HTTP ${res.status}`
       } catch (err) {
         last = err.message
       }
@@ -291,6 +401,108 @@ export async function armHost({
     log(`Phone remote: left alone (${err.message}).`)
     return { on: false, reason: 'failed', error: err.message }
   }
+}
+
+/**
+ * Look at the phone remote's link again, and say whether it needs making
+ * again.
+ *
+ * armHost runs at launch and after a restart, and until 1.87.19 nothing
+ * looked again after that — so a link the account service closed while the
+ * Mac slept stayed closed until the app was quit, with the menu saying on
+ * the whole time. This is the look the app takes between: twice after the
+ * computer wakes, and once a minute (see lookAtLink in main.js).
+ *
+ *   checkRelay({ port, fetch, nudged, wake, rebuild, log })
+ *     → { seen, nudged, rearm, rebuilt?, error? }
+ *
+ *   seen    — relayState of what the device server said, or null when it
+ *             did not answer (it is starting or stopped, and the app's own
+ *             restart asks for the remote again).
+ *   rearm   — run armHost now, which turns the remote on afresh. Only for a
+ *             device server that reports its state, switched on with its
+ *             link down, on a look just after a wake or a move to another
+ *             network (`wake`), and once per outage (`nudged`). That one
+ *             keeps trying by itself, waiting longer each time — up to ten
+ *             seconds, or a minute when the account service itself closed
+ *             the link; a push straight after a wake saves waiting that out,
+ *             and any more pushes only start its waits over, at an account
+ *             service that may be refusing everybody. Never when it
+ *             is switched off: somebody did that, or it was never on, and
+ *             armHost's own retry deals with the second. And never for an
+ *             older device server switched on with no link: that is what a
+ *             failed try leaves, and when the try was a refused link — the
+ *             page's, say — turning it on again adds a second handler to the
+ *             half-made link, and every tap on the phone happens twice.
+ *             armHost's own retry, which knows how its own tries failed,
+ *             covers those.
+ *   nudged  — whether this outage has had its push: true from the look
+ *             that asked for one until a look finds the link up, or the
+ *             remote switched off. main.js lets each real wake have one more.
+ *   rebuild — the link is to be made again even though it says it is up.
+ *             Only an older device server is asked, once: its `connected`
+ *             says a link was made, not that it is still there. One that
+ *             reports its state is believed.
+ *   rebuilt — 'done'; 'not yet' (the account service did not answer, which
+ *             changes nothing — ask again later); or 'stuck' (the device
+ *             server tried and failed, and see armHost on why that one is
+ *             not asked twice).
+ *
+ * Never throws.
+ */
+export async function checkRelay({
+  port = DEFAULT_PORT,
+  fetch = globalThis.fetch,
+  nudged = false,
+  wake = false,
+  rebuild = false,
+  log = () => {}
+} = {}) {
+  const base = `http://localhost:${port}`
+  const read = async (res) => {
+    try {
+      return await res.json()
+    } catch {
+      return null
+    }
+  }
+  let seen = null
+  try {
+    const res = await fetch(`${base}/remote/status`)
+    if (res.ok) seen = relayState(await read(res))
+  } catch {
+    // Not answering. See `seen` above.
+  }
+  if (!seen) return { seen: null, nudged, rearm: false }
+  if (!seen.enabled) return { seen, nudged: false, rearm: false }
+
+  if (seen.connected) {
+    if (!rebuild || seen.sure) return { seen, nudged: false, rearm: false }
+    try {
+      const res = await fetch(`${base}/remote/enable`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ on: true })
+      })
+      const body = await read(res)
+      if (res.ok && !body?.error) {
+        log('Phone remote: made its link again, in case it closed while the computer slept or changed network.')
+        return { seen: relayState(body), nudged: false, rearm: false, rebuilt: 'done' }
+      }
+      const error = body?.error || `HTTP ${res.status}`
+      if (!res.ok) {
+        log(`Phone remote: couldn't make its link again (${error}). Quit Fractal Remote and open it again.`)
+        return { seen: { ...seen, connected: false }, nudged: false, rearm: false, rebuilt: 'stuck', error }
+      }
+      return { seen, nudged: false, rearm: false, rebuilt: 'not yet', error }
+    } catch (err) {
+      return { seen, nudged: false, rearm: false, rebuilt: 'not yet', error: err?.message || String(err) }
+    }
+  }
+
+  // Switched on, and its link down.
+  const rearm = seen.sure && wake && !nudged
+  return { seen, nudged: nudged || rearm, rearm }
 }
 
 /**
