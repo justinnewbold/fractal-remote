@@ -275,6 +275,8 @@ const notHere = () => failure('Not over Bluetooth.', 404)
 const timedOut = () => failure('The unit did not answer in time.', 504)
 const badInput = (what) => failure(what, 400)
 const notConnected = () => failure('The Bluetooth adapter is not connected.', 503)
+/* A tap still waiting for the line at its deadline: never sent (device.js says it in the words every dropped tap is said in). */
+const tooLate = () => failure('Not sent in time.', 504, { late: true })
 const refusedBy = (code) => failure(`The unit refused it: ${rejectedWords(code)}.`, 502, { code })
 
 /* A poll that found the line busy, told apart from one the unit did not answer. */
@@ -439,7 +441,47 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const unheard = () =>
     failure(`The ${spec.name} has not answered yet, so nothing is sent to it. Check the unit picked on the Bluetooth (beta) page, and the adapter's plugs.`, 504)
 
+  /*
+   * A TAP'S DEADLINE, ON ITS WAY FROM request() TO THE FIRST MESSAGE IT SENDS.
+   *
+   * A write waits here for the exchange in flight — up to a second and a half
+   * on a gen-3 unit, and on an AM4 sending a stored preset (its scene names),
+   * a good deal longer. Something the player pressed (`options.deadline`,
+   * relay-rules TAP_DEADLINE_MS) must not go out after that, or a scene lands
+   * in the wrong bar of the song. So the first exchange a tap's route queues
+   * carries the deadline: it is taken out of the queue at the deadline if its
+   * turn has not come, and pump() never starts it once the deadline is past.
+   *
+   * The FIRST is found by itself, as the one queued while request() is still
+   * running the route: there is no way to follow a request through its
+   * awaits, and a later exchange could as well belong to something else. For
+   * every write the phone has learned the way of, the first exchange IS the
+   * write. A route that waits before its write reads `tapUntil` before its
+   * first message takes it, and hands it on by name (`opts.deadline`): the
+   * AM4's tuner opening (am4TunerOpen), which waits its turn behind a close
+   * and reads two settings before its 127 goes.
+   *
+   * ONE THING IS LET THROUGH LATE, ON PURPOSE: a write being learned. The
+   * first of its kind for this unit on this phone, or the one after a
+   * learned way was refused, tries the published way, reads the unit back, and then tries
+   * FM3-Edit's (trialScene and the rest), and only its first exchange is
+   * bound. Its second way comes after a read-back, and on a unit that does
+   * not answer the published way that read waits out the hold for a late
+   * answer (lateUntil): two seconds and more after the press, every time.
+   * Held to the deadline, it would never go, the way would never be
+   * learned, and every tap of that kind after it would be dropped too — a
+   * scene that never works rather than one that once came late. So it goes,
+   * once; the way it found is remembered on the phone from then on, and the
+   * taps after it are the first exchange of their route, bound as above.
+   *
+   * The reads after a write that went are never bound: that write may have
+   * landed, and a read is how the phone finds out.
+   */
+  let tapUntil = null
+
   function ex(out, opts = {}) {
+    const deadline = Number.isFinite(opts.deadline) ? opts.deadline : tapUntil
+    tapUntil = null
     if (closed) return Promise.reject(notConnected())
     if (wrongUnit) return Promise.reject(wrongUnitError())
     if (!am4 && !answered && !opts.probe) {
@@ -448,8 +490,22 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     }
     const priority = PRI[opts.priority] ?? PRI.read
     if (priority === PRI.poll && (current || waiting.length || draining())) return Promise.resolve(SKIPPED)
+    if (deadline !== null && time.now() >= deadline) {
+      say(`not sent, past its deadline: ${opts.what || 'a message'}`)
+      return Promise.reject(tooLate())
+    }
     return new Promise((resolve, reject) => {
-      const job = { out, opts, priority, resolve, reject, back: null }
+      const job = { out, opts, priority, resolve, reject, back: null, deadline }
+      if (deadline !== null) {
+        job.late = time.setTimeout(() => {
+          job.late = undefined
+          const i = waiting.indexOf(job)
+          if (i < 0) return
+          waiting.splice(i, 1)
+          say(`not sent, still waiting for the line at its deadline: ${opts.what || 'a message'}`)
+          reject(tooLate())
+        }, deadline - time.now())
+      }
       const at = waiting.findIndex((j) => j.priority > priority)
       waiting.splice(at < 0 ? waiting.length : at, 0, job)
       pump()
@@ -485,6 +541,16 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       return
     }
     const job = waiting.shift()
+    if (job.late !== undefined) {
+      time.clearTimeout(job.late)
+      job.late = undefined
+    }
+    /* Its turn came after its deadline: dropped, and the next in line goes. */
+    if (job.deadline !== null && job.deadline !== undefined && time.now() >= job.deadline) {
+      say(`not sent, its turn came after its deadline: ${job.opts.what || 'a message'}`)
+      job.reject(tooLate())
+      return pump()
+    }
     current = job
     job.started = time.now()
     const messages = job.opts.messages ? job.out : [job.out]
@@ -1636,9 +1702,17 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * against asking again at an open (`unitAsk`). What the answer does to
    * what is remembered is for the caller to say.
    */
-  async function askTunerNumber() {
+  async function askTunerNumber(deadline) {
+    const asked = tuner.unitRead
     tuner.unitRead = true
-    const a = await ask(buildAm4TunerCcRead(), (f) => parseAm4GlobalLong(f, AM4.TUNER_CC), WAIT.am4Tempo, 'the AM4’s Tuner setting')
+    let a
+    try {
+      a = await ask(buildAm4TunerCcRead(), (f) => parseAm4GlobalLong(f, AM4.TUNER_CC), WAIT.am4Tempo, 'the AM4’s Tuner setting', { deadline })
+    } catch (err) {
+      /* An open dropped at its deadline before this was asked: it has not been asked. */
+      if (err?.late) tuner.unitRead = asked
+      throw err
+    }
     const heard = !!a && !rejected(a)
     if (heard) sayShape('its Tuner setting', a)
     const words = heard ? `“${a.text ?? ''}”` : ''
@@ -1683,8 +1757,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * when the answer is silent or says nothing plain: then the caller keeps
    * the channel it already knows. `words` for the log.
    */
-  async function askChannel() {
-    const c = await ask(buildAm4MidiChannelRead(), (f) => parseAm4GlobalLong(f, AM4.MIDI_CHANNEL), WAIT.am4Tempo, 'the AM4’s MIDI channel')
+  async function askChannel(deadline) {
+    const c = await ask(buildAm4MidiChannelRead(), (f) => parseAm4GlobalLong(f, AM4.MIDI_CHANNEL), WAIT.am4Tempo, 'the AM4’s MIDI channel', { deadline })
     const told = !!c && !rejected(c)
     if (told) sayShape('its MIDI channel', c)
     const said = told ? am4ChannelSaid(c) : null
@@ -1701,11 +1775,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * answer must not move the CC off the channel the AM4 listens on.
    * {cc, channel}, 'none', or null when the answer was missing or unclear —
    * and then an open does not ask again on this connection, so a unit that
-   * cannot answer is asked once, not at every press.
+   * cannot answer is asked once, not at every press. An open's `deadline`
+   * goes to both reads (see am4TunerOpen); a close has none.
    */
-  async function readUnitTuner() {
+  async function readUnitTuner(deadline) {
     if (!tuner.unitAsk) return null
-    const { named, heard, words, why } = await askTunerNumber()
+    const { named, heard, words, why } = await askTunerNumber(deadline)
     if (named === 'none') {
       forgetUnitTuner(words)
       say(`the AM4’s Tuner setting reads ${words}: no MIDI number, so its own tuner is left as it is (SETUP > MIDI/Remote > Tuner)`)
@@ -1717,7 +1792,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       return null
     }
     moveUnitTuner(named, words)
-    const c = await askChannel()
+    const c = await askChannel(deadline)
     const channel = c.said ?? tuner.unitChannel ?? 1
     tuner.unitCc = { cc: named, channel }
     say(`the AM4’s Tuner setting reads ${words}, its MIDI channel “${c.words}”: CC ${named} on channel ${channel}`)
@@ -1740,22 +1815,29 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   }
 
   /* The CC as a write: ahead of the polls, and held behind a stored preset coming back rather than sent into it. */
-  const sendUnitTuner = (on, setting) =>
+  const sendUnitTuner = (on, setting, deadline) =>
     ex(buildAm4TunerCc(on, setting), {
       ms: WAIT.am4Settle,
       what: `the AM4’s own tuner ${on ? 'open' : 'closed'} (CC ${setting.cc} at ${on ? 127 : 0}, channel ${setting.channel})`,
-      priority: 'write'
+      priority: 'write',
+      deadline
     })
 
-  async function openUnitTuner(run) {
-    const setting = await readUnitTuner()
+  async function openUnitTuner(run, deadline) {
+    const setting = await readUnitTuner(deadline)
     if (setting === 'none') return 'none'
     if (!setting) return 'unknown'
     /* Let go of while it was being read: no 127 for a tuner nobody has open. */
     if (!tuner.on || tuner.run !== run) return 'unknown'
     /* Owed from here: the wire's close() sends the 0 if it lets go before this is answered. */
     tuner.unitOpen = true
-    await sendUnitTuner(true, setting)
+    try {
+      await sendUnitTuner(true, setting, deadline)
+    } catch (err) {
+      /* Dropped at its deadline, so never sent: no 0 is owed for it. */
+      if (err?.late) tuner.unitOpen = false
+      throw err
+    }
     return 'opened'
   }
 
@@ -1835,16 +1917,40 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return 'closed'
   }
 
-  async function am4TunerOpen() {
+  /*
+   * THE OPEN IS A TAP, AND IT CAN COME LATE IN TWO WAYS. Its turn waits for a
+   * close ahead of it (am4TunerInTurn), long after request() let go of the
+   * tap's deadline; and its two reads wait behind whatever holds the line —
+   * on an AM4 that can be a stored preset coming back, up to twenty seconds.
+   * A 127 that went out then would mute the unit a while after the player
+   * pressed, perhaps after the tuner was closed again and he had started to
+   * play. So the deadline is taken by name (writeTuner) and held to: past it
+   * at the turn, nothing at all; past it at a read or at the 127, the whole
+   * open is dropped — the phone's tuner with it, so the screen goes back to
+   * what the unit is on — and said as a dropped tap, never swallowed like
+   * the other reasons the AM4's own screen does not open.
+   */
+  async function am4TunerOpen(deadline = null) {
     if (tuner.on) return { ok: true, unitTuner: tuner.unitSays || 'unknown' }
+    if (deadline !== null && time.now() >= deadline) {
+      say('not sent, its turn came after its deadline: the tuner')
+      throw tooLate()
+    }
     tuner.on = true
     tuner.run++
     tuner.lastNote = null
     const run = tuner.run
     let says = 'unknown'
     try {
-      says = await openUnitTuner(run)
+      says = await openUnitTuner(run, deadline)
     } catch (err) {
+      if (err?.late) {
+        if (tuner.on && tuner.run === run) {
+          tuner.on = false
+          tuner.run++
+        }
+        throw err
+      }
       /* Only the AM4's own screen is lost: the phone still tunes. */
       say(`the AM4’s own tuner was not opened: ${err?.message || err}`)
     }
@@ -1877,8 +1983,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * phone's closed.
    */
   let am4TunerTurns = Promise.resolve()
-  function am4TunerInTurn(on) {
-    const turn = am4TunerTurns.then(() => (on ? am4TunerOpen() : am4TunerClose()))
+  function am4TunerInTurn(on, deadline = null) {
+    const turn = am4TunerTurns.then(() => (on ? am4TunerOpen(deadline) : am4TunerClose()))
     am4TunerTurns = turn.catch(() => {})
     return turn
   }
@@ -1889,7 +1995,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
 
   /* The AM4 in turn, on and off alike (see am4TunerInTurn); the gen-3 units open their tuner page. */
   async function writeTuner(on) {
-    if (am4) return am4TunerInTurn(on === true)
+    /* An open's deadline, taken now: its turn comes after request() has let go of it (see am4TunerOpen). */
+    const deadline = on === true ? tapUntil : null
+    if (am4) return am4TunerInTurn(on === true, deadline)
     if (on === true) {
       if (tuner.on) return { ok: true }
       tuner.on = true
@@ -1962,6 +2070,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   const toldNot = new Set()
   async function request(path, options = {}) {
     if (closed) throw notConnected()
+    /* Handed to the first exchange the route queues; see tapUntil. */
+    const deadline = Number.isFinite(options?.deadline) ? options.deadline : null
     const method = String(options?.method || 'GET').toUpperCase()
     const clean = String(path || '').split('?')[0]
     const part = clean.split('/').filter(Boolean)
@@ -1988,7 +2098,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       /* The computer's own documents simply do not exist here, which the app already handles. */
       throw method === 'GET' && (clean === '/device' || clean.startsWith('/store/')) ? notHere() : unsupported()
     }
-    return route()
+    tapUntil = deadline
+    try {
+      return route()
+    } finally {
+      tapUntil = null
+    }
   }
 
   /* ================================================================ */

@@ -2771,7 +2771,8 @@ export function run(test) {
     assert.match(bare, /import Sheet from '\.\/Sheet'/, 'the channel pick is not the app\u2019s sheet')
     const chanSheet = bare.slice(bare.indexOf('function ChannelSheet('))
     assert.match(chanSheet, /<Sheet open=\{!!block\} onClose=\{onClose\} title=\{name\} note="Channel">/, 'the channel sheet does not slide up under the block\u2019s name')
-    assert.match(chanSheet, /await setChannel\(block\.effectId, ch\)\s*\n\s*onClose\(\)/, 'the sheet does not go down once the channel is written')
+    /* With its deadline from the press, since 13 October 2026. */
+    assert.match(chanSheet, /await setChannel\(block\.effectId, ch, \{ deadline \}\)\s*\n\s*onClose\(\)/, 'the sheet does not go down once the channel is written')
     assert.match(bare, /onHold=\{\(\) => setChanEid\(block\.effectId\)\}/, 'a held tile no longer opens the sheet')
     /* One channel sheet; the looper's buttons are the other sheet Play owns. */
     assert.equal((bare.match(/<Sheet\b/g) || []).length, 2, 'more than one channel sheet — one per tile again')

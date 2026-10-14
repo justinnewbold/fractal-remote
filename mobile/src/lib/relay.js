@@ -40,7 +40,11 @@ import {
   unitChoices,
   unitFrom,
   repeatable,
-  timeoutFor
+  timeoutFor,
+  notSentError,
+  pastDeadline,
+  newestPresses,
+  tapDeadline
 } from './relay-rules'
 import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, CONFIRMED_SIGN_IN, cleanCode, codeRefused } from './confirm-code'
 
@@ -654,10 +658,20 @@ export function censusHosts(options) {
   return run
 }
 
-/** Resolves once no roll call is running, or after COUNT_WAIT_MS at most. */
-function countDone() {
+/**
+ * Resolves once no roll call is running, or after COUNT_WAIT_MS at most.
+ *
+ * A TAP WAITS NO LONGER THAN ITS DEADLINE. The roll call runs after every
+ * full join — launch, Android coming back, a join that failed — and a tap in
+ * the second and a half after one can find it still counting. It is not cut
+ * short for the tap: it is what stops one write landing on two units. The
+ * tap waits for it inside its own deadline instead, and if the count outlasts
+ * that, the tap is dropped (see remoteRequest) rather than sent late.
+ */
+function countDone(deadline) {
   if (!counting) return Promise.resolve()
-  return Promise.race([counting.catch(() => {}), new Promise((r) => setTimeout(r, COUNT_WAIT_MS))])
+  const most = Number.isFinite(deadline) ? Math.max(0, Math.min(COUNT_WAIT_MS, deadline - Date.now())) : COUNT_WAIT_MS
+  return Promise.race([counting.catch(() => {}), new Promise((r) => setTimeout(r, most))])
 }
 
 /** Shout one read and keep every answer, rather than the first. */
@@ -805,12 +819,14 @@ function failWaiting(message) {
 export async function waitForRelay(
   ms = RELAY_GRACE,
   step = 150,
-  sleep = (n) => new Promise((r) => setTimeout(r, n))
+  sleep = (n) => new Promise((r) => setTimeout(r, n)),
+  { socket = false } = {}
 ) {
   const until = Date.now() + ms
   for (;;) {
     const chan = session?.chan || channel
-    if (chan && isJoined(chan)) {
+    /* A tap waits for the socket as well as the channel: see socketUp. */
+    if (chan && isJoined(chan) && (!socket || socketUp())) {
       if (channel !== chan) {
         channel = chan
         announce()
@@ -836,8 +852,29 @@ export async function waitForRelay(
  */
 export async function remoteRequest(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase()
+  /* The newest press of its control, written down before anything can hold it: see relaySend.
+     A write with no deadline is a press made now, never dropped itself — closing the tuner, so an
+     opening still waiting in a drop is not sent after the close (shared/relay-rules newestPresses). */
+  presses.made(path, options.body, method === 'GET' || Number.isFinite(options.deadline) ? options.deadline : tapDeadline(Date.now()))
   /* Held while the roll call picks a computer: see countDone. */
-  if (method !== 'GET') await countDone()
+  if (method !== 'GET') await countDone(options.deadline)
+  /*
+   * A tap the roll call held past its deadline is dropped, not sent late —
+   * and so is one the roll call is STILL holding, whatever the clock says. A
+   * timer can go off a millisecond early by Date.now() (link.js downNow says
+   * how often Node's did), and then the clock alone read "a millisecond to
+   * spare" and let the tap through mid-count, addressed to nobody: on an
+   * account with two computers, computer app 1.87.4 carries out a write
+   * addressed to nobody on both, which is the one thing the roll call is
+   * there to stop. A count that has finished is never mistaken for one still
+   * running: censusHosts lets go of `counting` before countDone's wait ends.
+   */
+  if (Number.isFinite(options.deadline) && ((method !== 'GET' && counting) || pastDeadline(options.deadline, Date.now()))) {
+    logDebug('wire', `${method} ${path} not sent — past its deadline while the computers were counted`)
+    /* With a newer press of its control held too, that one's business: see requestOnce's end. */
+    const over = presses.overtaken(path, options.body, options.deadline)
+    throw notSentError({ late: over || linkLooksUp(), overtaken: over })
+  }
   /*
    * A dump that arrived in the wrong order is asked for again, not shown.
    *
@@ -847,11 +884,50 @@ export async function remoteRequest(path, options = {}) {
    * rather than in device.js because every read that wants a preset dump —
    * the block list, the scene names, the volume slider's level — passes
    * through this one function.
+   *
+   * A tap asked again goes in with `went` set: the unit answered the first
+   * one, so the tap reached it, and nothing after may call it "not sent".
    */
-  return withRetry(() => requestOnce(path, method, options), { method, path })
+  return withRetry((again) => requestOnce(path, method, options, { went: again > 0 }), {
+    method,
+    path,
+    deadline: options.deadline
+  })
 }
 
-async function requestOnce(path, method, options) {
+/**
+ * Whether the link reads as up right now: joined, its socket open, and the
+ * computer answering. Only for choosing the words a dropped tap is said in.
+ */
+const linkLooksUp = () => !!channel && isJoined(channel) && socketUp() && hostSeen
+
+/* When each control's newest tap was pressed (shared/relay-rules newestPresses). */
+const presses = newestPresses()
+
+/*
+ * WHETHER THE SOCKET UNDER THE CHANNEL IS OPEN, which 'joined' does not say.
+ *
+ * realtime-js keeps a channel 'joined' across a socket that has closed, and a
+ * broadcast sent on it then is not refused: it is posted to the relay server
+ * over HTTPS instead (RealtimeChannel.send, "falling back to REST API"), with
+ * a ten-second timeout, and this end has never read whether that worked. A
+ * tap that went that way could reach the computer ten seconds after the
+ * press. So a tap waits for the socket, inside its deadline, and is never
+ * handed to that fallback. Reads keep going as they always went.
+ *
+ * True when the client cannot say — an older realtime-js, or a test's
+ * stand-in — so nothing that worked before is held up by not knowing.
+ */
+function socketUp() {
+  try {
+    const rt = session?.client?.realtime ?? client?.realtime
+    return typeof rt?.isConnected === 'function' ? rt.isConnected() !== false : true
+  } catch {
+    return true
+  }
+}
+
+async function requestOnce(path, method, options, trip = { went: false }) {
   /*
    * Nothing is changed while two Macs are listening. A write is not sent to the
    * wrong unit — it is carried out on both. Reads are left alone deliberately:
@@ -883,6 +959,15 @@ async function requestOnce(path, method, options) {
    * whether a unit is really gone asks several in a row.
    */
   const graceUntil = Date.now() + (options.graceMs ?? RELAY_GRACE)
+  /*
+   * A TAP'S BUDGET ENDS AT ITS DEADLINE, not at the grace. Everything below
+   * is the same for a tap as for anything else — the wait for a channel
+   * coming back, the second attempt after a drop — only shorter: what fits
+   * inside the deadline still happens, so a connected rig, and a sub-second
+   * blip, go exactly as they always did. What does not fit is not sent.
+   */
+  const tap = Number.isFinite(options.deadline)
+  const until = tap ? Math.min(graceUntil, options.deadline) : graceUntil
   const attempts = repeatable(path) ? 2 : 1
 
   /*
@@ -897,16 +982,24 @@ async function requestOnce(path, method, options) {
    */
   const began = Date.now()
   let last = null
+  let overtaken = false
   for (let attempt = 0; attempt < attempts; attempt++) {
+    /* The second attempt is checked too: it is the one that used to land late. */
+    if (tap && pastDeadline(options.deadline, Date.now())) break
     try {
-      await relayReady(graceUntil - Date.now())
-      const answer = await relaySend(method, path, options)
+      await relayReady(until - Date.now(), tap)
+      const answer = await relaySend(method, path, options, trip)
       const took = Date.now() - began
       /* Only the slow ones. Logging every read would bury the one line that
          matters under four hundred that do not. */
       if (took > 1500) logDebug('wire', `${method} ${path} — ${took}ms`)
       return answer
     } catch (err) {
+      /* Too late to put on the wire, or a newer press of the same control was made: no attempt after this one either. */
+      if (err?.late) {
+        overtaken = err.overtaken === true
+        break
+      }
       // Only a relay that went missing is worth repeating. A 403, a 409, a unit
       // that answered "no" — those are answers, and asking again gets the same
       // one a second slower.
@@ -918,12 +1011,41 @@ async function requestOnce(path, method, options) {
       logDebug('wire', `${method} ${path} — link down, attempt ${attempt + 1} of ${attempts}`)
     }
   }
+  /*
+   * A TAP THAT NEVER LEFT IS SAID AS ONE, and a tap that did is not. One that
+   * went on the wire and lost its answer to a drop may well have landed, so
+   * it keeps the sentence it always had — "The connection dropped before your
+   * computer answered." — and is never sent again past its deadline. Only one
+   * that never went is "Not sent".
+   */
+  /*
+   * And one a newer press of its control took over, whether or not a first
+   * try of it went, is dropped as late and marked `overtaken`: the screen
+   * leaves the newer press's tile up and says nothing for it (see
+   * shared/relay-rules newestPresses).
+   */
+  /*
+   * And one the clock dropped — its deadline passed waiting for the channel —
+   * while a newer press of its control was made: the same, since it is that
+   * newer press the player meant. Said as plainly not sent, its screen put
+   * back the tile the newer press had lit, over a unit on the newer one.
+   */
+  if (tap && !overtaken && !trip.went) overtaken = presses.overtaken(path, options.body, options.deadline)
+  if (tap && (overtaken || !trip.went)) {
+    logDebug('wire', `${method} ${path} not sent${trip.went ? ' again' : ''} — ${overtaken ? 'a newer press of it was made' : 'the link could not carry it before its deadline'}`)
+    throw notSentError({ late: overtaken || linkLooksUp(), overtaken })
+  }
   logDebug('wire', `${method} ${path} gave up`, last?.message)
-  throw last
+  throw last || linkDown('The connection dropped before your computer answered.')
 }
 
-async function relayReady(grace) {
-  if (channel && isJoined(channel)) return
+async function relayReady(grace, tap = false) {
+  if (channel && isJoined(channel)) {
+    if (!tap || socketUp()) return
+    /* Joined over a socket that has closed: a tap waits for the socket, inside its deadline. */
+    if (grace > 0 && (await waitForRelay(grace, 150, undefined, { socket: true }))) return
+    throw linkDown('The connection to your computer dropped.')
+  }
   if (channel) {
     channel = null
     seen(false)
@@ -932,13 +1054,27 @@ async function relayReady(grace) {
   // Nothing was ever set up, and nothing is coming: say so now rather than
   // making someone watch a grace period elapse over an empty session.
   if (!session && !connecting) throw linkDown('Not connected to your computer.')
-  if (grace > 0 && (await waitForRelay(grace))) return
+  if (grace > 0 && (await waitForRelay(grace, 150, undefined, { socket: tap }))) return
   throw linkDown('The connection to your computer dropped.')
 }
 
+/** Too late to send: said by relaySend, read by requestOnce, never shown. */
+const tooLate = (overtaken = false) => Object.assign(linkDown('Too late to send.'), { late: true }, overtaken ? { overtaken } : {})
+
 /** One trip: shout the question, match the answer by id, unwrap it. */
-async function relaySend(method, path, options) {
+async function relaySend(method, path, options, trip = { went: false }) {
+  const tap = Number.isFinite(options.deadline)
+  /*
+   * THE LAST LOOK AT THE CLOCK before a tap goes on the wire, whichever way
+   * it got here: the first attempt, the second after a drop, or a dump asked
+   * for again. relayReady returns at once on a joined channel however long
+   * the request has waited, so this is the one check every send passes.
+   */
+  if (tap && pastDeadline(options.deadline, Date.now())) throw tooLate()
+  /* And not after a newer press of the same control: it would land over the newer one (shared/relay-rules newestPresses). */
+  if (tap && presses.overtaken(path, options.body, options.deadline)) throw tooLate(true)
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+  let doubt = null
   const reply = new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       waiting.delete(id)
@@ -950,13 +1086,17 @@ async function relaySend(method, path, options) {
       quiet.aboutLink = true
       reject(quiet)
     }, options.timeoutMs || timeoutFor(method, path))
+    const done = () => {
+      clearTimeout(timer)
+      if (doubt) clearTimeout(doubt)
+    }
     waiting.set(id, {
       resolve: (v) => {
-        clearTimeout(timer)
+        done()
         resolve(v)
       },
       reject: (e) => {
-        clearTimeout(timer)
+        done()
         reject(e)
       }
     })
@@ -967,22 +1107,53 @@ async function relaySend(method, path, options) {
    * single-host session sends exactly what it always sent, so nothing depends
    * on the host being new until the moment two are listening — and by then
    * confirmTargeting has proved they understand it.
+   *
+   * The deadline is not in it. Computer app 1.87.4 reads these four fields
+   * and the host and nothing else, and has no clock in common with this
+   * phone to read a deadline by.
    */
   const ask = { id, method, path, body: options.body ?? null }
   if (hosts.length > 1 && chosen && targeted) ask.host = chosen
 
+  const before = trip.went
   try {
-    await channel.send({ type: 'broadcast', event: 'req', payload: ask })
+    const msg = { type: 'broadcast', event: 'req', payload: ask }
+    trip.went = true
+    /* A tap is given the time it has left, should realtime-js ever have to post it the slow way. */
+    const said = tap ? await channel.send(msg, { timeout: Math.max(1, options.deadline - Date.now()) }) : await channel.send(msg)
+    /* Refused before it left: not on the wire, and the link is why. */
+    if (tap && said === 'error') throw new Error('the relay would not take it')
   } catch (err) {
+    trip.went = before
     /*
      * A send that throws never reached the wire, and the promise above is still
      * parked in `waiting` holding a timer. Left there it fires twenty seconds
-     * later against a request nobody made.
+     * later against a request nobody made — and, forgotten but not stopped, it
+     * still did: twenty seconds on it called the computer unanswered, which
+     * would now dim a working rig for a request that was never asked. So it
+     * is settled here, which stops the timer, as well as forgotten.
      */
+    waiting.get(id)?.resolve?.(null)
     waiting.delete(id)
     throw linkDown(
       err?.message ? `Couldn’t reach your computer — ${err.message}` : 'Couldn’t reach your computer.'
     )
+  }
+
+  /*
+   * A TAP WITH NO ANSWER BY ITS DEADLINE IS A REASON TO ASK. Computer app
+   * 1.87.4 can go deaf on a channel the relay server closed under it — sleep,
+   * a network change — while this end still reads joined; a tap sent into it
+   * is lost, and the bar went on saying connected until a keepalive missed,
+   * up to fourteen seconds later. One /healthz at the deadline finds out now.
+   * It changes nothing about the tap, and a computer that is merely busy
+   * answers it at once: /healthz never waits on the serial port.
+   */
+  if (tap && hostSeen) {
+    doubt = setTimeout(() => {
+      doubt = null
+      if (waiting.has(id) && hostSeen) hostResponds().catch(() => {})
+    }, Math.max(0, options.deadline - Date.now()))
   }
 
   const payload = await reply

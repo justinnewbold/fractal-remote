@@ -254,11 +254,14 @@ async function rigOnTheBench(over = {}) {
     'react.js': 'export const useSyncExternalStore = (sub) => { globalThis.__rigSub = sub; return null }\n',
     'relay.js': `
       export const wire = []
+      /* What each request was handed beside its path: a tap's deadline is here, and never in the body. */
+      export const handed = []
       let serve = null
       export const __serve = (fn) => { serve = fn }
       export async function remoteRequest(path, options = {}) {
         const method = String(options.method || 'GET').toUpperCase()
         wire.push(method + ' ' + path)
+        handed.push({ line: method + ' ' + path, ...options })
         await null
         return serve(method, path, options.body ? JSON.parse(options.body) : null)
       }
@@ -285,7 +288,8 @@ async function rigOnTheBench(over = {}) {
   }
   /* The catalog the pedals are named from before the chain is read; see lib/chain-outline. */
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
-  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'unsupported.js']) {
+  /* The gate a tap asks while the link is down, and the rules its deadline and its words come from: both real, as they are. */
+  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'unsupported.js', 'tapGate.js', 'relay-rules.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -314,6 +318,9 @@ async function rigOnTheBench(over = {}) {
     const relay = await import(at('relay.js'))
     const clock = await import(at('clock.js'))
     const rig = await import(at('rig.js'))
+    /* The gate link.js sets while the link is down, and the device layer, both the bench's own copies. */
+    const gate = await import(at('tapGate.js'))
+    const deviceLayer = await import(at('device.js'))
     /* `lag` is how long the computer takes over a request, by its line; `heard`
        is when each one reached it, on the hand-turned clock. */
     const heard = []
@@ -359,7 +366,8 @@ async function rigOnTheBench(over = {}) {
       if (method === 'POST' && path === '/preset/select') {
         if (unit.refuseSelect) throw Object.assign(new Error('The unit refused that preset.'), { status: 409 })
         unit.number = body.number
-        return { ok: true }
+        /* `selectAnswer` stands in for an answer that is not a plain yes, after the unit took it. */
+        return unit.selectAnswer ? unit.selectAnswer(body) : { ok: true }
       }
       if (method === 'POST' && path === '/scene') {
         unit.scene = body.index
@@ -374,8 +382,9 @@ async function rigOnTheBench(over = {}) {
     /* Connected, read once, and the log cleared: what follows is what a tap costs. */
     await rig.refreshAll()
     relay.wire.length = 0
+    relay.handed.length = 0
     const asked = (line) => relay.wire.filter((l) => (line instanceof RegExp ? line.test(l) : l === line)).length
-    return { rig, clock, unit, wire: relay.wire, asked, nameOf, relay, heard }
+    return { rig, clock, unit, wire: relay.wire, asked, nameOf, relay, heard, gate, device: deviceLayer }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -498,6 +507,16 @@ async function updatesOnTheBench({ available = true } = {}) {
   const at = (f) => pathToFileURL(join(dir, f)).href
   try {
     const clock = await import(at('clock.js'))
+    /*
+     * The stand-in updates.js asks for with import(), loaded before it is.
+     * Its first ask is that import, from inside a bench timer, and a first
+     * import reads the disk: on a slow moment it finished after advance()
+     * below had returned, or after the folder had gone (the finally), and
+     * the bench had no version waiting. Two of these tests failed that way
+     * on Node 20, one run in two, and never on 22 — the shape CLAUDE.md
+     * warns about. Loaded here, the import finds it already in memory.
+     */
+    await import(at('expo-updates.js'))
     const updates = await import(at('updates.js'))
     const stop = updates.watchForUpdates()
     /* The app going away and coming back, the way React Native says it: every AppState listener, in turn. */
@@ -1318,10 +1337,12 @@ export function run(test) {
     for (const [call, what] of [
       /* After the one refusal that sends nothing: a tile drawn for the preset
          just left (see lib/chain-view), which has edited nothing. */
-      ['export function writeBypass\\(id, bypassed\\) \\{ if \\(notSwitchable\\(id\\)\\) return Promise\\.resolve\\(false\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a bypass'],
-      ['export function writeChannel\\(id, channel\\) \\{ if \\(notThisChain\\(\\)\\) return Promise\\.resolve\\(false\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a channel'],
+      /* And after the other, since 13 October 2026: a tap refused because the
+         link is down (refusedNow), which has edited nothing either. */
+      ['export function writeBypass\\(id, bypassed, at = Date\\.now\\(\\)\\) \\{ if \\(notSwitchable\\(id\\)\\) return Promise\\.resolve\\(false\\) if \\(refusedNow\\([^)]*\\)\\) return Promise\\.resolve\\(false\\) const deadline = tapDeadline\\(at\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a bypass'],
+      ['export function writeChannel\\(id, channel, at = Date\\.now\\(\\)\\) \\{ if \\(notThisChain\\(\\)\\) return Promise\\.resolve\\(false\\) if \\(refusedNow\\([^)]*\\)\\) return Promise\\.resolve\\(false\\) const deadline = tapDeadline\\(at\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a channel'],
       ['export function beginChainWrite\\(\\) \\{ [^}]*noteEdited\\(\\)', 'a chain move'],
-      ['export function writeTempo\\(bpm\\) \\{ const was = state\\.bpm noteEdited\\(\\)', 'a typed tempo']
+      ['export function writeTempo\\(bpm, at = Date\\.now\\(\\)\\) \\{ if \\(refusedNow\\([^)]*\\)\\) return Promise\\.resolve\\(false\\) const deadline = tapDeadline\\(at\\) const was = state\\.bpm noteEdited\\(\\)', 'a typed tempo']
     ]) {
       assert.match(rig, new RegExp(call), `${what} does not count as unsaved work`)
     }
@@ -1329,9 +1350,17 @@ export function run(test) {
     assert.match(rig, /const guess = tappedBpm\(taps, range\) if \(guess != null\) \{ [^}]*noteEdited\(\)/, 'a tapped tempo does not count as unsaved work')
 
     /* Moving around the rig is not editing it. */
-    const moves = rig.slice(rig.indexOf('export function writeScene(index)'), rig.indexOf('export async function refreshSceneState()'))
+    /* Sliced by their whole signatures, and each slice checked to be there: a
+       signature that moves must fail here, not hand the check an empty slice. */
+    const between = (from, to) => {
+      const a = rig.indexOf(from)
+      const b = rig.indexOf(to, a)
+      assert.ok(a > 0 && b > a, `rig.js no longer has ${from} before ${to}`)
+      return rig.slice(a, b)
+    }
+    const moves = between('export function writeScene(index, at = Date.now())', 'export async function refreshSceneState()')
     assert.ok(!/noteEdited\(\)/.test(moves), 'changing scene counts as an edit, so Save appears for standing somewhere else')
-    const tuner = rig.slice(rig.indexOf('export async function writeTuner(on)'), rig.indexOf('export async function loadPreset(number)'))
+    const tuner = between('export async function writeTuner(on, at = Date.now())', 'export async function loadPreset(number, at = Date.now())')
     assert.ok(!/noteEdited\(\)/.test(tuner), 'turning the tuner on counts as an edit')
 
     /* And the screens that write the rest of it. */
@@ -1647,7 +1676,7 @@ export function run(test) {
     const rig = read('mobile/src/lib/rig.js')
     const load = rig.slice(rig.indexOf('export async function loadPreset'))
     const code = withoutComments(load)
-    assert.ok(load.indexOf('await device.selectPreset(number)') > 0, 'nothing selects a preset any more')
+    assert.ok(load.indexOf('await device.selectPreset(number, { deadline })') > 0, 'nothing selects a preset any more')
     assert.ok(!/dropReadCache/.test(code), 'a preset change deletes the computer’s profile of the unit again')
     assert.match(code.replace(/\s+/g, ' '), /if \(!\(Number\.isInteger\(fresh\?\.number\) && fresh\.number === number\)\) again = true else if \(run === presetRun\) takePreset\(fresh\) \} catch \{ again = true \}/, 'an early answer for the preset being left is put on screen')
     assert.match(code.replace(/\s+/g, ' '), /if \(also\.preset\) await settledPreset\(\)/, 'the preset is not asked again once the unit has settled')
@@ -1699,7 +1728,8 @@ export function run(test) {
     assert.match(vol, /return setParam\(block, p\.id, v, p\)/)
     assert.ok(!/setParam\(eid,/.test(vol), 'a write still goes to the render-time block')
     const rig = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
-    assert.match(rig, /await device\.setScene\(index\) .*? await refreshSceneState\(\) \}\)/, 'a scene change still dumps the whole preset')
+    /* Handed `air` after the send since 14 October 2026: what a dropped scene puts back (relay-rules pressesInTheAir). */
+    assert.match(rig, /await device\.setScene\(index, \{ deadline \}\) .*? await refreshSceneState\(\) \}, air\)/, 'a scene change still dumps the whole preset')
     assert.match(rig, /export async function refreshSceneState\(\)/)
     assert.match(rig, /if \(states === null\) return refreshBlocks\(\{ quiet: true \}\)/, 'an older Mac that cannot answer gets no chain at all')
     assert.match(rig, /if \(!states\.length\) \{ sceneStateSoon\(\) return false \}/, 'a status read the unit was too busy to answer turns into a dump of the whole preset, or is never asked again')
@@ -3636,7 +3666,8 @@ export function run(test) {
     assert.match(relay, /import \{ withRetry \} from '\.\/retry'/, 'the phone does not import the retry')
     assert.match(
       relay.replace(/\s+/g, ' '),
-      /export async function remoteRequest\(path, options = \{\}\) \{.*?return withRetry\(\(\) => requestOnce\(path, method, options\), \{ method, path \}\)/,
+      /* A tap asked again is marked as having gone (`went`), and the retry stops at its deadline: see retry.js. */
+      /export async function remoteRequest\(path, options = \{\}\) \{.*?return withRetry\(\(again\) => requestOnce\(path, method, options, \{ went: again > 0 \}\), \{ method, path, deadline: options\.deadline \}\)/,
       'the phone sends requests without going through the retry'
     )
     /* And it is the shared rule, not a second opinion about which requests may
@@ -3705,7 +3736,8 @@ export function run(test) {
       'the fault is back in the scrolling content, where it pushes the foot under a thumb'
     )
     assert.ok(stage.indexOf('sub="What to try"') > end, 'the fault’s fix is back in the scrolling content')
-    assert.match(stage, /<Toast open=\{!!error\}> \{error \? \( <Note tone="fault" onDismiss=\{clearError\}>/)
+    /* Its onLayout is where NOT CONNECTED learns the card's bottom edge (lib/tileGrid bandTop), 13 October 2026. */
+    assert.match(stage, /<Toast open=\{!!error\} onLayout=\{endOf\('fault'\)\}> \{error \? \( <Note tone="fault" onDismiss=\{clearError\}>/)
     assert.match(stage, /sub="What to try" height=\{44\}/)
     assert.doesNotMatch(stage, /setTimeout\([^)]*clearError/, 'the timer clears the store App reads to tell a failed first read')
 
@@ -5143,7 +5175,9 @@ export function run(test) {
     assert.match(web, /traceStep\('scenes: the unit answered, and every scene is unnamed'\)\s*return names\.map\(\(\) => ''\)/)
     /* And a write waits for the roll call, on both ends. */
     for (const file of ['mobile/src/lib/relay.js', 'src/lib/remote.js']) {
-      assert.match(read(file), /export async function remoteRequest\(path, options = \{\}\) \{\s*const method = \(options\.method \|\| 'GET'\)\.toUpperCase\(\)\s*\/\*[^*]*\*\/\s*if \(method !== 'GET'\) await countDone\(\)/, `${file} sends a write before the roll call has picked a computer`)
+      /* The wait is bounded by a tap's deadline since 13 October 2026 (countDone(deadline)); the count itself is not cut short. */
+      /* Before it, only the press written down (14 October 2026, shared/relay-rules newestPresses), which sends nothing: a write with no deadline as one made now. */
+      assert.match(read(file), /export async function remoteRequest\(path, options = \{\}\) \{\s*const method = \(options\.method \|\| 'GET'\)\.toUpperCase\(\)\s*\/\*[^*]*\*\/\s*presses\.made\(path, options\.body, method === 'GET' \|\| Number\.isFinite\(options\.deadline\) \? options\.deadline : tapDeadline\(Date\.now\(\)\)\)\s*\/\*[^*]*\*\/\s*if \(method !== 'GET'\) await countDone\(options\.deadline\)/, `${file} sends a write before the roll call has picked a computer`)
     }
   })
 
@@ -5208,8 +5242,10 @@ export function run(test) {
     /* The songs travel: a merge keeps them with their list. */
     assert.match(read('src/lib/setlistMerge.js'), /songs: list\.songs && typeof list\.songs === 'object'/, 'a sync drops each song’s setup')
     /* Both stage screens apply it after the preset, from the setlist being walked. */
-    assert.match(read('src/components/Gig.jsx'), /await loadPreset\(next\)[\s\S]{0,300}songFor\(source, lists, next\)[\s\S]{0,200}applySong\(song, \{ scene: writeScene, tempo: writeTempo \}\)/)
-    assert.match(read('mobile/src/screens/Stage.js'), /const loading = loadPreset\(next\)[\s\S]{0,300}songFor\(source, lists, next\)[\s\S]{0,300}applySong\(song, \{ scene: writeScene, tempo: writeTempo \}\)/)
+    /* The browser's sorted by why (13 October 2026): a half that was never sent is said over the tiles, see applySongSorted. */
+    assert.match(read('src/components/Gig.jsx'), /await loadPreset\(next\)[\s\S]{0,300}songFor\(source, lists, next\)[\s\S]{0,600}applySongSorted\(song, \{ scene: writeScene, tempo: writeTempo \}\)/)
+    /* The phone's only once the select has landed (13 October 2026): a select dropped at its deadline leaves the last song loaded. And only the newest press's (14 October; test/link-now.mjs). */
+    assert.match(read('mobile/src/screens/Stage.js'), /const loading = loadPreset\(next, at\)[\s\S]{0,900}songFor\(source, lists, next\)[\s\S]{0,300}landed === true && mine === stepsRef\.current && !songLate\(song, awayAtNext\) \? applySong\(song, \{ scene: writeScene, tempo: writeTempo \}\)/)
     /* And both setlist screens can set it up. */
     assert.match(read('src/components/Setlists.jsx'), /<SongSetup deviceKey=\{deviceKey\} list=\{chosen\}/)
     assert.match(read('mobile/src/screens/Setlists.js'), /<SongSetup device=\{device\} list=\{chosen\}/)
@@ -6294,11 +6330,11 @@ export function run(test) {
     const stage = read('mobile/src/screens/Stage.js').replace(/\s+/g, ' ')
     assert.match(stage, /export default function Stage\(\{[^}]*\blost = false, lostAway = false, onPutAway, onLookAgain \}\)/, 'the play screen is not told the computer has gone')
     const end = stage.indexOf('</ScrollView>')
-    const card = stage.indexOf('<Toast open={lost && !lostAway && !error}>')
+    const card = stage.indexOf("<Toast open={lost && !lostAway && !error} onLayout={endOf('advice')}>")
     /* Two questions, so a card that has gone is not reported as a card that has moved. */
     assert.ok(card > 0, 'the play screen has no card saying what to check')
     assert.ok(end > 0 && card > end, 'the advice is in the scrolling content, where it pushes the foot under a thumb')
-    assert.ok(card > stage.indexOf('<Toast open={!!error}>'), 'the advice is not behind the fault')
+    assert.ok(card > stage.indexOf("<Toast open={!!error} onLayout={endOf('fault')}>"), 'the advice is not behind the fault')
     const advice = stage.slice(card, stage.indexOf('</Toast>', card))
     assert.match(advice, /<Note tone="warn" onDismiss=\{\(\) => onPutAway\?\.\(\)\}>/, 'the advice cannot be put away')
     /* Changed on purpose, 12 October 2026: "the Fractal Remote app", not "the Fractal app", which reads as Fractal Audio's own (FM3-Edit). */
@@ -8322,7 +8358,8 @@ export function run(test) {
 
     /* One card at a time: the yielding toast stands aside while the fault or the advice is up. */
     const toast = read('mobile/src/components/Toast.js')
-    assert.match(toast, /export default function Toast\(\{ open, yields = false, children \}\) \{\s+const others = useSlot\(open && !yields\)\s+if \(!open \|\| \(yields && others\)\) return null/, 'a yielding toast is drawn over another')
+    /* `onLayout` since 13 October 2026: where Play's NOT CONNECTED learns the card's bottom edge. */
+    assert.match(toast, /export default function Toast\(\{ open, yields = false, onLayout, children \}\) \{\s+const others = useSlot\(open && !yields\)\s+if \(!open \|\| \(yields && others\)\) return null/, 'a yielding toast is drawn over another')
   })
 
   test('the switch to a new version waits for every rule: downloaded, back after two hours, and off the rig then and now', async () => {
@@ -11012,7 +11049,7 @@ export function run(test) {
     assert.match(demo, /mock = want \? createMockDevice\(unit\) : null/, 'the switch does not build a unit')
     assert.match(
       read('mobile/src/lib/device.js').replace(/\s+/g, ' '),
-      /const demo = demoDevice\(\) if \(demo\) return demoRequest\(demo, path, options\)[\s\S]{0,300}return overTheWire\(path, options\)/,
+      /const demo = demoDevice\(\) if \(demo\) return demoRequest\(demo, path, options\)[\s\S]{0,500}return overTheWire\(path, options\)/,
       'the app does not route through the demo, so turning it on changes nothing'
     )
   })
@@ -15236,6 +15273,258 @@ export function run(test) {
     assert.equal(asked(CHAIN), 1, `three presses 300ms apart cost ${asked(CHAIN)} chain reads`)
   })
 
+  /*
+   * A TAP A NEWER PRESS TOOK OVER IN THE RELAY (shared/relay-rules
+   * newestPresses) belongs to that press: its tile is not put back over the
+   * newer one's — which would be the scene before both, under a unit on the
+   * newer — and nothing is said for it. Any other dropped tap still goes
+   * back and is said. The tempo and the tuner opening, the same.
+   */
+  test('a phone tap a newer press took over leaves the newer one’s tile up and says nothing', async () => {
+    const { rig, clock, unit } = await rigOnTheBench()
+    const { notSentError } = await import('../shared/relay-rules.mjs')
+    const overtaken = () => notSentError({ late: true, overtaken: true })
+    const holds = []
+    unit.hold = () => new Promise((go, no) => holds.push({ go, no }))
+    const older = rig.writeScene(2)
+    await clock.advance(10)
+    const newer = rig.writeScene(3)
+    await clock.advance(10)
+    assert.equal(holds.length, 2)
+    holds[0].no(overtaken())
+    assert.equal(await older, false)
+    assert.equal(rig.getState().sceneIndex, 3, 'a scene a newer press took over put its tile back over the newer one')
+    holds[1].go({ ok: true })
+    assert.equal(await newer, true)
+    await clock.advance(1000)
+    assert.equal(rig.getState().sceneIndex, 3)
+    assert.equal(rig.getState().dropped, null, 'a tap a newer press took over was said')
+    assert.equal(rig.getState().error, null)
+    /* Any other dropped tap still goes back, and is said. */
+    const late = rig.writeScene(5)
+    await clock.advance(10)
+    holds[2].no(notSentError({ late: true }))
+    assert.equal(await late, false)
+    assert.equal(rig.getState().sceneIndex, 3, 'a dropped tap no longer puts its tile back')
+    assert.equal(rig.getState().dropped, 'Not sent — it would have landed late')
+    /* The tuner opening twice, the first taken over: the tuner the second opened stays open. */
+    unit.tunerAnswer = (body) => (body.on ? new Promise((go, no) => holds.push({ go, no })) : { ok: true })
+    const open = rig.writeTuner(true)
+    await clock.advance(10)
+    const again = rig.writeTuner(true)
+    await clock.advance(10)
+    holds[3].no(overtaken())
+    assert.equal(await open, false)
+    assert.equal(rig.getState().tunerOn, true, 'an opening a newer one took over closed the tuner the newer one opened')
+    holds[4].go({ ok: true })
+    assert.equal(await again, true)
+    await rig.writeTuner(false)
+    /* And a typed tempo over a tapped one still on its way: the typed one stays on the button. */
+    const rigSrc = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
+    assert.match(rigSrc, /\(err\) => \{ \/\*[^*]*\*\/ if \(err\?\.overtaken\) return if \(err\?\.notSent && unitBpm != null\) set\(\{ bpm: unitBpm \}\)/, 'a tapped tempo a newer one took over puts the button back')
+  })
+
+  /*
+   * A TAP THAT NEVER LANDED PUTS BACK WHAT THE UNIT IS ON (shared/relay-rules
+   * pressesInTheAir). Two presses of one control in one drop, both dropped,
+   * and the newer used to put back the older's tile, which the unit never
+   * took either: scene 2 on screen over a unit on scene 1, a pedal shown on
+   * that is off, the preset passed on the way to the next. And a pedal
+   * dropped put back the whole row as it was when it was pressed, over a
+   * second pedal that had landed since. Run with what the relay hands the
+   * rig for each (test/link-now.mjs): the older taken over by the newer, and
+   * the newer dropped, or landing.
+   */
+  test('phone: taps that never landed leave every tile on what the unit is on, however many were pressed in one drop', async () => {
+    const { rig, clock, unit } = await rigOnTheBench()
+    const { notSentError } = await import('../shared/relay-rules.mjs')
+    const overtaken = () => notSentError({ late: true, overtaken: true })
+    const holds = []
+    unit.hold = () => new Promise((go, no) => holds.push({ go, no }))
+    /* The unit's own scene and pedals, moved only by a write that lands. */
+    const real = { scene: unit.scene, 133: true, 58: false }
+    const lands = (k, what) => {
+      Object.assign(real, what)
+      holds[k].go({ ok: true })
+    }
+    const dropped = (k, err) => holds[k].no(err)
+    const pedal = (id) => rig.getState().blocks.find((b) => b.effectId === id)?.bypassed
+    const settle = async () => {
+      /* The bench sets its scene on the request; the unit is where the writes that landed put it. */
+      unit.scene = real.scene
+      unit.blocks = unit.blocks.map((b) => ({ ...b, bypassed: real[b.effectId] }))
+      await clock.advance(2000)
+    }
+
+    /* Two scenes, both dropped. */
+    const s1 = rig.writeScene(1)
+    await clock.advance(10)
+    const s2 = rig.writeScene(2)
+    await clock.advance(10)
+    dropped(0, overtaken())
+    dropped(1, notSentError())
+    assert.equal(await s1, false)
+    assert.equal(await s2, false)
+    await settle()
+    assert.equal(rig.getState().sceneIndex, real.scene, 'two scenes dropped in one drop, and the tile is on one the unit never took')
+    assert.equal(rig.getState().dropped, 'Not sent — not connected', 'the newest dropped scene is not said')
+    /* Healed between their deadlines: the older taken over, the newer lands. */
+    const s3 = rig.writeScene(3)
+    await clock.advance(10)
+    const s4 = rig.writeScene(4)
+    await clock.advance(10)
+    dropped(2, overtaken())
+    lands(3, { scene: 4 })
+    assert.equal(await s3, false)
+    assert.equal(await s4, true)
+    await settle()
+    assert.equal(rig.getState().sceneIndex, real.scene)
+    /* The older landed, the newer dropped: back to the older. */
+    const s5 = rig.writeScene(5)
+    await clock.advance(10)
+    const s6 = rig.writeScene(6)
+    await clock.advance(10)
+    lands(4, { scene: 5 })
+    await clock.advance(10)
+    dropped(5, notSentError())
+    assert.equal(await s5, true)
+    assert.equal(await s6, false)
+    await settle()
+    assert.equal(rig.getState().sceneIndex, real.scene, 'a dropped scene put back the one before a scene that landed')
+
+    /* One pedal on and off again, both dropped. */
+    holds.length = 0
+    const on = rig.writeBypass(133, false)
+    await clock.advance(10)
+    const off = rig.writeBypass(133, true)
+    await clock.advance(10)
+    dropped(0, overtaken())
+    dropped(1, notSentError())
+    assert.equal(await on, false)
+    assert.equal(await off, false)
+    await settle()
+    assert.equal(pedal(133), real[133], 'a pedal pressed on and off in one drop shows the press the unit never took')
+    /* Two pedals: the drive dropped, the amp landing after it. */
+    const drive = rig.writeBypass(133, false)
+    await clock.advance(10)
+    const amp = rig.writeBypass(58, true)
+    await clock.advance(10)
+    dropped(2, notSentError())
+    await clock.advance(10)
+    lands(3, { 58: true })
+    assert.equal(await drive, false)
+    assert.equal(await amp, true)
+    await settle()
+    assert.deepEqual([pedal(133), pedal(58)], [real[133], real[58]], 'a dropped pedal put back the whole row as it was, over a pedal that landed since')
+    /* The amp landing first and the drive dropped after: the same. */
+    const drive2 = rig.writeBypass(133, false)
+    await clock.advance(10)
+    const amp2 = rig.writeBypass(58, false)
+    await clock.advance(10)
+    lands(5, { 58: false })
+    await clock.advance(10)
+    dropped(4, notSentError())
+    assert.equal(await drive2, false)
+    assert.equal(await amp2, true)
+    await settle()
+    assert.deepEqual([pedal(133), pedal(58)], [real[133], real[58]])
+
+    /* A pedal the unit says no to, alone, still puts back the row it started from, as it always did. */
+    const before = rig.getState().blocks
+    const no = rig.writeBypass(133, false)
+    await clock.advance(10)
+    holds[6].no(Object.assign(new Error('The unit refused it.'), { status: 409 }))
+    assert.equal(await no, false)
+    assert.equal(rig.getState().blocks, before, 'a refused pedal no longer puts back the row it started from')
+  })
+
+  test('phone: two Nexts in one drop, both dropped, leave the preset the unit is on, with its pedals', async () => {
+    const { rig, clock, unit } = await rigOnTheBench()
+    const { notSentError } = await import('../shared/relay-rules.mjs')
+    const holds = []
+    unit.selectAnswer = () => new Promise((go, no) => holds.push({ go, no }))
+    const was = rig.getState()
+    assert.equal(was.preset.number, 12)
+    assert.equal(was.chainFor, 12, 'the bench chain was never read, so this proves nothing')
+    const a = rig.loadPreset(13)
+    await clock.advance(10)
+    const b = rig.loadPreset(14)
+    await clock.advance(10)
+    /* The unit took neither: the bench moves its slot on the request. */
+    unit.number = 12
+    holds[0].no(notSentError({ late: true, overtaken: true }))
+    holds[1].no(notSentError())
+    assert.equal(await a, false)
+    assert.equal(await b, false)
+    const now = rig.getState()
+    assert.equal(now.preset.number, 12, 'two Nexts dropped, and the screen is on the preset passed on the way, which the unit never loaded')
+    assert.deepEqual([now.chainFor, now.chainKnown, now.chainOutline], [was.chainFor, was.chainKnown, was.chainOutline], 'the pedals put back are not the preset’s the unit is on')
+    assert.equal(now.allBlocks, was.allBlocks)
+    assert.equal(now.dropped, 'Not sent — not connected')
+    /* And one Next alone, dropped: back where it was, as it always went. */
+    const c = rig.loadPreset(13)
+    await clock.advance(10)
+    unit.number = 12
+    holds[2].no(notSentError())
+    assert.equal(await c, false)
+    assert.equal(rig.getState().preset.number, 12)
+  })
+
+  /*
+   * A LOAD A NEWER ONE TOOK OVER IS NOT ONE THAT LANDED. rig.loadPreset
+   * answered true for it, and Stage.step's own count only knew its own
+   * presses: Next on a setlist song, then a preset chosen from the list (or
+   * Setlists' Play) before the first had finished, and the skipped song's
+   * scene was sent onto the preset just chosen. Stage's `step` is run here
+   * out of Stage.js, on the real rig.
+   */
+  test('phone: Next and then a preset from the list sets up no song on the preset chosen, and one Next still sets up its own', async () => {
+    const { rig, clock, unit, wire } = await rigOnTheBench()
+    unit.lag = (line) => (line === CHAIN ? 600 : 60)
+    const stage = read('mobile/src/screens/Stage.js')
+    const from = stage.indexOf('const step = async (by, at = Date.now()) => {')
+    const end = stage.indexOf('\n  }\n', from)
+    assert.ok(from > 0 && end > from, 'Stage.step is not where this test reads it')
+    const env = {
+      landing: (n) => n,
+      nope: () => {},
+      thud: () => {},
+      awayNow: () => 0,
+      loadPreset: rig.loadPreset,
+      order: [13, 20],
+      source: 'set',
+      lists: [],
+      songFor: (source, lists, n) => (n === 13 ? { scene: 5, bpm: 150 } : null),
+      songLate: () => false,
+      applySong: async (song, { scene, tempo }) => {
+        await scene(song.scene)
+        await tempo(song.bpm)
+      },
+      writeScene: rig.writeScene,
+      writeTempo: rig.writeTempo,
+      stepsRef: { current: 0 }
+    }
+    const step = new Function(...Object.keys(env), `return (${stage.slice(stage.indexOf('async', from), end + 4)})`)(...Object.values(env))
+    const after = (line) => wire.slice(wire.lastIndexOf(line) + 1)
+    for (const later of [400, 900, 1300]) {
+      wire.length = 0
+      step(13)
+      await clock.advance(later)
+      const plain = rig.loadPreset(20)
+      await clock.advance(5000)
+      assert.equal(await plain, true)
+      assert.equal(unit.number, 20)
+      const sent = after('POST /preset/select').filter((l) => l === 'POST /scene' || l === 'POST /tempo')
+      assert.deepEqual(sent, [], `${later} ms on: the skipped song’s setup was sent onto the preset chosen after it`)
+    }
+    /* One Next, left alone: its song, as before. */
+    wire.length = 0
+    step(13)
+    await clock.advance(5000)
+    assert.ok(wire.includes('POST /scene'), 'one Next no longer sets up its song')
+    assert.equal(unit.scene, 5)
+  })
+
   test('a preset chosen on the phone costs one chain read, and the stage screen coming back adds nothing', async () => {
     const { rig, clock, asked, wire } = await rigOnTheBench()
     /* What Stage does when it is shown again. See Stage.js reload. */
@@ -15367,7 +15656,8 @@ export function run(test) {
     assert.match(src, /rememberSceneNames\(device\.nameOwner\(state\.deviceSlug\), number, names, \{ blank: true \}\)/, 'an unnamed slot read over Bluetooth is not written down')
     /* Not while tuning: the read would freeze the needle for its four seconds. */
     assert.match(src, /const wait = state\.tunerOn \? AM4_NAMES_QUIET_MS : pressedAt \+ AM4_NAMES_QUIET_MS - Date\.now\(\)/)
-    assert.match(src, /export async function writeTuner\(on\) \{ pressed\(\)/)
+    /* Opening is refused first while the link is down; then the press is noted, as before. */
+    assert.match(src, /export async function writeTuner\(on, at = Date\.now\(\)\) \{ if \(on && refusedNow\('tuner on'\)\) return false pressed\(\)/)
     /* The same fault again is quiet only while it is still on screen: a second outage is said. */
     assert.match(src, /if \(fault\.error === state\.error && fault\.errorLink === state\.errorLink && faultLeft\(state, Date\.now\(\)\) > 0\) return/)
     const cache = read('mobile/src/lib/sceneNameCache.js').replace(/\s+/g, ' ')
@@ -16468,5 +16758,416 @@ export function run(test) {
     assert.match(stage, /\{looperTile \? \(\s*<Tile\s+key="looper"[\s\S]{0,600}?onPress=\{\(\) => setLooping\(true\)\}/, 'the looper is not a pedal in the chain, or tapping it does not open its buttons')
     assert.ok(!/<Press label="Looper"/.test(stage), 'the looper still has its own button under the chain')
     assert.match(stage, /const ofAllBlocks = \(s\) => s\.allBlocks/, 'the looper line reads the stage tiles, which leave the looper out')
+  })
+
+  /*
+   * NOT CONNECTED, AT ONCE, AND NOTHING QUEUED: the rig store, run.
+   *
+   * "When the link drops, Play says so right away. The tiles go dim under
+   * NOT CONNECTED, and a scene tap that can't get through is dropped."
+   * (Justin, 13 October 2026.) While link.js says the link is down, every
+   * tap is refused before anything goes on screen, in the words Play shows,
+   * and nothing is left waiting to land when the link comes back.
+   */
+  test('while NOT CONNECTED a tap is refused at once, shows nothing, and is never sent later', async () => {
+    const { rig, clock, wire, gate } = await rigOnTheBench()
+    const NOT_SENT = 'Not sent — not connected'
+    const before = rig.getState()
+    gate.setLinkDown(true)
+    assert.equal(await rig.writeScene(3), false)
+    assert.equal(rig.getState().sceneIndex, before.sceneIndex, 'a refused scene lit its tile anyway')
+    /* Said in its own field, never as the fault (lib/fault-rule faultFrom). */
+    assert.equal(rig.getState().dropped, NOT_SENT)
+    assert.equal(rig.getState().error, before.error, 'a dropped tap took the fault card')
+    assert.equal(await rig.writeBypass(133, false), false)
+    assert.equal(rig.getState().blocks.find((b) => b.effectId === 133).bypassed, true, 'a refused pedal switched on screen')
+    assert.equal(await rig.writeChannel(58, 'B'), false)
+    assert.equal(await rig.writeTempo(140), false)
+    assert.equal(await rig.loadPreset(20), false)
+    assert.equal(rig.getState().preset.number, 12, 'a refused preset went up on screen')
+    for (let i = 0; i < 4; i++) {
+      assert.equal(await rig.tapTempo(), false)
+      await clock.advance(400)
+    }
+    assert.equal(rig.getState().bpm, before.bpm, 'refused taps of the tempo still showed a number')
+    assert.equal(await rig.writeTuner(true), false)
+    assert.equal(rig.getState().tunerOn, false, 'a refused tuner opened on screen')
+    assert.deepEqual(wire, [], 'a tap went to the computer while the link was down')
+    /* The link back: nothing that was pressed in the outage lands now. */
+    gate.setLinkDown(false)
+    await clock.advance(20000)
+    assert.deepEqual(wire, [], 'a tap pressed while NOT CONNECTED landed when the link came back')
+    /* And a tap now goes, at once, as it always did. */
+    assert.equal(await rig.writeScene(1), true)
+    assert.equal(wire[0], 'POST /scene')
+  })
+
+  test('closing the tuner is never refused, and goes with no deadline', async () => {
+    const { rig, clock, wire, gate, relay } = await rigOnTheBench()
+    assert.equal(await rig.writeTuner(true), true)
+    gate.setLinkDown(true)
+    await rig.writeTuner(false)
+    await clock.advance(100)
+    assert.deepEqual(wire, ['POST /tuner', 'POST /tuner'], 'closing the tuner was refused while NOT CONNECTED, and the unit stays muted on it')
+    const [open, close] = relay.handed.filter((h) => h.line === 'POST /tuner')
+    assert.ok(Number.isFinite(open.deadline), 'opening the tuner is not bound by a deadline')
+    assert.equal(close.deadline, undefined, 'closing the tuner can be dropped at a deadline')
+  })
+
+  test('a tap carries its deadline from the press, and a watch tap from when the phone heard it', async () => {
+    const { rig, clock, relay, unit } = await rigOnTheBench()
+    const pressed = clock.now()
+    await rig.writeScene(2)
+    const [scene] = relay.handed.filter((h) => h.line === 'POST /scene')
+    assert.equal(scene.deadline, pressed + 1500, 'a scene tap went with no deadline, or the wrong one')
+    /* The body is the bytes it always was: the deadline is beside the request, never in it. */
+    assert.deepEqual(JSON.parse(scene.body), { index: 2 })
+    /* A watch tap heard 600 ms ago is due 900 ms from now, not 1500. */
+    const heard = clock.now() - 600
+    await rig.writeBypass(133, false, heard)
+    const [pedal] = relay.handed.filter((h) => h.line === 'POST /preset/blocks/133/bypass')
+    assert.equal(pedal.deadline, heard + 1500)
+    assert.deepEqual(JSON.parse(pedal.body), { bypassed: false })
+    /* Reads carry none: they keep their own grace and retries. */
+    relay.handed.length = 0
+    await rig.refreshScene()
+    assert.ok(relay.handed.length > 0 && relay.handed.every((h) => h.deadline === undefined), 'a read is bound by a tap’s deadline')
+    /* A preset from Next: the select is the tap; the reads after it are not. */
+    relay.handed.length = 0
+    const next = clock.now()
+    const loading = rig.loadPreset(13)
+    await clock.advance(5000)
+    await loading
+    const select = relay.handed.find((h) => h.line === 'POST /preset/select')
+    assert.equal(select?.deadline, next + 1500, 'a preset select is not bound by a deadline')
+    assert.ok(relay.handed.filter((h) => h.line.startsWith('GET ')).every((h) => h.deadline === undefined), 'the reads after a preset change are bound by its deadline')
+    assert.equal(unit.number, 13)
+  })
+
+  /*
+   * THE CARD ABOUT THE LINK OUTLASTS A DROPPED TAP.
+   *
+   * "The connection dropped before your computer answered." is the one thing
+   * on screen saying the tap before it may have reached the unit, with its
+   * What to try under it. One more tap during the outage — refused while
+   * NOT CONNECTED, or dropped at its deadline just before — used to put
+   * "Not sent — not connected" in its place for three seconds, and after
+   * those nothing was left at all.
+   */
+  test('a tap refused while NOT CONNECTED leaves the card about the link where it is', async () => {
+    const { rig, clock, gate, unit } = await rigOnTheBench()
+    const LOST = 'The connection dropped before your computer answered.'
+    unit.hold = () => {
+      throw Object.assign(new Error(LOST), { aboutLink: true, linkDown: true })
+    }
+    assert.equal(await rig.writeScene(4), false)
+    assert.equal(rig.getState().error, LOST, 'the bench never raised the card about the link')
+    assert.equal(rig.getState().errorLink, true)
+    const raised = rig.getState().faultAt
+    unit.hold = null
+    gate.setLinkDown(true)
+    for (const tap of [() => rig.writeScene(2), () => rig.writeBypass(133, false), () => rig.loadPreset(20), () => rig.tapTempo(), () => rig.writeTuner(true)]) {
+      assert.equal(await tap(), false)
+      assert.equal(rig.getState().error, LOST, 'a refused tap took the place of the card about the link')
+      assert.equal(rig.getState().errorLink, true, 'the card about the link is no longer about the link')
+      assert.equal(rig.getState().faultAt, raised, 'a refused tap raised the card again, as news')
+      assert.equal(rig.getState().dropped, 'Not sent — not connected', 'a refused tap is not said')
+    }
+    /* The note has had its few seconds; the card is still up, and still says what is true. */
+    await clock.advance(4000)
+    assert.equal(rig.getState().error, LOST, 'the card about the link was gone once the note had had its time')
+    /* And the link back takes both down. */
+    gate.setLinkDown(false)
+    rig.clearLinkFault('connected')
+    assert.equal(rig.getState().error, null)
+    assert.equal(rig.getState().dropped, null, '"not connected" stayed up under a link that is back')
+  })
+
+  test('a tap dropped at its deadline puts back the card about the link that its press cleared', async () => {
+    const { rig, unit } = await rigOnTheBench()
+    const LOST = 'The connection dropped before your computer answered.'
+    unit.hold = () => {
+      throw Object.assign(new Error(LOST), { aboutLink: true, linkDown: true })
+    }
+    assert.equal(await rig.writeScene(4), false)
+    assert.equal(rig.getState().errorLink, true)
+    /* The link not down yet by the rule's hold, and the next tap dropped by the relay at its deadline. */
+    unit.hold = () => {
+      throw Object.assign(new Error('Not sent — not connected'), { notSent: true })
+    }
+    assert.equal(await rig.writeScene(2), false)
+    assert.equal(rig.getState().error, LOST, 'a dropped tap left nothing saying the tap before it may have landed')
+    assert.equal(rig.getState().errorLink, true)
+    assert.equal(rig.getState().dropped, 'Not sent — not connected')
+    /* A card about something else is answered by the press, as it always was, and stays gone. */
+    rig.clearError()
+    unit.hold = () => {
+      throw Object.assign(new Error('The unit refused it.'), { status: 409 })
+    }
+    assert.equal(await rig.writeScene(3), false)
+    assert.equal(rig.getState().errorLink, false)
+    unit.hold = () => {
+      throw Object.assign(new Error('Not sent — it would have landed late'), { notSent: true, late: true })
+    }
+    assert.equal(await rig.writeScene(5), false)
+    assert.equal(rig.getState().error, null, 'a press that was dropped brought back a fault it had answered')
+    assert.equal(rig.getState().dropped, 'Not sent — it would have landed late')
+    /* Dropped with the link up: the link reading connected does not make it untrue. */
+    rig.clearLinkFault('connected')
+    assert.equal(rig.getState().dropped, 'Not sent — it would have landed late')
+  })
+
+  test('a setlist song’s scene and tempo are not sent after a load the link held up, and a link that stayed up changes nothing', async () => {
+    const { rig, clock, wire, gate } = await rigOnTheBench()
+    const song = { scene: 2, bpm: 128 }
+    /* Up the whole time, however long the load: never late. */
+    let atNext = rig.awayNow()
+    await clock.advance(9000)
+    assert.equal(rig.songLate(song, atNext), false, 'a link that stayed up dropped the song’s setup')
+    assert.equal(rig.getState().dropped, null)
+    /* A blip a tap would have ridden out: still goes. */
+    atNext = rig.awayNow()
+    gate.setLinkAway(true, clock.now())
+    await clock.advance(1200)
+    gate.setLinkAway(false, clock.now())
+    assert.equal(rig.songLate(song, atNext), false, 'a blip of 1.2 s dropped the song’s setup')
+    /* Away for six seconds of the load: not sent, said, and the card at the top left alone. */
+    const before = rig.getState().error
+    atNext = rig.awayNow()
+    await clock.advance(200)
+    gate.setLinkAway(true, clock.now())
+    await clock.advance(5700)
+    gate.setLinkAway(false, clock.now())
+    await clock.advance(2000)
+    wire.length = 0
+    assert.equal(rig.songLate(song, atNext), true, 'a song’s scene went out seconds after Next')
+    assert.equal(rig.getState().dropped, 'Not sent — the song’s scene and tempo would have landed late')
+    assert.equal(rig.getState().droppedLate, true, 'the link reading connected takes down a note that is still true')
+    assert.equal(rig.getState().error, before, 'a dropped song setup took the fault card')
+    assert.deepEqual(wire, [], 'asking about a song’s setup sent something')
+  })
+
+  test('a tempo the link dropped puts the Tap button back on what the unit is on', async () => {
+    const { rig, clock, relay } = await rigOnTheBench()
+    const before = rig.getState().bpm
+    relay.__serve(async (method, path) => {
+      if (method === 'POST' && path === '/tempo') throw Object.assign(new Error('Not sent — not connected'), { notSent: true })
+      if (method === 'GET' && path === '/tempo') return { bpm: before }
+      return { ok: true }
+    })
+    for (let i = 0; i < 3; i++) {
+      await rig.tapTempo()
+      await clock.advance(400)
+    }
+    assert.equal(rig.getState().bpm, before, 'a tempo that never left is still on the button')
+    assert.equal(rig.getState().dropped, 'Not sent — not connected')
+  })
+
+  test('a save to the computer carries no deadline', async () => {
+    const { relay, device } = await rigOnTheBench()
+    await device.parkSave('fm3', { slot: 40 }).catch(() => {})
+    const save = relay.handed.find((h) => /^PUT \/store\/config\/fractal\.pendingSave/.test(h.line))
+    assert.ok(save, 'the save request did not go')
+    assert.equal(save.deadline, undefined, 'a save to a slot is bound by a tap’s deadline, and can be dropped part-way')
+  })
+
+  test('a channel picked by a hold and a typed tempo carry their deadline from the press too', async () => {
+    const { rig, clock, relay } = await rigOnTheBench()
+    relay.__serve(async () => ({ ok: true }))
+    /* A hold on the watch heard 400 ms ago, or a ChannelSheet press now: due from then, not from when it went. */
+    const heard = clock.now() - 400
+    assert.equal(await rig.writeChannel(58, 'B', heard), true)
+    const [chan] = relay.handed.filter((h) => h.line === 'POST /preset/blocks/58/channel')
+    assert.equal(chan?.deadline, heard + 1500, 'a channel picked by a hold went with no deadline, and can land seconds late')
+    assert.deepEqual(JSON.parse(chan.body), { channel: 'B' })
+    /* A typed tempo, and a setlist song's, through the same write. */
+    const typed = clock.now()
+    assert.equal(await rig.writeTempo(140), true)
+    const [tempo] = relay.handed.filter((h) => h.line === 'POST /tempo')
+    assert.equal(tempo?.deadline, typed + 1500, 'a typed tempo went with no deadline')
+    assert.deepEqual(JSON.parse(tempo.body), { bpm: 140 })
+  })
+
+  /*
+   * A TAP NUMBER THAT WAITED BEHIND A SLOW ONE GOES WITH ITS OWN TAP'S DEADLINE.
+   *
+   * One tempo write is in the air at a time and the newest number waits for
+   * it (shared/tempo.mjs tempoSender). Its deadline is from the tap that made
+   * it, not from the moment its turn came: stamped then, a number queued
+   * behind a write the link held for three seconds went out three seconds
+   * after the thumb, with a fresh second and a half to land in.
+   */
+  test('a Tap number waiting behind a slow tempo write is dropped at its own tap’s deadline', async () => {
+    const { rig, clock, relay } = await rigOnTheBench()
+    let landed = 120
+    let writes = 0
+    relay.__serve(async (method, path, body) => {
+      if (method === 'POST' && path === '/tempo') {
+        const mine = relay.handed.filter((h) => h.line === 'POST /tempo')[writes++]
+        /* What the relay does with a tap past its deadline: never puts it on the wire. */
+        if (clock.now() >= mine.deadline) throw Object.assign(new Error('Not sent — it would have landed late'), { notSent: true, late: true })
+        /* The first one is held by the link for three seconds, and then lands. */
+        if (writes === 1) await new Promise((go) => clock.setTimeout(go, 3000))
+        landed = body.bpm
+        return { ok: true }
+      }
+      if (method === 'GET' && path === '/tempo') return { bpm: landed }
+      return { ok: true }
+    })
+    const first = clock.now()
+    await rig.tapTempo()
+    await clock.advance(400)
+    /* 150: sent at once, and held. */
+    await rig.tapTempo()
+    await clock.advance(500)
+    /* 133, waiting behind it, from this tap. */
+    const third = clock.now()
+    await rig.tapTempo()
+    await clock.advance(5000)
+    const sent = relay.handed.filter((h) => h.line === 'POST /tempo')
+    assert.deepEqual(sent.map((h) => JSON.parse(h.body).bpm), [150, 133])
+    assert.equal(sent[0].deadline, first + 400 + 1500)
+    assert.equal(sent[1].deadline, third + 1500, 'a number that waited its turn was given a deadline from its turn, not its tap')
+    assert.equal(landed, 150, 'a number queued past its own deadline landed seconds after the thumb')
+    assert.equal(rig.getState().bpm, 150, 'the button does not show what the unit is on')
+    assert.equal(rig.getState().dropped, 'Not sent — it would have landed late')
+  })
+
+  /*
+   * COPY A SCENE STOPS AT A SWITCH THAT DID NOT GO.
+   *
+   * Its first step is a switch to the scene copied from, and the read after
+   * it is what gets copied. With that switch dropped ("a scene tap that can't
+   * get through is dropped", 13 October 2026), the read waited for the link,
+   * read the scene the unit was really on, and that scene's pedals went onto
+   * the target and were called a success. The phone's writes resolve false
+   * rather than throw, so the copy's wire is the rig's writes through orStop,
+   * which stops there and says why — as the browser's copy does.
+   */
+  test('a scene or channel copy whose first switch is refused or dropped writes nothing and says it stopped', async () => {
+    const { rig, clock, wire, gate, relay, device } = await rigOnTheBench()
+    const { copyScene, copyChannel } = await import('../shared/copy-tools.mjs')
+    const sceneWire = { setScene: rig.orStop(rig.writeScene), sceneState: device.sceneState, setBypass: rig.orStop(rig.writeBypass), setChannel: rig.orStop(rig.writeChannel) }
+    /* With the link up, a copy goes as it always did. */
+    assert.deepEqual(await copyScene({ from: 1, to: 3, wire: sceneWire }), { ok: true, changed: 0 })
+    assert.equal(wire.filter((l) => l === 'POST /scene').length, 2)
+    wire.length = 0
+    /* While NOT CONNECTED: stopped at once, in the words Play shows, and nothing sent later. */
+    gate.setLinkDown(true)
+    assert.deepEqual(await copyScene({ from: 2, to: 4, wire: sceneWire }), { ok: false, error: 'Not sent — not connected', changed: 0 })
+    const channelWire = { setChannel: rig.orStop(rig.writeChannel), readBlock: device.blockParams, setType: device.setType, setParam: device.setParam, setEnum: device.setEnum }
+    assert.deepEqual(await copyChannel({ eid: 58, from: 'A', to: 'B', wire: channelWire }), { ok: false, error: 'Not sent — not connected', changed: 0 })
+    gate.setLinkDown(false)
+    await clock.advance(20000)
+    assert.deepEqual(wire, [], 'a copy started while NOT CONNECTED sent something once the link was back')
+    /* Dropped by the relay at its deadline, before the band's hold is up: nothing read or written after it. */
+    relay.__serve(async (method, path) => {
+      if (method === 'POST' && path === '/scene') throw Object.assign(new Error('Not sent — not connected'), { notSent: true })
+      throw new Error(`asked after a switch that did not go: ${method} ${path}`)
+    })
+    const res = await copyScene({ from: 2, to: 4, wire: sceneWire })
+    assert.equal(res.ok, false, 'a copy whose first switch never left called itself done')
+    assert.equal(res.error, 'Not sent — not connected')
+    assert.deepEqual(wire, ['POST /scene'], 'the copy read and wrote on after a switch that did not go')
+    /* A write turned away before it was tried says so, never an older note's words. */
+    rig.set({ error: 'An older fault.' })
+    await assert.rejects(rig.orStop(rig.writeBypass)(999, true), (e) => e.message === rig.WRITE_DID_NOT_GO && !e.notSent)
+    /* And both of the phone's copy tools are handed that wire. */
+    const bare = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+    assert.match(bare(read('mobile/src/components/SceneCopy.js')), /wire: \{ setScene: orStop\(writeScene\), sceneState, setBypass: orStop\(writeBypass\), setChannel: orStop\(writeChannel\) \}/, 'the scene copy goes on after a switch that did not go')
+    assert.match(bare(read('mobile/src/screens/Edit.js')), /wire: \{ setChannel: orStop\(writeChannel\), readBlock: blockParams, setType, setParam, setEnum \}/, 'the channel copy goes on after a switch that did not go')
+  })
+
+  test('a tap that went and lost its answer has the scene read again once the link is back', async () => {
+    const { rig, clock, wire, unit } = await rigOnTheBench()
+    /* Sent, landed on the unit, and the answer lost to a drop: the relay's own sentence for that. */
+    unit.hold = () => {
+      throw Object.assign(new Error('The connection dropped before your computer answered.'), { aboutLink: true, linkDown: true })
+    }
+    assert.equal(await rig.writeScene(4), false)
+    assert.equal(rig.getState().sceneIndex, 0, 'the tile stayed on a tap that failed')
+    assert.notEqual(rig.getState().error, 'Not sent — not connected', 'a tap that may have landed is said as "not sent"')
+    assert.equal(rig.getState().dropped, null, 'a tap that may have landed is said as "not sent"')
+    unit.hold = null
+    wire.length = 0
+    rig.clearLinkFault('connected')
+    await clock.advance(1000)
+    assert.ok(wire.includes('GET /scene'), 'the scene the unit is really on was never read after the link came back')
+    assert.equal(rig.getState().sceneIndex, 4, 'the tile does not show the scene the unit is on')
+    /* Once: the next reconnect reads nothing for it. */
+    wire.length = 0
+    rig.clearLinkFault('connected')
+    await clock.advance(1000)
+    assert.ok(!wire.includes('GET /scene'), 'the scene is read again at every reconnect')
+  })
+  /*
+   * A GARBLED ANSWER PAST THE DEADLINE IS NOT A NO. retry.js stops asking a
+   * scene or a preset again once that could only land late, and marks what
+   * came back `answeredGarbled`: the unit took the write, most likely, and it
+   * is the answer that was garbled. The tile stays, nothing says the codec's
+   * words, and where the unit is is read at once, so the screen shows that.
+   */
+  test('a scene answered garbled past its deadline keeps its tile, and the unit is read to say where it is', async () => {
+    const garbled = () => Object.assign(new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78'), { status: 500, answeredGarbled: true })
+    {
+      const { rig, clock, wire, unit } = await rigOnTheBench()
+      unit.hold = () => {
+        throw garbled()
+      }
+      assert.equal(await rig.writeScene(4), true)
+      await clock.advance(100)
+      assert.equal(rig.getState().sceneIndex, 4, 'a scene the unit took went back because its answer came back garbled')
+      assert.equal(rig.getState().error, null, `the codec's words were shown for a scene that landed: ${rig.getState().error}`)
+      assert.ok(wire.includes('GET /scene'), 'where the unit is was not read')
+      assert.ok(wire.includes('GET /preset/scene-state'), 'the new scene’s pedals were not read')
+    }
+    /* And when the unit did not take it, the read says so and the tile follows the unit. */
+    {
+      const { rig, clock, unit } = await rigOnTheBench()
+      unit.hold = () => {
+        unit.scene = 0
+        throw garbled()
+      }
+      await rig.writeScene(4)
+      await clock.advance(100)
+      assert.equal(rig.getState().sceneIndex, 0, 'the tile does not show the scene the unit is on')
+      assert.equal(rig.getState().error, null)
+    }
+    /* A real no is still a no: the tile goes back, as it always did. */
+    {
+      const { rig, unit } = await rigOnTheBench()
+      unit.hold = () => {
+        throw Object.assign(new Error('The unit refused it.'), { status: 409 })
+      }
+      assert.equal(await rig.writeScene(4), false)
+      assert.equal(rig.getState().sceneIndex, 0)
+      assert.equal(rig.getState().error, 'The unit refused it.')
+    }
+  })
+
+  test('a preset answered garbled past its deadline is not put back, and a song waits until the unit says it is on it', async () => {
+    const garbled = () => Object.assign(new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78'), { status: 500, answeredGarbled: true })
+    {
+      const { rig, clock, unit } = await rigOnTheBench({ selectAnswer: () => { throw garbled() } })
+      const loading = rig.loadPreset(20)
+      await clock.advance(5000)
+      assert.equal(await loading, true, 'a select the unit took and said it was on was not taken as landed')
+      assert.equal(unit.number, 20)
+      assert.equal(rig.getState().preset.number, 20, 'a preset the unit took went back because its answer came back garbled')
+      assert.equal(rig.getState().error, null, `the codec's words were shown: ${rig.getState().error}`)
+    }
+    /* The unit stayed where it was: the screen follows it, and the select is not called landed. */
+    {
+      const { rig, clock, unit } = await rigOnTheBench()
+      unit.selectAnswer = () => {
+        unit.number = 12
+        throw garbled()
+      }
+      const loading = rig.loadPreset(20)
+      await clock.advance(5000)
+      assert.equal(await loading, false, 'a select the unit never said it took was called landed, and a song would follow it')
+      assert.equal(rig.getState().preset.number, 12, 'the screen does not show the preset the unit is on')
+      assert.equal(rig.getState().error, null)
+    }
   })
 }

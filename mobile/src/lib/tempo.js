@@ -236,20 +236,30 @@ export function keepTaps(taps = [], now = Date.now(), range = ANY_BPM) {
  * `send` is the app's own write — setTempo, whatever that means at this end.
  * `onError` gets anything it throws, once, rather than each caller wrapping
  * every press in a try.
+ *
+ * AND WHEN THE TAP WAS. `send(bpm, at)` is handed the moment the number was
+ * pushed — the tap it came from — not the moment its turn came. A number
+ * that waited behind a write stuck on a dropped link is as late as that
+ * write, and a tap is bound by a deadline from its press (see TAP_DEADLINE_MS
+ * in shared/relay-rules.mjs): a tempo that would land seconds after the
+ * thumb is dropped, not sent. Each end builds the deadline from `at`; a
+ * `send` that ignores it sends exactly what it sent before.
  */
-export function tempoSender(send, onError) {
+export function tempoSender(send, onError, now = () => Date.now()) {
   let inFlight = false
   let waiting = null
+  let waitingAt = 0
   let sent = null
 
   const pump = async () => {
     if (inFlight) return
     while (waiting != null) {
       const bpm = waiting
+      const at = waitingAt
       waiting = null
       inFlight = true
       try {
-        await send(bpm)
+        await send(bpm, at)
         sent = bpm
       } catch (err) {
         onError?.(err)
@@ -263,6 +273,7 @@ export function tempoSender(send, onError) {
     /** Put this number next in line, replacing any that has not gone yet. */
     push(bpm) {
       waiting = bpm
+      waitingAt = now()
       return pump()
     },
     /** Nothing in the air and nothing waiting: safe to read the unit back. */

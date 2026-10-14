@@ -62,6 +62,8 @@ import {
  * a code, and nothing makes one any more.
  */
 import { isPairAccount } from '../../shared/pairing.mjs'
+import { LINK_DOWN_HOLD_MS, linkDownAt } from '../../shared/relay-rules.mjs'
+import { setLinkAway, setLinkDown, setTapsRelayed } from './tapGate.js'
 import { PHONE_NOTE_ID, phoneNote, timeToTell } from '../../shared/phone-note.mjs'
 import { holders } from '../../shared/editors.mjs'
 import { D4 } from '../../shared/onboarding.mjs'
@@ -472,7 +474,16 @@ let state = {
   /** remote role: which of them requests are addressed to, or null. */
   chosenHost: null,
   // Why the last pairing from a scanned code failed, for the connect screen.
-  pairError: null
+  pairError: null,
+  /*
+   * remote role: the link has been down long enough to say so (see
+   * LINK_DOWN_HOLD_MS in shared/relay-rules.mjs) — Play dims its tiles under
+   * NOT CONNECTED and refuses a tap at once (tapGate.js). Never for the
+   * computer's own window or its wifi page, where 'off' means the phone
+   * remote is off and the unit is right there, and so never in the demo,
+   * which takes the computer's role.
+   */
+  down: false
 }
 let joining = false
 /*
@@ -491,11 +502,80 @@ export function subscribeLink(fn) {
   return () => watchers.delete(fn)
 }
 
+/*
+ * When the remote link LEFT 'connected' — not its last change: joining, no
+ * answer and joining again in one stretch are one outage — and the one timer
+ * that says it has been away long enough.
+ */
+let lostAt = 0
+let downTimer = null
+
+function downNow(next) {
+  const now = Date.now()
+  /* And the time it is away, added up, for a setlist song's setup to ask (tapGate linkAwayMs). */
+  setLinkAway(next.role === 'remote' && next.link !== 'connected', now)
+  if (next.role !== 'remote' || next.link === 'connected') {
+    lostAt = 0
+    clearTimeout(downTimer)
+    downTimer = null
+    return false
+  }
+  if (!lostAt) {
+    lostAt = now
+    clearTimeout(downTimer)
+    downTimer = null
+  }
+  const down = linkDownAt({ link: next.link, lostAt }, now)
+  /*
+   * Not down yet: one timer for the rest of the hold, armed again whenever it
+   * went off short of it — a browser's timer, like Node's, can run a
+   * millisecond early by Date.now(), and with nothing else due NOT CONNECTED
+   * would then wait for the loop's next turn (the phone's downNow says more).
+   */
+  if (!down && !downTimer) {
+    downTimer = setTimeout(() => {
+      downTimer = null
+      set({})
+    }, Math.max(1, lostAt + LINK_DOWN_HOLD_MS - now))
+  }
+  return down
+}
+
+/*
+ * THE HOLD STARTS AGAIN WHEN THE PAGE COMES BACK, as the phone's does when
+ * the app comes back on screen (its holdAgain says the whole of it). A tab
+ * hidden for a minute whose channel dropped in there — a phone's browser
+ * put in a pocket, or a computer's tab behind another, whose timers still
+ * run — came back already saying NOT CONNECTED, and refused the first tap at
+ * once though the link was back a moment later. Nobody was looking while it
+ * was hidden, so it has its two seconds again from the moment it is seen.
+ */
+function holdAgain() {
+  if (state.role !== 'remote' || state.link === 'connected') return
+  lostAt = Date.now()
+  clearTimeout(downTimer)
+  downTimer = null
+  set({})
+}
+
+/*
+ * What Play was saying as the page was hidden: the outage it was already
+ * showing as NOT CONNECTED (its lostAt), or 0. Back to the same outage, the
+ * band stays up rather than going away for two seconds to come back, which
+ * would be it flickering over a link that never returned.
+ */
+let pageAway = false
+let downAway = 0
+
 function set(patch) {
   const next = { ...state, ...patch }
   if (next.link !== state.link) next.since = Date.now()
+  next.down = downNow(next)
   const changed = Object.keys(next).some((k) => next[k] !== state[k])
+  const was = state
   state = next
+  if (next.role !== was.role) setTapsRelayed(next.role === 'remote')
+  if (next.down !== was.down) setLinkDown(next.down)
   if (!changed) return
   for (const fn of watchers) {
     try {
@@ -615,6 +695,26 @@ function schedule(ms) {
   timer = setTimeout(tick, ms)
 }
 
+/*
+ * ASK AGAIN THE MOMENT THERE IS DOUBT — the phone's rule (see doubt in
+ * mobile/src/lib/link.js). One read the unit was slow to answer, or one
+ * missed keepalive, turns the link to "no answer"; with Play dimming after
+ * two seconds of that, the computer is asked once more at once, so a working
+ * rig is never dimmed by a single slow answer. Only while the channel is up:
+ * a channel that dropped is already being chased (pokeLink, below). Once per
+ * doubt: hostSeen is announced only on change.
+ */
+let ticking = 0
+let doubted = false
+function doubt() {
+  if (state.role !== 'remote' || !state.account || wantsAutoConnect() === false || !remoteActive()) return
+  if (ticking > 0) {
+    doubted = true
+    return
+  }
+  schedule(0)
+}
+
 /**
  * One turn of the loop. What it does depends on what is wrong:
  *
@@ -624,6 +724,15 @@ function schedule(ms) {
  *     ordinary traffic is proof enough and costs nothing extra
  */
 async function tick() {
+  ticking += 1
+  try {
+    await turn()
+  } finally {
+    ticking -= 1
+  }
+}
+
+async function turn() {
   if (state.role !== 'remote' || !state.account || wantsAutoConnect() === false) return
   if (typeof document !== 'undefined' && document.hidden) {
     schedule(PROBE_CAP)
@@ -650,6 +759,11 @@ async function tick() {
   refresh()
   // And the computer hears that a phone is using it, so it does not go to sleep under the song.
   tellComputer()
+  /* Doubted while this turn was out: ask again now, the backoff left where it was. */
+  if (doubted) {
+    doubted = false
+    if (state.link !== 'connected' && remoteActive()) return schedule(0)
+  }
   delay = state.link === 'connected' ? KEEPALIVE : nextDelay(delay)
   schedule(delay)
 }
@@ -821,8 +935,14 @@ export async function bootLink() {
      * somebody reloaded the page.
      */
     if (!up && state.role === 'remote' && state.account && wantsAutoConnect() !== false) pokeLink()
+    /* Back, and nothing heard on it yet: ask now. See doubt. */
+    if (up && !remoteHostSeen()) doubt()
   })
-  subscribeHostSeen(() => refresh())
+  subscribeHostSeen((seen) => {
+    refresh()
+    /* Stopped answering on a channel that is up: ask once more, at once. See doubt. */
+    if (!seen) doubt()
+  })
   /*
    * The roll call is re-taken by the write gate now, not only here, so its
    * answer has to reach the screen from wherever it was taken. Without this the
@@ -862,7 +982,20 @@ export async function bootLink() {
 
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden || state.role !== 'remote') return
+      if (state.role !== 'remote') return
+      if (document.hidden) {
+        if (!pageAway) {
+          pageAway = true
+          downAway = state.down ? lostAt : 0
+        }
+        return
+      }
+      /* Seen again: Play's two seconds start from here (holdAgain), unless it was saying NOT CONNECTED over this same outage already. */
+      if (pageAway) {
+        pageAway = false
+        if (!downAway || downAway !== lostAt) holdAgain()
+        downAway = 0
+      }
       pokeLink()
       // A phone comes out of a pocket into a room that may have changed. The
       // second Mac is the thing most likely to have left, and the notice about
@@ -1109,6 +1242,11 @@ export function _resetLink() {
   restoring = false
   booted = false
   toldAt = 0
+  lostAt = 0
+  clearTimeout(downTimer)
+  downTimer = null
+  pageAway = false
+  downAway = 0
   state = { role: 'unknown', link: 'off', account: null, hostOn: false, macName: null, macVersion: null, since: Date.now(), cloud: null, clash: null, hosts: [], units: {}, chosenHost: null, pairError: null }
   watchers.clear()
 }

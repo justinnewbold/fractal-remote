@@ -16,7 +16,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import { firmwareOf } from './firmware'
-import { faultFrom, faultLeft, withdrawsFault } from './fault-rule'
+import { faultFrom, faultLeft, withdrawsDropped, withdrawsFault } from './fault-rule'
 
 import * as device from './device'
 import { idOf, sameBlock } from './unit.mjs'
@@ -30,6 +30,8 @@ import { subscribeHostSeen, subscribeRemoteEvents, subscribeRemoteState } from '
 import { demoUnit, isDemo } from './demo'
 import { logDebug } from './debugLog'
 import { NO_TEMPO, isUnsupported } from './unsupported'
+import { linkAwayMs, linkIsDown } from './tapGate'
+import { notSentError, pressesInTheAir, songNotSent, songWouldLandLate, tapDeadline } from './relay-rules'
 import {
   CHAIN_FRESH_MS,
   OWN_SETTLE_MS,
@@ -129,6 +131,13 @@ const initial = {
   /* Whether `error` is a complaint about the link, and so is withdrawn
      when the link comes back. See faultFrom. */
   errorLink: false,
+  /* A tap that was dropped ("Not sent — not connected"): its words, said
+     briefly under NOT CONNECTED, and never in `error`, so the card about the
+     link stays where it is. See faultFrom. `droppedLate` is one dropped with
+     the link up, which the link coming back does not take down. */
+  dropped: null,
+  droppedLate: false,
+  droppedAt: 0,
   /* When `error` was raised, so the Play screen can let it go after a while
      (lib/fault-rule faultLeft) without clearing it. */
   faultAt: 0,
@@ -179,6 +188,8 @@ export function set(patch) {
   /* Stamped where every fault passes. The same words raised again are news
      again, and get their full time on screen. */
   if (patch.error) patch = { ...patch, faultAt: Date.now() }
+  /* And a dropped tap where it is said, so the same words again are said again. */
+  if (patch.dropped) patch = { ...patch, droppedAt: Date.now() }
   state = { ...state, ...patch }
   emit()
 }
@@ -269,9 +280,96 @@ export const clearError = () => set({ error: null, errorLink: false })
 
 /** The link is back, so a complaint about it having gone is over. */
 export function clearLinkFault(link = 'connected') {
-  if (!withdrawsFault(state, link)) return
+  if (!withdrawsFault(state, link)) return afterLinkNews(link)
   set({ error: null, errorLink: false })
+  afterLinkNews(link)
 }
+
+/* What else the link's news settles: a dropped tap's "not connected", and a tap that may have landed. */
+function afterLinkNews(link) {
+  if (withdrawsDropped(state, link)) set({ dropped: null, droppedLate: false })
+  readBackUnsure(link)
+}
+
+/*
+ * A TAP THAT WENT AND LOST ITS ANSWER MAY HAVE LANDED.
+ *
+ * Sent, and then the connection dropped before the computer said so: the
+ * tile went back to where it was, and the note says the connection dropped
+ * before the computer answered — but the unit may well be on the new scene,
+ * and what it announced in the gap was lost with the link. So once the link
+ * is back the scene and its pedals are read once, and the tiles show what
+ * the unit is really on. Not while a preset is loading: that read is coming
+ * anyway, and is the one that counts.
+ */
+let unsure = false
+function readBackUnsure(link) {
+  if (!unsure || link !== 'connected') return
+  unsure = false
+  if (presetBusy()) return
+  logDebug('write', 'reading the scene again: a tap went just before the link dropped')
+  refreshScene()
+    .then(() => (presetBusy() || otherPresetsChain() ? null : refreshSceneState()))
+    .catch(() => {})
+}
+
+/*
+ * NOTHING IS SENT, OR SHOWN AS SENT, WHILE THE LINK IS KNOWN TO BE DOWN.
+ *
+ * "When the link drops, Play says so right away. The tiles go dim under NOT
+ * CONNECTED, and a scene tap that can't get through is dropped." Every write
+ * the player presses asks this first, before anything goes on screen, so a
+ * tile never lights for a tap that cannot leave; the note says why, briefly,
+ * and the tile stays on what the unit is really on. Never in the demo, which
+ * has no link to lose.
+ */
+function refusedNow(what) {
+  if (isDemo() || !linkIsDown()) return false
+  logDebug('write', what, 'not sent — not connected')
+  /* Into its own field (faultFrom): the card about the link, if one is up, stays up. */
+  set(faultFrom(notSentError()))
+  return true
+}
+
+/*
+ * THE CARD ABOUT THE LINK, KEPT THROUGH A TAP THAT WAS DROPPED.
+ *
+ * A press clears the card at the top, so an old fault does not sit over a
+ * new action; if the tap lands, that is right. But a tap dropped at its
+ * deadline proves nothing about the link that the card was saying — and the
+ * card can be the only thing on screen saying the tap before it may have
+ * reached the unit ("The connection dropped before your computer
+ * answered."). So it is taken before the press, and put back when the press
+ * was dropped. Only a card about the link: anything else was answered by the
+ * press, and goes as it always went.
+ */
+const linkCard = () => (state.error && state.errorLink ? { error: state.error, errorLink: true } : null)
+const keptOver = (err, card) => (err?.notSent && card ? card : null)
+
+/*
+ * A SETLIST SONG'S SCENE AND TEMPO, AND WHETHER THEY WOULD NOW LAND LATE.
+ *
+ * Stage.step takes `awayNow()` as Next is pressed and asks `songLate` once
+ * the preset has loaded: true when the link was away for longer than a
+ * tap's deadline in between (relay-rules songWouldLandLate), so the preset's
+ * reads were held and the song's scene would go out seconds after Next,
+ * mid-verse. Then they are not sent, and that is said like any dropped tap,
+ * briefly and in its own field. Nothing to put back: nothing of them went on
+ * screen, and the tiles show the scene the preset loaded on, which is where
+ * the unit is. A link that stayed up is never late, however long the reads.
+ */
+export const awayNow = () => linkAwayMs(Date.now())
+
+export function songLate(song, awayAtNext) {
+  if (!songWouldLandLate(linkAwayMs(Date.now()) - awayAtNext)) return false
+  const words = songNotSent({ scene: Number.isInteger(song?.scene), tempo: Number.isFinite(song?.bpm) })
+  logDebug('write', 'song setup', 'not sent — the link was away while its preset loaded')
+  set(faultFrom(notSentError({ late: true, words })))
+  return true
+}
+
+/* A failure that may have reached the unit, for readBackUnsure. */
+const mayHaveLanded = (err) => Boolean(err?.aboutLink) && !err?.notSent
 
 function subscribe(fn) {
   subscribers.add(fn)
@@ -1841,32 +1939,110 @@ async function readBlocks(quiet) {
  * the failure: rebuilding it re-derives from a state that has already moved,
  * which is how a refused bypass once restored a chain that never existed.
  */
-async function optimistic(patch, revert, send) {
+/*
+ * `air` is this press among the others of its control still in the air
+ * (relay-rules pressesInTheAir): `control`, `before` (what this control
+ * showed before the press), `shows()` (whether the screen still shows what
+ * was pressed) and `undo(before)` (that put back, as a patch).
+ */
+async function optimistic(patch, revert, send, air) {
   pressed()
-  set({ ...patch, error: null, errorLink: false })
+  const card = linkCard()
+  const press = inTheAir.press(air.control, air.before)
+  /* A new press answers an old dropped tap's note as it answers the card: its own outcome is the news now. */
+  set({ ...patch, error: null, errorLink: false, dropped: null })
   try {
     await send()
+    inTheAir.landed(press)
     return true
   } catch (err) {
-    set({ ...revert, ...faultFrom(err) })
+    const from = inTheAir.failed(press)
+    /*
+     * Dropped for a newer press of the same control (relay-rules
+     * newestPresses): that press owns the tile and the news now, so nothing
+     * is put back over it and nothing is said. Put back, this tile's `revert`
+     * is the scene before both presses, under a unit on the newer one.
+     */
+    if (err?.overtaken) return false
+    if (mayHaveLanded(err)) unsure = true
+    /*
+     * PUT BACK ON WHAT THE UNIT IS ON. A newer press of this control in the
+     * air owns the tile: nothing. One that never left goes back on this
+     * control alone — never the whole row as it was when it was pressed,
+     * over a pedal that landed since — and to before the oldest press of it
+     * the unit never took, when there were several in one drop; and only
+     * while the tile still shows this press. A no from the unit to a press
+     * alone puts back what it always did.
+     */
+    const back = !from ? {} : from === press && !err?.notSent ? revert : air.shows() ? air.undo(from.before) : {}
+    set({ ...back, ...faultFrom(err), ...keptOver(err, card) })
     return false
   }
 }
 
-export function writeScene(index) {
+/* Every control's presses still in the air, for what a failed one puts back: see optimistic. */
+const inTheAir = pressesInTheAir()
+const same = (b) => b
+
+/**
+ * A rig write for a tool of several steps, which must STOP at a step that
+ * did not go.
+ *
+ * The writes here never throw: a tap that was refused, dropped at its
+ * deadline or said no to resolves false, and the screen says why. That is
+ * right for a tile, and wrong for Copy a scene, which goes to one scene,
+ * reads it, goes to the other and writes what it read. With its first switch
+ * dropped — "a scene tap that can't get through is dropped", 13 October 2026
+ * — the read after it waited for the link and read whatever scene the unit
+ * was really on, and that scene's pedals were written onto the target and
+ * called a success. So false becomes a throw here, in the words the screen
+ * gave it, and the copy stops there and says so, as the browser's does
+ * (its writes throw).
+ */
+export const WRITE_DID_NOT_GO = 'That change did not reach the unit.'
+export function orStop(write) {
+  return async (...args) => {
+    const was = state
+    if ((await write(...args)) !== false) return true
+    /* Only what this write put there: a write turned away before it was tried leaves the store as it was, and an older note is not its reason. */
+    const said = state !== was ? state.dropped || state.error : null
+    throw Object.assign(new Error(said || WRITE_DID_NOT_GO), { notSent: state !== was && Boolean(state.dropped) })
+  }
+}
+
+/*
+ * `at` is when the player pressed, for the deadline (relay-rules
+ * TAP_DEADLINE_MS): now, from a tile, or the moment the phone heard a tap
+ * from the watch, which can be a second after the wrist. The same write
+ * from a setlist song after its preset has loaded is stamped then, and is
+ * bound the same way: a song's scene that would land late is not sent late.
+ */
+export function writeScene(index, at = Date.now()) {
+  if (refusedNow(`scene ${index + 1}`)) return Promise.resolve(false)
+  const deadline = tapDeadline(at)
   const was = state.sceneIndex
   expect('sceneIndex', index)
   /* The computer announces this scene straight back; that announcement is
      this tap, not news, and the read below is the only one it costs. */
   const token = owe('scene', index)
+  const air = { control: 'scene', before: { sceneIndex: was }, shows: () => state.sceneIndex === index, undo: same }
   return optimistic({ sceneIndex: index }, { sceneIndex: was }, async () => {
     try {
-      await device.setScene(index)
+      await device.setScene(index, { deadline })
+      restamp(token)
     } catch (err) {
       disown(token)
-      throw err
+      if (!err?.answeredGarbled) throw err
+      /*
+       * ANSWERED, BUT GARBLED, AND NOT ASKED AGAIN PAST ITS DEADLINE (see
+       * retry.js). Not a no: the unit took the scene, most likely, and it is
+       * what came back that was garbled. So the tile is not put back on the
+       * word of it, and the codec's words are not shown. Where the unit is is
+       * read now, and the tile follows that, whichever scene it says.
+       */
+      logDebug('write', `scene ${index + 1}: its answer came back garbled past its deadline; reading where the unit is`)
+      await refreshScene()
     }
-    restamp(token)
     /* The tiles are the last preset's, its read having failed: the new
        scene's states laid over them would light the wrong song's blocks. */
     if (otherPresetsChain()) {
@@ -1878,7 +2054,7 @@ export function writeScene(index) {
     // is the small status read, not a dump of the whole preset -- see
     // device.sceneState for what the dump did here.
     await refreshSceneState()
-  })
+  }, air)
 }
 
 /**
@@ -1968,6 +2144,15 @@ const patchBlock = (id, patch) => ({
 
 const asWas = () => ({ blocks: state.blocks, allBlocks: state.allBlocks })
 
+/* One block's press, for what a failed one puts back (see optimistic): that block, and only it. */
+const blockNow = (id) => state.allBlocks.find((b) => sameBlock(b, id)) || state.blocks.find((b) => sameBlock(b, id))
+const blockAir = (id, field, value) => ({
+  control: `${field} ${id}`,
+  before: { [field]: blockNow(id)?.[field] },
+  shows: () => blockNow(id)?.[field] === value,
+  undo: (before) => patchBlock(id, before)
+})
+
 /*
  * Not from a tile drawn for another preset. The screens stop drawing those
  * the moment a preset is picked, but a tap already on its way used to land
@@ -1984,8 +2169,10 @@ const notThisChain = () => !chainActs(chainViewOf(state))
  */
 const notSwitchable = (id) => !chainSwitches(chainViewOf(state)) || !state.allBlocks.some((b) => sameBlock(b, id))
 
-export function writeBypass(id, bypassed) {
+export function writeBypass(id, bypassed, at = Date.now()) {
   if (notSwitchable(id)) return Promise.resolve(false)
+  if (refusedNow(`block ${id} ${bypassed ? 'off' : 'on'}`)) return Promise.resolve(false)
+  const deadline = tapDeadline(at)
   const was = asWas()
   noteEdited()
   /*
@@ -1995,22 +2182,26 @@ export function writeBypass(id, bypassed) {
    * The tile is already showing what was sent, so this costs no read at all.
    */
   const token = owe('grid')
+  const air = blockAir(id, 'bypassed', bypassed)
   return optimistic(patchBlock(id, { bypassed }), was, async () => {
     try {
-      await device.setBypass(id, bypassed)
+      await device.setBypass(id, bypassed, { deadline })
     } catch (err) {
       disown(token)
       throw err
     }
     restamp(token)
-  })
+  }, air)
 }
 
-export function writeChannel(id, channel) {
+export function writeChannel(id, channel, at = Date.now()) {
   if (notThisChain()) return Promise.resolve(false)
+  if (refusedNow(`block ${id} channel ${channel}`)) return Promise.resolve(false)
+  const deadline = tapDeadline(at)
   const was = asWas()
   noteEdited()
-  return optimistic(patchBlock(id, { channel }), was, () => device.setChannel(id, channel))
+  const air = blockAir(id, 'channel', channel)
+  return optimistic(patchBlock(id, { channel }), was, () => device.setChannel(id, channel, { deadline }), air)
 }
 
 /**
@@ -2077,12 +2268,34 @@ let tapsOn = null
  * One write in the air at a time, newest number wins — a burst of taps must
  * not queue five writes and have the last one land after the read-back.
  */
+/*
+ * Each number goes with the deadline of the tap it came from (tempoSender
+ * hands `send` the moment it was pushed): one that waited past it behind a
+ * write the link could not carry is dropped, not sent seconds after the
+ * thumb. `unitBpm` is what the unit is on while the taps run — the figure
+ * before the first write of this run, then each one the unit took — so a
+ * number that was dropped puts the button back on it: "the tile goes back to
+ * what the unit is really on", here the number on Tap.
+ */
+let unitBpm = null
 const sendTempo = tempoSender(
-  (bpm) => device.setTempo(bpm),
-  (err) => set(faultFrom(isUnsupported(err) ? { message: NO_TEMPO } : err))
+  async (bpm, at) => {
+    await device.setTempo(bpm, { deadline: tapDeadline(at) })
+    unitBpm = bpm
+  },
+  (err) => {
+    /* Taken over by a newer tempo (relay-rules newestPresses): that one owns the number now. */
+    if (err?.overtaken) return
+    if (err?.notSent && unitBpm != null) set({ bpm: unitBpm })
+    set(faultFrom(isUnsupported(err) ? { message: NO_TEMPO } : err))
+  },
+  () => Date.now()
 )
 
 export async function tapTempo() {
+  /* The link down: nothing counted, nothing shown, nothing waiting to go —
+     and the read-back of the last burst left to finish. */
+  if (refusedNow('tap tempo')) return false
   pressed()
   clearTimeout(reread)
   /* A unit that has said it has no tempo the app can set: say so, send nothing. */
@@ -2116,6 +2329,8 @@ export async function tapTempo() {
     /* The tempo lives in the preset, so a tap is a change to it — and a save
        that dropped the tempo somebody just set would be a save that lied. */
     noteEdited()
+    /* Nothing on its way: the unit is on what the button shows now. */
+    if (sendTempo.idle) unitBpm = state.bpm
     set({ bpm: guess })
     tempoSetAt = Date.now()
     expect('bpm', guess)
@@ -2133,15 +2348,22 @@ export async function tapTempo() {
   return true
 }
 
-export function writeTempo(bpm) {
+export function writeTempo(bpm, at = Date.now()) {
+  if (refusedNow(`tempo ${bpm}`)) return Promise.resolve(false)
+  const deadline = tapDeadline(at)
   const was = state.bpm
   noteEdited()
   expect('bpm', bpm)
   tempoSetAt = Date.now()
-  return optimistic({ bpm }, { bpm: was }, () =>
-    device.setTempo(bpm).catch((err) => {
-      throw isUnsupported(err) ? Object.assign(new Error(NO_TEMPO), { status: 501 }) : err
-    })
+  const air = { control: 'tempo', before: { bpm: was }, shows: () => state.bpm === bpm, undo: same }
+  return optimistic(
+    { bpm },
+    { bpm: was },
+    () =>
+      device.setTempo(bpm, { deadline }).catch((err) => {
+        throw isUnsupported(err) ? Object.assign(new Error(NO_TEMPO), { status: 501 }) : err
+      }),
+    air
   )
 }
 
@@ -2196,14 +2418,21 @@ let tunerPress = 0
  *
  * The flag goes down before the request, not after: a tuner the unit refuses to
  * start must not leave a screen waiting for readings that are never coming.
+ *
+ * OPENING IS A TAP; CLOSING NEVER IS. A tuner that cannot open in time is
+ * dropped like a scene. A close is never refused and never given a deadline:
+ * the tuner mutes the unit, and a close that was dropped would leave it
+ * muted on its tuner screen. It goes the way it always went.
  */
-export async function writeTuner(on) {
+export async function writeTuner(on, at = Date.now()) {
+  if (on && refusedNow('tuner on')) return false
   pressed()
   const press = ++tunerPress
-  set({ tunerOn: on, tuning: on ? state.tuning : null, unitTuner: null, error: null, errorLink: false })
+  const card = linkCard()
+  set({ tunerOn: on, tuning: on ? state.tuning : null, unitTuner: null, error: null, errorLink: false, dropped: null })
   if (!on) stopDemoTuner()
   try {
-    const res = await device.setTuner(on)
+    const res = await device.setTuner(on, on ? { deadline: tapDeadline(at) } : undefined)
     /* Kept only while it is still the open tuner it is about. */
     if (on && press === tunerPress && state.tunerOn) set({ unitTuner: unitTunerOf(res) })
     /* Only once the unit has agreed, and only in the demo — on a real rig the
@@ -2211,8 +2440,10 @@ export async function writeTuner(on) {
     if (on) startDemoTuner()
     return true
   } catch (err) {
+    /* An opening taken over by a newer one (relay-rules newestPresses): the tuner that one opened stays open. */
+    if (err?.overtaken) return false
     stopDemoTuner()
-    set({ tunerOn: false, tuning: null, ...faultFrom(err) })
+    set({ tunerOn: false, tuning: null, ...faultFrom(err), ...keptOver(err, card) })
     return false
   }
 }
@@ -2248,7 +2479,10 @@ export async function writeTuner(on) {
  * is known, `pending` says so and the screen shows the slot rather than
  * inventing "Untitled" for the one round trip it takes to find out.
  */
-export async function loadPreset(number) {
+export async function loadPreset(number, at = Date.now()) {
+  /* Before anything goes on screen: a preset that cannot be asked for is not shown as loading. */
+  if (refusedNow(`select preset ${number}`)) return false
+  const deadline = tapDeadline(at)
   pressed()
   const was = state.preset
   /*
@@ -2281,9 +2515,13 @@ export async function loadPreset(number) {
    * carrying them across would put the last song's names on this song's tiles —
    * which is worse than the numbers, because numbers are never wrong.
    */
+  const card = linkCard()
+  /* This press among the others of Previous, Next and the list still in the air: see the put-back below. */
+  const press = inTheAir.press('preset', { preset: was, ...wasChain })
   set({
     error: null,
     errorLink: false,
+    dropped: null,
     chain: recall || readFirst ? 'ok' : 'reading',
     sceneNames: [],
     /* The same slot tapped twice keeps whatever it has; another has nothing known unless recalled. */
@@ -2322,17 +2560,42 @@ export async function loadPreset(number) {
   const token = owe('preset')
   /* When the unit was asked: the wait before the chain read counts from here. */
   const sentAt = Date.now()
+  /*
+   * A select answered garbled and not asked again past its deadline (see
+   * retry.js): not a no, so it is not put back. The reads below are what
+   * say where the unit is, as for any select — and until one of them says
+   * it is on this slot, a setlist song's scene and tempo wait (Stage.step
+   * applies them only to a select that landed).
+   */
+  let unconfirmed = false
   try {
     try {
-      await device.selectPreset(number)
+      await device.selectPreset(number, { deadline }).catch((err) => {
+        if (!err?.answeredGarbled) throw err
+        unconfirmed = true
+        logDebug('write', `select preset ${number}: its answer came back garbled past its deadline; reading where the unit is`)
+      })
     } catch (err) {
       disown(token)
+      if (mayHaveLanded(err)) unsure = true
+      /*
+       * Two Nexts in one drop, both dropped: this one's `was` is the slot
+       * the first put up, which the unit never loaded. What goes back then
+       * is what was up before the oldest of them it did not take — that
+       * preset, with its chain (relay-rules pressesInTheAir).
+       */
+      const from = inTheAir.failed(press)
+      const older = from && from !== press ? from.before : null
       /* Only the newest tap decides what is on screen. */
       if (run === presetRun) {
         /* The chain that was up goes back with the preset it belongs to —
            and what it was: up from memory, or only the outline. */
         set(recall || readFirst ? wasChain : { chainKnown: wasChain.chainKnown, chainOutline: wasChain.chainOutline })
         set({ ...faultFrom(err), chain: 'ok', preset: was })
+        if (older) set(older)
+        /* And the card about the link the press cleared, when the select was only dropped (see linkCard). */
+        const kept = keptOver(err, card)
+        if (kept) set(kept)
         /* The preset put back may be one whose read this tap called off —
            the settled read, or the one more read the computer's copy of
            another preset was owed (which puts 'reading' back up). */
@@ -2341,6 +2604,7 @@ export async function loadPreset(number) {
       }
       return false
     }
+    inTheAir.landed(press)
     restamp(token)
     /* A chain read owed to the preset just left: this one's read carries it. */
     clearTimeout(gridTimer)
@@ -2358,7 +2622,7 @@ export async function loadPreset(number) {
      * And a newer tap owns the reads from here: three presses of Next are one
      * read of the preset landed on, not one of each slot passed on the way.
      */
-    if (run !== presetRun) return true
+    if (run !== presetRun) return false
     /*
      * Asked this soon, a unit still loading can answer with the preset it
      * is leaving. That answer is not put over the one just chosen; it is
@@ -2379,10 +2643,12 @@ export async function loadPreset(number) {
     } catch {
       again = true
     }
-    if (run !== presetRun) return true
+    /* The unit says it is on this slot: a garbled answer to the select is settled. */
+    if (!again) unconfirmed = false
+    if (run !== presetRun) return false
     if (again) settleAlso.preset = true
     await refreshScene()
-    if (run !== presetRun) return true
+    if (run !== presetRun) return false
     /* The pedals, from one small read, while the chain read waits for the
        unit. Only for a preset whose chain nothing on screen knows yet, and
        only once the unit has said it is on it. See drawOutline. */
@@ -2392,7 +2658,7 @@ export async function loadPreset(number) {
     if (!recall && !again && number !== was?.number) {
       await Promise.race([drawOutline(number, run, sentAt), new Promise((go) => setTimeout(go, settleFrom(sentAt)))])
     }
-    if (run !== presetRun) return true
+    if (run !== presetRun) return false
     /* What is already known about this slot's scenes, at once — off this
        phone and the computer's store, not the unit. See quickSceneNames. */
     await quickSceneNames()
@@ -2401,7 +2667,8 @@ export async function loadPreset(number) {
     syncChainBusy()
   }
   await readPresetSoon(settleFrom(sentAt), { reloaded: true })
-  return true
+  /* Not for a load a newer press took over: that press's song is the one to set up (Stage.step). */
+  return run === presetRun && !unconfirmed
 }
 
 /*

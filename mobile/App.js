@@ -1273,6 +1273,12 @@ export default function App() {
                  * with its own words (`settling`, above), and not while the
                  * stage is already saying the computer is on another account.
                  */
+                /*
+                 * NOT CONNECTED over dimmed tiles, the moment link.js says the
+                 * link has been down long enough to mean it (see
+                 * LINK_DOWN_HOLD_MS). Never in the demo, which has no link.
+                 */
+                down={link.down === true && !demo}
                 lost={lookedLong && !bluetooth && !elsewhereSaid}
                 lostAway={lostAway}
                 onPutAway={() => setLostAway(true)}

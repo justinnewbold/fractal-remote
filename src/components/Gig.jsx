@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import { liveMeters, setChannel, setMetersWanted } from '../lib/forgefx'
 import {
   useDevice,
@@ -20,7 +20,18 @@ import {
   retryChain
 } from '../lib/deviceState'
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
-import { remoteActive } from '../lib/remote'
+import {
+  NOT_CONNECTED,
+  NOT_SENT,
+  NOT_SENT_SHOWN_MS,
+  notSentError,
+  remoteActive,
+  songNotSent,
+  songWouldLandLate,
+  tapDeadline
+} from '../lib/remote'
+import { linkAwayMs } from '../lib/tapGate'
+import { downBandTop } from '../lib/downBand'
 import { STAGE_HIDDEN } from '../lib/guardrails'
 import { findLooper, LOOPER_LABEL } from '../../shared/looper.mjs'
 import { cornerFit } from '../../shared/tile-corners.mjs'
@@ -40,7 +51,7 @@ import {
   sourceLabel,
   positionIn,
   songFor,
-  applySong,
+  applySongSorted,
   CHANGED as SETLISTS_CHANGED
 } from '../lib/setlists'
 import Setlists from './Setlists'
@@ -95,6 +106,13 @@ export default function Gig({
      the unit, or his own order — and that order. See gigSize. */
   sceneLayout = 'across',
   sceneOrder = null,
+  /*
+   * The link to the rig is down (a phone on the web app only; App says, from
+   * link.js). "When the link drops, Play says so right away. The tiles go dim
+   * under NOT CONNECTED." Dimmed by the stylesheet off one attribute, and one
+   * floating word: nothing on the screen moves.
+   */
+  down = false,
   onError,
   onChanged,
   /* A preset stepped to here has been loaded and read, for what App keeps. */
@@ -360,6 +378,27 @@ export default function Gig({
     }
   }, [meterEid, size])
 
+  /*
+   * A DROPPED TAP, SAID OVER THE TILES. "Not sent — not connected", briefly.
+   * Not through onError: App's notice is in the page above Play, and a row
+   * appearing there pushes every tile down under a thumb already on its way
+   * to the next one. This floats, takes no touch and goes on its own.
+   */
+  const [dropped, setDropped] = useState(null)
+  /* Not one a newer press of the same control took over: that press is the news, and its tile is up (shared/relay-rules newestPresses). */
+  const sayNotSent = (err) => {
+    if (!err?.overtaken) setDropped({ words: err?.message || NOT_SENT, at: Date.now() })
+  }
+  useEffect(() => {
+    if (!dropped) return undefined
+    const t = setTimeout(() => setDropped(null), NOT_SENT_SHOWN_MS)
+    return () => clearTimeout(t)
+  }, [dropped])
+  /* And taken down the moment the link is back: "not connected" over a screen that is live again would be the very disagreement this app keeps out. */
+  useEffect(() => {
+    if (!down) setDropped(null)
+  }, [down])
+
   /**
    * The tuner, on this screen, where tuning actually happens.
    *
@@ -386,7 +425,8 @@ export default function Gig({
         onError('The unit refused the tuner — the Fractal Remote app on the computer may need updating.')
       }
     } catch (err) {
-      onError(err.message)
+      if (err?.notSent) sayNotSent(err)
+      else onError(err.message)
     }
   }
 
@@ -414,7 +454,8 @@ export default function Gig({
       // makes — not the chain, which is the whole preset dumped mid-switch.
       await writeScene(index)
     } catch (err) {
-      onError(err)
+      if (err?.notSent) sayNotSent(err)
+      else onError(err)
     }
   }
 
@@ -440,6 +481,11 @@ export default function Gig({
       /* A tap on a tile drawn for the preset just left: nothing was sent,
          so there is nothing to report and nothing to read back. */
       if (err?.notThisChain) return
+      /* Dropped before it left: the tile is still what the unit is on, and there is nothing to read back. */
+      if (err?.notSent) {
+        sayNotSent(err)
+        return
+      }
       // The error itself: the app reads `unitGone` off it to tell a refused
       // write from a Mac that has lost the unit altogether, and a flattened
       // message cannot carry that.
@@ -518,26 +564,46 @@ export default function Gig({
   useEffect(() => readAhead([nextAt, lastAt]), [nextAt, lastAt])
   useEffect(() => () => readAhead([]), [])
 
+  /*
+   * NOR LATE. A link that was away while the preset loaded held its reads,
+   * and the song's scene would go out seconds after Next, mid-verse. When it
+   * was away for longer than a tap's deadline in all, the scene and tempo are
+   * not sent, and that is said like a dropped tap (shared/relay-rules
+   * songWouldLandLate — the phone's rule too). A link that stayed up changes
+   * nothing, however long the reads took.
+   */
+  const songLate = (song, awayAtNext) => {
+    if (!songWouldLandLate(linkAwayMs(Date.now()) - awayAtNext)) return false
+    sayNotSent(notSentError({ late: true, words: songNotSent({ scene: Number.isInteger(song.scene), tempo: Number.isFinite(song.bpm) }) }))
+    return true
+  }
+
   const step = async (delta) => {
     const next = landing(delta)
     if (next === null) return
     setWorking(true)
+    const awayAtNext = linkAwayMs(Date.now())
     try {
       /* The select, which preset, which scene, and one chain read once the
          unit has settled — the store's, shared with the preset list. A whole
          re-read here was the chain and a dump of the slot while the unit was
          still loading it. */
-      await loadPreset(next)
+      const landed = await loadPreset(next)
       onPresetLoaded?.()
       /* And the song's own scene and tempo, when the setlist gives it some:
-         one tap is the whole change between songs. See songFor. */
+         one tap is the whole change between songs. See songFor. Not on a
+         select the unit has not said it took (null; see loadPreset). */
       const song = songFor(source, lists, next)
-      if (song) {
-        const failed = await applySong(song, { scene: writeScene, tempo: writeTempo })
-        if (failed.length) onError(`The song’s ${failed.join(' and ')} didn’t take. Set it by hand for this one.`)
+      if (song && landed !== null) {
+        if (songLate(song, awayAtNext)) return
+        /* A half never sent is said over the tiles, not in App's notice (applySongSorted). */
+        const { refused, unsent } = await applySongSorted(song, { scene: writeScene, tempo: writeTempo })
+        if (unsent) sayNotSent(unsent)
+        if (refused.length) onError(`The song’s ${refused.join(' and ')} didn’t take. Set it by hand for this one.`)
       }
     } catch (err) {
-      onError(err.message)
+      if (err?.notSent) sayNotSent(err)
+      else onError(err.message)
     } finally {
       setWorking(false)
     }
@@ -577,6 +643,57 @@ export default function Gig({
   const scenesRef = useRef(null)
   const blocksRef = useRef(null)
   const [fitVars, setFitVars] = useState(null)
+  /*
+   * WHERE NOT CONNECTED FLOATS: over the scenes, wherever they are in the
+   * window (lib/downBand says why — at 42% of the window it sat on Tap on an
+   * iPad and under everything on a big screen). Measured while the band is
+   * up, and again on anything that moves the tiles in the window: a resize,
+   * a scroll of the page or of Play's own screen (caught on the way down,
+   * since a scroll does not bubble), and a grid or the band changing size.
+   * Only the band moves; nothing it is drawn over does.
+   */
+  const bandRef = useRef(null)
+  const [bandAt, setBandAt] = useState(null)
+  const bandUp = down || !!dropped
+  useLayoutEffect(() => {
+    if (!bandUp) return undefined
+    let raf = 0
+    const box = (el) => {
+      if (!el) return null
+      const b = el.getBoundingClientRect()
+      return { top: b.top, bottom: b.bottom }
+    }
+    const place = () => {
+      const bar = document.querySelector('.topbar')
+      const next = downBandTop({
+        viewport: window.visualViewport?.height || window.innerHeight,
+        floor: bar ? Math.max(0, bar.getBoundingClientRect().bottom) : 0,
+        scenes: box(scenesRef.current),
+        blocks: box(blocksRef.current),
+        /* The word is what is centred; a dropped tap's note hangs under it. */
+        height: bandRef.current?.firstElementChild?.offsetHeight || 0,
+        whole: bandRef.current?.offsetHeight || 0
+      })
+      setBandAt((was) => (was === next ? was : next))
+    }
+    const schedule = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(place)
+    }
+    place()
+    window.addEventListener('resize', schedule)
+    window.visualViewport?.addEventListener('resize', schedule)
+    window.addEventListener('scroll', schedule, true)
+    const sized = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null
+    for (const el of [scenesRef.current, blocksRef.current, bandRef.current, gigRef.current]) if (el) sized?.observe(el)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', schedule)
+      window.visualViewport?.removeEventListener('resize', schedule)
+      window.removeEventListener('scroll', schedule, true)
+      sized?.disconnect()
+    }
+  }, [bandUp, down, !!dropped, hasScenes])
   /*
    * A PRESET WHOSE SCENES REALLY HAVE NO NAMES — not one whose names are on
    * their way. On the play test the "Those are scenes" note flashed up for a
@@ -695,6 +812,8 @@ export default function Gig({
       /* Three effects to a row still fits a name; four does not. The switch to
          three letters rides the column count rather than a width guess. */
       data-fx-abbr={(fitVars?.fxCols ?? SIZES[fit ? 0 : size].fx) >= 4 ? 'yes' : undefined}
+      /* NOT CONNECTED: the stylesheet dims the tiles and the buttons that send, by opacity alone. */
+      data-link-down={down ? 'yes' : undefined}
       style={{
         ...sizeVars(fit ? 0 : size),
         ...(fitVars
@@ -1013,6 +1132,7 @@ export default function Gig({
         channels={channels}
         onClose={() => setChanEid(null)}
         onError={onError}
+        onDropped={sayNotSent}
         /* A channel is a switch like a scene: the status read says what it
            changed, where a whole re-read would dump the preset. */
         onChanged={() => refreshSceneState()}
@@ -1102,7 +1222,7 @@ export default function Gig({
           Tap, and the tempo on it. The same button Edit has beside its scene —
           see TapTempo, which says why there is one of them and not two.
         */}
-        <TapTempo onError={onError} onChanged={onChanged} />
+        <TapTempo onError={onError} onChanged={onChanged} onDropped={sayNotSent} />
         {/*
           And what is actually in the preset, which until now a phone could not
           see at all.
@@ -1130,6 +1250,39 @@ export default function Gig({
         ) : null}
       </div>
       </div>
+
+      {/*
+        NOT CONNECTED, AND A DROPPED TAP, OVER THE SCREEN AND NEVER IN IT.
+        Fixed in the middle of the window, where the eye already is, taking no
+        touch and no room: the tiles under it do not move a pixel, and a tap
+        through it still reaches its tile — and is told, here, that it went
+        nowhere.
+
+        Put on the page itself, as Sheet does, and not left inside Play. The
+        screen Play is drawn in carries `will-change: transform` for its swipe
+        (styles.css .screen), and that makes it the box anything "fixed"
+        inside it is fixed to: the band sat 42% of the way down the Play
+        SCREEN, not the window, and scrolled away with it. On a small phone
+        held sideways, scrolled down to the pedals, a refused pedal tap was
+        told nothing anyone could see — only the dimming showed. Gig is drawn
+        only while Play is the screen on show, so this goes when Play does.
+      */}
+      {down || dropped
+        ? createPortal(
+            <div
+              className="gig-down-band"
+              role="status"
+              aria-live="polite"
+              ref={bandRef}
+              /* Over the scenes, measured above; the stylesheet's 42% until it has been. */
+              style={bandAt === null ? undefined : { top: bandAt }}
+            >
+              {down ? <span className="gig-down-word">{NOT_CONNECTED}</span> : null}
+              {dropped ? <span className="gig-down-note">{dropped.words}</span> : null}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   )
 }
@@ -1430,20 +1583,25 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
  * write goes down a serial port, and a sheet that sits there through it
  * reads as a tap that missed.
  */
-function ChannelSheet({ block, channels, onClose, onError, onChanged }) {
+function ChannelSheet({ block, channels, onClose, onError, onDropped, onChanged }) {
   const [writing, setWriting] = useState(null)
   const name = block?.name || block?.slug || ''
 
   const pick = async (ch) => {
     if (!block) return
+    /* A press, with its deadline from now; refused at once while the link is down (forgefx request). */
+    const deadline = tapDeadline()
     haptic()
     setWriting(ch)
     try {
-      await setChannel(block.effectId, ch)
+      await setChannel(block.effectId, ch, { deadline })
       onClose()
       onChanged?.(`${name} → channel ${ch}`)
     } catch (err) {
-      onError?.(err.message)
+      if (err?.notSent && onDropped) {
+        onClose()
+        onDropped(err)
+      } else onError?.(err.message)
     } finally {
       setWriting(null)
     }

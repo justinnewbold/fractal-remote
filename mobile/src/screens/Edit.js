@@ -48,7 +48,7 @@ import { isSilencingParam } from '../lib/guardrails'
 import { editPages, pageFor, pageHolding } from '../lib/editPages'
 import { withUnit } from '../lib/param-fixes'
 import { asOnPages, buildParamIndex, findControls, indexFor } from '../lib/paramIndex'
-import { beginChainWrite, chainChanged, endChainWrite, getState, noteEdited, refreshBlocks, useRig, writeBypass, writeChannel } from '../lib/rig'
+import { beginChainWrite, chainChanged, endChainWrite, getState, noteEdited, orStop, refreshBlocks, useRig, writeBypass, writeChannel } from '../lib/rig'
 import { useKeepAwake } from 'expo-keep-awake'
 import { logDebug } from '../lib/debugLog'
 import { oneWriteAtATime } from '../lib/knob-keys'
@@ -2319,7 +2319,8 @@ function ChannelCopy({ eid, block, channels, disabled, onDone, onError }) {
         eid,
         from,
         to,
-        wire: { setChannel: writeChannel, readBlock: blockParams, setType, setParam, setEnum }
+        /* A channel switch that did not go stops the copy (rig orStop), rather than reading the wrong channel, copying it onto itself and saying this scene is on the new one. */
+        wire: { setChannel: orStop(writeChannel), readBlock: blockParams, setType, setParam, setEnum }
       })
       setSaid(
         res.ok
