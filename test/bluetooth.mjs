@@ -4007,7 +4007,7 @@ export function run(test) {
     assert.match(app, /import \{ ALLOW_WORDS, RESTRICTED_WORDS, allowBluetooth, restoreBluetooth, setBluetooth, useBluetoothOn, useBluetoothTrouble \} from '\.\/src\/lib\/bluetooth'/)
     assert.match(waking, /\{bluetooth && onBluetooth \? <Press label="Bluetooth \(beta\)" onPress=\{onBluetooth\} \/> : null\}/, 'the waiting screen does not lead to the adapter’s page')
     assert.match(app, /onBluetooth=\{\(\) => openSettings\('bluetooth'\)\}/)
-    assert.match(waking, /\{email && link\.link !== 'connected' && !bluetooth \? \(/, 'the waiting screen names the computer’s account over Bluetooth')
+    assert.match(waking, /\{email && link\.link !== 'connected' && !bluetooth && !noneSaid \? \(/, 'the waiting screen names the computer’s account over Bluetooth')
   })
 
   test('Settings offers Bluetooth (beta) only on Justin’s account, unlocked, on a phone and build that can do it', () => {

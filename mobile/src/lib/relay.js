@@ -212,6 +212,42 @@ export async function computerElsewhere() {
 }
 
 /**
+ * Whether any computer has signed in with this phone's account: true, false,
+ * or null for can't tell.
+ *
+ * "No computer is signed in with this account yet, here's the download"
+ * instead of "make sure it's awake", for the customers who never set one up
+ * (supabase/migrations/20261014_account_has_computer.sql). It answers only
+ * about the caller's own account. Null is never a no: an error, no signal, a
+ * database without the function, or no caller all keep today's words. The
+ * same reading as shared/no-computer.mjs's hasComputerFrom, written out here
+ * so the relay imports nothing new.
+ */
+export async function accountHasComputer() {
+  try {
+    const { data, error } = await supabase().rpc('account_has_computer')
+    if (error) return null
+    return data === true ? true : data === false ? false : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Who the session kept on this phone belongs to, read off the phone: no
+ * question to the account server, so it answers with no signal as well.
+ */
+export async function sessionAccount() {
+  try {
+    const { data } = await supabase().auth.getSession()
+    const user = data?.session?.user
+    return user?.id ? { id: user.id, email: user.email || '' } : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Sign out here, and nowhere else.
  *
  * Scope 'local' on purpose: signing out on a phone must not sign out the Mac

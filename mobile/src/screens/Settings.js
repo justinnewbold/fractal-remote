@@ -49,6 +49,7 @@ import { sync, useStored } from '../lib/store'
 import { isPairAccount } from '../lib/pairing'
 import { mayDrive } from '../lib/unlock-rule'
 import { useComputerElsewhere } from '../lib/useComputerElsewhere'
+import NoComputerWords from '../components/NoComputer'
 import { quitEditor } from '../lib/editors'
 import { isAdmin } from '../lib/admin'
 import { watchHow, watchPaired, watchSupported } from '../lib/watchBridge'
@@ -105,6 +106,9 @@ export default function Settings({
   onUnlock,
   onOpenConnect,
   link,
+  /* No computer has ever signed in with this account, for certain: the
+     email to name, or null (App's useNoComputer). */
+  noComputer = null,
   macName,
   hostVersion,
   onBack,
@@ -131,6 +135,12 @@ export default function Settings({
   /* A computer on this wifi signed into another account — the likeliest
      reason nothing answers, and until now one nothing on this page could see. */
   const elsewhere = useComputerElsewhere(link === 'no-answer')
+  /*
+   * And "No computer is signed in with this account yet" in place of "make
+   * sure the computer is awake", once the account server has said so for
+   * certain and the account warning has had its answer and it was no.
+   */
+  const noneSaid = link === 'no-answer' && Boolean(noComputer) && elsewhere === false
   /*
    * Whether the account service has answered yet.
    *
@@ -934,6 +944,10 @@ export default function Settings({
                   ? `The computer on this wifi is signed into a different account. This phone is signed in as ${account.email}. On the computer, sign in to the Fractal Remote app with ${account.email}, or sign this phone out below and into the computer’s account.`
                   : 'The computer on this wifi is signed into a different account than this phone. Sign both into the same account.'}
               </Note>
+            ) : noneSaid ? (
+              <Note tone="warn">
+                <NoComputerWords email={noComputer.email} />
+              </Note>
             ) : link === 'no-answer' ? (
               <Note tone="warn">
                 Open the Fractal Remote app on the computer and make sure the computer is awake. This keeps trying on
@@ -944,7 +958,10 @@ export default function Settings({
                 to your computer using and then show the user's email
                 address". A computer signed in as somebody else is the
                 likeliest reason nothing answers. */}
-            {link === 'no-answer' && account?.email && !isPairAccount(account.email) ? (
+            {/* And not under "No computer is signed in with this account yet",
+                which names the account already, and beside which "make sure
+                you're connected" is about a computer that is not there. */}
+            {link === 'no-answer' && account?.email && !isPairAccount(account.email) && !noneSaid ? (
               <Note>{`Make sure you’re connected to your computer using ${account.email}.`}</Note>
             ) : null}
 

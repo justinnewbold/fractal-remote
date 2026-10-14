@@ -72,6 +72,7 @@ import Toast, { useStillNews } from '../components/Toast'
 import { droppedLeft, faultLeft } from '../lib/fault-rule'
 import { NOT_CONNECTED } from '../lib/relay-rules'
 import Note from '../components/Note'
+import NoComputerWords from '../components/NoComputer'
 import { fixById, fixFor } from '../lib/troubleshooting'
 import Press from '../components/Press'
 import TempoDot from '../components/TempoDot'
@@ -121,6 +122,14 @@ export default function Stage({
   onOpenFix,
   onUnlock,
   onAccount,
+  /*
+   * NO COMPUTER HAS EVER SIGNED IN WITH THIS ACCOUNT, for certain: the email
+   * to name, from App (lib/useNoComputer.js), and null for anything less
+   * than a definite no. The advice card below then says that instead of
+   * "make sure the computer is awake", which for somebody who never set one
+   * up was advice about nothing.
+   */
+  noComputer = null,
   /*
    * THE LINK TO THE RIG IS DOWN (`down`, from App: link.js's own word for it,
    * never in the demo). "When the link drops, Play says so right away. The
@@ -1266,8 +1275,14 @@ export default function Stage({
       */}
       <Toast open={lost && !lostAway && !error} onLayout={endOf('advice')}>
         <Note tone="warn" onDismiss={() => onPutAway?.()}>
-          The phone can’t reach your computer. Open the Fractal Remote app on the computer and make sure the computer is
-          awake. This keeps trying on its own.
+          {noComputer ? (
+            <NoComputerWords email={noComputer.email} />
+          ) : (
+            <>
+              The phone can’t reach your computer. Open the Fractal Remote app on the computer and make sure the computer
+              is awake. This keeps trying on its own.
+            </>
+          )}
         </Note>
         <Press label="Look for the computer again" height={44} onPress={() => onLookAgain?.()} />
         {onOpenFix ? <Press label="Troubleshooting" height={44} onPress={() => onOpenFix('connect')} /> : null}

@@ -1008,6 +1008,16 @@ input[type='text']:focus-visible {
   color: var(--silk-dim);
 }
 
+/* The downloads address under "No computer is signed in with this account
+   yet" (components/NoComputer.jsx): the one thing there a new customer has
+   to click, in the page's own bright lettering and underlined, never the
+   browser's default link blue, which was about 2:1 on this background. */
+.no-computer a {
+  color: var(--silk);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
