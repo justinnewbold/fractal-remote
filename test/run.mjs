@@ -6046,6 +6046,10 @@ console.log('\nNOT CONNECTED at once, and no tap landing late')
 const { run: linkNow } = await import('./link-now.mjs')
 linkNow(test)
 
+console.log('\nno computer signed in with this account yet')
+const { run: noComputer } = await import('./no-computer.mjs')
+noComputer(test)
+
 console.log('\nthe server')
 const { run: server } = await import('./server.mjs')
 server(test)

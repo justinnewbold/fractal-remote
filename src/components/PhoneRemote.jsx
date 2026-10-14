@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { changePassword } from '../lib/remote'
+import { changePassword, computerElsewhere } from '../lib/remote'
 import { describeLink, isPairAccount } from '../lib/link'
+import { useNoComputer } from '../lib/noComputer'
+import NoComputer from './NoComputer'
 
 /**
  * Phone remote, in Setup: what this end is, whether the other end is there,
@@ -131,6 +133,28 @@ function MacSide({ link, email, onAction, busy, error }) {
 /* ------------------------------------------------------------------ */
 
 function PhoneSide({ link, email, onAction, busy }) {
+  /*
+   * NO COMPUTER EVER SIGNED IN WITH THIS ACCOUNT, said for certain or not at
+   * all, as on the connect screen. This panel has never said "a computer on
+   * this wifi is on another account", so it asks that first and keeps
+   * today's words when the answer is yes: a computer on another account is
+   * the truer reason, and telling somebody whose computer is set up to go
+   * and install one would be wrong.
+   */
+  const lost = link.link === 'no-answer' && !isPairAccount(email)
+  const [elsewhere, setElsewhere] = useState(null)
+  useEffect(() => {
+    if (!lost) {
+      setElsewhere(null)
+      return undefined
+    }
+    let live = true
+    computerElsewhere().then((yes) => live && setElsewhere(yes))
+    return () => {
+      live = false
+    }
+  }, [lost])
+  const none = useNoComputer(lost && elsewhere === false, link.account)
   if (link.link === 'connected') {
     return (
       <>
@@ -155,10 +179,14 @@ function PhoneSide({ link, email, onAction, busy }) {
   if (link.link === 'no-answer') {
     return (
       <>
-        <p className="hint">
-          Make sure the Fractal Remote app is open on the computer and the computer is awake. This keeps trying on
-          its own.
-        </p>
+        {none ? (
+          <NoComputer email={none.email} className="hint" />
+        ) : (
+          <p className="hint">
+            Make sure the Fractal Remote app is open on the computer and the computer is awake. This keeps trying on
+            its own.
+          </p>
+        )}
         <div className="history-actions">
           <button className="chip" onClick={() => onAction('retry')} disabled={busy}>
             Try now

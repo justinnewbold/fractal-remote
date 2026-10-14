@@ -7,9 +7,11 @@ import { color, font, space, isDark, loadMode, setSystemDark, themeVersion, watc
 import { haveSession, linkState, probeNow, startLink, stopLink, subscribeLink } from './src/lib/link'
 import { currentAccount, signOut } from './src/lib/relay'
 import { useComputerElsewhere } from './src/lib/useComputerElsewhere'
+import { useNoComputer } from './src/lib/useNoComputer'
 import { isPairAccount } from './src/lib/pairing'
 import Note from './src/components/Note'
 import Press from './src/components/Press'
+import NoComputerWords from './src/components/NoComputer'
 import TopBar from './src/components/TopBar'
 import WrongAccount from './src/components/WrongAccount'
 import UpdateReady from './src/components/UpdateReady'
@@ -425,6 +427,21 @@ export default function App() {
   useEffect(() => {
     if (!lookedLong) setLostAway(false)
   }, [lookedLong])
+  /*
+   * AND WHETHER THERE IS A COMPUTER TO FIND AT ALL. "Clearer help for new
+   * customers. 'No computer is signed in with this account yet, here's the
+   * download' instead of 'make sure it's awake.'" (13 October 2026) About
+   * twelve of the first forty paid accounts had never signed in on a
+   * computer, and the advice that comes up at fifteen seconds told them to
+   * wake one.
+   *
+   * Asked at that same moment and no sooner, at most once a minute, and not
+   * again once the answer has been yes (lib/useNoComputer.js). Never over
+   * Bluetooth (beta), where no computer is being looked for; never in the
+   * demo or signed out, which `lookedLong` already leaves out. Anything but
+   * a definite no is null, and the screens keep today's words.
+   */
+  const noComputer = useNoComputer(lookedLong && !bluetooth)
   /*
    * THE LINK AS THE TOP BAR AND SETUP SAY IT. The flip under the waiting
    * screen was in the corner too: amber CONNECTING for a second and a half,
@@ -1148,6 +1165,8 @@ export default function App() {
                 onUnlock={() => setBuying(true)}
                 onSignIn={toSignIn}
                 onMakeAccount={toMakeAccount}
+                /* No computer has ever signed in with this account, said for certain (useNoComputer, above). */
+                noComputer={noComputer}
                 /* As the top bar says it, so the page under it does not flip either (useHeldLink). */
                 link={shownLink.link}
                 macName={link.macName}
@@ -1279,6 +1298,7 @@ export default function App() {
                  * LINK_DOWN_HOLD_MS). Never in the demo, which has no link.
                  */
                 down={link.down === true && !demo}
+                noComputer={noComputer}
                 lost={lookedLong && !bluetooth && !elsewhereSaid}
                 lostAway={lostAway}
                 onPutAway={() => setLostAway(true)}
@@ -1481,6 +1501,18 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
    * answer went with the screen. The note itself still waits for `long`.
    */
   const elsewhere = useComputerElsewhere(link.link !== 'connected' && !bluetooth)
+  /*
+   * AND NO COMPUTER EVER SIGNED IN WITH THIS ACCOUNT, when the account
+   * server has said so for certain. Asked on App's clock, `long`, the same
+   * moment as App's own question and from the same memory
+   * (lib/useNoComputer.js), so it is one question a minute however many
+   * screens ask it. Said in place of "make sure the computer is awake", and
+   * only once the account warning has had its answer and it was no: a
+   * computer on this wifi on another account is the truer reason, and its
+   * warning always wins.
+   */
+  const noComputer = useNoComputer(long && !bluetooth)
+  const noneSaid = Boolean(noComputer) && !bluetooth && elsewhere === false
   return (
     <View
       accessibilityLiveRegion="polite"
@@ -1488,7 +1520,10 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
     >
       <ActivityIndicator color={color.silkDim} />
       <Text style={{ color: color.silkDim, fontSize: font.body, textAlign: 'center' }}>{said}</Text>
-      {email && link.link !== 'connected' && !bluetooth ? (
+      {/* Not over "No computer is signed in with this account yet", which
+          names the account already: beside it, "make sure you're connected"
+          is about a computer that is not there. */}
+      {email && link.link !== 'connected' && !bluetooth && !noneSaid ? (
         <Text style={{ color: color.silkFaint, fontSize: font.small, textAlign: 'center' }}>
           {'Make sure you’re connected to your computer using '}
           <Text style={{ color: color.silkDim, fontWeight: '700' }}>{email}</Text>.
@@ -1525,6 +1560,10 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
               {email
                 ? `The computer on this wifi is signed into a different account. This phone is signed in as ${email}. On the computer, sign in to the Fractal Remote app with ${email}, or sign this phone into the computer’s account.`
                 : 'The computer on this wifi is signed into a different account than this phone. Sign both into the same account.'}
+            </Note>
+          ) : noneSaid ? (
+            <Note tone="warn">
+              <NoComputerWords email={noComputer.email} />
             </Note>
           ) : (
             <Note tone="warn">
