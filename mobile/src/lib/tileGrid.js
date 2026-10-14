@@ -30,3 +30,27 @@ export function tileWidth(width, n, gap, scale = 1) {
   const px = scale > 0 ? scale : 1
   return Math.max(0, Math.floor(exact * px) / px - 1 / px)
 }
+
+/**
+ * WHERE PLAY'S NOT CONNECTED FLOATS, in points from the top of the screen.
+ *
+ * A little over a third of the way down (`BAND_AT`), over the tiles, where
+ * the eye already is — and never under a card at the top. On the smallest
+ * phones, 320 by 568 (the first iPhone SE, or a later one set to Larger
+ * Text), the fifteen-second advice reaches further down than that, and its
+ * Troubleshooting button sat over the word: 7 points of it with the iPhone's
+ * font, nearly all of it with Android's wider one. The card is drawn on top,
+ * as it should be, so its buttons stay pressable; the word goes below it
+ * instead, `gap` under the card's bottom edge. Both float, so nothing under
+ * either one moves.
+ *
+ * `viewport` is the screen's measured height, 0 before the first layout;
+ * `cardBottom` the bottom edge of the card up now, 0 with none. Before the
+ * screen is measured the plain share is a percentage, as it always was.
+ */
+export const BAND_AT = 0.38
+export function bandTop(viewport, cardBottom = 0, gap = 0) {
+  const clear = cardBottom > 0 ? Math.ceil(cardBottom + gap) : 0
+  if (!(viewport > 0)) return clear > 0 ? clear : `${Math.round(BAND_AT * 100)}%`
+  return Math.max(Math.round(viewport * BAND_AT), clear)
+}

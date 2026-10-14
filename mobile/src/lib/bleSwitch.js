@@ -24,8 +24,9 @@ let live = null
  * it refuses everything without sending a byte.
  */
 const NOT_YET = {
+  /* `away` tells a tap refused here from one the wire took and lost: this one never left (device.js tapOverBle). */
   request: () =>
-    Promise.reject(Object.assign(new Error('The Bluetooth adapter is not connected.'), { status: 503, bluetooth: true }))
+    Promise.reject(Object.assign(new Error('The Bluetooth adapter is not connected.'), { status: 503, bluetooth: true, away: true }))
 }
 
 /**

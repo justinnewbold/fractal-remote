@@ -22,6 +22,8 @@ import { fixRead } from './param-fixes'
 import { demoDevice } from './demo'
 import { demoRequest } from './demoWire'
 import { bluetoothWire } from './bleSwitch'
+import { linkIsDown } from './tapGate'
+import { notSentError } from './relay-rules'
 import { logDebug } from './debugLog'
 
 /**
@@ -42,12 +44,21 @@ import { logDebug } from './debugLog'
  * what it cannot do by itself, with nothing sent, so there is nothing to
  * remember. With it off, bluetoothWire() is null and this is exactly the path
  * it always was.
+ *
+ * AND A TAP WHILE THE LINK IS KNOWN TO BE DOWN GOES NOWHERE. "When the link
+ * drops, Play says so right away … and a scene tap that can't get through is
+ * dropped." A tap is a request with a `deadline` (relay-rules TAP_DEADLINE_MS);
+ * with the link down it is refused here, at once, in the words the screen
+ * shows, and never put in a queue to land when the link comes back. Under
+ * the demo, which is never down, and before anything else is asked. Nothing
+ * without a deadline is touched: reads, saves and every edit go as before.
  */
 const remoteRequest = (path, options) => {
   const demo = demoDevice()
   if (demo) return demoRequest(demo, path, options)
+  if (options?.deadline && linkIsDown()) return Promise.reject(notSentError())
   const ble = bluetoothWire()
-  if (ble) return ble.request(path, options)
+  if (ble) return ble.request(path, options).catch((err) => Promise.reject(tapOverBle(options, err)))
   /* What this unit has already refused as unsupported is not asked again. */
   const method = options?.method || 'GET'
   if (refused.known(method, path)) return Promise.reject(rememberedRefusal(method, path))
@@ -56,6 +67,16 @@ const remoteRequest = (path, options) => {
     throw err
   })
 }
+
+/*
+ * A tap the Bluetooth (beta) wire could not send, in the words every other
+ * dropped tap is said in: the adapter away (`away`, from the switch's
+ * stand-in wire), or the wire still busy with something else at the tap's
+ * deadline (`late`, from bleWire). Anything else the wire says is said as it
+ * was, and nothing that is not a tap is touched.
+ */
+const tapOverBle = (options, err) =>
+  options?.deadline && !err?.notSent && (err?.away || err?.late) ? notSentError({ late: err.late === true }) : err
 
 /* What the attached unit has refused as unsupported: see shared/unsupported.mjs. */
 const refused = unsupportedMemo()
@@ -83,8 +104,21 @@ export {
 } from './unit.mjs'
 import { EXCLUDED_BLOCKS, STAGE_HIDDEN } from './unit.mjs'
 
-const post = (path, body) =>
-  remoteRequest(path, { method: 'POST', body: body === undefined ? null : JSON.stringify(body) })
+/*
+ * `tap` is the deadline of something the player pressed (see tapOf), kept
+ * beside the request and never in it: the body is the bytes it always was.
+ */
+const post = (path, body, tap) =>
+  remoteRequest(path, { method: 'POST', body: body === undefined ? null : JSON.stringify(body), ...(tap || {}) })
+
+/**
+ * A tap's options: `{ deadline }` when the caller gave one, nothing otherwise.
+ *
+ * Only what the player pressed has one — rig.js stamps it at the press — and
+ * the same write without it (a song's own scene, a tuner closing, a looper
+ * button let go) goes exactly as it always went.
+ */
+const tapOf = (opts) => (Number.isFinite(opts?.deadline) ? { deadline: opts.deadline } : undefined)
 
 const put = (path, body) => remoteRequest(path, { method: 'PUT', body: JSON.stringify(body) })
 
@@ -357,7 +391,7 @@ async function readParamValue(eid, paramId) {
 /* ---------------------------------------------------------------- */
 
 /** Load a stored slot into the edit buffer. Nothing is committed by doing this. */
-export const selectPreset = (number) => told(`select preset ${number}`, post('/preset/select', { number }))
+export const selectPreset = (number, opts) => told(`select preset ${number}`, post('/preset/select', { number }, tapOf(opts)))
 
 /**
  * What a stored slot is called, without loading it.
@@ -506,18 +540,18 @@ export async function readSaveProgress(slug) {
 export const nameOwner = (slug) => (slug ? (demoDevice() ? `${slug}:demo` : slug) : null)
 
 /** Switch scenes. */
-export const setScene = (index) => told(`scene ${index + 1}`, post('/scene', { index }))
+export const setScene = (index, opts) => told(`scene ${index + 1}`, post('/scene', { index }, tapOf(opts)))
 
 /** Engage or bypass a block. The live scene is what remembers it. */
-export const setBypass = (eid, bypassed) =>
-  told(`block ${eid} ${bypassed ? 'off' : 'on'}`, post(`/preset/blocks/${eid}/bypass`, { bypassed }))
+export const setBypass = (eid, bypassed, opts) =>
+  told(`block ${eid} ${bypassed ? 'off' : 'on'}`, post(`/preset/blocks/${eid}/bypass`, { bypassed }, tapOf(opts)))
 
 /** Switch a block's channel. Channels are A–D and hold independent settings. */
-export const setChannel = (eid, channel) =>
-  told(`block ${eid} channel ${channel}`, post(`/preset/blocks/${eid}/channel`, { channel }))
+export const setChannel = (eid, channel, opts) =>
+  told(`block ${eid} channel ${channel}`, post(`/preset/blocks/${eid}/channel`, { channel }, tapOf(opts)))
 
 /** Set the tempo outright. */
-export const setTempo = (bpm) => told(`tempo ${bpm}`, post('/tempo', { bpm }))
+export const setTempo = (bpm, opts) => told(`tempo ${bpm}`, post('/tempo', { bpm }, tapOf(opts)))
 
 /**
  * One tap of the tempo.
@@ -532,8 +566,8 @@ export const tapTempo = () => told('tap tempo', post('/tempo/tap'))
  * One looper button, down (on) or up. Never sent twice by the relay: a second
  * press is a second press. See lib/looper for which ones latch.
  */
-export const looperControl = (eid, action, on) =>
-  told(`looper ${action} ${on ? 'down' : 'up'}`, post('/preset/looper/control', { eid, action, on }))
+export const looperControl = (eid, action, on, opts) =>
+  told(`looper ${action} ${on ? 'down' : 'up'}`, post('/preset/looper/control', { eid, action, on }, tapOf(opts)))
 
 /** Where the looper's playhead is and what the loop looks like. A read; empty for a block that is not a looper. */
 export const looperTelemetry = (eid) => remoteRequest(`/preset/looper?eid=${eid}`)
@@ -547,7 +581,7 @@ export const looperTelemetry = (eid) => remoteRequest(`/preset/looper?eid=${eid}
  * streams, the tuner among them. So a phone can start the poll and then never
  * see a needle move. The tuner says exactly that after five silent seconds.
  */
-export const setTuner = (on) => post('/tuner', { on })
+export const setTuner = (on, opts) => post('/tuner', { on }, tapOf(opts))
 
 /**
  * The demo's tuner readings, for the phone to drive itself.

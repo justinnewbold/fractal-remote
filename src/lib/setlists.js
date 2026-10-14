@@ -167,6 +167,38 @@ export async function applySong(song, { scene, tempo }) {
   return failed
 }
 
+/**
+ * applySong, keeping WHY each half did not take: `refused` is the halves the
+ * unit or the link said no to, and `unsent` the error of the first half that
+ * never left at all — a tap dropped at its deadline, or refused while NOT
+ * CONNECTED (`notSent`; shared/relay-rules notSentError).
+ *
+ * Two kinds, because they are said in two places. "When the link drops, Play
+ * says so right away … and a scene tap that can't get through is dropped." A
+ * dropped scene is said over the tiles, briefly, like any dropped tap; the
+ * browser's notice for a refusal sits in the page above Play, and a row
+ * appearing there pushes every tile down under a thumb on its way to the
+ * next one. And "The song's scene didn't take. Set it by hand" is not true
+ * of a scene that was never sent.
+ */
+export async function applySongSorted(song, { scene, tempo } = {}) {
+  const why = {}
+  const kept = (half, write) =>
+    write
+      ? async (value) => {
+          try {
+            return await write(value)
+          } catch (err) {
+            why[half] = err
+            throw err
+          }
+        }
+      : null
+  const failed = await applySong(song, { scene: kept('scene', scene), tempo: kept('tempo', tempo) })
+  const unsent = failed.find((half) => why[half]?.notSent)
+  return { refused: failed.filter((half) => !why[half]?.notSent), unsent: unsent ? why[unsent] : null }
+}
+
 /** A tombstone, or null. What a delete leaves behind so it can travel. */
 const cleanGone = (g) =>
   g && typeof g === 'object' && typeof g.id === 'string' && g.id

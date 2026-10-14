@@ -3646,7 +3646,7 @@ export function run(test) {
       'debugLog.js': 'export const logDebug = () => {}\n',
       'lineage.js': 'export const withLineage = (slug, x) => x\n'
     }
-    for (const f of ['bleSwitch.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'unsupported.js', 'device.js']) {
+    for (const f of ['bleSwitch.js', 'tapGate.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'unsupported.js', 'device.js']) {
       files[f] = esm(lib(f))
     }
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
@@ -3654,7 +3654,8 @@ export function run(test) {
     const device = await import(at('device.js'))
     const sw = await import(at('bleSwitch.js'))
     const relay = await import(at('relay.js'))
-    return { device, sw, relay, done: () => rmSync(dir, { recursive: true, force: true }) }
+    const gate = await import(at('tapGate.js'))
+    return { device, sw, relay, gate, done: () => rmSync(dir, { recursive: true, force: true }) }
   }
 
   test('with Bluetooth off the computer is asked exactly as before; on, the wire is, and the computer never', async () => {
@@ -3708,12 +3709,247 @@ export function run(test) {
     }
   })
 
+  /*
+   * A TAP THAT CANNOT GO IS SAID AS ONE, WHICHEVER WAY IT WAS GOING. "A scene
+   * tap that can't get through is dropped" (Justin, 13 October 2026). With
+   * the link down, device.js refuses a tap before the wire or the computer
+   * is asked; over Bluetooth, the adapter away and a wire still busy at the
+   * deadline are both told in the words every dropped tap is said in. A read,
+   * and anything else with no deadline, is answered as it always was.
+   */
+  test('a tap while the link is down goes nowhere, and Bluetooth’s refusals of a tap are said as dropped taps', async () => {
+    const { device, sw, relay, gate, done } = await deviceOnABench()
+    try {
+      const deadline = Date.now() + 1500
+      gate.setLinkDown(true)
+      await assert.rejects(device.setScene(2, { deadline }), (e) => e.notSent === true && e.message === 'Not sent — not connected')
+      await assert.rejects(device.setBypass(58, true, { deadline }), (e) => e.notSent === true)
+      await assert.rejects(device.selectPreset(20, { deadline }), (e) => e.notSent === true)
+      assert.deepEqual(relay.asked, [], 'a tap went to the computer while the link was down')
+      /* Not a tap: a read, and a write with no deadline, go as they went. */
+      await device.currentPreset()
+      await device.setTuner(false)
+      assert.deepEqual(relay.asked, ['GET /preset', 'POST /tuner'])
+      gate.setLinkDown(false)
+
+      /* Bluetooth on, the adapter not there yet: a tap is "not sent", a read is the adapter's own words. */
+      sw.setSwitch({ on: true })
+      await assert.rejects(device.setScene(2, { deadline }), (e) => e.notSent === true && e.message === 'Not sent — not connected')
+      await assert.rejects(device.currentPreset(), (e) => e.status === 503 && e.bluetooth === true && !e.notSent)
+
+      /* Connected, and the wire still busy at the tap's deadline: dropped, in the late words. */
+      const late = Object.assign(new Error('Not sent in time.'), { status: 504, bluetooth: true, late: true })
+      sw.setSwitch({ on: true, wire: { request: async () => Promise.reject(late) } })
+      await assert.rejects(device.setScene(2, { deadline }), (e) => e.notSent === true && e.message === 'Not sent — it would have landed late')
+      /* Any other refusal from the wire is said as it was. */
+      const refused = Object.assign(new Error('The unit refused it: busy.'), { status: 502, bluetooth: true })
+      sw.setSwitch({ on: true, wire: { request: async () => Promise.reject(refused) } })
+      await assert.rejects(device.setScene(2, { deadline }), (e) => e === refused)
+      /* And the deadline reaches the wire with the request, the body as it always was. */
+      const heard = []
+      sw.setSwitch({ on: true, wire: { request: async (path, options) => (heard.push([path, options]), { ok: true }) } })
+      await device.setScene(3, { deadline })
+      assert.deepEqual(heard, [['/scene', { method: 'POST', body: JSON.stringify({ index: 3 }), deadline }]])
+      sw.setSwitch({ on: false })
+    } finally {
+      done()
+    }
+  })
+
+  test('over Bluetooth a tap still waiting behind another exchange at its deadline is never sent', async () => {
+    /* A gen-3 read the unit does not answer holds the line for its whole wait (1.5 s for the loaded preset). */
+    const t = await onTheLine('fm3')
+    t.unit.opt.silent = true
+    const read = t.wire.request('/preset')
+    read.catch(() => {})
+    await advance(t.clock, 10)
+    const busy = t.sent.length
+    assert.equal(busy, 1, 'the read did not go')
+    let readOver = false
+    read.then(
+      () => (readOver = true),
+      () => (readOver = true)
+    )
+    const body = JSON.stringify({ bypassed: true })
+    let dropped = null
+    t.wire.request('/preset/blocks/58/bypass', { method: 'POST', body, deadline: t.clock.now() + 500 }).catch((e) => (dropped = e))
+    /*
+     * Said AT the deadline, with the read still holding the line — not when
+     * the line frees. Behind an AM4 sending a stored preset that is up to
+     * twenty seconds on, and all that time the tile stayed lit for a tap that
+     * was never going to go.
+     */
+    await advance(t.clock, 510)
+    assert.equal(readOver, false, 'the read was over by the deadline, so this does not test a tap still waiting')
+    assert.equal(dropped?.late, true, `a tap behind a read was dropped only when the line freed, not at its deadline: ${dropped?.message}`)
+    await advance(t.clock, 3000)
+    assert.equal(t.sent.length, busy, 'a tap went out after its deadline, behind the read')
+    /* With room before its deadline, it goes once the read is done, as before. */
+    const t2 = await onTheLine('fm3')
+    t2.unit.opt.silent = true
+    t2.wire.request('/preset').catch(() => {})
+    await advance(t2.clock, 10)
+    t2.unit.opt.silent = false
+    const going = t2.wire.request('/preset/blocks/58/bypass', { method: 'POST', body, deadline: t2.clock.now() + 2500 })
+    going.catch(() => {})
+    await advance(t2.clock, 3000)
+    assert.equal(t2.sent.length, 2, 'a tap with time left was dropped')
+    /* And one with no deadline waits as long as it takes, as everything did. */
+    const t3 = await onTheLine('fm3')
+    t3.unit.opt.silent = true
+    t3.wire.request('/preset').catch(() => {})
+    await advance(t3.clock, 10)
+    t3.unit.opt.silent = false
+    t3.wire.request('/preset/blocks/58/bypass', { method: 'POST', body }).catch(() => {})
+    await advance(t3.clock, 3000)
+    assert.equal(t3.sent.length, 2)
+  })
+
+  /*
+   * AND NOT SENT WHEN THE LINE FREES ON THE VERY INSTANT OF ITS DEADLINE. The
+   * read ahead of it gives up at the same moment the tap's own time runs out,
+   * and the read's timer was set first, so it goes first: the line is free
+   * and pump() is choosing what goes next before the tap's own timer has had
+   * its turn. pump() asks the clock itself; a tap whose deadline has come is
+   * not started, however it came to be first in line.
+   */
+  test('over Bluetooth a tap whose turn comes on the instant of its deadline is not sent', async () => {
+    const { WAIT } = await import(WIRE)
+    const t = await onTheLine('fm3')
+    t.unit.opt.silent = true
+    t.wire.request('/preset').catch(() => {})
+    await advance(t.clock, 10)
+    assert.equal(t.sent.length, 1, 'the read did not go')
+    /* The read gives up WAIT.preset after it went; the tap's deadline is that same instant. */
+    const freesAt = t.sent[0].at + WAIT.preset
+    let dropped = null
+    let went = false
+    t.wire
+      .request('/preset/blocks/58/bypass', { method: 'POST', body: JSON.stringify({ bypassed: true }), deadline: freesAt })
+      .then(() => (went = true), (e) => (dropped = e))
+    await advance(t.clock, freesAt - t.clock.now() - 1)
+    assert.equal(dropped, null, 'the tap was dropped before its deadline, with a millisecond still to go')
+    await advance(t.clock, 3000)
+    assert.equal(went, false, 'a tap whose deadline had come was reported as sent')
+    assert.equal(dropped?.late, true, `not dropped as late: ${dropped?.message}`)
+    assert.equal(t.sent.length, 1, `a tap went on the wire at its deadline, the instant the line freed (at ${t.sent[1]?.at - freesAt} ms)`)
+  })
+
+  /*
+   * THE AM4'S TUNER OPENING IS A TAP TOO. Its 127 mutes the unit, and the
+   * open waits its turn behind a close (am4TunerInTurn) and reads two of the
+   * AM4's settings before the 127 goes, all after request() has let go of
+   * the deadline. Held to it by name: a 127 that went out late would mute
+   * the rig a while after the press, perhaps after the tuner was shut again.
+   */
+  test('over Bluetooth the AM4’s tuner opening is dropped at its deadline, behind a read or behind a close, and the phone’s tuner with it', async () => {
+    const tunerOn = (t, deadline) => t.wire.request('/tuner', { method: 'POST', body: JSON.stringify({ on: true }), deadline })
+    /* Behind a read the AM4 does not answer: nothing of the open goes out, and it is said as a dropped tap. */
+    {
+      const t = await onTheLine('am4', { unitTunerCc: 20 })
+      t.unit.opt.silent = true
+      t.wire.request('/preset').catch(() => {})
+      await advance(t.clock, 10)
+      const busy = t.sent.length
+      assert.equal(busy, 1, 'the read did not go')
+      let dropped = null
+      let opened = null
+      tunerOn(t, t.clock.now() + 500).then((v) => (opened = v), (e) => (dropped = e))
+      await advance(t.clock, 3000)
+      t.unit.opt.silent = false
+      await advance(t.clock, 3000)
+      assert.equal(opened, null, `a tuner open behind a read went ahead past its deadline: ${JSON.stringify(opened)}`)
+      assert.equal(dropped?.late, true, `not dropped as late: ${dropped?.message}`)
+      assert.equal(t.sent.length, busy, 'something of the tuner opening went out after its deadline')
+      assert.ok(!t.frames().some((f) => f[0] === 0xb0), 'the AM4’s tuner CC went out after the deadline')
+      assert.equal(t.unit.state.tunerOpen, false, 'the AM4 was put on its tuner after the deadline')
+      assert.ok(!readingsOf(t).length, 'the phone’s tuner opened on an open that was dropped')
+      /* Dropped, not broken: the next open, with time to spare, goes as it always did. */
+      assert.deepEqual(await t.post('/tuner', { on: true }), { ok: true, unitTuner: 'opened' })
+      assert.equal(t.unit.state.tunerOpen, true)
+      await t.post('/tuner', { on: false })
+      assert.equal(t.unit.state.tunerOpen, false)
+    }
+    /* Behind a close that takes longer than the deadline: its turn comes late, and nothing is sent for it. */
+    {
+      const t = await onTheLine('am4', { unitTunerCc: 20 })
+      assert.deepEqual(await t.post('/tuner', { on: true }), { ok: true, unitTuner: 'opened' })
+      /* The close reads the setting again; the AM4 slow to say it. */
+      t.unit.opt.silent = true
+      const closing = t.wire.request('/tuner', { method: 'POST', body: JSON.stringify({ on: false }) })
+      closing.catch(() => {})
+      await advance(t.clock, 0)
+      let dropped = null
+      tunerOn(t, t.clock.now() + 500).catch((e) => (dropped = e))
+      await advance(t.clock, 600)
+      t.unit.opt.silent = false
+      const mark = t.sent.length
+      await advance(t.clock, 5000)
+      assert.equal(dropped?.late, true, `an open whose turn came past its deadline was not dropped: ${dropped?.message}`)
+      assert.ok(!t.frames().slice(mark).some((f) => hex(f).endsWith('7F')), 'a 127 went out for an open dropped behind the close')
+      assert.equal(t.unit.state.tunerOpen, false, 'the AM4 was left on its tuner by an open dropped behind its close')
+    }
+    /* With time to spare, an open with a deadline goes exactly as one without. */
+    {
+      const t = await onTheLine('am4', { unitTunerCc: 20 })
+      const going = tunerOn(t, t.clock.now() + 1500)
+      assert.deepEqual(await drive(t.clock, going), { ok: true, unitTuner: 'opened' })
+      assert.deepEqual(besidesReadings(t), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F'])
+    }
+  })
+
+  /*
+   * A WRITE BEING LEARNED IS LET THROUGH LATE, ONCE, ON PURPOSE (see tapUntil
+   * in bleWire). Its second way comes after a read-back, and on a unit that
+   * does not answer the published way that read waits out the hold for a
+   * late answer: past the deadline every time. Held to it, the way would
+   * never be learned and every tap of its kind would be dropped. Only its
+   * first exchange is held; once learned, the tap is one bound write.
+   */
+  test('over Bluetooth a write being learned finishes once, late, and is learned; its first exchange and every tap after it keep the deadline', async () => {
+    const body = JSON.stringify({ index: 2 })
+    const get = (t) => hex(t.sx.buildGetScene(0x11))
+    const t = await onTheLine('fm3', { sceneEcho: false, publishedScene: false })
+    const t0 = t.clock.now()
+    const going = t.wire.request('/scene', { method: 'POST', body, deadline: t0 + 1500 })
+    assert.deepEqual(await drive(t.clock, going), { ok: true })
+    assert.deepEqual(t.frames().map(hex), [get(t), hex(t.sx.buildSetScene(0x11, 2)), get(t), hex(t.sx.buildSetSceneEdit(0x11, 2)), get(t)])
+    /* This is the case the comment names: FM3-Edit's way went after the deadline, and was learned. */
+    assert.ok(t.sent[3].at > t0 + 1500, 'the bench no longer shows the trial running past the deadline; the comment in bleWire is out of date')
+    assert.equal(t.unit.state.scene, 2)
+    assert.equal(t.remembered.at(-1).learned.scene, 'edit')
+    /* Learned: the next tap is one write, and held to its deadline behind a read like any other. */
+    t.unit.opt.silent = true
+    t.wire.request('/preset').catch(() => {})
+    await advance(t.clock, 10)
+    const busy = t.sent.length
+    let dropped = null
+    t.wire.request('/scene', { method: 'POST', body: JSON.stringify({ index: 4 }), deadline: t.clock.now() + 500 }).catch((e) => (dropped = e))
+    await advance(t.clock, 3000)
+    assert.equal(dropped?.late, true, `a learned scene behind a read was not dropped: ${dropped?.message}`)
+    assert.equal(t.sent.length, busy)
+    /* And a trial's first exchange, its read of where the unit is, keeps the deadline too. */
+    const u = await onTheLine('fm3', { sceneEcho: false, publishedScene: false })
+    u.unit.opt.silent = true
+    u.wire.request('/preset').catch(() => {})
+    await advance(u.clock, 10)
+    const held = u.sent.length
+    let first = null
+    u.wire.request('/scene', { method: 'POST', body, deadline: u.clock.now() + 500 }).catch((e) => (first = e))
+    await advance(u.clock, 3000)
+    u.unit.opt.silent = false
+    await advance(u.clock, 3000)
+    assert.equal(first?.late, true, `a trial behind a read was not dropped at its deadline: ${first?.message}`)
+    assert.equal(u.sent.length, held, 'a trial went out behind a read past its deadline')
+  })
+
   test('device.js asks the switch one line under the demo, and before the memo of refusals', () => {
     const device = flat('mobile/src/lib/device.js')
     assert.match(device, /import \{ bluetoothWire \} from '\.\/bleSwitch'/)
     assert.match(
       device,
-      /const demo = demoDevice\(\) if \(demo\) return demoRequest\(demo, path, options\) const ble = bluetoothWire\(\) if \(ble\) return ble\.request\(path, options\) \/\* What this unit has already refused/,
+      /* With one line between them since 13 October 2026: a tap while the link is down goes nowhere, Bluetooth or not. */
+      /const demo = demoDevice\(\) if \(demo\) return demoRequest\(demo, path, options\) if \(options\?\.deadline && linkIsDown\(\)\) return Promise\.reject\(notSentError\(\)\) const ble = bluetoothWire\(\) if \(ble\) return ble\.request\(path, options\)\.catch\(\(err\) => Promise\.reject\(tapOverBle\(options, err\)\)\) \/\* What this unit has already refused/,
       'the Bluetooth line is not directly under the demo line, or not before the memo'
     )
     /* No Bluetooth path strings in device.js: they all live in bleWire.js, where the tests above drive them. */

@@ -26,6 +26,8 @@ import { cancelledRestore, pendingRestoreDoc, restoreProgressDoc, restoreResultD
 import { toNormalized } from './scale.js'
 import { withLineage } from './lineage.js'
 import { remoteActive, remoteRequest, subscribeHostSeen, subscribeRemoteEvents, subscribeRemoteState } from './remote.js'
+import { linkIsDown, tapsRelayed } from './tapGate.js'
+import { notSentError } from '../../shared/relay-rules.mjs'
 import {
   rosterCache,
   helpTextCache,
@@ -213,6 +215,13 @@ class ForgeError extends Error {
     if (cause?.remoteBlocked) this.remoteBlocked = true
     if (cause?.hostConflict) this.hostConflict = true
     if (cause?.linkDown) this.linkDown = true
+    /* A tap that was dropped, so Play says so in its own floating note (see Gig.jsx) and reads nothing back. */
+    if (cause?.notSent) {
+      this.notSent = true
+      this.late = cause.late === true
+    }
+    /* And one dropped for a newer press of the same control, whose tile Play leaves up (shared/relay-rules newestPresses). */
+    if (cause?.overtaken) this.overtaken = true
   }
 }
 
@@ -255,16 +264,39 @@ const routine = (path, options, err) =>
   /* An empty slot, asked for its copy before a Put back: nothing to keep. See snapshotSlot. */
   (/^\/backup\/preset\/\d+$/.test(path) && err?.status === 422)
 
+/*
+ * A tap's options: `{ deadline }` when the caller pressed something
+ * (deviceState.js stamps it at the press; see TAP_DEADLINE_MS in
+ * shared/relay-rules.mjs), nothing otherwise — so every other call, and the
+ * same call made without one, sends exactly what it always sent.
+ */
+const tapOf = (opts) => (Number.isFinite(opts?.deadline) ? { deadline: opts.deadline } : {})
+const NOT_SENT_WORDS = notSentError().message
+
 async function request(path, options = {}) {
   const method = options.method || 'GET'
+  /*
+   * A TAP WHILE THE LINK IS KNOWN TO BE DOWN GOES NOWHERE: refused here, at
+   * once, in the words Play shows, and never queued to land when the link is
+   * back. Only a phone on the web app is ever down (tapGate.js); the
+   * computer's own window and its wifi page send exactly as they did.
+   */
+  if (!mock && options.deadline && linkIsDown()) return Promise.reject(new ForgeError(NOT_SENT_WORDS, { cause: notSentError() }))
   if (!mock && refused.known(method, path)) return Promise.reject(rememberedRefusal(method, path))
   /*
    * A dump that arrived garbled is asked for again before anyone sees it.
    * lib/retry.js says why, and which requests may be asked twice. Here
    * because this is the one place every read passes through, at the Mac or
-   * over the relay alike.
+   * over the relay alike. Not past a tap's deadline when it goes over the
+   * relay (see retry.js); the computer's own window and its wifi page ask
+   * again as they always did. A tap asked again has reached the unit once
+   * already, so it is never "not sent".
    */
-  return withRetry(() => requestOnce(path, options), { method: options.method || 'GET', path }).catch(
+  return withRetry((again) => requestOnce(path, again > 0 && options.deadline ? { ...options, went: true } : options), {
+    method: options.method || 'GET',
+    path,
+    deadline: remoteActive() || tapsRelayed() ? options.deadline : undefined
+  }).catch(
     (err) => {
       // Every request the app makes comes through here, so this is the one
       // place a failed one is written to the debug log — after the retry has
@@ -283,7 +315,16 @@ async function requestOnce(path, options = {}) {
   // With a remote session up, everything travels the relay instead. This is the
   // one place that has to know, which is why it was worth keeping a single
   // chokepoint for every call the app makes.
-  if (remoteActive()) {
+  /*
+   * AND A TAP FROM A PHONE ON THE WEB APP GOES TO THE RELAY EVEN WHILE ITS
+   * CHANNEL IS DOWN. There is no device server on a phone to fall back to:
+   * it failed at once, as "Can't reach the Fractal Remote app on your
+   * computer", over a channel that was a second from coming back. In the
+   * relay it waits for the channel inside its deadline, goes if it is back,
+   * and is "Not sent" if not. Only the 'remote' role (tapsRelayed); the
+   * computer's own window and its wifi page reach the device server as ever.
+   */
+  if (remoteActive() || (options.deadline && tapsRelayed())) {
     try {
       return await remoteRequest(path, options)
     } catch (err) {
@@ -305,7 +346,10 @@ async function requestOnce(path, options = {}) {
  * the switch to turn it on couldn't be read, and wasn't even drawn. The one
  * control that fixes the problem hid itself exactly when it was the answer.
  */
-async function directRequest(path, options = {}) {
+async function directRequest(path, given = {}) {
+  /* A tap's deadline and its "asked again" are for the relay; this fetch is sent as it always was. */
+  // eslint-disable-next-line no-unused-vars
+  const { deadline, went, ...options } = given
   const url = `${getHost()}${path}`
   let res
   try {
@@ -1000,12 +1044,13 @@ export const clearWireLog = () => {
 
 
 /** Engage or bypass a block. */
-export const setBypass = (eid, bypassed) =>
+export const setBypass = (eid, bypassed, opts) =>
   mock
     ? tick().then(() => mock.setBypass(eid, bypassed))
     : request(`/preset/blocks/${eid}/bypass`, {
     method: 'POST',
-    body: JSON.stringify({ bypassed })
+    body: JSON.stringify({ bypassed }),
+    ...tapOf(opts)
   })
 
 /** Swap the model loaded in a block. */
@@ -1459,8 +1504,8 @@ export async function applyScenes(scenes, onProgress, presetNumber = null) {
 }
 
 /** Load a preset by slot number on the hardware. */
-export const selectPreset = (number) =>
-  mock ? tick().then(() => mock.selectPreset(number)) : request('/preset/select', { method: 'POST', body: JSON.stringify({ number }) })
+export const selectPreset = (number, opts) =>
+  mock ? tick().then(() => mock.selectPreset(number)) : request('/preset/select', { method: 'POST', body: JSON.stringify({ number }), ...tapOf(opts) })
 
 /** Name of a stored preset, without loading it. */
 export const presetName = async (number) =>
@@ -1602,19 +1647,20 @@ export async function verifyChanges(changes, onProgress) {
 export const getScene = async () => (mock ? (await tick(), mock.getScene()) : request('/scene'))
 
 /** Switch scenes. The FM3 has eight. */
-export const setScene = (index) =>
-  mock ? tick().then(() => mock.setScene(index)) : request('/scene', { method: 'POST', body: JSON.stringify({ index }) })
+export const setScene = (index, opts) =>
+  mock ? tick().then(() => mock.setScene(index)) : request('/scene', { method: 'POST', body: JSON.stringify({ index }), ...tapOf(opts) })
 
 export const setSceneName = (index, name) =>
   mock ? tick().then(() => mock.setSceneName(index, name)) : request('/scene/name', { method: 'POST', body: JSON.stringify({ index, name }) })
 
 /** Switch a block's channel. Channels are A-D and hold independent settings. */
-export const setChannel = (eid, channel) =>
+export const setChannel = (eid, channel, opts) =>
   mock
     ? tick().then(() => mock.setChannel(eid, channel))
     : request(`/preset/blocks/${eid}/channel`, {
     method: 'POST',
-    body: JSON.stringify({ channel })
+    body: JSON.stringify({ channel }),
+    ...tapOf(opts)
   })
 
 /** Cab block's current IR assignment. */
@@ -1706,10 +1752,10 @@ export const sceneState = () =>
 /** Preset tempo in BPM. Delays and modulation sync to it. */
 export const getTempo = () => (mock ? tick().then(() => mock.tempo()) : request('/tempo'))
 
-export const setTempo = (bpm) =>
+export const setTempo = (bpm, opts) =>
   mock
     ? tick().then(() => mock.setTempo(bpm))
-    : request('/tempo', { method: 'POST', body: JSON.stringify({ bpm }) })
+    : request('/tempo', { method: 'POST', body: JSON.stringify({ bpm }), ...tapOf(opts) })
 
 export const tapTempo = () =>
   mock ? tick().then(() => mock.tapTempo()) : request('/tempo/tap', { method: 'POST' })
@@ -1718,12 +1764,13 @@ export const tapTempo = () =>
  * One looper button, down (on) or up. The relay never sends it twice; see
  * shared/looper.mjs for which buttons latch and which are a quick press.
  */
-export const looperControl = (eid, action, on) =>
+export const looperControl = (eid, action, on, opts) =>
   mock
     ? tick().then(() => ({ ok: true }))
     : request('/preset/looper/control', {
         method: 'POST',
-        body: JSON.stringify({ eid, action, on })
+        body: JSON.stringify({ eid, action, on }),
+        ...tapOf(opts)
       })
 
 /** Where the looper's playhead is and what the loop looks like. Empty for a block that is not a looper. */
@@ -1731,10 +1778,10 @@ export const looperTelemetry = (eid) =>
   mock ? tick().then(() => ({ wave: [], position: null, level: null })) : request(`/preset/looper?eid=${eid}`)
 
 /** Turn the hardware tuner on or off. */
-export const setTuner = (on) =>
+export const setTuner = (on, opts) =>
   mock
     ? tick().then(() => ({ ok: true }))
-    : request('/tuner', { method: 'POST', body: JSON.stringify({ on }) })
+    : request('/tuner', { method: 'POST', body: JSON.stringify({ on }), ...tapOf(opts) })
 
 
 /**

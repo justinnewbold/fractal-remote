@@ -21,10 +21,29 @@
  * — the tap tempo route is excluded from retries because a beat sent twice is
  * a beat that never happened.
  */
-export const faultFrom = (err) => ({
-  error: err?.message || 'Something went wrong.',
-  errorLink: Boolean(err?.aboutLink)
-})
+export const faultFrom = (err) =>
+  err?.notSent
+    ? {
+        /*
+         * A TAP THAT WAS DROPPED (`notSent`: "Not sent — not connected") is
+         * not a fault at all, and never touches the fault's fields. It has a
+         * field of its own, said briefly — "a dropped tap is said on screen
+         * briefly" — under NOT CONNECTED, which already says the lasting part.
+         * Kept apart because the card it would otherwise replace can be the
+         * only thing on screen saying the tap before it may have reached the
+         * unit ("The connection dropped before your computer answered."), with
+         * its What to try: one more tap during the outage swapped that for a
+         * three-second note, and after the note nothing was left. `droppedLate`
+         * is the one dropped with the link still up ("it would have landed
+         * late"), which the link coming back does not make untrue.
+         */
+        dropped: err.message || 'Not sent — not connected',
+        droppedLate: err.late === true
+      }
+    : {
+        error: err?.message || 'Something went wrong.',
+        errorLink: Boolean(err?.aboutLink)
+      }
 
 /**
  * Is this fault withdrawn by the link reaching `link`?
@@ -57,3 +76,24 @@ export const FAULT_SHOWN_MS = 8000
  */
 export const faultLeft = ({ error = null, errorLink = false, faultAt = 0 } = {}, now = 0) =>
   !error ? 0 : errorLink ? Infinity : Math.max(0, faultAt + FAULT_SHOWN_MS - now)
+
+/*
+ * AND A DROPPED TAP FOR LESS. Long enough to read "Not sent — not connected"
+ * at a glance from the floor, short enough to be gone before the next bar:
+ * the dimmed tiles and NOT CONNECTED stay up for as long as it is true, so
+ * this only has to say what happened to the one tap.
+ */
+export const NOT_SENT_SHOWN_MS = 3000
+
+/** How much longer a dropped tap is said at `now`, in ms: 0 once it has had its time, or there is none. */
+export const droppedLeft = ({ dropped = null, droppedAt = 0 } = {}, now = 0) =>
+  !dropped ? 0 : Math.max(0, droppedAt + NOT_SENT_SHOWN_MS - now)
+
+/**
+ * Is a dropped tap's note withdrawn by the link reaching `link`? "Not
+ * connected" is, on `connected`: left up, it would go on saying so under a
+ * bar that says connected. "It would have landed late" is not — it was
+ * dropped with the link up, and is still what happened.
+ */
+export const withdrawsDropped = ({ dropped = null, droppedLate = false } = {}, link) =>
+  Boolean(dropped) && !droppedLate && link === 'connected'

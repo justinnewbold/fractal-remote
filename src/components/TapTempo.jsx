@@ -3,6 +3,8 @@ import { currentDeviceSlug, refusedAlready, setTempo } from '../lib/forgefx'
 import { NO_TEMPO, isUnsupported } from '../../shared/unsupported.mjs'
 import { useDevice, refreshTempo, getSnapshot, chainNumberOf } from '../lib/deviceState'
 import { keepTaps, tappedBpm, tempoRange, tempoSender, TAP_REREAD_MS } from '../../shared/tempo.mjs'
+import { notSentError, tapDeadline } from '../lib/remote'
+import { linkIsDown } from '../lib/tapGate'
 import { tick as haptic } from '../lib/feedback'
 import { useLongPress } from '../lib/longPress'
 import { useDismiss } from '../lib/dismiss'
@@ -31,7 +33,7 @@ const ofBpm = (s) => s.bpm
  * has always said so — so it is reported once per burst of taps rather than
  * once per tap: one line in the history for "I tapped it in", not eight.
  */
-export default function TapTempo({ onError, onChanged, where = 'bar' }) {
+export default function TapTempo({ onError, onChanged, onDropped, where = 'bar' }) {
   const bpm = useDevice(ofBpm)
   /* The preset being loaded, or loaded: see the burst below. */
   const going = useDevice(chainNumberOf)
@@ -109,19 +111,33 @@ export default function TapTempo({ onError, onChanged, where = 'bar' }) {
    * way. So the gaps are measured here and what crosses the network is the
    * NUMBER — the same call a typed tempo makes.
    */
+  /*
+   * A dropped tap — "Not sent — not connected" — is said where the screen
+   * that drew this button says it (Play floats it over the tiles, so it
+   * moves nothing); anywhere else it is an ordinary error.
+   */
+  const dropped = (err) => (onDropped ? onDropped(err) : onError(err.message))
   const sender = useRef(null)
   if (!sender.current) {
     sender.current = tempoSender(
-      async (bpm) => {
+      /* Each number with the deadline of the tap it came from: one that waited past it is dropped, not sent late. */
+      async (bpm, at) => {
         try {
-          await setTempo(bpm)
+          await setTempo(bpm, { deadline: tapDeadline(at) })
           landed.current = bpm
         } finally {
           /* After the sender has noted this one as done, not inside it. */
           if (closing.current) setTimeout(() => reportBurst(), 0)
         }
       },
-      (err) => onError(isUnsupported(err) ? NO_TEMPO : err.message)
+      (err) => {
+        /* Taken over by a newer tempo (shared/relay-rules newestPresses): that one owns the face now. */
+        if (err?.overtaken) return
+        if (!err?.notSent) return onError(isUnsupported(err) ? NO_TEMPO : err.message)
+        /* Dropped: the face goes back to what the unit is on — the last of this burst it took, or its own figure. */
+        setTapped(landed.current ?? null)
+        dropped(err)
+      }
     )
   }
 
@@ -153,6 +169,11 @@ export default function TapTempo({ onError, onChanged, where = 'bar' }) {
   }, [going])
 
   const tap = async () => {
+    /* The link down: nothing counted, nothing shown, nothing waiting to go. */
+    if (linkIsDown()) {
+      dropped(notSentError())
+      return
+    }
     /* A unit that has said it has no tempo the app can set: say so, send nothing. */
     if (refusedAlready('POST', '/tempo')) {
       onError(NO_TEMPO)
@@ -239,13 +260,15 @@ export default function TapTempo({ onError, onChanged, where = 'bar' }) {
   useDismiss(tapCell, () => setTyping(false), { open: typing })
   const typeTempo = async (n) => {
     try {
-      await setTempo(n)
+      /* Enter is a press like a tap: the same deadline, and refused while the link is down. */
+      await setTempo(n, { deadline: tapDeadline() })
       await refreshTempo()
       /* A typed tempo takes the face over from any tapped one. */
       setTapped(null)
       onChanged?.(`Tempo → ${n} BPM`)
     } catch (err) {
-      onError(isUnsupported(err) ? NO_TEMPO : err.message)
+      if (err?.notSent) dropped(err)
+      else onError(isUnsupported(err) ? NO_TEMPO : err.message)
     }
   }
 
