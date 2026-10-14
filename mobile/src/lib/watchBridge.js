@@ -8,6 +8,7 @@ import { idOf } from './device'
 import { probeNow, untilConnected } from './link'
 import { shortBlock } from './shortName'
 import { getState, writeBypass, writeScene, writeTuner } from './rig'
+import { tapDeadline } from './relay-rules'
 import { createWatchSender, watchCommand, watchState } from './watch-link'
 import { metronome } from './metronome'
 
@@ -105,6 +106,14 @@ export function useWatchBridge(picture, step) {
       }
       const cmd = watchCommand(msg, last.current)
       if (!cmd) return
+      /*
+       * WHEN THE PHONE HEARD IT, which is as near the wrist as this end can
+       * know: a request carries no time, and the watch's own retry can make
+       * it a second late already. Every write below is bound by the deadline
+       * counted from here (relay-rules TAP_DEADLINE_MS), exactly as a tap on
+       * the phone's own screen is from the press.
+       */
+      const receivedAt = Date.now()
       const asleep = AppState.currentState !== 'active'
       logDebug('watch', cmd.do, `${JSON.stringify(cmd)}${asleep ? ' (woke the phone)' : ''}`)
       if (cmd.do === 'hello') {
@@ -113,35 +122,63 @@ export function useWatchBridge(picture, step) {
         return
       }
       const run = () => {
-        if (cmd.do === 'scene') return writeScene(cmd.index)
-        if (cmd.do === 'pedal') return writeBypass(cmd.id, !cmd.on)
-        if (cmd.do === 'preset') return stepRef.current?.(cmd.step)
-        if (cmd.do === 'tuner' && getState().tunerOn !== cmd.on) return writeTuner(cmd.on)
+        if (cmd.do === 'scene') return writeScene(cmd.index, receivedAt)
+        if (cmd.do === 'pedal') return writeBypass(cmd.id, !cmd.on, receivedAt)
+        if (cmd.do === 'preset') return stepRef.current?.(cmd.step, receivedAt)
+        if (cmd.do === 'tuner' && getState().tunerOn !== cmd.on) return writeTuner(cmd.on, receivedAt)
         return undefined
       }
       if (!asleep) {
         run()
         return
       }
+      const pause = (ms) => new Promise((r) => setTimeout(r, ms))
+      /*
+       * THE TUNER CLOSING, from a woken phone, as it always went: the tuner
+       * mutes the unit, and leaving its page is the watch saying "stop" — a
+       * close that was dropped would leave the unit muted. So it waits for
+       * the connection and is tried once more, and is never dropped.
+       */
+      if (cmd.do === 'tuner' && !cmd.on) {
+        probeNow()
+        pause(400)
+          .then(() => untilConnected())
+          .then(() => Promise.resolve(run()))
+          .catch(async (err) => {
+            logDebug('watch', 'first try failed while waking', err?.message || String(err))
+            await pause(1500)
+            await untilConnected()
+            return run()
+          })
+          .catch((err) => logDebug('watch', 'gave up', err?.message || String(err)))
+        return
+      }
       /*
        * WOKEN BY THE TAP, the phone locked in a pocket. The connection to the
-       * computer slept with the app, so it is rejoined first, then the tap is
-       * sent, and tried once more if the first go found it still waking.
+       * computer slept with the app, so it is rejoined first — but only for
+       * as long as the tap's deadline lasts. "A scene tap that can't get
+       * through is dropped": one that would land seconds after the wrist is
+       * worse than one that never lands, so it is not sent, and not tried
+       * again, which could only land later still. The watch shows what the
+       * unit is really on with its next picture; it never moved by itself.
+       *
+       * Most phones locked long enough to sleep the connection will not be
+       * back inside the deadline, so most of these taps are now dropped.
+       * That is the rule as it was agreed, said here so it is not mistaken
+       * for a fault. The relay itself waits for a connection still coming
+       * back, inside the same deadline, so no pause is put in front of it.
        */
-      const pause = (ms) => new Promise((r) => setTimeout(r, ms))
-      /* The link can still say "connected" for a moment after waking, before
-         it notices the connection slept; the short pause lets it find out. */
+      const deadline = tapDeadline(receivedAt)
       probeNow()
-      pause(400)
-        .then(() => untilConnected())
-        .then(() => Promise.resolve(run()))
-        .catch(async (err) => {
-          logDebug('watch', 'first try failed while waking', err?.message || String(err))
-          await pause(1500)
-          await untilConnected()
+      untilConnected(Math.max(0, deadline - Date.now()))
+        .then((up) => {
+          if (!up || Date.now() >= deadline) {
+            logDebug('watch', `${cmd.do} not sent: the phone could not reach the rig in time after waking`)
+            return undefined
+          }
           return run()
         })
-        .catch((err) => logDebug('watch', 'gave up', err?.message || String(err)))
+        .catch((err) => logDebug('watch', 'not sent', err?.message || String(err)))
     })
     return () => {
       sub?.remove?.()

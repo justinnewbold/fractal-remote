@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Alert, Text, View } from 'react-native'
 import { color, font, space } from '../lib/theme'
-import { refreshSceneState, useRig, writeBypass, writeChannel, writeScene } from '../lib/rig'
+import { orStop, refreshSceneState, useRig, writeBypass, writeChannel, writeScene } from '../lib/rig'
 import { sceneState } from '../lib/device'
 import { copyScene } from '../lib/copy-tools'
 import Note from './Note'
@@ -27,7 +27,12 @@ export default function SceneCopy({ count = 8 }) {
     setWorking(true)
     setSaid(null)
     try {
-      const res = await copyScene({ from: source, to, wire: { setScene: writeScene, sceneState, setBypass: writeBypass, setChannel: writeChannel } })
+      /* Each write stops the copy if it did not go (rig orStop): a dropped first switch would read the wrong scene and copy that. */
+      const res = await copyScene({
+        from: source,
+        to,
+        wire: { setScene: orStop(writeScene), sceneState, setBypass: orStop(writeBypass), setChannel: orStop(writeChannel) }
+      })
       await refreshSceneState()
       setSaid(
         res.ok

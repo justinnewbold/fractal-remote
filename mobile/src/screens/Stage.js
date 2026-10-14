@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Image, PixelRatio, Pressable, RefreshControl, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { useKeepAwake } from 'expo-keep-awake'
 
-import { color, font, space, TAP } from '../lib/theme'
-import { tileWidth as tileWidthIn } from '../lib/tileGrid'
+import { color, font, radius, space, TAP } from '../lib/theme'
+import { bandTop, tileWidth as tileWidthIn } from '../lib/tileGrid'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
 import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot } from '../lib/device'
 import {
@@ -35,7 +35,9 @@ import {
   loadPreset,
   readAhead,
   refreshAll,
+  awayNow,
   rereadSceneNames,
+  songLate,
   tapTempo,
   useRig,
   writeBypass,
@@ -67,7 +69,8 @@ import { findLooper } from '../lib/looper'
 import UnlockOffer from '../components/UnlockOffer'
 import OnlyOnThisPhone from '../components/OnlyOnThisPhone'
 import Toast, { useStillNews } from '../components/Toast'
-import { faultLeft } from '../lib/fault-rule'
+import { droppedLeft, faultLeft } from '../lib/fault-rule'
+import { NOT_CONNECTED } from '../lib/relay-rules'
 import Note from '../components/Note'
 import { fixById, fixFor } from '../lib/troubleshooting'
 import Press from '../components/Press'
@@ -94,6 +97,8 @@ const ofTuning = (s) => s.tuning
 const ofBpm = (s) => s.bpm
 const ofError = (s) => s.error
 const ofErrorLink = (s) => s.errorLink
+const ofDropped = (s) => s.dropped
+const ofDroppedAt = (s) => s.droppedAt
 const ofFaultAt = (s) => s.faultAt
 const ofSlug = (s) => s.deviceSlug
 
@@ -116,6 +121,13 @@ export default function Stage({
   onOpenFix,
   onUnlock,
   onAccount,
+  /*
+   * THE LINK TO THE RIG IS DOWN (`down`, from App: link.js's own word for it,
+   * never in the demo). "When the link drops, Play says so right away. The
+   * tiles go dim under NOT CONNECTED." Opacity and one floating word, below:
+   * nothing moves, and a tap still says why it went nowhere.
+   */
+  down = false,
   lost = false,
   lostAway = false,
   onPutAway,
@@ -167,12 +179,16 @@ export default function Stage({
   const fault = useRig(ofError)
   const faultLink = useRig(ofErrorLink)
   const faultAt = useRig(ofFaultAt)
+  const dropped = useRig(ofDropped)
+  const droppedAt = useRig(ofDroppedAt)
   /* The fault while it is still news (lib/fault-rule faultLeft). Hidden, never
      cleared: App tells a rig that failed its first read by the store's copy.
      And kept up while nothing has been read at all: on an empty screen it is
      the only thing saying why. */
   const left = caps ? faultLeft({ error: fault, errorLink: faultLink, faultAt }, Date.now()) : Infinity
   const news = useStillNews(fault, faultAt, left)
+  /* And a dropped tap's note while it is still news: briefly (lib/fault-rule droppedLeft). */
+  const droppedNews = useStillNews(dropped, droppedAt, droppedLeft({ dropped, droppedAt }, Date.now()))
   /*
    * THE COMPUTER GONE FOR FIFTEEN SECONDS (`lost`, from App: a rig on this
    * screen, the link down that long, not over Bluetooth). A complaint about
@@ -180,7 +196,24 @@ export default function Stage({
    * which says the same thing and what to do about it; anything else wrong is
    * still said first, and the advice waits behind it.
    */
+  /*
+   * A DROPPED TAP IS SAID UNDER NOT CONNECTED, NEVER IN THE CARD
+   * (`dropped`: "Not sent — not connected", lib/fault-rule). In the one
+   * card at the top it did four things wrong: its words matched the
+   * troubleshooting guide's "not connected", so every refused tap also put
+   * up a big "What to try" button over the preset button for a thumb on its
+   * way there; it pushed the fifteen-second advice and its Look for the
+   * computer again off the screen for as long as somebody kept tapping; with
+   * a screen reader on, which holds a note until its ✕, one refused tap kept
+   * the advice away until the link was back; and it took the place of the
+   * card about the link — "The connection dropped before your computer
+   * answered.", the one thing saying the tap before may have landed — which
+   * never came back after it. So it has its own field in the store, floats
+   * in the middle with NOT CONNECTED (below), takes no touch, and the card
+   * is left for faults and the advice. The browser says it in the same place.
+   */
   const error = news && !(lost && faultLink) ? fault : null
+  const droppedNote = droppedNews ? dropped : null
   /* Put away with its ✕ until the computer has answered again (`lostAway`).
      Held by App, not here: a look at Setlists or Settings takes this screen
      away, and the card came straight back with it. */
@@ -509,7 +542,18 @@ export default function Stage({
   useEffect(() => readAhead([nextAt, lastAt]), [nextAt, lastAt])
   useEffect(() => () => readAhead([]), [])
 
-  const step = async (by) => {
+  /*
+   * Which press of Previous or Next is the newest, from these buttons or the
+   * watch's (both come through `step`). Two quick Nexts had the skipped
+   * song's scene and tempo sent onto the unit loading the next song. Only
+   * the newest press's song is set up: rig.loadPreset answers false for a
+   * load any newer one took over — from here, the preset list or Setlists'
+   * Play — and this count is the second guard, for two from this screen.
+   */
+  const stepsRef = useRef(0)
+
+  /* `at` is when it was pressed: now from the buttons, or when the phone heard a watch's Previous or Next. */
+  const step = async (by, at = Date.now()) => {
     const next = landing(by)
     if (next === null) {
       // The end of the list. Wrapping round to slot 0 mid-set is worse than a
@@ -518,18 +562,58 @@ export default function Stage({
       return
     }
     thud()
+    /* How long the link has been away so far, for the song's setup to ask after the load (rig.songLate). */
+    const awayAtNext = awayNow()
+    const mine = ++stepsRef.current
     /* Not awaited: the rig puts the new slot on screen immediately and confirms
        it behind that. Waiting here would make Next feel like it missed. */
-    const loading = loadPreset(next)
+    const loading = loadPreset(next, at)
     /* And the song's own scene and tempo, once its preset is in, when the
-       setlist gives it some: one tap is the whole change between songs. */
+       setlist gives it some: one tap is the whole change between songs.
+       ONLY ONCE THE SELECT HAS LANDED. A select that was dropped or refused
+       leaves the unit on the last song, and that song's preset would be
+       handed this song's scene. AND NOT LATE: a link that was away while the
+       preset loaded held its reads, and the scene would go out seconds after
+       Next, mid-verse (relay-rules songWouldLandLate) — so it is not sent,
+       and said (rig.songLate). A link that stayed up changes nothing. AND
+       ONLY FOR THE NEWEST PRESS (stepsRef, above): a song skipped past is
+       not set up on the next one. */
     const song = order ? songFor(source, lists, next) : null
     if (song) {
       Promise.resolve(loading)
-        .then(() => applySong(song, { scene: writeScene, tempo: writeTempo }))
+        .then((landed) =>
+          landed === true && mine === stepsRef.current && !songLate(song, awayAtNext) ? applySong(song, { scene: writeScene, tempo: writeTempo }) : null
+        )
         .catch(() => {})
     }
   }
+
+  /*
+   * DIMMED, NEVER MOVED. Opacity only — on the two grids and on the four
+   * buttons at the foot that send something — so nothing on the screen is a
+   * pixel out of place while the link is down, and nothing jumps when it is
+   * back. Press's own `disabled` is not used: it recolours the words and
+   * blocks the press, and a press while NOT CONNECTED is still answered, with
+   * "Not sent — not connected". The tuner is left alone while it is open:
+   * Stop tuner always goes. Setlists and Edit need no rig and stay as they are.
+   */
+  const dim = down ? DOWN_DIM : null
+  const dimmed = dim ? { opacity: dim } : undefined
+
+  /*
+   * AND NOT CONNECTED NEVER UNDER A CARD. Each card at the top says where its
+   * bottom edge is, and the word floats below whichever one is up (see
+   * lib/tileGrid bandTop): on the smallest phones the fifteen-second advice
+   * reached past a third of the way down and covered it.
+   */
+  const [cardEnd, setCardEnd] = useState({ fault: 0, advice: 0 })
+  const endOf = (which) => (e) => {
+    const { y, height } = e.nativeEvent.layout
+    const end = Math.ceil(y + height)
+    setCardEnd((was) => (was[which] === end ? was : { ...was, [which]: end }))
+  }
+  const adviceUp = lost && !lostAway && !error
+  const bandAt = bandTop(viewport, error ? cardEnd.fault : adviceUp ? cardEnd.advice : 0, space.sm)
 
   /*
    * The button between the two: what they walk, and where you are in it.
@@ -564,7 +648,19 @@ export default function Stage({
       chain: chainNow.elsewhere ? [] : blocks,
       tunerOn,
       tuning,
-      linked: Number.isInteger(preset?.number),
+      /*
+       * Not while NOT CONNECTED: the watch shows its own "isn't connected"
+       * page instead of buttons that would only be refused — EXCEPT WHILE
+       * THE TUNER IS ON. Taking the watch's pages away takes its Tuner page
+       * with them, and that page turns the tuner off as it goes (Pages.swift,
+       * onDisappear: "Leaving the tuner page turns it back off"). That close
+       * is never dropped, so it waited for the link and shut the unit's tuner
+       * the moment the link came back, mid-tuning, or failed and left the
+       * unit muted on it with both screens saying off. The watch can only
+       * change by a build, so the phone keeps its pages up instead; a tap on
+       * them is still refused at once by the rig while the link is down.
+       */
+      linked: Number.isInteger(preset?.number) && (!down || tunerOn),
       canPrevious: lastAt !== null,
       canNext: nextAt !== null
     },
@@ -705,7 +801,7 @@ export default function Stage({
                 setGrid(e.nativeEvent.layout.width)
                 setSceneGrid(e.nativeEvent.layout.height)
               }}
-              style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}
+              style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, opacity: dim ?? 1 }}
             >
               {/* Drawn in the layout's order, but each tile is still its own
                   scene: "5" says 5, wears 5's colour and selects scene 5. */}
@@ -820,7 +916,7 @@ export default function Stage({
             }}
             /* Dimmed a little while they are only the outline: this preset's
                pedals, the chain read still finishing behind them. */
-            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, opacity: chainNow.late ? 0.55 : chainNow.outline ? 0.72 : 1 }}
+            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, opacity: dim ?? (chainNow.late ? 0.55 : chainNow.outline ? 0.72 : 1) }}
           >
             {chainNow.elsewhere ? (
               <View style={{ width: '100%', height: held ? held.height : undefined, overflow: 'hidden' }}>
@@ -927,6 +1023,7 @@ export default function Stage({
               height={foot}
               disabled={landing(-1) === null}
               onPress={() => step(-1)}
+              style={dimmed}
             />
             <Press
               grow
@@ -946,6 +1043,7 @@ export default function Stage({
               height={foot}
               disabled={landing(1) === null}
               onPress={() => step(1)}
+              style={dimmed}
             />
           </View>
 
@@ -968,6 +1066,7 @@ export default function Stage({
                 on={tunerOn}
                 height={foot}
                 onPress={() => writeTuner(!tunerOn)}
+                style={tunerOn ? undefined : dimmed}
               />
             ) : null}
             {/*
@@ -1009,6 +1108,7 @@ export default function Stage({
               onLongPress={() => setTyping(true)}
               /* "A green light dot ... that flashes at the current tempo." */
               badge={<TempoDot bpm={bpm} />}
+              style={dimmed}
             />
           </View>
 
@@ -1071,9 +1171,52 @@ export default function Stage({
           {looperHere ? <Looper block={looperHere} /> : null}
         </Sheet>
 
-        {/* Closing the tuner stops it at the unit, which is what the button does. */}
-        <Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} />
+        {/* Closing the tuner stops it at the unit, which is what the button does. It says NOT CONNECTED itself: nothing here is drawn over it. */}
+        <Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} down={down} />
       </ScrollView>
+
+      {/*
+        NOT CONNECTED, OVER THE TILES AND NEVER AMONG THEM. "When the link
+        drops, Play says so right away. The tiles go dim under NOT
+        CONNECTED." A word floating in the middle of the screen, where the
+        eye already is, rather than a row that would push the scenes down
+        under a thumb on its way to one. Not a Toast: the top of the screen
+        is the fault's and the advice's, one card at a time, and this is not
+        a card — it says what is true for as long as it is true, and goes the
+        moment the link is back. It takes no touch, so a tap through it
+        reaches the tile beneath and is told, in a note under the word, that
+        it went nowhere.
+      */}
+      {down || droppedNote ? (
+        <View
+          pointerEvents="none"
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+          /* Above the tiles, whose own elevation is 3, as the Toast is: on Android the higher one is drawn on top. */
+          style={{ position: 'absolute', left: space.lg, right: space.lg, top: bandAt, alignItems: 'center', gap: space.sm, zIndex: 1, elevation: 6 }}
+        >
+          {down ? (
+            <View
+              style={{
+                paddingHorizontal: space.lg,
+                paddingVertical: space.sm,
+                borderRadius: radius.pill,
+                borderWidth: 1,
+                borderColor: color.fault,
+                backgroundColor: color.chassis
+              }}
+            >
+              <Text style={{ color: color.fault, fontSize: font.small, fontWeight: '700', letterSpacing: 2 }}>{NOT_CONNECTED}</Text>
+            </View>
+          ) : null}
+          {/* And a tap that went nowhere, for its few seconds: under the word while the link is down, on its own when it was dropped as late with the link up. */}
+          {droppedNote ? (
+            <View style={{ paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.md, backgroundColor: color.panel }}>
+              <Text style={{ color: color.silk, fontSize: font.small, textAlign: 'center' }}>{droppedNote}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
 
       {/*
         THE FAULT, OVER THE SCREEN AND NEVER IN IT. "Can we just have it be
@@ -1082,7 +1225,7 @@ export default function Stage({
         and the foot slid down under a thumb already on its way to Tap. It
         also counted toward the fit, so every tile shrank to make room for it.
       */}
-      <Toast open={!!error}>
+      <Toast open={!!error} onLayout={endOf('fault')}>
         {error ? (
           <Note tone="fault" onDismiss={clearError}>
             {error}
@@ -1121,7 +1264,7 @@ export default function Stage({
         float here, until the computer answers or the ✕ puts them away.
         Never with the fault up: one card at a time, in the same place.
       */}
-      <Toast open={lost && !lostAway && !error}>
+      <Toast open={lost && !lostAway && !error} onLayout={endOf('advice')}>
         <Note tone="warn" onDismiss={() => onPutAway?.()}>
           The phone can’t reach your computer. Open the Fractal Remote app on the computer and make sure the computer is
           awake. This keeps trying on its own.
@@ -1194,6 +1337,13 @@ function ChannelSheet({ block, channels, onClose, onPick }) {
     </Sheet>
   )
 }
+
+/*
+ * How far the tiles dim while NOT CONNECTED: further than an outline's 0.72
+ * and a late chain's 0.55, so it reads as "not now" and not as "still
+ * loading", and still enough to read every name through it.
+ */
+export const DOWN_DIM = 0.35
 
 /** Beside CHAIN: what holding a block does. */
 export const HOLD_FOR_CHANNELS = 'Hold to switch channels'

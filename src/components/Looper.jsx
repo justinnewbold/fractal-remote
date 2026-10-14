@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { looperControl, looperTelemetry } from '../lib/forgefx'
 import { tick as haptic } from '../lib/feedback'
+import { tapDeadline } from '../lib/remote'
 import {
   IDLE_LATCH,
   LOOPER_LABEL,
@@ -52,6 +53,8 @@ export default function Looper({ block, presetNumber }) {
 
   async function tap(action) {
     if (busy || eid == null) return
+    /* The press is a tap with a deadline; the release after a press that went is not — dropped, it would leave the button held. As on the phone. */
+    const deadline = tapDeadline()
     haptic()
     setBusy(action)
     setError(null)
@@ -59,7 +62,7 @@ export default function Looper({ block, presetNumber }) {
     try {
       for (let i = 0; i < sends.length; i++) {
         if (i) await wait(PRESS_MS)
-        const r = await looperControl(eid, action, sends[i])
+        const r = await looperControl(eid, action, sends[i], i === 0 ? { deadline } : undefined)
         if (r?.ok === false) throw new Error('The unit did not take it.')
       }
       latches.set(key, next)

@@ -163,6 +163,269 @@ export function timeoutFor(method, path) {
  */
 export const RELAY_GRACE = 8000
 
+/*
+ * A TAP HAS A DEADLINE, AND A TAP THAT CANNOT MAKE IT IS DROPPED.
+ *
+ * "When the link drops, Play says so right away. The tiles go dim under NOT
+ * CONNECTED, and a scene tap that can't get through is dropped. Today a tap
+ * can be held and land up to 8 seconds late, mid-verse." (Justin, 13 October
+ * 2026.) RELAY_GRACE above is what held it: a request made while the channel
+ * was down waited for it to come back and was SENT when it did, up to eight
+ * seconds after the press — and the roll call's wait and a second attempt
+ * could each add more. A read that lands late costs nothing. A scene that
+ * lands late lands in the wrong bar of the song.
+ *
+ * So everything the player PRESSED — a scene, a preset, a pedal, a channel,
+ * a tempo, the tuner opening, a looper button — carries a deadline from the
+ * moment of the press, and nothing puts it on the wire after that. Reads keep
+ * their grace and their retries; they are not bound by any of this.
+ *
+ * WHY A SECOND AND A HALF. The relay's own reconnect is the one retry worth
+ * waiting for: realtime-js opens a new socket 1000 ms after one closes, and
+ * the rejoin on it is a tenth to half a second more, so a sub-second blip is
+ * back inside 1.5 s and the tap still goes, as it does today. Its next try is
+ * two seconds after that, three in all — a real outage, and by then the song
+ * has moved on: "a scene that lands later than that mid-verse is worse than
+ * one that never lands". A connected rig never comes near it; a tap there is
+ * on the wire in milliseconds.
+ *
+ * WHAT IT CANNOT REACH. The deadline is kept on the phone and in the browser
+ * and is never sent: computer app 1.87.4 has no clock in common with the
+ * phone and reads nothing but { id, method, path, body } from a request, so
+ * the request is the same bytes it always was. Once a tap is on the wire it
+ * can still wait at the computer behind a read on the one serial port, and a
+ * socket that died quietly can still deliver it late by TCP retransmission.
+ * Neither end can call those back; only a new computer app could age a
+ * request on arrival, and that is not this change.
+ */
+export const TAP_DEADLINE_MS = 1500
+
+/** When a tap pressed at `at` must be on the wire by. */
+export const tapDeadline = (at = Date.now()) => (Number.isFinite(at) ? at : Date.now()) + TAP_DEADLINE_MS
+
+/** Whether a deadline is set and has passed at `now`. */
+export const pastDeadline = (deadline, now = Date.now()) => Number.isFinite(deadline) && now >= deadline
+
+/*
+ * HOW LONG THE LINK HAS TO BE DOWN BEFORE PLAY SAYS NOT CONNECTED.
+ *
+ * The link stops being 'connected' for more than one reason, and two of them
+ * are not outages. One slow answer — a read the unit was too busy to answer
+ * in time — and one keepalive the computer missed both turn the link to "no
+ * answer" for a moment, and each is put right by asking again: /healthz never
+ * touches the serial port, so a computer that is there answers it in well
+ * under a second even with the unit busy. Each end now asks again the moment
+ * it doubts (link.js), so that moment is short. And a channel that drops and
+ * heals by itself is back in about 1.0 s of reconnect, plus the rejoin, plus
+ * that one /healthz: 1.2 to 1.8 s.
+ *
+ * Two seconds covers all three, so a working rig is never dimmed mid-song,
+ * and is short enough that a computer genuinely gone is said almost at once
+ * rather than after the eight to sixteen seconds the bar took on its own.
+ *
+ * It is longer than the tap deadline on purpose: the band never says NOT
+ * CONNECTED while a tap could still have made it. Between the two — 1.5 to
+ * 2 s into an outage — a tap is dropped while the band is not up yet; the bar
+ * at the top already says CONNECTING or DISCONNECTED by then, and the dropped
+ * tap says why in its own words.
+ */
+export const LINK_DOWN_HOLD_MS = 2000
+
+/**
+ * Whether the link has been down long enough to say so: off the demo, not
+ * 'connected', and away since `lostAt` (when it LEFT 'connected' — it can go
+ * joining, no answer, joining in one stretch, and that is one outage) for
+ * LINK_DOWN_HOLD_MS. The demo is never down: it has no far end to lose.
+ */
+export const linkDownAt = ({ link, lostAt = 0, demo = false } = {}, now = Date.now()) =>
+  !demo && link !== 'connected' && lostAt > 0 && now - lostAt >= LINK_DOWN_HOLD_MS
+
+/* The words. The band is drawn as it is written; the note is a sentence. */
+export const NOT_CONNECTED = 'NOT CONNECTED'
+export const NOT_SENT = 'Not sent — not connected'
+/*
+ * And the one for a tap dropped while the link still reads as up: the roll
+ * call after a join still counting, the tempo before it still unanswered, a
+ * Bluetooth unit still busy sending a stored preset. "Not connected" would be
+ * a claim the bar disagrees with; what is true is that it would have landed
+ * late, which is the reason it was dropped.
+ */
+export const NOT_SENT_LATE = 'Not sent — it would have landed late'
+
+/*
+ * And how long a dropped tap is said for: "a dropped tap is said on screen
+ * briefly". Long enough to read at a glance from the floor, gone before the
+ * next bar; NOT CONNECTED over the tiles says the lasting part for as long as
+ * it is true. The phone's fault-rule.js keeps the same number (it imports
+ * nothing), and a test holds the two together.
+ */
+export const NOT_SENT_SHOWN_MS = 3000
+
+/**
+ * A tap that never left: dropped at its deadline, or refused because the
+ * link is down. Deliberately NOT `linkDown`, which is what makes the relay
+ * send a request again — a dropped tap must stay dropped — and not
+ * `aboutLink`, which keeps a note up until the link is back; this one is
+ * said briefly (see fault-rule) and goes.
+ *
+ * `overtaken` is one dropped because a newer press of the same control was
+ * made before it could go (see newestPresses, below). Anything that does not
+ * read the flag takes it for a tap that would have landed late, which it is.
+ */
+export const notSentError = ({ late = false, words = null, overtaken = false } = {}) =>
+  Object.assign(
+    new Error(words || (late ? NOT_SENT_LATE : NOT_SENT)),
+    { notSent: true, late: late === true },
+    overtaken === true ? { overtaken: true } : {}
+  )
+
+/*
+ * THE NEWEST PRESS OF A CONTROL WINS, WHATEVER ORDER THE WIRE TAKES THEM IN.
+ *
+ * Two presses of one control inside one drop of the channel — scene 2, then
+ * scene 3 — each waited for it on a timer of its own, and when it came back
+ * they went out in whichever order those timers fell: the older after the
+ * newer, both inside their deadlines, and the unit left on scene 2 under a
+ * tile that said 3. A pedal pressed on and off, the same.
+ *
+ * So each end's relay keeps, for every control, when its newest tap was
+ * pressed, and a tap that would go after a newer press of the same control is
+ * dropped instead, at the last look before the wire. Nothing lands for it,
+ * and the screens neither put its tile back nor say it: the newer press is
+ * the one the player meant, and it is the one on screen.
+ *
+ * A control is a route: the scene, the preset, the tempo, the tuner, one
+ * block's bypass, one block's channel, one looper button (which travels in
+ * the body). Presses of different controls are never held against each
+ * other — a scene and then a pedal are both wanted. Only taps are ever
+ * dropped. A write with no deadline — closing the tuner, a looper button's
+ * release, a save — counts as a press of its route made as it is handed to
+ * the relay, and is never dropped itself: so the tuner opened in a drop and
+ * closed a moment later is not opened after the close went, leaving the unit
+ * muted on its tuner screen under a Play that shows it closed. A release
+ * goes once its press has been answered, so it never takes the press over.
+ * The tap tempo sends one number at a time already, so it never has two
+ * waiting. And a working link never meets any of this: a tap there is on the
+ * wire before the next can be pressed. (Two held by the roll call after a
+ * join are let go together, and there too the older is the one dropped. And
+ * a tap the clock drops while a newer press of its control is still waiting
+ * is that press's business the same way: `overtaken`.)
+ *
+ * A tap's press is its deadline less TAP_DEADLINE_MS, so a watch tap the
+ * phone sends a moment after the wrist is as old as the wrist, not as the
+ * moment it reached the relay. Two presses at the same instant both go.
+ */
+export function pressRoute(path, body) {
+  const clean = String(path || '').split('?')[0]
+  if (clean !== '/preset/looper/control') return clean
+  try {
+    const { eid, action } = JSON.parse(body)
+    return `${clean} ${eid} ${action}`
+  } catch {
+    return clean
+  }
+}
+
+export function newestPresses() {
+  const newest = new Map()
+  const pressedAt = (deadline) => deadline - TAP_DEADLINE_MS
+  return {
+    /** A tap handed to the relay: written down as the newest press of its control, unless one newer is already. */
+    made(path, body, deadline) {
+      if (!Number.isFinite(deadline)) return
+      const route = pressRoute(path, body)
+      if (!(newest.get(route) >= pressedAt(deadline))) newest.set(route, pressedAt(deadline))
+    },
+    /** Whether a newer press of this tap's control has been made since it was. */
+    overtaken(path, body, deadline) {
+      return Number.isFinite(deadline) && newest.get(pressRoute(path, body)) > pressedAt(deadline)
+    }
+  }
+}
+
+/*
+ * WHAT A TAP THAT NEVER LANDED PUTS BACK: WHAT THE UNIT IS ON.
+ *
+ * A tap goes on screen at once and keeps what was there before it, to put
+ * back if it does not land. Alone, that is what the unit is on. But two
+ * presses of one control in one drop — scene 2, then scene 3 — and the
+ * second kept the first's tile, which never reached the unit either: both
+ * dropped, the screen went back to scene 2 over a unit on scene 1. Two Nexts,
+ * the same: the preset passed on the way, never loaded, under the scene taps
+ * after it.
+ *
+ * So each end keeps, for every control, its presses still in the air, and
+ * one that fails puts back what was on screen before the oldest of them the
+ * unit has not taken: the last one it did take, or what was there before
+ * them all. Only the newest of a control puts anything back — an older one
+ * failing while a newer is in the air leaves the newer's tile alone — and
+ * presses of different controls never put back each other's: a pedal
+ * dropped puts back that pedal, not the whole row as it was when it was
+ * pressed, over a second pedal that landed after it.
+ */
+export function pressesInTheAir() {
+  const newest = new Map()
+  return {
+    /** A press of `control` going on screen; `before` is what was there. */
+    press(control, before) {
+      const press = { control, before, prev: newest.get(control) || null, landed: false }
+      newest.set(control, press)
+      return press
+    },
+    /** It reached the unit: a press after it that fails puts back what this one left on screen. */
+    landed(press) {
+      press.landed = true
+      press.prev = null
+      if (newest.get(press.control) === press) newest.delete(press.control)
+    },
+    /**
+     * It did not, or may not have: the press whose `before` the unit is on —
+     * this one, or an older one of its control the unit never took either —
+     * or null when a newer press of the control is in the air and owns the
+     * screen.
+     */
+    failed(press) {
+      if (newest.get(press.control) !== press) return null
+      newest.delete(press.control)
+      let from = press
+      while (from.prev && !from.prev.landed) from = from.prev
+      return from
+    }
+  }
+}
+
+/*
+ * A SETLIST SONG'S SCENE AND TEMPO, WHEN THE LINK WAS AWAY WHILE ITS PRESET
+ * LOADED.
+ *
+ * Next in a setlist is one press for the whole change between songs: the
+ * preset, then — once the unit has loaded it and been read — the song's own
+ * scene and tempo. Those two wait for the preset's reads on purpose, so they
+ * land on the song just loaded and never on the last one, and so they cannot
+ * be held to Next's own second and a half: on a working link they go one to
+ * three seconds after it, and each gets a deadline of its own as it goes.
+ *
+ * But each of those reads keeps the relay's grace (RELAY_GRACE, above): a
+ * channel that dropped just after the select had every one of them wait for
+ * it, and when it came back the song's scene went out eight seconds after
+ * Next, with the song under way — "a scene that lands later than that
+ * mid-verse is worse than one that never lands".
+ *
+ * So they are dropped, and said, when the link was away from 'connected' for
+ * more than a tap's own deadline, in all, between Next and the moment they
+ * would go. That is how much later than usual they would land, near enough:
+ * the reads wait while the link is away and go on as soon as it is back. The
+ * same allowance a tap has, for the same reason — a blip that heals inside it
+ * costs nothing, as it costs a tap nothing. And a rig whose link stayed up is
+ * never touched, however long its own reads take: an AM4 over Bluetooth reads
+ * for longer than this, and that is the unit, not the link.
+ */
+export const songWouldLandLate = (awayMs) => Number.isFinite(awayMs) && awayMs > TAP_DEADLINE_MS
+
+/** What is said for it: which halves of the song were not sent, and why, in plain words. */
+export const songNotSent = ({ scene = false, tempo = false } = {}) =>
+  `Not sent — the song’s ${[scene && 'scene', tempo && 'tempo'].filter(Boolean).join(' and ') || 'setup'} would have landed late`
+
 /**
  * Requests that must not be sent twice.
  *

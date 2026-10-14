@@ -44,6 +44,12 @@ One thing goes with it that is not in the patch: the next version's Notes
 for App Review and What's New say that holding a pedal on the watch opens
 its channels (Apple's 2.3.1(a): a new feature is described in the notes).
 
+Written again on 13 October 2026 over the tap deadline ("a scene tap that
+can't get through is dropped"): a channel picked on the wrist goes with the
+moment the phone heard it, `writeChannel(cmd.id, cmd.channel, receivedAt)`,
+and is dropped like any other tap that cannot land in time. Nothing else in
+it moved.
+
 **watch-name.patch, and why it waits.** Justin, 12 October 2026, about "the
 Fractal app": "a fractal app is probably gonna confuse people to think it's
 made by fractal, which would be like the FM3 edit." The phone, the browser

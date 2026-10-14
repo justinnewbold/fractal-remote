@@ -4362,7 +4362,9 @@ test('the grace period is one budget for the request, not one per attempt', () =
    */
   const src = readSrc(new URL('../src/lib/remote.js', import.meta.url), 'utf8')
   assert.match(src, /const graceUntil = Date\.now\(\) \+ \(options\.graceMs \?\? RELAY_GRACE\)/)
-  assert.match(src, /await relayReady\(graceUntil - Date\.now\(\)\)/, 'each attempt starts its own grace period')
+  /* One budget still, set once before the attempts: the grace, or a tap's deadline when that comes first (13 October 2026). */
+  assert.match(src, /const until = tap \? Math\.min\(graceUntil, options\.deadline\) : graceUntil/, 'a tap is given the whole grace again')
+  assert.match(src, /await relayReady\(until - Date\.now\(\), tap\)/, 'each attempt starts its own grace period')
 })
 
 
@@ -5996,7 +5998,8 @@ test('every request the app makes passes through the retry, at the computer and 
   assert.match(src, /import \{ withRetry \} from '\.\/retry\.js'/, 'forgefx.js does not import the retry')
   assert.match(
     src,
-    /async function request\(path, options = \{\}\) \{[\s\S]*?return withRetry\(\(\) => requestOnce\(path, options\), \{ method: options\.method \|\| 'GET', path \}\)/,
+    /* A tap asked again is marked as having gone, and the retry stops at its deadline (13 October 2026): see retry.js. */
+    /async function request\(path, options = \{\}\) \{[\s\S]*?return withRetry\(\(again\) => requestOnce\(path, again > 0 && options\.deadline \? \{ \.\.\.options, went: true \} : options\), \{\s*method: options\.method \|\| 'GET',\s*path,\s*deadline: remoteActive\(\) \|\| tapsRelayed\(\) \? options\.deadline : undefined\s*\}\)/,
     'request() no longer asks again on a garbled dump'
   )
   const once = src.slice(src.indexOf('async function requestOnce('))
@@ -6038,6 +6041,10 @@ bluetooth(test)
 console.log('\nboth ends')
 const { run: bothEnds } = await import('./both-ends.mjs')
 bothEnds(test)
+
+console.log('\nNOT CONNECTED at once, and no tap landing late')
+const { run: linkNow } = await import('./link-now.mjs')
+linkNow(test)
 
 console.log('\nthe server')
 const { run: server } = await import('./server.mjs')
@@ -6345,10 +6352,15 @@ test('subscribers hear a real change and only a real change', () => {
 
 test('a scene write shows immediately and reaches the device', async () => {
   const unit = fresh(fakeUnit())
+  const before = Date.now()
   const done = ds.writeScene(3)
   assert.equal(ds.getSnapshot().sceneIndex, 3, 'the scene did not move until the device answered')
   await done
-  assert.deepEqual(unit.calls, [['setScene', 3]])
+  /* With the deadline it must be on the wire by, from the press: TAP_DEADLINE_MS (13 October 2026). */
+  assert.equal(unit.calls.length, 1)
+  assert.deepEqual(unit.calls[0].slice(0, 2), ['setScene', 3])
+  const { deadline } = unit.calls[0][2] || {}
+  assert.ok(deadline >= before + 1500 && deadline <= Date.now() + 1500, `the scene went with no deadline, or the wrong one: ${deadline}`)
 })
 
 test('a refused write rolls back to what was on screen before it', async () => {
@@ -6647,6 +6659,9 @@ function windowOnTheBench(over = {}) {
     return typeof value === 'function' ? value() : value
   }
   const nameOf = (n) => `SONG ${n}`
+  /* What each tap write was handed beside its value: its deadline is here. */
+  const handed = []
+  const hand = (line, opts) => handed.push({ line, ...(opts || {}) })
   const clock = handClock()
   ds.reset()
   ds.attachClock(clock)
@@ -6658,17 +6673,19 @@ function windowOnTheBench(over = {}) {
       ),
     currentPreset: () =>
       answer(WHICH, () => (unit.which ? unit.which() : { number: unit.number, name: unit.presetName ?? nameOf(unit.number) })),
-    selectPreset: (n) =>
+    selectPreset: (n, opts) =>
+      hand('POST /preset/select', opts) &&
       answer('POST /preset/select', () => {
         if (unit.refuseSelect) throw Object.assign(new Error('The unit refused that preset.'), { status: 409 })
         unit.number = n
-        return { ok: true }
+        /* `selectAnswer` and `sceneAnswer` stand in for an answer that is not a plain yes, after the unit took it. */
+        return unit.selectAnswer ? unit.selectAnswer(n) : { ok: true }
       }),
     getScene: () => answer('GET /scene', () => ({ index: unit.scene })),
-    setScene: (i) => answer('POST /scene', () => ((unit.scene = i), { ok: true })),
-    setBypass: (eid) => answer(`POST /preset/blocks/${eid}/bypass`, () => (unit.hold ? unit.hold() : { ok: true })),
+    setScene: (i, opts) => hand('POST /scene', opts) && answer('POST /scene', () => ((unit.scene = i), unit.sceneAnswer ? unit.sceneAnswer(i) : { ok: true })),
+    setBypass: (eid, _b, opts) => hand(`POST /preset/blocks/${eid}/bypass`, opts) && answer(`POST /preset/blocks/${eid}/bypass`, () => (unit.hold ? unit.hold() : { ok: true })),
     getTempo: () => answer('GET /tempo', { bpm: 120 }),
-    setTempo: () => answer('POST /tempo', { ok: true }),
+    setTempo: (_bpm, opts) => hand('POST /tempo', opts) && answer('POST /tempo', { ok: true }),
     setTuner: () => answer('POST /tuner', { ok: true }),
     /* What forgefx.readSceneNames asks first: the stored slot, dumped. */
     readSceneNames: (n) => answer(`GET /presets/${n}/summary`, () => [...unit.scenes]),
@@ -6701,7 +6718,7 @@ function windowOnTheBench(over = {}) {
   })
   ds.chainWasRead(unit.number)
   const asked = (line) => wire.filter((l) => (line instanceof RegExp ? line.test(l) : l === line)).length
-  return { clock, unit, wire, asked, nameOf, kept, heard }
+  return { clock, unit, wire, asked, nameOf, kept, heard, handed }
 }
 
 /* Registered at the top level like every other test; the clock goes back afterwards. */
@@ -6736,6 +6753,87 @@ onTheBench('Previous and Next never read another slot — reading one moved the 
   await load
   assert.equal(ds.chainViewOf(ds.getSnapshot()), 'ready', 'a preset change does not still work without the read-ahead')
   assert.equal(asked(SUMMARY), 0)
+})
+
+/*
+ * EVERY TAP OF THE BROWSER'S PLAY SCREEN CARRIES ITS PRESS'S DEADLINE.
+ *
+ * "A scene tap that can't get through is dropped. Today a tap can be held and
+ * land up to 8 seconds late, mid-verse." (13 October 2026.) The relay holds a
+ * request to the deadline it is handed; one handed none is held for its whole
+ * grace. So Previous and Next, a scene, a pedal and a typed tempo are each
+ * checked for the deadline of their own press, from `at`, never from when the
+ * store got round to them.
+ */
+onTheBench('browser: Previous and Next, a scene, a pedal and a typed tempo go with the deadline of their press', async () => {
+  const { clock, handed } = windowOnTheBench()
+  const at = 5000
+  const load = ds.loadPreset(13, { at })
+  await clock.advance(ds.OWN_SETTLE_MS + 100)
+  await load
+  const select = handed.find((h) => h.line === 'POST /preset/select')
+  assert.equal(select?.deadline, at + 1500, 'Previous or Next went with no deadline, or the wrong one, and can land seconds late')
+  await ds.writeScene(2, at)
+  assert.equal(handed.find((h) => h.line === 'POST /scene')?.deadline, at + 1500, 'a scene went with no deadline')
+  await ds.writeBypass(133, false, at)
+  assert.equal(handed.find((h) => h.line === 'POST /preset/blocks/133/bypass')?.deadline, at + 1500, 'a pedal went with no deadline')
+  await ds.writeTempo(140, at)
+  assert.equal(handed.find((h) => h.line === 'POST /tempo')?.deadline, at + 1500, 'a typed tempo went with no deadline')
+})
+
+/*
+ * A GARBLED ANSWER PAST A TAP'S DEADLINE IS NOT A NO (see src/lib/retry.js).
+ * The unit took the scene or the preset, most likely; it is what came back
+ * that was garbled. So the tile stays, the codec's words are not shown, and
+ * where the unit is is read — and a setlist song waits until it says.
+ */
+const garbledLate = () => Object.assign(new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78'), { status: 500, answeredGarbled: true })
+
+onTheBench('browser: a scene answered garbled past its deadline keeps its tile, and the tile follows what the unit says', async () => {
+  const { clock, unit, asked } = windowOnTheBench({ sceneAnswer: () => { throw garbledLate() } })
+  await ds.writeScene(4)
+  await clock.advance(100)
+  assert.equal(ds.getSnapshot().sceneIndex, 4, 'a scene the unit took went back because its answer came back garbled')
+  assert.equal(asked('GET /scene'), 1, 'where the unit is was not read')
+  assert.equal(asked(STATE), 1, 'the new scene’s pedals were not read')
+  /* The unit did not take it: the read says so, and the tile goes where the unit is. */
+  unit.sceneAnswer = () => {
+    unit.scene = 1
+    throw garbledLate()
+  }
+  await ds.writeScene(6)
+  assert.equal(ds.getSnapshot().sceneIndex, 1, 'the tile does not show the scene the unit is on')
+  /* A real no is still a no. */
+  unit.sceneAnswer = () => {
+    throw Object.assign(new Error('The unit refused it.'), { status: 409 })
+  }
+  await assert.rejects(ds.writeScene(5), /The unit refused it/)
+  assert.equal(ds.getSnapshot().sceneIndex, 1)
+})
+
+onTheBench('browser: a preset answered garbled past its deadline is not put back, and is landed only once the unit says so', async () => {
+  const { clock, unit } = windowOnTheBench({ selectAnswer: () => { throw garbledLate() } })
+  const selected = []
+  let load = ds.loadPreset(20, { selected: () => selected.push(20) })
+  await clock.advance(ds.OWN_SETTLE_MS + 100)
+  const landed = await load
+  assert.equal(landed?.number, 20, 'a select the unit took and said it was on was not taken as landed')
+  assert.equal(ds.getSnapshot().preset.number, 20)
+  assert.deepEqual(selected, [20], 'the slot was not recorded once the unit said it was on it')
+  /* The unit stayed where it was: null, so Gig gives the song's scene and tempo to nothing, and nothing is recorded. */
+  unit.selectAnswer = () => {
+    unit.number = 20
+    throw garbledLate()
+  }
+  selected.length = 0
+  load = ds.loadPreset(30, { selected: () => selected.push(30) })
+  await clock.advance(ds.OWN_SETTLE_MS * 3)
+  assert.equal(await load, null, 'a select the unit never said it took was called landed')
+  assert.deepEqual(selected, [], 'a slot the unit never said it took was recorded as loaded')
+  assert.equal(ds.getSnapshot().preset.number, 20, 'the screen does not show the preset the unit is on')
+  const gig = readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+  assert.match(gig, /const landed = await loadPreset\(next\)/)
+  assert.match(gig, /if \(song && landed !== null\) \{/, 'a song’s scene and tempo follow a select nobody said landed')
 })
 
 onTheBench('a slot nothing can be read ahead for waits for the status read, as before', async () => {
@@ -6938,6 +7036,80 @@ onTheBench('presses of Next in the Mac window read the chain once, for where the
   await clock.advance(3000)
   assert.equal(ds.getSnapshot().preset.number, 18)
   assert.equal(asked(CHAIN), 1, `three presses 300ms apart cost ${asked(CHAIN)} chain reads`)
+})
+
+/*
+ * A LOAD A NEWER ONE TOOK OVER IS NOT ONE THAT LANDED (the phone's
+ * rig.loadPreset, the same). It answered with the preset on screen, and
+ * Gig.step only asks `landed !== null`: Next on a setlist song, then a preset
+ * from the menu before the first had finished, and the skipped song's scene
+ * and tempo were sent onto the preset just chosen. Gig.step's own shape, run
+ * on the real store.
+ */
+onTheBench('browser: Next and then a preset from the menu sets up no song on the preset chosen, and one Next still sets up its own', async () => {
+  const { clock, unit, wire } = windowOnTheBench()
+  unit.lag = (line) => (line === CHAIN ? 600 : 60)
+  const step = async (next, song) => {
+    const landed = await ds.loadPreset(next)
+    if (song && landed !== null) await setlists.applySongSorted(song, { scene: ds.writeScene, tempo: ds.writeTempo })
+  }
+  assert.match(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8').replace(/\s+/g, ' '), /const landed = await loadPreset\(next\) [\s\S]{0,400}if \(song && landed !== null\) \{/, 'Gig.step is not the shape this test runs')
+  for (const later of [400, 900, 1300]) {
+    wire.length = 0
+    const stepping = step(13, { scene: 5, bpm: 150 })
+    await clock.advance(later)
+    const plain = ds.loadPreset(20)
+    await clock.advance(5000)
+    await stepping
+    assert.notEqual(await plain, null)
+    assert.equal(unit.number, 20)
+    const sent = wire.slice(wire.lastIndexOf('POST /preset/select') + 1).filter((l) => l === 'POST /scene' || l === 'POST /tempo')
+    assert.deepEqual(sent, [], `${later} ms on: the skipped song’s setup was sent onto the preset chosen after it`)
+  }
+  /* One Next, left alone: its song, as before. */
+  wire.length = 0
+  const alone = step(13, { scene: 5, bpm: 150 })
+  await clock.advance(5000)
+  await alone
+  assert.ok(wire.includes('POST /scene') && wire.includes('POST /tempo'), 'one Next no longer sets up its song')
+  assert.equal(unit.scene, 5)
+})
+
+/*
+ * TWO NEXTS IN ONE DROP, BOTH DROPPED (shared/relay-rules pressesInTheAir).
+ * A preset loaded here before goes up on the press, so the second Next's
+ * "what was up before" was the first's slot, which the unit never loaded —
+ * and that is what went back, under scene taps that then went to the unit's
+ * real preset.
+ */
+onTheBench('browser: two Nexts in one drop, both dropped, leave the preset the unit is on, with its pedals', async () => {
+  const { clock, unit } = windowOnTheBench()
+  /* Both slots played here once, so each goes up on its press. */
+  for (const n of [13, 14, 12]) {
+    const load = ds.loadPreset(n)
+    await clock.advance(5000)
+    await load
+  }
+  const was = ds.getSnapshot()
+  assert.equal(was.preset.number, 12)
+  const { notSentError } = await import('../shared/relay-rules.mjs')
+  const holds = []
+  unit.selectAnswer = () => new Promise((go, no) => holds.push({ go, no }))
+  const a = ds.loadPreset(13).catch((e) => e)
+  await clock.advance(10)
+  assert.equal(ds.getSnapshot().preset.number, 13, 'a preset played here before did not go up on the press, so this proves nothing')
+  const b = ds.loadPreset(14).catch((e) => e)
+  await clock.advance(10)
+  /* The unit took neither: the bench moves its slot on the request. */
+  unit.number = 12
+  holds[0].no(notSentError({ late: true, overtaken: true }))
+  holds[1].no(notSentError())
+  assert.equal((await a).overtaken, true)
+  assert.equal((await b).notSent, true)
+  const now = ds.getSnapshot()
+  assert.equal(now.preset.number, 12, 'two Nexts dropped, and the screen is on the preset passed on the way, which the unit never loaded')
+  assert.equal(now.blocks, was.blocks, 'the pedals put back are not the preset’s the unit is on')
+  assert.deepEqual([now.chainFor, now.chainKnown], [was.chainFor, was.chainKnown])
 })
 
 onTheBench('a preset chosen in the Mac window costs one chain read, and Play appearing adds nothing', async () => {
@@ -8782,7 +8954,7 @@ test('the Tap button opens the tempo box on a hold or a right-click, at both end
   assert.match(hold, /setTyping\(true\)/, 'a hold does not open the box')
   assert.ok(!/clearTimeout\(reread\.current\)/.test(hold), 'a hold throws away the read-back, so the tapped number stays on the button over a typed tempo')
   assert.match(gig, /<BpmBox bpm=\{bpm\} autoFocus onSet=\{typeTempo\}/, 'the box does not open with the tempo selected')
-  assert.match(gig, /await setTempo\(n\)\s*\n\s*await refreshTempo\(\)/, 'a typed tempo is sent but the number on the button is not re-read')
+  assert.match(gig, /await setTempo\(n, \{ deadline: tapDeadline\(\) \}\)\s*\n\s*await refreshTempo\(\)/, 'a typed tempo is sent but the number on the button is not re-read')
   assert.match(gig, /useDismiss\(tapCell, \(\) => setTyping\(false\), \{ open: typing \}\)/, 'nothing closes the box on a tap elsewhere or Escape')
   // The box itself refuses with the shared words, and no longer sits unused in App.
   const box = readSrc(new URL('../src/components/BpmBox.jsx', import.meta.url), 'utf8')
@@ -13531,7 +13703,8 @@ test('Edit has the same Tap as Play, beside the scene, and a tapped tempo leaves
   assert.ok(row.length > 0, 'Edit’s row beside the scene is gone')
   assert.ok(row.indexOf('scene-now') !== -1 && row.indexOf('scene-now') < row.indexOf('<TapTempo'), 'Tap is not beside the scene on Edit')
   assert.match(row, /<TapTempo where="row" onError=\{setError\} onChanged=\{\(summary\) => record\('tempo', summary\)\} \/>/, 'a tempo set on Edit is not logged as a change to the preset')
-  assert.match(gig, /<TapTempo onError=\{onError\} onChanged=\{onChanged\} \/>/, 'Play draws a Tap of its own again, or stops reporting it')
+  /* And a dropped tap is said over Play's tiles rather than in the notice above them (onDropped, 13 October 2026). */
+  assert.match(gig, /<TapTempo onError=\{onError\} onChanged=\{onChanged\} onDropped=\{sayNotSent\} \/>/, 'Play draws a Tap of its own again, or stops reporting it')
   for (const [where, text] of [['App.jsx', app], ['Gig.jsx', gig]]) {
     assert.ok(!/tappedBpm\(|tempoSender\(/.test(text), `${where} works out a tapped tempo on its own again — there are two taps now`)
   }
@@ -13571,7 +13744,7 @@ test('Edit has the same Tap as Play, beside the scene, and a tapped tempo leaves
    * for a change that never happened. The typed tempo only reports once the
    * write has worked; so does a tapped one.
    */
-  assert.match(tap, /await setTempo\(bpm\)\s*landed\.current = bpm/, 'a tempo the unit refused still counts as tapped in')
+  assert.match(tap, /await setTempo\(bpm, \{ deadline: tapDeadline\(at\) \}\)\s*landed\.current = bpm/, 'a tempo the unit refused still counts as tapped in')
   assert.match(report, /const got = landed\.current/, 'the report names the number tapped rather than the one the unit took')
   assert.match(report, /if \(got == null\) return/, 'a burst that reached nothing is still reported, and lights Save')
   /* Closed with the last write still on its way: reported when it lands, not guessed at. */
@@ -13709,7 +13882,8 @@ test('the looper’s Rec and Play sit in the two top corners, and no corner word
    * box that changes at the depth the observer was just told about, in the
    * same frame, is the browser's loop error, which the crash log keeps.
    */
-  assert.match(gig, /import \{ flushSync \} from 'react-dom'/, 'a tile that changes size is drawn once with the old answer')
+  /* createPortal beside it since NOT CONNECTED went on the page (test/link-now.mjs). */
+  assert.match(gig, /import \{ (?:createPortal, )?flushSync \} from 'react-dom'/, 'a tile that changes size is drawn once with the old answer')
   assert.match(hook, /const now = \(\) => \{\s*if \(!gone\) flushSync\(\(\) => measure\.current\(\)\)\s*\}/, 'a tile that changes size is drawn once with the old answer')
   assert.match(hook, /if \(seen\.some\(\(e\) => e\.target === tile\.current\)\) now\(\)\s*else measure\.current\(\)/, 'a word that changes size is answered inside the frame that moved it')
   assert.match(hook, /watch\?\.disconnect\(\)/, 'a tile that goes keeps being watched')
@@ -14427,11 +14601,14 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   const bridge = readSrc(new URL('../mobile/src/lib/watchBridge.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
   assert.match(bridge, /requireOptionalNativeModule\('FractalWatch'\)/, 'a build without the watch would fail to start')
   assert.match(bridge, /const watch = link\(\) if \(!watch\) return undefined/)
-  assert.match(bridge, /if \(cmd\.do === 'scene'\) return writeScene\(cmd\.index\) if \(cmd\.do === 'pedal'\) return writeBypass\(cmd\.id, !cmd\.on\) if \(cmd\.do === 'preset'\) return stepRef\.current\?\.\(cmd\.step\)/)
+  /* Each with the moment the phone heard it, which its deadline counts from (13 October 2026). */
+  assert.match(bridge, /if \(cmd\.do === 'scene'\) return writeScene\(cmd\.index, receivedAt\) if \(cmd\.do === 'pedal'\) return writeBypass\(cmd\.id, !cmd\.on, receivedAt\) if \(cmd\.do === 'preset'\) return stepRef\.current\?\.\(cmd\.step, receivedAt\)/)
   /* Wake on tap: a tap that woke the phone rejoins the computer before it is
      sent, and the phone holds the app up long enough to send it. */
   assert.match(bridge, /AppState\.currentState !== 'active'/, 'a tap that woke a locked phone is sent into a sleeping connection')
+  /* The tuner closing still waits out the wake and tries twice; a tap waits only for what is left of its deadline. */
   assert.match(bridge, /untilConnected\(\)/)
+  assert.match(bridge, /untilConnected\(Math\.max\(0, deadline - Date\.now\(\)\)\)/, 'a woken watch tap waits the old eight seconds and lands late')
   /* The tuner mutes the unit: the watch never turns it on by being swiped to. */
   const pages = readSrc(new URL('../mobile/targets/watch/Pages.swift', import.meta.url), 'utf8')
   assert.match(pages, /\.onDisappear \{\s*if state\.tuner\.on \{ link\.send\(\.tuner\(on: false\)\) \}/)

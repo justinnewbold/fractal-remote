@@ -5,6 +5,7 @@ import { color, font, radius, space } from '../lib/theme'
 import { looperControl, looperTelemetry } from '../lib/device'
 import { thud, tick } from '../lib/feedback'
 import { useRig } from '../lib/rig'
+import { tapDeadline } from '../lib/relay-rules'
 import {
   IDLE_LATCH,
   LOOPER_LABEL,
@@ -65,6 +66,14 @@ export default function Looper({ block }) {
 
   async function tap(action) {
     if (busy || eid == null) return
+    /*
+     * THE PRESS IS A TAP; ITS RELEASE IS NOT. The first message carries the
+     * deadline from this moment (relay-rules TAP_DEADLINE_MS): a Record that
+     * would land seconds late is not sent, and says so. The release that
+     * follows a press that went is sent however long it takes — dropped, it
+     * would leave the button held down on the unit.
+     */
+    const deadline = tapDeadline()
     ;(action === 'record' ? thud : tick)()
     setBusy(action)
     setError(null)
@@ -72,7 +81,7 @@ export default function Looper({ block }) {
     try {
       for (let i = 0; i < sends.length; i++) {
         if (i) await wait(PRESS_MS)
-        const r = await looperControl(eid, action, sends[i])
+        const r = await looperControl(eid, action, sends[i], i === 0 ? { deadline } : undefined)
         if (r?.ok === false) throw new Error('The unit did not take it.')
       }
       latches.set(key, next)

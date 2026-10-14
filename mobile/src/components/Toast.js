@@ -23,12 +23,17 @@ import { color, radius, space } from '../lib/theme'
  * new-version note, which App floats over the play screen from outside it —
  * stands aside while any other toast is up, rather than being drawn on top of
  * it or under it, and comes back when that one goes.
+ *
+ * `onLayout` is the card's own, for a screen that floats something else and
+ * must keep it clear of the card: Play's NOT CONNECTED, which on the smallest
+ * phones sat under the advice's Troubleshooting button.
  */
-export default function Toast({ open, yields = false, children }) {
+export default function Toast({ open, yields = false, onLayout, children }) {
   const others = useSlot(open && !yields)
   if (!open || (yields && others)) return null
   return (
     <View
+      onLayout={onLayout}
       style={{
         position: 'absolute',
         top: space.sm,

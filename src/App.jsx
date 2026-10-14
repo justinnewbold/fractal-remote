@@ -1054,6 +1054,13 @@ export default function App() {
     (link.link === 'signed-out' ||
       link.link === 'off' ||
       (link.link !== 'connected' && (!everLinked || Date.now() - link.since > 10000 || tick < 0)))
+  /*
+   * And in the ten seconds before that, Play stays up and says NOT CONNECTED
+   * over dimmed tiles: "When the link drops, Play says so right away." Only
+   * a phone on the web app; link.js never sets `down` for any other role, and
+   * the demo takes the computer's.
+   */
+  const linkShowsDown = link.down === true && !isDemo()
   // What the notice says when the unit cannot be read — by role, in one tested
   // place, and nothing at all until the role is known.
   const fault =
@@ -4451,6 +4458,13 @@ export default function App() {
           icons={icons}
           sceneLayout={sceneLayout}
           sceneOrder={sceneOrder}
+          /*
+           * NOT CONNECTED over dimmed tiles: link.js's own word, true only for
+           * a phone on the web app whose link has been down long enough to
+           * mean it (shared/relay-rules.mjs LINK_DOWN_HOLD_MS) — never the
+           * computer's own window or its wifi page, never the demo.
+           */
+          down={linkShowsDown}
           onError={setError}
           /* A typed tempo, or a burst of taps once it settles and if the
              unit took it on this same preset: logged, and the preset left

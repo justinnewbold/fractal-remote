@@ -9542,6 +9542,83 @@ button.recent-del:focus-visible {
   transition: opacity 0.2s;
 }
 
+/*
+ * NOT CONNECTED. "When the link drops, Play says so right away. The tiles go
+ * dim under NOT CONNECTED." Opacity and nothing else, so not a pixel of Play
+ * moves while the link is down or when it comes back: the scenes, the
+ * pedals, and the buttons at the foot that send something. Setlists and Edit
+ * need no rig and stay as they are, and an open tuner's button stays lit —
+ * closing the tuner always goes. Dimmer than a chain still loading (0.55),
+ * so it reads as "not now" rather than "nearly", and every name still reads.
+ */
+.gig[data-link-down='yes'] .gig-scenes,
+.gig[data-link-down='yes'] .gig-blocks,
+.gig[data-link-down='yes'] .gig-nav > button:not(.gig-nav-source),
+.gig[data-link-down='yes'] .gig-bar-btn:not(.gig-edit):not(.on) {
+  opacity: 0.35;
+  transition: opacity 0.2s;
+}
+
+/*
+ * The word, and a dropped tap's note under it: fixed in the middle of the
+ * window, over the screen and never in it, and taking no touch, so a tap
+ * through it still reaches its tile and is told it went nowhere. Under a
+ * sheet and the bar, over the tiles.
+ *
+ * Gig puts it on the page (a portal to the body), not inside Play: .screen's
+ * will-change: transform below makes .screen the box a fixed child is fixed
+ * to, and inside it this sat 42vh down the Play screen and scrolled off with
+ * it — on a small phone held sideways, scrolled to the pedals, a refused tap
+ * was said where nobody could see it.
+ *
+ * Gig sets its `top` itself, over the middle of the scenes in view
+ * (src/lib/downBand.js). 42% of the window is only where it starts, before
+ * the first measure: kept as the phone's place, it sat on the Tap button on
+ * an iPad and under everything on a big screen, where Play is shorter than
+ * the window.
+ */
+.gig-down-band {
+  position: fixed;
+  top: 42vh;
+  /* Across the page and its children centred, rather than half-way across
+     and shrunk to fit: a fixed box at left 50% may be no wider than the half
+     of the screen to its right, and NOT CONNECTED broke onto two lines on
+     every phone under about 420 px. It takes no touch, so its width costs
+     nothing. */
+  left: var(--s-3);
+  right: var(--s-3);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-2);
+  text-align: center;
+  pointer-events: none;
+}
+
+.gig-down-word {
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--fault);
+  border-radius: var(--r-3);
+  background: var(--chassis);
+  color: var(--fault);
+  font-size: var(--f-3);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+  box-shadow: var(--e-2);
+}
+
+.gig-down-note {
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-2);
+  background: var(--panel);
+  color: var(--silk);
+  font-size: var(--f-3);
+  text-align: center;
+  box-shadow: var(--e-2);
+}
+
 .chain-updating-word {
   margin: 0;
   color: var(--silk-faint);

@@ -8,6 +8,7 @@ import Note from './Note'
 import Press from './Press'
 import { useBluetoothOn } from '../lib/bluetooth'
 import { useRig } from '../lib/rig'
+import { NOT_CONNECTED } from '../lib/relay-rules'
 
 const ofUnitTuner = (s) => s.unitTuner
 /* In the words on the AM4's own menus, so he can find the setting from here. */
@@ -40,7 +41,7 @@ const face = Platform.select(mono)
  * Tracked by time rather than by a flag, so a newer host that does bridge the
  * stream lights this up with no change here.
  */
-export default function Tuner({ reading, on, onClose }) {
+export default function Tuner({ reading, on, onClose, down = false }) {
   const [stalled, setStalled] = useState(false)
   /* Over Bluetooth there is no computer to blame: the unit itself is quiet. */
   const bluetooth = useBluetoothOn()
@@ -191,8 +192,27 @@ export default function Tuner({ reading, on, onClose }) {
               />
             </View>
 
-            <Text style={{ color: color.silk, fontSize: font.lead, fontFamily: face }}>
-              {reading?.note ? `${cents > 0 ? '+' : ''}${cents} cents` : 'Play a string'}
+            {/*
+              NOT CONNECTED, IN HERE TOO. "When the link drops, Play says so
+              right away." The word Stage floats over the tiles is drawn
+              under this: the tuner is a modal, over the whole screen and
+              everything on it, the link bar as well. So with the tuner open
+              the needle simply stopped and the screen said "Play a string"
+              to somebody playing one, with no reason given. While the link
+              is down this one line says it instead — the same line, the
+              same size, so nothing in the pane moves when it comes or goes.
+              Stop tuner below stays lit and works: a close always goes.
+            */}
+            <Text
+              numberOfLines={1}
+              accessibilityLiveRegion="polite"
+              style={
+                down
+                  ? { color: color.fault, fontSize: font.lead, fontFamily: face, fontWeight: '700', letterSpacing: 2 }
+                  : { color: color.silk, fontSize: font.lead, fontFamily: face }
+              }
+            >
+              {down ? NOT_CONNECTED : reading?.note ? `${cents > 0 ? '+' : ''}${cents} cents` : 'Play a string'}
             </Text>
 
             {stalled && bluetooth ? (

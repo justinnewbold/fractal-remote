@@ -42,8 +42,22 @@ export const RETRY_MS = [400, 800]
 /**
  * Run a request, and run it again on a garbled dump if it may be run again.
  * `wait` is injectable so the tests do not sleep.
+ *
+ * NOT PAST A TAP'S DEADLINE. A scene or a preset the player pressed carries
+ * one (TAP_DEADLINE_MS in shared/relay-rules.mjs): a scene that lands later
+ * than that mid-verse is worse than one that never lands. So when asking
+ * again could only land late, it is not asked again. `now` is injectable for
+ * the same reason as `wait`.
+ *
+ * And what comes back then is marked `answeredGarbled`, because it is not a
+ * no. The select reached the unit and the unit answered; it is the answer
+ * that came back garbled, from a unit still loading — which is the whole
+ * reason this file asks again. Taken as a refusal, the tile went back to
+ * the old scene with the codec's words under it, while the unit sat on the
+ * new one. The callers (rig.js on the phone, deviceState.js in the browser)
+ * read where the unit is instead, and show that.
  */
-export async function withRetry(fn, { method, path, wait = sleep, retries = RETRIES } = {}) {
+export async function withRetry(fn, { method, path, wait = sleep, retries = RETRIES, deadline, now = () => Date.now() } = {}) {
   let attempt = 0
   for (;;) {
     try {
@@ -52,6 +66,7 @@ export async function withRetry(fn, { method, path, wait = sleep, retries = RETR
       const again = attempt < retries && canAskAgain(method, path) && isGarbledDump(err?.message)
       if (!again) throw err
       await wait(RETRY_MS[Math.min(attempt, RETRY_MS.length - 1)])
+      if (Number.isFinite(deadline) && now() >= deadline) throw Object.assign(err, { answeredGarbled: true })
       attempt++
     }
   }

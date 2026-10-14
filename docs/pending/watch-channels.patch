@@ -1,5 +1,5 @@
 diff --git a/mobile/src/lib/watch-link.js b/mobile/src/lib/watch-link.js
-index d69ca56..d68e47e 100644
+index d69ca56a2f46a1eac6df66b9494925021d53689a..d68e47efbc332169c8dd0f4c68ee2edc18407ff9 100644
 --- a/mobile/src/lib/watch-link.js
 +++ b/mobile/src/lib/watch-link.js
 @@ -12,7 +12,7 @@
@@ -92,10 +92,10 @@ index d69ca56..d68e47e 100644
        return msg.step === 1 || msg.step === -1 ? { do: 'preset', step: msg.step } : null
      case 'tuner':
 diff --git a/mobile/src/lib/watchBridge.js b/mobile/src/lib/watchBridge.js
-index b4959c0..d968284 100644
+index 5e5727ec54274943f7a82656831d5ec328847f0b..09738e08559f70b941cbcc582af04ee136e35078 100644
 --- a/mobile/src/lib/watchBridge.js
 +++ b/mobile/src/lib/watchBridge.js
-@@ -4,17 +4,17 @@ import { requireOptionalNativeModule } from 'expo'
+@@ -4,10 +4,10 @@ import { requireOptionalNativeModule } from 'expo'
  
  import { blockColor } from './blockColors'
  import { logDebug } from './debugLog'
@@ -105,9 +105,10 @@ index b4959c0..d968284 100644
  import { shortBlock } from './shortName'
 -import { getState, writeBypass, writeScene, writeTuner } from './rig'
 +import { getState, writeBypass, writeChannel, writeScene, writeTuner } from './rig'
+ import { tapDeadline } from './relay-rules'
  import { createWatchSender, watchCommand, watchState } from './watch-link'
  import { metronome } from './metronome'
- 
+@@ -15,7 +15,7 @@ import { metronome } from './metronome'
  /*
   * THE APPLE WATCH, FROM THE PHONE'S SIDE.
   *
@@ -116,10 +117,10 @@ index b4959c0..d968284 100644
   * see lib/watch-link (shared/watch-link.mjs) for both halves of that. This is
   * the phone keeping its end: a fresh picture whenever the stage screen's
   * changes, and each request carried out with the same calls the stage
-@@ -116,6 +116,20 @@ export function useWatchBridge(picture, step) {
-         if (cmd.do === 'scene') return writeScene(cmd.index)
-         if (cmd.do === 'pedal') return writeBypass(cmd.id, !cmd.on)
-         if (cmd.do === 'preset') return stepRef.current?.(cmd.step)
+@@ -125,6 +125,21 @@ export function useWatchBridge(picture, step) {
+         if (cmd.do === 'scene') return writeScene(cmd.index, receivedAt)
+         if (cmd.do === 'pedal') return writeBypass(cmd.id, !cmd.on, receivedAt)
+         if (cmd.do === 'preset') return stepRef.current?.(cmd.step, receivedAt)
 +        /*
 +         * A pedal held on the wrist, and a channel picked: the Play screen's
 +         * channel sheet's own write, which turns down the outline and another
@@ -128,16 +129,17 @@ index b4959c0..d968284 100644
 +         * picture it sent before it locked, so this at least refuses an id the
 +         * chain no longer has. (An id names a kind of block, Drive 1 or Delay
 +         * 2, so a newer preset with the same block still takes it — as a
-+         * switch on or off from the wrist does today.)
++         * switch on or off from the wrist does today.) Bound by the deadline
++         * counted from when the phone heard it, like every other tap.
 +         */
 +        if (cmd.do === 'channel') {
 +          const here = getState().blocks.some((b) => sameBlock(b, cmd.id))
-+          return here ? writeChannel(cmd.id, cmd.channel) : undefined
++          return here ? writeChannel(cmd.id, cmd.channel, receivedAt) : undefined
 +        }
-         if (cmd.do === 'tuner' && getState().tunerOn !== cmd.on) return writeTuner(cmd.on)
+         if (cmd.do === 'tuner' && getState().tunerOn !== cmd.on) return writeTuner(cmd.on, receivedAt)
          return undefined
        }
-@@ -153,8 +167,10 @@ export function useWatchBridge(picture, step) {
+@@ -190,8 +205,10 @@ export function useWatchBridge(picture, step) {
    /* Every render of the stage screen is a chance the picture moved. */
    useEffect(() => {
      if (!sender.current) return
@@ -151,10 +153,10 @@ index b4959c0..d968284 100644
      const beat = metronome()
      const state = watchState({ ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm } })
 diff --git a/mobile/src/screens/Stage.js b/mobile/src/screens/Stage.js
-index b6786d5..1122fb5 100644
+index 80fa46906aa751ff3715461c6780cc8f9bfcf2c4..96d73012b847d35d30bb90547433d4b6319cc6c6 100644
 --- a/mobile/src/screens/Stage.js
 +++ b/mobile/src/screens/Stage.js
-@@ -562,6 +562,10 @@ export default function Stage({
+@@ -588,6 +588,10 @@ export default function Stage({
        sceneCount: scenes.hasScenes ? scenes.count : 0,
        /* Not another preset's: a tap would switch whatever shares the id. */
        chain: chainNow.elsewhere ? [] : blocks,
@@ -164,9 +166,9 @@ index b6786d5..1122fb5 100644
 +      channels: channels?.length > 1 && !chainNow.outline && !chainNow.elsewhere ? channels : [],
        tunerOn,
        tuning,
-       linked: Number.isInteger(preset?.number),
+       /*
 diff --git a/mobile/targets/watch/Model.swift b/mobile/targets/watch/Model.swift
-index def3d85..ef6f652 100644
+index def3d85f3779c5078f5fb3a8a8579124649aade7..ef6f652e867e47d0911859d87843af193af0043c 100644
 --- a/mobile/targets/watch/Model.swift
 +++ b/mobile/targets/watch/Model.swift
 @@ -5,7 +5,7 @@ import Foundation
@@ -287,7 +289,7 @@ index def3d85..ef6f652 100644
              next.preset.number = max(0, preset.number + (step < 0 ? -1 : 1))
              next.preset.label = String(format: "%03d", next.preset.number)
 diff --git a/mobile/targets/watch/Pages.swift b/mobile/targets/watch/Pages.swift
-index 2a2e612..22b4763 100644
+index 2a2e612cba888a43612305c0ebbbda7c129d6535..22b476391bd13a57301f2f0ba86cc2d4643ac815 100644
 --- a/mobile/targets/watch/Pages.swift
 +++ b/mobile/targets/watch/Pages.swift
 @@ -66,11 +66,42 @@ struct ScenesPage: View {
@@ -559,7 +561,7 @@ index 2a2e612..22b4763 100644
  }
  
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
-index 7777f48..a747149 100644
+index 7777f481ebee20b7aca9fdca8355f88cbcc51789..a74714918d4e1879fb3be80aa35ac72683decc1d 100644
 --- a/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
 +++ b/mobile/watch-ci/Tests/WatchModelTests/WatchModelTests.swift
 @@ -31,6 +31,13 @@ final class WatchModelTests: XCTestCase {
@@ -647,7 +649,7 @@ index 7777f48..a747149 100644
      }
  }
 diff --git a/mobile/watch-ci/Tests/WatchModelTests/state.json b/mobile/watch-ci/Tests/WatchModelTests/state.json
-index df4048b..30117c9 100644
+index df4048beb68a09af5df2e008e10101c3cc29cd15..30117c926c50c62f97dee8cb340d08ee2f55ac68 100644
 --- a/mobile/watch-ci/Tests/WatchModelTests/state.json
 +++ b/mobile/watch-ci/Tests/WatchModelTests/state.json
 @@ -27,7 +27,14 @@
@@ -678,7 +680,7 @@ index df4048b..30117c9 100644
    ],
    "tuner": {
 diff --git a/mobile/watch-ci/screens.sh b/mobile/watch-ci/screens.sh
-index 7a428f9..2ff29e6 100755
+index 7a428f9fe4940cd9b95bc9233902f6a78d887c22..2ff29e608db7b51f80be850e4f4325bbbbda1515 100755
 --- a/mobile/watch-ci/screens.sh
 +++ b/mobile/watch-ci/screens.sh
 @@ -25,6 +25,14 @@ for page in 0 1 2 3; do
@@ -697,7 +699,7 @@ index 7a428f9..2ff29e6 100755
  xcrun simctl launch --terminate-running-process "$UDID" "$ID" -demo NO
  sleep 5
 diff --git a/shared/watch-link.mjs b/shared/watch-link.mjs
-index 6ebe491..de74149 100644
+index 6ebe4919b82ee947545e0c1028223255c36ef45b..de741492bf6a50aa6fe2bff9b90f528838f74264 100644
 --- a/shared/watch-link.mjs
 +++ b/shared/watch-link.mjs
 @@ -8,7 +8,7 @@
@@ -790,10 +792,10 @@ index 6ebe491..de74149 100644
        return msg.step === 1 || msg.step === -1 ? { do: 'preset', step: msg.step } : null
      case 'tuner':
 diff --git a/test/run.mjs b/test/run.mjs
-index 742101c..0d49c0a 100644
+index 849179157826461b3a6dd6c24f60f5f65f6eb890..4cc7cdc96770cd50f054f439439a76806168eda5 100644
 --- a/test/run.mjs
 +++ b/test/run.mjs
-@@ -13836,14 +13836,21 @@ test('the computer app carries the server that opens the AM4’s own tuner scree
+@@ -14326,14 +14326,21 @@ test('the computer app carries the server that opens the AM4’s own tuner scree
  /*
   * THE APPLE WATCH. "Maybe three different screens that you can swipe between
   * … just simple actions from the watch." The phone sends the whole picture;
@@ -818,7 +820,7 @@ index 742101c..0d49c0a 100644
      tunerOn: true, tuning: { note: 'E', octave: 2, cents: -2.4 }, metronome: { on: true, bpm: 120 } })
    assert.deepEqual(again, fixture, 'the watch’s test fixture is not what the phone sends any more — write it again')
  
-@@ -13870,7 +13877,7 @@ test('the watch is sent the stage as one small picture, and may ask for only fiv
+@@ -14360,7 +14367,7 @@ test('the watch is sent the stage as one small picture, and may ask for only fiv
    assert.equal(watchState({ tunerOn: true, tuning: { note: 'A', cents: 300 } }).tuner.cents, 50)
    assert.equal(watchState({ pedals: Array.from({ length: 30 }, (_, i) => ({ id: i, name: 'x' })) }).pedals.length, WATCH_PEDALS_MAX)
  
@@ -827,7 +829,7 @@ index 742101c..0d49c0a 100644
    const shown = watchState({ sceneCount: 4, pedals: [{ id: 50, name: 'Drive' }] })
    assert.deepEqual(watchCommand({ do: 'scene', index: 3 }, shown), { do: 'scene', index: 3 })
    assert.equal(watchCommand({ do: 'scene', index: 4 }, shown), null)
-@@ -13882,8 +13889,26 @@ test('the watch is sent the stage as one small picture, and may ask for only fiv
+@@ -14372,8 +14379,26 @@ test('the watch is sent the stage as one small picture, and may ask for only fiv
    assert.deepEqual(watchCommand({ do: 'hello' }, null), { do: 'hello' })
    for (const bad of [null, 'scene', { do: 'save' }, { do: 'select', number: 5 }, { do: 'tuner', on: 'yes' }]) assert.equal(watchCommand(bad, shown), null)
  
@@ -856,19 +858,19 @@ index 742101c..0d49c0a 100644
      assert.ok(swift.includes(`"do":"${msg.do}"`), `the watch cannot ask for ${msg.do}`)
    }
    assert.equal(sameWatchState({ ...fixture, at: 1 }, { ...fixture, at: 2 }), true)
-@@ -13947,6 +13972,11 @@ test('the stage screen keeps the watch, which is inert until the watch is built
-   assert.match(bridge, /requireOptionalNativeModule\('FractalWatch'\)/, 'a build without the watch would fail to start')
+@@ -14438,6 +14463,11 @@ test('the stage screen keeps the watch, which is inert until the watch is built
    assert.match(bridge, /const watch = link\(\) if \(!watch\) return undefined/)
-   assert.match(bridge, /if \(cmd\.do === 'scene'\) return writeScene\(cmd\.index\) if \(cmd\.do === 'pedal'\) return writeBypass\(cmd\.id, !cmd\.on\) if \(cmd\.do === 'preset'\) return stepRef\.current\?\.\(cmd\.step\)/)
+   /* Each with the moment the phone heard it, which its deadline counts from (13 October 2026). */
+   assert.match(bridge, /if \(cmd\.do === 'scene'\) return writeScene\(cmd\.index, receivedAt\) if \(cmd\.do === 'pedal'\) return writeBypass\(cmd\.id, !cmd\.on, receivedAt\) if \(cmd\.do === 'preset'\) return stepRef\.current\?\.\(cmd\.step, receivedAt\)/)
 +  /* A channel from the wrist: the Play screen's channel sheet's own write, for
 +     a block on the screen now, offered only where the tile's own hold works. */
-+  assert.match(bridge, /if \(cmd\.do === 'channel'\) \{ const here = getState\(\)\.blocks\.some\(\(b\) => sameBlock\(b, cmd\.id\)\) return here \? writeChannel\(cmd\.id, cmd\.channel\) : undefined \}/, 'a channel from the watch lands on a block that is not on the screen')
++  assert.match(bridge, /if \(cmd\.do === 'channel'\) \{ const here = getState\(\)\.blocks\.some\(\(b\) => sameBlock\(b, cmd\.id\)\) return here \? writeChannel\(cmd\.id, cmd\.channel, receivedAt\) : undefined \}/, 'a channel from the watch lands on a block that is not on the screen')
 +  assert.match(bridge, /channel: b\.channel, channels \}\)\)/, 'the watch is not told each pedal’s channel')
 +  assert.match(stage, /chain: chainNow\.elsewhere \? \[\] : blocks, \/\*[^*]*\*\/ channels: channels\?\.length > 1 && !chainNow\.outline && !chainNow\.elsewhere \? channels : \[\],/, 'the watch offers a channel the Play screen would not')
    /* Wake on tap: a tap that woke the phone rejoins the computer before it is
       sent, and the phone holds the app up long enough to send it. */
    assert.match(bridge, /AppState\.currentState !== 'active'/, 'a tap that woke a locked phone is sent into a sleeping connection')
-@@ -13955,6 +13985,15 @@ test('the stage screen keeps the watch, which is inert until the watch is built
+@@ -14448,6 +14478,15 @@ test('the stage screen keeps the watch, which is inert until the watch is built
    const pages = readSrc(new URL('../mobile/targets/watch/Pages.swift', import.meta.url), 'utf8')
    assert.match(pages, /\.onDisappear \{\s*if state\.tuner\.on \{ link\.send\(\.tuner\(on: false\)\) \}/)
    assert.ok(!/onAppear[^}]*tuner\(on: true\)/.test(pages), 'the tuner turns on by being swiped to')

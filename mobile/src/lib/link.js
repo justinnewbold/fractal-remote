@@ -19,6 +19,8 @@ import { isDemo } from './demo'
 import { logDebug } from './debugLog'
 import { bluetoothOn } from './bleSwitch'
 import { pokeBluetooth, startBluetoothLink, stopBluetoothLink } from './bleLink'
+import { setLinkAway, setLinkDown } from './tapGate'
+import { LINK_DOWN_HOLD_MS, linkDownAt } from './relay-rules'
 
 import {
   censusHosts,
@@ -79,15 +81,111 @@ const initial = {
   hosts: [],
   units: {},
   chosenHost: null,
-  clash: null
+  clash: null,
+  /*
+   * WHETHER THE LINK IS DOWN, as Play says it: NOT CONNECTED over dimmed
+   * tiles, and every tap refused at once (tapGate). Not the same as "not
+   * connected this instant" — see LINK_DOWN_HOLD_MS in relay-rules, which
+   * says how long the link may be away before this is true, and why that is
+   * long enough never to dim a working rig and short enough to be honest.
+   * Never in the demo.
+   */
+  down: false
 }
 
 let state = initial
 const watchers = new Set()
 
+/*
+ * WHEN THE LINK LEFT 'connected', and the one timer that says it has been
+ * away long enough. The time it LEFT, not its last change: joining, no
+ * answer and joining again in one stretch are one outage, and a clock that
+ * started again at each of them would never reach the hold.
+ */
+let lostAt = 0
+let downTimer = null
+
+/** The `down` the link has now, moving lostAt and its timer with it. */
+function downNow(link) {
+  const now = Date.now()
+  /* And the time it is away, added up, for a setlist song's setup to ask (tapGate linkAwayMs). */
+  setLinkAway(link !== 'connected' && !isDemo(), now)
+  if (link === 'connected' || isDemo()) {
+    lostAt = 0
+    if (downTimer) clearTimeout(downTimer)
+    downTimer = null
+    return false
+  }
+  if (!lostAt) {
+    lostAt = now
+    if (downTimer) clearTimeout(downTimer)
+    downTimer = null
+  }
+  const down = linkDownAt({ link, lostAt, demo: isDemo() }, now)
+  /*
+   * Not down yet: one timer for the rest of the hold, armed again whenever it
+   * has gone off short of it. A timer can fire a millisecond early by
+   * Date.now() — Node's did, 47 times in 300 in a test — and then
+   * the hold reads 1999 ms, nothing else is due, and NOT CONNECTED would wait
+   * for whatever happened to call set() next: up to the loop's next turn,
+   * eight seconds on. "Play says so right away" has to mean every time.
+   */
+  if (!down && !downTimer) {
+    downTimer = setTimeout(() => {
+      downTimer = null
+      set({})
+    }, Math.max(1, lostAt + LINK_DOWN_HOLD_MS - now))
+  }
+  return down
+}
+
+/*
+ * THE HOLD STARTS AGAIN WHEN THE APP DOES.
+ *
+ * "connected → joining" twelve seconds after the last tap is the phone's
+ * screen going off: Android cuts the connection when the app is put to sleep
+ * (the AppState handler in startLink says more). The clock above started
+ * then, so by the time the phone was out of the pocket its two seconds had
+ * long run out, and Play came back already saying NOT CONNECTED — on every
+ * unlock — and refused the first tap at once, though the link was back a
+ * third of a second later and that tap would have waited for it inside its
+ * own deadline and gone. Before any of this, the first tap after an unlock
+ * waited a second for the rejoin and landed. It still should.
+ *
+ * Nobody was looking while the app slept, so whatever happened to the link
+ * in there is not an outage anybody has been told about. Coming back on
+ * screen, and the loop starting, are a fresh start: the link has its two
+ * seconds again from here, like any link that has only just gone, and NOT
+ * CONNECTED comes up only if the rejoin really does fail.
+ *
+ * The computer's loop only. Over Bluetooth, Play is not on screen to say
+ * anything while the adapter is being looked for — the waiting screen covers
+ * it from the moment the adapter goes (App.js's `settling`) — and the adapter
+ * arriving is 'connected', which clears all of this at once.
+ */
+function holdAgain() {
+  if (isDemo() || state.link === 'connected') return
+  lostAt = Date.now()
+  if (downTimer) clearTimeout(downTimer)
+  downTimer = null
+  set({})
+}
+
+/*
+ * WHAT PLAY WAS SAYING AS THE APP WENT TO SLEEP: the outage it was already
+ * showing as NOT CONNECTED (its lostAt), or 0. Coming back to the same outage
+ * keeps the band up rather than starting the hold again: taking NOT CONNECTED
+ * down for two seconds only to put it back would be the band flickering over
+ * a link that never came back, which is the one thing it must not do.
+ */
+let asleep = false
+let downAsleep = 0
+
 const set = (patch) => {
   const next = { ...state, ...patch }
+  next.down = downNow(next.link)
   if (
+    next.down === state.down &&
     next.link === state.link &&
     next.macName === state.macName &&
     // The computer's version as well: the red "update the computer app" line
@@ -110,9 +208,21 @@ const set = (patch) => {
    * the guard above has already thrown away the no-ops.
    */
   const was = state.link
+  const wasDown = state.down
   state = next
   if (next.link !== was) {
     logDebug('link', `${was} → ${next.link}`, next.macName || undefined)
+  }
+  if (next.down !== wasDown) {
+    setLinkDown(next.down)
+    logDebug(
+      'link',
+      next.down
+        ? `down — Play says not connected (${next.link})`
+        : next.link === 'connected' || isDemo()
+          ? 'up — Play is live again'
+          : `not down yet — the link has its two seconds again (${next.link})`
+    )
   }
   for (const fn of watchers) fn(state)
 }
@@ -185,6 +295,36 @@ function schedule(ms) {
 }
 
 /*
+ * ASK AGAIN THE MOMENT THERE IS DOUBT, so one slow answer is not an outage.
+ *
+ * The link turns to "no answer" on any request that went unanswered — a read
+ * the unit was too busy for, one keepalive the computer missed — and until
+ * now nothing asked again for sixteen seconds: the loop's next turn, backed
+ * off. With Play saying NOT CONNECTED after two seconds of that, a working
+ * rig would have been dimmed mid-song by one slow read. So the computer is
+ * asked once more at once (/healthz, which never waits on the serial port),
+ * and a computer that is there puts the link back inside the hold.
+ *
+ * Two moments only: the computer stopped answering while the channel is up,
+ * and the channel came back with nothing heard on it yet. Not when the
+ * channel drops: realtime-js is already rejoining, and joining over it would
+ * tear its rejoin down. And once per doubt, not a loop: hostSeen is only
+ * announced on change, so a re-ask that also goes unanswered raises none,
+ * and the ordinary backoff carries on from there. A rig that answers sends
+ * nothing extra at all.
+ */
+let doubted = false
+function doubt() {
+  if (!running || isDemo() || !remoteActive()) return
+  /* A turn on the network now reschedules itself when it ends; it asks again then instead. */
+  if (turns > 0) {
+    doubted = true
+    return
+  }
+  schedule(0)
+}
+
+/*
  * HOW MANY TURNS OF THE LOOP ARE OUT ON THE NETWORK, for one question:
  * whether the phone is in the middle of reaching the computer.
  *
@@ -252,7 +392,12 @@ async function turn() {
   /* Stopped while this turn was waiting on the network: no next turn. A turn
      that rescheduled itself after stopLink is a loop nobody can see running. */
   if (!running) return
-  delay = state.link === 'connected' ? KEEPALIVE : nextDelay(delay)
+  delay = state.link === 'connected' ? KEEPALIVE : doubted ? delay : nextDelay(delay)
+  /* Doubted while this turn was out: ask again now, the backoff left where it was for the turn after (see doubt). */
+  if (doubted) {
+    doubted = false
+    if (state.link !== 'connected' && remoteActive()) return schedule(0)
+  }
   schedule(delay)
 }
 
@@ -463,12 +608,29 @@ export function startLink() {
   }
   running = true
   delay = 0
+  /*
+   * The loop starting is a fresh start too: a link left 'off' by a sign-out,
+   * or set early in a launch before the loop began, has had its two seconds
+   * run out already, and the first join must not open with every tap
+   * refused. See holdAgain.
+   */
+  holdAgain()
+  asleep = AppState.currentState != null && AppState.currentState !== 'active'
+  downAsleep = 0
 
   unbind = [
     // The channel coming back under us is the app catching up rather than a
     // stale screen; realtime-js rejoins on its own and this is what notices.
-    subscribeRemoteState(() => refresh()),
-    subscribeHostSeen(() => refresh()),
+    subscribeRemoteState((up) => {
+      refresh()
+      /* Back, and nothing heard on it yet: ask now rather than at the next turn. See doubt. */
+      if (up && !remoteHostSeen()) doubt()
+    }),
+    subscribeHostSeen((seen) => {
+      refresh()
+      /* Stopped answering on a channel that is up: ask once more, at once. See doubt. */
+      if (!seen) doubt()
+    }),
     AppState.addEventListener('change', (status) => {
       /*
        * Said in the log, because without it a paste reads as a link that
@@ -479,6 +641,21 @@ export function startLink() {
        * evening's log, none of them a fault, and nothing in it said so.
        */
       logDebug('app', status === 'active' ? 'back on screen' : `put to sleep (${status})`)
+      /*
+       * And Play's two seconds start again on the way back (holdAgain), so
+       * the connection Android cut in the pocket is not NOT CONNECTED the
+       * instant the screen comes on — unless Play was already saying it as
+       * the phone went to sleep, over the same outage, which it still is.
+       */
+      if (status !== 'active' && !asleep) {
+        asleep = true
+        downAsleep = state.down ? lostAt : 0
+      }
+      if (status === 'active' && asleep) {
+        asleep = false
+        if (!downAsleep || downAsleep !== lostAt) holdAgain()
+        downAsleep = 0
+      }
       // Back from a locked screen or another app: ask now rather than waiting
       // out whatever backoff the loop had reached while nobody was looking.
       if (status === 'active') probeNow()
