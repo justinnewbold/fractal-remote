@@ -361,7 +361,9 @@ async function connectedLoop() {
  */
 async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'link-now-web-'))
-  const shared = (f) => pathToFileURL(new URL(`../shared/${f}`, import.meta.url).pathname).href
+  /* Already a file URL. Through .pathname and back, Windows read "/D:/a/…" as
+     a path on the current drive and looked for D:\D:\a\… */
+  const shared = (f) => new URL(`../shared/${f}`, import.meta.url).href
   const files = {
     'package.json': '{ "type": "module" }',
     'clock.mjs': CLOCK,
