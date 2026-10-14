@@ -136,7 +136,7 @@ export const WAYS = [
      */
     steps: [
       'On an ordinary PC, take the Linux PC AppImage from the download page below. The AppImage is the one that keeps itself up to date.',
-      'On a Raspberry Pi, take the Raspberry Pi AppImage (its file name has arm64 in it). It needs the 64-bit Raspberry Pi OS: open Terminal and type dpkg --print-architecture. If it says arm64, you are set. If it says armhf, the Pi is running the 32-bit one, which none of the files run on — put Raspberry Pi OS (64-bit) on it with Raspberry Pi Imager. That wipes the memory card, so copy off anything you want to keep first. A Pi 3, 4, 5 or Zero 2 W can run it.',
+      'On a Raspberry Pi, take the Raspberry Pi AppImage (its file name has arm64 in it). It needs the 64-bit Raspberry Pi OS: open Terminal and type dpkg --print-architecture. If it says arm64, you are set. If it says armhf, the Pi is running the 32-bit one, which none of the files run on — put Raspberry Pi OS (64-bit) on it with Raspberry Pi Imager. That wipes the memory card, so copy off anything you want to keep first. A Pi 4, 5, 400, 500 or 500+ with 2 GB or more is best, and a Pi 3 is slower. A Zero 2 W or Pi 3 A+ isn’t recommended: 512 MB is very likely too little.',
       'On a trimmed-down system, such as Raspberry Pi OS Lite with a desktop added, install two packages first: sudo apt install libfuse2t64 zlib1g-dev (on the older Bookworm release, libfuse2 in place of libfuse2t64).',
       "Make the AppImage executable and open it. Right-click it, choose Properties, and on the Permissions tab set Execute to Anyone (on other computers, tick the box that lets it run as a program). Or in Terminal, type cd Downloads, then chmod +x followed by the file's name. If double-clicking it does nothing, type ./ followed by the file's name in that same Terminal, and it says why.",
       "Or take the .deb for your machine (Linux PC or Raspberry Pi) instead. In Terminal, type cd Downloads, then sudo apt install ./the-file.deb with the file's own name in place of the-file.deb. The .deb updates itself too, but only when you quit the app, and it may ask for your password, so the AppImage is the easier one. If the phone says the computer app needs updating, quit the app, or install the new .deb the same way.",
@@ -159,7 +159,16 @@ export const WAYS = [
        */
       'For a Raspberry Pi that lives on your pedalboard with no screen, take the Raspberry Pi AppImage, not the .deb: the AppImage updates itself with nobody there, and the .deb only updates when somebody quits it and types a password. Plug a screen in once (or use Raspberry Pi Connect or VNC), open the app and sign in as above, then in the app go to Settings, then About, and switch on Start when this computer turns on. From then on the app starts by itself, with no window, every time the Pi is switched on. Leave the AppImage file where it is, because it is the app itself; if you move it, open it once from its new place. It needs the 64-bit Raspberry Pi OS with the desktop, with Desktop Autologin left on, which it is unless you changed it.'
     ],
-    links: [{ label: 'Download Fractal Remote for Linux', url: 'https://fractal.newbold.cloud/downloads' }]
+    /*
+     * The Pi guide as well, 14 October 2026: the steps above are one
+     * paragraph each for somebody who knows a Pi, and the guide is every
+     * step for somebody who has never used one, from the memory card on.
+     * The download page stays first, because it is what the steps name.
+     */
+    links: [
+      { label: 'Download Fractal Remote for Linux', url: 'https://fractal.newbold.cloud/downloads' },
+      { label: 'Set up a Raspberry Pi, step by step', url: 'https://fractal.newbold.cloud/raspberry-pi' }
+    ]
   },
 ]
 

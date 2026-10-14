@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Set up a Raspberry Pi — Fractal Remote</title>
+    <meta
+      name="description"
+      content="A small computer by your Fractal unit, so your phone controls it with no laptop: which Raspberry Pi to get, what to buy, and every step from the memory card to the gig, from a Mac, a Windows PC, a Linux computer, or a TV and keyboard on the Pi."
+    />
+    <!--
+      THE RASPBERRY PI SETUP GUIDE, for a guitarist who has never used one.
+
+      "Maybe it would be a good idea to ask them how they're setting it up?
+      And then they click on one and it gives them the specific instructions
+      for that device." (Justin, 14 October 2026.)
+
+      So the page asks, with four big buttons — from a Mac, from a Windows
+      PC, from a Linux computer, or with a keyboard, mouse and screen on the
+      Pi — and shows the one way chosen, complete from the memory card to
+      the gig. The app's own steps are in every one of the four, so nobody
+      scrolls past somebody else's steps to reach them. They are the same
+      steps, with the few words that differ written for each way (which
+      screen the reader is looking at, how to right-click, where the 64-bit
+      system was checked), and a test holds the rest word for word.
+
+      HOW THE CHOICE WORKS. A little plain JavaScript at the bottom, no
+      framework. The buttons are real buttons with aria-pressed, so a
+      keyboard and a screen reader both work them. The choice goes in the
+      address (#mac, #windows, #linux, #screen), so a link straight to one
+      way opens it and Back goes back to the one before. With scripts off,
+      nothing is hidden: the buttons stay hidden instead, every way shows one
+      after another under its own heading, and a line of links jumps to each.
+
+      LIGHT AND DARK. The site's other pages are dark only; this one follows
+      the system, and the app's own Light or Dark choice when one was made in
+      this browser (the web app keeps it as fab.theme, on this same address).
+
+      WHAT IT MAY CLAIM. The app has been started, the way a pedalboard Pi
+      starts it, on GitHub's arm64 machines on every build. Nothing records it
+      running all the way on a real Pi yet: the one customer on a Pi 3 first
+      took the wrong file (1.87.15 fixed that), and nobody has measured its
+      memory on a Pi. So the page says a Pi 3 "should" work, and never says a
+      model works beyond that. The 512 MB models are
+      "not recommended", not "won't work": the system goes on them, and
+      nobody has seen them run it. The facts about the Pis come from
+      Raspberry Pi's own documentation, Imager's list of systems and its
+      screens, and the 6 October 2026 image, checked on 14 October 2026.
+
+      NO PRICES AND NO SHOP LINKS: they go stale. And the word for the
+      phone's other way in is kept off this page, because the support page
+      links here and may not carry it.
+
+      Same look as support.html: the same colours and type, no build step,
+      nothing loaded from anywhere.
+    -->
+    <script>
+      /* The app's own Light or Dark, if one was chosen in this browser. */
+      ;(function () {
+        try {
+          var chosen = window.localStorage.getItem('fab.theme')
+          if (chosen === 'light' || chosen === 'dark') document.documentElement.setAttribute('data-theme', chosen)
+        } catch (e) {
+          /* Storage refused: the system's own choice stands. */
+        }
+      })()
+    </script>
+    <style>
+      :root {
+        --chassis: #0d0f12;
+        --panel: #15181d;
+        --panel-hi: #1c2027;
+        --rule: #262b33;
+        --silk: #e6e3dc;
+        --silk-dim: #878d97;
+        --signal: #f0a73c;
+        --ok: #63c68c;
+        --fault: #e0684f;
+        color-scheme: dark;
+      }
+      /* The app's light theme, from src/styles.css. */
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme="dark"]) {
+          --chassis: #f2efe9;
+          --panel: #faf8f4;
+          --panel-hi: #ffffff;
+          --rule: #d8d3c8;
+          --silk: #23262b;
+          --silk-dim: #3f444c;
+          --signal: #9c5f12;
+          --ok: #1f7a45;
+          --fault: #b23b23;
+          color-scheme: light;
+        }
+      }
+      :root[data-theme="light"] {
+        --chassis: #f2efe9;
+        --panel: #faf8f4;
+        --panel-hi: #ffffff;
+        --rule: #d8d3c8;
+        --silk: #23262b;
+        --silk-dim: #3f444c;
+        --signal: #9c5f12;
+        --ok: #1f7a45;
+        --fault: #b23b23;
+        color-scheme: light;
+      }
+      * { box-sizing: border-box; }
+      /* Whatever the script hides stays hidden, whatever else styles it. */
+      [hidden] { display: none !important; }
+      body {
+        margin: 0;
+        padding: 48px 20px 96px;
+        background: var(--chassis);
+        color: var(--silk);
+        font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      main { max-width: 720px; margin: 0 auto; }
+      h1 { font-size: 30px; line-height: 1.2; margin: 0 0 4px; }
+      h2 { font-size: 22px; line-height: 1.3; margin: 48px 0 8px; }
+      h3 { font-size: 17px; margin: 28px 0 6px; color: var(--signal); }
+      h4 { font-size: 16px; margin: 26px 0 4px; color: var(--signal); }
+      .when { color: var(--silk-dim); margin: 0 0 32px; font-size: 14px; }
+      .lead {
+        padding: 16px 20px;
+        border-left: 3px solid var(--signal);
+        background: var(--panel);
+        border-radius: 0 8px 8px 0;
+      }
+      a { color: var(--signal); overflow-wrap: anywhere; }
+      ul, ol { padding-left: 24px; }
+      li { margin: 8px 0; }
+      footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--silk-dim); font-size: 14px; }
+      code { background: var(--panel); padding: 1px 5px; border-radius: 4px; font-size: 14px; overflow-wrap: anywhere; }
+      .dim { color: var(--silk-dim); font-size: 15px; }
+      :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+      /* Which Pi: one box for each answer, its colour at the edge. */
+      .tier { margin: 12px 0; padding: 12px 16px; background: var(--panel); border-radius: 8px; border-left: 4px solid var(--rule); }
+      .tier p { margin: 0 0 4px; font-weight: 700; }
+      .tier ul { margin: 0; padding-left: 20px; }
+      .tier li { margin: 4px 0; }
+      .tier.good { border-left-color: var(--ok); }
+      .tier.good p { color: var(--ok); }
+      .tier.slow { border-left-color: var(--signal); }
+      .tier.slow p { color: var(--signal); }
+      .tier.no { border-left-color: var(--silk-dim); }
+      .tier.no p { color: var(--silk-dim); }
+      .tier.bad { border-left-color: var(--fault); }
+      .tier.bad p { color: var(--fault); }
+
+      /* The question, and its four answers as big buttons. */
+      .ask { font-size: 20px; color: var(--silk); margin-top: 32px; }
+      .pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; margin: 12px 0; }
+      .pick button {
+        display: block;
+        width: 100%;
+        min-height: 64px;
+        padding: 12px 16px;
+        border: 1px solid var(--rule);
+        border-radius: 10px;
+        background: var(--panel);
+        color: var(--silk);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .pick button:hover { border-color: var(--silk-dim); }
+      /* The one chosen: amber edge, lifted ground, and a tick before its name. */
+      .pick button[aria-pressed="true"] { border: 2px solid var(--signal); padding: 11px 15px; background: var(--panel-hi); }
+      .pick button[aria-pressed="true"] .pick-name::before { content: "✓ "; color: var(--signal); }
+      .pick-name { display: block; font-size: 17px; font-weight: 700; line-height: 1.3; }
+      .pick-note { display: block; margin-top: 2px; font-size: 14px; color: var(--silk-dim); }
+      .pick-hint { margin: 4px 0 0; }
+
+      /* One way's steps. */
+      .way { margin-top: 24px; padding-top: 4px; border-top: 1px solid var(--rule); }
+      .way h3 { font-size: 22px; color: var(--silk); margin-top: 20px; }
+      .way-lead { margin-top: 0; }
+      .opt { margin: 18px 0 0; }
+      .pi3 { display: block; margin-top: 6px; padding: 6px 10px; border-radius: 6px; background: var(--panel); font-size: 15px; }
+      .again { margin-top: 24px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Set up a Raspberry Pi for Fractal Remote</h1>
+      <p class="when">Fractal Remote · last updated 14 October 2026</p>
+
+      <p>
+        A Raspberry Pi is a small, inexpensive computer, about the size of a deck of cards. Set up
+        once, it sits by your Fractal unit, on your pedalboard or in your rack, with the unit
+        plugged into it, and runs the Fractal Remote app all by itself. Your phone controls the
+        unit through it, so there is no laptop at the gig. After the setup it needs no screen,
+        keyboard or mouse: switch it on, and your phone finds your unit.
+      </p>
+
+      <p class="lead">
+        <strong>The Fractal Remote app is new on the Raspberry Pi.</strong> Every new version is
+        started with no window, the way a pedalboard Pi starts it, on a computer with the same kind
+        of processor as a Pi, but it is still being tried on real ones. If it works on yours, or
+        something here doesn’t match what you see, please say so: in the app, Settings →
+        Troubleshooting → Feedback, or by email from the <a href="/support#contact">support page</a>.
+      </p>
+
+      <p class="dim">
+        On this page:
+        <a href="#which">which Pi</a> ·
+        <a href="#buy">what to buy</a> ·
+        <a href="#setup">setting it up</a> ·
+        <a href="#trouble">if something goes wrong</a> ·
+        <a href="#gigs">for gigs</a>
+      </p>
+
+      <h2 id="which">Which Raspberry Pi</h2>
+      <p>
+        It needs a Pi that can run the 64-bit Raspberry Pi OS with its desktop, and enough memory
+        for that desktop and the app together.
+      </p>
+
+      <div class="tier good">
+        <p>Good: pick one of these</p>
+        <ul>
+          <li><strong>Raspberry Pi 5 with 2 GB or more.</strong> The best pick, and the 4 GB is plenty. Give it a case with a fan.</li>
+          <li><strong>Raspberry Pi 4 with 2 GB or more.</strong> A little slower than a Pi 5, and still plenty for this.</li>
+          <li><strong>Raspberry Pi 400, 500 or 500+.</strong> A Pi built into a keyboard, so it suits a desk or a rack better than a pedalboard.</li>
+        </ul>
+      </div>
+      <div class="tier slow">
+        <p>Works, but slower</p>
+        <ul>
+          <li><strong>Raspberry Pi 3 Model B or B+.</strong> 1 GB of memory: a slow first start, and memory is tight. The Model B’s wifi only sees 2.4 GHz networks.</li>
+          <li><strong>A Pi 4 or Pi 5 with 1 GB.</strong> Tight on memory. Raspberry Pi itself doesn’t recommend 1 GB for the desktop.</li>
+        </ul>
+      </div>
+      <div class="tier no">
+        <p>Not recommended</p>
+        <ul>
+          <li><strong>Raspberry Pi Zero 2 W and Pi 3 Model A+.</strong> Only 512 MB of memory. The system goes on, but that is very likely too little for the desktop and the app together, and each has only one USB port.</li>
+        </ul>
+      </div>
+      <div class="tier bad">
+        <p>Won’t work</p>
+        <ul>
+          <li><strong>Raspberry Pi 2, every Raspberry Pi 1, and the first Zero, Zero W and Zero WH.</strong> They can only run the 32-bit Raspberry Pi OS, and the Fractal Remote app needs the 64-bit one.</li>
+        </ul>
+      </div>
+      <p class="dim">
+        Compute Modules are a Pi on a small card, made to be built into other things, with nothing
+        to plug into until they have a board of their own. They aren’t covered here.
+      </p>
+
+      <h3 id="pi3">Already have a Pi 3?</h3>
+      <p>
+        It should work, but expect it to be slower, and its memory to be tight with the desktop and
+        the app together: the first start after switching on can take several minutes. Once it starts by itself
+        at power-on, if it runs out of memory, the part of the app that talks to your unit starts
+        again by itself. These help:
+      </p>
+      <ul>
+        <li>Use the official Raspberry Pi 12.5W micro USB power supply. A phone charger may not give it enough power.</li>
+        <li>Switch off <strong>Active Desktop</strong>: Raspberry Pi menu → Preferences → Control Centre → Desktop, and turn off Active Desktop. Raspberry Pi recommends that on any Pi with less than 2 GB, and a Pi 3 may suggest it by itself when it starts. It only takes the icons off the desktop.</li>
+        <li>Close the web browser on the Pi once the app is downloaded. It is the heaviest thing a Pi 3 runs.</li>
+        <li>Switch on <strong>Start when this computer turns on</strong> (the steps below do), so the app runs with no window, and close screen sharing when you are done with it.</li>
+        <li>A Pi 3 Model B only sees 2.4 GHz wifi. At home, choose your router’s 2.4 GHz network. With an iPhone’s hotspot, switch on <strong>Maximize Compatibility</strong> in Settings → Personal Hotspot (iPhone 12 or later; older iPhones already use 2.4 GHz).</li>
+        <li>Give it a few minutes after switching on before you expect the phone to find it.</li>
+      </ul>
+      <p>
+        If it still struggles, slow to answer or dropping out, a Pi 4 or Pi 5 with 2 GB or more is
+        the fix, and every step on this page is the same on those.
+      </p>
+
+      <h2 id="buy">What to buy</h2>
+      <p>For the recommended <strong>Raspberry Pi 5 with 4 GB</strong>:</p>
+      <ul>
+        <li><strong>A Raspberry Pi 5, 4 GB.</strong></li>
+        <li><strong>The official Raspberry Pi 27W USB-C Power Supply.</strong> A Pi 5 needs 5 volts at 5 amps, and on a lesser supply it holds back the power it gives its USB ports.</li>
+        <li><strong>A case with a fan</strong>, such as the official Raspberry Pi 5 case, which has one built in. A Pi 5 runs best kept cool.</li>
+        <li><strong>A microSD card of 32 GB or more.</strong> It gets wiped, so a blank one is fine.</li>
+        <li>
+          <strong>The USB cable for your unit:</strong>
+          <ul>
+            <li>FM3, FM9 or Axe-Fx III: USB-A to USB-B, the squarer plug at the unit’s end, often called a printer cable.</li>
+            <li>AM4: USB-A to USB-C.</li>
+            <li>Any other unit: USB-A at the Pi’s end, and at the other end the plug your unit takes.</li>
+          </ul>
+          It has to be a data cable, not a charge-only one. They look the same, and a charge-only
+          cable carries no data, so the unit is never found.
+        </li>
+      </ul>
+      <p>
+        You also need Fractal Remote on your phone with the phone remote unlocked (the one-time
+        purchase inside the phone app), and the account you use on the phone: the app on the Pi
+        signs in with the same one. And an internet connection for the Pi: your wifi, or a network
+        cable to your router.
+      </p>
+
+      <h3>And for the way you set it up</h3>
+      <ul>
+        <li>
+          <strong>From a Mac, a Windows PC or a Linux computer:</strong> a USB microSD card reader that
+          fits that computer, a USB-C one if it only has USB-C ports. A computer with an SD card slot
+          can use the full-size adapter that often comes with the card instead. No keyboard, mouse or
+          screen for the Pi. On a Pi 3, have a TV or monitor, an ordinary HDMI cable, a USB keyboard
+          and a USB mouse you could borrow, in case screen sharing doesn’t start.
+        </li>
+        <li>
+          <strong>With a keyboard, mouse and screen on the Pi:</strong> a USB keyboard and a USB mouse
+          (a wireless pair with its own small USB plug works too), a TV or monitor with an HDMI
+          input, and a micro-HDMI to HDMI cable. To put the system on the card you also need one of
+          these: a card reader and any computer, a card bought already loaded with Raspberry Pi OS,
+          or, on a Pi 4, 400, 5, 500 or 500+, a network cable to your router.
+        </li>
+      </ul>
+
+      <h3>On a Pi 4 or Pi 3 instead</h3>
+      <ul>
+        <li><strong>Pi 4 (and Pi 400):</strong> the official Raspberry Pi 15W USB-C Power Supply. Its screen plugs in with a micro-HDMI to HDMI cable, as on a Pi 5. A fan is optional; it stops the Pi slowing itself down when it gets hot.</li>
+        <li><strong>Pi 3:</strong> the official Raspberry Pi 12.5W micro USB Power Supply. Its screen plugs in with an ordinary HDMI cable. It needs no fan.</li>
+      </ul>
+      <p class="dim">No prices or shop links here, because they change. Raspberry Pi’s own website lists the official parts and who sells them.</p>
+
+      <h2 id="setup">Setting it up</h2>
+      <p>
+        You do this once. Set aside an hour or so, much of it waiting. Afterwards the Pi needs no
+        screen.
+      </p>
+
+      <h3 class="ask" id="how">How are you setting it up?</h3>
+      <div class="pick" id="pick" role="group" aria-labelledby="how" hidden>
+        <button type="button" data-way="mac" aria-pressed="false" aria-controls="mac">
+          <span class="pick-name">From a Mac</span>
+          <span class="pick-note">See the Pi’s desktop in a browser on the Mac</span>
+        </button>
+        <button type="button" data-way="windows" aria-pressed="false" aria-controls="windows">
+          <span class="pick-name">From a Windows PC</span>
+          <span class="pick-note">See the Pi’s desktop in a browser on the PC</span>
+        </button>
+        <button type="button" data-way="linux" aria-pressed="false" aria-controls="linux">
+          <span class="pick-name">From a Linux computer</span>
+          <span class="pick-note">See the Pi’s desktop in a browser on that computer</span>
+        </button>
+        <button type="button" data-way="screen" aria-pressed="false" aria-controls="screen">
+          <span class="pick-name">With a keyboard, mouse and screen on the Pi</span>
+          <span class="pick-note">A TV or monitor plugged into the Pi</span>
+        </button>
+      </div>
+      <p class="pick-hint dim" id="pick-hint" hidden>Pick one to see its steps.</p>
+      <p class="dim" id="jump">
+        There are four ways, one after another below. Jump to yours:
+        <a href="#mac">From a Mac</a> ·
+        <a href="#windows">From a Windows PC</a> ·
+        <a href="#linux">From a Linux computer</a> ·
+        <a href="#screen">With a keyboard, mouse and screen on the Pi</a>
+      </p>
+
+      <div class="ways">
+        <section class="way" id="mac" aria-labelledby="mac-h">
+          <h3 id="mac-h">From a Mac</h3>
+          <p class="way-lead">You put the system on the memory card with your Mac, then see and use the Pi’s desktop in a web browser on your Mac. Nothing plugs into the Pi but its power, and later your unit. Have the card reader and your wifi’s name and password ready.</p>
+          <p>Your Mac needs macOS 13 Ventura or newer: the Apple menu, then <strong>About This Mac</strong>, shows which it has. On an older Mac, Raspberry Pi Imager won’t open, so take <a href="#screen" data-go="screen">With a keyboard, mouse and screen on the Pi</a> instead, with a card bought already loaded with Raspberry Pi OS, or, on a Pi 4 or Pi 5, with no other computer at all.</p>
+          <h4>1. Put Raspberry Pi OS on the memory card</h4>
+          <ol>
+            <li>On your Mac, go to <a href="https://www.raspberrypi.com/software/">raspberrypi.com/software</a> and click <strong>Download for macOS</strong>.</li>
+            <li>Open the file you downloaded (its name starts with imager and ends in .dmg), and drag <strong>Raspberry Pi Imager</strong> into the <strong>Applications</strong> folder.</li>
+            <li>Open Raspberry Pi Imager from Applications. If your Mac asks whether you are sure you want to open it, click <strong>Open</strong>.</li>
+            <li>Put the memory card in the card reader, and plug the reader into your Mac.</li>
+            <li>On the <strong>Device</strong> screen, choose your Pi: <strong>Raspberry Pi 5</strong> (also the one for a Pi 500 or 500+), <strong>Raspberry Pi 4</strong> (also the one for a Pi 400) or <strong>Raspberry Pi 3</strong>. Click <strong>Next</strong>.</li>
+            <li>On the <strong>OS</strong> screen, choose <strong>Raspberry Pi OS (64-bit)</strong>, the first one, marked Recommended. Not Raspberry Pi OS (32-bit) just under it, and nothing under Raspberry Pi OS (other): the Lite system there has no desktop, and the app needs one. Click <strong>Next</strong>.</li>
+            <li>On the <strong>Storage</strong> screen, choose your memory card (check its size, so you know it is the card), leave <strong>Exclude system drives</strong> ticked, and click <strong>Next</strong>.</li>
+            <li><strong>Hostname</strong>: type a name for the Pi, using only letters, numbers and hyphens, such as <code>pedalboard</code>. Click <strong>Next</strong>.</li>
+            <li><strong>Localisation</strong>: choose your capital city. That sets the time zone, the keyboard and the wifi country. Click <strong>Next</strong>.</li>
+            <li><strong>User</strong>: choose a username (small letters and numbers only) and a password, and write both down. Click <strong>Next</strong>.</li>
+            <li><strong>Wi-Fi</strong>: Imager may fill in the network your Mac is on. If it asks whether to fill in the wifi password from your Mac’s keychain, say yes and type your Mac’s password. Fill in whatever it left empty: leave <strong>Secure network</strong> chosen, type your wifi’s name in the <strong>SSID</strong> box exactly as it appears (capitals and spaces count), and type the wifi password in both password boxes. Leave <strong>Hidden SSID</strong> unticked. The Pi has to join this network by itself the first time it starts, so check every letter. Click <strong>Next</strong>. <span class="pi3"><strong>On a Pi 3:</strong> choose a 2.4 GHz network. A Pi 3 Model B can’t see 5 GHz ones, and if your router shows two names, the 5 GHz one often ends in 5G.</span></li>
+            <li><strong>Remote access</strong>: leave <strong>Enable SSH</strong> off, and click <strong>Next</strong>.</li>
+            <li><strong>Raspberry Pi Connect</strong>: switch on <strong>Enable Raspberry Pi Connect</strong>, then click <strong>Open Raspberry Pi Connect</strong>. Your web browser opens.</li>
+            <li>In the browser, sign in with your Raspberry Pi ID, or sign up for one. It’s free, and it is an account with Raspberry Pi, not your Fractal Remote one.</li>
+            <li>On the <strong>New auth key</strong> page, click <strong>Create auth key and launch Raspberry Pi Imager</strong>. If the browser asks whether to open Raspberry Pi Imager, say yes.</li>
+            <li>Back in Imager, the <strong>Authentication token</strong> box has filled itself in with a long code, and the <strong>Open Raspberry Pi Connect</strong> button has gone. Click <strong>Next</strong>. (If the box is still empty after half a minute, open <strong>Having trouble?</strong> on that web page, copy the key, and paste it into the box.)</li>
+            <li>If Imager shows any other screen, leave it as it is and click <strong>Next</strong>.</li>
+            <li>Click <strong>Write</strong>, then <strong>I understand, erase and write</strong>. Type your Mac’s password if it asks.</li>
+            <li>Wait while it writes the card and then checks it. That takes several minutes. When Imager says <strong>Write complete!</strong>, wait until it says the storage device (the card) was ejected (if it shows an <strong>Eject</strong> button instead, click <strong>Eject</strong>), then click <strong>Finish</strong>. If your Mac says the disk isn’t readable, now or while it writes, click <strong>Ignore</strong>. Never Initialize: that wipes what was just written.</li>
+            <li>Take the card out. Start the Pi with it within six hours: the Connect key Imager put on the card stops working after that. If you miss it, write the card again.</li>
+          </ol>
+          <h4>2. Start the Pi, and see its desktop on your Mac</h4>
+          <ol>
+            <li>Put the Pi in its case, following the leaflet that comes with the case (a Pi 400, 500 or 500+ is its own case, so skip this). In the official Raspberry Pi 5 case, plug the fan’s small cable into the little socket marked FAN on the Pi before you put the lid on.</li>
+            <li>Push the memory card into the Pi’s card slot, printed side facing away from the board. On a Pi 5, 4 or 3 the slot is underneath, at the end away from the USB ports.</li>
+            <li>Plug the power supply into the Pi and into the wall. The Pi starts by itself. The first start takes several minutes while it sets itself up and joins your wifi, and longer on a Pi 3.</li>
+            <li>On your Mac, go to <a href="https://connect.raspberrypi.com/">connect.raspberrypi.com</a> in the web browser and sign in with your Raspberry Pi ID. If the browser asks to find devices on your local network, allow it.</li>
+            <li>Open the <strong>Devices</strong> tab. Your Pi is listed there, with a <strong>Screen sharing</strong> badge under its name. If it isn’t there after ten minutes, see <a href="#trouble">If something goes wrong</a>.</li>
+            <li>Click <strong>Connect via</strong>, then <strong>Screen sharing</strong>. The Pi’s desktop opens in your browser, and your Mac’s mouse and keyboard work it. <span class="pi3"><strong>On a Pi 3:</strong> screen sharing should work on today’s Raspberry Pi OS, but nobody has tried it with this app on a Pi 3 yet. If your Pi still shows no Screen sharing badge after you unplug its power and plug it back in, plug a TV or monitor (with an ordinary HDMI cable), a USB keyboard and a USB mouse into the Pi. Unplug the Pi’s power and plug it back in, then do parts 3 and 4 below on the TV instead of in your browser. In part 4, unplug the keyboard, mouse and TV before you plug the power back in.</span></li>
+          </ol>
+          <h4>3. Put the Fractal Remote app on the Pi</h4>
+          <ol>
+            <li>On the Pi’s own desktop (in the screen sharing window, or on the TV if part 2 sent a Pi 3 there), open the web browser: click the Raspberry Pi menu at the top left, then <strong>Internet</strong>, then <strong>Chromium</strong> (or Firefox).</li>
+            <li>In the Pi’s web browser, click its address bar. On screen sharing, that is the one inside the picture of the Pi’s desktop, not your own browser’s at the very top. Type <code>fractal.newbold.cloud/downloads</code> there and press Enter. Type it on the Pi: clicking it on this page would open it on whatever you are reading this on.</li>
+            <li>Click <strong>Raspberry Pi and other ARM — AppImage</strong> (it may start with “Download for”). Not the Linux PC one, and not the .deb. If the browser asks whether to keep the file, choose <strong>Keep</strong>.</li>
+            <li>If the download page asks you to check the Pi’s system first, you can skip that: you chose Raspberry Pi OS (64-bit) in Imager.</li>
+            <li>When it has downloaded, close the Pi’s web browser with the × at its top right. On screen sharing, close only that one, inside the picture, and leave your own browser open. The Pi’s browser is the heaviest thing a Pi runs, most of all a Pi 3.</li>
+            <li>Open the file manager: Raspberry Pi menu, then <strong>Accessories</strong>, then <strong>File Manager</strong>. Open the <strong>Downloads</strong> folder.</li>
+            <li>Right-click the file whose name ends in <strong>arm64.AppImage</strong> (with a Mac trackpad, click with two fingers), choose <strong>Properties</strong>, and on the <strong>Permissions</strong> tab set <strong>Execute</strong> to <strong>Anyone</strong>. Click <strong>OK</strong>.</li>
+            <li>Double-click the file. If it asks whether to execute it, choose <strong>Execute</strong>. The Fractal Remote app opens. Leave the file where it is from now on: it is the app itself. <span class="pi3"><strong>On a Pi 3:</strong> the app can take a minute or more to open the first time.</span></li>
+            <li>The app opens on its welcome screen. (If it doesn’t, open Settings with the gear ⚙ at the top right and choose <strong>Show the walkthrough</strong>.) Choose <strong>I already have an account</strong>, type the email and password of your Fractal Remote account, the same one as on your phone, and click <strong>Turn on</strong>. No account yet? Choose <strong>Create account</strong> there instead.</li>
+            <li>Open Settings (the gear ⚙ at the top right), choose <strong>About</strong>, and tick <strong>Start when this computer turns on</strong>.</li>
+            <li>Plug your unit into one of the Pi’s USB ports with its USB cable, and switch the unit on.</li>
+            <li>On your phone, open Fractal Remote, signed in to that same account. It finds the Pi and shows your unit. If it says there is no computer, tap <strong>Look for the computer again</strong>.</li>
+          </ol>
+          <h4>4. Test it the way it will be used</h4>
+          <ol>
+            <li>On the Pi’s desktop, click the Raspberry Pi menu, then <strong>Shutdown</strong>, then <strong>Shutdown</strong>. The screen sharing ends.</li>
+            <li>Wait half a minute, unplug the Pi’s power, and plug it back in.</li>
+            <li>Give it a few minutes, longer on a Pi 3. With nobody there, the Pi starts, the app starts by itself with no window, and your phone finds your unit again.</li>
+            <li>That’s it. From now on, switch the Pi on and your phone finds your unit. Whenever you want the Pi’s desktop again, <a href="https://connect.raspberrypi.com/">connect.raspberrypi.com</a> shows it while the Pi is online, from any web browser, your phone’s included.</li>
+          </ol>
+          <p class="again dim">Setting it up another way? <a href="#how" data-again>Back to the four choices</a></p>
+        </section>
+
+        <section class="way" id="windows" aria-labelledby="windows-h">
+          <h3 id="windows-h">From a Windows PC</h3>
+          <p class="way-lead">You put the system on the memory card with your PC, then see and use the Pi’s desktop in a web browser on your PC. Nothing plugs into the Pi but its power, and later your unit. Have the card reader and your wifi’s name and password ready.</p>
+          <h4>1. Put Raspberry Pi OS on the memory card</h4>
+          <ol>
+            <li>On your PC, go to <a href="https://www.raspberrypi.com/software/">raspberrypi.com/software</a> and click <strong>Download for Windows</strong>.</li>
+            <li>Open the file you downloaded (its name starts with imager and ends in .exe). If Windows asks <strong>Do you want to allow this app to make changes to your device?</strong>, click <strong>Yes</strong>. If a blue box says <strong>Windows protected your PC</strong>, click <strong>More info</strong>, then <strong>Run anyway</strong>. Follow the installer to the end.</li>
+            <li>Open Raspberry Pi Imager from the Start menu. If Windows asks again whether to allow it to make changes, click <strong>Yes</strong>.</li>
+            <li>Put the memory card in the card reader, and plug the reader into your PC.</li>
+            <li>On the <strong>Device</strong> screen, choose your Pi: <strong>Raspberry Pi 5</strong> (also the one for a Pi 500 or 500+), <strong>Raspberry Pi 4</strong> (also the one for a Pi 400) or <strong>Raspberry Pi 3</strong>. Click <strong>Next</strong>.</li>
+            <li>On the <strong>OS</strong> screen, choose <strong>Raspberry Pi OS (64-bit)</strong>, the first one, marked Recommended. Not Raspberry Pi OS (32-bit) just under it, and nothing under Raspberry Pi OS (other): the Lite system there has no desktop, and the app needs one. Click <strong>Next</strong>.</li>
+            <li>On the <strong>Storage</strong> screen, choose your memory card (check its size, so you know it is the card), leave <strong>Exclude system drives</strong> ticked, and click <strong>Next</strong>.</li>
+            <li><strong>Hostname</strong>: type a name for the Pi, using only letters, numbers and hyphens, such as <code>pedalboard</code>. Click <strong>Next</strong>.</li>
+            <li><strong>Localisation</strong>: choose your capital city. That sets the time zone, the keyboard and the wifi country. Click <strong>Next</strong>.</li>
+            <li><strong>User</strong>: choose a username (small letters and numbers only) and a password, and write both down. Click <strong>Next</strong>.</li>
+            <li><strong>Wi-Fi</strong>: Imager may fill in the network your PC is on. Fill in whatever it left empty: leave <strong>Secure network</strong> chosen, type your wifi’s name in the <strong>SSID</strong> box exactly as it appears (capitals and spaces count), and type the wifi password in both password boxes. Leave <strong>Hidden SSID</strong> unticked. The Pi has to join this network by itself the first time it starts, so check every letter. Click <strong>Next</strong>. <span class="pi3"><strong>On a Pi 3:</strong> choose a 2.4 GHz network. A Pi 3 Model B can’t see 5 GHz ones, and if your router shows two names, the 5 GHz one often ends in 5G.</span></li>
+            <li><strong>Remote access</strong>: leave <strong>Enable SSH</strong> off, and click <strong>Next</strong>.</li>
+            <li><strong>Raspberry Pi Connect</strong>: switch on <strong>Enable Raspberry Pi Connect</strong>, then click <strong>Open Raspberry Pi Connect</strong>. Your web browser opens.</li>
+            <li>In the browser, sign in with your Raspberry Pi ID, or sign up for one. It’s free, and it is an account with Raspberry Pi, not your Fractal Remote one.</li>
+            <li>On the <strong>New auth key</strong> page, click <strong>Create auth key and launch Raspberry Pi Imager</strong>. If the browser asks whether to open Raspberry Pi Imager, say yes.</li>
+            <li>Back in Imager, the <strong>Authentication token</strong> box has filled itself in with a long code, and the <strong>Open Raspberry Pi Connect</strong> button has gone. Click <strong>Next</strong>. (If the box is still empty after half a minute, open <strong>Having trouble?</strong> on that web page, copy the key, and paste it into the box.)</li>
+            <li>If Imager shows any other screen, leave it as it is and click <strong>Next</strong>.</li>
+            <li>Click <strong>Write</strong>, then <strong>I understand, erase and write</strong>. If Windows asks whether to allow it, click <strong>Yes</strong>.</li>
+            <li>Wait while it writes the card and then checks it. That takes several minutes. When Imager says <strong>Write complete!</strong>, wait until it says the storage device (the card) was ejected (if it shows an <strong>Eject</strong> button instead, click <strong>Eject</strong>), then click <strong>Finish</strong>. If Windows says you need to format the disk, now or while it writes, click <strong>Cancel</strong>. Never Format: that wipes what was just written. Leave the small drive called bootfs alone too.</li>
+            <li>Take the card out. Start the Pi with it within six hours: the Connect key Imager put on the card stops working after that. If you miss it, write the card again.</li>
+          </ol>
+          <h4>2. Start the Pi, and see its desktop on your PC</h4>
+          <ol>
+            <li>Put the Pi in its case, following the leaflet that comes with the case (a Pi 400, 500 or 500+ is its own case, so skip this). In the official Raspberry Pi 5 case, plug the fan’s small cable into the little socket marked FAN on the Pi before you put the lid on.</li>
+            <li>Push the memory card into the Pi’s card slot, printed side facing away from the board. On a Pi 5, 4 or 3 the slot is underneath, at the end away from the USB ports.</li>
+            <li>Plug the power supply into the Pi and into the wall. The Pi starts by itself. The first start takes several minutes while it sets itself up and joins your wifi, and longer on a Pi 3.</li>
+            <li>On your PC, go to <a href="https://connect.raspberrypi.com/">connect.raspberrypi.com</a> in the web browser and sign in with your Raspberry Pi ID. If the browser asks to find devices on your local network, allow it.</li>
+            <li>Open the <strong>Devices</strong> tab. Your Pi is listed there, with a <strong>Screen sharing</strong> badge under its name. If it isn’t there after ten minutes, see <a href="#trouble">If something goes wrong</a>.</li>
+            <li>Click <strong>Connect via</strong>, then <strong>Screen sharing</strong>. The Pi’s desktop opens in your browser, and your PC’s mouse and keyboard work it. <span class="pi3"><strong>On a Pi 3:</strong> screen sharing should work on today’s Raspberry Pi OS, but nobody has tried it with this app on a Pi 3 yet. If your Pi still shows no Screen sharing badge after you unplug its power and plug it back in, plug a TV or monitor (with an ordinary HDMI cable), a USB keyboard and a USB mouse into the Pi. Unplug the Pi’s power and plug it back in, then do parts 3 and 4 below on the TV instead of in your browser. In part 4, unplug the keyboard, mouse and TV before you plug the power back in.</span></li>
+          </ol>
+          <h4>3. Put the Fractal Remote app on the Pi</h4>
+          <ol>
+            <li>On the Pi’s own desktop (in the screen sharing window, or on the TV if part 2 sent a Pi 3 there), open the web browser: click the Raspberry Pi menu at the top left, then <strong>Internet</strong>, then <strong>Chromium</strong> (or Firefox).</li>
+            <li>In the Pi’s web browser, click its address bar. On screen sharing, that is the one inside the picture of the Pi’s desktop, not your own browser’s at the very top. Type <code>fractal.newbold.cloud/downloads</code> there and press Enter. Type it on the Pi: clicking it on this page would open it on whatever you are reading this on.</li>
+            <li>Click <strong>Raspberry Pi and other ARM — AppImage</strong> (it may start with “Download for”). Not the Linux PC one, and not the .deb. If the browser asks whether to keep the file, choose <strong>Keep</strong>.</li>
+            <li>If the download page asks you to check the Pi’s system first, you can skip that: you chose Raspberry Pi OS (64-bit) in Imager.</li>
+            <li>When it has downloaded, close the Pi’s web browser with the × at its top right. On screen sharing, close only that one, inside the picture, and leave your own browser open. The Pi’s browser is the heaviest thing a Pi runs, most of all a Pi 3.</li>
+            <li>Open the file manager: Raspberry Pi menu, then <strong>Accessories</strong>, then <strong>File Manager</strong>. Open the <strong>Downloads</strong> folder.</li>
+            <li>Right-click the file whose name ends in <strong>arm64.AppImage</strong> (on a laptop touchpad, tap with two fingers), choose <strong>Properties</strong>, and on the <strong>Permissions</strong> tab set <strong>Execute</strong> to <strong>Anyone</strong>. Click <strong>OK</strong>.</li>
+            <li>Double-click the file. If it asks whether to execute it, choose <strong>Execute</strong>. The Fractal Remote app opens. Leave the file where it is from now on: it is the app itself. <span class="pi3"><strong>On a Pi 3:</strong> the app can take a minute or more to open the first time.</span></li>
+            <li>The app opens on its welcome screen. (If it doesn’t, open Settings with the gear ⚙ at the top right and choose <strong>Show the walkthrough</strong>.) Choose <strong>I already have an account</strong>, type the email and password of your Fractal Remote account, the same one as on your phone, and click <strong>Turn on</strong>. No account yet? Choose <strong>Create account</strong> there instead.</li>
+            <li>Open Settings (the gear ⚙ at the top right), choose <strong>About</strong>, and tick <strong>Start when this computer turns on</strong>.</li>
+            <li>Plug your unit into one of the Pi’s USB ports with its USB cable, and switch the unit on.</li>
+            <li>On your phone, open Fractal Remote, signed in to that same account. It finds the Pi and shows your unit. If it says there is no computer, tap <strong>Look for the computer again</strong>.</li>
+          </ol>
+          <h4>4. Test it the way it will be used</h4>
+          <ol>
+            <li>On the Pi’s desktop, click the Raspberry Pi menu, then <strong>Shutdown</strong>, then <strong>Shutdown</strong>. The screen sharing ends.</li>
+            <li>Wait half a minute, unplug the Pi’s power, and plug it back in.</li>
+            <li>Give it a few minutes, longer on a Pi 3. With nobody there, the Pi starts, the app starts by itself with no window, and your phone finds your unit again.</li>
+            <li>That’s it. From now on, switch the Pi on and your phone finds your unit. Whenever you want the Pi’s desktop again, <a href="https://connect.raspberrypi.com/">connect.raspberrypi.com</a> shows it while the Pi is online, from any web browser, your phone’s included.</li>
+          </ol>
+          <p class="again dim">Setting it up another way? <a href="#how" data-again>Back to the four choices</a></p>
+        </section>
+
+        <section class="way" id="linux" aria-labelledby="linux-h">
+          <h3 id="linux-h">From a Linux computer</h3>
+          <p class="way-lead">You put the system on the memory card with your Linux computer, then see and use the Pi’s desktop in a web browser on that computer. Nothing plugs into the Pi but its power, and later your unit. Have the card reader and your wifi’s name and password ready.</p>
+          <h4>1. Put Raspberry Pi OS on the memory card</h4>
+          <p class="dim">Is your Linux computer itself a Raspberry Pi? Then, instead of the first four steps, open Terminal, type <code>sudo apt install rpi-imager</code> and press Enter (it may say it is already installed), then open Imager from the Raspberry Pi menu → Accessories → Imager. Use a USB card reader for the new card, because the Pi’s own card slot holds its system.</p>
+          <ol>
+            <li>On your computer, go to <a href="https://www.raspberrypi.com/software/">raspberrypi.com/software</a> and click <strong>Download for Linux (x86_64)</strong>. That one is for an ordinary Intel or AMD computer. Take it from there rather than from your computer’s software store, which can have an older Imager without the Raspberry Pi Connect step.</li>
+            <li>Let the file run as a program: right-click it, choose <strong>Properties</strong>, and on the <strong>Permissions</strong> tab tick the box (or switch) that lets it run as a program. Each computer words it a little differently. Or, in Terminal, type <code>cd Downloads</code> and press Enter, then type <code>chmod +x</code> followed by a space and the file’s name (it starts with imager_ and ends in .AppImage), and press Enter.</li>
+            <li>Double-click the file to open Raspberry Pi Imager. It may ask for your computer’s password, so that it can write to the card.</li>
+            <li>If Imager can’t see or write the card, close it, open Terminal, type <code>cd Downloads</code> and press Enter, then type <code>sudo ./</code> followed by the file’s name, and press Enter. Type your computer’s password when it asks.</li>
+            <li>Put the memory card in the card reader, and plug the reader into your computer.</li>
+            <li>On the <strong>Device</strong> screen, choose your Pi: <strong>Raspberry Pi 5</strong> (also the one for a Pi 500 or 500+), <strong>Raspberry Pi 4</strong> (also the one for a Pi 400) or <strong>Raspberry Pi 3</strong>. Click <strong>Next</strong>.</li>
+            <li>On the <strong>OS</strong> screen, choose <strong>Raspberry Pi OS (64-bit)</strong>, the first one, marked Recommended. Not Raspberry Pi OS (32-bit) just under it, and nothing under Raspberry Pi OS (other): the Lite system there has no desktop, and the app needs one. Click <strong>Next</strong>.</li>
+            <li>On the <strong>Storage</strong> screen, choose your memory card (check its size, so you know it is the card), leave <strong>Exclude system drives</strong> ticked, and click <strong>Next</strong>.</li>
+            <li><strong>Hostname</strong>: type a name for the Pi, using only letters, numbers and hyphens, such as <code>pedalboard</code>. Click <strong>Next</strong>.</li>
+            <li><strong>Localisation</strong>: choose your capital city. That sets the time zone, the keyboard and the wifi country. Click <strong>Next</strong>.</li>
+            <li><strong>User</strong>: choose a username (small letters and numbers only) and a password, and write both down. Click <strong>Next</strong>.</li>
+            <li><strong>Wi-Fi</strong>: Imager may fill in the network your computer is on. Fill in whatever it left empty: leave <strong>Secure network</strong> chosen, type your wifi’s name in the <strong>SSID</strong> box exactly as it appears (capitals and spaces count), and type the wifi password in both password boxes. Leave <strong>Hidden SSID</strong> unticked. The Pi has to join this network by itself the first time it starts, so check every letter. Click <strong>Next</strong>. <span class="pi3"><strong>On a Pi 3:</strong> choose a 2.4 GHz network. A Pi 3 Model B can’t see 5 GHz ones, and if your router shows two names, the 5 GHz one often ends in 5G.</span></li>
+            <li><strong>Remote access</strong>: leave <strong>Enable SSH</strong> off, and click <strong>Next</strong>.</li>
+            <li><strong>Raspberry Pi Connect</strong>: switch on <strong>Enable Raspberry Pi Connect</strong>, then click <strong>Open Raspberry Pi Connect</strong>. Your web browser opens.</li>
+            <li>In the browser, sign in with your Raspberry Pi ID, or sign up for one. It’s free, and it is an account with Raspberry Pi, not your Fractal Remote one.</li>
+            <li>On the <strong>New auth key</strong> page, click <strong>Create auth key and launch Raspberry Pi Imager</strong>. If the browser asks whether to open Raspberry Pi Imager, say yes.</li>
+            <li>Back in Imager, the <strong>Authentication token</strong> box has filled itself in with a long code, and the <strong>Open Raspberry Pi Connect</strong> button has gone. Click <strong>Next</strong>. (If the box is still empty after half a minute, open <strong>Having trouble?</strong> on that web page, copy the key, and paste it into the box.)</li>
+            <li>If Imager shows any other screen, leave it as it is and click <strong>Next</strong>.</li>
+            <li>Click <strong>Write</strong>, then <strong>I understand, erase and write</strong>. Type your computer’s password if it asks.</li>
+            <li>Wait while it writes the card and then checks it. That takes several minutes. When Imager says <strong>Write complete!</strong>, wait until it says the storage device (the card) was ejected (if it shows an <strong>Eject</strong> button instead, click <strong>Eject</strong>), then click <strong>Finish</strong>.</li>
+            <li>Take the card out. Start the Pi with it within six hours: the Connect key Imager put on the card stops working after that. If you miss it, write the card again.</li>
+          </ol>
+          <h4>2. Start the Pi, and see its desktop on your computer</h4>
+          <ol>
+            <li>Put the Pi in its case, following the leaflet that comes with the case (a Pi 400, 500 or 500+ is its own case, so skip this). In the official Raspberry Pi 5 case, plug the fan’s small cable into the little socket marked FAN on the Pi before you put the lid on.</li>
+            <li>Push the memory card into the Pi’s card slot, printed side facing away from the board. On a Pi 5, 4 or 3 the slot is underneath, at the end away from the USB ports.</li>
+            <li>Plug the power supply into the Pi and into the wall. The Pi starts by itself. The first start takes several minutes while it sets itself up and joins your wifi, and longer on a Pi 3.</li>
+            <li>On your computer, go to <a href="https://connect.raspberrypi.com/">connect.raspberrypi.com</a> in the web browser and sign in with your Raspberry Pi ID. If the browser asks to find devices on your local network, allow it.</li>
+            <li>Open the <strong>Devices</strong> tab. Your Pi is listed there, with a <strong>Screen sharing</strong> badge under its name. If it isn’t there after ten minutes, see <a href="#trouble">If something goes wrong</a>.</li>
+            <li>Click <strong>Connect via</strong>, then <strong>Screen sharing</strong>. The Pi’s desktop opens in your browser, and your computer’s mouse and keyboard work it. <span class="pi3"><strong>On a Pi 3:</strong> screen sharing should work on today’s Raspberry Pi OS, but nobody has tried it with this app on a Pi 3 yet. If your Pi still shows no Screen sharing badge after you unplug its power and plug it back in, plug a TV or monitor (with an ordinary HDMI cable), a USB keyboard and a USB mouse into the Pi. Unplug the Pi’s power and plug it back in, then do parts 3 and 4 below on the TV instead of in your browser. In part 4, unplug the keyboard, mouse and TV before you plug the power back in.</span></li>
+          </ol>
+          <h4>3. Put the Fractal Remote app on the Pi</h4>
+          <ol>
+            <li>On the Pi’s own desktop (in the screen sharing window, or on the TV if part 2 sent a Pi 3 there), open the web browser: click the Raspberry Pi menu at the top left, then <strong>Internet</strong>, then <strong>Chromium</strong> (or Firefox).</li>
+            <li>In the Pi’s web browser, click its address bar. On screen sharing, that is the one inside the picture of the Pi’s desktop, not your own browser’s at the very top. Type <code>fractal.newbold.cloud/downloads</code> there and press Enter. Type it on the Pi: clicking it on this page would open it on whatever you are reading this on.</li>
+            <li>Click <strong>Raspberry Pi and other ARM — AppImage</strong> (it may start with “Download for”). Not the Linux PC one, and not the .deb. If the browser asks whether to keep the file, choose <strong>Keep</strong>.</li>
+            <li>If the download page asks you to check the Pi’s system first, you can skip that: you chose Raspberry Pi OS (64-bit) in Imager.</li>
+            <li>When it has downloaded, close the Pi’s web browser with the × at its top right. On screen sharing, close only that one, inside the picture, and leave your own browser open. The Pi’s browser is the heaviest thing a Pi runs, most of all a Pi 3.</li>
+            <li>Open the file manager: Raspberry Pi menu, then <strong>Accessories</strong>, then <strong>File Manager</strong>. Open the <strong>Downloads</strong> folder.</li>
+            <li>Right-click the file whose name ends in <strong>arm64.AppImage</strong> (on a touchpad, tap or click with two fingers), choose <strong>Properties</strong>, and on the <strong>Permissions</strong> tab set <strong>Execute</strong> to <strong>Anyone</strong>. Click <strong>OK</strong>.</li>
+            <li>Double-click the file. If it asks whether to execute it, choose <strong>Execute</strong>. The Fractal Remote app opens. Leave the file where it is from now on: it is the app itself. <span class="pi3"><strong>On a Pi 3:</strong> the app can take a minute or more to open the first time.</span></li>
+            <li>The app opens on its welcome screen. (If it doesn’t, open Settings with the gear ⚙ at the top right and choose <strong>Show the walkthrough</strong>.) Choose <strong>I already have an account</strong>, type the email and password of your Fractal Remote account, the same one as on your phone, and click <strong>Turn on</strong>. No account yet? Choose <strong>Create account</strong> there instead.</li>
+            <li>Open Settings (the gear ⚙ at the top right), choose <strong>About</strong>, and tick <strong>Start when this computer turns on</strong>.</li>
+            <li>Plug your unit into one of the Pi’s USB ports with its USB cable, and switch the unit on.</li>
+            <li>On your phone, open Fractal Remote, signed in to that same account. It finds the Pi and shows your unit. If it says there is no computer, tap <strong>Look for the computer again</strong>.</li>
+          </ol>
+          <h4>4. Test it the way it will be used</h4>
+          <ol>
+            <li>On the Pi’s desktop, click the Raspberry Pi menu, then <strong>Shutdown</strong>, then <strong>Shutdown</strong>. The screen sharing ends.</li>
+            <li>Wait half a minute, unplug the Pi’s power, and plug it back in.</li>
+            <li>Give it a few minutes, longer on a Pi 3. With nobody there, the Pi starts, the app starts by itself with no window, and your phone finds your unit again.</li>
+            <li>That’s it. From now on, switch the Pi on and your phone finds your unit. Whenever you want the Pi’s desktop again, <a href="https://connect.raspberrypi.com/">connect.raspberrypi.com</a> shows it while the Pi is online, from any web browser, your phone’s included.</li>
+          </ol>
+          <p class="again dim">Setting it up another way? <a href="#how" data-again>Back to the four choices</a></p>
+        </section>
+
+        <section class="way" id="screen" aria-labelledby="screen-h">
+          <h3 id="screen-h">With a keyboard, mouse and screen on the Pi</h3>
+          <p class="way-lead">You plug a TV or monitor, a keyboard and a mouse into the Pi and set it up right there, like an ordinary computer. Afterwards you unplug them, and the Pi carries on without them.</p>
+          <h4>1. Put the Pi in its case, and plug in the screen, the keyboard and the mouse</h4>
+          <ol>
+            <li>Put the Pi in its case, following the leaflet that comes with the case (a Pi 400, 500 or 500+ is its own case, so skip this). In the official Raspberry Pi 5 case, plug the fan’s small cable into the little socket marked FAN on the Pi before you put the lid on.</li>
+            <li>Plug the TV or monitor into the Pi. On a Pi 5 or Pi 4, use the micro-HDMI to HDMI cable, in the port marked HDMI0, next to the power socket. On a Pi 400, use the same kind of cable in the micro-HDMI port next to the memory card slot. On a Pi 500 or 500+, use it in the port marked HDMI0. On a Pi 3, use an ordinary HDMI cable.</li>
+            <li>Switch the TV or monitor on, and choose that HDMI input.</li>
+            <li>Plug the USB keyboard and the USB mouse into the Pi’s USB ports. A Pi 400, 500 or 500+ is the keyboard, so it needs only the mouse.</li>
+            <li>Don’t plug in the Pi’s power yet.</li>
+          </ol>
+          <h4>2. Get Raspberry Pi OS onto the memory card</h4>
+          <p class="dim">Three ways to do this. Take whichever fits, and skip the other two.</p>
+          <p class="opt"><strong>If the card came already loaded with Raspberry Pi OS</strong> (a kit’s card, or the one a Pi 500 comes with):</p>
+          <ol>
+            <li>Push the card into the Pi’s card slot, printed side facing away from the board. On a Pi 5, 4 or 3 the slot is underneath, at the end away from the USB ports. A Pi 500+ has the system on its own drive, so it needs no card.</li>
+            <li>Then go on to <em>3. Start the Pi, and answer its questions</em>. Its last step but one checks that the card holds the 64-bit system, because a loaded card doesn’t always say which it has.</li>
+          </ol>
+          <p class="opt"><strong>If you have another computer to write the card</strong> (a Mac, a Windows PC or a Linux computer, with a card reader for it):</p>
+          <ol>
+            <li>On that computer, go to <a href="https://www.raspberrypi.com/software/">raspberrypi.com/software</a> and download Raspberry Pi Imager for it. On a Mac (it needs macOS 13 Ventura or newer), open the file and drag Raspberry Pi Imager into Applications. On Windows, open the file and click <strong>Yes</strong> when it asks to make changes. On Linux, let the file run as a program (right-click it, <strong>Properties</strong>, <strong>Permissions</strong>).</li>
+            <li>Open Raspberry Pi Imager, put the memory card in the card reader, and plug the reader in.</li>
+            <li>On the <strong>Device</strong> screen, choose your Pi: <strong>Raspberry Pi 5</strong> (also the one for a Pi 500 or 500+), <strong>Raspberry Pi 4</strong> (also the one for a Pi 400) or <strong>Raspberry Pi 3</strong>. Click <strong>Next</strong>.</li>
+            <li>On the <strong>OS</strong> screen, choose <strong>Raspberry Pi OS (64-bit)</strong>, the first one, marked Recommended. Not Raspberry Pi OS (32-bit) just under it, and nothing under Raspberry Pi OS (other): the Lite system there has no desktop, and the app needs one. Click <strong>Next</strong>.</li>
+            <li>On the <strong>Storage</strong> screen, choose your memory card (check its size), leave <strong>Exclude system drives</strong> ticked, and click <strong>Next</strong>.</li>
+            <li>Click <strong>Skip customisation</strong>. The Pi asks the same questions on its own screen.</li>
+            <li>Click <strong>Write</strong>, then <strong>I understand, erase and write</strong>, and allow it if the computer asks for permission or its password.</li>
+            <li>Wait while it writes the card and then checks it, which takes several minutes. When Imager says <strong>Write complete!</strong>, wait until it says the storage device (the card) was ejected (if it shows an <strong>Eject</strong> button instead, click <strong>Eject</strong>), then click <strong>Finish</strong>. Take the card out. If the computer offers to format the card, or says it isn’t readable, say no: <strong>Cancel</strong> on Windows, <strong>Ignore</strong> on a Mac.</li>
+            <li>Push the card into the Pi’s card slot, printed side facing away from the board. On a Pi 5, 4 or 3 the slot is underneath, at the end away from the USB ports.</li>
+          </ol>
+          <p class="opt"><strong>With no other computer</strong> (a Pi 4, 400, 5, 500 or 500+ only, not a Pi 3):</p>
+          <ol>
+            <li>You need a memory card, blank or one you don’t mind wiping, and a network cable from the Pi to your router. This part doesn’t work over wifi.</li>
+            <li>Push the card into the Pi’s card slot, printed side facing away from the board (on a Pi 5 or 4 the slot is underneath, at the end away from the USB ports), and plug in the network cable.</li>
+            <li>Hold down Shift on the keyboard while you plug in the Pi’s power. The Pi downloads Raspberry Pi Imager and opens it on the screen, which can take a few minutes. If nothing like that appears, the Pi’s start-up software may be too old for this: take one of the other two ways instead.</li>
+            <li>If Imager first shows <strong>Welcome</strong> and asks for a language, choose yours and click <strong>Next</strong>.</li>
+            <li>On the <strong>Device</strong> screen, choose your Pi, and click <strong>Next</strong>.</li>
+            <li>On the <strong>OS</strong> screen, choose <strong>Raspberry Pi OS (64-bit)</strong>, the first one, marked Recommended. Not Raspberry Pi OS (32-bit) just under it, and nothing under Raspberry Pi OS (other): the Lite system there has no desktop, and the app needs one. Click <strong>Next</strong>.</li>
+            <li>On the <strong>Storage</strong> screen, choose the memory card in the Pi (check its size, so you know it is the card), and click <strong>Next</strong>. Then click <strong>Skip customisation</strong>.</li>
+            <li>Click <strong>Write</strong>. Here it starts writing at once, with no box asking if you are sure, so be sure you chose the card on the Storage screen. When the writing is done, it moves on to its last screen by itself. Click <strong>Reboot</strong> there. The Pi starts again from the card. If it doesn’t, unplug its power and plug it back in.</li>
+          </ol>
+          <h4>3. Start the Pi, and answer its questions</h4>
+          <ol>
+            <li>Plug in the Pi’s power, if it isn’t on already. It starts by itself, and the first start can take a few minutes.</li>
+            <li><strong>Welcome to Raspberry Pi</strong>: click <strong>Next</strong>.</li>
+            <li><strong>Set Country</strong>: choose your country, language and time zone. Click <strong>Next</strong>.</li>
+            <li><strong>Create User</strong>: choose a username (small letters and numbers only) and a password, and write both down. Click <strong>Next</strong>.</li>
+            <li><strong>Select WiFi Network</strong>: click your network, click <strong>Next</strong>, type its password, and click <strong>Next</strong>. Do this even if a network cable is plugged in: on the pedalboard the Pi will need the wifi, or your phone’s hotspot (see <a href="#gigs">For gigs</a>). Click <strong>Skip</strong> only if the Pi will always have a network cable. <span class="pi3"><strong>On a Pi 3:</strong> choose a 2.4 GHz network. A Pi 3 Model B can’t see 5 GHz ones.</span></li>
+            <li><strong>Choose Browser</strong>: either is fine. Click <strong>Next</strong>.</li>
+            <li><strong>Update Software</strong>: click <strong>Next</strong> and let it update. It can take up to half an hour, and it is worth it, most of all on a card that came loaded.</li>
+            <li><strong>Setup Complete</strong>: click <strong>Restart</strong> or <strong>Launch</strong>, whichever it offers.</li>
+            <li>Check it is the 64-bit system: open the Raspberry Pi menu at the top left, then <strong>Accessories</strong>, then <strong>Terminal</strong>. Type <code>dpkg --print-architecture</code> and press Enter. If it says <strong>arm64</strong>, you’re set. If it says <strong>armhf</strong>, it is the 32-bit system, which the app can’t run on. If you have another computer, write the card again with it, as above, choosing Raspberry Pi OS (64-bit); that wipes the card. With no other computer, on a Pi 4, 400, 5, 500 or 500+: shut the Pi down (Raspberry Pi menu, <strong>Shutdown</strong>, <strong>Shutdown</strong>), unplug its power, and take the way <em>With no other computer</em> above with this same card. Holding Shift, as it says, starts it even on a card that already has a system on it. On a Pi 3 you need another computer to write the card, or a card sold loaded with Raspberry Pi OS (64-bit).</li>
+            <li>Optional, and handy later on a pedalboard: switch on Raspberry Pi Connect, so you can see the Pi’s desktop from any web browser with no screen plugged in. Click the Connect icon at the top right of the screen and choose <strong>Turn On Raspberry Pi Connect</strong>. In the browser that opens, sign in with your Raspberry Pi ID (or sign up for one; it’s free), give the Pi a name, and click <strong>Create device and sign in</strong>.</li>
+          </ol>
+          <h4>4. Put the Fractal Remote app on the Pi</h4>
+          <ol>
+            <li>On the Pi’s desktop, on the TV, open the web browser: click the Raspberry Pi menu at the top left, then <strong>Internet</strong>, then <strong>Chromium</strong> (or Firefox).</li>
+            <li>In the Pi’s web browser, click its address bar at the top, type <code>fractal.newbold.cloud/downloads</code> there and press Enter. Type it on the Pi: clicking it on this page would open it on whatever you are reading this on.</li>
+            <li>Click <strong>Raspberry Pi and other ARM — AppImage</strong> (it may start with “Download for”). Not the Linux PC one, and not the .deb. If the browser asks whether to keep the file, choose <strong>Keep</strong>.</li>
+            <li>If the download page asks you to check the Pi’s system first, you can skip that: you checked it is the 64-bit one in part 3.</li>
+            <li>When it has downloaded, close the Pi’s web browser with the × at its top right. It is the heaviest thing a Pi runs, most of all a Pi 3.</li>
+            <li>Open the file manager: Raspberry Pi menu, then <strong>Accessories</strong>, then <strong>File Manager</strong>. Open the <strong>Downloads</strong> folder.</li>
+            <li>Right-click the file whose name ends in <strong>arm64.AppImage</strong> (with the right button on the mouse), choose <strong>Properties</strong>, and on the <strong>Permissions</strong> tab set <strong>Execute</strong> to <strong>Anyone</strong>. Click <strong>OK</strong>.</li>
+            <li>Double-click the file. If it asks whether to execute it, choose <strong>Execute</strong>. The Fractal Remote app opens. Leave the file where it is from now on: it is the app itself. <span class="pi3"><strong>On a Pi 3:</strong> the app can take a minute or more to open the first time.</span></li>
+            <li>The app opens on its welcome screen. (If it doesn’t, open Settings with the gear ⚙ at the top right and choose <strong>Show the walkthrough</strong>.) Choose <strong>I already have an account</strong>, type the email and password of your Fractal Remote account, the same one as on your phone, and click <strong>Turn on</strong>. No account yet? Choose <strong>Create account</strong> there instead.</li>
+            <li>Open Settings (the gear ⚙ at the top right), choose <strong>About</strong>, and tick <strong>Start when this computer turns on</strong>.</li>
+            <li>Plug your unit into one of the Pi’s USB ports with its USB cable, and switch the unit on.</li>
+            <li>On your phone, open Fractal Remote, signed in to that same account. It finds the Pi and shows your unit. If it says there is no computer, tap <strong>Look for the computer again</strong>.</li>
+          </ol>
+          <h4>5. Test it the way it will be used</h4>
+          <ol>
+            <li>Click the Raspberry Pi menu, then <strong>Shutdown</strong>, then <strong>Shutdown</strong>.</li>
+            <li>When the screen goes dark, unplug the Pi’s power. Then unplug the keyboard, the mouse and the screen.</li>
+            <li>Plug the power back in, with nothing else plugged into the Pi but your unit (and the network cable, if that is how this Pi always reaches the internet). Give it a few minutes, longer on a Pi 3. With nobody there, the Pi starts, the app starts by itself with no window, and your phone finds your unit again.</li>
+            <li>That’s it. From now on, switch the Pi on and your phone finds your unit. Whenever you want the Pi’s desktop again, plug the screen, keyboard and mouse back in, or, if you switched Connect on, go to <a href="https://connect.raspberrypi.com/">connect.raspberrypi.com</a> from any web browser.</li>
+          </ol>
+          <p class="again dim">Setting it up another way? <a href="#how" data-again>Back to the four choices</a></p>
+        </section>
+      </div>
+
+      <h2 id="trouble">If something goes wrong</h2>
+
+      <h3>The TV or monitor shows nothing</h3>
+      <ul>
+        <li>Check the cable is in the Pi’s port marked HDMI0 (on a Pi 5 or 4, the one next to the power socket; on a Pi 400, the one next to the memory card slot), and the TV is switched to that HDMI input.</li>
+        <li>Still nothing, on a Pi with two of those small ports? Unplug the Pi’s power, move the cable to the other port, and plug the power back in.</li>
+        <li>Switch the TV on first, then unplug the Pi’s power and plug it back in.</li>
+        <li>Use the official power supply: on a weaker one the Pi may not start.</li>
+      </ul>
+
+      <h3>The Pi doesn’t show up in Connect</h3>
+      <ul>
+        <li>Set it up with a keyboard and screen? Look at the Pi’s own screen: if the network icon at the top right shows no wifi, click it and choose your network. If it is online and still not listed, click the Connect icon there and choose <strong>Turn On Raspberry Pi Connect</strong> again.</li>
+        <li>Give it ten minutes. The first start is slow, most of all on a Pi 3.</li>
+        <li>Most often the wifi name or password was typed wrong in Imager, or, on a Pi 3 Model B, it is a 5 GHz network. Plug a network cable from the Pi into your router, then unplug the Pi’s power and plug it back in. If it shows up now, the wifi was the problem: on the Pi’s desktop, click the network icon at the top right and choose your wifi there.</li>
+        <li>No network cable? Unplug the Pi’s power, take the card out, and write it again with Imager (part 1 of the Mac, Windows PC or Linux way). Imager fills in most of what you typed last time. Check the wifi name and password letter by letter, and get a new Connect key with <strong>Open Raspberry Pi Connect</strong>, as before.</li>
+        <li>The Connect key works for six hours after Imager makes it. If the Pi first started later than that, write the card again with Imager.</li>
+        <li>Listed, but with no Screen sharing badge? Unplug the Pi’s power and plug it back in. With no screen plugged in, screen sharing now and then doesn’t start the first time.</li>
+      </ul>
+
+      <h3>During setup, a box says “The device server stopped”</h3>
+      <ul>
+        <li>The Pi ran short of memory while its window, the web browser and screen sharing were all open, most often on a Pi 3. Close the Pi’s web browser, then restart the Pi: Raspberry Pi menu → <strong>Shutdown</strong> → <strong>Reboot</strong>. Then open Fractal Remote again from Downloads.</li>
+      </ul>
+
+      <h3>Double-clicking the app does nothing</h3>
+      <ul>
+        <li>Check it is the Raspberry Pi file: its name ends in <strong>arm64.AppImage</strong>. The Linux PC file can’t run on a Pi.</li>
+        <li>Check <strong>Execute</strong> is set to <strong>Anyone</strong>: right-click the file (on a trackpad, click with two fingers), then <strong>Properties</strong>, <strong>Permissions</strong>.</li>
+        <li>Open Terminal (Raspberry Pi menu, <strong>Accessories</strong>, <strong>Terminal</strong>), type <code>cd Downloads</code> and press Enter, then type <code>./</code> followed by the file’s name, and press Enter. It says what is wrong.</li>
+        <li>On a trimmed-down system, such as Raspberry Pi OS Lite with a desktop added, first type <code>sudo apt install libfuse2t64 zlib1g-dev</code> (on the older Bookworm release, <code>libfuse2</code> in place of <code>libfuse2t64</code>). The normal Raspberry Pi OS (64-bit) already has both.</li>
+        <li>A command that starts with <code>sudo</code> asks for the Pi’s password, the one you chose when you set it up. Nothing shows while you type it; type it anyway and press Enter.</li>
+      </ul>
+
+      <h3>The phone says there is no computer</h3>
+      <ul>
+        <li>The app on the Pi and the phone have to be signed in to the same account. On the phone, Settings → Account shows which one.</li>
+        <li>Then, on the phone, tap <strong>Look for the computer again</strong>.</li>
+        <li>Is the Pi on the internet? If you skipped wifi while setting it up, plug the screen, keyboard and mouse back in, click the network icon at the top right of the Pi’s desktop, and choose your wifi.</li>
+        <li>Give it a few minutes after switching on. A Pi often starts before its wifi is up, so the app keeps trying: every minute for half an hour, then every five minutes.</li>
+        <li>The app starts when the Pi’s desktop does, so <strong>Desktop Auto Login</strong> has to be on. It is unless you changed it: Raspberry Pi menu → Preferences → Control Centre → System.</li>
+      </ul>
+
+      <h3>The app can’t find your unit</h3>
+      <ul>
+        <li>Use a data cable. A charge-only cable looks the same and carries no data.</li>
+        <li>Only one program can use the unit’s USB at a time. Run one copy of Fractal Remote on the Pi: the AppImage, not the .deb as well.</li>
+        <li>Turn the unit off and on again with the app running.</li>
+      </ul>
+      <p>More is on the <a href="/support">support page</a>.</p>
+
+      <h2 id="gigs">For gigs</h2>
+      <ul>
+        <li>
+          <strong>The Pi needs the internet.</strong> Your phone’s hotspot is the surest: add it once
+          at home, and the Pi joins it by itself at every gig. To add it, switch the hotspot on, then
+          on the Pi’s desktop (through Connect, or with a screen) click the network icon at the top
+          right, choose the hotspot and type its password. The Pi remembers it. A network cable into
+          the venue’s router works too. A venue’s wifi works only if the Pi has joined it before,
+          from its desktop, and never if it has a sign-in page.
+          <ul>
+            <li><strong>iPhone:</strong> open Settings → Personal Hotspot, switch on <strong>Allow Others to Join</strong>, and keep that screen open until the Pi has joined, at home and at the gig. With a Pi 3 Model B, also switch on <strong>Maximize Compatibility</strong> there (iPhone 12 or later; older iPhones already use 2.4 GHz).</li>
+            <li><strong>Android phone with a Pi 3 Model B:</strong> set the hotspot to 2.4 GHz in its settings. Some phones call that AP band, or Extend compatibility.</li>
+          </ul>
+        </li>
+        <li>
+          <strong>It needs a wall socket.</strong> Plug its own power supply into the wall or a
+          power strip, not into a USB socket on a pedal power supply or a power bank, which may
+          not give it enough.
+        </li>
+        <li>
+          <strong>Shut it down before you unplug it, when you can.</strong> Pulling the plug on a
+          running Pi can, now and then, spoil the memory card.
+          <ul>
+            <li><strong>Pi 5:</strong> press its power button twice, quickly. Wait a few seconds, then unplug it.</li>
+            <li><strong>Pi 4, Pi 3 and the keyboard ones:</strong> on the Pi’s desktop, Raspberry Pi menu → Shutdown → Shutdown, then unplug it. With no screen, open the desktop through Connect, if it is switched on; that works in your phone’s web browser too. (On a Pi 400, Fn and F10 together open the same Shutdown window; on a Pi 500 or 500+, the power key does.)</li>
+          </ul>
+        </li>
+        <li>
+          <strong>Switch it on in good time</strong>, before you need it. A Pi 3 most of all can
+          take several minutes before the phone finds it.
+        </li>
+      </ul>
+
+      <footer>
+        <p>
+          Fractal Remote is an independent app. It is in no way affiliated with, endorsed by, or
+          sponsored by Fractal Audio Systems, Inc.
+        </p>
+        <p>
+          &ldquo;Fractal Audio&rdquo;, &ldquo;Axe-Fx&rdquo;, &ldquo;FM3&rdquo;, &ldquo;FM9&rdquo;,
+          &ldquo;AM4&rdquo; and &ldquo;VP4&rdquo; are trademarks of Fractal Audio Systems, Inc.,
+          used here only to say which hardware this app works with. Fractal Remote is not connected
+          with Raspberry Pi Ltd either. Raspberry Pi is a trademark of Raspberry Pi Ltd.
+        </p>
+        <p>
+          <a href="https://apps.apple.com/app/id6812916461">Get the iPhone app</a> ·
+          <a href="/android">Get the Android app</a> ·
+          <a href="/downloads">Download the computer app</a> ·
+          <a href="/support">Support</a> ·
+          <a href="/privacy">Privacy</a> ·
+          <a href="/notices">Third-party licences</a>
+        </p>
+      </footer>
+    </main>
+
+    <script>
+      /*
+       * HOW ARE YOU SETTING IT UP: the four buttons, and the one way shown.
+       *
+       * Without this script every way shows, one after another, and the
+       * buttons stay hidden, so nothing is ever kept from a reader whose
+       * browser blocks scripts. With it, the buttons appear, the hint shows
+       * until one is chosen, and only the chosen way's steps are drawn.
+       *
+       * The choice is the address: #mac, #windows, #linux or #screen. A link
+       * to one opens it, a choice adds an entry to the history, and Back
+       * goes to the way chosen before it, or to none. Any other address on
+       * this page (#trouble, say) leaves the chosen way as it was.
+       */
+      ;(function () {
+        var WAYS = ['mac', 'windows', 'linux', 'screen']
+        var pick = document.getElementById('pick')
+        var hint = document.getElementById('pick-hint')
+        var jump = document.getElementById('jump')
+        if (!pick || !hint || !window.history || typeof window.history.pushState !== 'function') return
+        var buttons = pick.querySelectorAll('button[data-way]')
+        var current = null
+
+        function each(list, fn) {
+          for (var i = 0; i < list.length; i++) fn(list[i])
+        }
+
+        /* Which way an address names, or null for none. */
+        function wayIn(hash) {
+          var id = String(hash || '').replace(/^#/, '')
+          return WAYS.indexOf(id) === -1 ? null : id
+        }
+
+        function show(id) {
+          current = id
+          each(WAYS, function (way) {
+            var panel = document.getElementById(way)
+            if (panel) panel.hidden = way !== id
+          })
+          each(buttons, function (button) {
+            button.setAttribute('aria-pressed', button.getAttribute('data-way') === id ? 'true' : 'false')
+          })
+          hint.hidden = id !== null
+        }
+
+        function choose(id) {
+          if (id !== current) {
+            try {
+              window.history.pushState(null, '', '#' + id)
+            } catch (e) {
+              /* An address that cannot change still shows the way. */
+            }
+          }
+          show(id)
+        }
+
+        each(buttons, function (button) {
+          button.addEventListener('click', function () {
+            choose(button.getAttribute('data-way'))
+          })
+        })
+
+        /* A link inside one way to another way: choose it, and go to it. */
+        each(document.querySelectorAll('a[data-go]'), function (link) {
+          link.addEventListener('click', function (event) {
+            var id = wayIn('#' + link.getAttribute('data-go'))
+            if (!id) return
+            event.preventDefault()
+            choose(id)
+            var panel = document.getElementById(id)
+            if (panel && panel.scrollIntoView) panel.scrollIntoView()
+          })
+        })
+
+        /* Back to the four choices, keeping the one chosen marked. */
+        each(document.querySelectorAll('a[data-again]'), function (link) {
+          link.addEventListener('click', function (event) {
+            event.preventDefault()
+            var question = document.getElementById('how')
+            if (question && question.scrollIntoView) question.scrollIntoView()
+            each(buttons, function (button) {
+              if (button.getAttribute('data-way') === (current || WAYS[0]) && button.focus) button.focus()
+            })
+          })
+        })
+
+        /* Back and Forward, and a link typed or followed to one of the four. */
+        function follow() {
+          var hash = window.location.hash
+          var id = wayIn(hash)
+          if (id || !hash || hash === '#') show(id)
+        }
+        window.addEventListener('popstate', follow)
+        window.addEventListener('hashchange', follow)
+
+        pick.hidden = false
+        if (jump) jump.hidden = true
+        show(wayIn(window.location.hash))
+      })()
+    </script>
+  </body>
+</html>
