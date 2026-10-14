@@ -103,6 +103,8 @@
       .check strong { color: var(--silk); font-weight: 600; }
       /* A file name is one long word; let it break on a phone. */
       .hint code, .check code { overflow-wrap: anywhere; }
+      /* The way to the Pi guide, right under the Pi's own two buttons. */
+      .card .pi-guide { margin: 10px 0 14px; }
       ul { padding-left: 20px; margin: 0; }
       li { margin: 7px 0; color: var(--silk-dim); }
       li strong { color: var(--silk); font-weight: 600; }
@@ -127,6 +129,15 @@
       <ul>
         <li><strong>A Fractal unit</strong> — FM3, FM9, Axe-Fx III, AM4 or VP4.</li>
         <li><strong>A USB cable</strong> from the unit to this computer. That is the only wire.</li>
+      </ul>
+
+      <h2>Setting up a Raspberry Pi?</h2>
+      <ul>
+        <li>
+          <a href="/raspberry-pi">Step-by-step setup</a>: which Pi to get, what to buy, and every
+          step from the memory card to the pedalboard, from a Mac, a Windows PC, a Linux computer,
+          or a TV and keyboard plugged into the Pi.
+        </li>
       </ul>
 
       <h2>Want it on your phone too?</h2>
@@ -379,16 +390,23 @@
             var pc =
               button(linux, (arch ? '' : 'Download for ') + 'Linux PC (Intel or AMD) &mdash; AppImage', !!arch) +
               button(deb, 'Linux PC &mdash; Debian / Ubuntu package (.deb)', true)
+            /* The guide sits under the Pi's two buttons, whichever pair leads,
+               for somebody who has the file and not yet the Pi set up. */
+            var piGuide =
+              '<p class="hint pi-guide">New to Raspberry Pi? <a href="/raspberry-pi">Step-by-step setup</a>, ' +
+              'from the memory card to the pedalboard.</p>'
             var pi =
               button(linuxArm, (lead ? 'Download for ' : '') + 'Raspberry Pi and other ARM &mdash; AppImage', !lead) +
-              button(debArm, 'Raspberry Pi and other ARM &mdash; .deb package', true)
+              button(debArm, 'Raspberry Pi and other ARM &mdash; .deb package', true) +
+              piGuide
             var only32 =
               arch === 'arm32'
                 ? '<p class="bad"><strong>This looks like a Raspberry Pi running the 32-bit Raspberry Pi OS, ' +
                   'and Fractal Remote needs the 64-bit one.</strong> ' +
                   'Use <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> to put ' +
                   'Raspberry Pi OS (64-bit) on the Pi&rsquo;s memory card. That wipes the card, so copy off ' +
-                  'anything you want to keep first. A Pi 3, 4, 5 or Zero 2 W can run it.</p>'
+                  'anything you want to keep first. A Pi 4, 5, 400, 500 or 500+ with 2 GB or more is ' +
+                  'best, and a Pi 3 is slower. A Zero 2 W or Pi 3 A+ isn&rsquo;t recommended: 512 MB is very likely too little.</p>'
                 : ''
             var check = lead
               ? '<p class="check"><strong>Before you download, check the Pi can run it.</strong> Open Terminal ' +
@@ -396,7 +414,8 @@
                 'Raspberry Pi AppImage below. <strong>armhf</strong> means the Pi is running the 32-bit ' +
                 'Raspberry Pi OS, which none of these files run on: put Raspberry Pi OS (64-bit) on it with ' +
                 '<a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> first. That wipes the ' +
-                'memory card, so copy off anything you want to keep. A Pi 3, 4, 5 or Zero 2 W can run it.</p>'
+                'memory card, so copy off anything you want to keep. A Pi 4, 5, 400, 500 or 500+ with ' +
+                '2 GB or more is best, and a Pi 3 is slower. A Zero 2 W or Pi 3 A+ isn&rsquo;t recommended: 512 MB is very likely too little.</p>'
               : ''
             /* A command with the file's name in it. One name once the browser
                has said ARM; both when it has said nothing, so a Pi owner on
@@ -432,8 +451,9 @@
                           '<code>dpkg --print-architecture</code>. <strong>arm64</strong> means you are set. ' +
                           '<strong>armhf</strong> means it is running the 32-bit Raspberry Pi OS, which none of ' +
                           'these files run on: put Raspberry Pi OS (64-bit) on it with Raspberry Pi Imager. ' +
-                          'That wipes the memory card, so copy off anything you want to keep first. A Pi 3, 4, 5 ' +
-                          'or Zero 2 W can run it.'
+                          'That wipes the memory card, so copy off anything you want to keep first. A Pi 4, 5, ' +
+                          '400, 500 or 500+ with 2 GB or more is best, and a Pi 3 is slower. ' +
+                          'A Zero 2 W or Pi 3 A+ isn&rsquo;t recommended: 512 MB is very likely too little.'
                       ]
                 )
                 .concat([

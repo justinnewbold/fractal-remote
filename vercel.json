@@ -34,6 +34,10 @@
       "destination": "/notices.txt"
     },
     {
+      "source": "/raspberry-pi",
+      "destination": "/raspberry-pi.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/"
     }

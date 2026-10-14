@@ -155,11 +155,18 @@ shows the running one's window instead.
 
 ### A Raspberry Pi on a pedalboard
 
+The customers' version, every step for somebody who has never used a Pi, is
+[`public/raspberry-pi.html`](../public/raspberry-pi.html), at
+fractal.newbold.cloud/raspberry-pi. It asks how they are setting the Pi up
+(from a Mac, a Windows PC, a Linux computer, or a screen and keyboard on the
+Pi) and shows only that way's steps. What follows is the short form.
+
 1. Put **Raspberry Pi OS (64-bit)** on it, the version with the desktop (not
    Lite). Leave **Desktop Autologin** on — it is on unless you changed it.
    That is what makes the desktop, and so the app, start with nobody there.
-   (To check: Control Centre → System, or `sudo raspi-config` → System
-   Options → Boot / Auto Login.)
+   (To check: Control Centre → System → Desktop Auto Login, or
+   `sudo raspi-config` → 1 System Options → S6 Auto Login on the current
+   Trixie release; Boot / Auto Login on the older Bookworm one.)
 2. Once, with a screen plugged in (or over Raspberry Pi Connect or VNC),
    download the **Raspberry Pi AppImage** (not the `.deb`), make it
    executable, open it, and sign in to the phone remote. The AppImage,

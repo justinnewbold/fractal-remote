@@ -1781,7 +1781,560 @@ export function run(test) {
     for (const [where, words] of [['the download page', code], ['the Linux route', steps]]) {
       assert.ok(words.includes('Raspberry Pi OS Lite with a desktop added'), `${where} tells Lite alone that two packages are all it needs`)
     }
-    assert.deepEqual(linux.links.map((l) => l.url), ['https://fractal.newbold.cloud/downloads'], 'the Linux route goes somewhere other than the download page, which is the one that labels the Pi files')
+    /*
+     * Changed on purpose, 14 October 2026: the Pi guide joins the download
+     * page, second. The download page is still the first link, because it is
+     * the one that labels the Pi files, and nothing goes to GitHub's list.
+     */
+    assert.deepEqual(
+      linux.links.map((l) => l.url),
+      ['https://fractal.newbold.cloud/downloads', 'https://fractal.newbold.cloud/raspberry-pi'],
+      'the Linux route goes somewhere other than the download page, which is the one that labels the Pi files, and then the Pi guide'
+    )
+  })
+
+  /*
+   * THE RASPBERRY PI GUIDE ASKS HOW YOU ARE SETTING IT UP, AND SHOWS THAT WAY.
+   *
+   * "Maybe it would be a good idea to ask them how they're setting it up? And
+   * then they click on one and it gives them the specific instructions for
+   * that device." (Justin, 14 October 2026.)
+   *
+   * Four ways — from a Mac, a Windows PC, a Linux computer, or with a
+   * keyboard, mouse and screen on the Pi — each complete from the memory card
+   * to the gig, with the app's own steps in all four. The page's own script
+   * is run here under a small stand-in for the browser, because what it does
+   * with the address (#mac, #windows, #linux, #screen) and with Back is the
+   * part a reader can't see is wrong until it strands them. And with scripts
+   * off, nothing may be hidden.
+   */
+  test('the Raspberry Pi guide asks how you are setting it up, and every way is complete', async () => {
+    const page = read('public/raspberry-pi.html')
+    const html = page.replace(/<!--[\s\S]*?-->/g, '')
+    const text = (s) =>
+      s
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+        /* Inline tags join the words around them; the rest are a break. */
+        .replace(/<\/?(?:strong|em|a|code|span)\b[^>]*>/g, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&ldquo;|&rdquo;/g, '"')
+        .replace(/&mdash;/g, '—')
+        .replace(/&amp;/g, '&')
+        .replace(/\s+/g, ' ')
+        .trim()
+    const words = text(html)
+    const WAYS = ['mac', 'windows', 'linux', 'screen']
+    /* One way's markup: from its section's start tag to its end. */
+    const panel = (id) => {
+      const at = html.indexOf(`<section class="way" id="${id}"`)
+      assert.ok(at > -1, `the guide has no ${id} way`)
+      return html.slice(at, html.indexOf('</section>', at))
+    }
+
+    /* The site's own page: its title, its header line and its footer. */
+    assert.match(page, /<title>Set up a Raspberry Pi — Fractal Remote<\/title>/, 'the guide has lost its title')
+    assert.match(html, /<h1>Set up a Raspberry Pi for Fractal Remote<\/h1>/)
+    assert.match(words, /Fractal Remote · last updated 14 October 2026/, 'the guide does not say when it was last checked')
+    assert.match(page, /<meta name="viewport" content="width=device-width, initial-scale=1" \/>/, 'the guide is not laid out for a phone')
+    assert.ok(!/noindex/.test(page), 'the guide asks search engines not to list it, and it is for everybody')
+    const { NOT_AFFILIATED, TRADEMARKS } = await import('../shared/affiliation.mjs')
+    const foot = text(html.slice(html.indexOf('<footer>'), html.indexOf('</footer>')))
+    const flat = (s) => s.replace(/[“”]/g, '"').replace(/\s+/g, ' ')
+    assert.ok(flat(foot).includes(flat(NOT_AFFILIATED)), 'the guide’s footer does not say the app is not Fractal Audio’s')
+    assert.ok(flat(foot).includes(flat(TRADEMARKS)), 'the guide’s footer does not say whose the unit names are')
+    assert.match(foot, /not connected with Raspberry Pi Ltd/, 'the guide does not say the app is not Raspberry Pi’s')
+    for (const href of ['https://apps.apple.com/app/id6812916461', '/android', '/support', '/privacy', '/notices']) {
+      assert.ok(html.slice(html.indexOf('<footer>')).includes(`href="${href}"`), `the guide’s footer does not link ${href}`)
+    }
+    /* Light and dark: the site's dark, the app's light, and the app's own choice. */
+    assert.match(page, /@media \(prefers-color-scheme: light\)\s*\{\s*:root:not\(\[data-theme="dark"\]\)/, 'the guide does not follow a light system')
+    assert.match(page, /:root\[data-theme="light"\]\s*\{/, 'the guide ignores the app’s Light choice')
+    assert.match(page, /body \{[^}]*background: var\(--chassis\)/, 'the guide’s page has no background of its own')
+    assert.match(page, /\[hidden\] \{ display: none !important; \}/, 'a style can show what the script hid')
+
+    /* Routed without the extension, before the catch-all. */
+    const vercel = JSON.parse(read('vercel.json'))
+    const at = vercel.rewrites.findIndex((r) => r.source === '/raspberry-pi')
+    assert.ok(at !== -1, '/raspberry-pi is not routed, so it serves the web app instead of the guide')
+    assert.equal(vercel.rewrites[at].destination, '/raspberry-pi.html')
+    assert.ok(at < vercel.rewrites.findIndex((r) => r.source === '/(.*)'), '/raspberry-pi sits after the catch-all, so it never reaches the guide')
+
+    /* Linked from the download page, under the Pi's buttons and in the page itself, and from support. */
+    const downloads = read('public/downloads.html')
+    const card = downloads.slice(downloads.lastIndexOf('<script>'))
+    assert.match(card, /var pi =\s*button\(linuxArm[^\n]*\n\s*button\(debArm[^\n]*\n\s*piGuide/, 'the Pi guide is not under the Pi’s download buttons')
+    assert.match(card, /var piGuide =[\s\S]{0,80}New to Raspberry Pi\? <a href="\/raspberry-pi">Step-by-step setup<\/a>/, 'the download card does not offer the Pi guide')
+    assert.match(downloads.slice(0, downloads.lastIndexOf('<script>')), /<a href="\/raspberry-pi">Step-by-step setup<\/a>/, 'with GitHub not answering, the download page has no way to the Pi guide')
+    const support = read('public/support.html')
+    assert.match(support, /<h3>I want a Raspberry Pi on my pedalboard<\/h3>[\s\S]{0,200}href="\/raspberry-pi"/, 'the support page does not send a Pi owner to the guide')
+    assert.match(support, /<h2 id="contact">Reaching a person<\/h2>/, 'the guide’s link to the support page’s contact lands nowhere')
+    assert.match(html, /href="\/support#contact"/, 'the guide does not say where to send a report')
+    assert.match(words, /The Fractal Remote app is new on the Raspberry Pi\./, 'the guide does not say the app is new on the Pi')
+    /* Feedback is a row under Troubleshooting, in the computer app and on the phone, not under Settings itself. */
+    assert.match(words, /in the app, Settings → Troubleshooting → Feedback, or by email/, 'the guide names a way to Feedback the app does not have')
+    assert.ok(!/Settings → Feedback/.test(words), 'the guide sends a report to Settings → Feedback, which is not there')
+
+    /* The question, and its four answers. */
+    assert.match(html, /<h3 class="ask" id="how">How are you setting it up\?<\/h3>/, 'the guide does not ask how the Pi is being set up')
+    const pickAt = html.indexOf('<div class="pick" id="pick"')
+    const pick = html.slice(pickAt, html.indexOf('</div>', pickAt))
+    assert.match(pick, /role="group" aria-labelledby="how"/, 'the four buttons are not a group named by the question')
+    const NAMES = {
+      mac: 'From a Mac',
+      windows: 'From a Windows PC',
+      linux: 'From a Linux computer',
+      screen: 'With a keyboard, mouse and screen on the Pi'
+    }
+    const buttons = [...pick.matchAll(/<button type="button" data-way="(\w+)" aria-pressed="false" aria-controls="(\w+)">\s*<span class="pick-name">([^<]+)<\/span>/g)]
+    assert.deepEqual(buttons.map((b) => b[1]), WAYS, 'the four buttons are not Mac, Windows, Linux and screen, in that order')
+    for (const [, way, controls, name] of buttons) {
+      assert.equal(controls, way, `the ${way} button controls something else`)
+      assert.equal(name, NAMES[way], `the ${way} button says "${name}"`)
+      assert.match(panel(way), new RegExp(`<h3 id="${way}-h">${NAMES[way]}</h3>`), `the ${way} way does not open under its own heading`)
+    }
+    assert.equal((html.match(/data-way="/g) || []).length, 4, 'a button for a way sits outside the four')
+
+    /* Scripts off: every way shows, the buttons and the hint don't, and a line of links jumps to each. */
+    assert.match(html, /<div class="pick" id="pick" role="group" aria-labelledby="how" hidden>/, 'with scripts off, four buttons that do nothing are shown')
+    assert.match(html, /<p class="pick-hint dim" id="pick-hint" hidden>Pick one to see its steps\.<\/p>/, 'the hint is not there, or shows with scripts off')
+    for (const way of WAYS) {
+      assert.ok(!/^<section[^>]*\bhidden\b/.test(panel(way)), `with scripts off, the ${way} way is hidden`)
+    }
+    /*
+     * And nothing else hides them. Not one section at a time but the whole
+     * page: one hidden attribute on the box the four sit in, a <details>
+     * round one, or a rule in the styles hides them as surely as hiding
+     * each, with scripts on and off, and the stand-in browser below only
+     * sees elements with an id. So: the only things hidden in the markup are
+     * the buttons and the hint; the only "display: none" is the rule that
+     * keeps the script's hiding hidden; nothing folds, and no style uses
+     * another way to make something vanish.
+     */
+    const bare = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    const hiddenTags = [...bare.matchAll(/<([a-z][a-z0-9]*)\b([^>]*)>/gi)]
+      .filter((m) => [...m[2].matchAll(/([a-zA-Z][-a-zA-Z0-9]*)(?:="[^"]*")?/g)].some((a) => a[1].toLowerCase() === 'hidden'))
+      .map((m) => m[0])
+    assert.deepEqual(
+      hiddenTags,
+      ['<div class="pick" id="pick" role="group" aria-labelledby="how" hidden>', '<p class="pick-hint dim" id="pick-hint" hidden>'],
+      'with scripts off, something besides the buttons and the hint is hidden'
+    )
+    assert.ok(!/\sstyle="/.test(bare), 'a tag carries its own style, which can hide it with scripts off')
+    const css = [...page.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]).join('\n').replace(/\/\*[\s\S]*?\*\//g, '')
+    assert.equal((css.match(/display\s*:\s*none/g) || []).length, 1, 'a style hides something besides what the script hid')
+    assert.match(css, /\[hidden\] \{ display: none !important; \}/, 'the one "display: none" is not the rule for what the script hid')
+    for (const [what, how] of [['visibility', /visibility\s*:\s*hidden/], ['content-visibility', /content-visibility/], [':target', /:target\b/], ['opacity', /opacity\s*:\s*0(?![.\d])/]]) {
+      assert.ok(!how.test(css), `a style uses ${what} to hide something, which scripts off cannot undo`)
+    }
+    const waysAt = html.indexOf('<div class="ways">')
+    assert.ok(waysAt > html.indexOf('</div>', pickAt), 'the four ways sit inside the hidden buttons, so scripts off hides them')
+    const waysBox = html.slice(waysAt, html.indexOf('<h2 id="trouble">'))
+    /* Anywhere on the page, not only inside the box: a fold round the box from outside folds all four. */
+    assert.ok(!/<(?:details|template|dialog|noscript)\b/i.test(bare), 'with scripts off, the ways are folded away or never drawn')
+    assert.equal((waysBox.match(/<section class="way" id="/g) || []).length, 4, 'the four ways are not all in the box the question opens')
+    const jump = html.slice(html.indexOf('<p class="dim" id="jump">'), html.indexOf('</p>', html.indexOf('id="jump"')))
+    for (const way of WAYS) assert.ok(jump.includes(`<a href="#${way}">${NAMES[way]}</a>`), `with scripts off, nothing jumps to the ${way} way`)
+
+    /*
+     * Every way complete on its own. The app's steps are in all four, so nobody
+     * scrolls past another way to reach them: the same steps, with the few
+     * words that differ by way written for that way — which screen the reader
+     * is looking at, how he right-clicks, and where the 64-bit system was
+     * checked. Each of those is named here for every way, and with them set
+     * aside the four copies are word for word the same. So a reader at a TV is
+     * never told about screen sharing, nor a PC owner about a Mac's trackpad.
+     */
+    const APP_HEAD = /<h4>\d\. Put the Fractal Remote app on the Pi<\/h4>\s*<ol>([\s\S]*?)<\/ol>/
+    const apps = WAYS.map((way) => panel(way).match(APP_HEAD)?.[1])
+    for (const [i, way] of WAYS.entries()) assert.ok(apps[i], `the ${way} way has no steps for the app`)
+    /* A link here opens on whatever the reader is reading this on, which is not the Pi. */
+    for (const [i, way] of WAYS.entries()) assert.ok(!/href=/.test(apps[i]), `the ${way} way’s app steps link the download page, which then opens on the computer or the phone, not the Pi`)
+    const ON_SCREEN_SHARING = {
+      desk: 'On the Pi’s own desktop (in the screen sharing window, or on the TV if part 2 sent a Pi 3 there), open the web browser:',
+      bar: 'In the Pi’s web browser, click its address bar. On screen sharing, that is the one inside the picture of the Pi’s desktop, not your own browser’s at the very top. Type fractal.newbold.cloud/downloads there and press Enter.',
+      checked: 'you can skip that: you chose Raspberry Pi OS (64-bit) in Imager.',
+      close: 'close the Pi’s web browser with the × at its top right. On screen sharing, close only that one, inside the picture, and leave your own browser open. The Pi’s browser is'
+    }
+    const OWN = {
+      mac: { ...ON_SCREEN_SHARING, click: '(with a Mac trackpad, click with two fingers)' },
+      windows: { ...ON_SCREEN_SHARING, click: '(on a laptop touchpad, tap with two fingers)' },
+      linux: { ...ON_SCREEN_SHARING, click: '(on a touchpad, tap or click with two fingers)' },
+      screen: {
+        desk: 'On the Pi’s desktop, on the TV, open the web browser:',
+        bar: 'In the Pi’s web browser, click its address bar at the top, type fractal.newbold.cloud/downloads there and press Enter.',
+        checked: 'you can skip that: you checked it is the 64-bit one in part 3.',
+        close: 'close the Pi’s web browser with the × at its top right. It is',
+        click: '(with the right button on the mouse)'
+      }
+    }
+    const common = WAYS.map((way, i) => {
+      let steps = text(apps[i])
+      for (const [part, own] of Object.entries(OWN[way])) {
+        assert.equal(steps.split(own).length - 1, 1, `the ${way} way’s app steps do not say, once, its own "${own}"`)
+        steps = steps.replace(own, `«${part}»`)
+      }
+      return steps
+    })
+    for (const [i, way] of WAYS.entries()) assert.equal(common[i], common[0], `the ${way} way’s app steps differ from the Mac’s beyond the words written for each way`)
+    /* Nothing of another way's in any of them. */
+    assert.ok(!/screen sharing|picture|your own browser|trackpad|touchpad/i.test(text(apps[3])), 'the screen way’s app steps talk of screen sharing or a trackpad, which that way never had')
+    for (const way of ['windows', 'linux', 'screen']) assert.ok(!/\bMac\b/.test(text(apps[WAYS.indexOf(way)])), `the ${way} way’s app steps are written for a Mac`)
+    assert.ok(!/this page has already made sure/.test(words), 'the app steps say this page checked the system, which it never did')
+    /* The part 3 the screen way points to is the one that checks it. */
+    assert.match(panel('screen'), /<h4>3\. Start the Pi, and answer its questions<\/h4>[\s\S]*dpkg --print-architecture[\s\S]*<h4>4\. Put the Fractal Remote app on the Pi<\/h4>/, 'the screen way says part 3 checked the system, and part 3 does not')
+    const app = text(apps[0])
+    assert.match(app, /In the Pi’s web browser, click its address bar\. On screen sharing, that is the one inside the picture of the Pi’s desktop, not your own browser’s at the very top\. Type fractal\.newbold\.cloud\/downloads there and press Enter\./, 'the app steps do not say to type the address on the Pi')
+    /*
+     * On screen sharing there are two browsers on the reader's screen, his own
+     * and the Pi's inside it, and the one at the very top is his. Closing his
+     * own closes the screen sharing and the Pi's desktop with it.
+     */
+    assert.match(app, /close the Pi’s web browser with the × at its top right\. On screen sharing, close only that one, inside the picture, and leave your own browser open\./, 'the app steps tell a reader on screen sharing to close the browser that holds it')
+    for (const [i, way] of WAYS.entries()) assert.ok(!/click the address bar at the top|close the web browser\./.test(text(apps[i])), `a ${way} app step names a browser without saying it is the Pi’s`)
+    assert.match(app, /arm64\.AppImage \(with a Mac trackpad, click with two fingers\)/, 'a Mac owner working the Pi from a trackpad is not told how to right-click')
+    for (const said of [
+      'fractal.newbold.cloud/downloads',
+      'Click Raspberry Pi and other ARM — AppImage',
+      'Not the Linux PC one, and not the .deb.',
+      'arm64.AppImage',
+      'set Execute to Anyone',
+      'Leave the file where it is from now on: it is the app itself.',
+      'Choose I already have an account',
+      'click Turn on',
+      'Create account',
+      'Show the walkthrough',
+      'choose About, and tick Start when this computer turns on.',
+      'Plug your unit into one of the Pi’s USB ports',
+      'On your phone, open Fractal Remote, signed in to that same account.',
+      'Look for the computer again',
+      'On a Pi 3:'
+    ]) {
+      assert.ok(app.includes(said), `the app steps no longer say "${said}"`)
+    }
+    /* What to do if the welcome screen isn't there comes before the button on it. */
+    assert.match(app, /The app opens on its welcome screen\. \(If it doesn’t, open Settings with the gear ⚙ at the top right and choose Show the walkthrough\.\) Choose I already have an account,/, 'a reader whose app opened elsewhere hunts for the welcome screen’s button before he is told how to reach it')
+    /* In the app's own words, read from the app, so a rename there fails here. */
+    const { P1, REPLAY } = await import('../shared/onboarding.mjs')
+    assert.equal(P1.haveCode, 'I already have an account', 'the welcome screen’s button was renamed; read the guide against it again')
+    assert.equal(REPLAY, 'Show the walkthrough', 'Settings’ walkthrough row was renamed; read the guide against it again')
+    assert.match(read('src/components/SignInSheet.jsx'), /submitLabel=\{phone \? 'Connect' : 'Turn on'\}/, 'the computer’s sign-in button no longer says Turn on')
+    assert.match(read('src/components/SignIn.jsx'), />\s*Create account\s*</, 'the sign-in form no longer offers Create account')
+    assert.match(read('src/components/StartAtBoot.jsx'), /Start when this computer turns on/, 'the switch was renamed; read the guide against it again')
+    assert.match(read('src/App.jsx'), /\babout: 'About',/, 'Settings has no About page, which the guide sends people to')
+    assert.match(read('src/App.jsx'), /\bhelp: 'Troubleshooting',/, 'Settings has no Troubleshooting page, where the guide says Feedback is')
+    assert.match(read('src/App.jsx'), /<Section key="feedback" title="Feedback"/, 'the computer app’s Troubleshooting page has no Feedback, as the guide says')
+    assert.match(read('mobile/src/screens/Settings.js'), /title="Troubleshooting"[\s\S]*title="Feedback"/, 'the phone’s Troubleshooting has no Feedback, as the guide says')
+    assert.match(read('src/components/TopBar.jsx'), /className="topbar-gear"[\s\S]{0,200}⚙/, 'Settings is no longer behind the gear the guide names')
+    assert.match(downloads, /'Raspberry Pi and other ARM &mdash; AppImage'/, 'the download button the guide names was renamed')
+    assert.match(downloads, /return \/-arm64\\\.AppImage\$\/i\.test\(n\)/, 'the Pi’s file no longer ends in arm64.AppImage, as the guide says')
+    for (const f of ['mobile/src/screens/Settings.js', 'mobile/src/screens/Stage.js']) {
+      assert.match(read(f), /['"]Look for the computer again['"]/, `${f} no longer says Look for the computer again`)
+    }
+
+    /* What each way says that the others don't. */
+    const said = (way) => text(panel(way))
+    assert.match(said('mac'), /click Download for macOS/)
+    assert.match(said('windows'), /click Download for Windows/)
+    assert.match(said('windows'), /click Cancel\. Never Format/, 'Windows is not told to leave the written card alone')
+    assert.match(said('linux'), /click Download for Linux \(x86_64\)/)
+    assert.match(said('mac'), /click Ignore\. Never Initialize/, 'a Mac is not told to leave the written card alone')
+    for (const way of ['mac', 'windows', 'linux']) {
+      const w = said(way)
+      for (const step of ['Enable Raspberry Pi Connect', 'Create auth key and launch Raspberry Pi Imager', 'within six hours', 'connect.raspberrypi.com', 'Connect via, then Screen sharing', 'Shutdown, then Shutdown', 'unplug the Pi’s power, and plug it back in']) {
+        assert.ok(w.includes(step), `the ${way} way does not say "${step}"`)
+      }
+      /*
+       * The Pi 3, right where screen sharing is: untried there, and a TV as the
+       * fallback, in the reader's own way. Its card is written and it is
+       * running, so the screen way's first steps (power off, write the card)
+       * would be the wrong ones, and the parts after this are the same.
+       */
+      assert.match(w, /On a Pi 3: screen sharing should work on today’s Raspberry Pi OS, but nobody has tried it with this app on a Pi 3 yet\./, `the ${way} way promises a Pi 3 screen sharing`)
+      assert.match(w, /then do parts 3 and 4 below on the TV instead of in your browser\. In part 4, unplug the keyboard, mouse and TV before you plug the power back in\./, `the ${way} way gives a Pi 3 with no screen sharing nowhere to go`)
+      /*
+       * Imager's own screens, as rpi-imager 2.0.12 draws them. The Connect
+       * token arrives as the token itself in its box ("Token received from
+       * browser" is only that box's placeholder, never seen once it is
+       * filled), and a good write moves at once to "Write complete!", whose
+       * Finish waits for the card to be ejected.
+       */
+      assert.ok(w.includes('the Authentication token box has filled itself in with a long code, and the Open Raspberry Pi Connect button has gone.'), `the ${way} way does not say what Imager shows when the Connect key arrives`)
+      assert.ok(!/Token received/.test(w), `the ${way} way tells the reader to look for words Imager never shows`)
+      assert.ok(w.includes('When Imager says Write complete!, wait until it says the storage device (the card) was ejected (if it shows an Eject button instead, click Eject), then click Finish.'), `the ${way} way sends the reader to a Finish that does not answer yet`)
+      /* Imager's wifi, filled in or not, and the case before the card. */
+      assert.match(w, /Fill in whatever it left empty: leave Secure network chosen, type your wifi’s name in the SSID box exactly as it appears \(capitals and spaces count\), and type the wifi password in both password boxes\. Leave Hidden SSID unticked\./, `the ${way} way leaves an empty wifi box to the reader`)
+      assert.ok(w.indexOf('Put the Pi in its case') > -1 && w.indexOf('Put the Pi in its case') < w.indexOf('Push the memory card into the Pi’s card slot'), `the ${way} way never puts the Pi in its case`)
+    }
+    assert.equal((html.match(/data-go="/g) || []).length, 1, 'a way sends the reader across to another way’s first steps')
+    const macOS = said('mac')
+    assert.ok(macOS.indexOf('Your Mac needs macOS 13 Ventura or newer') > -1 && macOS.indexOf('Your Mac needs macOS 13 Ventura or newer') < macOS.indexOf('1. Put Raspberry Pi OS on the memory card'), 'an older Mac finds out it cannot open Imager only after downloading it')
+    assert.match(panel('mac'), /On an older Mac, Raspberry Pi Imager won’t open, so take <a href="#screen" data-go="screen">With a keyboard, mouse and screen on the Pi<\/a> instead/, 'an older Mac is given nowhere to go')
+    assert.match(said('screen'), /On a Mac \(it needs macOS 13 Ventura or newer\)/, 'the screen way’s Mac is not told the macOS Imager needs')
+    const screen = said('screen')
+    for (const step of ['Put the Pi in its case', 'socket marked FAN', 'micro-HDMI to HDMI cable, in the port marked HDMI0', 'On a Pi 3, use an ordinary HDMI cable', 'USB keyboard and the USB mouse', 'If the card came already loaded', 'If you have another computer', 'With no other computer (a Pi 4, 400, 5, 500 or 500+ only, not a Pi 3)', 'Skip customisation', 'Welcome to Raspberry Pi', 'Create User', 'dpkg --print-architecture', 'arm64', 'armhf', 'unplug the keyboard, the mouse and the screen']) {
+      assert.ok(screen.includes(step), `the screen way does not say "${step}"`)
+    }
+    /*
+     * The Pi 400's first screen port is the one by the card slot, not the
+     * power socket as on a Pi 4 or 5; the other one shows nothing while it
+     * starts, and the trouble section then sends him back to the wrong port.
+     */
+    assert.match(screen, /On a Pi 5 or Pi 4, use the micro-HDMI to HDMI cable, in the port marked HDMI0, next to the power socket\. On a Pi 400, use the same kind of cable in the micro-HDMI port next to the memory card slot\./, 'a Pi 400 is sent to the screen port that shows nothing at start-up')
+    assert.ok(!/Pi 5, 4, 400, 500 or 500\+, use the micro-HDMI/.test(screen), 'a Pi 400 is told its first screen port is by the power socket')
+    assert.match(words, /on a Pi 400, the one next to the memory card slot\), and the TV is switched to that HDMI input\./, 'a Pi 400 with no picture is not told which port is its first')
+    /* On the Pi itself Imager's last button is Reboot, not Finish (rpi-imager 2.0.12, DoneStep.qml). */
+    const noComputer = text(panel('screen').slice(panel('screen').indexOf('With no other computer'), panel('screen').indexOf('<h4>3.')))
+    assert.match(noComputer, /it moves on to its last screen by itself\. Click Reboot there\./, 'the network install sends him to a Finish button that is not there')
+    assert.ok(!/Finish/.test(noComputer), 'the network install names Imager’s Finish, which the Pi’s own Imager calls Reboot')
+    /* The Pi's own Imager asks for a language first, and writes the moment Write is clicked: no "are you sure". */
+    assert.match(noComputer, /If Imager first shows Welcome and asks for a language, choose yours and click Next\./, 'the network install leaves out the Welcome screen the Pi’s own Imager opens on')
+    assert.match(noComputer, /Click Write\. Here it starts writing at once, with no box asking if you are sure/, 'the network install never warns that Write wipes the card at once')
+    assert.ok(!/I understand, erase and write/.test(noComputer), 'the network install sends him to a box the Pi’s own Imager never shows')
+    assert.ok(!/Write completed successfully/.test(words), 'the guide waits for words Imager shows only for a moment before it moves on')
+    assert.equal(words.split('When Imager says Write complete!').length - 1, 4, 'a card written on another computer is not taken through Imager’s Write complete! screen')
+    /* Wifi set up even with a cable in, because the pedalboard Pi has no cable. */
+    assert.match(screen, /Do this even if a network cable is plugged in: on the pedalboard the Pi will need the wifi, or your phone’s hotspot/, 'the screen way lets the wifi be skipped, and the Pi then never reaches the phone')
+    assert.match(words, /Is the Pi on the internet\? If you skipped wifi while setting it up/, 'a Pi with no wifi has nothing under The phone says there is no computer')
+    /* An iPhone's hotspot needs its own switch on before a Pi, signed in to no Apple Account, can join it. */
+    assert.match(words, /switch on Allow Others to Join, and keep that screen open until the Pi has joined/, 'the gig steps leave out the iPhone switch that lets the Pi join its hotspot')
+    assert.match(words, /Maximize Compatibility in Settings → Personal Hotspot \(iPhone 12 or later; older iPhones already use 2\.4 GHz\)/, 'an older iPhone is told to switch on something it does not have')
+    /* The server is only started again by itself once the app runs with no window; during setup a box comes up instead. */
+    assert.match(words, /Once it starts by itself at power-on, if it runs out of memory, the part of the app that talks to your unit starts again by itself\./, 'the Pi 3 note promises a restart the app does not do while its window is open')
+    assert.match(words, /During setup, a box says “The device server stopped”/, 'the box a Pi 3 can show during setup has nowhere to be looked up')
+    /* A Pi setting up another Pi is told how to open Imager once it is installed. */
+    assert.match(words, /then open Imager from the Raspberry Pi menu → Accessories → Imager/, 'a Pi used to write the card is never told how to open Imager')
+    /* Set up at a TV: no Imager wifi to have mistyped, so the Pi's own screen is where to look. */
+    assert.match(words, /Set it up with a keyboard and screen\? Look at the Pi’s own screen: if the network icon at the top right shows no wifi, click it and choose your network\./, 'the keyboard-and-screen reader is sent to Imager steps he never used')
+    /* Mistyped wifi with no network cable, which the screenless ways never told him to buy. */
+    assert.match(words, /No network cable\? Unplug the Pi’s power, take the card out, and write it again with Imager \(part 1 of the Mac, Windows PC or Linux way\)\./, 'a Pi that never joined the wifi, with no cable to hand, has nowhere to go')
+    /* A 32-bit card and no other computer: not stranded. */
+    assert.match(screen, /With no other computer, on a Pi 4, 400, 5, 500 or 500\+: shut the Pi down[^.]*, and take the way With no other computer above with this same card\. Holding Shift, as it says, starts it even on a card that already has a system on it\. On a Pi 3 you need another computer to write the card/, 'a 32-bit card with no other computer is left with nothing to do')
+
+    /*
+     * Never the 32-bit system, nor Lite. Every sentence that names either is
+     * one of these four, read and agreed: the Pis that won't work, Imager's
+     * warning off both, the armhf check, and the packages for Lite with a
+     * desktop added. A new one fails here until somebody has read it, because
+     * "Lite is fine on a Pi with no screen" is the wrong advice a reader with
+     * no screen is most likely to believe, and no word list catches it.
+     */
+    const sentences = words.split(/(?<=[.!?])\s+/)
+    const named = sentences.filter((s) => /32-bit|\bLite\b/.test(s))
+    assert.deepEqual(
+      [...new Set(named)],
+      [
+        'They can only run the 32-bit Raspberry Pi OS, and the Fractal Remote app needs the 64-bit one.',
+        'Not Raspberry Pi OS (32-bit) just under it, and nothing under Raspberry Pi OS (other): the Lite system there has no desktop, and the app needs one.',
+        'If it says armhf, it is the 32-bit system, which the app can’t run on.',
+        'On a trimmed-down system, such as Raspberry Pi OS Lite with a desktop added, first type sudo apt install libfuse2t64 zlib1g-dev (on the older Bookworm release, libfuse2 in place of libfuse2t64).'
+      ],
+      'a sentence that names the 32-bit system or Lite has changed or been added; read it, and if it never offers either, put it here'
+    )
+    assert.equal(named.length, 8, 'the warning off the 32-bit system and Lite is missing from an Imager the guide walks through')
+    const OS = 'choose Raspberry Pi OS (64-bit), the first one, marked Recommended.'
+    assert.equal(words.split(OS).length - 1, 5, 'every Imager the guide walks through does not choose Raspberry Pi OS (64-bit)')
+
+    /* Which Pi: the reason with each, and the ones that won't work said plainly. */
+    const tier = (name) => text(html.slice(html.indexOf(`<div class="tier ${name}">`), html.indexOf('</div>', html.indexOf(`<div class="tier ${name}">`))))
+    assert.match(tier('good'), /^Good: pick one of these Raspberry Pi 5 with 2 GB or more\./)
+    assert.match(tier('good'), /Raspberry Pi 4 with 2 GB or more\./)
+    assert.match(tier('slow'), /^Works, but slower Raspberry Pi 3 Model B or B\+\./)
+    assert.match(tier('no'), /^Not recommended Raspberry Pi Zero 2 W and Pi 3 Model A\+\. Only 512 MB/)
+    assert.match(tier('bad'), /^Won’t work Raspberry Pi 2, every Raspberry Pi 1, and the first Zero, Zero W and Zero WH\. They can only run the 32-bit Raspberry Pi OS, and the Fractal Remote app needs the 64-bit one\./, 'the guide does not say which Pis won’t work, and why')
+    /* Nowhere else does the Zero 2 W come up, so nothing can say it works. */
+    assert.equal(words.split('Zero 2 W').length - 1, 1, 'the guide names the Zero 2 W outside Not recommended')
+    assert.match(words, /Already have a Pi 3\? It should work, but expect it to be slower/, 'the guide does not tell a Pi 3 owner what to expect')
+    assert.ok(!/\bIt works\./.test(words), 'the guide says flatly that a Pi works, and nothing records the app running all the way on one')
+    assert.match(words, /Switch off Active Desktop: Raspberry Pi menu → Preferences → Control Centre → Desktop, and turn off Active Desktop\. Raspberry Pi recommends that on any Pi with less than 2 GB/, 'a Pi 3 owner is not given Raspberry Pi’s own memory tip')
+    /* And the two pages a reader goes to from here say the same of the Zero 2 W. */
+    const { wayById: wayFor } = await import('../shared/ways-in.mjs')
+    for (const [where, theirs] of [['the download page', downloads], ['the computer app’s Linux steps', wayFor('linux-app').steps.join(' ')]]) {
+      assert.ok(!/Zero 2 W can run it/.test(theirs), `${where} says a Zero 2 W can run it, and the guide says it is not recommended`)
+      /* Not recommended, and very likely too little: nobody has measured the app on 512 MB, so neither page says it as a fact. */
+      assert.match(theirs, /A Zero 2 W or Pi 3 A\+ isn(’|&rsquo;)t recommended: 512 MB is very likely too little\./, `${where} does not say what the guide says of the Zero 2 W`)
+      assert.ok(!/has too little memory/.test(theirs), `${where} says as a fact that the Zero 2 W has too little memory, which nobody has measured`)
+    }
+    assert.equal(downloads.split('A Zero 2 W or Pi 3 A+ isn&rsquo;t recommended: 512 MB is very likely too little.').length - 1, 3, 'one of the download page’s three Pi messages still oversells or undersells the Zero 2 W')
+    assert.match(words, /a Pi 4 or Pi 5 with 2 GB or more is the fix/)
+
+    /* What to buy: named, never priced, never a shop. */
+    for (const part of ['A Raspberry Pi 5, 4 GB.', 'The official Raspberry Pi 27W USB-C Power Supply.', 'A case with a fan', 'A microSD card of 32 GB or more.', 'FM3, FM9 or Axe-Fx III: USB-A to USB-B', 'AM4: USB-A to USB-C.', 'It has to be a data cable, not a charge-only one.', 'a USB microSD card reader', 'the official Raspberry Pi 15W USB-C Power Supply', 'the official Raspberry Pi 12.5W micro USB Power Supply']) {
+      assert.ok(words.includes(part), `the shopping list does not say "${part}"`)
+    }
+    assert.ok(!/[$€£]\s?\d/.test(words), 'the guide quotes a price, which goes stale')
+    assert.match(words, /You also need Fractal Remote on your phone with the phone remote unlocked/, 'the guide never says the phone remote has to be unlocked, so its last check fails for somebody on the free app')
+    assert.match(words, /On a Pi 3, have a TV or monitor, an ordinary HDMI cable, a USB keyboard and a USB mouse you could borrow/, 'a Pi 3 set up from another computer is not told to have a screen to hand')
+    /* If something goes wrong, the screen way's own first trouble; and at a gig, what a venue's wifi can't do. */
+    assert.match(words, /The TV or monitor shows nothing Check the cable is in the Pi’s port marked HDMI0/, 'a TV with no picture has nothing under If something goes wrong')
+    assert.match(words, /Your phone’s hotspot is the surest[\s\S]{0,400}A venue’s wifi works only if the Pi has joined it before, from its desktop, and never if it has a sign-in page\./, 'the guide sends a Pi with no screen to a venue’s wifi it cannot join')
+    assert.match(words, /keep that screen open until the Pi has joined/, 'an iPhone’s hotspot is not kept findable while the Pi joins it')
+    const outside = [...html.matchAll(/href="(https?:[^"]*)"/g)].map((m) => m[1])
+    const CHECKED = new Set(['https://www.raspberrypi.com/software/', 'https://connect.raspberrypi.com/', 'https://apps.apple.com/app/id6812916461'])
+    for (const link of outside) assert.ok(CHECKED.has(link), `the guide links ${link}, which nobody checked`)
+    /* The support page links here and may not carry the phone's other way in, so nor does this. */
+    assert.ok(!/bluetooth/i.test(page), 'the guide mentions Bluetooth, which customers are not shown')
+
+    /*
+     * THE SCRIPT, run under a stand-in for the browser: an element for every
+     * tag with an id or a data- attribute the script looks for, an address and
+     * a history that keep each other honest, and the app's stored theme.
+     */
+    const { createContext, runInContext } = await import('node:vm')
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1])
+    assert.equal(scripts.length, 2, 'the guide’s scripts are not the theme and the four ways')
+    const markup = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    function browser({ hash = '', stored = null, refuse = false, pushState = true } = {}) {
+      const all = []
+      const focus = { on: null, scrolledTo: null }
+      const element = (tag, attrs) => {
+        const el = {
+          tag,
+          attrs,
+          hidden: 'hidden' in attrs,
+          listeners: {},
+          getAttribute: (n) => (n in el.attrs ? el.attrs[n] : null),
+          setAttribute: (n, v) => {
+            el.attrs[n] = String(v)
+          },
+          addEventListener: (type, fn) => (el.listeners[type] ||= []).push(fn),
+          focus: () => {
+            focus.on = el
+          },
+          scrollIntoView: () => {
+            focus.scrolledTo = el
+          },
+          click() {
+            const event = { prevented: false, preventDefault() { this.prevented = true } }
+            for (const fn of el.listeners.click || []) fn.call(el, event)
+            return event
+          }
+        }
+        return el
+      }
+      for (const m of markup.matchAll(/<([a-z][a-z0-9]*)\b([^>]*)>/gi)) {
+        const attrs = {}
+        for (const a of m[2].matchAll(/([a-zA-Z][-a-zA-Z0-9]*)(?:="([^"]*)")?/g)) attrs[a[1]] = a[2] ?? ''
+        if (['id', 'data-way', 'data-go', 'data-again'].some((n) => n in attrs)) all.push(element(m[1].toLowerCase(), attrs))
+      }
+      /* Only the selectors the script uses; anything else is a script that changed under this test. */
+      const select = (sel) => {
+        const m = sel.match(/^([a-z]+)\[([-a-z]+)\]$/)
+        if (!m) throw new Error(`the stand-in does not know the selector ${sel}`)
+        return all.filter((el) => el.tag === m[1] && m[2] in el.attrs)
+      }
+      const root = element('html', {})
+      const listeners = {}
+      const location = { hash }
+      const pushed = []
+      const win = {
+        document: {
+          documentElement: root,
+          getElementById: (id) => all.find((el) => el.attrs.id === id) || null,
+          querySelectorAll: select
+        },
+        location,
+        history: pushState
+          ? {
+              pushState: (state, title, url) => {
+                pushed.push(url)
+                location.hash = url
+              }
+            }
+          : {},
+        localStorage: {
+          getItem: (key) => {
+            if (refuse) throw new Error('storage is blocked')
+            return key === 'fab.theme' ? stored : null
+          }
+        },
+        addEventListener: (type, fn) => (listeners[type] ||= []).push(fn)
+      }
+      for (const el of all) el.querySelectorAll = select
+      win.window = win
+      const context = createContext(win)
+      for (const code of scripts) runInContext(code, context)
+      const byId = win.document.getElementById
+      return {
+        byId,
+        select,
+        pushed,
+        focus,
+        root,
+        shown: () => WAYS.filter((way) => !byId(way).hidden),
+        pressed: () => select('button[data-way]').filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.getAttribute('data-way')),
+        button: (way) => select('button[data-way]').find((b) => b.getAttribute('data-way') === way),
+        /* The reader presses Back, or follows a link to somewhere on the page. */
+        go: (to, type = 'popstate') => {
+          location.hash = to
+          for (const fn of listeners[type] || []) fn({})
+        }
+      }
+    }
+
+    /* No choice yet: the buttons, the hint, and no way's steps. */
+    const fresh = browser()
+    assert.deepEqual(fresh.shown(), [], 'before any choice, the guide shows a way’s steps')
+    assert.equal(fresh.byId('pick-hint').hidden, false, 'before any choice, the guide does not say to pick one')
+    assert.equal(fresh.byId('pick').hidden, false, 'with the script running, the four buttons stay hidden')
+    assert.equal(fresh.byId('jump').hidden, true, 'with the script running, the scripts-off links still show')
+    assert.deepEqual(fresh.pressed(), [], 'a button is marked chosen before anything was chosen')
+
+    /* A link straight to one way opens that one, and marks its button. */
+    for (const way of WAYS) {
+      const opened = browser({ hash: `#${way}` })
+      assert.deepEqual(opened.shown(), [way], `#${way} opens ${opened.shown().join(', ') || 'nothing'}`)
+      assert.deepEqual(opened.pressed(), [way], `#${way} does not mark its own button chosen`)
+      assert.equal(opened.byId('pick-hint').hidden, true, `#${way} still says to pick one`)
+    }
+    assert.deepEqual(browser({ hash: '#trouble' }).shown(), [], 'an address that is not a way opens one')
+
+    /* Choosing puts the way in the address, and Back goes back through them. */
+    const b = browser()
+    b.button('windows').click()
+    assert.deepEqual(b.shown(), ['windows'])
+    assert.deepEqual(b.pushed, ['#windows'], 'choosing a way does not put it in the address')
+    b.button('windows').click()
+    assert.deepEqual(b.pushed, ['#windows'], 'choosing the way already shown adds a second history entry')
+    b.button('mac').click()
+    assert.deepEqual(b.shown(), ['mac'])
+    assert.deepEqual(b.pressed(), ['mac'], 'the chosen button is not the one marked')
+    b.go('#windows')
+    assert.deepEqual(b.shown(), ['windows'], 'Back does not go back to the way chosen before')
+    b.go('#trouble', 'hashchange')
+    assert.deepEqual(b.shown(), ['windows'], 'a link to another part of the page loses the chosen way')
+    b.go('')
+    assert.deepEqual(b.shown(), [], 'Back to the start still shows a way')
+    assert.equal(b.byId('pick-hint').hidden, false, 'Back to the start does not say to pick one again')
+
+    /* An older Mac's way across to the screen way: chosen, and gone to. */
+    const across = browser({ hash: '#mac' })
+    const toScreen = across.select('a[data-go]').filter((a) => a.getAttribute('data-go') === 'screen')
+    assert.equal(toScreen.length, 1, 'an older Mac has no way across to the screen way')
+    assert.ok(toScreen[0].click().prevented, 'the link across to the screen way jumps to a heading that is still hidden')
+    assert.deepEqual(across.shown(), ['screen'], 'the link across to the screen way does not open it')
+    assert.deepEqual(across.pressed(), ['screen'], 'the link across to the screen way does not mark its button')
+    assert.deepEqual(across.pushed, ['#screen'], 'the link across to the screen way does not put it in the address')
+    assert.equal(across.focus.scrolledTo, across.byId('screen'), 'the link across to the screen way leaves the reader where the Mac way was')
+
+    /* Back to the four choices: the question in view, the chosen button focused, the way kept. */
+    const again = across.select('a[data-again]')
+    assert.equal(again.length, 4, 'a way has no way back to the four choices')
+    assert.ok(again[0].click().prevented, 'Back to the four choices changes the address and loses the way')
+    assert.equal(across.focus.scrolledTo, across.byId('how'), 'Back to the four choices does not go to the question')
+    assert.equal(across.focus.on, across.button('screen'), 'Back to the four choices does not put the reader on the chosen button')
+    assert.deepEqual(across.shown(), ['screen'], 'Back to the four choices forgets the way chosen')
+
+    /* A browser that cannot change the address is left as scripts off leave it: every way shown. */
+    const old = browser({ pushState: false })
+    assert.deepEqual(old.shown(), WAYS, 'a browser with no history to write is shown no way at all')
+    assert.equal(old.byId('pick').hidden, true, 'a browser with no history to write is shown buttons that cannot work')
+
+    /* The app's own Light or Dark; the system's when it follows the system, or storage refuses. */
+    assert.equal(browser({ stored: 'light' }).root.getAttribute('data-theme'), 'light', 'the guide ignores the app’s Light choice')
+    assert.equal(browser({ stored: 'dark' }).root.getAttribute('data-theme'), 'dark', 'the guide ignores the app’s Dark choice')
+    assert.equal(browser({ stored: 'auto' }).root.getAttribute('data-theme'), null, 'the guide overrides the system when the app follows it')
+    assert.equal(browser({ refuse: true }).root.getAttribute('data-theme'), null, 'storage that refuses breaks the guide')
   })
 
   /*
