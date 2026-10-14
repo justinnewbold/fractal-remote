@@ -760,6 +760,26 @@ export async function computerElsewhere() {
 }
 
 /**
+ * Whether any computer has signed in with this browser's account: true,
+ * false, or null for can't tell.
+ *
+ * The phone's question, asked from the browser: see mobile/src/lib/relay.js
+ * and supabase/migrations/20261014_account_has_computer.sql. Null is never a
+ * no — not signed in, an error, no signal, or a database without the
+ * function all keep today's words.
+ */
+export async function accountHasComputer() {
+  if (!client) return null
+  try {
+    const { data, error } = await client.rpc('account_has_computer')
+    if (error) return null
+    return data === true ? true : data === false ? false : null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Sign out here, and everywhere the session was written.
  *
  * Scope 'local' rather than 'global' on purpose: signing out on a phone should

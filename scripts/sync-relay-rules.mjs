@@ -130,6 +130,14 @@ export const FILES = [
    */
   { source: '../shared/confirm-code.mjs', target: '../mobile/src/lib/confirm-code.js' },
   /*
+   * "No computer is signed in with this account yet": the words, and the rule
+   * for when the account server may be asked and what counts as a no. The
+   * phone and the website say it to the same people at the same moment, and
+   * one of them treating an error as a no would be telling somebody with a
+   * computer to go and install one.
+   */
+  { source: '../shared/no-computer.mjs', target: '../mobile/src/lib/no-computer.js' },
+  /*
    * Which end is behind. Both apps carry the same version by construction, so
    * the comparison has to mean the same thing at both ends of it.
    */

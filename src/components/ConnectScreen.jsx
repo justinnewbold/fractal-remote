@@ -29,6 +29,8 @@ import { useEffect, useState } from 'react'
 import SignIn from './SignIn'
 import { isPairAccount } from '../lib/link'
 import { computerElsewhere } from '../lib/remote'
+import { useNoComputer } from '../lib/noComputer'
+import NoComputer from './NoComputer'
 import { CONNECT, P6, SETUP } from '../../shared/onboarding.mjs'
 import { DOWNLOADS_URL, sendDownloadLink } from '../../mobile/src/lib/downloadLink'
 import laptopIcon from '../../mobile/assets/icons/laptop.png'
@@ -85,11 +87,13 @@ export default function ConnectScreen({
    * or no, nothing about whose (lib/remote.js). Asked once it has been
    * waiting a while, and every half minute after.
    */
-  const [elsewhere, setElsewhere] = useState(false)
+  /* Null until the account server has answered, so the line below can wait
+     for a no rather than come up a moment before the warning replaces it. */
+  const [elsewhere, setElsewhere] = useState(null)
   const asking = (state === 'joining' && long) || state === 'no-answer'
   useEffect(() => {
     if (!asking || paired) {
-      setElsewhere(false)
+      setElsewhere(null)
       return undefined
     }
     let live = true
@@ -102,6 +106,18 @@ export default function ConnectScreen({
     }
   }, [asking, paired])
   const mismatch = elsewhere ? <Mismatch email={remembered} /> : null
+  /*
+   * AND NO COMPUTER EVER SIGNED IN WITH THIS ACCOUNT, for certain. "Clearer
+   * help for new customers. 'No computer is signed in with this account yet,
+   * here's the download' instead of 'make sure it's awake.'" Asked at the
+   * same moment, once the account warning has answered no — a computer on
+   * another account is the truer reason and always wins — and at most once a
+   * minute (lib/noComputer.js). Anything short of a definite no keeps
+   * today's words.
+   */
+  const none = useNoComputer(asking && !paired && elsewhere === false, account)
+  const noneSaid =
+    !mismatch && none ? <NoComputer email={none.email} className={state === 'joining' ? 'hint' : undefined} /> : null
   /* The mockup's first screen: nobody signed in, nothing being joined. */
   const fresh = state !== 'joining' && state !== 'no-answer' && !remembered
   const [howTo, setHowTo] = useState(false)
@@ -145,10 +161,13 @@ export default function ConnectScreen({
         <>
           <h2>Connecting…</h2>
           <p>Finding your computer.</p>
-          {account ? <Using email={remembered} paired={paired} /> : null}
+          {/* Not beside "No computer is signed in with this account yet", which
+              already names the account, and to which "make sure you're
+              connected" is advice about a computer that is not there. */}
+          {account && !noneSaid ? <Using email={remembered} paired={paired} /> : null}
           {long ? (
             <>
-              {mismatch || (
+              {mismatch || noneSaid || (
                 <p className="hint">
                   Make sure the Fractal Remote app is open on the computer and the computer is awake. This keeps
                   trying on its own.
@@ -175,13 +194,13 @@ export default function ConnectScreen({
       ) : state === 'no-answer' ? (
         <>
           <h2>Your computer isn&rsquo;t answering</h2>
-          {mismatch || (
+          {mismatch || noneSaid || (
             <p>
               Make sure the Fractal Remote app is open on the computer and the computer is awake. This keeps trying on
               its own.
             </p>
           )}
-          <Using email={remembered} paired={paired} />
+          {noneSaid ? null : <Using email={remembered} paired={paired} />}
           <div className="connect-actions">
             <button className="primary" onClick={onRetry} disabled={busy}>
               Try now
@@ -201,8 +220,13 @@ export default function ConnectScreen({
             other end yet — and this screen only said to check a computer
             they have not set up. The connect screen's own line, and the
             address the phone app gives for the same moment (Connect.js).
+            Under "No computer is signed in with this account yet" it keeps
+            its Download button, or the address to copy on a phone, and drops
+            only its own "Haven't set up the computer yet?", which the words
+            above have just said for certain: the customer we know has no
+            computer gets the most help getting one, not the least.
           */}
-          <NoComputerYet />
+          <NoComputerYet asked={!noneSaid} />
         </>
       ) : (
         <>
@@ -348,8 +372,12 @@ function Using({ email, paired }) {
  * phone's address and label, and a tap copies it — "a lot of Mac users can
  * copy and paste between phone and computer, or they could copy it and email
  * it themselves".
+ *
+ * `asked` false leaves out the question and keeps the way to the download:
+ * under "No computer is signed in with this account yet" it is not a
+ * question any more.
  */
-function NoComputerYet() {
+function NoComputerYet({ asked = true }) {
   const [copied, setCopied] = useState(false)
   if (inDesktopApp()) return null
   const url = `https://${DOWNLOADS_URL}`
@@ -364,10 +392,12 @@ function NoComputerYet() {
   }
   return (
     <>
-      <p className="hint">
-        Haven&rsquo;t set up the computer yet? Open this app on the computer, tap{' '}
-        <strong>Set up phone remote</strong>, and sign in with this same account.
-      </p>
+      {asked ? (
+        <p className="hint">
+          Haven&rsquo;t set up the computer yet? Open this app on the computer, tap{' '}
+          <strong>Set up phone remote</strong>, and sign in with this same account.
+        </p>
+      ) : null}
       {onPhone ? (
         <div className="hint connect-address">
           <span className="mono">{P6.address}</span>
