@@ -14501,6 +14501,21 @@ test('the computer app carries the server that opens the AM4’s own tuner scree
 })
 
 /*
+ * "Stop the computer asking the unit for level readings nobody is looking
+ * at." The server the computer carries starts with the output-level reads
+ * off, keeps the scene and channel watch a footswitch needs, and lets an on
+ * lapse unless it is said again.
+ */
+test('the computer app carries the server whose level readings start off', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+quietMeters(\+|$)/, 'the computer app still has the unit report its levels forty times a second for nobody')
+  for (const piece of ['meterGate', 'relayheal', 'am4tunercc', 'gridgen', 'looper']) {
+    assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
+  }
+  assert.ok(lock._why.some((line) => /meter loop starts quiet/.test(line) && /lease/.test(line)), 'the lock does not say why it moved')
+})
+
+/*
  * THE APPLE WATCH. "Maybe three different screens that you can swipe between
  * … just simple actions from the watch." The phone sends the whole picture;
  * the watch asks for one of five things, and anything else is dropped.
