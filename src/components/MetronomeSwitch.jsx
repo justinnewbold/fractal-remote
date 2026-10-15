@@ -13,8 +13,13 @@ import { PLACES, placeLit, unitClick } from '../../shared/metronome.mjs'
  * the app." Only on and off: where it clicks is chosen on Setup's Metronome
  * page, and this says which in the same words. The press is also the one that
  * lets this screen's beep start, which a browser allows only on a press.
+ *
+ * And in the box that opens on a held or right-clicked Tap, the same switch
+ * (see TapTempo): "can we add the metronome on and off to this screen as well
+ * so they can quickly turn the metronome on and off?" `heading` is all the
+ * box leaves off — it is already headed Tempo, and the row names itself.
  */
-export default function MetronomeSwitch({ slug }) {
+export default function MetronomeSwitch({ slug, heading = true }) {
   const setting = useMetronome()
   const heard = useUnitHeardOn(slug)
   const unitCan = unitClick(slug, { demo: isDemo() })
@@ -37,7 +42,7 @@ export default function MetronomeSwitch({ slug }) {
 
   return (
     <>
-      <p className="silk-label setup-group">Metronome</p>
+      {heading ? <p className="silk-label setup-group">Metronome</p> : null}
       <div className="setup-rows">
         <SetupRow
           title={setting.on ? 'Metronome on ✓' : 'Metronome off'}
