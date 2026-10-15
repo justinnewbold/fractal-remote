@@ -332,24 +332,35 @@ export default function Gig({
   )
 
   /*
-   * And tell the HOST, which is the expensive half.
+   * And tell the HOST, which is the expensive half — and tell it OFF, always,
+   * even while the bar below is on screen.
    *
    * Stopping this screen's own poll stops one request every 500ms. The host's
    * telemetry supervisor is the other thing, and it does not watch this
    * screen: it starts on its first event listener and runs four output-meter
    * round trips every 100ms for as long as anything is subscribed — about
    * forty SysEx transactions a second at a unit that is also making sound.
-   * Nothing here could reach it, so nothing did.
+   *
+   * This used to say ON whenever the bar was drawn, and the bar never needed
+   * it. The bar is the output block's own monitor, read by liveMeters()
+   * (GET /preset/monitors/live) straight off the unit; the supervisor's output
+   * meters are a different reading, and nothing in this app has ever drawn
+   * one. So ON bought the unit forty reads a second for nobody — and since
+   * the host keeps one setting for everybody, every Play that opened turned
+   * it back on under a phone that had just said off. "Stop the computer
+   * asking the unit for level readings nobody is looking at." (Justin, 15
+   * October 2026; shared/relay-rules.mjs METERS_OFF_PATH says the rest.)
    *
    * Off, it keeps the front-panel scene and channel watches (a footswitch
-   * press still lands) and drops to two reads every 800ms.
+   * press still lands, exactly as fast) and drops to two reads every 800ms.
+   * Said when Play opens: in the computer's own window and on its wifi page,
+   * where nothing else here says it, and through the account as well.
    */
   useEffect(() => {
-    const wanted = meterEid !== null && size !== 0
-    setMetersWanted(wanted).catch(() => {
+    setMetersWanted(false).catch(() => {
       /* An older host without the route keeps the behaviour it already had. */
     })
-  }, [meterEid, size])
+  }, [])
 
   useEffect(() => {
     // Hidden at the smallest size, and a bar nobody can see is not worth a

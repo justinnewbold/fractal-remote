@@ -20,7 +20,7 @@ import { logDebug } from './debugLog'
 import { bluetoothOn } from './bleSwitch'
 import { pokeBluetooth, startBluetoothLink, stopBluetoothLink } from './bleLink'
 import { setLinkAway, setLinkDown } from './tapGate'
-import { LINK_DOWN_HOLD_MS, linkDownAt } from './relay-rules'
+import { LINK_DOWN_HOLD_MS, linkDownAt, METERS_OFF_PATH, metersOffBody, metersRefused, timeToQuietMeters } from './relay-rules'
 
 import {
   censusHosts,
@@ -388,6 +388,8 @@ async function turn() {
   if (running && state.link === 'connected' && Date.now() - namedAt > NAME_AGAIN) await readMacName()
   // And the computer hears that a phone is using it, so it does not go to sleep under the song.
   if (running) tellComputer()
+  // And that nobody here is looking at the unit's level readings, so it stops asking the unit for them.
+  if (running) quietMeters()
 
   /* Stopped while this turn was waiting on the network: no next turn. A turn
      that rescheduled itself after stopLink is a loop nobody can see running. */
@@ -423,6 +425,14 @@ async function join() {
   if (!answered) return
 
   await readMacName()
+  /*
+   * The moment the computer answers, before the roll call holds every write
+   * for up to six seconds and before refreshAll's reads queue up on the
+   * unit's one port: from here on it stops asking the unit for its levels.
+   * Sent to every computer on the account, which is what is wanted. Not
+   * awaited. See quietMeters.
+   */
+  quietMeters()
   // Not awaited: the roll call costs a second and a half of listening and the
   // ordinary case has nothing to report, so it must not stand between someone
   // and their unit. Writes are refused from the moment the count lands.
@@ -451,6 +461,11 @@ async function countHosts() {
     const before = remoteChosenHost()
     await censusHosts()
     set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+    /* The roll call picked a computer: that one is told about the level readings, whatever answered first before (see metersAgain). */
+    if (remoteChosenHost() !== before) {
+      metersAgain()
+      quietMeters()
+    }
     /* The roll call picked one of two (firstUnitHost): what was read while it
        listened came from whichever answered first, so read it again. */
     if (remoteHosts().length > 1 && remoteChosenHost() !== before) await refreshAll()
@@ -471,6 +486,8 @@ async function countHosts() {
 export async function chooseHost(name) {
   const ok = await pickHost(name)
   set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+  metersAgain()
+  quietMeters()
   try {
     await refreshAll()
   } catch {
@@ -569,6 +586,55 @@ function tellComputer() {
   remoteRequest(PHONE_NOTE_PATH, { method: 'PUT', body: JSON.stringify(phoneNote(now)) }).catch(() => {})
 }
 
+/** When the computer was last told nobody here is looking at its level readings; 0 for not yet on this link. */
+let quietAt = 0
+/** It refused (a computer too old to have the route): not asked again until the link drops or another is picked. */
+let quietRefused = false
+/** Which link an answer belongs to, so a refusal that lands after a drop is not held against the next. */
+let quietLink = 0
+
+/**
+ * Tell the computer nobody here is looking at the unit's level readings: at
+ * once when it answers, every couple of minutes while connected, and at once
+ * again after any drop. See METERS_OFF_PATH in relay-rules — what it costs
+ * the unit when nobody says so, why both apps only ever say off, and what an
+ * old computer does with it.
+ *
+ * "With an FM3, FM9 or Axe-Fx III, the computer asks the unit for its output
+ * level about 40 times a second the whole time it's online ... The website
+ * already says 'stop' when it doesn't need them; the phone never does." (The
+ * pick Justin approved, 15 October 2026.)
+ *
+ * Its own clock, not tellComputer's: that one starts again only on a turn
+ * that finds the link down, and a drop that heals between two turns — a
+ * computer app restarted, which comes back with the readings on — would wait
+ * out the two minutes. metersAgain, from the link's own news in startLink,
+ * catches those.
+ *
+ * Not awaited, and nothing said: relay.js writes a failed request into the
+ * log once, and a computer that refused it is not asked again on this link.
+ * The demo and Bluetooth have no computer, and never run the loop that calls
+ * this.
+ */
+function quietMeters() {
+  if (isDemo() || bluetoothOn()) return
+  const now = Date.now()
+  if (state.link !== 'connected') quietAt = 0
+  if (!timeToQuietMeters({ link: state.link, clash: state.clash, refused: quietRefused, quietAt, now })) return
+  quietAt = now
+  const asked = quietLink
+  remoteRequest(METERS_OFF_PATH, { method: 'POST', body: metersOffBody() }).catch((err) => {
+    if (asked === quietLink && metersRefused(err)) quietRefused = true
+  })
+}
+
+/** The link dropped, or the computer it drives changed: say it again as soon as it answers, and ask one that refused again. */
+function metersAgain() {
+  quietAt = 0
+  quietRefused = false
+  quietLink += 1
+}
+
 /** Said once, and again only when the answer is a different one. */
 function say(line) {
   if (line === namedSaid) return
@@ -622,11 +688,14 @@ export function startLink() {
     // The channel coming back under us is the app catching up rather than a
     // stale screen; realtime-js rejoins on its own and this is what notices.
     subscribeRemoteState((up) => {
+      /* Gone: whatever answers when it is back may have restarted with the level readings on. See quietMeters. */
+      if (!up) metersAgain()
       refresh()
       /* Back, and nothing heard on it yet: ask now rather than at the next turn. See doubt. */
       if (up && !remoteHostSeen()) doubt()
     }),
     subscribeHostSeen((seen) => {
+      if (!seen) metersAgain()
       refresh()
       /* Stopped answering on a channel that is up: ask once more, at once. See doubt. */
       if (!seen) doubt()
@@ -715,6 +784,7 @@ export async function stopLink() {
   namedAt = 0
   namedSaid = null
   toldAt = 0
+  metersAgain()
   /* Reset first, then wait: see enterDemo. */
   resetRig()
   set({ ...initial })

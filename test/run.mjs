@@ -2176,6 +2176,13 @@ test('the debug report carries the computer’s own account of its port', async 
   assert.match(out, /serial ports: \/dev\/cu\.usbmodem1019 \(Fractal\), \/dev\/cu\.Bluetooth/)
   assert.match(out, /server up: 10 min/)
   assert.match(out, /traffic: 40 sent, 38 received/)
+  /*
+   * Whether the computer is asking the unit for its output levels (shared/relay-rules.mjs
+   * METERS_OFF_PATH). Only a device server that says it is reported; an older one is not guessed at.
+   */
+  assert.doesNotMatch(out, /level readings/, 'a computer that does not say is guessed at')
+  assert.match(formatMacDiag({ metersWanted: false }), /\nlevel readings: off\n/)
+  assert.match(formatMacDiag({ metersWanted: true }), /\nlevel readings: on\n/)
   assert.match(out, /port lost and reopened: 1 time\n  2026-09-12T15:34:10\.000Z \/dev\/cu\.usbmodem1019 — the device went away/)
   assert.match(out, /server log, last 1 lines:\n2026-09-12T15:34:10\.000Z warn/)
   // Nothing to say is nothing, not a heading over an empty list.

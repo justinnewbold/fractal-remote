@@ -20,12 +20,17 @@
  * connected rig's taps going exactly as they always went.
  */
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
+/* Every file under a directory of the repo, as repo paths. */
+const walk = (dir) =>
+  readdirSync(new URL(`../${dir}`, import.meta.url), { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? (e.name === 'node_modules' ? [] : walk(`${dir}/${e.name}`)) : [`${dir}/${e.name}`]
+  )
 
 /* A clock turned by hand, as test/mobile.mjs's rig bench has it. */
 const CLOCK = `
@@ -225,7 +230,9 @@ async function linkOnABench() {
     'bench.mjs': `
       import * as clock from './clock.mjs'
       export const bench = { channel: false, hostSeen: false, answeredAt: 0, asks: [], canJoin: true, demo: false,
-        answer: () => new Promise((r) => clock.setTimeout(() => r(true), 300)) }
+        answer: () => new Promise((r) => clock.setTimeout(() => r(true), 300)),
+        /* Every request the link sends and its time, and the order it went in beside the roll call and refreshAll. */
+        requests: [], order: [], refuseMeters: false, holdMeters: false }
     `,
     /* The app going to sleep and coming back: `app.change(status)` in what the bench returns. */
     'react-native.mjs': `
@@ -244,7 +251,7 @@ async function linkOnABench() {
     'bleLink.mjs': 'export const pokeBluetooth = () => {}\nexport const startBluetoothLink = () => {}\nexport const stopBluetoothLink = () => {}\n',
     'tapGate.mjs': read('mobile/src/lib/tapGate.js'),
     'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
-    'rig.mjs': 'export const listen = () => {}\nexport const refreshAll = async () => {}\nexport const reset = () => {}\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\n',
+    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\n",
     'phone-note.mjs': "export const PHONE_NOTE_PATH = '/store/config/phone'\nexport const phoneNote = () => ({})\nexport const timeToTell = () => false\n",
     /* The relay as link.js hears it: the same order of news as relay.js gives it. */
     'relay.mjs': `
@@ -282,14 +289,21 @@ async function linkOnABench() {
         return 'u1'
       }
       export const remoteDisconnect = async () => channelUp(false)
-      export const censusHosts = async () => []
+      export const censusHosts = async () => { bench.order.push('census'); return [] }
       export const hostConflict = () => null
       export const remoteChosenHost = () => null
       export const remoteHosts = () => []
       export const remoteUnits = () => ({})
       export const pickHost = async () => false
       export const restoreSession = async () => 'u1'
-      export const remoteRequest = async () => ({ data: { name: 'Studio', version: '1.87.4' } })
+      /* A computer older than 7 September refuses the level-readings route (refuseMeters); one that never answers holds it (holdMeters). */
+      export async function remoteRequest(path, options = {}) {
+        bench.requests.push({ at: clock.now(), path, method: options.method || 'GET', body: options.body ?? null })
+        bench.order.push(path)
+        if (path === '/telemetry/meters' && bench.holdMeters) return new Promise(() => {})
+        if (path === '/telemetry/meters' && bench.refuseMeters) throw Object.assign(new Error('not allowed remotely'), { status: 403, remoteBlocked: true })
+        return { data: { name: 'Studio', version: '1.87.4' } }
+      }
     `
   }
   const swaps = [
@@ -371,12 +385,20 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       import * as clock from './clock.mjs'
       export const bench = { channel: false, hostSeen: false, answeredAt: 0, asks: [], canJoin: true, joinMs: 0,
         demo: ${demo}, served: ${role === 'wifi'}, helper: ${role === 'mac'},
-        answer: () => new Promise((r) => clock.setTimeout(() => r(true), 300)) }
+        answer: () => new Promise((r) => clock.setTimeout(() => r(true), 300)),
+        /* What the website said about the level readings, and when; refuseMeters is a computer too old for the route. */
+        meters: [], refuseMeters: false }
     `,
     'tapGate.mjs': read('src/lib/tapGate.js'),
     'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
     'forgefx.mjs': `
+      import * as clock from './clock.mjs'
       import { bench } from './bench.mjs'
+      export async function setMetersWanted(on) {
+        bench.meters.push({ at: clock.now(), on })
+        if (bench.refuseMeters) throw Object.assign(new Error('not allowed remotely'), { status: 403, remoteBlocked: true })
+        return { ok: true, meters: !!on }
+      }
       export const isDemo = () => bench.demo
       export const servedLocally = () => bench.served
       export const localHelperAlive = async () => bench.helper
@@ -2388,5 +2410,216 @@ export function run(test) {
     const toast = read('mobile/src/components/Toast.js').replace(/\s+/g, ' ')
     assert.match(toast, /export default function Toast\(\{ open, yields = false, onLayout, children \}\)/)
     assert.match(toast, /<View onLayout=\{onLayout\} style=\{\{ position: 'absolute',[^}]*zIndex: 2,/)
+  })
+
+  /* ------------------------------------------------------------------ */
+  /* The level readings nobody looks at                                  */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * "Stop the computer asking the unit for level readings nobody is looking
+   * at. With an FM3, FM9 or Axe-Fx III, the computer asks the unit for its
+   * output level about 40 times a second the whole time it's online, even
+   * when no screen shows a level bar. That's the same load that once made the
+   * sound cut out. The website already says 'stop' when it doesn't need
+   * them; the phone never does." — what Justin approved on 15 October 2026.
+   * shared/relay-rules.mjs METERS_OFF_PATH says why only OFF is ever said,
+   * and what an old computer does with it.
+   */
+  const metersSaid = (t) => t.bench.requests.filter((r) => r.path === '/telemetry/meters')
+
+  test('the rule: off is all that is ever said, two minutes apart, and an old computer’s refusal is known', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    assert.equal(r.METERS_OFF_PATH, '/telemetry/meters')
+    assert.deepEqual(JSON.parse(r.metersOffBody()), { on: false }, 'something other than off is sent')
+    assert.equal(r.metersOffBody(), JSON.stringify({ on: false }), 'not the bytes Play has sent all along, which every computer since 7 September reads')
+    assert.equal(r.hostAllows('POST', r.METERS_OFF_PATH), true, 'the relay refuses the one request that quietens the unit')
+    assert.equal(r.forbiddenRemotely('POST', r.METERS_OFF_PATH), null)
+    assert.equal(r.QUIET_METERS_MS, 2 * 60 * 1000, 'the rhythm moved; say why in shared/relay-rules.mjs (every request is a line in the computer’s log)')
+    /* A computer older than the route: 403 over the relay, 404 at the computer itself. Nothing else is a refusal. */
+    assert.equal(r.metersRefused({ status: 403 }), true)
+    assert.equal(r.metersRefused({ status: 404 }), true)
+    assert.equal(r.metersRefused({ status: 500 }), false, 'a computer that failed once is never asked again')
+    assert.equal(r.metersRefused(Object.assign(new Error('The connection dropped'), { linkDown: true })), false, 'a dropped link counted as a refusal')
+    assert.equal(r.metersRefused(undefined), false)
+    const t0 = 1_000_000
+    assert.equal(r.timeToQuietMeters({ link: 'connected', quietAt: 0, now: t0 }), true, 'not said the moment the computer answers')
+    assert.equal(r.timeToQuietMeters({ link: 'connected', quietAt: t0, now: t0 + r.QUIET_METERS_MS - 1 }), false, 'said again inside two minutes')
+    assert.equal(r.timeToQuietMeters({ link: 'connected', quietAt: t0, now: t0 + r.QUIET_METERS_MS }), true)
+    assert.equal(r.timeToQuietMeters({ link: 'connected', quietAt: t0, now: t0 - 5 }), true, 'a clock that went back waits for ever')
+    assert.equal(r.timeToQuietMeters({ link: 'no-answer', quietAt: 0, now: t0 }), false, 'said to a computer that is not there')
+    assert.equal(r.timeToQuietMeters({ link: 'connected', quietAt: 0, now: t0, refused: true }), false, 'a computer that refused is asked again')
+    assert.equal(r.timeToQuietMeters({ link: 'connected', quietAt: 0, now: t0, clash: 'two computers' }), false)
+  })
+
+  test('phone: the computer is told the moment it answers, before the roll call and the first reads, and never waited for', async () => {
+    const t = await linkOnABench()
+    t.link.startLink()
+    await t.clock.advance(1000)
+    assert.equal(t.link.linkState().link, 'connected')
+    const said = metersSaid(t)
+    assert.equal(said.length, 1, 'the phone never tells the computer nobody is looking at the level readings')
+    assert.equal(said[0].method, 'POST')
+    assert.deepEqual(JSON.parse(said[0].body), { on: false })
+    const at = (what) => t.bench.order.indexOf(what)
+    assert.ok(at('/telemetry/meters') >= 0 && at('/telemetry/meters') < at('census'), 'said after the roll call started holding writes')
+    assert.ok(at('/telemetry/meters') < at('refreshAll'), 'said after the first reads queued up on the unit')
+    /* And never anything but off, from anywhere in the link. */
+    assert.ok(!t.bench.requests.some((x) => /"on":\s*true/.test(String(x.body))), 'the phone turned the readings on')
+  })
+
+  test('phone: a computer that never answers it holds nothing up', async () => {
+    const t = await linkOnABench()
+    t.bench.holdMeters = true
+    t.link.startLink()
+    await t.clock.advance(1000)
+    assert.equal(metersSaid(t).length, 1)
+    assert.ok(t.bench.order.includes('refreshAll'), 'the first reads waited on it')
+    const asks = t.bench.asks.length
+    await t.clock.advance(60000)
+    /* A keepalive every sixteen seconds of quiet (KEEPALIVE, answered at the turn before); a loop that waited on it would ask none. */
+    assert.ok(t.bench.asks.length >= asks + 3, `the keepalive waited on it (${t.bench.asks.length - asks} asks in a minute)`)
+    assert.equal(t.link.linkState().link, 'connected')
+  })
+
+  test('phone: said again every two minutes while connected, and no more often', async () => {
+    const t = await connectedLoop()
+    t.bench.requests.length = 0
+    await t.clock.advance(110000)
+    assert.equal(metersSaid(t).length, 0, 'said again inside two minutes, which pushes useful lines out of the computer’s log')
+    await t.clock.advance(20000)
+    assert.equal(metersSaid(t).length, 1, 'not said again after two minutes, so a computer whose own window turned them on stays loud')
+    await t.clock.advance(110000)
+    assert.equal(metersSaid(t).length, 1)
+    await t.clock.advance(20000)
+    assert.equal(metersSaid(t).length, 2)
+  })
+
+  test('phone: a computer that stopped answering and came back is told again at once, not two minutes later', async () => {
+    const t = await connectedLoop()
+    await t.clock.advance(30000)
+    t.bench.requests.length = 0
+    /* A computer app restarted: one request unanswered, and the next question answered. It comes back with the readings on. */
+    t.relay.seen(false)
+    await t.clock.advance(1500)
+    assert.equal(t.link.linkState().link, 'connected')
+    assert.equal(metersSaid(t).length, 1, 'a computer back from a restart is left reading its levels for up to two minutes')
+    /* And a channel that dropped and came back: the same. */
+    await t.clock.advance(30000)
+    t.bench.requests.length = 0
+    t.relay.channelUp(false)
+    await t.clock.advance(20000)
+    assert.equal(t.link.linkState().link, 'connected', 'the bench loop did not rejoin')
+    assert.equal(metersSaid(t).length, 1, 'a channel that came back is not told')
+  })
+
+  test('phone: a computer too old for it is asked once on each link, and nothing is said on screen', async () => {
+    const t = await linkOnABench()
+    t.bench.refuseMeters = true
+    t.link.startLink()
+    await t.clock.advance(1000)
+    assert.equal(metersSaid(t).length, 1)
+    await t.clock.advance(5 * 60 * 1000)
+    assert.equal(metersSaid(t).length, 1, 'a computer that refused is asked again every two minutes')
+    assert.equal(t.link.linkState().link, 'connected', 'a refusal moved the link')
+    assert.ok(!t.told.some((s) => s.down), 'a refusal dimmed Play')
+    /* The link dropped: it may be another computer app now, so it is asked once more. */
+    t.relay.seen(false)
+    await t.clock.advance(1500)
+    assert.equal(metersSaid(t).length, 2, 'a computer that came back is never asked again')
+    await t.clock.advance(5 * 60 * 1000)
+    assert.equal(metersSaid(t).length, 2)
+    /* And a computer chosen under Which unit is asked, whatever the last one said. */
+    await t.link.chooseHost('Studio')
+    assert.equal(metersSaid(t).length, 3, 'the computer picked under Which unit is not told')
+  })
+
+  test('phone: the demo tells no computer anything', async () => {
+    const t = await linkOnABench()
+    t.bench.demo = true
+    t.link.startLink()
+    await t.clock.advance(5 * 60 * 1000)
+    assert.equal(metersSaid(t).length, 0)
+  })
+
+  test('browser: a phone on the website tells the computer off when it answers, every two minutes, and at once after a drop', async () => {
+    const t = await webLinkOnABench()
+    /* bootLink's join: said once already. */
+    assert.deepEqual(t.bench.meters.map((m) => m.on), [false], 'the website used from a phone does not tell the computer when it answers')
+    await t.clock.advance(110000)
+    assert.equal(t.bench.meters.length, 1, 'said again inside two minutes')
+    await t.clock.advance(20000)
+    assert.equal(t.bench.meters.length, 2)
+    /* The computer stops answering and is back. */
+    t.remote.seen(false)
+    await t.clock.advance(1500)
+    assert.equal(t.link.linkState().link, 'connected')
+    assert.equal(t.bench.meters.length, 3, 'a computer back from a restart is left reading its levels')
+    assert.ok(t.bench.meters.every((m) => m.on === false), 'the website turned the readings on')
+  })
+
+  test('browser: a computer too old for it is asked once on each link', async () => {
+    const t = await webLinkOnABench()
+    t.bench.refuseMeters = true
+    t.remote.seen(false)
+    await t.clock.advance(1500)
+    assert.equal(t.bench.meters.length, 2)
+    await t.clock.advance(5 * 60 * 1000)
+    assert.equal(t.bench.meters.length, 2, 'a computer that refused is asked again every two minutes')
+    assert.equal(t.link.linkState().link, 'connected')
+  })
+
+  test('browser: the computer’s own window, its wifi page and the demo leave it to Play', async () => {
+    for (const opts of [{ role: 'mac' }, { role: 'wifi' }, { demo: true }]) {
+      const t = await webLinkOnABench(opts)
+      await t.clock.advance(5 * 60 * 1000)
+      assert.deepEqual(t.bench.meters, [], `${JSON.stringify(opts)}: the link said it where Play is the one to`)
+    }
+  })
+
+  test('Play says off when it opens, even with its bar on screen, and the bar keeps its own read', () => {
+    const gig = read('src/components/Gig.jsx')
+    const calls = [...gig.matchAll(/setMetersWanted\(([^)]*)\)/g)].map((m) => m[1].trim())
+    assert.deepEqual(calls, ['false'], 'Play tells the computer to read its levels again, under a phone that just said off')
+    assert.match(gig, /useEffect\(\(\) => \{\s*setMetersWanted\(false\)\.catch\(\(\) => \{[\s\S]{0,120}\}\)\s*\}, \[\]\)/, 'Play says it on every chain read, or not when it opens')
+    /* The bar is liveMeters — the output block's own monitor — and asks for it whatever the computer's readings are. */
+    assert.match(gig, /if \(meterEid === null \|\| compact\) \{\s*setMeters\(\[\]\)/, 'the bar is hidden for something other than its size or a chain with no output block')
+    assert.match(gig, /const data = await liveMeters\(meterEid\)/, 'the bar stopped reading the output block')
+    const fx = read('src/lib/forgefx.js')
+    assert.match(fx.slice(fx.indexOf('export const liveMeters')), /^export const liveMeters[^\n]*\n[\s\S]{0,300}\/preset\/monitors\/live/, 'the bar no longer reads the block monitor, which never needed the computer’s readings')
+  })
+
+  test('nothing anywhere in either app turns the readings on', () => {
+    const files = [
+      ...['src', 'mobile/src'].flatMap((dir) => walk(dir)),
+      'mobile/App.js'
+    ].filter((f) => /\.(m?js|jsx)$/.test(f))
+    assert.ok(files.length > 50, 'the walk found almost nothing to read')
+    for (const f of files) {
+      const text = read(f)
+      for (const m of text.matchAll(/setMetersWanted\(([^)]*)\)/g)) {
+        const arg = m[1].trim()
+        assert.ok(arg === 'false' || /export const setMetersWanted = \(on\)/.test(text.slice(Math.max(0, m.index - 30), m.index + 30)), `${f}: setMetersWanted(${arg})`)
+      }
+      for (const m of text.matchAll(/\/telemetry\/meters/g)) {
+        assert.ok(!/on:\s*(true|!!|on\b)|"on":\s*true/.test(text.slice(m.index, m.index + 160)) || f === 'src/lib/forgefx.js', `${f}: something posts on to /telemetry/meters`)
+      }
+    }
+    /* The phone's loop: in its turn and its join, never awaited, started again by every drop. */
+    const phone = read('mobile/src/lib/link.js')
+    const turn = phone.slice(phone.indexOf('async function turn()'), phone.indexOf('async function join()'))
+    assert.match(turn, /\n {2}if \(running\) quietMeters\(\)\n/, 'the phone’s loop never says it again')
+    const join = phone.slice(phone.indexOf('async function join()'), phone.indexOf('async function countHosts()'))
+    assert.ok(join.indexOf('quietMeters()') > join.indexOf('await readMacName()') && join.indexOf('quietMeters()') < join.indexOf('countHosts()'), 'the phone says it after the roll call has begun holding writes, or not at join at all')
+    assert.ok(!/await remoteRequest\(METERS_OFF_PATH/.test(phone), 'the link waits on it')
+    assert.match(phone, /remoteRequest\(METERS_OFF_PATH, \{ method: 'POST', body: metersOffBody\(\) \}\)/)
+    const start = phone.slice(phone.indexOf('export function startLink()'))
+    assert.match(start, /subscribeRemoteState\(\(up\) => \{\s*\/\*[^*]*\*\/\s*if \(!up\) metersAgain\(\)/, 'a dropped channel does not start the clock again')
+    assert.match(start, /subscribeHostSeen\(\(seen\) => \{\s*if \(!seen\) metersAgain\(\)/, 'a computer that stopped answering does not start the clock again')
+    assert.match(phone.slice(phone.indexOf('export async function stopLink()')), /metersAgain\(\)/)
+    const web = read('src/lib/link.js')
+    const webTurn = web.slice(web.indexOf('async function turn()'), web.indexOf('function tellComputer()'))
+    assert.match(webTurn, /\n {2}tellComputer\(\)\n {2}\/\/[^\n]*\n {2}quietMeters\(\)\n/, 'the website’s loop never says it')
+    assert.match(web.slice(web.indexOf('function quietMeters()')), /^function quietMeters\(\) \{\n {2}if \(state\.role !== 'remote'\) return/, 'the website says it from the computer’s own window, where Play does')
   })
 }
