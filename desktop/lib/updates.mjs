@@ -427,9 +427,20 @@ export function wireUpdates({ updater, native = null, onState, log = () => {}, l
         }
         // Point the library at exactly that release, so it cannot be told an
         // older one by a page answering from a stale copy.
+        //
+        // ONE PIECE PER REQUEST, which is the other half of "every Mac
+        // downloads the full 140 MB each time". An update that fetches only
+        // the changed pieces of the new file asks for them by byte range,
+        // and electron-updater's generic feed asks for many ranges in one
+        // request unless told otherwise (it assumes any server but S3 can).
+        // GitHub's download servers cannot: a request for two ranges is
+        // answered 501 "Unsupported client range", the library gives up on
+        // the small download, and fetches the whole file. Its own GitHub
+        // feed knows this and asks one range at a time; this feed is aimed
+        // at the same GitHub files, so it says the same.
         if (verdict?.kind === 'newer' && typeof updater.setFeedURL === 'function') {
           try {
-            updater.setFeedURL({ provider: 'generic', url: verdict.feed })
+            updater.setFeedURL({ provider: 'generic', url: verdict.feed, useMultipleRangeRequest: false })
           } catch (err) {
             log(err)
           }

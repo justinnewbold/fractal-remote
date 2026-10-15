@@ -9248,7 +9248,8 @@ test('a check asks GitHub what is there now, and says when the Mac version is st
   }
   const ready = updates.wireUpdates({ updater: v, onState: () => {}, running: '1.86.75', lookup: async () => release('v1.86.76', done) })
   await ready.check()
-  assert.deepEqual(feed, { provider: 'generic', url: 'https://github.com/justinnewbold/fractal-remote/releases/download/v1.86.76' })
+  /* One byte range per request: GitHub's download servers answer two in one request with 501, and the update then fetches the whole file. */
+  assert.deepEqual(feed, { provider: 'generic', url: 'https://github.com/justinnewbold/fractal-remote/releases/download/v1.86.76', useMultipleRangeRequest: false })
   assert.equal(v.checked, 1)
 
   // No answer from the API: the library's own check still happens.

@@ -14,7 +14,7 @@
  * Each fix has an `id` because the error notices link to one: a message that
  * says what went wrong and offers nothing to do about it is where this started.
  */
-import { isOlder } from './versions.mjs'
+import { COMPUTER_NEEDED, isOlder } from './versions.mjs'
 import { WINDOWS_DRIVER, quitEditor } from './editors.mjs'
 
 export const FIXES = [
@@ -55,7 +55,10 @@ export const FIXES = [
     title: 'The app and the computer disagree',
     when: 'Things half-work: a screen is blank, a button does nothing, or something that worked yesterday does not.',
     steps: [
-      'Check the versions below. The app and the computer app should be on the same number.',
+      /* Not "the same number" any more: a computer version is made only when
+         the computer's own part changes, so the computer app is usually a
+         few numbers behind this one and that is fine. */
+      'Check the line below. The computer app does not need the same number as this app, only one new enough for it, and the line says whether it is.',
       'If the computer app is behind, let it update — it checks on its own, and there is an Updates panel in Settings.',
       'Reload this page, or force-quit and reopen the phone app, once the computer has updated.'
     ]
@@ -117,8 +120,15 @@ export function fixFor(message) {
  * `null` for the computer's version is its own answer, not an error: a
  * computer app older than 7.205.0 never sent one, and so did every phone
  * running on the relay before that.
+ *
+ * BEHIND MEANS BELOW WHAT THIS APP NEEDS, the same rule as the red line on
+ * the computer's card (link-chain.mjs). A computer version is made only when
+ * the computer's own part changes, so a computer a few numbers behind this
+ * app is usually on the newest release there is, and calling that "behind"
+ * would send somebody looking for an update that does not exist. Behind this
+ * app but at or above `needed` (COMPUTER_NEEDED) is 'ok', said plainly.
  */
-export function versionsInSync({ app, host }) {
+export function versionsInSync({ app, host, needed = COMPUTER_NEEDED }) {
   if (!app) return { state: 'unknown', says: 'This app cannot tell what version it is.' }
   if (!host)
     return {
@@ -128,14 +138,19 @@ export function versionsInSync({ app, host }) {
   if (app === host) return { state: 'ok', says: `Both on v${app}.` }
   const behind = isOlder(host, app)
   if (behind === null) return { state: 'unknown', says: `This app is v${app}; the computer said "${host}".` }
-  return behind
+  if (!behind)
+    return {
+      state: 'ahead',
+      says: `The computer app is v${host} and this one is v${app}. Reload this app to catch up.`
+    }
+  return isOlder(host, needed) === true
     ? {
         state: 'behind',
-        says: `The computer app is v${host} and this one is v${app}. Let the computer update, then reload this app.`
+        says: `The computer app is v${host}, and this app needs v${needed} or newer. Let the computer update, then reload this app.`
       }
     : {
-        state: 'ahead',
-        says: `The computer app is v${host} and this one is v${app}. Reload this app to catch up.`
+        state: 'ok',
+        says: `The computer app is v${host} and this one is v${app}. That is fine: the computer app has everything this one needs.`
       }
 }
 

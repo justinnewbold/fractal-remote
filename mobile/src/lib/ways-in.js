@@ -39,19 +39,12 @@
 
 import { FRACTAL_DOWNLOADS, WINDOWS_DRIVER, quitEditor } from './editors.js'
 
-/*
- * The list, not `/releases/latest`.
- *
- * `/latest` means "the newest release of any kind", and this repository also
- * publishes an Android build on nearly every merge — so the download link
- * aimed at the Mac app landed on an .apk. The list page shows all of them with
- * their names, and the step below says which file to take.
- */
 /**
  * WHERE THIS CODE ACTUALLY LIVES, in one place, because three things point at
  * it and none of them can be wrong.
  *
- * The download link the apps offer, the Mac app's own menu, and
+ * The list the download page reads (public/downloads.html, where the
+ * download buttons below send people), the Mac app's own menu, and
  * electron-builder's publish block — which is BOTH where a release uploads
  * and where an installed Mac app looks for the next version.
  *
@@ -71,7 +64,31 @@ import { FRACTAL_DOWNLOADS, WINDOWS_DRIVER, quitEditor } from './editors.js'
  */
 export const REPO = 'justinnewbold/fractal-remote'
 
-export const RELEASES = `https://github.com/${REPO}/releases`
+/*
+ * THE DOWNLOAD PAGE, NOT GITHUB'S LIST, for all three computers.
+ *
+ * The Mac and Windows buttons used to open github.com/…/releases, and that
+ * was only safe while every merge made a computer release. It does not any
+ * more. "Fewer, smaller computer updates": a computer release is made only
+ * when the computer app's own part changes, while an Android build is still
+ * published on nearly every merge. GitHub's list shows ten releases a page,
+ * so ten merges in a row with nothing new for the computer push every .dmg
+ * and .exe off the page the button opens. A new buyer would find only .apk
+ * files there, under a step that says to take the .dmg.
+ *
+ * The download page asks GitHub for a hundred releases, keeps the computer
+ * ones, takes the newest by when it was published, and offers the one file
+ * with a label on it. It was made for that: "Right now it's just taking
+ * users to GitHub, which can be kind of confusing to a lot of people I feel."
+ * It is also where the Linux route below, the no-computer message, the
+ * update steps and the phone's own Mac, Windows and Linux icons already send
+ * people.
+ *
+ * Not `/releases/latest` either. That one does name the computer release
+ * now (the Android builds go up with --latest=false), but it is still a
+ * GitHub page of twenty-odd files, four of them the updater's.
+ */
+export const DOWNLOADS = 'https://fractal.newbold.cloud/downloads'
 
 /**
  * `ready` is a thing you can download and run today.
@@ -85,14 +102,14 @@ export const WAYS = [
     status: 'ready',
     note: 'Ready now — this is the easy one',
     steps: [
-      'On the Mac, open the download page below and take the newest file ending in .dmg.',
+      'On the Mac, open the download page below and take the Mac download, a file ending in .dmg. The page says how to tell whether your Mac is Apple Silicon or Intel.',
       'Drag it to Applications and open it.',
       'Plug your unit into the Mac with its USB cable.',
       quitEditor(null),
       'In the app, choose Set up phone remote and sign in. Make an account there if you have not got one.',
       'On your phone, get Fractal Remote from the App Store or Google Play and sign in with that same account. That is the whole of it.'
     ],
-    links: [{ label: 'Download Fractal Remote for Mac', url: RELEASES }]
+    links: [{ label: 'Download Fractal Remote for Mac', url: DOWNLOADS }]
   },
   {
     id: 'windows-app',
@@ -101,7 +118,7 @@ export const WAYS = [
     status: 'ready',
     note: 'Ready now — Windows will warn about it, and that is expected',
     steps: [
-      'On the PC, open the download page below and take the newest file ending in .exe.',
+      'On the PC, open the download page below and take the Windows download, a file ending in .exe.',
       'Open it. Windows shows a blue box that says "Windows protected your PC" — click More info, then Run anyway. It says that because the installer is not signed yet, not because anything is wrong with it.',
       WINDOWS_DRIVER,
       'Plug your unit into the PC with its USB cable.',
@@ -110,7 +127,7 @@ export const WAYS = [
       'In the app, choose Set up phone remote and sign in, then sign in on the phone with that same account. Same as the Mac.'
     ],
     links: [
-      { label: 'Download Fractal Remote for Windows', url: RELEASES },
+      { label: 'Download Fractal Remote for Windows', url: DOWNLOADS },
       { label: "Fractal's downloads, for the USB driver", url: FRACTAL_DOWNLOADS }
     ]
   },
@@ -170,7 +187,7 @@ export const WAYS = [
      * The download page stays first, because it is what the steps name.
      */
     links: [
-      { label: 'Download Fractal Remote for Linux', url: 'https://fractal.newbold.cloud/downloads' },
+      { label: 'Download Fractal Remote for Linux', url: DOWNLOADS },
       { label: 'Set up a Raspberry Pi, step by step', url: 'https://fractal.newbold.cloud/raspberry-pi' }
     ]
   },

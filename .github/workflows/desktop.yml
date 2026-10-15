@@ -64,6 +64,13 @@ on:
   # It costs no quota — ordinary runners and Apple's notary service, the same
   # as the APK's free build — and electron-updater does the rest: the app
   # checks the release feed on launch and installs what it finds.
+  #
+  # BUT NOT ON EVERY MERGE ANY MORE. "The computer app put out 28 versions in
+  # 4 days … After the fix: a new computer version only when its own part
+  # changed." Every merge still runs this, and the `decide` job below asks
+  # whether anything inside the computer app changed since the newest
+  # computer release. Nothing did: the builds are skipped and no release is
+  # made. Something did, or anything is in doubt: a release, as before.
   push:
     branches: [main]
     tags: ['desktop-v*']
@@ -71,9 +78,94 @@ on:
     paths:
       - 'desktop/**'
       - 'scripts/vendor-forgefx.mjs'
+      - 'scripts/computer-fingerprint.mjs'
       - '.github/workflows/desktop.yml'
 
 jobs:
+  # ------------------------------------------------------------------- decide
+  #
+  # A NEW COMPUTER VERSION ONLY WHEN THE COMPUTER'S OWN PART CHANGED.
+  #
+  # "Fewer, smaller computer updates. The computer app put out 28 versions in
+  # 4 days, and every Mac downloads the full 140 MB each time … So the red
+  # 'update the computer' line is on most of the time, and people learn to
+  # ignore it."
+  #
+  # Every merge moves the version number, and the release is named after it,
+  # so every merge made a release — for a phone screen, a website page or the
+  # docs as much as for the computer app. scripts/computer-fingerprint.mjs
+  # works out what is inside the computer app (desktop/, the device server's
+  # pin, and the web app it serves from inside itself, import by import),
+  # with the version number taken out, and compares it with the record the
+  # newest computer release carries (computer-fingerprint.json, which the
+  # complete job puts there once every platform is on it).
+  #
+  #   - a push to main, nothing inside changed: skip=true, and the release
+  #     and every build below are skipped. The run is green with this alone.
+  #   - a push to main, something changed: a release, as before.
+  #   - a desktop-v tag, or a hand-started run: as before. The Publish box
+  #     and the tag still make a release whatever this says, which is the
+  #     way to put out a computer version for a change it cannot see (a
+  #     newer Electron 33.x, which desktop/ has no lock file to pin). But
+  #     only under a number with no computer release yet: a computer takes
+  #     only a higher one, so the release job stops a forced run whose
+  #     version is already out. Merge a change first (one that changes
+  #     nothing inside the computer app makes no release of its own), then
+  #     tick Publish on main.
+  #   - a pull request: builds, never publishes, as before.
+  #
+  # IT NEVER SKIPS ON A DOUBT. No record on the newest release (every release
+  # made before this, any release that failed part of the way, and one a
+  # re-run is writing into again: release and complete take it off), a record
+  # it cannot read, GitHub not answering, the script itself failing: every
+  # one of them is a release, exactly what happened before any of this. And
+  # every job below asks for `skip != 'true'` rather than `skip == 'false'`,
+  # so even this job failing outright publishes rather than skips.
+  #
+  # Nor while the phones need a newer computer app than the newest release
+  # (COMPUTER_NEEDED in shared/versions.mjs): that release is made now.
+  #
+  # A merge that lands while a release is still being built finds that
+  # release with no record on it yet, and so makes one more release than it
+  # needed to. That costs a few minutes of runner time and nothing else.
+  decide:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      skip: ${{ steps.decide.outputs.skip }}
+      fingerprint: ${{ steps.decide.outputs.fingerprint }}
+      base: ${{ steps.decide.outputs.base }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # For @babel/parser, which the script reads the web app's imports with.
+      # Nothing here is built or run, so no install scripts either.
+      - name: The one library the fingerprint needs
+        run: npm ci --ignore-scripts
+
+      - name: Has anything inside the computer app changed
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH_BOX: ${{ inputs.publish }}
+        run: node scripts/computer-fingerprint.mjs --decide --out "$RUNNER_TEMP/computer-fingerprint.json"
+
+      # Kept for the complete job, which puts it on the release once every
+      # platform is there. Missing (the script could not work it out), the
+      # release simply has no record, and the next merge makes another.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: computer-fingerprint
+          path: ${{ runner.temp }}/computer-fingerprint.json
+          if-no-files-found: warn
+          retention-days: 7
+
   # ------------------------------------------------------------------ release
   #
   # ONE RELEASE, MADE ONCE, BEFORE ANYTHING TRIES TO UPLOAD INTO IT.
@@ -99,8 +191,37 @@ jobs:
   # skipped — which is why every job below says `always()` as well as naming
   # this one. A skipped dependency otherwise skips everything that needs it,
   # and that would turn off the desktop build on every pull request.
+  #
+  # AND ONLY WHEN `decide` DID NOT SAY SKIP. `!cancelled()` so that a decide
+  # job that failed outright still lets this run: a broken check publishes,
+  # as everything did before it existed.
+  #
+  # A RELEASE THAT IS ALREADY OUT IS NEVER MADE AGAIN. The Publish box and a
+  # desktop-v tag make the release for whatever version desktop/package.json
+  # says, and when that version already has one (the merge it came in on
+  # made it) the run used to go green having put nothing on any computer:
+  # electron-builder will not upload into a release published more than two
+  # hours ago (it says "skipped publishing" and carries on), and the check
+  # below then found the old files and passed. Inside the two hours it was
+  # worse, the old files swapped for new ones under a number no computer
+  # that has it takes again. So a forced run stops here, red, saying how:
+  # merge a change first, for a number with no release yet. And any run
+  # meeting a release more than two hours old stops too (a re-run, or a
+  # number used before), because nothing it built would be uploaded.
+  #
+  # AND A RUN THAT CARRIES ON INTO ITS OWN RELEASE TAKES THE RECORD OFF IT
+  # FIRST. electron-builder puts a file that is already there up again by
+  # deleting it and then uploading (electron-publish's overwriteArtifact), so
+  # a re-run that fails between the two leaves the release without that
+  # file, while the record from the first run still says it is whole. The
+  # next merge with nothing new for the computer would then skip, and the
+  # gap would stay until the computer app next changed. With the record off,
+  # that merge makes a new release instead; the complete job puts it back
+  # once every platform is there again. If it cannot be taken off, this
+  # stops red and nothing is written into the release at all.
   release:
-    if: ${{ startsWith(github.ref, 'refs/tags/desktop-v') || ((inputs.publish || github.event_name == 'push') && github.ref == 'refs/heads/main') }}
+    needs: decide
+    if: ${{ !cancelled() && needs.decide.outputs.skip != 'true' && (startsWith(github.ref, 'refs/tags/desktop-v') || ((inputs.publish || github.event_name == 'push') && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -113,6 +234,26 @@ jobs:
           set -euo pipefail
           tag="v$(node -p "require('./desktop/package.json').version")"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            published="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json publishedAt --jq '.publishedAt // ""' || true)"
+            age="$(node -p 'const t = Date.parse(process.argv[1]); Number.isNaN(t) ? 0 : Math.floor((Date.now() - t) / 1000)' "$published")"
+            if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || [[ "$GITHUB_REF" == refs/tags/desktop-v* ]]; then
+              echo "::error::$tag is already a computer release, so this would put nothing new on any computer: a computer only takes a higher number. Merge a change first (one that changes nothing inside the computer app makes no release of its own), then tick Publish on main. To finish a release that failed part of the way, re-run the failed jobs of the run that made it."
+              echo "### $tag is already out" >> "$GITHUB_STEP_SUMMARY"
+              echo "A computer only takes a higher number. Merge a change first, then tick Publish on main." >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+            if [ "$age" -gt 7200 ]; then
+              echo "::error::$tag went out more than two hours ago, and electron-builder does not upload into a release that old: every build would say \"skipped publishing\" and stay green. A new computer version needs a new number."
+              echo "### $tag went out more than two hours ago" >> "$GITHUB_STEP_SUMMARY"
+              echo "Nothing built now would be uploaded into it. A new computer version needs a new number." >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+            # Off before anything is written into it again (see above).
+            names="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+            if grep -qx 'computer-fingerprint.json' <<<"$names"; then
+              gh release delete-asset "$tag" computer-fingerprint.json --yes --repo "$GITHUB_REPOSITORY"
+              echo "took computer-fingerprint.json off $tag until every platform is on it again"
+            fi
             echo "$tag is already there; nothing to make."
           else
             # Same shape electron-builder would have made: published, not a
@@ -142,12 +283,16 @@ jobs:
     # while electron-builder is brought up to a version that handles the new
     # image; the real fix is that upgrade, and this line goes when it lands.
     runs-on: macos-15
-    needs: release
+    needs: [decide, release]
     # `always()` because `release` is skipped on a pull request, and a skipped
-    # dependency skips its dependents unless they say otherwise. The second
-    # half keeps the old behaviour where it matters: if making the release
-    # fails, nothing tries to publish into a release that is not there.
-    if: ${{ always() && needs.release.result != 'failure' && needs.release.result != 'cancelled' }}
+    # dependency skips its dependents unless they say otherwise. The rest
+    # keeps the old behaviour where it matters: if making the release fails,
+    # nothing tries to publish into a release that is not there. And nothing
+    # builds when `decide` found nothing inside the computer app had changed,
+    # or when the run was stopped while `decide` was still working: that
+    # leaves `release` skipped rather than cancelled, and four builds
+    # publishing into a release nobody made is the 1.14.0 race above.
+    if: ${{ always() && needs.decide.outputs.skip != 'true' && needs.release.result != 'failure' && needs.release.result != 'cancelled' && needs.decide.result != 'cancelled' }}
     # Creating a release needs contents: write, and a workflow that says
     # nothing gets whatever the repository defaults to — which here is read
     # only. GitHub named the missing permission itself when it refused:
@@ -434,12 +579,16 @@ jobs:
   # WIN_CERT_PASSWORD are read the moment they exist, and nothing else changes.
   windows:
     runs-on: windows-latest
-    needs: release
+    needs: [decide, release]
     # `always()` because `release` is skipped on a pull request, and a skipped
-    # dependency skips its dependents unless they say otherwise. The second
-    # half keeps the old behaviour where it matters: if making the release
-    # fails, nothing tries to publish into a release that is not there.
-    if: ${{ always() && needs.release.result != 'failure' && needs.release.result != 'cancelled' }}
+    # dependency skips its dependents unless they say otherwise. The rest
+    # keeps the old behaviour where it matters: if making the release fails,
+    # nothing tries to publish into a release that is not there. And nothing
+    # builds when `decide` found nothing inside the computer app had changed,
+    # or when the run was stopped while `decide` was still working: that
+    # leaves `release` skipped rather than cancelled, and four builds
+    # publishing into a release nobody made is the 1.14.0 race above.
+    if: ${{ always() && needs.decide.outputs.skip != 'true' && needs.release.result != 'failure' && needs.release.result != 'cancelled' && needs.decide.result != 'cancelled' }}
     permissions:
       contents: write
     env:
@@ -593,12 +742,16 @@ jobs:
           - runner: ubuntu-24.04-arm
             arch: arm64
     runs-on: ${{ matrix.runner }}
-    needs: release
+    needs: [decide, release]
     # `always()` because `release` is skipped on a pull request, and a skipped
-    # dependency skips its dependents unless they say otherwise. The second
-    # half keeps the old behaviour where it matters: if making the release
-    # fails, nothing tries to publish into a release that is not there.
-    if: ${{ always() && needs.release.result != 'failure' && needs.release.result != 'cancelled' }}
+    # dependency skips its dependents unless they say otherwise. The rest
+    # keeps the old behaviour where it matters: if making the release fails,
+    # nothing tries to publish into a release that is not there. And nothing
+    # builds when `decide` found nothing inside the computer app had changed,
+    # or when the run was stopped while `decide` was still working: that
+    # leaves `release` skipped rather than cancelled, and four builds
+    # publishing into a release nobody made is the 1.14.0 race above.
+    if: ${{ always() && needs.decide.outputs.skip != 'true' && needs.release.result != 'failure' && needs.release.result != 'cancelled' && needs.decide.result != 'cancelled' }}
     permissions:
       contents: write
     steps:
@@ -866,26 +1019,54 @@ jobs:
   # actually on the release, and fails with the missing names listed when
   # anything a person or an updater needs is not there.
   #
-  # WHAT IT CHECKS, and what it deliberately does not. Installers and update
-  # manifests, because those are what somebody downloads and what an installed
-  # app reads to find the next version — a missing latest-linux.yml is silent
-  # and permanent. Not blockmaps: they only make an update smaller, and a
-  # release is still usable without one.
+  # WHAT IT CHECKS. Installers and update manifests, because those are what
+  # somebody downloads and what an installed app reads to find the next
+  # version — a missing latest-linux.yml is silent and permanent.
+  #
+  # AND THE BLOCKMAPS AN UPDATE IS MADE SMALL WITH, which this used to leave
+  # out as nice to have. A computer fetching only the changed pieces of an
+  # update reads two lists of pieces: the new version's, and the one for the
+  # version it is running, from that version's own release. So a release
+  # without its Mac zip blockmaps costs a full download twice: once for the
+  # Macs updating TO it, and again for every Mac updating FROM it. Every Mac
+  # release until this one had them under the wrong name (a space GitHub
+  # turned into a dot; see desktop/blockmapNames.js), and nothing said so.
+  # The Windows installer's is the one its updater reads. Not the disk
+  # images' (no updater reads them) and not Linux (an AppImage carries its
+  # list inside itself, and a .deb is always downloaded whole).
+  #
+  # AND THEN IT SAYS WHAT THE RELEASE WAS MADE FROM. Once every file is
+  # there, the computer fingerprint `decide` worked out goes on the release
+  # as computer-fingerprint.json, and the next merge is compared with it.
+  # Last, and only when the check passed: a release that failed part of the
+  # way has no record, so the next merge makes a new one rather than leave a
+  # platform stranded on it.
+  #
+  # AND IT TAKES A RECORD OFF AS READILY AS IT PUTS ONE ON. A re-run of one
+  # build alone re-runs this job but not the release job above, and that
+  # build swaps its files on the release one by one, each deleted before the
+  # new one goes up. So when a file is missing, or a build of this run failed
+  # or was stopped part of the way (every name can still be there, with a
+  # new zip under an old latest-mac.yml that no longer matches it), the
+  # record an earlier run left comes off, and the next merge makes a release.
   complete:
-    needs: [mac, windows, linux]
+    needs: [decide, mac, windows, linux]
     # `always()` because this matters MOST when a build has failed: the run is
     # red either way, and this turns "something went wrong somewhere" into a
-    # list of exactly which files are missing.
-    if: ${{ always() && (startsWith(github.ref, 'refs/tags/desktop-v') || ((inputs.publish || github.event_name == 'push') && github.ref == 'refs/heads/main')) }}
+    # list of exactly which files are missing. Not when `decide` skipped the
+    # builds: there is no release to check.
+    if: ${{ always() && needs.decide.outputs.skip != 'true' && (startsWith(github.ref, 'refs/tags/desktop-v') || ((inputs.publish || github.event_name == 'push') && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-latest
+    # Write, for the one file it adds: the record, after the check.
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
       - name: Every platform is really on the release
         env:
           GH_TOKEN: ${{ github.token }}
+          BUILT: ${{ needs.mac.result }} ${{ needs.windows.result }} ${{ needs.linux.result }}
         run: |
           set -euo pipefail
           v="$(node -p "require('./desktop/package.json').version")"
@@ -894,14 +1075,28 @@ jobs:
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets \
             --jq '.assets[].name' | sort > have.txt
 
+          # A release that is not whole carries no record (see above).
+          take_record_off() {
+            grep -qx 'computer-fingerprint.json' have.txt || return 0
+            if gh release delete-asset "$tag" computer-fingerprint.json --yes --repo "$GITHUB_REPOSITORY"; then
+              echo "took computer-fingerprint.json off $tag: $1"
+            else
+              echo "::error::computer-fingerprint.json could not be taken off $tag ($1). Delete it from the release by hand, or the next merge with nothing new for the computer treats $tag as whole."
+              return 1
+            fi
+          }
+
           # One line per thing somebody downloads or an updater reads.
           cat > want.txt <<WANT
           Fractal-Remote-$v.dmg
           Fractal-Remote-$v-arm64.dmg
           Fractal-Remote-$v-mac.zip
           Fractal-Remote-$v-arm64-mac.zip
+          Fractal-Remote-$v-mac.zip.blockmap
+          Fractal-Remote-$v-arm64-mac.zip.blockmap
           latest-mac.yml
           Fractal-Remote-Setup-$v.exe
+          Fractal-Remote-Setup-$v.exe.blockmap
           latest.yml
           Fractal-Remote-$v.AppImage
           fractal-remote-desktop_${v}_amd64.deb
@@ -917,17 +1112,66 @@ jobs:
           sed 's/^/  /' have.txt
 
           if [ -n "$missing" ]; then
+            take_record_off "files are missing" || true
             echo "::error::$tag is incomplete. A platform built but did not publish."
             echo "### $tag is missing files" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             echo "$missing" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             echo "Re-run the failed job. If every job was green, the upload was" >> "$GITHUB_STEP_SUMMARY"
-            echo "lost rather than the build." >> "$GITHUB_STEP_SUMMARY"
+            echo "lost rather than the build: look for \"skipped publishing\" in" >> "$GITHUB_STEP_SUMMARY"
+            echo "its log, which electron-builder says, and carries on, when the" >> "$GITHUB_STEP_SUMMARY"
+            echo "release went out more than two hours before the upload." >> "$GITHUB_STEP_SUMMARY"
             echo "missing:"
             echo "$missing" | sed 's/^/  /'
             exit 1
           fi
 
+          case " $BUILT " in
+            *" failure "*|*" cancelled "*)
+              take_record_off "a build of this run failed or was stopped, and may have swapped some of its files first" ;;
+          esac
+
           echo "All four platforms are on $tag."
           echo "### $tag is complete — all four platforms" >> "$GITHUB_STEP_SUMMARY"
+
+      # The record decide made, from the same commit as everything above.
+      # Allowed to be missing: then the release has no record, and the next
+      # merge to main makes a release rather than skip, which is the safe way
+      # round.
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: computer-fingerprint
+          path: ${{ runner.temp }}/record
+
+      # And only from a run that built every platform. A forced run on a
+      # version already out is stopped by the release job and builds
+      # nothing; the files the check above found are an earlier run's, and
+      # the record on them stays the one that run left. A run whose build
+      # failed or was stopped has already had the record taken off by the
+      # check above, and puts none back.
+      - name: The release says what it was made from
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECORD: ${{ runner.temp }}/record/computer-fingerprint.json
+          WANT: ${{ needs.decide.outputs.fingerprint }}
+          BUILT: ${{ needs.mac.result }} ${{ needs.windows.result }} ${{ needs.linux.result }}
+        run: |
+          set -euo pipefail
+          tag="v$(node -p "require('./desktop/package.json').version")"
+          if [ "$BUILT" != "success success success" ]; then
+            echo "::warning::this run did not build every platform of $tag (mac, windows, linux: $BUILT), so its record is left as it was"
+            exit 0
+          fi
+          if [ ! -s "$RECORD" ]; then
+            echo "::warning::no computer fingerprint for $tag, so the next merge to main makes a new computer release"
+            exit 0
+          fi
+          have="$(node -p "require(process.env.RECORD).hash")"
+          if [ -n "$WANT" ] && [ "$have" != "$WANT" ]; then
+            echo "::warning::the record ($have) is not the fingerprint decide said ($WANT); left off $tag, so the next merge makes a new release"
+            exit 0
+          fi
+          gh release upload "$tag" "$RECORD" --clobber --repo "$GITHUB_REPOSITORY"
+          echo "$tag carries computer-fingerprint.json ($have)"

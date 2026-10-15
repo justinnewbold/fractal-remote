@@ -2058,15 +2058,34 @@ export function run(test) {
       assert.equal(guide.fixFor(message), want, `"${message}" was placed on ${guide.fixFor(message)}`)
     }
 
-    const sync = (app, host) => guide.versionsInSync({ app, host })
-    assert.equal(sync('7.1.0', '7.1.0').state, 'ok')
-    assert.equal(sync('7.2.0', '7.1.0').state, 'behind', 'a computer behind the app is not reported')
-    assert.equal(sync('7.1.0', '7.2.0').state, 'ahead', 'an app behind the computer is not reported')
-    assert.equal(sync('7.1.0', null).state, 'unknown', 'a computer that said nothing is reported as agreeing')
-    assert.equal(sync(null, '7.1.0').state, 'unknown')
-    assert.equal(sync('7.1.0', 'banana').state, 'unknown', 'an unreadable version is read as a verdict')
-    for (const [app, host] of [['7.2.0', '7.1.0'], ['7.1.0', '7.2.0'], ['7.1.0', null]])
+    /*
+     * Behind means below what this app needs (COMPUTER_NEEDED), not below
+     * this app: "the red line only shows when the phone really needs
+     * something the computer doesn't have yet". A computer version is made
+     * only when the computer's own part changes, so a few numbers behind is
+     * usually the newest there is, and that is 'ok', said plainly.
+     */
+    const { COMPUTER_NEEDED } = await import('../shared/versions.mjs')
+    const sync = (app, host, needed = '1.87.23') => guide.versionsInSync({ app, host, needed })
+    assert.equal(sync('1.87.30', '1.87.30').state, 'ok')
+    assert.equal(sync('1.87.30', '1.87.22').state, 'behind', 'a computer below what this app needs is not reported')
+    assert.match(sync('1.87.30', '1.87.22').says, /v1\.87\.22, and this app needs v1\.87\.23 or newer/, 'a computer that is behind is not told what it needs')
+    assert.equal(sync('1.87.30', '1.87.23').state, 'ok', 'a computer with everything this app needs is called behind')
+    assert.equal(sync('1.87.30', '1.87.26').state, 'ok', 'a computer on the newest release there is is called behind')
+    assert.match(sync('1.87.30', '1.87.26').says, /That is fine/, 'a computer that is fine is not told so')
+    assert.equal(sync('1.87.22', '1.87.30').state, 'ahead', 'an app behind the computer is not reported')
+    assert.equal(sync('1.87.30', null).state, 'unknown', 'a computer that said nothing is reported as agreeing')
+    assert.equal(sync(null, '1.87.30').state, 'unknown')
+    assert.equal(sync('1.87.30', 'banana').state, 'unknown', 'an unreadable version is read as a verdict')
+    for (const [app, host] of [['1.87.30', '1.87.22'], ['1.87.30', '1.87.26'], ['1.87.22', '1.87.30'], ['1.87.30', null]])
       assert.ok(sync(app, host).says.length > 20, 'a verdict with nothing to read')
+    /* Left out, it is the real one, which both ends call without naming it. */
+    assert.equal(guide.versionsInSync({ app: '99.0.0', host: COMPUTER_NEEDED }).state, 'ok', 'the default is not COMPUTER_NEEDED')
+    assert.equal(guide.versionsInSync({ app: '99.0.0', host: '0.0.1' }).state, 'behind')
+    /* And the step above it no longer says the two should be on the same number. */
+    const step = guide.fixById('versions').steps.join(' ')
+    assert.ok(!/same number\./.test(step), 'the guide still says the app and the computer app should be on the same number')
+    assert.match(step, /new enough/, 'the guide does not say the computer app only has to be new enough')
     assert.ok(/firmware/i.test(guide.FIRMWARE_NOTE), 'nothing says the firmware is unreadable')
 
     /* Both ends show it, and both ends link into it. */
@@ -4426,6 +4445,17 @@ export function run(test) {
     assert.match(behind[0].value, /^v1\.86\.58, behind v1\.86\.60/, 'a phone behind the newest update is not told')
     assert.match(live.liveRows(sample, { kind: 'phone', version: '1.86.60' })[0].value, /up to date/)
     assert.match(live.liveRows({ site: { failed: 'offline' } }, {})[0].value, /Couldn't read it \(offline\)/, 'a source that failed reads as a version')
+    /*
+     * The oldest computer app the phones need, beside the newest there is —
+     * and said loudly when the newest is older than that, because then every
+     * computer is told to update to a version that does not exist.
+     */
+    const neededRow = (rows) => rows.find((r) => r.label === 'Computer app needed')?.value
+    const { COMPUTER_NEEDED } = await import('../shared/versions.mjs')
+    assert.equal(neededRow(live.liveRows({ ...sample, release: { value: { tag_name: `v${COMPUTER_NEEDED}` } } }, {})), `v${COMPUTER_NEEDED} or newer`, 'What\u2019s live does not say which computer app the phones need')
+    assert.equal(neededRow(live.liveRows(sample, {}, '1.86.59')), 'v1.86.59 or newer', 'a newest release that is new enough is called too old')
+    assert.match(neededRow(live.liveRows(sample, {}, '1.86.60')), /^v1\.86\.60 or newer, and the newest release is older than that/, 'a newest release older than the phones need is not said')
+    assert.match(read('mobile/src/lib/whats-live.js'), /import \{ COMPUTER_NEEDED \} from '\.\/versions\.js'/, 'the phone\u2019s What\u2019s live imports a name Metro cannot find')
     assert.match(read('vite.config.js'), /fileName: 'version\.json'/, 'the website stopped saying which version it is')
 
     /* Messages from users: the same lock, checked before a single report is read. */
@@ -6816,15 +6846,29 @@ export function run(test) {
 
     assert.match(src, /The Mac app/, 'the route that actually works is not offered')
     /*
-     * Whatever repository this code lives in — see shared/ways-in.mjs REPO,
-     * which is now the one place that name is written down. Read as a VALUE
-     * rather than searched for in the source: the source builds the link from
-     * REPO, so the literal URL does not appear in it any more.
+     * THE DOWNLOAD PAGE, for every computer, and never GitHub's list.
+     *
+     * The list was fine while every merge made a computer release. Now a
+     * computer release is made only when the computer app's own part
+     * changes, an Android one still on nearly every merge, and GitHub's list
+     * shows ten a page: ten merges with nothing for the computer and the
+     * Mac button opened a page of .apk files. The download page reads a
+     * hundred and labels the one file. Read as VALUES, the same address the
+     * no-computer message gives, rather than searched for in the source.
      */
-    const { RELEASES, REPO } = await import('../shared/ways-in.mjs')
-    assert.equal(RELEASES, `https://github.com/${REPO}/releases`, 'there is nowhere to get the Mac app from')
+    const { DOWNLOADS, wayById } = await import('../shared/ways-in.mjs')
+    const { NO_COMPUTER_ADDRESS } = await import('../shared/no-computer.mjs')
+    assert.equal(DOWNLOADS, `https://${NO_COMPUTER_ADDRESS}`, 'the routes send people somewhere other than the download page the rest of the app gives')
+    for (const id of ['mac-app', 'windows-app', 'linux-app']) {
+      const way = wayById(id)
+      assert.equal(way.links[0].url, DOWNLOADS, `${id}'s download button is not the download page`)
+      assert.ok(
+        !way.links.some((l) => /github\.com/.test(l.url)),
+        `${id} sends people to GitHub's list, where ten merges with nothing for the computer leave only .apk files`
+      )
+    }
     /*
-     * The list, not `/releases/latest`.
+     * And not `/releases/latest`.
      *
      * `/latest` is the newest release of ANY kind, and this repository
      * publishes an Android build on nearly every merge — so the link that
@@ -9738,6 +9782,28 @@ export function run(test) {
     assert.equal(card({ name: 'MacBook Pro', version: '1.86.69', link: 'connected' }, { demo: true }).warn, undefined, 'the demo is told to update a computer')
     assert.equal(card({ name: 'MacBook Pro', version: '1.86.69', link: 'connected' }, { here: 'computer' }).warn, undefined, 'the computer tells itself to update')
     assert.equal(card({ name: 'MacBook Pro', version: 'v1.86', link: 'connected' }).warn, undefined, 'a version that cannot be read still gets an opinion')
+    /*
+     * MEASURED AGAINST WHAT THE PHONE NEEDS, not against the phone. "The red
+     * line only shows when the phone really needs something the computer
+     * doesn't have yet." The phone's number moves on every merge and a
+     * computer version is made only when the computer's own part changes, so
+     * "older than the phone" was on for nearly every computer.
+     */
+    const { COMPUTER_NEEDED } = await import('../shared/versions.mjs')
+    const red = (version, { needed = '1.87.23', phone = '1.87.40' } = {}) =>
+      linkChain({ here: 'phone', unit: { name: 'FM3', state: 'present' }, computer: { name: 'MacBook Pro', version, link: 'connected' }, phone: { version: phone }, needed }).find((c) => c.key === 'computer').warn
+    assert.equal(red('1.87.22'), UPDATE_COMPUTER, 'a computer below what the phone needs is not told to update')
+    assert.equal(red('1.87.4'), UPDATE_COMPUTER, 'a computer on 1.87.4, which lets a laptop sleep mid-song, is not told to update')
+    assert.equal(red('1.87.23'), undefined, 'a computer with everything the phone needs is told to update')
+    assert.equal(red('1.87.30'), undefined, 'a computer on the newest release there is, a few numbers behind the phone, is told to update')
+    assert.equal(red(null), UPDATE_COMPUTER, 'a computer too old to say its version is let off')
+    assert.equal(red('1.87.22', { phone: '1.87.20' }), undefined, 'a phone sends a computer looking for a version newer than the phone itself')
+    /* Left out, it is the real one, which neither end names. */
+    assert.equal(
+      linkChain({ here: 'phone', computer: { name: 'MacBook Pro', version: COMPUTER_NEEDED, link: 'connected' }, phone: { version: '99.0.0' } }).find((c) => c.key === 'computer').warn,
+      undefined,
+      'the red line is not measured against COMPUTER_NEEDED'
+    )
     /* Drawn in red at both ends. */
     const walk = read('mobile/src/components/Walk.js').replace(/\s+/g, ' ')
     assert.match(walk, /\{warn \? <Text style=\{\{ color: color\.fault,/)
@@ -9747,7 +9813,7 @@ export function run(test) {
     assert.match(web, /warn=\{card\.warn\}/)
     assert.match(read('src/styles.css'), /\.walk-card-warn \{\s*color: var\(--fault\);/)
     /* The phone's copy imports the version rule by the name Metro can find. */
-    assert.match(read('mobile/src/lib/link-chain.js'), /import \{ isOlder \} from '\.\/versions\.js'/)
+    assert.match(read('mobile/src/lib/link-chain.js'), /import \{ COMPUTER_NEEDED, isOlder \} from '\.\/versions\.js'/)
 
     /*
      * The comparison is strict about what it will answer, and that is the

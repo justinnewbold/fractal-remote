@@ -14,8 +14,8 @@
  * when it is quit (autoInstallOnAppQuit in desktop/lib/updates.mjs). Since
  * 1.87.23 every start looks again by itself, every six hours and after the
  * computer wakes (nextLookMs in desktop/lib/updates.mjs), but what it finds
- * still waits for a quit — so a computer left open for days is still behind
- * every phone update until somebody quits it. And a quit does not reopen it,
+ * still waits for a quit — so a computer left open for days stays on the
+ * version it has until somebody quits it. And a quit does not reopen it,
  * which is why every step says to open it again: a guitarist who only quits
  * has no phone remote until he does.
  *

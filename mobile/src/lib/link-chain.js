@@ -2,7 +2,7 @@
  * Do not edit. Change the source and run `npm run sync:rules`; the test suite
  * fails on any difference between the two. */
 
-import { isOlder } from './versions.js'
+import { COMPUTER_NEEDED, isOlder } from './versions.js'
 
 /**
  * THE THREE CARDS AT THE TOP OF PHONE & COMPUTER, worded once for both ends.
@@ -33,13 +33,23 @@ import { isOlder } from './versions.js'
  * AN OLD COMPUTER APP IS SAID ON ITS OWN CARD, in red (`warn`). "Instead of
  * having that warning, just use the 'your computer' card instead, and have a
  * very short message that says, for example — update computer app to latest
- * version. And have the text be in red." The phone, the website and the
- * computer app share one version number, and the computer app fetches its
- * own updates and installs them when it is quit — so a computer older than
- * this phone has a newer app waiting for it. One that names itself but not
- * its version is older still (from before it could). Not until the computer
- * has said its name, so the line never flashes up in the moment between
- * connecting and the first read.
+ * version. And have the text be in red." Not until the computer has said its
+ * name, so the line never flashes up in the moment between connecting and
+ * the first read.
+ *
+ * OLD MEANS OLDER THAN THIS PHONE NEEDS, not older than this phone. "The red
+ * line only shows when the phone really needs something the computer doesn't
+ * have yet." It was "older than the phone", and the phone's number moves on
+ * every merge, so the line was on for any computer not on the very newest
+ * release, which was most of them most of the time. And now that a computer
+ * version is made only when the computer's own part changes, it would be on
+ * even for a computer on the newest release there is. It now comes on for
+ * a computer below COMPUTER_NEEDED (shared/versions.mjs), and only if it is
+ * also behind this phone, so a phone never sends a computer looking for a
+ * version newer than itself. One that names itself but not its version is
+ * from before computers said one, far below anything needed, so it still
+ * gets the line; one whose version cannot be read gets no opinion.
+ * `needed` is a parameter only so the tests can move it.
  *
  * AND THE LINE SAYS HOW. "Change red text about updating computer to a link
  * that shows instructions when tapped on how to update it." The words stay;
@@ -61,8 +71,9 @@ export const UPDATE_COMPUTER = 'Update the computer app to the latest version'
  *   over Bluetooth: the adapter's name, and connected, joining or anything else for off.
  * @param {{ version?: string|null, email?: string|null, remote?: 'on'|'off'|'signed-out' }} [p.phone]
  *   remote, for a computer: whether its phone remote is on.
+ * @param {string} [p.needed]  the oldest computer app this phone needs; COMPUTER_NEEDED.
  */
-export function linkChain({ here, demo = false, via = 'computer', unit = {}, computer = {}, adapter = {}, phone = {} }) {
+export function linkChain({ here, demo = false, via = 'computer', unit = {}, computer = {}, adapter = {}, phone = {}, needed = COMPUTER_NEEDED }) {
   const atPhone = here === 'phone'
   const ble = atPhone && !demo && via === 'bluetooth'
   const reached = ble ? adapter.link === 'connected' : atPhone ? computer.link === 'connected' : true
@@ -99,7 +110,7 @@ export function linkChain({ here, demo = false, via = 'computer', unit = {}, com
   const computerWarn =
     atPhone && !demo && !ble && computer.link === 'connected' && phone.version && computer.name
       ? computer.version
-        ? isOlder(computer.version, phone.version) === true
+        ? isOlder(computer.version, needed) === true && isOlder(computer.version, phone.version) === true
           ? UPDATE_COMPUTER
           : null
         : UPDATE_COMPUTER
