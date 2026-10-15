@@ -226,8 +226,16 @@ export const FILES = [
   { source: '../shared/unsupported.mjs', target: '../mobile/src/lib/unsupported.js' },
   /* The metronome: where it clicks, and the number that switches each unit's. */
   { source: '../shared/metronome.mjs', target: '../mobile/src/lib/metronome-rules.js' },
-  /* What's live: which version each piece is on, for the Developer page. */
-  { source: '../shared/whats-live.mjs', target: '../mobile/src/lib/whats-live.js' },
+  /*
+   * What's live: which version each piece is on, for the Developer page. It
+   * says the oldest computer app the phones need, so it imports the version
+   * rules, under the name the phone's copy of them has.
+   */
+  {
+    source: '../shared/whats-live.mjs',
+    target: '../mobile/src/lib/whats-live.js',
+    render: (text) => banner('../shared/whats-live.mjs') + text.replace("from './versions.mjs'", "from './versions.js'")
+  },
   /* Which program to close so the unit is free, named per unit. */
   { source: '../shared/editors.mjs', target: '../mobile/src/lib/editors.js' },
   {

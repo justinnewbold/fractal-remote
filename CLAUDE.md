@@ -294,6 +294,43 @@ other.
 base branch and fails if they match. `desktop/package.json` has to move with
 it — a test holds the two to each other.
 
+**But a new number is not a new computer app.**
+
+> "Fewer, smaller computer updates … a new computer version only when its
+> own part changed, small Mac updates, and the red line only when it really
+> matters."
+
+Every merge runs desktop.yml, and its `decide` job compares a fingerprint
+of what is inside the computer app (scripts/computer-fingerprint.mjs:
+desktop/, the ForgeFX pin, and the web app it serves, import by import, with
+the version number taken out) with the record on the newest computer
+release. The same, and no release is made. So the computer is usually a few
+numbers behind the phone, and that is normal. To put one out anyway (for
+what the fingerprint cannot see, such as the newer Electron 33.x that
+desktop/ has no lock file to pin), it needs a number with no computer
+release yet, because a computer only takes a higher one: merge a change
+first (one that changes nothing inside the computer app makes no release
+of its own), then tick Publish on a hand-started desktop run on main, or
+push a desktop-v tag on that commit. A forced run whose version is already
+out stops red in the release job; it used to go green and put nothing on
+any computer.
+
+**The red "Update the computer app" line means the phone needs it.**
+
+> "The red line only shows when the phone really needs something the
+> computer doesn't have yet."
+
+It is measured against `COMPUTER_NEEDED` in shared/versions.mjs, never the
+phone's own number. Raise it only in the change that gives a phone feature
+something it cannot work without on the computer (a route, an answer, a
+behaviour), to the version of the computer release that carries that
+thing. Something the phone merely does better with (the AM4 tuner opening
+on the unit) does not raise it. Raised above the newest computer release,
+the next merge makes one even with nothing changed inside, so no computer
+is told to update to a version that does not exist. A test holds it to
+three numbers and to no higher than the app's own version; the comment
+over it says what each version brought.
+
 **CI runs Node 24, and the Mac app does not — yet.** The runners moved off
 Node 20 in 7.334.0. What did NOT move is the Node the packaged Mac app runs
 the device server on: that one comes from Electron (`desktop/main.js` spawns

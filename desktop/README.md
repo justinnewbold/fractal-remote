@@ -67,6 +67,33 @@ and the app keeps the computer's link to it up by itself:
 
 ## Looking for updates, and staying awake
 
+**A new version is made only when the computer app's own part changed.**
+Every merge to main runs the desktop workflow, and its `decide` job compares
+a fingerprint of what is inside this app — these files, the device server's
+pin, and the web app it serves, import by import, with the version number
+taken out ([`scripts/computer-fingerprint.mjs`](../scripts/computer-fingerprint.mjs))
+— with the record on the newest release. The same, and no release is made, so
+this app is usually a few numbers behind the phone, and that is normal. The
+red "Update the computer app" line on a phone comes on only below the oldest
+version the phone needs (`COMPUTER_NEEDED` in
+[`shared/versions.mjs`](../shared/versions.mjs)). The Publish box on a
+hand-started run, or a `desktop-v` tag, makes a release whatever it says,
+under a version number that has no computer release yet (a computer only
+takes a higher one): merge a change first, then publish that.
+
+**And an update downloads only what changed**, about 21 MB of a Mac's 140 MB
+and a few MB of the Windows installer, by the real lists of pieces
+(blockmaps) of two releases. That needs both: the new release's list, which
+is now uploaded under the name the updater asks for
+([`blockmapNames.js`](blockmapNames.js)), and the one for the version the
+computer is running. And it needs the updater to ask GitHub for one piece per
+request, which GitHub's download servers insist on
+(`useMultipleRangeRequest: false` in [`lib/updates.mjs`](lib/updates.mjs)). A
+computer older than the release that brought this asks the old way, so its
+next update is still the whole file; the ones after are small. A computer
+with no earlier download kept (a fresh install from the disk image) also
+fetches the whole file once.
+
 **Every start looks for a new version by itself** (since 1.87.23 — before
 that, an ordinary start looked only at launch): six hours after its last
 look, a quarter of an hour after one that found the new version still being

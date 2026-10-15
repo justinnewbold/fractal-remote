@@ -51,6 +51,13 @@ afterPack: afterPack.js
 # The stamp (stapling Apple's ticket on) is asked for afterwards and can no
 # longer stop a release. See notarise.js, and `notarize: false` under mac.
 afterSign: notarise.js
+# Runs on every file the build makes, just before it is uploaded. It gives
+# the Mac zips' blockmaps the name electron-updater asks for: they went up as
+# Fractal.Remote-<version>-mac.zip.blockmap (ArchiveTarget hands
+# createBlockmap the zip's raw name, with its space, and GitHub turns the
+# space into a dot), so every Mac update was the full 140 MB. See
+# blockmapNames.js.
+artifactBuildCompleted: blockmapNames.js
 
 # Where a new version comes from, and where a release build puts one.
 #

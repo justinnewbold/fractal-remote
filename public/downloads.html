@@ -30,6 +30,13 @@
       was reset from 7.397.0 to 1.0.0 for the first public release and every
       old build outranks every new one on the number alone.
 
+      A HUNDRED AT A TIME, NOT THIRTY. A computer release is made only when
+      the computer app's own part changes now, while an Android release is
+      still made on every merge — so thirty merges with nothing new for the
+      computer would push the newest computer release off a thirty-long list,
+      and this page would offer the releases page instead of a file. A
+      hundred is GitHub's largest page.
+
       Plain HTML, no build step, no dependencies. The repository is public, so
       the list is public, and this works with nothing installed and nobody
       signed in.
@@ -303,7 +310,7 @@
         if (bad) document.getElementById('ver').className = 'ver bad'
       }
 
-      fetch('https://api.github.com/repos/' + REPO + '/releases?per_page=30', {
+      fetch('https://api.github.com/repos/' + REPO + '/releases?per_page=100', {
         headers: { Accept: 'application/vnd.github+json' }
       })
         .then(function (r) {

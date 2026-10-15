@@ -2351,8 +2351,9 @@ export function run(test) {
     const job = wf.slice(wf.indexOf('\n  complete:'))
     assert.ok(job, 'nothing checks that a release carries every platform')
 
-    /* After all three builders, or it reads a release still being written. */
-    assert.match(job, /needs: \[mac, windows, linux\]/, 'the check no longer waits for every build')
+    /* After all three builders, or it reads a release still being written —
+       and after decide, whose fingerprint it puts on the release. */
+    assert.match(job, /needs: \[decide, mac, windows, linux\]/, 'the check no longer waits for every build')
 
     /*
      * And it runs when one of them FAILED, which is exactly when it earns its
@@ -2375,8 +2376,840 @@ export function run(test) {
     for (const zip of ['Fractal-Remote-$v-mac.zip', 'Fractal-Remote-$v-arm64-mac.zip']) {
       assert.ok(job.includes(zip), `the check does not look for ${zip}`)
     }
+    /*
+     * AND THE BLOCKMAPS AN UPDATE IS MADE SMALL WITH. "Every Mac downloads
+     * the full 140 MB each time, because the file that lets it fetch only the
+     * changes is uploaded under the wrong name." A computer reads the new
+     * version's list and the one for the version it is running, so a release
+     * without its own costs a full download twice: updating to it, and from
+     * it. Spelled as electron-updater asks for them: the zip's or the
+     * installer's own name with .blockmap on the end.
+     */
+    const want = job.slice(job.indexOf('cat > want.txt'), job.indexOf('WANT\n', job.indexOf('cat > want.txt') + 20))
+    for (const map of ['Fractal-Remote-$v-mac.zip.blockmap', 'Fractal-Remote-$v-arm64-mac.zip.blockmap', 'Fractal-Remote-Setup-$v.exe.blockmap']) {
+      assert.ok(want.includes(`\n          ${map}\n`), `the check does not look for ${map}, so a release that makes every update the full download looks complete`)
+    }
+    assert.ok(!/Fractal\.Remote-/.test(want), 'the check asks for the dotted name, which no updater ever reads')
     /* It has to actually fail, rather than printing and carrying on. */
     assert.match(job, /exit 1/, 'the check reports a gap without failing, so nobody sees it')
+    /* And a release with a gap loses the record an earlier run left on it, before the step fails (run for real in the next test but one). */
+    assert.match(job, /if \[ -n "\$missing" \]; then\n\s*take_record_off "files are missing" \|\| true\n[\s\S]*?\n\s*exit 1\n/, 'a release missing a file keeps the record that says it is whole')
+
+    /*
+     * Not when decide found nothing inside the computer app had changed:
+     * there is no release to check. And `!= 'true'`, never `== 'false'`, so a
+     * decide job that failed outright checks the release it published.
+     */
+    assert.match(job, /if: \$\{\{ always\(\) && needs\.decide\.outputs\.skip != 'true' &&/, 'the check runs on a merge that made no release, or is skipped when decide broke')
+
+    /*
+     * AND THE RECORD GOES ON LAST, after the check passed. The next merge is
+     * compared with it; a release that failed part of the way must have none,
+     * so the next merge makes a new one rather than leave a platform behind.
+     */
+    const check = job.indexOf('- name: Every platform is really on the release')
+    const record = job.indexOf('- name: The release says what it was made from')
+    assert.ok(check !== -1 && record > check, 'the fingerprint goes on a release before anybody has checked it is complete')
+    const recordStep = job.slice(record)
+    assert.ok(!/^\s+if:/m.test(recordStep.slice(0, recordStep.indexOf('run:'))), 'the record step runs whether or not the check passed')
+    assert.match(recordStep, /gh release upload "\$tag" "\$RECORD" --clobber/, 'the release is never told what it was made from, so every merge publishes')
+    /* Only from a run that built them: a forced run the release job stopped finds an earlier run's files. */
+    assert.match(recordStep, /BUILT: \$\{\{ needs\.mac\.result \}\} \$\{\{ needs\.windows\.result \}\} \$\{\{ needs\.linux\.result \}\}/, 'the record step cannot tell whether this run built anything')
+    assert.ok(
+      /if \[ "\$BUILT" != "success success success" \]; then[^\n]*\n[^\n]*::warning::[^\n]*\n\s*exit 0/.test(recordStep) && recordStep.indexOf('"$BUILT"') < recordStep.indexOf('gh release upload'),
+      'a run that built nothing puts its record on a release an earlier run made'
+    )
+    assert.match(job, /permissions:\s*\n\s*contents: write/, 'the check cannot put the record on the release')
+  })
+
+  /*
+   * A NEW COMPUTER VERSION ONLY WHEN THE COMPUTER'S OWN PART CHANGED.
+   *
+   * "Fewer, smaller computer updates. The computer app put out 28 versions in
+   * 4 days, and every Mac downloads the full 140 MB each time … After the
+   * fix: a new computer version only when its own part changed, small Mac
+   * updates, and the red line only when it really matters."
+   *
+   * scripts/computer-fingerprint.mjs says what is inside the computer app,
+   * and desktop.yml's decide job skips the release when that is what the
+   * newest computer release was made from. These hold the parts that are easy
+   * to get wrong in a way nobody would see: a file that ends up in the app
+   * but not in the fingerprint is a change that never reaches a computer.
+   */
+  const fingerprintTree = (files) => {
+    const dir = mkdtempSync(join(tmpdir(), 'computer-fp-'))
+    for (const [path, body] of Object.entries(files)) {
+      if (body === null) continue
+      mkdirSync(join(dir, path, '..'), { recursive: true })
+      writeFileSync(join(dir, path), body)
+    }
+    return dir
+  }
+  const FIXTURE = {
+    'index.html': '<!doctype html><script type="module" src="/src/main.jsx"></script>',
+    'vite.config.js': 'export default {}\n',
+    'package.json': JSON.stringify({ name: 'x', version: '1.0.0', dependencies: { react: '^18.3.1' } }),
+    'package-lock.json': JSON.stringify({ name: 'x', version: '1.0.0', lockfileVersion: 3, packages: { '': { name: 'x', version: '1.0.0' } } }),
+    'scripts/vendor-forgefx.mjs': '// fetches the device server\n',
+    '.github/workflows/desktop.yml': 'name: desktop\n',
+    'src/main.jsx': [
+      "import './styles.css'",
+      "import App from './App'",
+      "import rules from '../shared/rules.mjs'",
+      "import pic from '../mobile/assets/a.png'",
+      "import notes from './notes.txt?raw'",
+      "import { createRoot } from 'react-dom/client'",
+      "export * from './more.js'",
+      "const later = () => import('./lazy.js')",
+      "const worker = new URL('./worker.js', import.meta.url)",
+      'createRoot(document.body).render(<App rules={rules} pic={pic} notes={notes} later={later} worker={worker} />)'
+    ].join('\n'),
+    'src/App.jsx': 'export default function App() { return <div /> }\n',
+    'src/styles.css': "@import './more.css';\n.a { background: url('/icon.svg') }\n.b { background: url(data:image/png;base64,AA==) }\n",
+    'src/more.css': '.c {}\n',
+    'src/more.js': 'export const more = 1\n',
+    'src/notes.txt': 'hello\n',
+    'src/lazy.js': 'export const lazy = 1\n',
+    'src/worker.js': 'self.onmessage = () => {}\n',
+    'shared/rules.mjs': 'export default 1\n',
+    'shared/phone-only.mjs': 'export const phone = 1\n',
+    'mobile/assets/a.png': 'not really a png',
+    'mobile/src/screens/Stage.js': 'export default null\n',
+    'public/icon.svg': '<svg/>',
+    'public/privacy.html': 'privacy',
+    'public/support.html': 'support',
+    'desktop/main.js': 'main\n',
+    'desktop/package.json': JSON.stringify({ name: 'd', version: '1.0.0', dependencies: { 'electron-updater': '^6.3.9' } }),
+    'desktop/forgefx.lock.json': JSON.stringify({ _why: ['why'], forgefx: { repo: 'a/b', commit: 'a'.repeat(40) } }),
+    'desktop/README.md': 'readme',
+    'docs/notes.md': 'docs',
+    'CLAUDE.md': 'notes'
+  }
+
+  test('the computer fingerprint is made of what ends up in the computer app, and nothing else', async () => {
+    const fp = await import('../scripts/computer-fingerprint.mjs')
+    const base = fingerprintTree(FIXTURE)
+    try {
+      const inputs = fp.computerInputs(base)
+      /* Followed the way vite follows it: imports, re-exports, a lazy import,
+         a worker's address, CSS @import and url(), a ?raw import, and a
+         reach out of src/ into shared/ and mobile/assets. */
+      for (const want of ['src/main.jsx', 'src/App.jsx', 'src/styles.css', 'src/more.css', 'src/more.js', 'src/notes.txt', 'src/lazy.js', 'src/worker.js', 'shared/rules.mjs', 'mobile/assets/a.png', 'public/icon.svg', 'public/privacy.html', 'desktop/main.js', 'desktop/package.json', 'desktop/forgefx.lock.json', 'index.html', 'vite.config.js', 'package.json', 'package-lock.json', 'scripts/vendor-forgefx.mjs', '.github/workflows/desktop.yml']) {
+        assert.ok(inputs.includes(want), `${want} ends up in the computer app and is not in its fingerprint`)
+      }
+      for (const not of ['public/support.html', 'desktop/README.md', 'docs/notes.md', 'CLAUDE.md', 'mobile/src/screens/Stage.js', 'shared/phone-only.mjs']) {
+        assert.ok(!inputs.includes(not), `${not} is in the computer fingerprint, so changing it makes a computer release for nothing`)
+      }
+
+      const hashWith = (changes) => {
+        const dir = fingerprintTree({ ...FIXTURE, ...changes })
+        try {
+          return fp.computerFingerprint(dir).hash
+        } finally {
+          rmSync(dir, { recursive: true, force: true })
+        }
+      }
+      const same = fp.computerFingerprint(base).hash
+      assert.match(same, /^[0-9a-f]{64}$/)
+      assert.equal(hashWith({}), same, 'the same files gave two fingerprints')
+
+      /* The version number moves on every merge by rule, so on its own it is never a computer release. */
+      assert.equal(
+        hashWith({
+          'package.json': FIXTURE['package.json'].replace('1.0.0', '1.0.1'),
+          'package-lock.json': FIXTURE['package-lock.json'].replaceAll('1.0.0', '1.0.1'),
+          'desktop/package.json': FIXTURE['desktop/package.json'].replace('1.0.0', '1.0.1')
+        }),
+        same,
+        'a version number alone made a new computer release'
+      )
+      assert.equal(hashWith({ 'desktop/forgefx.lock.json': FIXTURE['desktop/forgefx.lock.json'].replace('"why"', '"a longer story"') }), same, 'the pin’s story alone made a new computer release')
+      for (const [path, body] of [
+        ['public/support.html', 'a website page'],
+        ['desktop/README.md', 'the desktop notes'],
+        ['docs/notes.md', 'docs'],
+        ['mobile/src/screens/Stage.js', 'a phone screen'],
+        ['shared/phone-only.mjs', 'export const phone = 2\n'],
+        ['supabase/functions/x/index.ts', 'a server function']
+      ]) {
+        assert.equal(hashWith({ [path]: body }), same, `a change to ${path} made a computer release, and nothing inside the computer app changed`)
+      }
+
+      for (const [path, body] of [
+        ['src/App.jsx', 'export default function App() { return <span /> }\n'],
+        ['shared/rules.mjs', 'export default 2\n'],
+        ['mobile/assets/a.png', 'another picture'],
+        ['src/more.css', '.c { color: red }\n'],
+        ['src/notes.txt', 'goodbye\n'],
+        ['src/lazy.js', 'export const lazy = 2\n'],
+        ['src/worker.js', '\n'],
+        ['public/privacy.html', 'privacy, revised'],
+        ['public/icon.svg', '<svg></svg>'],
+        ['public/new.txt', 'a new public file counts until somebody says it does not'],
+        ['desktop/main.js', 'main, changed\n'],
+        ['desktop/lib/new.mjs', 'export {}\n'],
+        ['desktop/forgefx.lock.json', FIXTURE['desktop/forgefx.lock.json'].replace('a'.repeat(40), 'b'.repeat(40))],
+        ['package.json', FIXTURE['package.json'].replace('^18.3.1', '^18.3.2')],
+        ['desktop/package.json', FIXTURE['desktop/package.json'].replace('^6.3.9', '^6.4.0')],
+        ['index.html', FIXTURE['index.html'] + '<link rel="icon" href="/icon.svg">'],
+        ['vite.config.js', 'export default { base: "/" }\n'],
+        ['scripts/vendor-forgefx.mjs', '// fetches it differently\n'],
+        ['.github/workflows/desktop.yml', 'name: desktop, built differently\n']
+      ]) {
+        assert.notEqual(hashWith({ [path]: body }), same, `a change to ${path} goes into the computer app and made no computer release`)
+      }
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  test('the computer fingerprint refuses an import it cannot follow, rather than missing it', async () => {
+    /*
+     * A file it cannot see is a change it cannot see. So an import style the
+     * walk cannot follow fails it outright — the decide job then publishes,
+     * which is what happened before any of this — and fails this test at
+     * the pull request, where somebody can teach it.
+     */
+    const fp = await import('../scripts/computer-fingerprint.mjs')
+    for (const [main, said] of [
+      ["const name = './App.jsx'\nimport(name)\n", /worked out while it runs/],
+      ["const all = import.meta.glob('./*.jsx')\n", /import\.meta\.glob/],
+      ["const name = './w.js'\nnew URL(name, import.meta.url)\n", /worked-out name/],
+      ["import './Missing.jsx'\n", /cannot find "\.\/Missing\.jsx"/]
+    ]) {
+      const dir = fingerprintTree({ ...FIXTURE, 'src/main.jsx': main })
+      try {
+        assert.throws(() => fp.computerFingerprint(dir), said, `the fingerprint quietly passed over: ${main.trim()}`)
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+    /* And a file that is always in the app, gone, is not quietly left out. */
+    const gone = fingerprintTree({ ...FIXTURE, 'vite.config.js': null })
+    try {
+      assert.throws(() => fp.computerFingerprint(gone), /vite\.config\.js is gone/)
+    } finally {
+      rmSync(gone, { recursive: true, force: true })
+    }
+  })
+
+  test('this repository’s computer fingerprint reaches every part of the app, and no website page', async () => {
+    const fp = await import('../scripts/computer-fingerprint.mjs')
+    const root = fileURLToPath(new URL('..', import.meta.url))
+    /*
+     * The web app reaches out of src/ and shared/: the download link and the
+     * project rules from mobile/src/lib, desktop/lib/project.mjs, the block
+     * icons and the welcome pictures from mobile/assets. A fingerprint over a
+     * list of folders would miss every one. When this was written the walk
+     * matched vite's own module list for a real build exactly, 251 files.
+     */
+    const bundle = fp.bundleInputs(root)
+    for (const want of ['src/main.jsx', 'src/App.jsx', 'src/styles.css', 'shared/link-chain.mjs', 'shared/versions.mjs', 'mobile/src/lib/downloadLink.js', 'desktop/lib/project.mjs', 'mobile/assets/welcome/fm3.jpg']) {
+      assert.ok(bundle.includes(want), `the web app is built from ${want} and the computer fingerprint does not know it`)
+    }
+    assert.ok(bundle.length > 200, `the walk found only ${bundle.length} files of the web app`)
+    assert.ok(!bundle.some((f) => f.startsWith('mobile/src/screens/') || f === 'mobile/App.js'), 'a phone screen is in the web app, or the walk is following the wrong imports')
+
+    const inputs = fp.computerInputs(root)
+    for (const want of ['desktop/main.js', 'desktop/preload.js', 'desktop/electron-builder.yml', 'desktop/forgefx.lock.json', 'desktop/notarise.js', 'scripts/vendor-forgefx.mjs', 'public/privacy.html', 'public/notices.txt', 'public/manifest.webmanifest', 'index.html', 'package-lock.json', '.github/workflows/desktop.yml']) {
+      assert.ok(inputs.includes(want), `${want} is part of the computer app and not of its fingerprint`)
+    }
+    assert.ok(inputs.some((f) => f.startsWith('public/gear/')), 'the gear pictures the computer window draws are not in its fingerprint')
+    for (const f of inputs) {
+      assert.ok(!/^(docs|supabase|test)\//.test(f) && !/(^|\/)(README|CLAUDE|CHANGELOG)\.md$/.test(f), `${f} is in the computer fingerprint and is not in the computer app`)
+    }
+    assert.ok(!inputs.includes('mobile/app.json') && !inputs.includes('mobile/package.json'), 'the phone app’s build settings are in the computer fingerprint')
+
+    /*
+     * THE WEBSITE-ONLY PAGES ARE NEVER OPENED FROM THE COMPUTER WINDOW, which
+     * is the whole reason they may be left out. Each is a real file, and
+     * nothing in the web app links its local copy (a link to the website's
+     * own address is fine: that is served by the website).
+     */
+    for (const page of fp.WEBSITE_ONLY) {
+      assert.ok(existsSync(join(root, page)), `${page} is left out of the computer fingerprint and does not exist`)
+      assert.ok(!inputs.includes(page), `${page} is website-only and in the fingerprint`)
+    }
+    const names = fp.WEBSITE_ONLY.map((p) => p.replace('public/', '').replace(/\.(html|json)$/, '').replace(/[.-]/g, '\\$&'))
+    const localLink = new RegExp(`["'\`(]\\.?/(${names.join('|')})(\\.html|\\.json)?["'\`)?#]`)
+    for (const file of [...walk(new URL('../src/', import.meta.url)), fileURLToPath(new URL('../index.html', import.meta.url))]) {
+      const m = localLink.exec(readFileSync(file, 'utf8'))
+      assert.ok(!m, `${file.split('/src/')[1] || 'index.html'} links ${m?.[0]} from the computer's own copy, so it is not website-only any more`)
+    }
+    /* No import style the walk cannot follow, anywhere in the web app. */
+    for (const file of walk(new URL('../src/', import.meta.url))) {
+      const text = readFileSync(file, 'utf8')
+      assert.ok(!/import\.meta\.glob/.test(text), `${file.split('/src/')[1]} uses import.meta.glob, which the computer fingerprint cannot follow`)
+    }
+  })
+
+  test('only a merge to main whose computer app is unchanged skips the release, and doubt never does', async () => {
+    const { decide, pickBase, FORMAT, RECORD } = await import('../scripts/computer-fingerprint.mjs')
+    const fingerprint = { format: FORMAT, hash: 'a'.repeat(64), files: {} }
+    const record = { format: FORMAT, hash: 'a'.repeat(64) }
+    const merge = { event: 'push', ref: 'refs/heads/main', fingerprint, record, baseTag: 'v1.87.30', needed: '1.87.23' }
+    assert.deepEqual(decide(merge), { skip: true, why: 'nothing inside the computer app changed since v1.87.30' })
+    for (const [change, why] of [
+      [{ record: { ...record, hash: 'b'.repeat(64) } }, 'the computer app changed'],
+      [{ record: null }, 'the newest release carries no record'],
+      [{ record: { format: FORMAT + 1, hash: record.hash } }, 'the record was worked out another way'],
+      [{ record: { format: FORMAT } }, 'the record has no hash'],
+      [{ baseTag: null }, 'there is no computer release at all'],
+      [{ fingerprint: null }, 'the fingerprint could not be worked out'],
+      [{ needed: '1.87.31' }, 'the phones need a newer computer app than the newest release'],
+      [{ ref: 'refs/tags/desktop-v1.87.31' }, 'a desktop-v tag'],
+      [{ event: 'workflow_dispatch', publishBox: true }, 'the Publish box'],
+      [{ event: 'workflow_dispatch' }, 'a hand-started build'],
+      [{ event: 'pull_request', ref: 'refs/pull/9/merge' }, 'a pull request'],
+      [{ ref: 'refs/heads/some-branch' }, 'a push to another branch']
+    ]) {
+      const said = decide({ ...merge, ...change })
+      assert.equal(said.skip, false, `skipped the release when ${why}`)
+      assert.ok(said.why.length > 10, `no reason given when ${why}`)
+    }
+    assert.match(decide({ ...merge, record: null }).why, new RegExp(`v1\\.87\\.30 carries no ${RECORD.replace('.', '\\.')}`))
+
+    /*
+     * Compared with the newest COMPUTER release by when it was published:
+     * not an Android one, not the stray v2 or watch-screenshots tags, not a
+     * draft or a prerelease, and not the highest number (it was reset from
+     * 7.397.0 to 1.0.0 once).
+     */
+    const rel = (tag_name, published_at, extra = {}) => ({ tag_name, published_at, draft: false, prerelease: false, assets: [], ...extra })
+    const list = [
+      rel('apk-v1.87.40', '2026-10-20T10:00:00Z'),
+      rel('v2', '2026-10-21T00:00:00Z'),
+      rel('watch-screenshots', '2026-10-21T00:00:00Z'),
+      rel('v1.87.39', '2026-10-19T12:00:00Z', { draft: true }),
+      rel('v1.87.38', '2026-10-19T11:00:00Z', { prerelease: true }),
+      rel('v1.87.29', '2026-10-17T00:00:00Z'),
+      rel('v1.87.30', '2026-10-18T00:00:00Z'),
+      rel('v7.397.0', '2026-09-01T00:00:00Z')
+    ]
+    assert.equal(pickBase(list)?.tag_name, 'v1.87.30', 'the merge is compared with the wrong release')
+    assert.equal(pickBase([]), null)
+    assert.equal(pickBase(null), null)
+  })
+
+  test('the decide step reads the newest computer release, and says skip only when its record matches', async () => {
+    /*
+     * The CI half of the decision, against a GitHub of the test's own: the
+     * releases list (two pages, so the paging is real), the record on the
+     * newest computer release, and the outputs the jobs read. Every way
+     * GitHub can let it down is a release.
+     */
+    const fp = await import('../scripts/computer-fingerprint.mjs')
+    const tree = fingerprintTree(FIXTURE)
+    const work = mkdtempSync(join(tmpdir(), 'computer-decide-'))
+    try {
+      const now = fp.computerFingerprint(tree)
+      const recordUrl = 'https://github.com/x/y/releases/download/v1.87.30/computer-fingerprint.json'
+      const page1 = Array.from({ length: 100 }, (_, i) => ({ tag_name: `apk-v1.87.${100 + i}`, published_at: '2026-10-20T00:00:00Z', assets: [] }))
+      const page2 = [
+        { tag_name: 'v1.87.30', published_at: '2026-10-18T00:00:00Z', draft: false, prerelease: false, assets: [{ name: 'latest-mac.yml' }, { name: fp.RECORD, browser_download_url: recordUrl }] },
+        { tag_name: 'v1.87.29', published_at: '2026-10-17T00:00:00Z', draft: false, prerelease: false, assets: [] }
+      ]
+      const github = ({ record = now, list = [page1, page2], recordStatus = 200, down = false } = {}) => {
+        const asked = []
+        const get = async (url, init = {}) => {
+          asked.push({ url, auth: init.headers?.Authorization || null })
+          if (down) throw new Error('getaddrinfo ENOTFOUND api.github.com')
+          if (url === recordUrl) return { ok: recordStatus === 200, status: recordStatus, text: async () => JSON.stringify(record) }
+          const page = Number(new URL(url).searchParams.get('page'))
+          return { ok: true, status: 200, json: async () => list[page - 1] || [] }
+        }
+        return { get, asked }
+      }
+      const run = async (env, gh = github()) => {
+        const output = join(work, `out-${Math.random()}`)
+        const said = await fp.inCi({ GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/heads/main', GH_TOKEN: 'secret', GITHUB_OUTPUT: output, ...env }, join(work, 'record.json'), { fetch: gh.get, root: tree, log: () => {} })
+        const outputs = Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]))
+        return { said, outputs, asked: gh.asked }
+      }
+
+      const same = await run({})
+      assert.equal(same.outputs.skip, 'true', `a merge with nothing changed inside the computer app made a release: ${same.outputs.why}`)
+      assert.equal(same.outputs.base, 'v1.87.30', 'the merge was not compared with the newest computer release, a page down below the Android ones')
+      assert.equal(same.outputs.fingerprint, now.hash)
+      assert.deepEqual(JSON.parse(readFileSync(join(work, 'record.json'), 'utf8')).files, now.files, 'the record for the release is not what was fingerprinted')
+      assert.equal(same.asked.find((a) => a.url === recordUrl).auth, null, 'the token is sent on to where GitHub keeps the file')
+      assert.ok(same.asked.filter((a) => a.url.includes('/releases?')).every((a) => a.auth === 'Bearer secret'), 'the releases are read without the token')
+
+      const changed = await run({}, github({ record: { ...now, hash: 'f'.repeat(64), files: { ...now.files, 'src/App.jsx': 'old' } } }))
+      assert.equal(changed.outputs.skip, 'false')
+      assert.deepEqual(changed.said.changed, ['src/App.jsx'], 'the summary does not say what changed inside the computer app')
+
+      for (const [gh, why] of [
+        [github({ list: [[...page2.map((r) => ({ ...r, assets: [] }))]] }), 'no record on the newest release'],
+        [github({ recordStatus: 404 }), 'the record not answering'],
+        [github({ record: 'not a record' }), 'a record that is not one'],
+        [github({ down: true }), 'GitHub not answering'],
+        [github({ list: [[]] }), 'no computer release at all']
+      ]) {
+        const r = await run({}, gh)
+        assert.equal(r.outputs.skip, 'false', `skipped the release with ${why}`)
+        assert.ok(r.outputs.why.length > 10, `no reason given for ${why}`)
+      }
+      /* Anything but a merge to main asks GitHub nothing and skips nothing. */
+      for (const env of [{ GITHUB_EVENT_NAME: 'pull_request', GITHUB_REF: 'refs/pull/9/merge' }, { GITHUB_EVENT_NAME: 'workflow_dispatch', PUBLISH_BOX: 'true' }, { GITHUB_REF: 'refs/tags/desktop-v1.87.31' }]) {
+        const r = await run(env)
+        assert.equal(r.outputs.skip, 'false', `${JSON.stringify(env)} skipped`)
+        assert.equal(r.asked.length, 0, `${JSON.stringify(env)} asked GitHub for releases it does not need`)
+      }
+      /* And a tree it cannot fingerprint is a release, with no record to put on it. */
+      const broken = fingerprintTree({ ...FIXTURE, 'src/main.jsx': "import './Missing.jsx'\n" })
+      try {
+        const output = join(work, 'broken-out')
+        const r = await fp.inCi({ GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/heads/main', GITHUB_OUTPUT: output }, join(work, 'broken.json'), { fetch: github().get, root: broken, log: () => {} })
+        assert.equal(r.skip, false)
+        assert.ok(!existsSync(join(work, 'broken.json')), 'a record was written for a tree that could not be fingerprinted')
+        assert.match(readFileSync(output, 'utf8'), /^skip=false$/m)
+      } finally {
+        rmSync(broken, { recursive: true, force: true })
+      }
+    } finally {
+      rmSync(tree, { recursive: true, force: true })
+      rmSync(work, { recursive: true, force: true })
+    }
+  })
+
+  test('the decide step reads only as far as the newest computer release, however many releases there are', async () => {
+    /*
+     * Every merge makes an Android release and many make a computer one:
+     * 325 on 15 October 2026, about ten more a day. Reading all of them
+     * with a limit of twenty pages would have hit it within months, and
+     * every merge after that would have made a computer version again,
+     * quietly. GitHub lists them newest made first, so reading stops one
+     * page past the first computer release, the extra page for one that was
+     * made a little earlier and published later.
+     */
+    const fp = await import('../scripts/computer-fingerprint.mjs')
+    const PAGES = fp.MOST_PAGES + 5
+    const releases = ({ computerAt = [] } = {}) => {
+      const list = []
+      for (let i = 0; i < PAGES * 100; i++) {
+        list.push({ tag_name: `apk-v1.${9000 - i}.0`, published_at: new Date(Date.UTC(2027, 0, 1) - i * 3600e3).toISOString(), draft: false, prerelease: false, assets: [] })
+      }
+      for (const [at, release] of computerAt) list[at] = { draft: false, prerelease: false, assets: [], ...release }
+      return list
+    }
+    const github = (list) => {
+      const pages = []
+      const get = async (url) => {
+        const page = Number(new URL(url).searchParams.get('page'))
+        pages.push(page)
+        return { ok: true, status: 200, json: async () => list.slice((page - 1) * 100, page * 100) }
+      }
+      return { get, pages }
+    }
+
+    const list = releases({
+      computerAt: [
+        [150, { tag_name: 'v1.87.30', published_at: '2026-12-20T00:00:00Z' }],
+        /* Made earlier, published later: a page further down, and still the newest. */
+        [260, { tag_name: 'v1.87.31', published_at: '2026-12-21T00:00:00Z' }],
+        [2300, { tag_name: 'v1.87.29', published_at: '2026-10-01T00:00:00Z' }]
+      ]
+    })
+    const gh = github(list)
+    const read = await fp.recentReleases(gh.get, 'x/y', 'secret')
+    assert.deepEqual(gh.pages, [1, 2, 3], 'the releases are read further than the page past the first computer one')
+    assert.equal(read.length, 300)
+    assert.equal(fp.pickBase(read)?.tag_name, 'v1.87.31', 'a release published later, a page down, is missed')
+
+    /* A short page is the end of the list, wherever it comes. */
+    const short = github(list.slice(0, 120))
+    assert.equal((await fp.recentReleases(short.get, 'x/y')).length, 120)
+    assert.deepEqual(short.pages, [1, 2])
+
+    /*
+     * The first computer release below the most pages it reads, and the list
+     * longer than that: an error, so a release, and that release is on the
+     * first page for the next merge. Never a skip.
+     */
+    const deep = github(releases({ computerAt: [[fp.MOST_PAGES * 100 + 10, { tag_name: 'v1.87.30', published_at: '2027-02-01T00:00:00Z' }]] }))
+    await assert.rejects(fp.recentReleases(deep.get, 'x/y'), /no computer release in the newest 2000 releases/)
+    assert.equal(Math.max(...deep.pages), fp.MOST_PAGES, 'it read past the most pages it should')
+
+    const tree = fingerprintTree(FIXTURE)
+    const work = mkdtempSync(join(tmpdir(), 'computer-deep-'))
+    try {
+      const output = join(work, 'out')
+      const r = await fp.inCi({ GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/heads/main', GITHUB_OUTPUT: output }, join(work, 'record.json'), { fetch: github(releases()).get, root: tree, log: () => {} })
+      assert.equal(r.skip, false, 'no computer release in reach was read as nothing to do')
+      assert.match(readFileSync(output, 'utf8'), /^skip=false$/m)
+      assert.match(r.why, /no computer release in the newest/)
+    } finally {
+      rmSync(tree, { recursive: true, force: true })
+      rmSync(work, { recursive: true, force: true })
+    }
+  })
+
+  test('the decide job runs first, and only its yes skips anything', () => {
+    const wf = read('.github/workflows/desktop.yml')
+    const jobBody = (name) => {
+      const at = wf.indexOf(`\n  ${name}:\n`)
+      assert.notEqual(at, -1, `the ${name} job is gone`)
+      const next = wf.slice(at + 1).search(/\n {2}[a-z][a-z0-9-]*:\n/)
+      return next === -1 ? wf.slice(at) : wf.slice(at, at + 1 + next)
+    }
+    const decideJob = jobBody('decide')
+    assert.ok(wf.indexOf('\n  decide:\n') < wf.indexOf('\n  release:\n'), 'decide is not the first job')
+    assert.match(decideJob, /node scripts\/computer-fingerprint\.mjs --decide/, 'decide does not ask the fingerprint')
+    assert.match(decideJob, /skip: \$\{\{ steps\.decide\.outputs\.skip \}\}/, 'decide says nothing the other jobs can read')
+    assert.match(decideJob, /PUBLISH_BOX: \$\{\{ inputs\.publish \}\}/, 'decide cannot tell that the Publish box was ticked')
+
+    const release = jobBody('release')
+    assert.match(release, /needs: decide\n/)
+    assert.match(release, /if: \$\{\{ !cancelled\(\) && needs\.decide\.outputs\.skip != 'true' && \(startsWith/, 'the release is made when decide said skip, or not made when decide broke')
+    for (const name of ['mac', 'windows', 'linux']) {
+      const job = jobBody(name)
+      assert.match(job, /needs: \[decide, release\]/, `the ${name} build does not wait for decide`)
+      assert.match(job, /if: \$\{\{ always\(\) && needs\.decide\.outputs\.skip != 'true' && needs\.release\.result != 'failure'/, `the ${name} build ignores decide`)
+      /*
+       * A run stopped while decide is working leaves `release` skipped, not
+       * cancelled, and `always()` would then start every build anyway: four
+       * of them making the release at once, the 1.14.0 race. Only a cancel:
+       * a decide that FAILED still lets them run, and publish, as before.
+       */
+      const cond = job.match(/\n {4}if: \$\{\{ (.*) \}\}\n/)?.[1] || ''
+      assert.match(cond, /&& needs\.decide\.result != 'cancelled'/, `the ${name} build publishes into a release nobody made when the run is stopped during decide`)
+      assert.ok(!/needs\.decide\.result == 'success'|needs\.decide\.result != 'failure'/.test(cond), `a decide that broke stops the ${name} build, when doubt should publish`)
+    }
+    /* `!= 'true'` everywhere: a decide job that failed says nothing, and nothing must read as skip. */
+    assert.ok(!/outputs\.skip == /.test(wf), 'a job waits for decide to say skip=false, so a broken decide skips the release')
+    assert.match(wf, /pull_request:\n {4}paths:[\s\S]*?'scripts\/computer-fingerprint\.mjs'/, 'a change to the decision itself is never built on a pull request')
+  })
+
+  test('a computer version already out is never published again, by hand or by tag', () => {
+    /*
+     * The Publish box and a desktop-v tag make the release for whatever
+     * version desktop/package.json says. When that version already had one
+     * (the merge it came in on made it), the run went green having put
+     * nothing on any computer: electron-builder will not upload into a
+     * release published more than two hours ago (electron-publish's
+     * gitHubPublisher logs "skipped publishing" and returns), and the
+     * complete job then found the old files and passed. Inside the two
+     * hours it swapped a live release's files under a number no computer
+     * that has it takes again. Run the step itself, on a stand-in GitHub,
+     * for every way it can be met.
+     */
+    if (process.platform === 'win32') return
+    const wf = read('.github/workflows/desktop.yml')
+    const script = (() => {
+      const raw = wf.slice(wf.indexOf('- name: The release exists before anything uploads to it'))
+      const body = raw.slice(raw.indexOf('run: |\n') + 'run: |\n'.length)
+      const lines = []
+      for (const line of body.split('\n')) {
+        if (line.trim() && !line.startsWith('          ')) break
+        lines.push(line.slice(10))
+      }
+      return lines.join('\n')
+    })()
+    assert.match(script, /gh release create "\$tag"/, 'the release step no longer makes the release')
+
+    const HOUR = 3600 * 1000
+    const releaseWith = ({ event = 'push', ref = 'refs/heads/main', exists, publishedMsAgo = 0, record = false, deleteFails = false }) => {
+      const root = mkdtempSync(join(tmpdir(), 'release-'))
+      try {
+        const bin = join(root, 'bin')
+        mkdirSync(bin)
+        mkdirSync(join(root, 'desktop'))
+        writeFileSync(join(root, 'desktop', 'package.json'), '{"version":"1.87.31"}\n')
+        const published = new Date(Date.now() - publishedMsAgo).toISOString().replace(/\.\d+Z$/, 'Z')
+        const assets = ['Fractal-Remote-1.87.31-arm64-mac.zip', 'latest-mac.yml', ...(record ? ['computer-fingerprint.json'] : [])]
+        const gh = [
+          '#!/bin/sh',
+          `echo "gh $*" >> "${join(root, 'asked')}"`,
+          'case "$1 $2" in',
+          `  "release view") ${exists ? '' : 'exit 1;'} case "$*" in *publishedAt*) echo "${published}";; *assets*) printf '%s\\n' ${assets.join(' ')};; esac; exit 0;;`,
+          `  "release delete-asset") exit ${deleteFails ? 1 : 0};;`,
+          '  "release create") exit 0;;',
+          'esac',
+          'exit 1'
+        ].join('\n')
+        writeFileSync(join(bin, 'gh'), `${gh}\n`)
+        chmodSync(join(bin, 'gh'), 0o755)
+        const summary = join(root, 'summary')
+        const out = spawnSync('bash', ['-c', script], {
+          cwd: root,
+          env: {
+            PATH: `${bin}:${join(process.execPath, '..')}:/usr/bin:/bin`,
+            GITHUB_EVENT_NAME: event,
+            GITHUB_REF: ref,
+            GITHUB_REPOSITORY: 'justinnewbold/fractal-remote',
+            GITHUB_SHA: 'abc123',
+            GITHUB_STEP_SUMMARY: summary
+          },
+          encoding: 'utf8'
+        })
+        let asked = ''
+        try {
+          asked = readFileSync(join(root, 'asked'), 'utf8')
+        } catch {
+          asked = ''
+        }
+        return {
+          code: out.status,
+          out: `${out.stdout}${out.stderr}`,
+          made: /gh release create v1\.87\.31/.test(asked),
+          tookRecord: /gh release delete-asset v1\.87\.31 computer-fingerprint\.json --yes/.test(asked)
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+
+    // A merge whose version has no release: made, as always.
+    const merge = releaseWith({ exists: false })
+    assert.equal(merge.code, 0, merge.out)
+    assert.ok(merge.made, 'a merge with something new inside the computer app makes no release')
+    // The Publish box, or a desktop-v tag, on a version with no release yet: made. This is the way to force one.
+    for (const forced of [{ event: 'workflow_dispatch' }, { ref: 'refs/tags/desktop-v1.87.31' }]) {
+      const fresh = releaseWith({ ...forced, exists: false })
+      assert.equal(fresh.code, 0, fresh.out)
+      assert.ok(fresh.made, `a forced run (${JSON.stringify(forced)}) on a new number makes no release`)
+    }
+    // The same, on a version already out: red, at once or hours later, and it says how to do it instead.
+    for (const forced of [{ event: 'workflow_dispatch' }, { ref: 'refs/tags/desktop-v1.87.31' }]) {
+      for (const publishedMsAgo of [10 * 60 * 1000, 5 * HOUR]) {
+        const again = releaseWith({ ...forced, exists: true, publishedMsAgo, record: true })
+        assert.notEqual(again.code, 0, `a forced run (${JSON.stringify(forced)}) on v1.87.31, already out, goes green and puts nothing new on any computer`)
+        assert.ok(!again.made)
+        assert.match(again.out, /::error::v1\.87\.31 is already a computer release[\s\S]*Merge a change first[\s\S]*tick Publish on main/, 'a forced run on a version already out does not say how to put one out')
+        /* It writes nothing into the release, so the record on it is still true. */
+        assert.ok(!again.tookRecord, 'a forced run that writes nothing takes the record off a whole release')
+      }
+    }
+    // A merge's run meeting its own release within the two hours (a re-run): carries on, as before.
+    const rerun = releaseWith({ exists: true, publishedMsAgo: 20 * 60 * 1000 })
+    assert.equal(rerun.code, 0, rerun.out)
+    assert.match(rerun.out, /v1\.87\.31 is already there; nothing to make\./)
+    assert.ok(!rerun.tookRecord, 'a release with no record is asked to delete one')
+    /*
+     * And when that release already carries a record, it comes off before
+     * anything is written into it again. electron-builder puts a file that
+     * is already there up again by deleting it first (electron-publish's
+     * overwriteArtifact), so a re-run failing between the two leaves the
+     * release short of a file while the record says it is whole, and the
+     * next phone-only merge would skip and leave the gap there.
+     */
+    const rerunRecorded = releaseWith({ exists: true, publishedMsAgo: 20 * 60 * 1000, record: true })
+    assert.equal(rerunRecorded.code, 0, rerunRecorded.out)
+    assert.ok(rerunRecorded.tookRecord, 'a re-run writes into a release whose record still says it is whole')
+    assert.match(rerunRecorded.out, /took computer-fingerprint\.json off v1\.87\.31[\s\S]*v1\.87\.31 is already there; nothing to make\./)
+    /* If it cannot come off, nothing is written: the step stops red, and the builds after it are skipped. */
+    const stuck = releaseWith({ exists: true, publishedMsAgo: 20 * 60 * 1000, record: true, deleteFails: true })
+    assert.notEqual(stuck.code, 0, 'a re-run carries on into a release whose record it could not take off')
+    assert.ok(!/nothing to make/.test(stuck.out), stuck.out)
+    // Any run meeting a release more than two hours old: red, because nothing it built would be uploaded.
+    const stale = releaseWith({ exists: true, publishedMsAgo: 3 * HOUR, record: true })
+    assert.notEqual(stale.code, 0, 'a run meeting a release more than two hours old goes green while every upload is skipped')
+    assert.match(stale.out, /::error::v1\.87\.31 went out more than two hours ago/)
+    assert.ok(!stale.tookRecord, 'a run that uploads nothing takes the record off a whole release')
+  })
+
+  test('a release that is not whole carries no computer fingerprint', () => {
+    /*
+     * The complete job puts the record on once every platform is there, and
+     * takes it off again when the release is not whole any more. A re-run of
+     * one build alone re-runs complete but not the release job, and that
+     * build swaps its files one by one, each deleted before the new one goes
+     * up. So a missing file, or a build of this run that failed or was
+     * stopped (every name can still be there, a new zip under an old
+     * latest-mac.yml that no longer matches it), takes the record off, and
+     * the next merge makes a release instead of skipping. Run the step
+     * itself, on a stand-in GitHub.
+     */
+    if (process.platform !== 'linux') return // GNU sed -i, as on the runner
+    const wf = read('.github/workflows/desktop.yml')
+    const job = wf.slice(wf.indexOf('\n  complete:'))
+    const script = (() => {
+      const raw = job.slice(job.indexOf('- name: Every platform is really on the release'))
+      const body = raw.slice(raw.indexOf('run: |\n') + 'run: |\n'.length)
+      const lines = []
+      for (const line of body.split('\n')) {
+        if (line.trim() && !line.startsWith('          ')) break
+        lines.push(line.slice(10))
+      }
+      return lines.join('\n')
+    })()
+    assert.match(script, /exit 1/, 'the check no longer fails')
+
+    const v = '1.87.31'
+    const whole = [
+      `Fractal-Remote-${v}.dmg`, `Fractal-Remote-${v}-arm64.dmg`,
+      `Fractal-Remote-${v}-mac.zip`, `Fractal-Remote-${v}-arm64-mac.zip`,
+      `Fractal-Remote-${v}-mac.zip.blockmap`, `Fractal-Remote-${v}-arm64-mac.zip.blockmap`, 'latest-mac.yml',
+      `Fractal-Remote-Setup-${v}.exe`, `Fractal-Remote-Setup-${v}.exe.blockmap`, 'latest.yml',
+      `Fractal-Remote-${v}.AppImage`, `fractal-remote-desktop_${v}_amd64.deb`, 'latest-linux.yml',
+      `Fractal-Remote-${v}-arm64.AppImage`, `fractal-remote-desktop_${v}_arm64.deb`, 'latest-linux-arm64.yml'
+    ]
+    const checkWith = ({ assets, built = 'success success success', deleteFails = false }) => {
+      const root = mkdtempSync(join(tmpdir(), 'complete-'))
+      try {
+        const bin = join(root, 'bin')
+        mkdirSync(bin)
+        mkdirSync(join(root, 'desktop'))
+        writeFileSync(join(root, 'desktop', 'package.json'), `{"version":"${v}"}\n`)
+        writeFileSync(join(root, 'assets'), `${assets.join('\n')}\n`)
+        const gh = [
+          '#!/bin/sh',
+          `echo "gh $*" >> "${join(root, 'asked')}"`,
+          'case "$1 $2" in',
+          `  "release view") cat "${join(root, 'assets')}"; exit 0;;`,
+          `  "release delete-asset") exit ${deleteFails ? 1 : 0};;`,
+          'esac',
+          'exit 1'
+        ].join('\n')
+        writeFileSync(join(bin, 'gh'), `${gh}\n`)
+        chmodSync(join(bin, 'gh'), 0o755)
+        const out = spawnSync('bash', ['-c', script], {
+          cwd: root,
+          env: {
+            PATH: `${bin}:${join(process.execPath, '..')}:/usr/bin:/bin`,
+            BUILT: built,
+            GITHUB_REPOSITORY: 'justinnewbold/fractal-remote',
+            GITHUB_STEP_SUMMARY: join(root, 'summary')
+          },
+          encoding: 'utf8'
+        })
+        let asked = ''
+        try {
+          asked = readFileSync(join(root, 'asked'), 'utf8')
+        } catch {
+          asked = ''
+        }
+        return { code: out.status, out: `${out.stdout}${out.stderr}`, tookRecord: new RegExp(`gh release delete-asset v${v.replace(/\./g, '\\.')} computer-fingerprint\\.json --yes`).test(asked) }
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+    const recorded = [...whole, 'computer-fingerprint.json']
+    const short = recorded.filter((name) => name !== `Fractal-Remote-${v}-arm64-mac.zip`)
+
+    // Whole, and every build green: passes, and the record stays for the record step to renew.
+    const fine = checkWith({ assets: recorded })
+    assert.equal(fine.code, 0, fine.out)
+    assert.ok(!fine.tookRecord, 'a whole release built green loses its record')
+    // A forced run the release job stopped built nothing and wrote nothing: the record is still true.
+    const refused = checkWith({ assets: recorded, built: 'skipped skipped skipped' })
+    assert.equal(refused.code, 0, refused.out)
+    assert.ok(!refused.tookRecord, 'a run that wrote nothing takes the record off a whole release')
+    // A file missing: red, the list of what is missing, and the record off.
+    const gap = checkWith({ assets: short })
+    assert.notEqual(gap.code, 0, 'a release missing the Apple Silicon zip passes the check')
+    assert.match(gap.out, new RegExp(`missing:\\s*\\n\\s*Fractal-Remote-${v.replace(/\./g, '\\.')}-arm64-mac\\.zip`))
+    assert.ok(gap.tookRecord, 'a release missing a file keeps a record saying it is whole, so the next phone-only merge skips and the gap stays')
+    // The same with no record on it: nothing to take off, and nothing asked to.
+    const gapBare = checkWith({ assets: short.filter((name) => name !== 'computer-fingerprint.json') })
+    assert.notEqual(gapBare.code, 0)
+    assert.ok(!gapBare.tookRecord, 'a release with no record is asked to delete one')
+    // Every name there, but a build of this run failed or was stopped part of the way: the record comes off.
+    for (const built of ['failure success success', 'success cancelled success', 'success success failure']) {
+      const half = checkWith({ assets: recorded, built })
+      assert.ok(half.tookRecord, `a build that ${built} may have swapped some files, and the record still says the release is whole`)
+    }
+    // And when it cannot come off, it says so, and still lists what is missing.
+    const stuck = checkWith({ assets: short, deleteFails: true })
+    assert.notEqual(stuck.code, 0)
+    assert.match(stuck.out, /::error::computer-fingerprint\.json could not be taken off v1\.87\.31[\s\S]*missing:/, 'a record that could not be taken off goes unremarked')
+    const stuckHalf = checkWith({ assets: recorded, built: 'failure success success', deleteFails: true })
+    assert.notEqual(stuckHalf.code, 0, 'a record that could not be taken off a half-written release leaves the check green')
+  })
+
+  test('the Mac zips’ blockmaps go up under the name the updater asks for', async () => {
+    /*
+     * "Every Mac downloads the full 140 MB each time, because the file that
+     * lets it fetch only the changes is uploaded under the wrong name."
+     * electron-builder 25 hands the Mac zip's blockmap its RAW name, with the
+     * space in "Fractal Remote", and GitHub turns the space into a dot. The
+     * updater asks for the zip's own name plus .blockmap, and got 404 on
+     * every Mac release.
+     */
+    const yml = read('desktop/electron-builder.yml')
+    assert.match(yml, /^artifactBuildCompleted: blockmapNames\.js$/m, 'nothing renames the Mac blockmaps, so every Mac update is the full download')
+    const files = yml.slice(yml.indexOf('\nfiles:'), yml.indexOf('\nasarUnpack:'))
+    assert.ok(!/blockmapNames/.test(files), 'the build hook is packaged into the app')
+
+    const { createRequire } = await import('node:module')
+    const hook = createRequire(import.meta.url)('../desktop/blockmapNames.js').default
+    assert.equal(typeof hook, 'function', 'electron-builder finds no hook in blockmapNames.js')
+    const named = (file, safeArtifactName) => {
+      const event = { file, safeArtifactName }
+      hook(event)
+      return event.safeArtifactName
+    }
+    const out = '/runner/desktop/release'
+    assert.equal(named(`${out}/Fractal Remote-1.87.30-arm64-mac.zip.blockmap`, 'Fractal Remote-1.87.30-arm64-mac.zip.blockmap'), 'Fractal-Remote-1.87.30-arm64-mac.zip.blockmap')
+    assert.equal(named(`${out}/Fractal Remote-1.87.30-mac.zip.blockmap`, null), 'Fractal-Remote-1.87.30-mac.zip.blockmap', 'a blockmap with no upload name goes up under its file name, space and all')
+    /* Everything already right is left exactly as it was. */
+    for (const [file, safe] of [
+      [`${out}/Fractal Remote Setup 1.87.30.exe.blockmap`, 'Fractal-Remote-Setup-1.87.30.exe.blockmap'],
+      [`${out}/Fractal-Remote-1.87.30-arm64.dmg.blockmap`, null],
+      [`${out}/Fractal Remote-1.87.30-mac.zip`, 'Fractal-Remote-1.87.30-mac.zip'],
+      [`${out}/Fractal Remote-1.87.30.AppImage`, 'Fractal-Remote-1.87.30.AppImage'],
+      [`${out}/fractal-remote-desktop_1.87.30_amd64.deb`, null],
+      [`${out}/Fractal Remote-1.87.30-mac.zip`, null]
+    ]) {
+      assert.equal(named(file, safe), safe, `${file.split('/').pop()} was renamed, and it was already right`)
+    }
+    assert.doesNotThrow(() => hook(undefined))
+    assert.doesNotThrow(() => hook({}))
+
+    /* And the releases already made, renamed by a script a person runs: dry by default. */
+    const { renamesFor } = await import('../scripts/rename-blockmaps.mjs')
+    const releases = [
+      {
+        tag_name: 'v1.87.4',
+        assets: [
+          { id: 1, name: 'Fractal.Remote-1.87.4-arm64-mac.zip.blockmap' },
+          { id: 2, name: 'Fractal.Remote-1.87.4-mac.zip.blockmap' },
+          { id: 3, name: 'Fractal-Remote-1.87.4.dmg.blockmap' },
+          { id: 4, name: 'Fractal-Remote-Setup-1.87.4.exe.blockmap' },
+          { id: 5, name: 'Fractal-Remote-1.87.4-mac.zip' }
+        ]
+      },
+      { tag_name: 'v1.87.30', assets: [{ id: 6, name: 'Fractal-Remote-1.87.30-mac.zip.blockmap' }] },
+      { tag_name: 'v1.87.29', assets: [{ id: 7, name: 'Fractal.Remote-1.87.29-mac.zip.blockmap' }, { id: 8, name: 'Fractal-Remote-1.87.29-mac.zip.blockmap' }] },
+      { tag_name: 'apk-v1.87.4', assets: [{ id: 9, name: 'Fractal.Remote-1.87.4-mac.zip.blockmap' }] },
+      { tag_name: 'v2', assets: [{ id: 10, name: 'Fractal.Remote-2-mac.zip.blockmap' }] }
+    ]
+    assert.deepEqual(renamesFor(releases), [
+      { tag: 'v1.87.4', id: 1, from: 'Fractal.Remote-1.87.4-arm64-mac.zip.blockmap', to: 'Fractal-Remote-1.87.4-arm64-mac.zip.blockmap' },
+      { tag: 'v1.87.4', id: 2, from: 'Fractal.Remote-1.87.4-mac.zip.blockmap', to: 'Fractal-Remote-1.87.4-mac.zip.blockmap' }
+    ])
+    const script = read('scripts/rename-blockmaps.mjs')
+    assert.ok(script.indexOf('if (!apply)') !== -1 && script.indexOf('if (!apply)') < script.indexOf("method: 'PATCH'"), 'the rename script changes releases without being told to')
+  })
+
+  test('the oldest computer app the phones need is three numbers, and no newer than this app', async () => {
+    /*
+     * "The red line only shows when the phone really needs something the
+     * computer doesn't have yet." COMPUTER_NEEDED is what it is measured
+     * against. Above this app's own version it would tell every computer to
+     * update to a version not made yet; anything but three numbers and
+     * isOlder has no opinion, and the line would quietly never show.
+     */
+    const { COMPUTER_NEEDED, isOlder } = await import('../shared/versions.mjs')
+    assert.match(COMPUTER_NEEDED, /^\d+\.\d+\.\d+$/, 'COMPUTER_NEEDED is not three plain numbers')
+    const version = JSON.parse(read('package.json')).version
+    assert.equal(isOlder(version, COMPUTER_NEEDED), false, `COMPUTER_NEEDED (${COMPUTER_NEEDED}) is above this app’s own version (${version})`)
+    /* And the phone's copy says the same. */
+    const phone = await import('../mobile/src/lib/versions.js')
+    assert.equal(phone.COMPUTER_NEEDED, COMPUTER_NEEDED)
+    /* CLAUDE.md says when it may be raised. */
+    assert.match(read('CLAUDE.md'), /COMPUTER_NEEDED/, 'nothing tells the next change when to raise COMPUTER_NEEDED')
+  })
+
+  test('the downloads page reads enough releases to find the computer one', () => {
+    /*
+     * An Android release is made on every merge and a computer release only
+     * when the computer's own part changes, so the newest computer release
+     * can sit below thirty Android ones.
+     */
+    const page = read('public/downloads.html')
+    assert.match(page, /\/releases\?per_page=100/, 'the downloads page reads too few releases to find the computer one')
   })
 
   test('the Android link is a bookmark rather than a thing to ask for', () => {

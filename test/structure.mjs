@@ -4603,8 +4603,8 @@ export function run(test) {
      *   - electron-builder's publish block, which is BOTH where a release
      *     build uploads and where an installed Mac app looks for the next
      *     version. Those two cannot be allowed to disagree.
-     *   - the Releases link the phone and the browser offer for downloading
-     *     the computer app.
+     *   - the list the download page reads (public/downloads.html), which is
+     *     where the browser's download buttons for the computer app go.
      *   - the same link in the Mac app's own menu.
      *
      * THE NAME THEY CARRY IS THE ONE THAT EXISTS TODAY, and this check learned
@@ -4619,7 +4619,7 @@ export function run(test) {
      * three strings and a hope. On the day of the rename: change REPO, change
      * `repo:` in electron-builder.yml, run the sync, and this passes again.
      */
-    const { REPO, RELEASES } = await import('../shared/ways-in.mjs')
+    const { REPO } = await import('../shared/ways-in.mjs')
     assert.match(REPO, /^[\w.-]+\/[\w.-]+$/, `REPO is not owner/name: ${REPO}`)
     const [owner, name] = REPO.split('/')
 
@@ -4627,7 +4627,11 @@ export function run(test) {
     assert.match(yml, new RegExp(`^\\s*owner: ${owner}$`, 'm'), 'the publish block names another owner')
     assert.match(yml, new RegExp(`^\\s*repo: ${name}$`, 'm'), `the Mac app publishes to, and updates from, a repository that is not ${REPO}`)
 
-    assert.equal(RELEASES, `https://github.com/${REPO}/releases`, 'the download link is not this repository')
+    /* The download buttons go to the download page, not GitHub's list (see
+       DOWNLOADS in shared/ways-in.mjs), so it is the page's own name for the
+       repository that has to agree. */
+    const page = readFileSync(new URL('../public/downloads.html', import.meta.url), 'utf8')
+    assert.ok(page.includes(`var REPO = '${REPO}'`), 'the download page reads the releases of another repository')
 
     const main = readFileSync(new URL('../desktop/main.js', import.meta.url), 'utf8')
     assert.match(main, new RegExp(`github\\.com/${REPO}/releases`), 'the Mac app menu points at another repository')
