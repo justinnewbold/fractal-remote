@@ -579,6 +579,8 @@ async function tapTempoOnABench() {
       export const chainNumberOf = () => 12
     `,
     'tapGate.mjs': read('src/lib/tapGate.js'),
+    /* The typed-tempo box's press guard, as it is: it imports nothing. */
+    'boxPress.mjs': read('src/lib/boxPress.js'),
     'rest.mjs': `
       export const tick = () => {}
       export const useLongPress = () => ({})
@@ -597,7 +599,10 @@ async function tapTempoOnABench() {
     ['from "../lib/feedback"', "from './rest.mjs'"],
     ['from "../lib/longPress"', "from './rest.mjs'"],
     ['from "../lib/dismiss"', "from './rest.mjs'"],
+    ['from "../lib/boxPress"', "from './boxPress.mjs'"],
     ['from "./BpmBox"', "from './rest.mjs'"],
+    /* The metronome switch in the typed-tempo box: drawn only after a hold, which this bench never makes. */
+    ['from "./MetronomeSwitch"', "from './rest.mjs'"],
     ['from "../../shared/unsupported.mjs"', `from '${repoUrl('shared/unsupported.mjs')}'`],
     ['from "../../shared/tempo.mjs"', `from '${repoUrl('shared/tempo.mjs')}'`]
   ]

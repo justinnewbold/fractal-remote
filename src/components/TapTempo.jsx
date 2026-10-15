@@ -8,7 +8,9 @@ import { linkIsDown } from '../lib/tapGate'
 import { tick as haptic } from '../lib/feedback'
 import { useLongPress } from '../lib/longPress'
 import { useDismiss } from '../lib/dismiss'
+import { boxPresses } from '../lib/boxPress'
 import BpmBox from './BpmBox'
+import MetronomeSwitch from './MetronomeSwitch'
 
 /* Hoisted: a selector rebuilt each render re-reads the store on every notify. */
 const ofBpm = (s) => s.bpm
@@ -258,6 +260,25 @@ export default function TapTempo({ onError, onChanged, onDropped, where = 'bar' 
     reportBurst()
   })
   useDismiss(tapCell, () => setTyping(false), { open: typing })
+  /*
+   * A press in the box that is not on the field — the metronome switch.
+   *
+   * "Also, can we add the metronome on and off to this screen as well so they
+   * can quickly turn the metronome on and off?" The field sets its tempo when
+   * it loses focus, so pressing the switch below it used to send whatever was
+   * in the field and close the box before the switch was reached. The guards
+   * are in lib/boxPress.js, where the tests run them: the press keeps the
+   * focus on the field where a browser allows it, and where it does not, the
+   * field is told the blur was the box's own. The click itself still lands on
+   * the switch; Enter still sets, Escape and a press outside still leave
+   * everything as it was. A new one each time the box opens, kept across its
+   * draws like the sender, so no press left over from the last time the box
+   * was open can hold this one open.
+   */
+  const presses = useRef(null)
+  if (!typing) presses.current = null
+  else if (!presses.current) presses.current = boxPresses('.gig-tempo')
+  const { handlers: inBox, keepOpen } = presses.current ?? {}
   const typeTempo = async (n) => {
     try {
       /* Enter is a press like a tap: the same deadline, and refused while the link is down. */
@@ -303,10 +324,16 @@ export default function TapTempo({ onError, onChanged, onDropped, where = 'bar' 
         ) : null}
       </button>
       {typing ? (
-        <div className="gig-tempo" role="group" aria-label="Type a tempo">
+        <div className="gig-tempo" role="group" aria-label="Type a tempo" {...inBox}>
           <span className="silk-label">Tempo</span>
-          <BpmBox bpm={bpm} autoFocus onSet={typeTempo} range={tempoRange(currentDeviceSlug())} onError={onError} onDone={() => setTyping(false)} />
+          <BpmBox bpm={bpm} autoFocus onSet={typeTempo} range={tempoRange(currentDeviceSlug())} onError={onError} onDone={() => setTyping(false)} keepOpen={keepOpen} />
           <span className="hint">Enter sets it</span>
+          {/* The Volume sheet's own switch, under the tempo: it acts when
+              pressed, not when Enter is, and writes the unit exactly as that
+              sheet and Setup do. */}
+          <div className="gig-tempo-metronome">
+            <MetronomeSwitch slug={currentDeviceSlug()} heading={false} />
+          </div>
         </div>
       ) : null}
     </div>

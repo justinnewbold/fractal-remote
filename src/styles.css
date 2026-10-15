@@ -7802,6 +7802,49 @@ button.gig-tap {
 }
 
 /*
+ * With the metronome in it, the box needs the width of a switch rather than
+ * of the Tap button. On Play it takes the bar it opens over as its width —
+ * the bar, not the cell, is what is positioned — centred and no wider than a
+ * phone's, so on a computer it does not stretch across the screen.
+ */
+.gig-bar {
+  position: relative;
+}
+
+.gig-bar > .gig-tap-cell {
+  position: static;
+}
+
+.gig-bar .gig-tempo {
+  max-width: 360px;
+  margin-inline: auto;
+}
+
+/* The Volume sheet's metronome switch, set apart from the tempo by a rule:
+   it acts when pressed, not when Enter is. Its sheet spacing is taken off. */
+.gig-tempo-metronome {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--rule);
+  text-align: left;
+}
+
+.gig-tempo-metronome button.setup-row {
+  min-height: 48px;
+  padding: var(--s-2) var(--s-3);
+}
+
+.gig-tempo-metronome .footnote {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  max-width: none;
+}
+
+/*
  * The same Tap on Edit, beside the scene chip (see TapTempo).
  *
  * Near the top of a page that scrolls, so its box opens downward rather than
@@ -7812,7 +7855,9 @@ button.gig-tap {
   top: calc(100% + var(--s-2));
   bottom: auto;
   right: auto;
-  width: 200px;
+  /* A switch's width: the metronome is in here too. Edit has this row only
+     on a window wide enough for its tabs, where 280px stays on screen. */
+  width: 280px;
 }
 
 /* The modifier just attached, in the colour of a thing that worked. */

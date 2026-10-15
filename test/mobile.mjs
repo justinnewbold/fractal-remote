@@ -4872,6 +4872,374 @@ export function run(test) {
     assert.match(browser, /await setMetronome\(\{ on: !setting\.on \}, slug\)/)
   })
 
+  /*
+   * "On the tap tempo button where you hold it down and it pops up to enter
+   * the tempo, make it so it highlights it so that they can just start
+   * typing. Right now they have to hit the back button to delete the tempo
+   * to reenter it."
+   */
+  test('the phone’s tempo box opens on the tempo, all of it selected, so a digit replaces it and Backspace clears it', async () => {
+    const f = await import('../mobile/src/lib/tempo-field.js')
+    const { checkBpm } = await import('../shared/tempo.mjs')
+    /* What the phone does with a key over a selection: replaces it, or for Backspace deletes it. */
+    const key = (text, sel, k) => {
+      const s = sel || { start: text.length, end: text.length }
+      if (k === 'Backspace') return s.start !== s.end ? text.slice(0, s.start) + text.slice(s.end) : text.slice(0, Math.max(0, s.start - 1)) + text.slice(s.end)
+      return text.slice(0, s.start) + k + text.slice(s.end)
+    }
+    let field = f.freshField()
+    /* The first frame: the number is in, and the whole of it is asked for. */
+    assert.equal(f.shownText(field, 120), '120', 'the box opens empty, and the tempo arrives after the cursor')
+    assert.deepEqual(f.heldSelection(field, '120'), { start: 0, end: 3 }, 'the box opens with the tempo not selected')
+    assert.equal(f.shownText(field, 99.6), '100')
+    assert.deepEqual(f.heldSelection(field, '100'), { start: 0, end: 3 })
+    /* The phone parking its caret at the end as the field takes focus: the selection is put back, not given up. */
+    field = f.selectionMoved(field, { start: 3, end: 3 }, '120')
+    assert.equal(field.held, true, 'the phone’s own caret, as the keyboard came up, took the selection away')
+    assert.deepEqual(f.heldSelection(field, '120'), { start: 0, end: 3 })
+    field = f.selectionMoved(field, { start: 0, end: 3 }, '120')
+    assert.equal(field.held, true)
+    assert.equal(field.seen, '120')
+    /* Typing a digit over it replaces the whole number. */
+    const typed = f.typedInto(field, key('120', f.heldSelection(field, '120'), '1'))
+    assert.equal(f.shownText(typed, 120), '1', 'a digit typed into the box was added to the tempo instead of replacing it')
+    assert.equal(f.heldSelection(typed, '1'), undefined, 'the selection is still held after a keystroke, so the next digit replaces the first')
+    const more = f.typedInto(typed, key('1', { start: 1, end: 1 }, '3'))
+    assert.equal(f.typedInto(more, key('13', { start: 2, end: 2 }, '2')).typed, '132')
+    /* Backspace empties it, and an empty box stays empty rather than springing back to the tempo. */
+    const cleared = f.typedInto(field, key('120', f.heldSelection(field, '120'), 'Backspace'))
+    assert.equal(f.shownText(cleared, 120), '', 'Backspace left part of the tempo in the box')
+    assert.equal(checkBpm(f.shownText(cleared, 120)).empty, true, 'Set on an emptied box no longer closes without a write')
+    /* Anything but digits never gets in. */
+    assert.equal(f.typedInto(field, '1a2.5').typed, '125')
+    /* A finger moving the cursor after the number was seen selected (Android reports it): the cursor is theirs. */
+    assert.equal(f.selectionMoved(field, { start: 1, end: 1 }, '120').held, false, 'a thumb can never put the cursor anywhere')
+    /*
+     * An iPhone's own stream, which never reports a selection the code made:
+     * at most the caret it parks at the end as the field takes focus, then
+     * nothing while the box selects the number itself once it is up, then a
+     * finger. Without the box noting what it did, that finger snapped back.
+     */
+    let ios = f.freshField()
+    ios = f.selectionMoved(ios, { start: 3, end: 3 }, '120')
+    assert.equal(ios.held, true, 'on an iPhone the caret parked as the field took focus gave up the selection')
+    ios = f.selectedByHand(ios)
+    assert.equal(ios.held, true)
+    assert.deepEqual(f.heldSelection(ios, '120'), { start: 0, end: 3 }, 'selecting it by hand let go of the selection')
+    assert.equal(f.selectionMoved(ios, { start: 1, end: 1 }, '120').held, false, 'on an iPhone a thumb in the number snaps back to the whole of it')
+    /* The tempo moving under the open box: TextInput sends the selection down with the new number, so a finger after it is still a finger. */
+    assert.equal(f.selectionMoved(ios, { start: 0, end: 3 }, '132').held, true)
+    assert.equal(f.selectionMoved(ios, { start: 2, end: 2 }, '132').held, false, 'after the tempo moved, a thumb in the number snaps back on an iPhone')
+    /* Before the box is up, nothing is known: a caret then is the phone's, and the hold puts it back. */
+    assert.equal(f.selectionMoved(f.freshField(), { start: 1, end: 1 }, '120').held, true)
+    /* After a keystroke there is nothing to note. */
+    const after = f.typedInto(ios, '5')
+    assert.equal(f.selectedByHand(after), after)
+    /* A new number from the unit while nothing is typed: followed, and its own caret is not taken for a finger. */
+    assert.equal(f.shownText(field, 132), '132', 'the box holds a stale tempo while the unit moves under it')
+    assert.equal(f.selectionMoved(field, { start: 3, end: 3 }, '132').held, true, 'the caret a new number brought with it gave up the selection')
+    /* No tempo yet: an empty box with nothing to select. */
+    assert.equal(f.shownText(f.freshField(), undefined), '')
+    assert.equal(f.heldSelection(f.freshField(), ''), undefined)
+    /* Pure: nothing imported, so this is the rule the app runs. */
+    assert.doesNotMatch(withoutComments(read('mobile/src/lib/tempo-field.js')), /^\s*import /m)
+  })
+
+  test('the phone’s tempo box draws the number from its first frame and hands TextInput the selection, on both phones', () => {
+    const src = read('mobile/src/components/TempoBox.js')
+    const code = withoutComments(src)
+    const flat = code.replace(/\s+/g, ' ')
+    /* An effect runs after the frame is on screen: that is how the field took focus empty. */
+    assert.doesNotMatch(code, /useEffect/, 'the box fills itself in an effect again, after the field has taken focus empty')
+    assert.match(flat, /if \(!!open !== wasOpen\) \{ setWasOpen\(!!open\) if \(open\) \{ setField\(freshField\(\)\)/, 'the box is not reset as it opens, on its first frame')
+    assert.match(flat, /const typed = shownText\(field, bpm\)/)
+    const input = flat.slice(flat.indexOf('<TextInput'), flat.indexOf('/>', flat.indexOf('<TextInput')))
+    for (const prop of [
+      /\bautoFocus\b/,
+      /\bselectTextOnFocus\b/,
+      /value=\{typed\}/,
+      /selection=\{heldSelection\(field, typed\)\}/,
+      /onSelectionChange=\{\(e\) => \{ const at = e\?\.nativeEvent\?\.selection setField\(\(f\) => selectionMoved\(f, at, shownText\(f, bpm\)\)\) \}\}/,
+      /onChangeText=\{\(t\) => \{ setField\(\(f\) => typedInto\(f, t\)\)/,
+      /keyboardType="number-pad"/
+    ]) {
+      assert.match(input, prop, `the tempo field has lost ${prop}`)
+    }
+    /* The net under autoFocus, once the Modal is up: Android always asks again; a focused iPhone field is only re-selected, never re-focused. */
+    assert.match(flat, /<Modal visible=\{!!open\} transparent animationType="fade" onRequestClose=\{onClose\} onShow=\{shown\}/)
+    assert.match(flat, /if \(Platform\.OS === 'android' \|\| !f\.isFocused\?\.\(\)\) f\.focus\(\) if \(field\.held && typed && f\.setSelection\) \{ f\.setSelection\(0, typed\.length\) setField\(selectedByHand\) \}/, 'the box selects the number once it is up without noting it did, so an iPhone snaps every tap back')
+    /* Tapping the panel only brings the field back when it has lost focus: asking a focused field again selects what was typed. */
+    assert.match(flat, /onPress=\{\(\) => \{ if \(!input\.current\?\.isFocused\?\.\(\)\) input\.current\?\.focus\(\) \}\}/)
+    /* And it still sends what is in the box, by the shared rule. */
+    assert.match(flat, /const checked = checkBpm\(typed, range\)/)
+    /*
+     * The same height whatever it has to say. What went wrong was a note of its
+     * own above Cancel and Set, two lines taller the moment it appeared, and on
+     * a 320 by 568 phone that put the metronome under the number pad.
+     */
+    assert.match(flat, /\{error \|\| `\$\{range\.min\} to \$\{range\.max\} beats per minute`\}/, 'the tempo error is no longer in the range line’s place')
+    assert.doesNotMatch(code, /<Note\b/, 'the tempo box has a note of its own again, which makes it taller as it appears')
+    assert.match(flat, /const tight = height <= 640/, 'a 360 by 640 phone is no longer counted small')
+  })
+
+  test('the tempo box has the volume pop-up’s own metronome switch, under Set, and pressing it can never set the tempo', () => {
+    /* "Also, can we add the metronome on and off to this screen as well so they can quickly turn the metronome on and off?" */
+    const box = withoutComments(read('mobile/src/components/TempoBox.js')).replace(/\s+/g, ' ')
+    assert.match(box, /import MetronomeSwitch from '\.\/MetronomeSwitch'/, 'the tempo box has its own metronome switch rather than the volume pop-up’s')
+    const tags = box.match(/<MetronomeSwitch[^>]*\/>/g) || []
+    assert.deepEqual(tags, ['<MetronomeSwitch compact lines={tight ? 2 : undefined} />'], 'the tempo box has no metronome switch, or hands it something that could set the tempo')
+    /* No second way of writing the metronome in the box: the switch is the only one. */
+    assert.doesNotMatch(box, /setMetronome|useMetronome/, 'the tempo box writes the metronome itself')
+    /* Under Cancel and Set, inside the panel that swallows presses, so it neither closes the box nor sits above Set. */
+    const set = box.indexOf('<Press grow label="Set" tone="signal" on onPress={commit} />')
+    const sw = box.indexOf('<MetronomeSwitch')
+    assert.ok(set > 0 && sw > set, 'the switch is not under Cancel and Set')
+    assert.equal(box.indexOf('</Pressable>', sw), box.indexOf('</Pressable> </View> </BlurView>'), 'the switch is outside the panel, where a press closes the box')
+    /* commit is reached by Set and by the keyboard's own Done, and by nothing else. */
+    assert.equal((box.match(/\bcommit\b/g) || []).length, 3, 'something other than Set and Done can send the typed tempo')
+    assert.match(box, /onSubmitEditing=\{commit\}/)
+    /* The switch itself knows nothing of a tempo being typed: nothing it presses reaches a write of one. */
+    const sw2 = withoutComments(read('mobile/src/components/MetronomeSwitch.js'))
+    assert.doesNotMatch(sw2, /\bonSet\b|\bcommit\b|\bonClose\b|setTempo|writeTempo/, 'the metronome switch can reach the tempo box’s write')
+    const flatSw = sw2.replace(/\s+/g, ' ')
+    assert.match(flatSw, /export default function MetronomeSwitch\(\{ compact = false, lines \}\)/)
+    /* The box leaves off the heading; the line about where the click is stays, held to `lines` there. */
+    assert.match(flatSw, /\{!compact \? \( <View/)
+    assert.match(flatSw, /<Text numberOfLines=\{compact \? lines : undefined\} style=\{\{ color: color\.silkDim, fontSize: font\.small, paddingHorizontal: space\.sm \}\}> \{line\} <\/Text>/)
+    /* "The unit didn't take it" in the line's place in the box, never cut short, and as a note of its own only in the volume pop-up. */
+    assert.match(flatSw, /\{compact && said \? \( <Text accessibilityLiveRegion="polite" style=\{\{ color: color\.fault, fontSize: font\.small, paddingHorizontal: space\.sm \}\}> \{said\} <\/Text> \) : \(/, 'in the tempo box the switch’s fault comes in under its line again, under the number pad')
+    assert.match(flatSw, /\{!compact && said \? \( <Note tone="fault"/)
+    /* And the volume pop-up's is as it was, with its heading. */
+    assert.match(read('mobile/src/components/Volume.js'), /<MetronomeSwitch \/>/)
+  })
+
+  test('the browser’s tempo box selects the tempo as it opens and has the Volume sheet’s metronome switch', () => {
+    const tap = withoutComments(read('src/components/TapTempo.jsx')).replace(/\s+/g, ' ')
+    const group = tap.slice(tap.indexOf('<div className="gig-tempo"'), tap.indexOf('</div> ) : null}', tap.indexOf('<div className="gig-tempo"')))
+    assert.match(tap, /import MetronomeSwitch from '\.\/MetronomeSwitch'/)
+    assert.match(group, /<MetronomeSwitch slug=\{currentDeviceSlug\(\)\} heading=\{false\} \/>/, 'the browser’s tempo box has no metronome switch')
+    assert.ok(group.indexOf('<MetronomeSwitch') > group.indexOf('<BpmBox'), 'the switch is above the tempo')
+    /*
+     * A press on the switch keeps focus on the field, and the field's blur is
+     * told it was the box's own — by lib/boxPress.js, the guard the tests
+     * below run, new each time the box opens and handed to the box and the
+     * field as it is.
+     */
+    assert.match(tap, /import \{ boxPresses \} from '\.\.\/lib\/boxPress'/)
+    assert.match(
+      tap,
+      /const presses = useRef\(null\) if \(!typing\) presses\.current = null else if \(!presses\.current\) presses\.current = boxPresses\('\.gig-tempo'\) const \{ handlers: inBox, keepOpen \} = presses\.current \?\? \{\}/,
+      'the tempo box’s press guard is not the one the tests run, or a press from its last opening can hold it open'
+    )
+    assert.match(group, /^<div className="gig-tempo" role="group" aria-label="Type a tempo" \{\.\.\.inBox\}>/)
+    assert.match(group, /<BpmBox bpm=\{bpm\} autoFocus onSet=\{typeTempo\} .*?keepOpen=\{keepOpen\} \/>/)
+    /*
+     * Nothing in the box but the field's Enter or blur sets the tempo or shuts
+     * the box: no press of its own on anything in it (the switch's wrapper
+     * included), no other set of handlers spread over it, and typeTempo and
+     * setTyping reached only through BpmBox's onSet and onDone.
+     */
+    assert.deepEqual(group.match(/\bon[A-Z]\w*=/g), ['onSet=', 'onError=', 'onDone='], 'something in the tempo box has a press of its own, which can reach the tempo')
+    assert.deepEqual(group.match(/\{\.\.\.\w+\}/g), ['{...inBox}'], 'the tempo box takes handlers other than the press guard')
+    assert.deepEqual(group.match(/\btypeTempo\b|\bsetTyping\b/g), ['typeTempo', 'setTyping'])
+    assert.match(group, /onDone=\{\(\) => setTyping\(false\)\}/)
+    assert.equal((tap.match(/\btypeTempo\b/g) || []).length, 2, 'the typed tempo is sent from somewhere other than the field')
+    /* The guard is handed nothing it could call, and imports nothing that could. */
+    const guard = withoutComments(read('src/lib/boxPress.js'))
+    assert.doesNotMatch(guard, /^\s*import\b/m, 'the tempo box’s press guard imports something')
+    assert.match(guard.replace(/\s+/g, ' '), /^ ?export function boxPresses\(group\) \{/)
+    assert.doesNotMatch(guard, /typeTempo|setTyping|setTempo|onSet|onDone|commit/, 'the tempo box’s press guard can reach the tempo')
+    const browserSwitch = withoutComments(read('src/components/MetronomeSwitch.jsx'))
+    assert.doesNotMatch(browserSwitch, /onSet|typeTempo|setTyping|setTempo/)
+    assert.match(browserSwitch.replace(/\s+/g, ' '), /export default function MetronomeSwitch\(\{ slug, heading = true \}\)/)
+    /* The Volume sheet's is as it was. */
+    assert.match(read('src/App.jsx'), /<MetronomeSwitch slug=\{slugOfUnit\(device\)\} \/>/)
+    /* The field: the number from its first render, selected on focus with setSelectionRange (Safari on an iPhone), kept selected through the press that focused it. */
+    const bpmBox = withoutComments(read('src/components/BpmBox.jsx')).replace(/\s+/g, ' ')
+    assert.match(bpmBox, /useState\(autoFocus && Number\.isFinite\(bpm\) \? String\(Math\.round\(bpm\)\) : null\)/, 'the box opens empty and the tempo arrives after the cursor')
+    assert.match(bpmBox, /autoFocus=\{autoFocus\}/)
+    assert.match(bpmBox, /requestAnimationFrame\(\(\) => selectAll\(el\)\)/, 'the box does not select the tempo as it opens')
+    assert.match(bpmBox, /el\.setSelectionRange\(0, el\.value\.length\)/)
+    assert.match(bpmBox, /onMouseUp=\{\(e\) => \{ if \(!pressFocus\.current && !fresh\.current\) return pressFocus\.current = false e\.preventDefault\(\)/, 'the first press into an already-focused field puts the cursor at the finger again')
+    assert.match(bpmBox, /const fresh = useRef\(autoFocus\)/)
+    assert.match(bpmBox, /if \(!entered\.current && !abandon\.current && keepOpen\?\.\(e\)\) return/, 'Enter or Escape can be held up by the box staying open')
+  })
+
+  test('the browser’s tempo box, run: open selected, a press on the switch neither sends nor closes, Enter still sets', async () => {
+    const { transformSync } = await import('esbuild')
+    const dir = mkdtempSync(join(tmpdir(), 'bpm-box-'))
+    try {
+      /* A React that keeps hook state by call order and redraws when asked. */
+      writeFileSync(join(dir, 'package.json'), '{ "type": "module" }')
+      writeFileSync(
+        join(dir, 'react.mjs'),
+        `export const h = (type, props, ...children) => ({ type, props: props || {}, children })
+         const slots = []
+         let at = 0
+         export const begin = () => { at = 0 }
+         export const remount = () => { slots.length = 0 }
+         export function useState(initial) {
+           const i = at++
+           if (!(i in slots)) slots[i] = typeof initial === 'function' ? initial() : initial
+           return [slots[i], (v) => { slots[i] = typeof v === 'function' ? v(slots[i]) : v }]
+         }
+         export function useRef(current = null) {
+           const i = at++
+           if (!(i in slots)) slots[i] = { current }
+           return slots[i]
+         }`
+      )
+      let src = transformSync(read('src/components/BpmBox.jsx'), { loader: 'jsx', jsx: 'transform', jsxFactory: 'h', format: 'esm' }).code
+      src = src.replaceAll('from "react"', "from './react.mjs'").replaceAll('from "../../shared/tempo.mjs"', `from '${pathToFileURL(fileURLToPath(new URL('../shared/tempo.mjs', import.meta.url))).href}'`)
+      writeFileSync(join(dir, 'BpmBox.mjs'), "import { h } from './react.mjs'\n" + src)
+      const react = await import(pathToFileURL(join(dir, 'react.mjs')).href)
+      const { default: BpmBox } = await import(pathToFileURL(join(dir, 'BpmBox.mjs')).href)
+      /* TapTempo's own guard, not a stand-in for it, handed to the field as TapTempo hands it. */
+      const { boxPresses } = await import('../src/lib/boxPress.js')
+      let presses = boxPresses('.gig-tempo')
+      const sets = []
+      let done = 0
+      const props = { bpm: 120, autoFocus: true, range: { min: 24, max: 250 }, onSet: (n) => sets.push(n), onDone: () => done++, onError: () => {}, keepOpen: presses.keepOpen }
+      const draw = () => {
+        react.begin()
+        return BpmBox(props)
+      }
+      /* Opened: the tempo is in it before anything else happens. */
+      assert.equal(draw().props.value, '120', 'the box opened without the tempo in it')
+      /* Focused: all of it selected, once the frame is drawn. */
+      const el = { value: '120', setSelectionRange(a, b) { this.sel = [a, b] } }
+      const frames = []
+      globalThis.document = { activeElement: el }
+      globalThis.requestAnimationFrame = (fn) => frames.push(fn)
+      draw().props.onFocus({ target: el })
+      frames.splice(0).forEach((fn) => fn())
+      assert.deepEqual(el.sel, [0, 3], 'the box opened with the tempo not selected')
+      /*
+       * An iPhone: the hold's timer focused the field, with no keyboard, so the
+       * player taps a field that already has focus. No focus event, and the
+       * caret goes to the finger after the press — unless the number is
+       * selected again, on the let-go and once more just after it.
+       */
+      const tick = () => new Promise((ok) => setTimeout(ok, 5))
+      let stopped = false
+      draw().props.onMouseDown({ currentTarget: el })
+      el.sel = [3, 3]
+      draw().props.onMouseUp({ currentTarget: el, preventDefault: () => (stopped = true) })
+      assert.ok(stopped, 'the first tap into a field that already had focus put the cursor at the finger')
+      assert.deepEqual(el.sel, [0, 3], 'the first tap into a field that already had focus left the tempo unselected')
+      el.sel = [3, 3]
+      await tick()
+      assert.deepEqual(el.sel, [0, 3], 'the caret an iPhone places after the tap was left there')
+      /* Only the first: the next press is somebody putting the cursor somewhere, and it stays there. */
+      stopped = false
+      el.sel = [1, 1]
+      draw().props.onMouseDown({ currentTarget: el })
+      draw().props.onMouseUp({ currentTarget: el, preventDefault: () => (stopped = true) })
+      await tick()
+      assert.ok(!stopped, 'a second press into the field can never place the cursor')
+      assert.deepEqual(el.sel, [1, 1])
+      /* A press focusing the field: its let-go is kept from moving the cursor. */
+      globalThis.document.activeElement = null
+      draw().props.onMouseDown({ currentTarget: el })
+      globalThis.document.activeElement = el
+      el.sel = null
+      draw().props.onMouseUp({ currentTarget: el, preventDefault: () => (stopped = true) })
+      assert.ok(stopped, 'letting go of the press that focused the field moves the cursor off the selection')
+      assert.deepEqual(el.sel, [0, 3])
+      /*
+       * 132 typed, then the metronome pressed, the way an iPhone does it: the
+       * press goes down on the switch, the field loses focus with nothing to
+       * hand it to, and only then does the switch's click land.
+       */
+      draw().props.onChange({ target: { value: '132' } })
+      el.closest = (sel) => (sel === '.gig-tempo' ? { contains: () => false } : null)
+      const sw = { tagName: 'BUTTON' }
+      presses.handlers.onPointerDown({ target: sw })
+      presses.handlers.onMouseDown({ target: sw, preventDefault: () => {} })
+      draw().props.onBlur({ relatedTarget: null, currentTarget: el })
+      assert.deepEqual(sets, [], 'pressing the metronome sent the typed tempo')
+      assert.equal(done, 0, 'pressing the metronome closed the box')
+      assert.equal(draw().props.value, '132', 'pressing the metronome lost what was typed')
+      presses.handlers.onClickCapture()
+      await tick()
+      /* A blur after that click — the keyboard's Done — sets it as it always did. */
+      draw().props.onBlur({ relatedTarget: null, currentTarget: el })
+      assert.deepEqual(sets, [132], 'after the metronome was pressed, the keyboard’s Done no longer sets the typed tempo')
+      assert.equal(done, 1)
+      /* Opened again, 140 typed, a press on the switch still down: Enter sets it, whatever the box says about staying open. */
+      react.remount()
+      presses = boxPresses('.gig-tempo')
+      props.keepOpen = presses.keepOpen
+      draw().props.onChange({ target: { value: '140' } })
+      presses.handlers.onPointerDown({ target: sw })
+      assert.equal(presses.keepOpen({ relatedTarget: null, currentTarget: el }), true)
+      const input = draw()
+      input.props.onKeyDown({ key: 'Enter', currentTarget: { blur: () => draw().props.onBlur({ relatedTarget: null, currentTarget: el }) } })
+      assert.deepEqual(sets, [132, 140], 'Enter did not set the typed tempo')
+      assert.equal(done, 2)
+      /* Opened again and typed into straight away: the cursor is the player's from the first key, so a press then moves it. */
+      react.remount()
+      draw().props.onChange({ target: { value: '9' } })
+      stopped = false
+      el.sel = [0, 0]
+      draw().props.onMouseDown({ currentTarget: el })
+      draw().props.onMouseUp({ currentTarget: el, preventDefault: () => (stopped = true) })
+      await tick()
+      assert.ok(!stopped, 'a press after typing selects everything typed again')
+      assert.deepEqual(el.sel, [0, 0])
+    } finally {
+      delete globalThis.document
+      delete globalThis.requestAnimationFrame
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('the browser’s tempo box, its press guard run: a press on the switch holds the field’s blur, and only until its click is done', async () => {
+    const { boxPresses } = await import('../src/lib/boxPress.js')
+    const tick = () => new Promise((ok) => setTimeout(ok, 5))
+    const button = { tagName: 'BUTTON' }
+    const field = { tagName: 'INPUT' }
+    const inBox = { tagName: 'BUTTON' }
+    const elsewhere = { tagName: 'BUTTON' }
+    const asked = []
+    const input = { tagName: 'INPUT', closest: (sel) => (asked.push(sel), sel === '.gig-tempo' ? { contains: (n) => n === inBox } : null) }
+    const blur = (relatedTarget = null) => ({ relatedTarget, currentTarget: input })
+    const { handlers, keepOpen } = boxPresses('.gig-tempo')
+    /* Nothing pressed: a blur with nowhere for focus to go sets, as it always did. */
+    assert.equal(keepOpen(blur()), false, 'the field’s blur no longer sets the typed tempo')
+    /* The switch pressed: its mouse-down keeps focus on the field, and a blur before its click is the box's own. */
+    let stopped = false
+    handlers.onPointerDown({ target: button })
+    handlers.onMouseDown({ target: button, preventDefault: () => (stopped = true) })
+    assert.ok(stopped, 'a press on the metronome takes focus off the field, which sends the typed tempo')
+    assert.equal(keepOpen(blur()), true, 'a press on the metronome sent the typed tempo and shut the box (an iPhone)')
+    /* Its click lands, and the press is over just after it; then a blur is judged on its own. */
+    handlers.onClickCapture()
+    assert.equal(keepOpen(blur()), true, 'a press on the metronome was over before its own click had done its work')
+    await tick()
+    assert.equal(keepOpen(blur()), false, 'after a press on the metronome, the keyboard’s Done no longer sets the typed tempo')
+    /* A press on the field itself is the field's: its mouse-down is left alone, and a blur after it sets. */
+    stopped = false
+    handlers.onPointerDown({ target: field })
+    handlers.onMouseDown({ target: field, preventDefault: () => (stopped = true) })
+    assert.ok(!stopped, 'a press on the field cannot put the cursor where the finger is')
+    assert.equal(keepOpen(blur()), false)
+    /* A press that turned into a scroll, and a key: over, with no click coming to end them. */
+    handlers.onPointerDown({ target: button })
+    handlers.onPointerCancel()
+    assert.equal(keepOpen(blur()), false, 'a scroll that began on the box kept the keyboard’s Done from setting the tempo')
+    handlers.onPointerDown({ target: button })
+    handlers.onKeyDown()
+    assert.equal(keepOpen(blur()), false, 'a key after a press on the box kept the field’s blur from setting the tempo')
+    /* Focus moved by Tab onto something in the box stays in the box; anywhere else, it sets. */
+    assert.equal(keepOpen(blur(inBox)), true)
+    assert.equal(keepOpen(blur(elsewhere)), false)
+    assert.deepEqual([...new Set(asked)], ['.gig-tempo'])
+    /* Each opening its own: a press left over from the last does not hold the next open. */
+    handlers.onPointerDown({ target: button })
+    assert.equal(boxPresses('.gig-tempo').keepOpen(blur()), false, 'a press from the last time the box was open holds this one open')
+  })
+
   test('the green light on Tap lights on the phone’s own click while it clicks, and keeps counted time when it does not', async () => {
     /* Run, not read: TempoDot beside stand-ins for React, Animated, the phone's beat and a clock the test turns. */
     const dir = mkdtempSync(join(tmpdir(), 'dot-'))
