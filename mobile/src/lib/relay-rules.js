@@ -451,6 +451,75 @@ const NOT_REPEATABLE = [
 
 export const repeatable = (path) => !NOT_REPEATABLE.some((re) => re.test(cleanPath(path)))
 
+/*
+ * NOBODY IS LOOKING AT THE LEVEL READINGS, SO THE COMPUTER IS TOLD SO.
+ *
+ * "Stop the computer asking the unit for level readings nobody is looking
+ * at. With an FM3, FM9 or Axe-Fx III, the computer asks the unit for its
+ * output level about 40 times a second the whole time it's online, even when
+ * no screen shows a level bar. That's the same load that once made the sound
+ * cut out. The website already says 'stop' when it doesn't need them; the
+ * phone never does." (Justin approved it, 15 October 2026.)
+ *
+ * The computer's device server runs one loop for as long as anything is
+ * listening to it, and its relay host listens from the moment the computer
+ * app signs in until it is turned off, for the scene and channel watches a
+ * phone needs to see a footswitch pressed on the unit. On every computer app
+ * up to now that loop also reads the unit's four output levels on every
+ * tick, about forty reads a second, until somebody says they are not wanted.
+ * Nothing in either app has ever drawn them. Play's signal bar reads the
+ * output block's own monitor (GET /preset/monitors/live), which goes to the
+ * unit on its own and never needed them, and the relay has never carried one
+ * of these readings to a phone. So both apps only ever say OFF:
+ *
+ *   - the phone app, and the website used from a phone through the account,
+ *     the moment the computer answers, again every couple of minutes while
+ *     connected, and at once after any drop — a computer that restarted
+ *     comes back with them on, and so does one whose own window (computer app
+ *     1.87.4 and older) opens Play;
+ *   - Play, whenever it opens, on every end (src/components/Gig.jsx).
+ *
+ * Footswitches are untouched: with the readings off the computer still
+ * watches the unit's scene and channels, exactly as often as it did with
+ * them on (every 800 ms at the usual setting).
+ *
+ * WHAT AN OLD COMPUTER DOES WITH IT. Every computer app since 7 September
+ * 2026 (desktop 7.101.1) has the route and lets a phone use it, and answers
+ * {"ok":true,"meters":false} — 1.87.4 included. One older than that refuses
+ * it: 403 over the relay, 404 at the computer itself. Nothing goes on screen,
+ * and the phone stops asking that computer until the link drops or another
+ * computer is picked (metersRefused). The request is the same bytes Play has
+ * sent from the browser since that route arrived; nothing new reaches a
+ * computer that could read it wrong.
+ *
+ * WHY TWO MINUTES. Every request a phone sends over the relay is a line in
+ * the computer's own log, and /diag keeps the last four hundred of them for
+ * Copy log to paste. Once every two minutes is nothing beside the
+ * eight-second keepalive; once every thirty seconds would push the lines
+ * that matter out of it.
+ */
+export const METERS_OFF_PATH = '/telemetry/meters'
+
+/** What is sent: off, and never anything else. */
+export const metersOffBody = () => JSON.stringify({ on: false })
+
+/** How often a connected phone says it again. */
+export const QUIET_METERS_MS = 2 * 60 * 1000
+
+/** A computer too old to have the route: refused by its relay (403) or not found (404). Said no more to it. */
+export const metersRefused = (err) => err?.status === 403 || err?.status === 404
+
+/**
+ * Whether to say it now: connected, not to two computers that clash, not to a
+ * computer that refused it, and not said in the last QUIET_METERS_MS on this
+ * link. A clock that went backwards says it again rather than waiting for ever.
+ */
+export function timeToQuietMeters({ link = null, clash = null, refused = false, quietAt = 0, now = 0, every = QUIET_METERS_MS } = {}) {
+  if (refused || link !== 'connected' || clash) return false
+  if (!quietAt) return true
+  return now - quietAt >= every || now < quietAt
+}
+
 /**
  * Why this account's requests cannot be trusted right now, or null.
  *

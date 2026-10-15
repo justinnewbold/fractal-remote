@@ -2821,6 +2821,11 @@ export const setTelemetryMode = (mode) =>
  *
  * A host that predates the route answers 404, which is not worth a word to
  * anybody: it simply keeps the behaviour it already had.
+ *
+ * Only ever called with false. Nothing in this app draws the host's output
+ * meters — Play's bar is liveMeters(), the output block's own monitor — so
+ * nothing here has a reason to turn them on, and the host keeps one setting
+ * for every client at once. See METERS_OFF_PATH in shared/relay-rules.mjs.
  */
 export const setMetersWanted = (on) =>
   mock

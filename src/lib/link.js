@@ -62,7 +62,7 @@ import {
  * a code, and nothing makes one any more.
  */
 import { isPairAccount } from '../../shared/pairing.mjs'
-import { LINK_DOWN_HOLD_MS, linkDownAt } from '../../shared/relay-rules.mjs'
+import { LINK_DOWN_HOLD_MS, linkDownAt, metersRefused, timeToQuietMeters } from '../../shared/relay-rules.mjs'
 import { setLinkAway, setLinkDown, setTapsRelayed } from './tapGate.js'
 import { PHONE_NOTE_ID, phoneNote, timeToTell } from '../../shared/phone-note.mjs'
 import { holders } from '../../shared/editors.mjs'
@@ -630,6 +630,8 @@ async function join({ fresh = false } = {}) {
   refresh()
   if (remoteHostSeen()) {
     readMacName()
+    /* The moment it answers, before the roll call holds writes: see quietMeters. */
+    quietMeters()
     countHosts()
   }
 }
@@ -645,8 +647,14 @@ async function join({ fresh = false } = {}) {
  */
 async function countHosts() {
   try {
+    const before = remoteChosenHost()
     await censusHosts()
     set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+    /* The roll call picked a computer: tell that one, whatever answered first before (see metersAgain). */
+    if (remoteChosenHost() !== before) {
+      metersAgain()
+      quietMeters()
+    }
   } catch {
     // A roll call that fails is not a reason to distrust the link.
   }
@@ -662,6 +670,8 @@ async function countHosts() {
 export async function chooseHost(name) {
   await pickHost(name)
   set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+  metersAgain()
+  quietMeters()
   return state.clash
 }
 
@@ -759,6 +769,8 @@ async function turn() {
   refresh()
   // And the computer hears that a phone is using it, so it does not go to sleep under the song.
   tellComputer()
+  // And that nobody here is looking at the unit's level readings, so it stops asking the unit for them.
+  quietMeters()
   /* Doubted while this turn was out: ask again now, the backoff left where it was. */
   if (doubted) {
     doubted = false
@@ -791,6 +803,47 @@ function tellComputer() {
   device()
     .then((d) => d.writeHostDoc(PHONE_NOTE_ID, phoneNote(now).data))
     .catch(() => {})
+}
+
+/** When the computer was last told nobody here is looking at its level readings; 0 for not yet on this link. */
+let quietAt = 0
+/** It refused (a computer too old to have the route): not asked again until the link drops or another is picked. */
+let quietRefused = false
+/** Which link an answer belongs to, so a refusal that lands after a drop is not held against the next. */
+let quietLink = 0
+
+/**
+ * Tell the computer nobody here is looking at the unit's level readings — the
+ * phone app's rule, on the same rhythm (see quietMeters in
+ * mobile/src/lib/link.js, and METERS_OFF_PATH in shared/relay-rules.mjs for
+ * why). A phone using the website through the account only: the computer's
+ * own window and its wifi page say it from Play, when Play opens (Gig.jsx).
+ *
+ * Its own clock, started again from the link's own news (metersAgain in
+ * bootLink), because a computer app that restarted between two turns comes
+ * back with the readings on. Never awaited, and nothing said: a refusal is
+ * not written into the log (forgefx.js `routine`), and the computer that
+ * gave it is not asked again on this link.
+ */
+function quietMeters() {
+  if (state.role !== 'remote') return
+  const now = Date.now()
+  if (state.link !== 'connected') quietAt = 0
+  if (!timeToQuietMeters({ link: state.link, clash: state.clash, refused: quietRefused, quietAt, now })) return
+  quietAt = now
+  const asked = quietLink
+  device()
+    .then((d) => d.setMetersWanted(false))
+    .catch((err) => {
+      if (asked === quietLink && metersRefused(err)) quietRefused = true
+    })
+}
+
+/** The link dropped, or the computer it drives changed: say it again as soon as it answers, and ask one that refused again. */
+function metersAgain() {
+  quietAt = 0
+  quietRefused = false
+  quietLink += 1
 }
 
 /**
@@ -924,6 +977,8 @@ export async function bootLink() {
   set({ account })
 
   subscribeRemoteState((up) => {
+    /* Gone: whatever answers when it is back may have restarted with the level readings on. See quietMeters. */
+    if (!up) metersAgain()
     refresh()
     /*
      * A socket that closed is chased at once rather than at the next turn of
@@ -939,6 +994,7 @@ export async function bootLink() {
     if (up && !remoteHostSeen()) doubt()
   })
   subscribeHostSeen((seen) => {
+    if (!seen) metersAgain()
     refresh()
     /* Stopped answering on a channel that is up: ask once more, at once. See doubt. */
     if (!seen) doubt()
@@ -1242,6 +1298,7 @@ export function _resetLink() {
   restoring = false
   booted = false
   toldAt = 0
+  metersAgain()
   lostAt = 0
   clearTimeout(downTimer)
   downTimer = null

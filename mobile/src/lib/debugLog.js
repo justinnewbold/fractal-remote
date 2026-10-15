@@ -164,6 +164,13 @@ export function formatMacDiag(d) {
     `detected: ${d.detected ? 'yes' : 'no'} · profile ${d.profile?.key || '?'} · telemetry ${d.telemetryMode || '?'}`,
     typeof d.uptime === 'number' ? `server up: ${Math.round(d.uptime / 60)} min` : null,
     traffic ? `traffic: ${traffic.txMsgs ?? '?'} sent, ${traffic.rxMsgs ?? '?'} received since ${traffic.since || '?'}` : null,
+    /*
+     * Whether the computer is asking the unit for its output levels right now
+     * (shared/relay-rules.mjs METERS_OFF_PATH). Only a computer app that
+     * carries the quiet device server says; an older one says nothing here,
+     * rather than a guess.
+     */
+    typeof d.metersWanted === 'boolean' ? `level readings: ${d.metersWanted ? 'on' : 'off'}` : null,
     d.listError ? `port listing error: ${d.listError}` : null,
     reopens
       ? `port lost and reopened: ${reopens.length} time${reopens.length === 1 ? '' : 's'}`

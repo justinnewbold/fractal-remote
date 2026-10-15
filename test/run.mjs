@@ -2176,6 +2176,13 @@ test('the debug report carries the computer’s own account of its port', async 
   assert.match(out, /serial ports: \/dev\/cu\.usbmodem1019 \(Fractal\), \/dev\/cu\.Bluetooth/)
   assert.match(out, /server up: 10 min/)
   assert.match(out, /traffic: 40 sent, 38 received/)
+  /*
+   * Whether the computer is asking the unit for its output levels (shared/relay-rules.mjs
+   * METERS_OFF_PATH). Only a device server that says it is reported; an older one is not guessed at.
+   */
+  assert.doesNotMatch(out, /level readings/, 'a computer that does not say is guessed at')
+  assert.match(formatMacDiag({ metersWanted: false }), /\nlevel readings: off\n/)
+  assert.match(formatMacDiag({ metersWanted: true }), /\nlevel readings: on\n/)
   assert.match(out, /port lost and reopened: 1 time\n  2026-09-12T15:34:10\.000Z \/dev\/cu\.usbmodem1019 — the device went away/)
   assert.match(out, /server log, last 1 lines:\n2026-09-12T15:34:10\.000Z warn/)
   // Nothing to say is nothing, not a heading over an empty list.
@@ -14491,6 +14498,21 @@ test('the computer app carries the server that opens the AM4’s own tuner scree
     assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
   }
   assert.ok(lock._why.some((line) => /AM4's own tuner screen/.test(line) && /never sends its 0 on a number the AM4 no longer names/.test(line)), 'the lock does not say why it moved')
+})
+
+/*
+ * "Stop the computer asking the unit for level readings nobody is looking
+ * at." The server the computer carries starts with the output-level reads
+ * off, keeps the scene and channel watch a footswitch needs, and lets an on
+ * lapse unless it is said again.
+ */
+test('the computer app carries the server whose level readings start off', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+quietMeters(\+|$)/, 'the computer app still has the unit report its levels forty times a second for nobody')
+  for (const piece of ['meterGate', 'relayheal', 'am4tunercc', 'gridgen', 'looper']) {
+    assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
+  }
+  assert.ok(lock._why.some((line) => /meter loop starts quiet/.test(line) && /lease/.test(line)), 'the lock does not say why it moved')
 })
 
 /*
