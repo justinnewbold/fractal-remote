@@ -44,6 +44,7 @@ import {
   notSentError,
   pastDeadline,
   newestPresses,
+  sendsOnce,
   tapDeadline
 } from './relay-rules'
 import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, CONFIRMED_SIGN_IN, cleanCode, codeRefused } from './confirm-code'
@@ -927,7 +928,9 @@ export async function remoteRequest(path, options = {}) {
   return withRetry((again) => requestOnce(path, method, options, { went: again > 0 }), {
     method,
     path,
-    deadline: options.deadline
+    deadline: options.deadline,
+    /* An answer that came back garbled went: a VP4's preset or scene is not sent again for it. */
+    once: sendsOnce(method, path, options.body)
   })
 }
 
@@ -961,6 +964,29 @@ function socketUp() {
   } catch {
     return true
   }
+}
+
+/*
+ * WHETHER A SEND ON THIS CHANNEL GOES ON ITS SOCKET, asked the way
+ * realtime-js itself asks before choosing (RealtimeChannel.send:
+ * `channelAdapter.canPush()`), not the way socketUp does. On the socket, with
+ * `ack: false`, a send always answers 'ok'. Off it, send() posts the message
+ * over HTTPS, and that road answers 'error' for any fetch that failed —
+ * including one that failed after the relay server had taken the post and
+ * passed it on. For a VP4's preset or scene that 'error' is the one answer
+ * that must not be read as "never left" (see relaySend).
+ *
+ * Asked of the channel, so it cannot disagree with send(). A channel with no
+ * adapter to ask (a test's stand-in) is read as socketUp reads it.
+ */
+function pushesNow(chan) {
+  try {
+    const adapter = chan?.channelAdapter
+    if (typeof adapter?.canPush === 'function') return adapter.canPush() === true
+  } catch {
+    return false
+  }
+  return isJoined(chan) && socketUp()
 }
 
 async function requestOnce(path, method, options, trip = { went: false }) {
@@ -1005,6 +1031,13 @@ async function requestOnce(path, method, options, trip = { went: false }) {
   const tap = Number.isFinite(options.deadline)
   const until = tap ? Math.min(graceUntil, options.deadline) : graceUntil
   const attempts = repeatable(path) ? 2 : 1
+  /*
+   * A VP4'S PRESET OR SCENE GOES ON THE WIRE ONCE. A second Program Change
+   * loads the preset again, losing what the player had not saved, and the
+   * computer cannot tell it from the first (shared/relay-rules sendsOnce). So
+   * the second try is only for one that never left.
+   */
+  const once = sendsOnce(method, path, options.body)
 
   /*
    * Every request passes here, which is why the log is written here and nowhere
@@ -1022,6 +1055,7 @@ async function requestOnce(path, method, options, trip = { went: false }) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     /* The second attempt is checked too: it is the one that used to land late. */
     if (tap && pastDeadline(options.deadline, Date.now())) break
+    if (attempt > 0 && once && trip.went) break
     try {
       await relayReady(until - Date.now(), tap)
       const answer = await relaySend(method, path, options, trip)
@@ -1109,6 +1143,18 @@ async function relaySend(method, path, options, trip = { went: false }) {
   if (tap && pastDeadline(options.deadline, Date.now())) throw tooLate()
   /* And not after a newer press of the same control: it would land over the newer one (shared/relay-rules newestPresses). */
   if (tap && presses.overtaken(path, options.body, options.deadline)) throw tooLate(true)
+  /*
+   * A VP4'S PRESET OR SCENE NEVER TAKES THE HTTPS ROAD. A send there that
+   * answers 'error' may already be on the computer, and below an 'error' is
+   * read as refused, so the second try would send it again: a second Program
+   * Change, which reloads the preset and loses what the player had not saved.
+   * relayReady has already waited for the socket, so this is the last look,
+   * asked the way send() will ask. Not on the socket: not sent, and nothing
+   * went, so a second try inside the deadline is its first.
+   */
+  if (tap && sendsOnce(method, path, options.body) && !pushesNow(channel)) {
+    throw linkDown('The connection to your computer dropped.')
+  }
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
   let doubt = null
   const reply = new Promise((resolve, reject) => {

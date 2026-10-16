@@ -5,7 +5,7 @@ import { color, font, mono, radius, space, TAP, MODES, getMode, setMode } from '
 import { APP_VERSION } from '../lib/version'
 import { AFFILIATION } from '../lib/affiliation'
 import { setDemo, useDemo, useDemoUnit, setDemoUnit } from '../lib/demo'
-import { UNITS as DEMO_UNITS } from '../lib/demoUnits'
+import { UNITS as DEMO_UNITS, demoSentence } from '../lib/demoUnits'
 import { getDebugLog } from '../lib/debugLog'
 import { tick } from '../lib/feedback'
 import { NOT_ACROSS, NOT_ACROSS_SIGNED_OUT, ONLY_HERE, unlockedFrom, usePurchase } from '../lib/purchases'
@@ -80,6 +80,9 @@ import Note from '../components/Note'
 import PasswordBox from '../components/PasswordBox'
 import Press from '../components/Press'
 import { stopLooper } from '../components/Looper'
+import Vp4Setup from '../components/Vp4Setup'
+import { vp4Here } from '../lib/device'
+import { MIDI_SETUP_TITLE, VP4_SETUP, readVp4Setup, vp4ComputerLacks, vp4SetupStatus } from '../lib/vp4-safety'
 import { findLooper } from '../lib/looper'
 import SceneArrange from '../components/SceneArrange'
 import EdgeBack from '../components/EdgeBack'
@@ -222,6 +225,9 @@ export default function Settings({
   /* A unit whose switches can be read — see the Footswitches page. */
   const caps = useRig(ofCapabilities)
   const switchesReadable = fcReadable(caps)
+  /* A real VP4 on the computer (not the demo's, not over Bluetooth): it gets the Scene Select card. Read again on every change to the rig or to storage. */
+  useStored()
+  const onRealVp4 = vp4Here()
   /* Bluetooth (beta): whether the phone is talking to the unit itself. */
   const bluetooth = useBluetoothOn()
   /*
@@ -480,8 +486,11 @@ export default function Settings({
             {(link === 'connected' || demo) && switchesReadable ? (
               <SetupRow title="Footswitches" status="What each switch does" onPress={() => setPage('footswitches')} />
             ) : null}
-            {/* Not over Bluetooth (beta): the looper is left off its chain. */}
-            {(link === 'connected' || demo) && !overBluetooth(caps) ? (
+            {/* Not over Bluetooth (beta): the looper is left off its chain.
+                And not on a real VP4: no computer app can work its looper,
+                so the row could only say "Didn’t stop" (lib/vp4-safety
+                VP4_NO_LOOPER). The browser's Setup leaves it out too. */}
+            {(link === 'connected' || demo) && !overBluetooth(caps) && !onRealVp4 ? (
               <SetupRow
                 title="Stop the looper"
                 status={looperSaid || 'If a loop keeps playing'}
@@ -495,6 +504,12 @@ export default function Settings({
               status={metronomeNote(clickSetting, rigSlug, rigBpm, { ...clickHere, heard: clickHeard })}
               onPress={() => setPage('metronome')}
             />
+            {/* A VP4's Scene Select number and MIDI channel, on a real VP4
+                only: presets by Program Change, scenes on the number the
+                player set on the pedal (components/Vp4Setup). */}
+            {onRealVp4 ? (
+              <SetupRow title={MIDI_SETUP_TITLE} status={vp4SetupStatus(readVp4Setup(sync), caps)} onPress={() => setPage('vp4')} />
+            ) : null}
           </Group>
 
           <Group title="Help">
@@ -846,7 +861,8 @@ export default function Settings({
                   firmware,
                   state: unitState
                 },
-                computer: { name: macName, version: hostVersion, link },
+                /* A VP4 on a computer that cannot change its scenes and presets: the red line says so too (lib/vp4-safety vp4ComputerLacks). */
+                computer: { name: macName, version: hostVersion, link, lacks: vp4ComputerLacks(onRealVp4, caps) },
                 /* Over Bluetooth, link.js's macName is the adapter's name. */
                 adapter: { name: macName, link },
                 phone: {
@@ -875,10 +891,18 @@ export default function Settings({
             */}
             {demo ? (
               <>
+                {/*
+                  A VP4 says its own sentence (VP4_DEMO, by demoSentence). "Every
+                  screen works" is true of the demo's VP4 and the opposite of a
+                  real one's, and this page is where a VP4 owner trying the demo
+                  before paying looks to see what it is.
+                */}
                 <Note tone="warn">
-                  {`This is the demo — a simulated ${
-                    DEMO_UNITS.find((u) => u.key === unit)?.name || 'FM3'
-                  }. Every screen works and nothing reaches hardware. It also answers instantly, so anything still slow in here is this app rather than the line to a computer.`}
+                  {unit === 'vp4'
+                    ? `${demoSentence(unit)} It also answers instantly, so anything still slow in here is this app rather than the line to a computer.`
+                    : `This is the demo — a simulated ${
+                        DEMO_UNITS.find((u) => u.key === unit)?.name || 'FM3'
+                      }. Every screen works and nothing reaches hardware. It also answers instantly, so anything still slow in here is this app rather than the line to a computer.`}
                 </Note>
                 {/*
                   Which unit, because the demo was an FM3 and only an FM3 —
@@ -1169,6 +1193,14 @@ export default function Settings({
               </>
             ) : null}
           </View>
+        </>
+      ) : null}
+
+      {/* ------------------------------------------------------------- vp4 */}
+      {page === 'vp4' && onRealVp4 ? (
+        <>
+          {head(VP4_SETUP.title, 'back')}
+          <Vp4Setup caps={caps} firmware={firmware} />
         </>
       ) : null}
 

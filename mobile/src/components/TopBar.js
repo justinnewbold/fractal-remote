@@ -47,7 +47,7 @@ const face = Platform.select(mono)
  * The words come from shared/link-word.mjs rather than from here, so the two
  * apps cannot drift into saying different things about the same link.
  */
-export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, saveHere = true }) {
+export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, saveHere: saveWanted = true }) {
   const unit = useRig(ofDeviceName)
   const unitState = useRig(ofUnitState)
   const blocks = useRig(ofAllBlocks)
@@ -68,6 +68,8 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
    * overwrites, and stays out of the way on Edit, which has its own.
    */
   const saveTo = useSaveToSlot()
+  /* Never on a VP4, which the app cannot save on: a lit Save that only says so after a tap is a promise (lib/vp4-safety VP4_NO_SAVE). */
+  const saveHere = saveWanted && !saveTo.notHere
   const preset = useRig(ofPreset)
   const unsaved = useRig(ofUnsaved)
   /* Up while it saves, too: its "Saving…" is the only sign one is running. */
@@ -241,7 +243,18 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
         borderBottomColor: color.rule,
         /* Translucent, or the blur has nothing to do: a solid panel in front
            of it hides the very thing it is blurring. */
-        backgroundColor: at(color.panel, 0.55)
+        backgroundColor: at(color.panel, 0.55),
+        /*
+         * ABOVE THE SCREEN UNDER IT. The bar's notes (Saved, a volume that
+         * would not take, a save running late) hang below it, over the top of
+         * the screen, by design. Drawn before that screen, they were drawn
+         * UNDER it: "The app can't save…" came out with PRESET 004 B1 OF 104
+         * printed through the middle of it. So the whole bar is lifted, notes
+         * and all, over the screens drawn after it — and only over those: the
+         * metronome's flash, which is over everything, sits higher still
+         * (MetronomeBeat's zIndex), and a sheet is a Modal of its own.
+         */
+        zIndex: 3
       }}
     >
       {bluetooth ? <BluetoothMark state={unitLamp} /> : <Lamp state={unitLamp} />}

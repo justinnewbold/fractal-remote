@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { currentDeviceSlug, refusedAlready, setTempo } from '../lib/forgefx'
+import { currentDeviceSlug, refusedAlready, setTempo, vp4Here } from '../lib/forgefx'
 import { NO_TEMPO, isUnsupported } from '../../shared/unsupported.mjs'
+import { VP4_NO_TEMPO, aboutVp4 } from '../../shared/vp4-safety.mjs'
 import { useDevice, refreshTempo, getSnapshot, chainNumberOf } from '../lib/deviceState'
 import { keepTaps, tappedBpm, tempoRange, tempoSender, TAP_REREAD_MS } from '../../shared/tempo.mjs'
 import { notSentError, tapDeadline } from '../lib/remote'
@@ -119,6 +120,14 @@ export default function TapTempo({ onError, onChanged, onDropped, where = 'bar' 
    * moves nothing); anywhere else it is an ordinary error.
    */
   const dropped = (err) => (onDropped ? onDropped(err) : onError(err.message))
+  /*
+   * WHAT A UNIT WITH NO TEMPO IS TOLD, in a VP4's own words on one. NO_TEMPO
+   * names no unit, so Play's check for a VP4's refusals missed it and it went
+   * under "Didn't work" in the page, pushing Play down 350 pixels at 320
+   * wide. VP4_NO_TEMPO goes over the tiles, as every other VP4 refusal does
+   * (Gig onError), and the phone's toast says the same.
+   */
+  const noTempo = (err) => (aboutVp4(err) ? err.message : vp4Here() ? VP4_NO_TEMPO : NO_TEMPO)
   const sender = useRef(null)
   if (!sender.current) {
     sender.current = tempoSender(
@@ -135,7 +144,7 @@ export default function TapTempo({ onError, onChanged, onDropped, where = 'bar' 
       (err) => {
         /* Taken over by a newer tempo (shared/relay-rules newestPresses): that one owns the face now. */
         if (err?.overtaken) return
-        if (!err?.notSent) return onError(isUnsupported(err) ? NO_TEMPO : err.message)
+        if (!err?.notSent) return onError(isUnsupported(err) ? noTempo(err) : err.message)
         /* Dropped: the face goes back to what the unit is on — the last of this burst it took, or its own figure. */
         setTapped(landed.current ?? null)
         dropped(err)
@@ -176,9 +185,13 @@ export default function TapTempo({ onError, onChanged, onDropped, where = 'bar' 
       dropped(notSentError())
       return
     }
-    /* A unit that has said it has no tempo the app can set: say so, send nothing. */
-    if (refusedAlready('POST', '/tempo')) {
-      onError(NO_TEMPO)
+    /*
+     * A unit that has said it has no tempo the app can set: say so, send
+     * nothing. And a VP4 from the first tap: no computer app sets one, so
+     * nothing is sent to find that out.
+     */
+    if (vp4Here() || refusedAlready('POST', '/tempo')) {
+      onError(noTempo(null))
       return
     }
     /*
@@ -280,6 +293,11 @@ export default function TapTempo({ onError, onChanged, onDropped, where = 'bar' 
   else if (!presses.current) presses.current = boxPresses('.gig-tempo')
   const { handlers: inBox, keepOpen } = presses.current ?? {}
   const typeTempo = async (n) => {
+    /* Not to a VP4, as a tap is not. */
+    if (vp4Here()) {
+      onError(VP4_NO_TEMPO)
+      return
+    }
     try {
       /* Enter is a press like a tap: the same deadline, and refused while the link is down. */
       await setTempo(n, { deadline: tapDeadline() })
@@ -289,7 +307,7 @@ export default function TapTempo({ onError, onChanged, onDropped, where = 'bar' 
       onChanged?.(`Tempo → ${n} BPM`)
     } catch (err) {
       if (err?.notSent) dropped(err)
-      else onError(isUnsupported(err) ? NO_TEMPO : err.message)
+      else onError(isUnsupported(err) ? noTempo(err) : err.message)
     }
   }
 

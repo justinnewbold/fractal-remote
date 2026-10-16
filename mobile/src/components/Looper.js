@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { AppState, Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
-import { looperControl, looperTelemetry } from '../lib/device'
+import { looperControl, looperTelemetry, vp4Here } from '../lib/device'
+import { VP4_NO_LOOPER } from '../lib/vp4-safety'
 import { thud, tick } from '../lib/feedback'
 import { useRig } from '../lib/rig'
 import { tapDeadline } from '../lib/relay-rules'
@@ -52,8 +53,20 @@ export async function stopLooper(eid) {
  * Opened from the Looper pedal on Edit and from the Looper button on the play
  * screen. Rec, Play and Stop on the top row because they are the three a foot
  * would want; the rest under them.
+ *
+ * ON A REAL VP4, ONE SENTENCE AND NO BUTTONS. No computer app can work a
+ * VP4's looper: every one of Rec, Play, Stop, Dub, Undo, Once, Rev and ½ Speed
+ * was refused, under "No loop yet. Tap Rec to start.", and the panel asked the
+ * computer where the playhead was every few hundred milliseconds for as long
+ * as it was open. So on a VP4 nothing is offered and nothing is asked; the
+ * browser's panel says the same.
  */
-export default function Looper({ block }) {
+export default function Looper(props) {
+  if (vp4Here()) return <Note>{VP4_NO_LOOPER}</Note>
+  return <LooperPanel {...props} />
+}
+
+function LooperPanel({ block }) {
   const number = useRig(ofPresetNumber)
   const eid = block?.effectId
   const key = looperKey(number, eid)

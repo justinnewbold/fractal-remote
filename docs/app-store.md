@@ -60,8 +60,16 @@ paragraph, and that copy can be empty. 1.87.11 came out on 12 October 2026
 with no promotional text at all. The run warns about any version it could not
 change.
 
+**On a VP4 it says what does not work yet** (since 15 October 2026), because
+it is the one part of the App Store page that can change before the next
+version, and the live Description there still promises a VP4 presets,
+scenes, the tuner and tap tempo (see *Description*, below). It names the
+same five things the purchase page does, and gave up "and your phone
+controls it from there" and "The demo needs no gear" for the room: the
+Description says both straight after it.
+
 ```
-REQUIRES A COMPUTER. Your Fractal plugs by USB into a Mac, PC or Linux computer running our desktop app, and your phone controls it from there. The demo needs no gear.
+REQUIRES A COMPUTER. Your Fractal plugs by USB into a computer running our desktop app. On a VP4, the app's knobs, tuner, tap tempo, channels and saving don't work yet.
 ```
 
 ### Keywords (100, commas, no spaces after them)
@@ -93,13 +101,38 @@ open (Apple's 2.3, and Google Play's rule that the listing matches the app).
 Both places say the computer again. **On Google Play it can go on whenever
 it suits:** nothing in it waits for 1.87.11 any more.
 
+**And on a VP4 it says what the app does there, and no more** (15 October
+2026). It said "FM3, FM9, Axe-Fx III, AM4 and VP4" and then promised every
+one of them presets, scenes, channels, the tuner and tap tempo, and on a VP4
+the app did little more than switch effects on and off. "I didn't know that those
+settings didn't work on the VP4. I thought that they did, so yeah, if they
+don't, we need to put that in there for now." So SUPPORTED UNITS gives the
+VP4 a line of its own, the purchase page's sentence word for word
+(VP4_SO_FAR in shared/vp4-safety.mjs; test/vp4-safety.mjs holds this file,
+the download page and both purchase pages to it): effects on and off,
+presets, and scenes once one number is set on the VP4, which are new and
+untried by us; knobs, the tuner, tap tempo, channels and saving not yet; and
+what a VP4 owner meets on the first screen, since WHAT IT DOES, just under
+it, promises presets "by name, in slot order": the list shows A1 to Z4, not
+names, the effects say neither on nor off until tapped, and Previous and Next
+go through a setlist or the stars, not slot by slot.
+"Not yet", never "coming": Apple's 2.3.1(a) forbids "promoting content or
+services that it does not actually offer", and a promise with no date is
+that. Presets and scenes on a VP4 need the computer app that carries them,
+so this goes on Google Play once that computer app is out, by hand (see
+*Google Play*, below). The App Store gets it with the next version; until
+then the promotional text, above, says what does not work. The day one of
+the five works, the sentence changes in shared/vp4-safety.mjs and here
+together.
+
 ```
 REQUIRES A COMPUTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play.
 
 Fractal Remote turns your phone into a remote control for your Fractal Audio rig. Switch presets and scenes, turn blocks on and off, change channels, tune up and tap tempo, without walking back to your unit. Build a setlist for tonight and step through it with two big buttons you can hit in the dark.
 
 SUPPORTED UNITS
-FM3, FM9, Axe-Fx III, AM4 and VP4.
+FM3, FM9, Axe-Fx III and AM4, and the VP4 in part.
+On a VP4, the app turns effects on and off, changes presets, and changes scenes once you set one number on the VP4 itself. Changing presets and scenes is new on a VP4, and nobody on our side has tried it on one yet. Knobs, the tuner, tap tempo, channels and saving don't work on a VP4 from the app yet. The app can't show the names of a VP4's presets, except the one it is on, or whether its effects are on or off, yet. On a VP4, Previous and Next go through a setlist or your starred presets, not slot by slot.
 
 TRY THE DEMO, FOR AS LONG AS YOU LIKE
 The demo is the whole app running against a simulated unit. Nothing is cut short and nothing expires. The demo needs no hardware and no computer. Controlling your real unit needs the computer described at the top.
@@ -120,7 +153,7 @@ A phone needs something between it and your Fractal unit: the desktop app. It ru
 Once the two are paired, the phone works from anywhere: the same room, the far side of the stage, or a different building.
 
 ONE PAYMENT, LIFETIME UNLOCK
-Controlling real hardware is a single purchase. It unlocks the full app on every device you own, forever, including every future update, on all supported Fractal units. No subscription.
+Controlling real hardware is a single purchase. It unlocks the full app on every device you own, forever, including every future update, on all supported Fractal units (on a VP4, what SUPPORTED UNITS says). No subscription.
 
 Fractal Remote is an independent app. It is in no way affiliated with, endorsed by, or sponsored by Fractal Audio Systems, Inc. “Fractal Audio”, “Axe-Fx”, “FM3”, “FM9”, “AM4” and “VP4” are trademarks of Fractal Audio Systems, Inc., used here only to say which hardware this app works with.
 ```
@@ -134,7 +167,9 @@ Google usually passes a text change within a day.
 
 - **Full description (4000):** the Description above, exactly. It mentions
   no Bluetooth, so it does not wait for 1.87.11. *By hand in Play Console for
-  1.87.11*, at the bottom, says the rest.
+  1.87.11*, at the bottom, says the rest. Its VP4 lines say the VP4 changes
+  presets and scenes, which is true once the computer app that does it is
+  out, so they are pasted once it is, not before.
 - **Short description (80):** the line under the app's name. **Not in
   capitals.** Google's help for this one field says "Do not use capitalization
   for emphasis", and its metadata policy lists "ALL CAPS although not part of
@@ -395,6 +430,21 @@ have pushed back, and with 1.87.11 it did not: the build was approved with the
 paragraph below as it stands. A later review could still ask. If one does, the
 choice is Justin's: show it to the review account too, with a video of it
 working, or a build without the module.
+
+**For the next version's notes: the VP4** (15 October 2026). Its presets and
+scenes reach phones by an update and the computer app, not by a build, and
+2.3.1(a) wants a new feature described in the next notes, so the next
+version's *New since 1.87.11* says it in a paragraph: on a VP4 the app now
+changes presets (a MIDI Program Change, A1 to Z4) and scenes (the VP4's own
+Scene Select message, on a number the player sets on the VP4 and types into
+a "VP4 scenes & presets" page in Settings, which shows only with a real VP4
+connected), new and not yet tried on a VP4 by us; and on a VP4 the app says
+in words, rather than doing, what it can't do there yet: knobs, the tuner,
+tap tempo, channels and saving. The review account has no VP4, so the page
+is described rather than reachable, as Bluetooth is above; the demo's VP4
+says what a real one does not do. What's New gets one line: "On a VP4, the
+app changes presets, and scenes once you set one number on the VP4." The
+Description above already says it.
 
 ### Notes for App Review, 1.87.11
 
@@ -732,13 +782,15 @@ take the build only if they insist.
 
 **3. The listing** (Grow users → Store presence → Store listings → the default
 listing), any time: nothing in it waits for 1.87.11 now. Checked on 11
-October 2026, the live listing still has both faults below, and Google
-reviews the listing along with the build, so this is cheapest done in the
-same sitting.
+October 2026, the live listing had two faults below, in the short
+description and the trademark line; checked again on 15 October, both had
+been put right on Play, and what it still lacks is the VP4 line (the last
+one). Google reviews the listing along with a
+build, so the next one is cheapest done in the same sitting.
 
 - **Short description:** the one under *Google Play: short description*,
-  which starts "Requires a computer" in ordinary letters. The live one is
-  in capitals.
+  which starts "Requires a computer" in ordinary letters. On Play since
+  before 15 October 2026.
 - **Full description:** the Description at the top of this file. It says
   nothing about Bluetooth, because customers cannot open it. It once said
   Bluetooth (beta) could take the computer's place, partly so that the
@@ -747,8 +799,15 @@ same sitting.
   declared and when it is asked for instead, and the risk that leaves is
   named under it.
 - **The trademark line** at the end has to be the one in this file, which
-  names the VP4 and Fractal Audio. The live one says "FM3, FM9, Axe-Fx and
-  AM4 are trademarks of their respective owner" and leaves the VP4 out.
+  names the VP4 and Fractal Audio. Play has had it since before 15 October
+  2026. The live App Store page still says "FM3, FM9, Axe-Fx and AM4 are
+  trademarks of their respective owner" and leaves the VP4 out; it goes
+  right with the next version, which brings this Description.
+- **The VP4 line** under SUPPORTED UNITS (15 October 2026). The live
+  listing still says "FM3, FM9, Axe-Fx III, AM4 and VP4." and promises all
+  five presets, scenes, channels, the tuner and tap tempo. Paste the whole
+  Description once the computer app that changes a VP4's presets and scenes
+  is out, since the VP4 line says it does.
 
 **4. Old testing tracks** (Test and release → Testing → Closed testing, and
 Internal testing). Google Play's public page for the app lists the camera,

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { looperControl, looperTelemetry } from '../lib/forgefx'
+import { looperControl, looperTelemetry, vp4Here } from '../lib/forgefx'
+import { VP4_NO_LOOPER } from '../../shared/vp4-safety.mjs'
 import { tick as haptic } from '../lib/feedback'
 import { tapDeadline } from '../lib/remote'
 import {
@@ -40,8 +41,17 @@ export async function stopLooper(eid) {
  *
  * Opened from the Looper pedal on Edit and from the Looper button on Play —
  * the same panel the phone draws, from the same rules in shared/looper.mjs.
+ *
+ * On a real VP4, one sentence and no buttons, as on the phone: no computer
+ * app can work a VP4's looper, so every button was refused, and the panel
+ * asked where the playhead was for as long as it was open.
  */
-export default function Looper({ block, presetNumber }) {
+export default function Looper(props) {
+  if (vp4Here()) return <p className="hint">{VP4_NO_LOOPER}</p>
+  return <LooperPanel {...props} />
+}
+
+function LooperPanel({ block, presetNumber }) {
   const eid = block?.effectId
   const key = looperKey(presetNumber, eid)
   const [latch, setLatch] = useState(() => latches.get(key) || IDLE_LATCH)

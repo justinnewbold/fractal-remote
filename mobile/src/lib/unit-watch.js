@@ -77,3 +77,48 @@ export const countQuiet = (quiet, said) => (said === 'answering' ? 0 : (Number(q
 
 /** Whether that run is long enough to stop claiming a unit is there. */
 export const unitGone = (quiet) => (Number(quiet) || 0) >= STRIKES
+
+/**
+ * A VP4 IS ASKED WHICH SCENE IT IS ON, NOT WHICH PRESET.
+ *
+ * A VP4 cannot say which preset it is on: every computer app answers GET
+ * /preset for one with a 501, which both apps take as the quiet "can't
+ * tell" (shared/vp4-safety.mjs). As the probe above, that is a quiet answer
+ * on every tick, so the browser handed over to a whole re-read every second
+ * tick for as long as a page was open — every 30 seconds at the computer and
+ * every minute from away. Each one asked the unit who it is and what
+ * firmware it runs all over again, and on the computer apps out there now,
+ * which fall back to the sweep that froze an AM4 whenever the one safe read
+ * of a VP4 is late, it read the chain too. And it wrote "the unit stopped
+ * answering" in the log every time, which was not true. The phone wrote the
+ * same line.
+ *
+ * GET /scene is that one safe read on every computer app, old and new: the
+ * record VP4-Edit itself polls, and nothing else. So a VP4 is asked that,
+ * and only a read that fails, or names no scene, is quiet. A computer app
+ * from before the fixed VP4 driver answers scene 1 for a read the VP4 did
+ * not answer, so behind one of those a VP4 that has stopped answering is not
+ * caught by this; it is caught by the next tap. That costs less than reading
+ * it from scratch twice a minute.
+ */
+export function sceneProbeSays({ scene, failed = false } = {}) {
+  if (failed) return 'quiet'
+  const i = scene?.index
+  return Number.isInteger(i) && i >= 0 ? 'answering' : 'quiet'
+}
+
+/**
+ * One timed check, at either end: `{ said, heard }`. `heard` is the preset
+ * the unit named, for the screen to follow one changed at the front panel —
+ * never on a VP4, which names none. `currentPreset` and `getScene` are that
+ * end's own reads; a VP4 is asked only the second.
+ */
+export async function probeUnit({ vp4 = false, currentPreset, getScene } = {}) {
+  try {
+    if (vp4) return { said: sceneProbeSays({ scene: await getScene() }), heard: null }
+    const heard = await currentPreset()
+    return { said: probeSays({ preset: heard }), heard }
+  } catch {
+    return { said: probeSays({ failed: true }), heard: null }
+  }
+}

@@ -38,6 +38,7 @@ import Setlists from './src/screens/Setlists'
 import Stage from './src/screens/Stage'
 import { hydrate, sync } from './src/lib/store'
 import { keepSetlistsInStep } from './src/lib/cloudSetlists'
+import { keepVp4SetupIn } from './src/lib/device'
 import { clearLinkFault, useRig } from './src/lib/rig'
 import { keepLog } from './src/lib/logKeep'
 import { installCrashCapture } from './src/lib/debugLog'
@@ -48,6 +49,9 @@ import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
 import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
 import { shouldAskToPay } from './src/lib/unlock-rule'
+
+/* The VP4's Scene Select number and MIDI channel live in the phone's store; the device layer reads them from there (lib/vp4-safety). */
+keepVp4SetupIn(sync)
 
 /**
  * Fractal Remote.

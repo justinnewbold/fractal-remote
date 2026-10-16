@@ -10,7 +10,25 @@
 //   - /preset/store commits to a slot even when capabilities report supportsSave:false
 
 import { unitMetronome, unitMetronomeRequest } from '../../shared/metronome.mjs'
-import { rememberedRefusal, unsupportedMemo } from '../../shared/unsupported.mjs'
+import { rememberedRefusal as refusalFromMemory, unsupportedMemo } from '../../shared/unsupported.mjs'
+import {
+  VP4_CANT_YET,
+  holdVp4Setup,
+  isVp4,
+  readVp4Setup,
+  vp4NameFromGrid,
+  vp4SceneNamesFromGrid,
+  vp4ScreenUnit,
+  vp4PresetFields,
+  vp4PresetGate,
+  vp4Refusal,
+  vp4Route,
+  vp4Said,
+  vp4SceneFields,
+  vp4SceneGate,
+  vp4SceneMissed,
+  vp4SceneUnconfirmed
+} from '../../shared/vp4-safety.mjs'
 import { logDebug } from './debugLog.js'
 import { EXCLUDED_BLOCKS, safeParams } from './guardrails.js'
 import { paletteFor } from './palette.js'
@@ -27,7 +45,7 @@ import { toNormalized } from './scale.js'
 import { withLineage } from './lineage.js'
 import { remoteActive, remoteRequest, subscribeHostSeen, subscribeRemoteEvents, subscribeRemoteState } from './remote.js'
 import { linkIsDown, tapsRelayed } from './tapGate.js'
-import { notSentError } from '../../shared/relay-rules.mjs'
+import { notSentError, sendsOnce } from '../../shared/relay-rules.mjs'
 import {
   rosterCache,
   helpTextCache,
@@ -284,6 +302,26 @@ async function request(path, options = {}) {
   if (!mock && options.deadline && linkIsDown()) return Promise.reject(new ForgeError(NOT_SENT_WORDS, { cause: notSentError() }))
   if (!mock && refused.known(method, path)) return Promise.reject(rememberedRefusal(method, path))
   /*
+   * A VP4 IS ASKED FOR ITS CHAIN THE SAFE WAY, AND NOT FOR ITS KNOBS OR A SAVE
+   * AT ALL. On the computer apps out there now, the chain read and a block's
+   * knobs send a VP4 the sweep that froze an AM4, and a save writes over Y1
+   * whatever slot was picked. The chain comes off GET /preset/grid instead,
+   * which reads the one record VP4-Edit polls (on those old computers a grid
+   * read whose record does not come still falls back to the sweep: fewer
+   * sweeps, not none); the rest is refused here in words. The phone does the
+   * same at its own seam. See shared/vp4-safety.mjs.
+   */
+  const vp4 = !mock && unitIsVp4 ? vp4Route(method, path) : null
+  if (vp4?.refuse) return Promise.reject(new ForgeError(vp4.refuse, { cause: vp4Refusal(vp4.refuse) }))
+  if (vp4?.local) return Promise.resolve(vp4.local)
+  if (vp4?.path)
+    return request(vp4.path, options).then((grid) => {
+      /* The name of the preset the VP4 is on rides on the same record: see vp4PresetName. */
+      vp4Name = vp4NameFromGrid(grid)
+      vp4Scenes = vp4SceneNamesFromGrid(grid)
+      return vp4.answer(grid)
+    })
+  /*
    * A dump that arrived garbled is asked for again before anyone sees it.
    * lib/retry.js says why, and which requests may be asked twice. Here
    * because this is the one place every read passes through, at the Mac or
@@ -295,7 +333,9 @@ async function request(path, options = {}) {
   return withRetry((again) => requestOnce(path, again > 0 && options.deadline ? { ...options, went: true } : options), {
     method: options.method || 'GET',
     path,
-    deadline: remoteActive() || tapsRelayed() ? options.deadline : undefined
+    deadline: remoteActive() || tapsRelayed() ? options.deadline : undefined,
+    /* A VP4's preset or scene, whose garbled answer means it went: not sent again (shared/relay-rules sendsOnce). */
+    once: sendsOnce(options.method || 'GET', path, options.body)
   }).catch(
     (err) => {
       // Every request the app makes comes through here, so this is the one
@@ -306,9 +346,29 @@ async function request(path, options = {}) {
         logDebug('unit', `${options.method || 'GET'} ${path} failed`, whyItFailed(err))
       }
       if (!mock) refused.heard(method, path, err)
-      throw err
+      throw saidOnVp4(method, path, err)
     }
   )
+}
+
+/*
+ * A VP4'S "UNSUPPORTED", IN WORDS: the phone's rule (shared/vp4-safety.mjs
+ * vp4Said), fresh or from memory. Still a 501, still remembered and still
+ * read as "this unit cannot" by everything that asks; only the sentence is
+ * new. Anything else, and anything on another unit, goes as it was.
+ */
+/* The memo's answer, in a VP4's words on a VP4: request() asks for it by the memo's own name. */
+const rememberedRefusal = (method, path) => saidOnVp4(method, path, refusalFromMemory(method, path))
+function saidOnVp4(method, path, err) {
+  if (mock || !unitIsVp4) return err
+  const words = vp4Said(method, path, err)
+  if (words === err) return err
+  const out = new ForgeError(words.message, { status: 501, cause: err })
+  out.unsupported = true
+  out.vp4 = true
+  if (words.remembered) out.remembered = true
+  if (words.quiet) out.quiet = true
+  return out
 }
 
 async function requestOnce(path, options = {}) {
@@ -460,6 +520,59 @@ export const currentDeviceSlug = () => unitSlug
  */
 let lastCaps = null
 
+/*
+ * And whether it is a VP4, which this end does not ask for its chain the
+ * dangerous way, for its knobs, or for a save: see shared/vp4-safety.mjs and
+ * request(). Never in the demo.
+ */
+let unitIsVp4 = false
+
+/*
+ * WHERE THIS BROWSER KEEPS THE PLAYER'S VP4 NUMBERS: its own storage, per
+ * unit (shared/vp4-safety.mjs). A browser that refuses storage has none, and
+ * a VP4 is then simply not set up.
+ */
+const vp4Storage = () => {
+  try {
+    return globalThis.localStorage ?? null
+  } catch {
+    return null
+  }
+}
+/** The player's Scene Select number and MIDI channel for the VP4, as kept in this browser. */
+export const vp4Setup = () => readVp4Setup(vp4Storage())
+/** Whether the unit is a VP4 (never the demo's). */
+export const vp4Here = () => unitIsVp4
+/*
+ * THE NAME OF THE PRESET A VP4 IS ON, off the grid answer its chain is read
+ * from — the phone's rule (mobile/src/lib/device.js vp4PresetName). A VP4
+ * cannot say which preset it is on, so this end showed "Untitled" over a
+ * preset with a name. Each chain read leaves it here; deviceState puts it on
+ * the preset on screen.
+ */
+let vp4Name = null
+/* And its scene names, off the same answer (shared/vp4-safety.mjs vp4SceneNamesFromGrid): the phone's rule (mobile/src/lib/device.js vp4SceneNames). */
+let vp4Scenes = null
+/** The name the last VP4 chain read carried, or null. */
+export const vp4PresetName = () => (unitIsVp4 ? vp4Name : null)
+/** The scene names the last VP4 chain read carried (blank where unnamed), or null. */
+export const vp4SceneNames = () => (unitIsVp4 && vp4Scenes ? [...vp4Scenes] : null)
+/** What the computer said this VP4 can do, or null when the unit is not a VP4. */
+export const vp4Capabilities = () => (unitIsVp4 ? lastCaps : null)
+
+/*
+ * NO WALK THROUGH A VP4'S SCENES. The scene map, Copy a scene, an on/off or a
+ * knob aimed at another scene, and a plan's scenes all go to each scene in
+ * turn and read its on/offs, which a VP4 never reports. So on one the map
+ * drew every effect On in every scene, a guess; the copy copied nothing and
+ * said so; and each was a run of scene changes on a pedal nobody was
+ * watching — "Read scenes" sent five Scene Select messages from one click.
+ * The screens do not offer them on a VP4 (App.jsx's Scenes sheet, as the
+ * phone's Edit); this is the second guard, before anything is sent, for any
+ * door that asks.
+ */
+export const vp4SceneWalk = () => (!mock && unitIsVp4 ? new ForgeError(VP4_CANT_YET, { cause: vp4Refusal(VP4_CANT_YET) }) : null)
+
 /**
  * Full capability report: grid size, scene count, preset count, what writes are
  * allowed — and what firmware the unit is running.
@@ -480,10 +593,15 @@ let lastCaps = null
 export const detect = async () => {
   /* A unit detected afresh is asked everything afresh: see shared/unsupported.mjs. */
   refused.forget()
-  const res = mock ? (await tick(), mock.detect()) : await request('/device/detect')
+  let res = mock ? (await tick(), mock.detect()) : await request('/device/detect')
   const label = res?.short || res?.name
   if (label) unitSlug = deviceSlug(label)
   lastCaps = res?.capabilities ?? null
+  unitIsVp4 = !mock && isVp4(res)
+  vp4Name = null
+  vp4Scenes = null
+  /* A VP4's screens offer no channels: nothing can switch one from the app (shared/vp4-safety.mjs vp4ScreenCaps). What the computer said stays in lastCaps. */
+  if (unitIsVp4) res = vp4ScreenUnit(res)
   if (mock) return res
   try {
     const whole = await request('/device')
@@ -635,7 +753,8 @@ export const readRestoreProgress = () => readHostDoc(restoreProgressKey())
  * repeat it. See lib/presetName.js.
  */
 export const currentPreset = async () => {
-  const res = mock ? (await tick(), mock.preset()) : await request('/preset')
+  /* A VP4 cannot say which preset it is on (`quiet`, shared/vp4-safety.mjs): no answer, as a read that came back empty — every caller already reads that as "not known", and none raises it. */
+  const res = mock ? (await tick(), mock.preset()) : await request('/preset').catch((err) => (err?.quiet ? null : Promise.reject(err)))
   if (res && typeof res.name === 'string') {
     // The fact travels with the cleaning: past here nobody can tell an empty
     // slot from a preset somebody made and never named, and those read
@@ -1386,6 +1505,9 @@ export async function applyChanges(changes, onProgress) {
 export async function applyScenes(scenes, onProgress, presetNumber = null) {
   const failures = []
   if (!scenes?.length) return failures
+  /* Not through a VP4's scenes: see vp4SceneWalk. Nothing sent, and said as the one failure. */
+  const noWalk = vp4SceneWalk()
+  if (noWalk) return [noWalk.message]
 
   /*
    * Every name this pass lands, so the phone can read them back.
@@ -1505,7 +1627,25 @@ export async function applyScenes(scenes, onProgress, presetNumber = null) {
 
 /** Load a preset by slot number on the hardware. */
 export const selectPreset = (number, opts) =>
-  mock ? tick().then(() => mock.selectPreset(number)) : request('/preset/select', { method: 'POST', body: JSON.stringify({ number }), ...tapOf(opts) })
+  mock
+    ? tick().then(() => mock.selectPreset(number))
+    : unitIsVp4
+      ? vp4Preset(number, opts)
+      : request('/preset/select', { method: 'POST', body: JSON.stringify({ number }), ...tapOf(opts) })
+
+/*
+ * A VP4'S PRESET, BY PROGRAM CHANGE: the phone's rule (mobile/src/lib/device.js
+ * vp4Preset). The channel travels as a field older computer apps ignore; on
+ * one too old to send it, nothing is sent and the words say to update it.
+ * `landed: false` in the answer is the computer saying it sent it and could
+ * not see the VP4 change — deviceState.loadPreset says so and does not treat
+ * it as a preset that landed.
+ */
+async function vp4Preset(number, opts) {
+  const gate = vp4PresetGate(lastCaps)
+  if (gate) throw new ForgeError(gate, { cause: vp4Refusal(gate) })
+  return request('/preset/select', { method: 'POST', body: JSON.stringify({ number, ...vp4PresetFields(vp4Setup()) }), ...tapOf(opts) })
+}
 
 /** Name of a stored preset, without loading it. */
 export const presetName = async (number) =>
@@ -1648,7 +1788,37 @@ export const getScene = async () => (mock ? (await tick(), mock.getScene()) : re
 
 /** Switch scenes. The FM3 has eight. */
 export const setScene = (index, opts) =>
-  mock ? tick().then(() => mock.setScene(index)) : request('/scene', { method: 'POST', body: JSON.stringify({ index }), ...tapOf(opts) })
+  mock
+    ? tick().then(() => mock.setScene(index))
+    : unitIsVp4
+      ? vp4Scene(index, opts)
+      : request('/scene', { method: 'POST', body: JSON.stringify({ index }), ...tapOf(opts) })
+
+/*
+ * A VP4'S SCENE, ON THE NUMBER THE PLAYER SET ON IT: the phone's rule
+ * (mobile/src/lib/device.js vp4Scene). Nothing is sent without a number, on
+ * a computer app that cannot, or on a number held after a scene the VP4 did
+ * not show. A scene sent and not shown throws the computer's words, and the
+ * number is held in this browser until the player saves it again.
+ */
+async function vp4Scene(index, opts) {
+  const setup = vp4Setup()
+  const gate = vp4SceneGate(setup, lastCaps)
+  if (gate) throw new ForgeError(gate, { cause: vp4Refusal(gate) })
+  let res
+  try {
+    res = await request('/scene', { method: 'POST', body: JSON.stringify({ index, ...vp4SceneFields(setup) }), ...tapOf(opts) })
+  } catch (err) {
+    if (vp4SceneMissed(null, err, setup)) holdVp4Setup(vp4Storage(), undefined, setup.savedAt)
+    throw err
+  }
+  if (vp4SceneMissed(res, null, setup)) {
+    holdVp4Setup(vp4Storage(), undefined, setup.savedAt)
+    const words = res.message || vp4SceneUnconfirmed(index, setup.sceneCc, setup.midiChannel)
+    throw new ForgeError(words, { cause: vp4Refusal(words) })
+  }
+  return res
+}
 
 export const setSceneName = (index, name) =>
   mock ? tick().then(() => mock.setSceneName(index, name)) : request('/scene/name', { method: 'POST', body: JSON.stringify({ index, name }) })
@@ -2075,6 +2245,16 @@ export const namesCostADump = () => nameRouteStubbed
  * declined to talk about, and is worth asking again rather than remembering.
  */
 export async function storedName(number) {
+  /*
+   * NOT ON A VP4: no read names a VP4 preset it is not on, and its "which
+   * name" answers null (shared/vp4-safety.mjs vp4Route). That null went
+   * through cleanPresetName as '' and on to GET /presets/n/summary, which a
+   * VP4 has none of: a 501, so deepNamesOff, so `known` — and every slot was
+   * learned as "Empty", kept, and published to the computer's store, where
+   * phones drew 104 rows of "Empty" over presets that are not, with no
+   * Refresh on a VP4 to clear them. Not known, and nothing asked.
+   */
+  if (unitIsVp4) return { name: '', known: false }
   let quick = null // null = the route didn't answer at all
   if (!nameRouteStubbed) {
     try {
@@ -2119,6 +2299,9 @@ const NAME_STORE = 'fractal.presetNames'
 let nameCache = new Map()
 let namesFor = null
 
+/** A VP4 slot's "empty" (blank, or the unit's empty-slot marker): nothing can have read one, so it is "not known", never "empty". */
+const vp4NoName = (name) => unitIsVp4 && !cleanPresetName(typeof name === 'string' ? name : '')
+
 /** The unit these names belong to. A demo scan is never confused for a real one. */
 const nameOwner = () => (mock ? `${currentDeviceSlug()}:demo` : currentDeviceSlug())
 
@@ -2130,7 +2313,8 @@ function restoreNames() {
   resetNameRoutes()
   try {
     const all = JSON.parse(localStorage.getItem(NAME_STORE) || '{}')
-    for (const [n, name] of Object.entries(all[owner] || {})) nameCache.set(Number(n), name)
+    /* A VP4's "empty" is one this app wrote before it knew better (see storedName): not believed. */
+    for (const [n, name] of Object.entries(all[owner] || {})) if (!vp4NoName(name)) nameCache.set(Number(n), name)
   } catch {
     // A full or disabled localStorage costs a re-scan, nothing more.
   }
@@ -2306,6 +2490,8 @@ export async function importHostNames() {
   for (const [key, name] of Object.entries(doc)) {
     const number = Number(key)
     if (!Number.isInteger(number) || typeof name !== 'string') continue
+    /* Nor the computer's copy of one: a page left open from before wrote '' for every VP4 slot there. */
+    if (vp4NoName(name)) continue
     if (nameCache.get(number) === name) continue
     /* The host's "empty" never wipes out a name: a copy taken before a preset
        was saved said the slot was empty for ever after, over the name the unit
@@ -2679,6 +2865,9 @@ export function forgetSceneNames(number) {
  * is fine at a bench and not fine mid-song, so callers warn before doing it.
  */
 export async function readAllScenes(count, onProgress) {
+  /* Not on a VP4, before anything is sent: see vp4SceneWalk. */
+  const noWalk = vp4SceneWalk()
+  if (noWalk) throw noWalk
   const started = (await getScene())?.index ?? 0
   const scenes = []
 
@@ -2713,6 +2902,8 @@ export async function readAllScenes(count, onProgress) {
  * so setting them means being in that scene when the write lands.
  */
 export async function setSceneBlock(sceneIndex, eid, { bypassed, channel } = {}) {
+  const noWalk = vp4SceneWalk()
+  if (noWalk) throw noWalk
   const started = (await getScene())?.index ?? 0
   try {
     if (started !== sceneIndex) {
@@ -2738,6 +2929,8 @@ export async function setSceneBlock(sceneIndex, eid, { bypassed, channel } = {})
  * was actually written.
  */
 export async function setSceneParam(sceneIndex, eid, paramId, value, param) {
+  const noWalk = vp4SceneWalk()
+  if (noWalk) throw noWalk
   const started = (await getScene())?.index ?? 0
   try {
     if (started !== sceneIndex) {

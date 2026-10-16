@@ -224,6 +224,13 @@ export const FILES = [
   { source: '../shared/bluetooth-gear.mjs', target: '../mobile/src/lib/bluetooth-gear.js' },
   /* What the unit said it cannot do, so it is not asked again. */
   { source: '../shared/unsupported.mjs', target: '../mobile/src/lib/unsupported.js' },
+  /*
+   * What neither end asks of a VP4: its chain the dangerous way, its knobs,
+   * or a save. A phone that asked for one of them where the browser did not
+   * would be the one sending a pedal nobody is watching the sweep that froze
+   * an AM4. See shared/vp4-safety.mjs.
+   */
+  { source: '../shared/vp4-safety.mjs', target: '../mobile/src/lib/vp4-safety.js' },
   /* The metronome: where it clicks, and the number that switches each unit's. */
   { source: '../shared/metronome.mjs', target: '../mobile/src/lib/metronome-rules.js' },
   /*
@@ -462,8 +469,16 @@ export const FILES = [
    */
   { source: '../src/data/factory-presets.json', target: '../mobile/src/data/factory-presets.json', raw: true },
   { source: '../src/lib/factoryPresets.js', target: '../mobile/src/lib/factoryPresets.js' },
-  /* The five units the demo can be, and what is real about each. */
-  { source: '../src/lib/demoUnits.js', target: '../mobile/src/lib/demoUnits.js' },
+  /*
+   * The five units the demo can be, and what is real about each. Rendered for
+   * its one import: what the demo's VP4 says about a real one is worded in
+   * shared/vp4-safety.mjs, whose phone copy sits beside this one.
+   */
+  {
+    source: '../src/lib/demoUnits.js',
+    target: '../mobile/src/lib/demoUnits.js',
+    render: (text) => banner('../src/lib/demoUnits.js') + text.replace("from '../../shared/vp4-safety.mjs'", "from './vp4-safety.js'")
+  },
 
   /*
    * Where a block sits, and how that becomes something the unit will accept.

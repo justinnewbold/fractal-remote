@@ -59,3 +59,20 @@ export function presetLabel(preset) {
   if (preset.empty || isEmptySlotName(preset.name)) return 'Empty'
   return (typeof preset.name === 'string' ? preset.name.trim() : '') || 'Untitled'
 }
+
+/**
+ * The line under "Choose a preset": which one is loaded, by its number and
+ * its name — "004 · Edge of Breakup is loaded".
+ *
+ * Only by a number there is. A VP4 never says which preset it is on, so its
+ * number is null, and the line printed the developer's word for nothing:
+ * "null · Big Room is loaded", before any pick and after a refused or unseen
+ * one — once its name came off the grid, the line was reached at all. A
+ * number the unit could not say (-1, too busy loading) is the same: the name
+ * alone, which is still true.
+ */
+export function loadedNote(preset) {
+  if (!preset) return null
+  const name = (typeof preset.name === 'string' ? preset.name.trim() : '') || 'Untitled'
+  return Number.isInteger(preset.number) && preset.number >= 0 ? `${String(preset.number).padStart(3, '0')} · ${name} is loaded` : `${name} is loaded`
+}

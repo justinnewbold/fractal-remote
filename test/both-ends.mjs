@@ -275,7 +275,8 @@ export const AREAS = [
         does: 'show whether a block is bypassed, and switch it',
         web: null,
         phone: 'Bypassed',
-        also: ['Engaged'],
+        /* "Turn it off" on a real VP4, whose on/off nothing reads: the press says what it does, not a state nobody read (shared/vp4-safety.mjs). */
+        also: ['Engaged', 'Turn it off'],
         why: 'the browser says a block’s on or off on the play screen instead, beside the block'
       },
       {
@@ -1115,6 +1116,17 @@ export function run(test) {
       assert.ok(norm(phone).includes(line), `the phone paywall no longer says: ${line}`)
       assert.ok(norm(page).includes(line), `the web unlock page does not say what the phone says: ${line}`)
     }
+    /*
+     * AND WHAT A VP4 GETS OF THAT LIST, under it at both ends, from one
+     * sentence. "I didn't know that those settings didn't work on the VP4 ...
+     * we need to put that in there for now." The VP4 is named above among the
+     * units this unlocks, so the line comes with it; shared/vp4-safety.mjs
+     * words it, and test/vp4-safety.mjs holds the words to what the app does.
+     */
+    assert.match(phone, /import \{ VP4_SO_FAR \} from '\.\.\/lib\/vp4-safety'/, 'the phone paywall does not take its VP4 line from the shared rule')
+    assert.match(web, /import \{ VP4_SO_FAR \} from '\.\.\/shared\/vp4-safety\.mjs'/, 'the web unlock page does not take its VP4 line from the shared rule')
+    assert.match(phone, /and so much more\.\s*<\/Text>[\s\S]{0,1200}?<Text[^>]*>\s*\{VP4_SO_FAR\}\s*<\/Text>\s*<\/View>/, 'the phone paywall does not say what a VP4 gets, under the list of what the app does')
+    assert.match(page, /and so much more\.\s*<\/p>[\s\S]{0,300}?<p className="hint">\{VP4_SO_FAR\}<\/p>/, 'the web unlock page does not say what a VP4 gets, under the list of what the app does')
     /* The Setup row is the phone's row, word for word. */
     const settings = read('mobile/src/screens/Settings.js')
     assert.match(settings, /title="Unlock the full version"/, 'the phone renamed its unlock row')
@@ -2418,7 +2430,10 @@ export function run(test) {
     const webAhead = line(gig, 'const ahead = nextWords(')
     /* Each end's preset list as it stands: the phone's (presetNames.nameOf, what Presets draws), the browser's (the slots App hands the picker and Play). */
     assert.match(stage, /import \{ nameOf, useNamesHeard \} from '\.\.\/lib\/presetNames'/)
-    assert.match(read('mobile/src/screens/Presets.js'), /const name = nameOf\(n\)/, 'the phone’s preset list reads its names from somewhere else')
+    /* nameOf, but for the row of the preset a real VP4 is on, which takes the name its record carried (test/vp4-safety.mjs): never a slot Next loads. */
+    const presets = read('mobile/src/screens/Presets.js').replace(/\s+/g, ' ')
+    assert.match(presets, /const name = nameHere\(n\)/, 'the phone’s preset list reads its names from somewhere else')
+    assert.match(presets, /const nameHere = \(n\) => \(vp4Playing !== null && n === preset\.number \? vp4Playing : nameOf\(n\)\)/, 'the phone’s preset list reads its names from somewhere else')
     assert.match(stage, /\bnextWords,?\n[\s\S]*?\} from '\.\.\/lib\/lists'/, 'the phone works out its line some other way than the shared rule')
     assert.match(gig, /\bnextWords,\n[\s\S]*?\} from '\.\.\/lib\/setlists'/, 'the browser works out its line some other way than the shared rule')
     /* lib/lists hands the phone the generated copy of the browser's own file. */

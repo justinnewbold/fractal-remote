@@ -15,6 +15,9 @@ import { color } from '../lib/theme'
  * takes a press away from the screen under it. Drawn only while the setting
  * says the phone clicks and there is a tempo to click at.
  */
+/** Above the top bar's 3 (components/TopBar), which is the highest thing beside it. */
+const BEAT_Z = 10
+
 export default function MetronomeBeat({ bpm }) {
   const glow = useRef(new Animated.Value(0)).current
   const onBeat = useCallback(() => {
@@ -31,10 +34,17 @@ export default function MetronomeBeat({ bpm }) {
   return (
     <>
       {clicking ? <StayAwake /> : null}
+      {/*
+        OVER THE TOP BAR TOO. It was over everything by being drawn last, and
+        the bar is lifted now (zIndex 3, so its notes are drawn over the screen
+        under it): this goes higher, or the bar covered the top of the frame.
+        No elevation: on Android that casts a shadow off a frame with nothing
+        inside it, and the bar has none for this to clear.
+      */}
       <Animated.View
         pointerEvents="none"
         accessible={false}
-        style={[StyleSheet.absoluteFill, { borderWidth: 4, borderRadius: round, borderCurve: 'continuous', borderColor: color.ok, opacity: glow }]}
+        style={[StyleSheet.absoluteFill, { borderWidth: 4, borderRadius: round, borderCurve: 'continuous', borderColor: color.ok, opacity: glow, zIndex: BEAT_Z }]}
       />
     </>
   )

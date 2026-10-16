@@ -5,7 +5,8 @@ import { useKeepAwake } from 'expo-keep-awake'
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { bandTop, tileWidth as tileWidthIn } from '../lib/tileGrid'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
-import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot } from '../lib/device'
+import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot, vp4Here } from '../lib/device'
+import { VP4_ON_OFF_UNKNOWN, vp4StepWords } from '../lib/vp4-safety'
 import {
   applySong,
   listsFor,
@@ -39,6 +40,7 @@ import {
   refreshAll,
   awayNow,
   rereadSceneNames,
+  sayFault,
   songLate,
   tapTempo,
   useRig,
@@ -69,6 +71,7 @@ import { shortBlock } from '../lib/shortName'
 import { useWatchBridge, watchHow, watchPaired } from '../lib/watchBridge'
 import { findLooper } from '../lib/looper'
 import UnlockOffer from '../components/UnlockOffer'
+import Vp4DemoNote from '../components/Vp4DemoNote'
 import OnlyOnThisPhone from '../components/OnlyOnThisPhone'
 import Toast, { useStillNews } from '../components/Toast'
 import { droppedLeft, faultLeft } from '../lib/fault-rule'
@@ -354,6 +357,18 @@ export default function Stage({
    */
   const looperHere = findLooper(allBlocks)
   const looperTile = !chainNow.elsewhere && !!looperHere
+  /*
+   * ON A REAL VP4 IT OPENS ONE SENTENCE, not Rec and Play. No computer app can
+   * work a VP4's looper (each of its eight buttons was refused, "The app can't
+   * do that on a VP4 yet"), and nothing reads a VP4's on/off, so the pedal was
+   * drawn lit, as if on, right above "The app can't see whether a VP4's
+   * effects are on or off". So on a VP4 it is drawn like the other pedals:
+   * lit only when the VP4's on/off is known to be on, with no Rec and no Play,
+   * and a tap opens the sheet with lib/vp4-safety VP4_NO_LOOPER in it
+   * (components/Looper). The browser's Play does the same.
+   */
+  const vp4Looper = looperTile && vp4Here()
+  const looperState = typeof looperHere?.bypassed === 'boolean' ? (looperHere.bypassed ? 'Off' : 'On') : '\u00a0'
   const tiles = blocks.length + (looperTile ? 1 : 0)
   const heldGrid = useRef({ count: 0, height: 0 })
   if (!chainNow.elsewhere && tiles > 0 && blockGrid > 0) heldGrid.current = { count: tiles, height: blockGrid }
@@ -539,10 +554,22 @@ export default function Stage({
    * many slots the unit reported and greys the button rather than sending a
    * press the unit is going to refuse.
    */
+  /*
+   * AND NOT SLOT BY SLOT ON A VP4. It cannot say which preset it is on, so
+   * "the next slot" is a guess from the last one this phone picked, and one
+   * changed at its footswitch since makes Next land somewhere nobody meant.
+   * A setlist or the stars know their own order and send the preset itself,
+   * so those still step. With neither, the buttons say why (VP4_NO_STEP, or
+   * on a computer too old for any of it the update words: vp4StepWords)
+   * rather than doing nothing. Never in the demo, whose VP4 knows.
+   */
+  const noSlotSteps = vp4Here()
   const landing = (by) =>
     order
       ? stepTarget({ source, current: preset?.number, delta: by, favourites, lists })
-      : stepSlot(preset?.number, by, caps)
+      : noSlotSteps
+        ? null
+        : stepSlot(preset?.number, by, caps)
 
   /*
    * And the pedals of where each would land, read while nothing else is going
@@ -589,6 +616,8 @@ export default function Stage({
     if (next === null) {
       // The end of the list. Wrapping round to slot 0 mid-set is worse than a
       // button that does nothing, so it does nothing and says so in the case.
+      /* And on a computer that can't change a VP4's presets at all, only that (vp4StepWords). */
+      if (!order && noSlotSteps) sayFault(vp4StepWords(caps))
       nope()
       return
     }
@@ -719,6 +748,8 @@ export default function Stage({
             an eye starts. A fault is not in here any more: it floats over the
             screen (the Toast at the end), so it never moves what is under it. */}
         <UnlockOffer onUnlock={onUnlock} />
+        {/* The demo's VP4 says what a real one doesn't do from the app yet, once, as the browser's banner does. */}
+        <Vp4DemoNote />
         {/* Paid in the demo with no account yet: see the component. */}
         <OnlyOnThisPhone onAccount={onAccount} />
         {conflict ? <Note tone="fault">{conflict}</Note> : null}
@@ -967,7 +998,10 @@ export default function Stage({
               /* Read ahead of the switch, on or off not said yet: dim and no
                  word, so the ones that are on light up rather than half of
                  them flipping from On to Off. */
-              const unknown = chainNow.outline && typeof block.bypassed !== 'boolean'
+              /* And every pedal of a real VP4 the player has not tapped: nothing
+                 reads a VP4's on/off (lib/vp4-safety VP4_ON_OFF_UNKNOWN). Its
+                 tap still goes — it turns the effect off first. */
+              const unknown = (chainNow.outline || vp4Here()) && typeof block.bypassed !== 'boolean'
               const engaged = !unknown && !block.bypassed
               const state = unknown ? '\u00a0' : engaged ? 'On' : 'Off'
               return (
@@ -1016,12 +1050,12 @@ export default function Stage({
                 key="looper"
                 label={shortBlock(looperHere)}
                 icon={showIcons ? blockIcon('looper') : undefined}
-                topLeft="Rec"
-                topRight="Play"
-                pair
+                topLeft={vp4Looper ? looperState : 'Rec'}
+                topRight={vp4Looper ? undefined : 'Play'}
+                pair={!vp4Looper}
                 fill={blockColor('looper').fill}
                 ink={blockColor('looper').ink}
-                on={!looperHere.bypassed}
+                on={vp4Looper ? looperHere.bypassed === false : !looperHere.bypassed}
                 height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
                 onPress={() => setLooping(true)}
                 onLongPress={() => setLooping(true)}
@@ -1029,6 +1063,11 @@ export default function Stage({
               />
             ) : null}
           </View>
+          {/* Why a real VP4's pedals say nothing until tapped. Always there on
+              a VP4, so nothing moves when it would go; the browser says the same. */}
+          {vp4Here() && blocks.length && !chainNow.elsewhere ? (
+            <Text style={{ color: color.silkDim, fontSize: font.small }}>{VP4_ON_OFF_UNKNOWN}</Text>
+          ) : null}
 
         </View>
 
@@ -1054,7 +1093,7 @@ export default function Stage({
               /* A blank line of the same height as Next's, so the two words sit level. */
               under=""
               height={foot}
-              disabled={landing(-1) === null}
+              disabled={landing(-1) === null && !(noSlotSteps && !order)}
               onPress={() => step(-1)}
               style={dimmed}
             />
@@ -1076,7 +1115,7 @@ export default function Stage({
               under={ahead.shown}
               accessibilityLabel={ahead.said}
               height={foot}
-              disabled={landing(1) === null}
+              disabled={landing(1) === null && !(noSlotSteps && !order)}
               onPress={() => step(1)}
               style={dimmed}
             />

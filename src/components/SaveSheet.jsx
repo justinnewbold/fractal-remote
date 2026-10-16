@@ -40,7 +40,7 @@ export const holdsWords = (check, target) =>
       ? `whatever is in slot ${target} — it couldn’t be read`
       : check.name || 'an empty slot'
 
-export function SaveFooter({ preset, slot, onSave, onCancel, busy, saving, remote, queued, slots, deviceSlots, check }) {
+export function SaveFooter({ preset, slot, onSave, onCancel, busy, saving, remote, queued, slots, deviceSlots, check, refused = null }) {
   const problem = slotProblem(slot, deviceSlots)
   const target = problem ? NaN : slot === '' ? preset?.number : Number(slot)
   const targetLabel = Number.isInteger(target) ? target : '--'
@@ -70,6 +70,23 @@ export function SaveFooter({ preset, slot, onSave, onCancel, busy, saving, remot
     }
     setArmed(false)
     onSave()
+  }
+
+  /*
+   * A UNIT THIS APP CANNOT SAVE ON, said in place of the question and with
+   * nothing to press: a VP4, whose only known save writes Y1 whatever slot is
+   * picked (shared/vp4-safety.mjs). The sheet said "Overwrite slot 5?", the
+   * second press closed it with no words, and that looked like a save.
+   */
+  if (refused) {
+    return (
+      <div className="save-foot">
+        <p className="hint save-target-warn">{refused}</p>
+        <button className="primary save-confirm" disabled>
+          Save
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -219,9 +236,12 @@ export default function SaveSheet({
       {!dirty ? <p className="hint">Nothing has changed since this was last saved.</p> : null}
 
       <div className="save-sheet-actions">
-        <button className="chip" onClick={onRevert} disabled={busy}>
-          Revert to saved
-        </button>
+        {/* None on a VP4, which App.jsx says by passing no onRevert. */}
+        {onRevert ? (
+          <button className="chip" onClick={onRevert} disabled={busy}>
+            Revert to saved
+          </button>
+        ) : null}
         {safety ? (
           <button className="chip" onClick={onRestoreSafety} disabled={busy}>
             Load pre-edit copy
