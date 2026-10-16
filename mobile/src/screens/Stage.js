@@ -73,6 +73,7 @@ import { droppedLeft, faultLeft } from '../lib/fault-rule'
 import { NOT_CONNECTED } from '../lib/relay-rules'
 import Note from '../components/Note'
 import NoComputerWords from '../components/NoComputer'
+import SendLinkButton from '../components/SendLinkButton'
 import { fixById, fixFor } from '../lib/troubleshooting'
 import Press from '../components/Press'
 import TempoDot from '../components/TempoDot'
@@ -1284,6 +1285,11 @@ export default function Stage({
             </>
           )}
         </Note>
+        {/* The download link to their inbox, under the words that say no
+            computer was ever set up, and only then. A label at 44 like the
+            two below, so the card is one height whatever it says and NOT
+            CONNECTED under it stays put (components/SendLinkButton.js). */}
+        {noComputer ? <SendLinkButton email={noComputer.email} height={44} /> : null}
         <Press label="Look for the computer again" height={44} onPress={() => onLookAgain?.()} />
         {onOpenFix ? <Press label="Troubleshooting" height={44} onPress={() => onOpenFix('connect')} /> : null}
       </Toast>

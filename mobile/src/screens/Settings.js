@@ -50,6 +50,7 @@ import { isPairAccount } from '../lib/pairing'
 import { mayDrive } from '../lib/unlock-rule'
 import { useComputerElsewhere } from '../lib/useComputerElsewhere'
 import NoComputerWords from '../components/NoComputer'
+import SendLinkButton from '../components/SendLinkButton'
 import { quitEditor } from '../lib/editors'
 import { isAdmin } from '../lib/admin'
 import { watchHow, watchPaired, watchSupported } from '../lib/watchBridge'
@@ -62,6 +63,7 @@ import SalesTool from '../components/SalesTool'
 import MessagesTool from '../components/MessagesTool'
 import LiveTool from '../components/LiveTool'
 import UsageTool from '../components/UsageTool'
+import StuckTool from '../components/StuckTool'
 import Lamp from '../components/Lamp'
 import { ChainCards, TipCard } from '../components/Walk'
 import { linkChain } from '../lib/link-chain'
@@ -339,7 +341,7 @@ export default function Settings({
    * One entry, because there is one nested page. It is a map rather than an
    * `if` so the next one is a line rather than a branch.
    */
-  const PARENT = { offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' }
+  const PARENT = { offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer' }
   const UP_LABEL = { link: '‹ Phone & computer', developer: '‹ Developer' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
@@ -734,6 +736,7 @@ export default function Settings({
             <SetupRow title="Sales at a glance" status="Today, this week, all time" onPress={() => setPage('sales')} />
             <SetupRow title="How many people" status="Who used it today, this week, this month" onPress={() => setPage('usage')} />
             <SetupRow title="Everyone with an account" status="Who has signed up" onPress={() => setPage('accounts')} />
+            <SetupRow title="Paid but no computer yet" status="Bought it, never set up the computer" onPress={() => setPage('stuck')} />
             <SetupRow title="Messages from users" status="Bug reports and suggestions, with their logs" onPress={() => setPage('messages')} />
             <SetupRow title="What's live" status="Which version each piece is on" onPress={() => setPage('live')} />
             {onViewAsCustomer ? (
@@ -954,6 +957,9 @@ export default function Settings({
                 its own.
               </Note>
             ) : null}
+            {/* And the download link to their inbox, under those words and
+                only with them: to the account's own address, which they name. */}
+            {noneSaid ? <SendLinkButton email={noComputer.email} /> : null}
             {/* Which account this is — his words: "make sure you're connected
                 to your computer using and then show the user's email
                 address". A computer signed in as somebody else is the
@@ -1211,6 +1217,15 @@ export default function Settings({
         <>
           {head('Everyone with an account', 'back')}
           <AccountsTool />
+        </>
+      ) : null}
+
+      {/* ----------------------------------------------------------- stuck */}
+      {/* "A 'paid but stuck' list on your Developer page" (15 October 2026). */}
+      {page === 'stuck' && isAdmin(account?.id) ? (
+        <>
+          {head('Paid but no computer yet', 'back')}
+          <StuckTool />
         </>
       ) : null}
 

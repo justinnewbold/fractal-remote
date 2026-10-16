@@ -49,7 +49,7 @@
   <body>
     <main>
       <h1>Privacy</h1>
-      <p class="when">Fractal Remote · last updated 13 October 2026</p>
+      <p class="when">Fractal Remote · last updated 15 October 2026</p>
 
       <p class="lead">
         <strong>This app collects as little as it can.</strong> Your phone talks to your
@@ -84,8 +84,9 @@
       </p>
       <table>
         <tr><th>What</th><th>Why</th></tr>
-        <tr><td>Your email address</td><td>To sign you in, and to reset a password</td></tr>
+        <tr><td>Your email address</td><td>To sign you in, to reset a password, and for the help setting up the computer described under <em>Unlocking the full version</em></td></tr>
         <tr><td>Your password</td><td>Stored as a hash. It is never readable, by us or anyone.</td></tr>
+        <tr><td>When a computer app first signed in with it</td><td>Kept for every account, bought or not, so that nobody who has already set up the computer is told how to</td></tr>
       </table>
       <p>
         The commands between your phone and your computer pass through a relay while you are
@@ -113,6 +114,18 @@
         last asked, which version of the app and of the phone's system it was, and which country
         it was in.
       </p>
+      <p>
+        <strong>Help setting up the computer.</strong> The phone drives your unit through a free
+        app on your computer. If no computer app has signed in with your account a day after the
+        full version arrives on it, one email goes to your address with the download link and the
+        three steps to set it up, and one reminder at least four days later if there is still
+        none. Never more than those two, none at all once a computer has signed in, and none to an
+        address that was never confirmed. A reply goes to Justin. To know when to send them, a few
+        dates are kept with your account: when it was first seen with the full version, when each
+        of those two emails went or was refused, and when Justin left you out of them, if he did.
+        So is the first time a computer app signed in with it, which is kept for every account
+        (see <em>An account</em>).
+      </p>
 
       <h3>Your setlists — only if you are signed in</h3>
       <p>
@@ -132,7 +145,8 @@
       <p>
         Either way, one email goes to that address to say so, headed "You have full access to
         Fractal Remote", with how to sign in and where to get the apps. It is sent when the access
-        is given, and that is the only time.
+        is given, and that is the only time, apart from the help setting up the computer described
+        under <em>Unlocking the full version</em>.
       </p>
 
       <h3>Bug reports and suggestions — only when you press Send</h3>
@@ -217,20 +231,32 @@
           days and in the last 30, on which kinds of device, and on which app versions. A count,
           naming nobody.</li>
         <li><strong>Sales</strong> — each purchase: when, through which store, for how much, and
-          by which account.</li>
+          by which account; and anybody who has paid twice, or paid on an account whose email was
+          never confirmed, so he can put it right. Once he has, he can mark it handled. Then the
+          account, which of those two it was, when he marked it, the time of the newest purchase it
+          was about, and how many purchases it counted (with any card sale beside it) are
+          kept, so it is not shown again unless they pay again.</li>
         <li><strong>Messages</strong> — the bug reports and suggestions described above.</li>
+        <li><strong>Paid but no computer yet</strong> — each account with the full version that no
+          computer app has signed in with: its email address and whether it is confirmed, how and
+          when it got the full version (which store, a test purchase, or given by hand), and which
+          of the emails about setting up the computer have gone to it or been refused. He can
+          leave an account out of those emails.</li>
       </ul>
       <p>
         All of it is read from what the account service and RevenueCat already keep in order to
-        sign you in and to know whether you have paid. Nothing new is recorded for these pages: no
-        screens, no buttons, no time spent in the app. To help somebody who cannot sign in, he can
+        sign you in and to know whether you have paid, apart from the dates kept for the help
+        setting up the computer, under <em>An account</em> and <em>Unlocking the full version</em>,
+        and the marks on Sales described above. Nothing else new is
+        recorded for these pages: no screens, no buttons, no time spent in the app. To help somebody who cannot sign in, he can
         also send their address a new confirmation or password-reset email, or mark the address as
         confirmed by hand.
       </p>
       <p>
         Emails this app sends (a link to confirm your address or reset a password, the desktop
-        download link you asked for, the one telling a tester they have been given full access, and
-        bug reports on their way to the person who builds it) go through
+        download link you asked for, the one telling a tester they have been given full access, the
+        email about setting up the computer and its one reminder, and bug reports on their way to
+        the person who builds it) go through
         <a href="https://resend.com/legal/privacy-policy" rel="noreferrer">Resend</a>. RevenueCat,
         Supabase, Resend, <a href="https://expo.dev/privacy" rel="noreferrer">Expo</a> (the phone
         app's update checks) and
@@ -260,6 +286,10 @@
           one-way scrambled fingerprint, to stop the link being sent to it over and over.</li>
         <li><strong>An address on the testers' waiting list</strong> — until somebody first signs
           in with it, or until the access is taken back or you ask for it to be removed.</li>
+        <li><strong>The dates kept for the help setting up the computer, and when a computer app
+          first signed in</strong> — until you delete the account.</li>
+        <li><strong>A sale marked handled</strong> — the mark is kept until you delete the
+          account.</li>
         <li><strong>Bug reports</strong> — until the problem is fixed and long enough afterwards to
           be sure, then deleted.</li>
       </ul>

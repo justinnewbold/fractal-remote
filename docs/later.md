@@ -64,6 +64,147 @@ a real one yet — a friend of Justin's is the first tester. After that:
   build, since watch code only reaches anyone inside the app, and trying on
   a real watch before it is worth one.
 
+## Plugging the phone straight into the unit, with no computer
+
+Researched 15 October 2026. **On hold:** "hold off on all the direct USB
+connections until I can test it like you said when I get home." Nothing is
+built for it.
+
+| Unit | iPhone | Android |
+|---|---|---|
+| AM4 (USB-C to USB-C) | Probably works already, through the hidden Bluetooth (beta) page. Untried. | Needs new Android code, so a build |
+| FM9 (USB-C to USB-B) | Probably works already, the same way. The manual: "The FM9 is a USB MIDI Device." | Needs a build |
+| Axe-Fx III (USB-C to USB-B) | Probably works already. The manual calls it class-compliant MIDI over USB. | Needs a build |
+| FM3 (USB-C to USB-B) | Never. The manual: "The FM3 is NOT a USB MIDI Device. It uses COM ports over USB". Apple (developer forums thread 834899, June 2026): an iPhone app cannot reach a USB serial device; DriverKit is iPad and Mac only. | Maybe, unproven: Android's USB host API can open the FM3's serial port, with an "Allow access" pop-up |
+| VP4 (USB-C to USB-C) | Not until the phone can drive a VP4 at all | The same |
+
+Why the iPhone may already work: the iPhone half of the Bluetooth module
+(mobile/modules/fractal-ble-midi/ios/FractalBleMidiModule.swift, devices())
+lists every two-way CoreMIDI port with an entity, cable or Bluetooth alike,
+and bleAdapters.js isAdapter() only leaves out Apple's network sessions. The
+Android half opens Bluetooth devices only (openBluetoothDevice, a scan
+filtered to the BLE-MIDI service), so Android needs MidiManager.openDevice for
+USB, which is native code and a build.
+
+**The first step is Justin's own try, when he is home:** AM4 out of the
+computer, WIDI off; unlock the iPhone, then plug the AM4 in with a data
+USB-C cable; Settings → Bluetooth (beta) → Connect (or "Use a different
+adapter" if it offers the WIDI); tap Done on Apple's Bluetooth screen; Play
+should show the preset with no computer. "Stop using Bluetooth" goes back.
+
+If it works, in order: a proper "Plugged into this phone" choice on the
+iPhone for his account only (JavaScript, an update, about 2-3 days); Android
+by cable (a build); the FM3 on Android (the largest and riskiest piece);
+customers only in a new store version whose review notes say so, the same
+rule as Bluetooth. At a gig: the phone cannot charge while the unit is in,
+unless a USB-C hub with a charging port (plug the charger in first); phone
+sounds may come out of the unit (Do Not Disturb); a cable plugged into a
+locked iPhone does nothing until it is unlocked (iOS 26's Wired Accessories
+setting).
+
+## Siri, the Action button and Back Tap
+
+Researched 15 October 2026. Nothing built.
+
+- **A free first step.** mobile/app.json has had `"scheme": "fractalremote"`
+  since 5 September, so every store build already answers fractalremote://
+  links, and nothing listens. A listener for next, previous, scene 1-8 and
+  tuner off is JavaScript only. A player makes a Shortcut ("Fractal next")
+  and Siri, the Action button or Back Tap runs it. The phone has to be
+  unlocked and the app comes to the front. Apple wants a new feature named in
+  the review notes, so the ready-made shortcuts go public with a store
+  version.
+- **Built-in phrases** ("Scene 3 in Fractal Remote", "Next song in Fractal
+  Remote") are App Intents, Swift, so a build. Apple requires the app's name
+  in every phrase, which is a safety on stage. Expo's own expo-app-intents is
+  alpha and needs SDK 58, so it would be built by hand, copying the watch
+  bridge (mobile/modules/fractal-watch).
+- **Limits.** Siri takes about 1-3 seconds, so it suits a change between
+  songs, not the downbeat. It is reliable only with Play on screen (Play keeps
+  the phone awake); from a locked phone in a pocket most commands would miss
+  the 1.5-second tap deadline and be dropped. A tempo cannot be said in one
+  phrase.
+- Android: the same links work from Samsung Routines or Tasker; Gemini's
+  equivalent is not open to apps like this.
+
+## Blind and low-vision players
+
+Audited 15 October 2026. Nothing built. VoiceOver and TalkBack are on every
+phone, but they say only what the app tells them.
+
+- **The biggest gap:** on an iPhone VoiceOver cannot get inside any pop-up.
+  The glass behind each one is a single "Close" button (Sheet.js, Tuner.js,
+  Volume.js, TempoBox.js, PasswordBox.js, the computer note in TopBar.js), so
+  the volume slider, Stop on the tuner and Delete account cannot be reached.
+  The fix also needs accessibilityViewIsModal and onAccessibilityEscape,
+  used nowhere today. Half a day; first.
+- Then, all free updates: scene tiles say "Scene 3, Rhythm", effects say
+  "Delay, on, channel A", the tuner says "F sharp"; changes spoken as they
+  happen; two-finger double-tap on Play for Next (Magic Tap); Move up / Move
+  down for setlist songs; a tuner by words, tones or a buzz; Play that holds
+  up at large text sizes, and the light-mode faint grey (#767d87, 3.3:1)
+  darkened. Speaking with VoiceOver off needs a new package, so a build.
+- The App Store's accessibility answers can be set without a build. Dark
+  interface can be claimed now; VoiceOver only after the fixes and a real
+  iPhone pass.
+
+## The iPhone Duo (the foldable)
+
+Researched 15 October 2026. Pre-orders opened 16 October, phones from 23
+October. 5.4-inch outside, 7.6-inch inside, iOS 27.1. Justin is getting one.
+
+- Today's store copy, built with the iOS 26 tools, shows phone-sized in the
+  middle of the inside screen. No update changes that; only a build made with
+  Xcode 27.1 fills it.
+- Free groundwork: keep the left and right edges clear (the SafeAreaView in
+  mobile/App.js has top and bottom only), and a sideways Play for wide
+  windows (scenes left, effects right), which helps iPads and Android
+  foldables at once.
+- The Duo build (a build pair, his yes first): pin the EAS image
+  macos-tahoe-26.6-xcode-27.1, and add expo-build-properties with
+  ios.enableSceneSupport, which Apple's TN3187 makes mandatory with the new
+  SDK ("your app won't launch"). That is a new package. Prove it compiles on
+  GitHub's free xcode-27 runner first. Duo screenshots are required from
+  April 2027.
+- On his phone, the day it comes: today's store copy as it is, then fold and
+  unfold mid-song with the link up, the tempo box with the keyboard, the NOT
+  CONNECTED band, the watch.
+
+## From the improvement list of 15 October 2026
+
+Done: pick 1, the quiet level readings (1.87.31); pick 6, fewer and smaller
+computer updates (1.87.30); the tempo box (1.87.29). Being finished: pick 2,
+the next song's name under Next; pick 3, help for buyers with no computer and
+the Handled button on Paid twice; the VP4's honest words and its presets and
+scenes. Still on the list, not started:
+
+- **Lock the computer's page to your own phone.** Anyone on the same Wi-Fi
+  can open the computer's page (ForgeFX listens on 0.0.0.0) and change
+  presets or sign it out. Found with it: Sign out in the computer app calls
+  auth.signOut() with no scope (forgefx server/src/runtime/cloud.ts), which
+  defaults to signing out every device on the account, phones included.
+- **No signal at the venue:** say "This phone isn't online" and offer the
+  computer's page over the same Wi-Fi, with the setlists on it.
+- **A volume for the AM4**, with its four scene levels.
+- Quick wins: a setlist tap sets the song's scene and tempo too; Android's
+  back swipe on Play asks first; after a crash, offer once to send the log;
+  the volume slider always moves Output 1; the Windows warnings on the
+  download card; help-page sentences no longer true.
+- Bigger: setlists made of songs (own title, same preset twice, a short
+  note); scene volume in the volume pop-up; a Gig lock; "how fast is the
+  link"; "No sound?" on the phone; the computer saying exactly why it cannot
+  see the unit; a weekly backup of every preset; page-turner pedals; iPad
+  sideways.
+- Growth: a 60-second video on a real rig; an honest forum post; a real
+  front page with link previews and /demo/fm3 links; ask for star ratings
+  (one rating so far); sign the Windows installer.
+- Health: an undo for a bad phone update and updates to a few phones first;
+  an alarm when something breaks; a safety catch on the computer against AM4
+  Global writes from a phone; GitHub refusing a red merge to main; a current
+  Electron (33 stopped getting security fixes in April 2025); Supabase
+  backups and two-step sign-in on the service accounts; a limit on the bug
+  report emails.
+
 ## Waiting on something
 
 Nothing right now. The GitHub description and RevenueCat's sample products

@@ -14,6 +14,12 @@
  *   confirm mark their email confirmed, for the email that never reaches them
  *   sales   every sale so far, for Sales at a glance
  *   usage   how many people used it lately, for How many people
+ *   stuck   paid but no computer yet, for the list of that name
+ *   reminders        the setup emails on or off ({ on: true } is on)
+ *   leave-out        one email left out of them ({ out: false } puts it back)
+ *   try-again        a refused setup email, by its address, due again
+ *   reminder-sample  both setup emails to his own inbox, to read first
+ *   handled          a Paid twice (or never confirmed) row on Sales, dealt with
  *
  * All three by email also answer with the Customer lookup: when they signed
  * up, whether they confirmed, what they paid for and where, which devices
@@ -239,6 +245,82 @@ async function unconfirmedAccounts(): Promise<{ id: string; email: string }[]> {
   return found.slice(0, MOST_UNCONFIRMED)
 }
 
+/*
+ * HANDLED. "I've already handled this paid twice thing ... I wanna [be able
+ * to] mark as completed or so that it doesn't appear anymore after it's been
+ * handled." (15 October 2026.) A row he marks is kept in
+ * supabase/migrations/20261015_sales_handled.sql by the account, the list
+ * ('twice' or 'unconfirmed') and what the row showed: the newest purchase it
+ * is about (`until`), how many purchases (`count`), and for a never-confirmed
+ * one how many card sales were beside it (`nearCount`). All three are worked
+ * out here and put on the row, and the page sends them back as they came, so
+ * a mark is always this function's own numbers. Sales leaves the row out
+ * only while all three are still no more than that, so the same person
+ * paying again shows again, however it happens:
+ *
+ *   - a purchase dated after the newest one marked;
+ *   - a purchase dated BEFORE it that lands on the account later, which is
+ *     how paying twice happens here: a phone that bought before it signed in
+ *     brings its purchase across with its own date (PAID, ACCOUNT NEVER
+ *     CONFIRMED above);
+ *   - a card sale on the website to another address, within a day, which
+ *     adds nothing to the row's own purchases and is the only sign that a
+ *     never-confirmed buyer paid twice. For a never-confirmed row the newest
+ *     purchase it is about takes those card sales in too, so a card sale
+ *     made after the mark brings the row back by its date alone: whoever
+ *     made it, and the same address paying again after its refund as well.
+ *
+ * The row's own purchases are counted with refunded ones in. RevenueCat keeps
+ * a refunded purchase on the account, marked refunded, so that count never
+ * goes down: a refund never brings a row back, and a refund followed by a
+ * new payment still does (counting only the purchases still paid for, that
+ * new payment would just put the count back where it was).
+ *
+ * The card sales beside a never-confirmed row are counted one sale at a time,
+ * refunded ones too, and that count CAN go down: an account whose only
+ * purchase was refunded is no longer a paying one (owner_overview lists the
+ * active ones), so Sales stops asking about it. That is why the date takes
+ * the card sales in. A refund adds no new date, so it never brings the row
+ * back, and a new card sale always does, even when the one it replaces has
+ * dropped out of the count.
+ */
+const HANDLED = ['twice', 'unconfirmed']
+/* The newest purchase time, as shared/admin.mjs's newestPaid counts it: 0 when none says when. */
+const newestOf = (at: (number | null)[]) => {
+  const times = at.filter((t): t is number => typeof t === 'number' && Number.isFinite(t))
+  return times.length ? Math.max(0, ...times) : 0
+}
+/* What a mark remembers, as the row it was made from showed it. */
+type Mark = { until: number; count: number; near: number }
+/* A count the page sends: a whole number, 0 up to `most`. */
+const wholeUpTo = (n: unknown, most: number) => (typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= most ? n : null)
+/* purchasesOf reads at most 100 purchases a person, so no row counts more. */
+const MOST_PURCHASES = 100
+
+/* The marks, as `kind:account` → what was marked. Not there (the database
+   change not put live yet) is no marks: Sales still stands. A count it does
+   not give is 0, which hides nothing. */
+async function handledMarks(): Promise<Map<string, Mark> | null> {
+  try {
+    const rows = await rpc('sales_handled_list', {})
+    const marks = new Map<string, Mark>()
+    for (const r of (Array.isArray(rows) ? rows : []) as {
+      id?: string
+      kind?: string
+      paid_until?: number | string
+      bought_count?: number | string
+      near_count?: number | string
+    }[]) {
+      if (r?.id && r?.kind) {
+        marks.set(`${r.kind}:${r.id}`, { until: Number(r.paid_until) || 0, count: Number(r.bought_count) || 0, near: Number(r.near_count) || 0 })
+      }
+    }
+    return marks
+  } catch {
+    return null
+  }
+}
+
 async function sales() {
   const overview = ((await rpc('owner_overview', {})) || {}) as {
     accounts?: number
@@ -257,7 +339,14 @@ async function sales() {
    * holding more than one real purchase, meaning money taken, not a test and
    * not refunded.
    */
-  const twice: { email: string; stores: string[]; at: (number | null)[] }[] = []
+  const twice: { email: string; stores: string[]; at: (number | null)[]; count: number; until: number }[] = []
+  const marks = await handledMarks()
+  /* Marked handled, and nothing more since (see HANDLED above): left out, and counted. */
+  const handled = { twice: 0, unconfirmed: 0 }
+  const isHandled = (kind: 'twice' | 'unconfirmed', id: string, row: { until: number; count: number; nearCount?: number }) => {
+    const mark = marks?.get(`${kind}:${id}`)
+    return mark !== undefined && row.until <= mark.until && row.count <= mark.count && (row.nearCount ?? 0) <= mark.near
+  }
   const answers = await eachFew(buyers, 5, async (b) => ({ b, bought: await purchasesOf(b.id) }))
   for (const { b, bought } of answers) {
     if (!bought) {
@@ -268,31 +357,47 @@ async function sales() {
     if (!real.some((p) => !p.refunded)) givenByHand += 1
     for (const p of real) sold.push({ ...p, email: b.email })
     const paid = real.filter((p) => !p.sandbox && !p.refunded)
-    if (paid.length > 1) twice.push({ email: b.email, stores: paid.map((p) => p.store), at: paid.map((p) => p.at) })
+    if (paid.length > 1) {
+      /* count: every real purchase, refunded ones too, so Handled can tell a new one from a refund. until: the newest one paid for (see HANDLED). */
+      const row = { email: b.email, stores: paid.map((p) => p.store), at: paid.map((p) => p.at), count: real.filter((p) => !p.sandbox).length, until: newestOf(paid.map((p) => p.at)) }
+      if (isHandled('twice', b.id, row)) handled.twice += 1
+      else twice.push(row)
+    }
   }
   /* And the accounts nothing has asked about (see PAID, ACCOUNT NEVER CONFIRMED). */
   const known = new Set(buyers.map((b) => b.id))
   const quiet = (await unconfirmedAccounts()).filter((u) => !known.has(u.id))
   const quietAnswers = await eachFew(quiet, 5, async (u) => ({ u, bought: await purchasesOf(u.id) }))
-  const neverConfirmed: { email: string; stores: string[]; at: (number | null)[] }[] = []
+  const neverConfirmed: { id: string; email: string; stores: string[]; at: (number | null)[]; count: number }[] = []
   for (const { u, bought } of quietAnswers) {
     const real = (bought || []).filter((p) => p.store !== 'promotional')
     for (const p of real) sold.push({ ...p, email: u.email })
     const paid = real.filter((p) => !p.sandbox && !p.refunded)
-    if (paid.length) neverConfirmed.push({ email: u.email, stores: paid.map((p) => p.store), at: paid.map((p) => p.at) })
+    if (!paid.length) continue
+    neverConfirmed.push({ id: u.id, email: u.email, stores: paid.map((p) => p.store), at: paid.map((p) => p.at), count: real.filter((p) => !p.sandbox).length })
   }
-  /* A card sale on the website within a day of one of theirs, to another address: maybe the same person, twice. */
-  const unconfirmed = neverConfirmed.map((n) => ({
-    ...n,
-    near: [
-      ...new Set(
-        sold
-          .filter((s) => CARD.includes(s.store) && !s.sandbox && !s.refunded && s.email !== n.email && s.at !== null)
-          .filter((s) => n.at.some((at) => at !== null && Math.abs((s.at as number) - at) <= DAY))
-          .map((s) => s.email)
-      )
-    ]
-  }))
+  /*
+   * A card sale on the website within a day of one of theirs, to another
+   * address: maybe the same person, twice. `near` names the addresses with
+   * one still paid for. What Handled compares (see HANDLED above) counts the
+   * sales themselves, refunded ones too, one sale at a time, so the same
+   * address paying again is one more (`nearCount`), and takes their dates
+   * into the newest purchase the row is about (`until`), so a card sale made
+   * after the mark brings the row back even when the one it replaces was
+   * refunded and has dropped out of the count.
+   */
+  const besideOf = (n: { email: string; at: (number | null)[] }) =>
+    sold
+      .filter((s) => CARD.includes(s.store) && !s.sandbox && s.email !== n.email && s.at !== null)
+      .filter((s) => n.at.some((at) => at !== null && Math.abs((s.at as number) - at) <= DAY))
+  const unconfirmed: { email: string; stores: string[]; at: (number | null)[]; count: number; near: string[]; nearCount: number; until: number }[] = []
+  for (const { id, ...n } of neverConfirmed) {
+    const beside = besideOf(n)
+    const near = [...new Set(beside.filter((s) => !s.refunded).map((s) => s.email))]
+    const row = { ...n, near, nearCount: beside.length, until: newestOf([...n.at, ...beside.map((s) => s.at)]) }
+    if (isHandled('unconfirmed', id, row)) handled.unconfirmed += 1
+    else unconfirmed.push(row)
+  }
   sold.sort((a, b) => (b.at || 0) - (a.at || 0))
   return {
     ok: true,
@@ -307,8 +412,39 @@ async function sales() {
     /* New: a phone too old to know it leaves it alone. */
     twice,
     /* Newer still, and the same: a purchase on an account nobody ever confirmed. */
-    unconfirmed
+    unconfirmed,
+    /* And how many of each he marked handled, which are not in the two lists above. */
+    handled
   }
+}
+
+/*
+ * Mark one row handled. Found by the account's address, as Leave them out
+ * is, and kept by the account: the list it was on, and what the row showed
+ * when he tapped it, as Sales put it on the row: the newest purchase it is
+ * about (until, which for a never-confirmed one takes the card sales beside
+ * it in), how many purchases (count) and, for a never-confirmed one, how
+ * many card sales beside it (nearCount), so any purchase after the mark
+ * brings them back (see HANDLED above).
+ */
+async function markHandled(found: Record<string, any> | null, email: string, kind: unknown, until: unknown, count: unknown, nearCount: unknown) {
+  const what = String(kind || '')
+  if (!HANDLED.includes(what)) return { ok: false, email, message: 'Only a Paid twice row, or a Paid, account never confirmed row, can be marked handled.' }
+  const upTo = typeof until === 'number' ? until : Number.NaN
+  if (!Number.isFinite(upTo) || upTo < 0 || upTo > Date.now() + DAY) {
+    return { ok: false, email, message: 'That row has no purchase time to mark, so nothing was marked. Refresh the page and try again.' }
+  }
+  /* A row always has a purchase; a twice row has two. Too high a count would hide the next payment. */
+  const bought = wholeUpTo(count, MOST_PURCHASES)
+  /* Card sales, not addresses: every account Sales asks about, each with as many purchases as purchasesOf reads. */
+  const near = what === 'unconfirmed' ? wholeUpTo(nearCount, (MOST_BUYERS + MOST_UNCONFIRMED) * MOST_PURCHASES) : 0
+  if (bought === null || bought < (what === 'twice' ? 2 : 1) || near === null) {
+    return { ok: false, email, message: 'That row doesn’t say how many purchases it showed, so nothing was marked. Refresh the page and try again.' }
+  }
+  const account = found?.id ? String(found.id) : null
+  if (!account) return { ok: false, found: false, email, message: `No account uses ${email}, so nothing was marked.` }
+  await rpc('mark_sales_handled', { uid: account, what, newest: Math.floor(upTo), bought, near })
+  return { ok: true, found: true, email, kind: what, until: Math.floor(upTo), count: bought, nearCount: near, message: `${email} is marked handled.` }
 }
 
 /*
@@ -347,6 +483,127 @@ async function usage() {
     total: Math.max(people.length, (Number(all.total) || 0) - (listed.length - everyone.length)),
     counted: out.filter(Boolean).length,
     people: out.filter(Boolean)
+  }
+}
+
+/*
+ * PAID BUT NO COMPUTER YET. "Get new buyers past 'no computer yet.' ... and a
+ * 'paid but stuck' list on your Developer page." Everybody with the full
+ * version that no computer app has ever been seen signed in on, with what the
+ * setup emails have done for them (supabase/migrations/20261015_setup_reminders.sql
+ * keeps those dates; owner_setup_stuck reads them). RevenueCat says how each
+ * got it, with the real date: the database only knows the day it first SAW
+ * the full version, which for anybody from before the list is a guess on the
+ * late side. The words are made on the phone (stuckSections, shared/admin.mjs).
+ */
+const MOST_STUCK = 200
+
+async function stuck() {
+  const answer = ((await rpc('owner_setup_stuck', {})) || {}) as {
+    sending?: boolean
+    due_first?: number
+    due_reminder?: number
+    set_up_after?: number
+    stuck?: Record<string, any>[]
+  }
+  const all = Array.isArray(answer.stuck) ? answer.stuck : []
+  const rows = all.slice(0, MOST_STUCK)
+  const labelled = await eachFew(rows, 5, async (row) => {
+    const bought = row?.id ? await purchasesOf(String(row.id)) : null
+    /* RevenueCat did not answer: say nothing rather than guess. */
+    if (!bought) return { ...row, paid: null }
+    let first: Sale | null = null
+    for (const p of bought) {
+      if (p.store === 'promotional' || p.refunded) continue
+      if (!first || (p.at ?? Infinity) < (first.at ?? Infinity)) first = p
+    }
+    /* A hand-given unlock is a promotional grant, not a purchase: none here. */
+    return { ...row, paid: first ? { store: first.store, at: first.at, sandbox: first.sandbox } : { store: 'promotional', at: null, sandbox: false } }
+  })
+  return {
+    ok: true,
+    sending: answer.sending === true,
+    dueFirst: Number(answer.due_first) || 0,
+    dueReminder: Number(answer.due_reminder) || 0,
+    setUpAfter: Number(answer.set_up_after) || 0,
+    total: all.length,
+    stuck: labelled
+  }
+}
+
+/* The setup emails' switch, off until he turns it on from the list. */
+async function reminderSwitch(on: boolean) {
+  const sending = (await rpc('set_setup_reminder_switch', { turn_on: on })) === true
+  return {
+    ok: true,
+    sending,
+    message: sending
+      ? 'Setup emails are on. Anybody due one gets it within the hour.'
+      : 'Setup emails are off. Nothing more is sent until you turn them on.'
+  }
+}
+
+/* Leave somebody out of the setup emails for good, or put them back. */
+async function leaveOut(found: Record<string, any> | null, email: string, out: boolean) {
+  const account = found?.id ? String(found.id) : null
+  if (!account) return { ok: false, found: false, email, message: `No account uses ${email}.` }
+  const left = (await rpc('set_setup_left_out', { uid: account, leave_out: out })) === true
+  return {
+    ok: true,
+    found: true,
+    email,
+    leftOut: left,
+    message: left
+      ? `${email} is left out. They won’t get the setup emails.`
+      : `${email} is back in. They get the setup emails if they still have no computer.`
+  }
+}
+
+/*
+ * TRY THE EMAIL AGAIN. A setup email the mail service refused for the
+ * person's address is never tried again by itself (failed_at), and before
+ * this only SQL typed by hand could undo it. Now his tap does: the refusal is
+ * forgotten and that one email is due again by the usual rule
+ * (clear_setup_reminder_refusal), so it goes at the next hourly run if the
+ * emails are on and they still have no computer. Never a second copy: a
+ * refused email never went.
+ */
+async function tryAgain(found: Record<string, any> | null, email: string) {
+  const account = found?.id ? String(found.id) : null
+  if (!account) return { ok: false, found: false, email, message: `No account uses ${email}.` }
+  const cleared = (await rpc('clear_setup_reminder_refusal', { uid: account })) === true
+  return {
+    ok: true,
+    found: true,
+    email,
+    cleared,
+    message: cleared
+      ? `The email to ${email} will be tried again within the hour, if the setup emails are on and they still have no computer.`
+      : `Nothing to them was refused, so there is nothing to try again.`
+  }
+}
+
+/*
+ * BOTH SETUP EMAILS, MARKED [Sample], to read before turning them on. Sent by
+ * the setup-reminder function itself, so the words are the ones customers
+ * would get, from the one place they are written; it sends them to the
+ * address replies go to, his own, and to nobody else.
+ */
+async function reminderSample() {
+  const service = env('SUPABASE_SERVICE_ROLE_KEY')
+  try {
+    const res = await fetch(`${env('SUPABASE_URL')}/functions/v1/setup-reminder`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${service}`, apikey: service, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'sample' })
+    })
+    const body = await res.json().catch(() => ({}))
+    if (res.status === 404) return { ok: false, message: 'The setup email isn’t on the server yet, so there is no sample to send.' }
+    if (body?.why === 'not configured') return { ok: false, message: 'The server has no mail key set, so nothing was sent.' }
+    if (!res.ok || !body?.ok) return { ok: false, message: `The sample didn’t send (${res.status}).` }
+    return { ok: true, message: 'Both setup emails are on their way to your Gmail, marked [Sample]. Replies to the real ones land there too.' }
+  } catch (err) {
+    return { ok: false, message: `Could not reach the setup email (${String((err as Error)?.message || err).slice(0, 120)}).` }
   }
 }
 
@@ -511,7 +768,7 @@ Deno.serve(async (req: Request) => {
   /* The lock. Anybody else gets the same answer as nobody at all. */
   if (!internal && (!me || !ADMINS.includes(me.id))) return json({ ok: false, message: 'Not allowed.' }, 403)
 
-  let input: { action?: string; email?: string } = {}
+  let input: { action?: string; email?: string; on?: unknown; out?: unknown; kind?: unknown; until?: unknown; count?: unknown; nearCount?: unknown } = {}
   try {
     input = await req.json()
   } catch {
@@ -519,10 +776,11 @@ Deno.serve(async (req: Request) => {
   }
   const action = String(input.action || 'check')
   const email = String(input.email || '').trim().toLowerCase()
-  if (internal ? action !== 'claim' : !['check', 'grant', 'revoke', 'confirm', 'sales', 'accounts', 'usage'].includes(action)) {
+  const ACTIONS = ['check', 'grant', 'revoke', 'confirm', 'sales', 'accounts', 'usage', 'stuck', 'reminders', 'leave-out', 'try-again', 'reminder-sample', 'handled']
+  if (internal ? action !== 'claim' : !ACTIONS.includes(action)) {
     return json({ ok: false, message: 'Unknown action.' }, 400)
   }
-  if (!['sales', 'accounts', 'usage'].includes(action) && !email.includes('@')) return json({ ok: false, message: 'Type the email address they signed up with.' }, 400)
+  if (!['sales', 'accounts', 'usage', 'stuck', 'reminders', 'reminder-sample'].includes(action) && !email.includes('@')) return json({ ok: false, message: 'Type the email address they signed up with.' }, 400)
   if (!env('REVENUECAT_SECRET')) return json({ ok: false, message: 'The server has no RevenueCat key set.' }, 500)
 
   try {
@@ -530,8 +788,16 @@ Deno.serve(async (req: Request) => {
     if (action === 'usage') return json(await usage())
     /* "How do I see a list of who has set up an account?" */
     if (action === 'accounts') return json({ ok: true, ...((await rpc('owner_accounts', {})) as Record<string, unknown>) })
+    /* Paid but no computer yet, and the setup emails (see stuck() above). Only exactly true turns them on. */
+    if (action === 'stuck') return json(await stuck())
+    if (action === 'reminders') return json(await reminderSwitch(input.on === true))
+    if (action === 'reminder-sample') return json(await reminderSample())
 
     const found = (await rpc('account_details', { address: email })) as Record<string, any> | null
+    if (action === 'leave-out') return json(await leaveOut(found, email, input.out !== false))
+    if (action === 'try-again') return json(await tryAgain(found, email))
+    /* A row of Sales at a glance, dealt with (see markHandled above). */
+    if (action === 'handled') return json(await markHandled(found, email, input.kind, input.until, input.count, input.nearCount))
     const account = found?.id ? String(found.id) : null
     /* Before the waiting list: an address with no account has nothing to confirm. */
     if (action === 'confirm') return await confirmByHand(found, email)

@@ -142,3 +142,192 @@ Then read `net._http_response` as above. Note that a rolled-back transaction
 sends nothing: `net.http_post` queues its request inside the caller's
 transaction, so a test wrapped in `begin; ... rollback;` proves the INSERT
 survives but never exercises the HTTP call.
+
+## The setup emails (paid, but no computer yet)
+
+"Get new buyers past 'no computer yet.' ... one friendly email a day after
+buying if no computer has signed in, and a 'paid but stuck' list on your
+Developer page." (15 October 2026.) Three pieces, none of them live until
+Justin says so, and the emails themselves off even then:
+
+- `migrations/20261015_setup_reminders.sql` — the dates kept from now on
+  (when an account was first seen with the full version; when a computer app
+  first signed in with it, kept for every account; when each setup email went
+  or was refused; and when Justin left one out), the
+  rule for who is due one, the switch (`setup_reminder_switch`, **off**), the
+  list `owner_setup_stuck()` for the Developer page, and a hook secret made in
+  vault like the feedback one. Everything is service_role only.
+- `migrations/20261015_setup_reminders_schedule.sql` — pg_cron, and one job at
+  23 minutes past every hour that calls `run_setup_reminders()`. A file of its
+  own so that if pg_cron is refused, nothing else is.
+- `functions/setup-reminder/` — reads the switch; off, it only counts; on, it
+  claims each due email in the database and then sends it through Resend.
+  The claim reads the switch again before every email, so turning the emails
+  off in the middle of a run stops that run at the next one. Each email goes
+  from `noreply@newbold.cloud`, with replies to `justinnewbold@gmail.com`.
+  At most two emails per account, ever: the first a day after the full
+  version is first seen, one reminder four days after that, none once a
+  computer has signed in, none to an unconfirmed address, and none after the
+  mail service refuses one of them.
+
+  **A refusal stops the run**, and what happens to that one account depends on
+  Resend's status and, for a 400 or 422, on what its answer was about. A bad
+  address does not bounce at the moment of sending (Resend takes it and
+  reports the bounce later), so most refusals are the service or our own
+  request, not the person. Even most 400s and 422s are ours: Resend answers
+  400 "API key is invalid" from every endpoint when the key is not in a key's
+  shape, 400 for a field it cannot read (a mistyped `SETUP_FROM`), and 422 for
+  a missing field. Only an answer about the `to` field is the person's. The
+  function reads Resend's answer to sort it and keeps nothing of it but its
+  error name (`validation_error` and the like), because the message can quote
+  the address.
+
+  | Resend answered | What it means | What happens |
+  | --- | --- | --- |
+  | 400, 422 about the `to` field | the mail service won't take this person's address | `failed_at` is written, and that account gets no more until Justin taps **Try the email again** on their sheet |
+  | 400, 422 about anything else, or an answer that won't read | the request itself was turned down: the key in the wrong shape, `SETUP_FROM` or `SETUP_REPLY_TO` mistyped, a field missing | the claim is taken back (`release_setup_reminder`); the run tries the next email once, to tell the request from the person, and stops when that one is turned down too; the next hour tries again |
+  | 401, 403 | the mail key was refused | the claim is taken back; the run stops; the next hour tries again |
+  | 429 | a sending limit was reached | the same: taken back, tried next hour |
+  | 5xx, no answer, or anything else | it may have gone: a fault, and a 502 or 504 from a gateway above all, can come back after Resend took the email | the claim stays, so it reads as sent and is never sent twice. After a first email the reminder still follows four days on; after a reminder, nothing |
+
+  So a wrong or rotated `RESEND_API_KEY`, or a typo in `SETUP_FROM`, costs
+  nobody anything: every hour one email (two, for a 400 or 422) is tried,
+  turned away, handed back, and the log says what it was, for example
+  `the mail key was refused (status 401)` or `the mail service turned the
+  request itself down, not the address (check RESEND_API_KEY and SETUP_FROM)
+  (status 400, validation_error)`, until it is fixed. A fault on Resend's side
+  costs at most the one email it stopped at, never a second copy.
+
+  **Try the email again** (grant-access `try-again`, then
+  `clear_setup_reminder_refusal`) forgets the refusal, and the one email it
+  stopped is due again by the usual rule. A refused email never went, and its
+  date was emptied when the refusal was written, so this is never a second
+  copy and never a third email.
+
+  Every real email also carries an `Idempotency-Key`,
+  `setup-reminder/<first|reminder>/<account id>` (never the address). Resend
+  keeps it for 24 hours and answers a repeat of the same key and words without
+  sending again, so an email handed back after a 401, 403, 429, or a 400 or
+  422 about the request, and tried again inside that day cannot arrive twice,
+  even if Resend had taken it. The
+  samples carry none.
+
+`functions/grant-access/` gains five actions behind the same lock: `stuck`
+(the list), `reminders` (the switch), `leave-out`, `try-again` (a refused
+email due again), and `reminder-sample` (both emails, marked [Sample], to the
+reply address).
+
+### Putting it live, in this order
+
+1. **Apply `20261015_setup_reminders.sql`.** The tables, the rule, the list and
+   the switch, which is off. It looks once at today's accounts on the way in.
+   Nothing calls anything yet.
+2. **Deploy the function**: `supabase functions deploy setup-reminder --no-verify-jwt`.
+   Secrets: `RESEND_API_KEY` is already set (feedback-email and download-link
+   use it). Optional: `SETUP_FROM`, `SETUP_REPLY_TO`.
+3. **Apply `20261015_setup_reminders_schedule.sql`.** If `create extension
+   pg_cron` is refused, turn pg_cron on in the dashboard (Integrations → Cron,
+   or Database → Extensions) and run the file again. The hourly run then keeps
+   the record of computers up to date, and still sends nothing.
+4. **Deploy grant-access**: `supabase functions deploy grant-access`. The phone's
+   Developer → Paid but no computer yet then fills in. Before that it says the
+   server doesn't have the list yet.
+5. **On the phone, in that list**: Send me a sample of both emails, and read
+   them. Tap and Leave them out: the App Store / Google Play review demo
+   account, and his own test accounts. Leave out, too, any account whose email
+   he confirmed by hand (Customer lookup → Confirm their account now) unless
+   that customer has written to him from that same address: confirming by hand
+   proves nothing about the address, and the setup emails only go to confirmed
+   ones on the understanding that the address is right. Before turning them
+   on, check the hourly job exists (the `cron.job` query under Checking it).
+   Then Turn the setup emails on.
+
+On the first hour after that, everybody already waiting more than a day gets
+the first email — about a dozen on 15 October 2026. The words never say
+"yesterday you bought" for that reason.
+
+### Checking it
+
+```sql
+-- the switch, and how many are due right now (counts only)
+select public.setup_reminder_sending() as sending,
+       (select count(*) from public.setup_due() where kind = 'first') as due_first,
+       (select count(*) from public.setup_due() where kind = 'reminder') as due_reminder;
+
+-- the schedule, and the last few runs
+select jobid, schedule, command, active from cron.job where jobname = 'setup-reminders';
+select id, status_code, content, created from net._http_response order by created desc limit 5;
+
+-- one run by hand
+select public.run_setup_reminders();
+```
+
+A run answers `{"sending":false,"first":n,"reminder":m}` while the switch is
+off, and `{"sending":true,"first":…,"reminder":…,"refused":…,"skipped":…,"stopped":…}`
+when on. `stopped` is `null` for a run that did not stop early, or
+`{"status":401,"why":"mail service"}` (or `"this email"`, `"may have gone"`) for
+the refusal it stopped at; `refused` counts every email turned down, so a run
+that got past one doubtful 400 says `"refused":1` and `"stopped":null`. Neither ever carries an address; the function log
+names an account only by its id, and only when an email was refused, with
+the status and what it means in words. `401` means the function
+could not read `setup_reminder_hook_secret` — check it still grants execute to
+`service_role`. Unless the 401's content is the gateway's own (`Missing
+authorization header`, or `Invalid JWT`): then setup-reminder was deployed
+without `--no-verify-jwt`, so the gateway turns the hourly call away before the
+function runs. Deploy it again with the flag. There is no `config.toml` here
+to remember it.
+
+## Sales at a glance: Handled
+
+"I've already handled this paid twice thing ... I wanna [be able to] mark as
+completed or so that it doesn't appear anymore after it's been handled. And
+probably doesn't need to be at the top of the list you know." (15 October
+2026.) On Sales at a glance, every Paid twice row and every Paid, account
+never confirmed row has a Handled button; those two lists now come after
+Latest sales. Two pieces:
+
+- `migrations/20261015_sales_handled.sql` — one table, `sales_handled`: the
+  account (deleted with it), which list (`twice` or `unconfirmed`), what the
+  row showed when he marked it (the newest purchase it was about in
+  RevenueCat's milliseconds, how many purchases counting refunded ones, and
+  for `unconfirmed` how many card sales on the website were beside it, one
+  sale at a time, with their dates in the newest purchase), and when. `mark_sales_handled(uid, what, newest, bought, near)` and
+  `sales_handled_list()`, both service_role only; row-level security on, no
+  policy, no client grant. A second mark only moves each value forward.
+- `functions/grant-access/` — a new action, `handled`
+  (`{ email, kind, until, count, nearCount }`), after the same ADMINS lock,
+  found by the address like Leave them out. And `sales` puts those three on
+  each row (`until`, `count`, `nearCount`), the page sends them back as they
+  came, and it asks for the marks and leaves out a row only while nothing is
+  newer than the purchase marked and there are no more purchases, or card
+  sales beside it, than marked, answering how many it left out (`handled`).
+  A new payment by the same person brings the row back, even one dated
+  before the mark that a phone brought across later, and any card sale
+  beside a never-confirmed row made after the mark, by its date, including
+  the same address paying again after its refund; a refund never does.
+
+Either piece can go first. Before the migration, Sales gets no marks and shows
+every row as today, and Handled answers that the database change hasn't been
+put live. Before grant-access is deployed, the old function answers Handled
+with "Unknown action.", which the page turns into words saying the server
+update hasn't been put live, and a phone or computer that hasn't taken the
+update just has no button.
+
+### Putting it live, in this order
+
+1. **Apply `20261015_sales_handled.sql`.** Nothing anybody sees changes.
+2. **Deploy grant-access**: `supabase functions deploy grant-access`. It is
+   the same file as the setup emails' step 4, so this one deploy puts their
+   actions up too; without their own migration those only say, in words, that
+   the database change hasn't been put live.
+3. **On the phone or the website, Developer → Sales at a glance**: tap Handled
+   under the customer already dealt with, then Handled again to say yes. The
+   row goes, and Note at the bottom says "Paid twice: 1 handled earlier."
+
+### Checking it
+
+```sql
+select account_id, kind, paid_until, to_timestamp(paid_until / 1000.0) as newest_marked,
+       bought_count, near_count, handled_at
+from public.sales_handled order by handled_at desc;
+```
