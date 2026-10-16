@@ -1550,6 +1550,9 @@ export function run(test) {
     }
     assert.match(code(phone).replace(/\s+/g, ' '), /Alert\.alert\(q\.title, q\.message, \[ \{ text: q\.cancel, style: 'cancel' \}, \{ text: q\.confirm, onPress: \(\) => handle\(row\) \} \]\)/, 'the phone marks a row without asking first')
     assert.match(web, /if \(q && window\.confirm\(`\$\{q\.title\} \$\{q\.message\}`\)\) handle\(row\)/, 'the browser marks a row without asking first')
+    /* A refusal leaves the row on screen, so it is said where the tap was, not only at the foot of the page. */
+    assert.match(code(phone).replace(/\s+/g, ' '), /Alert\.alert\(handledProblem\(res\)\)/, 'a refused Handled on the phone is said only below the fold')
+    assert.match(code(web).replace(/\s+/g, ' '), /window\.alert\(handledProblem\(res\)\)/, 'a refused Handled in the browser is said only below the fold')
     /* Both Facts draw what goes under a row. */
     assert.match(read('mobile/src/components/Facts.js'), /export default function Facts\(\{ title, rows, onRow, detail \}\)[\s\S]*const below = detail \? detail\(row\) : null/, 'the phone’s Facts draws nothing under a row')
     assert.match(read('src/components/Facts.jsx'), /\{detail \? detail\(row\) : null\}/, 'the browser’s Facts draws nothing under a row')

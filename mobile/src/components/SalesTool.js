@@ -72,9 +72,8 @@ export default function SalesTool() {
       } else {
         /* The row stays, so a refusal is said where the tap was, not in the
            line at the foot of the page, which is a screen or two below it. */
-        const message = handledProblem(res)
-        setTold({ ...res, message })
-        Alert.alert('Nothing was marked', message)
+        setTold({ ...res, message: handledProblem(res) })
+        Alert.alert(handledProblem(res))
       }
     } finally {
       setDoing(null)

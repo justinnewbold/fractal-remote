@@ -57,9 +57,8 @@ export default function SalesTool() {
       } else {
         /* The row stays, so a refusal is said where the click was, not in the
            line at the foot of the page, which is a screen or two below it. */
-        const message = handledProblem(res)
-        setTold({ ...res, message })
-        window.alert(message)
+        setTold({ ...res, message: handledProblem(res) })
+        window.alert(handledProblem(res))
       }
     } finally {
       setDoing(null)
