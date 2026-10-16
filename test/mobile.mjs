@@ -168,6 +168,7 @@ async function clickOnTheBench(os = 'ios') {
       }
     `,
     'metronome-rules.js': read('mobile/src/lib/metronome-rules.js'),
+    'device-word.js': read('mobile/src/lib/device-word.js'),
     'metronome.js': ("import * as __clock from './clock.js'\n" + esm(read('mobile/src/lib/metronome.js')))
       .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
       .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
@@ -292,7 +293,7 @@ async function rigOnTheBench(over = {}) {
   /* The catalog the pedals are named from before the chain is read; see lib/chain-outline. */
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
   /* The gate a tap asks while the link is down, and the rules its deadline and its words come from: both real, as they are. */
-  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'relay-rules.js']) {
+  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'relay-rules.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -2702,9 +2703,11 @@ export function run(test) {
      */
     const settings = read('mobile/src/screens/Settings.js')
 
-    for (const row of ['Phone & computer', 'Tiles & scenes', 'Troubleshooting', 'About']) {
+    for (const row of ['Tiles & scenes', 'Troubleshooting', 'About']) {
       assert.match(settings, new RegExp(`title="${row}"`), `Setup has no ${row} row`)
     }
+    /* Phone & computer, or iPad & computer on an iPad (device-word.mjs). */
+    assert.match(settings, /title=\{PAIR_TITLE\}/, 'Setup has no Phone & computer row')
     assert.match(settings, /const \[page, setPage\] = useState\(startPage\)/, 'Setup is one scroll again rather than a list of pages')
 
     /* The front page holds doors, plus the one quick choice of light or dark. */
@@ -4469,7 +4472,7 @@ export function run(test) {
     assert.match(phone, /email \|\| \(paired \? 'Paired, no account' : 'Not signed in'\)/, 'the phone does not say who is signed in, or that nobody is')
     const account = phone.slice(phone.indexOf("{page === 'account' ? ("), phone.indexOf("{page === 'developer'"))
     assert.match(account, /onPress=\{onSignIn\}/, 'the phone’s Account page has no way to sign in')
-    assert.match(account, /label="Sign out on this phone"/)
+    assert.match(account, /label=\{`Sign out on this \$\{deviceNoun\(\)\}`\}/)
     assert.match(account, /label="Change password"/, 'the password moved somewhere nobody will find it')
     assert.match(account, /title="Unlock the full version"/, 'unlocking or restoring a purchase is not with the account')
 
@@ -4527,16 +4530,17 @@ export function run(test) {
        a moment later, and again after every trip to Settings. It asks from
        the first second of looking now; the note still waits for `long`. */
     assert.match(waking, /useComputerElsewhere\(link\.link !== 'connected' && !bluetooth\)/, 'the phone never asks while it waits')
-    assert.match(waking, /This phone is signed in as \$\{email\}/, 'the phone does not say which account it is on')
-    assert.match(waking, /Switch account on this phone/, 'the phone gives no way to change account')
+    /* "This iPad" on an iPad (device-word.mjs). */
+    assert.match(waking, /This \$\{deviceNoun\(\)\} is signed in as \$\{email\}/, 'the phone does not say which account it is on')
+    assert.match(waking, /Switch account on this \$\{deviceNoun\(\)\}/, 'the phone gives no way to change account')
     assert.match(read('mobile/src/screens/Settings.js'), /useComputerElsewhere\(link === 'no-answer'\)/, 'Setup never asks')
 
     /* "When the app is signed in on the wrong account it should say so on the
        main screen, not just in settings." */
     const wrong = read('mobile/src/components/WrongAccount.js').replace(/\s+/g, ' ')
     assert.match(wrong, /useComputerElsewhere\(active\)/, 'the stage never asks')
-    assert.match(wrong, /This phone is signed in as \$\{email\}/, 'the stage does not say which account it is on')
-    assert.match(wrong, /Switch account on this phone/, 'the stage gives no way to change account')
+    assert.match(wrong, /This \$\{deviceNoun\(\)\} is signed in as \$\{email\}/, 'the stage does not say which account it is on')
+    assert.match(wrong, /Switch account on this \$\{deviceNoun\(\)\}/, 'the stage gives no way to change account')
     assert.match(
       phone,
       /<WrongAccount active=\{auth === 'in' && !demo && !settling && screen === 'stage' && link\.link !== 'connected' && !bluetooth\}/,
@@ -5108,7 +5112,7 @@ export function run(test) {
     const web = flat('src/App.jsx')
     assert.match(web, /<Volume eid=\{outputEid\} preset=\{preset\} onError=\{setError\} \/> \) : null\} \{\/\*[^*]*\*\/\} \{sheet === 'volume' \? <MetronomeSwitch slug=\{slugOfUnit\(device\)\} \/> : null\} <\/Sheet>/, 'the browser’s Volume sheet has no metronome switch')
     const browser = flat('src/components/MetronomeSwitch.jsx')
-    assert.match(browser, /const unitCan = unitClick\(slug, \{ demo: isDemo\(\) \}\)/)
+    assert.match(browser, /const unitCan = unitClick\(slug, \{ demo: isDemo\(\), ours: 'this screen' \}\)/)
     assert.match(browser, /await setMetronome\(\{ on: !setting\.on \}, slug\)/)
   })
 
@@ -5525,6 +5529,8 @@ export function run(test) {
           export const __beat = () => fns.forEach((fn) => fn())
         `,
         'metronome-rules.js': read('mobile/src/lib/metronome-rules.js'),
+        'device-word.js': read('mobile/src/lib/device-word.js'),
+    'device-word.js': read('mobile/src/lib/device-word.js'),
         'theme.js': "export const color = { ok: 'green' }\n",
         'TempoDot.js': ("import * as __clock from './clock.js'\n" + read('mobile/src/components/TempoDot.js'))
           .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
@@ -8449,7 +8455,7 @@ export function run(test) {
       settings.indexOf("{page === null ? ("),
       settings.indexOf("{page === 'account' ? (")
     )
-    const order = [...front.matchAll(/<Group title="([^"]+)"|title=(?:"([^"]+)"|\{(REPLAY)\})/g)]
+    const order = [...front.matchAll(/<Group title="([^"]+)"|title=(?:"([^"]+)"|\{(REPLAY|PAIR_TITLE)\})/g)]
       .map((m) => (m[1] ? `# ${m[1]}` : m[2] || m[3]))
 
     /*
@@ -8460,7 +8466,8 @@ export function run(test) {
      */
     assert.deepEqual(order, [
       '# My rig',
-      'Phone & computer',
+      /* Phone & computer, or iPad & computer on an iPad (device-word.mjs). */
+      'PAIR_TITLE',
       /* "Move the Bluetooth card from the phone and computer menu to its own menu under the settings menu." */
       'Bluetooth (beta)',
       /* What each footswitch does, where the switches can be read. */
@@ -8936,7 +8943,7 @@ export function run(test) {
     }
 
     /* And the word the top bar shows when there is nothing on the other end. */
-    assert.match(read('shared/link-word.mjs'), /'no computer' : 'no phone'/, 'the bar still says NO MAC')
+    assert.match(read('shared/link-word.mjs'), /'no computer' : 'no remote'/, 'the bar still says NO MAC')
   })
 
   test('a downloaded update is offered as a restart, and floats over the play screen rather than pushing it down', () => {
@@ -10077,7 +10084,7 @@ export function run(test) {
 
     const settings = read('mobile/src/screens/Settings.js')
     /* Back from the steps names the page it goes to. */
-    assert.match(settings, /const UP_LABEL = \{ link: '‹ Phone & computer'/)
+    assert.match(settings, /const UP_LABEL = \{ link: `‹ \$\{PAIR_TITLE\}`/)
     /* A page of its own, after Playing with no internet and before the watch: outside the slices the Bluetooth checks read. */
     const at = settings.indexOf("{page === 'updating' ? (")
     assert.ok(at > settings.indexOf("{page === 'offline' && mayDrive(purchase) ? (") && at < settings.indexOf("{page === 'watch' ? ("), 'the steps moved into a slice another test reads')
@@ -11123,7 +11130,7 @@ export function run(test) {
     )
     assert.match(flat, /\? \{ tone: 'hint', text: `Saved to slot \$\{res\.slot\}\.`, done: true \}/, 'the saved note is not marked to go')
     assert.match(flat, /: \{ tone: res\.cancelled \? 'hint' : 'warn', text: res\.error \}/, 'a failure is marked to go on its own')
-    assert.match(flat, /text: `Saved to slot \$\{slot\} on this phone\.`, done: true/)
+    assert.match(flat, /text: `Saved to slot \$\{slot\} on this \$\{deviceNoun\(\)\}\.`, done: true/)
   })
 
   test('a save from the bar on Play says when it runs late, and can be cancelled there', () => {
@@ -11487,7 +11494,7 @@ export function run(test) {
     assert.match(names, /export function learn\(n, name\) \{ if \(!Number\.isInteger\(n\) \|\| typeof name !== 'string'\) return names\.set\(n, cleanPresetName\(name\)\) persist\(\) announce\(\)/, 'a learned name is not kept or announced')
 
     /* And the note says what makes it permanent, in the app's own words. */
-    assert.match(settings, /Save asks the computer to write this slot, and that keeps everything changed from this phone: names, knobs, blocks and the chain\./)
+    assert.match(settings, /Save asks the computer to write this slot, and that keeps everything changed from this\{' '\} \{deviceNoun\(\)\}: names, knobs, blocks and the chain\./)
   })
 
   test('a dead account service is given twelve seconds, not the whole evening', async () => {
@@ -13535,7 +13542,8 @@ export function run(test) {
       block.app.indexOf('{P6.address}') < block.app.indexOf('<CopyAddress />'),
       'the line about which machine this is for comes after the address'
     )
-    assert.match(read('mobile/src/lib/onboarding.js'), /address: '[^']*NOT ON THIS PHONE'/, 'the address line no longer rules out this phone')
+    /* NOT ON THIS PHONE, or NOT ON THIS iPad on an iPad (device-word.mjs). */
+    assert.match(read('mobile/src/lib/onboarding.js'), /get address\(\) \{[\s\S]*?· NOT ON THIS \$\{DEVICE_NOUN\(\)\}`/, 'the address line no longer rules out this phone')
 
     /*
      * AND IT IS CALLED A QR CODE. "Call it a QR code not a square."
@@ -14040,6 +14048,7 @@ export function run(test) {
       ["from './debugLog'", "from './debugLog.js'"],
       ["from './unlock-rule'", `from '${real('unlock-rule.js')}'`],
       ["from './owner-unlock'", `from '${real('owner-unlock.js')}'`],
+      ["from './device-word'", `from '${real('device-word.js')}'`],
       ["from './relay'", "from './relay.js'"],
       ["from './demo'", "from './demo.js'"],
       ["from './relayPass'", "from './relayPass.js'"],
@@ -15672,14 +15681,14 @@ export function run(test) {
     const signIn = read('mobile/src/screens/SignIn.js')
     const flatSign = withoutComments(signIn).replace(/\s+/g, ' ')
     assert.match(flatSign, /const paid = start === 'up' \|\| paidHere/)
-    assert.match(flatSign, /You’ve paid — thank you\. Now make your account, so the full version goes with you to your computer and any other phone\. Use this same email there\./)
+    assert.match(flatSign, /You’ve paid — thank you\. Now make your account, so the full version goes with you to your computer and any other phone or tablet\. Use this same email there\./)
     assert.match(flatSign, /if \(mode === 'in' && paid && err\?\.noMatch\) setNoAccount\(true\)/, 'a failed sign-in on a phone that paid with no account says only that the details did not match')
     assert.match(flatSign, /label="Create account with this email" disabled=\{busy\} onPress=\{\(\) => switchTo\('up'\)\}/)
     assert.ok(!/setEmail\(''\)/.test(flatSign.slice(flatSign.indexOf('const switchTo'), flatSign.indexOf('const fieldText'))), 'switching to Create account throws the email away')
     /* The confirm-first note for a paid phone only, and one that can be followed: the email's own link opens the website. */
     assert.match(
       flatSign,
-      /paid \? 'Account made — type the code from the email we just sent in the box below\. Or tap the link in that email, then come back to this phone and sign in, so your purchase goes with your account\.' : 'Account made\. Type the code from the email we just sent in the box below, or tap the link in that email and then sign in\.'/,
+      /paid \? `Account made — type the code from the email we just sent in the box below\. Or tap the link in that email, then come back to this \$\{deviceNoun\(\)\} and sign in, so your purchase goes with your account\.` : 'Account made\. Type the code from the email we just sent in the box below, or tap the link in that email and then sign in\.'/,
       'a new account on a paid phone is not told to come back here and sign in, or everybody is'
     )
     assert.ok(!/before you open the website/.test(flatSign), 'the phone says to sign in before opening the website, which the email itself opens')

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Sheet from './Sheet'
 import SignIn from './SignIn'
+import { deviceNoun } from '../../shared/device-word.mjs'
 
 /**
  * Sign-in as a sheet: it pops up, you do the one thing, it goes.
@@ -55,10 +56,10 @@ export default function SignInSheet({ open, role, account = false, startIn = 'in
           {forUnlock ? (
             <p className="hint">
               {side === 'sent'
-                ? 'Bought it on your phone already? Don’t pay again here. Once you’ve confirmed the account, sign in with this email on the phone, and this unlocks by itself.'
+                ? 'Bought it on your phone or tablet already? Don’t pay again here. Once you’ve confirmed the account, sign in with this email there, and this unlocks by itself.'
                 : making
-                  ? 'Bought it on your phone already? Don’t pay again here. Make the account with the email you’ll use on the phone, then sign in with it on the phone, and this unlocks by itself.'
-                  : 'Bought it on your phone already? Don’t pay again here. Sign in with the same email as on the phone. If the phone isn’t signed in yet, sign in there too, and this unlocks by itself.'}
+                  ? 'Bought it on your phone or tablet already? Don’t pay again here. Make the account with the email you’ll use there, then sign in with it there, and this unlocks by itself.'
+                  : 'Bought it on your phone or tablet already? Don’t pay again here. Sign in with the same email you use in the app there. If the app there isn’t signed in yet, sign in there too, and this unlocks by itself.'}
             </p>
           ) : null}
           <SignIn
@@ -81,7 +82,7 @@ export default function SignInSheet({ open, role, account = false, startIn = 'in
       open={open}
       onClose={onClose}
       title={making ? 'Create Account' : phone ? 'Connect to your computer' : 'Set up phone remote'}
-      note={making ? null : phone ? 'Sign in once — this phone stays signed in' : 'Once, on this computer'}
+      note={making ? null : phone ? `Sign in once — this ${deviceNoun()} stays signed in` : 'Once, on this computer'}
     >
       <div className="signin-sheet">
         {/*
@@ -94,7 +95,7 @@ export default function SignInSheet({ open, role, account = false, startIn = 'in
             ? 'Use the same account you set up on the computer.'
             : /* "Sign in with the account you made in the phone app." came
                  off the front: an account can be made on this form now. */
-              'Your phone signs in with these same details to reach this computer.'}
+              'Your phone or tablet signs in with these same details to reach this computer.'}
         </p>
         <SignIn
           /* A new key when the button that opened it changes, so the form

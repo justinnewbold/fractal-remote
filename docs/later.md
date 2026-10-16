@@ -207,5 +207,26 @@ scenes. Still on the list, not started:
 
 ## Waiting on something
 
-Nothing right now. The GitHub description and RevenueCat's sample products
-were both done by Justin on 29 September.
+- **A VP4 owner's recording.** "That sounds good. Let's do it." (16 October
+  2026.) Rather than guess at the VP4 from the AM4, a VP4 owner records what
+  VP4-Edit sends the pedal and what it answers, while doing a set list of
+  things, and the next VP4 features are built from that. The guide is
+  docs/vp4-recording.md (MIDI Monitor on a Mac, Wireshark with USBPcap on an
+  Intel or AMD Windows PC), written from checked research and checked twice.
+  The message Justin sends with it is below. Nothing about the VP4 is built
+  further until a recording comes back.
+
+  > Hi! I make Fractal Remote, an app that controls Fractal units from a
+  > phone. Its VP4 side has never been checked on a real VP4, and I'm looking
+  > for an owner willing to help. … The step-by-step guide:
+  > https://github.com/justinnewbold/fractal-remote/blob/main/docs/vp4-recording.md
+
+- **The iPhone/iPad app on Apple-silicon Macs.** The app supports tablets,
+  so App Store Connect may offer it on M-series Macs as an iPad app, where
+  it would call the Mac "this iPad" (Platform.isPad is true there). The
+  computer app is the Mac's app, so the simple answer is App Store Connect →
+  Pricing and Availability → turn off "iPhone and iPad Apps on Apple Silicon
+  Macs". Justin's to decide; no build either way.
+
+The GitHub description and RevenueCat's sample products were both done by
+Justin on 29 September.

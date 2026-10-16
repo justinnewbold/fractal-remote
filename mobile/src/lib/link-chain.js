@@ -3,6 +3,7 @@
  * fails on any difference between the two. */
 
 import { COMPUTER_NEEDED, isOlder } from './versions.js'
+import { DEVICE_NOUN, deviceNoun } from './device-word.js'
 
 /**
  * THE THREE CARDS AT THE TOP OF PHONE & COMPUTER, worded once for both ends.
@@ -132,7 +133,7 @@ export function linkChain({ here, demo = false, via = 'computer', unit = {}, com
         : { body: 'Not connected', tone: 'dim' }
 
   const phoneCard = atPhone
-    ? { body: [phone.version ? `v${phone.version}` : null, phone.email || null].filter(Boolean).join(' · ') || 'This phone', tone: 'good' }
+    ? { body: [phone.version ? `v${phone.version}` : null, phone.email || null].filter(Boolean).join(' · ') || `This ${deviceNoun()}`, tone: 'good' }
     : phone.remote === 'on'
       ? { body: `Phone remote on${phone.email ? ` for ${phone.email}` : ''}`, tone: 'good' }
       : phone.remote === 'signed-out'
@@ -145,7 +146,8 @@ export function linkChain({ here, demo = false, via = 'computer', unit = {}, com
       ? { key: 'adapter', label: 'BLUETOOTH ADAPTER', ...adapterCard, wire: 'BLUETOOTH' }
       : /* "Where it says secure link, change that to say secure wireless link" (13 October 2026), here and in How it works (onboarding.mjs). */
         { key: 'computer', label: atPhone ? 'YOUR COMPUTER' : 'THIS COMPUTER', ...computerCard, ...(computerWarn ? { warn: computerWarn } : {}), wire: 'SECURE WIRELESS LINK' },
-    { key: 'phone', label: atPhone ? 'THIS PHONE' : 'YOUR PHONE', ...phoneCard }
+    /* THIS iPad on an iPad (device-word.mjs); the computer cannot tell what the remote is, so it says both. */
+    { key: 'phone', label: atPhone ? `THIS ${DEVICE_NOUN()}` : `YOUR ${DEVICE_NOUN('computer')}`, ...phoneCard }
   ].map((card, i, all) => ({
     ...card,
     /* A wire is lit when both of its ends are answering. */

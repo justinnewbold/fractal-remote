@@ -38,7 +38,9 @@ export function linkWord(tone, role) {
   if (tone === 'good') return 'connected'
   if (tone === 'busy') return 'connecting'
   if (tone === 'bad') return 'disconnected'
-  return role === 'remote' ? 'no computer' : 'no phone'
+  /* "no remote" on the computer: the remote can be a phone, a tablet or
+     another computer's browser now (device-word.mjs). */
+  return role === 'remote' ? 'no computer' : 'no remote'
 }
 
 /**

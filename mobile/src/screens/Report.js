@@ -6,6 +6,7 @@ import { KINDS, MAX_MESSAGE, carriesLog, context, logPreview, sendReport } from 
 import { useRig } from '../lib/rig'
 import Note from '../components/Note'
 import Press from '../components/Press'
+import { deviceNoun } from '../lib/device-word'
 
 const face = Platform.select(mono)
 
@@ -226,7 +227,7 @@ export default function Report({ onBack, start = 'bug' }) {
             />
 
             <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>
-              Your version, your phone&rsquo;s OS and which unit you&rsquo;re on are sent too, so it
+              Your version, your {deviceNoun()}&rsquo;s OS and which unit you&rsquo;re on are sent too, so it
               can be looked into.
               {bug && withLog ? ' The log goes as well — you can read it above first.' : ''} Nothing
               you&rsquo;ve built goes with it. If you&rsquo;re signed in, the report is linked to your account,

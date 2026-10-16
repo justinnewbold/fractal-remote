@@ -33,6 +33,7 @@
  * `npm run sync:rules`, which renames the import for Metro.
  */
 import { COMPUTER_NEEDED } from './versions.js'
+import { deviceNoun } from './device-word.js'
 
 export const SITE = 'https://fractal.newbold.cloud'
 export const RELEASES = 'https://api.github.com/repos/justinnewbold/fractal-remote/releases/latest'
@@ -129,7 +130,7 @@ export function liveRows(live, here = {}, needed = COMPUTER_NEEDED) {
 
   if (here.version) {
     const behind = siteVersion && compareVersions(here.version, siteVersion) < 0
-    const where = here.kind === 'phone' ? 'This phone' : 'This page'
+    const where = here.kind === 'phone' ? `This ${deviceNoun()}` : 'This page'
     let state
     if (!siteVersion) state = ''
     else if (!behind) state = ', up to date'

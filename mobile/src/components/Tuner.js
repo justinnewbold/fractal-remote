@@ -9,6 +9,7 @@ import Press from './Press'
 import { useBluetoothOn } from '../lib/bluetooth'
 import { useRig } from '../lib/rig'
 import { NOT_CONNECTED } from '../lib/relay-rules'
+import { deviceNoun } from '../lib/device-word'
 
 const ofUnitTuner = (s) => s.unitTuner
 /* In the words on the AM4's own menus, so he can find the setting from here. */
@@ -222,7 +223,7 @@ export default function Tuner({ reading, on, onClose, down = false }) {
               </Note>
             ) : stalled ? (
               <Note tone="warn">
-                The tuner is running on the unit, but the readings aren’t reaching this phone — your
+                The tuner is running on the unit, but the readings aren’t reaching this {deviceNoun()} — your
                 computer keeps them to itself over a remote link. Use the unit’s own display, or tune at
                 the computer.
               </Note>

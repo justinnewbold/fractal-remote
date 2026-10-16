@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { listPorts, selectPort, servedLocally } from '../lib/forgefx'
+import { HOSTED_ORIGIN } from '../../shared/pairing.mjs'
 
 /**
  * Which unit to talk to, and how to reach the server from elsewhere.
@@ -203,7 +204,7 @@ export default function Ports({ onError, onChanged, busy }) {
       </div>
 
       <p className="silk-label" style={{ marginTop: 20 }}>
-        Reaching this from your phone
+        Reaching this from your phone or tablet
       </p>
       <RemoteHelp />
     </section>
@@ -223,15 +224,25 @@ function RemoteHelp() {
     return (
       <p className="hint">
         This page is being served from your computer, so any device on the same network can open{' '}
-        <code>{window.location.origin}</code> — including a phone.
+        <code>{window.location.origin}</code> — including a phone or tablet.
       </p>
     )
   }
 
   return (
-    <p className="hint">
-      To play from a phone, use <strong>Phone remote</strong> above. Your computer stays plugged into
-      the unit and the phone drives it from anywhere.
-    </p>
+    <>
+      <p className="hint">
+        To play from a phone or tablet, use <strong>Phone remote</strong> above. Your computer stays
+        plugged into the unit and the phone or tablet drives it from anywhere.
+      </p>
+      {/* "A sound guy might just want to use another computer to be able to
+          control things remotely" (16 October 2026). He can, already: the
+          website on any other computer, signed in to the same account, is
+          the remote, just as a phone's browser is. */}
+      <p className="hint">
+        Another computer can be the remote too, for whoever is running sound: open{' '}
+        <code>{HOSTED_ORIGIN.replace('https://', '')}</code> in its browser and sign in with the same account.
+      </p>
+    </>
   )
 }

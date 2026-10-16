@@ -67,6 +67,7 @@ import { setLinkAway, setLinkDown, setTapsRelayed } from './tapGate.js'
 import { PHONE_NOTE_ID, phoneNote, timeToTell } from '../../shared/phone-note.mjs'
 import { holders } from '../../shared/editors.mjs'
 import { D4 } from '../../shared/onboarding.mjs'
+import { browserDevice, deviceNoun, setDevice } from '../../shared/device-word.mjs'
 export { isPairAccount, HOSTED_ORIGIN } from '../../shared/pairing.mjs'
 
 /**
@@ -86,6 +87,20 @@ export function detectRole({ demo, served, hostname, helperAlive }) {
   if (demo) return 'mac'
   if (served) return hostname === 'localhost' || hostname === '127.0.0.1' ? 'mac' : 'wifi'
   return helperAlive ? 'mac' : 'remote'
+}
+
+/**
+ * What this end calls itself, by its role (shared/device-word.mjs). The
+ * computer app talks about the remote, so it says "phone or tablet". A
+ * remote is whatever the browser is on: this phone, this iPad, or this
+ * browser on a laptop, the sound engineer's case.
+ */
+export function deviceForRole(role, nav = typeof navigator !== 'undefined' ? navigator : {}, screen = typeof window !== 'undefined' ? window.screen || {} : {}, canHost = true) {
+  /* The demo takes the Mac's role everywhere; a demo that cannot host is a
+     phone, a tablet or a laptop pretending (App.jsx's phoneEnd), and is
+     worded as the device it is on. */
+  if (role === 'mac' && canHost !== false) return 'computer'
+  return browserDevice({ userAgent: nav.userAgent || '', touchPoints: nav.maxTouchPoints || 0, width: screen.width || 0, height: screen.height || 0 })
 }
 
 /**
@@ -379,7 +394,7 @@ export function faultCopy({
   if (role === 'remote' && reason === 'no-answer') {
     return {
       title: 'Your computer stopped answering',
-      body: 'The phone is on the line but the computer is not replying. Check the Fractal Remote app is still open on the computer and that it hasn’t gone to sleep — nothing needs unplugging at the unit.'
+      body: `This ${deviceNoun()} is on the line but the computer is not replying. Check the Fractal Remote app is still open on the computer and that it hasn’t gone to sleep — nothing needs unplugging at the unit.`
     }
   }
   if (role === 'remote' && reason === 'unreadable') {
@@ -427,7 +442,7 @@ export function faultCopy({
   if (role === 'wifi') {
     return {
       title: 'Lost the computer',
-      body: 'Make sure the Fractal Remote app is still open on the computer and this phone is on the same wifi, then tap Try again.'
+      body: `Make sure the Fractal Remote app is still open on the computer and this ${deviceNoun()} is on the same wifi, then tap Try again.`
     }
   }
   if (role === 'remote') {
@@ -575,6 +590,10 @@ function set(patch) {
   const was = state
   state = next
   if (next.role !== was.role) setTapsRelayed(next.role === 'remote')
+  /* Only in a page: a test run has no device to name, and the words stay a phone's. */
+  if ((next.role !== was.role || next.canHost !== was.canHost) && typeof window !== 'undefined') {
+    setDevice(deviceForRole(next.role, undefined, undefined, next.canHost))
+  }
   if (next.down !== was.down) setLinkDown(next.down)
   if (!changed) return
   for (const fn of watchers) {

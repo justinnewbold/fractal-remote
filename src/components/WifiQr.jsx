@@ -52,25 +52,25 @@ export default function WifiQr() {
   if (!where.lan) {
     return (
       <p className="hint">
-        This computer is not on a wifi network right now. Join one, and the code for your phone
-        appears here.
+        This computer is not on a wifi network right now. Join one, and the code for your phone or
+        tablet appears here.
       </p>
     )
   }
   return (
     <div className="wifi-qr">
       <p className="hint">
-        No internet in the room? Put your phone on the same wifi as this computer and point your
-        phone&rsquo;s camera at this code. It opens in your phone&rsquo;s web browser, not the
-        Fractal Remote app, and nothing goes near the internet.
+        No internet in the room? Put your phone or tablet on the same wifi as this computer and point
+        its camera at this code. It opens in its web browser, not the Fractal Remote app, and nothing
+        goes near the internet.
       </p>
       {qr ? (
-        <img className="phone-store-qr" src={qr} alt="Scan to open this computer on your phone" width={160} height={160} />
+        <img className="phone-store-qr" src={qr} alt="Scan to open this computer on your phone or tablet" width={160} height={160} />
       ) : (
         <div className="phone-store-qr placeholder" aria-hidden="true" />
       )}
       <p className="hint">
-        Or type <strong className="mono">{where.lan}</strong> into the phone&rsquo;s browser.
+        Or type <strong className="mono">{where.lan}</strong> into its browser.
       </p>
       <p className="hint">
         What you change there is kept by that browser rather than in your account.

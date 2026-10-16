@@ -1,3 +1,5 @@
+/* First, so every sentence that names the device knows which one it is on. */
+import './src/lib/thisDevice'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { ActivityIndicator, Alert, AppState, Appearance, BackHandler, Linking, ScrollView, Text, View } from 'react-native'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
@@ -49,6 +51,7 @@ import { BENCH } from './src/lib/features'
 import Paywall from './src/screens/Paywall'
 import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
 import { shouldAskToPay } from './src/lib/unlock-rule'
+import { deviceNoun } from './src/lib/device-word'
 
 /* The VP4's Scene Select number and MIDI channel live in the phone's store; the device layer reads them from there (lib/vp4-safety). */
 keepVp4SetupIn(sync)
@@ -1571,8 +1574,8 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           ) : elsewhere ? (
             <Note tone="fault">
               {email
-                ? `The computer on this wifi is signed into a different account. This phone is signed in as ${email}. On the computer, sign in to the Fractal Remote app with ${email}, or sign this phone into the computer’s account.`
-                : 'The computer on this wifi is signed into a different account than this phone. Sign both into the same account.'}
+                ? `The computer on this wifi is signed into a different account. This ${deviceNoun()} is signed in as ${email}. On the computer, sign in to the Fractal Remote app with ${email}, or sign this ${deviceNoun()} into the computer’s account.`
+                : `The computer on this wifi is signed into a different account than this ${deviceNoun()}. Sign both into the same account.`}
             </Note>
           ) : noneSaid ? (
             <Note tone="warn">
@@ -1591,7 +1594,7 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
             2026). To the account's own address, the one the words name.
           */}
           {noneSaid ? <SendLinkButton email={noComputer.email} /> : null}
-          {elsewhere && onSwitch ? <Press label="Switch account on this phone" onPress={onSwitch} /> : null}
+          {elsewhere && onSwitch ? <Press label={`Switch account on this ${deviceNoun()}`} onPress={onSwitch} /> : null}
           {/*
             The way to what the line above asks for, right under it, as on the
             Bluetooth page: Fractal Remote's own page in the phone's settings.

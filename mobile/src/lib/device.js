@@ -201,6 +201,7 @@ export {
   stepSlot
 } from './unit.mjs'
 import { EXCLUDED_BLOCKS, STAGE_HIDDEN } from './unit.mjs'
+import { deviceNoun } from './device-word'
 
 /*
  * `tap` is the deadline of something the player pressed (see tapOf), kept
@@ -628,9 +629,9 @@ export function parkSave(slug, request) {
  */
 export async function saveInDemo(slot) {
   const demo = demoDevice()
-  if (!demo) throw new Error('Only the demo saves on the phone.')
+  if (!demo) throw new Error(`Only the demo saves on the ${deviceNoun()}.`)
   const res = demo.storePreset(slot)
-  if (res && res.kept === false) throw new Error('This phone would not keep it. It is saved until the app is closed.')
+  if (res && res.kept === false) throw new Error(`This ${deviceNoun()} would not keep it. It is saved until the app is closed.`)
   return Number.isInteger(res?.slot) ? res.slot : slot
 }
 

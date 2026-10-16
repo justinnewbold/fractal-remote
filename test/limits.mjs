@@ -4084,7 +4084,8 @@ export function run(test) {
     assert.ok(restricted.includes('Settings → Screen Time → Content & Privacy Restrictions'), 'the app’s Screen Time line no longer says where to look; read the guide against it again')
     assert.match(words, /blocked by Screen Time[^.]*Settings → Screen Time → Content & Privacy Restrictions, allow Bluetooth Sharing/, 'the guide does not say what to do when Screen Time blocks Bluetooth')
     const settings = read('mobile/src/screens/Settings.js')
-    assert.match(settings, /title="Phone & computer"/, 'Settings has no Phone & computer, which the guide names as the row above Bluetooth (beta)')
+    assert.match(settings, /title=\{PAIR_TITLE\}/, 'Settings has no Phone & computer, which the guide names as the row above Bluetooth (beta)')
+    assert.match(settings, /const PAIR_TITLE = pairTitle\(\)/, 'the Phone & computer row is not named by pairTitle')
     assert.match(settings, /title="Bluetooth \(beta\)"/, 'Settings has no Bluetooth (beta) row, which the guide sends people to')
 
     /* What's different from USB: the app's list, every line of it. */

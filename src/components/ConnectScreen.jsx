@@ -42,6 +42,7 @@ import appleIcon from '../../mobile/assets/icons/apple.png'
 import windowsIcon from '../../mobile/assets/icons/windows.png'
 import linuxIcon from '../../mobile/assets/icons/linux.png'
 import { inDesktopApp, onAPhoneOrTablet } from '../lib/desktop'
+import { deviceNoun } from '../../shared/device-word.mjs'
 
 export default function ConnectScreen({
   link,
@@ -235,8 +236,8 @@ export default function ConnectScreen({
             <>
               <p>
                 {paired
-                  ? 'This phone is paired with your computer.'
-                  : 'Your Fractal is plugged into your computer. Connect and this phone becomes its remote.'}
+                  ? `This ${deviceNoun()} is paired with your computer.`
+                  : `Your Fractal is plugged into your computer. Connect and this ${deviceNoun()} becomes its remote.`}
               </p>
               <div className="connect-actions">
                 <button className="primary" onClick={onConnect} disabled={busy}>
@@ -251,8 +252,8 @@ export default function ConnectScreen({
           ) : (
             <>
               <p>
-                Sign in with the same account as the computer your unit is plugged into, and this
-                phone becomes its remote. Your setlists and the presets you starred follow you to
+                Sign in with the same account as the computer your unit is plugged into, and this{' '}
+                {deviceNoun()} becomes its remote. Your setlists and the presets you starred follow you to
                 any device, anywhere &mdash; not just at home.
               </p>
               {/*

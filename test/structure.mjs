@@ -1388,10 +1388,11 @@ export function run(test) {
      */
     const phone = readFileSync(new URL('../mobile/src/screens/Settings.js', import.meta.url), 'utf8')
 
-    const titles = [...phone.matchAll(/<SetupRow\s+title="([^"]+)"/g)].map((m) => m[1])
+    const titles = [...phone.matchAll(/<SetupRow\s+title=(?:"([^"]+)"|\{(PAIR_TITLE)\})/g)].map((m) => m[1] || m[2])
     /* Settings in groups now: the rig first, then the play screen, then help —
        where the amp and pedal names went, beside the other things to look up. */
-    assert.equal(titles[0], 'Phone & computer', `the phone's Setup opens on ${titles.join(', ')}`)
+    /* PAIR_TITLE is Phone & computer, or iPad & computer on an iPad (device-word.mjs). */
+    assert.equal(titles[0], 'PAIR_TITLE', `the phone's Setup opens on ${titles.join(', ')}`)
     assert.ok(titles.includes('Amp & pedal names'), 'the amp and pedal names left Settings')
 
     /* The row's own component, not a colour pasted per row: one place to be
@@ -1468,7 +1469,7 @@ export function run(test) {
         /* The one row the phone has not got: "Somebody who has a rig
            connected and wants the remote in their pocket is the likeliest
            buyer there is." */
-        'Get it on your phone',
+        'Get it on your phone or tablet',
         '# Help',
         'Troubleshooting',
         'Amp & pedal names',
@@ -2262,7 +2263,8 @@ export function run(test) {
      * read as the app having lost something. Grey, and it says what it is.
      */
     assert.equal(linkWord('dim', 'remote'), 'no computer', 'a remote nobody turned on is called disconnected')
-    assert.equal(linkWord('dim', 'mac'), 'no phone', 'a computer with no phone on it is called disconnected')
+    /* The remote can be a phone, a tablet or another computer's browser (shared/device-word.mjs). */
+    assert.equal(linkWord('dim', 'mac'), 'no remote', 'a computer with no phone on it is called disconnected')
     /*
      * And the phone reads the same four states off its own link module, which
      * has no describeLink in it at all. This is the join between the two: if
@@ -2955,7 +2957,7 @@ export function run(test) {
     assert.match(qr, /not the\s+Fractal Remote app/, 'the page does not say the code opens in the browser rather than the app')
     assert.match(src.replace(/\s+/g, ' '), /\{inDesktopApp\(\) \? \( <Section key="no-internet"/, 'the code is drawn somewhere that does not know the address')
     const phone = readFileSync(new URL('../mobile/src/screens/Settings.js', import.meta.url), 'utf8')
-    assert.match(phone, /point\s+the phone(&rsquo;|’)s camera at the code there/i, 'the phone never tells anyone the code is there')
+    assert.match(phone, /point\s+the \$\{deviceNoun\(\)\}(&rsquo;|’)s camera at the code there/i, 'the phone never tells anyone the code is there')
   })
 
   test('a channel is written where the scene that plays it can keep it', () => {
@@ -5144,7 +5146,7 @@ export function run(test) {
     /* Not one word typed into the component. */
     assert.match(onb, /from '\.\.\/\.\.\/shared\/onboarding\.mjs'/, 'the copy is not coming from the one file that holds it')
     const bare = onb.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ')
-    for (const typed of ['FM3 found', 'firmware 8.02', '512 presets', 'K7QM-4T9R', 'iPhone connected']) {
+    for (const typed of ['FM3 found', 'firmware 8.02', '512 presets', 'K7QM-4T9R', 'Phone or tablet connected']) {
       assert.ok(!bare.includes(typed), `"${typed}" is typed into the screen, so it is true whether or not it is`)
     }
 
@@ -5195,8 +5197,8 @@ export function run(test) {
     )
     assert.equal(c.D2B.head, 'Something else has the USB port.')
     assert.equal(c.D2B.without, 'Continue without it')
-    assert.equal(c.D3.head, 'Use your phone as the remote?')
-    assert.equal(c.D4.waiting, 'Waiting for your phone\u2026')
+    assert.equal(c.D3.head, 'Use your phone or tablet as the remote?')
+    assert.equal(c.D4.waiting, 'Waiting for your phone or tablet\u2026')
     assert.equal(c.D5.head, 'You\u2019re set.')
     assert.equal(c.P1.head, 'CONTROL YOUR FRACTAL FROM YOUR PHONE.')
     assert.equal(c.P3.demo.go, 'Start free demo')
@@ -5272,7 +5274,7 @@ export function run(test) {
     /* And they say less rather than inventing, when a fact is missing. */
     assert.equal(c.D2.detail({}), 'USB')
     assert.equal(c.D5.status({ unit: 'FM3', phone: false }), 'FM3 on USB')
-    assert.equal(c.D5.status({ unit: null, phone: true }), 'iPhone connected')
+    assert.equal(c.D5.status({ unit: null, phone: true }), 'Phone or tablet connected')
   })
 
   /*

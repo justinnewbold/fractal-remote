@@ -21,6 +21,7 @@ import { probeNow } from '../lib/link'
 import { fire } from '../lib/tapped'
 import { useSaveToSlot } from './SaveToSlot'
 import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS } from '../lib/save-wait'
+import { deviceNoun } from '../lib/device-word'
 
 const face = Platform.select(mono)
 
@@ -358,7 +359,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
                 /* The mark is a picture, so the words carry the Bluetooth for a screen reader. */
                 accessibilityLabel: bluetooth
                   ? `${connected ? 'Connected' : 'Not connected'} over Bluetooth. Which adapter`
-                  : 'Which computer this phone is connected to',
+                  : `Which computer this ${deviceNoun()} is connected to`,
                 suppressHighlighting: true,
                 onPress: () => {
                   tick()

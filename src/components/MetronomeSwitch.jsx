@@ -22,12 +22,12 @@ import { PLACES, placeLit, unitClick } from '../../shared/metronome.mjs'
 export default function MetronomeSwitch({ slug, heading = true }) {
   const setting = useMetronome()
   const heard = useUnitHeardOn(slug)
-  const unitCan = unitClick(slug, { demo: isDemo() })
+  const unitCan = unitClick(slug, { demo: isDemo(), ours: 'this screen' })
   const [said, setSaid] = useState(null)
 
   const place = PLACES.find((p) => placeLit(setting, p.key, true))?.key
   const where = !unitCan.can
-    ? unitCan.why.replace(/(only )?the phone keeps time/, (_m, only) => `${only || ''}this screen keeps time`)
+    ? unitCan.why
     : place === 'phone'
       ? 'Beeps and flashes here'
       : place === 'both'

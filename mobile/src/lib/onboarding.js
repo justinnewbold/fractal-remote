@@ -28,6 +28,7 @@
  */
 
 import { holders, quitEditor } from './editors.js'
+import { DEVICE_NOUN, deviceKind, deviceNoun } from './device-word.js'
 
 /**
  * The price when the store has not said one.
@@ -82,9 +83,14 @@ export const CHAIN = [
     badge: 'P',
     n: '03',
     note: 'OPTIONAL',
-    title: 'Your phone',
+    /* Asked, 16 October 2026: phones, iPads, tablets. The computer's card
+       says both; the phone's names the one in hand (device-word.mjs). */
+    title: 'Your phone or tablet',
     body: 'A remote that works nearby or away.',
-    phoneTitle: 'THIS PHONE',
+    get phoneTitle() {
+      /* The computer app opens on these boxes too, and is not the remote. */
+      return deviceKind() === 'computer' ? 'YOUR PHONE OR TABLET' : `THIS ${DEVICE_NOUN()}`
+    },
     phoneBody: 'Your remote - nearby or away'
   }
 ]
@@ -94,7 +100,7 @@ export const D1 = {
   eyebrow: 'SETUP OVERVIEW',
   head: 'Let’s get your whole rig connected.',
   sub: 'Three clear steps. About a minute.',
-  foot: 'The computer talks to the Fractal unit. Your phone talks to the computer.',
+  foot: 'The computer talks to the Fractal unit. Your phone or tablet talks to the computer.',
   go: 'Start setup',
   skip: 'Skip walkthrough'
 }
@@ -128,20 +134,20 @@ export const D2B = {
   steps: [
     /* The unit is visible here, so its own editor is named when it is known. */
     (unit) => `Quit ${holders(unit)}, or another copy of Fractal Remote.`,
-    'On Windows, allow firewall access so the phone can reach this computer.'
+    'On Windows, allow firewall access so your phone or tablet can reach this computer.'
   ],
   again: 'Look again',
   without: 'Continue without it'
 }
 
-/** D3 — the offer of a phone. */
+/** D3 — the offer of a phone or a tablet. */
 export const D3 = {
   step: 'STEP 2 OF 3',
-  head: 'Use your phone as the remote?',
+  head: 'Use your phone or tablet as the remote?',
   /* Was "No account required. Scan one code and you're connected." Both
      halves stopped being true on the same day: there is no code to scan, and
      an account is now what joins the two ends. MY WORDING. */
-  sub: 'Sign in on this computer and on the phone, and they find each other.',
+  sub: 'Sign in on this computer and on your phone or tablet, and they find each other.',
   why: [
     { key: 'stage', badge: '↗', label: 'STAGE', body: 'Change scenes from across the room' },
     { key: 'rack', badge: 'T', label: 'RACK', body: 'Tune without walking back' },
@@ -152,10 +158,10 @@ export const D3 = {
       body: 'Connect through this computer - even away from home Wi-Fi'
     }
   ],
-  note: 'Secure connection through this computer - the phone never connects directly to the unit.',
-  pair: 'Pair my phone',
+  note: 'Secure connection through this computer - the phone or tablet never connects directly to the unit.',
+  pair: 'Pair my phone or tablet',
   not: 'Not now',
-  foot: 'You can add a phone later in Settings → Phone & computer.'
+  foot: 'You can add a phone or tablet later in Settings → Phone & computer.'
 }
 
 /** D4 — the QR code, the pairing code, and the wait. */
@@ -165,8 +171,8 @@ export const D4 = {
      required." The QR code and the pairing code are both gone, and an
      account is the only way the two ends find each other. MY WORDING. */
   head: 'Sign in on this computer.',
-  sub: 'Then sign in on the phone with the same account, and it becomes the remote for the unit here.',
-  waiting: 'Waiting for your phone…',
+  sub: 'Then sign in on your phone or tablet with the same account, and it becomes the remote for the unit here.',
+  waiting: 'Waiting for your phone or tablet…',
   note: 'An account is what joins the two. The demo and this computer app are both free without one.',
   noApp: 'I don’t have the app',
   skip: 'Skip for now',
@@ -184,7 +190,7 @@ export const D4 = {
    * Nothing here is being withheld, and somebody who has not bought it yet is
    * not doing anything wrong by scanning.
    */
-  owned: 'If you’ve bought the phone app, sign in on it with this same account and it will connect. The phone checks — it will say so if it isn’t unlocked yet.',
+  owned: 'If you’ve bought the app on your phone or tablet, sign in on it with this same account and it will connect. The app checks — it will say so if it isn’t unlocked yet.',
   /*
    * THE UNLOCK, ON THE STEP THAT NEEDS IT. MY WORDING. "There needs to be a
    * clear way to unlock it from the beginning… It needs to be part of the
@@ -215,8 +221,8 @@ export const D4 = {
 export const C3 = {
   /* The welcome's line under the heading, on the computer: the heading is
      his, and the phone is still the point, but this app works here too. */
-  welcomeSub: 'Presets, scenes, blocks, tuner and tap tempo - on this computer, or on the phone in your pocket.',
-  sub: 'Use it right here, try the demo, or add your phone as the remote.',
+  welcomeSub: 'Presets, scenes, blocks, tuner and tap tempo - on this computer, or on your phone or tablet.',
+  sub: 'Use it right here, try the demo, or add your phone or tablet as the remote.',
   here: {
     eyebrow: 'ON THIS COMPUTER',
     title: 'Use it on this computer',
@@ -225,9 +231,9 @@ export const C3 = {
   },
   demoBody: 'Use a simulated Fractal unit. Every screen works, with nothing plugged in.',
   phone: {
-    eyebrow: 'ADD YOUR PHONE',
-    title: 'Use your phone as the remote',
-    body: 'Presets, scenes, blocks, tuner and tap tempo from your pocket, anywhere. A one-time unlock.',
+    eyebrow: 'ADD YOUR PHONE OR TABLET',
+    title: 'Use your phone or tablet as the remote',
+    body: 'Presets, scenes, blocks, tuner and tap tempo from your phone or tablet, anywhere. A one-time unlock.',
     go: 'Unlock'
   }
 }
@@ -235,9 +241,10 @@ export const C3 = {
 /** The three things worth knowing, said once at the end of each walkthrough. */
 export const D5 = {
   head: 'You’re set.',
-  /** FM3 on USB · iPhone connected — only what is actually true. */
+  /** FM3 on USB · Phone or tablet connected — only what is actually true. It
+      was "iPhone connected", which an Android phone was not. */
   status: ({ unit, phone }) =>
-    [unit ? `${unit} on USB` : null, phone ? 'iPhone connected' : null].filter(Boolean).join('  ·  '),
+    [unit ? `${unit} on USB` : null, phone ? 'Phone or tablet connected' : null].filter(Boolean).join('  ·  '),
   tips: [
     { key: 'play', label: 'PLAY', body: 'Performance controls for the guitar in your hands.' },
     { key: 'edit', label: 'EDIT', body: 'The full signal chain when you need deeper changes.' },
@@ -258,10 +265,19 @@ export const P1 = {
      first thing somebody reads in the app is the thing that brought them to
      it. Capitals and the full stop are this screen's house style, not a
      change to his words. */
-  head: 'CONTROL YOUR FRACTAL FROM YOUR PHONE.',
+  /* On an iPad, FROM YOUR iPad. See device-word.mjs. Read when shown, so it
+     follows what the app said it is at the start. */
+  get head() {
+    return `CONTROL YOUR FRACTAL FROM YOUR ${DEVICE_NOUN()}.`
+  },
   /* "all" is from his mockup of the website's first screen. The hyphen stays
-     his, as it always was (see test/structure.mjs). */
-  sub: 'Presets, scenes, blocks, tuner and tap tempo - all on the phone in your pocket.',
+     his, as it always was (see test/structure.mjs). An iPad is not in a
+     pocket, so anything but a phone has it in its own words. */
+  get sub() {
+    return deviceKind() === 'phone'
+      ? 'Presets, scenes, blocks, tuner and tap tempo - all on the phone in your pocket.'
+      : `Presets, scenes, blocks, tuner and tap tempo - all ${deviceKind() === 'browser' ? 'in' : 'on'} your ${deviceNoun()}.`
+  },
   /* The five tiles under it, from the same mockup, in its order and its words. */
   features: ['PRESETS', 'SCENES', 'BLOCKS', 'TUNER', 'TAP TEMPO'],
   go: 'Get started',
@@ -494,7 +510,10 @@ export const P6 = {
    * that can do nothing with it. It is an address to type somewhere else, so
    * it is printed rather than pressed now, and this line says where.
    */
-  address: 'TYPE THIS ON YOUR COMPUTER · NOT ON THIS PHONE',
+  get address() {
+    /* A browser on a laptop is already on a computer, so it only says where. */
+    return deviceKind() === 'browser' ? 'TYPE THIS ON YOUR COMPUTER' : `TYPE THIS ON YOUR COMPUTER · NOT ON THIS ${DEVICE_NOUN()}`
+  },
   /* "Email me the download link", bold — his words, where the tiny
      "OR HAVE THE LINK SENT TO YOU" was. */
   emailLabel: 'Email me the download link',
@@ -634,7 +653,9 @@ export const SETUP = {
    * heading, its three steps and the button under the form are all read off
    * the picture he sent.
    */
-  tagline: 'Control your Fractal rig from your phone.',
+  get tagline() {
+    return `Control your Fractal rig from your ${deviceNoun()}.`
+  },
   title: 'Get connected',
   steps: [
     'Connect your Fractal to your computer with USB.',

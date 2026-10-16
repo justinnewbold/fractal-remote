@@ -634,7 +634,7 @@ export function run(test) {
     const advice = card.slice(0, card.indexOf('</Toast>'))
     assert.match(
       advice,
-      /<Note tone="warn" onDismiss=\{\(\) => onPutAway\?\.\(\)\}> \{noComputer \? \( <NoComputerWords email=\{noComputer\.email\} \/> \) : \( <> The phone can’t reach your computer\. Open the Fractal Remote app on the computer and make sure the computer is awake\. This keeps trying on its own\. <\/> \)\} <\/Note>/,
+      /<Note tone="warn" onDismiss=\{\(\) => onPutAway\?\.\(\)\}> \{noComputer \? \( <NoComputerWords email=\{noComputer\.email\} \/> \) : \( <> The \{deviceNoun\(\)\} can’t reach your computer\. Open the Fractal Remote app on the computer and make sure the computer is awake\. This keeps trying on its own\. <\/> \)\} <\/Note>/,
       'the play screen says the new words without a definite no, or lost today’s'
     )
     assert.match(advice, /<Press label="Look for the computer again" height=\{44\} onPress=\{\(\) => onLookAgain\?\.\(\)\} \/>/, 'Look for the computer again went')

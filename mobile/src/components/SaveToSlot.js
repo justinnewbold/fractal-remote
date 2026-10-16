@@ -10,6 +10,7 @@ import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS, stillOnPreset } from '../lib/save-
 import { onConfigDoc, savedToSlot, useRig } from '../lib/rig'
 import Note from './Note'
 import Press from './Press'
+import { deviceNoun } from '../lib/device-word'
 
 /*
  * How long "Saved to slot 12." stays up. It stayed until tapped, so a save
@@ -75,7 +76,7 @@ export function useSaveToSlot() {
       try {
         const slot = await saveInDemo(preset?.number)
         savedToSlot(slot)
-        said = { tone: 'hint', text: `Saved to slot ${slot} on this phone.`, done: true }
+        said = { tone: 'hint', text: `Saved to slot ${slot} on this ${deviceNoun()}.`, done: true }
       } catch (err) {
         said = { tone: 'warn', text: err?.message || String(err) }
       }

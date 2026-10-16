@@ -57,7 +57,7 @@ function StoreCard({ store }) {
           ) : (
             <div className="phone-store-qr placeholder" aria-hidden="true" />
           )}
-          <p className="hint">Point your phone&rsquo;s camera at the QR code.</p>
+          <p className="hint">Point the camera of your phone or tablet at the QR code.</p>
           <a className="chip" href={store.url} target="_blank" rel="noreferrer">
             Open {store.store}
           </a>
@@ -77,8 +77,8 @@ export default function PhoneApp() {
   return (
     <>
       <p className="hint">
-        This computer holds the cable. The phone app is the remote &mdash; scenes, presets,
-        tempo and the tuner, from across a stage, with the screen staying awake.
+        This computer holds the cable. The app on your phone or tablet is the remote &mdash; scenes,
+        presets, tempo and the tuner, from across a stage, with the screen staying awake.
       </p>
 
       <div className="phone-stores">
@@ -99,7 +99,7 @@ export default function PhoneApp() {
             so it cannot be bought here" came off the end: it can, since the
             browser and the computer app sell the unlock too. */}
         The app is a free download and the demo is free for as long as you want it. Driving a
-        real rig from the phone is a one-off purchase.
+        real rig from a phone or tablet is a one-off purchase.
       </p>
       <p className="hint">
         This computer app stays free. It is the thing holding the cable, and charging for both
@@ -108,8 +108,8 @@ export default function PhoneApp() {
 
       <h4>Once it is installed</h4>
       <p className="hint">
-        Open <strong>Phone &amp; computer</strong> in Settings here and sign in. Sign in on the
-        phone with the same account, and that is the pairing done.
+        Open <strong>Phone &amp; computer</strong> in Settings here and sign in. Sign in on your
+        phone or tablet with the same account, and that is the pairing done.
       </p>
     </>
   )

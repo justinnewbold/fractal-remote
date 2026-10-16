@@ -9,6 +9,7 @@ import { PLACES, beatMs, clicks, placeLit, unitClick } from '../lib/metronome-ru
 import { useRig } from '../lib/rig'
 import { useDemo } from '../lib/demo'
 import { useBluetoothOn } from '../lib/bluetooth'
+import { deviceNoun } from '../lib/device-word'
 
 const face = Platform.select(mono)
 const ofSlug = (s) => s.deviceSlug
@@ -70,8 +71,8 @@ export default function MetronomeSwitch({ compact = false, lines }) {
   }
 
   const where = unitCan.can ? PLACES.find((p) => placeLit(setting, p.key, true))?.note || '' : unitCan.why
-  const untilHeard = unitCan.can && setting.on && setting.where === 'unit' && !heard ? 'Until the unit says its click is on, the phone keeps time as well.' : ''
-  const noTempo = setting.on && clicks(setting, unitCan.can, heard).phone && !beatMs(bpm) ? 'No tempo from the unit yet, so the phone has nothing to click to.' : ''
+  const untilHeard = unitCan.can && setting.on && setting.where === 'unit' && !heard ? `Until the unit says its click is on, the ${deviceNoun()} keeps time as well.` : ''
+  const noTempo = setting.on && clicks(setting, unitCan.can, heard).phone && !beatMs(bpm) ? `No tempo from the unit yet, so the ${deviceNoun()} has nothing to click to.` : ''
   const line = [where, untilHeard, noTempo].filter(Boolean).map(sentence).join(' ')
 
   return (

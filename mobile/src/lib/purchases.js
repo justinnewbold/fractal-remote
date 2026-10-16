@@ -9,6 +9,7 @@ import { isOwner } from './owner-unlock'
 import { currentAccount, restoreSession } from './relay'
 import { isDemo, setDemo } from './demo'
 import { claimRelay } from './relayPass'
+import { deviceNoun } from './device-word'
 
 /**
  * The one purchase: paying to point this app at a real rig.
@@ -151,16 +152,14 @@ let state = {
 
 /* What a customer whose purchase is only on this phone is told, wherever
    they land: the sign-in screen, the demo, and Settings → Account. */
-export const ONLY_HERE =
-  'Your purchase is only on this phone so far. Make an account or sign in, and it works on your computer too.'
+export const ONLY_HERE = `Your purchase is only on this ${deviceNoun()} so far. Make an account or sign in, and it works on your computer too.`
 
 /* And on the sign-in screen, once it is on an account made here that has
    not been signed in to (madeHere): that account has it, and signing in
    here with it is what finishes the job. And because the commonest reason
    for being back here is an email that never came, it says what to do
    then: made again here, the purchase follows it (linkNewAccount). */
-export const MADE_HERE =
-  'Your purchase is on the account you made on this phone. Confirm it from the email, then sign in here with it. If that email never came, make the account again with the right address — your purchase moves to it.'
+export const MADE_HERE = `Your purchase is on the account you made on this ${deviceNoun()}. Confirm it from the email, then sign in here with it. If that email never came, make the account again with the right address — your purchase moves to it.`
 
 /* What a payment the store is still waiting on is called: Ask to Buy, a bank
    that wants its own approval, cash at a shop on Google Play. Buy waits with
@@ -172,8 +171,7 @@ export const PENDING =
 /* What a purchase made on this phone before signing in is called when it
    could not be sent across to the account (bringAcross, below). The app
    tries again by itself, so that is said, and Restore is the try-now. */
-export const NOT_ACROSS =
-  'You paid for the full version on this phone, but it hasn’t reached your account yet. Please don’t pay for it again anywhere. The app tries again each time it opens, or tap Restore a purchase to try now.'
+export const NOT_ACROSS = `You paid for the full version on this ${deviceNoun()}, but it hasn’t reached your account yet. Please don’t pay for it again anywhere. The app tries again each time it opens, or tap Restore a purchase to try now.`
 
 /* And the same with nobody signed in on the phone, after a sign-out or with
    it on its way to an account made here: there is no "your account" for it
@@ -181,8 +179,7 @@ export const NOT_ACROSS =
    own nameless id, would put it there rather than on anybody's account.
    Signing in, or making the account, is what sends it (phonesOwn,
    linkNewAccount), so that is what it says, and no Restore is offered. */
-export const NOT_ACROSS_SIGNED_OUT =
-  'You paid for the full version on this phone. Sign in or make an account and it goes with it. Please don’t pay for it again.'
+export const NOT_ACROSS_SIGNED_OUT = `You paid for the full version on this ${deviceNoun()}. Sign in or make an account and it goes with it. Please don’t pay for it again.`
 
 /* And when Restore could not move it either: a receipt the store will not
    send twice (a used-up Google purchase) is beyond anything on the phone,

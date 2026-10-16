@@ -76,7 +76,7 @@ async function phoneOnABench() {
     'debugLog.js': 'export const logDebug = () => {}\n',
     'lineage.js': 'export const withLineage = (slug, x) => x\n'
   }
-  for (const f of ['bleSwitch.js', 'tapGate.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'unsupported.js', 'vp4-safety.js', 'device.js']) {
+  for (const f of ['bleSwitch.js', 'tapGate.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js']) {
     files[f] = esm(lib(f))
   }
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
@@ -174,6 +174,7 @@ async function phoneSaveOnABench({ slug = 'vp4', demo = false } = {}) {
     ['from "../lib/saveViaComputer"', "from './saveViaComputer.mjs'"],
     ['from "../lib/vp4-safety"', `from '${repoUrl('shared/vp4-safety.mjs')}'`],
     ['from "../lib/save-wait"', `from '${repoUrl('shared/save-wait.mjs')}'`],
+    ['from "../lib/device-word"', `from '${repoUrl('shared/device-word.mjs')}'`],
     ['from "../lib/rig"', "from './rig.mjs'"],
     ['from "./Note"', "from './rest.mjs'"],
     ['from "./Press"', "from './rest.mjs'"]
@@ -348,7 +349,7 @@ async function phoneMidiBench() {
     'debugLog.js': 'export const logDebug = () => {}\n',
     'lineage.js': 'export const withLineage = (slug, x) => x\n'
   }
-  for (const f of ['bleSwitch.js', 'tapGate.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'unsupported.js', 'vp4-safety.js', 'device.js']) {
+  for (const f of ['bleSwitch.js', 'tapGate.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'device.js']) {
     files[f] = esm(lib(f))
   }
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)

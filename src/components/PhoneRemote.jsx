@@ -3,6 +3,7 @@ import { changePassword, computerElsewhere } from '../lib/remote'
 import { describeLink, isPairAccount } from '../lib/link'
 import { useNoComputer } from '../lib/noComputer'
 import NoComputer from './NoComputer'
+import { deviceNoun, onThis } from '../../shared/device-word.mjs'
 
 /**
  * Phone remote, in Setup: what this end is, whether the other end is there,
@@ -35,7 +36,7 @@ export default function PhoneRemote({ link, onAction, onError, error, busy }) {
         <MacSide link={link} email={email} onAction={onAction} busy={busy} error={error} />
       ) : link.role === 'wifi' ? (
         <p className="hint">
-          Nothing to set up &mdash; this phone is talking to the computer directly over wifi.
+          Nothing to set up &mdash; this {deviceNoun()} is talking to the computer directly over wifi.
         </p>
       ) : link.role === 'remote' ? (
         <PhoneSide link={link} email={email} onAction={onAction} busy={busy} />
@@ -85,7 +86,7 @@ function MacSide({ link, email, onAction, busy, error }) {
     return (
       <>
         <p className="hint">
-          Sign in here, then sign in on the phone with the same account, and the phone becomes the
+          Sign in here, then sign in on your phone or tablet with the same account, and it becomes the
           remote for the unit on this computer. The demo and this app are both free without one.
         </p>
         <div className="history-actions">
@@ -112,8 +113,8 @@ function MacSide({ link, email, onAction, busy, error }) {
   return (
     <>
       <p className="hint">
-        Signed in as <strong>{email}</strong>. Sign in on the phone with the same account and it
-        becomes the remote for the unit here.
+        Signed in as <strong>{email}</strong>. Sign in on your phone or tablet with the same account
+        and it becomes the remote for the unit here.
       </p>
       <div className="history-actions">
         {link.link === 'connected' ? (
@@ -200,8 +201,8 @@ function PhoneSide({ link, email, onAction, busy }) {
     <>
       <p className="hint">
         {paired
-          ? 'This phone is paired with your computer. Connect and it becomes the remote for the unit there.'
-          : 'Connect and this phone becomes the remote for the unit at your computer.'}
+          ? `This ${deviceNoun()} is paired with your computer. Connect and it becomes the remote for the unit there.`
+          : `Connect and this ${deviceNoun()} becomes the remote for the unit at your computer.`}
       </p>
       <div className="history-actions">
         <button className="primary" onClick={() => onAction('connect')} disabled={busy}>
@@ -245,14 +246,14 @@ function AccountFold({ email, paired, role, onAction, onError, busy }) {
             <p className="hint">
               {role === 'mac'
                 ? 'Presets stay on this computer. Sign in with an account to have them follow you between devices.'
-                : 'What you save stays on this phone. Sign in with an account to have it follow you between devices.'}
+                : `What you save stays ${onThis()}. Sign in with an account to have it follow you between devices.`}
             </p>
             <div className="history-actions">
               <button className="chip" disabled={busy} onClick={() => onAction(role === 'mac' ? 'mac-setup' : 'switch')}>
                 Sign in with an account
               </button>
               <button className="chip" disabled={busy} onClick={() => onAction('signout')}>
-                {role === 'mac' ? 'Unpair this computer' : 'Unpair this phone'}
+                {role === 'mac' ? 'Unpair this computer' : `Unpair this ${deviceNoun()}`}
               </button>
             </div>
           </div>

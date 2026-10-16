@@ -87,6 +87,11 @@ import { findLooper } from '../lib/looper'
 import SceneArrange from '../components/SceneArrange'
 import EdgeBack from '../components/EdgeBack'
 import Sheet from '../components/Sheet'
+import { deviceKind, deviceNoun, pairTitle } from '../lib/device-word'
+
+/* "Phone & computer", or "iPad & computer" on an iPad (device-word.mjs). Read
+   once: App.js says which device this is before this file is loaded. */
+const PAIR_TITLE = pairTitle()
 
 const face = Platform.select(mono)
 
@@ -348,7 +353,7 @@ export default function Settings({
    * `if` so the next one is a line rather than a branch.
    */
   const PARENT = { offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer' }
-  const UP_LABEL = { link: '‹ Phone & computer', developer: '‹ Developer' }
+  const UP_LABEL = { link: `‹ ${PAIR_TITLE}`, developer: '‹ Developer' }
   const upFrom = (p) => PARENT[p] || null
   const upLabel = (p) => UP_LABEL[PARENT[p]] || '‹ Settings'
 
@@ -434,7 +439,7 @@ export default function Settings({
               unit plugged into it — the status says how far along it gets.
             */}
             <SetupRow
-              title="Phone & computer"
+              title={PAIR_TITLE}
               status={
                 demo
                   ? `Demo — simulated ${DEMO_UNITS.find((u) => u.key === unit)?.name || 'unit'}`
@@ -530,8 +535,9 @@ export default function Settings({
             {onReplay ? <SetupRow title={REPLAY} status="The setup, from the start" onPress={onReplay} /> : null}
             {/* "Add a watch section to the iOS app so that people know how to
                 use it and how to set it up, and then they know that there is
-                a watch companion app." iPhone only: there is no Android watch. */}
-            {Platform.OS === 'ios' && watchSupported() ? (
+                a watch companion app." iPhone only: there is no Android watch,
+                and an iPad cannot be paired with one. */}
+            {Platform.OS === 'ios' && deviceKind() !== 'ipad' && watchSupported() ? (
               <SetupRow
                 title="Apple Watch"
                 status={watchPaired() ? 'On your watch · how to use it' : 'Scenes, pedals, presets and the tuner on your wrist'}
@@ -590,7 +596,7 @@ export default function Settings({
                   {!asked
                     ? 'Checking…'
                     : isPairAccount(account?.email)
-                      ? 'Paired with your computer, no account. What you save stays on this phone.'
+                      ? `Paired with your computer, no account. What you save stays on this ${deviceNoun()}.`
                       : 'Not signed in on this device.'}
                 </Text>
                 {/* Paid on this phone with no account yet: until there is one,
@@ -626,7 +632,7 @@ export default function Settings({
             {note ? <Note>{note}</Note> : null}
             {error ? <Note tone="fault">{error}</Note> : null}
 
-            <Press label="Sign out on this phone" onPress={onSignOut} />
+            <Press label={`Sign out on this ${deviceNoun()}`} onPress={onSignOut} />
             <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>
               The computer stays signed in — signing out here must not drop the link mid-set.
             </Text>
@@ -826,7 +832,7 @@ export default function Settings({
       {/* ------------------------------------------------------ phone & mac */}
       {page === 'link' ? (
         <>
-          {head('Phone & computer', 'back')}
+          {head(PAIR_TITLE, 'back')}
           {/* Said first, because everything under it is about a computer
               this phone is not using while it is on. */}
           {bluetooth && !demo ? (
@@ -968,8 +974,8 @@ export default function Settings({
             {link === 'no-answer' && elsewhere ? (
               <Note tone="fault">
                 {account?.email && !isPairAccount(account.email)
-                  ? `The computer on this wifi is signed into a different account. This phone is signed in as ${account.email}. On the computer, sign in to the Fractal Remote app with ${account.email}, or sign this phone out below and into the computer’s account.`
-                  : 'The computer on this wifi is signed into a different account than this phone. Sign both into the same account.'}
+                  ? `The computer on this wifi is signed into a different account. This ${deviceNoun()} is signed in as ${account.email}. On the computer, sign in to the Fractal Remote app with ${account.email}, or sign this ${deviceNoun()} out below and into the computer’s account.`
+                  : `The computer on this wifi is signed into a different account than this ${deviceNoun()}. Sign both into the same account.`}
               </Note>
             ) : noneSaid ? (
               <Note tone="warn">
@@ -1141,7 +1147,7 @@ export default function Settings({
                 unitCan.can ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.' : unitCan.why
               }${
                 unitCan.can && clickSetting.on && clickSetting.where === 'unit' && !clickHeard
-                  ? ' Until the unit says its click is on, the phone keeps time as well.'
+                  ? ` Until the unit says its click is on, the ${deviceNoun()} keeps time as well.`
                   : ''
               }`}
             </Note>
@@ -1178,7 +1184,7 @@ export default function Settings({
             ) : null}
             {/* "Same with the watch, metronome that can beep on the watch."
                 Its own switch: the wrist keeps time whichever end clicks. */}
-            {Platform.OS === 'ios' && watchSupported() ? (
+            {Platform.OS === 'ios' && deviceKind() !== 'ipad' && watchSupported() ? (
               <>
                 <Section>Apple Watch</Section>
                 <Press
@@ -1284,7 +1290,7 @@ export default function Settings({
             has none, there is another way round and it does not use this app.
           </Text>
           <View style={{ gap: space.md }}>
-            <TipCard icon={sendIcon} label="1  SAME WIFI" body="Put the phone on the same wifi as the computer." />
+            <TipCard icon={sendIcon} label="1  SAME WIFI" body={`Put the ${deviceNoun()} on the same wifi as the computer.`} />
             <TipCard
               icon={laptopIcon}
               label="2  OPEN THE CODE"
@@ -1293,7 +1299,7 @@ export default function Settings({
             <TipCard
               icon={phoneIcon}
               label="3  POINT THE CAMERA"
-              body="Point the phone’s camera at the code there — it opens in the phone’s web browser."
+              body={`Point the ${deviceNoun()}’s camera at the code there — it opens in the ${deviceNoun()}’s web browser.`}
             />
             <TipCard
               icon={setupIcon}
@@ -1306,7 +1312,7 @@ export default function Settings({
           </Text>
           <Note size={font.body}>
             What you change there is kept by that browser rather than in your account, so it does not
-            follow you to this app or to another phone.
+            follow you to this app or to another phone or tablet.
           </Note>
         </>
       ) : null}
@@ -1787,7 +1793,7 @@ const deleteCosts = (from) => {
      an iPhone may not do (Apple 2.3.10). */
   const here = Platform.OS === 'ios' ? ['APP_STORE', 'MAC_APP_STORE'] : ['PLAY_STORE']
   if (!here.includes(from)) {
-    return 'The full version you bought stays with the store account you paid with. Restore a purchase on the phone you bought it on brings it back on a new account.'
+    return 'The full version you bought stays with the store account you paid with. Restore a purchase on the phone or tablet you bought it on brings it back on a new account.'
   }
   return `The full version you bought stays with your ${mine}. Restore a purchase brings it back on a new account.`
 }
