@@ -51,6 +51,13 @@ import { COMPUTER_NEEDED, isOlder } from './versions.js'
  * gets the line; one whose version cannot be read gets no opinion.
  * `needed` is a parameter only so the tests can move it.
  *
+ * AND BELOW WHAT THIS UNIT NEEDS. `computer.lacks` names something the unit
+ * on that computer needs from a newer computer app than COMPUTER_NEEDED
+ * (vp4-safety.mjs vp4ComputerLacks: a VP4's scenes and presets, on a computer
+ * that does not say it can). The line then comes on for that computer too,
+ * still only if it is behind this phone. Nobody else ever passes it, so an
+ * FM3, AM4, FM9 or Axe-Fx III owner sees the line exactly as before.
+ *
  * AND THE LINE SAYS HOW. "Change red text about updating computer to a link
  * that shows instructions when tapped on how to update it." The words stay;
  * each end makes the card the link (an `onWarn` on ChainCards), and the steps
@@ -65,8 +72,9 @@ export const UPDATE_COMPUTER = 'Update the computer app to the latest version'
  * @param {boolean} [p.demo]
  * @param {{ name?: string|null, firmware?: string|null, state?: 'present'|'missing'|'silent'|'unknown' }} [p.unit]
  * @param {'computer'|'bluetooth'} [p.via]  how a phone reaches the unit
- * @param {{ name?: string|null, version?: string|null, link?: string }} [p.computer]
+ * @param {{ name?: string|null, version?: string|null, link?: string, lacks?: string|null }} [p.computer]
  *   link, for a phone: connected, joining, no-answer or anything else for off.
+ *   lacks: what the unit needs from a newer computer app, or null.
  * @param {{ name?: string|null, link?: string }} [p.adapter]
  *   over Bluetooth: the adapter's name, and connected, joining or anything else for off.
  * @param {{ version?: string|null, email?: string|null, remote?: 'on'|'off'|'signed-out' }} [p.phone]
@@ -110,7 +118,7 @@ export function linkChain({ here, demo = false, via = 'computer', unit = {}, com
   const computerWarn =
     atPhone && !demo && !ble && computer.link === 'connected' && phone.version && computer.name
       ? computer.version
-        ? isOlder(computer.version, needed) === true && isOlder(computer.version, phone.version) === true
+        ? (isOlder(computer.version, needed) === true || Boolean(computer.lacks)) && isOlder(computer.version, phone.version) === true
           ? UPDATE_COMPUTER
           : null
         : UPDATE_COMPUTER

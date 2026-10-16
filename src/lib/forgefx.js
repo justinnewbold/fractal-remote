@@ -306,8 +306,10 @@ async function request(path, options = {}) {
    * AT ALL. On the computer apps out there now, the chain read and a block's
    * knobs send a VP4 the sweep that froze an AM4, and a save writes over Y1
    * whatever slot was picked. The chain comes off GET /preset/grid instead,
-   * which reads the one record VP4-Edit polls; the rest is refused here in
-   * words. The phone does the same at its own seam. See shared/vp4-safety.mjs.
+   * which reads the one record VP4-Edit polls (on those old computers a grid
+   * read whose record does not come still falls back to the sweep: fewer
+   * sweeps, not none); the rest is refused here in words. The phone does the
+   * same at its own seam. See shared/vp4-safety.mjs.
    */
   const vp4 = !mock && unitIsVp4 ? vp4Route(method, path) : null
   if (vp4?.refuse) return Promise.reject(new ForgeError(vp4.refuse, { cause: vp4Refusal(vp4.refuse) }))

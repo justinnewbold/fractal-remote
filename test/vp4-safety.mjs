@@ -1003,6 +1003,8 @@ export function run(test) {
     namesEveryNotYet('the demo’s VP4', v.VP4_DEMO, v.VP4_NOT_YET)
     promisesAVp4Nothing('the demo’s VP4', v.VP4_DEMO)
     namesEveryCantShow('the demo’s VP4', v.VP4_DEMO, v.VP4_CANT_SHOW)
+    /* And what it does with nothing set up that a real one doesn't: scenes with no number, and Previous and Next slot by slot. */
+    assert.match(v.VP4_DEMO, /On a real VP4, scenes need one number set on the VP4 first, and Previous and Next go through a setlist or your starred presets\./, 'the demo’s VP4 leaves out that a real one’s scenes need a number and its Previous and Next do not step slot by slot')
   })
 
   test('the store listing, its promotional text, the download page and the README say the purchase page’s VP4 sentence', async () => {
@@ -1061,6 +1063,39 @@ export function run(test) {
     /* Where it is said: the phone's demo picker, the browser's banner and the top bar's word. */
     assert.match(read('mobile/src/components/DemoUnit.js'), /<Note tone="warn">\{demoSentence\(unit\)\}<\/Note>/)
     assert.match(read('src/App.jsx'), /<span>\{demoSentence\(demoUnit\(\)\)\}<\/span>/)
+    /*
+     * AND WHERE A VP4 IS PICKED. The phone's sheet said the sentence of the unit
+     * the demo was on, and closed on a pick, so picking VP4 from an FM3 never
+     * showed the VP4's. It stays open on a VP4 now, its note turned into the
+     * VP4's; every other pick still closes it.
+     */
+    assert.match(flat('mobile/src/components/DemoUnit.js'), /onPress=\{\(\) => \{ setDemoUnit\(u\.key\) if \(u\.key !== 'vp4'\) onClose\(\) \}\}/, 'the phone’s demo sheet closes on a VP4 pick before its sentence is shown')
+    /* The phone's Settings said "Every screen works" of the demo's VP4: it says the VP4's sentence, and every other unit's note is as it was. */
+    const settings = flat('mobile/src/screens/Settings.js')
+    assert.match(settings, /\{unit === 'vp4' \? `\$\{demoSentence\(unit\)\} It also answers instantly, so anything still slow in here is this app rather than the line to a computer\.` : `This is the demo — a simulated \$\{ DEMO_UNITS\.find\(\(u\) => u\.key === unit\)\?\.name \|\| 'FM3' \}\. Every screen works and nothing reaches hardware\./, 'the phone’s Settings says “Every screen works” of the demo’s VP4')
+    /*
+     * The browser's banner was put away for every unit by one Got it, so after
+     * Got it on the FM3 the VP4's never came up. A VP4 has its own, and the
+     * Demo Unit page says the VP4's sentence under the buttons while it is one.
+     */
+    const web = flat('src/App.jsx')
+    assert.match(web, /const demoNoteKey = \(unit\) => \(unit === 'vp4' \? DEMO_NOTE_KEY_VP4 : DEMO_NOTE_KEY\)/, 'a VP4’s demo note is put away by another unit’s Got it')
+    assert.match(web, /useState\(\(\) => demoNoteWasSeen\(demoUnit\(\)\)\)/)
+    assert.match(web, /setDemoNoteSeen\(true\) rememberDemoNote\(demoUnit\(\)\)/)
+    assert.match(web, /\{demoUnit\(\) === 'vp4' \? <p className="hint">\{demoSentence\(demoUnit\(\)\)\}<\/p> : null\} <\/div> \) : null\}/, 'the browser’s Demo Unit page does not say the VP4’s sentence')
+    /* Run, the keys: Got it on an FM3 leaves the VP4's note to come up, and the VP4's own Got it puts only it away. */
+    const src = read('src/App.jsx')
+    const keys = src.slice(src.indexOf("const DEMO_NOTE_KEY = "), src.indexOf('/**', src.indexOf("const rememberDemoNote")))
+    const store = new Map()
+    const localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, val) => store.set(k, String(val)) }
+    const { seen, remember } = new Function('localStorage', `${keys}; return { seen: demoNoteWasSeen, remember: rememberDemoNote }`)(localStorage)
+    assert.equal(seen('fm3'), false)
+    remember('fm3')
+    assert.equal(seen('fm3'), true)
+    assert.equal(seen('am4'), true, 'the other four units stopped sharing one note')
+    assert.equal(seen('vp4'), false, 'Got it on an FM3 put the VP4’s note away')
+    remember('vp4')
+    assert.equal(seen('vp4'), true)
   })
 
   /*
@@ -1086,6 +1121,53 @@ export function run(test) {
     /* Nothing else moved: a preset that will not load on an FM3 still gets its fix. */
     assert.equal(fixFor('The unit didn’t load that preset.'), 'preset')
     assert.equal(fixFor('The computer is not answering.'), 'connect')
+  })
+
+  /*
+   * AND THE PAGE THAT LINK OPENS AGREES WITH IT. A VP4 tap on a computer that
+   * cannot change its scenes and presets says to update the computer and links
+   * to "The app and the computer disagree", whose version line said "That is
+   * fine" for any computer from COMPUTER_NEEDED on, and the red line stayed
+   * off. Both are now told by what the computer says it can do for the VP4,
+   * not by raising COMPUTER_NEEDED, so every other unit sees what it saw.
+   */
+  test('a VP4 on a computer that cannot change its scenes and presets: the red line and the help page say update, at both ends, and nothing else moves', async () => {
+    const v = await import('../shared/vp4-safety.mjs')
+    const pv = await import('../mobile/src/lib/vp4-safety.js')
+    const ends = [
+      ['shared', await import('../shared/link-chain.mjs'), await import('../shared/troubleshooting.mjs'), v],
+      ['phone', await import('../mobile/src/lib/link-chain.js'), await import('../mobile/src/lib/troubleshooting.js'), pv]
+    ]
+    const { COMPUTER_NEEDED, isOlder } = await import('../shared/versions.mjs')
+    const PHONE = '1.87.40'
+    const COMPUTER = '1.87.29'
+    assert.equal(isOlder(COMPUTER, COMPUTER_NEEDED), false, 'the case is a computer new enough for everything but the VP4')
+    for (const [where, chain, help, safety] of ends) {
+      assert.equal(safety.vp4ComputerLacks(true, VP4_OLD.capabilities), safety.VP4_COMPUTER_FOR, `${where}: an old computer under a VP4 lacks nothing`)
+      assert.equal(safety.vp4ComputerLacks(true, VP4_NEW.capabilities), null, `${where}: a computer that can is said to lack it`)
+      assert.equal(safety.vp4ComputerLacks(false, VP4_OLD.capabilities), null, `${where}: a unit that is not a real VP4 is said to need a newer computer`)
+      assert.equal(safety.vp4ComputerLacks(false, null), null)
+      const card = (lacks, version = COMPUTER) =>
+        chain.linkChain({ here: 'phone', unit: { name: 'VP4', state: 'present' }, computer: { name: 'Studio', version, link: 'connected', lacks }, phone: { version: PHONE } }).find((c) => c.key === 'computer')
+      assert.equal(card(safety.VP4_COMPUTER_FOR).warn, chain.UPDATE_COMPUTER, `${where}: no red line for a VP4 on a computer that cannot change its scenes and presets`)
+      assert.equal(card(null).warn, undefined, `${where}: the red line came on for a computer new enough for its unit`)
+      assert.equal(card(safety.VP4_COMPUTER_FOR, PHONE).warn, undefined, `${where}: a computer on this phone's own version is sent looking for a newer one`)
+      assert.equal(card(safety.VP4_COMPUTER_FOR, '1.87.50').warn, undefined, `${where}: a computer ahead of this phone is sent looking for a newer one`)
+      const said = help.versionsInSync({ app: PHONE, host: COMPUTER, lacks: safety.VP4_COMPUTER_FOR })
+      assert.equal(said.state, 'behind', `${where}: the help page says the computer is fine for a VP4 it cannot change`)
+      assert.equal(said.says, `The computer app is v${COMPUTER}, and this app needs a newer one for a VP4’s scenes and presets. Let the computer update, then reload this app.`)
+      assert.equal(help.versionsInSync({ app: PHONE, host: COMPUTER }).state, 'ok', `${where}: every other unit's help page moved`)
+      assert.equal(help.versionsInSync({ app: PHONE, host: PHONE, lacks: safety.VP4_COMPUTER_FOR }).state, 'ok', `${where}: the same version is called behind`)
+      assert.equal(help.fixFor(safety.VP4_UPDATE_COMPUTER), 'versions', `${where}: the VP4's update words lost the link to that page`)
+    }
+    /* And each end asks it of what its computer said, where the line and the page are drawn. */
+    const settings = flat('mobile/src/screens/Settings.js')
+    assert.match(settings, /computer: \{ name: macName, version: hostVersion, link, lacks: vp4ComputerLacks\(onRealVp4, caps\) \}/, 'the phone’s computer card is not told about the VP4')
+    assert.match(flat('mobile/src/screens/Fixes.js'), /versionsInSync\(\{ app: APP_VERSION, host: hostVersion, lacks: vp4ComputerLacks\(vp4Here\(\), vp4Capabilities\(\)\) \}\)/, 'the phone’s help page is not told about the VP4')
+    const web = flat('src/App.jsx')
+    assert.match(web, /\? \{ name: link\.macName, version: link\.macVersion, link: link\.link, lacks: vp4ComputerLacks\(onRealVp4, vp4Capabilities\(\)\) \}/, 'the browser’s computer card is not told about the VP4')
+    assert.equal((web.match(/versionsInSync\(\{ app: VERSION, host: link\.macVersion, lacks: vp4ComputerLacks\(onRealVp4, vp4Capabilities\(\)\) \}\)/g) || []).length, 2, 'the browser’s help page is not told about the VP4')
+    assert.equal((web.match(/versionsInSync\(/g) || []).length, 2, 'a browser version line that is not told about the VP4')
   })
 
   test('a VP4’s refusal is known by its mark or by its words, at either end, and nothing else is one', async () => {
@@ -1260,6 +1342,74 @@ export function run(test) {
   })
 
   /*
+   * THE PRESET LIST NAMES THE ONE A VP4 IS ON, AT BOTH ENDS. VP4_NO_NAMES says
+   * "The one the VP4 is on shows its name once the app has read it". The
+   * browser's row did ("004 B1: Edge of Breakup"); the phone's said "Slot 004
+   * B1 · Playing" under that sentence with Play showing the name. And a VP4
+   * owner searching for "B1", the pedal's own name for it, found nothing at
+   * either end.
+   */
+  test('the preset list names the preset a VP4 is on, from its record, and finds A1 to Z4 by name, at both ends', async () => {
+    const v = await import('../shared/vp4-safety.mjs')
+    const src = read('mobile/src/screens/Presets.js')
+    const phone = src.replace(/\s+/g, ' ')
+    assert.match(phone, /renderItem=\{\(\{ item: n \}\) => \{ const name = nameHere\(n\)/, 'the phone’s row does not name the preset the VP4 is on')
+    assert.match(phone, /label=\{typeof name === 'string' \? \(name \|\| 'Empty'\) : `Slot \$\{slotLabel\(n, addressing\)\}`\}/)
+    assert.match(phone, /const name = nameHere\(n\) const q = query\.trim\(\)\.toLowerCase\(\)/, 'the phone’s search does not find the preset the VP4 is on by its name')
+    /* Run: the rule that picks the name, out of the screen as written. */
+    const body = src.slice(src.indexOf('  const vp4Playing ='), src.indexOf('\n', src.indexOf('  const nameHere =')))
+    const rule = (noNames, preset, recordName) =>
+      new Function('noNames', 'preset', 'vp4PresetName', 'nameOf', `${body}; return nameHere`)(noNames, preset, () => recordName, (n) => (n === 7 ? 'Kept' : undefined))
+    const edge = 'Edge of Breakup'
+    assert.equal(rule(true, { number: 4, name: edge }, edge)(4), edge, 'the row of the preset the VP4 is on has no name')
+    assert.equal(rule(true, { number: 4, name: edge }, edge)(5), undefined, 'another row took the name of the preset the VP4 is on')
+    assert.equal(rule(true, { number: 4, name: edge }, edge)(7), 'Kept')
+    assert.equal(rule(true, { number: 4, name: edge, pending: true }, edge)(4), undefined, 'a preset still being changed to is named')
+    assert.equal(rule(true, { number: 4, name: 'Remembered' }, edge)(4), undefined, 'a name the VP4’s record did not carry is put on the row')
+    assert.equal(rule(true, { number: null, name: edge }, edge)(4), undefined, 'an unseen preset’s name is put on a slot nobody saw it land in')
+    assert.equal(rule(true, { number: 4, name: '' }, '')(4), undefined)
+    assert.equal(rule(false, { number: 4, name: edge }, edge)(4), undefined, 'another unit’s rows are named by the VP4’s rule')
+    /* The browser's row is named off its own list, which takes the name the record carried (noteLoadedName). */
+    const web = flat('src/components/Console.jsx')
+    assert.match(web, /<span className="preset-id mono">\{slotLabel\(slot\.number, addressing\)\}:<\/span>/)
+    /* Search by the VP4's own name for a place, at both ends: "B1" is 004 B1, "B" the B bank, and a number is still a number. */
+    assert.match(phone, /if \(noNames && vp4PresetCode\(n\)\?\.toLowerCase\(\)\.startsWith\(q\)\) return true/, 'the phone’s search does not find a VP4’s B1')
+    assert.match(web, /\(noNames && \(vp4PresetCode\(s\.number\) \|\| ''\)\.toLowerCase\(\)\.startsWith\(needle\)\)/, 'the browser’s search does not find a VP4’s B1')
+    const finds = (q) => Array.from({ length: 104 }, (_, n) => n).filter((n) => v.vp4PresetCode(n).toLowerCase().startsWith(q))
+    assert.deepEqual(finds('b1'), [4])
+    assert.deepEqual(finds('b'), [4, 5, 6, 7])
+    assert.deepEqual(finds('z4'), [103])
+    assert.deepEqual(finds('4'), [], 'a number is matched by the code as well as by itself')
+  })
+
+  /*
+   * AN UNKNOWN PEDAL AND AN OFF ONE WERE THE SAME TILE in the browser at a
+   * narrow width, where the corner word has no room: a first tap, which sends
+   * Off, changed nothing on screen. A VP4's untapped pedal has a dashed ring.
+   */
+  test('the browser draws a VP4 pedal nobody has tapped unlike an Off one, at any width', () => {
+    const gig = flat('src/components/Gig.jsx')
+    assert.match(gig, /className=\{`gig-block \$\{unknown \|\| block\.bypassed \? 'off' : 'on'\}`\} (\/\*[^*]*(\*(?!\/)[^*]*)*\*\/ )?data-unknown=\{unknown && vp4Here\(\) \? 'yes' : undefined\}/, 'a VP4’s untapped pedal is not marked apart from an Off one')
+    assert.match(flat('src/styles.css'), /button\.gig-block\.off\[data-unknown='yes'\] \{ border-style: dashed; \}/, 'the mark draws nothing')
+  })
+
+  /*
+   * REVERT ON A VP4 LOADED THE WRONG PRESET, OR NOTHING. The browser's Revert
+   * is "load the preset again"; with a VP4's place unknown it did nothing and
+   * said nothing, and with it known it sent a Program Change for the preset
+   * the app last picked, which is another one if the player has moved at the
+   * footswitch since. The phone has no Revert. Neither end offers one now.
+   */
+  test('the browser offers no Revert on a VP4, in the Edit row or the save sheet, as the phone offers none', () => {
+    const web = flat('src/App.jsx')
+    assert.match(web, /\{dirty && !onRealVp4 \? \( <button className="chip armed" onClick=\{revert\} disabled=\{busy\}> Revert <\/button> \) : null\}/, 'the browser’s Edit row offers a VP4 a Revert')
+    assert.match(web, /onRevert=\{onRealVp4 \? null : revert\}/, 'the browser’s save sheet offers a VP4 a Revert')
+    assert.equal((web.match(/onRevert=\{/g) || []).length, 1)
+    assert.match(flat('src/components/SaveSheet.jsx'), /\{onRevert \? \( <button className="chip" onClick=\{onRevert\} disabled=\{busy\}> Revert to saved <\/button> \) : null\}/)
+    for (const where of ['mobile/src/screens/Edit.js', 'mobile/src/screens/Stage.js']) assert.ok(!/>\s*Revert|label="Revert/.test(read(where)), `${where} grew a Revert`)
+  })
+
+  /*
    * EDIT ON A VP4 OFFERED KNOBS THE APP CANNOT READ. The search box said
    * "Find a control — gain, mix, presence…" and answered "No control called
    * “gain” in this preset" over a preset with a Drive in it; the phone said
@@ -1291,7 +1441,7 @@ export function run(test) {
     assert.match(panel, /const knobless = vp4Here\(\) useEffect\(\(\) => \{ if \(!block \|\| knobless\) return let stop = false ;\(async \(\) => \{ setLoading\(true\) setLocal\(\{\}\) try \{ const \[p, t\] = await Promise\.all\(\[ blockParams\(block\.effectId\)/, 'the browser’s block panel asks a VP4 for its knobs')
     /* The same words at both ends (the phone's copy is generated from these, and held to them), and not a promise. */
     assert.match(edit, /import \{ VP4_NO_EDITS, VP4_NO_KNOBS \} from '\.\.\/lib\/vp4-safety'/)
-    assert.match(app, /import \{ MIDI_SETUP_TITLE, VP4_NO_EDITS, VP4_NO_KNOBS, VP4_NO_RENAME, vp4SetupStatus \} from '\.\.\/shared\/vp4-safety\.mjs'/)
+    assert.match(app, /import \{ MIDI_SETUP_TITLE, VP4_NO_EDITS, VP4_NO_KNOBS, VP4_NO_RENAME, vp4ComputerLacks, vp4SetupStatus \} from '\.\.\/shared\/vp4-safety\.mjs'/)
     assert.doesNotMatch(v.VP4_NO_KNOBS, /coming|unsupported/i)
     /* "No control called …" is said by the search alone, which a VP4 never draws (comments, which quote it, aside). */
     const code = (text) => text.replace(/\/\*[^]*?\*\//g, '')

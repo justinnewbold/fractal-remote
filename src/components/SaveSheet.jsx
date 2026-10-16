@@ -236,9 +236,12 @@ export default function SaveSheet({
       {!dirty ? <p className="hint">Nothing has changed since this was last saved.</p> : null}
 
       <div className="save-sheet-actions">
-        <button className="chip" onClick={onRevert} disabled={busy}>
-          Revert to saved
-        </button>
+        {/* None on a VP4, which App.jsx says by passing no onRevert. */}
+        {onRevert ? (
+          <button className="chip" onClick={onRevert} disabled={busy}>
+            Revert to saved
+          </button>
+        ) : null}
         {safety ? (
           <button className="chip" onClick={onRestoreSafety} disabled={busy}>
             Load pre-edit copy

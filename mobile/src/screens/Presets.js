@@ -3,8 +3,8 @@ import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'r
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
 import { Platform } from 'react-native'
-import { slotCount, slotLabel, vp4Here } from '../lib/device'
-import { VP4_NO_NAMES, VP4_RELOAD, VP4_UPDATE_COMPUTER, vp4ComputerCan } from '../lib/vp4-safety'
+import { slotCount, slotLabel, vp4Here, vp4PresetName } from '../lib/device'
+import { VP4_NO_NAMES, VP4_RELOAD, VP4_UPDATE_COMPUTER, vp4ComputerCan, vp4PresetCode } from '../lib/vp4-safety'
 import { jumpsFor } from '../lib/presetJumps'
 import { knownCount, nameOf, namedSlots, readFailed, refresh, useNames, wantOnly } from '../lib/presetNames'
 import { marksFor, toggleFavourite } from '../lib/lists'
@@ -78,6 +78,21 @@ export default function Presets({ onBack }) {
    * is said instead (VP4_UPDATE_COMPUTER), as the browser's list says it.
    */
   const vp4Old = noNames && !vp4ComputerCan(caps)
+  /*
+   * THE ONE A VP4 IS ON, BY NAME. VP4_NO_NAMES says "The one the VP4 is on
+   * shows its name once the app has read it", and the browser's row does
+   * ("004 B1: Edge of Breakup"); this one said "Slot 004 B1" under that
+   * sentence with Play showing the name. The name is the one the VP4's own
+   * record carried (device.vp4PresetName, put on the preset by the chain
+   * read), and only on the row of a preset that is up and not still being
+   * changed to: never one remembered, never under a slot nobody saw land
+   * (an unseen preset leaves the place unknown, so no row is it).
+   */
+  const vp4Playing =
+    noNames && Number.isInteger(preset?.number) && !preset.pending && !preset.empty && typeof preset.name === 'string' && preset.name.trim() && preset.name === vp4PresetName()
+      ? preset.name
+      : null
+  const nameHere = (n) => (vp4Playing !== null && n === preset.number ? vp4Playing : nameOf(n))
 
   /* Re-renders as names land, and keeps the reading queue draining. */
   useNames()
@@ -112,9 +127,11 @@ export default function Presets({ onBack }) {
   const hunting = query.trim().length > 0
   const shown = hunting
     ? rows.filter((n) => {
-        const name = nameOf(n)
+        const name = nameHere(n)
         const q = query.trim().toLowerCase()
         if (String(n).includes(q)) return true
+        /* A VP4 owner knows his presets by the pedal's own A1 to Z4, which the list says it shows: "B1" finds 004 B1, "B" the B bank. The browser's search the same. */
+        if (noNames && vp4PresetCode(n)?.toLowerCase().startsWith(q)) return true
         return typeof name === 'string' && name.toLowerCase().includes(q)
       })
     : rows
@@ -350,7 +367,7 @@ export default function Presets({ onBack }) {
              which is the top — the behaviour this replaced. */
         }}
         renderItem={({ item: n }) => {
-          const name = nameOf(n)
+          const name = nameHere(n)
           const here = n === preset?.number
           const starred = favourites.includes(n)
           return (

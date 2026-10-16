@@ -1531,6 +1531,12 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
       <button
         ref={tileRef}
         className={`gig-block ${unknown || block.bypassed ? 'off' : 'on'}`}
+        /* A VP4 pedal nobody has tapped is drawn with a dashed ring, so it is
+           never mistaken for an Off: at a narrow width the corner word has no
+           room, and the two were the same tile, so a first tap (which sends
+           Off) looked like it did nothing and invited a second (styles.css).
+           No apostrophes in here: test/both-ends.mjs reads this tag by hand. */
+        data-unknown={unknown && vp4Here() ? 'yes' : undefined}
         style={{
           '--block-fill': blockColor(block.slug).fill,
           '--block-ink': blockColor(block.slug).ink

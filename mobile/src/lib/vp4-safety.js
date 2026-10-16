@@ -18,9 +18,13 @@
  *     one of up to 46 blocks with a request nobody has seen a VP4 answer — the
  *     shape of the sweep that froze an AM4 until it was switched off and on.
  *     A phone asks for the chain after every scene change. GET /preset/grid
- *     reads the VP4 the safe way (the one record VP4-Edit itself polls), and
- *     carries the same chain, so on a VP4 the chain is asked for there, and a
- *     block's knobs are not asked for at all: there is no safe way to read them.
+ *     reads the VP4 by the one record VP4-Edit itself polls, and carries the
+ *     same chain, so on a VP4 the chain is asked for there, and a block's knobs
+ *     are not asked for at all: there is no safe way to read them. On those
+ *     same old computer apps a grid read whose record does not come still falls
+ *     back to the sweep (their VP4 driver's grid() goes on to the gen-3 read),
+ *     so it is fewer sweeps, not none: GET /preset/blocks swept every time. On
+ *     the computer app with the fixed driver it never falls back.
  *
  *   - SAVE. The only save a VP4 has ever been seen to accept saves to Y1,
  *     whatever slot was picked, and the computer apps out there send exactly
@@ -338,7 +342,7 @@ export const VP4_SETUP = {
     'Pick a number nothing else on your VP4 uses: not the volume, the tuner, an effect’s on/off or channel, or the footswitch mode. Each scene change sends 0 to 3 on that number, and anything else set to it moves too.',
   numberLabel: 'Scene Select number',
   channelLabel: 'MIDI channel',
-  channelNote: 'The VP4’s is 1 unless you changed it (SETUP > MIDI/Remote > MIDI Channel). OMNI hears any.',
+  channelNote: 'The VP4’s MIDI channel is 1 unless you changed it (SETUP > MIDI/Remote > MIDI Channel). If it is set to OMNI, leave this at 1.',
   save: 'Save',
   clear: 'Forget the number',
   saved: 'Saved. Scene taps now send Scene Select on this number.',
@@ -471,6 +475,23 @@ export function vp4SetupStatus(setup, caps) {
 /** Whether the computer's app can change a VP4's scenes and presets: its unit says plainMidi. */
 export const vp4ComputerCan = (caps) => caps?.plainMidi?.programChange === true && caps?.plainMidi?.sceneSelect === true
 
+/*
+ * AND WHAT THE RED LINE IS TOLD ABOUT IT. "The red line only shows when the
+ * phone really needs something the computer doesn't have yet." A VP4 on a
+ * computer app that does not say plainMidi is exactly that, for this one
+ * unit: a scene or preset tap says to update the computer app, and the red
+ * line on YOUR COMPUTER and the version check on the help page it links to
+ * said "That is fine", because a computer from 1.87.23 on is new enough for
+ * everything else. So both hear it from here (link-chain.mjs computer.lacks,
+ * troubleshooting.mjs versionsInSync), decided by what the computer says it
+ * can do for the VP4 on it. Not by raising COMPUTER_NEEDED: that would send
+ * every FM3, AM4, FM9 and Axe-Fx III owner looking for an update their unit
+ * does not need. `onRealVp4` is false in the demo and over Bluetooth, so
+ * neither ever hears it.
+ */
+export const VP4_COMPUTER_FOR = 'a VP4’s scenes and presets'
+export const vp4ComputerLacks = (onRealVp4, caps) => (onRealVp4 && !vp4ComputerCan(caps) ? VP4_COMPUTER_FOR : null)
+
 /** The extra fields a VP4 preset request carries: its channel, always — 1 with nothing set up. A
  *  computer that changes a VP4's presets sends nothing for a preset without one (VP4_UPDATE_APP). */
 export const vp4PresetFields = (setup) => ({ midiChannel: vp4ChannelOk(setup?.midiChannel) ? setup.midiChannel : 1 })
@@ -600,9 +621,12 @@ export const VP4_SO_FAR =
 /**
  * The demo's sentence when it is a VP4. The demo's VP4 does everything an FM3
  * does, so it says which of those a real one does not do from the app yet,
- * and what it shows that a real one does not (VP4_CANT_SHOW). It
+ * and what it shows that a real one does not (VP4_CANT_SHOW). And the two
+ * things it does with nothing set up that a real one does not: its scenes
+ * switch with no number set on the pedal, and its Previous and Next step slot
+ * by slot (VP4_NO_STEP). It
  * leaves out the other units' "the models, knobs and ranges are the real
  * ones": a real VP4's knobs have no known ranges anywhere in this stack.
  */
 export const VP4_DEMO =
-  'This is a practice VP4. Nothing you do here touches a real unit. Knobs, the tuner, tap tempo, channels and saving work in this demo, but don’t work on a real VP4 from the app yet. The demo also shows preset names and whether effects are on or off, which the app can’t show on a real VP4 yet. Changing presets and scenes is new on a real VP4, and nobody on our side has tried it on one yet.'
+  'This is a practice VP4. Nothing you do here touches a real unit. Knobs, the tuner, tap tempo, channels and saving work in this demo, but don’t work on a real VP4 from the app yet. The demo also shows preset names and whether effects are on or off, which the app can’t show on a real VP4 yet. On a real VP4, scenes need one number set on the VP4 first, and Previous and Next go through a setlist or your starred presets. Changing presets and scenes is new on a real VP4, and nobody on our side has tried it on one yet.'

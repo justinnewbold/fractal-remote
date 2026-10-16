@@ -92,8 +92,10 @@ const refused = unsupportedMemo()
  * knobs send a VP4 the sweep that froze an AM4, and a save writes over Y1
  * whatever slot was picked. So at the seam above (vp4Instead), GET
  * /preset/blocks is answered from GET /preset/grid, which reads the one
- * record VP4-Edit polls, and the rest is refused in words. The browser does
- * the same at its own seam. See lib/vp4-safety.
+ * record VP4-Edit polls (on those old computers a grid read whose record does
+ * not come still falls back to the sweep: fewer sweeps, not none), and the
+ * rest is refused in words. The browser does the same at its own seam. See
+ * lib/vp4-safety.
  */
 let onVp4 = false
 

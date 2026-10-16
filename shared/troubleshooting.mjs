@@ -138,8 +138,17 @@ export function fixFor(message) {
  * app is usually on the newest release there is, and calling that "behind"
  * would send somebody looking for an update that does not exist. Behind this
  * app but at or above `needed` (COMPUTER_NEEDED) is 'ok', said plainly.
+ *
+ * AND WHAT THE UNIT NEEDS, the same as the red line. `lacks` names something
+ * the unit on that computer needs from a newer computer app (vp4-safety.mjs
+ * vp4ComputerLacks: a VP4's scenes and presets, on a computer that does not
+ * say it can). A VP4 tap on such a computer says to update it, links here,
+ * and this line said "That is fine". Now it says the same as the tap and the
+ * red line: behind, and what for. Still only when the computer is behind this
+ * app, so nobody is sent looking for a version newer than this one. Nothing
+ * else passes it, so every other unit reads this line as before.
  */
-export function versionsInSync({ app, host, needed = COMPUTER_NEEDED }) {
+export function versionsInSync({ app, host, needed = COMPUTER_NEEDED, lacks = null }) {
   if (!app) return { state: 'unknown', says: 'This app cannot tell what version it is.' }
   if (!host)
     return {
@@ -159,10 +168,15 @@ export function versionsInSync({ app, host, needed = COMPUTER_NEEDED }) {
         state: 'behind',
         says: `The computer app is v${host}, and this app needs v${needed} or newer. Let the computer update, then reload this app.`
       }
-    : {
-        state: 'ok',
-        says: `The computer app is v${host} and this one is v${app}. That is fine: the computer app has everything this one needs.`
-      }
+    : lacks
+      ? {
+          state: 'behind',
+          says: `The computer app is v${host}, and this app needs a newer one for ${lacks}. Let the computer update, then reload this app.`
+        }
+      : {
+          state: 'ok',
+          says: `The computer app is v${host} and this one is v${app}. That is fine: the computer app has everything this one needs.`
+        }
 }
 
 /** What the guide says about the one version nobody can read. */

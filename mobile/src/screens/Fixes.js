@@ -8,6 +8,8 @@ import Note from '../components/Note'
 import Press from '../components/Press'
 import { bluetoothOn } from '../lib/bleSwitch'
 import { isDemo } from '../lib/demo'
+import { vp4Capabilities, vp4Here } from '../lib/device'
+import { vp4ComputerLacks } from '../lib/vp4-safety'
 
 /**
  * What to try when it isn't working.
@@ -28,7 +30,8 @@ import { isDemo } from '../lib/demo'
  */
 export default function Fixes({ onBack, open = null, hostVersion = null }) {
   const [shown, setShown] = useState(open)
-  const sync = versionsInSync({ app: APP_VERSION, host: hostVersion })
+  /* A VP4 on a computer that cannot change its scenes and presets is behind, as its taps and the red line say (lib/vp4-safety vp4ComputerLacks). */
+  const sync = versionsInSync({ app: APP_VERSION, host: hostVersion, lacks: vp4ComputerLacks(vp4Here(), vp4Capabilities()) })
 
   return (
     <ScrollView

@@ -209,13 +209,14 @@ import {
   clearParkedPresetName,
   getHost,
   servedLocally,
+  vp4Capabilities,
   vp4Here,
   vp4PresetName,
   vp4SceneNames,
   vp4Setup
 } from './lib/forgefx'
 import Vp4Setup from './components/Vp4Setup'
-import { MIDI_SETUP_TITLE, VP4_NO_EDITS, VP4_NO_KNOBS, VP4_NO_RENAME, vp4SetupStatus } from '../shared/vp4-safety.mjs'
+import { MIDI_SETUP_TITLE, VP4_NO_EDITS, VP4_NO_KNOBS, VP4_NO_RENAME, vp4ComputerLacks, vp4SetupStatus } from '../shared/vp4-safety.mjs'
 /* What a VP4 gets from the app, on the unlock page: the phone paywall's line, word for word. */
 import { VP4_SO_FAR } from '../shared/vp4-safety.mjs'
 import ConnectScreen, { AccountCheck } from './components/ConnectScreen'
@@ -381,18 +382,30 @@ const rememberHoldNote = () => {
   }
 }
 
-/** The one-time note about the demo, once put away. */
+/**
+ * The one-time note about the demo, once put away.
+ *
+ * A VP4 HAS ITS OWN. The note says the unit the demo is, and Got it put it
+ * away for every unit: after Got it on the first one (an FM3), switching the
+ * demo to a VP4 reloaded the page with no note at all, and the VP4's sentence
+ * (VP4_DEMO: which parts of the demo a real VP4 doesn't do from the app yet)
+ * was left in a hover tooltip — the exact path a VP4 owner trying the demo
+ * before paying takes. So a VP4 has a key of its own, and its note comes up
+ * the first time the demo is a VP4, whatever was put away before.
+ */
 const DEMO_NOTE_KEY = 'fab.demo.note'
-const demoNoteWasSeen = () => {
+const DEMO_NOTE_KEY_VP4 = 'fab.demo.note.vp4'
+const demoNoteKey = (unit) => (unit === 'vp4' ? DEMO_NOTE_KEY_VP4 : DEMO_NOTE_KEY)
+const demoNoteWasSeen = (unit) => {
   try {
-    return localStorage.getItem(DEMO_NOTE_KEY) === 'seen'
+    return localStorage.getItem(demoNoteKey(unit)) === 'seen'
   } catch {
     return false
   }
 }
-const rememberDemoNote = () => {
+const rememberDemoNote = (unit) => {
   try {
-    localStorage.setItem(DEMO_NOTE_KEY, 'seen')
+    localStorage.setItem(demoNoteKey(unit), 'seen')
   } catch {
     // Private windows throw; the note comes back next time, which is fine.
   }
@@ -1155,14 +1168,15 @@ export default function App() {
     rememberHoldNote()
     setHoldNoteSeen(true)
   }
-  const [demoNoteSeen, setDemoNoteSeen] = useState(() => demoNoteWasSeen())
+  /* The page reloads when the demo's unit changes, so which unit it is is read once here. */
+  const [demoNoteSeen, setDemoNoteSeen] = useState(() => demoNoteWasSeen(demoUnit()))
   /* What Change password on the Account page last said. */
   const [passwordSaid, setPasswordSaid] = useState(null)
   /* Delete account: null, 'asking' (the warning is open), 'deleting', or a fault. */
   const [deleting, setDeleting] = useState(null)
   const dismissDemoNote = () => {
     setDemoNoteSeen(true)
-    rememberDemoNote()
+    rememberDemoNote(demoUnit())
   }
   /* The blocks the last plan was checked against, kept so a plan re-made
      from a question in the chat (see scopeTurn) is checked against the same
@@ -4629,7 +4643,16 @@ export default function App() {
             <button className="chip" onClick={() => setSheet('presets')}>
               Presets and backups
             </button>
-            {dirty ? (
+            {/*
+              Not on a VP4, which the phone has no Revert for either. Revert is
+              "load the preset again", and a VP4 cannot say which preset it is
+              on: with the place unknown it did nothing and said nothing, and
+              with it known it sent a Program Change for the preset this app
+              last picked, which is another preset if the player has moved at
+              the footswitch since. The preset list loads one again, with its
+              warning (VP4_RELOAD).
+            */}
+            {dirty && !onRealVp4 ? (
               <button className="chip armed" onClick={revert} disabled={busy}>
                 Revert
               </button>
@@ -5085,7 +5108,8 @@ export default function App() {
             /* As the footer's: only a VP4's refusal keeps the sheet open. */
             if ((await save()) || !onRealVp4) setSheet(null)
           }}
-          onRevert={revert}
+          /* Not on a VP4: see the Revert chip in the Edit row. */
+          onRevert={onRealVp4 ? null : revert}
           safety={safety}
           onRestoreSafety={restoreSafety}
           busy={busy}
@@ -5653,6 +5677,8 @@ export default function App() {
                 </button>
               ))}
             </div>
+            {/* And on a VP4, what this page is for a VP4 owner: which parts of the demo a real one doesn't do from the app yet. */}
+            {demoUnit() === 'vp4' ? <p className="hint">{demoSentence(demoUnit())}</p> : null}
           </div>
         ) : null}
 
@@ -5719,7 +5745,7 @@ export default function App() {
                 },
                 computer:
                   link.role === 'remote'
-                    ? { name: link.macName, version: link.macVersion, link: link.link }
+                    ? { name: link.macName, version: link.macVersion, link: link.link, lacks: vp4ComputerLacks(onRealVp4, vp4Capabilities()) }
                     : link.role === 'wifi'
                       ? { link: 'connected' }
                       : { version: VERSION },
@@ -5960,8 +5986,8 @@ export default function App() {
                         read, and this says so rather than leaving a row that
                         looks like a check nobody ran.
                       */}
-                      <p className="mono" data-sync={versionsInSync({ app: VERSION, host: link.macVersion }).state}>
-                        {versionsInSync({ app: VERSION, host: link.macVersion }).says}
+                      <p className="mono" data-sync={versionsInSync({ app: VERSION, host: link.macVersion, lacks: vp4ComputerLacks(onRealVp4, vp4Capabilities()) }).state}>
+                        {versionsInSync({ app: VERSION, host: link.macVersion, lacks: vp4ComputerLacks(onRealVp4, vp4Capabilities()) }).says}
                       </p>
                       <p className="hint">{FIRMWARE_NOTE}</p>
                     </div>

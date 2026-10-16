@@ -7681,6 +7681,13 @@ button.gig-block.off {
   border: 2px solid var(--block-fill, var(--rule));
 }
 
+/* A VP4's pedal whose on/off nobody has read: the same ring, dashed, so an
+   unknown pedal and an Off one never look the same when the corner word is
+   crowded out (Gig.jsx BlockTile, data-unknown). */
+button.gig-block.off[data-unknown='yes'] {
+  border-style: dashed;
+}
+
 /* And when it is off, its picture is its own colour, lit less — not the grey
    of the letters. "When the effects were off they turned to white instead of
    just being lighter colored." Mixed toward the lettering colour, which is

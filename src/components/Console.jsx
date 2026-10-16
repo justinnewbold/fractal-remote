@@ -94,7 +94,7 @@ import { bringIntoView } from '../lib/feedback'
 import { useOverflow } from '../lib/overflow'
 import { slotLabel, startsBank } from '../lib/slots'
 import { vp4Capabilities, vp4Here } from '../lib/forgefx'
-import { VP4_NO_NAMES, VP4_RELOAD, VP4_UPDATE_COMPUTER, vp4ComputerCan } from '../../shared/vp4-safety.mjs'
+import { VP4_NO_NAMES, VP4_RELOAD, VP4_UPDATE_COMPUTER, vp4ComputerCan, vp4PresetCode } from '../../shared/vp4-safety.mjs'
 import { oneWriteAtATime } from '../../shared/knob-keys.mjs'
 
 /**
@@ -508,8 +508,13 @@ export function PresetList({
   const base = picked || (needle || showAll ? slots : named)
   const shown = needle
     ? base.filter(
-        /* A number finds its slot however it is typed: 59, 059. */
-        (s) => (s.name || '').toLowerCase().includes(needle) || (/^\d+$/.test(needle) && Number(needle) === s.number)
+        /* A number finds its slot however it is typed: 59, 059. And on a VP4 its
+           own A1 to Z4, which the list says it shows: "B1" finds 004 B1, "B" the
+           B bank. The phone's search the same. */
+        (s) =>
+          (s.name || '').toLowerCase().includes(needle) ||
+          (/^\d+$/.test(needle) && Number(needle) === s.number) ||
+          (noNames && (vp4PresetCode(s.number) || '').toLowerCase().startsWith(needle))
       )
     : base
   const unread = slots.length - known.length

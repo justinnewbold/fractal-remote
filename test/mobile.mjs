@@ -2094,7 +2094,8 @@ export function run(test) {
     const web = read('src/App.jsx')
     assert.match(web, /fixFor\(error\)/, 'the browser error notice offers no fix')
     assert.match(web, /FIXES\.map/, 'the browser does not draw the guide')
-    assert.match(web, /versionsInSync\(\{ app: VERSION, host: link\.macVersion \}\)/, 'the browser runs no version check')
+    /* With what a VP4 on that computer lacks, the same as the red line (test/vp4-safety.mjs). */
+    assert.match(web, /versionsInSync\(\{ app: VERSION, host: link\.macVersion, lacks: vp4ComputerLacks\(onRealVp4, vp4Capabilities\(\)\) \}\)/, 'the browser runs no version check')
 
     const stage = read('mobile/src/screens/Stage.js')
     assert.match(stage, /fixFor\(error\)/, 'the phone error note offers no fix')
@@ -9769,7 +9770,7 @@ export function run(test) {
     /* And on screen, where somebody can act on it. */
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
     /* On the computer's card now: its name and version, from shared/link-chain.mjs. */
-    assert.match(settings, /computer: \{ name: macName, version: hostVersion, link \}/, 'Setup never says the computer’s version')
+    assert.match(settings, /computer: \{ name: macName, version: hostVersion, link, lacks: vp4ComputerLacks\(onRealVp4, caps\) \}/, 'Setup never says the computer’s version')
     assert.match(read('shared/link-chain.mjs'), /\$\{computerName\}\$\{version\(computer\.version\)\}/, 'the computer card forgot its version')
     /*
      * An old computer app is said on its own card, in red, in a few words.
