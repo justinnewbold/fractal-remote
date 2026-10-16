@@ -278,7 +278,10 @@ async function rigOnTheBench(over = {}) {
     'bleSwitch.js': "export const bluetoothWire = () => null\nexport const bluetoothOn = () => false\nexport const overBluetooth = (caps) => caps?.via === 'bluetooth'\n",
     'debugLog.js': 'export const logDebug = () => {}\n',
     'lineage.js': 'export const withLineage = (x) => x\n',
-    'presetNames.js': 'export const adopt = async () => 0\nexport const forget = () => {}\nexport const learn = () => {}\nexport const nameOf = () => undefined\n',
+    /* `presetNames` is what this phone's list already calls a slot (the computer's copy, taken in). */
+    'presetNames.js':
+      `const listed = ${JSON.stringify(over.presetNames || {})}\n` +
+      'export const adopt = async () => 0\nexport const forget = () => {}\nexport const learn = () => {}\nexport const nameOf = (n) => listed[n]\n',
     'paramIndex.js': 'export const forget = () => {}\n',
     /* `keptNames` is what this phone's disk holds for a slot, from an earlier visit. */
     'sceneNameCache.js':
@@ -17797,6 +17800,86 @@ export function run(test) {
     await clock.advance(2000)
     assert.equal(rig.getState().allBlocks.find((b) => b.effectId === 118)?.bypassed, null, 'a VP4 pedal keeps saying what another scene had')
     device.keepVp4SetupIn(null)
+  })
+
+  /*
+   * A VP4 MOVED BY ITS OWN FOOTSWITCH, on the phone's rig. B1 landed from the
+   * app, then the player stepped to Fuzz Wall on the pedal and pressed
+   * Refresh names: Play read "PRESET 004 B1 / Fuzz Wall" and the list "Fuzz
+   * Wall / 004 B1 · Playing", over a B1 that holds Edge of Breakup. The
+   * record names the preset the VP4 is on, never its place, so a later read
+   * naming another preset leaves the place unknown. See shared/vp4-safety.mjs
+   * vp4RecordNames, and test/run.mjs for the browser.
+   */
+  test('the phone on a VP4: a preset changed on the pedal itself leaves the place unknown, never the name on the old place', async () => {
+    let named = 'Edge of Breakup'
+    let gridFails = false
+    const grid = () => {
+      if (gridFails) throw Object.assign(new Error('The VP4 didn’t answer.'), { status: 503 })
+      return { model: 'vp4', name: named, scenes: ['Verse', 'Chorus', '', ''], cells: [{ row: 0, col: 0, effectId: 118, name: 'Drive', isShunt: false, slug: 'drive' }] }
+    }
+    const { rig, clock, unit } = await rigOnTheBench({
+      short: 'VP4',
+      capabilities: { slotModel: 'linear', sceneCount: 4, presets: { count: 104, addressing: 'bankLetterShort' }, plainMidi: { programChange: true, sceneSelect: true } },
+      which: () => {
+        throw Object.assign(new Error('unsupported'), { status: 501 })
+      },
+      copy: grid,
+      status: () => [{ effectId: 118, bypassed: null, channel: null }],
+      /* B1's name on the list, written down when it was last picked: it goes up on the tap. */
+      presetNames: { 4: 'Edge of Breakup' }
+    })
+    unit.selectAnswer = () => ({ ok: true, landed: true, code: 'B1' })
+    const landing = rig.loadPreset(4)
+    await clock.advance(5000)
+    assert.equal(await landing, true)
+    assert.equal(rig.getState().preset?.number, 4)
+    assert.equal(rig.getState().preset?.name, 'Edge of Breakup')
+    /* The pedal's own footswitch, then Refresh names: the record says Fuzz Wall. */
+    named = 'Fuzz Wall'
+    const refreshed = rig.rereadSceneNames()
+    await clock.advance(3000)
+    assert.equal(await refreshed, 'found', 'Refresh names failed on a VP4 that changed preset by itself')
+    assert.equal(rig.getState().preset?.number, null, 'a preset changed on the VP4 itself is put on the place the app last put it')
+    assert.equal(rig.getState().preset?.name, 'Fuzz Wall', 'Play does not say the preset the VP4 is on')
+    assert.equal(rig.getState().preset?.pending, false)
+    assert.equal(rig.getState().chainFor, null, 'the chain of the preset the VP4 moved to is filed under the old place')
+    /* No row of the list is the one playing (mobile/src/screens/Presets.js marks the row whose number is the preset's). */
+    assert.ok(Array.from({ length: 104 }, (_, n) => n).every((n) => n !== rig.getState().preset?.number))
+    /* Read again: still unknown, still its name. */
+    const again = rig.rereadSceneNames()
+    await clock.advance(3000)
+    assert.equal(await again, 'found')
+    assert.equal(rig.getState().preset?.number, null)
+    assert.equal(rig.getState().preset?.name, 'Fuzz Wall')
+    /* Picked from the app again: its place, and the name its record carries then. */
+    named = 'Edge of Breakup'
+    const back = rig.loadPreset(4)
+    await clock.advance(5000)
+    assert.equal(await back, true)
+    assert.equal(rig.getState().preset?.number, 4, 'a preset the app put the VP4 on is not its place')
+    assert.equal(rig.getState().preset?.name, 'Edge of Breakup')
+    /* A slot overwritten on the VP4 since: the first read after the landing names it, over the name the list had. */
+    named = 'Crunch'
+    const over = rig.loadPreset(4)
+    await clock.advance(5000)
+    assert.equal(await over, true)
+    assert.equal(rig.getState().preset?.number, 4, 'the first read after a landing is taken for a footswitch')
+    assert.equal(rig.getState().preset?.name, 'Crunch')
+    /* One whose record did not come says its place, and the next record names it there. */
+    gridFails = true
+    unit.selectAnswer = () => ({ ok: true, landed: true, code: 'C2' })
+    const unread = rig.loadPreset(9)
+    await clock.advance(5000)
+    await unread
+    assert.equal(rig.getState().preset?.name, 'C2')
+    gridFails = false
+    named = 'Lead'
+    const named9 = rig.rereadSceneNames()
+    await clock.advance(3000)
+    assert.equal(await named9, 'found')
+    assert.equal(rig.getState().preset?.number, 9, 'a stand-in name’s record is taken for a footswitch')
+    assert.equal(rig.getState().preset?.name, 'Lead')
   })
 
   /*

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
-import { liveMeters, setChannel, setMetersWanted, vp4Here } from '../lib/forgefx'
-import { VP4_NO_STEP, VP4_ON_OFF_UNKNOWN, aboutVp4 } from '../../shared/vp4-safety.mjs'
+import { liveMeters, setChannel, setMetersWanted, vp4Capabilities, vp4Here } from '../lib/forgefx'
+import { VP4_ON_OFF_UNKNOWN, aboutVp4, vp4StepWords } from '../../shared/vp4-safety.mjs'
 import {
   useDevice,
   refreshBlocks as reReadChain,
@@ -595,7 +595,8 @@ export default function Gig({
    * Where a press would land, or null when the button has nothing to do. NOT
    * SLOT BY SLOT ON A VP4, which cannot say which preset it is on: a setlist
    * or the stars know their own order and send the preset itself, and with
-   * neither the buttons say why (VP4_NO_STEP) — the phone's rule.
+   * neither the buttons say why (VP4_NO_STEP, or on a computer too old for
+   * any of it the update words: vp4StepWords) — the phone's rule.
    */
   const noSlotSteps = vp4Here()
   const landing = (delta) =>
@@ -628,7 +629,8 @@ export default function Gig({
   const step = async (delta) => {
     const next = landing(delta)
     if (next === null) {
-      if (!order && noSlotSteps) onError(VP4_NO_STEP)
+      /* And on a computer that can't change a VP4's presets at all, only that (vp4StepWords). */
+      if (!order && noSlotSteps) onError(vp4StepWords(vp4Capabilities()))
       return
     }
     setWorking(true)

@@ -722,16 +722,41 @@ export function run(test) {
     const stage = flat('mobile/src/screens/Stage.js')
     assert.match(stage, /const noSlotSteps = vp4Here\(\)/)
     assert.match(stage, /const landing = \(by\) => order \? stepTarget\(\{ source, current: preset\?\.number, delta: by, favourites, lists \}\) : noSlotSteps \? null : stepSlot\(preset\?\.number, by, caps\)/, 'the phone steps a VP4 slot by slot')
-    assert.match(stage, /if \(!order && noSlotSteps\) sayFault\(VP4_NO_STEP\)/, 'the phone does not say why a VP4 cannot step')
+    assert.match(stage, /if \(!order && noSlotSteps\) sayFault\(vp4StepWords\(caps\)\)/, 'the phone does not say why a VP4 cannot step')
     const gig = flat('src/components/Gig.jsx')
     assert.match(gig, /const noSlotSteps = vp4Here\(\)/)
     assert.match(gig, /const landing = \(delta\) => !order && noSlotSteps \? null : stepTarget\(/, 'the browser steps a VP4 slot by slot')
-    assert.match(gig, /if \(!order && noSlotSteps\) onError\(VP4_NO_STEP\)/, 'the browser does not say why a VP4 cannot step')
+    assert.match(gig, /if \(!order && noSlotSteps\) onError\(vp4StepWords\(vp4Capabilities\(\)\)\)/, 'the browser does not say why a VP4 cannot step')
     /* And where presets are picked, the cost of tapping the one already on. */
     /* (Not behind an old computer app, which cannot send one: test below.) */
     assert.match(flat('mobile/src/screens/Presets.js'), /\{vp4Here\(\) && !vp4Old \? \( <View[^>]*> <Note tone="hint">\{VP4_RELOAD\}<\/Note>/)
     assert.match(flat('src/components/Console.jsx'), /const noNames = vp4Here\(\)/)
     assert.match(flat('src/components/Console.jsx'), /\{noNames && !vp4Old \? <p className="hint pad">\{VP4_RELOAD\}<\/p> : null\}/)
+  })
+
+  /*
+   * PREVIOUS AND NEXT BEHIND A COMPUTER TOO OLD FOR A VP4'S PRESETS (every
+   * computer app from before plainMidi, where most VP4 owners are until
+   * theirs restarts into the new one). They said "work in a setlist or your
+   * starred presets … Tap a preset in the list instead": a setlist Next there
+   * says to update the computer app, and the list shows only that. Both ways
+   * end in the update words, so the press says them at once, at both ends.
+   */
+  test('on a computer that can’t change a VP4’s presets, Previous and Next say to update it, at both ends', async () => {
+    const v = await import('../shared/vp4-safety.mjs')
+    const m = await import('../mobile/src/lib/vp4-safety.js')
+    for (const end of [v, m]) {
+      assert.equal(end.vp4StepWords(VP4_NEW.capabilities), end.VP4_NO_STEP, 'a VP4 on the new computer is not sent to a setlist, the stars or the list')
+      for (const old of [{ ...VP4_NEW.capabilities, plainMidi: undefined }, { plainMidi: { programChange: true } }, {}, null]) {
+        assert.equal(end.vp4StepWords(old), end.VP4_UPDATE_COMPUTER, `a VP4 on a computer that can’t change its presets is sent to a setlist, the stars or the list: ${JSON.stringify(old)}`)
+      }
+    }
+    /* And what each end hands it: the capabilities the preset list asks the same question of. */
+    assert.match(flat('mobile/src/screens/Stage.js'), /const caps = useRig\(ofCaps\)/)
+    assert.match(flat('mobile/src/screens/Presets.js'), /const vp4Old = noNames && !vp4ComputerCan\(caps\)/)
+    assert.match(flat('src/components/Console.jsx'), /const vp4Old = noNames && !vp4ComputerCan\(vp4Capabilities\(\)\)/)
+    assert.match(flat('src/components/Gig.jsx'), /import \{[^}]*\bvp4Capabilities\b[^}]*\} from '\.\.\/lib\/forgefx'/)
+    assert.doesNotMatch(flat('mobile/src/screens/Stage.js') + flat('src/components/Gig.jsx'), /\(VP4_NO_STEP\)/, 'a screen says VP4_NO_STEP whatever the computer can do')
   })
 
   test('the VP4 setup card says the same words on the phone and in the browser, and only there', () => {
@@ -1343,14 +1368,21 @@ export function run(test) {
 
   /*
    * THE PRESET LIST NAMES THE ONE A VP4 IS ON, AT BOTH ENDS. VP4_NO_NAMES says
-   * "The one the VP4 is on shows its name once the app has read it". The
-   * browser's row did ("004 B1: Edge of Breakup"); the phone's said "Slot 004
-   * B1 · Playing" under that sentence with Play showing the name. And a VP4
-   * owner searching for "B1", the pedal's own name for it, found nothing at
-   * either end.
+   * "A preset you pick from the app shows its name once the VP4 has loaded
+   * it". The browser's row did ("004 B1: Edge of Breakup"); the phone's said
+   * "Slot 004 B1 · Playing" under that sentence with Play showing the name.
+   * And a VP4 owner searching for "B1", the pedal's own name for it, found
+   * nothing at either end.
+   *
+   * The sentence used to say "The one the VP4 is on shows its name once the
+   * app has read it", untrue both ways: at the start Play has the name and
+   * no row does (the app can't tell which slot it is), and a preset picked
+   * from the app keeps its name on its row after the VP4 has moved on.
    */
   test('the preset list names the preset a VP4 is on, from its record, and finds A1 to Z4 by name, at both ends', async () => {
     const v = await import('../shared/vp4-safety.mjs')
+    assert.equal(v.VP4_NO_NAMES, 'The app can’t read the names of a VP4’s presets yet, so the list shows them as A1 to Z4. A preset you pick from the app shows its name once the VP4 has loaded it.')
+    assert.doesNotMatch(v.VP4_NO_NAMES, /the one the VP4 is on/i, 'the list promises the name of the preset the VP4 is on, which no row has at the start')
     const src = read('mobile/src/screens/Presets.js')
     const phone = src.replace(/\s+/g, ' ')
     assert.match(phone, /renderItem=\{\(\{ item: n \}\) => \{ const name = nameHere\(n\)/, 'the phone’s row does not name the preset the VP4 is on')
@@ -1625,6 +1657,54 @@ export function run(test) {
    * had named — under a Description promising "the names your unit already
    * uses".
    */
+  /*
+   * A VP4 MOVED BY ITS OWN FOOTSWITCH. A VP4 is a floor pedal, so changing
+   * preset on it is ordinary use, and its record names the preset it is on
+   * but never its place. Both ends put that name on whatever place was up:
+   * B1 landed from the app, a footswitch to Fuzz Wall, Refresh names, and
+   * Play read "PRESET 004 B1 / Fuzz Wall" and the list "Fuzz Wall / 004 B1 ·
+   * Playing", with Fuzz Wall nowhere near B1. Now only the first read after
+   * the app's own landed Program Change, or a stand-in name, names the place;
+   * a later read naming another preset leaves it unknown. Run at each end in
+   * test/mobile.mjs and test/run.mjs.
+   */
+  test('a VP4 that changes preset by itself leaves the place unknown, by one rule at both ends', async () => {
+    const v = await import('../shared/vp4-safety.mjs')
+    const edge = { number: 4, name: 'Edge of Breakup', empty: false, pending: false }
+    /* The first read after this app's own landing names the place, whatever was up. */
+    assert.deepEqual(v.vp4RecordNames({ ...edge, name: 'Remembered' }, 4, 'Edge of Breakup', 4), { name: 'Edge of Breakup', place: 4 })
+    /* A later one naming another preset: the VP4 moved by itself. */
+    assert.deepEqual(v.vp4RecordNames(edge, 4, 'Fuzz Wall', null), { name: 'Fuzz Wall', place: null }, 'a footswitch’s preset is put on the place the app last put the VP4')
+    assert.deepEqual(v.vp4RecordNames(edge, 4, 'Fuzz Wall', 9), { name: 'Fuzz Wall', place: null })
+    /* The same name again changes nothing. */
+    assert.equal(v.vp4RecordNames(edge, 4, 'Edge of Breakup', null), null)
+    /* A stand-in name is named on its place: blank, still coming, or its own A1 to Z4. */
+    for (const standIn of [{ name: '' }, { name: 'Old', pending: true }, { name: 'B1' }]) {
+      assert.deepEqual(v.vp4RecordNames({ ...edge, ...standIn }, 4, 'Crunch', null), { name: 'Crunch', place: 4 }, `${JSON.stringify(standIn)} is not a stand-in`)
+    }
+    assert.deepEqual(v.vp4RecordNames({ ...edge, name: 'C2' }, 4, 'Crunch', null), { name: 'Crunch', place: null }, 'another place’s code is a stand-in for this one')
+    /* With the place unknown already, or nothing up, the name goes up and the place stays unknown. */
+    assert.deepEqual(v.vp4RecordNames({ ...edge, number: null }, null, 'Fuzz Wall', null), { name: 'Fuzz Wall', place: null })
+    assert.deepEqual(v.vp4RecordNames(null, undefined, 'Big Room', null), { name: 'Big Room', place: null })
+    /* Never onto a preset the read was not for, and never without a name. */
+    assert.equal(v.vp4RecordNames(edge, 9, 'Fuzz Wall', 4), null)
+    assert.equal(v.vp4RecordNames(edge, 4, null, 4), null)
+    /* Both ends decide by it, owe it only to their own landing, and never off a read that crossed a tap. */
+    const phone = flat('mobile/src/lib/rig.js')
+    const web = flat('src/lib/deviceState.js')
+    assert.match(phone, /const said = vp4RecordNames\(p, number, name, vp4Owed\)/, 'the phone names a VP4’s place by its own rule')
+    assert.match(web, /const said = vp4RecordNames\(p, number, name, vp4Owed\)/, 'the browser names a VP4’s place by its own rule')
+    assert.match(phone, /if \(vp4PresetOn\(answer\) && run === presetRun\) vp4Owed = number/)
+    assert.match(web, /if \(vp4Landed && run === presetRun\) vp4Owed = number/)
+    assert.match(phone, /const run = \+\+presetRun \/\*[^*]*\*\/ vp4Owed = null/)
+    assert.match(web, /const run = \+\+presetRun \/\*[^*]*\*\/ vp4Owed = null/)
+    assert.match(phone, /const fresh = vp4ReadFresh\(era\) const named = fresh \? vp4NameFor\(number\) : null/)
+    assert.match(web, /if \(!held\) takeVp4Name\(number, era\)/)
+    for (const [end, src] of [['phone', phone], ['browser', web]]) {
+      assert.match(src, /vp4Era \+= 1 vp4Selecting\.add\(run\) let \w+ try \{ \w+ = await \w+\.selectPreset\(number, \{ deadline \}\)[\s\S]{0,400}?\} finally \{ vp4Selecting\.delete\(run\) vp4Era \+= 1 \}/, `the ${end}’s select does not mark the reads that cross it`)
+    }
+  })
+
   test('a VP4’s scene names are the ones its record carries, at both ends, and never asked for again', async () => {
     const v = await import('../shared/vp4-safety.mjs')
     assert.deepEqual(v.vp4SceneNamesFromGrid({ scenes: [' Verse ', 'Chorus', '', null, 'Fifth'] }), ['Verse', 'Chorus', '', ''], 'four, trimmed, blank where unnamed')
@@ -1650,7 +1730,7 @@ export function run(test) {
     assert.deepEqual(ffx.vp4SceneNames(), ['Clean', 'Crunch', 'Lead', 'Solo'], 'the browser does not keep the scene names its VP4 chain read carried')
     assert.deepEqual(web.asked.filter((l) => /\/presets\/|\/scene/.test(l)), [], 'the browser asked a VP4 for its scene names another way')
     /* Where they go: the phone's chain read, and the browser's store and its own read at the start. */
-    assert.match(flat('mobile/src/lib/rig.js'), /const scenes = vp4ScenesFor\(number\) if \(scenes\) patch\.sceneNames = scenes/)
+    assert.match(flat('mobile/src/lib/rig.js'), /const scenes = fresh \? vp4ScenesFor\(number\) : null .{0,300}?if \(scenes\) patch\.sceneNames = scenes/)
     assert.match(flat('src/lib/deviceState.js'), /export async function refreshLoadedSceneNames\(number\) \{ if \(!Number\.isInteger\(number\)\) return \/\*[^*]*\*\/ if \(driver\?\.vp4Here\?\.\(\)\) return/, 'the browser asks a VP4 for its scene names again, over the ones its record carried')
     assert.match(flat('src/App.jsx'), /setBlocks\(list\) \/\*[^*]*\*\/ if \(vp4Here\(\)\) takeVp4Record\(p\?\.number \?\? null\)/, 'the browser’s read at the start leaves a VP4 unnamed')
     assert.match(flat('src/App.jsx'), /vp4Here, vp4PresetName, vp4SceneNames, sceneState,/, 'the browser’s store is not handed the VP4’s scene names')

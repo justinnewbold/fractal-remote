@@ -7199,6 +7199,59 @@ onTheBench('browser: a VP4 preset is named off its record, the same preset again
   assert.equal(ds.getSnapshot().blocks.find((b) => b.effectId === 118)?.bypassed, null, 'a VP4 pedal keeps saying what another scene had')
 })
 
+/*
+ * A VP4 MOVED BY ITS OWN FOOTSWITCH, in the browser: the phone's rule
+ * (shared/vp4-safety.mjs vp4RecordNames, run on the phone in
+ * test/mobile.mjs). B1 landed from this page, the player stepped to Fuzz
+ * Wall on the pedal, and the next chain read put Fuzz Wall on B1. Only the
+ * first read after this page's own landing names the place; a later one
+ * naming another preset leaves it unknown ("--"), and no row is playing.
+ */
+onTheBench('browser: a VP4 preset changed on the pedal itself leaves the place unknown, never the name on the old place', async () => {
+  const { clock, unit } = windowOnTheBench({
+    vp4: true,
+    vp4Name: 'Edge of Breakup',
+    vp4Scenes: ['Verse', 'Chorus', '', ''],
+    keepsCopy: false,
+    outlines: false,
+    which: () => null,
+    blocks: [{ slug: 'drive', name: 'Drive', effectId: 118, bypassed: null, channel: null }],
+    status: () => [{ effectId: 118, bypassed: null, channel: null }],
+    selectAnswer: () => ({ ok: true, landed: true, code: 'B1' })
+  })
+  const landing = ds.loadPreset(4)
+  await clock.advance(5000)
+  assert.notEqual(await landing, null)
+  assert.equal(ds.getSnapshot().preset?.number, 4)
+  assert.equal(ds.getSnapshot().preset?.name, 'Edge of Breakup')
+  /* The pedal's own footswitch, then a chain read: the record says Fuzz Wall. */
+  unit.vp4Name = 'Fuzz Wall'
+  unit.vp4Scenes = ['Big', '', '', '']
+  assert.ok(Array.isArray(await ds.refreshBlocks()))
+  assert.equal(ds.getSnapshot().preset?.number, null, 'a preset changed on the VP4 itself is put on the place this page last put it')
+  assert.equal(ds.getSnapshot().preset?.name, 'Fuzz Wall', 'the bar does not say the preset the VP4 is on')
+  assert.deepEqual(ds.getSnapshot().sceneNames, ['Big', '', '', ''], 'the scene buttons keep the last preset’s names')
+  assert.equal(ds.getSnapshot().chainFor, null, 'the chain of the preset the VP4 moved to is filed under the old place')
+  /* Read again: still unknown, still its name. */
+  assert.ok(Array.isArray(await ds.refreshBlocks()))
+  assert.equal(ds.getSnapshot().preset?.number, null)
+  assert.equal(ds.getSnapshot().preset?.name, 'Fuzz Wall')
+  /* Picked here again: its place, and the name its record carries then. */
+  unit.vp4Name = 'Edge of Breakup'
+  const back = ds.loadPreset(4)
+  await clock.advance(5000)
+  assert.notEqual(await back, null)
+  assert.equal(ds.getSnapshot().preset?.number, 4, 'a preset this page put the VP4 on is not its place')
+  assert.equal(ds.getSnapshot().preset?.name, 'Edge of Breakup')
+  /* A slot overwritten on the VP4 since: the first read after the landing names it. */
+  unit.vp4Name = 'Crunch'
+  const over = ds.loadPreset(4)
+  await clock.advance(5000)
+  assert.notEqual(await over, null)
+  assert.equal(ds.getSnapshot().preset?.number, 4, 'the first read after a landing is taken for a footswitch')
+  assert.equal(ds.getSnapshot().preset?.name, 'Crunch')
+})
+
 onTheBench('browser: Next and then a preset from the menu sets up no song on the preset chosen, and one Next still sets up its own', async () => {
   const { clock, unit, wire } = windowOnTheBench()
   unit.lag = (line) => (line === CHAIN ? 600 : 60)
@@ -14655,6 +14708,31 @@ test('the computer app carries the server whose level readings start off', () =>
     assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
   }
   assert.ok(lock._why.some((line) => /meter loop starts quiet/.test(line) && /lease/.test(line)), 'the lock does not say why it moved')
+})
+
+/*
+ * A VP4'S PRESETS AND SCENES NEED THE SERVER THAT SENDS THEM. The app's VP4
+ * work waits for the computer to say plainMidi for a VP4 (shared/vp4-safety.mjs
+ * vp4ComputerCan), which only the server on the VP4 commits reports. That
+ * work also changes the web app the computer serves from inside itself, so
+ * merged on its own it makes a computer release (scripts/computer-fingerprint.mjs)
+ * on the old server: the newest computer app would then tell every VP4
+ * owner, on the phone, in the browser and in its own window, to update to a
+ * computer version that does not exist. The app work and the re-pin go in
+ * together, or this goes red.
+ */
+test('the computer app carries the server that changes a VP4’s presets and scenes, which the app’s VP4 work waits for', async () => {
+  const { vp4ComputerCan } = await import('../shared/vp4-safety.mjs')
+  assert.equal(vp4ComputerCan({ plainMidi: { programChange: true, sceneSelect: true } }), true)
+  assert.equal(vp4ComputerCan({}), false, 'the app changes a VP4’s presets through a computer that never said it can')
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+vp4midi(\+|$)/, 'the app’s VP4 work ships inside a computer app whose server reports no plainMidi: every VP4 owner is told to update to a computer version that does not exist')
+  for (const piece of ['gridgen', 'looper', 'am4scenes', 'am4tempo', 'am4fw', 'am4tempoparam', 'am4tunercc', 'meterGate', 'relayheal', 'quietMeters']) {
+    assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
+  }
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  assert.match(lock.forgefx.commit, /^[0-9a-f]{40}$/, 'the pin is not a full commit')
+  assert.ok(lock._why.some((line) => /\bVP4\b/.test(line) && /Program Change/.test(line) && /Scene Select/.test(line)), 'the lock does not say why it moved')
 })
 
 /*

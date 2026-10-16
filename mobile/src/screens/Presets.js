@@ -79,9 +79,9 @@ export default function Presets({ onBack }) {
    */
   const vp4Old = noNames && !vp4ComputerCan(caps)
   /*
-   * THE ONE A VP4 IS ON, BY NAME. VP4_NO_NAMES says "The one the VP4 is on
-   * shows its name once the app has read it", and the browser's row does
-   * ("004 B1: Edge of Breakup"); this one said "Slot 004 B1" under that
+   * THE ONE A VP4 IS ON, BY NAME. VP4_NO_NAMES says "A preset you pick from
+   * the app shows its name once the VP4 has loaded it", and the browser's row
+   * does ("004 B1: Edge of Breakup"); this one said "Slot 004 B1" under that
    * sentence with Play showing the name. The name is the one the VP4's own
    * record carried (device.vp4PresetName, put on the preset by the chain
    * read), and only on the row of a preset that is up and not still being

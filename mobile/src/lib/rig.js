@@ -19,7 +19,7 @@ import { firmwareOf } from './firmware'
 import { faultFrom, faultLeft, withdrawsDropped, withdrawsFault } from './fault-rule'
 
 import * as device from './device'
-import { VP4_NO_TEMPO, aboutVp4, vp4PresetCode, vp4PresetOn } from './vp4-safety'
+import { VP4_NO_TEMPO, aboutVp4, vp4PresetCode, vp4PresetOn, vp4RecordNames } from './vp4-safety'
 import { idOf, sameBlock } from './unit.mjs'
 import { TAP_REREAD_MS, keepTaps, tappedBpm, tempoRange, tempoSender } from './tempo'
 import { watchEvery, probeUnit, countQuiet, unitGone } from './unit-watch'
@@ -248,6 +248,10 @@ export function reset() {
   chainForBefore = null
   following = null
   namesRead = null
+  /* A VP4's place this phone put it on belongs to the rig that was: see vp4NameFor. */
+  vp4Owed = null
+  vp4Selecting.clear()
+  vp4Era += 1
   clearTimeout(quietTimer)
   quietTimer = null
   pressedAt = 0
@@ -1705,7 +1709,9 @@ export async function rereadSceneNames() {
 async function rereadVp4SceneNames() {
   const number = state.preset?.number ?? null
   const read = await refreshBlocks({ quiet: true }).catch(() => false)
-  if (!read || (state.preset?.number ?? null) !== number) return 'failed'
+  /* Unknown now is still this read: the VP4 changed preset by itself, and its record named the one it is on (vp4NameFor). */
+  const now = state.preset?.number ?? null
+  if (!read || (now !== number && now !== null)) return 'failed'
   const names = device.vp4SceneNames?.()
   if (!names) return 'failed'
   logDebug('scenes', 're-read a VP4’s scene names off its record')
@@ -1895,15 +1901,41 @@ let bufferOwed = false
  * for good after any pick. The record its chain comes from carries the name,
  * so the chain read puts it up. Only onto the preset that read was for, or
  * onto none at the start. null when there is nothing to change.
+ *
+ * And onto its place only when nothing can have moved the VP4 since this
+ * phone put it there (lib/vp4-safety vp4RecordNames, the browser's rule too):
+ * the first read after this phone's own Program Change landed (vp4Owed), or
+ * while the name up is only a stand-in. A later read naming another preset
+ * is the VP4's own footswitch: the name goes up with the place unknown. It
+ * was "PRESET 004 B1 / Fuzz Wall" over a B1 that holds Edge of Breakup, and
+ * the list said B1 was Fuzz Wall.
  */
 function vp4NameFor(number) {
   const name = device.vp4PresetName?.()
-  if (!name) return null
   const p = state.preset
-  if (p && p.number !== number) return null
-  if (p && p.name === name && !p.pending && !p.empty) return null
-  return { ...(p || { number: null }), name, empty: false, pending: false }
+  const said = vp4RecordNames(p, number, name, vp4Owed)
+  /* The first read after the landing has come: from here on, a different name is the VP4's own doing. */
+  if (name && Number.isInteger(number) && number === vp4Owed && (p?.number ?? null) === number) vp4Owed = null
+  if (!said) return null
+  if (said.place === null && Number.isInteger(p?.number)) {
+    logDebug('preset', `the VP4's record names "${said.name}", not the preset this phone put on ${vp4PresetCode(p.number) || p.number}: it changed preset by itself, so its place is unknown now`)
+  }
+  return { ...(p || {}), number: said.place, name: said.name, empty: false, pending: false }
 }
+
+/*
+ * The place this phone's own Program Change last landed on, until the first
+ * read of the VP4's record after it (vp4NameFor). null otherwise.
+ */
+let vp4Owed = null
+/*
+ * Moved at every preset tap and every answer to one, and the selects still
+ * in the air: a chain read that was on its way across either may carry the
+ * record of the preset being left, so it names nothing (vp4ReadFresh).
+ */
+let vp4Era = 0
+const vp4Selecting = new Set()
+const vp4ReadFresh = (era) => era === vp4Era && vp4Selecting.size === 0
 
 /*
  * AND ITS SCENE NAMES, off the same record, by the same rule: only onto the
@@ -1928,6 +1960,8 @@ async function readBlocks(quiet) {
   const key = chainKey()
   /* Which preset these are, for the screens: see chainViewOf. */
   const number = state.preset?.number
+  /* Which preset tap this read went out under: see vp4ReadFresh. */
+  const era = vp4Era
   try {
     /*
      * One read, two lists. The unit is asked once — it is a slow read and the
@@ -1959,10 +1993,16 @@ async function readBlocks(quiet) {
       patch.chainFor = Number.isInteger(number) ? number : null
       patch.chainKnown = null
       /* A VP4's name rides on the record this chain came from (device.vp4PresetName): see vp4NameFor. */
-      const named = vp4NameFor(number)
-      if (named) patch.preset = named
-      /* And its scene names: see vp4ScenesFor. */
-      const scenes = vp4ScenesFor(number)
+      /* Not off a read that was on its way across a preset tap or its answer: see vp4ReadFresh. */
+      const fresh = vp4ReadFresh(era)
+      const named = fresh ? vp4NameFor(number) : null
+      /* And its scene names: see vp4ScenesFor. Read before the name goes up: they are for the same preset. */
+      const scenes = fresh ? vp4ScenesFor(number) : null
+      if (named) {
+        patch.preset = named
+        /* A VP4 that moved by itself: this chain is the preset it is on, wherever that is. */
+        if (named.number === null) patch.chainFor = null
+      }
       if (scenes) patch.sceneNames = scenes
     }
     if (bufferOwed) {
@@ -2633,6 +2673,8 @@ export async function loadPreset(number, at = Date.now()) {
     }
   })
   const run = ++presetRun
+  /* No read owes this tap a name until it lands: see vp4NameFor. */
+  vp4Owed = null
   namesAtOnce(number, run)
   presetLoads += 1
   /* A read still waiting to go is for a preset this tap has just left. */
@@ -2678,11 +2720,20 @@ export async function loadPreset(number, at = Date.now()) {
   let vp4Code = null
   try {
     try {
-      const answer = await device.selectPreset(number, { deadline }).catch((err) => {
-        if (!err?.answeredGarbled) throw err
-        unconfirmed = true
-        logDebug('write', `select preset ${number}: its answer came back garbled past its deadline; reading where the unit is`)
-      })
+      /* A select in the air, for the reads that cross it: see vp4ReadFresh. */
+      vp4Era += 1
+      vp4Selecting.add(run)
+      let answer
+      try {
+        answer = await device.selectPreset(number, { deadline }).catch((err) => {
+          if (!err?.answeredGarbled) throw err
+          unconfirmed = true
+          logDebug('write', `select preset ${number}: its answer came back garbled past its deadline; reading where the unit is`)
+        })
+      } finally {
+        vp4Selecting.delete(run)
+        vp4Era += 1
+      }
       /*
        * `again`: the computer saw the VP4 was on this preset already and
        * loaded it again — two setlist songs on one preset. Nothing moved,
@@ -2693,6 +2744,8 @@ export async function loadPreset(number, at = Date.now()) {
       if (answer?.overtaken === true) overtaken = true
       if (answer?.landed === false && !answer?.overtaken && !answer?.again) unseen = answer.message || 'Sent, but the app couldn’t confirm the VP4 changed preset.'
       if (vp4PresetOn(answer)) vp4Code = typeof answer?.code === 'string' && answer.code ? answer.code : vp4PresetCode(number)
+      /* This phone put the VP4 there: the next read of its record may name the place (vp4NameFor). */
+      if (vp4PresetOn(answer) && run === presetRun) vp4Owed = number
     } catch (err) {
       disown(token)
       if (mayHaveLanded(err)) unsure = true

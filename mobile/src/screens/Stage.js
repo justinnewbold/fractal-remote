@@ -6,7 +6,7 @@ import { color, font, radius, space, TAP } from '../lib/theme'
 import { bandTop, tileWidth as tileWidthIn } from '../lib/tileGrid'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
 import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot, vp4Here } from '../lib/device'
-import { VP4_NO_STEP, VP4_ON_OFF_UNKNOWN } from '../lib/vp4-safety'
+import { VP4_ON_OFF_UNKNOWN, vp4StepWords } from '../lib/vp4-safety'
 import {
   applySong,
   listsFor,
@@ -544,7 +544,8 @@ export default function Stage({
    * "the next slot" is a guess from the last one this phone picked, and one
    * changed at its footswitch since makes Next land somewhere nobody meant.
    * A setlist or the stars know their own order and send the preset itself,
-   * so those still step. With neither, the buttons say why (VP4_NO_STEP)
+   * so those still step. With neither, the buttons say why (VP4_NO_STEP, or
+   * on a computer too old for any of it the update words: vp4StepWords)
    * rather than doing nothing. Never in the demo, whose VP4 knows.
    */
   const noSlotSteps = vp4Here()
@@ -581,7 +582,8 @@ export default function Stage({
     if (next === null) {
       // The end of the list. Wrapping round to slot 0 mid-set is worse than a
       // button that does nothing, so it does nothing and says so in the case.
-      if (!order && noSlotSteps) sayFault(VP4_NO_STEP)
+      /* And on a computer that can't change a VP4's presets at all, only that (vp4StepWords). */
+      if (!order && noSlotSteps) sayFault(vp4StepWords(caps))
       nope()
       return
     }

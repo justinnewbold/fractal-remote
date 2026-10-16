@@ -107,6 +107,35 @@ export function vp4SceneNamesFromGrid(grid) {
   return grid.scenes.slice(0, 4).map((n) => (typeof n === 'string' ? n.trim() : ''))
 }
 
+/*
+ * WHAT A VP4'S RECORD MAY DO TO THE PRESET ON SCREEN, the same at both ends
+ * (mobile/src/lib/rig.js vp4NameFor, src/lib/deviceState.js takeVp4Name).
+ * The record names the preset the VP4 is on and never its place, so the name
+ * goes onto the place on screen only when nothing else can have moved the
+ * VP4 in between: on the first read after this app's own Program Change
+ * landed there (`owed` is that place), or while the name up is only a stand-in
+ * (blank, still coming, or the place's own A1 to Z4). Any later read that
+ * names another preset means the VP4 changed preset by itself (its own
+ * footswitch, or VP4-Edit), and that read leaves the place unknown, as an
+ * unseen Program Change does: "PRESET — OF 104" over the new name, and no row
+ * in the list playing. Kept on the place, it was "PRESET 004 B1 / Fuzz Wall"
+ * with Fuzz Wall nowhere near B1, and the list said B1 was Fuzz Wall too.
+ *
+ * `p` is the preset on screen, `number` the place the read was for (the one
+ * on screen when it was asked), `name` the record's (vp4NameFromGrid). null
+ * when nothing changes; otherwise the name to put up, and `place`: the
+ * place to put it on, or null for unknown.
+ */
+export function vp4RecordNames(p, number, name, owed = null) {
+  if (!name) return null
+  const at = p?.number ?? null
+  if (p && at !== (number ?? null)) return null
+  if (p && p.name === name && !p.pending && !p.empty) return null
+  if (!Number.isInteger(at)) return { name, place: null }
+  const standIn = !p.name || Boolean(p.pending) || Boolean(p.empty) || p.name === vp4PresetCode(at)
+  return { name, place: at === owed || standIn ? at : null }
+}
+
 /**
  * Whether an error (or its words) is one of a VP4's refusals: marked at this
  * end (vp4Refusal, vp4Said), or the computer's own sentence about a VP4. Play
@@ -268,8 +297,16 @@ export const VP4_RELOAD = 'Tapping the preset the VP4 is already on loads it aga
  * "the rest fill in as you scroll" and "press ⟳ to read them" were promises
  * nothing keeps: the rows stay A1 to Z4, and Refresh reads nothing. Said once
  * instead, the same at both ends, and their Refresh is not offered.
+ *
+ * It said "The one the VP4 is on shows its name once the app has read it",
+ * which was untrue both ways. At the start the app has read it (Play says
+ * "Big Room") but cannot tell which slot that is, so no row has it; and a
+ * preset picked from the app keeps its name on its row (the browser writes
+ * it down, and phones take that list in) after the VP4 has moved on. What
+ * is true at both ends is the second sentence now: a name comes with a
+ * preset picked from the app, once the VP4 has loaded it.
  */
-export const VP4_NO_NAMES = 'The app can’t read the names of a VP4’s presets yet, so the list shows them as A1 to Z4. The one the VP4 is on shows its name once the app has read it.'
+export const VP4_NO_NAMES = 'The app can’t read the names of a VP4’s presets yet, so the list shows them as A1 to Z4. A preset you pick from the app shows its name once the VP4 has loaded it.'
 /*
  * The pedals' on/off. The one record a VP4 is read by carries no on/off, and
  * every computer app answers `bypassed: null` for each of its effects — which
@@ -470,6 +507,17 @@ export function vp4SetupStatus(setup, caps) {
 
 /** Whether the computer's app can change a VP4's scenes and presets: its unit says plainMidi. */
 export const vp4ComputerCan = (caps) => caps?.plainMidi?.programChange === true && caps?.plainMidi?.sceneSelect === true
+
+/*
+ * WHAT PREVIOUS AND NEXT SAY on a VP4 with no setlist and no stars, at both
+ * ends (mobile/src/screens/Stage.js, src/components/Gig.jsx). VP4_NO_STEP
+ * sends the player to a setlist, the stars or the list. On a computer app
+ * that can't change a VP4's presets at all (every one from before plainMidi,
+ * where most VP4 owners are until theirs restarts into the new one) all
+ * three end in "update the computer app": a setlist Next says it, and the
+ * list shows only it. So there it says only that.
+ */
+export const vp4StepWords = (caps) => (vp4ComputerCan(caps) ? VP4_NO_STEP : VP4_UPDATE_COMPUTER)
 
 /*
  * AND WHAT THE RED LINE IS TOLD ABOUT IT. "The red line only shows when the

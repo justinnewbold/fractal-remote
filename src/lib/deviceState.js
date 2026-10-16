@@ -14,7 +14,7 @@ import { OUTLINE_AFTER_MS, READ_AHEAD_ON, aheadChain, createReadAhead, fillOutli
 import { STAGE_HIDDEN } from './guardrails.js'
 import { linkIsDown } from './tapGate.js'
 import { notSentError, pressesInTheAir, tapDeadline } from '../../shared/relay-rules.mjs'
-import { vp4PresetCode, vp4PresetOn } from '../../shared/vp4-safety.mjs'
+import { vp4PresetCode, vp4PresetOn, vp4RecordNames } from '../../shared/vp4-safety.mjs'
 
 export { CHAIN_FRESH_MS, OWN_ECHO_MS, OWN_SETTLE_MS, PRESET_SETTLE_MS } from '../../shared/own-echo.mjs'
 export { OUTLINE_AFTER_MS, READ_AHEAD_MS } from '../../shared/chain-outline.mjs'
@@ -659,6 +659,8 @@ export async function refreshBlocks({ reloaded = false } = {}) {
   if (!driver?.presetBlocks) return null
   lastReadFailure = null
   const number = state.preset?.number
+  /* Which preset tap this read went out under: see takeVp4Name. */
+  const era = vp4Era
   const gen = followGen
   const done = beginChainRead()
   try {
@@ -711,7 +713,7 @@ export async function refreshBlocks({ reloaded = false } = {}) {
     chainForBefore = state.chainFor
     const whose = held ? {} : { chainFor: number, chainKnown: null }
     set(reloaded ? { blocks: list, ...whose, editRev: state.editRev + 1 } : { blocks: list, ...whose })
-    if (!held) takeVp4Name(number)
+    if (!held) takeVp4Name(number, era)
     return list
   } catch (err) {
     // The last known chain stays on screen: better than emptying it because
@@ -1019,13 +1021,32 @@ function sceneStateSoon() {
  * from (lib/forgefx.js vp4PresetName): a VP4 cannot say which preset it is
  * on, so nothing else ever names it, and this end showed "Untitled". Only
  * onto the preset this read was for, or onto none at all at the start.
+ *
+ * And onto its place only when nothing can have moved the VP4 since this
+ * window put it there (shared/vp4-safety.mjs vp4RecordNames, the phone's rule
+ * too): the first read after this window's own Program Change landed
+ * (vp4Owed), or while the name up is only a stand-in. A later read naming
+ * another preset is the VP4's own footswitch: the name goes up with the place
+ * unknown ("--"), rather than on a slot that holds another preset.
+ *
+ * `era` is the preset tap the read went out under (vp4ReadFresh); a read App
+ * made itself passes none.
  */
-function takeVp4Name(number) {
+function takeVp4Name(number, era) {
   if (!driver?.vp4Here?.()) return
+  /* Not off a read that was on its way across a preset tap or its answer: it may carry the record of the preset being left. */
+  if (era !== undefined && !vp4ReadFresh(era)) return
   const p = state.preset
   if (p && p.number !== number) return
   const name = driver.vp4PresetName?.()
-  if (name && !(p?.name === name && !p.empty)) set({ preset: { ...(p || { number: null }), name, empty: false } })
+  const said = vp4RecordNames(p, number, name, vp4Owed)
+  /* The first read after the landing has come: from here on, a different name is the VP4's own doing. */
+  if (name && Number.isInteger(number) && number === vp4Owed) vp4Owed = null
+  if (said) {
+    const moved = said.place === null && Number.isInteger(p?.number)
+    /* A VP4 that moved by itself: this chain is the preset it is on, wherever that is. */
+    set({ preset: { ...(p || {}), number: said.place, name: said.name, empty: false }, ...(moved ? { chainFor: null } : {}) })
+  }
   /*
    * And its scene names, off the same record (lib/forgefx.js vp4SceneNames),
    * by the same rule. The buttons said 1 to 4 over scenes the player had
@@ -1039,6 +1060,20 @@ function takeVp4Name(number) {
 
 /** The same, for a chain App read itself (its read at the start, and after a reconnect), which the store's own chain read never sees. */
 export const takeVp4Record = (number) => takeVp4Name(number)
+
+/*
+ * The place this window's own Program Change last landed on, until the first
+ * read of the VP4's record after it (takeVp4Name). null otherwise.
+ */
+let vp4Owed = null
+/*
+ * Moved at every preset tap and every answer to one, and the selects still
+ * in the air: a chain read that was on its way across either may carry the
+ * record of the preset being left, so it names nothing.
+ */
+let vp4Era = 0
+const vp4Selecting = new Set()
+const vp4ReadFresh = (era) => era === vp4Era && vp4Selecting.size === 0
 
 /** A status read, laid over the chain on screen. */
 function layStates(states) {
@@ -1447,6 +1482,8 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
   tapRefused()
   const deadline = tapDeadline(at)
   const run = ++presetRun
+  /* No read owes this tap a name until it lands: see takeVp4Name. */
+  vp4Owed = null
   presetLoads += 1
   /*
    * A preset loaded here before goes up on the tap: its name, its scene
@@ -1543,11 +1580,20 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
        * this slot the answer is null, which Gig takes as "not landed" and
        * gives a setlist song's scene and tempo to nothing.
        */
-      const res = await driver.selectPreset(number, { deadline }).catch((err) => {
-        if (!err?.answeredGarbled) throw err
-        unconfirmed = true
-        return null
-      })
+      /* A select in the air, for the reads that cross it: see takeVp4Name. */
+      vp4Era += 1
+      vp4Selecting.add(run)
+      let res
+      try {
+        res = await driver.selectPreset(number, { deadline }).catch((err) => {
+          if (!err?.answeredGarbled) throw err
+          unconfirmed = true
+          return null
+        })
+      } finally {
+        vp4Selecting.delete(run)
+        vp4Era += 1
+      }
       if (res && res.ok === false) throw new Error(SELECT_REFUSED)
       /*
        * `again`: the computer saw the VP4 was on this preset already and
@@ -1558,6 +1604,8 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
       if (res?.landed === false && !res?.overtaken && !res?.again) unseen = res.message || 'Sent, but the app couldn’t confirm the VP4 changed preset.'
       if (vp4PresetOn(res)) vp4Landed = true
       if (vp4Landed) vp4Code = typeof res?.code === 'string' && res.code ? res.code : vp4PresetCode(number)
+      /* This window put the VP4 there: the next read of its record may name the place (takeVp4Name). */
+      if (vp4Landed && run === presetRun) vp4Owed = number
       inTheAir.landed(press)
       /*
        * AND THE PLACE IT WAS SENT TO IS NOT PUT UP AS THE PLACE IT IS ON. A
@@ -2070,6 +2118,10 @@ export function reset() {
   staleOwn = false
   chainForBefore = null
   lastRead = null
+  /* A VP4's place this window put it on belongs to the unit that was: see takeVp4Name. */
+  vp4Owed = null
+  vp4Selecting.clear()
+  vp4Era += 1
   knownChains.clear()
   knownPresets.clear()
   aheadChains.clear()
