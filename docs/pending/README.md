@@ -18,7 +18,26 @@ then bump the version, delete the patch file in the same change, and build.
 | Patch | What it does | Moves |
 |---|---|---|
 | `watch-name.patch` | The Apple Watch app is called **Fractal Remote** instead of plain "Fractal", under its icon and in the iPhone's Watch app, and the phone's watch tips (Settings, WATCH_KEEP: "tap Fractal Remote", "comes back to Fractal Remote", "Fractal Remote stays on screen") name it the same way. | Android, iOS and watch (tried on 13 October 2026: changing `displayName` in mobile/targets/watch/expo-target.config.js moves all three) |
+| `r8.patch` | **Android: R8 on** (shrinking, obfuscation and optimization of the Java and Kotlin code), for Google Play's "DEX code optimization" rule: 25% or more in each from February 2027, when 1.87.11 scored 3% obfuscation. expo-build-properties with `enableMinifyInReleaseBuilds`, three keep rules from Expo's own SDK 58 fixes (the expo-updates database, which otherwise crashes the app at launch, and two for Expo Records), and mobile/plugins/withR8Optimize.js, which swaps the template's proguard-android.txt (it carries -dontoptimize) for proguard-android-optimize.txt. Proven for free by .github/workflows/android-minified.yml before any build. | Android and iOS (the fingerprint hashes the whole app config) |
 | `watch-channels.patch` | On the Apple Watch's Pedals page, **holding a pedal opens its channels** (A, B, C, D, the one it is on lit), as holding an effect on the phone's Play screen does; a tap still switches it on or off. Each pedal shows its channel letter in its corner, and a line under them says "Hold a pedal for its channels." The phone sends each pedal's channels and carries out the pick with the Play screen's own channel switch. | **Watch only** (tried on 13 October 2026: Swift under mobile/targets/watch and the phone's JavaScript move only the watch line of the fingerprint; Android and iOS stay the same, so every update keeps reaching every phone, before and after the build) |
+
+**r8.patch, and why it waits.** Google Play, October 2026, on 1.87.11:
+"DEX code optimization is below our threshold … Obfuscation (3%) … Fix by Feb
+2027." Google: "From February 2027 … You will need to achieve a minimum of 25%
+optimization, obfuscation and shrinking for any app uploads to Play Console"
+(support.google.com/googleplay/android-developer/answer/17492799), and a title
+below it "may see reduced app visibility and publishing capabilities". Only a
+new store build carries it, because R8 runs when the app is compiled; an
+over-the-air update cannot change the score either way (the JavaScript is not
+DEX). The app's DEX is about 41 MB, four times Play's 10 MB line, so the rule
+applies. Before applying it, read the latest run of android-minified on its
+pull request: the three scores out of the bundle's r8.json, the app started
+on a phone emulator with no R8 failure in its log, and the control (no
+database rule) crashing as it should. After the Play release, check App
+bundle explorer for the three percentages; the deobfuscation map rides inside
+the .aab, so nothing is uploaded by hand. Expo SDK 58 does all of this by
+default, so an upgrade to 58 replaces this patch (drop the plugin and the
+rules then).
 
 **watch-channels.patch, and why it waits.** Justin, 13 October 2026: "Can
 I add the tap to hold on the effects switches on the watch where you can
