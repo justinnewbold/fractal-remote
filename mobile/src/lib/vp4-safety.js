@@ -687,3 +687,19 @@ export const VP4_SO_FAR =
  */
 export const VP4_DEMO =
   'This is a practice VP4. Nothing you do here touches a real unit. Knobs, the tuner, tap tempo, channels and saving work in this demo, but don’t work on a real VP4 from the app yet. The demo also shows preset names and whether effects are on or off, which the app can’t show on a real VP4 yet. On a real VP4, scenes need one number set on the VP4 first, and Previous and Next go through a setlist or your starred presets. Changing presets and scenes is new on a real VP4, and nobody on our side has tried it on one yet.'
+
+/*
+ * THE WALKTHROUGH'S LAST SCREEN LEAVES OUT SAVE FOR A VP4.
+ *
+ * Its three cards are PLAY, EDIT and SAVE, and SAVE says "Changes write to
+ * the slot on your unit." A real VP4 is not saved from the app yet (VP4_DEMO
+ * says so, and Save is not offered on one), so somebody who has just picked
+ * the VP4 to try was told the app does something on theirs that it doesn't
+ * do yet, on the first screen they read. The computer's own walkthrough is
+ * the same: its SAVE says "Save permanently to a preset from this computer",
+ * over a VP4 on its USB that the computer cannot save. The words are his
+ * mockup's and stay as they are (shared/onboarding.mjs); a VP4 is shown the
+ * other two, and every other unit keeps all three. `unit` is the demo's unit
+ * key or a /device/detect answer, as isVp4 reads either.
+ */
+export const walkthroughTips = (tips, unit) => (isVp4(unit) ? tips.filter((tip) => tip.key !== 'save') : tips)

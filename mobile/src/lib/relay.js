@@ -966,6 +966,29 @@ function socketUp() {
   }
 }
 
+/*
+ * WHETHER A SEND ON THIS CHANNEL GOES ON ITS SOCKET, asked the way
+ * realtime-js itself asks before choosing (RealtimeChannel.send:
+ * `channelAdapter.canPush()`), not the way socketUp does. On the socket, with
+ * `ack: false`, a send always answers 'ok'. Off it, send() posts the message
+ * over HTTPS, and that road answers 'error' for any fetch that failed —
+ * including one that failed after the relay server had taken the post and
+ * passed it on. For a VP4's preset or scene that 'error' is the one answer
+ * that must not be read as "never left" (see relaySend).
+ *
+ * Asked of the channel, so it cannot disagree with send(). A channel with no
+ * adapter to ask (a test's stand-in) is read as socketUp reads it.
+ */
+function pushesNow(chan) {
+  try {
+    const adapter = chan?.channelAdapter
+    if (typeof adapter?.canPush === 'function') return adapter.canPush() === true
+  } catch {
+    return false
+  }
+  return isJoined(chan) && socketUp()
+}
+
 async function requestOnce(path, method, options, trip = { went: false }) {
   /*
    * Nothing is changed while two Macs are listening. A write is not sent to the
@@ -1120,6 +1143,18 @@ async function relaySend(method, path, options, trip = { went: false }) {
   if (tap && pastDeadline(options.deadline, Date.now())) throw tooLate()
   /* And not after a newer press of the same control: it would land over the newer one (shared/relay-rules newestPresses). */
   if (tap && presses.overtaken(path, options.body, options.deadline)) throw tooLate(true)
+  /*
+   * A VP4'S PRESET OR SCENE NEVER TAKES THE HTTPS ROAD. A send there that
+   * answers 'error' may already be on the computer, and below an 'error' is
+   * read as refused, so the second try would send it again: a second Program
+   * Change, which reloads the preset and loses what the player had not saved.
+   * relayReady has already waited for the socket, so this is the last look,
+   * asked the way send() will ask. Not on the socket: not sent, and nothing
+   * went, so a second try inside the deadline is its first.
+   */
+  if (tap && sendsOnce(method, path, options.body) && !pushesNow(channel)) {
+    throw linkDown('The connection to your computer dropped.')
+  }
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
   let doubt = null
   const reply = new Promise((resolve, reject) => {

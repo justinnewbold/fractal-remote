@@ -13467,7 +13467,8 @@ export function run(test) {
     /* The demo's words unconditionally: it is the only way to this screen
        now, and "You're connected" named a computer that is not there. */
     assert.match(block.connected, /<Head>\{P9\.demo\.head\}<\/Head>/, 'the demo is told it is connected to a computer')
-    assert.match(block.connected, /P9\.tips\.map/, 'the three tips are no longer on the last screen')
+    /* All three, but SAVE for a VP4 (shared/vp4-safety walkthroughTips). */
+    assert.match(block.connected, /walkthroughTips\(P9\.tips, unit\)\.map/, 'the three tips are no longer on the last screen')
 
     /* And the right handler finishes it. onDone marks an owner unlocked,
        which is wrong for somebody who has just chosen a simulation. */

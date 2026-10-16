@@ -71,6 +71,7 @@ import { shortBlock } from '../lib/shortName'
 import { useWatchBridge, watchHow, watchPaired } from '../lib/watchBridge'
 import { findLooper } from '../lib/looper'
 import UnlockOffer from '../components/UnlockOffer'
+import Vp4DemoNote from '../components/Vp4DemoNote'
 import OnlyOnThisPhone from '../components/OnlyOnThisPhone'
 import Toast, { useStillNews } from '../components/Toast'
 import { droppedLeft, faultLeft } from '../lib/fault-rule'
@@ -747,6 +748,8 @@ export default function Stage({
             an eye starts. A fault is not in here any more: it floats over the
             screen (the Toast at the end), so it never moves what is under it. */}
         <UnlockOffer onUnlock={onUnlock} />
+        {/* The demo's VP4 says what a real one doesn't do from the app yet, once, as the browser's banner does. */}
+        <Vp4DemoNote />
         {/* Paid in the demo with no account yet: see the component. */}
         <OnlyOnThisPhone onAccount={onAccount} />
         {conflict ? <Note tone="fault">{conflict}</Note> : null}

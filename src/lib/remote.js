@@ -1261,6 +1261,22 @@ function socketUp() {
   }
 }
 
+/*
+ * Whether a send on this channel goes on its socket, asked the way
+ * realtime-js asks before it chooses (`channelAdapter.canPush()`). Off the
+ * socket it posts over HTTPS, and an 'error' there may come after the relay
+ * passed the message on (the phone's relay.js says more).
+ */
+function pushesNow(chan) {
+  try {
+    const adapter = chan?.channelAdapter
+    if (typeof adapter?.canPush === 'function') return adapter.canPush() === true
+  } catch {
+    return false
+  }
+  return isJoined(chan) && socketUp()
+}
+
 /**
  * Don't send into a socket that isn't there — wait for the one coming back.
  *
@@ -1298,6 +1314,13 @@ async function relaySend(method, path, options, trip = { went: false }) {
   if (tap && pastDeadline(options.deadline, Date.now())) throw tooLate()
   /* And not after a newer press of the same control: it would land over the newer one (shared/relay-rules newestPresses). */
   if (tap && presses.overtaken(path, options.body, options.deadline)) throw tooLate(true)
+  /*
+   * A VP4's preset or scene never takes the HTTPS road: an 'error' there may
+   * be one that went, and below an 'error' is read as refused, so the second
+   * try would be a second Program Change. Not on the socket: not sent, and a
+   * second try inside the deadline is its first (the phone's relay.js says why).
+   */
+  if (tap && sendsOnce(method, path, options.body) && !pushesNow(channel)) throw linkDown('The connection to your computer dropped.')
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
   let doubt = null
   const reply = new Promise((resolve, reject) => {

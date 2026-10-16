@@ -6,6 +6,7 @@ import { color, font, mono, radius, space, TAP } from '../lib/theme'
 import { Platform } from 'react-native'
 import { UNITS } from '../lib/demoUnits'
 import { setDemo, setDemoUnit } from '../lib/demo'
+import { walkthroughTips } from '../lib/vp4-safety'
 import { tick } from '../lib/feedback'
 /* An ES import rather than require(): Metro resolves both, but require is not
    a name this app has anywhere, and a test is right to refuse it. */
@@ -511,7 +512,8 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
           <Steps at={2} of={3} label={P9.count} />
           <Head>{P9.demo.head}</Head>
           <Sub>{P9.demo.sub}</Sub>
-          {P9.tips.map((tip) => (
+          {/* A VP4 is not shown SAVE: see walkthroughTips. */}
+          {walkthroughTips(P9.tips, unit).map((tip) => (
             <TipCard key={tip.key} icon={TIP_ICONS[tip.key]} label={tip.label} body={tip.body} onPress={onEnterDemo} />
           ))}
           <Cta label={P9.go} onPress={onEnterDemo} />

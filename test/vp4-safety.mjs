@@ -195,6 +195,99 @@ async function phoneSaveOnABench({ slug = 'vp4', demo = false } = {}) {
   }
 }
 
+/**
+ * The phone's demo VP4 note on Play (mobile/src/components/Vp4DemoNote.js) as
+ * it is, its JSX turned into calls by esbuild, drawn against stand-ins: a
+ * hook store that keeps its state across draws as a mounted component does,
+ * the phone's storage as a Map, and the demo's on/off and unit as the bench
+ * says. `mount()` is the component put on screen afresh (the next launch);
+ * `draw()` draws it again, running any effect whose inputs moved and waiting
+ * for what it asked the storage.
+ */
+async function phoneDemoNoteOnABench() {
+  const { transformSync } = await import('esbuild')
+  const dir = mkdtempSync(join(tmpdir(), 'vp4-demo-note-'))
+  const files = {
+    'package.json': '{ "type": "module" }',
+    'react.mjs': `
+      export const h = (type, props, ...children) => ({ type, props: props || {}, children })
+      export const Frag = 'frag'
+      let slots = [], deps = [], at = 0, effects = []
+      export const mount = () => { slots = []; deps = []; at = 0; effects = [] }
+      export const begin = () => { at = 0; effects = [] }
+      export const ran = () => effects
+      export function useState(initial) {
+        const i = at++
+        if (!(i in slots)) slots[i] = initial
+        return [slots[i], (v) => { slots[i] = typeof v === 'function' ? v(slots[i]) : v }]
+      }
+      export function useEffect(fn, inputs) {
+        const i = at++
+        const was = deps[i]
+        if (!was || inputs.some((x, k) => x !== was[k])) { deps[i] = inputs; effects.push(fn) }
+      }
+    `,
+    'storage.mjs': `
+      export const kept = new Map()
+      export default {
+        getItem: async (k) => (kept.has(k) ? kept.get(k) : null),
+        setItem: async (k, v) => { kept.set(k, String(v)) }
+      }
+    `,
+    'demo.mjs': `
+      export const bench = { demo: true, unit: 'vp4' }
+      export const useDemo = () => bench.demo
+      export const useDemoUnit = () => bench.unit
+    `,
+    'rest.mjs': 'export const tick = () => {}\nexport default function Note() { return null }\n',
+    /* The phone's own copies of the words, beside it, as a module. */
+    'demoUnits.js': read('mobile/src/lib/demoUnits.js'),
+    'vp4-safety.js': read('mobile/src/lib/vp4-safety.js')
+  }
+  let src = transformSync(read('mobile/src/components/Vp4DemoNote.js'), { loader: 'jsx', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'Frag', format: 'esm' }).code
+  const swaps = [
+    ['from "react"', "from './react.mjs'"],
+    ['from "@react-native-async-storage/async-storage"', "from './storage.mjs'"],
+    ['from "../lib/demoUnits"', "from './demoUnits.js'"],
+    ['from "../lib/demo"', "from './demo.mjs'"],
+    ['from "../lib/feedback"', "from './rest.mjs'"],
+    ['from "./Note"', "from './rest.mjs'"]
+  ]
+  for (const [from, to] of swaps) src = src.replaceAll(from, to)
+  const left = [...src.matchAll(/from\s+["']([^"']+)["']/g)].map((m) => m[1]).filter((m) => !m.endsWith('.mjs') && !m.endsWith('.js'))
+  assert.deepEqual(left, [], 'Vp4DemoNote.js imports something the bench has no stand-in for')
+  files['Vp4DemoNote.mjs'] = "import { h, Frag } from './react.mjs'\n" + src
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+  const at = (f) => pathToFileURL(join(dir, f)).href
+  try {
+    const note = await import(at('Vp4DemoNote.mjs'))
+    const react = await import(at('react.mjs'))
+    const storage = await import(at('storage.mjs'))
+    const demo = await import(at('demo.mjs'))
+    const draw = async () => {
+      react.begin()
+      let out = note.default()
+      const effects = react.ran()
+      if (!effects.length) return out
+      for (const fn of effects) fn()
+      await new Promise((r) => setTimeout(r, 0))
+      react.begin()
+      out = note.default()
+      for (const fn of react.ran()) fn()
+      await new Promise((r) => setTimeout(r, 0))
+      react.begin()
+      return note.default()
+    }
+    const mount = () => {
+      react.mount()
+      return draw()
+    }
+    return { mount, draw, kept: storage.kept, bench: demo.bench, key: note.VP4_DEMO_NOTE_KEY }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 /* ------------------------------------------------- presets and scenes, by MIDI -- */
 
 /* A VP4 behind a computer app that changes its scenes and presets (plainMidi), and one behind an older app. */
@@ -1122,6 +1215,75 @@ export function run(test) {
     assert.equal(seen('vp4'), false, 'Got it on an FM3 put the VP4’s note away')
     remember('vp4')
     assert.equal(seen('vp4'), true)
+  })
+
+  /*
+   * AND ON THE PHONE'S PLAY, the first time the demo is a VP4, as on the
+   * browser's. Somebody who picked VP4 in the walkthrough went from "Which
+   * unit should we simulate?" to SAVE "Changes write to the slot on your
+   * unit." to Play, with a working tuner, Tap 120 and HOLD TO SWITCH
+   * CHANNELS, and the sentence that says a real VP4 does none of that from
+   * the app yet was only in the Demo Unit sheet and Settings.
+   */
+  test('the demo’s VP4 says its sentence on Play the first time, at both ends, and its walkthrough offers no SAVE', async () => {
+    const v = await import('../shared/vp4-safety.mjs')
+    /* The phone: drawn. The first Play in the demo's VP4 says it, with a cross. */
+    const phone = await phoneDemoNoteOnABench()
+    const first = await phone.mount()
+    assert.equal(first?.type?.name, 'Note', 'the phone’s Play says nothing the first time the demo is a VP4')
+    assert.equal(first.props.tone, 'warn')
+    assert.deepEqual(first.children, [v.VP4_DEMO], 'the phone’s Play says something other than the demo’s VP4 sentence')
+    assert.equal(typeof first.props.onDismiss, 'function', 'the phone’s VP4 demo note cannot be put away')
+    /* Put away, it stays away: on this draw, on the next launch, and through another unit and back. */
+    first.props.onDismiss()
+    await new Promise((r) => setTimeout(r, 0))
+    assert.equal(phone.kept.get(phone.key), 'seen', 'putting the note away is not kept on the phone')
+    assert.equal(await phone.draw(), null)
+    assert.equal(await phone.mount(), null, 'the VP4 demo note came back on the next launch after it was put away')
+    phone.bench.unit = 'fm3'
+    assert.equal(await phone.draw(), null)
+    phone.bench.unit = 'vp4'
+    assert.equal(await phone.draw(), null, 'the VP4 demo note came back after a trip to another unit')
+    /* Never for another unit, never off the demo, and never before the phone's storage has answered. */
+    phone.kept.clear()
+    for (const unit of ['fm3', 'fm9', 'am4', 'axefx3']) {
+      phone.bench.unit = unit
+      assert.equal(await phone.mount(), null, `the phone’s Play says the VP4’s sentence over a demo ${unit}`)
+    }
+    phone.bench.unit = 'vp4'
+    phone.bench.demo = false
+    assert.equal(await phone.mount(), null, 'the phone’s Play says the demo’s VP4 sentence off the demo')
+    phone.bench.demo = true
+    assert.ok(phone.key !== 'fractal.offerDismissed', 'the VP4 demo note shares its key with the unlock offer')
+    /* Hidden until storage answers: the first draw, before its effect, is nothing. */
+    assert.match(flat('mobile/src/components/Vp4DemoNote.js'), /const \[seen, setSeen\] = useState\(true\)/, 'the VP4 demo note flashes up before the phone knows it was put away')
+    /* At the top of Play, under the offer, and once. */
+    const stage = flat('mobile/src/screens/Stage.js')
+    assert.match(stage, /<UnlockOffer onUnlock=\{onUnlock\} \/> \{\/\*[^*]*\*\/\} <Vp4DemoNote \/>/, 'the phone’s Play does not put the demo’s VP4 sentence at its top')
+    assert.equal((stage.match(/<Vp4DemoNote /g) || []).length, 1)
+    /* The browser: its banner over Play, kept for a VP4 apart (held, run, above). */
+    const web = flat('src/App.jsx')
+    assert.match(web, /\{isDemo\(\) && status === 'live' && !demoNoteSeen \? \( <p className="demo-banner"> <span>\{demoSentence\(demoUnit\(\)\)\}<\/span>/, 'the browser’s Play no longer says the demo’s sentence')
+
+    /* The walkthrough's last screen: a VP4 is shown PLAY and EDIT, and every other unit all three, at both ends. */
+    const { P9, D5 } = await import('../shared/onboarding.mjs')
+    assert.deepEqual(P9.tips.map((t) => t.key), ['play', 'edit', 'save'], 'the walkthrough’s cards moved; say what a VP4 is shown')
+    assert.deepEqual(v.walkthroughTips(P9.tips, 'vp4').map((t) => t.key), ['play', 'edit'])
+    assert.deepEqual(v.walkthroughTips(D5.tips, VP4_DETECT).map((t) => t.key), ['play', 'edit'], 'the computer’s walkthrough tells a VP4 on its USB to save from the computer')
+    for (const unit of ['fm3', 'fm9', 'am4', 'axefx3', FM3_DETECT, null, undefined]) {
+      assert.equal(v.walkthroughTips(P9.tips, unit), P9.tips, `the walkthrough left out a card for ${JSON.stringify(unit)}`)
+    }
+    assert.equal(P9.tips.length, 3, 'walkthroughTips changed the cards it was given')
+    const phoneWalk = flat('mobile/src/screens/Onboarding.js')
+    const webWalk = flat('src/components/PhoneWalkthrough.jsx')
+    const computerWalk = flat('src/components/Onboarding.jsx')
+    assert.match(phoneWalk, /\{walkthroughTips\(P9\.tips, unit\)\.map\(\(tip\) => \(/, 'the phone’s walkthrough shows a VP4 SAVE')
+    assert.match(webWalk, /\{walkthroughTips\(P9\.tips, unit\)\.map\(\(tip\) => \(/, 'the browser’s walkthrough shows a VP4 SAVE')
+    assert.match(computerWalk, /\{walkthroughTips\(D5\.tips, found \? device : null\)\.map\(\(tip\) => \(/, 'the computer’s walkthrough shows a VP4 SAVE')
+    for (const [end, text] of [['phone', phoneWalk], ['browser', webWalk], ['computer', computerWalk]]) {
+      assert.ok(!/\b(P9|D5)\.tips\.map/.test(text), `the ${end}’s walkthrough draws its cards another way too`)
+    }
+    assert.match(phoneWalk, /import \{ walkthroughTips \} from '\.\.\/lib\/vp4-safety'/)
   })
 
   /*

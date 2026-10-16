@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { CHAIN, D1, D2, D2B, D3, D4, D5 } from '../../shared/onboarding.mjs'
 import { firmwareOf } from '../../shared/firmware.mjs'
+import { walkthroughTips } from '../../shared/vp4-safety.mjs'
 import { slotCount } from '../lib/slots'
 import { Cta, Steps, TipCard } from './Walk'
 import playIcon from '../../mobile/assets/icons/play.png'
@@ -295,7 +296,8 @@ export default function Onboarding({
                 rather than claiming one. */}
             <p className="onb-sub mono">{D5.status({ unit: unitName, phone: paired })}</p>
             <div className="onb-cards">
-              {D5.tips.map((tip) => (
+              {/* A VP4 on the USB is not shown SAVE: see walkthroughTips. */}
+              {walkthroughTips(D5.tips, found ? device : null).map((tip) => (
                 <TipCard key={tip.key} icon={ICONS[tip.key]} label={tip.label} body={tip.body} />
               ))}
             </div>

@@ -893,6 +893,50 @@ export function run(test) {
         await clock.advance(300)
         assert.equal(p.done && !p.error, true, p.error?.message)
       })
+
+      /*
+       * AND NEVER BY THE HTTPS ROAD, where an 'error' may be one that went.
+       * realtime-js sends a broadcast over HTTPS when the channel cannot push
+       * on its socket (RealtimeChannel.send asks `channelAdapter.canPush()`),
+       * and answers 'error' for a fetch that failed after the relay server had
+       * already taken it and passed it on. Read as refused, the second try
+       * was a second Program Change. The bench's send does what realtime-js
+       * does: off the socket, the message arrives and the answer is 'error'.
+       */
+      const httpsRoad = (bench, canPush) => {
+        const send = bench.chan.send
+        bench.chan.channelAdapter = { canPush }
+        bench.chan.send = async function (msg, opts) {
+          if (this.channelAdapter.canPush()) return send.call(this, msg, opts)
+          await send.call(this, msg, opts)
+          return 'error'
+        }
+      }
+
+      test(`${end}: a VP4's ${path} whose socket closed just before it left goes once, on the socket, not by HTTPS`, async () => {
+        const { bench, clock, tap, watch, asked } = await relayOnABench(end)
+        const t0 = clock.now()
+        /* The first look finds the socket gone; the next finds it back. */
+        let looks = 0
+        httpsRoad(bench, () => looks++ > 0)
+        const p = watch(tap(path, body))
+        await clock.advance(1400)
+        assert.equal(looks >= 2, true, 'nothing asked whether the send would go on the socket')
+        assert.deepEqual(asked().filter((a) => a === `POST ${path}`), [`POST ${path}`], `a VP4's ${path} went twice, or never`)
+        assert.ok(bench.sent.find((s) => s.msg.payload.path === path).at < t0 + 1500, 'it went past its deadline')
+        await clock.advance(300)
+        assert.equal(p.done && !p.error, true, p.error?.message)
+      })
+
+      test(`${end}: a VP4's ${path} with no socket to go on is not sent, and is never posted by HTTPS`, async () => {
+        const { bench, clock, tap, watch, asked } = await relayOnABench(end)
+        httpsRoad(bench, () => false)
+        const p = watch(tap(path, body))
+        await clock.advance(5000)
+        assert.deepEqual(asked().filter((a) => a === `POST ${path}`), [], `a VP4's ${path} was posted by HTTPS, where an 'error' may be one that went`)
+        assert.equal(p.done, true)
+        assert.equal(p.error?.notSent, true, `a VP4 tap that never left was not said as not sent: ${p.error?.message}`)
+      })
     }
 
     test(`${end}: a tap held by the roll call past its deadline is dropped, and the roll call is not cut short`, async () => {
