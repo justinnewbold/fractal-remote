@@ -486,8 +486,11 @@ export default function Settings({
             {(link === 'connected' || demo) && switchesReadable ? (
               <SetupRow title="Footswitches" status="What each switch does" onPress={() => setPage('footswitches')} />
             ) : null}
-            {/* Not over Bluetooth (beta): the looper is left off its chain. */}
-            {(link === 'connected' || demo) && !overBluetooth(caps) ? (
+            {/* Not over Bluetooth (beta): the looper is left off its chain.
+                And not on a real VP4: no computer app can work its looper,
+                so the row could only say "Didn’t stop" (lib/vp4-safety
+                VP4_NO_LOOPER). The browser's Setup leaves it out too. */}
+            {(link === 'connected' || demo) && !overBluetooth(caps) && !onRealVp4 ? (
               <SetupRow
                 title="Stop the looper"
                 status={looperSaid || 'If a loop keeps playing'}

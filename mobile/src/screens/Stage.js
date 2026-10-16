@@ -356,6 +356,18 @@ export default function Stage({
    */
   const looperHere = findLooper(allBlocks)
   const looperTile = !chainNow.elsewhere && !!looperHere
+  /*
+   * ON A REAL VP4 IT OPENS ONE SENTENCE, not Rec and Play. No computer app can
+   * work a VP4's looper (each of its eight buttons was refused, "The app can't
+   * do that on a VP4 yet"), and nothing reads a VP4's on/off, so the pedal was
+   * drawn lit, as if on, right above "The app can't see whether a VP4's
+   * effects are on or off". So on a VP4 it is drawn like the other pedals:
+   * lit only when the VP4's on/off is known to be on, with no Rec and no Play,
+   * and a tap opens the sheet with lib/vp4-safety VP4_NO_LOOPER in it
+   * (components/Looper). The browser's Play does the same.
+   */
+  const vp4Looper = looperTile && vp4Here()
+  const looperState = typeof looperHere?.bypassed === 'boolean' ? (looperHere.bypassed ? 'Off' : 'On') : '\u00a0'
   const tiles = blocks.length + (looperTile ? 1 : 0)
   const heldGrid = useRef({ count: 0, height: 0 })
   if (!chainNow.elsewhere && tiles > 0 && blockGrid > 0) heldGrid.current = { count: tiles, height: blockGrid }
@@ -1035,12 +1047,12 @@ export default function Stage({
                 key="looper"
                 label={shortBlock(looperHere)}
                 icon={showIcons ? blockIcon('looper') : undefined}
-                topLeft="Rec"
-                topRight="Play"
-                pair
+                topLeft={vp4Looper ? looperState : 'Rec'}
+                topRight={vp4Looper ? undefined : 'Play'}
+                pair={!vp4Looper}
                 fill={blockColor('looper').fill}
                 ink={blockColor('looper').ink}
-                on={!looperHere.bypassed}
+                on={vp4Looper ? looperHere.bypassed === false : !looperHere.bypassed}
                 height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
                 onPress={() => setLooping(true)}
                 onLongPress={() => setLooping(true)}

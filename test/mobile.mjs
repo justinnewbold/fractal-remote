@@ -7771,7 +7771,8 @@ export function run(test) {
     const stage = withoutComments(read('mobile/src/screens/Stage.js'))
     const looper = stage.slice(stage.indexOf('key="looper"'), stage.indexOf('/>', stage.indexOf('key="looper"')))
     assert.ok(looper.length > 0, 'the looper tile is not where this test reads it')
-    assert.match(looper, /topLeft="Rec"\s*\n\s*topRight="Play"\s*\n\s*pair\n/, 'the looper’s Rec and Play are not in their own corners as one phrase')
+    /* Off a real VP4: on one, no computer app can work its looper, so the pedal says neither (test/vp4-safety.mjs). */
+    assert.match(looper, /topLeft=\{vp4Looper \? looperState : 'Rec'\}\s*\n\s*topRight=\{vp4Looper \? undefined : 'Play'\}\s*\n\s*pair=\{!vp4Looper\}\n/, 'the looper’s Rec and Play are not in their own corners as one phrase')
     assert.ok(!/Rec · Play/.test(stage), 'the whole phrase is back in one corner, on the picture')
     const effects = stage.slice(stage.indexOf('blocks.map((block) =>'), stage.indexOf('{looperTile ?'))
     assert.ok(effects.length > 0, 'the effect tiles are not where this test reads them')

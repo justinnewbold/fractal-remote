@@ -5428,8 +5428,10 @@ export default function App() {
             <div className="setup-rows">
               <SetupRow key="link" title="Phone & computer" status={[describeLink(link).note || 'Phone remote off', status === 'live' ? `${device?.short || device?.name || 'Unit'} · connected` : 'No unit'].join(' · ')} onClick={() => setSetupPage('link')} />
               {/* The looper's emergency stop. "There needs to be something in
-                  settings … for when it keeps playing." */}
-              {status === 'live' ? (
+                  settings … for when it keeps playing." Not on a real VP4: no
+                  computer app can work its looper (VP4_NO_LOOPER), and the
+                  phone leaves it out there too. */}
+              {status === 'live' && !onRealVp4 ? (
                 <SetupRow
                   key="looper-stop"
                   title="Stop the looper"

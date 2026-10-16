@@ -1527,8 +1527,15 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
    * ones that are on light up when the status read lands, and nothing is
    * contradicted.
    */
+  /*
+   * The looper's door says Rec and Play, except on a real VP4: there it opens
+   * one sentence (VP4_NO_LOOPER, components/Looper), since no computer app can
+   * work a VP4's looper, and it is drawn like the VP4's other pedals. It was
+   * lit, as if on, over an on/off nobody had read. The phone's does the same.
+   */
+  const rec = door && !vp4Here()
   /* And every pedal of a real VP4 that the player has not tapped: nothing reads a VP4's on/off (shared/vp4-safety.mjs VP4_ON_OFF_UNKNOWN). */
-  const unknown = !door && (outline || vp4Here()) && typeof block.bypassed !== 'boolean'
+  const unknown = !rec && (outline || vp4Here()) && typeof block.bypassed !== 'boolean'
 
   /*
    * THE TWO CORNERS. An effect says On or Off at the top left and its channel
@@ -1548,8 +1555,8 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
   const acrossRef = useRef(null)
   const shows = useCornerFit(
     { tile: tileRef, picture: pictureRef, band: bandRef, left: wordRef, right: acrossRef },
-    door,
-    [door, unknown, block.bypassed, block.channel, !!icon]
+    rec,
+    [rec, unknown, block.bypassed, block.channel, !!icon]
   )
 
   return (
@@ -1576,7 +1583,7 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
            no room is hidden, and a hidden word is not read out either. The
            same three things the tile read before, in the order it drew them. */
         aria-label={
-          door
+          rec
             ? 'Looper — open Record, Play and Stop'
             : [block.name || block.slug, unknown ? null : block.bypassed ? 'Off' : 'On', block.channel].filter(Boolean).join(', ')
         }
@@ -1620,12 +1627,12 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
               door's words are the looper's own names for the two buttons
               it opens, so the tile and the sheet cannot disagree. */}
           <span className="gig-block-word" ref={wordRef} data-crowded={shows.left ? undefined : 'yes'}>
-            {door ? LOOPER_LABEL.record : unknown ? '\u00a0' : block.bypassed ? 'Off' : 'On'}
+            {rec ? LOOPER_LABEL.record : unknown ? '\u00a0' : block.bypassed ? 'Off' : 'On'}
           </span>
           {/* The door's other half, in the corner an effect keeps for its
               channel — set like the word across from it, not like the
               channel's pill, because it is the rest of the same phrase. */}
-          {door ? (
+          {rec ? (
             <span className="gig-block-word gig-block-word-end" ref={acrossRef} data-crowded={shows.right ? undefined : 'yes'}>
               {LOOPER_LABEL.play}
             </span>

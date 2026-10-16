@@ -14268,19 +14268,21 @@ test('the looper’s Rec and Play sit in the two top corners, and no corner word
   /* On and Off stay written in the tile, where test/both-ends.mjs reads them. */
   assert.match(
     tile,
-    /<span className="gig-block-word" ref=\{wordRef\} data-crowded=\{shows\.left \? undefined : 'yes'\}>\s*\{door \? LOOPER_LABEL\.record : unknown \? '\\u00a0' : block\.bypassed \? 'Off' : 'On'\}/,
+    /<span className="gig-block-word" ref=\{wordRef\} data-crowded=\{shows\.left \? undefined : 'yes'\}>\s*\{rec \? LOOPER_LABEL\.record : unknown \? '\\u00a0' : block\.bypassed \? 'Off' : 'On'\}/,
     'the door’s top left does not say Rec, or the top-left word is drawn whether or not it has room'
   )
   /* Play looks like the word it finishes, not like the channel's pill. */
   assert.match(
     tile,
-    /\{door \? \(\s*<span className="gig-block-word gig-block-word-end" ref=\{acrossRef\} data-crowded=\{shows\.right \? undefined : 'yes'\}>\s*\{LOOPER_LABEL\.play\}/,
+    /\{rec \? \(\s*<span className="gig-block-word gig-block-word-end" ref=\{acrossRef\} data-crowded=\{shows\.right \? undefined : 'yes'\}>\s*\{LOOPER_LABEL\.play\}/,
     'the door has no Play in its top right, or Play is drawn whether or not it has room'
   )
   /* An effect is unchanged: On or Off on the left, its channel on the right, and the same rule. */
   assert.match(tile, /\{block\.channel && !door \? \(\s*<span className="gig-block-channel" ref=\{acrossRef\} data-crowded=\{shows\.right \? undefined : 'yes'\}>/, 'the channel letter is drawn on the picture')
   /* The door's two words are one phrase; an effect's are two facts. */
-  assert.match(tile, /useCornerFit\(\s*\{ tile: tileRef, picture: pictureRef, band: bandRef, left: wordRef, right: acrossRef \},\s*door,/, 'Rec and Play are not held together, or an effect’s corners are')
+  assert.match(tile, /useCornerFit\(\s*\{ tile: tileRef, picture: pictureRef, band: bandRef, left: wordRef, right: acrossRef \},\s*rec,/, 'Rec and Play are not held together, or an effect’s corners are')
+  /* Rec and Play are the door's words off a real VP4 only: on one, no computer app can work its looper (test/vp4-safety.mjs). */
+  assert.match(tile, /const rec = door && !vp4Here\(\)/, 'the door says Rec and Play on a VP4, or nowhere')
   /* A hidden word is not read out, so the label carries the words. */
   assert.match(tile, /\[block\.name \|\| block\.slug, unknown \? null : block\.bypassed \? 'Off' : 'On', block\.channel\]\.filter\(Boolean\)\.join\(', '\)/, 'a hidden On or channel letter is lost to a screen reader')
   assert.match(tile, /'Looper — open Record, Play and Stop'/)

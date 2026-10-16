@@ -286,6 +286,14 @@ export const VP4_UPDATE_APP = 'Update the Fractal Remote app on your phone, or r
  */
 export const VP4_UPDATE_APP_SCENES = 'Update the Fractal Remote app on your phone, or reload the page in your browser, to change a VP4’s scenes.'
 export const VP4_NO_TUNER = 'The app can’t open a VP4’s tuner yet. Use the tuner on the VP4 itself for now.'
+/*
+ * The looper. No computer app can work a VP4's looper (its driver has no
+ * looper control, so each button is a 501), and both ends offered Rec, Play,
+ * Stop and the rest under a pedal drawn lit. On a real VP4 the looper's pedal
+ * opens this sentence and nothing else, and Settings has no "Stop the looper".
+ * Not one of VP4_NOT_YET: nothing a buyer reads promises a looper.
+ */
+export const VP4_NO_LOOPER = 'The app can’t work a VP4’s looper yet. Use the looper on the VP4 itself for now.'
 export const VP4_NO_TEMPO = 'The app can’t set a VP4’s tempo yet. Tap tempo on the VP4 itself for now.'
 export const VP4_NO_CHANNELS = 'The app can’t change a VP4’s channels yet. Change them on the VP4 itself for now.'
 export const VP4_NO_RENAME = 'The app can’t rename on a VP4 yet. Rename on the VP4 itself for now.'
@@ -588,6 +596,7 @@ export function vp4Words(method, path) {
   const p = String(path || '').split('?')[0].replace(/\/+$/, '')
   if (m === 'POST' && (p === '/scene' || p === '/preset/select' || p === '/am4/scene' || p === '/am4/preset')) return VP4_UPDATE_COMPUTER
   if (p === '/tuner') return VP4_NO_TUNER
+  if (p === '/preset/looper' || p.startsWith('/preset/looper/')) return VP4_NO_LOOPER
   if (p === '/tempo' || p.startsWith('/tempo/')) return VP4_NO_TEMPO
   if (/^\/preset\/blocks\/\d+\/channel$/.test(p) || p === '/am4/channel') return VP4_NO_CHANNELS
   if (m === 'POST' && (p === '/scene/name' || p === '/preset/name')) return VP4_NO_RENAME

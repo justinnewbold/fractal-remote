@@ -505,7 +505,7 @@ export function run(test) {
     assert.doesNotMatch(v.VP4_UPDATE_APP_SCENES, /Settings >/, 'the words for an old app’s scene send it to a page it does not have')
     const all = [
       v.VP4_SCENES_NOT_SET_UP, v.VP4_NEEDS_USB, v.vp4PresetUnconfirmed(1), v.vp4SceneUnconfirmed(0, 34, 1), v.vp4SceneHeld(34), v.VP4_UPDATE_COMPUTER, v.VP4_UPDATE_APP, v.VP4_UPDATE_APP_SCENES,
-      v.VP4_NO_TUNER, v.VP4_NO_TEMPO, v.VP4_NO_CHANNELS, v.VP4_NO_RENAME, v.VP4_NO_WHICH_PRESET, v.VP4_CANT_YET, v.VP4_NO_STEP, v.VP4_RELOAD,
+      v.VP4_NO_TUNER, v.VP4_NO_LOOPER, v.VP4_NO_TEMPO, v.VP4_NO_CHANNELS, v.VP4_NO_RENAME, v.VP4_NO_WHICH_PRESET, v.VP4_CANT_YET, v.VP4_NO_STEP, v.VP4_RELOAD,
       v.VP4_PRESET_AGAIN, v.VP4_LATE, v.VP4_NOT_IN_CHAIN, v.VP4_NO_NAMES, v.VP4_ON_OFF_UNKNOWN, v.VP4_NO_EDITS,
       ...Object.values(v.VP4_SETUP).flatMap((w) => (typeof w === 'string' ? [w] : Array.isArray(w) ? w : [])),
       v.VP4_SETUP.status.on(34, 1), v.VP4_SETUP.status.held(34), v.VP4_SETUP.status.offChannel(2), v.vp4OldFirmware('2.10')
@@ -515,7 +515,7 @@ export function run(test) {
       assert.doesNotMatch(w, /unsupported|coming|\bsoon\b/i, `the words say "unsupported" or promise something: ${w}`)
       assert.doesNotMatch(w, /\bMac\b/, `the words call the computer a Mac: ${w}`)
     }
-    for (const w of [v.VP4_NO_TUNER, v.VP4_NO_TEMPO, v.VP4_NO_CHANNELS, v.VP4_NO_RENAME, v.VP4_NO_WHICH_PRESET, v.VP4_CANT_YET, v.VP4_NO_NAMES, v.VP4_NO_EDITS]) assert.match(w, /\byet\b/, `a VP4 limit is not said as "yet": ${w}`)
+    for (const w of [v.VP4_NO_TUNER, v.VP4_NO_LOOPER, v.VP4_NO_TEMPO, v.VP4_NO_CHANNELS, v.VP4_NO_RENAME, v.VP4_NO_WHICH_PRESET, v.VP4_CANT_YET, v.VP4_NO_NAMES, v.VP4_NO_EDITS]) assert.match(w, /\byet\b/, `a VP4 limit is not said as "yet": ${w}`)
     /* The setup card says how to set the number on the pedal, and to pick one nothing else uses. */
     assert.match(v.VP4_SETUP.steps.join(' '), /SETUP > MIDI\/Remote > Scene Select/)
     assert.match(v.VP4_SETUP.steps.join(' '), /1 to 119 \(not 32\)/)
@@ -687,6 +687,7 @@ export function run(test) {
     assert.equal(v.vp4Words('POST', '/scene'), v.VP4_UPDATE_COMPUTER)
     assert.equal(v.vp4Words('POST', '/preset/select'), v.VP4_UPDATE_COMPUTER)
     assert.equal(v.vp4Words('POST', '/tuner'), v.VP4_NO_TUNER)
+    assert.equal(v.vp4Words('POST', '/preset/looper/control'), v.VP4_NO_LOOPER)
     assert.equal(v.vp4Words('GET', '/tempo'), v.VP4_NO_TEMPO)
     assert.equal(v.vp4Words('POST', '/preset/blocks/12/channel'), v.VP4_NO_CHANNELS)
     assert.equal(v.vp4Words('POST', '/scene/name'), v.VP4_NO_RENAME)
@@ -1253,7 +1254,7 @@ export function run(test) {
     assert.match(stage, /if \(chainNow\.outline && typeof block\.bypassed !== 'boolean'\) return/, 'a VP4 pedal’s tap no longer goes, or an outline’s does')
     assert.match(stage, /\{vp4Here\(\) && blocks\.length && !chainNow\.elsewhere \? \( <Text[^>]*>\{VP4_ON_OFF_UNKNOWN\}<\/Text>/)
     const gig = flat('src/components/Gig.jsx')
-    assert.match(gig, /const unknown = !door && \(outline \|\| vp4Here\(\)\) && typeof block\.bypassed !== 'boolean'/, 'the browser’s VP4 pedals say On over an on/off nobody read')
+    assert.match(gig, /const unknown = !rec && \(outline \|\| vp4Here\(\)\) && typeof block\.bypassed !== 'boolean'/, 'the browser’s VP4 pedals say On over an on/off nobody read')
     assert.match(gig, /\{!shown\.elsewhere && blocks\.length && vp4Here\(\) \? <p className="gig-note">\{VP4_ON_OFF_UNKNOWN\}<\/p> : null\}/)
     /* The edit screens: no On, no Engaged, no channel A. */
     const edit = flat('mobile/src/screens/Edit.js')
@@ -1808,5 +1809,182 @@ export function run(test) {
     const rig = flat('mobile/src/lib/rig.js')
     assert.match(rig, /const \{ said, heard \} = await probeUnit\(\{ vp4: Boolean\(device\.vp4Here\?\.\(\)\), currentPreset: \(\) => device\.currentPreset\(\), getScene: \(\) => device\.getScene\(\) \}\)/, 'the phone’s timed check is not the shared probe')
     assert.match(rig, /if \(said === 'answering' && heard && state\.unit === 'present' && !presetBusy\(\)\) presetMovedAtUnit\(heard, loadRun\)/, 'the phone follows a preset a VP4 never named')
+  })
+
+  /*
+   * A VP4'S LOOPER, LIT AND FULL OF BUTTONS THAT ONLY SAID NO. A VP4 preset
+   * with a Looper in it (effect 166, which ForgeFX names `looper`) put the
+   * LPR pedal on Play lit, as if on, right above "The app can't see whether a
+   * VP4's effects are on or off": the record says `bypassed: null`, and both
+   * ends drew !null. Tapping it opened Rec, Play, Stop, Dub, Undo, Once, Rev
+   * and ½ Speed under "No loop yet. Tap Rec to start.", and each was refused
+   * (no computer app's VP4 driver has a looper control: a 501), while the
+   * panel asked where the playhead was for as long as it was open. Settings
+   * at both ends offered "Stop the looper", which said "Didn't stop — The app
+   * can't do that on a…", cut off. Nothing reached the pedal. Now, on a real
+   * VP4 only: the pedal is lit only for an on/off known to be on and says
+   * neither Rec nor Play, the panel is one sentence with nothing asked, and
+   * there is no Stop the looper row. The demo and the other units as before.
+   */
+  test('a VP4’s looper pedal is not lit for an unread on/off, opens one sentence and no buttons, and has no Stop row, at both ends', async () => {
+    const v = await import('../shared/vp4-safety.mjs')
+    const { LOOPER_LABEL, LOOPER_ROWS } = await import('../shared/looper.mjs')
+    /* The words: "yet", nothing promised, and not one of what a buyer is told doesn't work (nothing a buyer reads promises a VP4 a looper). */
+    assert.equal(v.VP4_NO_LOOPER, 'The app can’t work a VP4’s looper yet. Use the looper on the VP4 itself for now.')
+    assert.doesNotMatch(v.VP4_NO_LOOPER, /unsupported|coming|\bsoon\b|\bMac\b/i)
+    assert.ok(!v.VP4_NOT_YET.includes('the looper'))
+    for (const text of [v.VP4_SO_FAR, v.VP4_DEMO]) assert.doesNotMatch(text, /looper/i, 'a buyer is told something about a VP4’s looper')
+    assert.equal(v.vp4Words('POST', '/preset/looper/control'), v.VP4_NO_LOOPER)
+    assert.equal(v.vp4Words('GET', '/preset/looper?eid=166'), v.VP4_NO_LOOPER)
+    assert.equal(v.vp4Said('POST', '/preset/looper/control', Object.assign(new Error('unsupported'), { status: 501 })).message, v.VP4_NO_LOOPER)
+    assert.equal(v.aboutVp4(v.VP4_NO_LOOPER), true, 'the looper’s words are given a help link')
+
+    /* And a button that still reached a computer, at either end, says those words rather than "unsupported". */
+    const looper501 = (m, p) => (p.split('?')[0].startsWith('/preset/looper') ? { status: 501, message: 'unsupported' } : { ok: true })
+    const phone = await phoneMidiBench()
+    try {
+      phone.computer.state.reply = looper501
+      await phone.device.detect()
+      await assert.rejects(phone.device.looperControl(166, 'record', true), (err) => err.message === v.VP4_NO_LOOPER, 'the phone’s looper refusal on a VP4 is not its words')
+    } finally {
+      phone.done()
+    }
+    await withLocalStorage(memoryStorage(), async () => {
+      const { ffx, computer } = await browserMidiBench()
+      computer.state.reply = looper501
+      await ffx.detect()
+      await assert.rejects(ffx.looperControl(166, 'record', true), (err) => err.message === v.VP4_NO_LOOPER, 'the browser’s looper refusal on a VP4 is not its words')
+    })
+
+    /*
+     * The panel, run at both ends: the component as it is, its JSX turned
+     * into calls, against stand-ins that write down every hook and every
+     * request. On a VP4 it is the sentence, with no hook run and nothing
+     * asked; anywhere else it is the panel with its eight buttons.
+     */
+    const { transformSync } = await import('esbuild')
+    const tree = (node, out = []) => {
+      if (Array.isArray(node)) node.forEach((n) => tree(n, out))
+      else if (node && typeof node === 'object') {
+        out.push(node)
+        tree(node.children, out)
+      }
+      return out
+    }
+    const textOf = (node) => (Array.isArray(node) ? node.map(textOf).join('') : node && typeof node === 'object' ? textOf(node.children) : typeof node === 'string' ? node : '')
+    async function panel(file, swaps) {
+      const dir = mkdtempSync(join(tmpdir(), 'vp4-looper-'))
+      try {
+        writeFileSync(join(dir, 'package.json'), '{ "type": "module" }')
+        writeFileSync(
+          join(dir, 'stand.mjs'),
+          `export const h = (type, props, ...children) => ({ type, props: props || {}, children })
+           export const Frag = 'frag'
+           export const log = []
+           export const unit = { vp4: false }
+           export function useState(initial) { log.push('hook'); return [typeof initial === 'function' ? initial() : initial, () => {}] }
+           export function useRef(current = null) { log.push('hook'); return { current } }
+           export const undo = []
+           export function useEffect(fn) { log.push('hook'); const u = fn(); if (typeof u === 'function') undo.push(u) }
+           export const vp4Here = () => unit.vp4
+           export const looperControl = async (...a) => { log.push('control'); return { ok: true } }
+           export const looperTelemetry = async (eid) => { log.push('telemetry ' + eid); return { wave: [], position: null, level: null } }
+           export const useRig = (pick) => pick({ preset: { number: 5 } })
+           export const tapDeadline = () => 0
+           export const tick = () => {}
+           export const thud = () => {}
+           export const AppState = { currentState: 'active' }
+           export const Text = 'Text'
+           export const View = 'View'
+           export const color = {}, font = {}, radius = {}, space = {}
+           export function Note() { return null }
+           export function Press() { return null }
+           export default function Stub() { return null }`
+        )
+        let src = transformSync(read(file), { loader: 'jsx', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'Frag', format: 'esm' }).code
+        for (const [from, to] of swaps) src = src.replaceAll(from, to)
+        const left = [...src.matchAll(/from\s+["']([^"']+)["']/g)].map((m) => m[1]).filter((m) => !m.endsWith('.mjs'))
+        assert.deepEqual(left, [], `${file} imports something the bench has no stand-in for`)
+        writeFileSync(join(dir, 'Looper.mjs'), "import { h, Frag } from './stand.mjs'\n" + src)
+        const stand = await import(pathToFileURL(join(dir, 'stand.mjs')).href)
+        const { default: Looper } = await import(pathToFileURL(join(dir, 'Looper.mjs')).href)
+        return { Looper, stand }
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+    const shared = (f) => [`from "${f}"`, `from '${repoUrl(f.replace(/^(\.\.\/)+/, ''))}'`]
+    const ends = [
+      {
+        where: 'phone',
+        ...(await panel('mobile/src/components/Looper.js', [
+          ['from "react"', "from './stand.mjs'"],
+          ['from "react-native"', "from './stand.mjs'"],
+          ['from "../lib/theme"', "from './stand.mjs'"],
+          ['from "../lib/device"', "from './stand.mjs'"],
+          ['from "../lib/feedback"', "from './stand.mjs'"],
+          ['from "../lib/rig"', "from './stand.mjs'"],
+          ['from "../lib/relay-rules"', "from './stand.mjs'"],
+          ['from "../lib/looper"', `from '${repoUrl('shared/looper.mjs')}'`],
+          ['from "../lib/vp4-safety"', `from '${repoUrl('shared/vp4-safety.mjs')}'`],
+          ['from "./Note"', "from './stand.mjs'"],
+          ['from "./Press"', "from './stand.mjs'"]
+        ])),
+        button: (n) => n.props?.accessibilityLabel
+      },
+      {
+        where: 'browser',
+        ...(await panel('src/components/Looper.jsx', [
+          ['from "react"', "from './stand.mjs'"],
+          ['from "../lib/forgefx"', "from './stand.mjs'"],
+          ['from "../lib/feedback"', "from './stand.mjs'"],
+          ['from "../lib/remote"', "from './stand.mjs'"],
+          shared('../../shared/looper.mjs'),
+          shared('../../shared/vp4-safety.mjs')
+        ])),
+        button: (n) => (n.type === 'button' ? n.props?.['aria-label'] : undefined)
+      }
+    ]
+    const block = { slug: 'looper', name: 'Looper 1', effectId: 166, bypassed: null }
+    for (const { where, Looper, stand, button } of ends) {
+      stand.unit.vp4 = true
+      stand.log.length = 0
+      const said = Looper({ block, presetNumber: 5 })
+      assert.equal(textOf(said), v.VP4_NO_LOOPER, `${where}: a VP4’s looper panel does not say its sentence`)
+      assert.ok(!tree(said).some((n) => typeof n.type === 'function' && n.type.name === 'LooperPanel'), `${where}: a VP4 is offered the looper’s buttons`)
+      assert.deepEqual(stand.log, [], `${where}: a VP4’s looper panel ran a hook or asked the computer for something`)
+      /* Anywhere else, the panel and its eight buttons, as before. */
+      stand.unit.vp4 = false
+      const panelEl = Looper({ block, presetNumber: 5 })
+      assert.equal(panelEl.type?.name, 'LooperPanel', `${where}: an FM3’s looper is no longer the panel`)
+      const drawn = panelEl.type(panelEl.props)
+      stand.undo.splice(0).forEach((u) => u())
+      const labels = tree(drawn).map(button).filter(Boolean)
+      assert.deepEqual(labels, LOOPER_ROWS.flat().map((a) => `Looper ${LOOPER_LABEL[a]}`), `${where}: an FM3’s looper lost its buttons`)
+      assert.ok(stand.log.includes('telemetry 166'), `${where}: an FM3’s looper no longer asks where the playhead is`)
+    }
+
+    /* Play's pedal, at both ends: lit only for an on/off known to be on, and no Rec or Play, on a real VP4; Rec and Play elsewhere. */
+    const stage = flat('mobile/src/screens/Stage.js')
+    assert.match(stage, /const vp4Looper = looperTile && vp4Here\(\)/)
+    assert.match(stage, /const looperState = typeof looperHere\?\.bypassed === 'boolean' \? \(looperHere\.bypassed \? 'Off' : 'On'\) : '\\u00a0'/)
+    assert.match(stage, /topLeft=\{vp4Looper \? looperState : 'Rec'\} topRight=\{vp4Looper \? undefined : 'Play'\} pair=\{!vp4Looper\}/, 'the phone’s VP4 looper pedal says Rec and Play')
+    assert.match(stage, /on=\{vp4Looper \? looperHere\.bypassed === false : !looperHere\.bypassed\}/, 'the phone’s VP4 looper pedal is lit for an on/off nobody read')
+    assert.match(stage, /onPress=\{\(\) => setLooping\(true\)\}/)
+    const gig = flat('src/components/Gig.jsx')
+    assert.match(gig, /const rec = door && !vp4Here\(\)/)
+    assert.match(gig, /const unknown = !rec && \(outline \|\| vp4Here\(\)\) && typeof block\.bypassed !== 'boolean'/, 'the browser’s VP4 looper pedal is lit for an on/off nobody read')
+    assert.match(gig, /className=\{`gig-block \$\{unknown \|\| block\.bypassed \? 'off' : 'on'\}`\}/)
+    assert.match(gig, /\{rec \? LOOPER_LABEL\.record : unknown \? '\\u00a0' : block\.bypassed \? 'Off' : 'On'\}/, 'the browser’s VP4 looper pedal says Rec')
+    assert.match(gig, /\{rec \? \( <span className="gig-block-word gig-block-word-end"/, 'the browser’s VP4 looper pedal says Play')
+    assert.match(gig, /rec \? 'Looper — open Record, Play and Stop'/)
+    /* Settings at both ends: no Stop the looper on a real VP4. */
+    const settings = flat('mobile/src/screens/Settings.js')
+    assert.match(settings, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) && !onRealVp4 \? \( <SetupRow title="Stop the looper"/, 'the phone offers a VP4 Stop the looper')
+    assert.match(settings, /const onRealVp4 = vp4Here\(\)/)
+    const app = flat('src/App.jsx')
+    assert.match(app, /\{status === 'live' && !onRealVp4 \? \( <SetupRow key="looper-stop" title="Stop the looper"/, 'the browser offers a VP4 Stop the looper')
+    assert.equal((app.match(/title="Stop the looper"/g) || []).length, 1)
+    assert.equal((settings.match(/title="Stop the looper"/g) || []).length, 1)
   })
 }

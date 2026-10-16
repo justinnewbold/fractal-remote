@@ -4055,7 +4055,7 @@ export function run(test) {
     assert.ok(at > settings.indexOf("{page === 'link' ? (") && at < settings.indexOf("{page === 'metronome' ? ("), 'the page moved into a slice another test reads')
     assert.match(one, /Bluetooth \(beta\) is on\. This phone talks to the unit directly, not through the computer\./, 'Phone & computer does not say Bluetooth is on')
     /* The looper row stays away: the looper is left off the chain over Bluetooth. */
-    assert.match(one, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) \? \( <SetupRow title="Stop the looper"/)
+    assert.match(one, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) && !onRealVp4 \? \( <SetupRow title="Stop the looper"/)
   })
 
   test('Bluetooth (beta) is Justin’s account’s alone, asked of the session on the phone, at launch and at every change of who is signed in', async () => {
