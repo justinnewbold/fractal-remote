@@ -1,5 +1,5 @@
 diff --git a/mobile/app.json b/mobile/app.json
-index e8cae4e..f33377c 100644
+index 6eb44cf..786d7ff 100644
 --- a/mobile/app.json
 +++ b/mobile/app.json
 @@ -88,7 +88,17 @@
@@ -13,7 +13,7 @@ index e8cae4e..f33377c 100644
 +        {
 +          "android": {
 +            "enableMinifyInReleaseBuilds": true,
-+            "extraProguardRules": "-keep class * extends androidx.room.RoomDatabase { <init>(); }\n-keep interface expo.modules.kotlin.records.Record\n-keep @interface expo.modules.kotlin.records.Field { *; }"
++            "extraProguardRules": "-keep class * extends androidx.room.RoomDatabase { <init>(); }\n-keep interface expo.modules.kotlin.records.Record\n-keep @interface expo.modules.kotlin.records.Field { *; }\n-keepnames class * extends expo.modules.kotlin.exception.CodedException"
 +          }
 +        }
 +      ],

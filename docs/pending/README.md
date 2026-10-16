@@ -18,7 +18,7 @@ then bump the version, delete the patch file in the same change, and build.
 | Patch | What it does | Moves |
 |---|---|---|
 | `watch-name.patch` | The Apple Watch app is called **Fractal Remote** instead of plain "Fractal", under its icon and in the iPhone's Watch app, and the phone's watch tips (Settings, WATCH_KEEP: "tap Fractal Remote", "comes back to Fractal Remote", "Fractal Remote stays on screen") name it the same way. | Android, iOS and watch (tried on 13 October 2026: changing `displayName` in mobile/targets/watch/expo-target.config.js moves all three) |
-| `r8.patch` | **Android: R8 on** (shrinking, obfuscation and optimization of the Java and Kotlin code), for Google Play's "DEX code optimization" rule: 25% or more in each from February 2027, when 1.87.11 scored 3% obfuscation. expo-build-properties with `enableMinifyInReleaseBuilds`, three keep rules from Expo's own SDK 58 fixes (the expo-updates database, which Expo found R8 breaking at its first read, and two for Expo Records; none of the three changes this build today, see below), and mobile/plugins/withR8Optimize.js, which swaps the template's proguard-android.txt (it carries -dontoptimize) for proguard-android-optimize.txt. Proven for free by .github/workflows/android-minified.yml before any build. | Android and iOS (the fingerprint hashes the whole app config) |
+| `r8.patch` | **Android: R8 on** (shrinking, obfuscation and optimization of the Java and Kotlin code), for Google Play's "DEX code optimization" rule: 25% or more in each from February 2027, when 1.87.11 scored 3% obfuscation. expo-build-properties with `enableMinifyInReleaseBuilds`, four keep rules: three from Expo's own SDK 58 fixes (the expo-updates database, which Expo found R8 breaking at its first read, and two for Expo Records; none of the three changes this build today, see below), and one so Expo's error codes keep their real names (ERR_ARGUMENT_CAST rather than ERR_A) in the logs a player sends, and mobile/plugins/withR8Optimize.js, which swaps the template's proguard-android.txt (it carries -dontoptimize) for proguard-android-optimize.txt. Proven for free by .github/workflows/android-minified.yml before any build. | Android and iOS (the fingerprint hashes the whole app config) |
 | `watch-channels.patch` | On the Apple Watch's Pedals page, **holding a pedal opens its channels** (A, B, C, D, the one it is on lit), as holding an effect on the phone's Play screen does; a tap still switches it on or off. Each pedal shows its channel letter in its corner, and a line under them says "Hold a pedal for its channels." The phone sends each pedal's channels and carries out the pick with the Play screen's own channel switch. | **Watch only** (tried on 13 October 2026: Swift under mobile/targets/watch and the phone's JavaScript move only the watch line of the fingerprint; Android and iOS stay the same, so every update keeps reaching every phone, before and after the build) |
 
 **r8.patch, and why it waits.** Google Play, October 2026, on 1.87.11:
@@ -41,7 +41,13 @@ surprise: a build without the database rule came out byte for byte the same
 as the build with it, because R8 8.12 (the one this React Native's Android
 tooling brings) keeps that constructor anyway, and expo-modules-core's own
 rules already keep Records whole. The three rules are kept all the same:
-they are what Expo 58 ships, and they cost nothing. Before applying the
+they are what Expo 58 ships, and they cost nothing. The fourth rule came
+out of a read of everything a minute cannot reach (buying and restoring, an
+over-the-air update arriving and launching, Bluetooth, sound, the server and
+the relay link, checked against the build's mapping.txt and DEX): nothing
+there breaks, but an Expo error code is made from its class's name, and R8
+renames the class, so a failed native call would say ERR_A or ERR_F. Nothing
+in the app checks those codes; the rule is for the logs. Before applying the
 patch, read the latest run of android-minified on its pull request again:
 the scores, the minute on each emulator, and the check catching the crash it
 makes on purpose. After the Play release, check App
