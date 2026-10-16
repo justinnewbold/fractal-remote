@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { ActivityIndicator, Alert, AppState, Appearance, BackHandler, Linking, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, AppState, Appearance, BackHandler, Linking, ScrollView, Text, View } from 'react-native'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 
@@ -12,6 +12,7 @@ import { isPairAccount } from './src/lib/pairing'
 import Note from './src/components/Note'
 import Press from './src/components/Press'
 import NoComputerWords from './src/components/NoComputer'
+import SendLinkButton from './src/components/SendLinkButton'
 import TopBar from './src/components/TopBar'
 import WrongAccount from './src/components/WrongAccount'
 import UpdateReady from './src/components/UpdateReady'
@@ -1513,10 +1514,18 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
    */
   const noComputer = useNoComputer(long && !bluetooth)
   const noneSaid = Boolean(noComputer) && !bluetooth && elsewhere === false
+  /*
+   * Centred when it fits, and scrolled when it does not: with Send me the
+   * download link under the words, the column is taller than a small phone
+   * with Display Zoom or a large text size (320 by 548), and a column that
+   * cannot scroll was cut at both ends, the spinner under the top bar and
+   * Setlists off the bottom.
+   */
   return (
-    <View
+    <ScrollView
       accessibilityLiveRegion="polite"
-      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.lg, padding: space.xl }}
+      style={{ flex: 1 }}
+      contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: space.lg, padding: space.xl }}
     >
       <ActivityIndicator color={color.silkDim} />
       <Text style={{ color: color.silkDim, fontSize: font.body, textAlign: 'center' }}>{said}</Text>
@@ -1571,6 +1580,13 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
               its own.
             </Note>
           )}
+          {/*
+            AND THE LINK, TO THEIR INBOX, right under the words that say no
+            computer was ever set up. "Add a 'Send me the download link'
+            button on the three screens where they get stuck" (15 October
+            2026). To the account's own address, the one the words name.
+          */}
+          {noneSaid ? <SendLinkButton email={noComputer.email} /> : null}
           {elsewhere && onSwitch ? <Press label="Switch account on this phone" onPress={onSwitch} /> : null}
           {/*
             The way to what the line above asks for, right under it, as on the
@@ -1602,6 +1618,6 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           {onSetlists ? <Press label="Setlists" sub="These work with nothing connected" onPress={onSetlists} /> : null}
         </View>
       ) : null}
-    </View>
+    </ScrollView>
   )
 }
