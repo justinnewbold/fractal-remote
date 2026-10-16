@@ -96,7 +96,8 @@ jobs:
           grep -q '^android.enableMinifyInReleaseBuilds=true' gradle.properties
           grep -q 'getDefaultProguardFile("proguard-android-optimize.txt")' app/build.gradle
           grep -q 'androidx.room.RoomDatabase { <init>(); }' app/proguard-rules.pro
-          echo "minify on, the optimize file, the database rule: all there"
+          grep -q 'keepnames class \* extends expo.modules.kotlin.exception.CodedException' app/proguard-rules.pro
+          echo "minify on, the optimize file, the database rule, the error-name rule: all there"
 
       # An updates configuration that reads, so expo-updates opens its
       # database at launch the way a phone's copy does. The value is any
@@ -196,6 +197,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           ls -la release/ 2>/dev/null || true
           test -s mapping/release/mapping.txt && echo "mapping.txt: $(wc -l < mapping/release/mapping.txt) lines"
+          # Expo makes an error's code from its class name (ERR_ARGUMENT_CAST),
+          # so the error-name rule has to leave that name alone.
+          if grep -q '^expo.modules.kotlin.exception.ArgumentCastException -> expo.modules.kotlin.exception.ArgumentCastException:' mapping/release/mapping.txt; then
+            echo "Expo's error codes keep their names"
+          else
+            echo "::error::ArgumentCastException was renamed, so Expo's error codes would read ERR_A in the logs."
+            exit 1
+          fi
           unzip -l "$aab" > bundle-files.txt
           if grep -q 'BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map' bundle-files.txt; then
             echo "the map is inside the bundle, for Play to read"
