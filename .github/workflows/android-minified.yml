@@ -132,6 +132,11 @@ jobs:
       # SDK components: ndk;27.1.12297006" with nothing wrong in the app. The
       # version is React Native's own, read from its catalogue, so this moves
       # when the app's React Native does.
+      #
+      # Judged by the NDK being on disk, not by the exit status: `yes` feeding
+      # the licence prompts dies of a broken pipe once sdkmanager is done, and
+      # under pipefail that made a good install read as a failed one four
+      # times running.
       - name: The NDK the build asks for
         working-directory: mobile
         run: |
@@ -139,9 +144,12 @@ jobs:
           ndk="$(sed -n 's/^ndkVersion = "\(.*\)"$/\1/p' node_modules/react-native/gradle/libs.versions.toml)"
           [ -n "$ndk" ] || { echo "::error::No ndkVersion in React Native's libs.versions.toml."; exit 1; }
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          if [ -d "$ANDROID_HOME/ndk/$ndk" ]; then echo "NDK $ndk is already on the runner"; exit 0; fi
+          there="$ANDROID_HOME/ndk/$ndk/source.properties"
+          if [ -f "$there" ]; then echo "NDK $ndk is already on the runner"; exit 0; fi
           for try in 1 2 3 4; do
-            if yes | "$sdkmanager" --install "ndk;$ndk" > /dev/null; then echo "NDK $ndk installed"; exit 0; fi
+            yes 2>/dev/null | "$sdkmanager" --install "ndk;$ndk" > sdkmanager.log 2>&1 || true
+            if [ -f "$there" ]; then echo "NDK $ndk installed on try $try"; exit 0; fi
+            tail -5 sdkmanager.log
             echo "try $try failed; waiting $((try * 15)) s"
             sleep $((try * 15))
           done
