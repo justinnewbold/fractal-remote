@@ -48,6 +48,7 @@ import {
   sourceFor,
   orderFor,
   stepTarget,
+  nextWords,
   sourceLabel,
   positionIn,
   songFor,
@@ -574,6 +575,23 @@ export default function Gig({
   const lastAt = landing(-1)
   useEffect(() => readAhead([nextAt, lastAt]), [nextAt, lastAt])
   useEffect(() => () => readAhead([]), [])
+
+  /*
+   * The line under Next: the name of what it will load, or at the end of a
+   * setlist that the set starts over. "'Next: song name' under the Next
+   * button. You see what's coming before the count-in, so a wrong running
+   * order gets caught in time." The phone's line, by the phone's rule (see
+   * lib/setlists nextWords).
+   *
+   * Out of `slots`, which is the preset list's own (App hands the picker and
+   * this screen the same allSlots), so the line says what the list says for
+   * the slot Next loads, and nothing is asked of the unit for it. By number,
+   * not by place in the array: before the unit has said how many slots it
+   * has, the list is only the slots with names. Not known, or past the last
+   * slot, is a blank line, never a guess.
+   */
+  const slotNames = useMemo(() => new Map((slots || []).map((s) => [s.number, s.name])), [slots])
+  const ahead = nextWords({ order, current: preset?.number, next: nextAt, nameOf: (n) => slotNames.get(n) })
 
   /*
    * NOR LATE. A link that was away while the preset loaded held its reads,
@@ -1196,8 +1214,10 @@ export default function Gig({
         the same row so the footer costs the screen nothing more.
       */}
       <div className="gig-nav">
-        <button onClick={() => step(-1)} disabled={working || landing(-1) === null}>
+        <button className="gig-nav-step" onClick={() => step(-1)} disabled={working || landing(-1) === null}>
           ‹ Previous
+          {/* Blank, and as tall as Next's line, so the two words sit level. */}
+          <span className="gig-nav-ahead" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -1214,8 +1234,12 @@ export default function Gig({
           <span className="gig-nav-source-name">{order ? sourceName : 'All'}</span>
           {sourceWhere ? <span className="gig-nav-source-pos mono">{sourceWhere}</span> : null}
         </button>
-        <button onClick={() => step(1)} disabled={working || landing(1) === null}>
+        <button className="gig-nav-step" onClick={() => step(1)} disabled={working || landing(1) === null} aria-label={ahead.said}>
           Next ›
+          {/* What Next will load. Always drawn, blank until a name is known, so nothing moves when one arrives. */}
+          <span className="gig-nav-ahead" aria-hidden="true">
+            {ahead.shown}
+          </span>
         </button>
       </div>
 

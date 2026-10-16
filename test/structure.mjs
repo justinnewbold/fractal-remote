@@ -3622,6 +3622,93 @@ export function run(test) {
     assert.match(play, /slots=\{allSlots\}/, 'the setlist sheet has no preset names to show')
   })
 
+  test('the line under Next on Play names what Next loads, from the preset list, and the button stays its height', async () => {
+    /*
+     * "'Next: song name' under the Next button. You see what's coming before
+     * the count-in, so a wrong running order gets caught in time." The
+     * phone's line, by the phone's rule (lib/setlists nextWords), out of the
+     * names App already hands Play: the picker's own list.
+     */
+    const gig = readFileSync(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
+    const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+    const g = gig.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
+
+    // Worked out for where Next lands, the same landing(1) it steps by and is greyed by.
+    const lift = (start, stop = '\n') => {
+      const from = g.indexOf(start)
+      assert.ok(from > 0, `Gig.jsx moved; this test reads ${start}`)
+      return g.slice(from, g.indexOf(stop, from))
+    }
+    assert.match(g, /const nextAt = landing\(1\)\n/)
+    const lookup = lift('const slotNames = useMemo(')
+    const ahead = lift('const ahead = nextWords(')
+    assert.equal(ahead.trim(), 'const ahead = nextWords({ order, current: preset?.number, next: nextAt, nameOf: (n) => slotNames.get(n) })', 'the line is worked out from something other than where Next lands')
+    /* The list Play is handed (App's allSlots, the picker's), looked up by slot number, and nothing else. */
+    assert.equal(lookup.trim(), 'const slotNames = useMemo(() => new Map((slots || []).map((s) => [s.number, s.name])), [slots])', 'the line takes its names from somewhere other than the preset list')
+    assert.ok(!/\b(lookUpName|rememberedName|learnName|scanNames|presetName|knowsName|importHostNames|cachedPresetNames|storedName)\(/.test(g), 'Play asks for a name to put under Next')
+
+    // Run it: the name of the slot Next loads, "Starts over" at the end, blank when not known.
+    const { nextWords, stepTarget, NEXT_WRAPS } = await import('../src/lib/setlists.js')
+    const slots = [{ number: 40, name: 'Opener' }, { number: 7, name: 'Schism' }, { number: 45, name: 'Plexi' }, { number: 46, name: '' }, { number: 47 }]
+    const run = (order, current, source, lists) => {
+      const nextAt = stepTarget({ source, current, delta: 1, favourites: [], lists })
+      return new Function('slots', 'useMemo', 'order', 'preset', 'nextAt', 'nextWords', `${lookup}\n${ahead}\nreturn ahead`)(slots, (fn) => fn(), order, { number: current }, nextAt, nextWords)
+    }
+    const lists = [{ id: 'sat', name: 'Saturday', presets: [40, 7, 200] }]
+    assert.equal(run([40, 7, 200], 40, 'sat', lists).shown, 'Schism')
+    assert.equal(run([40, 7, 200], 7, 'sat', lists).shown, '', 'a slot with no name in the list is given one under Next')
+    assert.equal(run([40, 7, 200], 200, 'sat', lists).shown, NEXT_WRAPS, 'the end of the setlist does not say the set starts over')
+    assert.equal(run([40, 7, 200], 200, 'sat', lists).said, 'Next, starts over, Opener')
+    assert.equal(run(null, 44, 'all', []).shown, 'Plexi')
+    assert.equal(run(null, 45, 'all', []).shown, '', 'a slot the list calls empty has a name under Next')
+    assert.equal(run(null, 46, 'all', []).shown, '', 'a slot the list has not named has a guess under Next')
+    assert.equal(run(null, 47, 'all', []).shown, '', 'past the names known, the line guesses')
+
+    // The markup: both buttons in the order the nav test holds, Next saying where it goes.
+    const nav = g.slice(g.indexOf('className="gig-nav"'), g.indexOf('className="gig-bar"'))
+    const previous = nav.slice(nav.indexOf('<button'), nav.indexOf('</button>') + 9)
+    const next = nav.slice(nav.lastIndexOf('<button'), nav.lastIndexOf('</button>') + 9)
+    assert.match(previous, /‹ Previous/)
+    assert.match(next, /Next ›/)
+    for (const b of [previous, next]) assert.match(b, /className="gig-nav-step"/, 'a step button has no room kept for the line')
+    assert.match(previous, /<span className="gig-nav-ahead" aria-hidden="true" \/>/, 'Previous has no blank line, so it and Next do not sit level')
+    assert.match(next, /<span className="gig-nav-ahead" aria-hidden="true">\s*\{ahead\.shown\}\s*<\/span>/, 'Next has no line under it, or it is drawn only once there are words')
+    assert.match(next, /aria-label=\{ahead\.said\}/, 'a screen reader is not told where Next goes')
+    assert.match(next, /disabled=\{working \|\| landing\(1\) === null\}/)
+    assert.match(next, /onClick=\{\(\) => step\(1\)\}/)
+
+    // The height: the line is paid for out of the padding, to the pixel, at both sizes.
+    const block = (sel) => {
+      const at = css.indexOf(`${sel} {`)
+      assert.ok(at !== -1, `${sel} is gone from the stylesheet`)
+      return css.slice(at, css.indexOf('}', at))
+    }
+    const token = (name) => Number(css.match(new RegExp(`--${name}: (\\d+)px;`))[1])
+    const base = block('.gig-nav button')
+    const step = block('.gig-nav button.gig-nav-step')
+    const line = block('.gig-nav-ahead')
+    assert.match(base, /padding: var\(--s-4\);/, 'the step buttons’ padding moved; the sum below is about it')
+    assert.match(step, /padding: var\(--s-2\) var\(--s-4\);/)
+    /* The line counts for nothing when the columns are shared out, then fills its button: a long name cannot widen Next. */
+    assert.match(line, /\n\s*width: 0;/, 'a long name widens Next and squeezes the Setlists button')
+    assert.match(line, /\n\s*min-width: 100%;/, 'the line under Next is no wider than nothing, so the name is never shown')
+    /* And the buttons keep their own smallest width, so they sit where they always did (min-width: 0 moved all three 3px at 320 wide). */
+    assert.ok(!/min-width/.test(step), 'the step buttons can shrink past their own words, which moves every button in the row')
+    for (const rule of [/display: block;/, /\n\s*height: var\(--s-4\);/, /line-height: var\(--s-4\);/, /white-space: nowrap;/, /overflow: hidden;/, /text-overflow: ellipsis;/]) {
+      assert.match(line, rule, `the line under Next: ${rule.source} is missing, so it can wrap or move`)
+    }
+    assert.equal(2 * (token('s-4') - token('s-2')), token('s-4'), 'the padding given up is not the height of the line, so the button changed height')
+    const compact = block('.gig[data-compact] .gig-nav button')
+    const compactStep = block('.gig[data-compact] .gig-nav button.gig-nav-step')
+    assert.match(compact, /padding: var\(--s-2\);/)
+    assert.match(compactStep, /padding: var\(--s-1\) var\(--s-2\);/)
+    const floor = Number(compact.match(/min-height: (\d+)px/)[1])
+    const labelLine = Math.ceil(token('f-3') * 1.25)
+    const before = 2 * token('s-2') + labelLine + 2
+    const after = 2 * token('s-1') + labelLine + token('s-4') + 2
+    assert.ok(before <= floor && after <= floor, `at the compact size Next was ${Math.max(before, floor)}px and is now ${Math.max(after, floor)}px`)
+  })
+
   
   
   test('the stage screen is the layout he picked, not the one it grew into', () => {

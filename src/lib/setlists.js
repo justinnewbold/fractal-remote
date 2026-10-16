@@ -30,6 +30,9 @@
  * Map.
  */
 
+/* The one rule for what a slot's name is, so the line under Next never shows a gen-3 unit's "<EMPTY>" marker. */
+import { cleanPresetName } from './presetName.js'
+
 const KEY = 'fractal.setlists'
 
 /** Where Previous / Next go when nothing has been chosen. */
@@ -302,6 +305,56 @@ export function stepTarget({ source, current, delta, favourites, lists }) {
     return next < 0 ? null : next
   }
   return nextIn(order, current, delta)
+}
+
+/**
+ * The small line under Next: where Next is about to go.
+ *
+ * "'Next: song name' under the Next button. You see what's coming before the
+ * count-in, so a wrong running order gets caught in time." Justin's pick, 15
+ * October 2026. A setlist in the wrong order is found out today by pressing
+ * Next and hearing the wrong song, which on a stage is the count-in.
+ *
+ * THE NAME ALONE, NOT "Next: Schism". The button already says Next in big
+ * letters right above it, so the line reads "Next › / Schism" as it stands,
+ * and the six characters of "Next: " were a third of the room on a small
+ * phone, which on most names is the difference between the name and "Sch…".
+ *
+ * THE NAME THE PRESET LIST SHOWS, AND ONLY FOR THE SLOT NEXT LOADS. `nameOf`
+ * is each end's own preset list, as it stands (the phone's presetNames, the
+ * browser's slots), and it is asked about `next` and nothing else, so the
+ * line can never carry the name of a slot other than the one Next is going
+ * to load, and never says anything the preset list would not. Nothing is
+ * read from the unit for it. A name not known yet is a blank line rather
+ * than a guess, and so is a slot the list calls empty: on a gen-3 unit an
+ * empty answer is also what a slot it could not name looks like, so "Empty"
+ * under Next would sometimes be untrue.
+ *
+ * AND WHAT NEXT REALLY DOES AT THE END. After the last song a setlist goes
+ * back round to the first (see nextIn), so the line says that instead of the
+ * opener's name, which would read as though the set carried on. "Starts over"
+ * are the Setlists screen's own words for it ("after the last one it starts
+ * over"), and they fit whole on the narrowest phone, where "Back to song 1"
+ * was cut to "Back to so…" on the one press of the night where the line
+ * matters most. The opener's name still goes to a screen reader with it.
+ *
+ * `shown` is the line, `said` is what a screen reader hears for the whole
+ * button, and `name` is the name Next lands on ('' when it is not known).
+ * Pure, and the same function at both ends, so the phone and the browser
+ * cannot say two different things about the same press.
+ */
+export const NEXT_WRAPS = 'Starts over'
+
+export function nextWords({ order, current, next, nameOf }) {
+  if (!Number.isInteger(next)) return { shown: '', said: 'Next', name: '' }
+  const name = cleanPresetName(typeof nameOf === 'function' ? nameOf(next) : undefined)
+  const list = order === null || order === undefined ? [] : cleanSlots(order)
+  /* The last song, and Next going where nextIn sends the last song: the first. */
+  if (list.length && list.indexOf(current) === list.length - 1 && next === list[0]) {
+    const back = `Next, ${NEXT_WRAPS.charAt(0).toLowerCase()}${NEXT_WRAPS.slice(1)}`
+    return { shown: NEXT_WRAPS, said: name ? `${back}, ${name}` : back, name }
+  }
+  return name ? { shown: name, said: `Next, ${name}`, name } : { shown: '', said: 'Next', name: '' }
 }
 
 /** What to call the source on the button between Previous and Next. */

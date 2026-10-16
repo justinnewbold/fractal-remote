@@ -378,6 +378,19 @@ export function useNames() {
 }
 
 /**
+ * Re-render as names arrive, and ask the unit for nothing.
+ *
+ * For Play, which shows the name of the preset Next will load ("Next: song
+ * name", see setlists nextWords) and must never be the reason a preset is
+ * dumped down the serial port mid-song. So: no `interest`, which would keep
+ * the queue draining while Play is up, and no `want`. What Play shows is what
+ * the preset list already holds (the computer's copy, and whatever the list
+ * itself has read), and a name that arrives while Play is up is drawn when it
+ * lands.
+ */
+export const useNamesHeard = () => useSyncExternalStore(subscribe, () => revision, () => revision)
+
+/**
  * Forget everything — a different unit is on the other end.
  *
  * Slot 45 on an FM3 and slot 45 on an AM4 are different presets, and showing

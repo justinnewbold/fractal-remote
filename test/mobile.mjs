@@ -1188,6 +1188,198 @@ export function run(test) {
     assert.match(read('mobile/App.js'), /screen === 'setlists'/, 'there is no setlist screen to open')
   })
 
+  /*
+   * "'Next: song name' under the Next button. You see what's coming before
+   * the count-in, so a wrong running order gets caught in time." Justin's
+   * pick, 15 October 2026. Three ways it could go wrong without anything
+   * looking broken: the line names a slot Next does not load, Play starts
+   * asking the unit for names mid-song to fill it, or the line makes the foot
+   * row taller and the buttons move under the thumb.
+   */
+  test('phone: the line under Next is the name of the slot a press of Next loads, by the button’s own rule', async () => {
+    const stage = withoutComments(read('mobile/src/screens/Stage.js'))
+    const lift = (start, stop) => {
+      const from = stage.indexOf(start)
+      const end = stage.indexOf(stop, from)
+      assert.ok(from > 0 && end > from, `Stage.js moved; this test reads ${start}`)
+      return stage.slice(from, end)
+    }
+    const landing = lift('const landing = (by) =>', '\n\n')
+    assert.match(stage, /const nextAt = landing\(1\)\n/, 'the line is not asked about where Next lands')
+    const ahead = lift('const ahead = nextWords(', '\n')
+    assert.equal(ahead.trim(), 'const ahead = nextWords({ order, current: preset?.number, next: nextAt, nameOf })', 'the line is worked out from something other than where Next lands')
+    const step = lift('const step = async (by, at = Date.now()) => {', '\n  }\n') + '\n  }'
+
+    const setlists = await import('../mobile/src/lib/setlists.js')
+    const { stepSlot } = await import('../mobile/src/lib/unit.mjs')
+    const known = { 0: 'Clean', 5: 'Solo', 7: 'Schism', 40: 'Opener', 45: 'Plexi', 46: 'Lead', 99: 'Last Slot', 200: 'Encore', 300: 'Big Star' }
+    const favourites = [300, 7, 45]
+    const lists = [
+      { id: 'sat', name: 'Saturday', presets: [40, 7, 200] },
+      { id: 'one', name: 'One', presets: [5] },
+      { id: 'none', name: 'None', presets: [] }
+    ]
+    const caps = { presets: { count: 100 } }
+    for (const source of ['all', 'starred', 'sat', 'one', 'none']) {
+      for (const current of [undefined, 0, 5, 7, 40, 45, 98, 99, 200, 300]) {
+        const order = setlists.orderFor(source, { favourites, lists })
+        const preset = current === undefined ? null : { number: current }
+        const asked = []
+        const nameOf = (n) => {
+          asked.push(n)
+          return known[n]
+        }
+        const loads = []
+        const env = {
+          order, source, preset, favourites, lists, caps,
+          stepTarget: setlists.stepTarget, stepSlot, nextWords: setlists.nextWords, nameOf,
+          nope: () => loads.push(null), thud: () => {}, awayNow: () => 0,
+          loadPreset: (n) => (loads.push(n), Promise.resolve(true)),
+          songFor: () => null, songLate: () => false, applySong: async () => {}, writeScene: () => {}, writeTempo: () => {},
+          stepsRef: { current: 0 }
+        }
+        const run = new Function(...Object.keys(env), `${landing}\nconst nextAt = landing(1)\n${ahead}\nconst step = ${step.slice(step.indexOf('async'))}\nreturn { nextAt, ahead, step }`)
+        const got = run(...Object.values(env))
+        await got.step(1)
+        const where = `${source} on ${current}`
+        const pressed = loads[0]
+        assert.equal(got.nextAt, pressed, `${where}: the line is worked out for a different press than Next makes`)
+        assert.ok(asked.every((n) => n === pressed), `${where}: the line looked up slot ${asked.find((n) => n !== pressed)}, which Next does not load`)
+        if (pressed === null) {
+          assert.equal(got.ahead.shown, '', `${where}: a Next with nowhere to go has a line under it`)
+          continue
+        }
+        const clean = setlists.cleanSlots(order)
+        const wraps = clean.length > 0 && clean.indexOf(current) === clean.length - 1 && pressed === clean[0]
+        if (wraps) assert.equal(got.ahead.shown, setlists.NEXT_WRAPS, `${where}: Next goes back to song 1 and the line does not say the set starts over`)
+        else assert.equal(got.ahead.shown, known[pressed] ?? '', `${where}: the line is not the name of slot ${pressed}, which Next loads`)
+      }
+    }
+    // A name not read yet is a blank line, never the slot number or "Untitled".
+    const blank = new Function('order', 'source', 'preset', 'favourites', 'lists', 'caps', 'stepTarget', 'stepSlot', 'nextWords', 'nameOf', `${landing}\nconst nextAt = landing(1)\n${ahead}\nreturn ahead`)(
+      null, 'all', { number: 44 }, [], [], caps, setlists.stepTarget, stepSlot, setlists.nextWords, () => undefined
+    )
+    assert.deepEqual(blank, { shown: '', said: 'Next', name: '' }, 'a name nobody has read is shown under Next')
+  })
+
+  test('phone: Play shows what the preset list says Next will load, for the unit there now, without ever asking the unit for a name', async () => {
+    /*
+     * A name read from Play is a preset dump down the one serial port, in the
+     * middle of a song, for a word under a button. Play reads what the preset
+     * list already holds and redraws when more arrives; it never asks.
+     */
+    const stage = withoutComments(read('mobile/src/screens/Stage.js'))
+    assert.match(stage, /import \{ nameOf, useNamesHeard \} from '\.\.\/lib\/presetNames'/, 'Play takes its names from somewhere other than the preset list')
+    assert.match(stage, /^ {2}useNamesHeard\(\)$/m, 'Play does not redraw when a name arrives, so the line stays blank until something else moves')
+    for (const asks of [/\bwant\(/, /\bwantOnly\(/, /\buseNames\(\)/, /\bpresetName\(/, /\brefresh\(\)/]) {
+      assert.ok(!asks.test(stage), `Play asks the unit for names (${asks.source}), which is a preset dump mid-song`)
+    }
+
+    /* The hook, run on the bench: it must not raise the count that keeps the read queue draining. */
+    const dir = mkdtempSync(join(tmpdir(), 'names-'))
+    try {
+      const files = {
+        'package.json': '{ "type": "module" }',
+        'react.js': 'export const effects = []\nexport const subs = []\nexport const useEffect = (fn) => { effects.push(fn) }\nexport const useSyncExternalStore = (sub, get) => { subs.push(sub); return get() }\n',
+        'device.js':
+          "export const reads = []\nexport const presetName = async (n) => { reads.push(n); return { name: 'Read ' + n, empty: false } }\n" +
+          "export const storedNames = async (slug) => (slug === 'fm3' ? { 7: 'Schism', 40: 'Opener' } : { 7: 'AM4 SEVEN' })\n",
+        'store.js': 'const m = new Map()\nexport const hydrate = async () => {}\nexport const sync = { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, v) } }\n',
+        'presetName.js': read('mobile/src/lib/presetName.js'),
+        'presetNames.js': read('mobile/src/lib/presetNames.js')
+          .replace("from 'react'", "from './react.js'")
+          .replace("from './device'", "from './device.js'")
+          .replace("from './presetName'", "from './presetName.js'")
+          .replace("from './store'", "from './store.js'")
+      }
+      for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+      const at = (f) => pathToFileURL(join(dir, f)).href
+      const names = await import(at('presetNames.js'))
+      const react = await import(at('react.js'))
+      const device = await import(at('device.js'))
+      const { nextWords } = await import('../mobile/src/lib/setlists.js')
+      const under = (current, next) => nextWords({ order: null, current, next, nameOf: names.nameOf }).shown
+      assert.equal(typeof names.useNamesHeard, 'function', 'presetNames has no way to watch the names without asking for them')
+
+      names.useNamesHeard()
+      assert.equal(react.effects.length, 0, 'watching the names from Play keeps the read queue running')
+      assert.equal(react.subs.length, 1, 'Play does not hear names arriving')
+      let told = 0
+      react.subs[0](() => told++)
+
+      /* The computer's list arrives: Play hears it, and the unit was asked nothing. */
+      await names.adopt('fm3')
+      await new Promise((r) => setTimeout(r, 200))
+      assert.equal(under(6, 7), 'Schism')
+      assert.ok(told > 0, 'a name arriving does not redraw Play')
+      assert.equal(under(7, 8), '', 'a slot the preset list has no name for has one under Next')
+      names.useNamesHeard()
+      await new Promise((r) => setTimeout(r, 200))
+      assert.deepEqual(device.reads, [], 'Play made the unit read a preset to find its name')
+
+      /* Another unit: what the rig does when a read finds one (forgetNames, then the new unit's list). */
+      names.forget()
+      assert.equal(under(6, 7), '', 'the last unit’s name is under Next once the unit has changed')
+      await names.adopt('am4')
+      assert.equal(under(6, 7), 'AM4 SEVEN')
+      assert.equal(under(39, 40), '', 'the FM3’s name is under Next on the AM4')
+      /* And straight from one unit's list to the other's, as a launch on a different unit does. */
+      await names.adopt('fm3')
+      assert.equal(under(6, 7), 'Schism')
+      assert.deepEqual(device.reads, [], 'a change of unit made the unit read a preset')
+
+      /* The preset list does ask, which is what makes the difference worth a test. */
+      names.useNames()
+      assert.equal(react.effects.length, 1, 'the bench cannot tell the two hooks apart')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('phone: the line under Next never makes the foot taller, and is there before any name is', () => {
+    const press = withoutComments(read('mobile/src/components/Press.js'))
+    const stage = withoutComments(read('mobile/src/screens/Stage.js'))
+    const theme = read('mobile/src/lib/theme.js')
+    const space = Object.fromEntries([...theme.match(/export const space = \{([^}]*)\}/)[1].matchAll(/(\w+): (\d+)/g)].map((m) => [m[1], Number(m[2])]))
+    const font = Object.fromEntries([...theme.match(/export const font = \{([^}]*)\}/)[1].matchAll(/(\w+): (\d+)/g)].map((m) => [m[1], Number(m[2])]))
+
+    /* One line, its own fixed height, across the whole button — not `sub`, which sits beside the chevron and may take two. */
+    const under = press.slice(press.indexOf('{under !== undefined ? ('), press.indexOf(') : null}', press.indexOf('{under !== undefined ? (')))
+    assert.ok(under.length > 0, 'Press has no line under the button, or it is drawn only once it has words (so it moves)')
+    assert.match(under, /numberOfLines=\{1\}/, 'the line under Next can wrap, which makes the button taller')
+    assert.match(under, /alignSelf: 'stretch'/, 'the line under Next is squeezed in beside the chevron')
+    assert.match(under, /lineHeight: UNDER_LINE/, 'the line under Next has no fixed height')
+    /* A no-break space: a line of one plain space can fold away to nothing, and the word moves when a name arrives. */
+    assert.match(under, /\{under \|\| '\\u00a0'\}/, 'a blank line under Next has no height, so the word moves when a name arrives')
+    const line = Number(press.match(/export const UNDER_LINE = (\d+)/)?.[1])
+    assert.match(press, /paddingVertical: under !== undefined \? space\.xs : space\.sm/, 'the line is not paid for out of the button’s padding')
+    assert.ok(!/\[caption, label, sub, under\]/.test(press), 'the line is read out twice by a screen reader')
+    assert.match(press, /\[caption, label, sub\]\.filter\(Boolean\)\.join\(', '\)/)
+
+    /* The arithmetic, from the files' own numbers: the picture or the label, the gap, the line, the padding and the border. */
+    const picture = Number(press.match(/style=\{\{ width: (\d+), height: \1,/)?.[1])
+    const labelLine = Math.ceil(font.body * 1.34)
+    const marginTop = Number(under.match(/marginTop: (\d+)/)?.[1])
+    const tall = Math.max(picture, labelLine) + marginTop + line + 2 * space.xs + 2 * 1
+    const smallest = Number(stage.match(/const foot = tight \? (\d+) : TAP/)?.[1])
+    assert.ok(Number.isFinite(tall) && smallest > 0, 'this test could not read the sizes it adds up')
+    assert.ok(tall <= smallest, `Previous and Next are ${tall}pt with the line, taller than the ${smallest}pt foot at Smallest, so the row grows`)
+    assert.equal(font.micro, 11)
+    assert.ok(line >= Math.ceil(font.micro * 1.2), 'the line is shorter than its own letters')
+
+    /* Next carries the line and says it; Previous carries a blank one so the two words sit level; neither is held by anything new. */
+    const at = (label) => stage.slice(stage.indexOf(`label="${label}"`), stage.indexOf('/>', stage.indexOf(`label="${label}"`)))
+    const next = at('Next')
+    const previous = at('Previous')
+    assert.match(next, /under=\{ahead\.shown\}/, 'Next has no line under it')
+    assert.match(next, /accessibilityLabel=\{ahead\.said\}/, 'a screen reader is not told where Next goes')
+    assert.match(next, /height=\{foot\}/)
+    assert.match(next, /disabled=\{landing\(1\) === null\}/)
+    assert.match(next, /onPress=\{\(\) => step\(1\)\}/)
+    assert.match(previous, /under=""/, 'Previous has no blank line, so it and Next do not sit level')
+    assert.ok(!/\bsub=/.test(next), 'the name is in the two-line `sub` beside the chevron, which grows the row')
+  })
+
   test('finding a control reads the unit once, one block at a time, and never on a whim', () => {
     /*
      * A find box that walks the whole preset is the right feature and the
