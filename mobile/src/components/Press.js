@@ -4,6 +4,9 @@ import { color, font, radius, space, TAP } from '../lib/theme'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
 
+/* The height of the line under a button (`under`), fixed so a name arriving never moves anything. */
+export const UNDER_LINE = 14
+
 /**
  * Every button in the app.
  *
@@ -39,6 +42,29 @@ export default function Press({
    * over the button rather than in the row, so it never moves the label.
    */
   badge,
+  /*
+   * One small line under the whole button, across its full width: what Next
+   * will load. "'Next: song name' under the Next button."
+   *
+   * Not `sub`. That one sits beside the chevron, in what is left of the
+   * button once the picture has its room (under forty points on a small
+   * phone), and is allowed two lines, so a song name there wrapped and made
+   * the whole foot row taller. This one is a single line with a fixed height,
+   * and the button gives it four points of its own padding at each edge, so
+   * the button is the size it always was at both foot heights (Stage's 56
+   * and the 48 of the Smallest size).
+   *
+   * DRAWN WHENEVER IT IS GIVEN, even blank. A line that appeared when the
+   * name was known would move the word Next up under the thumb on its way;
+   * a line that is always there means nothing moves. Previous is given a
+   * blank one so the two words sit level. Blank is a no-break space, not a
+   * space: a line holding only a space can fold away to nothing, and then
+   * the word moves anyway.
+   *
+   * Never part of what a screen reader hears unless the screen says so with
+   * `accessibilityLabel`: the screen knows how to say it ("Next, Schism").
+   */
+  under,
   /*
    * Mirror the left picture. Previous and Next are the same chevron pointing
    * opposite ways, and one file flipped is better than two files that could
@@ -101,7 +127,7 @@ export default function Press({
           alignItems: 'center',
           justifyContent: 'center',
           paddingHorizontal: space.md,
-          paddingVertical: space.sm,
+          paddingVertical: under !== undefined ? space.xs : space.sm,
           borderRadius: radius.md,
           borderWidth: 1,
           borderColor: on ? accent : color.rule,
@@ -165,6 +191,21 @@ export default function Press({
         </View>
         {after ? <Picture source={after} tint={ink} /> : null}
       </View>
+      {under !== undefined ? (
+        <Text
+          numberOfLines={1}
+          style={{
+            alignSelf: 'stretch',
+            color: on ? color.onSignal : color.silkDim,
+            fontSize: font.micro,
+            lineHeight: UNDER_LINE,
+            marginTop: 2,
+            textAlign: 'center'
+          }}
+        >
+          {under || '\u00a0'}
+        </Text>
+      ) : null}
       {badge ? (
         <View pointerEvents="none" style={{ position: 'absolute', top: space.sm, right: space.sm }}>
           {badge}

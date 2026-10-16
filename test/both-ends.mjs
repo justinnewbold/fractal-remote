@@ -2399,6 +2399,56 @@ export function run(test) {
   })
 
   /*
+   * "'Next: song name' under the Next button." One line at both ends, worked
+   * out by one function from each end's own preset list, so the phone on the
+   * stand and the computer beside it cannot say two different things about
+   * the same press when their lists agree.
+   */
+  test('the line under Next says the same at both ends, for the same press', async () => {
+    const bare = (t) => t.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+    const stage = bare(read('mobile/src/screens/Stage.js'))
+    const gig = bare(read('src/components/Gig.jsx'))
+    const line = (src, start) => {
+      const from = src.indexOf(start)
+      assert.ok(from > 0, `${start} is not where this test reads it`)
+      return src.slice(from, src.indexOf('\n', from))
+    }
+    const phoneAhead = line(stage, 'const ahead = nextWords(')
+    const webLookup = line(gig, 'const slotNames = useMemo(')
+    const webAhead = line(gig, 'const ahead = nextWords(')
+    /* Each end's preset list as it stands: the phone's (presetNames.nameOf, what Presets draws), the browser's (the slots App hands the picker and Play). */
+    assert.match(stage, /import \{ nameOf, useNamesHeard \} from '\.\.\/lib\/presetNames'/)
+    assert.match(read('mobile/src/screens/Presets.js'), /const name = nameOf\(n\)/, 'the phone’s preset list reads its names from somewhere else')
+    assert.match(stage, /\bnextWords,?\n[\s\S]*?\} from '\.\.\/lib\/lists'/, 'the phone works out its line some other way than the shared rule')
+    assert.match(gig, /\bnextWords,\n[\s\S]*?\} from '\.\.\/lib\/setlists'/, 'the browser works out its line some other way than the shared rule')
+    /* lib/lists hands the phone the generated copy of the browser's own file. */
+    assert.match(read('mobile/src/lib/lists.js'), /export \{[^}]*\bnextWords\b[^}]*\} from '\.\/setlists'/)
+
+    const phone = await import('../mobile/src/lib/setlists.js')
+    const web = await import('../src/lib/setlists.js')
+    const names = { 0: 'Clean', 7: 'Schism', 12: '<EMPTY>k Album Chug', 13: '', 40: 'Opener', 45: 'Plexi', 200: 'A Very Long Preset Name For A Small Phone' }
+    /* The browser's list in its own shape: a row per slot, the unread ones with no name at all. */
+    const slots = Array.from({ length: 256 }, (_, n) => (n in names ? { number: n, name: names[n] } : { number: n }))
+    const phoneSays = new Function('order', 'preset', 'nextAt', 'nameOf', 'nextWords', `${phoneAhead}\nreturn ahead`)
+    const webSays = new Function('order', 'preset', 'nextAt', 'slots', 'useMemo', 'nextWords', `${webLookup}\n${webAhead}\nreturn ahead`)
+    for (const order of [null, [40, 7, 200], [7], [], [200, 12, 13, 0]]) {
+      for (const current of [undefined, 0, 7, 12, 13, 40, 44, 200]) {
+        for (const nextAt of [null, 0, 7, 12, 13, 40, 45, 46, 200, 300]) {
+          const preset = current === undefined ? null : { number: current }
+          const p = phoneSays(order, preset, nextAt, (n) => names[n], phone.nextWords)
+          const w = webSays(order, preset, nextAt, slots, (fn) => fn(), web.nextWords)
+          assert.deepEqual(p, w, `the phone and the browser disagree under Next (${JSON.stringify(order)} on ${current}, Next to ${nextAt})`)
+        }
+      }
+    }
+
+    /* And the words live in the shared rule, not in either screen's button. */
+    const next = gig.slice(gig.lastIndexOf('<button', gig.indexOf('Next ›')), gig.indexOf('</button>', gig.indexOf('Next ›')))
+    assert.deepEqual([...webButtons(next + '</button>')].filter((w) => w !== 'Next ›'), [], 'the browser’s Next carries words of its own under it')
+    assert.ok(!stage.includes(web.NEXT_WRAPS) && !gig.includes(web.NEXT_WRAPS), 'one end spells out the end-of-setlist words itself, and the two can drift')
+  })
+
+  /*
    * "Where it says chain above the pedals, also put hold to switch channels.
    * So users know that they can just hold the things to switch between
    * channels, A B C and D."

@@ -11,9 +11,9 @@
  * So the binding happens once, here, and screens import from this file.
  *
  * WHAT IS NOT WRAPPED is anything pure. `orderFor`, `stepTarget`, `positionIn`,
- * `sourceLabel`, `addTo`, `removeFrom` and `moveIn` are handed what they need
- * and touch no storage, so they pass straight through and are re-exported as
- * they are.
+ * `nextWords`, `sourceLabel`, `addTo`, `removeFrom` and `moveIn` are handed
+ * what they need and touch no storage, so they pass straight through and are
+ * re-exported as they are.
  */
 import { sync } from './store'
 import {
@@ -33,7 +33,7 @@ import {
 } from './presetMarks'
 
 export { ALL, STARRED } from './setlists'
-export { addAll, addTo, applySong, moveIn, orderFor, pickMatches, positionIn, removeFrom, songFor, songIn, songsWith, songWords, sourceLabel, stepTarget, togglePick, SCENES, SONG_BPM } from './setlists'
+export { addAll, addTo, applySong, moveIn, nextWords, orderFor, pickMatches, positionIn, removeFrom, songFor, songIn, songsWith, songWords, sourceLabel, stepTarget, togglePick, NEXT_WRAPS, SCENES, SONG_BPM } from './setlists'
 export { deviceSlug } from './device-slug'
 
 /** Every setlist this unit has, in the order they were made. */

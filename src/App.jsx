@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import TopBar from './components/TopBar'
 import { ChangeLog } from './components/ChangeLog'
 import Diagnostics from './components/Diagnostics'
@@ -3572,6 +3572,25 @@ export default function App() {
   const switchesReadable = fcReadable(device?.capabilities)
 
   /*
+   * ANOTHER UNIT, ANOTHER LIST. `slots` is a copy of the names, taken again
+   * when a scan learns one, a save writes one, or the computer's list brings
+   * something new, and a change of unit was none of those. An FM3 swapped
+   * for an AM4 this browser already knew, with nothing new on the computer,
+   * left the picker showing the FM3's names over the AM4's slots, and the
+   * line under Next on Play reads the same list. So the copy is let go the
+   * moment the unit is another one, before anything is drawn with it, and
+   * the list is read as a fresh page reads it: straight from what this
+   * browser already holds for the unit there now (knownSlots, below).
+   * Nothing is read from the unit or the computer for it.
+   */
+  const namesUnit = currentDeviceSlug()
+  const namesWere = useRef(namesUnit)
+  useLayoutEffect(() => {
+    if (namesWere.current === namesUnit) return
+    namesWere.current = namesUnit
+    setSlots([])
+  }, [namesUnit])
+  /*
    * Every slot the unit has, whether or not its name has been read.
    *
    * The preset menu was empty until someone ran a scan — and on a gen-3 unit a
@@ -3650,9 +3669,11 @@ export default function App() {
       byNumber.set(preset.number, { number: preset.number, name: preset.name })
     }
     return Array.from({ length: count }, (_, i) => byNumber.get(i) || { number: i })
-    // knownSlots is rebuilt each render; its length and the count are what move.
+    // knownSlots is rebuilt each render while `slots` is empty, so its length
+    // stands for it then; `slots` itself, so a copy let go for another unit
+    // (or one taken again) is not passed over when the lengths agree.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [knownSlots.length, device?.capabilities?.presets?.count, preset?.number, preset?.name])
+  }, [slots, knownSlots.length, device?.capabilities?.presets?.count, preset?.number, preset?.name])
 
   /*
    * Whether browser storage still holds anything.
