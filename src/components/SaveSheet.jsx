@@ -40,7 +40,7 @@ export const holdsWords = (check, target) =>
       ? `whatever is in slot ${target} — it couldn’t be read`
       : check.name || 'an empty slot'
 
-export function SaveFooter({ preset, slot, onSave, onCancel, busy, saving, remote, queued, slots, deviceSlots, check }) {
+export function SaveFooter({ preset, slot, onSave, onCancel, busy, saving, remote, queued, slots, deviceSlots, check, refused = null }) {
   const problem = slotProblem(slot, deviceSlots)
   const target = problem ? NaN : slot === '' ? preset?.number : Number(slot)
   const targetLabel = Number.isInteger(target) ? target : '--'
@@ -70,6 +70,23 @@ export function SaveFooter({ preset, slot, onSave, onCancel, busy, saving, remot
     }
     setArmed(false)
     onSave()
+  }
+
+  /*
+   * A UNIT THIS APP CANNOT SAVE ON, said in place of the question and with
+   * nothing to press: a VP4, whose only known save writes Y1 whatever slot is
+   * picked (shared/vp4-safety.mjs). The sheet said "Overwrite slot 5?", the
+   * second press closed it with no words, and that looked like a save.
+   */
+  if (refused) {
+    return (
+      <div className="save-foot">
+        <p className="hint save-target-warn">{refused}</p>
+        <button className="primary save-confirm" disabled>
+          Save
+        </button>
+      </div>
+    )
   }
 
   return (

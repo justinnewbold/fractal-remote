@@ -3,7 +3,8 @@ import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'r
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
 import { Platform } from 'react-native'
-import { slotCount, slotLabel } from '../lib/device'
+import { slotCount, slotLabel, vp4Here } from '../lib/device'
+import { VP4_NO_NAMES, VP4_RELOAD, VP4_UPDATE_COMPUTER, vp4ComputerCan } from '../lib/vp4-safety'
 import { jumpsFor } from '../lib/presetJumps'
 import { knownCount, nameOf, namedSlots, readFailed, refresh, useNames, wantOnly } from '../lib/presetNames'
 import { marksFor, toggleFavourite } from '../lib/lists'
@@ -68,6 +69,15 @@ export default function Presets({ onBack }) {
   const device = useRig(ofSlug)
   const slots = slotCount(caps)
   const addressing = caps?.presets?.addressing
+  /* A real VP4: no name of its stored presets can be read (lib/vp4-safety VP4_NO_NAMES). */
+  const noNames = vp4Here()
+  /*
+   * And one behind a computer app too old to change its presets: it reports
+   * no preset count for a VP4, so the list had no rows — a spinner that never
+   * stopped, under the names note and the reload warning. The one true thing
+   * is said instead (VP4_UPDATE_COMPUTER), as the browser's list says it.
+   */
+  const vp4Old = noNames && !vp4ComputerCan(caps)
 
   /* Re-renders as names land, and keeps the reading queue draining. */
   useNames()
@@ -218,7 +228,8 @@ export default function Presets({ onBack }) {
           Presets
         </Text>
         <View style={{ flexDirection: 'row', gap: space.sm }}>
-          <Press label={refreshing ? 'Reading…' : 'Refresh'} height={40} onPress={refreshNow} />
+          {/* Not on a VP4: there are no names to read (VP4_NO_NAMES below), and a Refresh that reads nothing looks broken. */}
+          {noNames ? null : <Press label={refreshing ? 'Reading…' : 'Refresh'} height={40} onPress={refreshNow} />}
           <Press label="Done" height={40} onPress={onBack} />
         </View>
       </View>
@@ -228,7 +239,16 @@ export default function Presets({ onBack }) {
         stop looking the same. Most of it arrives from the computer at once;
         this is the line that shows it did.
       */}
-      {slots ? (
+      {/*
+        Except on a VP4, whose names no computer app can read: "the rest fill
+        in as you scroll" was a promise nothing keeps. Said as it is instead,
+        in the browser's words too (lib/vp4-safety VP4_NO_NAMES).
+      */}
+      {noNames ? (
+        <View style={{ paddingHorizontal: space.lg, paddingBottom: space.xs }}>
+          <Text style={{ color: color.silkDim, fontSize: font.small }}>{vp4Old ? VP4_UPDATE_COMPUTER : VP4_NO_NAMES}</Text>
+        </View>
+      ) : slots ? (
         <View style={{ paddingHorizontal: space.lg, paddingBottom: space.xs }}>
           <Text style={{ color: color.silkFaint, fontSize: font.micro }}>
             {knownCount() >= slots
@@ -238,26 +258,28 @@ export default function Presets({ onBack }) {
         </View>
       ) : null}
 
-      <View style={{ paddingHorizontal: space.lg, paddingBottom: space.sm }}>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Find by name or number"
-          placeholderTextColor={color.silkFaint}
-          autoCorrect={false}
-          autoCapitalize="none"
-          style={{
-            minHeight: TAP,
-            paddingHorizontal: space.md,
-            borderRadius: radius.md,
-            borderWidth: 1,
-            borderColor: color.rule,
-            backgroundColor: color.panel,
-            color: color.silk,
-            fontSize: font.body
-          }}
-        />
-      </View>
+      {vp4Old ? null : (
+        <View style={{ paddingHorizontal: space.lg, paddingBottom: space.sm }}>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Find by name or number"
+            placeholderTextColor={color.silkFaint}
+            autoCorrect={false}
+            autoCapitalize="none"
+            style={{
+              minHeight: TAP,
+              paddingHorizontal: space.md,
+              borderRadius: radius.md,
+              borderWidth: 1,
+              borderColor: color.rule,
+              backgroundColor: color.panel,
+              color: color.silk,
+              fontSize: font.body
+            }}
+          />
+        </View>
+      )}
 
       {jumps.length && !hunting ? (
         <View
@@ -268,6 +290,15 @@ export default function Presets({ onBack }) {
           {jumps.map((n) => (
             <Press key={n} grow label={String(n)} height={44} onPress={() => jumpTo(n)} />
           ))}
+        </View>
+      ) : null}
+
+      {/* A VP4 cannot say which preset it is on, so nothing here can warn
+          at the one it is on: tapping that one loads it again. Said once,
+          above the list, rather than on a row it may not be (lib/vp4-safety). */}
+      {vp4Here() && !vp4Old ? (
+        <View style={{ paddingHorizontal: space.lg, paddingBottom: space.sm }}>
+          <Note tone="hint">{VP4_RELOAD}</Note>
         </View>
       ) : null}
 
@@ -286,7 +317,7 @@ export default function Presets({ onBack }) {
         preset you are looking for is worse than one that admits it is still
         filling in.
       */}
-      {hunting ? (
+      {hunting && !noNames ? (
         <View style={{ paddingHorizontal: space.lg, paddingBottom: space.sm }}>
           <Text style={{ color: color.silkDim, fontSize: font.micro }}>
             {knownCount() >= slots
@@ -363,9 +394,10 @@ export default function Presets({ onBack }) {
           )
         }}
         ListEmptyComponent={
-          slots ? (
+          /* Nothing under the update note: there is nothing to wait for (vp4Old). */
+          vp4Old ? null : slots ? (
             <Note>
-              {knownCount() >= slots
+              {knownCount() >= slots || noNames
                 ? 'Nothing matches that.'
                 : 'Nothing matches that among the names known so far. Tap Refresh to get the rest from the computer.'}
             </Note>

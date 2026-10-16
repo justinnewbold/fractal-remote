@@ -14,6 +14,7 @@ import { OUTLINE_AFTER_MS, READ_AHEAD_ON, aheadChain, createReadAhead, fillOutli
 import { STAGE_HIDDEN } from './guardrails.js'
 import { linkIsDown } from './tapGate.js'
 import { notSentError, pressesInTheAir, tapDeadline } from '../../shared/relay-rules.mjs'
+import { vp4PresetCode, vp4PresetOn } from '../../shared/vp4-safety.mjs'
 
 export { CHAIN_FRESH_MS, OWN_ECHO_MS, OWN_SETTLE_MS, PRESET_SETTLE_MS } from '../../shared/own-echo.mjs'
 export { OUTLINE_AFTER_MS, READ_AHEAD_MS } from '../../shared/chain-outline.mjs'
@@ -710,6 +711,7 @@ export async function refreshBlocks({ reloaded = false } = {}) {
     chainForBefore = state.chainFor
     const whose = held ? {} : { chainFor: number, chainKnown: null }
     set(reloaded ? { blocks: list, ...whose, editRev: state.editRev + 1 } : { blocks: list, ...whose })
+    if (!held) takeVp4Name(number)
     return list
   } catch (err) {
     // The last known chain stays on screen: better than emptying it because
@@ -850,6 +852,8 @@ export async function refreshSceneNames(number) {
  */
 export async function refreshLoadedSceneNames(number) {
   if (!Number.isInteger(number)) return
+  /* A VP4's came with its chain (takeVp4Name), from the one record it is read by. Asked again here they were a 501 and an empty list, put up over the names. */
+  if (driver?.vp4Here?.()) return
   /* Only where the copy is free: on an Axe-Fx II GET /preset/grid is a whole
      second read of the preset, and a gen-1 has no copy at all. */
   if (driver?.presetCopy && hostKeepsCopy() === true) {
@@ -1010,16 +1014,49 @@ function sceneStateSoon() {
   }, SCENE_RETRY_MS)
 }
 
+/*
+ * THE NAME OF THE PRESET A VP4 IS ON, off the record its chain was just read
+ * from (lib/forgefx.js vp4PresetName): a VP4 cannot say which preset it is
+ * on, so nothing else ever names it, and this end showed "Untitled". Only
+ * onto the preset this read was for, or onto none at all at the start.
+ */
+function takeVp4Name(number) {
+  if (!driver?.vp4Here?.()) return
+  const p = state.preset
+  if (p && p.number !== number) return
+  const name = driver.vp4PresetName?.()
+  if (name && !(p?.name === name && !p.empty)) set({ preset: { ...(p || { number: null }), name, empty: false } })
+  /*
+   * And its scene names, off the same record (lib/forgefx.js vp4SceneNames),
+   * by the same rule. The buttons said 1 to 4 over scenes the player had
+   * named: the names were asked for again by routes a VP4 has none of, and
+   * refreshLoadedSceneNames, below, no longer asks them on a VP4 at all.
+   */
+  const names = driver.vp4SceneNames?.()
+  const now = state.sceneNames || []
+  if (names && !(names.length === now.length && names.every((n, i) => n === (now[i] || '')))) set({ sceneNames: names })
+}
+
+/** The same, for a chain App read itself (its read at the start, and after a reconnect), which the store's own chain read never sees. */
+export const takeVp4Record = (number) => takeVp4Name(number)
+
 /** A status read, laid over the chain on screen. */
 function layStates(states) {
   statusIds = new Set(states.map((s) => s.effectId))
   const byId = new Map(states.map((s) => [s.effectId, s]))
   const before = state.blocks
   let moved = false
+  /*
+   * On a VP4, a null is "not known", not "as it was". Nothing reads a VP4's
+   * on/off, and a scene moves them: the one the player's last tap set is
+   * another scene's now, so the pedal says nothing again until the next tap
+   * (shared/vp4-safety.mjs VP4_ON_OFF_UNKNOWN). The phone does the same.
+   */
+  const vp4 = Boolean(driver?.vp4Here?.())
   const next = before.map((b) => {
     const s = byId.get(b.effectId)
     if (!s) return b
-    const bypassed = s.bypassed ?? b.bypassed
+    const bypassed = vp4 ? s.bypassed ?? null : s.bypassed ?? b.bypassed
     const channel = s.channel ?? b.channel
     if (bypassed === b.bypassed && channel === b.channel) return b
     /* A value belongs to the block's channel; see refreshBlocks. */
@@ -1428,15 +1465,17 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
     : null
   /* What the chain on screen was — up from memory, or only the outline — for a refusal to put back. */
   const wasKnown = { chainKnown: state.chainKnown, chainOutline: state.chainOutline }
-  /* This press among the others of Previous, Next and the list still in the air: see the put-back below. */
-  const press = inTheAir.press('preset', {
+  /* What was up before the tap: for a refusal to put back (below), and for a VP4 preset nobody saw land. */
+  const left = {
     preset: state.preset,
     blocks: state.blocks,
     sceneNames: state.sceneNames,
     chainFor: state.chainFor,
     chainKnown: state.chainKnown,
     chainOutline: state.chainOutline
-  })
+  }
+  /* This press among the others of Previous, Next and the list still in the air: see the put-back below. */
+  const press = inTheAir.press('preset', left)
   if (seen) resetSchemaCache()
   /* From the tap, not from the unit's answer: a tile drawn for the preset
      being left must not switch anything while the select is in the air. */
@@ -1464,6 +1503,29 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
   const token = echoes.owe('preset')
   let again = false
   let unconfirmed = false
+  /*
+   * A VP4'S PROGRAM CHANGE THAT WENT, WITH NO SIGN THE VP4 CHANGED (the
+   * computer's `landed: false`; shared/vp4-safety.mjs), and the words for it.
+   * Not put back — it was sent, and two presets can look alike — and not a
+   * preset that landed either: no setlist song is set up on it, and the
+   * words are thrown once the reads are done. Its own flag, because nothing
+   * read below settles it: a VP4 never says which preset it is on.
+   */
+  let unseen = null
+  /*
+   * AND ONE A NEWER PRESS OVERTOOK at the computer, while it was still reading
+   * whether this one landed (the computer's `overtaken`). A newer press from
+   * this page already stops this one by its run; one from anywhere else — the
+   * computer's window, a phone — did not, and this answered with the preset,
+   * so Gig put a setlist song's scene onto a preset nobody saw land, and
+   * `selected` logged it as loaded. Not landed, and nothing said: the press
+   * that overtook it is the news.
+   */
+  let overtaken = false
+  /* And one that did land, which nothing below will say either: its number is the one on screen. */
+  let vp4Landed = false
+  /* What the VP4 calls the place, for the bar until its record names the preset (B1, not "Untitled"). */
+  let vp4Code = null
   /* When the unit was asked: the wait before the chain read counts from here. */
   const sentAt = clock.now()
   try {
@@ -1487,7 +1549,29 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
         return null
       })
       if (res && res.ok === false) throw new Error(SELECT_REFUSED)
+      /*
+       * `again`: the computer saw the VP4 was on this preset already and
+       * loaded it again (two setlist songs on one preset). Not unseen, and a
+       * landing as far as a song's scene goes (vp4PresetOn): the VP4 is on it.
+       */
+      if (res?.overtaken === true) overtaken = true
+      if (res?.landed === false && !res?.overtaken && !res?.again) unseen = res.message || 'Sent, but the app couldn’t confirm the VP4 changed preset.'
+      if (vp4PresetOn(res)) vp4Landed = true
+      if (vp4Landed) vp4Code = typeof res?.code === 'string' && res.code ? res.code : vp4PresetCode(number)
       inTheAir.landed(press)
+      /*
+       * AND THE PLACE IT WAS SENT TO IS NOT PUT UP AS THE PLACE IT IS ON. A
+       * preset played here before went up on the tap with its number, and an
+       * unseen one left it there: B1 in the bar while a VP4 with Receive MIDI
+       * PC off was still on A1. The phone did the same for every unseen
+       * preset, under the name the VP4's record still carried. One rule at
+       * both ends now (mobile/src/lib/rig.js, the same): what was up before
+       * the tap goes back — the VP4 did not visibly change, so its name,
+       * scene names and pedals are still the best word on what it is on —
+       * with its place unknown ("--"), and the reads below name it off the
+       * record. Nothing is put back as a failure: it was sent.
+       */
+      if (unseen && run === presetRun) set({ ...left, preset: left.preset ? { ...left.preset, number: null } : null, chainGoing: null })
     } catch (err) {
       echoes.disown(token)
       /*
@@ -1515,7 +1599,7 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
     gridTimer = null
     syncChainBusy()
     /* Not yet for an answer that came back garbled: once the read below says the unit took it. */
-    if (!unconfirmed) selected?.()
+    if (!unconfirmed && !unseen && !overtaken) selected?.()
     /* A newer tap owns the reads from here. */
     if (run !== presetRun) return null
     /*
@@ -1526,13 +1610,19 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
     /* Only the slot just chosen is taken from this answer: the preset being
        left, or -1 (the unit too busy loading to say its name in time), is
        asked again once it has settled. */
-    try {
-      const fresh = await driver.currentPreset()
-      if (!(Number.isInteger(fresh?.number) && fresh.number === number)) again = true
-      else if (run === presetRun) enterPreset(fresh)
-    } catch {
-      again = true
+    /* Not for an unseen VP4 preset: nothing a VP4 answers says where it is, and its place stays unknown (above). */
+    if (unseen) again = true
+    else {
+      try {
+        const fresh = await driver.currentPreset()
+        if (!(Number.isInteger(fresh?.number) && fresh.number === number)) again = true
+        else if (run === presetRun) enterPreset(fresh)
+      } catch {
+        again = true
+      }
     }
+    /* A VP4 the computer saw land, which cannot say so itself (its read is empty or refused): this is the preset on screen now. */
+    if (again && vp4Landed && run === presetRun && state.preset?.number !== number) enterPreset({ number, name: vp4Code || '', empty: false })
     /* The unit says it is on this slot: a garbled answer to the select is settled. */
     if (!again && unconfirmed) {
       unconfirmed = false
@@ -1557,8 +1647,11 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
     syncChainBusy()
   }
   await readPresetSoon(settleFrom(sentAt), { preset: again, reloaded: true })
-  /* Nor for a load a newer press took over: that press's song is the one to set up (Gig.step). */
-  return unconfirmed || run !== presetRun ? null : state.preset
+  /* The VP4's words, once the reads are done, for the newest press only: Gig and the preset list say them. */
+  /* Marked as a VP4's, so App says it over Play's tiles and never under "Didn't work": it was sent (App jumpTo). */
+  if (unseen && run === presetRun) throw Object.assign(new Error(unseen), { vp4: true, unconfirmed: true })
+  /* Nor for a load a newer press took over, here or at the computer: that press's song is the one to set up (Gig.step). */
+  return unconfirmed || unseen || overtaken || run !== presetRun ? null : state.preset
 }
 
 /*

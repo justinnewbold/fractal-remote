@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useDevice, writeBypass, writeScene, refreshSceneState } from '../lib/deviceState'
-import { sceneState, setChannel } from '../lib/forgefx'
+import { sceneState, setChannel, vp4SceneWalk } from '../lib/forgefx'
 import { copyScene } from '../../shared/copy-tools.mjs'
 
 const ofScene = (s) => s.sceneIndex
@@ -22,6 +22,13 @@ export default function SceneCopy({ count = 8, names = [], busy, onChanged, onEr
   const label = (i) => `Scene ${i + 1}${names[i] ? ` · ${names[i]}` : ''}`
 
   const run = async () => {
+    /* Not on a VP4, whose on/offs nothing reads: nothing sent (forgefx vp4SceneWalk). App does not offer this on one. */
+    const noWalk = vp4SceneWalk()
+    if (noWalk) {
+      setAsking(false)
+      onError?.(noWalk.message)
+      return
+    }
     setWorking(true)
     try {
       const res = await copyScene({ from, to, wire: { setScene: writeScene, sceneState, setBypass: writeBypass, setChannel } })

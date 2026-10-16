@@ -56,14 +56,18 @@ export const RETRY_MS = [400, 800]
  * the old scene with the codec's words under it, while the unit sat on the
  * new one. The callers (rig.js on the phone, deviceState.js in the browser)
  * read where the unit is instead, and show that.
+ *
+ * AND NEVER `once`: a VP4's preset or scene (shared/relay-rules.mjs
+ * sendsOnce). A garbled answer means it went, and a second Program Change
+ * loads the preset again, losing what the player had not saved.
  */
-export async function withRetry(fn, { method, path, wait = sleep, retries = RETRIES, deadline, now = () => Date.now() } = {}) {
+export async function withRetry(fn, { method, path, wait = sleep, retries = RETRIES, deadline, now = () => Date.now(), once = false } = {}) {
   let attempt = 0
   for (;;) {
     try {
       return await fn(attempt)
     } catch (err) {
-      const again = attempt < retries && canAskAgain(method, path) && isGarbledDump(err?.message)
+      const again = !once && attempt < retries && canAskAgain(method, path) && isGarbledDump(err?.message)
       if (!again) throw err
       await wait(RETRY_MS[Math.min(attempt, RETRY_MS.length - 1)])
       if (Number.isFinite(deadline) && now() >= deadline) throw Object.assign(err, { answeredGarbled: true })

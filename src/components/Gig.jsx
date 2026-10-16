@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal, flushSync } from 'react-dom'
-import { liveMeters, setChannel, setMetersWanted } from '../lib/forgefx'
+import { liveMeters, setChannel, setMetersWanted, vp4Here } from '../lib/forgefx'
+import { VP4_NO_STEP, VP4_ON_OFF_UNKNOWN, aboutVp4 } from '../../shared/vp4-safety.mjs'
 import {
   useDevice,
   refreshBlocks as reReadChain,
@@ -82,6 +83,8 @@ const ofTuning = (s) => s.tuning
 
 /* How long a preset's scenes stay nameless before Play says how to name them. */
 const UNNAMED_AFTER_MS = 1500
+/* How long a VP4's refusal stays over Play: its longest sentence, read at an easy pace (see onError). */
+const VP4_SAID_MS = 9000
 
 export default function Gig({
   preset,
@@ -113,7 +116,9 @@ export default function Gig({
    * floating word: nothing on the screen moves.
    */
   down = false,
-  onError,
+  onError: raiseInPage,
+  /* A VP4's words App was handed — a preset picked from the list — for the band below: { words, at }. */
+  said = null,
   onChanged,
   /* A preset stepped to here has been loaded and read, for what App keeps. */
   onPresetLoaded,
@@ -396,13 +401,38 @@ export default function Gig({
    * to the next one. This floats, takes no touch and goes on its own.
    */
   const [dropped, setDropped] = useState(null)
+  /*
+   * AND A VP4'S REFUSALS, THE SAME WAY. On a VP4 a scene with no number set,
+   * Previous with no setlist, the tempo and a number held after a miss all
+   * come back in words, and through App's notice each one pushed the preset
+   * bar, the scenes and the pedals down — 280 pixels at 320 wide, so the
+   * notice sat where scene 2 had been and a quick second tap landed on a
+   * pedal. Said over the screen instead, like the phone's toast: no room
+   * taken, no touch taken, gone on its own once there has been time to read
+   * it (VP4_SAID_MS, not a dropped tap's three seconds). It is the band a
+   * dropped tap is said in, so the two never sit on top of each other.
+   * Everything else still goes to App's notice, as before.
+   */
+  const onError = (err) => {
+    if (vp4Here() && aboutVp4(err)) setDropped({ words: typeof err === 'string' ? err : err?.message, at: Date.now(), ms: VP4_SAID_MS })
+    else raiseInPage(err)
+  }
   /* Not one a newer press of the same control took over: that press is the news, and its tile is up (shared/relay-rules newestPresses). */
   const sayNotSent = (err) => {
     if (!err?.overtaken) setDropped({ words: err?.message || NOT_SENT, at: Date.now() })
   }
+  /*
+   * And one App was handed (`said`): the same band, for what is left of its
+   * time. Each new one by when it was said; one from before Play was last
+   * left is not said again on coming back to it.
+   */
+  useEffect(() => {
+    const left = said?.words ? VP4_SAID_MS - (Date.now() - said.at) : 0
+    if (left > 0) setDropped({ words: said.words, at: said.at, ms: left })
+  }, [said?.at])
   useEffect(() => {
     if (!dropped) return undefined
-    const t = setTimeout(() => setDropped(null), NOT_SENT_SHOWN_MS)
+    const t = setTimeout(() => setDropped(null), dropped.ms || NOT_SENT_SHOWN_MS)
     return () => clearTimeout(t)
   }, [dropped])
   /* And taken down the moment the link is back: "not connected" over a screen that is live again would be the very disagreement this app keeps out. */
@@ -561,9 +591,15 @@ export default function Gig({
   const order = orderFor(source, { favourites, lists })
   const [setlistOpen, setSetlistOpen] = useState(false)
 
-  /* Where a press would land, or null when the button has nothing to do. */
+  /*
+   * Where a press would land, or null when the button has nothing to do. NOT
+   * SLOT BY SLOT ON A VP4, which cannot say which preset it is on: a setlist
+   * or the stars know their own order and send the preset itself, and with
+   * neither the buttons say why (VP4_NO_STEP) — the phone's rule.
+   */
+  const noSlotSteps = vp4Here()
   const landing = (delta) =>
-    stepTarget({ source, current: preset?.number, delta, favourites, lists })
+    !order && noSlotSteps ? null : stepTarget({ source, current: preset?.number, delta, favourites, lists })
 
   /*
    * And the pedals of where each would land, read while nothing else is going
@@ -591,7 +627,10 @@ export default function Gig({
 
   const step = async (delta) => {
     const next = landing(delta)
-    if (next === null) return
+    if (next === null) {
+      if (!order && noSlotSteps) onError(VP4_NO_STEP)
+      return
+    }
     setWorking(true)
     const awayAtNext = linkAwayMs(Date.now())
     try {
@@ -1061,7 +1100,8 @@ export default function Gig({
               on Edit renames one directly. The line that sent people to the
               AI's Create screen for named scenes went with the AI. */}
           Those are scenes &mdash; the same blocks, switched on and off in different combinations.
-          Tap one to hear it. Name them yourself under Scenes on Edit.
+          {/* Not on a VP4, which the app cannot rename on yet (shared/vp4-safety.mjs VP4_NO_EDITS). */}
+          {vp4Here() ? ' Tap one to hear it.' : ' Tap one to hear it. Name them yourself under Scenes on Edit.'}
         </p>
       ) : null}
 
@@ -1133,6 +1173,8 @@ export default function Gig({
           ) : null}
         </div>
       ) : null}
+      {/* Why a VP4's pedals say nothing until tapped: said once, and always there on a VP4, so nothing moves when it would go (the phone says the same). */}
+      {!shown.elsewhere && blocks.length && vp4Here() ? <p className="gig-note">{VP4_ON_OFF_UNKNOWN}</p> : null}
 
       <Sheet open={looping && !!looperHere && !shown.elsewhere} onClose={() => setLooping(false)} title="Looper">
         {looperHere ? <Looper block={looperHere} presetNumber={preset?.number} /> : null}
@@ -1196,7 +1238,7 @@ export default function Gig({
         the same row so the footer costs the screen nothing more.
       */}
       <div className="gig-nav">
-        <button onClick={() => step(-1)} disabled={working || landing(-1) === null}>
+        <button onClick={() => step(-1)} disabled={working || (landing(-1) === null && !(noSlotSteps && !order))}>
           ‹ Previous
         </button>
         <button
@@ -1214,7 +1256,7 @@ export default function Gig({
           <span className="gig-nav-source-name">{order ? sourceName : 'All'}</span>
           {sourceWhere ? <span className="gig-nav-source-pos mono">{sourceWhere}</span> : null}
         </button>
-        <button onClick={() => step(1)} disabled={working || landing(1) === null}>
+        <button onClick={() => step(1)} disabled={working || (landing(1) === null && !(noSlotSteps && !order))}>
           Next ›
         </button>
       </div>
@@ -1459,7 +1501,8 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
    * ones that are on light up when the status read lands, and nothing is
    * contradicted.
    */
-  const unknown = !door && outline && typeof block.bypassed !== 'boolean'
+  /* And every pedal of a real VP4 that the player has not tapped: nothing reads a VP4's on/off (shared/vp4-safety.mjs VP4_ON_OFF_UNKNOWN). */
+  const unknown = !door && (outline || vp4Here()) && typeof block.bypassed !== 'boolean'
 
   /*
    * THE TWO CORNERS. An effect says On or Off at the top left and its channel

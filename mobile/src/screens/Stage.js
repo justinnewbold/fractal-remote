@@ -5,7 +5,8 @@ import { useKeepAwake } from 'expo-keep-awake'
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { bandTop, tileWidth as tileWidthIn } from '../lib/tileGrid'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
-import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot } from '../lib/device'
+import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot, vp4Here } from '../lib/device'
+import { VP4_NO_STEP, VP4_ON_OFF_UNKNOWN } from '../lib/vp4-safety'
 import {
   applySong,
   listsFor,
@@ -37,6 +38,7 @@ import {
   refreshAll,
   awayNow,
   rereadSceneNames,
+  sayFault,
   songLate,
   tapTempo,
   useRig,
@@ -536,10 +538,21 @@ export default function Stage({
    * many slots the unit reported and greys the button rather than sending a
    * press the unit is going to refuse.
    */
+  /*
+   * AND NOT SLOT BY SLOT ON A VP4. It cannot say which preset it is on, so
+   * "the next slot" is a guess from the last one this phone picked, and one
+   * changed at its footswitch since makes Next land somewhere nobody meant.
+   * A setlist or the stars know their own order and send the preset itself,
+   * so those still step. With neither, the buttons say why (VP4_NO_STEP)
+   * rather than doing nothing. Never in the demo, whose VP4 knows.
+   */
+  const noSlotSteps = vp4Here()
   const landing = (by) =>
     order
       ? stepTarget({ source, current: preset?.number, delta: by, favourites, lists })
-      : stepSlot(preset?.number, by, caps)
+      : noSlotSteps
+        ? null
+        : stepSlot(preset?.number, by, caps)
 
   /*
    * And the pedals of where each would land, read while nothing else is going
@@ -567,6 +580,7 @@ export default function Stage({
     if (next === null) {
       // The end of the list. Wrapping round to slot 0 mid-set is worse than a
       // button that does nothing, so it does nothing and says so in the case.
+      if (!order && noSlotSteps) sayFault(VP4_NO_STEP)
       nope()
       return
     }
@@ -945,7 +959,10 @@ export default function Stage({
               /* Read ahead of the switch, on or off not said yet: dim and no
                  word, so the ones that are on light up rather than half of
                  them flipping from On to Off. */
-              const unknown = chainNow.outline && typeof block.bypassed !== 'boolean'
+              /* And every pedal of a real VP4 the player has not tapped: nothing
+                 reads a VP4's on/off (lib/vp4-safety VP4_ON_OFF_UNKNOWN). Its
+                 tap still goes — it turns the effect off first. */
+              const unknown = (chainNow.outline || vp4Here()) && typeof block.bypassed !== 'boolean'
               const engaged = !unknown && !block.bypassed
               const state = unknown ? '\u00a0' : engaged ? 'On' : 'Off'
               return (
@@ -1007,6 +1024,11 @@ export default function Stage({
               />
             ) : null}
           </View>
+          {/* Why a real VP4's pedals say nothing until tapped. Always there on
+              a VP4, so nothing moves when it would go; the browser says the same. */}
+          {vp4Here() && blocks.length && !chainNow.elsewhere ? (
+            <Text style={{ color: color.silkDim, fontSize: font.small }}>{VP4_ON_OFF_UNKNOWN}</Text>
+          ) : null}
 
         </View>
 
@@ -1030,7 +1052,7 @@ export default function Stage({
               icon={chevronIcon}
               flip
               height={foot}
-              disabled={landing(-1) === null}
+              disabled={landing(-1) === null && !(noSlotSteps && !order)}
               onPress={() => step(-1)}
               style={dimmed}
             />
@@ -1050,7 +1072,7 @@ export default function Stage({
               label="Next"
               after={chevronIcon}
               height={foot}
-              disabled={landing(1) === null}
+              disabled={landing(1) === null && !(noSlotSteps && !order)}
               onPress={() => step(1)}
               style={dimmed}
             />

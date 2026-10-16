@@ -86,6 +86,7 @@ import {
   notSentError,
   pastDeadline,
   newestPresses,
+  sendsOnce,
   tapDeadline
 } from '../../shared/relay-rules.mjs'
 import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, cleanCode, codeRefused } from '../../shared/confirm-code.mjs'
@@ -1199,6 +1200,8 @@ export async function remoteRequest(path, options = {}) {
   const tap = Number.isFinite(options.deadline)
   const until = tap ? Math.min(graceUntil, options.deadline) : graceUntil
   const attempts = repeatable(path) ? 2 : 1
+  /* A VP4's preset or scene goes on the wire once: a second try only when the first never left (shared/relay-rules sendsOnce). */
+  const once = sendsOnce(method, path, options.body)
   const trip = { went: options.went === true }
 
   let last = null
@@ -1206,6 +1209,7 @@ export async function remoteRequest(path, options = {}) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     /* The second attempt is checked too: it is the one that used to land late. */
     if (tap && pastDeadline(options.deadline, Date.now())) break
+    if (attempt > 0 && once && trip.went) break
     try {
       await relayReady(until - Date.now(), tap)
       return await relaySend(method, path, options, trip)

@@ -105,6 +105,17 @@ export function fixFor(message) {
   /* Before the computer, because "the computer app is older than this one"
      names the computer only to say whose version it is talking about. */
   if (/version|older than|out of date|update/.test(said)) return 'versions'
+  /*
+   * NOTHING FOR A VP4'S OWN WORDS, past the one above ("Update the Fractal
+   * Remote app on your computer…", which is a version fix). Every other
+   * sentence the app says about a VP4 (shared/vp4-safety.mjs, and the
+   * computer's copies of them) already says what to do — set the number in
+   * Settings > VP4 scenes & presets, check SETUP > MIDI/Remote, tap again —
+   * and the word "preset" in them sent the player to "A preset will not load":
+   * pick it again, which on a VP4 reloads it and throws away what has not
+   * been saved, the very thing the app warns about where presets are picked.
+   */
+  if (/\bvp4\b/.test(said)) return null
   if (computer) return 'connect'
   if (/not connected|no unit|cannot find|no device|disconnected|gone/.test(said)) return 'connect'
   if (quiet) return 'frozen'

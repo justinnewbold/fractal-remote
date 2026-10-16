@@ -4220,7 +4220,8 @@ export function run(test) {
     ]) assert.ok(!/bluetooth|adapter|cme\b|widi/i.test(text), `the ${where} mentions Bluetooth, and customers cannot open it`)
     assert.match(current, /Controlling your real unit needs the computer described at the top\.\n/, 'the demo paragraph does not say the computer is what controls a real unit')
     assert.match(current, /HOW IT WORKS\nA phone needs something between it and your Fractal unit: the desktop app\. It runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to it\. Get it at fractal\.newbold\.cloud\/downloads\.\n/, 'HOW IT WORKS does not say the desktop app is what sits between the phone and the unit')
-    assert.match(current, /^SUPPORTED UNITS\nFM3, FM9, Axe-Fx III, AM4 and VP4\.$/m, 'the supported units changed')
+    /* The VP4 in part, in the purchase page's words: test/vp4-safety.mjs holds the line to them. */
+    assert.match(current, /^SUPPORTED UNITS\nFM3, FM9, Axe-Fx III and AM4, and the VP4 in part\.\nOn a VP4, the app turns effects on and off, /m, 'the supported units changed')
     assert.ok(current.includes(AFFILIATION), 'the Description no longer ends on the shared disclaimer')
     assert.match(store, /\*\*This is the one written for 1\.87\.11, and the one the next version keeps\.\*\*\s+It says nothing about Bluetooth\./, 'the Description does not say it is the one for 1.87.11 and the next version, with no Bluetooth')
     assert.match(store, /\*\*On Google Play it can go on whenever\s+it suits:\*\* nothing in it waits for 1\.87\.11 any more\./)

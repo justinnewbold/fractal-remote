@@ -19,6 +19,7 @@ import SaveBar, { SaveLate } from './components/SaveBar'
 import SaveSheet, { SaveFooter } from './components/SaveSheet'
 import { overwriteCheck } from './lib/overwrite'
 import { SAVE_CANCELLED, SAVE_FRESH_MS, SAVE_WORKING_WORDS, startSaveWait, stillOnPreset } from '../shared/save-wait.mjs'
+import { aboutVp4, isVp4, VP4_NO_SAVE } from '../shared/vp4-safety.mjs'
 import {
   carryOutRestore,
   dirtyAfterRestore,
@@ -61,6 +62,7 @@ import {
   refreshLoadedSceneNames,
   refreshTempo,
   chainWasRead,
+  takeVp4Record,
   beginChainRead,
   loadPreset as loadPresetInStore,
   SELECT_REFUSED,
@@ -206,8 +208,16 @@ import {
   takeParkedPresetName,
   clearParkedPresetName,
   getHost,
-  servedLocally
+  servedLocally,
+  vp4Here,
+  vp4PresetName,
+  vp4SceneNames,
+  vp4Setup
 } from './lib/forgefx'
+import Vp4Setup from './components/Vp4Setup'
+import { MIDI_SETUP_TITLE, VP4_NO_EDITS, VP4_NO_KNOBS, VP4_NO_RENAME, vp4SetupStatus } from '../shared/vp4-safety.mjs'
+/* What a VP4 gets from the app, on the unlock page: the phone paywall's line, word for word. */
+import { VP4_SO_FAR } from '../shared/vp4-safety.mjs'
 import ConnectScreen, { AccountCheck } from './components/ConnectScreen'
 import PhoneRemote from './components/PhoneRemote'
 import WifiQr from './components/WifiQr'
@@ -224,6 +234,7 @@ import { firmwareOf } from '../shared/firmware.mjs'
 import LinkDetails from './components/LinkDetails'
 import SignInSheet from './components/SignInSheet'
 import { arrivedToJoin } from './lib/joinLink.js'
+import { loadedNote } from './lib/presetName.js'
 import {
   bootLink,
   linkState,
@@ -258,7 +269,7 @@ import {
   unitChoices
 } from './lib/remote'
 import { newEntry, append } from './lib/log'
-import { watchEvery, probeSays, countQuiet, unitGone } from '../shared/unit-watch.mjs'
+import { watchEvery, probeUnit, countQuiet, unitGone } from '../shared/unit-watch.mjs'
 
 /* Session-only: "open the unlock page once the demo has ended" — see afterAccount. */
 const UNLOCK_NEXT = 'fractal.unlockNext'
@@ -291,6 +302,10 @@ const PAID_SAID = 'fractal.paidSaid'
 attachDriver({
   subscribeEvents,
   presetBlocks,
+  /* A real VP4, and the names its chain read carried: see deviceState.takeVp4Name. */
+  vp4Here,
+  vp4PresetName,
+  vp4SceneNames,
   sceneState,
   currentPreset,
   selectPreset,
@@ -520,6 +535,8 @@ const SETUP_PAGES = {
   metronome: 'Metronome',
   usage: 'How many people',
   am4check: 'AM4 check',
+  /* A VP4's Scene Select number and MIDI channel: shared/vp4-safety.mjs. */
+  vp4: MIDI_SETUP_TITLE,
   /* The phone's sheet is titled Unlock; so is this page. */
   unlock: 'Unlock'
 }
@@ -1323,6 +1340,27 @@ export default function App() {
     []
   )
   const [setupPage, setSetupPage] = useState(null)
+  /* A real VP4 on the computer, not the demo's: it gets the Scene Select card (components/Vp4Setup). Follows each detect through `device`. */
+  const onRealVp4 = Boolean(device) && vp4Here()
+  /*
+   * WHETHER HOLDING A BLOCK ON PLAY DOES WHAT THE TIP SAYS: brings up its
+   * channels. Only where the unit has more than one to pick from — the rule
+   * Gig's BlockTile holds by, and the phone's tip (Stage holdDoesSomething).
+   * On a VP4 the screens are given no channels (vp4ScreenCaps), so a hold is
+   * a tap: "Hold a block … to bring up its channels" had a player following
+   * it switch an effect off mid-song. Named, so the hint's condition says
+   * what it is about.
+   */
+  const holdOpensChannels = (device?.capabilities?.channelNames?.length || 0) > 1
+  /*
+   * A VP4'S OWN WORDS ABOUT A PRESET PICKED FROM THE LIST, said over Play in
+   * its band (Gig's `said`), not as "Didn't work" in the page. "Sent, but the
+   * app couldn't confirm the VP4 changed preset" is not a failure — the
+   * Program Change went — and the notice it went in pushed the preset bar,
+   * the scenes and the pedals down, 470 pixels at 320 wide. The phone floats
+   * the same words as a toast. Elsewhere it is the notice, with no heading.
+   */
+  const [vp4Said, setVp4Said] = useState(null)
   /*
    * WHETHER THIS ACCOUNT HAS PAID, asked of the server rather than decided here.
    *
@@ -1619,6 +1657,9 @@ export default function App() {
       if (!dirtyRef.current) noteLoadedAs(p)
       const list = Array.isArray(b) ? b : []
       setBlocks(list)
+      /* A VP4's preset and scene names ride on the record this chain came
+         from, and nothing else names them: see deviceState.takeVp4Name. */
+      if (vp4Here()) takeVp4Record(p?.number ?? null)
       /* So a screen that appears next does not read the same chain again. */
       chainWasRead(p?.number)
       setFaultReason(null)
@@ -1823,14 +1864,10 @@ export default function App() {
         timer = setTimeout(ask, every)
         return
       }
-      let said = 'quiet'
-      let heard = null
-      try {
-        heard = await currentPreset()
-        said = probeSays({ preset: heard })
-      } catch {
-        said = probeSays({ failed: true })
-      }
+      /* A VP4 is asked which scene it is on: it can never say which preset,
+         and taking that for silence re-read it from scratch every second
+         tick, for as long as the page was open. See probeUnit. */
+      const { said, heard } = await probeUnit({ vp4: vp4Here(), currentPreset, getScene })
       if (!live) return
       /* And which preset it is, which this read always knew and threw away:
          a preset changed on the front panel that opens on the same scene is
@@ -2387,6 +2424,14 @@ export default function App() {
         await reportSavePicked(req.id)
         step('told the phone it was picked up')
         /*
+         * Never on a VP4, from any phone, old or new. The only save a VP4 has
+         * been seen to accept writes Y1 whatever slot was picked, and the
+         * computer apps out there send exactly that. Refused here, before the
+         * name or anything else is written, and the phone is told why. See
+         * shared/vp4-safety.mjs.
+         */
+        if (isVp4(device)) throw new Error(VP4_NO_SAVE)
+        /*
          * A slot this unit does not have is refused here, not by the unit.
          *
          * A save is parked on one machine and carried out on another, and the
@@ -2482,7 +2527,7 @@ export default function App() {
         setBusy(false)
       }
     },
-    [preset?.name, sceneNames, record, device?.capabilities, markHandled]
+    [preset?.name, sceneNames, record, device, markHandled]
   )
 
   /*
@@ -3158,10 +3203,16 @@ export default function App() {
   const save = async () => {
     // An empty slot field means "the one that's loaded" — the save bar shows
     // that number, so the button does what it says without anything typed.
+    /*
+     * WHETHER A SAVE STARTED, as the answer: true once it was written or handed
+     * to the computer, false for every refusal below. The sheet closes only on
+     * true. It closed on anything, so a refusal put its words on a sheet that
+     * was gone the same moment, and a VP4's "can't save" read as a save.
+     */
     const number = slot === '' ? preset?.number : Number(slot)
     if (!Number.isInteger(number) || number < 0) {
       setSaveError('Enter a preset slot number.')
-      return
+      return false
     }
     /*
      * Caught here rather than by the unit, and caught before it is parked: a
@@ -3172,7 +3223,12 @@ export default function App() {
     if (slotOutside(number, device?.capabilities)) {
       const has = slotCount(device?.capabilities)
       setSaveError(`This unit holds ${has} presets, numbered 0 to ${has - 1}.`)
-      return
+      return false
+    }
+    /* Not on a VP4: its only known save writes Y1, whatever slot is typed here. See shared/vp4-safety.mjs. */
+    if (isVp4(device) && !isDemo()) {
+      setSaveError(VP4_NO_SAVE)
+      return false
     }
     setBusy(true)
     setSaving(true)
@@ -3194,7 +3250,7 @@ export default function App() {
         const here = await stillOnPreset(currentPreset, preset?.number)
         if (!here.ok) {
           setSaveError(here.error)
-          return
+          return false
         }
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
         const parked = await parkSave({
@@ -3220,7 +3276,7 @@ export default function App() {
           scenes: Array.isArray(sceneNames) ? [...sceneNames] : []
         })
         record('save', `Asked the computer to save "${saveName.trim() || preset?.name}" to slot ${number}`)
-        return
+        return true
       }
 
       // Name first: /preset/name writes the working buffer, and storePreset is
@@ -3258,12 +3314,14 @@ export default function App() {
        */
       loadedAs.current = { number, name: (name || preset?.name || '').trim() }
       presetSaved(number, name || preset?.name)
+      return true
     } catch (err) {
       // Shown on the save bar itself as well as the banner. A refusal that
       // appears only at the top of a page you aren't looking at reads as a
       // button that did nothing.
       setSaveError(err.message)
       setError(err.message)
+      return false
     } finally {
       setBusy(false)
       setSaving(false)
@@ -3327,7 +3385,8 @@ export default function App() {
       })
       presetLanded({ fresh: true })
     } catch (err) {
-      setError(err.message)
+      if (onRealVp4 && view === 'play' && aboutVp4(err)) setVp4Said({ words: err.message, at: Date.now() })
+      else setError(err.message)
     } finally {
       setBusy(false)
     }
@@ -3687,8 +3746,16 @@ export default function App() {
    * 104, and the picker offered every one of them to be saved into. Zero means
    * there is nothing to scan, which is the right amount of a unit's attention
    * to spend on slots nobody has said exist.
+   *
+   * And none on a VP4. Every computer before said it did not know how many
+   * presets a VP4 holds; the one that changes them by Program Change says
+   * 104, which started this scan on a VP4 — 4 s after the computer's own
+   * window went live, and whenever the picker opened on the website. No read
+   * names a VP4 preset it is not on, so each slot came back "Empty" and was
+   * published to the computer's store for every phone to draw (see
+   * lib/forgefx.js storedName). The list draws a VP4's places, A1 to Z4.
    */
-  const namesTotal = slotCount(device?.capabilities) ?? 0
+  const namesTotal = onRealVp4 ? 0 : slotCount(device?.capabilities) ?? 0
 
   useEffect(() => {
     unitInUse.current.busy = busy
@@ -3901,15 +3968,18 @@ export default function App() {
         nothing, keep it as 46. Losing that quietly would have been a feature
         removed under cover of a tidy-up.
       */}
-      <button
-        className="chip preset-menu-more"
-        onClick={() => {
-          setPresetMenu(false)
-          setSheet('save')
-        }}
-      >
-        Save to a slot…
-      </button>
+      {/* Not on a VP4, which the app cannot save on (shared/vp4-safety.mjs VP4_NO_SAVE). */}
+      {onRealVp4 ? null : (
+        <button
+          className="chip preset-menu-more"
+          onClick={() => {
+            setPresetMenu(false)
+            setSheet('save')
+          }}
+        >
+          Save to a slot…
+        </button>
+      )}
       <button
         className="chip preset-menu-more"
         onClick={() => {
@@ -3944,6 +4014,8 @@ export default function App() {
         You&rsquo;ll be able to control and switch presets, scenes, amp &amp; effects blocks,
         tuner, tap tempo, setlists, and so much more.
       </p>
+      {/* What a VP4 gets of that, under the list it is an exception to: the phone paywall's line, from shared/vp4-safety.mjs. */}
+      <p className="hint">{VP4_SO_FAR}</p>
       {/*
         THE LINES HERE THAT ARE NOT THE PHONE'S: only this end can be looking
         at an account that a phone's purchase has not reached yet, because
@@ -4059,7 +4131,7 @@ export default function App() {
         link={link}
         onLinkAction={linkAction}
       >
-        {status === 'live' && view !== 'gig' ? (
+        {status === 'live' && view !== 'gig' && !onRealVp4 ? (
           <SaveBar
             savedAt={savedAt}
             preset={preset}
@@ -4277,7 +4349,8 @@ export default function App() {
         /* Keyed on when it was raised, so the same failure happening again
            remounts the notice rather than looking like nothing happened. */
         <div className="notice" data-kind="fault" role="alert" key={errorAt}>
-          <h2>Didn&rsquo;t work</h2>
+          {/* Not over a VP4's own sentence: "Sent, but the app couldn't confirm…" did not fail, and each of them says what happened (shared/vp4-safety.mjs). */}
+          {onRealVp4 && aboutVp4(error) ? null : <h2>Didn&rsquo;t work</h2>}
           <p>{error}</p>
           {/*
             And what to do about it, when this app can tell.
@@ -4434,7 +4507,7 @@ export default function App() {
         {/* One note at a time: on the play test the demo's note and this one
             stood stacked over the scenes and took a third of the screen. This
             waits until the demo's has been put away. */}
-        {!holdNoteSeen && !(isDemo() && status === 'live' && !demoNoteSeen) ? (
+        {!holdNoteSeen && holdOpensChannels && !(isDemo() && status === 'live' && !demoNoteSeen) ? (
           <p className="play-hint">
             <span>
               Hold a block &mdash; the amp, the drive, any of them &mdash; to bring up its channels
@@ -4466,6 +4539,8 @@ export default function App() {
            */
           down={linkShowsDown}
           onError={setError}
+          /* A VP4's words about a preset picked from the list, for the band over the tiles (vp4Said). */
+          said={vp4Said}
           /* A typed tempo, or a burst of taps once it settles and if the
              unit took it on this same preset: logged, and the preset left
              unsaved — not a re-read of the whole rig, which was a chain dump
@@ -4565,37 +4640,54 @@ export default function App() {
             Search opens the block that holds the control and lands on it. It
             used to feed a separate staged editor, which is why the same knob
             existed twice with two different write contracts.
-          */}
-          <ParamSearch
-            blocks={blocks}
-            onError={setError}
-            onPick={(eid, paramId) => {
-              openBlockFrom(eid)
-              setEditorFocus({ eid, paramId, nonce: Date.now() })
-            }}
-          />
 
-          <Section key="chain" title="Chain" note="Add, remove and move blocks" defaultOpen>
-            <GridEditor
+            Not on a VP4, whose knobs the app cannot read: the box offered
+            "gain, mix, presence…" and answered "No control called “gain” in
+            this preset" over a preset with a Drive in it. The knobs' words
+            stand where it was, once — the phone's rule (mobile Edit.js) — and
+            a block opened on a VP4 has its on/off and no read (BlockPanel).
+          */}
+          {onRealVp4 ? (
+            <p className="hint">{VP4_NO_KNOBS}</p>
+          ) : (
+            <ParamSearch
               blocks={blocks}
-              capabilities={device?.capabilities}
-              busy={busy}
               onError={setError}
-              onChanged={(summary) => {
-                record('grid', summary)
-                read()
+              onPick={(eid, paramId) => {
+                openBlockFrom(eid)
+                setEditorFocus({ eid, paramId, nonce: Date.now() })
               }}
             />
-          </Section>
+          )}
 
-          <Section key="modifiers" title="Modifiers" note="Let a pedal or the volume knob move a control">
-            <Modifiers
-              blocks={blocks}
-              busy={busy}
-              onError={setError}
-              onChanged={(summary) => record('modifier', `Modifier bound: ${summary}`)}
-            />
-          </Section>
+          {/* Not on a VP4: one sentence where the chain editor and the modifiers were, the phone's (shared/vp4-safety.mjs VP4_NO_EDITS). */}
+          {onRealVp4 ? (
+            <p className="hint">{VP4_NO_EDITS}</p>
+          ) : (
+            <>
+              <Section key="chain" title="Chain" note="Add, remove and move blocks" defaultOpen>
+                <GridEditor
+                  blocks={blocks}
+                  capabilities={device?.capabilities}
+                  busy={busy}
+                  onError={setError}
+                  onChanged={(summary) => {
+                    record('grid', summary)
+                    read()
+                  }}
+                />
+              </Section>
+
+              <Section key="modifiers" title="Modifiers" note="Let a pedal or the volume knob move a control">
+                <Modifiers
+                  blocks={blocks}
+                  busy={busy}
+                  onError={setError}
+                  onChanged={(summary) => record('modifier', `Modifier bound: ${summary}`)}
+                />
+              </Section>
+            </>
+          )}
 
           {/*
             "See what the footswitches do." Read-only, and read only while
@@ -4686,43 +4778,55 @@ export default function App() {
               onToggle={toggleBlock}
             />
 
-            <ParamSearch
-              blocks={blocks}
-              onError={setError}
-              onPick={(eid, paramId) => {
-                openBlockFrom(eid, 'chain')
-                setEditorFocus({ eid, paramId, nonce: Date.now() })
-              }}
-            />
+            {/* Not on a VP4: its knobs' words instead, once, as on the Edit screen above. */}
+            {onRealVp4 ? (
+              <p className="hint">{VP4_NO_KNOBS}</p>
+            ) : (
+              <ParamSearch
+                blocks={blocks}
+                onError={setError}
+                onPick={(eid, paramId) => {
+                  openBlockFrom(eid, 'chain')
+                  setEditorFocus({ eid, paramId, nonce: Date.now() })
+                }}
+              />
+            )}
 
             {/* Folded until asked for, unless there is nothing to show yet: open,
                 it drew the chain a second and third time above the knobs
                 somebody opened Edit for. */}
-            <Section
-              key="chain-blocks"
-              title="Add, remove and move blocks"
-              defaultOpen={!blocks.some((b) => b.slug && b.slug !== 'input' && b.slug !== 'output')}
-            >
-              <GridEditor
-                blocks={blocks}
-                capabilities={device?.capabilities}
-                busy={busy}
-                onError={setError}
-                onChanged={(summary) => {
-                  record('grid', summary)
-                  read()
-                }}
-              />
-            </Section>
+            {/* Not on a VP4, the same as the Edit screen above (VP4_NO_EDITS). */}
+            {onRealVp4 ? (
+              <p className="hint">{VP4_NO_EDITS}</p>
+            ) : (
+              <>
+                <Section
+                  key="chain-blocks"
+                  title="Add, remove and move blocks"
+                  defaultOpen={!blocks.some((b) => b.slug && b.slug !== 'input' && b.slug !== 'output')}
+                >
+                  <GridEditor
+                    blocks={blocks}
+                    capabilities={device?.capabilities}
+                    busy={busy}
+                    onError={setError}
+                    onChanged={(summary) => {
+                      record('grid', summary)
+                      read()
+                    }}
+                  />
+                </Section>
 
-            <Section key="chain-modifiers" title="Modifiers" note="Let a pedal or the volume knob move a control">
-              <Modifiers
-                blocks={blocks}
-                busy={busy}
-                onError={setError}
-                onChanged={(summary) => record('modifier', `Modifier bound: ${summary}`)}
-              />
-            </Section>
+                <Section key="chain-modifiers" title="Modifiers" note="Let a pedal or the volume knob move a control">
+                  <Modifiers
+                    blocks={blocks}
+                    busy={busy}
+                    onError={setError}
+                    onChanged={(summary) => record('modifier', `Modifier bound: ${summary}`)}
+                  />
+                </Section>
+              </>
+            )}
 
             {/*
               RENAME THE PRESET AND ITS SCENES, beside the preset rather than
@@ -4731,17 +4835,19 @@ export default function App() {
               same button, in the same place under Modifiers.
             */}
             <div className="history-actions chain-rename">
-              <button
-                type="button"
-                className="chip"
-                disabled={busy || status !== 'live'}
-                onClick={() => {
-                  setSheetBack('chain')
-                  setSheet('scenes')
-                }}
-              >
-                Rename preset and scenes
-              </button>
+              {onRealVp4 ? null : (
+                <button
+                  type="button"
+                  className="chip"
+                  disabled={busy || status !== 'live'}
+                  onClick={() => {
+                    setSheetBack('chain')
+                    setSheet('scenes')
+                  }}
+                >
+                  Rename preset and scenes
+                </button>
+              )}
               {/* "Add the amps and pedals names as a link in the edit area." */}
               <button
                 type="button"
@@ -4830,7 +4936,7 @@ export default function App() {
         open={presetMenu && narrow}
         onClose={() => setPresetMenu(false)}
         title="Choose a preset"
-        note={preset ? `${Number.isInteger(preset.number) && preset.number >= 0 ? String(preset.number).padStart(3, '0') : preset.number} · ${preset.name?.trim() || 'Untitled'} is loaded` : null}
+        note={loadedNote(preset)}
       >
         {presetPicker}
       </Sheet>
@@ -4949,10 +5055,15 @@ export default function App() {
           <SaveFooter
             preset={preset}
             slot={slot}
+            /*
+             * Closed after a press, as it always was — except a VP4's refusal,
+             * which stays on the sheet in its words. Every other unit's failed
+             * save closes it as before, its words on the banner.
+             */
             onSave={async () => {
-              await save()
-              setSheet(null)
+              if ((await save()) || !onRealVp4) setSheet(null)
             }}
+            refused={onRealVp4 ? VP4_NO_SAVE : null}
             onCancel={cancelQueuedSave}
             busy={busy}
             saving={saving}
@@ -4971,8 +5082,8 @@ export default function App() {
           slot={slot}
           onSlot={setSlot}
           onSave={async () => {
-            await save()
-            setSheet(null)
+            /* As the footer's: only a VP4's refusal keeps the sheet open. */
+            if ((await save()) || !onRealVp4) setSheet(null)
           }}
           onRevert={revert}
           safety={safety}
@@ -5086,7 +5197,18 @@ export default function App() {
         {/* The preset's own name first: the pencil on the Play screen opens
             here, and a name is the one thing about a preset with no other
             place to be typed. */}
-        <RenamePreset preset={preset} busy={busy} onRename={rename} />
+        {/*
+          ON A VP4, THE FOUR SCENE BUTTONS AND NOTHING ELSE. The scene chip on
+          Edit still opens this sheet there, and it offered Rename, Edit name,
+          Copy a scene and the scene map under the sentence saying the app
+          can't rename on a VP4. The map and the copy go through every scene
+          reading on/offs a VP4 never reports: "Read scenes" sent five Scene
+          Select messages from one click and drew every effect On, and the
+          copy changed scene twice to copy nothing. A tap of a scene button is
+          one message, as on Play. The phone's Edit offers none of them on a
+          VP4 (RenameDoor); forgefx.js vp4SceneWalk refuses the walk anyway.
+        */}
+        {onRealVp4 ? null : <RenamePreset preset={preset} busy={busy} onRename={rename} />}
         <Scenes
           /* Not the outline drawn ahead of the chain read: a channel waits for it. */
           blocks={chainNow.outline ? [] : blocks}
@@ -5094,6 +5216,7 @@ export default function App() {
           count={device?.capabilities?.sceneCount || 8}
           channelNames={device?.capabilities?.channelNames}
           hasScenes={hasScenes}
+          canRename={!onRealVp4}
           busy={busy}
           onChanged={(summary, { reread = true } = {}) => {
             record('scene', summary)
@@ -5104,31 +5227,37 @@ export default function App() {
           onError={setError}
         />
 
-        {/* Start a scene from another one. See SceneCopy. */}
-        {hasScenes && !chainNow.elsewhere ? (
-          <SceneCopy
-            count={device?.capabilities?.sceneCount || 8}
-            names={sceneNames}
-            busy={busy || status !== 'live'}
-            onChanged={(summary) => record('scene', summary)}
-            onError={setError}
-          />
-        ) : null}
+        {onRealVp4 ? (
+          <p className="hint">{VP4_NO_RENAME}</p>
+        ) : (
+          <>
+            {/* Start a scene from another one. See SceneCopy. */}
+            {hasScenes && !chainNow.elsewhere ? (
+              <SceneCopy
+                count={device?.capabilities?.sceneCount || 8}
+                names={sceneNames}
+                busy={busy || status !== 'live'}
+                onChanged={(summary) => record('scene', summary)}
+                onError={setError}
+              />
+            ) : null}
 
-        {/* A map read for the last song switched this song's blocks by number;
-            it starts again, empty, for each preset. */}
-        <SceneMatrix
-          key={chainNow.number ?? 'none'}
-          blocks={blocks}
-          count={device?.capabilities?.sceneCount || 8}
-          names={sceneNames}
-          busy={busy || chainNow.elsewhere}
-          onError={setError}
-          onChanged={(summary) => {
-            record('scene', summary)
-            setDirty(true)
-          }}
-        />
+            {/* A map read for the last song switched this song's blocks by number;
+                it starts again, empty, for each preset. */}
+            <SceneMatrix
+              key={chainNow.number ?? 'none'}
+              blocks={blocks}
+              count={device?.capabilities?.sceneCount || 8}
+              names={sceneNames}
+              busy={busy || chainNow.elsewhere}
+              onError={setError}
+              onChanged={(summary) => {
+                record('scene', summary)
+                setDirty(true)
+              }}
+            />
+          </>
+        )}
       </Sheet>
 
       {/*
@@ -5281,6 +5410,16 @@ export default function App() {
                 status={metronomeNote(clickSetting, slugOfUnit(device), rigBpm, { ...clickHere, heard: clickHeard })}
                 onClick={() => setSetupPage('metronome')}
               />
+              {/* A real VP4's Scene Select number and MIDI channel, as on the
+                  phone: components/Vp4Setup, the words shared/vp4-safety.mjs's. */}
+              {onRealVp4 ? (
+                <SetupRow
+                  key="vp4"
+                  title={MIDI_SETUP_TITLE}
+                  status={vp4SetupStatus(vp4Setup(), device?.capabilities)}
+                  onClick={() => setSetupPage('vp4')}
+                />
+              ) : null}
               {/* The one row the phone has not got: somebody with a rig on the
                   desk who wants the remote in their pocket. */}
               <SetupRow
@@ -6060,6 +6199,16 @@ export default function App() {
             </button>
             <p className="setup-page-title">{SETUP_PAGES.sales}</p>
             <SalesTool />
+          </div>
+        ) : null}
+
+        {setupPage === 'vp4' && onRealVp4 ? (
+          <div className="setup-page">
+            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
+              ‹ Settings
+            </button>
+            <p className="setup-page-title">{SETUP_PAGES.vp4}</p>
+            <Vp4Setup caps={device?.capabilities} firmware={firmwareOf(device)} />
           </div>
         ) : null}
 

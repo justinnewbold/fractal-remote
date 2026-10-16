@@ -62,9 +62,11 @@ const remoteRequest = (path, options) => {
   /* What this unit has already refused as unsupported is not asked again. */
   const method = options?.method || 'GET'
   if (refused.known(method, path)) return Promise.reject(rememberedRefusal(method, path))
+  const vp4 = onVp4 && vp4Instead(method, path, options)
+  if (vp4) return vp4
   return overTheWire(path, options).catch((err) => {
     refused.heard(method, path, err)
-    throw err
+    throw said(method, path, err)
   })
 }
 
@@ -81,6 +83,80 @@ const tapOverBle = (options, err) =>
 /* What the attached unit has refused as unsupported: see shared/unsupported.mjs. */
 const refused = unsupportedMemo()
 
+/*
+ * WHETHER THE COMPUTER'S UNIT IS A VP4, from the last detect. Never in the
+ * demo, and never over Bluetooth.
+ *
+ * A VP4 is asked for its chain the safe way, and not for its knobs or a save
+ * at all. On the computer apps out there now, the chain read and a block's
+ * knobs send a VP4 the sweep that froze an AM4, and a save writes over Y1
+ * whatever slot was picked. So at the seam above (vp4Instead), GET
+ * /preset/blocks is answered from GET /preset/grid, which reads the one
+ * record VP4-Edit polls, and the rest is refused in words. The browser does
+ * the same at its own seam. See lib/vp4-safety.
+ */
+let onVp4 = false
+
+/*
+ * AND WHAT ITS COMPUTER CAN DO FOR IT: the VP4's capabilities from the same
+ * detect. A computer app that changes a VP4's scenes and presets says
+ * `plainMidi`; one from before it does not, and a scene or preset tap is
+ * then answered here, with the words to update it, rather than sent.
+ */
+let vp4Caps = null
+
+/*
+ * WHERE THE PLAYER'S VP4 NUMBERS ARE KEPT: the phone's store, handed in by
+ * App.js (keepVp4SetupIn). Not imported here, so this file stays loadable
+ * without React Native; with none handed in, a VP4 is simply not set up.
+ */
+let vp4Storage = null
+export const keepVp4SetupIn = (storage) => {
+  vp4Storage = storage || null
+}
+/** The player's Scene Select number and MIDI channel for the VP4, as kept on this phone. */
+export const vp4Setup = () => readVp4Setup(vp4Storage)
+/** Whether the unit on the computer is a VP4 (never the demo's, never over Bluetooth). */
+export const vp4Here = () => onVp4
+/** What the computer said this VP4 can do (null when the unit is not a VP4). */
+export const vp4Capabilities = () => (onVp4 ? vp4Caps : null)
+
+/* A VP4's "unsupported" in words (lib/vp4-safety vp4Said), fresh or remembered; anything else as it was. */
+const said = (method, path, err) => (onVp4 ? vp4Said(method, path, err) : err)
+
+/* What a VP4 is answered in place of a request (see onVp4), or null when the request goes as it is. */
+function vp4Instead(method, path, options) {
+  const v = vp4Route(method, path)
+  if (v?.refuse) return Promise.reject(vp4Refusal(v.refuse))
+  if (v?.local) return Promise.resolve(v.local)
+  if (v?.path)
+    return remoteRequest(v.path, options).then((grid) => {
+      noteVp4Name(grid)
+      return v.answer(grid)
+    })
+  return null
+}
+
+/*
+ * THE NAME OF THE PRESET A VP4 IS ON, off the grid answer its chain is read
+ * from. A VP4 cannot say which preset it is on (GET /preset is its quiet
+ * refusal), so the name was never shown: "Untitled" at the start, and "…" for
+ * good after any pick. The record the chain comes from carries the name, so
+ * each chain read leaves it here, and rig.readBlocks puts it on the preset on
+ * screen. null until a read has carried one.
+ */
+let vp4Name = null
+/* And its scene names, off the same answer (lib/vp4-safety vp4SceneNamesFromGrid): the scene buttons said 1 to 4 over scenes the player had named. */
+let vp4Scenes = null
+const noteVp4Name = (grid) => {
+  vp4Name = vp4NameFromGrid(grid)
+  vp4Scenes = vp4SceneNamesFromGrid(grid)
+}
+/** The name the last VP4 chain read carried, or null. */
+export const vp4PresetName = () => (onVp4 ? vp4Name : null)
+/** The scene names the last VP4 chain read carried (blank where unnamed), or null. */
+export const vp4SceneNames = () => (onVp4 && vp4Scenes ? [...vp4Scenes] : null)
+
 /** Whether this unit has already refused this kind of request as unsupported. */
 export const refusedAlready = (method, path) => !demoDevice() && refused.known(method, path)
 import { withLineage } from './lineage'
@@ -89,7 +165,27 @@ import { cleanPresetName, isEmptySlotName } from './unit.mjs'
 import { preferredEncoding, rememberEncoding } from './encoding'
 import { toNormalized } from './scale'
 import { unitMetronome, unitMetronomeRequest } from './metronome-rules'
-import { rememberedRefusal, unsupportedMemo } from './unsupported'
+import { rememberedRefusal as refusalFromMemory, unsupportedMemo } from './unsupported'
+
+/* The memo's answer, said in a VP4's words on a VP4 (lib/vp4-safety vp4Said): the seam above asks for it by the memo's own name. */
+const rememberedRefusal = (method, path) => said(method, path, refusalFromMemory(method, path))
+import {
+  holdVp4Setup,
+  isVp4,
+  readVp4Setup,
+  vp4NameFromGrid,
+  vp4SceneNamesFromGrid,
+  vp4ScreenUnit,
+  vp4PresetFields,
+  vp4PresetGate,
+  vp4Refusal,
+  vp4Route,
+  vp4Said,
+  vp4SceneFields,
+  vp4SceneGate,
+  vp4SceneMissed,
+  vp4SceneUnconfirmed
+} from './vp4-safety'
 
 export {
   EXCLUDED_BLOCKS,
@@ -158,7 +254,13 @@ const told = (what, req) =>
 export const detect = async () => {
   /* A unit detected afresh is asked everything afresh: see shared/unsupported.mjs. */
   refused.forget()
-  const res = await remoteRequest('/device/detect')
+  let res = await remoteRequest('/device/detect')
+  onVp4 = !demoDevice() && !bluetoothWire() && isVp4(res)
+  vp4Caps = onVp4 ? res?.capabilities ?? null : null
+  vp4Name = null
+  vp4Scenes = null
+  /* A VP4's screens offer no channels: nothing can switch one from the app (lib/vp4-safety vp4ScreenCaps). What the computer said stays in vp4Caps. */
+  if (onVp4) res = vp4ScreenUnit(res)
   /*
    * AND THE FIRMWARE, WHICH IS ON THE OTHER ENDPOINT. `/device/detect` answers
    * with the capabilities rather than the whole unit, so a version read only
@@ -391,7 +493,21 @@ async function readParamValue(eid, paramId) {
 /* ---------------------------------------------------------------- */
 
 /** Load a stored slot into the edit buffer. Nothing is committed by doing this. */
-export const selectPreset = (number, opts) => told(`select preset ${number}`, post('/preset/select', { number }, tapOf(opts)))
+export const selectPreset = (number, opts) => told(`select preset ${number}`, onVp4 ? vp4Preset(number, opts) : post('/preset/select', { number }, tapOf(opts)))
+
+/*
+ * A VP4'S PRESET, BY PROGRAM CHANGE (lib/vp4-safety). The channel the player
+ * set travels with it, as a field a computer app from before this ignores;
+ * on one of those, nothing is sent, and the words say to update it. The
+ * answer's `landed` is the computer's: false when it sent the Program Change
+ * and could not see the VP4 change, which rig.loadPreset says in its words
+ * and does not treat as a preset that landed.
+ */
+async function vp4Preset(number, opts) {
+  const gate = vp4PresetGate(vp4Caps)
+  if (gate) throw vp4Refusal(gate)
+  return post('/preset/select', { number, ...vp4PresetFields(vp4Setup()) }, tapOf(opts))
+}
 
 /**
  * What a stored slot is called, without loading it.
@@ -540,7 +656,34 @@ export async function readSaveProgress(slug) {
 export const nameOwner = (slug) => (slug ? (demoDevice() ? `${slug}:demo` : slug) : null)
 
 /** Switch scenes. */
-export const setScene = (index, opts) => told(`scene ${index + 1}`, post('/scene', { index }, tapOf(opts)))
+export const setScene = (index, opts) => told(`scene ${index + 1}`, onVp4 ? vp4Scene(index, opts) : post('/scene', { index }, tapOf(opts)))
+
+/*
+ * A VP4'S SCENE, ON THE NUMBER THE PLAYER SET ON IT (lib/vp4-safety). Nothing
+ * is sent until there is one, on a computer app that cannot, or on a number
+ * held after a scene the VP4 did not show; the words say which. Sent, it
+ * carries the number, the channel and which save of them this is. A scene
+ * the computer sent and the VP4 did not show is an error in the computer's
+ * words, and the number is held here until the player saves it again — as
+ * it is at the computer. Never asked again by itself.
+ */
+async function vp4Scene(index, opts) {
+  const setup = vp4Setup()
+  const gate = vp4SceneGate(setup, vp4Caps)
+  if (gate) throw vp4Refusal(gate)
+  let res
+  try {
+    res = await post('/scene', { index, ...vp4SceneFields(setup) }, tapOf(opts))
+  } catch (err) {
+    if (vp4SceneMissed(null, err, setup)) holdVp4Setup(vp4Storage, undefined, setup.savedAt)
+    throw err
+  }
+  if (vp4SceneMissed(res, null, setup)) {
+    holdVp4Setup(vp4Storage, undefined, setup.savedAt)
+    throw vp4Refusal(res.message || vp4SceneUnconfirmed(index, setup.sceneCc, setup.midiChannel))
+  }
+  return res
+}
 
 /** Engage or bypass a block. The live scene is what remembers it. */
 export const setBypass = (eid, bypassed, opts) =>

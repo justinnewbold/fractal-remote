@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 
-import { presetName, storedNames } from './device'
+import { presetName, storedNames, vp4Here } from './device'
 import { cleanPresetName } from './presetName'
 import { hydrate, sync } from './store'
 
@@ -276,6 +276,16 @@ function takeIn(doc) {
     const n = Number(key)
     if (!Number.isInteger(n) || n < 0 || typeof raw !== 'string') continue
     const name = cleanPresetName(raw)
+    /*
+     * NOT A VP4'S "EMPTY". No read names a VP4 preset it is not on, and a
+     * browser page from before this knew it took the 501 a VP4 answers for a
+     * preset's summary as "known empty" and wrote '' for every slot into the
+     * computer's store — 104 rows of "Empty" here over presets that are not,
+     * on a unit with no Refresh to clear them. On a VP4 an empty name is "not
+     * known": the row shows its place (A1). From the disk too, which took the
+     * computer's copy before. The browser does the same (lib/forgefx.js).
+     */
+    if (!name && vp4Here()) continue
     if (names.get(n) === name) continue
     if (!name && names.get(n)) continue
     names.set(n, name)

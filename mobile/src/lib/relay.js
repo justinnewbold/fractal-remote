@@ -44,6 +44,7 @@ import {
   notSentError,
   pastDeadline,
   newestPresses,
+  sendsOnce,
   tapDeadline
 } from './relay-rules'
 import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, CONFIRMED_SIGN_IN, cleanCode, codeRefused } from './confirm-code'
@@ -927,7 +928,9 @@ export async function remoteRequest(path, options = {}) {
   return withRetry((again) => requestOnce(path, method, options, { went: again > 0 }), {
     method,
     path,
-    deadline: options.deadline
+    deadline: options.deadline,
+    /* An answer that came back garbled went: a VP4's preset or scene is not sent again for it. */
+    once: sendsOnce(method, path, options.body)
   })
 }
 
@@ -1005,6 +1008,13 @@ async function requestOnce(path, method, options, trip = { went: false }) {
   const tap = Number.isFinite(options.deadline)
   const until = tap ? Math.min(graceUntil, options.deadline) : graceUntil
   const attempts = repeatable(path) ? 2 : 1
+  /*
+   * A VP4'S PRESET OR SCENE GOES ON THE WIRE ONCE. A second Program Change
+   * loads the preset again, losing what the player had not saved, and the
+   * computer cannot tell it from the first (shared/relay-rules sendsOnce). So
+   * the second try is only for one that never left.
+   */
+  const once = sendsOnce(method, path, options.body)
 
   /*
    * Every request passes here, which is why the log is written here and nowhere
@@ -1022,6 +1032,7 @@ async function requestOnce(path, method, options, trip = { went: false }) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     /* The second attempt is checked too: it is the one that used to land late. */
     if (tap && pastDeadline(options.deadline, Date.now())) break
+    if (attempt > 0 && once && trip.went) break
     try {
       await relayReady(until - Date.now(), tap)
       const answer = await relaySend(method, path, options, trip)

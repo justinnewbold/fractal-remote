@@ -6006,7 +6006,8 @@ test('every request the app makes passes through the retry, at the computer and 
   assert.match(
     src,
     /* A tap asked again is marked as having gone, and the retry stops at its deadline (13 October 2026): see retry.js. */
-    /async function request\(path, options = \{\}\) \{[\s\S]*?return withRetry\(\(again\) => requestOnce\(path, again > 0 && options\.deadline \? \{ \.\.\.options, went: true \} : options\), \{\s*method: options\.method \|\| 'GET',\s*path,\s*deadline: remoteActive\(\) \|\| tapsRelayed\(\) \? options\.deadline : undefined\s*\}\)/,
+    /* And a VP4's preset or scene is never asked again: a garbled answer means it went (shared/relay-rules sendsOnce). */
+    /async function request\(path, options = \{\}\) \{[\s\S]*?return withRetry\(\(again\) => requestOnce\(path, again > 0 && options\.deadline \? \{ \.\.\.options, went: true \} : options\), \{\s*method: options\.method \|\| 'GET',\s*path,\s*deadline: remoteActive\(\) \|\| tapsRelayed\(\) \? options\.deadline : undefined,\s*(?:\/\*[^*]*\*\/\s*)?once: sendsOnce\(options\.method \|\| 'GET', path, options\.body\)\s*\}\)/,
     'request() no longer asks again on a garbled dump'
   )
   const once = src.slice(src.indexOf('async function requestOnce('))
@@ -6056,6 +6057,10 @@ linkNow(test)
 console.log('\nno computer signed in with this account yet')
 const { run: noComputer } = await import('./no-computer.mjs')
 noComputer(test)
+
+console.log('\nwhat the app keeps away from a VP4')
+const { run: vp4Safety } = await import('./vp4-safety.mjs')
+vp4Safety(test)
 
 console.log('\nthe server')
 const { run: server } = await import('./server.mjs')
@@ -6719,7 +6724,9 @@ function windowOnTheBench(over = {}) {
     subscribeEvents: (fn, { onGap } = {}) => {
       unit.gap = () => onGap?.()
       return () => {}
-    }
+    },
+    /* A real VP4, and the name its chain read carried (lib/forgefx.js vp4PresetName): only where a test says so. */
+    ...(unit.vp4 ? { vp4Here: () => true, vp4PresetName: () => unit.vp4Name ?? null, vp4SceneNames: () => (unit.vp4Scenes ? [...unit.vp4Scenes] : null) } : {})
   })
   ds.put({
     preset: { number: unit.number, name: unit.presetName ?? nameOf(unit.number) },
@@ -7057,6 +7064,141 @@ onTheBench('presses of Next in the Mac window read the chain once, for where the
  * and tempo were sent onto the preset just chosen. Gig.step's own shape, run
  * on the real store.
  */
+/*
+ * A VP4 PRESET THE COMPUTER SENT BUT COULD NOT SEE LAND (its `landed: false`,
+ * shared/vp4-safety.mjs). "Sent, but the app couldn't confirm" — never
+ * "failed", so the preset stays on screen; but it is not one that landed,
+ * so a setlist song's scene is not sent onto whatever the VP4 is really on,
+ * and the words are said once the reads are done. One that landed is the
+ * preset on screen, though a VP4 never says which preset it is on.
+ */
+onTheBench('browser: a VP4 preset not seen to land says so and sets up no song; one that landed is on screen', async () => {
+  const { vp4PresetUnconfirmed, aboutVp4 } = await import('../shared/vp4-safety.mjs')
+  const words = vp4PresetUnconfirmed(1)
+  const { clock, unit, wire } = windowOnTheBench({ which: () => null, selectAnswer: () => ({ ok: true, landed: false, message: words }) })
+  const step = async (next, song) => {
+    const landed = await ds.loadPreset(next)
+    if (song && landed !== null) await setlists.applySongSorted(song, { scene: ds.writeScene, tempo: ds.writeTempo })
+  }
+  const going = step(13, { scene: 2, bpm: 150 }).then(() => null, (err) => err)
+  await clock.advance(5000)
+  const err = await going
+  assert.equal(err?.message, words, 'a VP4 preset the computer could not see land is not said')
+  /* Marked, so App says it over Play rather than under "Didn't work" (test/vp4-safety.mjs). */
+  assert.equal(err?.vp4, true, 'a VP4 preset not seen to land is not marked as a VP4’s words')
+  assert.equal(aboutVp4(err), true)
+  assert.deepEqual(wire.filter((l) => l === 'POST /scene' || l === 'POST /tempo'), [], 'a setlist song was set up on a VP4 preset nobody saw land')
+  assert.equal(wire.filter((l) => l === 'POST /preset/select').length, 1, 'the Program Change was asked for again')
+  /* What was up before the tap stays up, with its place unknown ("--"): the phone's rule (test/mobile.mjs). */
+  assert.equal(ds.getSnapshot().preset?.number, null, 'a VP4 preset nobody saw land is drawn as the place the VP4 is on')
+  assert.equal(ds.getSnapshot().preset?.name, 'SONG 12', 'a VP4 preset nobody saw land took another name than the one that was up')
+  unit.selectAnswer = () => ({ ok: true, landed: true })
+  const landing = ds.loadPreset(20)
+  await clock.advance(5000)
+  assert.notEqual(await landing, null, 'a VP4 preset the computer saw land is not one that landed')
+  assert.equal(ds.getSnapshot().preset?.number, 20, 'a VP4 preset that landed is not the one on screen')
+  /*
+   * And one played here before, which goes up on the tap from memory with its
+   * number: unseen, that number stayed in the bar — B1 while a VP4 with
+   * Receive MIDI PC off was still on A1. It goes back to unknown too.
+   */
+  const first = ds.loadPreset(13)
+  await clock.advance(5000)
+  assert.notEqual(await first, null)
+  assert.equal(ds.getSnapshot().preset?.number, 13)
+  unit.selectAnswer = () => ({ ok: true, landed: false, message: words })
+  const back = ds.loadPreset(20).then(() => null, (err) => err)
+  await clock.advance(5000)
+  assert.equal((await back)?.message, words)
+  assert.equal(ds.getSnapshot().preset?.number, null, 'a VP4 preset played here before stays up as the place the VP4 is on, unseen')
+})
+
+/*
+ * A VP4 PRESET A NEWER PRESS OVERTOOK AT THE COMPUTER (its `overtaken`): a
+ * press from somewhere else — the computer's own window, a phone — reached
+ * the computer while it was still reading whether this one landed. A press
+ * from this page stops this one by its run already; one from anywhere else
+ * did not, and the preset came back as landed, so the song's Scene Select
+ * went onto a preset nobody saw land. Not landed, and nothing said: the press
+ * that overtook it is the news. Nor logged as loaded (`selected`).
+ */
+onTheBench('browser: a VP4 preset another press overtook at the computer sets up no song and is not logged as loaded', async () => {
+  const { clock, wire } = windowOnTheBench({ which: () => null, selectAnswer: () => ({ ok: true, number: 13, code: 'D2', landed: false, overtaken: true }) })
+  let logged = 0
+  const step = async (next, song) => {
+    const landed = await ds.loadPreset(next, { selected: () => (logged += 1) })
+    if (song && landed !== null) await setlists.applySongSorted(song, { scene: ds.writeScene, tempo: ds.writeTempo })
+    return landed
+  }
+  const going = step(13, { scene: 2, bpm: 150 }).then((v) => ({ v }), (err) => ({ err }))
+  await clock.advance(5000)
+  const out = await going
+  assert.equal(out.err, undefined, `an overtaken VP4 preset was said as a fault: ${out.err?.message}`)
+  assert.equal(out.v, null, 'a VP4 preset another press overtook came back as one that landed')
+  assert.deepEqual(wire.filter((l) => l === 'POST /scene' || l === 'POST /tempo'), [], 'a setlist song was set up on a VP4 preset another press overtook')
+  assert.equal(logged, 0, 'a VP4 preset another press overtook was logged as loaded')
+  assert.equal(wire.filter((l) => l === 'POST /preset/select').length, 1, 'the Program Change was asked for again')
+})
+
+/*
+ * AND WHAT THE FIRST ROUND'S REVIEW FOUND, in the browser: a VP4 preset is
+ * named off the record its chain is read from ("Untitled" before); the same
+ * preset again — two setlist songs on one preset — sets up its song, since
+ * the computer saw the VP4 was on it (`again`); and a scene makes a pedal the
+ * player tapped unknown again, since the VP4's scenes move its on/offs.
+ */
+onTheBench('browser: a VP4 preset is named off its record, the same preset again sets up its song, and a scene makes its pedals unknown', async () => {
+  const { VP4_PRESET_AGAIN } = await import('../shared/vp4-safety.mjs')
+  const { clock, unit, wire } = windowOnTheBench({
+    vp4: true,
+    vp4Name: 'Big Room',
+    vp4Scenes: ['Verse', 'Chorus', '', 'Outro'],
+    keepsCopy: false,
+    outlines: false,
+    which: () => null,
+    blocks: [{ slug: 'drive', name: 'Drive', effectId: 118, bypassed: null, channel: null }],
+    status: () => [{ effectId: 118, bypassed: null, channel: null }],
+    selectAnswer: () => ({ ok: true, landed: true, code: 'B1' })
+  })
+  const landing = ds.loadPreset(4)
+  await clock.advance(5000)
+  assert.notEqual(await landing, null)
+  assert.equal(ds.getSnapshot().preset?.number, 4)
+  assert.equal(ds.getSnapshot().preset?.name, 'Big Room', 'a VP4 preset is not named off the record its chain came from')
+  /* And its scenes, off the same record, not 1 to 4 — and not asked again by routes a VP4 has none of, which put up an empty list over them. */
+  assert.deepEqual(ds.getSnapshot().sceneNames, ['Verse', 'Chorus', '', 'Outro'], 'a VP4’s scene buttons are numbered over the names its record carries')
+  assert.equal(wire.filter((l) => /^GET \/presets\/\d+\/summary$/.test(l)).length, 0, 'a VP4’s scene names were asked for by a route it has none of')
+  await ds.refreshLoadedSceneNames(4)
+  assert.deepEqual(ds.getSnapshot().sceneNames, ['Verse', 'Chorus', '', 'Outro'], 'the browser put another read’s names over a VP4’s')
+  /* App's own read at the start (or after a reconnect), with no preset known: named off the record too. */
+  ds.put({ preset: null, sceneNames: [] })
+  unit.vp4Name = 'Opener'
+  unit.vp4Scenes = ['Intro', '', '', '']
+  ds.takeVp4Record(null)
+  assert.equal(ds.getSnapshot().preset?.name, 'Opener', 'the browser’s read at the start leaves a VP4 unnamed')
+  assert.deepEqual(ds.getSnapshot().sceneNames, ['Intro', '', '', ''])
+  unit.vp4Name = 'Big Room'
+  ds.put({ preset: { number: 4, name: 'Big Room' } })
+  /* The second song on preset 4. */
+  unit.selectAnswer = () => ({ ok: true, landed: false, again: true, code: 'B1', message: VP4_PRESET_AGAIN })
+  wire.length = 0
+  const step = async (next, song) => {
+    const landed = await ds.loadPreset(next)
+    if (song && landed !== null) await setlists.applySongSorted(song, { scene: ds.writeScene, tempo: ds.writeTempo })
+  }
+  const going = step(4, { scene: 2 }).then(() => null, (err) => err)
+  await clock.advance(5000)
+  assert.equal(await going, null, 'the second song on one VP4 preset is said as a fault')
+  assert.equal(wire.filter((l) => l === 'POST /scene').length, 1, 'the second song on one VP4 preset never gets its scene')
+  assert.equal(wire.filter((l) => l === 'POST /preset/select').length, 1)
+  /* A pedal tapped says what was sent, until a scene moves it. */
+  await ds.writeBypass(118, true)
+  assert.equal(ds.getSnapshot().blocks.find((b) => b.effectId === 118)?.bypassed, true)
+  await ds.writeScene(1)
+  await clock.advance(2000)
+  assert.equal(ds.getSnapshot().blocks.find((b) => b.effectId === 118)?.bypassed, null, 'a VP4 pedal keeps saying what another scene had')
+})
+
 onTheBench('browser: Next and then a preset from the menu sets up no song on the preset chosen, and one Next still sets up its own', async () => {
   const { clock, unit, wire } = windowOnTheBench()
   unit.lag = (line) => (line === CHAIN ? 600 : 60)

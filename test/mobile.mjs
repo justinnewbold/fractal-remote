@@ -289,7 +289,7 @@ async function rigOnTheBench(over = {}) {
   /* The catalog the pedals are named from before the chain is read; see lib/chain-outline. */
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
   /* The gate a tap asks while the link is down, and the rules its deadline and its words come from: both real, as they are. */
-  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'unsupported.js', 'tapGate.js', 'relay-rules.js']) {
+  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'relay-rules.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -1174,8 +1174,10 @@ export function run(test) {
     const stage = read('mobile/src/screens/Stage.js')
 
     assert.match(stage, /stepTarget\(\{ source, current: preset\?\.number/, 'the phone still steps slot by slot')
-    assert.match(stage, /disabled=\{landing\(-1\) === null\}/, 'Previous is greyed out by a different rule than it steps by')
-    assert.match(stage, /disabled=\{landing\(1\) === null\}/, 'Next is greyed out by a different rule than it steps by')
+    /* The one exception is a real VP4 with no setlist, whose press stays live
+       only to say why it cannot step slot by slot (lib/vp4-safety VP4_NO_STEP). */
+    assert.match(stage, /disabled=\{landing\(-1\) === null && !\(noSlotSteps && !order\)\}/, 'Previous is greyed out by a different rule than it steps by')
+    assert.match(stage, /disabled=\{landing\(1\) === null && !\(noSlotSteps && !order\)\}/, 'Next is greyed out by a different rule than it steps by')
     assert.ok(
       !/disabled=\{stepSlot\(/.test(stage),
       'a step button is still greyed out by the slot rule, so a setlist cannot wrap at the end of the night'
@@ -2971,7 +2973,9 @@ export function run(test) {
     /* And put back if the unit refuses — captured before the change rather
        than rebuilt from a state that has already moved. */
     assert.match(load, /const was = state\.preset/, 'nothing remembers the preset to go back to')
-    assert.match(load, /set\(\{ \.\.\.faultFrom\(err\), chain: 'ok', preset: was \}\)/, 'a refused select leaves the wrong preset on screen')
+    /* With the scene names that belong to it: a refusal left the buttons bare and Play moved (test/mobile.mjs, the VP4's refused preset). */
+    assert.match(load, /const wasNames = state\.sceneNames/, 'nothing remembers the scene names to put back')
+    assert.match(load, /set\(\{ \.\.\.faultFrom\(err\), chain: 'ok', preset: was, sceneNames: wasNames \}\)/, 'a refused select leaves the wrong preset on screen, or takes its scene names away')
 
     /* Neither screen waits on it. */
     for (const file of ['mobile/src/screens/Presets.js', 'mobile/src/screens/Stage.js']) {
@@ -3686,7 +3690,8 @@ export function run(test) {
     assert.match(
       relay.replace(/\s+/g, ' '),
       /* A tap asked again is marked as having gone (`went`), and the retry stops at its deadline: see retry.js. */
-      /export async function remoteRequest\(path, options = \{\}\) \{.*?return withRetry\(\(again\) => requestOnce\(path, method, options, \{ went: again > 0 \}\), \{ method, path, deadline: options\.deadline \}\)/,
+      /* And a VP4's preset or scene, which went if its answer came back at all, is not asked again (`once`; shared/relay-rules sendsOnce). */
+      /export async function remoteRequest\(path, options = \{\}\) \{.*?return withRetry\(\(again\) => requestOnce\(path, method, options, \{ went: again > 0 \}\), \{ method, path, deadline: options\.deadline, (?:\/\*[^*]*\*\/ )?once: sendsOnce\(method, path, options\.body\) \}\)/,
       'the phone sends requests without going through the retry'
     )
     /* And it is the shared rule, not a second opinion about which requests may
@@ -5567,8 +5572,12 @@ export function run(test) {
     assert.match(phone, /if \(refused\.known\(method, path\)\) return Promise\.reject\(rememberedRefusal\(method, path\)\)/)
     assert.match(phone, /export const detect = async \(\) => \{[\s\S]{0,200}refused\.forget\(\)/)
     /* Tap on a unit with no tempo says so and sends nothing. */
-    assert.match(read('src/components/TapTempo.jsx'), /if \(refusedAlready\('POST', '\/tempo'\)\) \{\s*onError\(NO_TEMPO\)\s*return/)
-    assert.match(read('mobile/src/lib/rig.js'), /if \(device\.refusedAlready\('POST', '\/tempo'\)\) \{\s*set\(faultFrom\(\{ message: NO_TEMPO \}\)\)\s*return false/)
+    /* On a VP4 from the first tap, in its own words (test/vp4-safety.mjs); NO_TEMPO on every other unit. */
+    assert.match(read('src/components/TapTempo.jsx'), /if \(vp4Here\(\) \|\| refusedAlready\('POST', '\/tempo'\)\) \{\s*onError\(noTempo\(null\)\)\s*return/)
+    assert.match(read('src/components/TapTempo.jsx'), /const noTempo = \(err\) => \(aboutVp4\(err\) \? err\.message : vp4Here\(\) \? VP4_NO_TEMPO : NO_TEMPO\)/)
+    assert.match(read('mobile/src/lib/rig.js'), /if \(device\.vp4Here\?\.\(\) \|\| device\.refusedAlready\('POST', '\/tempo'\)\) \{\s*set\(faultFrom\(\{ message: noTempo\(null\) \}\)\)\s*return false/)
+    /* The two ends' words for it are one rule: a VP4's own sentence on a VP4, NO_TEMPO elsewhere. */
+    assert.match(read('mobile/src/lib/rig.js'), /const noTempo = \(err\) => \(aboutVp4\(err\) \? err\.message : device\.vp4Here\?\.\(\) \? VP4_NO_TEMPO : NO_TEMPO\)/)
     /* Unnamed scenes are an answer: no second dump to learn the same nothing. */
     assert.match(web, /traceStep\('scenes: the unit answered, and every scene is unnamed'\)\s*return names\.map\(\(\) => ''\)/)
     /* And a write waits for the roll call, on both ends. */
@@ -10153,6 +10162,8 @@ export function run(test) {
         return hostDoc ? hostDoc[slug] ?? null : null
       }
       export const failing = new Set()
+      /* An FM3 here; a VP4's names are held in test/vp4-safety.mjs. */
+      export const vp4Here = () => false
       export async function presetName(n) {
         unitReads.push(n)
         if (failing.has(n)) throw new Error('no answer')
@@ -11698,6 +11709,11 @@ export function run(test) {
     assert.equal(watch.probeSays({ preset: { number: -1 } }), 'quiet', 'the computer said the unit did not answer')
     assert.equal(watch.probeSays({ preset: null }), 'quiet')
     assert.equal(watch.probeSays({ failed: true }), 'quiet')
+    /* And the probe both ends run asks an FM3 exactly that, and never its scene. */
+    const asked = []
+    const one = await watch.probeUnit({ currentPreset: async () => (asked.push('preset'), { number: 7 }), getScene: async () => (asked.push('scene'), { index: 0 }) })
+    assert.deepEqual([one.said, one.heard?.number, asked], ['answering', 7, ['preset']])
+    assert.equal((await watch.probeUnit({ currentPreset: async () => { throw new Error('port busy') } })).said, 'quiet', 'a read that threw is an answer')
 
     /*
      * One quiet answer is not evidence. "My Mac is connected just fine. The
@@ -11718,7 +11734,8 @@ export function run(test) {
        plugged in is not a difference between them; it is one of them lying. */
     const rig = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
     assert.match(rig, /export function watchUnit\(\)/, 'the phone never asks')
-    assert.match(rig, /heard = await device\.currentPreset\(\) said = probeSays\(\{ preset: heard \}\)/, 'the phone asks something a write could fake')
+    /* Which preset, through the shared probe (a VP4, which can never say, is asked which scene: test/vp4-safety.mjs). */
+    assert.match(rig, /const \{ said, heard \} = await probeUnit\(\{ vp4: Boolean\(device\.vp4Here\?\.\(\)\), currentPreset: \(\) => device\.currentPreset\(\), getScene: \(\) => device\.getScene\(\) \}\)/, 'the phone asks something a write could fake')
     assert.match(rig, /if \(unitGone\(quiet\)\) \{/, 'the phone believes one quiet answer')
     const link = read('mobile/src/lib/link.js').replace(/\s+/g, ' ')
     assert.match(link, /watchUnit\(\)/, 'nothing starts the phone asking')
@@ -11727,7 +11744,7 @@ export function run(test) {
 
     const app = read('src/App.jsx').replace(/\s+/g, ' ')
     assert.match(app, /if \(status !== 'live'\) return undefined/, 'the browser asks about a unit it never had')
-    assert.match(app, /heard = await currentPreset\(\) said = probeSays\(\{ preset: heard \}\)/, 'the browser asks something a write could fake')
+    assert.match(app, /const \{ said, heard \} = await probeUnit\(\{ vp4: vp4Here\(\), currentPreset, getScene \}\)/, 'the browser asks something a write could fake')
     /* And uses the answer: a front-panel preset change on the same scene is announced by nothing else. */
     assert.match(app, /if \(said === 'answering'\) presetHeard\(heard\)/, 'the browser throws away which preset the unit is on')
     assert.match(app, /if \(unitGone\(quiet\)\) \{/, 'the browser believes one quiet answer')
@@ -17602,6 +17619,263 @@ export function run(test) {
       assert.equal(await loading, false, 'a select the unit never said it took was called landed, and a song would follow it')
       assert.equal(rig.getState().preset.number, 12, 'the screen does not show the preset the unit is on')
       assert.equal(rig.getState().error, null)
+    }
+  })
+
+  /*
+   * A VP4 ON THE PHONE'S RIG, RUN: a preset the computer sent and could not
+   * see land is not one that landed (so Stage.step sets up no setlist song on
+   * it) and says the computer's words; a scene tap with no Scene Select number
+   * is refused in words and sends nothing, and with one it carries it.
+   * See shared/vp4-safety.mjs.
+   */
+  test('the phone on a VP4: a preset not seen to land is not landed, and a scene waits for its number', async () => {
+    const v = await import('../shared/vp4-safety.mjs')
+    const words = v.vp4PresetUnconfirmed(1)
+    const { rig, clock, unit, wire, relay, device } = await rigOnTheBench({
+      short: 'VP4',
+      capabilities: { slotModel: 'linear', sceneCount: 4, presets: { count: 104, addressing: 'bankLetterShort' }, plainMidi: { programChange: true, sceneSelect: true } },
+      /* A VP4 cannot say which preset it is on (every computer app answers GET /preset with a 501), and its record still says the preset it was on. */
+      which: () => {
+        throw Object.assign(new Error('unsupported'), { status: 501 })
+      },
+      copy: () => ({ model: 'vp4', name: 'Big Room', scenes: ['Verse', 'Chorus', '', ''], cells: [] }),
+      selectAnswer: () => ({ ok: true, landed: false, message: words })
+    })
+    const loading = rig.loadPreset(13)
+    await clock.advance(5000)
+    assert.equal(await loading, false, 'a VP4 preset nobody saw land counts as landed, and a setlist song would be set up on it')
+    assert.equal(rig.getState().error, words, 'the computer’s words are not on Play')
+    /*
+     * Not put back as a failure (it was sent), and not put up as the place the
+     * VP4 is on either: "PRESET 013 D2 OF 104" over the name the VP4's record
+     * still carried was a header that contradicted itself. Its place is
+     * unknown — "PRESET — OF 104", as the browser shows it — and its name is
+     * the record's. See test/vp4-safety.mjs for the browser.
+     */
+    assert.equal(rig.getState().preset?.number, null, 'a VP4 preset nobody saw land is drawn as the place the VP4 is on')
+    assert.equal(rig.getState().preset?.name, 'Big Room', 'a VP4 preset nobody saw land is not named off the VP4’s record')
+    assert.equal(rig.getState().preset?.pending, false)
+    const select = relay.handed.filter((h) => h.line === 'POST /preset/select')
+    assert.equal(select.length, 1, 'the Program Change was asked for again')
+    assert.deepEqual(JSON.parse(select[0].body), { number: 13, midiChannel: 1 })
+    unit.selectAnswer = () => ({ ok: true, landed: true })
+    const landed = rig.loadPreset(20)
+    await clock.advance(5000)
+    assert.equal(await landed, true, 'a VP4 preset the computer saw land did not land')
+    assert.equal(rig.getState().preset?.number, 20, 'a VP4 preset that landed is not the place on screen')
+    /* And one played here before, which goes up on the tap from memory: unseen, its place goes back to unknown too. */
+    unit.selectAnswer = () => ({ ok: true, landed: true })
+    const first = rig.loadPreset(13)
+    await clock.advance(5000)
+    assert.equal(await first, true)
+    unit.selectAnswer = () => ({ ok: true, landed: false, message: words })
+    const back = rig.loadPreset(20)
+    await clock.advance(5000)
+    assert.equal(await back, false)
+    assert.equal(rig.getState().preset?.number, null, 'a VP4 preset played here before stays up as the place the VP4 is on, unseen')
+    assert.equal(rig.getState().preset?.name, 'Big Room')
+
+    wire.length = 0
+    assert.equal(await rig.writeScene(2), false, 'a VP4 scene with no number went')
+    assert.equal(rig.getState().error, v.VP4_SCENES_NOT_SET_UP)
+    assert.equal(wire.filter((l) => l === 'POST /scene').length, 0, 'a VP4 scene went before the player set a number')
+    const kept = new Map()
+    device.keepVp4SetupIn({ getItem: (k) => (kept.has(k) ? kept.get(k) : null), setItem: (k, x) => kept.set(k, x), removeItem: (k) => kept.delete(k) })
+    v.saveVp4Setup({ getItem: (k) => (kept.has(k) ? kept.get(k) : null), setItem: (k, x) => kept.set(k, x) }, undefined, { sceneCc: 34, midiChannel: 1 }, 77)
+    relay.handed.length = 0
+    assert.equal(await rig.writeScene(2), true, 'a VP4 scene on its number did not go')
+    const scene = relay.handed.filter((h) => h.line === 'POST /scene')
+    assert.equal(scene.length, 1)
+    assert.deepEqual(JSON.parse(scene[0].body), { index: 2, sceneCc: 34, midiChannel: 1, sceneCcSet: 77 })
+    device.keepVp4SetupIn(null)
+  })
+
+  /*
+   * A VP4 ON THE PHONE'S RIG, RUN, for what the first round's review found:
+   * its preset's name is the one its record carries ("Untitled" at the start
+   * and "…" for good after a pick, before), and its place when that has not
+   * come; its pedals say nothing until tapped, and a scene makes them
+   * unknown again; it is offered no channels; and the same preset again —
+   * two setlist songs on one preset — is not a fault, and lets the song's
+   * scene go. See shared/vp4-safety.mjs.
+   */
+  test('the phone on a VP4: the name off its record, pedals unknown until tapped, no channels, and the same preset again is not a fault', async () => {
+    const v = await import('../shared/vp4-safety.mjs')
+    let named = 'Big Room'
+    let scenes = ['Clean', 'Crunch', 'Lead', 'Solo']
+    let gridFails = false
+    const grid = () => {
+      if (gridFails) throw Object.assign(new Error(v.VP4_NOT_IN_CHAIN.replace('That isn’t', 'The VP4 didn’t answer')), { status: 503 })
+      return {
+        model: 'vp4',
+        name: named,
+        scenes,
+        cells: [
+          { row: 0, col: 0, effectId: 118, name: 'Drive', isShunt: false, slug: 'drive' },
+          { row: 0, col: 2, effectId: 70, name: 'Delay', isShunt: false, slug: 'delay' }
+        ]
+      }
+    }
+    const { rig, clock, unit, wire, device } = await rigOnTheBench({
+      short: 'VP4',
+      capabilities: { slotModel: 'linear', sceneCount: 4, hasChannels: true, channelNames: ['A', 'B', 'C', 'D'], presets: { count: 104, addressing: 'bankLetterShort' }, plainMidi: { programChange: true, sceneSelect: true } },
+      /* A VP4 cannot say which preset it is on: every computer app answers GET /preset with a 501. */
+      which: () => {
+        throw Object.assign(new Error('unsupported'), { status: 501 })
+      },
+      copy: grid,
+      status: () => [{ effectId: 118, bypassed: null, channel: null }, { effectId: 70, bypassed: null, channel: null }]
+    })
+    /* At the start: the name its record carries, not "Untitled", and no channels to hold for. */
+    assert.equal(rig.getState().preset?.name, 'Big Room', 'a VP4’s preset is drawn as “Untitled” over a name its record carries')
+    /* And its scenes are the names that record carries, not 1 to 4 (device.vp4SceneNames). */
+    assert.deepEqual(rig.getState().sceneNames, ['Clean', 'Crunch', 'Lead', 'Solo'], 'a VP4’s scene buttons are numbered over the names its record carries')
+    assert.deepEqual(rig.getState().capabilities.channelNames, [], 'a VP4 is offered channels A to D')
+    assert.equal(rig.getState().capabilities.plainMidi?.programChange, true)
+    assert.ok(rig.getState().allBlocks.length >= 2 && rig.getState().allBlocks.every((b) => b.bypassed === null), 'a VP4’s pedals are said on or off before anybody read it')
+
+    /* A preset that landed: its name, not "…", and its own scene names — blank where it has none, not the last song's. */
+    named = 'Lead Song'
+    scenes = ['Verse', '', 'Solo', '']
+    unit.selectAnswer = () => ({ ok: true, landed: true, code: 'B1' })
+    const landing = rig.loadPreset(4)
+    await clock.advance(5000)
+    assert.equal(await landing, true)
+    assert.equal(rig.getState().preset?.name, 'Lead Song', 'a VP4 preset that landed is still “…”')
+    assert.equal(rig.getState().preset?.pending, false)
+    assert.deepEqual(rig.getState().sceneNames, ['Verse', '', 'Solo', ''], 'a VP4 preset that landed shows the last song’s scene names, or none')
+    assert.equal(wire.filter((l) => /^GET \/presets\/\d+\/(summary|scenes)$/.test(l)).length, 0, 'a VP4’s scene names were asked for by a route it has none of')
+    /* Refresh names reads its record again (the chain), and nothing else. */
+    scenes = ['Verse', 'Bridge', 'Solo', '']
+    const before = wire.length
+    const refreshed = rig.rereadSceneNames()
+    await clock.advance(3000)
+    assert.equal(await refreshed, 'found', 'Refresh names on a VP4 could not read the names its record carries')
+    assert.deepEqual(rig.getState().sceneNames, ['Verse', 'Bridge', 'Solo', ''])
+    assert.ok(wire.slice(before).some((l) => l === 'GET /preset/grid') && wire.slice(before).every((l) => !/^GET \/presets\//.test(l)), `Refresh names on a VP4 asked ${wire.slice(before).join(', ')}`)
+
+    /* One whose record did not come: its place, not "…" for good. */
+    gridFails = true
+    unit.selectAnswer = () => ({ ok: true, landed: true, code: 'C2' })
+    const unread = rig.loadPreset(9)
+    await clock.advance(5000)
+    await unread
+    assert.equal(rig.getState().preset?.name, 'C2', 'a VP4 preset whose record did not come says “…” for good')
+
+    /* The same preset again: the computer says so, and it is not a fault, and it landed for a song. */
+    gridFails = false
+    unit.selectAnswer = () => ({ ok: true, landed: false, again: true, code: 'C2', message: v.VP4_PRESET_AGAIN })
+    const again = rig.loadPreset(9)
+    await clock.advance(5000)
+    assert.equal(await again, true, 'the second song on one VP4 preset is taken as one that did not land, and its scene never goes')
+    assert.equal(rig.getState().error, null, 'the second song on one VP4 preset raises a fault sending the player into the MIDI settings')
+    assert.equal(wire.filter((l) => l === 'POST /preset/select').length, 3, 'a Program Change went more than once a press')
+
+    /* A pedal tapped says what was sent; a scene change makes it unknown again. */
+    await rig.writeBypass(118, true)
+    assert.equal(rig.getState().allBlocks.find((b) => b.effectId === 118)?.bypassed, true)
+    const kept = new Map()
+    const store = { getItem: (k) => (kept.has(k) ? kept.get(k) : null), setItem: (k, x) => kept.set(k, x), removeItem: (k) => kept.delete(k) }
+    device.keepVp4SetupIn(store)
+    v.saveVp4Setup(store, undefined, { sceneCc: 34, midiChannel: 1 }, 99)
+    assert.equal(await rig.writeScene(2), true)
+    await clock.advance(2000)
+    assert.equal(rig.getState().allBlocks.find((b) => b.effectId === 118)?.bypassed, null, 'a VP4 pedal keeps saying what another scene had')
+    device.keepVp4SetupIn(null)
+  })
+
+  /*
+   * A VP4 PRESET A NEWER PRESS OVERTOOK AT THE COMPUTER (its `overtaken`). A
+   * press from this phone stops this one by its run; one from anywhere else —
+   * the computer's window, another phone, the browser — did not, and the load
+   * answered true, so Stage.step sent the song's Scene Select onto a preset
+   * nobody saw land. Not landed, and nothing said. Stage.step's own rule
+   * (`landed === true`), with a number set so the scene WOULD go if it were
+   * let: the same bench with a preset that landed sends it, once.
+   */
+  test('the phone on a VP4: a preset another press overtook at the computer is not landed, and sets up no song', async () => {
+    const v = await import('../shared/vp4-safety.mjs')
+    const { rig, clock, unit, wire, device } = await rigOnTheBench({
+      short: 'VP4',
+      capabilities: { slotModel: 'linear', sceneCount: 4, presets: { count: 104, addressing: 'bankLetterShort' }, plainMidi: { programChange: true, sceneSelect: true } },
+      selectAnswer: () => ({ ok: true, number: 13, code: 'D2', landed: false, overtaken: true })
+    })
+    const kept = new Map()
+    const store = { getItem: (k) => (kept.has(k) ? kept.get(k) : null), setItem: (k, x) => kept.set(k, x), removeItem: (k) => kept.delete(k) }
+    device.keepVp4SetupIn(store)
+    v.saveVp4Setup(store, undefined, { sceneCc: 34, midiChannel: 1 }, 55)
+    try {
+      const step = async (next) => {
+        const landed = await rig.loadPreset(next)
+        if (landed === true) await rig.writeScene(2)
+        return landed
+      }
+      wire.length = 0
+      const going = step(13)
+      await clock.advance(5000)
+      assert.equal(await going, false, 'a VP4 preset another press overtook counts as landed, and the song’s scene goes onto it')
+      assert.deepEqual(wire.filter((l) => l === 'POST /scene' || l === 'POST /tempo'), [], 'a setlist song was set up on a VP4 preset another press overtook')
+      assert.equal(rig.getState().error, null, `an overtaken VP4 preset raised a fault: ${rig.getState().error}`)
+      assert.equal(wire.filter((l) => l === 'POST /preset/select').length, 1, 'the Program Change was asked for again')
+      /* The control: one that landed lets its song's scene go. */
+      unit.selectAnswer = () => ({ ok: true, landed: true, code: 'B1' })
+      wire.length = 0
+      const landing = step(4)
+      await clock.advance(5000)
+      assert.equal(await landing, true)
+      assert.equal(wire.filter((l) => l === 'POST /scene').length, 1, 'a VP4 preset that landed never gets its song’s scene')
+    } finally {
+      device.keepVp4SetupIn(null)
+    }
+  })
+
+  /*
+   * A VP4 PRESET REFUSED KEEPS THE SCENE NAMES THAT WERE UP. The tap cleared
+   * them and a refusal put the preset back without them: the scene buttons
+   * fell from "1 Verse / 2 Chorus" to bare numbers, shrank, and moved the
+   * chain, Previous and Next and Edit by 24 pixels on Play, under words saying
+   * nothing changed on the VP4. A VP4's names come only off its one record,
+   * so they stayed blank until the next preset. Both ways a VP4 preset is
+   * refused: by this phone, before anything is sent, on a computer app too
+   * old to change one (vp4PresetGate) — every VP4 owner until their computer
+   * updates — and by a new computer that could only have sent it late (503).
+   */
+  test('the phone on a VP4: a preset refused (old computer, or late) keeps the scene names that were up and says why', async () => {
+    const v = await import('../shared/vp4-safety.mjs')
+    const names = ['Verse', 'Chorus', 'Solo', 'Outro']
+    const grid = () => ({
+      model: 'vp4',
+      name: 'Big Room',
+      scenes: names,
+      cells: [{ row: 0, col: 0, effectId: 118, name: 'Drive', isShunt: false, slug: 'drive' }]
+    })
+    const vp4 = (plainMidi, selectAnswer) =>
+      rigOnTheBench({
+        short: 'VP4',
+        capabilities: { slotModel: 'linear', sceneCount: 4, presets: { count: plainMidi ? 104 : null, addressing: plainMidi ? 'bankLetterShort' : 'numeric' }, ...(plainMidi ? { plainMidi: { programChange: true, sceneSelect: true } } : {}) },
+        which: () => {
+          throw Object.assign(new Error('unsupported'), { status: 501 })
+        },
+        copy: grid,
+        status: () => [{ effectId: 118, bypassed: null, channel: null }],
+        ...(selectAnswer ? { selectAnswer } : {})
+      })
+    for (const [why, bench, words] of [
+      ['an old computer', () => vp4(false), v.VP4_UPDATE_COMPUTER],
+      ['a late Program Change', () => vp4(true, () => { throw Object.assign(new Error(v.VP4_LATE), { status: 503 }) }), v.VP4_LATE]
+    ]) {
+      const { rig, clock, wire } = await bench()
+      assert.deepEqual(rig.getState().sceneNames, names, `${why}: the bench’s VP4 has no scene names up to keep`)
+      const presetBefore = rig.getState().preset
+      wire.length = 0
+      const going = rig.loadPreset(5)
+      await clock.advance(10000)
+      assert.equal(await going, false, `${why}: a refused VP4 preset counts as landed`)
+      assert.deepEqual(rig.getState().sceneNames, names, `${why}: a refused VP4 preset took the scene names away, and Play moved`)
+      assert.equal(rig.getState().preset?.name, presetBefore?.name, `${why}: the preset that was up did not come back`)
+      assert.equal(rig.getState().error, words, `${why}: the fault card does not say why`)
+      if (why === 'an old computer') assert.equal(wire.filter((l) => l === 'POST /preset/select').length, 0, 'a VP4 preset went to a computer too old to change one')
     }
   })
 }

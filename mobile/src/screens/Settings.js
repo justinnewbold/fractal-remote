@@ -78,6 +78,9 @@ import Note from '../components/Note'
 import PasswordBox from '../components/PasswordBox'
 import Press from '../components/Press'
 import { stopLooper } from '../components/Looper'
+import Vp4Setup from '../components/Vp4Setup'
+import { vp4Here } from '../lib/device'
+import { MIDI_SETUP_TITLE, VP4_SETUP, readVp4Setup, vp4SetupStatus } from '../lib/vp4-safety'
 import { findLooper } from '../lib/looper'
 import SceneArrange from '../components/SceneArrange'
 import EdgeBack from '../components/EdgeBack'
@@ -220,6 +223,9 @@ export default function Settings({
   /* A unit whose switches can be read — see the Footswitches page. */
   const caps = useRig(ofCapabilities)
   const switchesReadable = fcReadable(caps)
+  /* A real VP4 on the computer (not the demo's, not over Bluetooth): it gets the Scene Select card. Read again on every change to the rig or to storage. */
+  useStored()
+  const onRealVp4 = vp4Here()
   /* Bluetooth (beta): whether the phone is talking to the unit itself. */
   const bluetooth = useBluetoothOn()
   /*
@@ -493,6 +499,12 @@ export default function Settings({
               status={metronomeNote(clickSetting, rigSlug, rigBpm, { ...clickHere, heard: clickHeard })}
               onPress={() => setPage('metronome')}
             />
+            {/* A VP4's Scene Select number and MIDI channel, on a real VP4
+                only: presets by Program Change, scenes on the number the
+                player set on the pedal (components/Vp4Setup). */}
+            {onRealVp4 ? (
+              <SetupRow title={MIDI_SETUP_TITLE} status={vp4SetupStatus(readVp4Setup(sync), caps)} onPress={() => setPage('vp4')} />
+            ) : null}
           </Group>
 
           <Group title="Help">
@@ -1163,6 +1175,14 @@ export default function Settings({
               </>
             ) : null}
           </View>
+        </>
+      ) : null}
+
+      {/* ------------------------------------------------------------- vp4 */}
+      {page === 'vp4' && onRealVp4 ? (
+        <>
+          {head(VP4_SETUP.title, 'back')}
+          <Vp4Setup caps={caps} firmware={firmware} />
         </>
       ) : null}
 

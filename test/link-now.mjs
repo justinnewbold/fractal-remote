@@ -590,8 +590,11 @@ async function tapTempoOnABench() {
     `,
     'forgefx.mjs': `
       export const sent = []
-      export const currentDeviceSlug = () => 'fm3'
+      /* Whether the unit is a VP4, which no computer app sets a tempo on (TapTempo's noTempo). */
+      export const unit = { vp4: false }
+      export const currentDeviceSlug = () => (unit.vp4 ? 'vp4' : 'fm3')
       export const refusedAlready = () => false
+      export const vp4Here = () => unit.vp4
       export const setTempo = async (bpm, opts) => { sent.push([bpm, opts]); return { ok: true } }
     `,
     'deviceState.mjs': `
@@ -626,6 +629,7 @@ async function tapTempoOnABench() {
     /* The metronome switch in the typed-tempo box: drawn only after a hold, which this bench never makes. */
     ['from "./MetronomeSwitch"', "from './rest.mjs'"],
     ['from "../../shared/unsupported.mjs"', `from '${repoUrl('shared/unsupported.mjs')}'`],
+    ['from "../../shared/vp4-safety.mjs"', `from '${repoUrl('shared/vp4-safety.mjs')}'`],
     ['from "../../shared/tempo.mjs"', `from '${repoUrl('shared/tempo.mjs')}'`]
   ]
   for (const [from, to] of swaps) src = src.replaceAll(from, to)
@@ -637,7 +641,7 @@ async function tapTempoOnABench() {
   try {
     const { default: TapTempo } = await import(at('TapTempo.mjs'))
     const react = await import(at('react.mjs'))
-    const { sent } = await import(at('forgefx.mjs'))
+    const { sent, unit } = await import(at('forgefx.mjs'))
     const gate = await import(at('tapGate.mjs'))
     const clock = await import(at('clock.mjs'))
     const dropped = []
@@ -655,7 +659,7 @@ async function tapTempoOnABench() {
     }
     const button = find(tree)
     assert.ok(button, 'the bench could not find the Tap button')
-    return { press: () => button.props.onClick(), sent, faces: react.faces, dropped, errors, gate, clock }
+    return { press: () => button.props.onClick(), sent, faces: react.faces, dropped, errors, gate, clock, unit }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -840,6 +844,56 @@ export function run(test) {
       await clock.advance(200)
       assert.equal(p.done && !p.error, true, p.error?.message)
     })
+
+    /*
+     * BUT NOT A VP4'S. Its preset is a Program Change, and a second one loads
+     * the preset again: what the player had not saved goes, and the computer,
+     * which cannot tell the second from the first, answers "couldn't
+     * confirm" over a preset that landed (shared/relay-rules sendsOnce).
+     */
+    for (const [path, body] of [
+      ['/preset/select', { number: 12, midiChannel: 1 }],
+      ['/scene', { index: 2, sceneCc: 34, midiChannel: 1, sceneCcSet: 4242 }]
+    ]) {
+      test(`${end}: a VP4's ${path} that went and lost its answer inside its deadline goes on the wire once`, async () => {
+        const { bench, clock, tap, watch, asked } = await relayOnABench(end)
+        bench.silent = true
+        const p = watch(tap(path, body))
+        await clock.advance(300)
+        bench.chan.state = 'errored'
+        bench.status('CHANNEL_ERROR')
+        await clock.advance(500)
+        bench.silent = false
+        bench.chan.state = 'joined'
+        bench.status('SUBSCRIBED')
+        await clock.advance(10000)
+        assert.deepEqual(asked().filter((a) => a === `POST ${path}`), [`POST ${path}`], `a VP4's ${path} was sent again by itself`)
+        assert.equal(p.done, true)
+        assert.ok(p.error, 'a VP4 tap whose answer was lost was reported as having worked')
+        assert.ok(!p.error.notSent, 'a VP4 tap that may have landed is said as "not sent"')
+        assert.equal(p.error.message, 'The connection dropped before your computer answered.')
+      })
+
+      test(`${end}: a VP4's ${path} the relay refused before it left still goes, once, inside 1.5 s`, async () => {
+        const { bench, clock, tap, watch, asked } = await relayOnABench(end)
+        const t0 = clock.now()
+        /* The first try never leaves: the relay will not take it. That is not a send, so the second try is its first. */
+        const send = bench.chan.send
+        let refused = 0
+        bench.chan.send = async function (msg, opts) {
+          if (msg?.payload?.path === path && refused++ === 0) return 'error'
+          return send.call(this, msg, opts)
+        }
+        const p = watch(tap(path, body))
+        await clock.advance(1400)
+        assert.equal(refused >= 1, true, 'the bench never refused the first try')
+        assert.deepEqual(asked(), [`POST ${path}`], `a VP4's ${path} that never left was lost, or went twice`)
+        assert.ok(bench.sent[0].at < t0 + 1500, `it went at ${bench.sent[0].at - t0} ms`)
+        assert.deepEqual(JSON.parse(bench.sent[0].msg.payload.body), body, 'the VP4 fields did not travel')
+        await clock.advance(300)
+        assert.equal(p.done && !p.error, true, p.error?.message)
+      })
+    }
 
     test(`${end}: a tap held by the roll call past its deadline is dropped, and the roll call is not cut short`, async () => {
       const { bench, clock, relay, tap, watch, asked, rules } = await relayOnABench(end)
@@ -1208,6 +1262,54 @@ export function run(test) {
       /* Marked as answered, so the rig reads where the unit is rather than putting the tile back (test/mobile.mjs). */
       assert.equal(p.error?.answeredGarbled, true, 'a garbled answer stopped at the deadline is taken for a no')
     }
+  })
+
+  test('phone: a garbled answer to a VP4’s preset or scene is never asked again: it went', async () => {
+    const garbled = { status: 500, body: JSON.stringify({ message: 'PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78' }) }
+    for (const [path, body] of [
+      ['/preset/select', { number: 12, midiChannel: 1 }],
+      ['/scene', { index: 2, sceneCc: 34, midiChannel: 1, sceneCcSet: 4242 }]
+    ]) {
+      const { bench, clock, tap, watch, asked } = await relayOnABench('phone')
+      let n = 0
+      bench.reply = () => (n++ === 0 ? garbled : { ok: true })
+      const p = watch(tap(path, body))
+      await clock.advance(3000)
+      assert.deepEqual(asked(), [`POST ${path}`], `a VP4's ${path} was sent again for a garbled answer`)
+      assert.match(p.error?.message || '', /PRESET_DUMP_HEADER/)
+    }
+  })
+
+  test('a VP4’s preset and scene are told apart by what they carry, and nothing else is sent once', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const retry = await import('../src/lib/retry.js')
+    for (const [m, p, b] of [
+      ['POST', '/preset/select', { number: 12, midiChannel: 1 }],
+      ['post', '/scene/', JSON.stringify({ index: 2, sceneCc: 34, midiChannel: 3, sceneCcSet: 1 })],
+      ['POST', '/scene?x=1', { index: 0, sceneCc: 21 }]
+    ]) {
+      assert.equal(r.sendsOnce(m, p, b), true, `${m} ${p} ${JSON.stringify(b)} may be sent twice`)
+    }
+    for (const [m, p, b] of [
+      ['POST', '/preset/select', { number: 12 }],
+      ['POST', '/scene', JSON.stringify({ index: 2 })],
+      ['POST', '/scene', 'not json'],
+      ['POST', '/scene', null],
+      ['GET', '/scene', { midiChannel: 1 }],
+      ['PUT', '/preset/blocks/58/params/3', { value: 0.5, midiChannel: 1 }]
+    ]) {
+      assert.equal(r.sendsOnce(m, p, b), false, `${m} ${p} ${JSON.stringify(b)} is held to once`)
+    }
+    /* And the garbled-answer retry obeys it, at either end (the phone's copy is generated from this one). */
+    const garbled = () => Promise.reject(new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78'))
+    let calls = 0
+    await assert.rejects(retry.withRetry(() => (calls++, garbled()), { method: 'POST', path: '/preset/select', wait: async () => {}, once: true }))
+    assert.equal(calls, 1, 'a once-only request was asked again for a garbled answer')
+    calls = 0
+    await assert.rejects(retry.withRetry(() => (calls++, garbled()), { method: 'POST', path: '/preset/select', wait: async () => {} }))
+    assert.equal(calls, 3, 'an FM3’s preset is no longer asked again for a garbled answer')
+    /* The browser asks with what the request carries. */
+    assert.match(read('src/lib/forgefx.js'), /once: sendsOnce\(options\.method \|\| 'GET', path, options\.body\)/)
   })
 
   test('phone: a tap with no answer by its deadline has the computer asked whether it is there', async () => {
@@ -1698,6 +1800,35 @@ export function run(test) {
     assert.equal(t.sent.length >= 1, true, 'taps with the link up sent nothing')
     assert.equal(t.sent.at(-1)[0], 120)
     assert.ok(Number.isFinite(t.sent.at(-1)[1]?.deadline), 'a tapped tempo went with no deadline')
+  })
+
+  /*
+   * ON A VP4: no computer app sets one's tempo, and the generic sentence
+   * named no unit, so Play's check for a VP4's refusals missed it and it went
+   * under "Didn't work", pushing Play down. Its own words, from the first tap,
+   * with nothing sent — and Gig's onError says those over the tiles.
+   */
+  test('browser: the Tap button on a VP4 sends nothing and says the VP4’s own words, which Play says over the tiles', async () => {
+    const { VP4_NO_TEMPO, aboutVp4 } = await import('../shared/vp4-safety.mjs')
+    const t = await tapTempoOnABench()
+    t.unit.vp4 = true
+    for (let i = 0; i < 3; i++) {
+      await t.press()
+      await t.clock.advance(500)
+    }
+    assert.deepEqual(t.sent, [], 'a tempo was sent to a VP4')
+    assert.ok(!t.faces.some((v) => Number.isFinite(v)), `the face showed a tempo on a VP4: ${t.faces.join(', ')}`)
+    assert.deepEqual(t.errors, [VP4_NO_TEMPO, VP4_NO_TEMPO, VP4_NO_TEMPO], 'a VP4’s Tap is not said in the VP4’s words')
+    assert.equal(aboutVp4(t.errors[0]), true, 'Play would not know the Tap’s words for a VP4’s')
+    /* And an FM3 on the same bench still sends: the guard is the VP4's alone. */
+    t.unit.vp4 = false
+    await t.clock.advance(5000)
+    for (let i = 0; i < 3; i++) {
+      await t.press()
+      await t.clock.advance(500)
+    }
+    assert.ok(t.sent.length >= 1, 'an FM3’s Tap sent nothing')
+    assert.match(read('src/components/Gig.jsx').replace(/\s+/g, ' '), /<TapTempo onError=\{onError\} onChanged=\{onChanged\} onDropped=\{sayNotSent\} \/>/, 'Play’s Tap no longer goes through the onError that floats a VP4’s words')
   })
 
   /* ------------------------------------------------------------------ */

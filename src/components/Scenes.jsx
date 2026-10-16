@@ -24,6 +24,8 @@ export default function Scenes({
   count = 8,
   channelNames,
   hasScenes = true,
+  /* False on a VP4, which the app cannot rename on: no Edit name (App.jsx says why under the buttons). */
+  canRename = true,
   onChanged,
   onError,
   busy
@@ -139,7 +141,7 @@ export default function Scenes({
         ))}
       </div>
 
-      {hasScenes && renaming === null ? (
+      {hasScenes && canRename && renaming === null ? (
         <button
           className="chip scene-edit-name"
           onClick={() => startRename(current)}
@@ -149,7 +151,7 @@ export default function Scenes({
         </button>
       ) : null}
 
-      {renaming !== null ? (
+      {canRename && renaming !== null ? (
         <div className="rename-row">
           <input
             type="text"
