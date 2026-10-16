@@ -95,8 +95,11 @@ export function detectRole({ demo, served, hostname, helperAlive }) {
  * remote is whatever the browser is on: this phone, this iPad, or this
  * browser on a laptop, the sound engineer's case.
  */
-export function deviceForRole(role, nav = typeof navigator !== 'undefined' ? navigator : {}, screen = typeof window !== 'undefined' ? window.screen || {} : {}) {
-  if (role === 'mac') return 'computer'
+export function deviceForRole(role, nav = typeof navigator !== 'undefined' ? navigator : {}, screen = typeof window !== 'undefined' ? window.screen || {} : {}, canHost = true) {
+  /* The demo takes the Mac's role everywhere; a demo that cannot host is a
+     phone, a tablet or a laptop pretending (App.jsx's phoneEnd), and is
+     worded as the device it is on. */
+  if (role === 'mac' && canHost !== false) return 'computer'
   return browserDevice({ userAgent: nav.userAgent || '', touchPoints: nav.maxTouchPoints || 0, width: screen.width || 0, height: screen.height || 0 })
 }
 
@@ -586,10 +589,10 @@ function set(patch) {
   const changed = Object.keys(next).some((k) => next[k] !== state[k])
   const was = state
   state = next
-  if (next.role !== was.role) {
-    setTapsRelayed(next.role === 'remote')
-    /* Only in a page: a test run has no device to name, and the words stay a phone's. */
-    if (typeof window !== 'undefined') setDevice(deviceForRole(next.role))
+  if (next.role !== was.role) setTapsRelayed(next.role === 'remote')
+  /* Only in a page: a test run has no device to name, and the words stay a phone's. */
+  if ((next.role !== was.role || next.canHost !== was.canHost) && typeof window !== 'undefined') {
+    setDevice(deviceForRole(next.role, undefined, undefined, next.canHost))
   }
   if (next.down !== was.down) setLinkDown(next.down)
   if (!changed) return

@@ -142,7 +142,7 @@ export function linkChain({ here, demo = false, via = 'computer', unit = {}, com
       ? { key: 'adapter', label: 'BLUETOOTH ADAPTER', ...adapterCard, wire: 'BLUETOOTH' }
       : /* "Where it says secure link, change that to say secure wireless link" (13 October 2026), here and in How it works (onboarding.mjs). */
         { key: 'computer', label: atPhone ? 'YOUR COMPUTER' : 'THIS COMPUTER', ...computerCard, ...(computerWarn ? { warn: computerWarn } : {}), wire: 'SECURE WIRELESS LINK' },
-    /* THIS iPAD on an iPad (device-word.mjs); the computer cannot tell what the remote is, so it says both. */
+    /* THIS iPad on an iPad (device-word.mjs); the computer cannot tell what the remote is, so it says both. */
     { key: 'phone', label: atPhone ? `THIS ${DEVICE_NOUN()}` : `YOUR ${DEVICE_NOUN('computer')}`, ...phoneCard }
   ].map((card, i, all) => ({
     ...card,

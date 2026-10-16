@@ -8943,7 +8943,7 @@ export function run(test) {
     }
 
     /* And the word the top bar shows when there is nothing on the other end. */
-    assert.match(read('shared/link-word.mjs'), /'no computer' : 'no phone'/, 'the bar still says NO MAC')
+    assert.match(read('shared/link-word.mjs'), /'no computer' : 'no remote'/, 'the bar still says NO MAC')
   })
 
   test('a downloaded update is offered as a restart, and floats over the play screen rather than pushing it down', () => {
@@ -13542,7 +13542,7 @@ export function run(test) {
       block.app.indexOf('{P6.address}') < block.app.indexOf('<CopyAddress />'),
       'the line about which machine this is for comes after the address'
     )
-    /* NOT ON THIS PHONE, or THIS iPAD on an iPad (device-word.mjs). */
+    /* NOT ON THIS PHONE, or NOT ON THIS iPad on an iPad (device-word.mjs). */
     assert.match(read('mobile/src/lib/onboarding.js'), /get address\(\) \{[\s\S]*?· NOT ON THIS \$\{DEVICE_NOUN\(\)\}`/, 'the address line no longer rules out this phone')
 
     /*

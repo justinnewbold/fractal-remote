@@ -2007,7 +2007,7 @@ export function run(test) {
     assert.match(gate, /^let down = false$/m)
     assert.match(gate, /^let relayed = false$/m)
     const links = read('src/lib/link.js').replace(/\s+/g, ' ')
-    assert.match(links, /if \(next\.role !== was\.role\) \{ setTapsRelayed\(next\.role === 'remote'\)/)
+    assert.match(links, /if \(next\.role !== was\.role\) setTapsRelayed\(next\.role === 'remote'\)/)
     /* The computer's own window and its wifi page never relay a tap with a channel down. */
     const ffx = read('src/lib/forgefx.js')
     assert.match(ffx, /if \(remoteActive\(\) \|\| \(options\.deadline && tapsRelayed\(\)\)\) \{/)

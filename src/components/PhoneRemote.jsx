@@ -3,7 +3,7 @@ import { changePassword, computerElsewhere } from '../lib/remote'
 import { describeLink, isPairAccount } from '../lib/link'
 import { useNoComputer } from '../lib/noComputer'
 import NoComputer from './NoComputer'
-import { deviceNoun } from '../../shared/device-word.mjs'
+import { deviceNoun, onThis } from '../../shared/device-word.mjs'
 
 /**
  * Phone remote, in Setup: what this end is, whether the other end is there,
@@ -246,7 +246,7 @@ function AccountFold({ email, paired, role, onAction, onError, busy }) {
             <p className="hint">
               {role === 'mac'
                 ? 'Presets stay on this computer. Sign in with an account to have them follow you between devices.'
-                : `What you save stays on this ${deviceNoun()}. Sign in with an account to have it follow you between devices.`}
+                : `What you save stays ${onThis()}. Sign in with an account to have it follow you between devices.`}
             </p>
             <div className="history-actions">
               <button className="chip" disabled={busy} onClick={() => onAction(role === 'mac' ? 'mac-setup' : 'switch')}>

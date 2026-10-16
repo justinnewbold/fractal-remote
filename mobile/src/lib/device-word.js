@@ -21,7 +21,7 @@
  *
  * So each end says what it is once, at the start (setDevice), and every
  * sentence that talks about "this phone" asks here instead. Where the app is
- * talking about itself it names the device: THIS iPAD, This tablet. The
+ * talking about itself it names the device: THIS iPad, This tablet. The
  * computer app is not a remote, so where it talks about one it means
  * whatever the player holds: "phone or tablet".
  *
@@ -71,10 +71,19 @@ export function DeviceNoun(kind = current) {
   return noun.startsWith('iP') ? noun : noun[0].toUpperCase() + noun.slice(1)
 }
 
-/** In capitals, the way the cards are labelled. iPAD, as Apple writes it in capitals. */
+/**
+ * In capitals, the way the cards are labelled: THIS PHONE, THIS TABLET. But
+ * THIS iPad: Apple's marketing guidelines say never to set its product names
+ * in capitals, nor to follow a small i with capitals, so "iPad" stays as it is.
+ */
 export function DEVICE_NOUN(kind = current) {
   const noun = deviceNoun(kind)
-  return noun.startsWith('iP') ? 'iP' + noun.slice(2).toUpperCase() : noun.toUpperCase()
+  return noun.startsWith('iP') ? noun : noun.toUpperCase()
+}
+
+/** "in this browser", "on this iPad": things are in a browser, and on a phone. */
+export function onThis(kind = current) {
+  return `${kind === 'browser' ? 'in' : 'on'} this ${deviceNoun(kind)}`
 }
 
 /** "Phone & computer", "iPad & computer": the Settings page about the two of them. */
@@ -101,15 +110,22 @@ export function appDevice({ os, pad = false, width = 0, height = 0 } = {}) {
  * Which kind of device a browser is on, from its user agent.
  *
  * iPadOS Safari says "Macintosh" unless asked for the mobile site, so a Mac
- * that answers to more than one finger at once is an iPad. A phone is said
- * outright by every phone browser; an Android browser without "Mobile" is a
- * tablet's. Anything else is a computer's browser.
+ * that answers to more than one finger at once is an iPad, unless its screen
+ * is a phone's: an iPhone asking for the desktop site says "Macintosh" too. A
+ * phone is said outright by every phone browser; an Android browser without
+ * "Mobile" is a tablet's. Chrome on a big Android tablet asks for the desktop
+ * site by default and then says only "Linux", so a Linux touch screen that
+ * is not a Chromebook is a tablet, or a phone by its size. Anything else is a
+ * computer's browser.
  */
 export function browserDevice({ userAgent = '', touchPoints = 0, width = 0, height = 0 } = {}) {
-  if (/iPad/.test(userAgent) || (/Macintosh/.test(userAgent) && touchPoints > 1)) return 'ipad'
+  const small = Boolean(width && height && Math.min(width, height) < TABLET_SIDE)
+  if (/iPad/.test(userAgent)) return 'ipad'
+  if (/Macintosh/.test(userAgent) && touchPoints > 1) return small ? 'phone' : 'ipad'
   if (/iPhone|iPod/.test(userAgent)) return 'phone'
   if (/Android/.test(userAgent)) return /Mobile/.test(userAgent) ? 'phone' : 'tablet'
   if (/Mobi/.test(userAgent)) return 'phone'
-  if (touchPoints > 0 && width && height && Math.min(width, height) < TABLET_SIDE) return 'phone'
+  if (/Linux/.test(userAgent) && !/CrOS/.test(userAgent) && touchPoints > 0) return small ? 'phone' : 'tablet'
+  if (touchPoints > 0 && small) return 'phone'
   return 'browser'
 }

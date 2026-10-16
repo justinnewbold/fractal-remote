@@ -2263,7 +2263,8 @@ export function run(test) {
      * read as the app having lost something. Grey, and it says what it is.
      */
     assert.equal(linkWord('dim', 'remote'), 'no computer', 'a remote nobody turned on is called disconnected')
-    assert.equal(linkWord('dim', 'mac'), 'no phone', 'a computer with no phone on it is called disconnected')
+    /* The remote can be a phone, a tablet or another computer's browser (shared/device-word.mjs). */
+    assert.equal(linkWord('dim', 'mac'), 'no remote', 'a computer with no phone on it is called disconnected')
     /*
      * And the phone reads the same four states off its own link module, which
      * has no describeLink in it at all. This is the join between the two: if

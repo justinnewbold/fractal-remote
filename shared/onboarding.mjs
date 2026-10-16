@@ -229,7 +229,7 @@ export const C3 = {
   phone: {
     eyebrow: 'ADD YOUR PHONE OR TABLET',
     title: 'Use your phone or tablet as the remote',
-    body: 'Presets, scenes, blocks, tuner and tap tempo from your pocket, anywhere. A one-time unlock.',
+    body: 'Presets, scenes, blocks, tuner and tap tempo from your phone or tablet, anywhere. A one-time unlock.',
     go: 'Unlock'
   }
 }
@@ -261,7 +261,7 @@ export const P1 = {
      first thing somebody reads in the app is the thing that brought them to
      it. Capitals and the full stop are this screen's house style, not a
      change to his words. */
-  /* On an iPad, FROM YOUR iPAD. See device-word.mjs. Read when shown, so it
+  /* On an iPad, FROM YOUR iPad. See device-word.mjs. Read when shown, so it
      follows what the app said it is at the start. */
   get head() {
     return `CONTROL YOUR FRACTAL FROM YOUR ${DEVICE_NOUN()}.`
@@ -272,7 +272,7 @@ export const P1 = {
   get sub() {
     return deviceKind() === 'phone'
       ? 'Presets, scenes, blocks, tuner and tap tempo - all on the phone in your pocket.'
-      : `Presets, scenes, blocks, tuner and tap tempo - all on your ${deviceNoun()}.`
+      : `Presets, scenes, blocks, tuner and tap tempo - all ${deviceKind() === 'browser' ? 'in' : 'on'} your ${deviceNoun()}.`
   },
   /* The five tiles under it, from the same mockup, in its order and its words. */
   features: ['PRESETS', 'SCENES', 'BLOCKS', 'TUNER', 'TAP TEMPO'],

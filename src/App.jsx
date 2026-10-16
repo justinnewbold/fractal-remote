@@ -6150,8 +6150,8 @@ export default function App() {
                     This deletes your account for good: your sign-in, your set lists, bug reports you sent from it and
                     everything else stored under it. It happens straight away and cannot be undone. Any computer,
                     phone or tablet signed in to this account is signed out. A full version bought in the App Store or on Google
-                    Play stays with that Apple ID or Google account, and Restore a purchase in the phone app brings it
-                    back on a new account. One bought with a card on the website or in the computer app, or given to
+                    Play stays with that Apple ID or Google account, and Restore a purchase in the app on your phone or
+                    tablet brings it back on a new account. One bought with a card on the website or in the computer app, or given to
                     you, belongs to this account and goes with it for good.
                   </p>
                   {typeof deleting === 'object' ? (

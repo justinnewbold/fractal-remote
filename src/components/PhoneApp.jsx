@@ -57,7 +57,7 @@ function StoreCard({ store }) {
           ) : (
             <div className="phone-store-qr placeholder" aria-hidden="true" />
           )}
-          <p className="hint">Point your phone&rsquo;s camera at the QR code.</p>
+          <p className="hint">Point the camera of your phone or tablet at the QR code.</p>
           <a className="chip" href={store.url} target="_blank" rel="noreferrer">
             Open {store.store}
           </a>

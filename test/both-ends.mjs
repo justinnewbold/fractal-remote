@@ -1587,7 +1587,7 @@ export function run(test) {
      */
     assert.match(
       sheet,
-      /\{forUnlock \? \(\s*<p className="hint">\s*\{side === 'sent'\s*\? 'Bought it on your phone or tablet already\? Don’t pay again here\. Once you’ve confirmed the account, sign in with this email there, and this unlocks by itself\.'\s*: making\s*\? 'Bought it on your phone or tablet already\? Don’t pay again here\. Make the account with the email you’ll use there, then sign in with it there, and this unlocks by itself\.'\s*: 'Bought it on your phone or tablet already\? Don’t pay again here\. Sign in with the same email as there\. If it isn’t signed in yet, sign in there too, and this unlocks by itself\.'\}\s*<\/p>\s*\) : null\}\s*<SignIn/,
+      /\{forUnlock \? \(\s*<p className="hint">\s*\{side === 'sent'\s*\? 'Bought it on your phone or tablet already\? Don’t pay again here\. Once you’ve confirmed the account, sign in with this email there, and this unlocks by itself\.'\s*: making\s*\? 'Bought it on your phone or tablet already\? Don’t pay again here\. Make the account with the email you’ll use there, then sign in with it there, and this unlocks by itself\.'\s*: 'Bought it on your phone or tablet already\? Don’t pay again here\. Sign in with the same email you use in the app there\. If the app there isn’t signed in yet, sign in there too, and this unlocks by itself\.'\}\s*<\/p>\s*\) : null\}\s*<SignIn/,
       'the sign-in on the way to the unlock does not say which email to use'
     )
     /*
@@ -1620,7 +1620,7 @@ export function run(test) {
     const app = read('src/App.jsx').replace(/\s+/g, ' ')
     const sheet = app.slice(app.indexOf('aria-label="Delete account"'), app.indexOf('Delete my account'))
     assert.ok(sheet.length > 0, 'the website’s Delete account moved; this check reads it')
-    assert.match(sheet, /A full version bought in the App Store or on Google Play stays with that Apple ID or Google account, and Restore a purchase in the phone app brings it back on a new account\. One bought with a card on the website or in the computer app, or given to you, belongs to this account and goes with it for good\./, 'the website promises a card purchase survives deleting the account')
+    assert.match(sheet, /A full version bought in the App Store or on Google Play stays with that Apple ID or Google account, and Restore a purchase in the app on your phone or tablet brings it back on a new account\. One bought with a card on the website or in the computer app, or given to you, belongs to this account and goes with it for good\./, 'the website promises a card purchase survives deleting the account')
     assert.ok(!/stays with the account you paid with/.test(app), 'the old promise is still on the website')
 
     const policy = read('public/privacy.html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
@@ -2924,10 +2924,20 @@ export function run(test) {
     assert.equal(d.browserDevice({ userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) Chrome/129.0 Mobile Safari/537.36' }), 'phone')
     assert.equal(d.browserDevice({ userAgent: 'Mozilla/5.0 (Linux; Android 14; SM-X710) Chrome/129.0 Safari/537.36' }), 'tablet')
     assert.equal(d.browserDevice({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/129.0 Safari/537.36' }), 'browser')
+    /* An iPhone asking for the desktop site says Macintosh too, from a phone's screen. */
+    assert.equal(d.browserDevice({ userAgent: mac, touchPoints: 5, width: 390, height: 844 }), 'phone', 'an iPhone in desktop mode is called an iPad')
+    assert.equal(d.browserDevice({ userAgent: mac, touchPoints: 5, width: 820, height: 1180 }), 'ipad')
+    /* Chrome on a big Android tablet asks for the desktop site by default, and says only Linux. */
+    const desktopChrome = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36'
+    assert.equal(d.browserDevice({ userAgent: desktopChrome, touchPoints: 5, width: 800, height: 1280 }), 'tablet', 'an Android tablet in desktop mode is called a browser')
+    assert.equal(d.browserDevice({ userAgent: desktopChrome, touchPoints: 0, width: 1920, height: 1080 }), 'browser', 'a Linux computer is called a tablet')
+    assert.equal(d.browserDevice({ userAgent: 'Mozilla/5.0 (X11; CrOS x86_64 15000.0.0) Chrome/129.0', touchPoints: 10, width: 800, height: 1280 }), 'browser', 'a Chromebook is called a tablet')
     /* The words, in a sentence, at the start of one, and in the cards' capitals. */
     assert.deepEqual(['phone', 'ipad', 'tablet', 'browser', 'computer'].map((k) => d.deviceNoun(k)), ['phone', 'iPad', 'tablet', 'browser', 'phone or tablet'])
     assert.deepEqual(['phone', 'ipad', 'tablet'].map((k) => d.DeviceNoun(k)), ['Phone', 'iPad', 'Tablet'])
-    assert.deepEqual(['phone', 'ipad', 'tablet'].map((k) => d.DEVICE_NOUN(k)), ['PHONE', 'iPAD', 'TABLET'])
+    /* Never iPAD: Apple's marketing guidelines forbid its names in capitals, and a small i before capitals. */
+    assert.deepEqual(['phone', 'ipad', 'tablet'].map((k) => d.DEVICE_NOUN(k)), ['PHONE', 'iPad', 'TABLET'])
+    assert.deepEqual(['phone', 'ipad', 'browser'].map((k) => d.onThis(k)), ['on this phone', 'on this iPad', 'in this browser'])
     assert.deepEqual(['phone', 'ipad', 'tablet', 'computer'].map((k) => d.pairTitle(k)), ['Phone & computer', 'iPad & computer', 'Tablet & computer', 'Phone & computer'])
     assert.equal(d.setDevice('a toaster'), 'phone', 'something unknown is not a phone')
 
@@ -2938,10 +2948,10 @@ export function run(test) {
     const { fixById } = await import('../shared/troubleshooting.mjs')
     try {
       d.setDevice('ipad')
-      assert.equal(linkChain({ here: 'phone', demo: true }).at(-1).label, 'THIS iPAD')
-      assert.equal(onboarding.P1.head, 'CONTROL YOUR FRACTAL FROM YOUR iPAD.')
+      assert.equal(linkChain({ here: 'phone', demo: true }).at(-1).label, 'THIS iPad')
+      assert.equal(onboarding.P1.head, 'CONTROL YOUR FRACTAL FROM YOUR iPad.')
       assert.equal(onboarding.P1.sub, 'Presets, scenes, blocks, tuner and tap tempo - all on your iPad.', 'an iPad is in a pocket')
-      assert.equal(onboarding.CHAIN.at(-1).phoneTitle, 'THIS iPAD')
+      assert.equal(onboarding.CHAIN.at(-1).phoneTitle, 'THIS iPad')
       assert.equal(metronome.PLACES.find((p) => p.key === 'phone').label, 'iPad')
       assert.match(metronome.unitClick('am4').why, /so the iPad keeps time\.$/)
       assert.match(fixById('connect').steps.at(-1), /^If your iPad still cannot reach the computer/)
@@ -2963,6 +2973,9 @@ export function run(test) {
     assert.match(read('mobile/src/lib/thisDevice.js'), /setDevice\(appDevice\(\{ os: Platform\.OS, pad: Platform\.isPad === true, width: screen\.width, height: screen\.height \}\)\)/)
     const { deviceForRole } = await import('../src/lib/link.js')
     assert.equal(deviceForRole('mac'), 'computer')
+    /* The demo is the Mac's role everywhere; one that cannot host is the device it is on (App.jsx's phoneEnd). */
+    assert.equal(deviceForRole('mac', { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' }, {}, false), 'phone')
+    assert.equal(deviceForRole('mac', { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' }, {}, true), 'computer')
     assert.equal(deviceForRole('remote', { userAgent: mac, maxTouchPoints: 5 }, {}), 'ipad')
     assert.equal(deviceForRole('wifi', { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' }, {}), 'phone')
     assert.equal(deviceForRole('remote', { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }, {}), 'browser')

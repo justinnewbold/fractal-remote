@@ -59,7 +59,7 @@ export default function SignInSheet({ open, role, account = false, startIn = 'in
                 ? 'Bought it on your phone or tablet already? Don’t pay again here. Once you’ve confirmed the account, sign in with this email there, and this unlocks by itself.'
                 : making
                   ? 'Bought it on your phone or tablet already? Don’t pay again here. Make the account with the email you’ll use there, then sign in with it there, and this unlocks by itself.'
-                  : 'Bought it on your phone or tablet already? Don’t pay again here. Sign in with the same email as there. If it isn’t signed in yet, sign in there too, and this unlocks by itself.'}
+                  : 'Bought it on your phone or tablet already? Don’t pay again here. Sign in with the same email you use in the app there. If the app there isn’t signed in yet, sign in there too, and this unlocks by itself.'}
             </p>
           ) : null}
           <SignIn
