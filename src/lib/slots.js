@@ -13,7 +13,13 @@
 const PER_BANK = 4
 const LAST_BANK = 25 // Z
 
-export const isBanked = (addressing) => addressing === 'bankLetter'
+/*
+ * AND THE VP4'S, which are lettered banks of four as well, but named A1 to
+ * Z4 on its own screen and in Fractal's VP4 manual — one digit, not the
+ * AM4's A01. ForgeFX calls that 'bankLetterShort'; a computer app from before
+ * it says nothing of the kind, and its VP4 has no count at all.
+ */
+export const isBanked = (addressing) => addressing === 'bankLetter' || addressing === 'bankLetterShort'
 
 /**
  * How many stored slots this unit actually has, or null when it has not said.
@@ -90,7 +96,8 @@ export function slotLabel(number, addressing) {
   const bank = Math.floor(number / PER_BANK)
   // Past Z there is no letter left, and inventing one is worse than a number.
   if (bank > LAST_BANK) return padded
-  return `${padded} ${String.fromCharCode(65 + bank)}${String((number % PER_BANK) + 1).padStart(2, '0')}`
+  const place = String((number % PER_BANK) + 1)
+  return `${padded} ${String.fromCharCode(65 + bank)}${addressing === 'bankLetterShort' ? place : place.padStart(2, '0')}`
 }
 
 /** Whether this slot opens a bank — the only place the list draws a rule. */

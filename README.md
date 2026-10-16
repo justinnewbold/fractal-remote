@@ -1,7 +1,16 @@
 # Fractal Remote
 
-A remote for Fractal Audio units — the FM3, FM9, Axe-Fx III, AM4 and VP4 — on the
-phone, in the browser, and on the computer the unit is plugged into.
+A remote for Fractal Audio units — the FM3, FM9, Axe-Fx III and AM4, and the VP4
+in part — on the phone, in the browser, and on the computer the unit is plugged
+into.
+
+On a VP4, the app turns effects on and off, changes presets, and changes scenes
+once you set one number on the VP4 itself. Changing presets and scenes is new on
+a VP4, and nobody on our side has tried it on one yet. Knobs, the tuner, tap
+tempo, channels and saving don't work on a VP4 from the app yet. The app can't
+show the names of a VP4's presets, except the one it is on, or whether its
+effects are on or off, yet. On a VP4, Previous and Next go through a setlist or
+your starred presets, not slot by slot.
 
 The AI features this project began with — describing a tone and having a preset
 written, and the Ask screen that took instructions in words — are gone from the

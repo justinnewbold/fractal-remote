@@ -10,6 +10,7 @@ import { UNITS } from '../lib/demoUnits'
 import { ALREADY_UNLOCKED } from '../lib/onboarding'
 import { currentAccount, deleteAccount, restoreSession } from '../lib/relay'
 import { isPairAccount } from '../lib/pairing'
+import { VP4_SO_FAR } from '../lib/vp4-safety'
 
 /*
  * The units named on the offer, read off the list the app actually carries.
@@ -160,6 +161,18 @@ export default function Paywall({ onUnlocked, onDemo, onBack, onSignIn, onDelete
         <Text style={{ color: color.silk, fontSize: font.body, lineHeight: font.body * 1.45 }}>
           You&rsquo;ll be able to control and switch presets, scenes, amp &amp; effects blocks,
           tuner, tap tempo, setlists, and so much more.
+        </Text>
+        {/*
+          AND WHAT A VP4 GETS OF THAT, right under the list it is an exception
+          to. "I didn't know that those settings didn't work on the VP4. I
+          thought that they did, so yeah, if they don't, we need to put that
+          in there for now." The VP4 is named above among the units this
+          unlocks, and this is the one screen where somebody pays on the
+          strength of what it says. Worded once in shared/vp4-safety.mjs, so
+          the browser's unlock page says it word for word.
+        */}
+        <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.5 }}>
+          {VP4_SO_FAR}
         </Text>
       </View>
 

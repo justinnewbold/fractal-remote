@@ -93,6 +93,8 @@ import { editPages, pageFor, pageHolding } from '../lib/editPages'
 import { bringIntoView } from '../lib/feedback'
 import { useOverflow } from '../lib/overflow'
 import { slotLabel, startsBank } from '../lib/slots'
+import { vp4Capabilities, vp4Here } from '../lib/forgefx'
+import { VP4_NO_NAMES, VP4_RELOAD, VP4_UPDATE_COMPUTER, vp4ComputerCan, vp4PresetCode } from '../../shared/vp4-safety.mjs'
 import { oneWriteAtATime } from '../../shared/knob-keys.mjs'
 
 /**
@@ -330,8 +332,15 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
       */}
       {chain.length === 0 ? (
         <p className="hint chain-empty">
-          Nothing in this preset yet — no blocks to show. Open <strong>Add, remove and move
-          blocks</strong> below to put some in, or ask for a tone and they will be placed for you.
+          {/* A VP4 has no "Add, remove and move blocks" to open: see VP4_NO_EDITS. */}
+          {vp4Here() ? (
+            'Nothing in this preset yet — no blocks to show.'
+          ) : (
+            <>
+              Nothing in this preset yet — no blocks to show. Open <strong>Add, remove and move
+              blocks</strong> below to put some in, or ask for a tone and they will be placed for you.
+            </>
+          )}
         </p>
       ) : null}
 
@@ -348,17 +357,33 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
               title={block.name}
             >
               <span className="fx-abbr">{shortName(block.slug)}</span>
-              <span className="fx-chan">{block.channel || 'A'}</span>
+              {/* A VP4's channel is not read, and "A" would be a guess (shared/vp4-safety.mjs). */}
+              <span className="fx-chan">{block.channel || (vp4Here() ? '' : 'A')}</span>
             </button>
             {onToggle ? (
-              <button
-                className={`fx-power ${block.bypassed ? 'off' : 'on'}`}
-                onClick={() => onToggle(block)}
-                aria-pressed={!block.bypassed}
-                aria-label={`${block.name || block.slug} ${block.bypassed ? 'off — turn on' : 'on — turn off'}`}
-              >
-                {block.bypassed ? 'Off' : 'On'}
-              </button>
+              /*
+               * On a VP4 the on/off is not read either (VP4_ON_OFF_UNKNOWN):
+               * a dash until the player's own tap says what it sent. The tap
+               * turns it off first, the same as an unread pedal on Play.
+               */
+              typeof block.bypassed !== 'boolean' && vp4Here() ? (
+                <button
+                  className="fx-power off"
+                  onClick={() => onToggle(block)}
+                  aria-label={`${block.name || block.slug}: on or off not known — turn off`}
+                >
+                  —
+                </button>
+              ) : (
+                <button
+                  className={`fx-power ${block.bypassed ? 'off' : 'on'}`}
+                  onClick={() => onToggle(block)}
+                  aria-pressed={!block.bypassed}
+                  aria-label={`${block.name || block.slug} ${block.bypassed ? 'off — turn on' : 'on — turn off'}`}
+                >
+                  {block.bypassed ? 'Off' : 'On'}
+                </button>
+              )
             ) : null}
           </div>
         ))}
@@ -419,7 +444,22 @@ export function PresetList({
   device
 }) {
   const [filter, setFilter] = useState('')
-  const [showAll, setShowAll] = useState(false)
+  /*
+   * A REAL VP4 HAS NO NAMES TO READ: no computer app can read a VP4's stored
+   * names (shared/vp4-safety.mjs VP4_NO_NAMES). So it opens on every slot, A1
+   * to Z4, and nothing offers to read names that will never come — no ⟳, no
+   * "No names read yet", no "Show all" chip, no "read them all again".
+   */
+  const noNames = vp4Here()
+  /*
+   * AND ONE BEHIND A COMPUTER APP TOO OLD TO CHANGE ITS PRESETS (1.87.4 and
+   * every one before the VP4's presets and scenes). That app reports no
+   * preset count for a VP4, so there were no rows at all under the names
+   * note and the reload warning, and then "Nothing matches “”." The one true
+   * thing is said instead, and nothing else: the phone's Presets the same.
+   */
+  const vp4Old = noNames && !vp4ComputerCan(vp4Capabilities())
+  const [showAll, setShowAll] = useState(noNames)
   const rows = useRef(null)
   /*
    * Starred, and where you have just been.
@@ -468,8 +508,13 @@ export function PresetList({
   const base = picked || (needle || showAll ? slots : named)
   const shown = needle
     ? base.filter(
-        /* A number finds its slot however it is typed: 59, 059. */
-        (s) => (s.name || '').toLowerCase().includes(needle) || (/^\d+$/.test(needle) && Number(needle) === s.number)
+        /* A number finds its slot however it is typed: 59, 059. And on a VP4 its
+           own A1 to Z4, which the list says it shows: "B1" finds 004 B1, "B" the
+           B bank. The phone's search the same. */
+        (s) =>
+          (s.name || '').toLowerCase().includes(needle) ||
+          (/^\d+$/.test(needle) && Number(needle) === s.number) ||
+          (noNames && (vp4PresetCode(s.number) || '').toLowerCase().startsWith(needle))
       )
     : base
   const unread = slots.length - known.length
@@ -722,23 +767,27 @@ export function PresetList({
             ))}
           </div>
         ) : null}
-        <button
-          className="icon-btn"
-          onClick={scanning ? onStop : onScan}
-          title={scanning ? 'Stop' : 'Read all names'}
-        >
-          {scanning ? '■' : '⟳'}
-        </button>
+        {noNames ? null : (
+          <button
+            className="icon-btn"
+            onClick={scanning ? onStop : onScan}
+            title={scanning ? 'Stop' : 'Read all names'}
+          >
+            {scanning ? '■' : '⟳'}
+          </button>
+        )}
       </div>
 
-      <input
-        type="text"
-        className="preset-filter"
-        value={filter}
-        placeholder="Search"
-        onChange={(e) => setFilter(e.target.value)}
-        aria-label="Search presets"
-      />
+      {vp4Old ? null : (
+        <input
+          type="text"
+          className="preset-filter"
+          value={filter}
+          placeholder="Search"
+          onChange={(e) => setFilter(e.target.value)}
+          aria-label="Search presets"
+        />
+      )}
       </div>
 
       {/*
@@ -778,8 +827,13 @@ export function PresetList({
         </div>
       ) : null}
 
+      {/* A VP4 cannot say which preset it is on, so the one it is on cannot be
+          marked: tapping it loads it again. Said once, above the list — the
+          phone's Presets screen says the same (shared/vp4-safety.mjs). */}
+      {noNames ? <p className="hint pad">{vp4Old ? VP4_UPDATE_COMPUTER : VP4_NO_NAMES}</p> : null}
+      {noNames && !vp4Old ? <p className="hint pad">{VP4_RELOAD}</p> : null}
       <div className="preset-scroll" ref={rows}>
-        {named.length === 0 && !needle && !showAll ? (
+        {vp4Old ? null : named.length === 0 && !needle && !showAll ? (
           <p className="hint pad">
             {scanning ? (
               'Reading the names off the unit — they appear here as they come in.'
@@ -841,7 +895,7 @@ export function PresetList({
             </span>
           ))
         )}
-        {!needle && hidden > 0 ? (
+        {!needle && hidden > 0 && !noNames ? (
           <p className="hint pad preset-unread-note">
             {named.length && unread > 0 ? (
               scanning ? (
@@ -859,7 +913,7 @@ export function PresetList({
           </p>
         ) : null}
       </div>
-      {deviceSlots && named.length ? (
+      {deviceSlots && named.length && !noNames ? (
         <p className="hint pad">
           {named.length} of {deviceSlots} named
           {/*
@@ -987,8 +1041,17 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
      another block, that one's picker and Undo are its own and stay live. */
   const restoringHere = restoring && block && restoring.eid === block.effectId ? restoring : null
 
+  /*
+   * A VP4's knobs and models have no read the app can make, and asking raised
+   * the refusal as a fault: red at the top of the page and again on this
+   * panel, at 1280 both at once, for a tap the Edit screen had just invited.
+   * Nothing is asked and nothing raised; the knobs' words are said once on
+   * the Edit screen where the search box was (App), and this panel has the
+   * on/off. The phone's rule (mobile Edit.js BlockPanel).
+   */
+  const knobless = vp4Here()
   useEffect(() => {
-    if (!block) return
+    if (!block || knobless) return
     let stop = false
     ;(async () => {
       setLoading(true)
@@ -1626,6 +1689,9 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
     }
   }
 
+  /* A real VP4's on/off, not read: see the button below. */
+  const unsure = vp4Here() && typeof block?.bypassed !== 'boolean'
+
   return (
     <div className="block-panel">
       {/*
@@ -1667,8 +1733,15 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
           <span />
         )}
 
+        {/*
+          A REAL VP4'S ON/OFF IS NOT READ: the record it is read by carries none
+          (bypassed: null). The button said "Engaged", lit, over a state nobody
+          read, and a tap logged "bypassed". The phone's rule (mobile Edit.js):
+          it says what a press does — "Turn it off" — unlit, and sends the same.
+          Play's tiles at both ends show nothing until tapped (VP4_ON_OFF_UNKNOWN).
+        */}
         <button
-          className={`bypass-btn ${block.bypassed ? 'off' : ''}`}
+          className={`bypass-btn ${block.bypassed || unsure ? 'off' : ''}`}
           onClick={async () => {
             const wanted = !block.bypassed
             try {
@@ -1685,7 +1758,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
           }}
           disabled={busy}
         >
-          {block.bypassed ? 'Bypassed' : 'Engaged'}
+          {unsure ? 'Turn it off' : block.bypassed ? 'Bypassed' : 'Engaged'}
         </button>
       </div>
 

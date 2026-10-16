@@ -52,10 +52,17 @@ export default function DemoUnit({ open, onClose }) {
             /* Closed on the way out, because the change is the errand. Staying
                open to admire the lit button is a second tap for nothing, and
                the screen behind it has just become a different rig — which is
-               the thing worth looking at. */
+               the thing worth looking at.
+
+               EXCEPT FOR A VP4, which stays open on its own sentence. The note
+               above says the unit the demo is now, so picking VP4 from an FM3
+               closed the sheet on the FM3's sentence, and the one thing a VP4
+               owner trying the demo before paying must read — which parts of
+               it a real VP4 doesn't do from the app yet (VP4_DEMO) — was never
+               on screen. Open, the note turns into it under his thumb. */
             onPress={() => {
               setDemoUnit(u.key)
-              onClose()
+              if (u.key !== 'vp4') onClose()
             }}
           />
         ))}

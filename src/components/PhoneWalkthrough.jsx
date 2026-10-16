@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { C3, CHAIN, CLOSE, P1, P2, P3, P4, P9 } from '../../shared/onboarding.mjs'
+import { walkthroughTips } from '../../shared/vp4-safety.mjs'
 import { WELCOME_NOTICE } from '../../shared/affiliation.mjs'
 import { UNITS } from '../lib/demoUnits'
 import { setDemo, setDemoUnit } from '../lib/forgefx'
@@ -307,7 +308,8 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
             <Steps at={2} of={3} label={P9.count} />
             <h1 className="pw-head">{P9.demo.head}</h1>
             <p className="pw-sub">{P9.demo.sub}</p>
-            {P9.tips.map((tip) => (
+            {/* A VP4 is not shown SAVE: see walkthroughTips. */}
+            {walkthroughTips(P9.tips, unit).map((tip) => (
               <TipCard key={tip.key} icon={TIP_ICONS[tip.key]} label={tip.label} body={tip.body} onClick={intoDemo} />
             ))}
             <Cta stick label={P9.go} onClick={intoDemo} />

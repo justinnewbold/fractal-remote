@@ -3646,7 +3646,7 @@ export function run(test) {
       'debugLog.js': 'export const logDebug = () => {}\n',
       'lineage.js': 'export const withLineage = (slug, x) => x\n'
     }
-    for (const f of ['bleSwitch.js', 'tapGate.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'unsupported.js', 'device.js']) {
+    for (const f of ['bleSwitch.js', 'tapGate.js', 'relay-rules.js', 'firmware.js', 'param-fixes.js', 'grid-plan.js', 'unit.mjs', 'slots.js', 'presetName.js', 'encoding.js', 'scale.js', 'metronome-rules.js', 'unsupported.js', 'vp4-safety.js', 'device.js']) {
       files[f] = esm(lib(f))
     }
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
@@ -4055,7 +4055,7 @@ export function run(test) {
     assert.ok(at > settings.indexOf("{page === 'link' ? (") && at < settings.indexOf("{page === 'metronome' ? ("), 'the page moved into a slice another test reads')
     assert.match(one, /Bluetooth \(beta\) is on\. This phone talks to the unit directly, not through the computer\./, 'Phone & computer does not say Bluetooth is on')
     /* The looper row stays away: the looper is left off the chain over Bluetooth. */
-    assert.match(one, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) \? \( <SetupRow title="Stop the looper"/)
+    assert.match(one, /\{\(link === 'connected' \|\| demo\) && !overBluetooth\(caps\) && !onRealVp4 \? \( <SetupRow title="Stop the looper"/)
   })
 
   test('Bluetooth (beta) is Justin’s account’s alone, asked of the session on the phone, at launch and at every change of who is signed in', async () => {
@@ -4726,7 +4726,8 @@ export function run(test) {
     const device = flat('mobile/src/lib/device.js')
     assert.match(device, /export function keepSceneNames\(slug, number, names\) \{ if \(!slug \|\| !Number\.isInteger\(number\) \|\| number < 0 \|\| demoDevice\(\) \|\| bluetoothWire\(\)\) return/)
     /* Refresh names lets the wire's own copy go, so the press reaches the unit. */
-    assert.match(rig, /export async function rereadSceneNames\(\) \{ const number = state\.preset\?\.number if \(!Number\.isInteger\(number\)\) return 'failed' device\.freshSceneNames\?\.\(\)/)
+    /* (A VP4 goes first, to its own re-read of the one record it is read by: never over Bluetooth, test/vp4-safety.mjs.) */
+    assert.match(rig, /export async function rereadSceneNames\(\) \{ if \(device\.vp4Here\?\.\(\)\) return rereadVp4SceneNames\(\) const number = state\.preset\?\.number if \(!Number\.isInteger\(number\)\) return 'failed' device\.freshSceneNames\?\.\(\)/)
     assert.match(device, /export const freshSceneNames = \(\) => bluetoothWire\(\)\?\.forgetSceneNames\?\.\(\)/)
     const { deviceSlug } = await import('../shared/device-slug.mjs')
     assert.equal(deviceSlug({ name: 'AM4', short: 'AM4' }), 'am4', 'Bluetooth files the AM4 under another name, so the computer’s names are not found')

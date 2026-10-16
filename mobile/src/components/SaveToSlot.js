@@ -5,6 +5,7 @@ import { logDebug } from '../lib/debugLog'
 import { currentPreset, parkSave, readSaveProgress, readSaveResult, saveInDemo } from '../lib/device'
 import { isDemo } from '../lib/demo'
 import { startComputerSave } from '../lib/saveViaComputer'
+import { isVp4, VP4_NO_SAVE } from '../lib/vp4-safety'
 import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS, stillOnPreset } from '../lib/save-wait'
 import { onConfigDoc, savedToSlot, useRig } from '../lib/rig'
 import Note from './Note'
@@ -84,6 +85,18 @@ export function useSaveToSlot() {
       return
     }
     /*
+     * NOT ON A VP4. The only save a VP4 has been seen to accept writes Y1,
+     * whatever slot was picked, and the computer apps out there send exactly
+     * that. Said here, and nothing is left for the computer. See
+     * lib/vp4-safety.
+     */
+    if (isVp4(slug)) {
+      setSaving(false)
+      logDebug('write', `save to slot ${preset?.number}`, 'not on a VP4')
+      setSaid({ tone: 'warn', text: VP4_NO_SAVE })
+      return
+    }
+    /*
      * "Saving…" on the button, and nothing else unless it runs late.
      *
      * It used to open with a sentence about the computer doing the writing,
@@ -137,7 +150,15 @@ export function useSaveToSlot() {
     )
   }
 
+  /* A VP4 cannot be saved on from the app: see lib/vp4-safety. Never in the demo. */
+  const notHere = !isDemo() && isVp4(slug)
   const save = async () => {
+    /* A VP4 is told at the first tap, not warned about an overwrite that will not happen. */
+    if (notHere) {
+      setArmed(false)
+      setSaid({ tone: 'warn', text: VP4_NO_SAVE })
+      return
+    }
     if (!armed) {
       setArmed(true)
       setSaid(null)
@@ -156,6 +177,7 @@ export function useSaveToSlot() {
     save,
     write,
     cancel: () => job.current?.cancel(),
+    notHere,
     can: !saving && Number.isInteger(preset?.number),
     disarm: () => setArmed(false),
     dismiss: () => setSaid(null)

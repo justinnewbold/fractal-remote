@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Alert, Text, View } from 'react-native'
 import { color, font, space } from '../lib/theme'
 import { orStop, refreshSceneState, useRig, writeBypass, writeChannel, writeScene } from '../lib/rig'
-import { sceneState } from '../lib/device'
+import { sceneState, vp4Here } from '../lib/device'
+import { VP4_CANT_YET } from '../lib/vp4-safety'
 import { copyScene } from '../lib/copy-tools'
 import Note from './Note'
 import Press from './Press'
@@ -24,6 +25,11 @@ export default function SceneCopy({ count = 8 }) {
   const label = (i) => `${i + 1}${names[i] ? ` ${names[i]}` : ''}`
 
   const run = async (to) => {
+    /* Not on a VP4, whose on/offs nothing reads: nothing sent. Edit does not offer this on one (RenameDoor); the browser's rule. */
+    if (vp4Here()) {
+      setSaid({ bad: true, text: VP4_CANT_YET })
+      return
+    }
     setWorking(true)
     setSaid(null)
     try {

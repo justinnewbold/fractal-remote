@@ -3,7 +3,8 @@ import { FlatList, Modal, Pressable, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { slotCount, slotLabel } from '../lib/device'
+import { slotCount, slotLabel, vp4Here } from '../lib/device'
+import { VP4_NO_NAMES, VP4_UPDATE_COMPUTER, vp4ComputerCan } from '../lib/vp4-safety'
 import { jumpsFor } from '../lib/presetJumps'
 import { knownCount, nameOf, useNames, wantOnly } from '../lib/presetNames'
 import { pickMatches, togglePick } from '../lib/lists'
@@ -125,7 +126,10 @@ export default function SongPicker({ open, listName, already = [], onAdd, onClos
               ))}
             </View>
           ) : null}
-          {slots && knownCount() < slots ? (
+          {/* On a VP4 there is nothing more to fill in: no name of its stored presets can be read (lib/vp4-safety). Behind a computer app too old to change its presets, there is no list at all, and that is what is said (screens/Presets). */}
+          {vp4Here() ? (
+            <Text style={{ color: color.silkDim, fontSize: font.small }}>{vp4ComputerCan(caps) ? VP4_NO_NAMES : VP4_UPDATE_COMPUTER}</Text>
+          ) : slots && knownCount() < slots ? (
             <Text style={{ color: color.silkFaint, fontSize: font.micro }}>
               {`${knownCount()} of ${slots} names known · the rest fill in as you scroll`}
             </Text>

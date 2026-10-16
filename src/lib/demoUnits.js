@@ -30,6 +30,14 @@
  */
 
 /*
+ * The one import: what the demo's VP4 says about a real one, which is the
+ * purchase page's subject too and is worded once, in shared/vp4-safety.mjs.
+ * The phone's copy of this file imports the phone's copy of that one (see
+ * scripts/sync-relay-rules.mjs).
+ */
+import { VP4_DEMO } from '../../shared/vp4-safety.mjs'
+
+/*
  * The layout the demo's chain occupies. Not a claim about anybody's hardware
  * beyond the FM3, whose grid this genuinely is.
  */
@@ -117,6 +125,16 @@ export const UNIT_KEYS = UNITS.map((u) => u.key)
  * In a guitarist's words. It said "real write behaviour including the silent
  * clamp", which is true and means nothing to somebody who has just tapped Try
  * the demo — the play test's first note.
+ *
+ * And a VP4 says its own. "I didn't know that those settings didn't work on
+ * the VP4. I thought that they did, so yeah, if they don't, we need to put
+ * that in there for now." The demo's VP4 changes presets and scenes, tunes,
+ * taps tempo, turns knobs and saves. From the app, a real one so far only
+ * changes presets and scenes (untried) and turns effects on and off, so a
+ * VP4 owner trying the demo before paying is told which parts it is ahead
+ * of a real one. See VP4_DEMO.
  */
 export const demoSentence = (key) =>
-  `This is a practice ${unitByKey(key).name}. Nothing you do here touches a real unit — the models, knobs and ranges are the real ones.`
+  unitByKey(key).key === 'vp4'
+    ? VP4_DEMO
+    : `This is a practice ${unitByKey(key).name}. Nothing you do here touches a real unit — the models, knobs and ranges are the real ones.`

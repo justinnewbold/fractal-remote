@@ -1462,6 +1462,9 @@ export function run(test) {
         'Phone & computer',
         'Stop the looper',
         'Metronome',
+        /* On a real VP4 only: its Scene Select number and MIDI channel, the
+           phone's row too (shared/vp4-safety.mjs MIDI_SETUP_TITLE). */
+        'MIDI_SETUP_TITLE',
         /* The one row the phone has not got: "Somebody who has a rig
            connected and wants the remote in their pocket is the likeliest
            buyer there is." */
@@ -3603,8 +3606,11 @@ export function run(test) {
       nav.indexOf('‹ Previous') < nav.indexOf('gig-nav-source') && nav.indexOf('gig-nav-source') < nav.indexOf('Next ›'),
       'the setlist button is not between Previous and Next'
     )
-    assert.match(nav, /disabled=\{working \|\| landing\(-1\) === null\}/, 'Previous no longer goes dead where the list ends')
-    assert.match(nav, /disabled=\{working \|\| landing\(1\) === null\}/, 'Next no longer goes dead on an empty list')
+    /* Greyed by the rule it steps by. On a real VP4 with no setlist the press
+       stays live only to say why it cannot step (shared/vp4-safety.mjs
+       VP4_NO_STEP): landing() is still the one rule for where it goes. */
+    assert.match(nav, /disabled=\{working \|\| \(landing\(-1\) === null && !\(noSlotSteps && !order\)\)\}/, 'Previous no longer goes dead where the list ends')
+    assert.match(nav, /disabled=\{working \|\| \(landing\(1\) === null && !\(noSlotSteps && !order\)\)\}/, 'Next no longer goes dead on an empty list')
     assert.match(g, /<Setlists\b/, 'the sheet that builds a setlist is not on Play')
 
     // Three across, in the one row.
@@ -3674,7 +3680,8 @@ export function run(test) {
     assert.match(previous, /<span className="gig-nav-ahead" aria-hidden="true" \/>/, 'Previous has no blank line, so it and Next do not sit level')
     assert.match(next, /<span className="gig-nav-ahead" aria-hidden="true">\s*\{ahead\.shown\}\s*<\/span>/, 'Next has no line under it, or it is drawn only once there are words')
     assert.match(next, /aria-label=\{ahead\.said\}/, 'a screen reader is not told where Next goes')
-    assert.match(next, /disabled=\{working \|\| landing\(1\) === null\}/)
+    /* Greyed by where it lands, except on a real VP4 with no setlist, whose press stays live to say why (the nav test above). */
+    assert.match(next, /disabled=\{working \|\| \(landing\(1\) === null && !\(noSlotSteps && !order\)\)\}/)
     assert.match(next, /onClick=\{\(\) => step\(1\)\}/)
 
     // The height: the line is paid for out of the padding, to the pixel, at both sizes.

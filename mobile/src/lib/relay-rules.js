@@ -437,7 +437,9 @@ export const songNotSent = ({ scene = false, tempo = false } = {}) =>
  * up — this parameter is 4.5, this block is on channel B, load preset 12 — and
  * arriving twice leaves the unit exactly where arriving once did. Tap tempo is
  * the one that is not: it is a beat, and a resend is a beat that never
- * happened. So the retry covers the whole relay except this.
+ * happened. So the retry covers the whole relay except this, and a VP4's
+ * preset and scene (sendsOnce, below), which on a VP4 are not "load 12" but a
+ * MIDI message that does it again.
  */
 const NOT_REPEATABLE = [
   /^\/tempo\/tap$/,
@@ -518,6 +520,42 @@ export function timeToQuietMeters({ link = null, clash = null, refused = false, 
   if (refused || link !== 'connected' || clash) return false
   if (!quietAt) return true
   return now - quietAt >= every || now < quietAt
+}
+
+/**
+ * AND A VP4'S PRESET AND SCENE, WHICH GO ON THE WIRE ONCE, whatever happens to
+ * their answer.
+ *
+ * "Load preset 12" arriving twice leaves an FM3 where once did. On a VP4 it
+ * does not: there it is a MIDI Program Change, and the second one loads the
+ * preset again — the changes the player had not saved go, and it goes back
+ * to its own scene. And the computer cannot tell the second from the first
+ * (each try carries a new id), so it reads the VP4 before and after the
+ * second, sees nothing move, and the player is told "couldn't confirm, check
+ * SETUP > MIDI/Remote" about a preset that did land, and the song's scene is
+ * not set. A Scene Select is held to the same: one message a tap, never a
+ * loop. They are told apart by the MIDI channel they carry, which nothing
+ * else the app sends has (shared/vp4-safety.mjs vp4PresetFields and
+ * vp4SceneFields).
+ *
+ * One that never left — the relay refused it before it went — may still go
+ * once inside its deadline: that is its first send, not a second. One that
+ * went and lost its answer to a drop is not sent again, and neither is one
+ * whose answer came back garbled (lib/retry.js), which went too.
+ */
+export function sendsOnce(method, path, body) {
+  if (String(method || 'GET').toUpperCase() !== 'POST') return false
+  const p = cleanPath(path)
+  if (p !== '/preset/select' && p !== '/scene') return false
+  let b = body
+  if (typeof b === 'string') {
+    try {
+      b = JSON.parse(b)
+    } catch {
+      return false
+    }
+  }
+  return Boolean(b && typeof b === 'object' && ('midiChannel' in b || 'sceneCc' in b))
 }
 
 /**

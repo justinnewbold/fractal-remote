@@ -21,6 +21,8 @@ import {
   setParamConfirmed,
   setType
 } from '../lib/device'
+import { vp4Here } from '../lib/device'
+import { VP4_NO_EDITS, VP4_NO_KNOBS } from '../lib/vp4-safety'
 import {
   CAB_REFUSED,
   CAB_UNDO_LOST,
@@ -370,14 +372,23 @@ export default function Edit({ onBack, onOpenGear }) {
       ) : null}
       {!blocks.length && chain === 'ok' && !chainNow.elsewhere ? <Note>This preset is empty.</Note> : null}
 
-      <FindControl
-        blocks={blocks}
-        onError={setError}
-        onPick={(eid, paramId) => {
-          setOpenEid(eid)
-          setFocus({ eid, paramId, nonce: Date.now() })
-        }}
-      />
+      {/*
+        NOT ON A VP4, whose knobs the app cannot read. The box offered "gain,
+        mix, presence…" and answered "No control called “gain” in this preset"
+        over a preset with a Drive in it — untrue: the gain is there, the app
+        just cannot see it. VP4_NO_KNOBS says so once, under the chain, where
+        "Tap a block to open its controls" was. The browser does the same.
+      */}
+      {vp4Here() ? null : (
+        <FindControl
+          blocks={blocks}
+          onError={setError}
+          onPick={(eid, paramId) => {
+            setOpenEid(eid)
+            setFocus({ eid, paramId, nonce: Date.now() })
+          }}
+        />
+      )}
 
       {/*
         WHAT A MODEL REALLY IS, one tap from where models are picked: "add the
@@ -423,11 +434,13 @@ export default function Edit({ onBack, onOpenGear }) {
         {blocks.map((b) => {
           const hue = blockColor(b.slug)
           const open = sameBlock(b, openEid)
-          const engaged = !b.bypassed
+          /* A real VP4's on/off is not read: no word, and unlit, until the player's own tap (lib/vp4-safety VP4_ON_OFF_UNKNOWN). */
+          const unsure = vp4Here() && typeof b.bypassed !== 'boolean'
+          const engaged = !unsure && !b.bypassed
           /* Named rather than written inline: the word the unit uses for a
              block that is off has no business sitting next to the text that
              gets drawn. */
-          const state = engaged ? 'On' : 'Off'
+          const state = unsure ? '\u00a0' : engaged ? 'On' : 'Off'
           const under = open ? 'Open' : b.channel || state
           return (
             <Tile
@@ -455,6 +468,15 @@ export default function Edit({ onBack, onOpenGear }) {
         loop's level and mix are set.
       */}
       {block?.slug === 'looper' ? <Looper block={block} /> : null}
+
+      {/*
+        A VP4's knobs, said once, in words, where the line below says to tap
+        a block — and above an opened block, so opening one moves nothing. Its
+        panel has the on/off and nothing else (BlockPanel), and nothing raises
+        the knobs refusal as a fault: it went up red over the page and pushed
+        the chain down, for a tap the screen had just invited.
+      */}
+      {vp4Here() && blocks.length && !chainNow.elsewhere ? <Note>{VP4_NO_KNOBS}</Note> : null}
 
       {block ? (
         <View onLayout={panelLaid}>
@@ -484,13 +506,25 @@ export default function Edit({ onBack, onOpenGear }) {
             onUndoSaid={(said) => setUndoSaid(said ? { ...said, eid: idOf(block), rev: bufferRev } : null)}
           />
         </View>
-      ) : blocks.length && !chainNow.elsewhere ? (
+      ) : blocks.length && !chainNow.elsewhere && !vp4Here() ? (
         <Note>Tap a block to open its controls.</Note>
       ) : null}
 
-      {chainNow.elsewhere ? null : <ChainEditor blocks={blocks} caps={caps} onError={setError} onScrollLock={setHeld} />}
+      {/*
+        NOT ON A VP4: moving, adding and removing its effects, its modifiers
+        and renaming are none of them things the app can do on one, and each
+        door offered them. One sentence where the three were (lib/vp4-safety
+        VP4_NO_EDITS); the browser says the same.
+      */}
+      {vp4Here() ? (
+        <Note tone="hint">{VP4_NO_EDITS}</Note>
+      ) : (
+        <>
+          {chainNow.elsewhere ? null : <ChainEditor blocks={blocks} caps={caps} onError={setError} onScrollLock={setHeld} />}
 
-      <Modifiers blocks={blocks} onError={setError} />
+          <Modifiers blocks={blocks} onError={setError} />
+        </>
+      )}
 
       {/*
         RENAME THE PRESET AND ITS SCENES, here beside the preset rather than
@@ -605,7 +639,10 @@ function BlockPanel({
 
   /* Moved by a channel copy, so the panel reads the block again. */
   const [readAgain, setReadAgain] = useState(0)
+  /* A VP4's knobs and models have no read the app can make (lib/vp4-safety VP4_NO_KNOBS, said once above): nothing is asked, and nothing raised. */
+  const knobless = vp4Here()
   useEffect(() => {
+    if (knobless) return undefined
     let stop = false
     ;(async () => {
       setLoading(true)
@@ -634,7 +671,7 @@ function BlockPanel({
     return () => {
       stop = true
     }
-  }, [eid, block.slug, onError, readAgain])
+  }, [eid, block.slug, onError, readAgain, knobless])
 
   useEffect(() => () => clearTimeout(undoTimer.current), [])
 
@@ -977,6 +1014,8 @@ function BlockPanel({
   }
 
   const engaged = !block.bypassed
+  /* A real VP4's on/off is not read (lib/vp4-safety): the button says what a press does, not a state nobody read. */
+  const unsure = vp4Here() && typeof block.bypassed !== 'boolean'
   const hue = blockColor(block.slug)
 
   /* What the picker says the block is on: for a cab with cab state, what the
@@ -1061,9 +1100,9 @@ function BlockPanel({
       */}
       {['input', 'output'].includes(block.slug) ? null : (
         <Press
-          label={engaged ? 'Engaged' : 'Bypassed'}
+          label={unsure ? 'Turn it off' : engaged ? 'Engaged' : 'Bypassed'}
           tone="signal"
-          on={engaged}
+          on={engaged && !unsure}
           onPress={() => writeBypass(eid, engaged)}
         />
       )}
@@ -1291,6 +1330,8 @@ function BlockPanel({
 /** The rename boxes behind one button, the way Edit chain and Modifiers open. */
 function RenameDoor() {
   const [open, setOpen] = useState(false)
+  /* Not on a VP4, which the app cannot rename on: VP4_NO_EDITS says so above, where the chain editor was. */
+  if (vp4Here()) return null
   if (!open) {
     return <Press label="Rename preset and scenes" sub="Names you will know on a dark stage" onPress={() => setOpen(true)} />
   }
