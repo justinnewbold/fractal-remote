@@ -16,6 +16,7 @@
  */
 import { COMPUTER_NEEDED, isOlder } from './versions.mjs'
 import { WINDOWS_DRIVER, quitEditor } from './editors.mjs'
+import { deviceNoun } from './device-word.mjs'
 
 export const FIXES = [
   {
@@ -32,23 +33,27 @@ export const FIXES = [
     id: 'connect',
     title: 'It will not connect at all',
     when: 'The app has never found the unit, or stopped finding it after a restart.',
-    steps: [
-      'Check the USB cable is a data cable. A charge-only cable fits perfectly and carries nothing — this is the single most common cause.',
-      'Try a different USB port, straight into the computer rather than through a hub.',
-      /* The other common one: Fractal's own editor already has the unit. */
-      quitEditor(null),
-      /* The one a new Windows user can hit before any of the above. */
-      WINDOWS_DRIVER,
-      'Make sure the computer app is actually running. On a Mac it lives in the menu bar at the top of the screen, not the Dock. On Windows it sits by the clock, sometimes behind the ^ arrow. On Linux it is an ordinary window.',
-      /* "I think it's connected to a different account on the computer." A
-         computer on another account never hears this app, and looks exactly
-         like one that is switched off. */
-      'Make sure the Fractal Remote app is signed into the same account here and on the computer with your unit. Settings on each one shows which account it is using.',
-      /* Over the internet the wifi is not the question: the phone and the
-         computer can be in different cities. What stops it is a computer that
-         is asleep or offline, or something on it blocking the app. */
-      'If the phone still cannot reach the computer, check the computer is awake and online (a closed laptop lid usually puts it to sleep), and that a firewall or a VPN on the computer is not blocking the Fractal Remote app. The phone and the computer do not need to be on the same wifi.'
-    ]
+    /* Read when the guide is opened, so the last step names the device in
+       hand, or "phone or tablet" on the computer (device-word.mjs). */
+    get steps() {
+      return [
+        'Check the USB cable is a data cable. A charge-only cable fits perfectly and carries nothing — this is the single most common cause.',
+        'Try a different USB port, straight into the computer rather than through a hub.',
+        /* The other common one: Fractal's own editor already has the unit. */
+        quitEditor(null),
+        /* The one a new Windows user can hit before any of the above. */
+        WINDOWS_DRIVER,
+        'Make sure the computer app is actually running. On a Mac it lives in the menu bar at the top of the screen, not the Dock. On Windows it sits by the clock, sometimes behind the ^ arrow. On Linux it is an ordinary window.',
+        /* "I think it's connected to a different account on the computer." A
+           computer on another account never hears this app, and looks exactly
+           like one that is switched off. */
+        'Make sure the Fractal Remote app is signed into the same account here and on the computer with your unit. Settings on each one shows which account it is using.',
+        /* Over the internet the wifi is not the question: the phone and the
+           computer can be in different cities. What stops it is a computer that
+           is asleep or offline, or something on it blocking the app. */
+        `If your ${deviceNoun()} still cannot reach the computer, check the computer is awake and online (a closed laptop lid usually puts it to sleep), and that a firewall or a VPN on the computer is not blocking the Fractal Remote app. Your ${deviceNoun()} and the computer do not need to be on the same wifi.`
+      ]
+    }
   },
   {
     id: 'versions',
@@ -60,7 +65,7 @@ export const FIXES = [
          few numbers behind this one and that is fine. */
       'Check the line below. The computer app does not need the same number as this app, only one new enough for it, and the line says whether it is.',
       'If the computer app is behind, let it update — it checks on its own, and there is an Updates panel in Settings.',
-      'Reload this page, or force-quit and reopen the phone app, once the computer has updated.'
+      'Reload this page, or force-quit and reopen the app on your phone or tablet, once the computer has updated.'
     ]
   },
   {

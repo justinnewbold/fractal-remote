@@ -63,6 +63,7 @@ import { Tuner } from './Console'
 import TapTempo from './TapTempo'
 import Sheet from './Sheet'
 import { sizeVars, SIZES, fitTiles, sceneColsFor, sceneOrderFor } from '../lib/gigSize'
+import { deviceNoun } from '../../shared/device-word.mjs'
 
 /**
  * The stand, not the bench.
@@ -1043,7 +1044,7 @@ export default function Gig({
                 things that are actually still possible, in the order worth
                 trying, and neither of them is a guess about the unit.
               */}
-              No readings are reaching this phone. The computer needs to be running this version of the
+              No readings are reaching this {deviceNoun()}. The computer needs to be running this version of the
               app too &mdash; older ones don&rsquo;t send tuner readings over the link at all. On the
               same wifi as the computer it works either way.
             </>
@@ -1130,7 +1131,7 @@ export default function Gig({
           scenes", which is a different and wrong thing to believe. */}
       {unnamedSettled && remoteActive() ? (
         <p className="gig-note">
-          Scene names aren&rsquo;t readable from the phone. Open this preset once at the
+          Scene names aren&rsquo;t readable from this {deviceNoun()}. Open this preset once at the
           computer and they&rsquo;ll show here from then on.
         </p>
       ) : null}
@@ -1144,7 +1145,7 @@ export default function Gig({
       ) : chain === 'failed' ? (
         <div className="gig-note gig-note-action">
           <span>
-            Couldn&rsquo;t read the chain{remoteActive() ? ' from the phone' : ''}, so
+            Couldn&rsquo;t read the chain{remoteActive() ? ` from this ${deviceNoun()}` : ''}, so
             there&rsquo;s nothing to switch here yet.
           </span>
           <button onClick={() => refreshBlocks()}>Try again</button>

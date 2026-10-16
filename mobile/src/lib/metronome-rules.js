@@ -23,12 +23,42 @@
  * metronome on.
  */
 
-/** Where the click goes. 'unit' is the default: it is the one with steady time. */
+import { DeviceNoun, deviceNoun } from './device-word.js'
+
+/**
+ * Where the click goes. 'unit' is the default: it is the one with steady time.
+ *
+ * The key stays 'phone' whatever the app is on, since it is what a setting
+ * is saved under; the words say the device in hand (device-word.mjs), so an
+ * iPad's row reads iPad. They are read when they are shown, not when this
+ * file loads, so they follow whatever the app said it is at the start.
+ */
 export const PLACES = [
   { key: 'unit', label: 'Unit', note: 'Clicks through the unit’s own outputs' },
-  { key: 'phone', label: 'Phone', note: 'Clicks out loud on this phone, with a flash' },
-  { key: 'both', label: 'Both', note: 'The unit clicks and the phone keeps time with it' }
+  {
+    key: 'phone',
+    get label() {
+      return DeviceNoun()
+    },
+    get note() {
+      return `Clicks out loud on this ${deviceNoun()}, with a flash`
+    }
+  },
+  {
+    key: 'both',
+    label: 'Both',
+    get note() {
+      return `The unit clicks and the ${deviceNoun()} keeps time with it`
+    }
+  }
 ]
+
+/**
+ * The app's own half of the click, in a sentence: "the iPad". The browser
+ * passes its own words (`here.ours`, "this screen"), since its click is the
+ * page's and the computer app is not a phone or a tablet.
+ */
+const ours = (here) => here?.ours || `the ${deviceNoun()}`
 
 export const DEFAULT_METRONOME = { on: false, where: 'unit', watch: false }
 
@@ -158,17 +188,18 @@ export function unitMetronome(slug) {
  * and a setting is not one of them — nor can it switch OFF a click the unit
  * was already making when Bluetooth was turned on, so the page says so.
  */
-export function unitClick(slug, { bluetooth = false, demo = false } = {}) {
+export function unitClick(slug, { bluetooth = false, demo = false, ours: mine } = {}) {
+  const who = ours({ ours: mine })
   /* The demo's unit makes no sound: Unit there clicked nowhere, under a line saying the unit did. */
-  if (demo) return { can: false, why: 'The demo’s unit makes no sound, so the phone keeps time.' }
+  if (demo) return { can: false, why: `The demo’s unit makes no sound, so ${who} keeps time.` }
   if (bluetooth) {
     return {
       can: false,
-      why: 'Over Bluetooth the app can’t switch the unit’s click, so the phone keeps time. If the unit was already clicking, switch its Metronome off on the unit.'
+      why: `Over Bluetooth the app can’t switch the unit’s click, so ${who} keeps time. If the unit was already clicking, switch its Metronome off on the unit.`
     }
   }
-  if (String(slug || '').toLowerCase() === 'am4') return { can: false, why: 'The app can’t switch the AM4’s own click yet, so the phone keeps time.' }
-  if (!unitMetronome(slug)) return { can: false, why: 'This unit has no metronome the app can switch, so only the phone keeps time.' }
+  if (String(slug || '').toLowerCase() === 'am4') return { can: false, why: `The app can’t switch the AM4’s own click yet, so ${who} keeps time.` }
+  if (!unitMetronome(slug)) return { can: false, why: `This unit has no metronome the app can switch, so only ${who} keeps time.` }
   return { can: true }
 }
 
@@ -260,9 +291,10 @@ export function metronomeNote(setting, slug, bpm, here = {}) {
   const s = metronomeSetting(setting)
   if (!s.on) return 'Off'
   const at = beatMs(bpm) ? `${Math.round(bpm)} BPM` : 'the unit’s tempo'
-  const place = PLACES.find((p) => p.key === s.where)?.label || 'Unit'
-  if ((s.where === 'unit' || s.where === 'both') && !unitMetronome(slug)) return `On, ${at}. This unit has no metronome the app can switch, so only the phone keeps time.`
-  if ((s.where === 'unit' || s.where === 'both') && !unitClick(slug, here).can) return `On, ${at}, on the phone`
-  if (s.where === 'unit' && here.heard === false) return `On, ${at}, on the phone until the unit says its click is on`
-  return `On, ${at}, on the ${place.toLowerCase() === 'both' ? 'unit and the phone' : place.toLowerCase()}`
+  const who = ours(here)
+  if ((s.where === 'unit' || s.where === 'both') && !unitMetronome(slug)) return `On, ${at}. This unit has no metronome the app can switch, so only ${who} keeps time.`
+  if ((s.where === 'unit' || s.where === 'both') && !unitClick(slug, here).can) return `On, ${at}, on ${who}`
+  if (s.where === 'unit' && here.heard === false) return `On, ${at}, on ${who} until the unit says its click is on`
+  if (s.where === 'unit') return `On, ${at}, on the unit`
+  return `On, ${at}, on ${s.where === 'both' ? `the unit and ${who}` : who}`
 }

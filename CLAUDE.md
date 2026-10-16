@@ -377,6 +377,29 @@ hit — so writing that same conditional higher up the file, *including inside
 a comment*, hands the test the wrong block. Both of those have happened. Give
 the condition a name instead.
 
+**Never write "this phone" into a sentence the app shows.**
+
+> "The app pretty much always uses the word phone instead of device. This
+> app will work on phones, iPads, tablets … a sound guy might just want to
+> use another computer to be able to control things remotely."
+
+Since 16 October 2026 the app names the device it is on:
+`deviceNoun()` and its kin in shared/device-word.mjs (phone, iPad, tablet,
+browser, or "phone or tablet" on the computer app). The phone app says which
+device it is in mobile/src/lib/thisDevice.js, the first import in App.js, and
+the website says it by its role in src/lib/link.js. So a new sentence about
+the device in hand says `this ${deviceNoun()}`, and one on the computer about
+the remote says "phone or tablet". A shared sentence that names it must be
+read when it is shown (a getter or a function), because the website changes
+role after its files load.
+
+Left as they are on purpose: the Bluetooth (beta) words (his alone, from an
+iPhone), the Apple Watch words (a watch pairs only with an iPhone, and an
+iPad is not offered one), the feature names "Phone remote" and the computer's
+"Phone & computer" page, the paywall's "Phone Remote", log lines, and the VP4
+sentences in shared/vp4-safety.mjs, which are the computer's own word for
+word.
+
 **The phone and the browser share one relay allowlist.** `shared/relay-rules.mjs`
 is the source; `mobile/src/lib/relay-rules.js` is generated from it by
 `npm run sync:rules` and a test fails if it is stale. Never hand-edit the

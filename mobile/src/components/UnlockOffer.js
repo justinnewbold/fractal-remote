@@ -6,6 +6,7 @@ import { color, font, radius, space } from '../lib/theme'
 import { tick } from '../lib/feedback'
 import { shouldOffer, usePurchase } from '../lib/purchases'
 import { useDemo } from '../lib/demo'
+import { deviceNoun } from '../lib/device-word'
 
 /**
  * The offer, on the screen somebody is actually looking at.
@@ -76,7 +77,7 @@ export default function UnlockOffer({ onUnlock }) {
           This is the demo
         </Text>
         <Text style={{ color: color.silkDim, fontSize: font.small, marginTop: 2 }}>
-          Unlock to drive your own rig from this phone.
+          Unlock to drive your own rig from this {deviceNoun()}.
         </Text>
       </View>
 

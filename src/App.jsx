@@ -529,7 +529,7 @@ const HAND_EDIT_KINDS = new Set([
  */
 const SETUP_PAGES = {
   link: 'Phone & computer',
-  phone: 'Get it on your phone',
+  phone: 'Get it on your phone or tablet',
   demo: 'Demo Unit',
   /* What the red line on the computer's card opens — see shared/computer-update.mjs. */
   updating: UPDATE_STEPS.title,
@@ -630,7 +630,7 @@ export default function App() {
   const [clickSaid, setClickSaid] = useState(null)
   useUnitMetronome(slugOfUnit(device), status === 'live' && !isDemo())
   /* Where the unit's click can be switched (not an AM4, not the demo), and whether the unit has said it is on. */
-  const clickHere = { demo: isDemo() }
+  const clickHere = { demo: isDemo(), ours: 'this screen' }
   const unitCan = unitClick(slugOfUnit(device), clickHere)
   const clickHeard = useUnitHeardOn(slugOfUnit(device))
   /*
@@ -4066,8 +4066,8 @@ export default function App() {
         <p className="hint">Couldn&rsquo;t check your purchase just now, so Buy is off for a moment. This page asks again by itself.</p>
       ) : signedInHere ? (
         <p className="hint unlock-phone">
-          Bought it on your iPhone or Android? Don&rsquo;t pay again. Open the phone app and sign in with{' '}
-          <strong>{link.account.email}</strong> — this page unlocks by itself as soon as you do. If your phone is
+          Bought it on your phone or tablet? Don&rsquo;t pay again. Open the app there and sign in with{' '}
+          <strong>{link.account.email}</strong> — this page unlocks by itself as soon as you do. If the app there is
           signed in with a different email, sign in here with that one instead.
         </p>
       ) : null}
@@ -5471,7 +5471,7 @@ export default function App() {
                   desk who wants the remote in their pocket. */}
               <SetupRow
                 key="phone-app"
-                title="Get it on your phone"
+                title="Get it on your phone or tablet"
                 status="The remote, for a stage"
                 onClick={() => setSetupPage('phone')}
               />
@@ -5897,8 +5897,8 @@ export default function App() {
           >
             <p className="hint">
               Your unit plugs into a computer with a USB cable. That computer talks to the unit, and
-              your phone tells the computer what to do — over wifi at the venue, or over the
-              internet from anywhere. The phone never talks to the unit directly.
+              your phone or tablet tells the computer what to do — over wifi at the venue, or over the
+              internet from anywhere. It never talks to the unit directly.
             </p>
             <div className="ways">
               {waysFor(thisComputer).map((way, i) => (
@@ -5947,7 +5947,7 @@ export default function App() {
             </p>
           </Section>
 
-          <Section key="link-details" title="Link details" note="What the phone and the computer say about the line between them">
+          <Section key="link-details" title="Link details" note="What the phone or tablet and the computer say about the line between them">
             <LinkDetails />
           </Section>
           </div>
@@ -6148,8 +6148,8 @@ export default function App() {
                 <div className="facts-open" role="alertdialog" aria-label="Delete account">
                   <p className="hint">
                     This deletes your account for good: your sign-in, your set lists, bug reports you sent from it and
-                    everything else stored under it. It happens straight away and cannot be undone. Any computer or
-                    phone signed in to this account is signed out. A full version bought in the App Store or on Google
+                    everything else stored under it. It happens straight away and cannot be undone. Any computer,
+                    phone or tablet signed in to this account is signed out. A full version bought in the App Store or on Google
                     Play stays with that Apple ID or Google account, and Restore a purchase in the phone app brings it
                     back on a new account. One bought with a card on the website or in the computer app, or given to
                     you, belongs to this account and goes with it for good.
@@ -6306,7 +6306,7 @@ export default function App() {
               {`It keeps the unit’s tempo${Number.isFinite(rigBpm) ? `, ${Math.round(rigBpm)} BPM right now` : ''}: tap tempo changes it. ${
                 unitCan.can
                   ? 'The unit’s click comes out of the unit with your guitar, in steady time — the one to play to.'
-                  : unitCan.why.replace(/(only )?the phone keeps time/, (_m, only) => `${only || ''}this screen keeps time`)
+                  : unitCan.why
               }${
                 unitCan.can && clickSetting.on && clickSetting.where === 'unit' && !clickHeard
                   ? ' Until the unit says its click is on, this screen keeps time as well.'

@@ -7,6 +7,7 @@ import { sceneShape, setPresetName, setSceneName } from '../lib/device'
 import Note from './Note'
 import SceneCopy from './SceneCopy'
 import { SaveButton, SaveNotes, useSaveToSlot } from './SaveToSlot'
+import { deviceNoun } from '../lib/device-word'
 
 /**
  * Rename the preset, and rename its scenes.
@@ -107,8 +108,8 @@ export default function RenamePreset() {
       <SaveButton s={saveTo} height={TAP} grow waiting={pending} />
       <Note>
         A new name is on the unit straight away and is lost on the next preset change unless it is
-        saved. Save asks the computer to write this slot, and that keeps everything changed from this
-        phone: names, knobs, blocks and the chain.
+        saved. Save asks the computer to write this slot, and that keeps everything changed from this{' '}
+        {deviceNoun()}: names, knobs, blocks and the chain.
       </Note>
     </View>
   )

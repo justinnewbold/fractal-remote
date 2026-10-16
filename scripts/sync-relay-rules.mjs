@@ -117,6 +117,13 @@ export const FILES = [
    */
   { source: '../shared/link-word.mjs', target: '../mobile/src/lib/link-word.js' },
   /*
+   * What to call the thing in the player's hand: phone, iPad, tablet, or on
+   * the computer "phone or tablet". The shared sentences that say it ask this,
+   * so it travels with them. Every copy that imports it is pointed at the
+   * phone's name for it by `generate`, below.
+   */
+  { source: '../shared/device-word.mjs', target: '../mobile/src/lib/device-word.js' },
+  /*
    * The note a connected phone leaves on the computer, so the computer stays
    * awake under it. The phone and the website write the same document on the
    * same rhythm, and the computer app reads it by the same name.
@@ -624,9 +631,18 @@ export const generate = (source, sourcePath, raw = false, render = null, current
      the renderer writes says where it came from instead. A renderer is also
      handed what the copy holds now, for the one file that is edited in place
      rather than replaced. */
-  if (render) return render(source, current)
-  return raw ? source : banner(sourcePath) + source
+  if (raw) return render ? render(source, current) : source
+  return deviceWordHere(render ? render(source, current) : banner(sourcePath) + source)
 }
+
+/**
+ * Every copy imports the device word under the phone's name for it: the
+ * shared files as './device-word.mjs', the browser's as the path up to shared.
+ * One rule here rather than a replace in each renderer, because a copy that
+ * missed it would not bundle.
+ */
+const deviceWordHere = (text) =>
+  text.replace("from './device-word.mjs'", "from './device-word.js'").replace("from '../../shared/device-word.mjs'", "from './device-word.js'")
 
 const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 

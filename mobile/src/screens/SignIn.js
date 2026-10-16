@@ -21,6 +21,7 @@ import mailIcon from '../../assets/icons/mail.png'
 import lockIcon from '../../assets/icons/lock.png'
 import checkIcon from '../../assets/icons/check.png'
 import externalIcon from '../../assets/icons/external.png'
+import { deviceNoun } from '../lib/device-word'
 
 /**
  * One account, two ends.
@@ -157,7 +158,7 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
              typed here, on this phone, so only the link needs saying so. */
           setNote(
             paid
-              ? 'Account made — type the code from the email we just sent in the box below. Or tap the link in that email, then come back to this phone and sign in, so your purchase goes with your account.'
+              ? `Account made — type the code from the email we just sent in the box below. Or tap the link in that email, then come back to this ${deviceNoun()} and sign in, so your purchase goes with your account.`
               : 'Account made. Type the code from the email we just sent in the box below, or tap the link in that email and then sign in.'
           )
           setUnconfirmed({ why: 'made', email: email.trim() })
@@ -352,7 +353,7 @@ export default function SignIn({ onSignedIn, onDemo, start = 'in', paidHere = fa
             {madeHere
               ? MADE_HERE
               : mode === 'up'
-                ? 'You’ve paid — thank you. Now make your account, so the full version goes with you to your computer and any other phone. Use this same email there.'
+                ? 'You’ve paid — thank you. Now make your account, so the full version goes with you to your computer and any other phone or tablet. Use this same email there.'
                 : ONLY_HERE}
           </Note>
         ) : null}

@@ -90,6 +90,7 @@ import {
   tapDeadline
 } from '../../shared/relay-rules.mjs'
 import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, cleanCode, codeRefused } from '../../shared/confirm-code.mjs'
+import { deviceNoun } from '../../shared/device-word.mjs'
 
 export const loadRemoteConfig = () => {
   try {
@@ -1174,7 +1175,7 @@ export async function remoteRequest(path, options = {}) {
 
   const why = forbiddenRemotely(method, path)
   if (why) {
-    const err = new Error(`You can't ${why} from your phone — do that at the computer.`)
+    const err = new Error(`You can't ${why} from your ${deviceNoun()} — do that at the computer.`)
     err.status = 403
     err.remoteBlocked = true
     throw err

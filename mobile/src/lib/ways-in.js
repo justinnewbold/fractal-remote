@@ -107,7 +107,7 @@ export const WAYS = [
       'Plug your unit into the Mac with its USB cable.',
       quitEditor(null),
       'In the app, choose Set up phone remote and sign in. Make an account there if you have not got one.',
-      'On your phone, get Fractal Remote from the App Store or Google Play and sign in with that same account. That is the whole of it.'
+      'On your phone or tablet, get Fractal Remote from the App Store or Google Play and sign in with that same account. That is the whole of it.'
     ],
     links: [{ label: 'Download Fractal Remote for Mac', url: DOWNLOADS }]
   },
@@ -123,8 +123,8 @@ export const WAYS = [
       WINDOWS_DRIVER,
       'Plug your unit into the PC with its USB cable.',
       quitEditor(null),
-      'The first time it starts its server, Windows asks whether to allow it through the firewall. Say yes, or your phone cannot reach this computer over wifi.',
-      'In the app, choose Set up phone remote and sign in, then sign in on the phone with that same account. Same as the Mac.'
+      'The first time it starts its server, Windows asks whether to allow it through the firewall. Say yes, or your phone or tablet cannot reach this computer over wifi.',
+      'In the app, choose Set up phone remote and sign in, then sign in on your phone or tablet with that same account. Same as the Mac.'
     ],
     links: [
       { label: 'Download Fractal Remote for Windows', url: DOWNLOADS },
@@ -163,7 +163,7 @@ export const WAYS = [
       "Or take the .deb for your machine (Linux PC or Raspberry Pi) instead. In Terminal, type cd Downloads, then sudo apt install ./the-file.deb with the file's own name in place of the-file.deb. The .deb updates itself too, but only when you quit the app, and it may ask for your password, so the AppImage is the easier one. If the phone says the computer app needs updating, quit the app, or install the new .deb the same way.",
       'Plug your unit into the machine with its USB cable.',
       'You may need permission to use the USB port. If the app says it cannot find your unit, run: sudo usermod -aG dialout $USER — then log out and back in. Most distributions keep serial ports behind that group, and it catches nearly everybody once.',
-      'In the app, choose Set up phone remote and sign in, then sign in on the phone with that same account.',
+      'In the app, choose Set up phone remote and sign in, then sign in on your phone or tablet with that same account.',
       /*
        * Added 12 October 2026, with the switch it names. A Pi on a pedalboard
        * has no screen, so the one-time setup needs one plugged in (or the

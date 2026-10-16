@@ -90,6 +90,7 @@ import TempoBox from '../components/TempoBox'
 import { tempoRange } from '../lib/tempo'
 import Tuner from '../components/Tuner'
 import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
+import { deviceNoun } from '../lib/device-word'
 
 /* Hoisted: a selector rebuilt each render re-reads the store on every notify. */
 const ofPreset = (s) => s.preset
@@ -1344,8 +1345,8 @@ export default function Stage({
             <NoComputerWords email={noComputer.email} />
           ) : (
             <>
-              The phone can’t reach your computer. Open the Fractal Remote app on the computer and make sure the computer
-              is awake. This keeps trying on its own.
+              The {deviceNoun()} can’t reach your computer. Open the Fractal Remote app on the computer and make sure the
+              computer is awake. This keeps trying on its own.
             </>
           )}
         </Note>

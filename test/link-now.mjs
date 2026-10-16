@@ -149,6 +149,7 @@ async function relayOnABench(end) {
     /* On the bench's clock too: its deadlines are counted in the bench's time. */
     'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
     'confirm-code.mjs': read('shared/confirm-code.mjs'),
+    'device-word.mjs': read('shared/device-word.mjs'),
     'project.mjs': end === 'phone' ? read('mobile/src/lib/project.js') : read('desktop/lib/project.mjs')
   }
   const swaps =
@@ -162,12 +163,14 @@ async function relayOnABench(end) {
           ["from './retry'", "from './retry.mjs'"],
           ["from './notForever'", "from './nothing.mjs'"],
           ["from './relay-rules'", "from './relay-rules.mjs'"],
-          ["from './confirm-code'", "from './confirm-code.mjs'"]
+          ["from './confirm-code'", "from './confirm-code.mjs'"],
+          ["from './device-word'", "from './device-word.mjs'"]
         ]
       : [
           ["from '../../desktop/lib/project.mjs'", "from './project.mjs'"],
           ["from '../../shared/relay-rules.mjs'", "from './relay-rules.mjs'"],
           ["from '../../shared/confirm-code.mjs'", "from './confirm-code.mjs'"],
+          ["from '../../shared/device-word.mjs'", "from './device-word.mjs'"],
           ["import('@supabase/supabase-js')", "import('./service.mjs')"]
         ]
   let src = read(end === 'phone' ? 'mobile/src/lib/relay.js' : 'src/lib/remote.js')
@@ -473,6 +476,7 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
     ["from '../../shared/phone-note.mjs'", `from '${shared('phone-note.mjs')}'`],
     ["from '../../shared/editors.mjs'", `from '${shared('editors.mjs')}'`],
     ["from '../../shared/onboarding.mjs'", `from '${shared('onboarding.mjs')}'`],
+    ["from '../../shared/device-word.mjs'", `from '${shared('device-word.mjs')}'`],
     ["import('./forgefx.js')", "import('./forgefx.mjs')"]
   ]
   let src = read('src/lib/link.js')
@@ -2003,7 +2007,7 @@ export function run(test) {
     assert.match(gate, /^let down = false$/m)
     assert.match(gate, /^let relayed = false$/m)
     const links = read('src/lib/link.js').replace(/\s+/g, ' ')
-    assert.match(links, /if \(next\.role !== was\.role\) setTapsRelayed\(next\.role === 'remote'\)/)
+    assert.match(links, /if \(next\.role !== was\.role\) \{ setTapsRelayed\(next\.role === 'remote'\)/)
     /* The computer's own window and its wifi page never relay a tap with a channel down. */
     const ffx = read('src/lib/forgefx.js')
     assert.match(ffx, /if \(remoteActive\(\) \|\| \(options\.deadline && tapsRelayed\(\)\)\) \{/)

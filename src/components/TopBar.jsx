@@ -197,7 +197,7 @@ export default function TopBar({
             className="topbar-how is-button" data-state={lampState}
             onClick={onGetPhoneApp}
             title={demoSentence(demoUnit())}
-            aria-label="Get Fractal Remote on your phone"
+            aria-label="Get Fractal Remote on your phone or tablet"
           >
             {how}
           </button>

@@ -48,6 +48,7 @@ import {
   tapDeadline
 } from './relay-rules'
 import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, CONFIRMED_SIGN_IN, cleanCode, codeRefused } from './confirm-code'
+import { deviceNoun } from './device-word'
 
 export { DEFAULT_PROJECT, RELAY_GRACE, forbiddenRemotely, explainAuth, NOT_IN_INBOX, sentAgain }
 
@@ -1008,7 +1009,7 @@ async function requestOnce(path, method, options, trip = { went: false }) {
 
   const why = forbiddenRemotely(method, path)
   if (why) {
-    const err = new Error(`You can't ${why} from your phone — do that at the computer.`)
+    const err = new Error(`You can't ${why} from your ${deviceNoun()} — do that at the computer.`)
     err.status = 403
     err.remoteBlocked = true
     logDebug('wire', `${method} ${path} refused here`, why)
