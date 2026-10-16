@@ -126,6 +126,28 @@ jobs:
           sed -i 's/^org\.gradle\.jvmargs=.*/org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8/' gradle.properties
           grep -E 'reactNativeArchitectures|jvmargs' gradle.properties
 
+      # The NDK, fetched here with retries rather than by Gradle in the middle
+      # of configuring. Both matrix legs ask Google for the same 1 GB at once,
+      # and the first run lost one of them to "Failed to install the following
+      # SDK components: ndk;27.1.12297006" with nothing wrong in the app. The
+      # version is React Native's own, read from its catalogue, so this moves
+      # when the app's React Native does.
+      - name: The NDK the build asks for
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          ndk="$(sed -n 's/^ndkVersion = "\(.*\)"$/\1/p' node_modules/react-native/gradle/libs.versions.toml)"
+          [ -n "$ndk" ] || { echo "::error::No ndkVersion in React Native's libs.versions.toml."; exit 1; }
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ -d "$ANDROID_HOME/ndk/$ndk" ]; then echo "NDK $ndk is already on the runner"; exit 0; fi
+          for try in 1 2 3 4; do
+            if yes | "$sdkmanager" --install "ndk;$ndk" > /dev/null; then echo "NDK $ndk installed"; exit 0; fi
+            echo "try $try failed; waiting $((try * 15)) s"
+            sleep $((try * 15))
+          done
+          echo "::error::NDK $ndk would not install after four tries."
+          exit 1
+
       - name: Build the bundle and the APK
         working-directory: mobile/android
         env:
