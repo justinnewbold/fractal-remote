@@ -10,24 +10,30 @@
 # started from here.
 #
 # R8 can break an app quietly: it renames and removes Java and Kotlin code,
-# and anything a library looks up by name goes with it. The known one here is
-# expo-updates 57: its database class is made by name, R8 full mode drops its
-# constructor, and the app dies on launch with NoSuchMethodException (fixed in
-# expo-updates 58.0.0, #47729; the patch carries the same keep rule). So this
+# and anything a library looks up by name goes with it. The known one is
+# expo-updates: its database class is made by name, and Expo found R8 dropping
+# its constructor, so the app died at its first database read with
+# NoSuchMethodException (fixed in expo-updates 58, #47729; the patch carries
+# the same keep rule). In this app's build it does not happen: on 16 October
+# 2026 a build without the rule came out byte for byte the same as one with
+# it. The rule stays as insurance for a later Android build tool. So this
 # builds the app the way EAS would, with the patch in, and starts it on an
 # Android emulator on GitHub's computers, which costs nothing:
 #
 #   1. The scores Play will read, out of the bundle's own r8.json, and the
 #      DEX size against Play's 10 MB line.
 #   2. The app launched on a phone emulator, a minute left running, and the
-#      log read for the crashes R8 causes.
+#      log read for the crashes R8 causes. Then the check is tried on itself:
+#      the app is crashed on purpose and an R8 failure written to the log,
+#      and both must be seen, or the clean minute means nothing.
 #   3. The same app on a tablet emulator, sideways: Android 16 ignores the
 #      portrait lock on a screen 600 points wide or more (Play's "Remove
 #      resizability and orientation restrictions"), so this is what an
 #      Android tablet shows.
-#   4. A control: the same build without the database keep rule. It has to
-#      crash. If it does not, the check cannot see the failure it is here
-#      for, and the green on the real build means less than it says.
+#
+# What a minute cannot reach (buying, restoring, an over-the-air update
+# arriving, Bluetooth, sound) is read rather than run: see the r8.patch
+# notes in docs/pending/README.md.
 #
 # Nothing here signs for the Play Store or goes near the Releases page.
 name: android-minified
@@ -48,10 +54,6 @@ jobs:
     runs-on: ubuntu-latest
     # The build alone is apk.yml's 40 minutes; the emulators add about ten.
     timeout-minutes: 80
-    strategy:
-      fail-fast: false
-      matrix:
-        rules: [all, control]
     steps:
       - uses: actions/checkout@v4
 
@@ -96,15 +98,6 @@ jobs:
           grep -q 'androidx.room.RoomDatabase { <init>(); }' app/proguard-rules.pro
           echo "minify on, the optimize file, the database rule: all there"
 
-      # The control drops the one rule the launch depends on.
-      - name: 'Control: take the database rule out'
-        if: matrix.rules == 'control'
-        working-directory: mobile/android
-        run: |
-          set -euo pipefail
-          sed -i '/androidx.room.RoomDatabase/d' app/proguard-rules.pro
-          ! grep -q 'androidx.room.RoomDatabase' app/proguard-rules.pro
-
       # An updates configuration that reads, so expo-updates opens its
       # database at launch the way a phone's copy does. The value is any
       # runtime version; no update is published under it, and no channel is
@@ -127,8 +120,8 @@ jobs:
           grep -E 'reactNativeArchitectures|jvmargs' gradle.properties
 
       # The NDK, fetched here with retries rather than by Gradle in the middle
-      # of configuring. Both matrix legs ask Google for the same 1 GB at once,
-      # and the first run lost one of them to "Failed to install the following
+      # of configuring. The first run, with two builds asking Google for the
+      # same 1 GB at once, lost one of them to "Failed to install the following
       # SDK components: ndk;27.1.12297006" with nothing wrong in the app. The
       # version is React Native's own, read from its catalogue, so this moves
       # when the app's React Native does.
@@ -167,7 +160,6 @@ jobs:
       # Google's own check: unzip -p <app>.aab BUNDLE-METADATA/com.android.tools/r8.json
       # (developer.android.com/google/play/vitals/code-optimization).
       - name: The scores Play will read
-        if: matrix.rules == 'all'
         working-directory: mobile/android/app/build/outputs
         run: |
           set -euo pipefail
@@ -215,7 +207,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r8-${{ matrix.rules }}-build
+          name: r8-build
           path: |
             mobile/android/app/build/outputs/r8.json
             mobile/android/app/build/outputs/mapping/release/mapping.txt
@@ -230,7 +222,8 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       # Started, left a minute, and the log read for what R8 breaks. The app
-      # still running at the end counts as much as the log does.
+      # still running at the end counts as much as the log does. Then the
+      # check is tried on itself (see android-smoke.sh).
       - name: Start it on a phone
         id: phone
         uses: reactivecircus/android-emulator-runner@v2
@@ -241,13 +234,12 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash .github/android-smoke.sh phone ${{ matrix.rules }}
+          script: bash .github/android-smoke.sh phone
 
       # Sideways on a tablet, where Android 16 ignores the portrait lock. A
       # picture to look at, not a pass or a fail: whether it reads well
       # sideways is a question for the screens, not for R8.
       - name: And sideways on a tablet
-        if: matrix.rules == 'all'
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -257,13 +249,13 @@ jobs:
           profile: pixel_tablet
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash .github/android-smoke.sh tablet ${{ matrix.rules }}
+          script: bash .github/android-smoke.sh tablet
 
       - name: Keep the pictures and the logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r8-${{ matrix.rules }}-run
+          name: r8-run
           path: smoke/
           retention-days: 7
           if-no-files-found: ignore
