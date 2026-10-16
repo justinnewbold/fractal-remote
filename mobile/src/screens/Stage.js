@@ -11,6 +11,7 @@ import {
   applySong,
   listsFor,
   marksFor,
+  nextWords,
   orderFor,
   positionIn,
   songFor,
@@ -19,6 +20,7 @@ import {
   stepTarget
 } from '../lib/lists'
 import { sync, useStored } from '../lib/store'
+import { nameOf, useNamesHeard } from '../lib/presetNames'
 import {
   SIZES,
   fitTiles,
@@ -567,6 +569,25 @@ export default function Stage({
   useEffect(() => () => readAhead([]), [])
 
   /*
+   * The line under Next: the name of what it will load, or at the end of a
+   * setlist that the set starts over. "'Next: song name' under the Next
+   * button. You see what's coming before the count-in, so a wrong running
+   * order gets caught in time."
+   *
+   * Asked about `nextAt` and nothing else, the same landing(1) the button is
+   * greyed by and steps to, so it cannot name a different slot from the one
+   * a press loads. And it is the preset list's own name for that slot
+   * (presetNames.nameOf, the list Presets draws), for this unit: a change of
+   * unit empties that list (rig readAll, forgetNames) before the new one's
+   * names come in. `useNamesHeard` redraws as names arrive and never asks the
+   * unit for one, because a name read from here is a preset dump down the
+   * serial port in the middle of a song. Not known yet is a blank line,
+   * never a guess. See nextWords.
+   */
+  useNamesHeard()
+  const ahead = nextWords({ order, current: preset?.number, next: nextAt, nameOf })
+
+  /*
    * Which press of Previous or Next is the newest, from these buttons or the
    * watch's (both come through `step`). Two quick Nexts had the skipped
    * song's scene and tempo sent onto the unit loading the next song. Only
@@ -1054,6 +1075,8 @@ export default function Stage({
               label="Previous"
               icon={chevronIcon}
               flip
+              /* A blank line of the same height as Next's, so the two words sit level. */
+              under=""
               height={foot}
               disabled={landing(-1) === null && !(noSlotSteps && !order)}
               onPress={() => step(-1)}
@@ -1074,6 +1097,8 @@ export default function Stage({
               grow
               label="Next"
               after={chevronIcon}
+              under={ahead.shown}
+              accessibilityLabel={ahead.said}
               height={foot}
               disabled={landing(1) === null && !(noSlotSteps && !order)}
               onPress={() => step(1)}

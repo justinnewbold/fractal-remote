@@ -2989,6 +2989,43 @@ button.gig-name:disabled .gig-name-caret {
 }
 
 /*
+ * The line under Next: what it will load. "'Next: song name' under the Next
+ * button. You see what's coming before the count-in."
+ *
+ * PAID FOR OUT OF THE PADDING, so the button is the height it always was:
+ * the 16px line takes the place of 8px of padding above the word and 8px
+ * below it. Always there, blank until a name is known (and Previous has a
+ * blank one of its own), so nothing moves when a name arrives and the two
+ * words stay level. One line, cut with an ellipsis rather than wrapped, for
+ * the same reason.
+ *
+ * NO WIDER THAN THE BUTTON IT IS IN, AND ADDING NOTHING TO IT. A grid column
+ * of 1fr will not shrink below the widest thing in it that cannot wrap, so a
+ * long name on one line would widen Next and squeeze the Setlists button
+ * between them. `width: 0` makes the line count for nothing when the columns
+ * are shared out, and `min-width: 100%` then fills the button that was left.
+ * Not min-width: 0 on the buttons, which let Previous shrink past its own
+ * word and moved all three buttons 3px on a 320-wide screen.
+ */
+.gig-nav button.gig-nav-step {
+  padding: var(--s-2) var(--s-4);
+}
+
+.gig-nav-ahead {
+  display: block;
+  height: var(--s-4);
+  line-height: var(--s-4);
+  width: 0;
+  min-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--f-1);
+  font-weight: 400;
+  color: var(--silk-dim);
+}
+
+/*
  * The button-size steps, in Setup.
  *
  * "Let's move the sizing to the Settings menu." Two 44px buttons either
@@ -10798,6 +10835,12 @@ button.view-tab {
 .gig[data-compact] .gig-nav button.gig-nav-source {
   font-size: var(--f-1);
   gap: 0;
+}
+
+/* The line under Next at this size too: 4px off each edge and the 16px line,
+   which leaves the button on the 44px floor it stands on already. */
+.gig[data-compact] .gig-nav button.gig-nav-step {
+  padding: var(--s-1) var(--s-2);
 }
 
 

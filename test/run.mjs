@@ -11029,6 +11029,228 @@ test('Previous and Next step through the slots, the stars, or a setlist', () => 
   assert.equal(sourceLabel('gone', { lists }), 'All presets')
 })
 
+test('the line under Next names what Next loads, says so when the set starts over, and never guesses', () => {
+  /*
+   * "'Next: song name' under the Next button. You see what's coming before
+   * the count-in, so a wrong running order gets caught in time." Justin's
+   * pick, 15 October 2026. The whole point is that the line is TRUE: a name
+   * under Next that is not what Next loads is worse than no line, because it
+   * is believed right up to the wrong song.
+   */
+  const { nextWords, stepTarget, NEXT_WRAPS, ALL, STARRED } = setlists
+  const names = { 40: 'Opener', 7: 'Schism', 200: 'Encore', 45: 'Plexi', 12: '<EMPTY>k Album Chug', 13: '', 14: '   ' }
+  const asked = []
+  const nameOf = (n) => {
+    asked.push(n)
+    return names[n]
+  }
+
+  // A song in the middle: its name, alone. The button says Next above it.
+  assert.deepEqual(nextWords({ order: [40, 7, 200], current: 40, next: 7, nameOf }), { shown: 'Schism', said: 'Next, Schism', name: 'Schism' })
+  assert.deepEqual(asked, [7], 'the line asked about a slot other than the one Next loads')
+
+  // The last song: Next goes back round to the first (nextIn), and the line says THAT.
+  assert.deepEqual(nextWords({ order: [40, 7, 200], current: 200, next: 40, nameOf }), {
+    shown: NEXT_WRAPS,
+    said: 'Next, starts over, Opener',
+    name: 'Opener'
+  })
+  /* The Setlists screen's own words for it, and short enough to fit whole on a 320-point phone. */
+  assert.equal(NEXT_WRAPS, 'Starts over')
+  assert.deepEqual(nextWords({ order: [40, 7, 200], current: 200, next: 40, nameOf: () => undefined }), {
+    shown: NEXT_WRAPS,
+    said: 'Next, starts over',
+    name: ''
+  })
+  // A list of one: Next loads that song again, which is song 1.
+  assert.equal(nextWords({ order: [5], current: 5, next: 5, nameOf }).shown, NEXT_WRAPS)
+  // Off the list, Next loads song 1 and the line is simply its name: no "starts over".
+  assert.deepEqual(nextWords({ order: [40, 7, 200], current: 99, next: 40, nameOf }), { shown: 'Opener', said: 'Next, Opener', name: 'Opener' })
+  assert.equal(nextWords({ order: [40, 7, 200], current: undefined, next: 40, nameOf }).shown, 'Opener')
+  // Never "starts over" for a press that does not go to song 1.
+  assert.equal(nextWords({ order: [40, 7, 200], current: 200, next: 7, nameOf }).shown, 'Schism', 'the line said the set starts over about a press that goes somewhere else')
+  // Slot by slot: the next slot's name.
+  assert.equal(nextWords({ order: null, current: 44, next: 45, nameOf }).shown, 'Plexi')
+
+  // Not known, empty, a gen-3 empty marker, blank, or no slot at all: a blank line. Never a guess.
+  for (const next of [8, 12, 13, 14]) {
+    assert.deepEqual(nextWords({ order: null, current: next - 1, next, nameOf }), { shown: '', said: 'Next', name: '' }, `slot ${next} was given a name it does not have`)
+  }
+  for (const next of [null, undefined, NaN, 1.5]) {
+    assert.deepEqual(nextWords({ order: [40], current: 40, next, nameOf }), { shown: '', said: 'Next', name: '' }, 'a Next with nowhere to go has a line')
+  }
+  assert.deepEqual(nextWords({ order: null, current: 1, next: 2 }), { shown: '', said: 'Next', name: '' }, 'no names at all is not a blank line')
+
+  // Starred at its last star goes back round too.
+  const favourites = [300, 12, 45]
+  assert.equal(
+    nextWords({ order: favourites, current: 45, next: stepTarget({ source: STARRED, current: 45, delta: 1, favourites, lists: [] }), nameOf: () => 'First star' }).shown,
+    NEXT_WRAPS
+  )
+
+  /*
+   * And against the rule the button steps by, everywhere: every source, every
+   * place in it, with names known and not. The line is "Starts over"
+   * exactly when Next goes from the last song to the first; otherwise it is
+   * the name of the slot Next loads, or nothing.
+   */
+  const lists = [
+    { id: 'sat', name: 'Saturday', presets: [40, 7, 200] },
+    { id: 'one', name: 'One', presets: [5] },
+    { id: 'none', name: 'None', presets: [] },
+    { id: 'messy', name: 'Messy', presets: [7, 7, -1, 40, 1.5, 200] }
+  ]
+  const known = { 5: 'Solo', 7: 'Schism', 40: 'Opener', 45: 'Plexi', 200: 'Encore', 300: 'Big Star' }
+  for (const source of [ALL, STARRED, 'sat', 'one', 'none', 'messy', 'gone']) {
+    for (const current of [undefined, 0, 5, 7, 12, 40, 44, 45, 99, 200, 300]) {
+      const order = setlists.orderFor(source, { favourites, lists })
+      const next = stepTarget({ source, current, delta: 1, favourites, lists })
+      const words = nextWords({ order, current, next, nameOf: (n) => known[n] })
+      const clean = setlists.cleanSlots(order)
+      const wraps = clean.length > 0 && clean.indexOf(current) === clean.length - 1 && next === clean[0]
+      const where = `${source} on ${current} → ${next}`
+      if (wraps) assert.equal(words.shown, NEXT_WRAPS, `${where}: Next goes back to song 1 and the line does not say the set starts over`)
+      else assert.equal(words.shown, known[next] ?? '', `${where}: the line is not the name of what Next loads`)
+      assert.equal(words.name, known[next] ?? '', `${where}: the name is not the slot Next loads`)
+      assert.equal(typeof words.shown, 'string', `${where}: the line is not always a string, so the button cannot keep its height`)
+    }
+  }
+})
+
+test('the line under Next in the browser says what the preset list says for that slot, for the unit there now', () => {
+  /*
+   * The browser's line reads App's `slots` (allSlots), the very list the
+   * picker draws, so the two cannot disagree about a slot. That list is a
+   * copy, though, taken again only when a scan, a save or the computer's
+   * list brought something, and a change of unit was none of those: an FM3
+   * swapped for an AM4 this browser already knew left the FM3's names on the
+   * AM4's slots, in the picker and so under Next. Not an old name: another
+   * unit's.
+   *
+   * Run here with App's own code for the copy and allSlots, and Gig's own
+   * two lines for the line, on a small stand-in for React that draws again
+   * when a layout effect sets state, as React does before anything is shown.
+   */
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const gig = readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
+  const lift = (src, start, end, file) => {
+    const from = src.indexOf(start)
+    const to = src.indexOf(end, from)
+    assert.ok(from > 0 && to > from, `${file} moved; this test reads ${start}`)
+    return src.slice(from, to + end.length)
+  }
+  const copy = lift(app, 'const namesUnit = currentDeviceSlug()', '}, [namesUnit])', 'App.jsx')
+  const known = lift(app, 'const knownSlots = ', '\n', 'App.jsx')
+  const all = lift(app, 'const allSlots = useMemo(() => {', 'preset?.name])', 'App.jsx')
+  const lookup = lift(gig, 'const slotNames = useMemo(', '\n', 'Gig.jsx')
+  const ahead = lift(gig, 'const ahead = nextWords(', '\n', 'Gig.jsx')
+  /* Gig is handed the list the picker is handed. */
+  const play = app.slice(app.indexOf('<Gig'), app.indexOf('/>', app.indexOf('<Gig')))
+  assert.match(play, /slots=\{allSlots\}/, 'Play reads a different list from the picker')
+  assert.ok((app.match(/<PresetList\s+slots=\{allSlots\}/g) || []).length >= 2, 'the picker reads a different list from Play')
+  assert.ok(!/slots\[/.test(lookup + ahead), 'the line finds its slot by place in the list, which is not its number before the unit has said how many it has')
+
+  /* What this browser holds for each unit, as forgefx cachedPresetNames gives it. FM3 and FM9 have as many slots, and as many names, as each other. */
+  const kept = {
+    fm3: [{ number: 4, name: 'FM3 FOUR' }, { number: 5, name: 'FM3 FIVE' }, { number: 6, name: '' }],
+    fm9: [{ number: 4, name: 'FM9 FOUR' }, { number: 5, name: 'FM9 FIVE' }, { number: 6, name: 'FM9 SIX' }],
+    am4: [{ number: 5, name: 'AM4 FIVE' }]
+  }
+  const counts = { fm3: 512, fm9: 512, am4: 104 }
+  let unit = 'fm3'
+  const cachedPresetNames = () => kept[unit].map((s) => ({ ...s }))
+
+  /* React, as far as these lines need it: hooks by call order, and a layout effect's setState drawn again before the screen is. */
+  const hooks = []
+  let at = 0
+  let effects = []
+  let slots = []
+  let dirty = false
+  const setSlots = (v) => {
+    slots = typeof v === 'function' ? v(slots) : v
+    dirty = true
+  }
+  const same = (a, b) => Array.isArray(a) && a.length === b.length && a.every((x, i) => Object.is(x, b[i]))
+  const useRef = (v) => (hooks[at] ??= { current: v }, hooks[at++])
+  const useMemo = (fn, deps) => {
+    const h = hooks[at]
+    if (h && same(h.deps, deps)) return (at++, h.value)
+    hooks[at++] = { deps, value: fn() }
+    return hooks[at - 1].value
+  }
+  const useLayoutEffect = (fn, deps) => {
+    const h = hooks[at]
+    if (h && same(h.deps, deps)) return void at++
+    hooks[at++] = { deps }
+    effects.push(fn)
+  }
+  const appRender = new Function(
+    'currentDeviceSlug', 'cachedPresetNames', 'useRef', 'useLayoutEffect', 'useMemo', 'slots', 'setSlots', 'device', 'preset',
+    `${copy}\n${known}\n${all}\nreturn allSlots`
+  )
+  const gigLine = new Function('slots', 'useMemo', 'nextWords', 'order', 'preset', 'nextAt', `${lookup}\n${ahead}\nreturn ahead`)
+  /* The loaded preset stays put through every change, so nothing else about the screen moves the list along. */
+  const preset = { number: 3, name: 'LOADED' }
+  const shown = () => {
+    for (let pass = 0; pass < 4; pass++) {
+      at = 0
+      effects = []
+      dirty = false
+      const list = appRender(() => unit, cachedPresetNames, useRef, useLayoutEffect, useMemo, slots, setSlots, { capabilities: { presets: { count: counts[unit] } } }, preset)
+      for (const fn of effects) fn()
+      if (!dirty) return list
+    }
+    throw new Error('App never settled')
+  }
+  const lineFrom = (list, current, next, order = null) => gigLine(list, (fn) => fn(), setlists.nextWords, order, { number: current }, next).shown
+  const picker = (list, n) => list.find((s) => s.number === n)?.name
+  const check = (where) => {
+    const list = shown()
+    for (const s of list) {
+      if (s.name && s.number !== preset.number) assert.ok(s.name.startsWith(unit.toUpperCase()), `${where}: the picker shows "${s.name}" on the ${unit}`)
+    }
+    for (const n of [4, 5, 6, 7]) {
+      assert.equal(lineFrom(list, n - 1, n), picker(list, n) ?? '', `${where}: under Next for slot ${n} is not what the picker says for it`)
+    }
+    return list
+  }
+
+  // Before anything has taken a copy, the list is read as it is.
+  check('the FM3, nothing taken yet')
+  assert.equal(lineFrom(shown(), 4, 5), 'FM3 FIVE')
+  assert.equal(lineFrom(shown(), 5, 6), '', 'a slot the list calls empty has a name under Next')
+  assert.equal(lineFrom(shown(), 6, 7), '', 'a slot nobody has named has a guess under Next')
+  // A scan or the computer's list took a copy.
+  setSlots(cachedPresetNames())
+  check('the FM3, after a scan')
+  // Another unit of the same size, with as many names known: nothing but the change of unit moves the list.
+  unit = 'fm9'
+  check('the FM9, swapped in for the FM3')
+  assert.equal(lineFrom(shown(), 4, 5), 'FM9 FIVE', 'the FM3’s name is under Next on the FM9')
+  unit = 'am4'
+  check('the AM4')
+  assert.equal(lineFrom(shown(), 4, 5), 'AM4 FIVE')
+  assert.equal(lineFrom(shown(), 3, 4), '', 'another unit’s name is under Next for a slot this unit has no name for')
+  /* Read as a fresh page reads it, not frozen at the change: a name this browser learns for the AM4 afterwards (a preset loaded, a save looked up) is in the list as it is on main. */
+  kept.am4.push({ number: 6, name: 'AM4 SIX' })
+  check('the AM4, a name learned after the change')
+  assert.equal(lineFrom(shown(), 5, 6), 'AM4 SIX', 'the list was frozen at the change of unit, so a name learned since is missing from it')
+  kept.am4.pop()
+  unit = 'fm3'
+  check('the FM3 again')
+  // A setlist on the FM3: the opener's name goes to a screen reader, and the line says the set starts over.
+  assert.equal(lineFrom(shown(), 6, 4, [4, 5, 6]), setlists.NEXT_WRAPS)
+  assert.equal(gigLine(shown(), (fn) => fn(), setlists.nextWords, [4, 5, 6], { number: 6 }, 4).said, 'Next, starts over, FM3 FOUR')
+
+  // And never taken at all, then another unit: the list is read as it is, for the unit there now.
+  hooks.length = 0
+  slots = []
+  unit = 'fm3'
+  check('a fresh page on the FM3')
+  unit = 'fm9'
+  check('a fresh page, the FM9 swapped in')
+})
+
 test('a setlist is built, reordered and kept per unit', () => {
   const { addTo, removeFrom, moveIn, createList, updateList, deleteList, listsFor, sourceFor, setSource, ALL, STARRED } = setlists
 
