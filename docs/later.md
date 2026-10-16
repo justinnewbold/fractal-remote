@@ -205,6 +205,34 @@ scenes. Still on the list, not started:
   backups and two-step sign-in on the service accounts; a limit on the bug
   report emails.
 
+## Google Play's 2027 rules
+
+Looked into on 16 October 2026, after Play Console's Android vitals warned
+"DEX code optimization is below our threshold … Fix by Feb 2027". Google
+says an app that misses these may lose visibility and some publishing
+abilities on Play, not be taken down.
+
+- **Code optimization, February 2027.** Done and waiting for a build:
+  docs/pending/r8.patch, proven for free by the android-minified workflow.
+  JavaScript is not what Play scores, so no update can fix it; only a store
+  build can.
+- **Staying signed in on a new Android phone, April 2027** ("Zero-Tap
+  Sign-In"). An app with accounts has to put the player back in their
+  account by itself when they move to a new phone, through Android's
+  Restore Credentials. It is bigger than R8: a new native piece
+  (androidx.credentials 1.5 or newer, so a build), and a server side the
+  project does not have yet, because the key it saves is a passkey-style
+  key the server has to issue and check. The way out for apps already
+  using Google's Block Store closed on 30 September 2026. Games are exempt;
+  this app is not a game. Its own build, after the R8 one, before April.
+  developer.android.com/identity/sign-in/restore-credentials-implementation
+- **Not fixable from here, and nothing due:** Play's "deprecated APIs for
+  edge-to-edge" names code inside React Native and Google's own libraries,
+  which their updates fix; and "Remove resizability and orientation
+  restrictions" is the portrait lock, which Android 16 already ignores on
+  tablets. That one is a suggestion, and the sideways tablet picture from
+  android-minified shows what it looks like today.
+
 ## Waiting on something
 
 - **A VP4 owner's recording.** "That sounds good. Let's do it." (16 October

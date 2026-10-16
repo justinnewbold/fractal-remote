@@ -1,0 +1,261 @@
+# THE ANDROID APP WITH R8 ON, BUILT AND STARTED FOR FREE BEFORE IT COSTS A BUILD.
+#
+# Google Play, October 2026: "DEX code optimization is below our threshold.
+# Improve your percentages in the following categories: Obfuscation (3%).
+# … Fix by Feb 2027." From February 2027 every upload needs 25% or more in
+# each of obfuscation, optimization and shrinking
+# (support.google.com/googleplay/android-developer/answer/17492799). The fix
+# is R8, switched on by docs/pending/r8.patch, and it changes the built app,
+# so it reaches phones only in a store build, which is asked for, never
+# started from here.
+#
+# R8 can break an app quietly: it renames and removes Java and Kotlin code,
+# and anything a library looks up by name goes with it. The known one is
+# expo-updates: its database class is made by name, and Expo found R8 dropping
+# its constructor, so the app died at its first database read with
+# NoSuchMethodException (fixed in expo-updates 58, #47729; the patch carries
+# the same keep rule). In this app's build it does not happen: on 16 October
+# 2026 a build without the rule came out byte for byte the same as one with
+# it. The rule stays as insurance for a later Android build tool. So this
+# builds the app the way EAS would, with the patch in, and starts it on an
+# Android emulator on GitHub's computers, which costs nothing:
+#
+#   1. The scores Play will read, out of the bundle's own r8.json, and the
+#      DEX size against Play's 10 MB line.
+#   2. The app launched on a phone emulator, a minute left running, and the
+#      log read for the crashes R8 causes. Then the check is tried on itself:
+#      the app is crashed on purpose and an R8 failure written to the log,
+#      and both must be seen, or the clean minute means nothing.
+#   3. The same app on a tablet emulator, sideways: Android 16 ignores the
+#      portrait lock on a screen 600 points wide or more (Play's "Remove
+#      resizability and orientation restrictions"), so this is what an
+#      Android tablet shows.
+#
+# What a minute cannot reach (buying, restoring, an over-the-air update
+# arriving, Bluetooth, sound) is read rather than run: see the r8.patch
+# notes in docs/pending/README.md.
+#
+# Nothing here signs for the Play Store or goes near the Releases page.
+name: android-minified
+
+on:
+  pull_request:
+    paths:
+      - 'docs/pending/r8.patch'
+      - '.github/workflows/android-minified.yml'
+      - '.github/android-smoke.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  r8:
+    runs-on: ubuntu-latest
+    # The build alone is apk.yml's 40 minutes; the emulators add about ten.
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The patch, unless main already carries it (after the build that takes it).
+      - name: Put R8 in
+        run: |
+          set -euo pipefail
+          if grep -q '"expo-build-properties"' mobile/app.json; then
+            echo "main already has it"
+          else
+            git apply docs/pending/r8.patch
+          fi
+          grep -n 'enableMinifyInReleaseBuilds' mobile/app.json
+
+      - name: Install the app's own dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Make the native Android project
+        working-directory: mobile
+        run: npx expo prebuild --platform android --no-install
+
+      # What the patch promises, read off the generated project before an
+      # hour goes into building it.
+      - name: The project says what the patch promised
+        working-directory: mobile/android
+        run: |
+          set -euo pipefail
+          grep -q '^android.enableMinifyInReleaseBuilds=true' gradle.properties
+          grep -q 'getDefaultProguardFile("proguard-android-optimize.txt")' app/build.gradle
+          grep -q 'androidx.room.RoomDatabase { <init>(); }' app/proguard-rules.pro
+          echo "minify on, the optimize file, the database rule: all there"
+
+      # An updates configuration that reads, so expo-updates opens its
+      # database at launch the way a phone's copy does. The value is any
+      # runtime version; no update is published under it, and no channel is
+      # set, so nothing is downloaded (see apk.yml for why both are needed).
+      - name: Let expo-updates start
+        working-directory: mobile
+        run: |
+          mkdir -p android/app/src/main/assets
+          printf '%s' 'r8-smoke-test' > android/app/src/main/assets/fingerprint
+
+      # x86_64, the emulator's processor. The DEX is the same for every
+      # processor, so the scores are the phone's. The memory is EAS's own
+      # (docs.expo.dev/build-reference/infrastructure: -Xmx4g, 1g Metaspace on
+      # a medium worker), so a build that fits here fits there.
+      - name: The emulator's processor, and EAS's memory
+        working-directory: mobile/android
+        run: |
+          sed -i 's/^reactNativeArchitectures=.*/reactNativeArchitectures=x86_64/' gradle.properties
+          sed -i 's/^org\.gradle\.jvmargs=.*/org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8/' gradle.properties
+          grep -E 'reactNativeArchitectures|jvmargs' gradle.properties
+
+      # The NDK, fetched here with retries rather than by Gradle in the middle
+      # of configuring. The first run, with two builds asking Google for the
+      # same 1 GB at once, lost one of them to "Failed to install the following
+      # SDK components: ndk;27.1.12297006" with nothing wrong in the app. The
+      # version is React Native's own, read from its catalogue, so this moves
+      # when the app's React Native does.
+      #
+      # Judged by the NDK being on disk, not by the exit status: `yes` feeding
+      # the licence prompts dies of a broken pipe once sdkmanager is done, and
+      # under pipefail that made a good install read as a failed one four
+      # times running.
+      - name: The NDK the build asks for
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          ndk="$(sed -n 's/^ndkVersion = "\(.*\)"$/\1/p' node_modules/react-native/gradle/libs.versions.toml)"
+          [ -n "$ndk" ] || { echo "::error::No ndkVersion in React Native's libs.versions.toml."; exit 1; }
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          there="$ANDROID_HOME/ndk/$ndk/source.properties"
+          if [ -f "$there" ]; then echo "NDK $ndk is already on the runner"; exit 0; fi
+          for try in 1 2 3 4; do
+            yes 2>/dev/null | "$sdkmanager" --install "ndk;$ndk" > sdkmanager.log 2>&1 || true
+            if [ -f "$there" ]; then echo "NDK $ndk installed on try $try"; exit 0; fi
+            tail -5 sdkmanager.log
+            echo "try $try failed; waiting $((try * 15)) s"
+            sleep $((try * 15))
+          done
+          echo "::error::NDK $ndk would not install after four tries."
+          exit 1
+
+      - name: Build the bundle and the APK
+        working-directory: mobile/android
+        env:
+          EXPO_UPDATES_FINGERPRINT_OVERRIDE: r8-smoke-test
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bundleRelease assembleRelease --no-daemon
+
+      # Google's own check: unzip -p <app>.aab BUNDLE-METADATA/com.android.tools/r8.json
+      # (developer.android.com/google/play/vitals/code-optimization).
+      - name: The scores Play will read
+        working-directory: mobile/android/app/build/outputs
+        run: |
+          set -euo pipefail
+          aab=bundle/release/app-release.aab
+          unzip -l "$aab" | grep -E 'BUNDLE-METADATA|\.dex$' || true
+          unzip -p "$aab" BUNDLE-METADATA/com.android.tools/r8.json > r8.json || echo "no r8.json in the bundle" > r8.json
+          python3 - <<'PY'
+          import json, re, zipfile
+          raw = open('r8.json').read()
+          print('r8.json:', raw[:4000])
+          dex = sum(i.file_size for i in zipfile.ZipFile('bundle/release/app-release.aab').infolist() if i.filename.endswith('.dex'))
+          print('DEX, uncompressed: %.1f MB (Play enforces from 10 MB)' % (dex / 1e6))
+          try:
+              data = json.loads(raw)
+          except Exception:
+              raise SystemExit('r8.json is missing or does not read, so Play would fall back to guessing')
+          found = []
+          def walk(x, path=''):
+              if isinstance(x, dict):
+                  for k, v in x.items(): walk(v, path + '.' + k)
+              elif isinstance(x, list):
+                  for i, v in enumerate(x): walk(v, '%s[%d]' % (path, i))
+              elif re.search(r'obfusc|optimi|shrink|percent|ratio', path, re.I):
+                  found.append((path, x))
+          walk(data)
+          for p, v in found: print(p, '=', v)
+          PY
+          {
+            echo "### R8 scores"
+            echo '```'
+            head -c 3000 r8.json
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          ls -la release/ 2>/dev/null || true
+          test -s mapping/release/mapping.txt && echo "mapping.txt: $(wc -l < mapping/release/mapping.txt) lines"
+          unzip -l "$aab" > bundle-files.txt
+          if grep -q 'BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map' bundle-files.txt; then
+            echo "the map is inside the bundle, for Play to read"
+          else
+            echo "::warning::No deobfuscation map inside the bundle; Play's crash reports would be unreadable without an upload by hand."
+          fi
+
+      - name: Keep what the build said
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8-build
+          path: |
+            mobile/android/app/build/outputs/r8.json
+            mobile/android/app/build/outputs/mapping/release/mapping.txt
+            mobile/android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Let the emulator use the processor's virtualisation
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # Started, left a minute, and the log read for what R8 breaks. The app
+      # still running at the end counts as much as the log does. Then the
+      # check is tried on itself (see android-smoke.sh).
+      - name: Start it on a phone
+        id: phone
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash .github/android-smoke.sh phone
+
+      # Sideways on a tablet, where Android 16 ignores the portrait lock. A
+      # picture to look at, not a pass or a fail: whether it reads well
+      # sideways is a question for the screens, not for R8.
+      - name: And sideways on a tablet
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          target: google_apis
+          profile: pixel_tablet
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash .github/android-smoke.sh tablet
+
+      - name: Keep the pictures and the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8-run
+          path: smoke/
+          retention-days: 7
+          if-no-files-found: ignore
