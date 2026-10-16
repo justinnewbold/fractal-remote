@@ -19,7 +19,7 @@
  * the suite reads the screens.
  */
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -215,6 +215,59 @@ async function phoneHookOnABench() {
         await settle()
       }
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+/*
+ * The phone's SendLinkButton, DRAWN: its JSX turned into plain calls by
+ * esbuild (which Vite already brings), with React, React Native, the theme,
+ * the download link and Press stood in for. `h` draws a component by calling
+ * it, so the button comes back as the props it handed Press. The memory
+ * (lib/sendLink.js) is the real one, and so is everything the button decides.
+ */
+async function sendButtonOnABench() {
+  const { transformSync } = await import('esbuild')
+  const dir = mkdtempSync(join(tmpdir(), 'send-link-'))
+  const bench = { sent: [], said: [], answer: { ok: true } }
+  globalThis.__sendLinkBench = bench
+  const files = {
+    'package.json': '{ "type": "module" }',
+    'react.mjs': `
+      export const useSyncExternalStore = (watch, get) => get()
+      export const useEffect = () => {}
+      export const useState = (v) => [v, () => {}]
+    `,
+    'react-native.mjs': 'export const AccessibilityInfo = { announceForAccessibility: (s) => globalThis.__sendLinkBench.said.push(s) }\n',
+    'theme.mjs': 'export const TAP = 56\n',
+    'downloadLink.mjs': `
+      export async function sendDownloadLink(email) {
+        globalThis.__sendLinkBench.sent.push(email)
+        return globalThis.__sendLinkBench.answer
+      }
+    `,
+    'Press.mjs': 'export default function Press(props) { return { drawn: "Press", props } }\n'
+  }
+  let src = read('mobile/src/components/SendLinkButton.js')
+  const swaps = [
+    ["from 'react'", "from './react.mjs'"],
+    ["from 'react-native'", "from './react-native.mjs'"],
+    ["from '../lib/theme'", "from './theme.mjs'"],
+    ["from '../lib/downloadLink'", "from './downloadLink.mjs'"],
+    ["from '../lib/sendLink'", `from '${repoUrl('mobile/src/lib/sendLink.js')}'`],
+    ["from './Press'", "from './Press.mjs'"]
+  ]
+  for (const [from, to] of swaps) {
+    assert.ok(src.includes(from), `SendLinkButton.js no longer imports ${from}; the bench needs telling`)
+    src = src.replaceAll(from, to)
+  }
+  const code = transformSync(src, { loader: 'jsx', format: 'esm', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'Fragment' }).code
+  files['SendLinkButton.mjs'] = `const h = (type, props) => (typeof type === 'function' ? type({ ...(props || {}) }) : { drawn: type, props })\nconst Fragment = 'Fragment'\n${code}`
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+  try {
+    const { default: SendLinkButton } = await import(pathToFileURL(join(dir, 'SendLinkButton.mjs')).href)
+    return { bench, draw: (props) => SendLinkButton(props) }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -695,5 +748,202 @@ export function run(test) {
     /* And the warning is still said as it was. */
     assert.match(connect, /const mismatch = elsewhere \? <Mismatch email=\{remembered\} \/> : null/)
     assert.match(flat('mobile/src/components/WrongAccount.js'), /const saying = Boolean\(active && elsewhere\)/)
+  })
+
+  /* ------------------------------------------------------------------ */
+  /* "Send me the download link"                                          */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * "Add a 'Send me the download link' button on the three screens where
+   * they get stuck" — Justin, 15 October 2026. Under the words that say no
+   * computer was ever set up, on the waiting screen, the play screen's card
+   * and Phone & computer, and only behind the same definite no.
+   */
+  test('the download link button is under the no-computer words on all three screens, behind the same no, and nowhere else', () => {
+    const app = flat('mobile/App.js')
+    const waking = app.slice(app.indexOf('function Waking('))
+    const wakingWords = waking.indexOf('<NoComputerWords email={noComputer.email} />')
+    const wakingButton = waking.indexOf('{noneSaid ? <SendLinkButton email={noComputer.email} /> : null}')
+    assert.ok(wakingWords > 0, 'the waiting screen lost the words')
+    assert.ok(wakingButton > wakingWords, 'the waiting screen has no download link button under the words, or not behind the same no')
+    assert.ok(wakingButton < waking.indexOf('<Press label="Look for the computer again"'), 'the waiting screen’s button is not with the words, above Look for the computer again')
+
+    const stage = flat('mobile/src/screens/Stage.js')
+    const card = stage.slice(stage.indexOf("<Toast open={lost && !lostAway && !error} onLayout={endOf('advice')}>"))
+    const advice = card.slice(0, card.indexOf('</Toast>'))
+    const stageButton = advice.indexOf('{noComputer ? <SendLinkButton email={noComputer.email} height={44} /> : null}')
+    assert.ok(stageButton > advice.indexOf('</Note>'), 'the play screen’s card has no download link button under its words, behind the same no, at 44')
+    assert.ok(stageButton < advice.indexOf('<Press label="Look for the computer again"'), 'the play screen’s button is not above Look for the computer again')
+    assert.ok(stage.indexOf('<SendLinkButton ') > stage.indexOf('</ScrollView>'), 'the button is in the scrolling content, where it pushes the foot under a thumb')
+
+    const settings = flat('mobile/src/screens/Settings.js')
+    const settingsWords = settings.indexOf('<NoComputerWords email={noComputer.email} />')
+    const settingsButton = settings.indexOf('{noneSaid ? <SendLinkButton email={noComputer.email} /> : null}')
+    assert.ok(settingsButton > settingsWords && settingsWords > 0, 'Phone & computer has no download link button under the words, or not behind the same no')
+    assert.ok(settingsButton < settings.indexOf('Make sure you’re connected to your computer using'), 'Phone & computer’s button is not with the words')
+
+    /* Three, and only three, on the whole phone; never inside the words themselves, which stay words. */
+    const uses = []
+    const walk = (dir) => {
+      for (const name of readdirSync(new URL(`../${dir}`, import.meta.url))) {
+        const path = `${dir}/${name}`
+        if (statSync(new URL(`../${path}`, import.meta.url)).isDirectory()) walk(path)
+        else if (/\.js$/.test(name)) for (const m of read(path).matchAll(/<SendLinkButton /g)) uses.push(`${path}@${m.index}`)
+      }
+    }
+    walk('mobile/src')
+    for (const m of read('mobile/App.js').matchAll(/<SendLinkButton /g)) uses.push(`mobile/App.js@${m.index}`)
+    assert.equal(uses.length, 3, `the button is drawn somewhere else as well, or somewhere is missing it: ${uses.join(', ')}`)
+    assert.ok(!/SendLinkButton|sendDownloadLink/.test(read('mobile/src/components/NoComputer.js')), 'the words about the download became a button')
+  })
+
+  test('the button sends the account’s own address through the download-link function the walkthrough uses, and nothing else', () => {
+    const code = read('mobile/src/components/SendLinkButton.js').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ')
+    const imports = [...code.matchAll(/from\s+'([^']+)'/g)].map((m) => m[1])
+    assert.deepEqual(imports, ['react', 'react-native', '../lib/theme', '../lib/downloadLink', '../lib/sendLink', './Press'], 'the button reaches for something besides the download link')
+    assert.match(code, /import \{ sendDownloadLink \} from '\.\.\/lib\/downloadLink'/, 'the button does not send through the download link the walkthrough uses')
+    assert.match(code, /^const sender = linkSender\(sendDownloadLink\)$/m, 'each button keeps its own memory, or sends some other way')
+    assert.ok(!/\bfetch\(|Linking|openURL|supabase|https?:|TextInput/.test(code), 'the button opens a page, asks the server something else, or takes a typed address')
+    assert.match(code, /sender\.press\(email\)/, 'the button sends something other than the address it was given')
+    /* Given the account's own address, at every place it is drawn. */
+    for (const file of ['mobile/App.js', 'mobile/src/screens/Stage.js', 'mobile/src/screens/Settings.js']) {
+      for (const m of flat(file).matchAll(/<SendLinkButton ([^/]*)\/>/g)) {
+        assert.match(m[1], /^email=\{noComputer\.email\}( height=\{44\})? $/, `${file} hands the button an address other than the account’s own: ${m[1]}`)
+      }
+    }
+    /* The download link itself is the deployed function, as it was. */
+    const link = read('mobile/src/lib/downloadLink.js')
+    assert.match(link, /fetch\(`\$\{DEFAULT_PROJECT\.url\}\/functions\/v1\/download-link`/, 'the download link goes somewhere other than the download-link function')
+    assert.match(link, /body: JSON\.stringify\(\{ email: addr \}\)/, 'the download link sends more than the address')
+    /* And the memory is plain, so it can be run. */
+    assert.ok(!/^import /m.test(read('mobile/src/lib/sendLink.js')), 'lib/sendLink.js imports something, so a test can no longer run it as it is')
+  })
+
+  test('the button says one short line at a time, and a link sent from one screen reads as sent on the others for ten minutes', async () => {
+    const { linkSender, sendLinkSaid, SEND_LINK, SENT_FOR_MS } = await import('../mobile/src/lib/sendLink.js')
+    assert.equal(SENT_FOR_MS, 10 * 60 * 1000, '“Sent” is not held for the download-link function’s own ten minutes')
+    const rate = read('supabase/functions/download-link/index.ts').match(/const EVERY_MINUTES = (\d+)/)?.[1]
+    assert.equal(Number(rate) * 60 * 1000, SENT_FOR_MS, 'the button and the download-link function disagree about how long one send lasts')
+    assert.deepEqual(SEND_LINK, {
+      idle: 'Send me the download link',
+      sending: 'Sending…',
+      sent: 'Sent. Check your email',
+      failed: 'Didn’t send. Tap to try again'
+    })
+    /* One line on the smallest phone: short, and never two lines. */
+    for (const label of Object.values(SEND_LINK)) {
+      assert.ok(!label.includes('\n') && label.length <= 30, `“${label}” could take two lines and move the card`)
+    }
+
+    const clock = { t: 5_000_000 }
+    const sent = []
+    let answer = () => ({ ok: true })
+    const held = []
+    const send = (email) => {
+      sent.push(email)
+      return new Promise((resolve, reject) => held.push(() => {
+        try {
+          resolve(answer())
+        } catch (err) {
+          reject(err)
+        }
+      }))
+    }
+    const memory = linkSender(send, () => clock.t)
+    const told = []
+    memory.watch(() => told.push(memory.phase('player@example.com')))
+    const land = async (p) => {
+      held.shift()()
+      await p
+    }
+
+    assert.equal(memory.phase('player@example.com'), 'idle')
+    const first = memory.press(' Player@Example.com ')
+    assert.equal(memory.phase('player@example.com'), 'sending', 'a link on its way does not say so')
+    assert.equal(await memory.press('player@example.com'), null, 'a second tap while one is on its way sends again')
+    await land(first)
+    assert.deepEqual(sent, ['Player@Example.com'], 'it sent something other than the address it was given, or sent twice')
+    /* Another screen, the same account: the same answer. */
+    assert.equal(memory.phase('PLAYER@example.com'), 'sent', 'a link sent from one screen does not read as sent on another')
+    assert.equal(await memory.press('player@example.com'), null, 'a tap inside the ten minutes sends again, which the function would swallow')
+    clock.t += SENT_FOR_MS - 1
+    assert.equal(memory.phase('player@example.com'), 'sent')
+    assert.ok(memory.sentLeft('player@example.com') === 1, 'the button does not know when “Sent” runs out')
+    clock.t += 1
+    assert.equal(memory.phase('player@example.com'), 'idle', '“Sent” stays after the ten minutes')
+    assert.deepEqual(told, ['sending', 'sent'], 'the other screens are not told')
+
+    /* Refused, said as a failure with its reason, and a tap tries again. */
+    answer = () => ({ ok: false, message: 'Email isn’t set up yet. Open fractal.newbold.cloud/downloads on your computer.' })
+    const second = memory.press('player@example.com')
+    await land(second)
+    assert.equal(memory.phase('player@example.com'), 'failed')
+    assert.match(sendLinkSaid('failed', 'player@example.com', memory.why('player@example.com')).spoken, /^The download link didn’t send\. Email isn’t set up yet\./, 'a screen reader is not told why')
+    answer = () => {
+      throw new Error('offline')
+    }
+    const third = memory.press('player@example.com')
+    await land(third)
+    assert.equal(memory.phase('player@example.com'), 'failed', 'a send that threw reads as sent')
+    assert.equal(sent.length, 3)
+
+    /* No address, no send. */
+    assert.equal(await memory.press(''), null)
+    assert.equal(await memory.press(null), null)
+    assert.equal(sent.length, 3, 'it sent with no address')
+
+    /* What each moment says, and whether a tap does anything. */
+    assert.deepEqual(sendLinkSaid('idle', 'a@b.co'), { label: 'Send me the download link', spoken: 'Send me the download link. It goes to a@b.co.', busy: false })
+    assert.equal(sendLinkSaid('sending', 'a@b.co').busy, true)
+    /* Sent is the line that says it worked: drawn at full strength, never dimmed (a tap on it sends nothing; see press above). */
+    assert.equal(sendLinkSaid('sent', 'a@b.co').busy, false, 'Sent is dimmed, so the line that says it worked is hard to read')
+    assert.match(sendLinkSaid('sent', 'a@b.co').spoken, /^Sent the download link to a@b\.co\. Open it on the computer your Fractal is plugged into\.$/)
+    assert.equal(sendLinkSaid('failed', 'a@b.co').busy, false, 'a failure cannot be tried again')
+    for (const phase of ['idle', 'sending', 'sent', 'failed']) {
+      assert.ok(!/\bMac\b/.test(sendLinkSaid(phase, 'a@b.co', 'x').spoken), 'the button calls the computer a Mac')
+    }
+  })
+
+  test('the button, drawn: nothing without an address, one label at a fixed height with nothing under it, and the account’s own address sent', async () => {
+    const { bench, draw } = await sendButtonOnABench()
+    assert.equal(draw({ email: '' }), null, 'a button with no address to send to is drawn')
+    assert.equal(draw({ email: '   ' }), null)
+    assert.equal(draw({}), null)
+
+    const onPlay = draw({ email: 'fan@example.com', height: 44 })
+    assert.equal(onPlay.drawn, 'Press')
+    assert.equal(onPlay.props.label, 'Send me the download link')
+    assert.equal(onPlay.props.height, 44, 'the play screen’s button is not the height of the buttons beside it')
+    for (const grows of ['sub', 'caption', 'icon', 'after', 'badge']) {
+      assert.equal(onPlay.props[grows], undefined, `the button has a ${grows}, which can change its height`)
+    }
+    assert.equal(onPlay.props.disabled, false)
+    assert.match(onPlay.props.accessibilityLabel, /fan@example\.com/, 'a screen reader is not told where it goes')
+    assert.equal(draw({ email: 'fan@example.com' }).props.height, 56, 'off the play screen the button is not a full-size button')
+
+    await onPlay.props.onPress()
+    assert.deepEqual(bench.sent, ['fan@example.com'], 'the button sent something other than the address it was given')
+    const after = draw({ email: 'fan@example.com', height: 44 })
+    assert.equal(after.props.label, 'Sent. Check your email')
+    assert.equal(after.props.disabled, false, 'Sent is drawn dimmed and faint, so the line that says it worked is hard to read')
+    await after.props.onPress()
+    assert.deepEqual(bench.sent, ['fan@example.com'], 'a tap on Sent sent the link again')
+    assert.equal(after.props.height, 44, 'the button changed height with its words')
+    assert.match(bench.said.at(-1) || '', /^Sent the download link to fan@example\.com\./, 'a screen reader is not told it went')
+    /* Another screen, drawn after: it went. */
+    assert.equal(draw({ email: 'FAN@example.com' }).props.label, 'Sent. Check your email', 'another screen offers to send it again')
+
+    bench.answer = { ok: false, message: 'Couldn’t reach the mail service.' }
+    const other = draw({ email: 'second@example.com' })
+    const going = other.props.onPress()
+    /* On its way: dimmed, the one moment a tap does nothing and it says so. */
+    const sending = draw({ email: 'second@example.com' })
+    assert.equal(sending.props.label, 'Sending…')
+    assert.equal(sending.props.disabled, true, 'Sending… looks like it can be tapped again')
+    await going
+    assert.equal(draw({ email: 'second@example.com' }).props.label, 'Didn’t send. Tap to try again')
+    assert.match(bench.said.at(-1) || '', /Couldn’t reach the mail service\./, 'a screen reader is not told why it did not send')
+    delete globalThis.__sendLinkBench
   })
 }

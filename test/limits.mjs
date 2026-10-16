@@ -3782,6 +3782,103 @@ export function run(test) {
     assert.match(words, /Over Bluetooth \(beta\) they go from the phone to the adapter on your unit, through no relay and no internet at all/, 'the relay paragraph does not say Bluetooth goes through no relay')
   })
 
+  test('the privacy policy says what the setup emails are, how many, what they keep, and for how long', () => {
+    /*
+     * "One friendly email a day after buying if no computer has signed in"
+     * (15 October 2026). Four sentences on this page became untrue the day it
+     * was written: the tester's email was "the only time", the Developer
+     * pages recorded "nothing new", the list of emails left it out, and so
+     * did how long things are kept. Each is tied here to what the migration
+     * and the function do, so the page cannot drift from them.
+     */
+    const words = read('public/privacy.html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+    const sql = read('supabase/migrations/20261015_setup_reminders.sql')
+    const fn = read('supabase/functions/setup-reminder/index.ts')
+
+    assert.match(sql, /s\.unlocked_at <= now\(\) - interval '24 hours'/, 'the first email no longer waits a day; the policy should say when it goes')
+    assert.match(sql, /s\.first_sent_at <= now\(\) - interval '4 days'/, 'the reminder no longer waits four days; the policy should say when it goes')
+    assert.match(words, /If no computer app has signed in with your account a day after the full version arrives on it, one email goes to your address with the download link and the three steps to set it up, and one reminder at least four days later if there is still none\./, 'the policy does not say when the setup emails go')
+    assert.match(words, /Never more than those two, none at all once a computer has signed in, and none to an address that was never confirmed\./, 'the policy does not say two is the most, or who never gets one')
+    assert.match(fn, /const DEFAULT_REPLY_TO = 'justinnewbold@gmail\.com'/)
+    assert.match(words, /A reply goes to Justin\./, 'the policy does not say where a reply goes')
+    /*
+     * EVERY DATE THE MIGRATION KEEPS, said. Read off the tables themselves,
+     * so a new column fails here until the page says it: unlock_seen's date
+     * (and whether it is an estimate of that date), setup_reminders' two sent
+     * dates, the refusal and which email it was, and the leave-out.
+     */
+    const columns = (t) => {
+      const body = sql.slice(sql.indexOf(`create table if not exists public.${t} (`))
+      return [...body.slice(0, body.indexOf(');')).matchAll(/^\s+(\w+) (?:uuid|timestamptz|boolean|text)/gm)].map((m) => m[1])
+    }
+    assert.deepEqual(columns('unlock_seen'), ['account_id', 'first_seen_at', 'estimated'], 'what is kept about when somebody got the full version changed; the policy should say it')
+    assert.deepEqual(columns('setup_reminders'), ['account_id', 'first_sent_at', 'reminder_sent_at', 'failed_at', 'failed_kind', 'left_out_at'], 'what is kept about the setup emails changed; the policy should say it')
+    assert.deepEqual(columns('computer_seen'), ['account_id', 'first_seen_at'], 'what is kept about computers changed; the policy should say it')
+    assert.match(words, /a few dates are kept with your account: when it was first seen with the full version, when each of those two emails went or was refused, and when Justin left you out of them, if he did\./, 'the policy does not say what is kept for the setup emails')
+    /* The computer date is kept for EVERY account (note_setup_facts reads every computer app's sign-in), so it is said under An account, not under "only if you buy it". */
+    assert.ok(!/entitlements/.test(sql.slice(sql.indexOf('insert into public.computer_seen'), sql.indexOf('insert into public.unlock_seen'))), 'the computer date is now kept only for buyers; the policy says every account')
+    const account = words.slice(words.indexOf('An account — only if you make one'), words.indexOf('Unlocking the full version — a purchase record only if you buy it'))
+    assert.match(account, /When a computer app first signed in with it Kept for every account, bought or not, so that nobody who has already set up the computer is told how to/, 'the account section does not say the first computer date is kept for every account')
+    assert.match(account, /Your email address To sign you in, to reset a password, and for the help setting up the computer described under Unlocking the full version/, 'the account section says the address is only for signing in')
+    assert.match(words, /So is the first time a computer app signed in with it, which is kept for every account \(see An account ?\)\./, 'the setup emails’ paragraph leaves out the computer date')
+    /* The Resend list, with no parenthesis inside it: the test above reads it that way. */
+    assert.match(words, /Emails this app sends \([^)]*the email about setting up the computer and its one reminder[^)]*\) go through Resend/, 'the list of emails Resend sends leaves the setup emails out')
+    /* The four sentences that were true until now. */
+    assert.ok(!/that is the only time\./.test(words), 'the tester’s email is still “the only time”, and a tester with no computer gets the setup emails too')
+    assert.match(words, /that is the only time, apart from the help setting up the computer described under Unlocking the full version ?\./)
+    assert.ok(!/Nothing new is recorded for these pages/.test(words), 'the Developer pages still “record nothing new”, and the setup emails keep dates')
+    assert.ok(!/three dates/.test(words), 'the policy still says three dates, and more are kept')
+    assert.match(words, /apart from the dates kept for the help setting up the computer, under An account and Unlocking the full version ?, and the marks on Sales described above\. Nothing else new is recorded for these pages/)
+    assert.match(words, /Paid but no computer yet — each account with the full version that no computer app has signed in with: its email address and whether it is confirmed, how and when it got the full version \(which store, a test purchase, or given by hand\), and which of the emails about setting up the computer have gone to it or been refused\. He can leave an account out of those emails\./, 'the Developer pages do not list Paid but no computer yet, or leave out what it shows')
+    /* What that list shows, read off the words that draw it. */
+    const admin = read('shared/admin.mjs')
+    for (const [shown, why] of [
+      [/Email not confirmed, so the setup emails don’t go to them\./, 'whether the address is confirmed'],
+      [/\(a test purchase, no money taken\)/, 'a test purchase'],
+      [/Given the full version by hand/, 'given by hand'],
+      [/Paid \$\{paidBy\(paid\.store\)\}/, 'which store'],
+      [/was refused \$\{ago\(row\.failed_at, now\)\}/, 'a refusal']
+    ]) {
+      assert.match(admin, shown, `the list no longer shows ${why}; the policy should stop saying it does`)
+    }
+    const kept = words.slice(words.indexOf('How long it is kept'), words.indexOf('Deleting your data'))
+    assert.match(kept, /The dates kept for the help setting up the computer, and when a computer app first signed in — until you delete the account\./, 'how long the setup emails’ dates are kept is not said')
+    for (const t of ['computer_seen', 'unlock_seen', 'setup_reminders']) {
+      assert.match(sql, new RegExp(`create table if not exists public\\.${t} \\(\\s*account_id uuid primary key references auth\\.users \\(id\\) on delete cascade`), `${t} is not deleted with the account, and the policy says it is`)
+    }
+    /* "Except two" still holds: the setup emails go to people who bought, under Unlocking the full version. */
+    assert.match(words, /something you choose to turn on, except two:/)
+    const unlocking = words.slice(words.indexOf('Unlocking the full version — a purchase record only if you buy it'), words.indexOf('Your setlists — only if you are signed in'))
+    assert.ok(unlocking.includes('Help setting up the computer.'), 'the setup emails are not described under Unlocking the full version')
+    /* And the date moved with the words. */
+    const when = words.match(/last updated (\d{1,2} \w+ 2026)/)?.[1]
+    assert.ok(when && Date.parse(`${when} UTC`) >= Date.parse('15 October 2026 UTC'), `the privacy page still says it was last updated ${when}`)
+  })
+
+  test('the privacy policy says what a sale marked handled keeps, and for how long', () => {
+    /*
+     * "I wanna [be able to] mark as completed or so that it doesn't appear
+     * anymore after it's been handled." (15 October 2026.) A mark is a new
+     * thing kept about a customer, on a page that said nothing new is
+     * recorded for it. Every column of the table is said, read off the
+     * migration, so a new one fails here until the page says it too.
+     */
+    const words = read('public/privacy.html').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+    const sql = read('supabase/migrations/20261015_sales_handled.sql')
+    const body = sql.slice(sql.indexOf('create table if not exists public.sales_handled ('))
+    const columns = [...body.slice(0, body.indexOf(');')).matchAll(/^\s+(\w+) (?:uuid|text|bigint|integer|timestamptz)/gm)].map((m) => m[1])
+    assert.deepEqual(columns, ['account_id', 'kind', 'paid_until', 'bought_count', 'near_count', 'handled_at'], 'what a handled mark keeps changed; the policy should say it')
+    assert.match(
+      words,
+      /Sales — each purchase: when, through which store, for how much, and by which account; and anybody who has paid twice, or paid on an account whose email was never confirmed, so he can put it right\. Once he has, he can mark it handled\. Then the account, which of those two it was, when he marked it, the time of the newest purchase it was about, and how many purchases it counted \(with any card sale beside it\) are kept, so it is not shown again unless they pay again\./,
+      'the Developer pages do not say what marking a sale handled keeps'
+    )
+    assert.match(words, /and the marks on Sales described above\. Nothing else new is recorded for these pages/, 'the Developer pages still say nothing new is kept for them')
+    const kept = words.slice(words.indexOf('How long it is kept'), words.indexOf('Deleting your data'))
+    assert.match(kept, /A sale marked handled — the mark is kept until you delete the account\./, 'how long a handled mark is kept is not said')
+    assert.match(body, /^create table if not exists public\.sales_handled \(\s*account_id uuid not null references auth\.users \(id\) on delete cascade,/, 'a handled mark outlives the account, and the policy says it does not')
+  })
+
   test('the privacy policy names Expo and GitHub, says what the update check carries, and where an unpaid account is deleted', () => {
     /*
      * Apple's 5.1.1(i): the policy must "confirm that any third party with

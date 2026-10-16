@@ -4995,8 +4995,10 @@ export function run(test) {
     assert.equal((waking.match(/label="Open Settings"/g) || []).length, 1)
     /* Changed on purpose, 12 October 2026 (1.87.17): AppState joined the line, for the
        waiting screen's fifteen-second clock, which does not count time away from the screen
-       (useLookedLong). What this holds is Linking, for Open Settings, and that is unchanged. */
-    assert.match(flat('mobile/App.js'), /import \{ ActivityIndicator, Alert, AppState, Appearance, BackHandler, Linking, Text, View \} from 'react-native'/)
+       (useLookedLong). What this holds is Linking, for Open Settings, and that is unchanged.
+       And again, 15 October 2026: ScrollView joined it, for the waiting screen's column,
+       which scrolls now when it is taller than a small phone. */
+    assert.match(flat('mobile/App.js'), /import \{ ActivityIndicator, Alert, AppState, Appearance, BackHandler, Linking, ScrollView, Text, View \} from 'react-native'/)
   })
 
   test('the iPhone module answers whether Bluetooth is allowed without asking, and the build links CoreBluetooth for it', () => {

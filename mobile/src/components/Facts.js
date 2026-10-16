@@ -11,6 +11,10 @@ import { color, font, radius, space } from '../lib/theme'
  * paste somewhere else. A row that names somebody (`row.email`) can also be
  * tapped, when `onRow` is given: Everyone with an account uses it to open
  * that person.
+ *
+ * `detail(row)` draws whatever belongs under a row, as the browser's
+ * src/components/Facts.jsx does: on Sales at a glance, the Handled button
+ * under each Paid twice row. A row it gives nothing for is drawn as before.
  */
 const look = (i, pressed) => ({
   flexDirection: 'row',
@@ -22,7 +26,7 @@ const look = (i, pressed) => ({
   opacity: pressed ? 0.6 : 1
 })
 
-export default function Facts({ title, rows, onRow }) {
+export default function Facts({ title, rows, onRow, detail }) {
   if (!rows?.length) return null
   return (
     <View style={{ gap: space.xs }}>
@@ -33,13 +37,16 @@ export default function Facts({ title, rows, onRow }) {
         {rows.map((row, i) => {
           const tappable = !!(onRow && (row.email || row.id))
           const Row = tappable ? Pressable : View
-          return (
+          const below = detail ? detail(row) : null
+          /* With something under it, the line between rows goes above both. */
+          const at = below ? 0 : i
+          const line = (
             <Row
               key={`${row.label}-${i}`}
               {...(tappable
                 ? { onPress: () => onRow(row), accessibilityRole: 'button', accessibilityHint: row.id ? 'Opens this message' : 'Opens this person' }
                 : {})}
-              style={tappable ? ({ pressed }) => look(i, pressed) : look(i, false)}
+              style={tappable ? ({ pressed }) => look(at, pressed) : look(at, false)}
             >
               {row.label ? (
                 <Text selectable style={{ width: 120, color: color.silkDim, fontSize: font.small, lineHeight: font.small * 1.4 }}>
@@ -54,6 +61,13 @@ export default function Facts({ title, rows, onRow }) {
               </Text>
               {tappable ? <Text style={{ color: color.silkDim, fontSize: font.body }}>›</Text> : null}
             </Row>
+          )
+          if (!below) return line
+          return (
+            <View key={`${row.label}-${i}`} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: color.rule, paddingBottom: space.md }}>
+              {line}
+              {below}
+            </View>
           )
         })}
       </View>

@@ -3102,7 +3102,7 @@ export function run(test) {
       }
       assert.ok(!/from '(\.\.\/lib|\.)\/ways-in'/.test(code), `${name} imports the browser's routes, which name Google Play`)
     }
-    for (const [tool, page] of [['AccessTool', 'access'], ['SalesTool', 'sales'], ['UsageTool', 'usage'], ['LiveTool', 'live'], ['MessagesTool', 'messages'], ['AccountsTool', 'accounts']]) {
+    for (const [tool, page] of [['AccessTool', 'access'], ['SalesTool', 'sales'], ['UsageTool', 'usage'], ['LiveTool', 'live'], ['MessagesTool', 'messages'], ['AccountsTool', 'accounts'], ['StuckTool', 'stuck']]) {
       assert.match(settings, new RegExp(`\\{page === '${page}' && isAdmin\\(account\\?\\.id\\) \\? \\( <> \\{head\\([^)]*\\)\\} <${tool} \\/>`), `${tool} is drawn for somebody other than Justin`)
       assert.equal(settings.split(`<${tool} `).length - 1, 1, `${tool} is drawn in a second place`)
     }
@@ -4396,7 +4396,9 @@ export function run(test) {
        above it (sales, usage) only run when the handler calls them. */
     const handler = server.slice(server.indexOf('Deno.serve('))
     const lock = handler.indexOf('ADMINS.includes(me.id)')
-    for (const step of ["rpc('account_details'", 'await sales()', 'await usage()', "rpc('owner_accounts'", 'confirmByHand(']) {
+    /* And Paid but no computer yet's four (15 October 2026): the list, the switch, leaving somebody out, the sample. */
+    /* And Sales at a glance's Handled (15 October 2026). */
+    for (const step of ["rpc('account_details'", 'await sales()', 'await usage()', "rpc('owner_accounts'", 'confirmByHand(', 'await stuck()', 'reminderSwitch(', 'leaveOut(', 'reminderSample(', 'markHandled(']) {
       assert.ok(lock > 0 && handler.includes(step) && lock < handler.indexOf(step), `the server does ${step} before checking who is asking`)
     }
     /*
@@ -5780,12 +5782,14 @@ export function run(test) {
     assert.match(read('src/components/UsageTool.jsx'), /action: 'usage'/)
   })
 
-  test('Sales at a glance names anybody who paid twice, first, and which purchase can be refunded', async () => {
+  test('Sales at a glance names anybody who paid twice, after the sales, and which purchase can be refunded', async () => {
     /*
      * A customer paid on his iPhone and again by card on the website, and the
      * page counted two sales. It names them now: the server lists anybody
-     * with more than one real purchase, and the page puts them on top, in
-     * plain words, with the one RevenueCat can refund.
+     * with more than one real purchase, and the page says so in plain words,
+     * with the one RevenueCat can refund. On top at first; below the sales
+     * since 15 October 2026: "probably doesn't need to be at the top of the
+     * list you know."
      */
     const { salesSections } = await import('../shared/admin.mjs')
     const now = new Date(2026, 9, 11, 15, 0).getTime()
@@ -5802,8 +5806,10 @@ export function run(test) {
       },
       now
     )
-    assert.equal(sections[0]?.title, 'Paid twice', 'paying twice is not the first thing on the page')
-    assert.deepEqual(sections[0].rows, [
+    assert.equal(sections[0]?.title, 'Sales', 'the sales are not the first thing on the page')
+    const twice = sections.find((s) => s.title === 'Paid twice')
+    assert.equal(sections.indexOf(twice), sections.findIndex((s) => s.title === 'Latest sales') + 1, 'Paid twice is not right after the latest sales')
+    assert.deepEqual(twice.rows.map(({ label, value }) => ({ label, value })), [
       { label: 'p@x.com', value: 'Paid on the App Store, Oct 8, 2026, and by card on the website, Oct 8, 2026. The card one can be refunded in RevenueCat.' },
       { label: 'q@x.com', value: 'Paid on Google Play, Oct 1, 2026, and on the App Store, Oct 9, 2026.' },
       {
@@ -5811,7 +5817,12 @@ export function run(test) {
         value: 'Paid on the App Store, Oct 1, 2026; on Google Play, Oct 2, 2026; and by card on the website, Oct 3, 2026. The card one can be refunded in RevenueCat.'
       }
     ])
-    assert.equal(sections[1].title, 'Sales', 'the rest of the page moved')
+    /* What Handled needs, on each row: whose, which list, and the newest purchase it is about. */
+    assert.deepEqual(twice.rows.map(({ email, kind, until }) => [email, kind, until]), [
+      ['p@x.com', 'twice', at(2026, 9, 8)],
+      ['q@x.com', 'twice', at(2026, 9, 9)],
+      ['r@x.com', 'twice', at(2026, 9, 3)]
+    ])
     /* Nobody twice, or a server from before it counted: no section at all. */
     for (const answer of [{ ...base, twice: [] }, base]) {
       assert.ok(!salesSections(answer, now).some((s) => s.title === 'Paid twice'), 'an empty Paid twice is drawn')
@@ -5826,12 +5837,13 @@ export function run(test) {
     const server = read('supabase/functions/grant-access/index.ts')
     const sales = server.slice(server.indexOf('async function sales()'), server.indexOf('async function usage()'))
     assert.match(sales, /const real = bought\.filter\(\(p\) => p\.store !== 'promotional'\)/)
+    /* Real purchases only; and one he marked handled, with nothing more since, is counted instead of listed. The count Handled keeps takes refunds in, and the row carries the newest one paid for, which Handled sends back. */
     assert.match(
       sales,
-      /const paid = real\.filter\(\(p\) => !p\.sandbox && !p\.refunded\)\s*if \(paid\.length > 1\) twice\.push\(\{ email: b\.email, stores: paid\.map\(\(p\) => p\.store\), at: paid\.map\(\(p\) => p\.at\) \}\)/,
+      /const paid = real\.filter\(\(p\) => !p\.sandbox && !p\.refunded\)\s*if \(paid\.length > 1\) \{\s*(\/\*[\s\S]*?\*\/\s*)?const row = \{ email: b\.email, stores: paid\.map\(\(p\) => p\.store\), at: paid\.map\(\(p\) => p\.at\), count: real\.filter\(\(p\) => !p\.sandbox\)\.length, until: newestOf\(paid\.map\(\(p\) => p\.at\)\) \}\s*if \(isHandled\('twice', b\.id, row\)\) handled\.twice \+= 1\s*else twice\.push\(row\)/,
       'paying twice is counted from something other than real purchases'
     )
-    assert.match(sales, /sales: sold,\s*(\/\*[\s\S]*?\*\/\s*)?twice,\s*(\/\*[\s\S]*?\*\/\s*)?unconfirmed\s*\}/, 'the list is not in the answer, or replaced a field an older phone reads')
+    assert.match(sales, /sales: sold,\s*(\/\*[\s\S]*?\*\/\s*)?twice,\s*(\/\*[\s\S]*?\*\/\s*)?unconfirmed,\s*(\/\*[\s\S]*?\*\/\s*)?handled\s*\}/, 'the list is not in the answer, or replaced a field an older phone reads')
   })
 
   test('Customer lookup and Sales at a glance say what happened, in his words', async () => {
@@ -12500,8 +12512,9 @@ export function run(test) {
     /* Troubleshooting is on the front again, under Help; the developer tools sit inside Developer.
        Changed on purpose, 13 October 2026 (1.87.21): 'updating', the steps the
        red line on the computer card opens, is a child of Phone & computer
-       beside 'offline'. */
-    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer' \}/, 'a page goes back somewhere it did not come from')
+       beside 'offline'. And on 15 October 2026, 'stuck', Paid but no computer
+       yet, a child of Developer like the other tools. */
+    assert.match(set, /const PARENT = \{ offline: 'link', updating: 'link', access: 'developer', sales: 'developer', accounts: 'developer', messages: 'developer', live: 'developer', usage: 'developer', stuck: 'developer' \}/, 'a page goes back somewhere it did not come from')
     /* And it says where it is going, because "Settings" would be a lie. */
     assert.match(set, /label=\{upLabel\(page\)\}/, 'the Back button names a screen it does not go to')
     assert.match(set, /<EdgeBack onBack=\{goBack\}>/, 'Settings cannot be swiped out of')
