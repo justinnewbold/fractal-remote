@@ -608,6 +608,47 @@ export const AREAS = [
         why: 'signing in is a page in the browser, with nothing to close'
       }
     ]
+  },
+  {
+    /*
+     * Settings → Colours, and the colour sheet it opens. "A section where a
+     * user can edit the colors of the blocks/presets and effects." What it
+     * offers is lib/colourPage at both ends; this holds the buttons, and the
+     * test further down holds the looks, the swatches and the words.
+     */
+    area: 'the Colours page',
+    web: ['src/components/Colours.jsx', 'src/components/ColourSheet.jsx'],
+    phone: ['mobile/src/components/Colours.js', 'mobile/src/components/ColourSheet.js'],
+    notButtons: {
+      'Your colour': 'the word on an effect tile that wears a colour you chose — the tile is the button, and what it opens is the colour sheet',
+      On: 'the corner word on the lit tile at the top of the colour sheet, a picture of Play’s tile rather than a control',
+      Off: 'the corner word on the unlit tiles drawn beside the switched-off choices and at the top of the sheet, pictures of Play’s tile'
+    },
+    buttons: [
+      { does: 'take your own colours off and keep the look', web: 'Clear them', phone: 'Clear them' },
+      { does: 'show the rest of the unit’s effects, and hide them again', web: 'More effects', phone: 'More effects', also: ['Fewer effects'] },
+      {
+        does: 'draw switched-off effects in their own colour',
+        /* A radio button's label at this end, which the scan of <button>s cannot see: the words are held by the test below. */
+        web: 'Keep their colour',
+        phone: 'Keep their colour',
+        unreadable: ['web']
+      },
+      { does: 'draw switched-off effects grey, as the unit does', web: 'Grey when off', phone: 'Grey when off', unreadable: ['web'] },
+      { does: 'change your mind about putting the colours back', web: 'Keep mine', phone: 'Keep mine' },
+      { does: 'put the colours back, once asked', web: 'Put back', phone: 'Put back' },
+      { does: 'wear the look you had before, a moment after a new one went on', web: 'Undo', phone: 'Undo' },
+      { does: 'close the colour sheet without painting anything', web: 'Cancel', phone: 'Cancel' },
+      { does: 'paint the tile in the colour picked', web: 'Use it', phone: 'Use it' },
+      { does: 'take the colour a step darker', web: 'Darker', phone: 'Darker' },
+      { does: 'take the colour a step lighter', web: 'Lighter', phone: 'Lighter' },
+      {
+        does: 'pick any colour at all, or type its colour code',
+        web: 'Any colour…',
+        phone: null,
+        why: 'the browser has a colour picker of its own; the phone would need a package with native code for one, which moves the fingerprint and costs a build, and the grid with Lighter and Darker covers it (lib/colourPage freePick says what a free pick goes through, for both)'
+      }
+    ]
   }
 ]
 
@@ -990,9 +1031,6 @@ export function run(test) {
         'iPhone only — the watch app comes with the iPhone app and works through it; a browser has no watch, and there is no Android watch app',
       'Bluetooth (beta)':
         'phone only — a browser cannot reach a Bluetooth MIDI adapter; the phone does it through its own native module, and since 11 October 2026 only on Justin’s account (useBluetoothAllowed, mobile/src/lib/bluetooth.js)',
-      /* Take this out when the browser's own Colours page lands, later in the
-         same pull request (1.87.39): the check below fails until it is. */
-      Colours: 'phone only for now — the browser’s Colours page, from the same src/lib/colourPage.js, comes in the next part of this same pull request',
       Footswitches:
         'phone only as a Settings row — the browser shows the same panel, from the same shared/footswitches.mjs, as a section of the Edit sheet, where it has been since it was built',
       'Get it on your phone or tablet': 'browser only — a phone has no use for a way to get itself onto a phone, and it stays on the front page rather than inside About because "somebody who has a rig connected and wants the remote in their pocket is the likeliest buyer there is"'
@@ -1094,6 +1132,103 @@ export function run(test) {
     }
     for (const row of ['Give someone access', 'Sales at a glance', 'Everyone with an account']) {
       assert.ok(!webFront.includes(row) && !phoneFront.includes(row), `${row} is back on a front list instead of inside Developer`)
+    }
+  })
+
+  /*
+   * THE TWO COLOURS PAGES OFFER THE SAME THING.
+   *
+   * "Additionally i want to make a section where a user can edit the colors
+   * of the blocks/presets and effects." The phone's page came first, and the
+   * browser's was written to it: the same looks in the same order, the same
+   * swatches with the same names said for them, the same words. The scan of
+   * buttons above sees the buttons; this sees the rest — every sentence each
+   * page shows, read out of the code itself (the babel parser, as
+   * test/structure.mjs reads the tests), so a heading or a note that changes
+   * at one end and not the other fails here rather than on a stage.
+   */
+  test('the two Colours pages offer the same looks, the same swatches and the same words', async () => {
+    const { parse } = await import('@babel/parser')
+    const babelTraverse = (await import('@babel/traverse')).default
+    const traverse = babelTraverse.default || babelTraverse
+    /* What only one end says, and why. Unexplained fails; explained passes. */
+    const WEB_ONLY = {
+      'Your colours are kept on this computer. A phone or tablet keeps its own.':
+        'the computer app’s own window, which is not the remote: it says what a phone or tablet does instead',
+      'Your colours are kept {}. The computer’s screen keeps its own.':
+        'the phone’s sentence, with the device said by onThis() — "in this browser", "on this iPad" — where the phone says "on this {deviceNoun()}" (held word for word below)',
+      'Any colour…': 'the browser’s free colour picker, which the phone cannot have without a build (AREAS above)',
+      'Pick any colour': 'the label on that picker',
+      'Or type its colour code': 'the label on the box beside it',
+      'Got it': 'the browser’s one-time notes on Play are put away with Got it (the hold tip’s, the demo’s); the phone’s Note has a cross',
+      'Scene {}{}{}': 'what a screen reader says for a scene tile, its name and "your colour" with it; the phone’s Tile says its own caption and label'
+    }
+    const PHONE_ONLY = {
+      'Your colours are kept on this {}. The computer’s screen keeps its own.': 'the same sentence as the browser’s, which names the device by onThis() rather than "on this" and deviceNoun()'
+    }
+    const KEYS = new Set(['Escape', 'Enter', 'Tab', 'ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'])
+    const shown = (files) => {
+      const out = new Set()
+      const keep = (raw) => {
+        const t = String(raw).replace(/\s+/g, ' ').trim()
+        /* Something a person reads: it starts with a capital and has words in it. */
+        if (!t || KEYS.has(t) || !/^[^A-Za-z{]*[A-Z]/.test(t) || !/[a-z]/.test(t)) return
+        out.add(t)
+      }
+      for (const f of files) {
+        traverse(parse(read(f), { sourceType: 'module', plugins: ['jsx'] }), {
+          ImportDeclaration: (p) => p.skip(),
+          StringLiteral(p) {
+            if (!(p.parentPath.isObjectProperty() && p.parentPath.node.key === p.node)) keep(p.node.value)
+          },
+          /* A sentence built round a value is read with the value as {}: "{} of your own colours on top". */
+          TemplateLiteral: (p) => keep(p.node.quasis.map((q) => q.value.cooked).join('{}')),
+          JSXText: (p) => keep(p.node.value)
+        })
+      }
+      return out
+    }
+    const web = shown(['src/components/Colours.jsx', 'src/components/ColourSheet.jsx', 'src/components/ColoursNotice.jsx'])
+    const phone = shown(['mobile/src/components/Colours.js', 'mobile/src/components/ColourSheet.js', 'mobile/src/components/ColoursNotice.js'])
+    assert.ok(web.size > 30 && phone.size > 30, 'the pages came back nearly empty; this check no longer reads them')
+    for (const [where, mine, theirs, excused] of [
+      ['browser', web, phone, WEB_ONLY],
+      ['phone', phone, web, PHONE_ONLY]
+    ]) {
+      for (const w of mine) {
+        if (theirs.has(w)) continue
+        assert.ok(excused[w], `"${w}" is on the ${where}’s Colours page and not the other end’s, and no reason is written down`)
+      }
+      for (const w of Object.keys(excused)) assert.ok(mine.has(w) && !theirs.has(w), `"${w}" is excused as ${where}-only and is ${mine.has(w) ? 'at both ends' : 'gone'} now. Take it out.`)
+    }
+    /* The remote's own sentence is the phone's, the device named by what it is. */
+    assert.match(read('src/components/Colours.jsx'), /`Your colours are kept \$\{onThis\(\)\}\. The computer’s screen keeps its own\.`/)
+    assert.match(read('mobile/src/components/Colours.js'), /`Your colours are kept on this \$\{deviceNoun\(\)\}\. The computer’s screen keeps its own\.`/)
+
+    /* The same looks, in the same order, each card in its own look's colours. */
+    for (const f of ['src/components/Colours.jsx', 'mobile/src/components/Colours.js']) {
+      const page = read(f)
+      assert.match(page, /\{LOOKS\.map\(\(look\) => \(\s*<LookCard key=\{look\.id\}/, `${f} does not offer every look, in order`)
+      assert.match(page, /const tiles = lookCard\(look\.id\)/, `${f} draws a look’s card from something other than lib/colourPage`)
+      assert.match(page, /const rest = unitFamilies\(\)\.filter\(\(f\) => !chain\.includes\(f\)\)/, `${f} offers effects of its own choosing`)
+      assert.match(page, /const chain = presetFamilies\(blocks\)/, `${f} does not put the loaded preset’s effects first`)
+    }
+    /* The same swatches, said the same way. */
+    for (const f of ['src/components/ColourSheet.jsx', 'mobile/src/components/ColourSheet.js']) {
+      const sheet = read(f)
+      assert.match(sheet, /const swatches = target \? sheetSwatches\(target\) : \[\]/, `${f} draws swatches of its own`)
+      assert.match(sheet, /spokenSwatch\(target, s, \{ yours: s\.fill === yours && !s\.own \}\)/, `${f} names its swatches some other way`)
+      assert.match(sheet, /const pick = open \? shadeOf\(base, step, \{ scene \}\) : null/, `${f} goes lighter and darker by some other rule`)
+      assert.match(sheet, /const warning = open \? nextToWarning\(target, pick, \{ chain \}\) : null/, `${f} warns by some other rule`)
+    }
+    /* And every rule the phone's page takes from lib/colourPage, the browser's takes too. */
+    const fromPage = (f) => new Set((read(f).match(/import \{([^}]*)\} from '\.\.\/lib\/colourPage'/)?.[1] || '').split(',').map((x) => x.trim()).filter(Boolean))
+    for (const [phoneFile, webFile] of [
+      ['mobile/src/components/Colours.js', 'src/components/Colours.jsx'],
+      ['mobile/src/components/ColourSheet.js', 'src/components/ColourSheet.jsx']
+    ]) {
+      const web = fromPage(webFile)
+      for (const name of fromPage(phoneFile)) assert.ok(web.has(name), `${webFile} does without ${name}, which the phone’s page is drawn by`)
     }
   })
 

@@ -96,6 +96,10 @@ import { findLooper } from '../shared/looper.mjs'
 import { useChain } from './components/ChainWait'
 import Screens, { viewsFor } from './components/Screens'
 import SceneArrange from './components/SceneArrange'
+import Colours from './components/Colours'
+import { markColoursNotice } from './components/ColoursNotice'
+import { coloursStatus } from './lib/colourPage'
+import { useLooks } from './lib/useLooks'
 import { useAsks } from './lib/asks'
 import {
   SIZES,
@@ -535,6 +539,8 @@ const SETUP_PAGES = {
   updating: UPDATE_STEPS.title,
   account: 'Account',
   appearance: 'Tiles & scenes',
+  /* "Let's make the colors match better", and choose your own: the phone's page, from the same lib/colourPage. */
+  colours: 'Colours',
   help: 'Troubleshooting',
   updates: 'Updates',
   about: 'About',
@@ -600,7 +606,14 @@ export default function App() {
    * seen it; offering it again treats closing as an accident, and a tutorial
    * that keeps coming back is the thing everybody remembers hating.
    */
-  const [walkthrough, setWalkthrough] = useState(() => !onboarded())
+  const [walkthrough, setWalkthrough] = useState(() => {
+    const first = !onboarded()
+    /* A first run never saw the old colours, so it is never told they
+       changed (components/ColoursNotice) — marked here, in the very first
+       render, before Play can be drawn and ask. */
+    if (first) markColoursNotice()
+    return first
+  })
   /* Opened again from Settings, which is when the phone's walkthrough offers a way out at the top. */
   const [walkReplay, setWalkReplay] = useState(false)
   /*
@@ -1354,6 +1367,9 @@ export default function App() {
     []
   )
   const [setupPage, setSetupPage] = useState(null)
+  /* The Colours row's line names the look and the unit's colours, so it is
+     redrawn when either changes (lib/useLooks). */
+  useLooks()
   /* A real VP4 on the computer, not the demo's: it gets the Scene Select card (components/Vp4Setup). Follows each detect through `device`. */
   const onRealVp4 = Boolean(device) && vp4Here()
   /*
@@ -4573,6 +4589,8 @@ export default function App() {
            * computer's own window or its wifi page, never the demo.
            */
           down={linkShowsDown}
+          /* The hold tip above, or the demo's line, is up: the colours' one-time line waits for them. */
+          noteAbove={(!holdNoteSeen && holdOpensChannels) || (isDemo() && status === 'live' && !demoNoteSeen)}
           onError={setError}
           /* A VP4's words about a preset picked from the list, for the band over the tiles (vp4Said). */
           said={vp4Said}
@@ -5519,6 +5537,8 @@ export default function App() {
             <p className="silk-label setup-group">Play screen</p>
             <div className="setup-rows">
               <SetupRow key="appearance" title="Tiles & scenes" status="Tile size, effect pictures, scene layout" onClick={() => setSetupPage('appearance')} />
+              {/* "Let's make the colors match better", and choose your own. */}
+              <SetupRow key="colours" title="Colours" status={coloursStatus({ unitName: device?.short || device?.name || undefined })} onClick={() => setSetupPage('colours')} />
             </div>
             {/* Light or dark right here, as on the phone: one click, not a page. */}
             <div className="setup-inline-theme">
@@ -5665,6 +5685,17 @@ export default function App() {
                 ) : null}
               </div>
             </div>
+          </div>
+        ) : null}
+
+        {setupPage === 'colours' ? (
+          <div className="setup-page">
+            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
+              ‹ Settings
+            </button>
+            <p className="setup-page-title">{SETUP_PAGES.colours}</p>
+            {/* The loaded preset's effects go first, and the scene tiles carry their names. */}
+            <Colours blocks={blocks} sceneNames={sceneNames} icons={icons} />
           </div>
         ) : null}
 

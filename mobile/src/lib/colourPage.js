@@ -280,6 +280,62 @@ export const shadeWords = (name, step) =>
   !step ? name : `${name}, ${Math.abs(step) === 1 ? 'a step' : `${Math.abs(step)} steps`} ${step < 0 ? 'darker' : 'lighter'}`
 
 /* ------------------------------------------------------------------ */
+/* Any colour, in the browser                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A colour code as somebody types one: "#cc0000", "cc0000", or the short
+ * "#c00" a web page writes. Six figures, lower case, with the #; null for
+ * anything that is not a colour yet, which is every keystroke but the last
+ * while one is being typed.
+ */
+export function colourCode(text) {
+  const s = String(text ?? '').trim().replace(/^#/, '').toLowerCase()
+  if (/^[0-9a-f]{6}$/.test(s)) return `#${s}`
+  if (/^[0-9a-f]{3}$/.test(s)) return `#${[...s].map((c) => c + c).join('')}`
+  return null
+}
+
+/*
+ * ANY COLOUR AT ALL, MADE SAFE TO WEAR. Only the browser offers one: it has a
+ * colour picker of its own (<input type="color">), and the phone would need a
+ * package with native code for one, which moves the fingerprint and costs a
+ * build. But the rule a free pick goes through is here, beside the grid's,
+ * so the two ends paint by the same rules and a colour chosen at the computer
+ * is one the phone would have let through.
+ *
+ * The pick goes through readable() (lib/ink): its hue kept, only its
+ * lightness moved, into a window where its letters read at 4.5:1 and a lit
+ * tile still stands clear of an unlit one on the black stage. `moved` says
+ * which way it went, for the line that says why the tile is not quite what
+ * was picked — a sheet that quietly paints something else reads as a sheet
+ * that is broken. And a scene is never given a colour within reach of the
+ * amber that rings the scene you are in, by the same measure the swatches
+ * and Lighter and Darker are held to: `amber` says so, and the sheet will not
+ * use it.
+ *
+ * `offered` is the sheet's own swatches: a code typed that is one of them —
+ * Fractal's red is #cc0000 whichever way it is reached — is the grid's
+ * colour, already checked, and is used as it is rather than moved a shade
+ * by a rule stricter than the one the grid was chosen by.
+ */
+export function freePick(text, { scene = false, offered = [] } = {}) {
+  const raw = colourCode(text)
+  if (!raw) return null
+  const fill = offered.some((o) => String(o).toLowerCase() === raw) ? raw : String(readable(raw)).toLowerCase()
+  const moved = fill === raw ? null : luminance(fill) > luminance(raw) ? 'lighter' : 'darker'
+  return Object.freeze({ raw, fill, moved, amber: scene && nearAmber(fill) })
+}
+
+/** What the sheet says under a free pick that was moved, or that a scene cannot have. */
+export const FREE_PICK_WORDS = Object.freeze({
+  lighter: 'Brightened a little so its letters stay readable',
+  darker: 'Darkened a little so its letters stay readable',
+  amber: 'Too close to the amber ring that marks the scene you are on. Pick another colour for a scene.',
+  notYet: 'A colour code is a # and six letters or numbers, like #cc0000'
+})
+
+/* ------------------------------------------------------------------ */
 /* Too close to the one beside it                                       */
 /* ------------------------------------------------------------------ */
 

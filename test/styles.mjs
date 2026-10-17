@@ -1300,4 +1300,77 @@ export function run(test) {
     assert.match(box, /top: calc\(100% \+ var\(--s-2\)\)/, 'Edit’s tempo box opens upward over the chain')
     assert.match(box, /bottom: auto/, 'Edit’s tempo box is pinned to both edges at once')
   })
+
+  /*
+   * SETTINGS → COLOURS, at a phone's width and on both pages.
+   *
+   * The page is the phone's, and it has to fit where the phone's does: a
+   * 320px screen with the sheet's own inset leaves 288px, and five tiles to a
+   * look card, two effects across, four scenes across and four swatches across
+   * all have to come out of that without the page going sideways. Every grid
+   * here shrinks its columns (minmax(0, …) or min(100%, …)) rather than
+   * holding a width — the min-content trap that once had the effects stuck
+   * three to a row is the same one that pushes a page off a phone.
+   */
+  test('the Colours page and its colour sheet fit a 320px phone, and the sheet sits over Settings', () => {
+    const rule = (sel) => {
+      const at = code.indexOf(`${sel} {`)
+      assert.notEqual(at, -1, `styles.css has no ${sel} rule`)
+      return code.slice(at, code.indexOf('}', at))
+    }
+    assert.match(rule('.colours-looks'), /grid-template-columns: repeat\(auto-fill, minmax\(min\(100%, 300px\), 1fr\)\)/, 'a look card can be wider than the phone')
+    assert.match(rule('.gig.colours-look-tiles'), /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/, 'a look card’s five tiles hold their widths')
+    assert.match(rule('.gig.colours-effects'), /grid-template-columns: repeat\(auto-fill, minmax\(min\(100%, 140px\), 1fr\)\)/, 'the effects are not two across on a phone')
+    assert.match(rule('.gig.colours-scenes'), /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/, 'the scenes are not four across, or hold their widths')
+    /* Six swatches across at most, never under 48px: four on a 320px phone. */
+    assert.match(rule('.colour-swatches'), /minmax\(max\(48px, calc\(\(100% - 5 \* var\(--s-2\)\) \/ 6\)\), 1fr\)/)
+    const sixAt = (inner) => Math.floor((inner + 8) / (Math.max(48, (inner - 5 * 8) / 6) + 8))
+    assert.equal(sixAt(320 - 2 * 16 - 2 * 16), 4, 'a 320px phone does not get four swatches across')
+    assert.equal(sixAt(480 - 2 * 16), 6, 'a wide panel does not get six across')
+    /* The panel is never wider than the screen it is on. */
+    assert.match(rule('.colour-panel'), /width: min\(480px, 100%\)/)
+    assert.match(rule('.colour-panel-body'), /overflow-y: auto/, 'a tall sheet runs off a short screen')
+    /* No fixed width anywhere on the page wider than a 320px phone leaves. */
+    const section = code.slice(code.indexOf('.colours {'), code.indexOf('.colour-layer {'))
+    for (const m of section.matchAll(/(?:^|[;{\s])(?:min-)?width: (\d+)px/g)) {
+      assert.ok(Number(m[1]) <= 288, `something on the Colours page is ${m[1]}px wide, more than a 320px phone has`)
+    }
+    /* And names are broken between words, not left to push the page. */
+    assert.match(rule('.colours-scenes button.gig-scene.named .gig-scene-name'), /overflow-wrap: break-word/)
+
+    /* Over Settings and under a toast: one thing open, the colour sheet on top. */
+    assert.match(rule('.colour-layer'), /z-index: var\(--z-over-sheet\)/)
+    const z = (name) => Number(code.match(new RegExp(`--z-${name}: (\\d+);`))?.[1])
+    assert.ok(z('sheet') < z('over-sheet') && z('over-sheet') < z('toast'), 'the colour sheet is not between Settings and a toast')
+    /* On paper a pale swatch has an edge, or white is a hole in the panel. */
+    assert.match(code, /\[data-theme='light'\] button\.colour-swatch \{\s*border-color: var\(--swatch-edge\);/)
+    assert.match(code, /button\.colour-swatch\.chosen,\s*\[data-theme='light'\] button\.colour-swatch\.chosen \{\s*border-color: var\(--signal\);/, 'the swatch picked is not ringed in amber on both pages')
+  })
+
+  test('Grey when off is lib/colourPage’s grey on both pages, and stays off the scenes', async () => {
+    const { OFF_GREY } = await import('../src/lib/colourPage.js')
+    const { contrast } = await import('../src/lib/ink.js')
+    const vars = (opener) => {
+      const at = code.indexOf(opener)
+      assert.notEqual(at, -1, `styles.css has no ${opener.trim()} rule`)
+      const body = code.slice(at, code.indexOf('}', at))
+      const v = (name) => body.match(new RegExp(`--off-${name}: (#[0-9a-f]{6});`))?.[1]
+      return { fill: v('fill'), edge: v('edge'), ink: v('ink') }
+    }
+    const dark = vars("button.gig-block.off[data-off='grey'],\nbutton.fx-tile.bypassed[data-off='grey'] {")
+    const light = vars("[data-theme='light'] button.gig-block.off[data-off='grey'],\n[data-theme='light'] button.fx-tile.bypassed[data-off='grey'] {")
+    assert.deepEqual(dark, { ...OFF_GREY.dark }, 'the dark page’s grey is not the one the phone draws')
+    assert.deepEqual(light, { ...OFF_GREY.light }, 'the Light page’s grey is not the one the phone draws')
+    /* The letters at 4.5:1, the edge 3:1 off the page, on both pages. */
+    for (const [page, grey, grounds] of [['dark', dark, ['#0d0f12', '#15181d']], ['light', light, ['#f2efe9', '#faf8f4', '#ffffff']]]) {
+      assert.ok(contrast(grey.ink, grey.fill) >= 4.5, `the ${page} page’s grey tile cannot carry its letters`)
+      for (const g of grounds) assert.ok(contrast(grey.edge, g) >= 3, `the ${page} page’s grey edge is lost on ${g}`)
+    }
+    /* Drawn: the tile, its edge, its letters and its picture, on Play's pedals and the strip's bypassed blocks. */
+    assert.match(code, /:root button\.gig-block\.off\[data-off='grey'\] \{\s*background: var\(--off-fill\);\s*border: 2px solid var\(--off-edge\);/)
+    assert.match(code, /:root button\.gig-block\.off\[data-off='grey'\] \.gig-block-icon \{\s*background-color: var\(--off-ink\);/)
+    assert.match(code, /:root button\.fx-tile\.bypassed\[data-off='grey'\]:not\(\.io-tile\) \{\s*background: var\(--off-fill\);\s*color: var\(--off-ink\);/)
+    /* Never a scene: a scene that is not the live one is not switched off. */
+    assert.ok(!/gig-scene[^{]*\[data-off/.test(code), 'a scene tile can go grey')
+  })
 }

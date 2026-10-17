@@ -4,7 +4,7 @@ import { copyChannel } from '../../shared/copy-tools.mjs'
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import { blockColor } from '../lib/blockColors'
 import { LIGHT_INK } from '../lib/ink'
-import { isFractalRemoteLook } from '../lib/looks'
+import { isFractalRemoteLook, offMode } from '../lib/looks'
 import { useLooks } from '../lib/useLooks'
 import { useDismiss } from '../lib/dismiss'
 import { marksFor, toggleFavourite } from '../lib/presetMarks'
@@ -368,6 +368,8 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
               }`}
               style={{ '--tile': colorFor(block.slug), '--tile-ink': inkFor(block.slug) }}
               data-shade={shadeFor(block.slug)}
+              /* Grey when off (Settings → Colours): a bypassed block as the unit draws one. */
+              data-off={offMode() === 'grey' ? 'grey' : undefined}
               onClick={() => tap(block)}
               title={block.name}
             >

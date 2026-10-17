@@ -41,6 +41,8 @@ import { blockColor } from '../lib/blockColors'
 import { blockIcon } from '../lib/blockIcons'
 import { sceneColor } from '../lib/sceneColors'
 import { useLooks } from '../lib/useLooks'
+import { offMode } from '../lib/looks'
+import ColoursNotice from './ColoursNotice'
 import { shortBlock } from '../lib/shortName'
 import { presetLabel } from '../lib/presetName'
 import { setlistCloudReady } from '../lib/cloudSetlists'
@@ -120,6 +122,9 @@ export default function Gig({
    * floating word: nothing on the screen moves.
    */
   down = false,
+  /* Another of Play's one-time notes is up above this screen (App's hold tip,
+     the demo's line), so the colours' one waits its turn. */
+  noteAbove = false,
   onError: raiseInPage,
   /* A VP4's words App was handed — a preset picked from the list — for the band below: { words, at }. */
   said = null,
@@ -937,6 +942,9 @@ export default function Gig({
         that into a mystery about the app. A unit whose outputs aren't a block
         on a grid is not accused of anything.
       */}
+      {/* "Colours now match your unit", once, for somebody who had the app before. */}
+      <ColoursNotice waiting={noteAbove} />
+
       {meterEid === null && chain === 'ok' && !shown.elsewhere && blocks.length && capabilities?.slotModel !== 'linear' ? (
         <p className="gig-note">
           This preset has no Output block, so nothing reaches your amp and there is no volume to
@@ -1587,6 +1595,9 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
            Off) looked like it did nothing and invited a second (styles.css).
            No apostrophes in here: test/both-ends.mjs reads this tag by hand. */
         data-unknown={unknown && vp4Here() ? 'yes' : undefined}
+        /* Grey when off, if that is the choice in Settings → Colours: a dark
+           tile with a grey edge, as the unit draws a bypassed block (styles.css). */
+        data-off={offMode() === 'grey' ? 'grey' : undefined}
         style={{
           '--block-fill': blockColor(block.slug).fill,
           '--block-ink': blockColor(block.slug).ink

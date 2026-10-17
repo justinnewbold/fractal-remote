@@ -6157,6 +6157,54 @@ test('instance suffixes and unknowns resolve sensibly', async () => {
   assert.equal(blockColor(null).fill, '#5b616b')
 })
 
+test('any colour picked in the browser is made readable first, and a scene is never given the amber', async () => {
+  /*
+   * "Any colour…" on the browser's colour sheet: its own colour picker and a
+   * box for a colour code. Whatever comes out goes through lib/colourPage
+   * freePick — the hue kept, the lightness moved just far enough for the
+   * letters to read and a lit tile to stand off an unlit one — and the sheet
+   * says when it moved. The phone has no free picker (it would need a build),
+   * so this is the only way a colour nobody checked reaches a tile.
+   */
+  const { colourCode, freePick, FREE_PICK_WORDS } = await import('../src/lib/colourPage.js')
+  const { AMBERS } = await import('../src/lib/blockPalettes.js')
+  const { contrast, deltaE, inkOn, luminance } = await import('../src/lib/ink.js')
+  /* The ways a colour code gets typed, and the ones that are not one yet. */
+  assert.equal(colourCode('#CC0000'), '#cc0000')
+  assert.equal(colourCode(' cc0000 '), '#cc0000')
+  assert.equal(colourCode('#c00'), '#cc0000')
+  for (const half of ['', '#', '#cc00', 'cc00000', 'red', 'var(--signal)', null, undefined]) assert.equal(colourCode(half), null, `"${half}" was taken for a colour`)
+  assert.equal(freePick('#cc00'), null, 'half a code was used')
+  /* One already readable is used exactly as picked, and nothing is said. */
+  assert.deepEqual({ ...freePick('#0055ff') }, { raw: '#0055ff', fill: '#0055ff', moved: null, amber: false })
+  /* And one of the grid's own is the grid's, whichever way it was reached: Fractal's red typed is Fractal's red. */
+  assert.notEqual(freePick('#cc0000').fill, '#cc0000', 'this no longer shows that the grid is let through')
+  assert.equal(freePick('#CC0000', { offered: ['#cc0000'] }).fill, '#cc0000', 'a swatch typed in was moved off itself')
+  assert.equal(freePick('#cc0000', { offered: ['#cc0000'] }).moved, null)
+  /* Across the whole wheel, light and dark: every pick comes out readable and still lit. */
+  for (let h = 0; h < 360; h += 15) {
+    for (const l of [0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95]) {
+      const c = (1 - Math.abs(2 * l - 1)) * 0.9
+      const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+      const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
+      const hex = '#' + [r, g, b].map((v) => Math.round((v + l - c / 2) * 255).toString(16).padStart(2, '0')).join('')
+      const got = freePick(hex)
+      assert.ok(contrast(got.fill, inkOn(got.fill)) >= 4.5, `${hex} came out as ${got.fill}, which cannot carry its letters`)
+      assert.ok(contrast(got.fill, '#0d0f12') >= 3, `${hex} came out as ${got.fill}, lost on the dark stage when unlit`)
+      if (got.moved) assert.equal(got.moved, luminance(got.fill) > luminance(hex) ? 'lighter' : 'darker', `${hex}: the line says the wrong way`)
+      if (got.moved) assert.ok(FREE_PICK_WORDS[got.moved], 'a moved pick has nothing to say for itself')
+    }
+  }
+  assert.equal(freePick('#101010').moved, 'lighter')
+  assert.match(FREE_PICK_WORDS.lighter, /^Brightened a little so its letters stay readable$/)
+  /* The amber rings the scene you are on: a scene is never given it, an effect may be. */
+  const amber = freePick('#f0a73c', { scene: true })
+  assert.equal(amber.amber, true, 'a scene was let have the amber')
+  assert.ok(AMBERS.some((a) => deltaE(amber.fill, a) < 10))
+  assert.equal(freePick('#f0a73c').amber, false, 'an effect was refused a colour only a scene must not have')
+  assert.equal(freePick('#0055ff', { scene: true }).amber, false)
+})
+
 
 test('a chain built into an empty preset gets an input and an output', async () => {
   const { chainPlan } = await import('../src/lib/actions.js')
