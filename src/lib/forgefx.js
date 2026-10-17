@@ -37,6 +37,7 @@ import { cleanPresetName, isEmptySlotName } from './presetName.js'
 import { zeroBasedChain, wrongSlot } from './slots.js'
 import { cableColumns, toWireCable, toWireCell } from '../../shared/grid-plan.mjs'
 import { DEFAULT_SLUG, deviceSlug } from '../../shared/device-slug.mjs'
+import { setColourUnit } from './looks.js'
 import { firmwareOf } from '../../shared/firmware.mjs'
 import { fixRead } from '../../shared/param-fixes.mjs'
 import { cancelledSave, pendingSaveDoc, saveProgressDoc, saveResultDoc } from '../../shared/save-wait.mjs'
@@ -596,6 +597,9 @@ export const detect = async () => {
   let res = mock ? (await tick(), mock.detect()) : await request('/device/detect')
   const label = res?.short || res?.name
   if (label) unitSlug = deviceSlug(label)
+  /* Which unit's colours the tiles wear — an AM4's are its own — told where
+     the unit is learned, the demo's included and kept to itself (lib/looks). */
+  setColourUnit(unitSlug, { demo: !!mock })
   lastCaps = res?.capabilities ?? null
   unitIsVp4 = !mock && isVp4(res)
   vp4Name = null

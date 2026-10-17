@@ -894,6 +894,9 @@ export default function Stage({
                     height={tileH}
                     haptic={thud}
                     onPress={() => writeScene(i)}
+                    /* Amber round the live one, as in the browser: every scene
+                       can be the same red now, and so can an AM4's drive. */
+                    ring
                     /* Two lines, a size down, at every width: "Scene names
                        cut short." Wrapping fixes it for everyone — a hold to
                        show the name would be a footswitch that doesn't switch. */

@@ -3,6 +3,9 @@ import { useDevice, writeBypass, refreshSceneState, getSnapshot, bufferReloaded 
 import { copyChannel } from '../../shared/copy-tools.mjs'
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import { blockColor } from '../lib/blockColors'
+import { LIGHT_INK } from '../lib/ink'
+import { isFractalRemoteLook } from '../lib/looks'
+import { useLooks } from '../lib/useLooks'
 import { useDismiss } from '../lib/dismiss'
 import { marksFor, toggleFavourite } from '../lib/presetMarks'
 import { jumpsFor } from '../lib/presetJumps'
@@ -47,6 +50,15 @@ const shortName = (slug) => SHORT[slug] || (slug || '??').slice(0, 3).toUpperCas
  * is — and with the photo-corrected hues, they briefly did.
  */
 const colorFor = (slug) => blockColor(slug).fill
+/* And its letters, which the stylesheet used to write as white for every tile. */
+const inkFor = (slug) => blockColor(slug).ink
+/*
+ * Which way the tile's face is shaded: away from its letters, so they are
+ * never on a lighter colour than the one they were picked for (styles.css,
+ * button.fx-tile[data-shade]). None in Fractal Remote, which keeps the face
+ * it always had.
+ */
+const shadeFor = (slug) => (isFractalRemoteLook() ? undefined : inkFor(slug) === LIGHT_INK ? 'down' : 'up')
 import Knob from './Knob'
 import {
   blockHelp,
@@ -214,6 +226,8 @@ const LEVEL_FLOOR_DB = -20
 const TABS_SHOWN = 4
 
 export function Chain({ blocks, selected, onSelect, onToggle }) {
+  /* Repaint when the colours change (lib/useLooks). */
+  useLooks()
   const chain = blocks.filter((b) => !['input', 'output'].includes(b.slug))
   /*
    * The two ends of the signal path, which this used to draw as arrows.
@@ -352,7 +366,8 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
               className={`fx-tile ${selected === block.effectId ? 'selected' : ''} ${
                 block.bypassed ? 'bypassed' : ''
               }`}
-              style={{ '--tile': colorFor(block.slug) }}
+              style={{ '--tile': colorFor(block.slug), '--tile-ink': inkFor(block.slug) }}
+              data-shade={shadeFor(block.slug)}
               onClick={() => tap(block)}
               title={block.name}
             >

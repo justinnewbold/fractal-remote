@@ -6,6 +6,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 
 import { color, font, space, isDark, loadMode, setSystemDark, themeVersion, watchTheme } from './src/lib/theme'
+import { loadLooks, looksVersion, watchLooks } from './src/lib/looks'
 import { haveSession, linkState, probeNow, startLink, stopLink, subscribeLink } from './src/lib/link'
 import { currentAccount, signOut } from './src/lib/relay'
 import { useComputerElsewhere } from './src/lib/useComputerElsewhere'
@@ -83,6 +84,13 @@ export default function App() {
    * on `color` for why that works and what it depends on.
    */
   useSyncExternalStore(watchTheme, themeVersion, themeVersion)
+  /*
+   * And the colours, by the same trick and for the same reason. A look picked
+   * in Settings, a colour of your own, or a unit with its own palette
+   * answering — every tile on every screen reads blockColor and sceneColor
+   * while it renders, so one re-render here repaints them all. See lib/looks.
+   */
+  useSyncExternalStore(watchLooks, looksVersion, looksVersion)
   useEffect(() => {
     setSystemDark(Appearance.getColorScheme() !== 'light')
     const off = Appearance.addChangeListener(({ colorScheme }) => {
@@ -509,6 +517,10 @@ export default function App() {
        that it is Auto, which follows the handset — the right answer to show
        somebody on their first launch anyway. */
     hydrate().then(() => loadMode(sync))
+    /* The colours too, from the same store. Until they land, the look and the
+       last unit's palette are not known yet, and Match my unit in gen-3's
+       colours is what is drawn — for a moment, as the theme is Auto. */
+    hydrate().then(() => loadLooks(sync))
   }, [])
 
   /* Ask the store what this person owns. Never throws, never blocks a frame,

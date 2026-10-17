@@ -3,6 +3,8 @@ import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native
 
 import { color, font, isDark, radius, space, TAP } from '../lib/theme'
 import { at, inkOn, lighter, vivid } from '../lib/vivid'
+import { LIGHT_INK, paperEdge } from '../lib/ink'
+import { isFractalRemoteLook } from '../lib/looks'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
 import { cornerFit } from '../lib/tile-corners'
@@ -32,6 +34,23 @@ import { cornerFit } from '../lib/tile-corners'
  * `npm run sync:rules`, so the two screens cannot drift into disagreeing about
  * which tile is the delay.
  */
+
+/*
+ * THE GLASS, AND WHICH WAY IT FALLS.
+ *
+ * A lit tile has a sheen: a tenth of white over its top half, which is a
+ * gradient's job done without one (see the note where it is drawn). On a
+ * tile with black letters that only helps them. On one with WHITE letters it
+ * is the half they read worst on — an AM4's chorus, darkened just enough to
+ * carry white letters as the unit does, lost them under it. So a tile with
+ * white letters takes the same tenth as a shade over its BOTTOM half instead:
+ * still lit from above, and never lighter anywhere than the colour its
+ * letters were chosen for. The browser's edit strip does the same with its
+ * gradients, and a test measures both ends of both against every look.
+ */
+const SHEEN = 'rgba(255,255,255,0.10)'
+const SHADE = 'rgba(0,0,0,0.10)'
+
 export default function Tile({
   label,
   sub,
@@ -68,6 +87,18 @@ export default function Tile({
    */
   bar = false,
   /*
+   * One of the chain's two ends, drawn as a quiet outline rather than a lit
+   * tile: "the plumbing, not the tone", as the browser has always drawn them.
+   * Neither has an on or off, so `on` here only says it is the one open.
+   */
+  quiet = false,
+  /*
+   * The live scene's amber ring, the browser's. Every scene is the same red in
+   * Match my unit, and so is an AM4's drive: the ring is what says which of
+   * the red tiles is the scene you are standing in.
+   */
+  ring = false,
+  /*
    * A name that may take a second line, a size down: "Crunch Bot UP" rather
    * than "Cru…". It began as the four-across scene tile's, which leaves room
    * for five letters at the usual size — and then the tester, at two across:
@@ -85,20 +116,23 @@ export default function Tile({
   style
 }) {
   /*
-   * THE HUE IS THE PALETTE'S; THE VIBRANCY IS THIS SCREEN'S.
+   * THE COLOUR AS IT IS AUTHORED — EXCEPT IN THE ONE LOOK THAT WAS LIFTED.
    *
-   * `vivid` lifts saturation and leaves hue exactly where it was, so a drive
-   * is still the red the unit shows and a delay is still the same blue — see
-   * lib/vivid for why that distinction is worth a function. It is applied here
-   * rather than in the palettes because those are shared with the browser, and
-   * repainting the computer app was not what was asked for.
+   * The palettes are Fractal's own colours now, set at the brightness a lit
+   * tile on a dark stage needs, and the browser draws them as they are. This
+   * screen used to lift every colour on top (`vivid`: saturation up, hue kept)
+   * — which turned an AM4's red drive orange with black letters here. So the
+   * lift is gone, except in Fractal Remote, the app's colours as they always
+   * were, which is drawn exactly as it always was: "I just don't wanna lose
+   * all the colors and current color scheme cause I like those also."
    *
    * Off is the same hue at a seventh, over the chassis, rather than a flat
    * panel: the tile stays recognisably its own colour while being obviously
    * unlit, which is the distinction the whole grid rests on.
    */
-  const hue = vivid(fill)
-  const background = on ? hue : at(hue, 0.14)
+  const asBefore = isFractalRemoteLook()
+  const hue = asBefore ? vivid(fill) : fill
+  const background = quiet ? 'transparent' : on ? hue : at(hue, 0.14)
   /*
    * BLACK LETTERS ON A LIGHT TILE, WHITE ON A DARK ONE — FROM THE COLOUR
    * ACTUALLY DRAWN.
@@ -112,7 +146,7 @@ export default function Tile({
    * answer for a colour it cannot read.
    */
   const lit = inkOn(hue, ink)
-  const foreground = on ? lit : color.silk
+  const foreground = quiet ? (on ? color.signal : color.silkDim) : on ? lit : color.silk
   /*
    * AN UNLIT PICTURE IS ITS OWN COLOUR, LIT LESS.
    *
@@ -211,11 +245,32 @@ export default function Tile({
     right: topRight ? laid.right : 0,
     pair
   })
-  const cornerInk = on ? lit : color.silkDim
+  const cornerInk = quiet ? foreground : on ? lit : color.silkDim
   const leftWord = { color: cornerInk, fontSize: font.micro, fontWeight: '600', opacity: shows.left ? 1 : 0 }
   const rightWord = { color: cornerInk, fontSize: font.micro, fontWeight: '700', opacity: shows.right ? 1 : 0 }
 
-  const glow = on
+  /*
+   * THE EDGE, which on an unlit tile is the only thing still naming the block.
+   *
+   * It was the colour at a little over half strength, which on the dark stage
+   * came to 1.7:1 against the black — an outline you had to look for. Now it
+   * is the colour itself, which every look keeps bright enough to stand 3:1
+   * off the page. On the Light page a pale colour is nearly the paper, so
+   * there the edge is the colour half way to black, lit or not, and the lit
+   * tile keeps an edge too instead of dissolving into the page. Fractal
+   * Remote keeps the edges it always had.
+   */
+  const edge = (() => {
+    if (quiet) return on ? color.signal : color.rule
+    if (asBefore) return at(hue, on ? 0.85 : 0.55)
+    if (ring && on) return color.signal
+    if (!isDark()) return paperEdge(hue)
+    return on ? at(hue, 0.85) : hue
+  })()
+  /* Which way the glass falls: see SHEEN and SHADE above. */
+  const shadeBelow = !asBefore && lit === LIGHT_INK
+
+  const glow = on && !quiet
     ? Platform.select({
         ios: {
           shadowColor: hue,
@@ -260,7 +315,7 @@ export default function Tile({
           /* Two pixels, because the edge is doing real work when the tile is
              off — it is the only thing still naming the block. */
           borderWidth: 2,
-          borderColor: on ? at(hue, 0.85) : at(hue, 0.55),
+          borderColor: edge,
           backgroundColor: background,
           opacity: pressed ? 0.7 : 1,
           ...glow
@@ -279,18 +334,18 @@ export default function Tile({
         tile's height is what the fit-to-screen arithmetic is budgeting, and a
         decoration must not move it.
       */}
-      {on ? (
+      {on && !quiet ? (
         <View
           pointerEvents="none"
           style={{
             position: 'absolute',
             left: 0,
             right: 0,
-            top: 0,
             height: '50%',
-            borderTopLeftRadius: radius.md - 2,
-            borderTopRightRadius: radius.md - 2,
-            backgroundColor: 'rgba(255,255,255,0.10)'
+            ...(shadeBelow
+              ? { bottom: 0, borderBottomLeftRadius: radius.md - 2, borderBottomRightRadius: radius.md - 2 }
+              : { top: 0, borderTopLeftRadius: radius.md - 2, borderTopRightRadius: radius.md - 2 }),
+            backgroundColor: shadeBelow ? SHADE : SHEEN
           }}
         />
       ) : null}
@@ -336,14 +391,14 @@ export default function Tile({
                state, and a second announcement for the picture of it would
                make every tile read itself out twice. */
             accessible={false}
-            style={{ width: picture, height: picture, marginBottom: 2, tintColor: pictureTint }}
+            style={{ width: picture, height: picture, marginBottom: 2, tintColor: quiet ? foreground : pictureTint }}
             resizeMode="contain"
           />
         ) : null}
         {caption ? (
           <Text
             numberOfLines={1}
-            style={{ color: on ? lit : color.silkDim, fontSize: font.micro, marginBottom: 1 }}
+            style={{ color: quiet ? foreground : on ? lit : color.silkDim, fontSize: font.micro, marginBottom: 1 }}
           >
             {caption}
           </Text>
@@ -363,7 +418,7 @@ export default function Tile({
         {sub ? (
           <Text
             numberOfLines={1}
-            style={{ color: on ? lit : color.silkDim, fontSize: font.micro, marginTop: 2 }}
+            style={{ color: quiet ? foreground : on ? lit : color.silkDim, fontSize: font.micro, marginTop: 2 }}
           >
             {sub}
           </Text>

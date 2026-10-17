@@ -40,6 +40,7 @@ import Looper from './Looper'
 import { blockColor } from '../lib/blockColors'
 import { blockIcon } from '../lib/blockIcons'
 import { sceneColor } from '../lib/sceneColors'
+import { useLooks } from '../lib/useLooks'
 import { shortBlock } from '../lib/shortName'
 import { presetLabel } from '../lib/presetName'
 import { setlistCloudReady } from '../lib/cloudSetlists'
@@ -139,6 +140,8 @@ export default function Gig({
    */
   onChain
 }) {
+  /* Repaint the scenes when the colours change (lib/useLooks); each block tile subscribes for itself. */
+  useLooks()
   /* Smallest, or Fit: both are the trimmed layout. The literal is what the
      meter poll and the tests read. */
   const compact = fit || size === 0
@@ -1520,6 +1523,8 @@ function useCornerFit({ tile, picture, band, left, right }, pair, again) {
  * only says it was held.
  */
 function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, icon, door = false }) {
+  /* Repaint when the colours change (lib/useLooks). */
+  useLooks()
   /* Only where there is something to choose. Not every block is channelled,
      and a menu with one entry in it is a menu that wasted a gesture. And not
      on the outline drawn ahead of the chain read: a channel waits for it. */

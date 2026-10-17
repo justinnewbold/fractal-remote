@@ -4,9 +4,12 @@ import App from './App'
 import Boundary from './components/Boundary'
 import './styles.css'
 import { apply, getMode } from './lib/theme'
+import { startLooks } from './lib/useLooks'
 
 // Before first paint, so a dark-preferring browser never flashes a light page.
 apply(getMode())
+// And the colours, for the same reason: the first frame is in the look you chose.
+startLooks()
 
 /*
  * The last resort. A throw outside every panel boundary still unmounts the app,

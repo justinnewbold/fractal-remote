@@ -54,7 +54,7 @@ import { beginChainWrite, chainChanged, endChainWrite, getState, noteEdited, orS
 import { useKeepAwake } from 'expo-keep-awake'
 import { logDebug } from '../lib/debugLog'
 import { oneWriteAtATime } from '../lib/knob-keys'
-import { blockColor } from '../lib/blockColors'
+import { blockColor, quietEnd } from '../lib/blockColors'
 import { presetLabel } from '../lib/presetName'
 import { shortBlock } from '../lib/shortName'
 import { thud } from '../lib/feedback'
@@ -449,6 +449,8 @@ export default function Edit({ onBack, onOpenGear }) {
               sub={under}
               fill={hue.fill}
               ink={hue.ink}
+              /* Input and Output: an outline, as the browser's strip draws them. */
+              quiet={quietEnd(b.slug)}
               on={open}
               height={TAP}
               haptic={thud}

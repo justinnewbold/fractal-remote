@@ -6062,6 +6062,10 @@ console.log('\nwhat the app keeps away from a VP4')
 const { run: vp4Safety } = await import('./vp4-safety.mjs')
 vp4Safety(test)
 
+console.log('\nthe colours: the units’ own, readable, and the ones you choose')
+const { run: colours } = await import('./colours.mjs')
+colours(test)
+
 console.log('\nthe server')
 const { run: server } = await import('./server.mjs')
 server(test)
@@ -6119,18 +6123,17 @@ test('a design file survives the round trip', async () => {
   assert.deepEqual(back.spec, entry.spec)
 })
 
-test('every block colour is real CSS', async () => {
+test('every block colour is real CSS, and a colour the phone can draw', async () => {
   // A Cyrillic а slipped into the reverb hex on first writing: identical on
   // screen, invalid to CSS, and the colour just never appears — no error, no
-  // clue. Colour strings must be plain ASCII hex or a var() reference.
+  // clue. Colour strings must be plain ASCII hex — no var() any more either:
+  // React Native cannot draw one, which is why an unknown block on the phone
+  // used to have no fill at all. test/colours.mjs checks every look and unit.
   const { blockColor } = await import('../src/lib/blockColors.js')
   for (const slug of ['drive', 'amp', 'delay', 'reverb', 'cab', 'chorus', 'pitch', 'mystery']) {
     const { fill, ink } = blockColor(slug)
     for (const value of [fill, ink]) {
-      assert.ok(
-        /^#[0-9a-f]{6}$/.test(value) || /^var\(--[\w-]+\)$/.test(value),
-        `${slug}: "${value}" is not valid CSS`
-      )
+      assert.ok(/^#[0-9a-f]{6}$/.test(value), `${slug}: "${value}" is not a colour both ends can draw`)
     }
   }
 })
@@ -6149,8 +6152,9 @@ test('instance suffixes and unknowns resolve sensibly', async () => {
   const { blockColor } = await import('../src/lib/blockColors.js')
   assert.deepEqual(blockColor('delay2'), blockColor('delay'))
   assert.deepEqual(blockColor('drive1'), blockColor('drive'))
-  assert.equal(blockColor('definitely-new-block').fill, 'var(--panel-hi)')
-  assert.equal(blockColor(null).fill, 'var(--panel-hi)')
+  /* A blue-grey of its own (lib/blockPalettes NEUTRAL), where it was var(--panel-hi). */
+  assert.equal(blockColor('definitely-new-block').fill, '#5b616b')
+  assert.equal(blockColor(null).fill, '#5b616b')
 })
 
 
@@ -14502,7 +14506,8 @@ test('a switch is said in words: tap, hold, a typed label, and the light', async
   assert.equal(one.tap.label, 'CLEAN', 'a stored label is shown, without its padding')
   assert.equal(one.hold.action, 'Tap Tempo', '“Utility · Tap Tempo” is two words for one thing')
   assert.equal(one.hold.label, null, 'an empty label is drawn as a label')
-  assert.deepEqual(one.light, { name: 'Red', hex: '#e23b3b' })
+  /* The editors' own Red, not the host's approximation of it (see RING_COLOURS). */
+  assert.deepEqual(one.light, { name: 'Red', hex: '#cc0000' })
   assert.equal(lightWords(one.light), 'Red light')
   assert.equal(one.unread, false)
 
@@ -14525,8 +14530,12 @@ test('a switch is said in words: tap, hold, a typed label, and the light', async
   assert.equal(at({ tapCategory: 4, tapFunction: 7, holdCategory: 0, color: 1 }).tap.action, 'Effect', 'a function this app has no word for hides the kind it does know')
   assert.equal(at({ tapCategory: 42, holdCategory: 0, color: 1 }).tap.action, 'Something this app can’t name yet')
 
-  /* The FM3's colour list starts at 1, so a 0 is an answer with no name, not a failed read. */
-  const odd = at({ tapCategory: 3, tapFunction: 0, holdCategory: 0, color: 0 })
+  /* 0 is Default: a Scene switch left on it lights red, as every Scene switch does out of the box. */
+  const plain = at({ tapCategory: 3, tapFunction: 0, holdCategory: 0, color: 0 })
+  assert.deepEqual(plain.light, { name: 'Default', hex: '#cc0000', shade: 'Red' }, 'a switch on Default reads as a colour nobody can name')
+  assert.equal(lightWords(plain.light), 'Red light (the default)')
+  /* A number past the editor's twelve is still an answer with no name, not a failed read. */
+  const odd = at({ tapCategory: 3, tapFunction: 0, holdCategory: 0, color: 42 })
   assert.deepEqual(odd.light, { name: null, hex: null }, 'a colour the unit did report is not a failed read')
   assert.equal(lightWords(odd.light), 'Light: a colour this app can’t name yet')
 })

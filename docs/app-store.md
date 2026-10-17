@@ -145,7 +145,7 @@ WHAT IT DOES
 • Tuner, with the note and how far off you are
 • Tap tempo, with the tempo on the button
 • Setlists and starred presets, kept with your account across devices
-• Colors that match your unit's own screen, so you find things by looking
+• Colors that match your Fractal unit and its editor, so you find things by looking
 
 HOW IT WORKS
 A phone needs something between it and your Fractal unit: the desktop app. It runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to it. Get it at fractal.newbold.cloud/downloads.

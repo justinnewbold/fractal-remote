@@ -4243,7 +4243,26 @@ button.fx-tile {
   border-radius: var(--r-1);
   background: linear-gradient(180deg, color-mix(in srgb, var(--tile) 88%, white), var(--tile));
   border: 2px solid transparent;
-  color: #fff;
+  /* The letters the app picked for this colour (lib/ink), set by the strip.
+     White was written here for every tile, and an AM4's pale chorus or a
+     Sunlight tile carried white letters it could not be read in. */
+  color: var(--tile-ink, #fff);
+}
+
+/*
+ * THE FACE NEVER LIGHTENS UNDER WHITE LETTERS.
+ *
+ * The lift above is lighter at the top, which is the half the letters sit in;
+ * on a colour chosen just dark enough for white letters it took them under
+ * 4:1. So a tile with white letters is shaded the other way — its colour at
+ * the top, a little darker below — and is never lighter anywhere than the
+ * colour its letters were chosen for. The strip says which (data-shade), and
+ * leaves Fractal Remote, the app's look as it always was, without one, so it
+ * is drawn as it always was. A test measures both ends of every gradient here
+ * against every look.
+ */
+button.fx-tile[data-shade='down'] {
+  background: linear-gradient(180deg, var(--tile), color-mix(in srgb, var(--tile) 88%, black));
 }
 
 button.fx-tile.selected {
@@ -5473,7 +5492,13 @@ ol.action-list li.destructive::marker {
    and light lettering rather than the lifted gradient used on the chassis. */
 [data-theme='light'] button.fx-tile {
   background: linear-gradient(180deg, var(--tile), color-mix(in srgb, var(--tile) 82%, black));
-  color: #fff;
+  color: var(--tile-ink, #fff);
+}
+
+/* And the other way on paper: a tile with black letters is never darker
+   anywhere than its colour, so the face lightens toward the top instead. */
+[data-theme='light'] button.fx-tile[data-shade='up'] {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tile) 82%, white), var(--tile));
 }
 
 /*
@@ -7741,6 +7766,43 @@ button.gig-block.off .gig-block-icon {
 
 .chain .block[data-bypassed='true'] {
   opacity: 0.55;
+}
+
+/*
+ * EDGES YOU CAN SEE, in every look but the app's old one.
+ *
+ * An unlit tile's edge is the only thing still naming it, and it has to stand
+ * 3:1 off the page. On the dark page that is the tile's own colour, at full
+ * strength — every look keeps its colours bright enough for it — where an
+ * unlit scene's edge had been its colour at 40%, 1.34:1 against the panel.
+ * On the Light page a pale colour is nearly the paper (a Sunlight tile came
+ * to 1.13:1), so there every tile's edge, lit or unlit, is its colour half
+ * way to black: the amount that holds 3:1 for white itself against the
+ * warmest paper. lib/ink's PAPER_EDGE is the same half, and a test holds the
+ * two together.
+ *
+ * Fractal Remote (data-look on <html>, lib/useLooks) keeps the edges it
+ * always had, as it keeps everything else.
+ */
+:root:not([data-look='fractalremote']) button.gig-scene {
+  border-color: var(--scene-fill, var(--rule));
+}
+
+:root:not([data-look='fractalremote']) button.fx-tile.bypassed:not(.selected) {
+  border-color: var(--tile);
+}
+
+[data-theme='light']:not([data-look='fractalremote']) button.gig-block.on,
+[data-theme='light']:not([data-look='fractalremote']) button.gig-block.off {
+  border-color: color-mix(in srgb, var(--block-fill, var(--rule)) 50%, black);
+}
+
+[data-theme='light']:not([data-look='fractalremote']) button.gig-scene {
+  border-color: color-mix(in srgb, var(--scene-fill, var(--rule)) 50%, black);
+}
+
+[data-theme='light']:not([data-look='fractalremote']) button.fx-tile:not(.io-tile):not(.selected) {
+  border-color: color-mix(in srgb, var(--tile) 50%, black);
 }
 
 /* ---------- the tuner and the pad, at stage size ---------- */
@@ -13133,6 +13195,13 @@ button.rows-cell {
 
 button.rows-cell.off {
   opacity: 0.55;
+}
+
+/* The chain's two ends, quiet here as in the strip: the plumbing, not the tone. */
+button.rows-cell.io {
+  background: none;
+  border: 1px solid var(--rule);
+  color: var(--silk-dim);
 }
 
 button.rows-cell.chosen {

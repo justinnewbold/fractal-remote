@@ -24,6 +24,7 @@ import { idOf, sameBlock } from './unit.mjs'
 import { TAP_REREAD_MS, keepTaps, tappedBpm, tempoRange, tempoSender } from './tempo'
 import { watchEvery, probeUnit, countQuiet, unitGone } from './unit-watch'
 import { DEFAULT_SLUG, deviceSlug } from './device-slug'
+import { setColourUnit } from './looks'
 import { adopt as adoptNames, forget as forgetNames, learn as learnName, nameOf } from './presetNames'
 import { forget as forgetControls } from './paramIndex'
 import { forgetSceneNames, recallSceneNames, rememberSceneNames, sceneNamesKnown } from './sceneNameCache'
@@ -1010,6 +1011,14 @@ async function readAll() {
    */
   const simulated = isDemo()
   if (slug !== state.deviceSlug || simulated !== state.simulated) forgetNames()
+  /*
+   * And which unit's colours the tiles wear. "The button and effects pedal
+   * colors dont match the colors on real fractal units": an AM4 has its own,
+   * and so has an Axe-Fx II. Told here, where the unit is learned, so the
+   * palette changes in the same moment the names do (lib/looks remembers it
+   * for the next launch, and keeps the demo's to itself).
+   */
+  setColourUnit(slug, { demo: simulated })
   const unit = caps?.connected === false ? 'missing' : 'present'
   /* Over Bluetooth (beta) the answer came through the adapter, not a computer
      (bleWire's detect carries capabilities.via 'bluetooth'). */

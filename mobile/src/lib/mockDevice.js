@@ -1086,15 +1086,17 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
         6: [{ ord: 0, name: 'Select' }],
         8: [{ ord: 0, name: 'Record' }, { ord: 1, name: 'Play/Stop' }, { ord: 4, name: 'Undo/Erase' }]
       },
+      /* The editors' ring colours, as shared/footswitches draws them — the
+         host's own table is an approximation the panel no longer reads. */
       colors: {
-        1: { name: 'Red', hex: '#e23b3b' },
-        2: { name: 'Orange', hex: '#f5871f' },
-        4: { name: 'Green', hex: '#33c46b' },
-        5: { name: 'Blue', hex: '#2f6bd0' },
-        6: { name: 'Cyan', hex: '#35c9d6' },
-        7: { name: 'Purple', hex: '#9b59f5' },
+        1: { name: 'Red', hex: '#cc0000' },
+        2: { name: 'Orange', hex: '#ff9933' },
+        4: { name: 'Green', hex: '#66cc33' },
+        5: { name: 'Blue', hex: '#0055ff' },
+        6: { name: 'Cyan', hex: '#00ccff' },
+        7: { name: 'Purple', hex: '#6633cc' },
         8: { name: 'White', hex: '#ffffff' },
-        12: { name: 'Off', hex: '#3a3a44' }
+        12: { name: 'Off', hex: '#777777' }
       }
     }),
 

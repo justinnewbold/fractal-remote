@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { clearCell, placeBlock, readGrid, setCable } from '../lib/forgefx'
 import { logDebug } from '../lib/debugLog'
-import { blockColor } from '../lib/blockColors'
+import { blockColor, quietEnd } from '../lib/blockColors'
+import { useLooks } from '../lib/useLooks'
 import { shortBlock } from '../lib/shortName'
 import { doubtfulWrite, gridShape } from '../../shared/grid-plan.mjs'
 import {
@@ -35,6 +36,8 @@ const ROW_GAP = 12
  * the chain is read back from the unit afterwards.
  */
 export default function RowsPanel({ blocks, capabilities, palette, busy, onChanged, onError }) {
+  /* Repaint when the colours change (lib/useLooks). */
+  useLooks()
   const [cells, setCells] = useState(null)
   const [failed, setFailed] = useState(false)
   const [picked, setPicked] = useState(null)
@@ -154,13 +157,22 @@ export default function RowsPanel({ blocks, capabilities, palette, busy, onChang
                 )
               }
               const hue = blockColor(c.slug)
+              /* The chain's two ends are an outline here as in the strip: the plumbing, not the tone. */
+              const quiet = quietEnd(c.slug)
               const chosen = picked && picked.row === c.row && picked.col === c.col
               return (
                 <button
                   type="button"
                   key={`${c.row}:${c.col}`}
-                  className={`rows-cell${chosen ? ' chosen' : ''}${c.block?.bypassed ? ' off' : ''}`}
-                  style={{ left: x(c.col), top: y(c.row), width: W, height: H, background: hue.fill, color: hue.ink }}
+                  className={`rows-cell${chosen ? ' chosen' : ''}${c.block?.bypassed ? ' off' : ''}${quiet ? ' io' : ''}`}
+                  style={{
+                    left: x(c.col),
+                    top: y(c.row),
+                    width: W,
+                    height: H,
+                    background: quiet ? undefined : hue.fill,
+                    color: quiet ? undefined : hue.ink
+                  }}
                   aria-label={`${c.name || c.slug}, row ${c.row + 1}, column ${c.col + 1}`}
                   aria-pressed={!!chosen}
                   onClick={() => {

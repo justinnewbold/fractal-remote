@@ -336,8 +336,22 @@ export const FILES = [
    * are for: the browser and the handset would disagree about which tile is the
    * delay, and a player switching between them would have to read both.
    *
-   * Pure data with no imports, so they cross unchanged.
+   * And since the looks, five files rather than two: the palettes and looks
+   * (blockPalettes), which letters read on which colour (ink), and what a
+   * player chose and which unit is connected (looks), which blockColors and
+   * sceneColors put together. "Let's make the colors match better" and "a
+   * section where a user can edit the colors" are both claims about what a
+   * tile shows, and a pink drive on the Mac with a red one on the phone would
+   * be the same disagreement as before, chosen this time.
+   *
+   * They import only each other, by explicit './x.js' paths, and land side by
+   * side here, so those imports resolve on the phone exactly as they do in the
+   * browser. Nothing in them reaches for the device layer of either end: the
+   * unit is handed in (looks.setColourUnit), never looked up.
    */
+  { source: '../src/lib/ink.js', target: '../mobile/src/lib/ink.js' },
+  { source: '../src/lib/blockPalettes.js', target: '../mobile/src/lib/blockPalettes.js' },
+  { source: '../src/lib/looks.js', target: '../mobile/src/lib/looks.js' },
   { source: '../src/lib/blockColors.js', target: '../mobile/src/lib/blockColors.js' },
   { source: '../src/lib/sceneColors.js', target: '../mobile/src/lib/sceneColors.js' },
   /*

@@ -20,11 +20,24 @@
  * through sync:rules, and editing them there would have repainted the computer
  * app too — which was not what was asked for.
  *
+ * SINCE THE LOOKS, ONE LOOK'S. The colours of Match my unit and the other
+ * looks are Fractal's own, or chosen for the stage, at the brightness they are
+ * meant to be drawn — lifting them again is what turned an AM4's red drive
+ * orange with black letters on the phone. So Tile lifts only the look called
+ * Fractal Remote, the app's colours as they always were, which Justin asked
+ * to keep exactly: "I just don't wanna lose all the colors and current color
+ * scheme cause I like those also." Sunlight is the bright look now.
+ *
  * GREY STAYS GREY. Multiplying saturation leaves a colour with almost none
  * almost exactly where it was, so the slate scene and the utility blocks do
  * not turn into pastels. That falls out of the maths rather than needing a
  * list of exceptions.
  */
+import { inkOn, lighter, luminance, readHex } from './ink.js'
+
+/* Moved to lib/ink, shared with the browser, and still answered here so
+   nothing that imported them from this file had to move. */
+export { inkOn, lighter, luminance, readHex }
 
 /** How much more saturated, and how much lighter, a lit tile becomes. */
 const SAT = 1.6
@@ -34,26 +47,6 @@ const LIFT = 1.14
 const MAX_L = 0.62
 
 const hex2 = (n) => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, '0')
-
-/** '#rgb' or '#rrggbb' to {r,g,b} 0-255, or null for anything else. */
-export function readHex(value) {
-  const s = String(value || '').trim()
-  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(s)
-  if (!m) return null
-  const body = m[1]
-  const full =
-    body.length === 3
-      ? body
-          .split('')
-          .map((c) => c + c)
-          .join('')
-      : body
-  return {
-    r: parseInt(full.slice(0, 2), 16),
-    g: parseInt(full.slice(2, 4), 16),
-    b: parseInt(full.slice(4, 6), 16)
-  }
-}
 
 function toHsl({ r, g, b }) {
   const R = r / 255
@@ -98,9 +91,10 @@ function toHex({ h, s, l }) {
  * The vivid version of a colour, hue untouched.
  *
  * Anything this cannot read — a CSS variable, a name, undefined — comes back
- * exactly as it went in. The browser's palette carries `var(--panel-hi)` for
- * an unknown block, and a helper that turned that into garbage would paint a
- * tile black rather than leave it neutral.
+ * exactly as it went in. The palette used to carry `var(--panel-hi)` for an
+ * unknown block, and a helper that turned that into garbage would paint a tile
+ * black rather than leave it neutral; a colour from anywhere else gets the
+ * same courtesy.
  */
 export function vivid(value) {
   const rgb = readHex(value)
@@ -127,46 +121,8 @@ export function at(value, alpha) {
 }
 
 /*
- * WHICH INK READS ON A COLOUR, worked out from the colour actually drawn.
- *
- * "Fix the text so when it's on lighter tiles it's black and when it's on
- * darker tiles it's white, like we already had set up." The palette names an
- * ink per family, but it names it for the palette's own colour — and the
- * phone draws a brighter one (`vivid`, above). A grey gate or an orange EQ
- * brightened past the point where white still reads kept its white letters.
- * So the ink is chosen here from the colour on the screen: whichever of the
- * two has the higher contrast against it, by the WCAG luminance formula.
+ * WHICH INK READS ON A COLOUR, worked out from the colour actually drawn, now
+ * lives in lib/ink — shared, because the browser picks letters by the same
+ * rule. "Fix the text so when it's on lighter tiles it's black and when it's
+ * on darker tiles it's white, like we already had set up."
  */
-const DARK_INK = '#15181d'
-const LIGHT_INK = '#ffffff'
-
-const lin = (c) => {
-  const v = c / 255
-  return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
-}
-
-export function luminance(value) {
-  const rgb = readHex(value)
-  if (!rgb) return null
-  return 0.2126 * lin(rgb.r) + 0.7152 * lin(rgb.g) + 0.0722 * lin(rgb.b)
-}
-
-export function inkOn(value, fallback = LIGHT_INK) {
-  const L = luminance(value)
-  if (L === null) return fallback
-  const onWhite = 1.05 / (L + 0.05)
-  const onDark = (L + 0.05) / (luminance(DARK_INK) + 0.05)
-  return onDark > onWhite ? DARK_INK : LIGHT_INK
-}
-
-/**
- * The same colour, lighter: mixed toward white by `amount` (0 to 1). What an
- * effect that is OFF draws its picture in — its own colour, lit less, rather
- * than plain white.
- */
-export function lighter(value, amount = 0.45) {
-  const rgb = readHex(value)
-  if (!rgb) return value
-  const k = Math.max(0, Math.min(1, amount))
-  return `#${hex2(rgb.r + (255 - rgb.r) * k)}${hex2(rgb.g + (255 - rgb.g) * k)}${hex2(rgb.b + (255 - rgb.b) * k)}`
-}

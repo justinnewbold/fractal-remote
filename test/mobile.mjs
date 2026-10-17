@@ -293,7 +293,8 @@ async function rigOnTheBench(over = {}) {
   /* The catalog the pedals are named from before the chain is read; see lib/chain-outline. */
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
   /* The gate a tap asks while the link is down, and the rules its deadline and its words come from: both real, as they are. */
-  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'relay-rules.js']) {
+  /* And the colours, which rig.js tells which unit answered (lib/looks). */
+  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -7872,15 +7873,23 @@ export function run(test) {
   test('the letters on a lit tile are black on a light colour and white on a dark one, from the colour drawn', async () => {
     /*
      * "Fix the text so when it's on lighter icons, it's black and when it's
-     * on darker icons, it's white." The phone draws the palette's colour
-     * brighter (vivid), so the palette's ink is no longer the answer — the
-     * grey gate and the orange EQ kept white letters on a light tile.
+     * on darker icons, it's white." The letters are worked out from the
+     * colour drawn, never stored — the grey gate and the orange EQ once kept
+     * white letters on a tile the phone had drawn light. Now that the phone
+     * draws the palette as authored, the colour drawn is the palette's; in
+     * Fractal Remote, the one look it still lifts, it is the lifted one, and
+     * that is the colour the letters are taken from (test/colours.mjs).
      */
-    const { vivid, inkOn, lighter, readHex } = await import('../mobile/src/lib/vivid.js')
+    const { inkOn, lighter, readHex } = await import('../mobile/src/lib/vivid.js')
     const { blockColor } = await import('../src/lib/blockColors.js')
+    const { loadLooks, setColourUnit } = await import('../src/lib/looks.js')
+    loadLooks({ getItem: () => null, setItem: () => {} })
+    setColourUnit('fm3')
     const dark = '#15181d'
-    for (const slug of ['gate', 'peq', 'amp']) assert.equal(inkOn(vivid(blockColor(slug).fill)), dark, `${slug} has white letters on a light tile`)
-    for (const slug of ['delay', 'reverb']) assert.equal(inkOn(vivid(blockColor(slug).fill)), '#ffffff', `${slug} has black letters on a dark tile`)
+    for (const slug of ['plex', 'peq', 'gate', 'enhancer']) assert.equal(inkOn(blockColor(slug).fill), dark, `${slug} has white letters on a light tile`)
+    for (const slug of ['delay', 'reverb', 'drive']) assert.equal(inkOn(blockColor(slug).fill), '#ffffff', `${slug} has black letters on a dark tile`)
+    setColourUnit('am4')
+    assert.equal(inkOn(blockColor('amp').fill), dark, 'the AM4’s silver amp has white letters')
     assert.equal(inkOn('var(--x)', '#abcdef'), '#abcdef', 'a colour it cannot read loses the palette’s ink')
     assert.match(read('mobile/src/components/Tile.js'), /const lit = inkOn\(hue, ink\)/, 'the tile takes its letters from the palette again')
 
@@ -7888,7 +7897,8 @@ export function run(test) {
      * "When the effects were off they turned to white instead of just being
      * lighter colored." Off is the effect's own hue, lifted — not white.
      */
-    const delay = vivid(blockColor('delay').fill)
+    const delay = blockColor('delay').fill
+    setColourUnit(null)
     const pale = readHex(lighter(delay, 0.35))
     const base = readHex(delay)
     assert.ok(pale.r >= base.r && pale.g >= base.g && pale.b >= base.b && pale.r + pale.g + pale.b > base.r + base.g + base.b, 'lighter did not lighten')
@@ -13256,7 +13266,7 @@ export function run(test) {
    * sixty chances to break that quietly, and nobody would notice until they
    * looked at the hardware.
    */
-  test('the vibrancy is a lift, not a repaint — every hue stays put', async () => {
+  test('the vibrancy is a lift, not a repaint — every hue stays put — and only the app’s own look wears it', async () => {
     const { vivid, at, readHex } = await import('../mobile/src/lib/vivid.js')
 
     /* Hue is identity and must not move. Saturation and lightness are what
@@ -13282,19 +13292,24 @@ export function run(test) {
     const moved = Math.abs(readHex(vivid(grey)).r - readHex(grey).r)
     assert.ok(moved < 16, `a grey shifted by ${moved} — the neutrals are being tinted`)
 
-    /* Anything it cannot read comes back untouched. The browser's palette
-       carries var(--panel-hi) for an unknown block, and turning that into
-       garbage would paint a tile black rather than leave it neutral. */
+    /* Anything it cannot read comes back untouched. The palette used to carry
+       var(--panel-hi) for an unknown block, and turning that into garbage
+       would paint a tile black rather than leave it neutral. */
     assert.equal(vivid('var(--panel-hi)'), 'var(--panel-hi)')
     assert.equal(vivid(undefined), undefined)
     assert.match(at('#b5502f', 0.14), /^#[0-9a-f]{8}$/, 'the alpha helper does not produce a colour RN can read')
 
-    /* The palettes themselves are untouched, which is the whole point — they
-       are shared with the browser through sync:rules. */
-    const scenes = read('mobile/src/lib/sceneColors.js')
-    assert.match(scenes, /#b5502f/, 'the scene palette was repainted rather than lifted')
+    /*
+     * The palettes themselves are untouched, which is the whole point — they
+     * are shared with the browser through sync:rules. The old eight scenes
+     * live on as Fractal Remote's ("make sure you preserve the current
+     * colors"), and the phone lifts that look and only that one: the others
+     * are the units' own colours, authored at the brightness they are drawn.
+     */
+    const palettes = read('mobile/src/lib/blockPalettes.js')
+    assert.match(palettes, /'#b5502f', \/\/ 1 terracotta/, 'the app’s own scene colours were repainted rather than kept')
     const tile = read('mobile/src/components/Tile.js')
-    assert.match(tile, /const hue = vivid\(fill\)/, 'the tiles are not lifted')
+    assert.match(tile, /const asBefore = isFractalRemoteLook\(\)\n\s+const hue = asBefore \? vivid\(fill\) : fill/, 'the tiles are lifted in every look, or in none')
 
     /*
      * AND THE GLASS COST NOTHING. expo-blur is already a dependency, which is
