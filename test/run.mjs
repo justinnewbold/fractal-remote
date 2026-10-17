@@ -11117,6 +11117,100 @@ test('the line under Next names what Next loads, says so when the set starts ove
   }
 })
 
+test('the line under Previous names what Previous loads, says so when it goes to the end, and never guesses', () => {
+  /*
+   * "The next button now shows the next song/preset. Can we add that to the
+   * previous button as well where it show which one would be the previous
+   * one?" Justin, 17 October 2026. Next's line the other way round, and as
+   * TRUE: a name under Previous that is not what Previous loads is believed
+   * right up to the wrong song.
+   */
+  const { previousWords, nextWords, stepTarget, PREVIOUS_WRAPS, NEXT_WRAPS, ALL, STARRED } = setlists
+  const names = { 40: 'Opener', 7: 'Schism', 200: 'Encore', 43: 'Plexi', 12: '<EMPTY>k Album Chug', 13: '', 14: '   ' }
+  const asked = []
+  const nameOf = (n) => {
+    asked.push(n)
+    return names[n]
+  }
+
+  // A song in the middle: the one before it, by name, alone. The button says Previous above it.
+  assert.deepEqual(previousWords({ order: [40, 7, 200], current: 200, previous: 7, nameOf }), { shown: 'Schism', said: 'Previous, Schism', name: 'Schism' })
+  assert.deepEqual(asked, [7], 'the line asked about a slot other than the one Previous loads')
+
+  // Song 1: Previous goes back round to the last song (nextIn), and the line says THAT.
+  assert.deepEqual(previousWords({ order: [40, 7, 200], current: 40, previous: 200, nameOf }), {
+    shown: PREVIOUS_WRAPS,
+    said: 'Previous, to the end, Encore',
+    name: 'Encore'
+  })
+  /* Short enough to fit whole on a 320-point phone, as "Starts over" is, and not Next's words. */
+  assert.equal(PREVIOUS_WRAPS, 'To the end')
+  assert.ok(PREVIOUS_WRAPS.length <= NEXT_WRAPS.length, 'the words for going to the end are longer than the ones that fit under Next')
+  assert.deepEqual(previousWords({ order: [40, 7, 200], current: 40, previous: 200, nameOf: () => undefined }), {
+    shown: PREVIOUS_WRAPS,
+    said: 'Previous, to the end',
+    name: ''
+  })
+  // A list of one: Previous loads that song again, from song 1, which is also the last.
+  assert.equal(previousWords({ order: [5], current: 5, previous: 5, nameOf }).shown, PREVIOUS_WRAPS)
+  // Off the list, Previous loads the last song and the line is simply its name, as Next names the first.
+  assert.deepEqual(previousWords({ order: [40, 7, 200], current: 99, previous: 200, nameOf }), { shown: 'Encore', said: 'Previous, Encore', name: 'Encore' })
+  assert.equal(previousWords({ order: [40, 7, 200], current: undefined, previous: 200, nameOf }).shown, 'Encore')
+  // Never "to the end" for a press that does not go to the last song.
+  assert.equal(previousWords({ order: [40, 7, 200], current: 40, previous: 7, nameOf }).shown, 'Schism', 'the line said it goes to the end about a press that goes somewhere else')
+  // Slot by slot: the slot before's name.
+  assert.equal(previousWords({ order: null, current: 44, previous: 43, nameOf }).shown, 'Plexi')
+
+  // Not known, empty, a gen-3 empty marker, blank, or no slot at all: a blank line. Never a guess.
+  for (const previous of [8, 12, 13, 14]) {
+    assert.deepEqual(previousWords({ order: null, current: previous + 1, previous, nameOf }), { shown: '', said: 'Previous', name: '' }, `slot ${previous} was given a name it does not have`)
+  }
+  for (const previous of [null, undefined, NaN, 1.5]) {
+    assert.deepEqual(previousWords({ order: [40], current: 40, previous, nameOf }), { shown: '', said: 'Previous', name: '' }, 'a Previous with nowhere to go has a line')
+  }
+  assert.deepEqual(previousWords({ order: null, current: 2, previous: 1 }), { shown: '', said: 'Previous', name: '' }, 'no names at all is not a blank line')
+
+  // Starred at its first star goes round to the last too.
+  const favourites = [300, 12, 45]
+  assert.equal(
+    previousWords({ order: favourites, current: 300, previous: stepTarget({ source: STARRED, current: 300, delta: -1, favourites, lists: [] }), nameOf: () => 'Last star' }).shown,
+    PREVIOUS_WRAPS
+  )
+
+  /*
+   * And against the rule the button steps by, everywhere: every source, every
+   * place in it, with names known and not. The line is "To the end" exactly
+   * when Previous goes from the first song to the last; otherwise it is the
+   * name of the slot Previous loads, or nothing. And it never says Next's
+   * words, nor Next its.
+   */
+  const lists = [
+    { id: 'sat', name: 'Saturday', presets: [40, 7, 200] },
+    { id: 'one', name: 'One', presets: [5] },
+    { id: 'none', name: 'None', presets: [] },
+    { id: 'messy', name: 'Messy', presets: [7, 7, -1, 40, 1.5, 200] }
+  ]
+  const known = { 0: 'Clean', 5: 'Solo', 7: 'Schism', 40: 'Opener', 43: 'Plexi', 199: 'Before', 200: 'Encore', 300: 'Big Star' }
+  for (const source of [ALL, STARRED, 'sat', 'one', 'none', 'messy', 'gone']) {
+    for (const current of [undefined, 0, 1, 5, 7, 12, 40, 44, 45, 99, 200, 300]) {
+      const order = setlists.orderFor(source, { favourites, lists })
+      const previous = stepTarget({ source, current, delta: -1, favourites, lists })
+      const words = previousWords({ order, current, previous, nameOf: (n) => known[n] })
+      const clean = setlists.cleanSlots(order)
+      const wraps = clean.length > 0 && clean.indexOf(current) === 0 && previous === clean[clean.length - 1]
+      const where = `${source} on ${current} → ${previous}`
+      if (previous === null) assert.deepEqual(words, { shown: '', said: 'Previous', name: '' }, `${where}: a Previous with nowhere to go has a line`)
+      else if (wraps) assert.equal(words.shown, PREVIOUS_WRAPS, `${where}: Previous goes to the last song and the line does not say it goes to the end`)
+      else assert.equal(words.shown, known[previous] ?? '', `${where}: the line is not the name of what Previous loads`)
+      assert.equal(words.name, previous === null ? '' : known[previous] ?? '', `${where}: the name is not the slot Previous loads`)
+      assert.equal(typeof words.shown, 'string', `${where}: the line is not always a string, so the button cannot keep its height`)
+      assert.notEqual(words.shown, NEXT_WRAPS, `${where}: Previous says the set starts over`)
+      const next = stepTarget({ source, current, delta: 1, favourites, lists })
+      assert.notEqual(nextWords({ order, current, next, nameOf: (n) => known[n] }).shown, PREVIOUS_WRAPS, `${where}: Next says it goes to the end`)
+    }
+  }
+})
+
 test('the line under Next in the browser says what the preset list says for that slot, for the unit there now', () => {
   /*
    * The browser's line reads App's `slots` (allSlots), the very list the

@@ -2989,14 +2989,14 @@ button.gig-name:disabled .gig-name-caret {
 }
 
 /*
- * The line under Next: what it will load. "'Next: song name' under the Next
- * button. You see what's coming before the count-in."
+ * The line under Next, and under Previous: what each will load. "'Next:
+ * song name' under the Next button. You see what's coming before the
+ * count-in."
  *
  * PAID FOR OUT OF THE PADDING, so the button is the height it always was:
  * the 16px line takes the place of 8px of padding above the word and 8px
- * below it. Always there, blank until a name is known (and Previous has a
- * blank one of its own), so nothing moves when a name arrives and the two
- * words stay level. One line, cut with an ellipsis rather than wrapped, for
+ * below it. Always there on both buttons, blank until a name is known, so
+ * nothing moves when a name arrives and the two words stay level. One line, cut with an ellipsis rather than wrapped, for
  * the same reason.
  *
  * NO WIDER THAN THE BUTTON IT IS IN, AND ADDING NOTHING TO IT. A grid column

@@ -50,6 +50,7 @@ import {
   orderFor,
   stepTarget,
   nextWords,
+  previousWords,
   sourceLabel,
   positionIn,
   songFor,
@@ -630,6 +631,14 @@ export default function Gig({
    */
   const slotNames = useMemo(() => new Map((slots || []).map((s) => [s.number, s.name])), [slots])
   const ahead = nextWords({ order, current: preset?.number, next: nextAt, nameOf: (n) => slotNames.get(n) })
+
+  /*
+   * And the line under Previous, by the same rule the other way round: the
+   * name of what it will load, or on song 1 of a setlist that it goes to the
+   * end. "Can we add that to the previous button as well?" The phone's line
+   * (lib/setlists previousWords), asked about `lastAt` and nothing else.
+   */
+  const behind = previousWords({ order, current: preset?.number, previous: lastAt, nameOf: (n) => slotNames.get(n) })
 
   /*
    * NOR LATE. A link that was away while the preset loaded held its reads,
@@ -1259,10 +1268,12 @@ export default function Gig({
         the same row so the footer costs the screen nothing more.
       */}
       <div className="gig-nav">
-        <button className="gig-nav-step" onClick={() => step(-1)} disabled={working || (landing(-1) === null && !(noSlotSteps && !order))}>
+        <button className="gig-nav-step" onClick={() => step(-1)} disabled={working || (landing(-1) === null && !(noSlotSteps && !order))} aria-label={behind.said}>
           ‹ Previous
-          {/* Blank, and as tall as Next's line, so the two words sit level. */}
-          <span className="gig-nav-ahead" aria-hidden="true" />
+          {/* What Previous will load, as tall as Next's line so the two words sit level. Always drawn, blank until a name is known. */}
+          <span className="gig-nav-ahead" aria-hidden="true">
+            {behind.shown}
+          </span>
         </button>
         <button
           type="button"

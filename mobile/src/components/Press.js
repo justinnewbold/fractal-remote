@@ -44,7 +44,7 @@ export default function Press({
   badge,
   /*
    * One small line under the whole button, across its full width: what Next
-   * will load. "'Next: song name' under the Next button."
+   * (or Previous) will load. "'Next: song name' under the Next button."
    *
    * Not `sub`. That one sits beside the chevron, in what is left of the
    * button once the picture has its room (under forty points on a small
@@ -56,10 +56,10 @@ export default function Press({
    *
    * DRAWN WHENEVER IT IS GIVEN, even blank. A line that appeared when the
    * name was known would move the word Next up under the thumb on its way;
-   * a line that is always there means nothing moves. Previous is given a
-   * blank one so the two words sit level. Blank is a no-break space, not a
-   * space: a line holding only a space can fold away to nothing, and then
-   * the word moves anyway.
+   * a line that is always there means nothing moves. Previous has one too,
+   * what it will load, so the two words sit level. Blank is a no-break
+   * space, not a space: a line holding only a space can fold away to
+   * nothing, and then the word moves anyway.
    *
    * Never part of what a screen reader hears unless the screen says so with
    * `accessibilityLabel`: the screen knows how to say it ("Next, Schism").

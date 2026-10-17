@@ -2465,6 +2465,46 @@ export function run(test) {
     assert.ok(!stage.includes(web.NEXT_WRAPS) && !gig.includes(web.NEXT_WRAPS), 'one end spells out the end-of-setlist words itself, and the two can drift')
   })
 
+  /* "Can we add that to the previous button as well?" The same, under Previous. */
+  test('the line under Previous says the same at both ends, for the same press', async () => {
+    const bare = (t) => t.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+    const stage = bare(read('mobile/src/screens/Stage.js'))
+    const gig = bare(read('src/components/Gig.jsx'))
+    const line = (src, start) => {
+      const from = src.indexOf(start)
+      assert.ok(from > 0, `${start} is not where this test reads it`)
+      return src.slice(from, src.indexOf('\n', from))
+    }
+    const phoneBehind = line(stage, 'const behind = previousWords(')
+    const webLookup = line(gig, 'const slotNames = useMemo(')
+    const webBehind = line(gig, 'const behind = previousWords(')
+    assert.match(stage, /\bpreviousWords,?\n[\s\S]*?\} from '\.\.\/lib\/lists'/, 'the phone works out its line some other way than the shared rule')
+    assert.match(gig, /\bpreviousWords,\n[\s\S]*?\} from '\.\.\/lib\/setlists'/, 'the browser works out its line some other way than the shared rule')
+    assert.match(read('mobile/src/lib/lists.js'), /export \{[^}]*\bpreviousWords\b[^}]*\} from '\.\/setlists'/)
+
+    const phone = await import('../mobile/src/lib/setlists.js')
+    const web = await import('../src/lib/setlists.js')
+    const names = { 0: 'Clean', 7: 'Schism', 12: '<EMPTY>k Album Chug', 13: '', 40: 'Opener', 45: 'Plexi', 200: 'A Very Long Preset Name For A Small Phone' }
+    const slots = Array.from({ length: 256 }, (_, n) => (n in names ? { number: n, name: names[n] } : { number: n }))
+    const phoneSays = new Function('order', 'preset', 'lastAt', 'nameOf', 'previousWords', `${phoneBehind}\nreturn behind`)
+    const webSays = new Function('order', 'preset', 'lastAt', 'slots', 'useMemo', 'previousWords', `${webLookup}\n${webBehind}\nreturn behind`)
+    for (const order of [null, [40, 7, 200], [7], [], [200, 12, 13, 0]]) {
+      for (const current of [undefined, 0, 7, 12, 13, 40, 44, 200]) {
+        for (const lastAt of [null, 0, 7, 12, 13, 40, 43, 44, 200, 300]) {
+          const preset = current === undefined ? null : { number: current }
+          const p = phoneSays(order, preset, lastAt, (n) => names[n], phone.previousWords)
+          const w = webSays(order, preset, lastAt, slots, (fn) => fn(), web.previousWords)
+          assert.deepEqual(p, w, `the phone and the browser disagree under Previous (${JSON.stringify(order)} on ${current}, Previous to ${lastAt})`)
+        }
+      }
+    }
+
+    /* And the words live in the shared rule, not in either screen's button. */
+    const previous = gig.slice(gig.lastIndexOf('<button', gig.indexOf('‹ Previous')), gig.indexOf('</button>', gig.indexOf('‹ Previous')))
+    assert.deepEqual([...webButtons(previous + '</button>')].filter((w) => w !== '‹ Previous'), [], 'the browser’s Previous carries words of its own under it')
+    assert.ok(!stage.includes(web.PREVIOUS_WRAPS) && !gig.includes(web.PREVIOUS_WRAPS), 'one end spells out the start-of-setlist words itself, and the two can drift')
+  })
+
   /*
    * "Where it says chain above the pedals, also put hold to switch channels.
    * So users know that they can just hold the things to switch between
