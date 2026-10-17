@@ -296,6 +296,15 @@ export const AREAS = [
         web: null,
         phone: 'Hide',
         why: 'the browser’s ? opens into the line itself and a second tap on it closes it; the phone’s knobs are three across, so the line opens under them and its button says Hide'
+      },
+      {
+        does: 'give the open block’s kind a colour of its own, on the colour sheet',
+        web: 'Colour',
+        phone: 'Colour',
+        /* The browser's is at the top of the block panel (Console.jsx BlockColour),
+           which this area's files do not hold; the per-preset colours test
+           further down holds it there, beside the phone's. */
+        unreadable: ['web']
       }
       /*
        * The page tabs over a block's controls are not listed: they are named
@@ -1219,7 +1228,7 @@ export function run(test) {
       assert.match(sheet, /const swatches = target \? sheetSwatches\(target\) : \[\]/, `${f} draws swatches of its own`)
       assert.match(sheet, /spokenSwatch\(target, s, \{ yours: s\.fill === yours && !s\.own \}\)/, `${f} names its swatches some other way`)
       assert.match(sheet, /const pick = open \? shadeOf\(base, step, \{ scene \}\) : null/, `${f} goes lighter and darker by some other rule`)
-      assert.match(sheet, /const warning = open \? nextToWarning\(target, pick, \{ chain \}\) : null/, `${f} warns by some other rule`)
+      assert.match(sheet, /const warning = open \? nextToWarning\(target, pick, \{ chain, only \}\) : null/, `${f} warns by some other rule`)
     }
     /* And every rule the phone's page takes from lib/colourPage, the browser's takes too. */
     const fromPage = (f) => new Set((read(f).match(/import \{([^}]*)\} from '\.\.\/lib\/colourPage'/)?.[1] || '').split(',').map((x) => x.trim()).filter(Boolean))
@@ -1229,6 +1238,94 @@ export function run(test) {
     ]) {
       const web = fromPage(webFile)
       for (const name of fromPage(phoneFile)) assert.ok(web.has(name), `${webFile} does without ${name}, which the phone’s page is drawn by`)
+    }
+  })
+
+  /*
+   * ONE PRESET'S COLOURS, THE SAME AT BOTH ENDS.
+   *
+   * "Make a section where a user can edit the colors of the blocks/presets
+   * and effects." A scene can be coloured for just the preset that is loaded,
+   * and a preset can wear a colour tag; both are filed per unit and preset
+   * number in lib/looks and painted through lib/colourPage at both ends. What
+   * this holds is everything around that: that Play at both ends asks for
+   * this preset's scene colours (and Scene arrange, which is every preset's
+   * layout, does not), that the tag is drawn in the same places by the same
+   * rule, and that the ways in — the preset list beside the star, the scene
+   * names, the open block on Edit — are at both ends.
+   */
+  test('one preset’s colours are the same at both ends: its scenes on Play, its tag, and the ways in', async () => {
+    const gig = read('src/components/Gig.jsx')
+    const stage = read('mobile/src/screens/Stage.js')
+    /* Play: this preset's colour for a scene, then yours, then the look's. */
+    assert.match(gig, /'--scene-fill': sceneColor\(i, preset\?\.number\)\.fill, '--scene-ink': sceneColor\(i, preset\?\.number\)\.ink/, 'the browser’s Play does not ask for this preset’s scene colours')
+    assert.match(stage, /const hue = sceneColor\(i, preset\?\.number\)/, 'the phone’s Play does not ask for this preset’s scene colours')
+    /* Scene arrange lays out every preset's scenes, so it wears every preset's colours. */
+    assert.match(read('src/components/SceneArrange.jsx'), /'--scene-fill': sceneColor\(scene\)\.fill/)
+    assert.match(read('mobile/src/components/SceneArrange.js'), /const hue = sceneColor\(scene\)\n/)
+
+    /* The tag beside the name on Play, at both ends, and nothing for a preset without one. */
+    assert.match(gig, /\{presetTag\(preset\?\.number\) \? \(\s*<span className="gig-name-tag" aria-hidden="true" style=\{\{ '--tag': presetTag\(preset\.number\) \}\} \/>\s*\) : null\}/)
+    assert.match(stage, /style=\{\[\{ paddingHorizontal: space\.lg \}, tagEdge\(presetTag\(preset\?\.number\)\)\]\}/)
+    /* On every preset's row in the preset list, with a Colour button beside the star. */
+    const list = read('src/components/Console.jsx')
+    const rows = list.slice(list.indexOf('export function PresetList('), list.indexOf('export function BlockPanel('))
+    assert.ok(rows.indexOf('className="preset-colour"') > rows.indexOf('className={`preset-star') && rows.indexOf('className="preset-colour"') < rows.indexOf('className={`preset-row'), 'the browser’s Colour button is not between the star and the row')
+    assert.match(rows, /data-tag=\{presetTag\(slot\.number\) \? 'yes' : undefined\}\s+style=\{presetTag\(slot\.number\) \? \{ '--tag': presetTag\(slot\.number\) \} : undefined\}/)
+    assert.match(rows, /onClick=\{\(\) => setPainting\(presetTarget\(slot\.number, \{ words: wordsFor\(slot\) \}\)\)\}/)
+    assert.match(rows, /<ColourSheet target=\{painting\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
+    const presets = read('mobile/src/screens/Presets.js')
+    assert.match(presets, /style=\{tagEdge\(tag\)\}\s*\/>\s*\{\/\*[^*]*\*\/\}\s*\{presetTarget\(n, \{ words \}\) \? \(\s*<TagButton words=\{words\} fill=\{tag\} onPress=\{\(\) => setPainting\(presetTarget\(n, \{ words \}\)\)\} \/>\s*\) : null\}\s*<Star/, 'the phone’s Colour button is not between the row and the star')
+    assert.match(presets, /<ColourSheet target=\{painting\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
+    /* And on a song's row in a setlist. */
+    assert.match(read('src/components/Setlists.jsx'), /\$\{presetTag\(n\) \? ' tagged' : ''\}[\s\S]{0,400}\.\.\.\(presetTag\(n\) \? \{ '--tag': presetTag\(n\) \} : \{\}\)/)
+    assert.match(read('mobile/src/screens/Setlists.js'), /tag=\{presetTag\(n\)\}/)
+    assert.match(read('mobile/src/screens/Setlists.js'), /tagEdge\(tag\)\n\s*\]\}/)
+
+    /* THE ONE RULE THE BAR IS DRAWN BY: the colour on the dark page, half way to black on paper, four wide. */
+    const page = await import('../src/lib/colourPage.js')
+    const ink = await import('../src/lib/ink.js')
+    assert.equal(page.TAG_WIDTH, 4)
+    const css = read('src/styles.css')
+    const half = Math.round(ink.PAPER_EDGE * 100)
+    assert.match(css, /button\.preset-row\[data-tag\],\nbutton\.preset-colour\[data-tagged\],\n\.gig-name-tag,\n\.setlist-song\.tagged,\n\.colour-tag-preview \{\n  --tag-drawn: var\(--tag\);\n\}/, 'the browser draws the bar in something other than the colour on the dark page')
+    assert.match(css, new RegExp(`\\[data-theme='light'\\] \\.colour-tag-preview \\{\\n  --tag-drawn: color-mix\\(in srgb, var\\(--tag\\) ${half}%, black\\);`), 'the browser’s bar on paper is not the colour half way to black, as lib/ink’s PAPER_EDGE is')
+    for (const where of ['button.preset-row[data-tag]', '.setlist-song.tagged']) {
+      assert.ok(css.includes(`${where} {\n  box-shadow: inset ${page.TAG_WIDTH}px 0 0 var(--tag-drawn);`), `${where} is not a bar ${page.TAG_WIDTH} wide`)
+    }
+    const tag = read('mobile/src/components/PresetTag.js')
+    assert.match(tag, /return \{ borderLeftWidth: TAG_WIDTH, borderLeftColor: tagFill\(fill, \{ light: !isDark\(\) \}\) \}/, 'the phone draws the bar by some other rule')
+    for (const s of page.TAG_SWATCHES) {
+      assert.equal(page.tagFill(s.fill), s.fill)
+      assert.equal(page.tagFill(s.fill, { light: true }), ink.paperEdge(s.fill))
+      for (const p of ['#0d0f12', '#15181d']) assert.ok(ink.contrast(page.tagFill(s.fill), p) >= 3, `a ${s.name} tag is lost on the dark page`)
+      for (const p of ['#f2efe9', '#faf8f4', '#f4f2ee', '#ffffff']) assert.ok(ink.contrast(page.tagFill(s.fill, { light: true }), p) >= 3, `a ${s.name} tag is lost on paper (${p})`)
+    }
+
+    /* The ways in. The scene names: a colour for this preset's scene, opening on Just this preset. */
+    assert.match(read('src/components/Scenes.jsx'), /setPainting\(sceneTarget\(current, \{ preset: presetHere, only: true \}\)\)/)
+    assert.match(read('mobile/src/components/RenamePreset.js'), /setPainting\(sceneTarget\(i, \{ preset: here, only: true \}\)\)/)
+    /* The open block on Edit, for its family, never for the chain's two ends. */
+    const block = list.slice(list.indexOf('export function BlockPanel('))
+    assert.match(block, /\{paintable\(block\?\.slug\) \? <BlockColour slug=\{block\.slug\} \/> : null\}/)
+    assert.match(list, /setPainting\(familyTarget\(slug\)\)\}>\s*<span className="block-colour-dot"[^>]*\/>\s*Colour\s*<\/button>/)
+    const edit = read('mobile/src/screens/Edit.js')
+    assert.match(edit, /\{paintable\(block\.slug\) \? <BlockColour slug=\{block\.slug\} \/> : null\}/)
+    assert.match(edit, /<Press label="Colour" height=\{40\} onPress=\{\(\) => setPainting\(familyTarget\(slug\)\)\} \/>/)
+    assert.equal(page.paintable('Input 1'), false)
+    assert.equal(page.paintable('drive2'), true)
+    /* The preset is named the same way at both ends: "012 Lead Rig". */
+    for (const f of ['src/App.jsx', 'mobile/src/components/Colours.js', 'mobile/src/components/RenamePreset.js']) {
+      assert.match(read(f), /words: `\$\{slotLabel\(preset\.number, [^)]+\)\} \$\{presetLabel\(preset\)\}`/, `${f} names the loaded preset some other way`)
+    }
+    /* And both sheets paint, and change between every preset and this one, by the same rule. */
+    for (const f of ['src/components/ColourSheet.jsx', 'mobile/src/components/ColourSheet.js']) {
+      const sheet = read(f)
+      assert.match(sheet, /paint\(target, fill, \{ only \}/, `${f} paints in some other presets`)
+      assert.match(sheet, /setBase\(colourNow\(target, \{ only: to \}\)\)/, `${f} does not show the colour the presets chosen have`)
+      assert.match(sheet, /\{SCOPE_WORDS\.every\}|label=\{SCOPE_WORDS\.every\}/, `${f} does not offer every preset`)
+      assert.match(sheet, /\{SCOPE_WORDS\.only\}<\/span> <span className="colour-scope-which">\{target\.preset\.words\}|label=\{SCOPE_WORDS\.only\} sub=\{target\.preset\.words\}/, `${f} does not offer just this preset, named`)
+      assert.match(sheet, /target\.kind === 'scene' && target\.preset \?/, `${f} offers the choice where there is no preset to make it about`)
     }
   })
 

@@ -2257,7 +2257,8 @@ export function run(test) {
     assert.match(picker, /open=\{presetMenu && narrow\}/)
     assert.match(picker, /\{presetPicker\}/, 'the sheet does not carry the same picker as the popover')
     assert.equal((src.match(/<PresetList\b/g) || []).length, 2, 'the picker is written more than once')
-    assert.match(src, /useDismiss\(presetMenuRef, \(\) => setPresetMenu\(false\), \{ open: presetMenu && !narrow, ignore: '\.topbar-preset' \}\)/, 'the popover’s outside-tap listener runs under the sheet, or the menu no longer dismisses through the shared hook')
+    /* And the colour panel a preset's Colour button opens is over the page, not in the menu: a click in it is not a click away. */
+    assert.match(src, /useDismiss\(presetMenuRef, \(\) => setPresetMenu\(false\), \{ open: presetMenu && !narrow, ignore: '\.topbar-preset, \.colour-layer' \}\)/, 'the popover’s outside-tap listener runs under the sheet, or the menu no longer dismisses through the shared hook')
   })
 
   test('the bar’s preset line is one span inside the button', () => {
@@ -5717,7 +5718,7 @@ export function run(test) {
     const page = src.slice(at, src.indexOf("{setupPage === 'phone'", at))
     assert.match(page, /onClick=\{\(\) => setSetupPage\(null\)\}>\s*‹ Settings/, 'the Colours page has no way back to Settings')
     assert.match(page, /\{SETUP_PAGES\.colours\}/, 'the Colours page has no title')
-    assert.match(page, /<Colours blocks=\{blocks\} sceneNames=\{sceneNames\} icons=\{icons\} \/>/, 'the page is not handed the preset’s effects, the scene names and the pictures setting')
+    assert.match(page, /<Colours blocks=\{blocks\} sceneNames=\{sceneNames\} preset=\{presetHere\} icons=\{icons\} \/>/, 'the page is not handed the preset’s effects, the scene names, the preset that is loaded and the pictures setting')
     /* The row's line is redrawn when the look or the unit changes. */
     assert.match(src, /\n  useLooks\(\)\n/, 'the Colours row keeps saying the look it said when Settings opened')
   })
@@ -5742,7 +5743,7 @@ export function run(test) {
     assert.match(page, /onChange=\{\(\) => chooseScenes\(false\)\}/)
     assert.match(page, /onChange=\{\(\) => chooseScenes\(true\)\}/)
     assert.match(page, /onClick=\{\(\) => setPainting\(familyTarget\(f\)\)\}/, 'an effect tile does not open the colour sheet')
-    assert.match(page, /onClick=\{\(\) => setPainting\(sceneTarget\(i\)\)\}/, 'a scene tile does not open the colour sheet')
+    assert.match(page, /onClick=\{\(\) => setPainting\(sceneTarget\(i, \{ preset \}\)\)\}/, 'a scene tile does not open the colour sheet, with the preset that is loaded')
     /* Both ways a switched-off effect is drawn, each beside a tile drawn that way. */
     assert.match(page, /<OffChoice\s+mode="colour"\s+label="Keep their colour"/)
     assert.match(page, /<OffChoice mode="grey" label="Grey when off"/)
@@ -5859,6 +5860,42 @@ export function run(test) {
     const amp = c.draw(c.ColourSheet, { target: c.page.familyTarget('amp'), chain: [], icons: false, onClose: () => {} })
     assert.match(amp, /<button type="button" class="colour-back">Back to the unit’s colour<\/button>/)
     assert.match(amp, /aria-label="Amp colour, Green, your own"/, 'your own colour is said as if somebody else chose it')
+    c.looks.setColourUnit(null)
+  })
+
+  test('the browser’s colour sheet, drawn for one preset: Every preset or Just this preset for a scene, and a preset’s tag', async () => {
+    const c = await coloursOnABench()
+    c.looks.setColourUnit('fm3')
+    const lead = { number: 12, words: '012 Lead Rig' }
+    /* From the scene names: opens on just this preset, says so, and offers every preset beside it. */
+    const only = c.draw(c.ColourSheet, { target: c.page.sceneTarget(2, { preset: lead, only: true }), onClose: () => {} })
+    assert.match(only, /For this scene in 012 Lead Rig only/)
+    assert.match(only, /<div class="colour-scope" role="group" aria-label="Which presets"><button type="button" aria-pressed="false" class="">Every preset<\/button><button type="button" aria-pressed="true" class="on"><span>Just this preset<\/span> <span class="colour-scope-which">012 Lead Rig<\/span><\/button><\/div>/, 'the choice of presets is not drawn, or not on just this preset')
+    assert.ok(only.indexOf('colour-scope') < only.indexOf('colour-swatches'), 'the choice of presets is under the grid it changes')
+    /* From the Colours page: every preset, the same two buttons. */
+    const every = c.draw(c.ColourSheet, { target: c.page.sceneTarget(2, { preset: lead }), onClose: () => {} })
+    assert.match(every, /aria-pressed="true" class="on">Every preset<\/button>/)
+    assert.match(every, /For this scene in every preset/)
+    /* No preset loaded: no choice to make. */
+    assert.ok(!/colour-scope/.test(c.draw(c.ColourSheet, { target: c.page.sceneTarget(2), onClose: () => {} })), 'the choice is offered with no preset to make it about')
+    /* This preset's own colour, with the way back to every preset's. */
+    c.page.paint(c.page.sceneTarget(2, { preset: lead, only: true }), '#66cc33', { only: true })
+    const own = c.draw(c.ColourSheet, { target: c.page.sceneTarget(2, { preset: lead, only: true }), onClose: () => {} })
+    assert.match(own, /<button type="button" class="colour-back">Same as every preset<\/button>/)
+    assert.match(own, /aria-label="Scene 3 colour, Green, your own"/)
+
+    /* A preset's tag: drawn as its row, the twenty-three without the orange, no way back until it has one. */
+    const target = c.page.presetTarget(45, { words: '045 Clean' })
+    const tag = c.draw(c.ColourSheet, { target, onClose: () => {} })
+    assert.match(tag, /role="dialog" aria-modal="true" aria-label="045 Clean colour"/)
+    assert.match(tag, /Kept for this preset on this unit, like its star/)
+    assert.match(tag, /<span class="colour-tag-preview" style="--tag:#cc0000">045 Clean<\/span>/, 'the tag is not shown as its row will look')
+    assert.equal((tag.match(/role="radio"/g) || []).length, 22)
+    assert.ok(!/045 Clean colour, Orange/.test(tag), 'a tag is offered the amber-like orange')
+    assert.ok(!/class="gig-block|class="gig-scene/.test(tag), 'a tag is drawn as a tile')
+    assert.ok(!/colour-back/.test(tag))
+    c.page.paint(target, '#0055ff')
+    assert.match(c.draw(c.ColourSheet, { target, onClose: () => {} }), /<button type="button" class="colour-back">Take the colour off<\/button>/)
     c.looks.setColourUnit(null)
   })
 

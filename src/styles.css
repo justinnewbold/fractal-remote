@@ -14087,3 +14087,173 @@ button.fx-tile.bypassed[data-off='grey'] {
 :root button.fx-tile.bypassed[data-off='grey']:not(.io-tile):not(.selected) {
   border: 2px dashed var(--off-edge);
 }
+
+/* ---------- One preset's colours: its scenes, and its tag ----------
+
+   "Make a section where a user can edit the colors of the blocks/presets and
+   effects." A preset's colour tag — the editors' Assign Color — is a bar down
+   the left of its row in the preset list and in a setlist, and beside its
+   name on Play; never a fill, so the row is still the row and the amber that
+   marks the preset you are on is still the only thing in the list that says
+   so. The colour is set on the row by the component as --tag.
+
+   ONE RULE FOR THE BAR AT BOTH ENDS (lib/colourPage tagFill): the colour
+   itself on the dark page, where everything on offer stands 3:1 off the
+   black; on paper, the colour half way to black — lib/ink's PAPER_EDGE, the
+   edge a lit tile gets there, and the half the light page's tile edges above
+   are written with. A pale tag (white, yellow, lime) would otherwise be a
+   stripe of nothing on the page. A test holds the 50% to PAPER_EDGE. */
+
+button.preset-row[data-tag],
+button.preset-colour[data-tagged],
+.gig-name-tag,
+.setlist-song.tagged,
+.colour-tag-preview {
+  --tag-drawn: var(--tag);
+}
+
+[data-theme='light'] button.preset-row[data-tag],
+[data-theme='light'] button.preset-colour[data-tagged],
+[data-theme='light'] .gig-name-tag,
+[data-theme='light'] .setlist-song.tagged,
+[data-theme='light'] .colour-tag-preview {
+  --tag-drawn: color-mix(in srgb, var(--tag) 50%, black);
+}
+
+/* Inside the row's own 2px edge, which still says which row is loaded. */
+button.preset-row[data-tag] {
+  box-shadow: inset 4px 0 0 var(--tag-drawn);
+}
+
+.setlist-song.tagged {
+  box-shadow: inset 4px 0 0 var(--tag-drawn);
+}
+
+.setlist-song.tagged.lifted {
+  box-shadow: inset 4px 0 0 var(--tag-drawn), var(--e-2);
+}
+
+/* Beside the name on Play, the height of the name's line. Nothing at all for
+   a preset without a tag, so Play is as it was. */
+.gig-name-tag {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 4px;
+  height: 1.2em;
+  border-radius: var(--r-1);
+  background: var(--tag-drawn);
+}
+
+/* The Colour button beside a preset's star: an empty ring, or a dot in its colour. */
+button.preset-colour {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.preset-colour-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--silk-faint);
+}
+
+button.preset-colour[data-tagged] .preset-colour-dot {
+  border: none;
+  background: var(--tag-drawn);
+}
+
+/* The colour sheet's picture of a tagged row, for a preset's tag. */
+.colour-tag-preview {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  background: var(--panel);
+  box-shadow: inset 4px 0 0 var(--tag-drawn);
+  color: var(--silk);
+  font-size: var(--f-3);
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Every preset, or just this one: the phone's two buttons, the one in force filled. */
+.colour-scope {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+}
+
+.colour-scope button {
+  min-height: 48px;
+  min-width: 0;
+  padding: var(--s-1) var(--s-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--panel);
+  color: var(--silk-dim);
+  font-size: var(--f-2);
+  overflow-wrap: anywhere;
+}
+
+.colour-scope button.on {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--on-signal);
+}
+
+/* "012 Lead Rig" under "Just this preset", a size down: the phone's line under a button. */
+.colour-scope-which {
+  display: block;
+  font-size: var(--f-1);
+}
+
+/* The Colour button at the top of an open block, and beside a scene's Edit
+   name: the word, with a dot of the colour it opens on. */
+.block-colour {
+  display: flex;
+  justify-content: flex-end;
+}
+
+button.chip.block-colour-open,
+button.chip.scene-colour {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 44px;
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--f-2);
+}
+
+.block-colour-dot,
+.scene-colour-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.block-colour-dot {
+  background: var(--block-fill);
+}
+
+.scene-colour-dot {
+  background: var(--scene-fill);
+}
+
+[data-theme='light'] .block-colour-dot {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--block-fill) 50%, black);
+}
+
+[data-theme='light'] .scene-colour-dot {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--scene-fill) 50%, black);
+}

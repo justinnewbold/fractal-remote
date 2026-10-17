@@ -86,7 +86,7 @@ import Updates, { UpdateReadyNotice } from './components/Updates'
 import StartAtBoot from './components/StartAtBoot'
 import Am4Check from './components/Am4Check'
 import RenamePreset from './components/RenamePreset'
-import { countFromRefusal, slotCount, slotOutside, slotProblem, slotsForChat, timeLeft } from './lib/slots'
+import { countFromRefusal, slotCount, slotLabel, slotOutside, slotProblem, slotsForChat, timeLeft } from './lib/slots'
 import { checkRevert, noteEdit, revertSaid, revertTook, stuckLines } from './lib/revertCheck'
 import { inDesktopApp } from './lib/desktop'
 import { createNameScan } from './lib/nameScan'
@@ -239,7 +239,7 @@ import { firmwareOf } from '../shared/firmware.mjs'
 import LinkDetails from './components/LinkDetails'
 import SignInSheet from './components/SignInSheet'
 import { arrivedToJoin } from './lib/joinLink.js'
-import { loadedNote } from './lib/presetName.js'
+import { loadedNote, presetLabel } from './lib/presetName.js'
 import {
   bootLink,
   linkState,
@@ -1461,7 +1461,8 @@ export default function App() {
   /* A tap outside and Escape are the two ways anyone expects to dismiss a
      menu; without them the only way out is finding the button again. The
      sheet on a phone brings its own, so the listener stands down under it. */
-  useDismiss(presetMenuRef, () => setPresetMenu(false), { open: presetMenu && !narrow, ignore: '.topbar-preset' })
+  /* The colour panel a preset's Colour button opens is drawn over the page, not in the menu: a click in it is not a click away. */
+  useDismiss(presetMenuRef, () => setPresetMenu(false), { open: presetMenu && !narrow, ignore: '.topbar-preset, .colour-layer' })
   const [slots, setSlots] = useState([])
   const [scanning, setScanning] = useState(false)
   const scene = useDevice(ofScene)
@@ -3965,6 +3966,14 @@ export default function App() {
     }
   }, [status, namesTotal, remote, readNames])
 
+  /*
+   * The preset that is loaded, as the colour sheet names it — "012 Lead Rig" —
+   * so a scene can be painted for just this one (lib/colourPage sceneTarget).
+   */
+  const presetHere = Number.isInteger(preset?.number)
+    ? { number: preset.number, words: `${slotLabel(preset.number, device?.capabilities?.presets?.addressing)} ${presetLabel(preset)}` }
+    : undefined
+
   // The picker: eager while it is open; quiet — or, over the relay, stopped — when it closes.
   const pickerOpen = presetMenu || sheet === 'presets'
   useEffect(() => {
@@ -5280,6 +5289,7 @@ export default function App() {
           channelNames={device?.capabilities?.channelNames}
           hasScenes={hasScenes}
           canRename={!onRealVp4}
+          presetHere={presetHere}
           busy={busy}
           onChanged={(summary, { reread = true } = {}) => {
             record('scene', summary)
@@ -5695,7 +5705,7 @@ export default function App() {
             </button>
             <p className="setup-page-title">{SETUP_PAGES.colours}</p>
             {/* The loaded preset's effects go first, and the scene tiles carry their names. */}
-            <Colours blocks={blocks} sceneNames={sceneNames} icons={icons} />
+            <Colours blocks={blocks} sceneNames={sceneNames} preset={presetHere} icons={icons} />
           </div>
         ) : null}
 

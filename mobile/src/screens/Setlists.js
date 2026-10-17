@@ -33,6 +33,8 @@ import Press from '../components/Press'
 import { landingIndex } from '../lib/laneOrder'
 import SongPicker from '../components/SongPicker'
 import SongSetup from '../components/SongSetup'
+import { tagEdge } from '../components/PresetTag'
+import { presetTag } from '../lib/colourPage'
 
 const face = Platform.select(mono)
 
@@ -368,6 +370,7 @@ export default function Setlists({ onBack }) {
                     slot={slotLabel(n, addressing)}
                     name={nameOfSlot(n) || 'Unnamed'}
                     playing={n === current}
+                    tag={presetTag(n)}
                     lifted={!!drag && i === drag.index}
                     alone={chosen.presets.length === 1}
                     onPlay={() => loadPreset(n)}
@@ -523,21 +526,25 @@ function SourceRow({ on, onPress, name, note, editing = null }) {
  * movement — see SwipeAway — and a row that is mostly read now carries a name
  * and a grip rather than a name, a grip and a standing offer to delete it.
  */
-function Song({ position, slot, name, playing, alone, lifted, onPlay, onDragStart, onDragMove, onDragEnd, onRemove, demo }) {
+function Song({ position, slot, name, playing, tag, alone, lifted, onPlay, onDragStart, onDragMove, onDragEnd, onRemove, demo }) {
   return (
     <SwipeAway onRemove={onRemove} label={`Remove ${name}`} demo={demo}>
     <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: space.sm,
-        paddingHorizontal: space.sm,
-        paddingVertical: space.sm,
-        borderRadius: radius.md,
-        borderWidth: playing || lifted ? 2 : 1,
-        borderColor: lifted ? color.silk : playing ? color.signal : color.rule,
-        backgroundColor: lifted ? color.panelHi : color.panel
-      }}
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.sm,
+          paddingHorizontal: space.sm,
+          paddingVertical: space.sm,
+          borderRadius: radius.md,
+          borderWidth: playing || lifted ? 2 : 1,
+          borderColor: lifted ? color.silk : playing ? color.signal : color.rule,
+          backgroundColor: lifted ? color.panelHi : color.panel
+        },
+        /* The preset's colour tag, the bar its row in the preset list wears (components/PresetTag). */
+        tagEdge(tag)
+      ]}
     >
       {/*
         THE NAME IS A BUTTON: tap a song and the unit goes to it, the way a row

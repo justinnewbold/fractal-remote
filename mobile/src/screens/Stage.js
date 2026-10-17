@@ -68,6 +68,8 @@ import editIcon from '../../assets/icons/edit.png'
 import tempoIcon from '../../assets/icons/tempo.png'
 import tunerIcon from '../../assets/icons/tuner.png'
 import { sceneColor } from '../lib/sceneColors'
+import { presetTag } from '../lib/colourPage'
+import { tagEdge } from '../components/PresetTag'
 import { shortBlock } from '../lib/shortName'
 import { useWatchBridge, watchHow, watchPaired } from '../lib/watchBridge'
 import { findLooper } from '../lib/looper'
@@ -833,7 +835,11 @@ export default function Stage({
             height={tight ? TAP : TAP + 12}
             disabled={!onOpenPresets}
             onPress={onOpenPresets}
-            style={{ paddingHorizontal: space.lg }}
+            /* The preset's colour tag, as a bar down the left of its button —
+               the bar its row in the list wears, by the same rule
+               (lib/colourPage tagFill). None for a preset without one, so
+               Play is as it was for everybody who never tags one. */
+            style={[{ paddingHorizontal: space.lg }, tagEdge(presetTag(preset?.number))]}
           />
 
         </View>
@@ -881,7 +887,9 @@ export default function Stage({
               {/* Drawn in the layout's order, but each tile is still its own
                   scene: "5" says 5, wears 5's colour and selects scene 5. */}
               {sceneOrderFor(sceneLayout, scenes.count, loadSceneOrder(sync)).map((i) => {
-                const hue = sceneColor(i)
+                /* This preset's own colour where it has one ("Just this
+                   preset"), then yours for every preset, then the look's. */
+                const hue = sceneColor(i, preset?.number)
                 return (
                   <Tile
                     key={i}

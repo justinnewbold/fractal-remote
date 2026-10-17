@@ -1,11 +1,16 @@
 import { useState } from 'react'
-import { Text, TextInput, View } from 'react-native'
+import { Pressable, Text, TextInput, View } from 'react-native'
 
-import { color, font, radius, space, TAP } from '../lib/theme'
+import { color, font, isDark, radius, space, TAP } from '../lib/theme'
 import { notePresetName, noteSceneName, useRig } from '../lib/rig'
-import { sceneShape, setPresetName, setSceneName } from '../lib/device'
+import { presetLabel, sceneShape, setPresetName, setSceneName, slotLabel } from '../lib/device'
+import { sceneColor } from '../lib/sceneColors'
+import { sceneTarget } from '../lib/colourPage'
+import { inkOn, paperEdge } from '../lib/ink'
+import { tick } from '../lib/feedback'
 import Note from './Note'
 import SceneCopy from './SceneCopy'
+import ColourSheet from './ColourSheet'
 import { SaveButton, SaveNotes, useSaveToSlot } from './SaveToSlot'
 import { deviceNoun } from '../lib/device-word'
 
@@ -46,6 +51,12 @@ export default function RenamePreset() {
   const [said, setSaid] = useState(null)
   const [failed, setFailed] = useState(null)
   const saveTo = useSaveToSlot()
+  /* The scene whose colour the colour sheet is open on, or null. */
+  const [painting, setPainting] = useState(null)
+  /* This preset, as the colour sheet names it: "012 Lead Rig". */
+  const here = Number.isInteger(preset?.number)
+    ? { number: preset.number, words: `${slotLabel(preset.number, caps?.presets?.addressing)} ${presetLabel(preset)}` }
+    : undefined
 
   const rename = async (name) => {
     const wanted = name.trim()
@@ -83,6 +94,13 @@ export default function RenamePreset() {
         onDone={rename}
       />
 
+      {/*
+        EACH SCENE'S COLOUR, beside its name, for this preset: Fractal's own
+        PERFORM layout makes Clean green, Crunch yellow and Lead red in the
+        one preset that wants them, and this is where a preset's scenes are
+        named, so it is where they are coloured. The sheet opens on "Just this
+        preset" and offers every preset too (lib/colourPage sceneTarget).
+      */}
       {shape.hasScenes
         ? Array.from({ length: shape.count }, (_, i) => (
             <NameField
@@ -90,9 +108,19 @@ export default function RenamePreset() {
               label={`Scene ${i + 1}`}
               value={scenes[i] || ''}
               onDone={(name) => renameScene(i, name)}
+              colour={
+                here
+                  ? {
+                      fill: sceneColor(i, here.number).fill,
+                      said: `Colour for scene ${i + 1} in this preset`,
+                      onPress: () => setPainting(sceneTarget(i, { preset: here, only: true }))
+                    }
+                  : null
+              }
             />
           ))
         : null}
+      <ColourSheet target={painting} onClose={() => setPainting(null)} />
 
       {/* Start a scene from another one. See SceneCopy. */}
       {shape.hasScenes ? <SceneCopy count={shape.count} /> : null}
@@ -122,39 +150,76 @@ export default function RenamePreset() {
  * says snapped back to the old name the moment the last letter was deleted, so
  * you could not clear it to type a new one.
  */
-function NameField({ label, value, onDone }) {
+function NameField({ label, value, onDone, colour = null }) {
   const [draft, setDraft] = useState(null)
   return (
     <View style={{ gap: space.xs }}>
       <Text style={{ color: color.silkFaint, fontSize: font.micro, letterSpacing: 1.2 }}>
         {label.toUpperCase()}
       </Text>
-      <TextInput
-        value={draft ?? value}
-        onChangeText={setDraft}
-        onBlur={() => {
-          if (draft !== null) onDone(draft)
-          setDraft(null)
-        }}
-        onSubmitEditing={() => {
-          if (draft !== null) onDone(draft)
-          setDraft(null)
-        }}
-        returnKeyType="done"
-        accessibilityLabel={label}
-        placeholder="Untitled"
-        placeholderTextColor={color.silkFaint}
-        style={{
-          minHeight: TAP,
-          paddingHorizontal: space.md,
-          borderRadius: radius.md,
-          borderWidth: 1,
-          borderColor: color.rule,
-          backgroundColor: color.panel,
-          color: color.silk,
-          fontSize: font.body
-        }}
-      />
+      <View style={{ flexDirection: 'row', gap: space.sm }}>
+        <TextInput
+          value={draft ?? value}
+          onChangeText={setDraft}
+          onBlur={() => {
+            if (draft !== null) onDone(draft)
+            setDraft(null)
+          }}
+          onSubmitEditing={() => {
+            if (draft !== null) onDone(draft)
+            setDraft(null)
+          }}
+          returnKeyType="done"
+          accessibilityLabel={label}
+          placeholder="Untitled"
+          placeholderTextColor={color.silkFaint}
+          style={{
+            minHeight: TAP,
+            paddingHorizontal: space.md,
+            borderRadius: radius.md,
+            borderWidth: 1,
+            borderColor: color.rule,
+            backgroundColor: color.panel,
+            color: color.silk,
+            fontSize: font.body,
+            flex: 1
+          }}
+        />
+        {colour ? <SceneColour {...colour} /> : null}
+      </View>
     </View>
+  )
+}
+
+/**
+ * A scene's colour in this preset, as a square of it beside the name box —
+ * the colour Play draws the scene in when it is the one you are on, with the
+ * word on it in the letters Play would use — and the button that opens the
+ * colour sheet on it. On paper a pale one gets the
+ * paper edge (lib/ink), as a swatch does, or white is a hole in the page.
+ */
+function SceneColour({ fill, said, onPress }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={said}
+      onPress={() => {
+        tick()
+        onPress()
+      }}
+      style={({ pressed }) => ({
+        width: TAP,
+        minHeight: TAP,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: isDark() ? fill : paperEdge(fill),
+        backgroundColor: fill,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: pressed ? 0.7 : 1
+      })}
+    >
+      <Text style={{ color: inkOn(fill), fontSize: font.micro, fontWeight: '600' }}>Colour</Text>
+    </Pressable>
   )
 }

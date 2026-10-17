@@ -11,8 +11,11 @@ import { marksFor, toggleFavourite } from '../lib/lists'
 import { useStored } from '../lib/store'
 import { loadPreset, useRig } from '../lib/rig'
 import { thud, tick } from '../lib/feedback'
+import { presetTag, presetTarget } from '../lib/colourPage'
 import Note from '../components/Note'
 import Press from '../components/Press'
+import ColourSheet from '../components/ColourSheet'
+import { TagButton, tagEdge } from '../components/PresetTag'
 
 const face = Platform.select(mono)
 
@@ -62,6 +65,12 @@ const STRIDE = ROW + GAP
  * three things Previous and Next can walk, and the star belongs where you are
  * looking at the preset — so it is the right-hand end of every row, on its own
  * target, away from the part of the row that loads the preset.
+ *
+ * AND ITS COLOUR, beside the star: "make a section where a user can edit the
+ * colors of the blocks/presets and effects". A tag, the editors' Assign
+ * Color, drawn as a bar down the row's left edge here, in a setlist and on
+ * Play, and kept per unit and preset number like the star. Between the row
+ * and the star, so the star stays at the edge where a thumb knows it.
  */
 export default function Presets({ onBack }) {
   const preset = useRig(ofPreset)
@@ -101,6 +110,8 @@ export default function Presets({ onBack }) {
   const favourites = marksFor(device).favourites
 
   const [query, setQuery] = useState('')
+  /* The preset whose colour tag the colour sheet is open on, or null. */
+  const [painting, setPainting] = useState(null)
 
   /*
    * Refresh: the computer's list again, and the rows on screen read again.
@@ -370,6 +381,9 @@ export default function Presets({ onBack }) {
           const name = nameHere(n)
           const here = n === preset?.number
           const starred = favourites.includes(n)
+          const tag = presetTag(n)
+          /* What the colour sheet calls it: "012 Lead Rig", or the slot alone before its name is known. */
+          const words = typeof name === 'string' && name.trim() ? `${slotLabel(n, addressing)} ${name.trim()}` : slotLabel(n, addressing)
           return (
             <View style={{ flexDirection: 'row', gap: space.sm, height: ROW, marginBottom: GAP }}>
               {/*
@@ -401,7 +415,13 @@ export default function Presets({ onBack }) {
                   loadPreset(n)
                   onBack?.()
                 }}
+                /* Its colour tag, down the left edge: none for a preset without one. */
+                style={tagEdge(tag)}
               />
+              {/* Nothing to file a tag under before a unit has answered (colourPage presetTarget). */}
+              {presetTarget(n, { words }) ? (
+                <TagButton words={words} fill={tag} onPress={() => setPainting(presetTarget(n, { words }))} />
+              ) : null}
               <Star
                 on={starred}
                 label={`${starred ? 'Unstar' : 'Star'} ${name || `slot ${slotLabel(n, addressing)}`}`}
@@ -425,6 +445,9 @@ export default function Presets({ onBack }) {
           )
         }
       />
+
+      {/* The colour sheet every colour is chosen on, here for a preset's tag. */}
+      <ColourSheet target={painting} onClose={() => setPainting(null)} />
     </View>
   )
 }

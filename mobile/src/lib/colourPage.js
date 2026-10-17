@@ -21,9 +21,23 @@
  * Shared with the phone by `npm run sync:rules`, so it imports only its
  * neighbours, by explicit './x.js' paths, and no React.
  */
-import { AMBERS, DORMANT, FRACTAL_REMOTE_LOOK, LOOKS, SCENE_RED, familyOf, lookById, swatchesFor } from './blockPalettes.js'
-import { contrast, darker, deltaE, inkOn, lighter, luminance, readable, seenWith, VISIONS } from './ink.js'
-import { SCENE_SLOTS, currentPaletteId, lookId, ownColourCount, setFamily, setLook, setScene, setScenes, yourFamily, yourScene } from './looks.js'
+import { AMBERS, DORMANT, FRACTAL_REMOTE_LOOK, LOOKS, SCENE_RED, SWATCHES, familyOf, lookById, swatchesFor } from './blockPalettes.js'
+import { contrast, darker, deltaE, inkOn, lighter, luminance, paperEdge, readable, seenWith, VISIONS } from './ink.js'
+import {
+  SCENE_SLOTS,
+  colourUnit,
+  currentPaletteId,
+  lookId,
+  ownColourCount,
+  presetColour,
+  setFamily,
+  setLook,
+  setPresetColour,
+  setScene,
+  setScenes,
+  yourFamily,
+  yourScene
+} from './looks.js'
 import { blockColor, lookColour } from './blockColors.js'
 import { sceneColor } from './sceneColors.js'
 
@@ -155,37 +169,179 @@ export function familyTarget(slug) {
   return family ? Object.freeze({ kind: 'family', slug: family, name: FAMILY_NAMES[family] || family }) : null
 }
 
+/**
+ * Whether a block's colour is one anybody would see: a family the app can
+ * name, and not one of the chain's two ends or a shunt, which are drawn as
+ * outlines (the plumbing, not the tone). What the Edit screen's Colour
+ * button is offered for, so it is never offered for a colour nobody sees.
+ */
+export function paintable(slug) {
+  const family = familyOf(slug)?.family
+  return !!family && !quietFamily(family)
+}
+
 const slotOf = (i) => ((Number(i) % SCENE_SLOTS) + SCENE_SLOTS) % SCENE_SLOTS
 
-/** A scene, by its index from 0, as the colour sheet is handed it. */
-export function sceneTarget(i) {
-  const index = slotOf(i)
-  return Object.freeze({ kind: 'scene', index, name: `Scene ${index + 1}` })
-}
-
-/** The colour it is drawn in now, yours included. */
-export const colourNow = (t) => (t.kind === 'scene' ? sceneColor(t.index).fill : blockColor(t.slug).fill)
-
-/** The look's own colour for it: what it is with nothing of yours on top. */
-export const lookOwn = (t) => (t.kind === 'scene' ? lookById(lookId()).scenes[t.index] : lookColour(t.slug))
-
-/** Your own colour for it, or null. */
-export const yoursFor = (t) => (t.kind === 'scene' ? yourScene(t.index) : yourFamily(t.slug))
+/** One preset, as a scene or a tag is handed it: its number, and the words it goes by ("012 Lead Rig"). */
+const presetHere = (preset) =>
+  preset && Number.isInteger(preset.number) && preset.number >= 0
+    ? Object.freeze({ number: preset.number, words: String(preset.words || '').trim() || String(preset.number) })
+    : null
 
 /**
- * Paint it. Picking the look's own colour is putting yours away, not
- * pinning a copy of the look's: the next look you wear should still repaint
- * it. Null is "Back to the unit's colour".
- *
- * `preset` is where "Just this preset" comes in for a scene, the day the
- * Play screen draws a scene in one preset's own colour (lib/looks already
- * keeps them); every preset until then.
+ * A scene, by its index from 0, as the colour sheet is handed it — and the
+ * preset that is loaded, where there is one, so the sheet can offer "Just
+ * this preset (012 Lead Rig)" beside "Every preset". `only` is which of the
+ * two the sheet opens on: every preset from the Colours page, whose scenes
+ * are the ones every preset wears; just this one from the scene names on
+ * Edit, which are this preset's.
  */
-export function paint(t, fill, { preset } = {}, storage) {
-  const f = fill && String(fill).toLowerCase() === String(lookOwn(t)).toLowerCase() && preset == null ? null : fill || null
-  if (t.kind === 'scene') return setScene(t.index, f, preset == null ? {} : { preset }, storage)
+export function sceneTarget(i, { preset, only = false } = {}) {
+  const index = slotOf(i)
+  const here = presetHere(preset)
+  return Object.freeze({ kind: 'scene', index, name: `Scene ${index + 1}`, preset: here, only: !!(here && only) })
+}
+
+/*
+ * "JUST THIS PRESET". Fractal's own PERFORM layout forces Clean, Crunch and
+ * Lead to green, yellow and red in the one preset that wants them and leaves
+ * every other preset's scenes red: so a scene's colour is the same in every
+ * preset unless one preset has its own, and the sheet asks which it is
+ * painting. The preset's number is the one with the unit it is on (lib/looks
+ * files it under the unit setlists and stars use, the demo's apart), so an
+ * FM3's preset 12 never colours an AM4's.
+ */
+const within = (t, only) => (t.kind === 'scene' && only && t.preset ? t.preset.number : null)
+
+/** The colour it is drawn in now, yours included — in this preset when the sheet is painting just this one. */
+export function colourNow(t, { only = false } = {}) {
+  if (t.kind === 'preset') return presetColour(t.unit, t.number) || TAG_SWATCHES[0].fill
+  if (t.kind === 'scene') return sceneColor(t.index, within(t, only)).fill
+  return blockColor(t.slug).fill
+}
+
+/** The look's own colour for it: what it is with nothing of yours on top. A preset's tag has none: no look tags a preset. */
+export const lookOwn = (t) => (t.kind === 'preset' ? null : t.kind === 'scene' ? lookById(lookId()).scenes[t.index] : lookColour(t.slug))
+
+/** Your own colour for it, or null — this preset's own, when the sheet is painting just this one. */
+export function yoursFor(t, { only = false } = {}) {
+  if (t.kind === 'preset') return presetColour(t.unit, t.number)
+  if (t.kind === 'scene') {
+    const p = within(t, only)
+    return p === null ? yourScene(t.index) : yourScene(t.index, { preset: p })
+  }
+  return yourFamily(t.slug)
+}
+
+const same = (a, b) => !!a && !!b && String(a).toLowerCase() === String(b).toLowerCase()
+
+/**
+ * Paint it. Null is "Back to the unit's colour".
+ *
+ * Picking the look's own colour is putting yours away, not pinning a copy of
+ * the look's: the next look you wear should still repaint it. And in the same
+ * way, picking for just this preset the colour the scene has in every preset
+ * is putting this preset's away — so that changing the every-preset colour
+ * later still reaches this preset, which is what it looked like it would.
+ */
+export function paint(t, fill, { only = false } = {}, storage) {
+  if (t.kind === 'preset') return setPresetColour(t.unit, t.number, fill || null, storage)
+  const p = within(t, only)
+  if (p !== null) {
+    const f = fill && same(fill, sceneColor(t.index).fill) ? null : fill || null
+    return setScene(t.index, f, { preset: p }, storage)
+  }
+  const f = fill && same(fill, lookOwn(t)) ? null : fill || null
+  if (t.kind === 'scene') return setScene(t.index, f, {}, storage)
   return setFamily(t.slug, f, storage)
 }
+
+/**
+ * Whether the sheet keeps it off the amber: a scene, because the scene you
+ * are on is ringed in it, and a preset's tag, because the preset you are on
+ * is marked in it in every list a tag is drawn in. An effect is not: its
+ * colour is the unit's, and an AM4's PEQ is the AM4's orange.
+ */
+export const offAmber = (t) => !!t && t.kind !== 'family'
+
+/** What the sheet says it is painting, under its title. */
+export function sheetNote(t, { only = false } = {}) {
+  if (t.kind === 'preset') return 'Kept for this preset on this unit, like its star'
+  if (t.kind === 'scene') return within(t, only) === null ? 'For this scene in every preset' : `For this scene in ${t.preset.words} only`
+  return 'For every one of these, in every preset'
+}
+
+/** The words on the way back from a colour of your own: to the look's, to every preset's, or no tag at all. */
+export function backWords(t, { only = false } = {}) {
+  if (t.kind === 'preset') return 'Take the colour off'
+  if (within(t, only) !== null) return 'Same as every preset'
+  const look = lookById(lookId())
+  return look.id === 'unit' ? 'Back to the unit’s colour' : `Back to ${look.name}’s colour`
+}
+
+/**
+ * The two answers to "which presets?", for a scene painted while a preset is
+ * loaded. The preset's own words go under "Just this preset" — "012 Lead Rig"
+ * — on a line of their own: in a button half a phone wide, "Just this preset
+ * (012 Lead Rig)" on one line is "Just this preset (012 Le…".
+ */
+export const SCOPE_WORDS = Object.freeze({ every: 'Every preset', only: 'Just this preset' })
+
+/* ------------------------------------------------------------------ */
+/* A preset's colour tag                                                */
+/* ------------------------------------------------------------------ */
+
+/*
+ * A COLOUR FOR A PRESET, the editors' "Assign Color": a thin bar on its row
+ * in the preset list and in a setlist, and beside its name on Play, so a set
+ * of presets can be grouped by eye — the clean ones blue, the heavy ones red.
+ * Kept per unit and preset number, like a star: preset 12 on an FM3 and
+ * preset 12 on an AM4 are different sounds.
+ *
+ * Nothing but a bar, never a fill: the row is still the row, its letters
+ * still the app's own, and the amber that marks the preset you are on still
+ * the only thing in the list that says so. So a tag is offered what a scene
+ * is — the twenty-three without the amber-like orange — less the look's own
+ * colour first, because no look tags a preset: twenty-two.
+ */
+
+/** The swatches a tag is offered: the twenty-three, without the one like the amber. */
+export const TAG_SWATCHES = Object.freeze(SWATCHES.filter((s) => s.scene !== false))
+
+/**
+ * One preset on the unit that is connected, as the colour sheet is handed it.
+ * Null before any unit has answered: there is nothing to file the tag under.
+ */
+export function presetTarget(number, { words, unit = colourUnit() } = {}) {
+  const here = presetHere({ number, words })
+  if (!here || !unit) return null
+  return Object.freeze({ kind: 'preset', number: here.number, unit, name: here.words })
+}
+
+/** That preset's tag on the unit that is connected, or null. */
+export const presetTag = (number, unit = colourUnit()) => (Number.isInteger(number) && unit ? presetColour(unit, number) : null)
+
+/** How wide the bar is, in points on the phone and pixels in the browser. */
+export const TAG_WIDTH = 4
+
+/**
+ * THE BAR IS DRAWN BY ONE RULE AT BOTH ENDS. On the dark page it is the
+ * colour itself: everything on offer stands 3:1 off the black. On the Light
+ * page a pale one — white, yellow, lime — would be a stripe of nothing on
+ * paper, so there it is the colour taken half way to black: the edge a lit
+ * tile gets on paper (lib/ink paperEdge), which styles.css writes as
+ * `color-mix(… 50%, black)` and a test holds the two to each other.
+ */
+export const tagFill = (fill, { light = false } = {}) => (fill ? (light ? paperEdge(fill) : String(fill).toLowerCase()) : null)
+
+/** What a tag is called, for a screen reader: "Blue", or "a colour of your own" for one typed in. */
+export const tagName = (fill) => SWATCHES.find((s) => same(s.fill, fill))?.name || 'a colour of your own'
+
+/**
+ * What a screen reader says for the Colour button beside a preset's star:
+ * what it is now, and what a press does.
+ */
+export const tagButtonWords = (words, fill) => (fill ? `Colour for ${words}: ${tagName(fill)}. Change it` : `Give ${words} a colour`)
 
 /* ------------------------------------------------------------------ */
 /* The sheet's swatches                                                 */
@@ -201,6 +357,8 @@ export function paint(t, fill, { preset } = {}, storage) {
  * Darker cover it.
  */
 export function sheetSwatches(t) {
+  /* A tag has no look of its own to start the grid with (TAG_SWATCHES). */
+  if (t.kind === 'preset') return TAG_SWATCHES.map((s) => ({ ...s, said: s.name }))
   const scene = t.kind === 'scene'
   const lookName = lookById(lookId()).name
   return swatchesFor(lookOwn(t), { scene }).map((s) =>
@@ -391,11 +549,15 @@ export function neighboursOf(family, chain = []) {
  * `chain` is the loaded preset's families in order; `colourOf` what each
  * neighbour is drawn in now (blockColor, or sceneColor for a scene).
  */
-export function nextToWarning(t, pick, { chain = [], colourOf } = {}) {
-  if (!pick || String(pick).toLowerCase() === String(lookOwn(t)).toLowerCase()) return null
+export function nextToWarning(t, pick, { chain = [], colourOf, only = false } = {}) {
+  /* A tag is a bar beside a name, with no neighbour it could be mistaken for. */
+  if (t.kind === 'preset') return null
+  if (!pick || same(pick, lookOwn(t))) return null
+  /* In just this preset, the scenes either side as this preset draws them. */
+  const p = within(t, only)
   const around =
     t.kind === 'scene'
-      ? [t.index - 1, t.index + 1].filter((j) => j >= 0 && j < SCENE_SLOTS).map((j) => ({ name: `scene ${j + 1}`, fill: (colourOf || ((x) => sceneColor(x).fill))(j) }))
+      ? [t.index - 1, t.index + 1].filter((j) => j >= 0 && j < SCENE_SLOTS).map((j) => ({ name: `scene ${j + 1}`, fill: (colourOf || ((x) => sceneColor(x, p).fill))(j) }))
       : neighboursOf(t.slug, chain).map((f) => ({ name: FAMILY_NAMES[f] || f, fill: (colourOf || ((x) => blockColor(x).fill))(f) }))
   let seen = null
   let hidden = null

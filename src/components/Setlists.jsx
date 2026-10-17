@@ -22,6 +22,8 @@ import {
 import { slotLabel } from '../lib/slots'
 import { presetLabel } from '../lib/presetName'
 import { tick as haptic } from '../lib/feedback'
+import { presetTag } from '../lib/colourPage'
+import { useLooks } from '../lib/useLooks'
 
 /**
  * The sheet behind the button between Previous and Next.
@@ -54,6 +56,8 @@ export default function Setlists({
 }) {
   const current = preset?.number
   const chosen = lists.find((l) => l.id === source) || null
+  /* A song's row wears its preset's colour tag (lib/colourPage), and repaints when one changes. */
+  useLooks()
 
   /*
    * DRAGGING A SONG UP OR DOWN THE RUNNING ORDER.
@@ -389,8 +393,13 @@ export default function Setlists({
                   wrapClass={drag?.index === i ? 'lifted' : ''}
                   className={`setlist-song ${n === current ? 'current' : ''} ${
                     drag?.index === i ? 'lifted' : ''
-                  }`}
-                  style={shiftFor(i) ? { transform: `translateY(${shiftFor(i)}px)` } : undefined}
+                  }${presetTag(n) ? ' tagged' : ''}`}
+                  /* The preset's colour tag, the bar its row in the preset list
+                     wears: the colour rides down to the row from here. */
+                  style={{
+                    ...(shiftFor(i) ? { transform: `translateY(${shiftFor(i)}px)` } : {}),
+                    ...(presetTag(n) ? { '--tag': presetTag(n) } : {})
+                  }}
                   label={`Remove ${nameOf(n) || `preset ${n}`} from ${chosen.name}`}
                   onRemove={() => setPresets(removeFrom(chosen.presets, n))}
                   demo={i === 0 && swipeHint}

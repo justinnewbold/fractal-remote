@@ -1,6 +1,10 @@
 import { useState } from 'react'
 import { setSceneName, setChannel, noteSceneName } from '../lib/forgefx'
 import { useDevice, refreshScene, refreshSceneState, writeScene } from '../lib/deviceState'
+import { sceneColor } from '../lib/sceneColors'
+import { sceneTarget } from '../lib/colourPage'
+import { useLooks } from '../lib/useLooks'
+import ColourSheet from './ColourSheet'
 
 /**
  * Scenes and per-block channels.
@@ -26,6 +30,8 @@ export default function Scenes({
   hasScenes = true,
   /* False on a VP4, which the app cannot rename on: no Edit name (App.jsx says why under the buttons). */
   canRename = true,
+  /* The loaded preset as the colour sheet names it, { number, words: "012 Lead Rig" }, or nothing. */
+  presetHere,
   onChanged,
   onError,
   busy
@@ -45,6 +51,9 @@ export default function Scenes({
   const names = useDevice(ofSceneNames)
   const [renaming, setRenaming] = useState(null)
   const [draft, setDraft] = useState('')
+  /* The scene whose colour the colour sheet is open on; the chip repaints when a colour changes. */
+  const [painting, setPainting] = useState(null)
+  useLooks()
 
   const startRename = (i) => {
     setDraft(names[i] || '')
@@ -150,6 +159,29 @@ export default function Scenes({
           Edit name
         </button>
       ) : null}
+
+      {/*
+        AND ITS COLOUR, in this preset: Fractal's own PERFORM layout makes
+        Clean green, Crunch yellow and Lead red in the one preset that wants
+        them, and this sheet is where a preset's scenes are named. One button
+        about the scene you are in, beside Edit name, for the reason the tiles
+        lost their eight pencils: "if you wanna edit the scene just have a
+        single button". It wears the colour it opens on, and the sheet opens
+        on Just this preset, with Every preset beside it. Not a write to the
+        unit, so a VP4 has it too.
+      */}
+      {hasScenes && presetHere && Number.isInteger(current) && renaming === null ? (
+        <button
+          type="button"
+          className="chip scene-colour"
+          onClick={() => setPainting(sceneTarget(current, { preset: presetHere, only: true }))}
+          aria-label={`Colour for scene ${current + 1} in this preset`}
+        >
+          <span className="scene-colour-dot" aria-hidden="true" style={{ '--scene-fill': sceneColor(current, presetHere.number).fill }} />
+          Colour
+        </button>
+      ) : null}
+      <ColourSheet target={painting} onClose={() => setPainting(null)} />
 
       {canRename && renaming !== null ? (
         <div className="rename-row">

@@ -54,7 +54,7 @@ import ColourSheet, { ColourPanel } from './ColourSheet'
  * Kept in this browser, as everything here is (lib/looks, localStorage): the
  * phone app keeps its own.
  */
-export default function Colours({ blocks = [], sceneNames = [], icons = true }) {
+export default function Colours({ blocks = [], sceneNames = [], preset, icons = true }) {
   /* Repaint on any change to the colours, from here or from the unit answering. */
   useLooks()
   const wearing = lookId()
@@ -182,7 +182,7 @@ export default function Colours({ blocks = [], sceneNames = [], icons = true }) 
                 className="gig-scene current named"
                 style={{ '--scene-fill': hue.fill, '--scene-ink': hue.ink }}
                 aria-label={`Scene ${i + 1}${sceneNames?.[i] ? ` — ${sceneNames[i]}` : ''}${yourScene(i) ? ', your colour' : ''}`}
-                onClick={() => setPainting(sceneTarget(i))}
+                onClick={() => setPainting(sceneTarget(i, { preset }))}
               >
                 <span className="gig-scene-num mono">{yourScene(i) ? `${i + 1} · yours` : String(i + 1)}</span>
                 <span className="gig-scene-name">{sceneNames?.[i] || `Scene ${i + 1}`}</span>
@@ -190,7 +190,7 @@ export default function Colours({ blocks = [], sceneNames = [], icons = true }) 
             )
           })}
         </div>
-        <p className="hint">Tap a scene to give it a colour. It is the same in every preset.</p>
+        <p className="hint">Tap a scene to give it a colour, in every preset or just the one that is loaded.</p>
       </section>
 
       {/* ---------------------------------------------------- switched off */}

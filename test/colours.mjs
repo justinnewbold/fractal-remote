@@ -740,6 +740,135 @@ export function run(test) {
     assert.ok(!/#e23b3b|#9b59f5|#35c9d6/.test(mock), 'the demo still has the host’s approximate colours')
   })
 
+  /*
+   * ONE PRESET'S COLOURS. "Make a section where a user can edit the colors of
+   * the blocks/presets and effects." A scene can be painted for every preset
+   * or just the one that is loaded — Fractal's own PERFORM layout makes
+   * Clean, Crunch and Lead green, yellow and red in one preset and leaves the
+   * rest red — and a preset can wear a colour tag, the editors' Assign Color.
+   * These are held through lib/colourPage, the rules both ends' colour sheets
+   * paint by, rather than through the store underneath it, because the sheet
+   * is where the order has to come out right.
+   */
+  const withPage = async () => ({ ...(await load()), ...(await import('../src/lib/colourPage.js')) })
+
+  test('a scene is coloured in order: this preset’s, then yours for every preset, then the look’s', async () => {
+    const c = await withPage()
+    const store = memory()
+    c.loadLooks(store)
+    c.setColourUnit('fm3')
+    const lead = { number: 12, words: '012 Lead Rig' }
+    const three = c.sceneTarget(2, { preset: lead, only: true })
+    assert.deepEqual([three.preset, three.only], [{ number: 12, words: '012 Lead Rig' }, true])
+    assert.equal(c.SCOPE_WORDS.only, 'Just this preset')
+    assert.equal(c.SCOPE_WORDS.every, 'Every preset')
+    /* No preset loaded: there is nothing for "just this one" to mean. */
+    assert.equal(c.sceneTarget(2, { only: true }).only, false, 'a scene with no preset loaded opens on just this preset')
+    assert.equal(c.sceneTarget(2, { preset: { number: null }, only: true }).preset, null)
+
+    /* The look's: every scene red on Match my unit. */
+    assert.equal(c.colourNow(three, { only: true }), c.SCENE_RED)
+    /* This preset's own. */
+    assert.ok(c.paint(three, '#66cc33', { only: true }))
+    assert.equal(c.sceneColor(2, 12).fill, '#66cc33', 'Just this preset is not on this preset')
+    assert.equal(c.sceneColor(2, 13).fill, c.SCENE_RED, 'Just this preset is on another preset')
+    assert.equal(c.sceneColor(2).fill, c.SCENE_RED, 'Just this preset is every preset’s colour')
+    assert.equal(c.yoursFor(three, { only: true }), '#66cc33')
+    assert.equal(c.yoursFor(three), null)
+    /* Yours for every preset, under this preset's own. */
+    assert.ok(c.paint(three, '#ffff00', { only: false }))
+    assert.equal(c.sceneColor(2, 13).fill, '#ffff00', 'every preset’s colour did not reach another preset')
+    assert.equal(c.sceneColor(2, 12).fill, '#66cc33', 'every preset’s colour went over this preset’s own')
+    assert.equal(c.colourNow(three), '#ffff00')
+    assert.equal(c.colourNow(three, { only: true }), '#66cc33')
+    /* A look changes the look's colour and leaves both of yours. */
+    c.setLook('sunlight')
+    assert.equal(c.sceneColor(2, 12).fill, '#66cc33')
+    assert.equal(c.sceneColor(2, 13).fill, '#ffff00')
+    c.setLook('unit')
+    /* Picking for this preset the colour every preset has puts this preset's away, so the next change of every preset's reaches it. */
+    assert.ok(c.paint(three, '#ffff00', { only: true }))
+    assert.equal(c.yourScene(2, { preset: 12 }), null, 'this preset pinned a copy of every preset’s colour')
+    c.paint(three, '#00ccff', { only: false })
+    assert.equal(c.sceneColor(2, 12).fill, '#00ccff', 'a change to every preset missed the preset that had been put back')
+    /* And Back, from this preset's own: to every preset's, said so. */
+    c.paint(three, '#ff99cc', { only: true })
+    assert.equal(c.backWords(three, { only: true }), 'Same as every preset')
+    assert.equal(c.backWords(three), 'Back to the unit’s colour')
+    assert.equal(c.sheetNote(three, { only: true }), 'For this scene in 012 Lead Rig only')
+    assert.equal(c.sheetNote(three), 'For this scene in every preset')
+    assert.ok(c.paint(three, null, { only: true }))
+    assert.equal(c.sceneColor(2, 12).fill, '#00ccff', 'putting this preset back did not fall back to every preset’s colour')
+
+    /* The scenes either side, as this preset draws them, are what a pick is held against. */
+    c.paint(c.sceneTarget(1, { preset: lead, only: true }), '#66cc33', { only: true })
+    assert.equal(c.nextToWarning(three, '#66cc33', { only: true }), 'Hard to tell from scene 2 next to it', 'this preset’s own scene 2 is not what scene 3 sits next to')
+    assert.equal(c.nextToWarning(three, '#66cc33', { only: false }), null, 'every preset’s scene 3 is held against this preset’s scene 2')
+
+    /* Kept per unit, the demo's apart, and back from storage. */
+    c.setColourUnit('am4')
+    assert.equal(c.sceneColor(2, 12).fill, '#00ccff', 'an FM3’s preset 12 is colouring an AM4’s')
+    c.setColourUnit('fm3', { demo: true })
+    assert.equal(c.sceneColor(1, 12).fill, c.SCENE_RED, 'the demo’s FM3 wears the real FM3’s preset colours')
+    c.setColourUnit('fm3')
+    c.loadLooks(store)
+    assert.equal(c.sceneColor(1, 12).fill, '#66cc33', 'this preset’s own scene colour did not come back from storage')
+  })
+
+  test('a preset’s colour tag is kept per unit and preset number, like a star, and the demo’s apart', async () => {
+    const c = await withPage()
+    const store = memory()
+    c.loadLooks(store)
+    /* Before any unit has answered there is nothing to file a tag under. */
+    assert.equal(c.presetTarget(45, { words: '045 Clean' }), null)
+    assert.equal(c.presetTag(45), null)
+    c.setColourUnit('fm3')
+    const clean = c.presetTarget(45, { words: '045 Clean' })
+    assert.deepEqual(clean, { kind: 'preset', number: 45, unit: 'fm3', name: '045 Clean' })
+    assert.equal(c.presetTarget(-1), null)
+    /* Offered the scene's grid — no amber-like orange, no look's colour first — and kept off the amber that marks the preset you are on. */
+    const grid = c.sheetSwatches(clean)
+    assert.equal(grid.length, 22, 'a tag is not offered the twenty-three without the orange')
+    assert.ok(!grid.some((s) => s.own || s.fill === '#ff9933'), 'a tag is offered the look’s colour, or the orange beside the amber')
+    assert.equal(c.offAmber(clean), true)
+    assert.equal(c.offAmber(c.familyTarget('peq')), false, 'an effect is kept off the amber the AM4’s own PEQ wears')
+    assert.equal(c.nextToWarning(clean, '#cc0000'), null, 'a tag is warned about a neighbour it does not have')
+    /* No tag: the sheet opens on the first colour, with no way back to show. */
+    assert.equal(c.colourNow(clean), grid[0].fill)
+    assert.equal(c.yoursFor(clean), null)
+    assert.equal(c.tagButtonWords('045 Clean', null), 'Give 045 Clean a colour')
+    assert.ok(c.paint(clean, '#0055ff'))
+    assert.equal(c.presetTag(45), '#0055ff')
+    assert.equal(c.yoursFor(clean), '#0055ff')
+    assert.equal(c.backWords(clean), 'Take the colour off')
+    assert.equal(c.sheetNote(clean), 'Kept for this preset on this unit, like its star')
+    assert.equal(c.tagButtonWords('045 Clean', '#0055ff'), 'Colour for 045 Clean: Blue. Change it')
+    assert.equal(c.tagName('#123456'), 'a colour of your own')
+    /* Per unit and per number. */
+    assert.equal(c.presetTag(46), null, 'a tag reached the preset next to it')
+    c.setColourUnit('am4')
+    assert.equal(c.presetTag(45), null, 'an FM3’s preset 45 tags an AM4’s')
+    assert.equal(c.presetTarget(45).unit, 'am4')
+    c.setColourUnit('fm3', { demo: true })
+    assert.equal(c.presetTag(45), null, 'the demo’s FM3 wears the real FM3’s tags')
+    c.paint(c.presetTarget(45), '#cc0000')
+    c.setColourUnit('fm3')
+    assert.equal(c.presetTag(45), '#0055ff', 'a tag given in the demo went onto the real FM3')
+    /* Back from storage; Clear them leaves tags; Put every colour back takes them, with a time. */
+    c.loadLooks(store)
+    assert.equal(c.presetTag(45), '#0055ff')
+    c.clearYours()
+    assert.equal(c.presetTag(45), '#0055ff', 'Clear them took a preset’s tag')
+    c.resetAll()
+    assert.equal(c.presetTag(45), null)
+    assert.ok(Number.isFinite(JSON.parse(store.kept['fractal.colours']).presets.fm3['45'].at), 'a tag taken off has no time on it')
+    /* And Take the colour off is a reset with a time too. */
+    c.paint(clean, '#66cc33')
+    c.paint(clean, null)
+    assert.deepEqual(Object.keys(JSON.parse(store.kept['fractal.colours']).presets.fm3['45']).sort(), ['at', 'fill'])
+    assert.equal(c.presetTag(45), null)
+  })
+
   test('the store words say what is true on every unit', () => {
     const store = read('docs/app-store.md')
     assert.ok(!/match your unit's own screen/.test(store), 'the store says every colour is off the unit’s own screen, which is not true on an FM3')

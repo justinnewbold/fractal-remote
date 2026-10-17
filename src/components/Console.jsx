@@ -6,6 +6,8 @@ import { blockColor } from '../lib/blockColors'
 import { LIGHT_INK } from '../lib/ink'
 import { isFractalRemoteLook, offMode } from '../lib/looks'
 import { useLooks } from '../lib/useLooks'
+import { familyTarget, paintable, presetFamilies, presetTag, presetTarget, tagButtonWords } from '../lib/colourPage'
+import ColourSheet from './ColourSheet'
 import { useDismiss } from '../lib/dismiss'
 import { marksFor, toggleFavourite } from '../lib/presetMarks'
 import { jumpsFor } from '../lib/presetJumps'
@@ -490,6 +492,17 @@ export function PresetList({
   const [marks, setMarks] = useState(() => marksFor(device))
   const [view, setView] = useState('all')
   const star = (n) => setMarks((m) => ({ ...m, favourites: toggleFavourite(device, n, undefined) }))
+  /*
+   * AND ITS COLOUR, beside the star: a tag, the editors' Assign Color, drawn
+   * as a bar down the row's left edge here, in a setlist and on Play, and kept
+   * per unit and preset number like the star (lib/colourPage). `painting` is
+   * the preset the colour sheet is open on; the list repaints when a tag
+   * changes, here or anywhere (lib/useLooks).
+   */
+  useLooks()
+  const [painting, setPainting] = useState(null)
+  /* What the colour sheet calls a preset: "012 Lead Rig", or the slot alone before its name is read. */
+  const wordsFor = (slot) => [slotLabel(slot.number, addressing), (slot.name || '').trim()].filter(Boolean).join(' ')
   /* Which preset we have already centred on, so typing in the filter does not
      get yanked back and a re-render does not re-scroll a list being read. */
   const centredOn = useRef(null)
@@ -884,6 +897,22 @@ export function PresetList({
             >
               {marks.favourites.includes(slot.number) ? '★' : '☆'}
             </button>
+            {/* Its colour, beside the star and on its own target for the same
+                reason: tagging a preset must never load it by a near miss.
+                Nothing to file a tag under before a unit has answered. */}
+            {presetTarget(slot.number, { words: wordsFor(slot) }) ? (
+              <button
+                type="button"
+                className="preset-colour"
+                style={presetTag(slot.number) ? { '--tag': presetTag(slot.number) } : undefined}
+                data-tagged={presetTag(slot.number) ? 'yes' : undefined}
+                onClick={() => setPainting(presetTarget(slot.number, { words: wordsFor(slot) }))}
+                aria-label={tagButtonWords(wordsFor(slot), presetTag(slot.number))}
+                title="Give this preset a colour"
+              >
+                <span className="preset-colour-dot" aria-hidden="true" />
+              </button>
+            ) : null}
             <button
               className={`preset-row ${slot.number === current ? 'current' : ''} ${
                 !needle && startsBank(slot.number, i === 0 ? null : shown[i - 1].number, addressing)
@@ -891,6 +920,9 @@ export function PresetList({
                   : ''
               }`}
               data-slot={slot.number}
+              /* Its colour tag, down the row's left edge (styles.css .preset-row[data-tag]). */
+              data-tag={presetTag(slot.number) ? 'yes' : undefined}
+              style={presetTag(slot.number) ? { '--tag': presetTag(slot.number) } : undefined}
               onClick={() => onSelect(slot.number)}
             >
               <span className="preset-id mono">{slotLabel(slot.number, addressing)}:</span>
@@ -930,6 +962,9 @@ export function PresetList({
           </p>
         ) : null}
       </div>
+      {/* The colour sheet every colour is chosen on, here for a preset's tag. */}
+      <ColourSheet target={painting} onClose={() => setPainting(null)} />
+
       {deviceSlots && named.length && !noNames ? (
         <p className="hint pad">
           {named.length} of {deviceSlots} named
@@ -953,6 +988,28 @@ export function PresetList({
           ) : null}
         </p>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * The Colour button at the top of an open block, with a dot of the colour it
+ * wears now, and the colour sheet it opens for that block's family. The
+ * loaded preset's chain goes with it, so the sheet can say when a colour is
+ * hard to tell from the block beside it.
+ */
+const ofBlocks = (s) => s.blocks
+function BlockColour({ slug }) {
+  useLooks()
+  const blocks = useDevice(ofBlocks)
+  const [painting, setPainting] = useState(null)
+  return (
+    <div className="block-colour">
+      <button type="button" className="chip block-colour-open" onClick={() => setPainting(familyTarget(slug))}>
+        <span className="block-colour-dot" aria-hidden="true" style={{ '--block-fill': blockColor(slug).fill }} />
+        Colour
+      </button>
+      <ColourSheet target={painting} chain={presetFamilies(blocks)} onClose={() => setPainting(null)} />
     </div>
   )
 }
@@ -1711,6 +1768,15 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
 
   return (
     <div className="block-panel">
+      {/*
+        ITS COLOUR, from here as well as from Settings → Colours: the bench is
+        where a player looks at a block and decides it should not be the same
+        red as the drive beside it. The colour is the family's — every drive,
+        in every preset — and the sheet says so. Not for the chain's two ends,
+        which are outlines nobody sees a colour on. The phone's Edit puts the
+        same button in the block's header.
+      */}
+      {paintable(block?.slug) ? <BlockColour slug={block.slug} /> : null}
       {/*
         Everything that isn't a knob, in two rows.
         It used to be a 190px column down the left of a four-column grid,

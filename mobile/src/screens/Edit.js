@@ -55,6 +55,7 @@ import { useKeepAwake } from 'expo-keep-awake'
 import { logDebug } from '../lib/debugLog'
 import { oneWriteAtATime } from '../lib/knob-keys'
 import { blockColor, quietEnd } from '../lib/blockColors'
+import { familyTarget, paintable, presetFamilies } from '../lib/colourPage'
 import { presetLabel } from '../lib/presetName'
 import { shortBlock } from '../lib/shortName'
 import { thud } from '../lib/feedback'
@@ -73,6 +74,7 @@ import Looper from '../components/Looper'
 import Press from '../components/Press'
 import { SaveButton, SaveNotes, useSaveToSlot } from '../components/SaveToSlot'
 import Tile from '../components/Tile'
+import ColourSheet from '../components/ColourSheet'
 import ChainWait, { ChainUpdating, useChain } from '../components/ChainWait'
 
 const face = Platform.select(mono)
@@ -1047,15 +1049,25 @@ function BlockPanel({
     <View style={{ gap: space.md }}>
       <View
         style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.md,
           borderLeftWidth: 4,
           borderLeftColor: hue.fill,
-          paddingLeft: space.md,
-          gap: space.xs
+          paddingLeft: space.md
         }}
       >
-        <Text accessibilityRole="header" style={{ color: color.silk, fontSize: font.lead, fontWeight: '700' }}>
+        <Text accessibilityRole="header" style={{ flex: 1, color: color.silk, fontSize: font.lead, fontWeight: '700' }}>
           {block.name}
         </Text>
+        {/*
+          ITS COLOUR, from here as well as from Settings → Colours: the bench
+          is where a player looks at a block and decides it should not be the
+          same red as the drive beside it. The colour is the family's — every
+          drive, in every preset — so the sheet says so. Not for the chain's
+          two ends, which are outlines nobody sees a colour on.
+        */}
+        {paintable(block.slug) ? <BlockColour slug={block.slug} /> : null}
       </View>
 
       {/* ------------------------------------------------ channel and state */}
@@ -1299,6 +1311,22 @@ function BlockPanel({
         </View>
       ) : null}
     </View>
+  )
+}
+
+/**
+ * The Colour button in an open block's header, and the colour sheet it opens
+ * for that block's family. The loaded preset's own chain goes with it, so the
+ * sheet can say when a colour is hard to tell from the block beside it.
+ */
+function BlockColour({ slug }) {
+  const blocks = useRig(ofBlocks)
+  const [painting, setPainting] = useState(null)
+  return (
+    <>
+      <Press label="Colour" height={40} onPress={() => setPainting(familyTarget(slug))} />
+      <ColourSheet target={painting} chain={presetFamilies(blocks)} onClose={() => setPainting(null)} />
+    </>
   )
 }
 

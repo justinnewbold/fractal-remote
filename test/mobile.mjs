@@ -18509,7 +18509,7 @@ export function run(test) {
     c.setColourUnit(null)
     /* A line, with its room kept: Use it never waits on it. */
     const sheet = read('mobile/src/components/ColourSheet.js')
-    assert.match(sheet, /const warning = open \? nextToWarning\(target, pick, \{ chain \}\) : null/)
+    assert.match(sheet, /const warning = open \? nextToWarning\(target, pick, \{ chain, only \}\) : null/)
     assert.match(sheet, /\{warning \|\| ''\}/)
     assert.ok(!/disabled=\{[^}]*warning/.test(sheet), 'the warning blocks Use it')
   })
@@ -18562,7 +18562,7 @@ export function run(test) {
     assert.match(page, /const rest = unitFamilies\(\)\.filter\(\(f\) => !chain\.includes\(f\)\)/)
     assert.match(page, /label=\{more \? 'Fewer effects' : 'More effects'\}/)
     assert.match(page, /onPress=\{\(\) => setPainting\(familyTarget\(f\)\)\}/, 'an effect tile does not open the colour sheet')
-    assert.match(page, /onPress=\{\(\) => setPainting\(sceneTarget\(i\)\)\}/, 'a scene tile does not open the colour sheet')
+    assert.match(page, /onPress=\{\(\) => setPainting\(sceneTarget\(i, \{ preset: here \}\)\)\}/, 'a scene tile does not open the colour sheet, with the preset that is loaded')
   })
 
   test('scenes are all red like the unit, or a colour each, in one write', async () => {
@@ -18599,9 +18599,57 @@ export function run(test) {
     assert.match(read('src/lib/colourPage.js'), /export const COLOURS_NOTICE = 'Colours now match your unit · Settings → Colours'/)
   })
 
+  test('a scene painted while a preset is loaded asks which presets, and the phone’s generated copy keeps them apart', async () => {
+    const c = await coloursOnTheBench()
+    c.setColourUnit('am4')
+    const here = { number: 7, words: '007 B4 Crunch' }
+    const two = c.sceneTarget(1, { preset: here })
+    assert.equal(two.only, false, 'the Colours page opens a scene on just this preset')
+    c.paint(two, '#ffff00', { only: true }, c.storage)
+    assert.equal(c.sceneColor(1, 7).fill, '#ffff00')
+    assert.equal(c.sceneColor(1, 8).fill, c.SCENE_RED, 'just this preset went onto the next one')
+    assert.equal(JSON.parse(c.storage.kept['fractal.colours']).presetScenes.am4['7']['1'].fill, '#ffff00', 'this preset’s scene colour is not filed under the AM4 and its number')
+    /* A tag through the phone's copy, filed the same way. */
+    c.paint(c.presetTarget(7, { words: here.words }), '#66cc33', {}, c.storage)
+    assert.equal(JSON.parse(c.storage.kept['fractal.colours']).presets.am4['7'].fill, '#66cc33')
+    c.setColourUnit(null)
+
+    /* The sheet: the choice above the grid, only where there is a preset to make it about, and the tiles follow it. */
+    const sheet = read('mobile/src/components/ColourSheet.js')
+    assert.match(sheet, /setOnly\(!!target\?\.only\)\s+setBase\(target \? colourNow\(target, \{ only: !!target\.only \}\) : null\)/, 'the sheet does not open on the presets the opener asked for')
+    assert.match(sheet, /<Press label=\{SCOPE_WORDS\.every\} grow tone="signal" on=\{!only\} onPress=\{\(\) => scope\(false\)\} \/>\s*<Press label=\{SCOPE_WORDS\.only\} sub=\{target\.preset\.words\} grow tone="signal" on=\{only\} onPress=\{\(\) => scope\(true\)\} \/>/)
+    assert.ok(sheet.indexOf('SCOPE_WORDS.every') < sheet.indexOf('{swatches.map('), 'the choice of presets is under the grid it changes')
+    assert.match(sheet, /note=\{target \? sheetNote\(target, \{ only \}\) : null\}/)
+    assert.match(sheet, /const backLabel = target \? backWords\(target, \{ only \}\) : ''/)
+    /* A tag is drawn as its row is. */
+    assert.match(sheet, /\{target\.kind === 'preset' \? \(\s*<TagPreview words=\{target\.name\} fill=\{pick\} \/>/)
+    assert.match(read('mobile/src/components/PresetTag.js'), /export function TagPreview[\s\S]*?\.\.\.tagEdge\(fill\)/, 'the sheet draws a tag some other way than its row does')
+
+    /* The scene names on Edit: a colour beside each name, for this preset. */
+    const rename = read('mobile/src/components/RenamePreset.js')
+    assert.match(rename, /fill: sceneColor\(i, here\.number\)\.fill,\s+said: `Colour for scene \$\{i \+ 1\} in this preset`/)
+    assert.match(rename, /\{colour \? <SceneColour \{\.\.\.colour\} \/> : null\}/)
+    assert.match(rename, /<ColourSheet target=\{painting\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
+    /* The Colour button on a tag reads as one: a dot and the word, its own target beside the star. */
+    const tag = read('mobile/src/components/PresetTag.js')
+    assert.match(tag, /accessibilityLabel=\{tagButtonWords\(words, fill\)\}/)
+    assert.match(tag, />Colour<\/Text>/)
+    assert.match(tag, /width: TAP,\s+minHeight: TAP/, 'the Colour button is smaller than a thumb')
+    /* Edit's open block, its family's colour, with the loaded chain for the neighbour line. */
+    const edit = read('mobile/src/screens/Edit.js')
+    assert.match(edit, /<ColourSheet target=\{painting\} chain=\{presetFamilies\(blocks\)\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
+  })
+
   test('nothing on the Colours page says “this phone”', () => {
     /* CLAUDE.md: the app names the device it is on (deviceNoun). */
-    for (const file of ['mobile/src/components/Colours.js', 'mobile/src/components/ColourSheet.js', 'mobile/src/components/ColoursNotice.js', 'src/lib/colourPage.js']) {
+    for (const file of [
+      'mobile/src/components/Colours.js',
+      'mobile/src/components/ColourSheet.js',
+      'mobile/src/components/ColoursNotice.js',
+      'mobile/src/components/PresetTag.js',
+      'mobile/src/components/RenamePreset.js',
+      'src/lib/colourPage.js'
+    ]) {
       const shown = read(file).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
       assert.ok(!/this (phone|iphone|ipad|device)\b/i.test(shown), `${file} says "this phone"`)
     }

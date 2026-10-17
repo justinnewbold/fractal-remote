@@ -2,21 +2,24 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { inkOn, paperEdge } from '../lib/ink'
-import { lookById } from '../lib/blockPalettes'
-import { lookId, offMode } from '../lib/looks'
+import { offMode } from '../lib/looks'
 import { blockIcon } from '../lib/blockIcons'
 import { shortName } from '../lib/shortName'
 import { useLooks } from '../lib/useLooks'
 import { tick } from '../lib/feedback'
 import {
   FREE_PICK_WORDS,
+  SCOPE_WORDS,
+  backWords,
   colourNow,
   freePick,
   nextToWarning,
+  offAmber,
   paint,
   shadeOf,
   shadeWords,
   shades,
+  sheetNote,
   sheetSwatches,
   spokenSwatch,
   yoursFor
@@ -114,7 +117,10 @@ export function ColourPanel({ open, title, note, onClose, foot, children }) {
 }
 
 /**
- * THE COLOUR SHEET: one effect, or one scene, and the colours it can be.
+ * THE COLOUR SHEET: one effect, one scene, or one preset's tag, and the
+ * colours it can be — one panel wherever it is opened from (the Colours page,
+ * a preset's row, the Scenes sheet, a block on Edit), so a colour is chosen
+ * the same way everywhere.
  *
  * "A section where a user can edit the colors of the blocks/presets and
  * effects." The phone's sheet, word for word and swatch for swatch — the tile
@@ -145,7 +151,9 @@ export function ColourPanel({ open, title, note, onClose, foot, children }) {
 export default function ColourSheet({ target, chain = [], icons = true, onClose }) {
   /* A look worn behind it, or a unit answering, changes the first swatch. */
   useLooks()
-  const [base, setBase] = useState(() => (target ? colourNow(target) : null))
+  /* A scene painted while a preset is loaded: for every preset, or just this one. */
+  const [only, setOnly] = useState(() => !!target?.only)
+  const [base, setBase] = useState(() => (target ? colourNow(target, { only: !!target.only }) : null))
   const [step, setStep] = useState(0)
   /* "Any colour…": closed, or open with what is typed in its box. */
   const [any, setAny] = useState(null)
@@ -156,19 +164,21 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
   /* Each opening starts from the colour the tile has now. Closing forgets the
      last one, so the next opening never shows it for a frame. */
   useEffect(() => {
-    setBase(target ? colourNow(target) : null)
+    setOnly(!!target?.only)
+    setBase(target ? colourNow(target, { only: !!target.only }) : null)
     setStep(0)
     setAny(null)
     setFree(null)
   }, [target])
 
   const open = !!target && !!base
-  const scene = target?.kind === 'scene'
+  /* A scene's rules — no amber — and a preset's tag keeps them too (colourPage offAmber). */
+  const scene = offAmber(target)
   const swatches = target ? sheetSwatches(target) : []
-  const yours = target ? yoursFor(target) : null
+  const yours = target ? yoursFor(target, { only }) : null
   const pick = open ? shadeOf(base, step, { scene }) : null
   const steps = open ? shades(base, { scene }) : { darker: [], lighter: [] }
-  const warning = open ? nextToWarning(target, pick, { chain }) : null
+  const warning = open ? nextToWarning(target, pick, { chain, only }) : null
   /* A scene's free pick too near the amber is shown, said, and not used —
      though a step lighter or darker from it may be (shades keeps a scene's
      steps off the amber). */
@@ -183,13 +193,20 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
       : yours && base === yours
         ? 'your own colour'
         : 'the colour it has now'
-  const look = lookById(lookId())
-  const backLabel = look.id === 'unit' ? 'Back to the unit’s colour' : `Back to ${look.name}’s colour`
+  const backLabel = target ? backWords(target, { only }) : ''
 
   const use = (fill) => {
     if (free && free.amber && fill === free.fill) return
-    paint(target, fill, {})
+    paint(target, fill, { only })
     onClose?.()
+  }
+
+  /* Every preset, or just this one: the tiles show what each would be. */
+  const scope = (to) => {
+    setOnly(to)
+    setBase(colourNow(target, { only: to }))
+    setStep(0)
+    setFree(null)
   }
 
   const choose = (fill) => {
@@ -251,11 +268,11 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
        * WHERE IT APPLIES. A family's colour is the family's, on every unit and
        * in every preset: a drive that is red in one song and green in the next
        * is exactly what these colours exist to stop. A scene's is for every
-       * preset — and this is where "Just this preset" goes, the day the Play
-       * screen draws one preset's own scene colours (lib/colourPage paint
-       * already takes a preset), at both ends at once.
+       * preset, or for the one that is loaded (the choice under the tiles); a
+       * preset's tag is that preset's on this unit, like its star. The words
+       * are lib/colourPage's, so both ends say the same.
        */
-      note={scene ? 'For this scene in every preset' : 'For every one of these, in every preset'}
+      note={target ? sheetNote(target, { only }) : null}
       foot={
         open ? (
           <>
@@ -286,40 +303,47 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
             panel's title already says what they are.
           */}
           <div className="gig colour-preview" aria-hidden="true">
-            {[true, false].map((lit) =>
-              scene ? (
-                <button
-                  key={String(lit)}
-                  type="button"
-                  tabIndex={-1}
-                  className={`gig-scene named${lit ? ' current' : ''}`}
-                  style={{ '--scene-fill': pick, '--scene-ink': inkOn(pick) }}
-                >
-                  <span className="gig-scene-num mono">{target.index + 1}</span>
-                  <span className="gig-scene-name">{target.name}</span>
-                </button>
-              ) : (
-                <button
-                  key={String(lit)}
-                  type="button"
-                  tabIndex={-1}
-                  className={`gig-block ${lit ? 'on' : 'off'}`}
-                  data-off={!lit && offModeGrey() ? 'grey' : undefined}
-                  style={{ '--block-fill': pick, '--block-ink': inkOn(pick) }}
-                >
-                  <span className="gig-block-name">
-                    {icons && blockIcon(target.slug) ? (
-                      <span
-                        className="gig-block-icon"
-                        style={{ WebkitMaskImage: `url(${blockIcon(target.slug)})`, maskImage: `url(${blockIcon(target.slug)})` }}
-                      />
-                    ) : null}
-                    <span>{shortName(target.slug)}</span>
-                  </span>
-                  <span className="gig-block-state">
-                    <span className="gig-block-word">{lit ? 'On' : 'Off'}</span>
-                  </span>
-                </button>
+            {/* A preset's tag, drawn as its row in the preset list draws it: the bar and the name. */}
+            {target.kind === 'preset' ? (
+              <span className="colour-tag-preview" style={{ '--tag': pick }}>
+                {target.name}
+              </span>
+            ) : (
+              [true, false].map((lit) =>
+                target.kind === 'scene' ? (
+                  <button
+                    key={String(lit)}
+                    type="button"
+                    tabIndex={-1}
+                    className={`gig-scene named${lit ? ' current' : ''}`}
+                    style={{ '--scene-fill': pick, '--scene-ink': inkOn(pick) }}
+                  >
+                    <span className="gig-scene-num mono">{target.index + 1}</span>
+                    <span className="gig-scene-name">{target.name}</span>
+                  </button>
+                ) : (
+                  <button
+                    key={String(lit)}
+                    type="button"
+                    tabIndex={-1}
+                    className={`gig-block ${lit ? 'on' : 'off'}`}
+                    data-off={!lit && offModeGrey() ? 'grey' : undefined}
+                    style={{ '--block-fill': pick, '--block-ink': inkOn(pick) }}
+                  >
+                    <span className="gig-block-name">
+                      {icons && blockIcon(target.slug) ? (
+                        <span
+                          className="gig-block-icon"
+                          style={{ WebkitMaskImage: `url(${blockIcon(target.slug)})`, maskImage: `url(${blockIcon(target.slug)})` }}
+                        />
+                      ) : null}
+                      <span>{shortName(target.slug)}</span>
+                    </span>
+                    <span className="gig-block-state">
+                      <span className="gig-block-word">{lit ? 'On' : 'Off'}</span>
+                    </span>
+                  </button>
+                )
               )
             )}
           </div>
@@ -332,6 +356,25 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
               {movedSaid(free, base)}
             </span>
           </p>
+
+          {/*
+            EVERY PRESET, OR JUST THIS ONE, for a scene painted while a preset
+            is loaded: Fractal's own PERFORM layout makes Clean, Crunch and
+            Lead green, yellow and red in the one preset that wants them. Above
+            the grid, because it changes what the grid is painting — the tiles
+            over it change to the colour the scene has in the presets chosen.
+            Two buttons, the phone's two, the one in force pressed.
+          */}
+          {target.kind === 'scene' && target.preset ? (
+            <div className="colour-scope" role="group" aria-label="Which presets">
+              <button type="button" aria-pressed={!only} className={only ? '' : 'on'} onClick={() => scope(false)}>
+                {SCOPE_WORDS.every}
+              </button>
+              <button type="button" aria-pressed={only} className={only ? 'on' : ''} onClick={() => scope(true)}>
+                <span>{SCOPE_WORDS.only}</span> <span className="colour-scope-which">{target.preset.words}</span>
+              </button>
+            </div>
+          ) : null}
 
           <div
             className="colour-swatches"

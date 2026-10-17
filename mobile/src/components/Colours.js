@@ -22,6 +22,7 @@ import { blockIcon } from '../lib/blockIcons'
 import { loadIcons } from '../lib/gigSize'
 import { shortName } from '../lib/shortName'
 import { useRig } from '../lib/rig'
+import { presetLabel, slotLabel } from '../lib/device'
 import { sync } from '../lib/store'
 import { tick } from '../lib/feedback'
 import { deviceNoun } from '../lib/device-word'
@@ -59,6 +60,12 @@ export default function Colours() {
   useSyncExternalStore(watchLooks, looksVersion, looksVersion)
   const blocks = useRig((s) => s.allBlocks)
   const sceneNames = useRig((s) => s.sceneNames)
+  const preset = useRig((s) => s.preset)
+  const addressing = useRig((s) => s.capabilities?.presets?.addressing)
+  /* The preset that is loaded, so a scene can be painted for just this one: "012 Lead Rig". */
+  const here = Number.isInteger(preset?.number)
+    ? { number: preset.number, words: `${slotLabel(preset.number, addressing)} ${presetLabel(preset)}` }
+    : undefined
   const wearing = lookId()
   const chain = presetFamilies(blocks)
   const [painting, setPainting] = useState(null)
@@ -179,13 +186,15 @@ export default function Colours() {
                 ink={hue.ink}
                 on
                 height={TAP}
-                onPress={() => setPainting(sceneTarget(i))}
+                onPress={() => setPainting(sceneTarget(i, { preset: here }))}
                 style={{ width: quarter }}
               />
             )
           })}
         </View>
-        <Text style={{ color: color.silkDim, fontSize: font.small }}>Tap a scene to give it a colour. It is the same in every preset.</Text>
+        <Text style={{ color: color.silkDim, fontSize: font.small }}>
+          Tap a scene to give it a colour, in every preset or just the one that is loaded.
+        </Text>
       </View>
 
       {/* ---------------------------------------------------- switched off */}
