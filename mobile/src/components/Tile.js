@@ -4,7 +4,8 @@ import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native
 import { color, font, isDark, radius, space, TAP } from '../lib/theme'
 import { at, inkOn, lighter, vivid } from '../lib/vivid'
 import { LIGHT_INK, paperEdge } from '../lib/ink'
-import { isFractalRemoteLook } from '../lib/looks'
+import { isFractalRemoteLook, offMode } from '../lib/looks'
+import { OFF_GREY, liftedLook } from '../lib/colourPage'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
 import { cornerFit } from '../lib/tile-corners'
@@ -99,6 +100,21 @@ export default function Tile({
    */
   ring = false,
   /*
+   * An effect a tap switches on and off: the only kind of tile "Grey when
+   * off" (Settings → Colours) turns grey. A scene that is not the live one
+   * is not switched off, and the Edit strip's `on` means the one open, so
+   * neither of those passes it.
+   */
+  effect = false,
+  /*
+   * The Colours page's previews, which draw a look or a switched-off choice
+   * that is not the one being worn — each card shows its look as Play would.
+   * Left out, the tile is drawn in what is being worn, which is every tile
+   * anywhere else.
+   */
+  asLook,
+  offAs,
+  /*
    * A name that may take a second line, a size down: "Crunch Bot UP" rather
    * than "Cru…". It began as the four-across scene tile's, which leaves room
    * for five letters at the usual size — and then the tester, at two across:
@@ -130,9 +146,19 @@ export default function Tile({
    * panel: the tile stays recognisably its own colour while being obviously
    * unlit, which is the distinction the whole grid rests on.
    */
-  const asBefore = isFractalRemoteLook()
+  const asBefore = asLook ? liftedLook(asLook) : isFractalRemoteLook()
   const hue = asBefore ? vivid(fill) : fill
-  const background = quiet ? 'transparent' : on ? hue : at(hue, 0.14)
+  /*
+   * GREY WHEN OFF, the other way a switched-off effect can look: as the units
+   * draw a bypassed block, a dark tile, a grey outline and dim letters — the
+   * letters lifted to read at 4.5:1, which the FM3's own grey does not. One
+   * grey for every unit and every look, a paler one on the Light page
+   * (OFF_GREY, shared with the browser). Lit tiles are untouched: "keep
+   * their colour" is about the ones that are off.
+   */
+  const grey = effect && !on && !quiet && (offAs || offMode()) === 'grey'
+  const off = isDark() ? OFF_GREY.dark : OFF_GREY.light
+  const background = quiet ? 'transparent' : grey ? off.fill : on ? hue : at(hue, 0.14)
   /*
    * BLACK LETTERS ON A LIGHT TILE, WHITE ON A DARK ONE — FROM THE COLOUR
    * ACTUALLY DRAWN.
@@ -146,7 +172,7 @@ export default function Tile({
    * answer for a colour it cannot read.
    */
   const lit = inkOn(hue, ink)
-  const foreground = quiet ? (on ? color.signal : color.silkDim) : on ? lit : color.silk
+  const foreground = quiet ? (on ? color.signal : color.silkDim) : grey ? off.ink : on ? lit : color.silk
   /*
    * AN UNLIT PICTURE IS ITS OWN COLOUR, LIT LESS.
    *
@@ -157,7 +183,7 @@ export default function Tile({
    * theme lifting it toward white would wash it into the page, so there it
    * is the hue as it is.
    */
-  const unlitPicture = isDark() ? lighter(hue, 0.35) : hue
+  const unlitPicture = grey ? off.ink : isDark() ? lighter(hue, 0.35) : hue
   const pictureTint = on ? lit : unlitPicture
   /*
    * The glow, and it is iOS only by nature rather than by choice: Android has
@@ -245,7 +271,7 @@ export default function Tile({
     right: topRight ? laid.right : 0,
     pair
   })
-  const cornerInk = quiet ? foreground : on ? lit : color.silkDim
+  const cornerInk = quiet || grey ? foreground : on ? lit : color.silkDim
   const leftWord = { color: cornerInk, fontSize: font.micro, fontWeight: '600', opacity: shows.left ? 1 : 0 }
   const rightWord = { color: cornerInk, fontSize: font.micro, fontWeight: '700', opacity: shows.right ? 1 : 0 }
 
@@ -262,6 +288,7 @@ export default function Tile({
    */
   const edge = (() => {
     if (quiet) return on ? color.signal : color.rule
+    if (grey) return off.edge
     if (asBefore) return at(hue, on ? 0.85 : 0.55)
     if (ring && on) return color.signal
     if (!isDark()) return paperEdge(hue)
@@ -398,7 +425,7 @@ export default function Tile({
         {caption ? (
           <Text
             numberOfLines={1}
-            style={{ color: quiet ? foreground : on ? lit : color.silkDim, fontSize: font.micro, marginBottom: 1 }}
+            style={{ color: quiet || grey ? foreground : on ? lit : color.silkDim, fontSize: font.micro, marginBottom: 1 }}
           >
             {caption}
           </Text>
@@ -418,7 +445,7 @@ export default function Tile({
         {sub ? (
           <Text
             numberOfLines={1}
-            style={{ color: quiet ? foreground : on ? lit : color.silkDim, fontSize: font.micro, marginTop: 2 }}
+            style={{ color: quiet || grey ? foreground : on ? lit : color.silkDim, fontSize: font.micro, marginTop: 2 }}
           >
             {sub}
           </Text>

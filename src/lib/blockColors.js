@@ -29,18 +29,35 @@ import { currentPaletteId, lookId, looksVersion, yourFamily } from './looks.js'
 let keptFor = null
 const kept = new Map()
 
+/* Steps 2 to 4: what a look paints a family on a kind of unit, yours aside. */
+function fromLook({ key, family }, id, palette) {
+  if (id === FRACTAL_REMOTE_LOOK) return FRACTAL_REMOTE[key] || FRACTAL_REMOTE[family] || NEUTRAL
+  const look = lookById(id)
+  const forUnit = look.byUnit?.[palette]
+  const fill = forUnit?.[key] || forUnit?.[family] || look.families[key] || look.families[family]
+  return fill ? Object.freeze({ fill, ink: inkOn(fill) }) : NEUTRAL
+}
+
 function resolve(slug) {
   const found = familyOf(slug)
   if (!found) return NEUTRAL
-  const { key, family } = found
-  const own = yourFamily(family)
+  const own = yourFamily(found.family)
   if (own) return Object.freeze({ fill: own, ink: inkOn(own) })
-  const id = lookId()
-  if (id === FRACTAL_REMOTE_LOOK) return FRACTAL_REMOTE[key] || FRACTAL_REMOTE[family] || NEUTRAL
-  const look = lookById(id)
-  const forUnit = look.byUnit?.[currentPaletteId()]
-  const fill = forUnit?.[key] || forUnit?.[family] || look.families[key] || look.families[family]
-  return fill ? Object.freeze({ fill, ink: inkOn(fill) }) : NEUTRAL
+  return fromLook(found, lookId(), currentPaletteId())
+}
+
+/**
+ * The colour a look gives a block when you have chosen none for it — the
+ * same steps as blockColor, without step 1.
+ *
+ * The look being worn and the unit connected unless told otherwise, which is
+ * what the colour sheet's first swatch and its "Back to the unit's colour"
+ * are. The Colours page asks about the looks NOT being worn too, to draw each
+ * one's card as Play would draw it.
+ */
+export function lookColour(slug, { look = lookId(), palette = currentPaletteId() } = {}) {
+  const found = familyOf(slug)
+  return found ? fromLook(found, look, palette).fill : NEUTRAL.fill
 }
 
 /** The colour for a block, by its slug. Unknown families stay neutral. */

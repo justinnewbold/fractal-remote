@@ -68,3 +68,31 @@ export async function watchTipSeen() {
 export function markWatchTip() {
   AsyncStorage.setItem(WATCH_TIP_KEY, 'done').catch(() => {})
 }
+
+/*
+ * "Colours now match your unit · Settings → Colours", once, on Play, after
+ * the update that changed them. Every tile on the stage changed colour in
+ * one go, and somebody who had learned the old ones deserves to be told why
+ * and where the way back is (Fractal Remote, the app's own look as it was).
+ *
+ * Only for somebody who HAD the app: a first run never saw the old colours,
+ * so App marks this the moment it finds the walkthrough not yet done.
+ * Remembered in memory too, because that write and the Play screen's read
+ * can meet on the first launch and the read must not win.
+ */
+const COLOURS_KEY = 'fractal.coloursNoticed'
+let coloursSettled = false
+
+export async function coloursNoticeSeen() {
+  if (coloursSettled) return true
+  try {
+    return (await AsyncStorage.getItem(COLOURS_KEY)) === 'done'
+  } catch {
+    return true
+  }
+}
+
+export function markColoursNotice() {
+  coloursSettled = true
+  AsyncStorage.setItem(COLOURS_KEY, 'done').catch(() => {})
+}

@@ -667,7 +667,7 @@ export function run(test) {
 
     /* Drawn as it was: the phone lifts it, and only it, and keeps its edges. */
     const tile = read('mobile/src/components/Tile.js')
-    assert.match(tile, /const asBefore = isFractalRemoteLook\(\)/)
+    assert.match(tile, /const asBefore = asLook \? liftedLook\(asLook\) : isFractalRemoteLook\(\)/)
     assert.match(tile, /const hue = asBefore \? vivid\(fill\) : fill/, 'Fractal Remote is not lifted on the phone, or every look is')
     assert.match(tile, /if \(asBefore\) return at\(hue, on \? 0\.85 : 0\.55\)/, 'Fractal Remote lost the edges it always had')
     const { vivid } = await import('../mobile/src/lib/vivid.js')

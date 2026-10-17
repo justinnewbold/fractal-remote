@@ -74,6 +74,7 @@ import { findLooper } from '../lib/looper'
 import UnlockOffer from '../components/UnlockOffer'
 import Vp4DemoNote from '../components/Vp4DemoNote'
 import OnlyOnThisPhone from '../components/OnlyOnThisPhone'
+import ColoursNotice from '../components/ColoursNotice'
 import Toast, { useStillNews } from '../components/Toast'
 import { droppedLeft, faultLeft } from '../lib/fault-rule'
 import { NOT_CONNECTED } from '../lib/relay-rules'
@@ -762,6 +763,8 @@ export default function Stage({
         <Vp4DemoNote />
         {/* Paid in the demo with no account yet: see the component. */}
         <OnlyOnThisPhone onAccount={onAccount} />
+        {/* "Colours now match your unit", once, for somebody who had the app before. */}
+        <ColoursNotice />
         {conflict ? <Note tone="fault">{conflict}</Note> : null}
 
         {/* ---------------------------------------------------------- preset */}
@@ -1027,6 +1030,8 @@ export default function Stage({
                   fill={hue.fill}
                   ink={hue.ink}
                   on={engaged}
+                  /* A switch: grey when off, if that is the choice in Settings → Colours. */
+                  effect
                   height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
                   /* A pedal read ahead of the switch, whose on or off the unit
                      has not said yet: a tap would be a guess, so it waits. */
@@ -1069,6 +1074,7 @@ export default function Stage({
                 fill={blockColor('looper').fill}
                 ink={blockColor('looper').ink}
                 on={vp4Looper ? looperHere.bypassed === false : !looperHere.bypassed}
+                effect
                 height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
                 onPress={() => setLooping(true)}
                 onLongPress={() => setLooping(true)}

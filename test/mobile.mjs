@@ -8580,7 +8580,9 @@ export function run(test) {
       'Developer',
       /* "Move the Play Screen section down to the bottom of the list." */
       '# Play screen',
-      'Tiles & scenes'
+      'Tiles & scenes',
+      /* "A section where a user can edit the colors": beside the other choices about how Play looks. */
+      'Colours'
     ], 'the Setup rows are not in the order he asked for')
     /* And the names are a tap from Edit too: "add the amps and pedals names as a link in the edit area". */
     assert.match(read('mobile/src/screens/Edit.js'), /<Press label="Amp & pedal names"[^>]*onPress=\{onOpenGear\}/, 'Edit has no way to the amp and pedal names')
@@ -13309,7 +13311,8 @@ export function run(test) {
     const palettes = read('mobile/src/lib/blockPalettes.js')
     assert.match(palettes, /'#b5502f', \/\/ 1 terracotta/, 'the app’s own scene colours were repainted rather than kept')
     const tile = read('mobile/src/components/Tile.js')
-    assert.match(tile, /const asBefore = isFractalRemoteLook\(\)\n\s+const hue = asBefore \? vivid\(fill\) : fill/, 'the tiles are lifted in every look, or in none')
+    /* `asLook` is the Colours page drawing a look's card while another is worn: the same rule, asked of that look. */
+    assert.match(tile, /const asBefore = asLook \? liftedLook\(asLook\) : isFractalRemoteLook\(\)\n\s+const hue = asBefore \? vivid\(fill\) : fill/, 'the tiles are lifted in every look, or in none')
 
     /*
      * AND THE GLASS COST NOTHING. expo-blur is already a dependency, which is
@@ -13719,7 +13722,7 @@ export function run(test) {
     /* Seen once, and reachable again from Settings under the name its own
        last screen promises. */
     const app = read('mobile/App.js')
-    assert.match(app, /walkthroughSeen\(\)\.then\(setSeenWalk\)/, 'nothing decides whether the walkthrough has been through')
+    assert.match(app, /walkthroughSeen\(\)\.then\(\(seen\) => \{[\s\S]{0,240}setSeenWalk\(seen\)/, 'nothing decides whether the walkthrough has been through')
     assert.match(app, /auth === 'out' && !seenWalk/, 'the walkthrough is not the way in')
     assert.match(app, /onReplay=\{/, 'there is no way back into the walkthrough')
     const set = read('mobile/src/screens/Settings.js')
@@ -18283,5 +18286,325 @@ export function run(test) {
       assert.equal(rig.getState().error, words, `${why}: the fault card does not say why`)
       if (why === 'an old computer') assert.equal(wire.filter((l) => l === 'POST /preset/select').length, 0, 'a VP4 preset went to a computer too old to change one')
     }
+  })
+
+
+  /* ------------------------------------------------------------------ */
+  /* Settings → Colours                                                   */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * "Additionally i want to make a section where a user can edit the colors of
+   * the blocks/presets and effects. Let's figure out the best way to implement
+   * that as well. Maybe even make some preset themes?"
+   *
+   * The page is drawn by React Native and read here as text, the way the rest
+   * of this file reads screens; what it OFFERS is lib/colourPage, which is
+   * plain and imported — the phone's own generated copy, so these hold the
+   * file the phone actually runs.
+   */
+  const coloursOnTheBench = async () => {
+    const [looks, page, blocks, scenes, palettes, ink] = await Promise.all([
+      import('../mobile/src/lib/looks.js'),
+      import('../mobile/src/lib/colourPage.js'),
+      import('../mobile/src/lib/blockColors.js'),
+      import('../mobile/src/lib/sceneColors.js'),
+      import('../mobile/src/lib/blockPalettes.js'),
+      import('../mobile/src/lib/ink.js')
+    ])
+    const kept = {}
+    const storage = { kept, getItem: (k) => (k in kept ? kept[k] : null), setItem: (k, v) => (kept[k] = String(v)) }
+    /* A clean start: nothing chosen, no unit — the colours are one store for the whole module. */
+    looks.loadLooks(storage)
+    looks.setColourUnit(null)
+    return { ...looks, ...page, ...blocks, ...scenes, ...palettes, ...ink, storage }
+  }
+
+  test('Settings has a Colours row under Play screen, and the page it opens', () => {
+    const settings = read('mobile/src/screens/Settings.js')
+    const front = settings.slice(settings.indexOf('{page === null ? ('), settings.indexOf("{page === 'account' ? ("))
+    const play = front.slice(front.indexOf('<Group title="Play screen">'))
+    /* Between Tiles & scenes and the Auto / Light / Dark buttons, as the plan put it. */
+    assert.match(
+      play,
+      /title="Tiles & scenes"[\s\S]*?<SetupRow title="Colours" status=\{coloursStatus\(\{ unitName: deviceName \}\)\} onPress=\{\(\) => setPage\('colours'\)\} \/>[\s\S]*?<Appearance \/>/,
+      'the Colours row is not between Tiles & scenes and light or dark'
+    )
+    /* The page condition written once, so a check that takes the first hit takes the page. */
+    assert.equal(settings.split("{page === 'colours' ? (").length, 2, 'the Colours page condition is written more than once, or not at all')
+    const pageText = settings.slice(settings.indexOf("{page === 'colours' ? ("), settings.indexOf("{page === 'trouble' ? ("))
+    assert.match(pageText, /head\('Colours', 'back'\)/, 'the Colours page has no title or way back')
+    assert.match(pageText, /<Colours \/>/, 'the Colours page is empty')
+    /* Undo floats over the screen, outside the scroll, so it never moves the cards. */
+    assert.match(settings, /<\/ScrollView>\s*\{\/\*[\s\S]*?\*\/\}\s*<LookUndo \/>\s*<\/EdgeBack>/, 'the look Undo is inside the scrolling page, or missing')
+  })
+
+  test('the Settings row names the look, and the unit when the look is the unit’s', async () => {
+    const c = await coloursOnTheBench()
+    c.setColourUnit('am4')
+    assert.equal(c.coloursStatus({ unitName: 'AM4' }), 'Match my unit · AM4 colours')
+    assert.equal(c.coloursStatus(), 'Match my unit · AM4 colours', 'with no name, the palette’s name')
+    c.setLook('sunlight', c.storage)
+    c.setFamily('drive', '#ff99cc', c.storage)
+    assert.equal(c.coloursStatus({ unitName: 'AM4' }), 'Sunlight · 1 of your own')
+    c.setColourUnit(null)
+  })
+
+  test('a look goes on in one tap, and Undo puts the last one back', async () => {
+    const c = await coloursOnTheBench()
+    c.setColourUnit('am4')
+    assert.equal(c.blockColor('drive').fill, c.PALETTES.am4.drive, 'Match my unit is not the AM4’s colours on an AM4')
+    const done = c.wearLook('sunlight', c.storage)
+    assert.deepEqual(done, { was: 'unit', now: 'sunlight' })
+    assert.equal(c.blockColor('drive').fill, c.LOOKS.find((l) => l.id === 'sunlight').families.drive, 'the look did not repaint the drive')
+    assert.equal(JSON.parse(c.storage.kept['fractal.colours']).theme.id, 'sunlight', 'the look is not kept for the next launch')
+    /* Undo is wearing `was` again. */
+    c.setLook(done.was, c.storage)
+    assert.equal(c.blockColor('drive').fill, c.PALETTES.am4.drive, 'Undo did not put the AM4’s drive back')
+    assert.equal(c.wearLook('nonsense', c.storage), null, 'a look that does not exist was worn')
+    assert.equal(c.UNDO_MS, 8000, '"Undo for 8 seconds"')
+    c.setColourUnit(null)
+
+    /* The page: one tap on a card wears it and offers Undo; Undo wears the last one. */
+    const page = read('mobile/src/components/Colours.js')
+    assert.match(page, /const done = wearLook\(id, sync\)\s+if \(done && done\.was !== done\.now\) offerUndo\(\{ \.\.\.done, at: Date\.now\(\) \}\)/, 'a look card does not offer Undo')
+    assert.match(page, /Math\.max\(0, offer\.at \+ UNDO_MS - Date\.now\(\)\)/, 'Undo does not go after UNDO_MS')
+    assert.match(page, /setLook\(offer\.was, sync\)/, 'Undo does not put the last look back on')
+    assert.match(page, /useEffect\(\(\) => \(\) => offerUndo\(null\), \[\]\)/, 'leaving the page leaves the Undo offer up over the next one')
+    /* Every look is a card, Fractal Remote second, and each card is drawn in its own look. */
+    assert.match(page, /\{LOOKS\.map\(\(look\) => \(\s*<LookCard key=\{look\.id\}/)
+    assert.deepEqual(c.LOOK_ORDER.slice(0, 2), ['unit', 'fractalremote'], 'Fractal Remote is not straight after Match my unit')
+    assert.match(page, /asLook=\{look\.id\}/, 'a look’s card is drawn in the look being worn rather than its own')
+  })
+
+  test('putting every colour back leaves a reset with a time, not a hole, and asks first', async () => {
+    const c = await coloursOnTheBench()
+    c.setColourUnit('fm3')
+    c.setLook('stompbox', c.storage)
+    c.setFamily('drive', '#ff99cc', c.storage)
+    c.setScene(2, '#66cc33', {}, c.storage)
+    c.setOffMode('grey', c.storage)
+    assert.equal(c.ownColourCount(), 2)
+    c.resetAll(c.storage)
+    const doc = c.looksDoc()
+    assert.equal(doc.families.drive.fill, null, 'the drive’s colour vanished instead of being put back')
+    assert.ok(Number.isFinite(doc.families.drive.at), 'a reset with no time is a hole a later copy fills back in')
+    assert.equal(doc.scenes['2'].fill, null)
+    assert.equal(doc.theme.id, null, 'the look was not put back')
+    assert.equal(doc.off.mode, 'colour', 'switched-off effects are still grey')
+    /* And the resets come back from storage as resets. */
+    c.loadLooks(c.storage)
+    assert.equal(c.looksDoc().families.drive.fill, null)
+    assert.ok(Number.isFinite(c.looksDoc().families.drive.at), 'the reset lost its time on the way back in')
+    assert.equal(c.blockColor('drive').fill, c.PALETTES.gen3.drive, 'the drive is not the unit’s again')
+    assert.equal(c.lookId(), 'unit')
+
+    /* Clear them: your colours go, the look stays. */
+    c.setLook('sunlight', c.storage)
+    c.setFamily('delay', '#ffff00', c.storage)
+    c.clearYours(c.storage)
+    assert.equal(c.lookId(), 'sunlight', 'Clear them took the look off too')
+    assert.equal(c.looksDoc().families.delay.fill, null)
+    assert.equal(c.ownColourCount(), 0)
+    c.setColourUnit(null)
+
+    /* Both are behind a sheet with Put back and Keep mine at the bottom, never one tap from the page. */
+    const page = read('mobile/src/components/Colours.js')
+    assert.match(page, /<Press label="Keep mine" grow onPress=\{\(\) => setAsking\(null\)\} \/>/)
+    assert.match(page, /label="Put back"[\s\S]{0,200}if \(asking === 'yours'\) clearYours\(sync\)\s+else resetAll\(sync\)/)
+    assert.equal(page.split('resetAll(sync)').length, 2, 'Put every colour back happens somewhere other than its confirm')
+    assert.match(page, /<Press\s+label="Put every colour back"[\s\S]{0,200}onPress=\{\(\) => setAsking\('all'\)\}/)
+  })
+
+  test('the colour sheet offers exactly the checked swatches, each one named for a screen reader', async () => {
+    const c = await coloursOnTheBench()
+    c.setColourUnit('fm3')
+    const drive = c.familyTarget('Drive 2')
+    assert.deepEqual(drive, { kind: 'family', slug: 'drive', name: 'Drive' })
+    const grid = c.sheetSwatches(drive)
+    assert.equal(grid.length, 24, 'an effect is not offered 24 swatches')
+    assert.equal(grid[0].fill, c.lookColour('drive'), 'the first swatch is not the look’s own colour')
+    assert.equal(grid[0].name, 'Unit')
+    assert.deepEqual(grid.slice(1).map((s) => s.fill), c.SWATCHES.map((s) => s.fill), 'the sheet offers something other than the checked twenty-three')
+    /* A scene is never offered the one like the amber that rings the scene you are in. */
+    const scene = c.sheetSwatches(c.sceneTarget(9))
+    assert.equal(scene.length, 23)
+    assert.ok(!scene.some((s) => s.fill === '#ff9933'), 'a scene is offered Orange, a step from the amber')
+    assert.equal(scene[0].fill, c.SCENE_RED, 'scene 2’s own colour in Match my unit is not red')
+    for (const s of [...grid, ...scene]) {
+      assert.ok(c.contrast(s.fill, c.inkOn(s.fill)) >= 4.5, `${s.name} ${s.fill} cannot carry its letters`)
+    }
+    /* "Drive colour, raspberry, your own." */
+    assert.equal(c.spokenSwatch(drive, grid[1]), 'Drive colour, Red')
+    assert.equal(c.spokenSwatch(drive, grid[1], { yours: true }), 'Drive colour, Red, your own')
+    assert.equal(c.spokenSwatch(drive, grid[0]), 'Drive colour, the unit’s own colour')
+    c.setLook('sunlight', c.storage)
+    assert.equal(c.sheetSwatches(drive)[0].name, 'Look')
+    assert.equal(c.spokenSwatch(drive, c.sheetSwatches(drive)[0]), 'Drive colour, Sunlight’s own colour')
+    c.setColourUnit(null)
+
+    const sheet = read('mobile/src/components/ColourSheet.js')
+    assert.match(sheet, /const swatches = target \? sheetSwatches\(target\) : \[\]/, 'the sheet draws swatches of its own')
+    assert.match(sheet, /accessibilityLabel=\{spokenSwatch\(target, s, \{ yours: s\.fill === yours && !s\.own \}\)\}/, 'a swatch has no name for a screen reader')
+    assert.match(sheet, /Math\.max\(TAP, Math\.floor/, 'a swatch can be drawn smaller than a thumb')
+    assert.ok(!/TextInput/.test(sheet), 'the phone grew a free colour picker')
+    /* Cancel and Use it in the sheet's foot, which stays at the bottom where the thumb is. */
+    assert.match(sheet, /foot=\{[\s\S]*?<Press label="Cancel" grow onPress=\{onClose\} \/>\s*<Press label="Use it" grow tone="signal" on onPress=\{\(\) => use\(pick\)\} \/>/)
+    assert.match(read('mobile/src/components/Sheet.js'), /\{foot \? <View[^>]*>\{foot\}<\/View> : null\}/, 'the sheet has nowhere for buttons that stay at the bottom')
+    /* Picking the look's own colour puts yours away rather than pinning a copy. */
+    const fresh = await coloursOnTheBench()
+    fresh.paint(fresh.familyTarget('amp'), '#cc0000', {}, fresh.storage)
+    assert.equal(fresh.yourFamily('amp'), '#cc0000')
+    fresh.paint(fresh.familyTarget('amp'), fresh.lookColour('amp'), {}, fresh.storage)
+    assert.equal(fresh.yourFamily('amp'), null, 'Use it on the unit’s own colour pinned a copy of it')
+  })
+
+  test('Lighter and Darker go three steps at most, and every step still carries its letters', async () => {
+    const c = await coloursOnTheBench()
+    for (const scene of [false, true]) {
+      for (const s of [...c.SWATCHES, { name: 'scene red', fill: c.SCENE_RED }]) {
+        const { darker, lighter } = c.shades(s.fill, { scene })
+        assert.ok(darker.length <= 3 && lighter.length <= 3, `${s.name} has more than three steps`)
+        let was = c.luminance(s.fill)
+        for (const d of darker) {
+          assert.ok(c.luminance(d) < was, `${s.name}: a Darker step is not darker`)
+          was = c.luminance(d)
+        }
+        was = c.luminance(s.fill)
+        for (const l of lighter) {
+          assert.ok(c.luminance(l) > was, `${s.name}: a Lighter step is not lighter`)
+          was = c.luminance(l)
+        }
+        for (const x of [...darker, ...lighter]) {
+          assert.ok(c.contrast(x, c.inkOn(x)) >= 4.5, `${s.name} → ${x} cannot carry its letters`)
+          assert.ok(c.contrast(x, '#0d0f12') >= 3, `${s.name} → ${x}: an unlit tile in it is lost on the dark stage`)
+          if (scene) assert.ok(c.AMBERS.every((a) => c.deltaE(x, a) >= 10), `${s.name} → ${x} is offered to a scene a step from the amber`)
+        }
+      }
+    }
+    assert.deepEqual(c.shades('#cc0000').darker, [], 'red is offered a Darker that an unlit tile cannot carry')
+    assert.equal(c.shadeOf('#ffff00', 0), '#ffff00')
+    assert.equal(c.shadeOf('#ffff00', -9), c.shades('#ffff00').darker.at(-1), 'past the last step is not the last step')
+    assert.equal(c.shadeWords('Red', 1), 'Red, a step lighter')
+    assert.equal(c.shadeWords('Red', -2), 'Red, 2 steps darker')
+    const sheet = read('mobile/src/components/ColourSheet.js')
+    assert.match(sheet, /disabled=\{step <= -steps\.darker\.length\}/)
+    assert.match(sheet, /disabled=\{step >= steps\.lighter\.length\}/)
+  })
+
+  test('the sheet warns, in a line, about a red next to the drive, and never about the unit’s own colour', async () => {
+    const c = await coloursOnTheBench()
+    c.setColourUnit('fm3')
+    const amp = c.familyTarget('amp')
+    assert.equal(c.nextToWarning(amp, '#cc0000'), 'Hard to tell from Drive next to it', 'a red amp next to the drive says nothing')
+    assert.equal(c.nextToWarning(amp, c.lookOwn(amp)), null, 'the unit’s own amp colour is warned about')
+    assert.equal(c.nextToWarning(amp, '#ffff00'), null, 'a yellow amp is called hard to tell from its neighbours')
+    assert.match(c.nextToWarning(amp, '#018901'), /^Hard to tell from \w+ next to it \(for some colour-blind players\)$/, 'a pick only colour-blind players would lose says nothing')
+    /* The loaded preset's own order counts too. */
+    assert.ok(c.neighboursOf('synth', ['drive', 'synth', 'looper']).includes('looper'))
+    assert.ok(c.neighboursOf('drive').includes('amp') && c.neighboursOf('drive').includes('wah'))
+    /* Scenes: the ones either side, and never the all-red the unit itself draws. */
+    assert.equal(c.nextToWarning(c.sceneTarget(1), c.SCENE_RED), null)
+    assert.match(c.nextToWarning(c.sceneTarget(1), c.shades(c.SCENE_RED).lighter[0]), /^Hard to tell from scene [13] next to it$/)
+    c.setColourUnit(null)
+    /* A line, with its room kept: Use it never waits on it. */
+    const sheet = read('mobile/src/components/ColourSheet.js')
+    assert.match(sheet, /const warning = open \? nextToWarning\(target, pick, \{ chain \}\) : null/)
+    assert.match(sheet, /\{warning \|\| ''\}/)
+    assert.ok(!/disabled=\{[^}]*warning/.test(sheet), 'the warning blocks Use it')
+  })
+
+  test('Grey when off greys effects only, with letters at 4.5:1 and an edge that shows on both pages', async () => {
+    const c = await coloursOnTheBench()
+    assert.equal(c.offMode(), 'colour', '"Keep their colour" is not the default')
+    assert.equal(c.setOffMode('grey', c.storage), true)
+    assert.equal(c.offMode(), 'grey')
+    assert.equal(c.setOffMode('beige', c.storage), false)
+    for (const [page, grey, pages] of [
+      ['dark', c.OFF_GREY.dark, ['#0d0f12', '#15181d']],
+      ['light', c.OFF_GREY.light, ['#f2efe9', '#faf8f4', '#f4f2ee', '#ffffff']]
+    ]) {
+      assert.ok(c.contrast(grey.ink, grey.fill) >= 4.5, `the ${page} page’s grey tile cannot carry its letters`)
+      for (const p of pages) assert.ok(c.contrast(grey.edge, p) >= 3, `the ${page} page’s grey edge is lost on ${p}`)
+    }
+    const tile = read('mobile/src/components/Tile.js')
+    assert.match(tile, /const grey = effect && !on && !quiet && \(offAs \|\| offMode\(\)\) === 'grey'/)
+    assert.match(tile, /if \(grey\) return off\.edge/)
+    assert.match(tile, /const off = isDark\(\) \? OFF_GREY\.dark : OFF_GREY\.light/, 'the Light page has no grey of its own')
+    /* Play passes `effect` to its pedals and its looper, and not to its scenes. */
+    const stage = read('mobile/src/screens/Stage.js')
+    const scenes = stage.slice(stage.indexOf('sceneOrderFor(sceneLayout'), stage.indexOf('{/* ---------------------------------------------------------- blocks */}'))
+    const pedals = stage.slice(stage.indexOf('{/* ---------------------------------------------------------- blocks */}'), stage.indexOf('{/* ------------------------------------------------------------ foot */}'))
+    assert.ok(scenes.length > 100 && pedals.length > 100, 'Play moved; this check reads it')
+    assert.ok(!/\beffect\b\s/.test(scenes.replace(/\/\*[\s\S]*?\*\//g, '')), 'a scene that is not live is drawn as a switched-off effect')
+    assert.equal((pedals.match(/^\s+effect$/gm) || []).length, 2, 'the pedals and the looper do not go grey when off')
+    c.setOffMode('colour', c.storage)
+  })
+
+  test('the Effects section shows the unit’s own effects, the loaded preset’s first', async () => {
+    const c = await coloursOnTheBench()
+    assert.ok(!c.unitFamilies('am4').includes('plex') && !c.unitFamilies('am4').includes('cab'), 'an AM4 is offered blocks it does not have')
+    assert.ok(!c.unitFamilies('vp4').includes('amp'), 'a VP4 is offered an amp')
+    for (const id of c.PALETTE_IDS) {
+      for (const f of c.unitFamilies(id)) {
+        assert.ok(!['input', 'output', 'shunt'].includes(f), `${id} offers ${f}, which is drawn as an outline`)
+        if (id !== 'gen2') assert.ok(!c.DORMANT.includes(f), `${id} offers ${f}, which ForgeFX does not name yet`)
+        assert.ok(c.FAMILY_NAMES[f], `${f} has no name`)
+      }
+    }
+    assert.deepEqual(
+      c.presetFamilies([{ slug: 'input' }, { slug: 'drive1' }, { slug: 'drive2' }, { slug: 'Plex Delay' }, { slug: 'nam' }, { slug: 'output' }, { slug: '' }]),
+      ['drive', 'plex'],
+      'the loaded preset’s effects are not each family once, in order, without the ends'
+    )
+    const page = read('mobile/src/components/Colours.js')
+    assert.match(page, /const chain = presetFamilies\(blocks\)/)
+    assert.match(page, /const rest = unitFamilies\(\)\.filter\(\(f\) => !chain\.includes\(f\)\)/)
+    assert.match(page, /label=\{more \? 'Fewer effects' : 'More effects'\}/)
+    assert.match(page, /onPress=\{\(\) => setPainting\(familyTarget\(f\)\)\}/, 'an effect tile does not open the colour sheet')
+    assert.match(page, /onPress=\{\(\) => setPainting\(sceneTarget\(i\)\)\}/, 'a scene tile does not open the colour sheet')
+  })
+
+  test('scenes are all red like the unit, or a colour each, in one write', async () => {
+    const c = await coloursOnTheBench()
+    c.setColourUnit('fm3')
+    assert.equal(c.scenesAllRed(), true, 'Match my unit’s scenes are not all red')
+    const cvd = c.LOOKS.find((l) => l.id === 'cvd').scenes
+    c.chooseScenes(true, c.storage)
+    assert.deepEqual(Array.from({ length: 8 }, (_, i) => c.sceneColor(i).fill), [...cvd], 'a colour each on an all-red look is not Colour-blind safe’s eight')
+    assert.equal(c.scenesAllRed(), false)
+    c.chooseScenes(false, c.storage)
+    assert.equal(c.scenesAllRed(), true)
+    assert.equal(c.yourScene(0), null, 'all red on an all-red look pinned eight reds rather than putting yours away')
+    c.setLook('sunlight', c.storage)
+    assert.equal(c.scenesAllRed(), false)
+    c.chooseScenes(false, c.storage)
+    assert.equal(c.scenesAllRed(), true, 'all red does nothing on a look with a colour each')
+    assert.equal(c.yourScene(4), c.SCENE_RED)
+    assert.equal(c.setScenes(['#cc0000'], c.storage), false, 'seven scenes went missing from one write')
+    c.setColourUnit(null)
+  })
+
+  test('“Colours now match your unit”, once, and only to somebody who had the app before', () => {
+    const coach = read('mobile/src/lib/coach.js')
+    /* The phone's store carries only keys that start fractal. */
+    assert.match(coach, /const COLOURS_KEY = 'fractal\.coloursNoticed'/)
+    assert.match(coach, /export function markColoursNotice\(\) \{\s+coloursSettled = true/, 'the first run’s mark can lose to Play’s read')
+    /* A first run never saw the old colours. */
+    assert.match(read('mobile/App.js'), /walkthroughSeen\(\)\.then\(\(seen\) => \{[\s\S]{0,200}if \(!seen\) markColoursNotice\(\)/, 'a first run is told the colours changed')
+    assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} \/>[\s\S]{0,120}<ColoursNotice \/>/, 'Play does not say the colours changed')
+    const notice = read('mobile/src/components/ColoursNotice.js')
+    assert.match(notice, /if \(!alive \|\| v\) return\s+markColoursNotice\(\)\s+setSeen\(false\)/, 'the line is not remembered the moment it is shown')
+    assert.match(notice, /<Note\s+onDismiss=/, 'the line cannot be put away')
+    assert.match(read('src/lib/colourPage.js'), /export const COLOURS_NOTICE = 'Colours now match your unit · Settings → Colours'/)
+  })
+
+  test('nothing on the Colours page says “this phone”', () => {
+    /* CLAUDE.md: the app names the device it is on (deviceNoun). */
+    for (const file of ['mobile/src/components/Colours.js', 'mobile/src/components/ColourSheet.js', 'mobile/src/components/ColoursNotice.js', 'src/lib/colourPage.js']) {
+      const shown = read(file).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+      assert.ok(!/this (phone|iphone|ipad|device)\b/i.test(shown), `${file} says "this phone"`)
+    }
+    assert.match(read('mobile/src/components/Colours.js'), /`Your colours are kept on this \$\{deviceNoun\(\)\}\. The computer’s screen keeps its own\.`/)
   })
 }

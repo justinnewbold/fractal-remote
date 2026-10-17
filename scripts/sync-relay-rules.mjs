@@ -355,6 +355,14 @@ export const FILES = [
   { source: '../src/lib/blockColors.js', target: '../mobile/src/lib/blockColors.js' },
   { source: '../src/lib/sceneColors.js', target: '../mobile/src/lib/sceneColors.js' },
   /*
+   * And what the Colours page offers: which effects a unit has, the colour
+   * sheet's swatches in their order, how far Lighter and Darker go, when a
+   * pick is too close to the block beside it, and what a screen reader says
+   * for each swatch. Each end draws its own page; the two must not offer a
+   * player different colours for the same tile.
+   */
+  { source: '../src/lib/colourPage.js', target: '../mobile/src/lib/colourPage.js' },
+  /*
    * And what a block is called when there is no room for its name. Shared for
    * the same reason as the colours: "DLY 2" has to mean the same block on both
    * screens, and the rule that keeps the instance number only when it is not 1

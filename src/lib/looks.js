@@ -346,6 +346,22 @@ export function yourScene(i, { unit: u, preset } = {}) {
   return (p !== null && uk && doc.presetScenes[uk]?.[p]?.[slot]?.fill) || null
 }
 
+/**
+ * All eight scenes at once, for every preset: one write rather than eight.
+ * What the Colours page's "All red, like the unit" and "A colour for each
+ * scene" each are. A null in a place puts that scene back to the look's.
+ */
+export function setScenes(fills, storage) {
+  if (!Array.isArray(fills) || fills.length !== SCENE_SLOTS) return false
+  const clean = fills.map(asFill)
+  if (clean.includes(undefined)) return false
+  const at = Date.now()
+  clean.forEach((fill, i) => {
+    doc.scenes[String(i)] = { fill, at }
+  })
+  return save(storage)
+}
+
 /** A colour tag for one preset on one unit, like a star. Null takes it off. */
 export function setPresetColour(u, preset, fill, storage) {
   const p = presetOf(preset)
@@ -376,6 +392,20 @@ export function setOffMode(mode, storage) {
 /** How many of your own colours sit on top of the look, every-preset ones only. */
 export const ownColourCount = () =>
   Object.values(doc.families).filter((e) => e.fill).length + Object.values(doc.scenes).filter((e) => e.fill).length
+
+/**
+ * Take off the colours ownColourCount counts and keep everything else: the
+ * look, the switched-off choice, one preset's scenes and the preset tags.
+ * "3 of your own colours on top · Clear them". Resets with a time, like
+ * resetAll, for the reason at the top of this file.
+ */
+export function clearYours(storage) {
+  const at = Date.now()
+  for (const map of [doc.families, doc.scenes]) {
+    for (const [k, e] of Object.entries(map)) if (e.fill) map[k] = { fill: null, at }
+  }
+  return save(storage)
+}
 
 /**
  * Put every colour back: Match my unit, the unit's colours, coloured outlines

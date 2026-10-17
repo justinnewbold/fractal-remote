@@ -29,6 +29,8 @@ import { setFlashTiming, setMetronome, useFlashTiming, useMetronome, useUnitHear
 import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, nudgeFloor, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
+import Colours, { LookUndo } from '../components/Colours'
+import { coloursStatus } from '../lib/colourPage'
 import {
   SIZES,
   clampSize,
@@ -574,6 +576,8 @@ export default function Settings({
               status="Tile size, effect pictures, scene layout"
               onPress={() => setPage('appearance')}
             />
+            {/* "Let's make the colors match better", and choose your own. */}
+            <SetupRow title="Colours" status={coloursStatus({ unitName: deviceName })} onPress={() => setPage('colours')} />
             {/* Light or dark right here: one tap, not a page to open for it. */}
             <View style={{ paddingVertical: space.md }}>
               <Appearance />
@@ -786,6 +790,14 @@ export default function Settings({
             <Section>Stage tiles</Section>
             <TileSize onScrollLock={setHeld} />
           </View>
+        </>
+      ) : null}
+
+      {/* ---------------------------------------------------------- colours */}
+      {page === 'colours' ? (
+        <>
+          {head('Colours', 'back')}
+          <Colours />
         </>
       ) : null}
 
@@ -1513,6 +1525,9 @@ export default function Settings({
         </>
       ) : null}
     </ScrollView>
+    {/* The Colours page's Undo, floating over the bottom of the screen for a
+        moment after a look goes on (components/Colours). Nothing otherwise. */}
+    <LookUndo />
     </EdgeBack>
   )
 }

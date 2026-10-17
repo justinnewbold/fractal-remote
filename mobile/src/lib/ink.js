@@ -288,3 +288,47 @@ export function hueOf(value) {
   if (!lab || Math.hypot(lab.a, lab.b) < 0.02) return null
   return deg(Math.atan2(lab.b, lab.a))
 }
+
+/* ------------------------------------------------------------------ */
+/* The same colour, as a colour-blind player sees it                    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Machado, Oliveira and Fernandes (2009), at full strength, in linear light:
+ * the three kinds of colour blindness the looks were built and checked
+ * against. About one man in twelve has the first two in some measure, which
+ * on a stage is a player in most bands.
+ */
+const SEEN = Object.freeze({
+  protan: [
+    [0.152286, 1.052583, -0.204868],
+    [0.114503, 0.786281, 0.099216],
+    [-0.003882, -0.048116, 1.051998]
+  ],
+  deutan: [
+    [0.367322, 0.860646, -0.227968],
+    [0.280085, 0.672501, 0.047413],
+    [-0.01182, 0.04294, 0.968881]
+  ],
+  tritan: [
+    [1.255528, -0.076749, -0.178779],
+    [-0.078411, 0.930809, 0.147602],
+    [0.004733, 0.691367, 0.3039]
+  ]
+})
+
+/** Normal vision first, then the three the colour sheet warns about. */
+export const VISIONS = Object.freeze(['normal', 'protan', 'deutan', 'tritan'])
+
+/**
+ * The colour a player with that kind of colour vision sees. 'normal' is the
+ * colour itself; anything that is not a colour comes back as it went in.
+ */
+export function seenWith(value, vision = 'normal') {
+  const M = SEEN[vision]
+  const rgb = readHex(value)
+  if (!M || !rgb) return value
+  const v = [lin(rgb.r), lin(rgb.g), lin(rgb.b)]
+  const [r, g, b] = M.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2])
+  return toHex({ r: unlin(r), g: unlin(g), b: unlin(b) })
+}

@@ -21,8 +21,14 @@ import { color, font, radius, space } from '../lib/theme'
  * THE BACKDROP CLOSES IT AND THE PANEL DOES NOT. A press that lands on the sheet
  * is a press on the sheet, including one that started as a slip off a control.
  * Only the glass around it is a way out.
+ *
+ * `foot` is what stays at the bottom however far the rest scrolls: the
+ * colour sheet's Cancel and Use it, and the big Put back and Keep mine of
+ * the Colours page's confirm. "Built for one thumb": the buttons that finish
+ * the errand sit where the thumb already is, never scrolled off the bottom
+ * of a small phone by the grid above them.
  */
-export default function Sheet({ open, onClose, title, note, children }) {
+export default function Sheet({ open, onClose, title, note, foot, children }) {
   const { height } = useWindowDimensions()
 
   return (
@@ -107,6 +113,7 @@ export default function Sheet({ open, onClose, title, note, children }) {
             >
               {children}
             </ScrollView>
+            {foot ? <View style={{ gap: space.sm, paddingHorizontal: space.lg, paddingTop: space.sm }}>{foot}</View> : null}
           </Pressable>
         </BlurView>
       </Pressable>

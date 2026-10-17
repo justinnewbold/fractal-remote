@@ -30,6 +30,7 @@ import EdgeBack from './src/components/EdgeBack'
 import SignIn from './src/screens/SignIn'
 import Onboarding from './src/screens/Onboarding'
 import { walkthroughSeen, markWalkthrough } from './src/lib/walkthrough'
+import { markColoursNotice } from './src/lib/coach'
 import Edit from './src/screens/Edit'
 import Connect from './src/screens/Connect'
 import Fixes from './src/screens/Fixes'
@@ -130,7 +131,12 @@ export default function App() {
    */
   const [replaying, setReplaying] = useState(false)
   useEffect(() => {
-    walkthroughSeen().then(setSeenWalk)
+    walkthroughSeen().then((seen) => {
+      /* A first run never saw the old colours, so it is never told they
+         changed (components/ColoursNotice). */
+      if (!seen) markColoursNotice()
+      setSeenWalk(seen)
+    })
   }, [])
   const [screen, setScreen] = useState('stage')
   /*
