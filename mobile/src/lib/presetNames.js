@@ -390,8 +390,9 @@ export function useNames() {
 /**
  * Re-render as names arrive, and ask the unit for nothing.
  *
- * For Play, which shows the name of the preset Next will load ("Next: song
- * name", see setlists nextWords) and must never be the reason a preset is
+ * For Play, which shows the name of the preset Next and Previous will load
+ * ("Next: song name", see setlists nextWords and previousWords) and must
+ * never be the reason a preset is
  * dumped down the serial port mid-song. So: no `interest`, which would keep
  * the queue draining while Play is up, and no `want`. What Play shows is what
  * the preset list already holds (the computer's copy, and whatever the list

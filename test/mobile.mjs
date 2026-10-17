@@ -1272,6 +1272,81 @@ export function run(test) {
     assert.deepEqual(blank, { shown: '', said: 'Next', name: '' }, 'a name nobody has read is shown under Next')
   })
 
+  /*
+   * "Can we add that to the previous button as well where it show which one
+   * would be the previous one?" Justin, 17 October 2026. The same three ways
+   * to go wrong, the other way round: a name under Previous that Previous
+   * does not load, a name asked of the unit for it, or a taller foot row.
+   */
+  test('phone: the line under Previous is the name of the slot a press of Previous loads, by the button’s own rule', async () => {
+    const stage = withoutComments(read('mobile/src/screens/Stage.js'))
+    const lift = (start, stop) => {
+      const from = stage.indexOf(start)
+      const end = stage.indexOf(stop, from)
+      assert.ok(from > 0 && end > from, `Stage.js moved; this test reads ${start}`)
+      return stage.slice(from, end)
+    }
+    const landing = lift('const landing = (by) =>', '\n\n')
+    assert.match(stage, /const lastAt = landing\(-1\)\n/, 'the line is not asked about where Previous lands')
+    const behind = lift('const behind = previousWords(', '\n')
+    assert.equal(behind.trim(), 'const behind = previousWords({ order, current: preset?.number, previous: lastAt, nameOf })', 'the line is worked out from something other than where Previous lands')
+    const step = lift('const step = async (by, at = Date.now()) => {', '\n  }\n') + '\n  }'
+
+    const setlists = await import('../mobile/src/lib/setlists.js')
+    const { stepSlot } = await import('../mobile/src/lib/unit.mjs')
+    const known = { 0: 'Clean', 4: 'Before Solo', 5: 'Solo', 7: 'Schism', 39: 'Warm Up', 40: 'Opener', 44: 'Crunch', 45: 'Plexi', 98: 'Second Last', 99: 'Last Slot', 199: 'Before Encore', 200: 'Encore', 300: 'Big Star' }
+    const favourites = [300, 7, 45]
+    const lists = [
+      { id: 'sat', name: 'Saturday', presets: [40, 7, 200] },
+      { id: 'one', name: 'One', presets: [5] },
+      { id: 'none', name: 'None', presets: [] }
+    ]
+    const caps = { presets: { count: 100 } }
+    for (const noSlotSteps of [false, true]) for (const source of ['all', 'starred', 'sat', 'one', 'none']) {
+      for (const current of [undefined, 0, 1, 5, 7, 40, 45, 98, 99, 200, 300]) {
+        const order = setlists.orderFor(source, { favourites, lists })
+        const preset = current === undefined ? null : { number: current }
+        const asked = []
+        const nameOf = (n) => {
+          asked.push(n)
+          return known[n]
+        }
+        const loads = []
+        const said = []
+        const env = {
+          order, source, preset, favourites, lists, caps, noSlotSteps,
+          stepTarget: setlists.stepTarget, stepSlot, previousWords: setlists.previousWords, nameOf,
+          nope: () => loads.push(null), thud: () => {}, awayNow: () => 0,
+          sayFault: (w) => said.push(w), vp4StepWords: () => 'why a VP4 does not step',
+          loadPreset: (n) => (loads.push(n), Promise.resolve(true)),
+          songFor: () => null, songLate: () => false, applySong: async () => {}, writeScene: () => {}, writeTempo: () => {},
+          stepsRef: { current: 0 }
+        }
+        const run = new Function(...Object.keys(env), `${landing}\nconst lastAt = landing(-1)\n${behind}\nconst step = ${step.slice(step.indexOf('async'))}\nreturn { lastAt, behind, step }`)
+        const got = run(...Object.values(env))
+        await got.step(-1)
+        const where = `${noSlotSteps ? 'VP4, ' : ''}${source} on ${current}`
+        assert.deepEqual(said, noSlotSteps && !order ? ['why a VP4 does not step'] : [], `${where}: Previous says why it does not step, or not`)
+        const pressed = loads[0] ?? null
+        assert.equal(got.lastAt, pressed, `${where}: the line is worked out for a different press than Previous makes`)
+        assert.ok(asked.every((n) => n === pressed), `${where}: the line looked up slot ${asked.find((n) => n !== pressed)}, which Previous does not load`)
+        if (pressed === null) {
+          assert.equal(got.behind.shown, '', `${where}: a Previous with nowhere to go has a line under it`)
+          continue
+        }
+        const clean = setlists.cleanSlots(order)
+        const wraps = clean.length > 0 && clean.indexOf(current) === 0 && pressed === clean[clean.length - 1]
+        if (wraps) assert.equal(got.behind.shown, setlists.PREVIOUS_WRAPS, `${where}: Previous goes to the last song and the line does not say it goes to the end`)
+        else assert.equal(got.behind.shown, known[pressed] ?? '', `${where}: the line is not the name of slot ${pressed}, which Previous loads`)
+      }
+    }
+    // A name not read yet is a blank line, never the slot number or "Untitled".
+    const blank = new Function('order', 'source', 'preset', 'favourites', 'lists', 'caps', 'noSlotSteps', 'stepTarget', 'stepSlot', 'previousWords', 'nameOf', `${landing}\nconst lastAt = landing(-1)\n${behind}\nreturn behind`)(
+      null, 'all', { number: 44 }, [], [], caps, false, setlists.stepTarget, stepSlot, setlists.previousWords, () => undefined
+    )
+    assert.deepEqual(blank, { shown: '', said: 'Previous', name: '' }, 'a name nobody has read is shown under Previous')
+  })
+
   test('phone: Play shows what the preset list says Next will load, for the unit there now, without ever asking the unit for a name', async () => {
     /*
      * A name read from Play is a preset dump down the one serial port, in the
@@ -1309,8 +1384,9 @@ export function run(test) {
       const names = await import(at('presetNames.js'))
       const react = await import(at('react.js'))
       const device = await import(at('device.js'))
-      const { nextWords } = await import('../mobile/src/lib/setlists.js')
+      const { nextWords, previousWords } = await import('../mobile/src/lib/setlists.js')
       const under = (current, next) => nextWords({ order: null, current, next, nameOf: names.nameOf }).shown
+      const behind = (current, previous) => previousWords({ order: null, current, previous, nameOf: names.nameOf }).shown
       assert.equal(typeof names.useNamesHeard, 'function', 'presetNames has no way to watch the names without asking for them')
 
       names.useNamesHeard()
@@ -1323,6 +1399,7 @@ export function run(test) {
       await names.adopt('fm3')
       await new Promise((r) => setTimeout(r, 200))
       assert.equal(under(6, 7), 'Schism')
+      assert.equal(behind(8, 7), 'Schism', 'Previous does not read the preset list Next reads')
       assert.ok(told > 0, 'a name arriving does not redraw Play')
       assert.equal(under(7, 8), '', 'a slot the preset list has no name for has one under Next')
       names.useNamesHeard()
@@ -1332,9 +1409,12 @@ export function run(test) {
       /* Another unit: what the rig does when a read finds one (forgetNames, then the new unit's list). */
       names.forget()
       assert.equal(under(6, 7), '', 'the last unit’s name is under Next once the unit has changed')
+      assert.equal(behind(8, 7), '', 'the last unit’s name is under Previous once the unit has changed')
       await names.adopt('am4')
       assert.equal(under(6, 7), 'AM4 SEVEN')
+      assert.equal(behind(8, 7), 'AM4 SEVEN')
       assert.equal(under(39, 40), '', 'the FM3’s name is under Next on the AM4')
+      assert.equal(behind(41, 40), '', 'the FM3’s name is under Previous on the AM4')
       /* And straight from one unit's list to the other's, as a launch on a different unit does. */
       await names.adopt('fm3')
       assert.equal(under(6, 7), 'Schism')
@@ -1379,7 +1459,7 @@ export function run(test) {
     assert.equal(font.micro, 11)
     assert.ok(line >= Math.ceil(font.micro * 1.2), 'the line is shorter than its own letters')
 
-    /* Next carries the line and says it; Previous carries a blank one so the two words sit level; neither is held by anything new. */
+    /* Each carries its own line and says it, so the two words sit level; neither is held by anything new. */
     const at = (label) => stage.slice(stage.indexOf(`label="${label}"`), stage.indexOf('/>', stage.indexOf(`label="${label}"`)))
     const next = at('Next')
     const previous = at('Previous')
@@ -1389,8 +1469,12 @@ export function run(test) {
     /* Greyed by where it lands, except on a real VP4 with no setlist, whose press stays live to say why (lib/vp4-safety vp4StepWords). */
     assert.match(next, /disabled=\{landing\(1\) === null && !\(noSlotSteps && !order\)\}/)
     assert.match(next, /onPress=\{\(\) => step\(1\)\}/)
-    assert.match(previous, /under=""/, 'Previous has no blank line, so it and Next do not sit level')
-    assert.ok(!/\bsub=/.test(next), 'the name is in the two-line `sub` beside the chevron, which grows the row')
+    assert.match(previous, /under=\{behind\.shown\}/, 'Previous has no line under it, so it and Next do not sit level')
+    assert.match(previous, /accessibilityLabel=\{behind\.said\}/, 'a screen reader is not told where Previous goes')
+    assert.match(previous, /height=\{foot\}/)
+    assert.match(previous, /disabled=\{landing\(-1\) === null && !\(noSlotSteps && !order\)\}/)
+    assert.match(previous, /onPress=\{\(\) => step\(-1\)\}/)
+    for (const b of [next, previous]) assert.ok(!/\bsub=/.test(b), 'the name is in the two-line `sub` beside the chevron, which grows the row')
   })
 
   test('finding a control reads the unit once, one block at a time, and never on a whim', () => {

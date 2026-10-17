@@ -14,6 +14,7 @@ import {
   nextWords,
   orderFor,
   positionIn,
+  previousWords,
   songFor,
   sourceFor,
   sourceLabel,
@@ -602,6 +603,14 @@ export default function Stage({
   const ahead = nextWords({ order, current: preset?.number, next: nextAt, nameOf })
 
   /*
+   * And the line under Previous, by the same rule the other way round: the
+   * name of what it will load, or on song 1 of a setlist that it goes to the
+   * end. "Can we add that to the previous button as well?" Asked about
+   * `lastAt` and nothing else, the landing(-1) Previous steps to.
+   */
+  const behind = previousWords({ order, current: preset?.number, previous: lastAt, nameOf })
+
+  /*
    * Which press of Previous or Next is the newest, from these buttons or the
    * watch's (both come through `step`). Two quick Nexts had the skipped
    * song's scene and tempo sent onto the unit loading the next song. Only
@@ -1091,8 +1100,9 @@ export default function Stage({
               label="Previous"
               icon={chevronIcon}
               flip
-              /* A blank line of the same height as Next's, so the two words sit level. */
-              under=""
+              /* What Previous will load, on a line as tall as Next's, so the two words sit level. */
+              under={behind.shown}
+              accessibilityLabel={behind.said}
               height={foot}
               disabled={landing(-1) === null && !(noSlotSteps && !order)}
               onPress={() => step(-1)}

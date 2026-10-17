@@ -361,6 +361,38 @@ export function nextWords({ order, current, next, nameOf }) {
   return name ? { shown: name, said: `Next, ${name}`, name } : { shown: '', said: 'Next', name: '' }
 }
 
+/**
+ * The small line under Previous: where Previous is about to go.
+ *
+ * "The next button now shows the next song/preset. Can we add that to the
+ * previous button as well where it show which one would be the previous
+ * one?" Justin, 17 October 2026. Next's line, the other way round, by the
+ * same rules: the name alone, the preset list's own name for the one slot
+ * Previous loads and nothing else, and a blank line rather than a guess.
+ *
+ * AND WHAT PREVIOUS REALLY DOES AT THE START. Before the first song a
+ * setlist goes back round to the last (see nextIn), so on song 1 the line
+ * says that instead of the closer's name, which would read as though the
+ * set had a song before its opener and the running order were wrong. "To
+ * the end" fits whole on the narrowest phone, as "Starts over" does; the
+ * closer's name still goes to a screen reader with it. A preset that is not
+ * in the list is not song 1, so there Previous names the last song, as Next
+ * names the first.
+ */
+export const PREVIOUS_WRAPS = 'To the end'
+
+export function previousWords({ order, current, previous, nameOf }) {
+  if (!Number.isInteger(previous)) return { shown: '', said: 'Previous', name: '' }
+  const name = cleanPresetName(typeof nameOf === 'function' ? nameOf(previous) : undefined)
+  const list = order === null || order === undefined ? [] : cleanSlots(order)
+  /* The first song, and Previous going where nextIn sends the first song: the last. */
+  if (list.length && list.indexOf(current) === 0 && previous === list[list.length - 1]) {
+    const back = `Previous, ${PREVIOUS_WRAPS.charAt(0).toLowerCase()}${PREVIOUS_WRAPS.slice(1)}`
+    return { shown: PREVIOUS_WRAPS, said: name ? `${back}, ${name}` : back, name }
+  }
+  return name ? { shown: name, said: `Previous, ${name}`, name } : { shown: '', said: 'Previous', name: '' }
+}
+
 /** What to call the source on the button between Previous and Next. */
 export function sourceLabel(source, { favourites = [], lists = [] } = {}) {
   if (source === STARRED) return 'Starred'

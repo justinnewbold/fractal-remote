@@ -3672,6 +3672,27 @@ export function run(test) {
     assert.equal(run(null, 46, 'all', []).shown, '', 'a slot the list has not named has a guess under Next')
     assert.equal(run(null, 47, 'all', []).shown, '', 'past the names known, the line guesses')
 
+    // And under Previous: the same list, for where Previous lands (landing(-1)), "To the end" on song 1.
+    assert.match(g, /const lastAt = landing\(-1\)\n/)
+    const behind = lift('const behind = previousWords(')
+    assert.equal(behind.trim(), 'const behind = previousWords({ order, current: preset?.number, previous: lastAt, nameOf: (n) => slotNames.get(n) })', 'the line is worked out from something other than where Previous lands')
+    const { previousWords, PREVIOUS_WRAPS } = await import('../src/lib/setlists.js')
+    const back = (order, current, source, lists) => {
+      const lastAt = stepTarget({ source, current, delta: -1, favourites: [], lists })
+      return new Function('slots', 'useMemo', 'order', 'preset', 'lastAt', 'previousWords', `${lookup}\n${behind}\nreturn behind`)(slots, (fn) => fn(), order, { number: current }, lastAt, previousWords)
+    }
+    assert.equal(back([40, 7, 200], 200, 'sat', lists).shown, 'Schism')
+    assert.equal(back([40, 7, 200], 7, 'sat', lists).shown, 'Opener')
+    assert.equal(back([40, 7, 200], 40, 'sat', lists).shown, PREVIOUS_WRAPS, 'song 1 does not say Previous goes to the end')
+    assert.equal(back([40, 7, 200], 40, 'sat', lists).said, 'Previous, to the end')
+    assert.equal(back([200, 7, 40], 200, 'sat', [{ id: 'sat', name: 'Saturday', presets: [200, 7, 40] }]).said, 'Previous, to the end, Opener')
+    assert.equal(back([40, 46, 200], 200, 'sat', [{ id: 'sat', name: 'Saturday', presets: [40, 46, 200] }]).shown, '', 'a slot the list calls empty has a name under Previous')
+    assert.equal(back(null, 46, 'all', []).shown, 'Plexi')
+    assert.equal(back(null, 47, 'all', []).shown, '', 'a slot the list calls empty has a name under Previous')
+    assert.equal(back(null, 48, 'all', []).shown, '', 'a slot the list has not named has a guess under Previous')
+    assert.equal(back(null, 49, 'all', []).shown, '', 'past the names known, the line under Previous guesses')
+    assert.equal(back(null, 0, 'all', []).shown, '', 'Previous below slot 0 has a line')
+
     // The markup: both buttons in the order the nav test holds, Next saying where it goes.
     const nav = g.slice(g.indexOf('className="gig-nav"'), g.indexOf('className="gig-bar"'))
     const previous = nav.slice(nav.indexOf('<button'), nav.indexOf('</button>') + 9)
@@ -3679,7 +3700,10 @@ export function run(test) {
     assert.match(previous, /‹ Previous/)
     assert.match(next, /Next ›/)
     for (const b of [previous, next]) assert.match(b, /className="gig-nav-step"/, 'a step button has no room kept for the line')
-    assert.match(previous, /<span className="gig-nav-ahead" aria-hidden="true" \/>/, 'Previous has no blank line, so it and Next do not sit level')
+    assert.match(previous, /<span className="gig-nav-ahead" aria-hidden="true">\s*\{behind\.shown\}\s*<\/span>/, 'Previous has no line under it, so it and Next do not sit level')
+    assert.match(previous, /aria-label=\{behind\.said\}/, 'a screen reader is not told where Previous goes')
+    assert.match(previous, /disabled=\{working \|\| \(landing\(-1\) === null && !\(noSlotSteps && !order\)\)\}/)
+    assert.match(previous, /onClick=\{\(\) => step\(-1\)\}/)
     assert.match(next, /<span className="gig-nav-ahead" aria-hidden="true">\s*\{ahead\.shown\}\s*<\/span>/, 'Next has no line under it, or it is drawn only once there are words')
     assert.match(next, /aria-label=\{ahead\.said\}/, 'a screen reader is not told where Next goes')
     /* Greyed by where it lands, except on a real VP4 with no setlist, whose press stays live to say why (the nav test above). */
