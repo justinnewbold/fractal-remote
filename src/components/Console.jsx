@@ -899,7 +899,9 @@ export function PresetList({
             </button>
             {/* Its colour, beside the star and on its own target for the same
                 reason: tagging a preset must never load it by a near miss.
-                Nothing to file a tag under before a unit has answered. */}
+                Nothing to file a tag under before a unit has answered. The
+                dot and the word, as the phone's button has them: a bare ring
+                with only a hover to name it is a mystery on a touch screen. */}
             {presetTarget(slot.number, { words: wordsFor(slot) }) ? (
               <button
                 type="button"
@@ -911,6 +913,9 @@ export function PresetList({
                 title="Give this preset a colour"
               >
                 <span className="preset-colour-dot" aria-hidden="true" />
+                <span className="preset-colour-word" aria-hidden="true">
+                  Colour
+                </span>
               </button>
             ) : null}
             <button

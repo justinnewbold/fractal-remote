@@ -1303,8 +1303,11 @@ export function run(test) {
     }
 
     /* The ways in. The scene names: a colour for this preset's scene, opening on Just this preset. */
-    assert.match(read('src/components/Scenes.jsx'), /setPainting\(sceneTarget\(current, \{ preset: presetHere, only: true \}\)\)/)
-    assert.match(read('mobile/src/components/RenamePreset.js'), /setPainting\(sceneTarget\(i, \{ preset: here, only: true \}\)\)/)
+    /* With the scene's own name, so the sheet's tiles say "Pushed AC" as Play does rather than "Scene 2". */
+    assert.match(read('src/components/Scenes.jsx'), /setPainting\(sceneTarget\(current, \{ preset: presetHere, only: true, called: names\[current\] \}\)\)/)
+    assert.match(read('mobile/src/components/RenamePreset.js'), /setPainting\(sceneTarget\(i, \{ preset: here, only: true, called: scenes\[i\] \}\)\)/)
+    assert.match(read('src/components/ColourSheet.jsx'), /<span className="gig-scene-name">\{target\.label \|\| target\.name\}<\/span>/, 'the browser sheet’s scene tiles say Scene 2 where Play says the name')
+    assert.match(read('mobile/src/components/ColourSheet.js'), /label=\{target\.label \|\| target\.name\}/, 'the phone sheet’s scene tiles say Scene 2 where Play says the name')
     /* The open block on Edit, for its family, never for the chain's two ends. */
     const block = list.slice(list.indexOf('export function BlockPanel('))
     assert.match(block, /\{paintable\(block\?\.slug\) \? <BlockColour slug=\{block\.slug\} \/> : null\}/)

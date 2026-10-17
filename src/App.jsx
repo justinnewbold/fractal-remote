@@ -5704,8 +5704,9 @@ export default function App() {
               ‹ Settings
             </button>
             <p className="setup-page-title">{SETUP_PAGES.colours}</p>
-            {/* The loaded preset's effects go first, and the scene tiles carry their names. */}
-            <Colours blocks={blocks} sceneNames={sceneNames} preset={presetHere} icons={icons} />
+            {/* The loaded preset's effects go first, and the scene tiles carry
+                their names — as many of them as the unit has scenes. */}
+            <Colours blocks={blocks} sceneNames={sceneNames} preset={presetHere} capabilities={device?.capabilities} icons={icons} />
           </div>
         ) : null}
 

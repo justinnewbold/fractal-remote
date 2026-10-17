@@ -3,7 +3,7 @@ import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native
 
 import { color, font, isDark, radius, space, TAP } from '../lib/theme'
 import { at, inkOn, lighter, vivid } from '../lib/vivid'
-import { LIGHT_INK, paperEdge } from '../lib/ink'
+import { LIGHT_INK, enoughOn, mix, paperEdge } from '../lib/ink'
 import { isFractalRemoteLook, offMode } from '../lib/looks'
 import { OFF_GREY, liftedLook } from '../lib/colourPage'
 import { tick } from '../lib/feedback'
@@ -186,6 +186,20 @@ export default function Tile({
   const unlitPicture = grey ? off.ink : isDark() ? lighter(hue, 0.35) : hue
   const pictureTint = on ? lit : unlitPicture
   /*
+   * THE QUIET WORDS ON AN UNLIT TILE — its number, Off, the channel — in the
+   * dim silkscreen grey, unless the wash under them is too bright for it.
+   *
+   * The new looks' colours are brighter than the old ones, and a seventh of a
+   * pale Sunlight scene or of Match my unit's red on the Light page lifts the
+   * tile enough that the dim grey came to 4.2:1 on it. So it is taken toward
+   * the full lettering colour just far enough to read at 4.5:1 on the tile as
+   * drawn, over either ground a tile sits on, and no further: where the grey
+   * already reads, it is the grey. Fractal Remote keeps its grey as it was.
+   */
+  const quietWords = asBefore
+    ? color.silkDim
+    : enoughOn(color.silkDim, color.silk, [mix(color.chassis, hue, 0.14), mix(color.panel, hue, 0.14)])
+  /*
    * The glow, and it is iOS only by nature rather than by choice: Android has
    * no coloured shadow, only `elevation`, which is grey. Rather than fake a
    * halo with an extra View behind every tile in a grid that can hold twenty
@@ -271,7 +285,7 @@ export default function Tile({
     right: topRight ? laid.right : 0,
     pair
   })
-  const cornerInk = quiet || grey ? foreground : on ? lit : color.silkDim
+  const cornerInk = quiet || grey ? foreground : on ? lit : quietWords
   const leftWord = { color: cornerInk, fontSize: font.micro, fontWeight: '600', opacity: shows.left ? 1 : 0 }
   const rightWord = { color: cornerInk, fontSize: font.micro, fontWeight: '700', opacity: shows.right ? 1 : 0 }
 
@@ -425,7 +439,7 @@ export default function Tile({
         {caption ? (
           <Text
             numberOfLines={1}
-            style={{ color: quiet || grey ? foreground : on ? lit : color.silkDim, fontSize: font.micro, marginBottom: 1 }}
+            style={{ color: quiet || grey ? foreground : on ? lit : quietWords, fontSize: font.micro, marginBottom: 1 }}
           >
             {caption}
           </Text>
@@ -445,7 +459,7 @@ export default function Tile({
         {sub ? (
           <Text
             numberOfLines={1}
-            style={{ color: quiet || grey ? foreground : on ? lit : color.silkDim, fontSize: font.micro, marginTop: 2 }}
+            style={{ color: quiet || grey ? foreground : on ? lit : quietWords, fontSize: font.micro, marginTop: 2 }}
           >
             {sub}
           </Text>

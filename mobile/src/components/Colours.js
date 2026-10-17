@@ -12,6 +12,8 @@ import {
   chooseScenes,
   familyTarget,
   lookCard,
+  OFF_WORDS,
+  pageSceneCount,
   presetFamilies,
   sceneTarget,
   scenesAllRed,
@@ -62,6 +64,8 @@ export default function Colours() {
   const sceneNames = useRig((s) => s.sceneNames)
   const preset = useRig((s) => s.preset)
   const addressing = useRig((s) => s.capabilities?.presets?.addressing)
+  /* As many scene tiles as the unit has scenes, as Play draws: an AM4 has four. */
+  const sceneCount = useRig((s) => pageSceneCount(s.capabilities))
   /* The preset that is loaded, so a scene can be painted for just this one: "012 Lead Rig". */
   const here = Number.isInteger(preset?.number)
     ? { number: preset.number, words: `${slotLabel(preset.number, addressing)} ${presetLabel(preset)}` }
@@ -171,9 +175,9 @@ export default function Colours() {
             onPress={() => chooseScenes(true, sync)}
           />
         </View>
-        {/* Lit, all eight, so each one's colour can be seen: on Play only the live one is. */}
+        {/* Lit, every one, so each one's colour can be seen: on Play only the live one is. */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-          {Array.from({ length: 8 }, (_, i) => {
+          {Array.from({ length: sceneCount }, (_, i) => {
             const hue = sceneColor(i)
             return (
               <Tile
@@ -186,7 +190,7 @@ export default function Colours() {
                 ink={hue.ink}
                 on
                 height={TAP}
-                onPress={() => setPainting(sceneTarget(i, { preset: here }))}
+                onPress={() => setPainting(sceneTarget(i, { preset: here, called: sceneNames?.[i] }))}
                 style={{ width: quarter }}
               />
             )
@@ -201,16 +205,11 @@ export default function Colours() {
       <View style={{ gap: space.md }}>
         <Heading>Switched-off effects</Heading>
         <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
-          <OffChoice
-            mode="colour"
-            label="Keep their colour"
-            sub="A pale tile with an edge in the effect’s own colour, so you still know which it is."
-          />
-          <OffChoice
-            mode="grey"
-            label="Grey when off"
-            sub="A dark tile with a grey edge, the way the unit draws an effect that is off."
-          />
+          {/* Words that hold on both pages (lib/colourPage OFF_WORDS): the tile
+              beside them is dark on the stage and pale on the Light page,
+              whichever way is chosen. */}
+          <OffChoice mode="colour" label="Keep their colour" sub={OFF_WORDS.colour} />
+          <OffChoice mode="grey" label="Grey when off" sub={OFF_WORDS.grey} />
         </View>
       </View>
 

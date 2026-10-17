@@ -18,7 +18,7 @@
  * neighbours, by explicit './x.js' paths, and no React.
  */
 import { AMBERS, DORMANT, FRACTAL_REMOTE_LOOK, LOOKS, SCENE_RED, SWATCHES, familyOf, lookById, swatchesFor } from './blockPalettes.js'
-import { contrast, darker, deltaE, inkOn, lighter, luminance, paperEdge, readable, seenWith, VISIONS } from './ink.js'
+import { contrast, darker, deltaE, inkOn, lighter, luminance, paperEdge, readable, seenWith, VISIONS, WHITE_WINDOW } from './ink.js'
 import {
   SCENE_SLOTS,
   colourUnit,
@@ -96,6 +96,13 @@ export const familyName = (slug) => {
   const family = familyOf(slug)?.family
   return family ? FAMILY_NAMES[family] || family : null
 }
+
+/** The same name inside a sentence: "drive", "graphic EQ", "IR player" — the letters that are always capitals stay so. */
+const inSentence = (name) =>
+  String(name)
+    .split(' ')
+    .map((w) => (/^[A-Z]{2,}/.test(w) ? w : w.toLowerCase()))
+    .join(' ')
 
 /** Whose colours "Match my unit" is wearing, for the Settings row. */
 export const PALETTE_NAMES = Object.freeze({ gen3: 'FM3, FM9 and Axe-Fx III', am4: 'AM4', vp4: 'VP4', gen2: 'Axe-Fx II' })
@@ -191,11 +198,27 @@ const presetHere = (preset) =>
  * two the sheet opens on: every preset from the Colours page, whose scenes
  * are the ones every preset wears; just this one from the scene names on
  * Edit, which are this preset's.
+ *
+ * `called` is the scene's own name where it has one, "Pushed AC": the sheet's
+ * tiles show what Play will draw, and Play draws the name. The title stays
+ * "Scene 2 colour", which says what is being painted whatever it is called.
  */
-export function sceneTarget(i, { preset, only = false } = {}) {
+export function sceneTarget(i, { preset, only = false, called } = {}) {
   const index = slotOf(i)
   const here = presetHere(preset)
-  return Object.freeze({ kind: 'scene', index, name: `Scene ${index + 1}`, preset: here, only: !!(here && only) })
+  const name = `Scene ${index + 1}`
+  return Object.freeze({ kind: 'scene', index, name, label: String(called || '').trim() || name, preset: here, only: !!(here && only) })
+}
+
+/**
+ * How many scenes the Colours page shows: as many as Play does, which is as
+ * many as the unit has — an AM4 has four, and four more tiles for scenes it
+ * does not have would be colours nobody ever sees. Eight, the most there are,
+ * before a unit has said.
+ */
+export const pageSceneCount = (capabilities) => {
+  const n = capabilities?.sceneCount
+  return Number.isInteger(n) && n > 0 ? Math.min(n, SCENE_SLOTS) : SCENE_SLOTS
 }
 
 /*
@@ -264,7 +287,7 @@ export const offAmber = (t) => !!t && t.kind !== 'family'
 export function sheetNote(t, { only = false } = {}) {
   if (t.kind === 'preset') return 'Kept for this preset on this unit, like its star'
   if (t.kind === 'scene') return within(t, only) === null ? 'For this scene in every preset' : `For this scene in ${t.preset.words} only`
-  return 'For every one of these, in every preset'
+  return `For every ${inSentence(t.name)}, in every preset`
 }
 
 /** The words on the way back from a colour of your own: to the look's, to every preset's, or no tag at all. */
@@ -478,16 +501,34 @@ export function freePick(text, { scene = false, offered = [] } = {}) {
   if (!raw) return null
   const fill = offered.some((o) => String(o).toLowerCase() === raw) ? raw : String(readable(raw)).toLowerCase()
   const moved = fill === raw ? null : luminance(fill) > luminance(raw) ? 'lighter' : 'darker'
-  return Object.freeze({ raw, fill, moved, amber: scene && nearAmber(fill) })
+  /* Why it moved: too dark for a lit tile to show on the dark stage, or in
+     between, where neither black letters nor white quite read. */
+  const why = !moved ? null : luminance(raw) < WHITE_WINDOW[0] ? 'stage' : 'letters'
+  return Object.freeze({ raw, fill, moved, why, amber: scene && nearAmber(fill) })
 }
 
-/** What the sheet says under a free pick that was moved, or that a scene cannot have. */
+/*
+ * What the sheet says under a free pick that was moved, or that a scene
+ * cannot have. A dark pick is brightened for the stage, not for its letters —
+ * white letters read better on #330066 than on what it becomes — and by more
+ * than a little sometimes (#202020 comes back #696969), so it says what is
+ * true: a lit tile has to stand out from an unlit one on the black.
+ */
 export const FREE_PICK_WORDS = Object.freeze({
+  stage: 'Brightened so it shows on a dark stage',
   lighter: 'Brightened a little so its letters stay readable',
   darker: 'Darkened a little so its letters stay readable',
   amber: 'Too close to the amber ring that marks the scene you are on. Pick another colour for a scene.',
   notYet: 'A colour code is a # and six letters or numbers, like #cc0000'
 })
+
+/** The line for a free pick: refused for a scene, moved and why, or nothing. */
+export function freePickSaid(got) {
+  if (!got) return ''
+  if (got.amber) return FREE_PICK_WORDS.amber
+  if (!got.moved) return ''
+  return got.why === 'stage' ? FREE_PICK_WORDS.stage : FREE_PICK_WORDS[got.moved]
+}
 
 /* ------------------------------------------------------------------ */
 /* Too close to the one beside it                                       */
@@ -653,6 +694,17 @@ export function chooseScenes(each, storage) {
 export const OFF_GREY = Object.freeze({
   dark: Object.freeze({ fill: '#15181d', edge: '#666666', ink: '#878d97' }),
   light: Object.freeze({ fill: '#e9e6e0', edge: '#767d87', ink: '#5b626c' })
+})
+
+/**
+ * What the two choices for a switched-off effect say, on both ends. Not "a
+ * pale tile" or "a dark tile": the tile is dark on the stage and pale on the
+ * Light page in both ways, and in each theme one of those sentences said the
+ * opposite of the picture beside it.
+ */
+export const OFF_WORDS = Object.freeze({
+  colour: 'A faint wash of the effect’s own colour, with an edge in it, so you still know which it is.',
+  grey: 'Greyed out, with a grey edge, the way the unit draws an effect that is off.'
 })
 
 /** The one-time line on Play after the colours changed, for somebody who had the app before. */

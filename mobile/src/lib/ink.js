@@ -100,6 +100,20 @@ export function mix(a, b, t) {
   return toHex({ r: x.r + (y.r - x.r) * k, g: x.g + (y.g - x.g) * k, b: x.b + (y.b - x.b) * k })
 }
 
+/**
+ * `ink` taken toward `full` just far enough to read at `ratio` on every one of
+ * `grounds`, in twentieths: the quiet letters on a tile — a scene's number, an
+ * effect's Off — stay as quiet as the tile lets them and no quieter than it
+ * can carry. `full` itself if nothing short of it reads.
+ */
+export function enoughOn(ink, full, grounds, ratio = 4.5) {
+  for (let i = 0; i <= 20; i++) {
+    const c = i ? mix(ink, full, i / 20) : ink
+    if (grounds.every((g) => (contrast(c, g) ?? 0) >= ratio)) return c
+  }
+  return full
+}
+
 /** The same colour with `k` of black mixed in (0 to 1). */
 export const darker = (value, k = 0.5) => mix(value, '#000000', k)
 

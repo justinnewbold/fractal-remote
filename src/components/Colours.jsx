@@ -7,10 +7,12 @@ import { blockColor } from '../lib/blockColors'
 import { sceneColor } from '../lib/sceneColors'
 import {
   FAMILY_NAMES,
+  OFF_WORDS,
   UNDO_MS,
   chooseScenes,
   familyTarget,
   lookCard,
+  pageSceneCount,
   presetFamilies,
   sceneTarget,
   scenesAllRed,
@@ -54,7 +56,7 @@ import ColourSheet, { ColourPanel } from './ColourSheet'
  * Kept in this browser, as everything here is (lib/looks, localStorage): the
  * phone app keeps its own.
  */
-export default function Colours({ blocks = [], sceneNames = [], preset, icons = true }) {
+export default function Colours({ blocks = [], sceneNames = [], preset, capabilities, icons = true }) {
   /* Repaint on any change to the colours, from here or from the unit answering. */
   useLooks()
   const wearing = lookId()
@@ -171,9 +173,10 @@ export default function Colours({ blocks = [], sceneNames = [], preset, icons = 
             <span>A colour for each scene</span>
           </label>
         </div>
-        {/* Lit, all eight, so each one's colour can be seen: on Play only the live one is. */}
+        {/* Lit, every one, so each one's colour can be seen: on Play only the
+            live one is. As many as the unit has (an AM4 has four). */}
         <div className="gig colours-scenes">
-          {Array.from({ length: 8 }, (_, i) => {
+          {Array.from({ length: pageSceneCount(capabilities) }, (_, i) => {
             const hue = sceneColor(i)
             return (
               <button
@@ -182,7 +185,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, icons = 
                 className="gig-scene current named"
                 style={{ '--scene-fill': hue.fill, '--scene-ink': hue.ink }}
                 aria-label={`Scene ${i + 1}${sceneNames?.[i] ? ` — ${sceneNames[i]}` : ''}${yourScene(i) ? ', your colour' : ''}`}
-                onClick={() => setPainting(sceneTarget(i, { preset }))}
+                onClick={() => setPainting(sceneTarget(i, { preset, called: sceneNames?.[i] }))}
               >
                 <span className="gig-scene-num mono">{yourScene(i) ? `${i + 1} · yours` : String(i + 1)}</span>
                 <span className="gig-scene-name">{sceneNames?.[i] || `Scene ${i + 1}`}</span>
@@ -199,12 +202,10 @@ export default function Colours({ blocks = [], sceneNames = [], preset, icons = 
           Switched-off effects
         </h3>
         <div className="colours-choices" role="radiogroup" aria-labelledby="colours-off">
-          <OffChoice
-            mode="colour"
-            label="Keep their colour"
-            sub="A pale tile with an edge in the effect’s own colour, so you still know which it is."
-          />
-          <OffChoice mode="grey" label="Grey when off" sub="A dark tile with a grey edge, the way the unit draws an effect that is off." />
+          {/* Words that hold on both pages: the tile beside them is dark on the
+              stage and pale on the Light page, whichever way is chosen. */}
+          <OffChoice mode="colour" label="Keep their colour" sub={OFF_WORDS.colour} />
+          <OffChoice mode="grey" label="Grey when off" sub={OFF_WORDS.grey} />
         </div>
       </section>
 

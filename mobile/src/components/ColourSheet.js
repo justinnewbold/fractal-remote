@@ -158,7 +158,8 @@ export default function ColourSheet({ target, chain = [], onClose }) {
                   <Tile
                     key={String(lit)}
                     caption={String(target.index + 1)}
-                    label={target.name}
+                    /* The scene's own name where it has one, as Play draws it. */
+                    label={target.label || target.name}
                     bar
                     ring
                     wrap

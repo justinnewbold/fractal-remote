@@ -13,6 +13,7 @@ import {
   backWords,
   colourNow,
   freePick,
+  freePickSaid,
   nextToWarning,
   offAmber,
   paint,
@@ -319,7 +320,8 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
                     style={{ '--scene-fill': pick, '--scene-ink': inkOn(pick) }}
                   >
                     <span className="gig-scene-num mono">{target.index + 1}</span>
-                    <span className="gig-scene-name">{target.name}</span>
+                    {/* The scene's own name where it has one, as Play draws it. */}
+                    <span className="gig-scene-name">{target.label || target.name}</span>
                   </button>
                 ) : (
                   <button
@@ -347,15 +349,10 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
               )
             )}
           </div>
-          <p className="colour-said">
-            {shadeWords(capital(baseName), step)}
-            {/* Why the tile is not quite what was picked, or why a scene
-                cannot have it: under the tiles, where the eye already is, the
-                moment it matters. */}
-            <span className="colour-free-said" aria-live="polite">
-              {movedSaid(free, base)}
-            </span>
-          </p>
+          {/* Why a free pick is not quite what was picked, or why a scene
+              cannot have it, is said under the Any colour box rather than
+              here: that is where the eye is when it matters. */}
+          <p className="colour-said">{shadeWords(capital(baseName), step)}</p>
 
           {/*
             EVERY PRESET, OR JUST THIS ONE, for a scene painted while a preset
@@ -473,9 +470,16 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
                   }}
                 />
               </label>
-              {/* Half a code is not a colour yet: said beside the box, not as a fault. */}
+              {/*
+                Half a code is not a colour yet: said beside the box, not as a
+                fault. And once it is a colour, why it was moved or refused,
+                said here, beside the box too. It used to be under the tiles,
+                and on a phone-sized window those have scrolled away by the
+                time the box is in use: Use it gone grey with no reason in
+                sight reads as broken.
+              */}
               <p className="colour-any-said" aria-live="polite">
-                {String(any || '').trim() && !freePick(any) ? FREE_PICK_WORDS.notYet : ''}
+                {String(any || '').trim() && !freePick(any) ? FREE_PICK_WORDS.notYet : movedSaid(free, base)}
               </p>
             </div>
           )}
@@ -499,9 +503,8 @@ const capital = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)
 /* The picker only takes six figures; anything else shows it black. */
 const colourOr = (c) => (/^#[0-9a-f]{6}$/i.test(String(c || '')) ? String(c).toLowerCase() : '#000000')
 
-/** The line under the tiles for a free pick being worn: refused for a scene, moved, or nothing. */
+/** The line for a free pick being worn: refused for a scene, moved and why, or nothing (colourPage freePickSaid). */
 function movedSaid(free, base) {
   if (!free || free.fill !== base) return ''
-  if (free.amber) return FREE_PICK_WORDS.amber
-  return free.moved ? FREE_PICK_WORDS[free.moved] : ''
+  return freePickSaid(free)
 }

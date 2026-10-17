@@ -113,7 +113,7 @@ export default function RenamePreset() {
                   ? {
                       fill: sceneColor(i, here.number).fill,
                       said: `Colour for scene ${i + 1} in this preset`,
-                      onPress: () => setPainting(sceneTarget(i, { preset: here, only: true }))
+                      onPress: () => setPainting(sceneTarget(i, { preset: here, only: true, called: scenes[i] }))
                     }
                   : null
               }

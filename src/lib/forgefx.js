@@ -598,8 +598,12 @@ export const detect = async () => {
   const label = res?.short || res?.name
   if (label) unitSlug = deviceSlug(label)
   /* Which unit's colours the tiles wear — an AM4's are its own — told where
-     the unit is learned, the demo's included and kept to itself (lib/looks). */
-  setColourUnit(unitSlug, { demo: !!mock })
+     the unit is learned, the demo's included and kept to itself (lib/looks).
+     An answer that names no unit is told as one, 'device', the phone's word
+     for it: unitSlug keeps the last name it heard, and after the demo that
+     is the demo's FM3, which the colours would then have kept as the real
+     unit's (lib/looks setColourUnit). */
+  setColourUnit(label ? unitSlug : DEFAULT_SLUG, { demo: !!mock })
   lastCaps = res?.capabilities ?? null
   unitIsVp4 = !mock && isVp4(res)
   vp4Name = null

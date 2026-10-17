@@ -6176,7 +6176,7 @@ test('any colour picked in the browser is made readable first, and a scene is ne
   for (const half of ['', '#', '#cc00', 'cc00000', 'red', 'var(--signal)', null, undefined]) assert.equal(colourCode(half), null, `"${half}" was taken for a colour`)
   assert.equal(freePick('#cc00'), null, 'half a code was used')
   /* One already readable is used exactly as picked, and nothing is said. */
-  assert.deepEqual({ ...freePick('#0055ff') }, { raw: '#0055ff', fill: '#0055ff', moved: null, amber: false })
+  assert.deepEqual({ ...freePick('#0055ff') }, { raw: '#0055ff', fill: '#0055ff', moved: null, why: null, amber: false })
   /* And one of the grid's own is the grid's, whichever way it was reached: Fractal's red typed is Fractal's red. */
   assert.notEqual(freePick('#cc0000').fill, '#cc0000', 'this no longer shows that the grid is let through')
   assert.equal(freePick('#CC0000', { offered: ['#cc0000'] }).fill, '#cc0000', 'a swatch typed in was moved off itself')
@@ -6196,7 +6196,21 @@ test('any colour picked in the browser is made readable first, and a scene is ne
     }
   }
   assert.equal(freePick('#101010').moved, 'lighter')
+  /* And the line says WHY it moved. A dark pick is brightened for the stage —
+     a lit tile has to stand out from an unlit one on the black — and not for
+     its letters, which read better on #330066 than on what it becomes. One
+     in between is moved for its letters, a little. */
+  const { freePickSaid } = await import('../src/lib/colourPage.js')
+  for (const dark of ['#330066', '#202020', '#cd0000']) {
+    assert.equal(freePick(dark).why, 'stage', dark)
+    assert.equal(freePickSaid(freePick(dark)), 'Brightened so it shows on a dark stage', `${dark} is said to be brightened for its letters`)
+  }
+  const between = freePick('#7a7a7a')
+  assert.equal(between.why, 'letters')
+  assert.equal(freePickSaid(between), FREE_PICK_WORDS[between.moved])
   assert.match(FREE_PICK_WORDS.lighter, /^Brightened a little so its letters stay readable$/)
+  assert.equal(freePickSaid(freePick('#0055ff')), '', 'a pick used as it was says something')
+  assert.equal(freePickSaid(freePick('#f0a73c', { scene: true })), FREE_PICK_WORDS.amber)
   /* The amber rings the scene you are on: a scene is never given it, an effect may be. */
   const amber = freePick('#f0a73c', { scene: true })
   assert.equal(amber.amber, true, 'a scene was let have the amber')

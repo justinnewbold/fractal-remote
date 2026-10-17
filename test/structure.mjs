@@ -5718,7 +5718,7 @@ export function run(test) {
     const page = src.slice(at, src.indexOf("{setupPage === 'phone'", at))
     assert.match(page, /onClick=\{\(\) => setSetupPage\(null\)\}>\s*‹ Settings/, 'the Colours page has no way back to Settings')
     assert.match(page, /\{SETUP_PAGES\.colours\}/, 'the Colours page has no title')
-    assert.match(page, /<Colours blocks=\{blocks\} sceneNames=\{sceneNames\} preset=\{presetHere\} icons=\{icons\} \/>/, 'the page is not handed the preset’s effects, the scene names, the preset that is loaded and the pictures setting')
+    assert.match(page, /<Colours blocks=\{blocks\} sceneNames=\{sceneNames\} preset=\{presetHere\} capabilities=\{device\?\.capabilities\} icons=\{icons\} \/>/, 'the page is not handed the preset’s effects, the scene names, the preset that is loaded, the unit’s scene count and the pictures setting')
     /* The row's line is redrawn when the look or the unit changes. */
     assert.match(src, /\n  useLooks\(\)\n/, 'the Colours row keeps saying the look it said when Settings opened')
   })
@@ -5743,7 +5743,9 @@ export function run(test) {
     assert.match(page, /onChange=\{\(\) => chooseScenes\(false\)\}/)
     assert.match(page, /onChange=\{\(\) => chooseScenes\(true\)\}/)
     assert.match(page, /onClick=\{\(\) => setPainting\(familyTarget\(f\)\)\}/, 'an effect tile does not open the colour sheet')
-    assert.match(page, /onClick=\{\(\) => setPainting\(sceneTarget\(i, \{ preset \}\)\)\}/, 'a scene tile does not open the colour sheet, with the preset that is loaded')
+    assert.match(page, /onClick=\{\(\) => setPainting\(sceneTarget\(i, \{ preset, called: sceneNames\?\.\[i\] \}\)\)\}/, 'a scene tile does not open the colour sheet, with the preset that is loaded and the scene’s own name')
+    /* As many scenes as the unit has: an AM4's four, not eight. */
+    assert.match(page, /Array\.from\(\{ length: pageSceneCount\(capabilities\) \}/, 'the page draws eight scenes whatever the unit has')
     /* Both ways a switched-off effect is drawn, each beside a tile drawn that way. */
     assert.match(page, /<OffChoice\s+mode="colour"\s+label="Keep their colour"/)
     assert.match(page, /<OffChoice mode="grey" label="Grey when off"/)
@@ -5773,7 +5775,10 @@ export function run(test) {
     /* Any colour, made readable first, with a line that says so. */
     assert.match(sheet, /const got = freePick\(text, \{ scene, offered: swatches\.map\(\(s\) => s\.fill\) \}\)/, 'a free pick is used as picked')
     assert.match(sheet, /<input\s+type="color"/, 'there is no colour picker')
-    assert.match(sheet, /if \(free\.amber\) return FREE_PICK_WORDS\.amber\s+return free\.moved \? FREE_PICK_WORDS\[free\.moved\] : ''/, 'a moved or refused pick is not said')
+    assert.match(sheet, /if \(!free \|\| free\.fill !== base\) return ''\s+return freePickSaid\(free\)/, 'a moved or refused pick is not said')
+    /* Said under the box, where the eye is while typing: the line under the tiles has scrolled away by then on a small window. */
+    assert.match(sheet, /<p className="colour-any-said" aria-live="polite">\s+\{String\(any \|\| ''\)\.trim\(\) && !freePick\(any\) \? FREE_PICK_WORDS\.notYet : movedSaid\(free, base\)\}/, 'why a free pick moved, or was refused, is not said beside the box')
+    assert.ok(!/colour-free-said/.test(sheet), 'the reason is said up under the tiles again, out of sight while the box is in use')
     /* Lighter and Darker rest where they have nothing left, as on the phone. */
     assert.match(sheet, /disabled=\{step <= -steps\.darker\.length\}/)
     assert.match(sheet, /disabled=\{step >= steps\.lighter\.length\}/)
@@ -5839,7 +5844,7 @@ export function run(test) {
     const drive = c.page.familyTarget('drive')
     const sheet = c.draw(c.ColourSheet, { target: drive, chain: [], icons: false, onClose: () => {} })
     assert.match(sheet, /role="dialog" aria-modal="true" aria-label="Drive colour"/)
-    assert.match(sheet, /For every one of these, in every preset/)
+    assert.match(sheet, /For every drive, in every preset/)
     const swatches = [...sheet.matchAll(/role="radio" aria-checked="(true|false)" aria-label="([^"]+)"[^>]*tabindex="(-?\d)"/g)]
     assert.equal(swatches.length, 24, 'an effect is not offered the twenty-four')
     assert.deepEqual(swatches.map((m) => m[2]), c.page.sheetSwatches(drive).map((s) => c.page.spokenSwatch(drive, s)), 'the swatches are not the shared ones, said the shared way')
@@ -5850,9 +5855,11 @@ export function run(test) {
     assert.match(sheet, /class="gig-block off"/)
     assert.match(sheet, />Cancel<\/button><button type="button" class="primary">Use it<\/button>/)
     assert.ok(!/Back to the unit’s colour/.test(sheet), 'Back to the unit’s colour is offered for a colour that is already the unit’s')
-    /* A scene: twenty-three, no Orange, and red has no Darker. */
+    /* A scene: no Orange, no second Red beside the unit's own, and red has no Darker. */
     const scene = c.draw(c.ColourSheet, { target: c.page.sceneTarget(1), chain: [], icons: false, onClose: () => {} })
-    assert.equal((scene.match(/role="radio"/g) || []).length, 23)
+    assert.equal((scene.match(/role="radio"/g) || []).length, 22)
+    assert.equal((scene.match(/aria-checked="true"/g) || []).length, 1, 'the scene sheet opens with two swatches ticked')
+    assert.ok(!/Scene 2 colour, Red"/.test(scene), 'Fractal’s red is offered twice, as the unit’s own and as Red')
     assert.ok(!/Scene 2 colour, Orange/.test(scene), 'a scene is offered the amber-like orange')
     assert.match(scene, /<button type="button" aria-label="A step darker" disabled="">Darker<\/button>/, 'red is offered a Darker an unlit tile cannot carry')
     /* Yours, with the way back. */

@@ -200,7 +200,7 @@ export function run(test) {
     const c = await load()
     assert.equal(c.PALETTES.am4.drive, '#ce0201', 'the AM4’s pure red drive')
     assert.equal(c.PALETTES.am4.delay, '#1451ff', 'the AM4’s royal blue delay')
-    assert.equal(c.PALETTES.gen3.amp, '#865d3c', 'the brown amp of the FM3’s own screen')
+    assert.equal(c.PALETTES.gen3.amp, '#876042', 'the brown amp of the FM3’s own screen, a shade off the browser’s Light-page amber')
     /* Silver off the AM4, a few shades deeper — the app's own reading of it. */
     assert.equal(c.PALETTES.am4.amp, '#7d8591')
     assert.equal(c.PALETTES.vp4.amp, '#7d8591')
@@ -249,6 +249,54 @@ export function run(test) {
     }
     assert.deepEqual(misses, [], `letters under 4.5:1:\n  ${misses.join('\n  ')}`)
     assert.ok(checked > 5000, `only ${checked} surfaces were measured`)
+    /* Measured at full strength because that is how they are drawn: the live
+       scene's words were its letters at 85%, 4.45:1 on Fractal's red. */
+    assert.match(
+      css,
+      /:root:not\(\[data-look='fractalremote'\]\) button\.gig-scene\.named\.current \.gig-scene-num,\n:root:not\(\[data-look='fractalremote'\]\) button\.gig-scene\.current \.gig-scene-name \{\n  opacity: 1;\n\}/,
+      'the live scene’s words are drawn faded again in the new looks'
+    )
+  })
+
+  test('the quiet words on an unlit tile — a scene’s number, Off, the channel — read at 4.5:1 on its wash', async () => {
+    /*
+     * An unlit tile is a seventh of its colour over the page, and the brighter
+     * colours of the new looks lift it: the dim grey on it came to 4.2 on the
+     * phone's Light page in Match my unit and 3.2 on the browser's dark page
+     * in Sunlight. The phone takes the grey toward the lettering colour just
+     * far enough for the tile it is on (lib/ink enoughOn); the browser's dark
+     * page draws the unlit scene number half way there for every look.
+     */
+    const c = await load()
+    const misses = []
+    const phone = { dark: { page: ['#0d0f12', '#15181d'], dim: '#878d97', full: '#e6e3dc' }, light: { page: ['#f4f2ee', '#ffffff'], dim: '#5b626c', full: '#1b1e23' } }
+    const BROWSER_DARK_NUMBER = c.mix('#e6e3dc', '#878d97', 0.5)
+    for (const { look, unit } of everyLookAndUnit(c)) {
+      const fills = [...resolved(c, look, unit).filter(({ slug }) => !c.quietEnd(slug)).map((r) => r.fill), ...Array.from({ length: 8 }, (_, i) => c.sceneColor(i).fill)]
+      for (const fill of fills) {
+        for (const [theme, t] of Object.entries(phone)) {
+          const grounds = t.page.map((p) => c.mix(p, fill, 0.14))
+          const ink = c.enoughOn(t.dim, t.full, grounds)
+          for (const g of grounds) if (c.contrast(ink, g) < 4.5) misses.push(`phone ${theme}: ${look.name} ${fill} ${c.contrast(ink, g).toFixed(2)}:1`)
+        }
+      }
+      for (let i = 0; i < 8; i++) {
+        const fill = c.sceneColor(i).fill
+        const dark = c.contrast(BROWSER_DARK_NUMBER, c.mix('#15181d', fill, 0.14))
+        if (dark < 4.5) misses.push(`browser dark: ${look.name} scene ${i + 1} ${fill} ${dark.toFixed(2)}:1`)
+        const light = c.contrast('#4d525a', c.mix('#faf8f4', fill, 0.14))
+        if (light < 4.5) misses.push(`browser light: ${look.name} scene ${i + 1} ${fill} ${light.toFixed(2)}:1`)
+      }
+    }
+    assert.deepEqual(misses, [], `quiet words under 4.5:1:\n  ${misses.join('\n  ')}`)
+    /* Only as far as it has to go: on the dark stage most tiles keep the grey itself. */
+    assert.equal(c.enoughOn('#878d97', '#e6e3dc', ['#15181d']), '#878d97')
+    /* And drawn that way. */
+    const tile = read('mobile/src/components/Tile.js')
+    assert.match(tile, /: enoughOn\(color\.silkDim, color\.silk, \[mix\(color\.chassis, hue, 0\.14\), mix\(color\.panel, hue, 0\.14\)\]\)/, 'the phone’s quiet words are the dim grey whatever the tile')
+    assert.equal((tile.match(/on \? lit : quietWords/g) || []).length, 3, 'the number, the line under the name and the corner words are not all drawn readable')
+    const css = read('src/styles.css')
+    assert.match(css, /:root:not\(\[data-theme='light'\]\):not\(\[data-look='fractalremote'\]\) button\.gig-scene\.named:not\(\.current\) \.gig-scene-num \{\n  color: color-mix\(in srgb, var\(--silk\) 50%, var\(--silk-dim\)\);/, 'the browser’s unlit scene number is the faint grey again')
   })
 
   test('the face is shaded away from its letters, never toward them, on both ends', async () => {
@@ -318,6 +366,12 @@ export function run(test) {
     const grid = c.swatchesFor('#bf2f23')
     assert.equal(grid.length, 24, 'the colour sheet is not six by four')
     assert.deepEqual(grid[0], { name: 'Unit', fill: '#bf2f23', own: true }, 'the look’s own colour is not first')
+    /* Never the same colour twice: a sheet that opens with two squares ticked reads as two colours picked. */
+    for (const own of ['#cc0000', '#CC0000', c.PALETTES.am4.delay]) {
+      const twice = c.swatchesFor(own, { scene: true }).filter((s) => s.fill === own.toLowerCase() || s.fill === own)
+      assert.equal(twice.length, 1, `${own} is offered twice`)
+    }
+    assert.equal(c.swatchesFor('#cc0000', { scene: true }).length, 22, 'a scene in Match my unit is not offered the twenty-two')
     /* Fractal's own ring fills, from FM3-Edit's led-ring-*.svg; Purple lifted so a lit one stands off an unlit one. */
     assert.deepEqual(
       c.RING_SWATCHES.map((s) => s.fill),
@@ -342,14 +396,95 @@ export function run(test) {
         if (d < 10) near.push(`${where} ${fill} is ${d.toFixed(1)} from ${amber}`)
       }
     }
+    /*
+     * The one effect let off, and only off the browser's darker Light-page
+     * amber: gen-2's gate, which is already a step yellower than Fractal's
+     * and would be a mustard 6 further from it to clear this one too
+     * (blockPalettes says so where it sits). Held where it is, so it cannot
+     * creep closer. Scenes and the swatches a scene is offered have no such
+     * excuse.
+     */
+    const LET_OFF = { 'Match my unit on gen2: gate': '#9c5f12' }
     for (const { look, unit } of everyLookAndUnit(c)) {
-      for (const { slug, fill } of resolved(c, look, unit)) if (!c.quietEnd(slug)) check(`${look.name} on ${unit}: ${slug}`, fill)
+      for (const { slug, fill } of resolved(c, look, unit)) {
+        if (c.quietEnd(slug)) continue
+        const where = `${look.name} on ${unit}: ${slug}`
+        if (LET_OFF[where]) {
+          assert.ok(c.deltaE(fill, LET_OFF[where]) >= 9.2, `${where} has crept closer to ${LET_OFF[where]}`)
+          for (const amber of c.AMBERS.filter((a) => a !== LET_OFF[where])) assert.ok(c.deltaE(fill, amber) >= 10, `${where} is ${c.deltaE(fill, amber).toFixed(1)} from ${amber}`)
+          continue
+        }
+        check(where, fill)
+      }
       for (let i = 0; i < 8; i++) check(`${look.name}: scene ${i + 1}`, c.sceneColor(i).fill)
     }
-    for (const s of c.swatchesFor('#cc0000', { scene: true }).slice(1)) check(`scene swatch ${s.name}`, s.fill)
+    for (const s of c.SWATCHES.filter((x) => x.scene !== false)) check(`scene swatch ${s.name}`, s.fill)
     assert.deepEqual(near, [], `too close to the amber:\n  ${near.join('\n  ')}`)
-    assert.deepEqual(c.AMBERS, ['#f0a73c', '#a8650a'], 'the ambers this checks against are not the app’s')
+    /* All three: the dark page's, the phone's Light page (theme.js) and the browser's (styles.css), which is darker still. */
+    assert.deepEqual(c.AMBERS, ['#f0a73c', '#a8650a', '#9c5f12'], 'the ambers this checks against are not the app’s')
+    const css = read('src/styles.css')
+    assert.match(css, /:root \{[\s\S]*?--signal: #f0a73c;/)
+    assert.match(css, /\[data-theme='light'\] \{[\s\S]*?--signal: #9c5f12;/, 'the browser’s Light-page amber is not the one checked')
+    assert.match(read('mobile/src/lib/theme.js'), /signal: '#a8650a'/, 'the phone’s Light-page amber is not the one checked')
     assert.ok(!c.swatchesFor('#cc0000', { scene: true }).some((s) => s.name === 'Orange'), 'a scene is offered the amber-like orange')
+  })
+
+  test('Colour-blind safe keeps scenes side by side apart in every vision, and a four-scene unit’s four', async () => {
+    /*
+     * The look is named for exactly this, and an AM4 or a VP4 has four scenes:
+     * the orange and the olive were scenes 1 and 4, and to a red-green
+     * colour-blind eye they are one colour (3.5 apart). Side by side is one,
+     * two or four places apart — beside or above one another on Play.
+     */
+    const c = await load()
+    const far = (a, b) => Math.min(...c.VISIONS.map((v) => c.deltaE(c.seenWith(a, v), c.seenWith(b, v))))
+    const scenes = c.lookById('cvd').scenes
+    const misses = []
+    for (let i = 0; i < 8; i++) {
+      for (let j = i + 1; j < 8; j++) {
+        const d = far(scenes[i], scenes[j])
+        if ([1, 2, 4].includes(j - i) && d < 30) misses.push(`scenes ${i + 1} and ${j + 1}, side by side, ${d.toFixed(1)}`)
+        if (j < 4 && d < 20) misses.push(`scenes ${i + 1} and ${j + 1}, two of a four-scene unit’s, ${d.toFixed(1)}`)
+      }
+    }
+    assert.deepEqual(misses, [], `too alike for some colour-blind players:\n  ${misses.join('\n  ')}`)
+  })
+
+  test('two of a unit’s own effects closer than 8 are only the pairs named here', async () => {
+    /*
+     * Fractal draws some pairs close itself — the gen-3 Flanger and Ten-Tap,
+     * the AM4's Delay and EQ — and the stage lift draws more close, because a
+     * window that narrow leaves little lightness to tell pedals apart by
+     * (blockPalettes, WHAT THE LIFT COSTS). They are written down rather than
+     * hidden, so a change that crowds two more pedals together fails here, and
+     * one that separates a pair says so by asking to be taken off the list.
+     */
+    const c = await withPage()
+    const FRACTALS_OWN = {
+      gen3: ['wah return', 'flanger tentap', 'flanger ringmod', 'phaser synth', 'tremolo looper'],
+      am4: ['delay geq', 'reverb geq', 'flanger filter'],
+      vp4: ['delay geq', 'reverb geq', 'flanger filter'],
+      gen2: ['cab looper', 'wah volpan', 'phaser synth', 'tremolo looper', 'geq multitap', 'geq fxloop', 'formant send']
+    }
+    const THE_LIFTS = {
+      gen3: ['filter ringmod', 'geq enhancer', 'geq multitap', 'geq mixer', 'multitap mixer', 'megatap multiplexer', 'formant send', 'ringmod resonator'],
+      am4: ['wah enhancer', 'chorus tremolo'],
+      vp4: ['comp pitch', 'chorus tremolo', 'chorus plex', 'tremolo multitap', 'megatap ringmod'],
+      gen2: [
+        'amp rotary', 'amp pitch', 'comp gate', 'wah return', 'chorus tremolo', 'phaser tonematch', 'rotary volpan', 'filter ringmod',
+        'geq enhancer', 'geq resonator', 'enhancer fxloop', 'synth tonematch', 'resonator fxloop'
+      ]
+    }
+    for (const id of c.PALETTE_IDS) {
+      const fams = c.unitFamilies(id)
+      const close = []
+      for (let i = 0; i < fams.length; i++) {
+        for (let j = i + 1; j < fams.length; j++) if (c.deltaE(c.PALETTES[id][fams[i]], c.PALETTES[id][fams[j]]) < 8) close.push(`${fams[i]} ${fams[j]}`)
+      }
+      const named = [...FRACTALS_OWN[id], ...THE_LIFTS[id]]
+      assert.deepEqual(close.filter((p) => !named.includes(p)), [], `${id}: two more of its effects are under 8 apart`)
+      assert.deepEqual(named.filter((p) => !close.includes(p)), [], `${id}: these are 8 or more apart now; take them off the list`)
+    }
   })
 
   test('CIEDE2000 here agrees with the reference pairs', async () => {
@@ -380,6 +515,21 @@ export function run(test) {
         }
       }
     }
+    /*
+     * And in Match my unit, on every unit, from every effect: an unknown block
+     * is not mistaken for any of them. Return is the one it looks like — the
+     * blue-grey Fractal gives a Return, 2.7 from it — and that is said where
+     * NEUTRAL is written down rather than passed over here.
+     */
+    for (const id of c.PALETTE_IDS) {
+      for (const [slug, fill] of Object.entries(c.PALETTES[id])) {
+        if (slug === 'return') continue
+        const d = c.deltaE(c.NEUTRAL.fill, fill)
+        assert.ok(d >= 5, `${id}: the unknown block is only ${d.toFixed(1)} from the ${slug}`)
+      }
+      assert.ok(c.deltaE(c.NEUTRAL.fill, c.PALETTES[id].return) < 5, `${id}: Return is apart from the unknown block now; say so in blockPalettes and take this out`)
+    }
+    assert.match(read('src/lib/blockPalettes.js'), /An unknown block and a Return look alike/, 'the comment on NEUTRAL claims a grey of its own again')
   })
 
   test('a block’s name, in any shape it arrives, finds its family', async () => {
@@ -451,7 +601,8 @@ export function run(test) {
       ['gen3 delay', c.PALETTES.gen3.delay, '#14457e'],
       ['gen3 reverb', c.PALETTES.gen3.reverb, '#562e7e'],
       ['gen3 multitap (the tile’s body)', c.PALETTES.gen3.multitap, '#1f2549'],
-      ['gen3 megatap (the tile’s body)', c.PALETTES.gen3.megatap, '#2b403b'],
+      /* The edge of the editors' picture, not Fractal's flat inventory: lifted, that one is Looper's colour (blockPalettes). */
+      ['gen3 megatap (the edge of its picture)', c.PALETTES.gen3.megatap, '#2b403b'],
       ['gen3 NAM (the tile’s body)', c.PALETTES.gen3.nam, '#3c197a'],
       ['AM4 chorus', c.PALETTES.am4.chorus, '#0092c2'],
       ['AM4 comp', c.PALETTES.am4.comp, '#a59100'],
@@ -465,8 +616,16 @@ export function run(test) {
       const d = Math.min(Math.abs(a - b), 360 - Math.abs(a - b))
       assert.ok(d <= 3, `${what}: ${fill} is ${d.toFixed(1)}° from Fractal's ${official}`)
     }
-    /* The AM4 draws white letters on these, and so does the app now. */
-    for (const slug of ['chorus', 'comp', 'phaser']) assert.equal(c.inkOn(c.PALETTES.am4[slug]), c.LIGHT_INK, `AM4 ${slug} has black letters where the unit has white`)
+    /* The AM4 and VP4 draw white letters on these, and so does the app now —
+       the PEQ too, which takes a step towards red for it rather than land on
+       the app's amber at its own hue. */
+    for (const id of ['am4', 'vp4']) {
+      for (const slug of ['chorus', 'comp', 'phaser', 'peq']) {
+        assert.equal(c.inkOn(c.PALETTES[id][slug]), c.LIGHT_INK, `${id} ${slug} has black letters where the unit has white`)
+        assert.ok(c.contrast(c.PALETTES[id][slug], c.LIGHT_INK) >= 4.5, `${id} ${slug}`)
+      }
+    }
+    assert.equal(c.PALETTES.am4.peq, '#b7510b')
   })
 
   test('a colour is resolved in order: yours, the look on this unit, the look, then neutral', async () => {
@@ -628,8 +787,16 @@ export function run(test) {
     c.setColourUnit('fm3', { demo: true })
     assert.equal(c.currentPaletteId(), 'gen3')
     assert.equal(JSON.parse(store.kept['fractal.colours']).palette.id, 'am4', 'trying the demo left an AM4 owner in FM3 colours')
+    /* And turning the demo off while the AM4 is not answering yet — an
+       answer that names no unit — is not the demo's FM3 carried on. */
+    c.setColourUnit('device')
+    assert.equal(c.currentPaletteId(), 'am4', 'after the demo, a unit that did not say what it is wore the demo’s FM3 colours')
+    assert.equal(JSON.parse(store.kept['fractal.colours']).palette.id, 'am4', 'after the demo, the demo’s FM3 colours were written down as the AM4 owner’s')
     c.setColourUnit('vp4')
     assert.equal(JSON.parse(store.kept['fractal.colours']).palette.id, 'vp4')
+    /* A real unit's palette still carries over a moment it does not say its name. */
+    c.setColourUnit('device')
+    assert.equal(c.currentPaletteId(), 'vp4')
 
     /* A unit that answers before the store has landed is not allowed to write over it. */
     c.setColourUnit(null)
@@ -689,7 +856,7 @@ export function run(test) {
     assert.match(app, /hydrate\(\)\.then\(\(\) => loadLooks\(sync\)\)/, 'the phone forgets its colours between launches')
     /* Browser. */
     const forge = read('src/lib/forgefx.js')
-    assert.match(forge, /if \(label\) unitSlug = deviceSlug\(label\)[\s\S]{0,300}setColourUnit\(unitSlug, \{ demo: !!mock \}\)/, 'the browser does not tell the colours which unit it found')
+    assert.match(forge, /if \(label\) unitSlug = deviceSlug\(label\)[\s\S]{0,600}setColourUnit\(label \? unitSlug : DEFAULT_SLUG, \{ demo: !!mock \}\)/, 'the browser does not tell the colours which unit it found, or tells them the demo’s FM3 when nothing was named')
     assert.match(read('src/main.jsx'), /apply\(getMode\(\)\)[\s\S]{0,200}startLooks\(\)/, 'the browser does not load the colours beside the theme')
     for (const f of ['src/components/Gig.jsx', 'src/components/Console.jsx', 'src/components/RowsPanel.jsx', 'src/components/SceneArrange.jsx']) {
       assert.match(read(f), /\n\s+useLooks\(\)\n/, `${f} does not repaint when the colours change`)

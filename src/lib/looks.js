@@ -238,6 +238,11 @@ export function loadLooks(storage) {
  * 'device' — a unit that answered without naming itself — says nothing about
  * which palette it wears, so it leaves the remembered one alone. Null forgets
  * the unit altogether.
+ *
+ * Nor does it carry on the demo's. An AM4 owner who tried the demo's FM3 and
+ * turned it off with his AM4 not answering yet got 'device' next, which took
+ * the palette still in hand — the demo's gen-3 — and, the demo being off now,
+ * wrote it down as his: FM3 colours on every launch until the AM4 spoke.
  */
 export function setColourUnit(slug, { demo = false } = {}, storage) {
   const s = slug ? String(slug).toLowerCase() : ''
@@ -247,7 +252,7 @@ export function setColourUnit(slug, { demo = false } = {}, storage) {
     if (had) changed()
     return currentPaletteId()
   }
-  const palette = s === 'device' ? unit.palette : paletteFor(s)
+  const palette = s === 'device' ? (unit.demo ? null : unit.palette) : paletteFor(s)
   const key = demo ? `${s}:demo` : s
   const moved = key !== unit.key || palette !== unit.palette
   unit = { slug: s, key, palette, demo: !!demo }

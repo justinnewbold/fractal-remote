@@ -31,10 +31,21 @@
  *
  * WHY A FEW MOVED MORE THAN THAT. The amber is this app's own colour: it
  * marks the audio path, the block you have selected and the scene you are in.
- * A tile within 10 (CIEDE2000) of it, in either theme, hides the very ring
- * that says which one is selected. Fractal's gate and PEQ are amber on every
- * generation, so those few are taken a step lighter or a step yellower, and
- * say so where they sit.
+ * A tile within 10 (CIEDE2000) of it, in either theme, on either end, hides
+ * the very ring that says which one is selected. Fractal's gate and PEQ are
+ * amber on every generation, so those few are taken a step lighter or a step
+ * yellower — the AM4's PEQ a step towards red, which keeps the white letters
+ * the unit gives it and still clears the amber — and a few browns a shade off the
+ * browser's darker Light-page amber. Each says so where it sits.
+ *
+ * WHAT THE LIFT COSTS. Lifted into a window that narrow, two pedals Fractal
+ * tells apart only by how dark they are can end up close: gen-3's Graphic EQ,
+ * Multitap and Mixer are all a mid blue at nearly one lightness here, and the
+ * AM4's Chorus (darkened for its white letters) sits 7.5 from its Tremolo
+ * (lifted to be seen). Moving the lighter one of each pair up means black
+ * letters where the unit draws white, or a new pair as close as the old, so
+ * they are left as they are and named in a test that lets no other pair join
+ * them.
  *
  * Keys are block FAMILIES — the slug ForgeFX reports, with the other
  * spellings in ALIASES. The letters are never stored here: lib/ink picks
@@ -45,7 +56,14 @@
  * A block the app cannot name. It used to be the CSS variable `--panel-hi`,
  * which React Native cannot draw: on the phone an unknown block had no fill
  * at all, and RN's black border and letters on the dark stage. A real colour
- * now, a blue-grey of its own, so it is not mistaken for a grey wah or shunt.
+ * now: a quiet blue-grey, at least 5 from every effect's colour on every
+ * unit, so it is not mistaken for an amp or a wah.
+ *
+ * Not apart from the plumbing, though. Fractal gives Return a blue-grey too
+ * (#394048 in the editors), and lifted for the stage that sits 2.7 from this;
+ * the utility greys — shunt, Scene MIDI — are 6. An unknown block and a Return look alike
+ * and are told apart by the name on the tile, which is how anybody tells two
+ * of the greys apart on the unit itself.
  */
 export const NEUTRAL = Object.freeze({ fill: '#5b616b', ink: '#ffffff' })
 
@@ -58,11 +76,14 @@ export const NEUTRAL = Object.freeze({ fill: '#5b616b', ink: '#ffffff' })
 export const SCENE_RED = '#cc0000'
 
 /**
- * The signal amber, dark page and light page (the phone's light amber; the
- * browser's light one is darker still). No colour any look offers sits within
- * 10 of either.
+ * The signal amber: the dark page's, the phone's Light page, and the
+ * browser's Light page, which is darker still (styles.css says why: it is
+ * used as text on the cream there). No scene colour, and no swatch a scene or
+ * a preset is offered, sits within 10 of any of the three; nor does any colour
+ * a look gives an effect, but one — gen-2's gate, which says why where it
+ * sits.
  */
-export const AMBERS = Object.freeze(['#f0a73c', '#a8650a'])
+export const AMBERS = Object.freeze(['#f0a73c', '#a8650a', '#9c5f12'])
 
 /** Every family the palettes paint, by the one name each is filed under. */
 export const FAMILIES = Object.freeze([
@@ -129,7 +150,7 @@ export const ALIASES = Object.freeze({
 export const PALETTES = Object.freeze({
   gen3: Object.freeze({
     drive: '#bf2f23', // the editors' picture #771a12, lifted
-    amp: '#865d3c', // the unit's own screen (manual p49) #492401, lifted
+    amp: '#876042', // the unit's own screen (manual p49) #492401, lifted, and a shade off the browser's Light-page amber
     delay: '#2266b6', // the editors' picture #14457e, lifted
     reverb: '#8349bc', // the editors' picture #562e7e, lifted
     comp: '#776a00', // the editors' picture #776a00
@@ -146,7 +167,12 @@ export const PALETTES = Object.freeze({
     pitch: '#846d38', // the editors' picture #846d38
     synth: '#437136', // the editors' picture #39612d, lifted
     multitap: '#57629b', // the editors' picture, its body #1f2549 (not the glow in the middle), lifted
-    megatap: '#4b6c64', // the editors' picture, its body #2b403b (not the glow in the middle), lifted
+    /* The editors' picture at its edge, #2b403b (not the olive glow in the
+       middle), lifted. Fractal's flat block inventory draws Megatap a darker
+       blue-teal, #0b212e — but lifted for the stage that is Looper's colour,
+       5.8 from it, so this keeps the edge's greener teal, about 40° round
+       from Fractal's own. */
+    megatap: '#4b6c64',
     plex: '#0091aa', // the editors' picture #0091aa
     gate: '#a47d4d', // the editors' #744a00, made lighter: at its own depth it was the app's amber on the Light page
     volpan: '#777460', // the editors' picture #5a5748, lifted
@@ -190,9 +216,14 @@ export const PALETTES = Object.freeze({
     filter: '#a8416b', // the AM4 manual's picture, the bright end of its tile
     cab: '#0e7365', // not on this unit; borrowed from gen-3
     geq: '#5c4aec', // the AM4 manual's picture, the bright end of its tile
-    peq: '#d27c01', // the unit's #b96d00, a little lighter, with black letters: with white ones it was the app's own amber
+    /* The unit's #b96d00 takes white letters like every tile on the AM4's
+       screen, but darkened at its own hue for them it lands on the app's
+       Light-page amber (0.7 from it). So it is darkened a step towards red
+       instead, about 17°: white letters at 5:1, and 10 clear of all three
+       ambers. */
+    peq: '#b7510b',
     tremolo: '#056f89', // the unit's, kept a step darker than Chorus, as the unit draws it
-    rotary: '#865d35', // the AM4 manual's picture, the bright end of its tile
+    rotary: '#825f3f', // the AM4 manual's picture #865d35, a shade off the browser's Light-page amber
     pitch: '#8e843a', // not on an AM4; the VP4 manual's picture, the bright end of its tile
     synth: '#167542', // not on an AM4; the VP4 manual's picture, the bright end of its tile
     multitap: '#03717c', // not on an AM4; the VP4 manual's picture, the bright end of its tile
@@ -209,7 +240,7 @@ export const PALETTES = Object.freeze({
     formant: '#a26451', // not on an AM4; the VP4 manual's picture, the bright end of its tile
     multicomp: '#ad4246', // not on this unit; borrowed from gen-3
     crossover: '#62898d', // not on this unit; borrowed from gen-3
-    tentap: '#a73e7f', // not on an AM4; the VP4 manual's picture, the bright end of its tile
+    tentap: '#a73e7f', // not on this unit; borrowed from gen-3
     resonator: '#894e9d', // not on an AM4; the VP4 manual's picture, the bright end of its tile
     send: '#7c5e5e', // not on this unit; borrowed from gen-3
     return: '#5f676f', // not on this unit; borrowed from gen-3
@@ -240,9 +271,9 @@ export const PALETTES = Object.freeze({
     filter: '#a8416b', // the same tile as the AM4's
     cab: '#0e7365', // not on this unit; borrowed from gen-3
     geq: '#5c4aec', // the same tile as the AM4's
-    peq: '#d27c01', // the unit's #b96d00, a little lighter, with black letters: with white ones it was the app's own amber
+    peq: '#b7510b', // the same tile as the AM4's, a step towards red for its white letters
     tremolo: '#056f89', // the unit's, kept a step darker than Chorus, as the unit draws it
-    rotary: '#865d35', // the same tile as the AM4's
+    rotary: '#825f3f', // the same tile as the AM4's
     pitch: '#8e843a', // the VP4 manual's picture, the bright end of its tile
     synth: '#167542', // the VP4 manual's picture, the bright end of its tile
     multitap: '#03717c', // the VP4 manual's picture, the bright end of its tile
@@ -296,7 +327,11 @@ export const PALETTES = Object.freeze({
     multitap: '#536497', // the gen-2 editors' picture #1a2444, lifted
     megatap: '#496e59', // the gen-2 editors' picture #203429, lifted
     plex: '#0091aa', // not a gen-2 block; borrowed from gen-3
-    gate: '#826003', // the gen-2 editors' #774d00, a step towards yellow: at its own depth it was the app's amber
+    /* The gen-2 editors' #774d00, a step towards yellow: at its own depth it
+       was the app's amber. It still sits 9.3 from the browser's darker
+       Light-page amber, the one fill that does: clear of that too, it would
+       be a mustard 6 further from Fractal's gate, and no further from Comp. */
+    gate: '#826003',
     volpan: '#696656', // the gen-2 editors' picture #4f4d40, lifted
     mixer: '#7084a5', // the gen-2 editors' picture #6c80a2, lifted
     looper: '#246f79', // the gen-2 editors' picture #0c3439, lifted
@@ -483,10 +518,12 @@ const every = (fill) => Object.freeze(Object.fromEntries(FAMILIES.map((f) => [f,
  * colours moved after that, because they sat too close to the amber: the
  * colour-blind look's gate (it was 3.6 from it), Sunlight's looper, and
  * Stompbox's phaser and rotary. Each moved as little as it could while staying
- * as far from its neighbours as before.
+ * as far from its neighbours as before. And three more by a shade (1 to 2.3)
+ * once the browser's darker Light-page amber was checked as well: the
+ * colour-blind look's drive, Stompbox's cab, and its rotary again.
  */
 const COLOUR_BLIND = Object.freeze({
-  drive: '#b54f02',
+  drive: '#b84e02',
   amp: '#d5dae4',
   delay: '#8e8dfc',
   reverb: '#a25380',
@@ -528,7 +565,7 @@ const COLOUR_BLIND = Object.freeze({
   tonematch: '#b7bcc5',
   rta: '#b7bcc5',
   nam: '#d5dae4',
-  dynadist: '#b54f02',
+  dynadist: '#b84e02',
   scenemidi: '#b7bcc5',
   controllers: '#b7bcc5',
   fxloop: '#b7bcc5'
@@ -594,11 +631,11 @@ const STOMPBOX = Object.freeze({
   phaser: '#ea8419',
   wah: '#c0c4ca',
   filter: '#55ba64',
-  cab: '#946241',
+  cab: '#8f6548',
   geq: '#aca49e',
   peq: '#aca49e',
   tremolo: '#0c8185',
-  rotary: '#8a633e',
+  rotary: '#836141',
   pitch: '#097da3',
   synth: '#097da3',
   multitap: '#c9364b',
@@ -621,7 +658,7 @@ const STOMPBOX = Object.freeze({
   return: '#686e79',
   multiplexer: '#686e79',
   shunt: '#686e79',
-  irplayer: '#946241',
+  irplayer: '#8f6548',
   vocoder: '#097da3',
   tonematch: '#686e79',
   rta: '#686e79',
@@ -671,13 +708,22 @@ export const LOOKS = Object.freeze([
   {
     /* From the Okabe-Ito and Paul Tol colour-blind palettes, light and dark.
        Neighbouring effects in a chain stay at least 8 apart in all three
-       colour-blind simulations (the old colours came to 2); scenes at least
-       30 apart in every one. */
+       colour-blind simulations (the old colours came to 2).
+
+       Scenes side by side — one, two or four places apart, which is beside
+       or above one another on Play — stay at least 30 apart in every one,
+       and the first four, which are all an AM4 or a VP4 has, at least 23
+       from each other. The eight are in this order for that: the orange was
+       scene 1 and the olive scene 4, and to a red-green colour-blind eye
+       those two are one colour (3.5 apart), which on a four-scene unit was a
+       quarter of the colours he could see. Three places apart is not held:
+       the orange and the olive are scenes 2 and 5 now, a diagonal step on
+       Play. */
     id: 'cvd',
     name: 'Colour-blind safe',
     why: 'Chosen so effects side by side stay easy to tell apart with red-green or blue-yellow colour blindness. Each scene gets its own colour.',
     families: COLOUR_BLIND,
-    scenes: Object.freeze(['#b54f02', '#0273b3', '#fed0ba', '#777004', '#8e8dfc', '#eade39', '#b04d60', '#68c5fb'])
+    scenes: Object.freeze(['#0273b3', '#b84e02', '#fed0ba', '#68c5fb', '#777004', '#eade39', '#8e8dfc', '#b04d60'])
   },
   {
     id: 'sunlight',
@@ -760,9 +806,16 @@ export const SWATCHES = Object.freeze([...RING_SWATCHES, ...UNIT_SWATCHES])
  * The sheet's grid: the look's own colour for the thing being painted first,
  * then the twenty-three. Twenty-four in all for an effect; a scene is not
  * offered the amber-like ones.
+ *
+ * And never the same colour twice. Every scene in Match my unit is Fractal's
+ * Red, which is also the first ring swatch, and an AM4's delay is the Delay
+ * blue swatch: with both in the grid the sheet opened with two squares
+ * ticked, which reads as two colours picked and is two checked buttons to a
+ * screen reader. The look's own goes first and the twin is left out.
  */
 export function swatchesFor(own, { scene = false } = {}) {
-  const rest = SWATCHES.filter((s) => !(scene && s.scene === false))
+  const mine = String(own || '').toLowerCase()
+  const rest = SWATCHES.filter((s) => !(scene && s.scene === false) && s.fill !== mine)
   return [{ name: 'Unit', fill: own, own: true }, ...rest]
 }
 

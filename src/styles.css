@@ -7791,6 +7791,30 @@ button.gig-block.off .gig-block-icon {
   border-color: var(--scene-fill, var(--rule));
 }
 
+/*
+ * THE SCENE'S WORDS AT A STRENGTH THEY CAN BE READ AT, in the same looks.
+ *
+ * The live scene's number and name were its letters at 85%, which on the
+ * old muted scene colours still read. On Fractal's red — every scene, for
+ * every customer, in Match my unit — that came to 4.45:1, and 3.8 on
+ * Stompbox's plum; the phone draws the same tile at full strength (5.9).
+ * So they are drawn at full strength here too.
+ *
+ * And an unlit scene's number, the dim grey on a seventh of the scene's
+ * colour, came to 3.2:1 on the dark page once the colours were the brighter
+ * ones of Sunlight or Colour-blind safe. Half way from the dim grey to the
+ * lettering colour holds 4.5 on all of them (a test measures every look's
+ * every scene); the Light page's darker grey already does, and is left.
+ */
+:root:not([data-look='fractalremote']) button.gig-scene.named.current .gig-scene-num,
+:root:not([data-look='fractalremote']) button.gig-scene.current .gig-scene-name {
+  opacity: 1;
+}
+
+:root:not([data-theme='light']):not([data-look='fractalremote']) button.gig-scene.named:not(.current) .gig-scene-num {
+  color: color-mix(in srgb, var(--silk) 50%, var(--silk-dim));
+}
+
 :root:not([data-look='fractalremote']) button.fx-tile.bypassed:not(.selected) {
   border-color: var(--tile);
 }
@@ -13888,12 +13912,6 @@ button.colour-back {
   color: var(--silk-dim);
 }
 
-.colour-free-said {
-  display: block;
-  line-height: 1.4;
-  color: var(--signal);
-}
-
 /*
  * The swatches: as many across as fit at a thumb's width, never more than
  * six. The shape is the gig-scenes trick — each may shrink to a sixth of the
@@ -14144,16 +14162,27 @@ button.preset-row[data-tag] {
   background: var(--tag-drawn);
 }
 
-/* The Colour button beside a preset's star: an empty ring, or a dot in its colour. */
+/* The Colour button beside a preset's star: an empty ring, or a dot in its
+   colour, and the word, as the phone's has them — side by side, because the
+   list's rows are a line tall and a word under the dot would make every row
+   taller. */
 button.preset-colour {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  padding: 0;
+  gap: var(--s-1);
+  min-width: 44px;
+  padding: 0 var(--s-1);
   border: none;
   background: none;
+  color: var(--silk-dim);
+  font-size: var(--f-1);
+  letter-spacing: 0.05em;
+}
+
+.preset-colour-word {
+  white-space: nowrap;
 }
 
 .preset-colour-dot {

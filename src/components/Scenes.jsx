@@ -174,7 +174,7 @@ export default function Scenes({
         <button
           type="button"
           className="chip scene-colour"
-          onClick={() => setPainting(sceneTarget(current, { preset: presetHere, only: true }))}
+          onClick={() => setPainting(sceneTarget(current, { preset: presetHere, only: true, called: names[current] }))}
           aria-label={`Colour for scene ${current + 1} in this preset`}
         >
           <span className="scene-colour-dot" aria-hidden="true" style={{ '--scene-fill': sceneColor(current, presetHere.number).fill }} />

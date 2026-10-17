@@ -18428,7 +18428,9 @@ export function run(test) {
     assert.deepEqual(grid.slice(1).map((s) => s.fill), c.SWATCHES.map((s) => s.fill), 'the sheet offers something other than the checked twenty-three')
     /* A scene is never offered the one like the amber that rings the scene you are in. */
     const scene = c.sheetSwatches(c.sceneTarget(9))
-    assert.equal(scene.length, 23)
+    /* Without the Orange, and without a second Red: Match my unit's scene is Fractal's Red already, and two ticks is two colours picked. */
+    assert.equal(scene.length, 22)
+    assert.equal(scene.filter((s) => s.fill === c.SCENE_RED).length, 1, 'Fractal’s red is offered twice')
     assert.ok(!scene.some((s) => s.fill === '#ff9933'), 'a scene is offered Orange, a step from the amber')
     assert.equal(scene[0].fill, c.SCENE_RED, 'scene 2’s own colour in Match my unit is not red')
     for (const s of [...grid, ...scene]) {
@@ -18562,7 +18564,10 @@ export function run(test) {
     assert.match(page, /const rest = unitFamilies\(\)\.filter\(\(f\) => !chain\.includes\(f\)\)/)
     assert.match(page, /label=\{more \? 'Fewer effects' : 'More effects'\}/)
     assert.match(page, /onPress=\{\(\) => setPainting\(familyTarget\(f\)\)\}/, 'an effect tile does not open the colour sheet')
-    assert.match(page, /onPress=\{\(\) => setPainting\(sceneTarget\(i, \{ preset: here \}\)\)\}/, 'a scene tile does not open the colour sheet, with the preset that is loaded')
+    assert.match(page, /onPress=\{\(\) => setPainting\(sceneTarget\(i, \{ preset: here, called: sceneNames\?\.\[i\] \}\)\)\}/, 'a scene tile does not open the colour sheet, with the preset that is loaded and the scene’s own name')
+    /* As many scenes as the unit has: an AM4's four, not eight. */
+    assert.match(page, /const sceneCount = useRig\(\(s\) => pageSceneCount\(s\.capabilities\)\)/)
+    assert.match(page, /Array\.from\(\{ length: sceneCount \}/, 'the page draws eight scenes whatever the unit has')
   })
 
   test('scenes are all red like the unit, or a colour each, in one write', async () => {
