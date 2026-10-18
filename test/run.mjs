@@ -6628,6 +6628,50 @@ test('a hold is a press that stays put, and a right-click is not a middle-click'
   assert.equal(hold.movedOut(null, 999, 999), false, 'a move with no press behind it counts as one')
 })
 
+test('the click a hold ends in is swallowed wherever it lands, once, and never later', async () => {
+  /*
+   * After a touch the browser aims the lift's click at whatever is under the
+   * finger, and a hold that opened the colour sheet put the sheet there: the
+   * lift pressed Use it and tagged the preset red. So the next click on the
+   * page is eaten, whatever it lands on — once, and only that one.
+   */
+  const page = new EventTarget()
+  const click = () => {
+    const e = new Event('click', { cancelable: true })
+    page.dispatchEvent(e)
+    return e.defaultPrevented
+  }
+  let done = 0
+  hold.swallowNextClick(page, { ms: 5, done: () => done++ })
+  page.dispatchEvent(new Event('pointerup'))
+  assert.equal(click(), true, 'the click a hold ends in pressed what the hold opened')
+  assert.equal(click(), false, 'the click after it is eaten too')
+  assert.equal(done, 1)
+
+  /* A new press stands it down: that press's click is its own. */
+  hold.swallowNextClick(page, { ms: 5, done: () => done++ })
+  page.dispatchEvent(new Event('pointerdown'))
+  assert.equal(click(), false, 'a press after a hold lost its click')
+  assert.equal(done, 2)
+
+  /* And a lift with no click after it (a scroll, a menu of the browser's) stands it down a moment later. */
+  hold.swallowNextClick(page, { ms: 5, done: () => done++ })
+  page.dispatchEvent(new Event('pointercancel'))
+  await new Promise((r) => setTimeout(r, 25))
+  assert.equal(click(), false, 'a click long after the hold, from the keyboard, was eaten')
+  assert.equal(done, 3)
+
+  /* Nowhere to listen, nothing to break. */
+  assert.equal(typeof hold.swallowNextClick(undefined), 'function')
+
+  /* The hook arms it only with a press still down: a right-click sends no click to eat. */
+  const press = readSrc(new URL('../src/lib/longPress.js', import.meta.url), 'utf8')
+  assert.match(press, /const pressing = from\.current !== null\s+stop\(\)\s+if \(pressing\) \{\s+fired\.current = true\s+swallowNextClick\(globalThis\.window,/, 'the click after a hold is swallowed only where it was aimed')
+  /* And a press keeps where it went down: put the last one away first, or a hold never knows a finger is on it and a drag never stops it. */
+  const down = press.slice(press.indexOf('onPointerDown:'), press.indexOf('onPointerMove:'))
+  assert.match(down.replace(/\/\*[\s\S]*?\*\//g, ''), /stop\(\)\s+from\.current = \{ x: e\.clientX, y: e\.clientY \}\s+timer\.current = setTimeout\(fire, HOLD_MS\)/, 'a press forgets where it went down as soon as it is made')
+})
+
 test('a tuner the unit cannot run turns itself back off', async () => {
   fresh(fakeUnit({ setTuner: () => Promise.resolve({ ok: false }) }))
   await ds.writeTuner(true)

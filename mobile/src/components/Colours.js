@@ -19,6 +19,7 @@ import {
   pageColour,
   pageSceneCount,
   presetFamilies,
+  presetSpelling,
   presetTag,
   presetTarget,
   sceneTarget,
@@ -82,6 +83,8 @@ export default function Colours() {
   const tagHere = here ? presetTarget(here.number, { words: here.words }) : null
   const wearing = lookId()
   const chain = presetFamilies(blocks)
+  /* The names its blocks came by: an Axe-Fx II's Quad Chorus is drawn as Play draws it, not as its Chorus (colourPage presetSpelling). */
+  const spelt = presetSpelling(blocks)
   const [painting, setPainting] = useState(null)
   const [more, setMore] = useState(false)
   /* 'all' for Put every colour back, 'yours' for Clear them: both cost something, so both ask. */
@@ -113,7 +116,7 @@ export default function Colours() {
   const rest = unitFamilies().filter((f) => !chain.includes(f))
   const effectTile = (f) => {
     /* As Play draws this family on this unit: an Axe-Fx II asks by its own names (colourPage pageColour). */
-    const hue = pageColour(f)
+    const hue = pageColour(f, spelt)
     return (
       <Tile
         key={f}
@@ -127,7 +130,7 @@ export default function Colours() {
         picked={hue.picked}
         on
         height={TAP}
-        onPress={() => setPainting(familyTarget(f))}
+        onPress={() => setPainting(familyTarget(spelt[f] || f))}
         style={{ width: half }}
       />
     )
@@ -250,7 +253,7 @@ export default function Colours() {
         <Note>{`Your colours are kept on this ${deviceNoun()}. The computer’s screen keeps its own.`}</Note>
       </View>
 
-      <ColourSheet target={painting} chain={chain} onClose={() => setPainting(null)} />
+      <ColourSheet target={painting} chain={chain} spelt={spelt} onClose={() => setPainting(null)} />
 
       {/*
         THE CONFIRM, with its two big buttons at the bottom of the screen where

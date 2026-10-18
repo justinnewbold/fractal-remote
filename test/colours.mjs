@@ -1061,8 +1061,8 @@ export function run(test) {
     assert.equal(c.offAmber(clean), true)
     assert.equal(c.offAmber(c.familyTarget('peq')), false, 'an effect is kept off the amber the AM4’s own PEQ wears')
     assert.equal(c.nextToWarning(clean, '#cc0000'), null, 'a tag is warned about a neighbour it does not have')
-    /* No tag: the sheet opens on the first colour, with no way back to show. */
-    assert.equal(c.colourNow(clean), grid[0].fill)
+    /* No tag: the sheet opens on no colour at all, with nothing ticked and no way back to show. A Red ticked read as the colour it had. */
+    assert.equal(c.colourNow(clean), null)
     assert.equal(c.yoursFor(clean), null)
     assert.equal(c.tagButtonWords('045 Clean', null), 'Give 045 Clean a colour')
     assert.ok(c.paint(clean, '#0055ff'))
@@ -1320,10 +1320,34 @@ export function run(test) {
       ]
     }
     {
+      /*
+       * The browser's the same as the phone's since a 320 by 568 window
+       * opened its panel on one row of colours: Darker and Lighter either side
+       * of the tiles, the name and the neighbour line under them, all in the
+       * part that stays put — and only the grid scrolls, between it and
+       * Cancel and Use it.
+       */
       const f = 'src/components/ColourSheet.jsx'
       const [sheet, at] = finder(f)
-      assert.ok(at('<p className="colour-said">') < at("{warning || ''}") && at("{warning || ''}") < at('aria-label="A step darker"') && at('aria-label="A step darker"') < at('className="colour-swatches"'), `${f}: the neighbour line and Lighter and Darker are not between the pick’s name and the grid`)
+      assert.ok(
+        at('head={') < at('aria-label="A step darker"') &&
+          at('aria-label="A step darker"') < at('{tiles}') &&
+          at('{tiles}') < at('aria-label="A step lighter"') &&
+          at('aria-label="A step lighter"') < at('<p className="colour-said">') &&
+          at('<p className="colour-said">') < at("{warning || ''}") &&
+          at("{warning || ''}") < at('foot={') &&
+          at('foot={') < at('className="colour-swatches"'),
+        `${f}: the tiles, Lighter and Darker, the pick’s name and the neighbour line are not in the part that stays put, above a grid that scrolls`
+      )
       assert.equal(sheet.split("{warning || ''}").length, 2, `${f} says the neighbour line twice`)
+      const panel = sheet.slice(sheet.indexOf('export function ColourPanel'), sheet.indexOf('export default function ColourSheet'))
+      assert.match(panel, /<div className="colour-panel-middle">\s*\{head \? <div className="colour-panel-top">\{head\}<\/div> : null\}\s*<div className="colour-panel-body">\{children\}<\/div>/, 'the panel scrolls its head with its grid')
+      const css = read('src/styles.css')
+      const rule = (sel) => css.slice(css.indexOf(`${sel} {`), css.indexOf('}', css.indexOf(`${sel} {`)))
+      assert.match(rule('.colour-panel-top'), /flex: 0 0 auto/, 'the part that stays put gives its room to the grid')
+      assert.match(rule('.colour-panel-body'), /overflow-y: auto/)
+      assert.match(rule('.colour-panel-body'), /min-height: 140px/, 'in a short window the grid can shrink to nothing')
+      assert.match(rule('.colour-top-row'), /grid-template-columns: 52px minmax\(0, 1fr\) 52px/, 'Darker and Lighter are not either side of the tiles')
     }
     {
       /*
@@ -1425,8 +1449,37 @@ export function run(test) {
     /* Every other unit sends the family's own name. */
     for (const id of ['gen3', 'am4', 'vp4']) for (const f of c.unitFamilies(id)) assert.equal(c.sentAs(f, id), f)
     for (const name of Object.values(c.SENT_AS.gen2)) assert.ok(c.ALIASES[name], `${name} is not a name familyOf knows`)
-    /* Both pages draw their effect tiles by it. */
-    for (const f of ['src/components/Colours.jsx', 'mobile/src/components/Colours.js']) assert.match(read(f), /const hue = pageColour\(f\)/, `${f} draws an effect in a colour Play may not`)
+    /* Both pages draw their effect tiles by it, by the name the loaded preset's block came by. */
+    for (const f of ['src/components/Colours.jsx', 'mobile/src/components/Colours.js']) {
+      assert.match(read(f), /const spelt = presetSpelling\(blocks\)/, `${f} asks the loaded preset's effects by their families' names`)
+      assert.match(read(f), /const hue = pageColour\(f, spelt\)/, `${f} draws an effect in a colour Play may not`)
+    }
+
+    /*
+     * A preset with a Quad Chorus: its tile under "In this preset" is the Quad
+     * Chorus as Play draws it, the sheet from it opens on that colour, and the
+     * neighbour line measures against it — not against the Chorus the preset
+     * does not have. Both looks that tell them apart.
+     */
+    const blocks = [{ slug: 'Amp 1' }, { slug: 'Quad Chorus 1' }, { slug: 'Delay 1' }]
+    assert.deepEqual(c.presetFamilies(blocks), ['amp', 'chorus', 'delay'])
+    const spelt = c.presetSpelling(blocks)
+    assert.deepEqual({ ...spelt }, { chorus: 'quadchorus' }, 'the names the preset’s blocks came by are not kept')
+    for (const look of ['unit', 'fractalremote']) {
+      c.setLook(look)
+      assert.equal(c.pageColour('chorus', spelt).fill, c.blockColor('Quad Chorus 1').fill, `${look}: the page’s tile is not the Quad Chorus Play draws`)
+      assert.notEqual(c.pageColour('chorus', spelt).fill, c.pageColour('chorus').fill, `${look}: this test cannot tell the two apart`)
+      const opened = c.familyTarget(spelt.chorus || 'chorus')
+      assert.equal(c.colourNow(opened), c.blockColor('Quad Chorus 1').fill, `${look}: the sheet opens on the Chorus’s colour`)
+    }
+    /* The neighbour line measures the block beside it: in Fractal Remote a delay painted the Chorus's teal is nothing like this preset's Quad Chorus. */
+    const delay = c.familyTarget('delay')
+    const teal = c.pageColour('chorus').fill
+    const chain = c.presetFamilies(blocks)
+    assert.equal(c.nextToWarning(delay, teal, { chain }), 'Hard to tell from Chorus next to it', 'this test cannot tell the two apart')
+    assert.ok(!/Chorus/.test(c.nextToWarning(delay, teal, { chain, spelt }) || ''), 'the neighbour line measures the Chorus the preset has not got')
+    for (const f of ['src/components/ColourSheet.jsx', 'mobile/src/components/ColourSheet.js']) assert.match(read(f), /nextToWarning\(target, pick, \{ chain, spelt, only \}\)/, `${f} measures neighbours by their families’ names`)
+    c.setLook('unit')
     c.setColourUnit(null)
   })
 
@@ -1446,14 +1499,23 @@ export function run(test) {
     assert.deepEqual(close, [], `side by side and too alike:\n  ${close.join('\n  ')}`)
   })
 
-  test('a preset’s tag sheet keeps the word colour in its title, however long the name', async () => {
+  test('a preset’s tag sheet is titled Preset colour, never cut, and says the name to a screen reader', async () => {
+    /*
+     * "Colour for 000 AM4 Gig Rig" came out "Colour for 000 AM4 Gi…" at a
+     * phone's width, for almost every name there is. The row under the title
+     * carries the name, on two lines; a screen reader, which is not shown that
+     * row, is told it whole.
+     */
     const c = await withPage()
     c.setColourUnit('fm3')
     const long = c.presetTarget(12, { words: '012 Shine On You Crazy Diamond Solo' })
-    assert.equal(c.sheetTitle(long), 'Colour for 012 Shine On You Crazy Diamond Solo')
+    assert.equal(c.sheetTitle(long), 'Preset colour')
+    assert.equal(c.sheetSaid(long), 'Colour for 012 Shine On You Crazy Diamond Solo')
     assert.equal(c.sheetTitle(c.familyTarget('drive')), 'Drive colour')
+    assert.equal(c.sheetSaid(c.familyTarget('drive')), 'Drive colour')
     assert.equal(c.sheetTitle(c.sceneTarget(1)), 'Scene 2 colour')
     assert.equal(c.spokenSwatch(long, c.sheetSwatches(long)[0]), 'Colour for 012 Shine On You Crazy Diamond Solo, Red')
+    assert.match(read('mobile/src/components/PresetTag.js'), /export function TagPreview[\s\S]*?<Text numberOfLines=\{2\}/, 'the phone’s row under the title cuts the name to one line')
     for (const f of ['src/components/ColourSheet.jsx', 'mobile/src/components/ColourSheet.js']) assert.match(read(f), /title=\{target \? sheetTitle\(target\) : ''\}/, `${f} titles its sheet another way`)
     c.setColourUnit(null)
   })
@@ -1471,5 +1533,50 @@ export function run(test) {
     assert.match(settings, /onScroll=\{\(e\) => \{\s+offsets\.current\[page \?\? ''\] = e\.nativeEvent\.contentOffset\.y\s+\}\}/)
     /* The effect reads `page` after it is declared: Hermes forgives the other order, a browser does not. */
     assert.ok(settings.indexOf('const [page, setPage] = useState(startPage)') < settings.indexOf('const lastPage = useRef(page)'))
+  })
+
+  test('the colour sheet never offers two squares of the same colour, side by side', async () => {
+    /*
+     * An AM4's drive (#ce0201) and Red (#cc0000) were the first two squares,
+     * and tapping Red marked the drive "Your colour" for nothing anybody could
+     * see on Play. The same with the AM4's delay and Blue, gen-3's chorus and
+     * Chorus blue, and others: eighteen pairs under 3 apart.
+     */
+    const c = await withPage()
+    const twins = []
+    for (const look of c.LOOKS) {
+      for (const palette of c.PALETTE_IDS) {
+        for (const f of c.FAMILIES) {
+          const own = c.lookColour(f, { look: look.id, palette })
+          for (const scene of [false, true]) {
+            const grid = c.swatchesFor(own, { scene })
+            assert.deepEqual(grid[0], { name: 'Unit', fill: own, own: true })
+            for (const s of grid.slice(1)) if (c.deltaE(s.fill, own) < c.TWIN) twins.push(`${look.id} ${palette} ${f}: ${s.name} ${s.fill} is ${c.deltaE(s.fill, own).toFixed(2)} from ${own}`)
+          }
+        }
+      }
+    }
+    assert.deepEqual(twins, [], twins.join('\n'))
+    assert.equal(c.TWIN, 3)
+    /* The case it was found by. */
+    const drive = c.swatchesFor(c.lookColour('drive', { look: 'unit', palette: 'am4' }))
+    assert.ok(!drive.some((s) => s.name === 'Red'), 'an AM4’s drive is offered its own red twice')
+    /* And nothing further off is taken: a gen-3 drive keeps every one of the twenty-three. */
+    assert.equal(c.swatchesFor('#bf2f23').length, 24)
+  })
+
+  test('a look’s card shows only effects the unit has: no amp on a VP4', async () => {
+    const c = await withPage()
+    for (const palette of c.PALETTE_IDS) {
+      for (const look of c.LOOKS) {
+        const tiles = c.lookCard(look.id, palette)
+        const slugs = tiles.filter((t) => t.slug).map((t) => t.slug)
+        assert.equal(slugs.length, 4, `${palette} ${look.id}: the card does not have four effects`)
+        for (const f of slugs) assert.ok(c.unitFamilies(palette).includes(f), `${palette} ${look.id}: the card shows ${f}, which this unit has not got`)
+        assert.equal(tiles.filter((t) => t.scene === 0).length, 1)
+      }
+    }
+    assert.deepEqual(c.lookCard('unit', 'vp4').filter((t) => t.slug).map((t) => t.slug), ['drive', 'comp', 'delay', 'reverb'], 'a VP4’s card is not its drive, compressor, delay and reverb')
+    assert.deepEqual(c.lookCard('unit', 'am4').filter((t) => t.slug).map((t) => t.slug), ['drive', 'amp', 'delay', 'reverb'])
   })
 }

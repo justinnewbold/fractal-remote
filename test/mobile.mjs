@@ -293,8 +293,8 @@ async function rigOnTheBench(over = {}) {
   /* The catalog the pedals are named from before the chain is read; see lib/chain-outline. */
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
   /* The gate a tap asks while the link is down, and the rules its deadline and its words come from: both real, as they are. */
-  /* And the colours, which rig.js tells which unit answered (lib/looks). */
-  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js']) {
+  /* And the colours, which rig.js tells which unit answered (lib/looks), with the colour sums the palettes use (lib/ink). */
+  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -18454,7 +18454,7 @@ export function run(test) {
     assert.match(sheet, /width: side,\s+height: side,/)
     assert.ok(!/TextInput/.test(sheet), 'the phone grew a free colour picker')
     /* Cancel and Use it in the sheet's foot, which stays at the bottom where the thumb is. */
-    assert.match(sheet, /foot=\{[\s\S]*?<Press label="Cancel" grow onPress=\{onClose\} \/>\s*<Press label="Use it" grow tone="signal" on onPress=\{\(\) => use\(pick\)\} \/>/)
+    assert.match(sheet, /foot=\{[\s\S]*?<Press label="Cancel" grow onPress=\{onClose\} \/>[\s\S]*?<Press label="Use it" grow tone="signal" on=\{!!pick\} disabled=\{!pick\} onPress=\{\(\) => use\(pick\)\} \/>/)
     assert.match(read('mobile/src/components/Sheet.js'), /\{foot \? <View[^>]*>\{foot\}<\/View> : null\}/, 'the sheet has nowhere for buttons that stay at the bottom')
     /* Picking the look's own colour puts yours away rather than pinning a copy. */
     const fresh = await coloursOnTheBench()
@@ -18514,7 +18514,7 @@ export function run(test) {
     c.setColourUnit(null)
     /* A line, with its room kept: Use it never waits on it. */
     const sheet = read('mobile/src/components/ColourSheet.js')
-    assert.match(sheet, /const warning = open \? nextToWarning\(target, pick, \{ chain, only \}\) : null/)
+    assert.match(sheet, /const warning = open \? nextToWarning\(target, pick, \{ chain, spelt, only \}\) : null/)
     assert.match(sheet, /\{warning \|\| ''\}/)
     assert.ok(!/disabled=\{[^}]*warning/.test(sheet), 'the warning blocks Use it')
   })
@@ -18566,7 +18566,7 @@ export function run(test) {
     assert.match(page, /const chain = presetFamilies\(blocks\)/)
     assert.match(page, /const rest = unitFamilies\(\)\.filter\(\(f\) => !chain\.includes\(f\)\)/)
     assert.match(page, /label=\{more \? 'Fewer effects' : 'More effects'\}/)
-    assert.match(page, /onPress=\{\(\) => setPainting\(familyTarget\(f\)\)\}/, 'an effect tile does not open the colour sheet')
+    assert.match(page, /onPress=\{\(\) => setPainting\(familyTarget\(spelt\[f\] \|\| f\)\)\}/, 'an effect tile does not open the colour sheet')
     assert.match(page, /onPress=\{\(\) => setPainting\(sceneTarget\(i, \{ preset: here, called: sceneNames\?\.\[i\] \}\)\)\}/, 'a scene tile does not open the colour sheet, with the preset that is loaded and the scene’s own name')
     /* As many scenes as the unit has: an AM4's four, not eight. */
     assert.match(page, /const sceneCount = useRig\(\(s\) => pageSceneCount\(s\.capabilities\)\)/)
@@ -18652,7 +18652,7 @@ export function run(test) {
     assert.ok(!/export function TagButton/.test(tag), 'the Colour button is back on every row of the preset list')
     /* Edit's open block, its family's colour, with the loaded chain for the neighbour line. */
     const edit = read('mobile/src/screens/Edit.js')
-    assert.match(edit, /<ColourSheet target=\{painting\} chain=\{presetFamilies\(blocks\)\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
+    assert.match(edit, /<ColourSheet target=\{painting\} chain=\{presetFamilies\(blocks\)\} spelt=\{presetSpelling\(blocks\)\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
   })
 
   test('nothing on the Colours page says “this phone”', () => {

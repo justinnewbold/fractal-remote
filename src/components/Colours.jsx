@@ -18,6 +18,7 @@ import {
   pageColour,
   pageSceneCount,
   presetFamilies,
+  presetSpelling,
   presetTag,
   presetTarget,
   sceneTarget,
@@ -73,6 +74,8 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
   const tagNow = tagHere ? presetTag(tagHere.number) : null
   const wearing = lookId()
   const chain = presetFamilies(blocks)
+  /* The names its blocks came by: an Axe-Fx II's Quad Chorus is drawn as Play draws it, not as its Chorus (colourPage presetSpelling). */
+  const spelt = presetSpelling(blocks)
   const [painting, setPainting] = useState(null)
   const [more, setMore] = useState(false)
   /* 'all' for Put every colour back, 'yours' for Clear them: both cost something, so both ask. */
@@ -92,7 +95,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
   const rest = unitFamilies().filter((f) => !chain.includes(f))
   const effectTile = (f) => {
     /* As Play draws this family on this unit: an Axe-Fx II asks by its own names (colourPage pageColour). */
-    const hue = pageColour(f)
+    const hue = pageColour(f, spelt)
     const icon = icons ? blockIcon(f) : null
     return (
       <div className="gig-block-cell" key={f}>
@@ -100,7 +103,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
           type="button"
           className="gig-block on"
           style={{ '--block-fill': hue.fill, '--block-ink': hue.ink }}
-          onClick={() => setPainting(familyTarget(f))}
+          onClick={() => setPainting(familyTarget(spelt[f] || f))}
         >
           <span className="gig-block-name">
             {icon ? (
@@ -260,7 +263,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
 
       {undo ? <LookUndo offer={undo} onUndo={() => setLook(undo.was)} onGone={() => setUndo(null)} /> : null}
 
-      <ColourSheet target={painting} chain={chain} icons={icons} onClose={() => setPainting(null)} />
+      <ColourSheet target={painting} chain={chain} spelt={spelt} icons={icons} onClose={() => setPainting(null)} />
 
       {/*
         THE CONFIRM, with its two big buttons at the foot. Putting colours back

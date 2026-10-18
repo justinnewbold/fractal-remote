@@ -163,6 +163,23 @@ export function presetFamilies(blocks) {
   return out
 }
 
+/**
+ * The name each of those families came by in the loaded preset, where it is
+ * not the family's own: { chorus: 'quadchorus' } for an Axe-Fx II preset with
+ * a Quad Chorus in it. Match my unit paints the Quad Chorus apart from the
+ * Chorus, and Play draws the block the preset has — so the page's tile for
+ * it, the sheet it opens, and the neighbour line all ask by that name.
+ */
+export function presetSpelling(blocks) {
+  const out = {}
+  for (const b of Array.isArray(blocks) ? blocks : []) {
+    const found = familyOf(b?.slug)
+    if (found && !(found.family in out)) out[found.family] = found.key
+  }
+  for (const f of Object.keys(out)) if (out[f] === f || out[f] === asSent(f)) delete out[f]
+  return Object.freeze(out)
+}
+
 /* ------------------------------------------------------------------ */
 /* What is being painted                                                */
 /* ------------------------------------------------------------------ */
@@ -177,8 +194,12 @@ export function presetFamilies(blocks) {
  */
 const asSent = (family) => sentAs(family, currentPaletteId())
 
-/** The colour a family's tiles wear on Play, yours included: what the Colours page draws its tile in. */
-export const pageColour = (family) => blockColor(asSent(family))
+/**
+ * The colour a family's tiles wear on Play, yours included: what the Colours
+ * page draws its tile in. `spelt` is presetSpelling's, for a family in the
+ * loaded preset: the colour of the block the preset really has.
+ */
+export const pageColour = (family, spelt = {}) => blockColor(spelt[family] || asSent(family))
 
 /**
  * An effect family, as the colour sheet is handed it. Null for a block nobody
@@ -257,9 +278,14 @@ export const pageSceneCount = (capabilities) => {
  */
 const within = (t, only) => (t.kind === 'scene' && only && t.preset ? t.preset.number : null)
 
-/** The colour it is drawn in now, yours included — in this preset when the sheet is painting just this one. */
+/**
+ * The colour it is drawn in now, yours included — in this preset when the
+ * sheet is painting just this one. Null for a preset with no tag: the sheet
+ * opens on no colour, with nothing ticked, rather than on a Red that reads as
+ * the colour it already has.
+ */
 export function colourNow(t, { only = false } = {}) {
-  if (t.kind === 'preset') return presetColour(t.unit, t.number) || TAG_SWATCHES[0].fill
+  if (t.kind === 'preset') return presetColour(t.unit, t.number) || null
   if (t.kind === 'scene') return sceneColor(t.index, within(t, only)).fill
   return blockColor(sentFor(t)).fill
 }
@@ -331,12 +357,18 @@ export function paint(t, fill, { only = false } = {}, storage) {
 export const offAmber = (t) => !!t && t.kind !== 'family'
 
 /**
- * The sheet's title: "Drive colour", "Scene 2 colour" — and for a preset's
- * tag "Colour for 012 Lead Rig", the word first, because a title one line
- * long cuts a long name short, and it must cut the name rather than lose
- * what the sheet is for.
+ * The sheet's title: "Drive colour", "Scene 2 colour", "Preset colour". Not
+ * the preset's name: a title is one line, and at a phone's width "Colour for
+ * 000 AM4 Gig Rig" came out "Colour for 000 AM4 Gi…", for almost every name
+ * there is. The row drawn under the title carries the name, on two lines.
  */
-export const sheetTitle = (t) => (t.kind === 'preset' ? `Colour for ${t.name}` : `${t.name} colour`)
+export const sheetTitle = (t) => (t.kind === 'preset' ? 'Preset colour' : `${t.name} colour`)
+
+/**
+ * The same, whole, for a screen reader, which is not shown the row under the
+ * title: "Colour for 012 Lead Rig". Everything else is said as titled.
+ */
+export const sheetSaid = (t) => (t.kind === 'preset' ? `Colour for ${t.name}` : sheetTitle(t))
 
 /** What the sheet says it is painting, under its title. */
 export function sheetNote(t, { only = false } = {}) {
@@ -492,10 +524,11 @@ export function sheetSwatches(t) {
  * What a screen reader says for one swatch: "Drive colour, Red", and
  * "your own" on the one that is yours now — "Drive colour, raspberry, your
  * own" in the plan's words. The grid is two dozen squares of colour, and
- * without names it is two dozen identical buttons.
+ * without names it is two dozen identical buttons. A tag's are said with the
+ * preset's name: "Colour for 012 Lead Rig, Blue".
  */
 export const spokenSwatch = (t, swatch, { yours = false } = {}) =>
-  `${sheetTitle(t)}, ${swatch.said || swatch.name}${yours ? ', your own' : ''}`
+  `${sheetSaid(t)}, ${swatch.said || swatch.name}${yours ? ', your own' : ''}`
 
 /* ------------------------------------------------------------------ */
 /* Lighter and Darker                                                   */
@@ -686,10 +719,11 @@ export function neighboursOf(family, chain = []) {
  * look's own colour — the sheet warns about what you bring, not about what
  * the unit already does.
  *
- * `chain` is the loaded preset's families in order; `colourOf` what each
- * neighbour is drawn in now (blockColor, or sceneColor for a scene).
+ * `chain` is the loaded preset's families in order, and `spelt` the names
+ * they came by (presetSpelling); `colourOf` what each neighbour is drawn in
+ * now (blockColor, or sceneColor for a scene).
  */
-export function nextToWarning(t, pick, { chain = [], colourOf, only = false } = {}) {
+export function nextToWarning(t, pick, { chain = [], spelt = {}, colourOf, only = false } = {}) {
   /* A tag is a bar beside a name, with no neighbour it could be mistaken for. */
   if (t.kind === 'preset') return null
   if (!pick || same(pick, lookOwn(t))) return null
@@ -698,7 +732,7 @@ export function nextToWarning(t, pick, { chain = [], colourOf, only = false } = 
   const around =
     t.kind === 'scene'
       ? [t.index - 1, t.index + 1].filter((j) => j >= 0 && j < SCENE_SLOTS).map((j) => ({ name: `scene ${j + 1}`, fill: (colourOf || ((x) => sceneColor(x, p).fill))(j) }))
-      : neighboursOf(t.slug, chain).map((f) => ({ name: FAMILY_NAMES[f] || f, fill: (colourOf || ((x) => pageColour(x).fill))(f) }))
+      : neighboursOf(t.slug, chain).map((f) => ({ name: FAMILY_NAMES[f] || f, fill: (colourOf || ((x) => pageColour(x, spelt).fill))(f) }))
   let seen = null
   let hidden = null
   for (const n of around) {
@@ -733,11 +767,20 @@ export function wearLook(id, storage) {
  * What a look's card shows: Drive, Amp, Delay and Reverb lit, and scene 1,
  * in the look's own colours on this unit — yours left off, because the card
  * is there to show the look. Play draws them with the same tile.
+ *
+ * Only effects the unit has. A VP4 has no amp, and its cards showed one in
+ * every look: there the compressor takes the amp's place, the effect after
+ * it that the eye tells from the delay at once in every look.
  */
+const CARD = ['drive', 'amp', 'delay', 'reverb']
+const CARD_STAND_INS = ['comp', 'chorus']
+
 export function lookCard(id, palette = currentPaletteId()) {
   const look = lookById(id)
+  const has = unitFamilies(palette)
+  const shown = CARD.map((f) => (has.includes(f) ? f : CARD_STAND_INS.find((g) => has.includes(g)))).filter(Boolean)
   return [
-    ...['drive', 'amp', 'delay', 'reverb'].map((slug) => ({ slug, fill: lookColour(sentAs(slug, palette), { look: look.id, palette }) })),
+    ...shown.map((slug) => ({ slug, fill: lookColour(sentAs(slug, palette), { look: look.id, palette }) })),
     { scene: 0, fill: look.scenes[0] }
   ]
 }

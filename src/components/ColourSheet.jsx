@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-import { inkOn, paperEdge } from '../lib/ink'
-import { offMode } from '../lib/looks'
+import { LIGHT_INK, inkOn, paperEdge } from '../lib/ink'
+import { isFractalRemoteLook, offMode } from '../lib/looks'
 import { blockIcon } from '../lib/blockIcons'
 import { shortName } from '../lib/shortName'
 import { useLooks } from '../lib/useLooks'
 import { tick } from '../lib/feedback'
+import { cornerFit } from '../../shared/tile-corners.mjs'
 import {
   FREE_PICK_WORDS,
   SCOPE_WORDS,
@@ -22,6 +23,7 @@ import {
   shadeWords,
   shades,
   sheetNote,
+  sheetSaid,
   sheetSwatches,
   sheetTitle,
   spokenSwatch,
@@ -50,8 +52,15 @@ const FOCUSABLE =
  *
  * Put away, the focus goes back to whatever opened it: the tile somebody
  * clicked is where they were.
+ *
+ * Three parts between the title and the foot, as the phone's sheet has them:
+ * `head` stays put under the title, `children` scroll, and `foot` stays at
+ * the bottom. On a 568-high phone the whole middle used to scroll as one,
+ * and the sheet opened with one row of colours above Cancel and Use it.
+ * `label` is what a screen reader calls the panel, where the title is not
+ * all of it.
  */
-export function ColourPanel({ open, title, note, onClose, foot, children }) {
+export function ColourPanel({ open, title, label, note, onClose, head, foot, children }) {
   const box = useRef(null)
   const cameFrom = useRef(null)
   /* The caller writes `onClose={() => …}`, a new function every render; the
@@ -106,12 +115,17 @@ export function ColourPanel({ open, title, note, onClose, foot, children }) {
       {/* The dim behind, and a click on it is Cancel. Not a control of its
           own: Escape and Cancel are the ways out for a keyboard. */}
       <div className="colour-scrim" aria-hidden="true" onClick={close} />
-      <section className="colour-panel" ref={box} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
+      <section className="colour-panel" ref={box} role="dialog" aria-modal="true" aria-label={label || title} tabIndex={-1}>
         <header className="colour-panel-head">
           <span className="colour-panel-title">{title}</span>
           {note ? <span className="colour-panel-note">{note}</span> : null}
         </header>
-        <div className="colour-panel-body">{children}</div>
+        {/* The middle: what stays put, over what scrolls. In a window too
+            short for both, the two scroll together (styles.css). */}
+        <div className="colour-panel-middle">
+          {head ? <div className="colour-panel-top">{head}</div> : null}
+          <div className="colour-panel-body">{children}</div>
+        </div>
         {foot ? <div className="colour-panel-foot">{foot}</div> : null}
       </section>
     </div>,
@@ -127,11 +141,11 @@ export function ColourPanel({ open, title, note, onClose, foot, children }) {
  *
  * "A section where a user can edit the colors of the blocks/presets and
  * effects." The phone's sheet, word for word and swatch for swatch — the tile
- * at the top so you can see what you are painting, the swatches under it,
- * Lighter and Darker, and Cancel and Use it at the foot, which stays put
- * however far the grid scrolls. What it offers is lib/colourPage's, shared
- * with the phone, so the two ends cannot hand a player different colours for
- * the same tile.
+ * at the top so you can see what you are painting, Darker and Lighter either
+ * side of it, the swatches under it, and Cancel and Use it at the foot. Only
+ * the swatches scroll. What it offers is lib/colourPage's, shared with the
+ * phone, so the two ends cannot hand a player different colours for the
+ * same tile.
  *
  * THE KEYBOARD, because this end has one. The arrows move between the
  * swatches and pick as they go, the way a row of radio buttons does; Enter
@@ -151,7 +165,7 @@ export function ColourPanel({ open, title, note, onClose, foot, children }) {
  * next to it — Use it still works. A player may want his amp the same red as
  * his drive; the sheet says what it sees and leaves the choice with him.
  */
-export default function ColourSheet({ target, chain = [], icons = true, onClose }) {
+export default function ColourSheet({ target, chain = [], spelt, icons = true, onClose }) {
   /* A look worn behind it, or a unit answering, changes the first swatch. */
   useLooks()
   /* A scene painted while a preset is loaded: for every preset, or just this one. */
@@ -163,6 +177,7 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
   /* The last free pick, made safe — or null while the grid is what was used. */
   const [free, setFree] = useState(null)
   const grid = useRef(null)
+  const preview = useRef(null)
 
   /* Each opening starts from the colour the tile has now. Closing forgets the
      last one, so the next opening never shows it for a frame. */
@@ -174,31 +189,43 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
     setFree(null)
   }, [target])
 
-  const open = !!target && !!base
+  /* A preset with no tag yet opens on no colour at all (colourPage colourNow). */
+  const open = !!target && (!!base || target.kind === 'preset')
   /* A scene's rules — no amber — and a preset's tag keeps them too (colourPage offAmber). */
   const scene = offAmber(target)
   const swatches = target ? sheetSwatches(target) : []
   const yours = target ? yoursFor(target, { only }) : null
-  const pick = open ? shadeOf(base, step, { scene }) : null
-  const steps = open ? shades(base, { scene }) : { darker: [], lighter: [] }
-  const warning = open ? nextToWarning(target, pick, { chain, only }) : null
+  const pick = open && base ? shadeOf(base, step, { scene }) : null
+  const steps = open && base ? shades(base, { scene }) : { darker: [], lighter: [] }
+  const warning = open ? nextToWarning(target, pick, { chain, spelt, only }) : null
   /* A scene's free pick too near the amber is shown, said, and not used —
      though a step lighter or darker from it may be (shades keeps a scene's
      steps off the amber). */
   const refused = !!(free && free.amber && pick === free.fill)
   /* Drawn as Play will draw it: a colour of his own at full strength in every look (lib/colourPage pickIsPicked). */
   const picked = open ? pickIsPicked(target, pick, { only }) : false
+  /*
+   * And with Play's letters. Fractal Remote keeps the white letters it always
+   * had on its own colours (lib/blockColors), where inkOn would pick dark
+   * ones for its amp, chorus and cab: the sheet drew those tiles with letters
+   * Play does not. A colour of his own takes the letters worked out for it.
+   */
+  const tileInk = pick ? (!picked && isFractalRemoteLook() ? LIGHT_INK : inkOn(pick)) : undefined
 
   /* What the pick is called, for the line under the tiles. */
   const named = swatches.find((s) => s.fill === base)
-  const baseName = named
-    ? named.said
-    : free && free.fill === base
-      ? 'the colour you picked'
-      : yours && base === yours
-        ? 'your own colour'
-        : 'the colour it has now'
+  const baseName = !base
+    ? 'no colour'
+    : named
+      ? named.said
+      : free && free.fill === base
+        ? 'the colour you picked'
+        : yours && base === yours
+          ? 'your own colour'
+          : 'the colour it has now'
   const backLabel = target ? backWords(target, { only }) : ''
+  /* A scene painted while a preset is loaded: the choice of presets is on the sheet, and says what the note would. */
+  const choosing = !!target && target.kind === 'scene' && !!target.preset
 
   const use = (fill) => {
     if (free && free.amber && fill === free.fill) return
@@ -264,154 +291,193 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
   /* Tab lands on the chosen swatch, or the first: one stop for the whole grid. */
   const at = Math.max(0, swatches.findIndex((s) => s.fill === base))
 
+  /*
+   * PLAY'S RULE FOR THE WORD IN THE CORNER (shared/tile-corners): beside the
+   * picture, or not drawn. Between Darker and Lighter on a 320px phone a tile
+   * here is as wide as Play draws it there, and its "Off" ran into the
+   * picture, as Play never lets it. Measured before the paint, every time the
+   * tiles are drawn, and the word kept or hidden as Play would.
+   */
+  useLayoutEffect(() => {
+    for (const tile of preview.current?.querySelectorAll('button.gig-block') || []) {
+      const word = tile.querySelector('.gig-block-word')
+      const band = tile.querySelector('.gig-block-state')
+      if (!word || !band || !tile.offsetWidth) continue
+      const box = tile.getBoundingClientRect()
+      const icon = tile.querySelector('.gig-block-icon')?.getBoundingClientRect()
+      const text = document.createRange()
+      text.selectNodeContents(word)
+      const fit = cornerFit({
+        width: tile.offsetWidth,
+        picture: icon ? icon.width : 0,
+        pictureTop: icon ? icon.top - box.top : undefined,
+        bandBottom: band.getBoundingClientRect().bottom - box.top,
+        inset: word.getBoundingClientRect().left - box.left,
+        left: text.getBoundingClientRect().width,
+        right: null
+      })
+      if (fit.left) word.removeAttribute('data-crowded')
+      else word.setAttribute('data-crowded', 'yes')
+    }
+  })
+
+  /*
+   * The tiles at the top, as Play draws them: a preset's tag as its row in
+   * the preset list draws it, the bar and the name, on two lines if it needs
+   * them; a scene or an effect lit and unlit.
+   */
+  const tiles = !open ? null : target.kind === 'preset' ? (
+    <span className="colour-tag-preview" data-tagged={pick ? 'yes' : undefined} style={pick ? { '--tag': pick } : undefined}>
+      <span className="colour-tag-preview-name">{target.name}</span>
+    </span>
+  ) : (
+    [true, false].map((lit) =>
+      target.kind === 'scene' ? (
+        <button
+          key={String(lit)}
+          type="button"
+          tabIndex={-1}
+          className={`gig-scene named${lit ? ' current' : ''}`}
+          style={{ '--scene-fill': pick, '--scene-ink': tileInk }}
+          data-picked={picked ? 'yes' : undefined}
+        >
+          <span className="gig-scene-num mono">{target.index + 1}</span>
+          {/* The scene's own name where it has one, as Play draws it. */}
+          <span className="gig-scene-name">{target.label || target.name}</span>
+        </button>
+      ) : (
+        <button
+          key={String(lit)}
+          type="button"
+          tabIndex={-1}
+          className={`gig-block ${lit ? 'on' : 'off'}`}
+          data-off={!lit && offModeGrey() ? 'grey' : undefined}
+          style={{ '--block-fill': pick, '--block-ink': tileInk }}
+        >
+          <span className="gig-block-name">
+            {icons && blockIcon(target.slug) ? (
+              <span
+                className="gig-block-icon"
+                style={{ WebkitMaskImage: `url(${blockIcon(target.slug)})`, maskImage: `url(${blockIcon(target.slug)})` }}
+              />
+            ) : null}
+            <span>{shortName(target.slug)}</span>
+          </span>
+          <span className="gig-block-state">
+            <span className="gig-block-word">{lit ? 'On' : 'Off'}</span>
+          </span>
+        </button>
+      )
+    )
+  )
+
   return (
     <ColourPanel
       open={open}
       onClose={onClose}
       title={target ? sheetTitle(target) : ''}
+      label={target ? sheetSaid(target) : ''}
       /*
        * WHERE IT APPLIES. A family's colour is the family's, on every unit and
        * in every preset: a drive that is red in one song and green in the next
        * is exactly what these colours exist to stop. A scene's is for every
-       * preset, or for the one that is loaded (the choice under the tiles); a
-       * preset's tag is that preset's on this unit, like its star. The words
-       * are lib/colourPage's, so both ends say the same.
+       * preset, or for the one that is loaded — and there the two buttons
+       * that choose between them say it, so the line is left off for their
+       * room, as on the phone; a preset's tag is that preset's on this unit,
+       * like its star. The words are lib/colourPage's, so both ends say the
+       * same.
        */
-      note={target ? sheetNote(target, { only }) : null}
-      foot={
+      note={target && !choosing ? sheetNote(target, { only }) : null}
+      head={
         open ? (
           <>
-            {yours ? (
-              <button type="button" className="colour-back" onClick={() => use(null)}>
-                {backLabel}
+            {/*
+              THE TILE, LIT AND UNLIT, at the size Play draws it, side by side:
+              the colour is chosen for both. Drawn by Play's own classes, so what
+              is here is what the stage will show — the switched-off one in grey
+              if that is what the page above says. Pictures, not controls: the
+              panel's title already says what they are.
+
+              DARKER AND LIGHTER either side of it, three steps each way at
+              most, and only as far as the letters still read and an unlit tile
+              still shows on the black stage. Where a way has nothing left, its
+              button rests: red has no Darker at all. Beside the tiles rather
+              than in a row of their own, which in a phone-sized window was the
+              row of colours the panel had no room left for — the phone's
+              sheet, laid out the same.
+            */}
+            <div className="colour-top-row">
+              <button type="button" aria-label="A step darker" disabled={step <= -steps.darker.length} onClick={() => setStep(step - 1)}>
+                Darker
               </button>
-            ) : null}
-            <div className="colour-foot-row">
-              <button type="button" onClick={onClose}>
-                Cancel
-              </button>
-              <button type="button" className="primary" disabled={refused} onClick={() => use(pick)}>
-                Use it
+              <div className="gig colour-preview" aria-hidden="true" ref={preview}>
+                {tiles}
+              </div>
+              <button type="button" aria-label="A step lighter" disabled={step >= steps.lighter.length} onClick={() => setStep(step + 1)}>
+                Lighter
               </button>
             </div>
+            {/* Why a free pick is not quite what was picked, or why a scene
+                cannot have it, is said under the Any colour box rather than
+                here: that is where the eye is when it matters. */}
+            <p className="colour-said">{shadeWords(capital(baseName), step)}</p>
+
+            {/*
+              THE NEIGHBOUR LINE, right under the name of the pick, where the eye
+              is when a swatch has just been clicked. Its room is kept when
+              there is nothing to say (two lines, which the colour-blind one
+              takes in a narrow window), so the grid under it never jumps as a
+              swatch is tried. Not for a tag: a bar beside a name has no
+              neighbour to be mistaken for. The phone's, in the same place.
+            */}
+            {target.kind === 'preset' ? null : (
+              <p className="colour-warning" aria-live="polite">
+                {warning || ''}
+              </p>
+            )}
+
+            {/*
+              EVERY PRESET, OR JUST THIS ONE, for a scene painted while a preset
+              is loaded: Fractal's own PERFORM layout makes Clean, Crunch and
+              Lead green, yellow and red in the one preset that wants them. Above
+              the grid, because it changes what the grid is painting — the tiles
+              over it change to the colour the scene has in the presets chosen.
+              Two buttons, the phone's two, the one in force pressed.
+            */}
+            {choosing ? (
+              <div className="colour-scope" role="group" aria-label="Which presets">
+                <button type="button" aria-pressed={!only} className={only ? '' : 'on'} onClick={() => scope(false)}>
+                  {SCOPE_WORDS.every}
+                </button>
+                <button type="button" aria-pressed={only} className={only ? 'on' : ''} onClick={() => scope(true)}>
+                  <span>{SCOPE_WORDS.only}</span> <span className="colour-scope-which">{target.preset.words}</span>
+                </button>
+              </div>
+            ) : null}
           </>
+        ) : null
+      }
+      foot={
+        open ? (
+          <div className="colour-foot-row">
+            <button type="button" onClick={onClose}>
+              Cancel
+            </button>
+            {/* Resting until there is a colour to use: a preset with no tag opens on none. */}
+            <button type="button" className="primary" disabled={refused || !pick} onClick={() => use(pick)}>
+              Use it
+            </button>
+          </div>
         ) : null
       }
     >
       {open ? (
         <>
-          {/*
-            THE TILE, LIT AND UNLIT, at the size Play draws it, side by side:
-            the colour is chosen for both. Drawn by Play's own classes, so what
-            is here is what the stage will show — the switched-off one in grey
-            if that is what the page above says. Pictures, not controls: the
-            panel's title already says what they are.
-          */}
-          <div className="gig colour-preview" aria-hidden="true">
-            {/* A preset's tag, drawn as its row in the preset list draws it: the bar and the name. */}
-            {target.kind === 'preset' ? (
-              <span className="colour-tag-preview" style={{ '--tag': pick }}>
-                {target.name}
-              </span>
-            ) : (
-              [true, false].map((lit) =>
-                target.kind === 'scene' ? (
-                  <button
-                    key={String(lit)}
-                    type="button"
-                    tabIndex={-1}
-                    className={`gig-scene named${lit ? ' current' : ''}`}
-                    style={{ '--scene-fill': pick, '--scene-ink': inkOn(pick) }}
-                    data-picked={picked ? 'yes' : undefined}
-                  >
-                    <span className="gig-scene-num mono">{target.index + 1}</span>
-                    {/* The scene's own name where it has one, as Play draws it. */}
-                    <span className="gig-scene-name">{target.label || target.name}</span>
-                  </button>
-                ) : (
-                  <button
-                    key={String(lit)}
-                    type="button"
-                    tabIndex={-1}
-                    className={`gig-block ${lit ? 'on' : 'off'}`}
-                    data-off={!lit && offModeGrey() ? 'grey' : undefined}
-                    style={{ '--block-fill': pick, '--block-ink': inkOn(pick) }}
-                  >
-                    <span className="gig-block-name">
-                      {icons && blockIcon(target.slug) ? (
-                        <span
-                          className="gig-block-icon"
-                          style={{ WebkitMaskImage: `url(${blockIcon(target.slug)})`, maskImage: `url(${blockIcon(target.slug)})` }}
-                        />
-                      ) : null}
-                      <span>{shortName(target.slug)}</span>
-                    </span>
-                    <span className="gig-block-state">
-                      <span className="gig-block-word">{lit ? 'On' : 'Off'}</span>
-                    </span>
-                  </button>
-                )
-              )
-            )}
-          </div>
-          {/* Why a free pick is not quite what was picked, or why a scene
-              cannot have it, is said under the Any colour box rather than
-              here: that is where the eye is when it matters. */}
-          <p className="colour-said">{shadeWords(capital(baseName), step)}</p>
-
-          {/*
-            THE NEIGHBOUR LINE, right under the name of the pick, where the eye
-            is when a swatch has just been clicked — it sat under the grid, and
-            in a phone-sized window that is below the bottom of the panel.
-            Its room is kept when there is nothing to say (two lines, which
-            the colour-blind one takes in a narrow window), so the buttons
-            under it never jump as a swatch is tried. The phone's, in the same
-            place.
-          */}
-          <p className="colour-warning" aria-live="polite">
-            {warning || ''}
-          </p>
-
-          {/*
-            LIGHTER AND DARKER, three steps each way at most, and only as far
-            as the letters still read and an unlit tile still shows on the
-            black stage. Where a way has nothing left, its button rests: red
-            has no Darker at all. Up here beside the pick they change, not
-            under two dozen swatches.
-          */}
-          <div className="colour-steps">
-            <button type="button" aria-label="A step darker" disabled={step <= -steps.darker.length} onClick={() => setStep(step - 1)}>
-              Darker
-            </button>
-            <button type="button" aria-label="A step lighter" disabled={step >= steps.lighter.length} onClick={() => setStep(step + 1)}>
-              Lighter
-            </button>
-          </div>
-
-          {/*
-            EVERY PRESET, OR JUST THIS ONE, for a scene painted while a preset
-            is loaded: Fractal's own PERFORM layout makes Clean, Crunch and
-            Lead green, yellow and red in the one preset that wants them. Above
-            the grid, because it changes what the grid is painting — the tiles
-            over it change to the colour the scene has in the presets chosen.
-            Two buttons, the phone's two, the one in force pressed.
-          */}
-          {target.kind === 'scene' && target.preset ? (
-            <div className="colour-scope" role="group" aria-label="Which presets">
-              <button type="button" aria-pressed={!only} className={only ? '' : 'on'} onClick={() => scope(false)}>
-                {SCOPE_WORDS.every}
-              </button>
-              <button type="button" aria-pressed={only} className={only ? 'on' : ''} onClick={() => scope(true)}>
-                <span>{SCOPE_WORDS.only}</span> <span className="colour-scope-which">{target.preset.words}</span>
-              </button>
-            </div>
-          ) : null}
-
           <div
             className="colour-swatches"
             ref={grid}
             role="radiogroup"
-            aria-label={sheetTitle(target)}
+            aria-label={sheetSaid(target)}
           >
             {swatches.map((s, i) => {
               const chosen = s.fill === base
@@ -445,12 +511,27 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
           </div>
 
           {/*
+            THE WAY BACK, from a colour of your own: to the unit's (or the
+            look's), to every preset's, or no tag at all. Under the grid, in
+            the part that scrolls, as on the phone: in the foot it was a third
+            big button, and the second row of colours a small window had no
+            room for. The grid's first square is the same colour for an effect
+            or a scene, so most of the time this is one click less, not the
+            only way.
+          */}
+          {yours ? (
+            <button type="button" className="colour-back" onClick={() => use(null)}>
+              {backLabel}
+            </button>
+          ) : null}
+
+          {/*
             ANY COLOUR, behind a button so the grid stays the way in: the grid
             is two dozen colours that already work, and a picker is a few
             million that mostly do not until they are moved.
           */}
           {any === null ? (
-            <button type="button" className="chip colour-any-open" onClick={() => setAny(free ? free.raw : base)}>
+            <button type="button" className="chip colour-any-open" onClick={() => setAny(free ? free.raw : base || '')}>
               Any colour…
             </button>
           ) : (

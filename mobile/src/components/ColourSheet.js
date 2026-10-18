@@ -60,7 +60,7 @@ import { TagPreview } from './PresetTag'
  * next to it — Use it still works. A player may want his amp the same red as
  * his drive; the sheet says what it sees and leaves the choice with him.
  */
-export default function ColourSheet({ target, chain = [], onClose }) {
+export default function ColourSheet({ target, chain = [], spelt, onClose }) {
   const [base, setBase] = useState(null)
   const [step, setStep] = useState(0)
   const [grid, setGrid] = useState(0)
@@ -75,20 +75,21 @@ export default function ColourSheet({ target, chain = [], onClose }) {
     setStep(0)
   }, [target])
 
-  const open = !!target && !!base
+  /* A preset with no tag yet opens on no colour at all (colourPage colourNow). */
+  const open = !!target && (!!base || target.kind === 'preset')
   /* A scene's rules — no amber — and a preset's tag keeps them too (colourPage offAmber). */
   const scene = offAmber(target)
   const swatches = target ? sheetSwatches(target) : []
   const yours = target ? yoursFor(target, { only }) : null
-  const pick = open ? shadeOf(base, step, { scene }) : null
-  const steps = open ? shades(base, { scene }) : { darker: [], lighter: [] }
-  const warning = open ? nextToWarning(target, pick, { chain, only }) : null
+  const pick = open && base ? shadeOf(base, step, { scene }) : null
+  const steps = open && base ? shades(base, { scene }) : { darker: [], lighter: [] }
+  const warning = open ? nextToWarning(target, pick, { chain, spelt, only }) : null
   /* Drawn as Play will draw it: a colour of his own as he picked it, the look's own as the look draws it (Tile `picked`). */
   const picked = open ? pickIsPicked(target, pick, { only }) : false
 
   /* What the pick is called, for the line under the tiles and for a screen reader. */
   const named = swatches.find((s) => s.fill === base)
-  const baseName = named ? named.said : yours && base === yours ? 'your own colour' : 'the colour it has now'
+  const baseName = !base ? 'no colour' : named ? named.said : yours && base === yours ? 'your own colour' : 'the colour it has now'
   const backLabel = target ? backWords(target, { only }) : ''
 
   /* Every preset, or just this one: the tiles show what each would be. */
@@ -259,7 +260,8 @@ export default function ColourSheet({ target, chain = [], onClose }) {
         open ? (
           <View style={{ flexDirection: 'row', gap: space.sm }}>
             <Press label="Cancel" grow onPress={onClose} />
-            <Press label="Use it" grow tone="signal" on onPress={() => use(pick)} />
+            {/* Resting until there is a colour to use: a preset with no tag opens on none. */}
+            <Press label="Use it" grow tone="signal" on={!!pick} disabled={!pick} onPress={() => use(pick)} />
           </View>
         ) : null
       }

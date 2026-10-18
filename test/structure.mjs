@@ -2257,7 +2257,7 @@ export function run(test) {
     assert.match(picker, /open=\{presetMenu && narrow\}/)
     assert.match(picker, /\{presetPicker\}/, 'the sheet does not carry the same picker as the popover')
     assert.equal((src.match(/<PresetList\b/g) || []).length, 2, 'the picker is written more than once')
-    /* And the colour panel a preset's Colour button opens is over the page, not in the menu: a click in it is not a click away. */
+    /* And the colour panel a preset held or right-clicked opens is over the page, not in the menu: a click in it is not a click away. */
     assert.match(src, /useDismiss\(presetMenuRef, \(\) => setPresetMenu\(false\), \{ open: presetMenu && !narrow, ignore: '\.topbar-preset, \.colour-layer' \}\)/, 'the popover’s outside-tap listener runs under the sheet, or the menu no longer dismisses through the shared hook')
   })
 
@@ -5742,7 +5742,7 @@ export function run(test) {
     /* The scenes in one write either way; a tile opens the sheet. */
     assert.match(page, /onChange=\{\(\) => chooseScenes\(false\)\}/)
     assert.match(page, /onChange=\{\(\) => chooseScenes\(true\)\}/)
-    assert.match(page, /onClick=\{\(\) => setPainting\(familyTarget\(f\)\)\}/, 'an effect tile does not open the colour sheet')
+    assert.match(page, /onClick=\{\(\) => setPainting\(familyTarget\(spelt\[f\] \|\| f\)\)\}/, 'an effect tile does not open the colour sheet')
     assert.match(page, /onClick=\{\(\) => setPainting\(sceneTarget\(i, \{ preset, called: sceneNames\?\.\[i\] \}\)\)\}/, 'a scene tile does not open the colour sheet, with the preset that is loaded and the scene’s own name')
     /* As many scenes as the unit has: an AM4's four, not eight — and the count of your own colours, and the choice, are of those four. */
     assert.match(page, /const sceneCount = pageSceneCount\(capabilities\)/)
@@ -5774,7 +5774,7 @@ export function run(test) {
     /* A line, never a block. */
     assert.match(sheet, /\{warning \|\| ''\}/)
     assert.ok(!/disabled=\{[^}]*warning/.test(sheet), 'the warning blocks Use it')
-    assert.match(sheet, /<button type="button" className="primary" disabled=\{refused\} onClick=\{\(\) => use\(pick\)\}>\s*Use it/)
+    assert.match(sheet, /<button type="button" className="primary" disabled=\{refused \|\| !pick\} onClick=\{\(\) => use\(pick\)\}>\s*Use it/)
     /* Any colour, made readable first, with a line that says so. */
     assert.match(sheet, /const got = freePick\(text, \{ scene, offered: swatches\.map\(\(s\) => s\.fill\) \}\)/, 'a free pick is used as picked')
     assert.match(sheet, /<input\s+type="color"/, 'there is no colour picker')
@@ -5879,13 +5879,16 @@ export function run(test) {
     const lead = { number: 12, words: '012 Lead Rig' }
     /* From the scene names: opens on just this preset, says so, and offers every preset beside it. */
     const only = c.draw(c.ColourSheet, { target: c.page.sceneTarget(2, { preset: lead, only: true }), onClose: () => {} })
-    assert.match(only, /For this scene in 012 Lead Rig only/)
+    /* The two buttons say where it applies, so the line under the title is left off for their room, as on the phone. */
+    assert.ok(!/For this scene in/.test(only), 'the browser says under the title what the two buttons say, and the phone does not')
     assert.match(only, /<div class="colour-scope" role="group" aria-label="Which presets"><button type="button" aria-pressed="false" class="">Every preset<\/button><button type="button" aria-pressed="true" class="on"><span>Just this preset<\/span> <span class="colour-scope-which">012 Lead Rig<\/span><\/button><\/div>/, 'the choice of presets is not drawn, or not on just this preset')
     assert.ok(only.indexOf('colour-scope') < only.indexOf('colour-swatches'), 'the choice of presets is under the grid it changes')
     /* From the Colours page: every preset, the same two buttons. */
     const every = c.draw(c.ColourSheet, { target: c.page.sceneTarget(2, { preset: lead }), onClose: () => {} })
     assert.match(every, /aria-pressed="true" class="on">Every preset<\/button>/)
-    assert.match(every, /For this scene in every preset/)
+    assert.ok(!/For this scene in/.test(every))
+    /* With no preset loaded there is no choice, and the line says it. */
+    assert.match(c.draw(c.ColourSheet, { target: c.page.sceneTarget(2), onClose: () => {} }), /For this scene in every preset/)
     /* No preset loaded: no choice to make. */
     assert.ok(!/colour-scope/.test(c.draw(c.ColourSheet, { target: c.page.sceneTarget(2), onClose: () => {} })), 'the choice is offered with no preset to make it about')
     /* This preset's own colour, with the way back to every preset's. */
@@ -5897,17 +5900,51 @@ export function run(test) {
     /* A preset's tag: drawn as its row, the twenty-three without the orange, no way back until it has one. */
     const target = c.page.presetTarget(45, { words: '045 Clean' })
     const tag = c.draw(c.ColourSheet, { target, onClose: () => {} })
-    /* "Colour for", first: a title one line long cuts a long name short, and must not cut the word that says what the sheet is for. */
+    /* Titled "Preset colour", never cut; the row under it carries the name, and a screen reader is told it whole. */
     assert.match(tag, /role="dialog" aria-modal="true" aria-label="Colour for 045 Clean"/)
+    assert.match(tag, /<span class="colour-panel-title">Preset colour<\/span>/)
     assert.match(tag, /Kept for this preset on this unit, like its star/)
-    assert.match(tag, /<span class="colour-tag-preview" style="--tag:#cc0000">045 Clean<\/span>/, 'the tag is not shown as its row will look')
+    /* No tag yet: no bar, nothing ticked, "No colour", and Use it resting until a colour is picked. */
+    assert.match(tag, /<span class="colour-tag-preview"><span class="colour-tag-preview-name">045 Clean<\/span><\/span>/, 'a preset with no tag is shown with a bar')
+    assert.equal((tag.match(/aria-checked="true"/g) || []).length, 0, 'a preset with no tag opens with a colour ticked')
+    assert.match(tag, /<p class="colour-said">No colour<\/p>/)
+    assert.match(tag, /<button type="button" class="primary" disabled="">Use it<\/button>/, 'Use it tags a preset before a colour is picked')
     assert.equal((tag.match(/role="radio"/g) || []).length, 22)
     assert.ok(!/Colour for 045 Clean, Orange/.test(tag), 'a tag is offered the amber-like orange')
     assert.match(tag, /aria-label="Colour for 045 Clean, Blue"/, 'a tag’s swatches are not said with the sheet’s title')
     assert.ok(!/class="gig-block|class="gig-scene/.test(tag), 'a tag is drawn as a tile')
     assert.ok(!/colour-back/.test(tag))
     c.page.paint(target, '#0055ff')
-    assert.match(c.draw(c.ColourSheet, { target, onClose: () => {} }), /<button type="button" class="colour-back">Take the colour off<\/button>/)
+    const blue = c.draw(c.ColourSheet, { target, onClose: () => {} })
+    assert.match(blue, /<button type="button" class="colour-back">Take the colour off<\/button>/)
+    assert.match(blue, /<span class="colour-tag-preview" data-tagged="yes" style="--tag:#0055ff"><span class="colour-tag-preview-name">045 Clean<\/span><\/span>/, 'the tag is not shown as its row will look')
+    assert.match(blue, /aria-checked="true" aria-label="Colour for 045 Clean, Blue, your own"/)
+    c.looks.setColourUnit(null)
+  })
+
+  test('the browser’s colour sheet draws Fractal Remote’s own colours with the letters Play gives them', async () => {
+    /*
+     * Fractal Remote keeps the white letters it always had (lib/blockColors),
+     * and the sheet drew its amp with dark ones: "what is here is what the
+     * stage will show" was not so. A colour of his own takes the letters
+     * worked out for it, as on Play.
+     */
+    const c = await coloursOnABench()
+    c.looks.setColourUnit('am4')
+    c.looks.setLook('fractalremote')
+    for (const f of ['amp', 'chorus', 'cab', 'comp']) {
+      const drawn = c.draw(c.ColourSheet, { target: c.page.familyTarget(f), icons: false, onClose: () => {} })
+      assert.match(drawn, /class="gig-block on" style="--block-fill:#[0-9a-f]{6};--block-ink:#ffffff"/, `Fractal Remote’s ${f} is drawn on the sheet with letters Play does not give it`)
+    }
+    for (const i of [0, 3]) assert.match(c.draw(c.ColourSheet, { target: c.page.sceneTarget(i), onClose: () => {} }), /--scene-ink:#ffffff/)
+    c.looks.setFamily('amp', '#ffff00')
+    assert.match(c.draw(c.ColourSheet, { target: c.page.familyTarget('amp'), icons: false, onClose: () => {} }), /class="gig-block on" style="--block-fill:#ffff00;--block-ink:#15181d"/, 'his own yellow is drawn with white letters')
+    c.looks.setFamily('amp', null)
+    c.looks.setLook('unit')
+    assert.match(c.draw(c.ColourSheet, { target: c.page.familyTarget('amp'), icons: false, onClose: () => {} }), /--block-ink:#15181d/, 'Match my unit’s silver amp lost its dark letters')
+    /* The line under the title is the phone’s rule too: left off where the two buttons for which presets say it. */
+    const sheet = readFileSync(new URL('../src/components/ColourSheet.jsx', import.meta.url), 'utf8')
+    assert.match(sheet, /note=\{target && !choosing \? sheetNote\(target, \{ only \}\) : null\}/)
     c.looks.setColourUnit(null)
   })
 

@@ -1227,8 +1227,8 @@ export function run(test) {
       const sheet = read(f)
       assert.match(sheet, /const swatches = target \? sheetSwatches\(target\) : \[\]/, `${f} draws swatches of its own`)
       assert.match(sheet, /spokenSwatch\(target, s, \{ yours: s\.fill === yours && !s\.own \}\)/, `${f} names its swatches some other way`)
-      assert.match(sheet, /const pick = open \? shadeOf\(base, step, \{ scene \}\) : null/, `${f} goes lighter and darker by some other rule`)
-      assert.match(sheet, /const warning = open \? nextToWarning\(target, pick, \{ chain, only \}\) : null/, `${f} warns by some other rule`)
+      assert.match(sheet, /const pick = open && base \? shadeOf\(base, step, \{ scene \}\) : null/, `${f} goes lighter and darker by some other rule`)
+      assert.match(sheet, /const warning = open \? nextToWarning\(target, pick, \{ chain, spelt, only \}\) : null/, `${f} warns by some other rule`)
     }
     /* And every rule the phone's page takes from lib/colourPage, the browser's takes too. */
     const fromPage = (f) => new Set((read(f).match(/import \{([^}]*)\} from '\.\.\/lib\/colourPage'/)?.[1] || '').split(',').map((x) => x.trim()).filter(Boolean))

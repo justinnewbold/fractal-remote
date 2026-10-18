@@ -1461,7 +1461,7 @@ export default function App() {
   /* A tap outside and Escape are the two ways anyone expects to dismiss a
      menu; without them the only way out is finding the button again. The
      sheet on a phone brings its own, so the listener stands down under it. */
-  /* The colour panel a preset's Colour button opens is drawn over the page, not in the menu: a click in it is not a click away. */
+  /* The colour panel a preset held or right-clicked opens is drawn over the page, not in the menu: a click in it is not a click away. */
   useDismiss(presetMenuRef, () => setPresetMenu(false), { open: presetMenu && !narrow, ignore: '.topbar-preset, .colour-layer' })
   const [slots, setSlots] = useState([])
   const [scanning, setScanning] = useState(false)

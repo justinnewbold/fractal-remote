@@ -55,7 +55,7 @@ import { useKeepAwake } from 'expo-keep-awake'
 import { logDebug } from '../lib/debugLog'
 import { oneWriteAtATime } from '../lib/knob-keys'
 import { blockColor, quietEnd } from '../lib/blockColors'
-import { familyTarget, paintable, presetFamilies } from '../lib/colourPage'
+import { familyTarget, paintable, presetFamilies, presetSpelling } from '../lib/colourPage'
 import { presetLabel } from '../lib/presetName'
 import { shortBlock } from '../lib/shortName'
 import { thud } from '../lib/feedback'
@@ -1326,7 +1326,7 @@ function BlockColour({ slug }) {
   return (
     <>
       <Press label="Colour" height={40} onPress={() => setPainting(familyTarget(slug))} />
-      <ColourSheet target={painting} chain={presetFamilies(blocks)} onClose={() => setPainting(null)} />
+      <ColourSheet target={painting} chain={presetFamilies(blocks)} spelt={presetSpelling(blocks)} onClose={() => setPainting(null)} />
     </>
   )
 }

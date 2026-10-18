@@ -67,7 +67,9 @@ export function TagRow({ words, fill, onPress }) {
 
 /**
  * A preset's tag on the colour sheet, drawn as its row in the preset list
- * draws it: the name, and the bar down its left edge (tagEdge above).
+ * draws it: the name, and the bar down its left edge (tagEdge above) once it
+ * has one. The name on two lines if it needs them: the sheet is titled
+ * "Preset colour", so this is where the name is read.
  */
 export function TagPreview({ words, fill }) {
   return (
@@ -84,7 +86,7 @@ export function TagPreview({ words, fill }) {
         ...tagEdge(fill)
       }}
     >
-      <Text numberOfLines={1} style={{ color: color.silk, fontSize: font.body, fontWeight: '600' }}>
+      <Text numberOfLines={2} style={{ color: color.silk, fontSize: font.body, fontWeight: '600' }}>
         {words}
       </Text>
     </View>

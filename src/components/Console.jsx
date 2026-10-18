@@ -6,7 +6,7 @@ import { blockColor } from '../lib/blockColors'
 import { LIGHT_INK } from '../lib/ink'
 import { isFractalRemoteLook, offMode } from '../lib/looks'
 import { useLooks } from '../lib/useLooks'
-import { TAG_HOLD, familyTarget, paintable, presetFamilies, presetTag, presetTarget } from '../lib/colourPage'
+import { TAG_HOLD, familyTarget, paintable, presetFamilies, presetSpelling, presetTag, presetTarget } from '../lib/colourPage'
 import { useLongPress } from '../lib/longPress'
 import ColourSheet from './ColourSheet'
 import { useDismiss } from '../lib/dismiss'
@@ -1019,7 +1019,7 @@ function BlockColour({ slug }) {
         <span className="block-colour-dot" aria-hidden="true" style={{ '--block-fill': blockColor(slug).fill }} />
         Colour
       </button>
-      <ColourSheet target={painting} chain={presetFamilies(blocks)} onClose={() => setPainting(null)} />
+      <ColourSheet target={painting} chain={presetFamilies(blocks)} spelt={presetSpelling(blocks)} onClose={() => setPainting(null)} />
     </div>
   )
 }

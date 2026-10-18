@@ -51,6 +51,7 @@
  * spellings in ALIASES. The letters are never stored here: lib/ink picks
  * them from the colour drawn.
  */
+import { deltaE } from './ink.js'
 
 /**
  * A block the app cannot name. It used to be the CSS variable `--panel-hi`,
@@ -893,10 +894,20 @@ export const SWATCHES = Object.freeze([...RING_SWATCHES, ...UNIT_SWATCHES])
  * blue swatch: with both in the grid the sheet opened with two squares
  * ticked, which reads as two colours picked and is two checked buttons to a
  * screen reader. The look's own goes first and the twin is left out.
+ *
+ * Nor two the eye cannot tell apart: an AM4's drive (#ce0201) beside Red
+ * (#cc0000) was two squares of the same red, and tapping the second marked
+ * the drive "Your colour" for no change anybody could see on Play. So a
+ * swatch within TWIN of the look's own colour (CIEDE2000, lib/ink) is left
+ * out too: well under the 10 the neighbour line asks of two tiles side by
+ * side, and over the 1 to 2.5 the near twins came to.
  */
+export const TWIN = 3
+
 export function swatchesFor(own, { scene = false } = {}) {
   const mine = String(own || '').toLowerCase()
-  const rest = SWATCHES.filter((s) => !(scene && s.scene === false) && s.fill !== mine)
+  const twin = (fill) => fill === mine || (deltaE(fill, mine) ?? Infinity) < TWIN
+  const rest = SWATCHES.filter((s) => !(scene && s.scene === false) && !twin(s.fill))
   return [{ name: 'Unit', fill: own, own: true }, ...rest]
 }
 
