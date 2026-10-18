@@ -18621,9 +18621,12 @@ export function run(test) {
     /* Read with the startup card's answer since 18 October 2026, in one Promise.all (see independentDue). */
     assert.match(read('mobile/App.js'), /walkthroughSeen\(\), independentNoticeSeen\(\)\]\)\.then\(\(\[seen, noticed\]\) => \{[\s\S]{0,200}if \(!seen\) markColoursNotice\(\)/, 'a first run is told the colours changed')
     /* Last of Play's one-time notes since 18 October 2026: it waits for every other (test/independent.mjs, the startup messages take turns). */
-    assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} onWant=\{says\.only\} \/>[\s\S]{0,160}<ColoursNotice waiting=\{notesUp \|\| coach \|\| watchTip\} \/>/, 'Play does not say the colours changed')
+    assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} onWant=\{says\.only\} \/>[\s\S]{0,160}<ColoursNotice waiting=\{notesUp \|\| coach \|\| watchTip\} unanswered=\{coachPending \|\| watchPending\} \/>/, 'Play does not say the colours changed')
     const notice = read('mobile/src/components/ColoursNotice.js')
-    assert.match(notice, /if \(!alive \|\| v\) return\s+markColoursNotice\(\)\s+launch = 'showing'\s+setShown\(true\)/, 'the line is not remembered the moment it is shown')
+    /* Remembered once it is drawn, not when the storage answers: a note that comes up in that moment would leave it said and never seen. */
+    assert.match(notice, /if \(alive && !v\) setDue\(true\)/)
+    assert.match(notice, /const drawn = due && !waiting && \(launch === 'showing' \|\| !unanswered\)/)
+    assert.match(notice, /useEffect\(\(\) => \{\s+if \(!drawn \|\| launch !== null\) return\s+markColoursNotice\(\)\s+launch = 'showing'\s+\}, \[drawn\]\)/, 'the line is not remembered the moment it is shown')
     assert.match(notice, /<Note\s+onDismiss=/, 'the line cannot be put away')
     /* "Settings → Colours" held together, so a narrow screen never breaks it after "Settings". */
     assert.match(read('src/lib/colourPage.js'), /export const COLOURS_NOTICE = 'Colours now match your unit · Settings\\u00a0→\\u00a0Colours'/)

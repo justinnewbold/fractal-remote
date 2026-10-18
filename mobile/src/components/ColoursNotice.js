@@ -26,36 +26,54 @@ import Note from './Note'
  * bottom of Play. Not asked for, and so not remembered, while another note
  * is up; and once shown it steps aside for one that comes up after it, and
  * is back when that one goes.
+ *
+ * NOR WHILE ONE BEFORE IT HAS NOT ANSWERED (`unanswered`: the quick tip on
+ * holding a block, or the watch's sheet, still waiting on the phone's
+ * storage). Found in review on the demo AM4: the demo card put away, this
+ * line's storage and the quick tip's were asked in the same moment, this one
+ * answered first and was remembered as said, and the tip took the turn
+ * before it was ever drawn. A Try it with no hold after it, or the app
+ * closed under the tip, and "Colours now match your unit" was never seen and
+ * never came back. So it is not asked until they have answered, it is not
+ * drawn while one of them still might, and it is remembered only once it has
+ * been drawn. Once said, a question still open before it does not take it
+ * down again: only a note that is actually up does.
  */
-export default function ColoursNotice({ waiting = false }) {
-  const [shown, setShown] = useState(launch === 'showing')
+export default function ColoursNotice({ waiting = false, unanswered = false }) {
+  const [due, setDue] = useState(launch === 'showing')
 
   useEffect(() => {
     if (launch === 'showing') {
-      setShown(true)
+      setDue(true)
       return undefined
     }
-    if (waiting) return undefined
+    if (launch === 'gone' || waiting || unanswered) return undefined
     let alive = true
     coloursNoticeSeen().then((v) => {
-      if (!alive || v) return
-      markColoursNotice()
-      launch = 'showing'
-      setShown(true)
+      if (alive && !v) setDue(true)
     })
     return () => {
       alive = false
     }
-  }, [waiting])
+  }, [waiting, unanswered])
 
-  if (!shown || waiting) return null
+  const drawn = due && !waiting && (launch === 'showing' || !unanswered)
+
+  /* Remembered the moment it is on the screen, and not a moment before. */
+  useEffect(() => {
+    if (!drawn || launch !== null) return
+    markColoursNotice()
+    launch = 'showing'
+  }, [drawn])
+
+  if (!drawn) return null
 
   return (
     <Note
       onDismiss={() => {
         tick()
         launch = 'gone'
-        setShown(false)
+        setDue(false)
       }}
     >
       {COLOURS_NOTICE}

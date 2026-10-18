@@ -606,6 +606,12 @@ export default function App() {
    * finishes. Somebody who opens it, reads a screen and closes the tab has
    * seen it; offering it again treats closing as an accident, and a tutorial
    * that keeps coming back is the thing everybody remembers hating.
+   *
+   * "Opens" is when it can be seen, not when it is drawn: on a first visit it
+   * is drawn under the startup card (`independentDue`, below), which is
+   * opaque, and a tab closed with the card still up has seen none of it. So
+   * it is marked once OK has been pressed, and that visitor meets the card
+   * and then the walkthrough next time.
    */
   const [walkthrough, setWalkthrough] = useState(() => {
     const first = !onboarded()
@@ -642,8 +648,8 @@ export default function App() {
    */
   const [computerSetup, setComputerSetup] = useState(false)
   useEffect(() => {
-    if (walkthrough) markOnboarded()
-  }, [walkthrough])
+    if (walkthrough && !independentDue) markOnboarded()
+  }, [walkthrough, independentDue])
   const [device, setDevice] = useState(null)
   /*
    * The unit's own state comes from the store, not from here.

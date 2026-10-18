@@ -5282,7 +5282,8 @@ export function run(test) {
     const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
     /* The first run is also when the colours' one-time line is put away unsaid (ColoursNotice): read in the same breath. */
     assert.match(app, /useState\(\(\) => \{\s*const first = !onboarded\(\)[\s\S]{0,400}return first\s*\}\)/, 'the walkthrough does not open itself on a first run')
-    assert.match(app, /if \(walkthrough\) markOnboarded\(\)/, 'the walkthrough is not remembered, so it returns every load')
+    /* Remembered once it can be seen: on a first visit it is drawn under the opaque startup card, and a tab closed there has seen none of it. */
+    assert.match(app, /useEffect\(\(\) => \{\s+if \(walkthrough && !independentDue\) markOnboarded\(\)\s+\}, \[walkthrough, independentDue\]\)/, 'the walkthrough is not remembered, so it returns every load, or it is remembered under the startup card')
   })
 
   test('the walkthrough is worded the way he wrote it', async () => {

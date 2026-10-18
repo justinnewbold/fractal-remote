@@ -457,6 +457,10 @@ export default function Stage({
    * waits while any before it wants it or has not answered (lib/coach
    * turnTaken). The startup card and the walkthrough are drawn by App in
    * place of this screen, so nothing here is ever up beside them.
+   *
+   * The quick tip and the watch's sheet have a "not answered yet" of their
+   * own (`coachPending`, `watchPending`, below), for the colours line: it is
+   * not asked for, or drawn, while either might still take the turn.
    */
   const [wants, setWants] = useState({ only: null, vp4: null, offer: null })
   const says = useMemo(() => {
@@ -482,6 +486,16 @@ export default function Stage({
    */
   const holdDoesSomething = chain === 'ok' && blocks.length > 0 && channels?.length > 1 && !chainNow.elsewhere && !chainNow.outline
   const [coach, setCoach] = useState(false)
+  /*
+   * Whether the phone's storage has answered for the tip yet, here. Until it
+   * has, on a preset where the hold does something, the tip may be about to
+   * take the turn, and what comes after it waits (`coachPending`). Found in
+   * review: the demo card put away, the colours line and the tip asked the
+   * storage in the same moment, the line answered first and was remembered
+   * as said, and the tip came up over it before it was ever drawn.
+   */
+  const [coachHeard, setCoachHeard] = useState(false)
+  const coachPending = holdDoesSomething && !coachHeard
   /* 'tip', then after Try it 'trying' until a block is held, then 'done'. */
   const [coachStage, setCoachStage] = useState('tip')
 
@@ -491,7 +505,9 @@ export default function Stage({
     if (notesUp) return undefined
     let live = true
     coachSeen().then((seen) => {
-      if (live && !seen) setCoach(true)
+      if (!live) return
+      if (!seen) setCoach(true)
+      setCoachHeard(true)
     })
     return () => {
       live = false
@@ -504,22 +520,34 @@ export default function Stage({
    * as there's a thing that pops up the first time explaining how the user
    * uses the Apple Watch." Waits for the channel tip, so two cards never stack,
    * and for the notes at the top of Play: it is remembered the moment it is
-   * shown, so it is not shown until its turn.
+   * shown, so it is not shown until its turn. The tip's turn includes the
+   * moment before its answer (`coachPending`), or the sheet could be marked
+   * seen and then go under a tip that answered second.
+   *
+   * And it has an unanswered moment of its own (`watchPending`), which the
+   * colours line waits out. `paired` is read on every draw and the question
+   * asked again when it changes, so a watch paired with Play open is noticed
+   * and the colours line is never left waiting on a question nobody asked.
    */
   const [watchTip, setWatchTip] = useState(false)
+  const [watchHeard, setWatchHeard] = useState(false)
+  const paired = watchPaired()
+  const watchPending = paired && !watchHeard
   useEffect(() => {
-    if (coach || notesUp || !watchPaired()) return undefined
+    if (coach || coachPending || notesUp || !paired) return undefined
     let live = true
     watchTipSeen().then((seen) => {
-      if (live && !seen) {
+      if (!live) return
+      if (!seen) {
         markWatchTip()
         setWatchTip(true)
       }
+      setWatchHeard(true)
     })
     return () => {
       live = false
     }
-  }, [coach, notesUp])
+  }, [coach, coachPending, notesUp, paired])
 
   /* Shown once, and remembered the moment it is shown rather than when it is
      answered — killing the app with the card up is not an accident to correct
@@ -806,7 +834,7 @@ export default function Stage({
         {/* Paid in the demo with no account yet: see the component. */}
         <OnlyOnThisPhone onAccount={onAccount} onWant={says.only} />
         {/* "Colours now match your unit", once, for somebody who had the app before: last, after every other note. */}
-        <ColoursNotice waiting={notesUp || coach || watchTip} />
+        <ColoursNotice waiting={notesUp || coach || watchTip} unanswered={coachPending || watchPending} />
         {conflict ? <Note tone="fault">{conflict}</Note> : null}
 
         {/* ---------------------------------------------------------- preset */}

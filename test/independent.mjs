@@ -221,8 +221,8 @@ async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 
       react.moved.n++
     }
     const says = { only: say('only'), vp4: say('vp4'), offer: say('offer') }
-    /* What else Stage waits for: the quick tip and the watch's sheet. */
-    const after = { coach: false, watchTip: false }
+    /* What else Stage waits for: the quick tip and the watch's sheet, up, or not yet answered by the phone's storage. */
+    const after = { coach: false, watchTip: false, coachPending: false, watchPending: false }
     const draw = () => {
       const noteBefore = (which) => coach.turnTaken(wants, which)
       const notesUp = coach.turnTaken(wants)
@@ -235,7 +235,7 @@ async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 
       one('offer', { onUnlock: () => {}, waiting: noteBefore('offer'), onWant: says.offer })
       one('vp4', { waiting: noteBefore('vp4'), onWant: says.vp4 })
       one('only', { onAccount: () => {}, onWant: says.only })
-      one('colours', { waiting: notesUp || after.coach || after.watchTip })
+      one('colours', { waiting: notesUp || after.coach || after.watchTip, unanswered: after.coachPending || after.watchPending })
       return { drawn, stores }
     }
     const play = async () => {
@@ -523,10 +523,15 @@ export function run(test) {
     assert.match(stage, /<UnlockOffer onUnlock=\{onUnlock\} waiting=\{noteBefore\('offer'\)\} onWant=\{says\.offer\} \/>/)
     assert.match(stage, /<Vp4DemoNote waiting=\{noteBefore\('vp4'\)\} onWant=\{says\.vp4\} \/>/)
     assert.match(stage, /<OnlyOnThisPhone onAccount=\{onAccount\} onWant=\{says\.only\} \/>/)
-    assert.match(stage, /<ColoursNotice waiting=\{notesUp \|\| coach \|\| watchTip\} \/>/, 'the colours line does not wait for every other note')
+    assert.match(stage, /<ColoursNotice waiting=\{notesUp \|\| coach \|\| watchTip\} unanswered=\{coachPending \|\| watchPending\} \/>/, 'the colours line does not wait for every other note, or for one that has not answered yet')
+    /* The quick tip's and the watch's "not answered yet" (found in review: the line was remembered as said, then the tip came up over it before it was drawn). */
+    assert.match(stage, /const \[coachHeard, setCoachHeard\] = useState\(false\)\n\s+const coachPending = holdDoesSomething && !coachHeard\n/, 'the quick tip has no unanswered moment for the colours line to wait out')
+    assert.match(stage, /coachSeen\(\)\.then\(\(seen\) => \{\s+if \(!live\) return\s+if \(!seen\) setCoach\(true\)\s+setCoachHeard\(true\)/, 'the quick tip is heard from before it is up')
+    assert.match(stage, /const paired = watchPaired\(\)\n\s+const watchPending = paired && !watchHeard\n/, 'the watch’s sheet has no unanswered moment for the colours line to wait out')
+    assert.match(stage, /watchTipSeen\(\)\.then\(\(seen\) => \{\s+if \(!live\) return\s+if \(!seen\) \{\s+markWatchTip\(\)\s+setWatchTip\(true\)\s+\}\s+setWatchHeard\(true\)/)
     assert.match(stage, /<Coach open=\{coach && !notesUp\} /, 'the quick tip is drawn beside a note at the top')
     assert.match(stage, /if \(!holdDoesSomething\) return undefined\s+\/\*[^*]*\*\/\s+if \(notesUp\) return undefined[\s\S]{0,200}\}, \[holdDoesSomething, notesUp\]\)/, 'the quick tip comes up before its turn')
-    assert.match(stage, /if \(coach \|\| notesUp \|\| !watchPaired\(\)\) return undefined[\s\S]{0,250}\}, \[coach, notesUp\]\)/, 'the watch’s sheet is remembered as shown before its turn')
+    assert.match(stage, /if \(coach \|\| coachPending \|\| notesUp \|\| !paired\) return undefined[\s\S]{0,300}\}, \[coach, coachPending, notesUp, paired\]\)/, 'the watch’s sheet is remembered as shown before its turn, or never asked again once a watch is paired')
     assert.match(stage, /<Sheet open=\{watchTip && !coach && !notesUp\} /)
 
     /* The rule itself: only a plain no from every note before is a go-ahead. */
@@ -568,6 +573,45 @@ export function run(test) {
     /* The next launch: nothing. */
     p = await playNotesOnABench({ kept })
     assert.deepEqual(Object.keys(await p.play()), [], 'a note came back on the next launch')
+
+    /*
+     * FOUND IN REVIEW, on the demo AM4: the demo card put away while the
+     * quick tip's storage had not answered yet. The line answered first, was
+     * remembered as said, and the tip took the turn before it was drawn; a
+     * Try it with no hold after it, or the app closed under the tip, and it
+     * was never seen and never came back.
+     */
+    const race = new Map([['fractal.walkthrough.v1', 'done']])
+    p = await playNotesOnABench({ kept: race })
+    drawn = await p.play()
+    assert.deepEqual(Object.keys(drawn), ['offer'])
+    p.after.coachPending = true
+    p.press(drawn.offer, 'Put this away')
+    assert.deepEqual(Object.keys(await p.play()), [], 'the colours line was drawn while the quick tip might still take the turn')
+    assert.equal(race.get('fractal.coloursNoticed'), undefined, 'the colours line was remembered as said while the quick tip had not answered')
+    /* The tip is owed and comes up; Try it, no hold; the app is closed under it. */
+    p.after.coachPending = false
+    p.after.coach = true
+    assert.deepEqual(Object.keys(await p.play()), [])
+    assert.equal(race.get('fractal.coloursNoticed'), undefined, 'the colours line was remembered as said under the quick tip')
+    /* The next launch, the tip seen: the line, and only now remembered. */
+    p = await playNotesOnABench({ kept: race })
+    drawn = await p.play()
+    assert.deepEqual(Object.keys(drawn), ['colours'], 'the colours line never came, after a launch where the quick tip took its turn')
+    assert.equal(race.get('fractal.coloursNoticed'), 'done')
+    /* Said, and then a question opens before it (the first preset with channels, read late): it stays where it is rather than going and coming back. */
+    p.after.coachPending = true
+    assert.deepEqual(Object.keys(await p.play()), ['colours'], 'the colours line went away for a question, not a note')
+    p.after.coachPending = false
+
+    /* The watch's sheet the same: asked after the tip, and the line waits for its answer. */
+    const watched = new Map([['fractal.walkthrough.v1', 'done']])
+    p = await playNotesOnABench({ kept: watched, demo: { demo: false, unit: 'fm3' } })
+    p.after.watchPending = true
+    assert.deepEqual(Object.keys(await p.play()), [], 'the colours line was drawn while the watch’s sheet might still take the turn')
+    assert.equal(watched.get('fractal.coloursNoticed'), undefined)
+    p.after.watchPending = false
+    assert.deepEqual(Object.keys(await p.play()), ['colours'], 'the colours line did not come once the watch’s sheet answered that it is seen')
 
     /* THE DEMO VP4: its sentence first, then the demo card, then the colours line. */
     const vp4 = new Map([['fractal.walkthrough.v1', 'done']])
