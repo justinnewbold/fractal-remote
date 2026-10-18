@@ -44,11 +44,11 @@ export function markColoursNotice() {
  * the preset name for good because nobody pressed Got it. Nothing here for a
  * first run, which never saw the old colours: App marks it then. And it waits
  * while another of Play's one-time notes is up (`waiting`) — one note at a
- * time, as the hold tip waits for the demo's — and while the startup card or
- * the walkthrough is (App's `noteAbove`), so it is never said, and never
- * remembered, under either. Once shown it steps aside for a note that comes
- * up after it (the hold tip waits for a unit that has channels), and is back
- * when that one is put away.
+ * time, as the hold tip waits for the demo's — and while the startup card,
+ * the walkthrough or the sign-in sheet is (App's `noteAbove`), so it is never
+ * said, and never remembered, under any of them. Once shown it steps aside
+ * for a note that comes up after it (the hold tip waits for a unit that has
+ * channels), and is back when that one is put away.
  */
 export default function ColoursNotice({ waiting = false }) {
   const [shown, setShown] = useState(visit === 'showing')

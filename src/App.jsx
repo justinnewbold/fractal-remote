@@ -632,7 +632,7 @@ export default function App() {
    * walkthrough. Both are drawn over the page, with Play running under
    * them, and a note "shown" under either is a note nobody saw but the app
    * remembers as said. The startup card comes first and alone; the colours
-   * line waits for both (Gig `noteAbove`).
+   * line waits for both, and for the sign-in sheet (Gig `noteAbove`).
    */
   const startupOver = independentDue || walkthrough
   /*
@@ -1110,6 +1110,15 @@ export default function App() {
       setSignInStart('up')
       setSignIn('account')
     }, [independentDue])
+    /* WHETHER THE SIGN-IN SHEET IS OVER PLAY, or the join link's is owed:
+       Play's colours line waits for it (Gig `noteAbove`), as it waits for the
+       startup card. The link's own answer counts as well as the sheet,
+       because the line's effect runs before the one above that opens the
+       sheet, in the same moment OK is pressed: waiting on the sheet alone,
+       the line was said and remembered under it, and a sign-in from the demo
+       then reloads the page, so a player who came in through the link was
+       never told where the old colours went. */
+    const signInOver = Boolean(signIn) || Boolean(joinOwed.current)
   /*
    * Whether the phone has ever had the Mac answer this session. A blip after
    * that keeps the screen (the chip goes red; the loop retries); before it,
@@ -4630,8 +4639,8 @@ export default function App() {
            * computer's own window or its wifi page, never the demo.
            */
           down={linkShowsDown}
-          /* The startup card or the walkthrough is over the page, or the hold tip above or the demo's line is up: the colours' one-time line waits for them all. */
-          noteAbove={startupOver || (!holdNoteSeen && holdOpensChannels) || (isDemo() && status === 'live' && !demoNoteSeen)}
+          /* The startup card or the walkthrough is over the page, or the sign-in sheet is (the join link opens it the moment OK is pressed, and a sign-in from the demo reloads the page under it), or the hold tip above or the demo's line is up: the colours' one-time line waits for them all. */
+          noteAbove={startupOver || signInOver || (!holdNoteSeen && holdOpensChannels) || (isDemo() && status === 'live' && !demoNoteSeen)}
           onError={setError}
           /* A VP4's words about a preset picked from the list, for the band over the tiles (vp4Said). */
           said={vp4Said}

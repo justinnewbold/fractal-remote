@@ -5971,7 +5971,7 @@ export function run(test) {
     /* On Play, waiting while another one-time note is up. */
     const gig = readFileSync(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
     assert.match(gig, /<ColoursNotice waiting=\{noteAbove\} \/>/, 'Play does not say the colours changed')
-    assert.match(src, /noteAbove=\{startupOver \|\| \(!holdNoteSeen && holdOpensChannels\) \|\| \(isDemo\(\) && status === 'live' && !demoNoteSeen\)\}/, 'the line stacks on the hold tip or the demo’s, or is said under the startup card or the walkthrough')
+    assert.match(src, /noteAbove=\{startupOver \|\| signInOver \|\| \(!holdNoteSeen && holdOpensChannels\) \|\| \(isDemo\(\) && status === 'live' && !demoNoteSeen\)\}/, 'the line stacks on the hold tip or the demo’s, or is said under the startup card, the walkthrough or the sign-in sheet')
     assert.match(src, /const startupOver = independentDue \|\| walkthrough\n/, 'the line is said under the startup card or the walkthrough')
   })
 

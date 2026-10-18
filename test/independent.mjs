@@ -601,7 +601,18 @@ export function run(test) {
     /* A named condition (test/structure.mjs reads App.jsx as text): the card, then the walkthrough. */
     assert.match(page, /const startupOver = independentDue \|\| walkthrough\n/)
     assert.ok(page.indexOf('const startupOver') > page.indexOf('const [independentDue, setIndependentDue]'), 'startupOver is read before the card’s answer')
-    assert.match(page, /noteAbove=\{startupOver \|\| \(!holdNoteSeen && holdOpensChannels\) \|\| \(isDemo\(\) && status === 'live' && !demoNoteSeen\)\}/, 'the colours line is said under the startup card or the walkthrough')
+    assert.match(page, /noteAbove=\{startupOver \|\| signInOver \|\| \(!holdNoteSeen && holdOpensChannels\) \|\| \(isDemo\(\) && status === 'live' && !demoNoteSeen\)\}/, 'the colours line is said under the startup card, the walkthrough or the sign-in sheet')
+    /*
+     * Found in review, with a real browser at phone width: a returning demo
+     * player through /join pressed OK, Create Account opened over Play, and
+     * the line was said and remembered under the sheet. A sign-in from the
+     * demo then reloads the page, so it was never seen at all. The sheet is
+     * the same `signIn` that opens it, and the link's own answer counts too:
+     * the line's effect runs before App's that opens the sheet, in the same
+     * commit, so waiting on the sheet alone still said it under the sheet.
+     */
+    assert.match(page, /\}, \[independentDue\]\)\s+(?:\/\*[\s\S]*?\*\/\s+)?const signInOver = Boolean\(signIn\) \|\| Boolean\(joinOwed\.current\)\n/, 'the colours line is said in the moment the join link opens its sheet')
+    assert.match(page, /<SignInSheet\s+open=\{Boolean\(signIn\)\}/, 'the colours line waits for something other than the sign-in sheet')
     /* And the hold tip still waits for the demo's line: one note at a time under the bar. */
     assert.match(page, /\{!holdNoteSeen && holdOpensChannels && !\(isDemo\(\) && status === 'live' && !demoNoteSeen\) \? \(/)
 
