@@ -6066,6 +6066,10 @@ console.log('\nthe colours: the units’ own, readable, and the ones you choose'
 const { run: colours } = await import('./colours.mjs')
 colours(test)
 
+console.log('\nwhose app this is not: Fractal Audio’s letter')
+const { run: independent } = await import('./independent.mjs')
+independent(test)
+
 console.log('\nthe server')
 const { run: server } = await import('./server.mjs')
 server(test)
@@ -9989,6 +9993,27 @@ function loadDesktopMain({
 }
 const ENTRY = '/home/pi/.config/autostart/fractal-remote.desktop'
 const trayItem = (menu, label) => (menu || []).find((item) => typeof item.label === 'string' && item.label.startsWith(label))
+
+test('the tray says whose app this is not, greyed, just above Quit, and asks nobody anything', async () => {
+  /*
+   * Fractal Audio's letter of 18 October 2026 asks for its sentence at
+   * startup. A computer started with no window (a Raspberry Pi on a
+   * pedalboard) has only this menu, and must never put up a box nobody can
+   * click: one line that cannot be pressed, the shared short form.
+   */
+  const { NOT_AFFILIATED_SHORT } = await import('../shared/affiliation.mjs')
+  const main = loadDesktopMain()
+  main.run('buildTray()')
+  const menu = main.menus.at(-1)
+  const line = trayItem(menu, 'Not affiliated')
+  assert.ok(line, 'the tray does not say whose app this is not')
+  assert.equal(line.label, NOT_AFFILIATED_SHORT)
+  assert.equal(line.enabled, false, 'the line can be pressed')
+  const at = menu.indexOf(line)
+  assert.equal(menu[at + 1]?.type, 'separator')
+  assert.equal(menu[at + 2]?.label, 'Quit', 'the line is not just above Quit')
+  assert.deepEqual(main.dialogs, [], 'drawing the tray put up a dialog')
+})
 
 test('the menu draws with the phone remote on and the phones told — main.js’s own buildTray, run', () => {
   const main = loadDesktopMain()

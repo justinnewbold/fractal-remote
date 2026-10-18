@@ -93,6 +93,9 @@
   /* A panel opened from inside a sheet — the colour sheet in Settings →
      Colours — over that sheet, and still under a toast. */
   --z-over-sheet: 65;
+  /* "An independent app", once, at startup (components/IndependentNotice):
+     over the walkthrough, every page and every sheet, still under a toast. */
+  --z-notice: 68;
   --z-toast: 70;
 
   /*
@@ -12266,7 +12269,11 @@ button.setup-back {
   place-items: center;
   padding: var(--s-2);
   border-radius: var(--r-3);
-  background: #f7f6f3;
+  /* The theme's own panel. It was the photograph's off-white, so the photo's
+     edges vanished into it; the plain box that replaced the photo
+     (mobile/assets/unit-plain.png, Fractal Audio's letter) is drawn on
+     clear and sits on either theme as it is. */
+  background: var(--panel);
   border: 1px solid var(--rule);
 }
 .pw-welcome-shot img {
@@ -12274,9 +12281,6 @@ button.setup-back {
   width: 100%;
   max-height: 25dvh;
   object-fit: contain;
-  /* The photo's own background fades into the card at its edges. */
-  -webkit-mask-image: radial-gradient(ellipse 72% 72% at center, #000 62%, transparent 100%);
-  mask-image: radial-gradient(ellipse 72% 72% at center, #000 62%, transparent 100%);
 }
 .pw-welcome-head {
   margin: var(--s-2) 0 0;
@@ -12355,12 +12359,14 @@ button.setup-back {
 .pw-sheet .chip.pw-go {
   font-size: var(--f-4);
 }
-/* The disclaimer at the foot, small and quiet. */
+/* Fractal Audio's sentence at the foot: small, and readable. It was the
+   faintest colour at the smallest size, small print in the sense of hoping
+   nobody reads it, and it is the one disclaimer a first visit meets here. */
 .pw-welcome-notice {
   margin: var(--s-2) 0 0;
-  color: var(--silk-faint);
-  font-size: var(--f-1);
-  line-height: 1.4;
+  color: var(--silk-dim);
+  font-size: var(--f-3);
+  line-height: 1.45;
 }
 .pw-sub {
   margin: 0;
@@ -14306,4 +14312,66 @@ button.chip.scene-colour {
 
 [data-theme='light'] .scene-colour-dot {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--scene-fill) 50%, black);
+}
+
+/*
+ * "AN INDEPENDENT APP", ONCE, AT STARTUP (components/IndependentNotice).
+ *
+ * Fractal Audio's letter of 18 October 2026 asks for its sentence at
+ * startup. A page of its own over everything, opaque, so nothing behind it
+ * is seen or reached until OK: the walkthrough, the connecting screen and
+ * Play all wait under it. The phone's card in this app's materials, at the
+ * walkthrough's width.
+ */
+.independent {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-notice);
+  display: grid;
+  place-items: center;
+  padding: var(--s-5) var(--s-4);
+  background: var(--chassis);
+  overflow: auto;
+}
+.independent-card {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--panel);
+}
+.independent-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--f-6);
+  line-height: 1.15;
+}
+.independent-words {
+  margin: 0;
+  color: var(--silk);
+  font-size: var(--f-4);
+  line-height: 1.5;
+}
+.independent-help {
+  margin: 0;
+  color: var(--silk-dim);
+  font-size: var(--f-3);
+  line-height: 1.5;
+}
+.independent-ok {
+  width: 100%;
+  min-height: 48px;
+  font-size: var(--f-4);
+}
+
+/* Fractal Audio's sentence under "Finding your computer.", on the screen a
+   phone's browser shows while it starts up and looks: the screen's own small
+   type (.connect > p), set a little apart so it reads as the small print and
+   not as a line of what is happening. */
+.connect > p.connect-independent {
+  margin-top: var(--s-3);
 }

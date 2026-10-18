@@ -1294,6 +1294,10 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   // Which kind of pointer pressed the button that opened it, if any.
   const openedWith = useRef(null)
   useDismiss(picker, () => setPicking(false), { open: picking, ignore: '.type-open' })
+  /* A model's picture that does not arrive is none at all, never a broken
+     frame: the same rule as the gear card (components/GearCard.jsx says why).
+     Up here with the other hooks, above the empty panel's early return. */
+  const [photoFailed, setPhotoFailed] = useState(null)
 
   // Open where you already are. A native menu does this and a list that starts
   // at the top of three hundred names would be a step backwards without it.
@@ -1359,7 +1363,8 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   /* Looked up by the model's own name, the same key lineage joins on — the
      unit reports a name and nothing else, so it is the only thing both ends
      agree about. */
-  const chosenPhoto = chosen ? photoFor(chosen.name) : null
+  const chosenFound = chosen ? photoFor(chosen.name) : null
+  const chosenPhoto = chosenFound && chosenFound.src !== photoFailed ? chosenFound : null
 
   /* And what the real thing is like to play. The line above says which amp it
      is; this says what that means, for the many people who have never had one
@@ -1997,7 +2002,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
       {models.length && chosenAbout ? <GearAbout key={chosenAbout} text={chosenAbout} /> : null}
       {models.length && chosenPhoto ? (
         <figure className="gear-photo">
-          <img src={chosenPhoto.src} alt={chosenPhoto.alt} loading="lazy" />
+          <img src={chosenPhoto.src} alt={chosenPhoto.alt} loading="lazy" onError={() => setPhotoFailed(chosenPhoto.src)} />
           <figcaption className="hint">
             <a href={chosenPhoto.rights} target="_blank" rel="noreferrer noopener">
               {chosenPhoto.credit}

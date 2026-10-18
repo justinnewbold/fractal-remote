@@ -3,7 +3,7 @@ import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, Text, Vie
 
 import { color, font, mono, radius, space, TAP, MODES, getMode, setMode } from '../lib/theme'
 import { APP_VERSION } from '../lib/version'
-import { AFFILIATION } from '../lib/affiliation'
+import { AFFILIATION, SUPPORT_LINE, SUPPORT_URL } from '../lib/affiliation'
 import { setDemo, useDemo, useDemoUnit, setDemoUnit } from '../lib/demo'
 import { UNITS as DEMO_UNITS, demoSentence } from '../lib/demoUnits'
 import { getDebugLog } from '../lib/debugLog'
@@ -1534,6 +1534,19 @@ export default function Settings({
             {/* Said in the app, not only in a file somebody would have to go
                 looking for. Same string as the browser — shared/affiliation.mjs. */}
             <Note>{AFFILIATION}</Note>
+            {/*
+              AND WHERE HELP COMES FROM, which is never Fractal Audio. Their
+              letter (18 October 2026) asks that support come through the
+              developer's own channels, and nothing in the app named the
+              support page until now. The line says both ways in, and the row
+              under it opens the page.
+            */}
+            <Note>{SUPPORT_LINE}</Note>
+            <Press
+              label="Help with this app"
+              sub="The support page, and how to reach a person"
+              onPress={() => Linking.openURL(SUPPORT_URL)}
+            />
             <Press
               label="Privacy"
               sub="What this sends, and what it never does"

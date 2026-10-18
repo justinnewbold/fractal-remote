@@ -56,10 +56,13 @@ no reason to care about because upstream has no phone on the other end.
 | Guard the gen-3 Huffman tree builder against an empty or truncated bitstream | The reader answers 0 past the end of its buffer and a 0 bit means "internal node, read two more subtrees", so it recursed for ever. Six slots of one FM3 answered every summary request with a stack overflow. |
 
 Its `NOTICE` file is reproduced at
-[`forgefx-midi-NOTICE.txt`](forgefx-midi-NOTICE.txt) and its trademark
-statement applies to this app too: **Fractal Remote is not affiliated with,
-endorsed by, or sponsored by Fractal Audio Systems.** "Fractal Audio",
-"Axe-Fx", "FM3", "FM9", "AM4" and "VP4" are their trademarks, not ours.
+[`forgefx-midi-NOTICE.txt`](forgefx-midi-NOTICE.txt), as its author wrote
+it, and its trademark statement applies to this app too, in the words
+Fractal Audio asked for in October 2026: **Fractal Remote is independently
+developed and is not affiliated with, endorsed by, or supported by Fractal
+Audio Systems, LLC.** "Fractal Audio", "Axe-Fx", "FM3", "FM9", "AM4" and
+"VP4" are trademarks of Fractal Audio Systems, LLC, used here only to say
+which hardware this app works with.
 
 ---
 

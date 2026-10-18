@@ -72,6 +72,17 @@ export default function GearCard({ entry, entries = [], onGo, onBack }) {
   const { width } = useWindowDimensions()
   const x = useRef(new Animated.Value(0)).current
   const [moving, setMoving] = useState(false)
+  /*
+   * A PICTURE THAT DOES NOT ARRIVE IS NO PICTURE, never an empty grey box.
+   * The 34 drawings of Fractal Audio's own models were taken off the website
+   * on 18 October 2026 (their letter: no logos, no artwork of theirs). This
+   * copy no longer asks for them, but a picture gone from the site, or no
+   * signal, ends the same way: the website answers a missing file with its
+   * own front page, which no phone can draw. So the picture's address goes
+   * here when it fails, and the card shows the words alone, as it does for a
+   * model with no picture. By address, so the next model's is tried afresh.
+   */
+  const [failed, setFailed] = useState(null)
   const list = entries.length ? entries : entry ? [entry] : []
   const at = Math.max(0, list.findIndex((e) => e === entry || (e.name === entry?.name && e.slug === entry?.slug)))
   const many = list.length > 1
@@ -135,7 +146,8 @@ export default function GearCard({ entry, entries = [], onGo, onBack }) {
   }, [at, many, list])
 
   if (!entry) return null
-  const photo = photoFor(entry.name, `${HOSTED_ORIGIN}/gear`)
+  const found = photoFor(entry.name, `${HOSTED_ORIGIN}/gear`)
+  const photo = found && found.src !== failed ? found : null
   const about = paragraphsOf(descriptionFor(entry.slug, entry.name))
   const specs = specsFor(entry.slug, entry.name)
 
@@ -211,6 +223,7 @@ export default function GearCard({ entry, entries = [], onGo, onBack }) {
               source={{ uri: photo.src }}
               accessibilityLabel={photo.alt}
               resizeMode="contain"
+              onError={() => setFailed(photo.src)}
               style={{
                 width: '100%',
                 height: 200,

@@ -7,17 +7,24 @@ import { UNITS } from '../lib/demoUnits'
 import { setDemo, setDemoUnit } from '../lib/forgefx'
 import { markOnboarded } from './Onboarding'
 /* His own pictures, the phone's files — one copy of the artwork for both ends. */
-import unitShot from '../../mobile/assets/unit-fm3.png'
-/* His photograph of an FM3, sent for the first screen: "I included the photo
-   of the fractal device separately". */
-import welcomeShot from '../../mobile/assets/welcome/fm3.jpg'
+/*
+ * THE UNIT, AS A PLAIN BOX THE APP DREW ITSELF, in all three places it is
+ * shown: the first screen, the demo card and the three pieces. They were an
+ * FM3 photograph ("I included the photo of the fractal device separately"),
+ * an FM3 with Fractal's logo on its screen and a rack front with the FRACTAL
+ * AUDIO logo, and Fractal Audio's letter of 18 October 2026 asks for no
+ * logos, no official product photographs and no other proprietary artwork.
+ * The phone's walkthrough draws the same file (mobile/src/screens/Onboarding.js
+ * says what it is). The old files are gone from the website with the build
+ * that stopped importing them.
+ */
+import unitShot from '../../mobile/assets/unit-plain.png'
 /* And the five tile pictures cut from his mockup, the phone's same files. */
 import featurePresets from '../../mobile/assets/welcome/presets.png'
 import featureScenes from '../../mobile/assets/welcome/scenes.png'
 import featureBlocks from '../../mobile/assets/welcome/blocks.png'
 import featureTuner from '../../mobile/assets/welcome/tuner.png'
 import featureTempo from '../../mobile/assets/welcome/tempo.png'
-import pieceUnit from '../../mobile/assets/piece-unit.png'
 import pieceComputer from '../../mobile/assets/piece-computer.png'
 import piecePhone from '../../mobile/assets/piece-phone.png'
 import playIcon from '../../mobile/assets/icons/play.png'
@@ -25,7 +32,7 @@ import slidersIcon from '../../mobile/assets/icons/sliders.png'
 import saveIcon from '../../mobile/assets/icons/save.png'
 import { Cta, FootRow, Steps, TipCard } from './Walk'
 
-const PIECES = { unit: pieceUnit, computer: pieceComputer, phone: piecePhone }
+const PIECES = { unit: unitShot, computer: pieceComputer, phone: piecePhone }
 
 /*
  * FOR SOMEBODY WHO HAS IT ALREADY, the last card stops selling. The
@@ -116,13 +123,15 @@ export default function PhoneWalkthrough({ open, replay = false, computer = fals
         {/*
           THE FIRST SCREEN, FROM HIS MOCKUP. "Redo the initial landing page…
           use the mockup - keep it the same except remove the text 'official
-          remote app'." The unit in a card, the heading, the line under it,
-          the five things the app does as tiles, then the two ways in.
+          remote app'." The unit in a card (the plain box, a picture and not
+          a thing to read, so it has no words for a screen reader), the
+          heading, the line under it, the five things the app does as tiles,
+          the two ways in, and Fractal Audio's sentence at the foot.
         */}
         {at === 'welcome' ? (
           <div className="pw-welcome">
             <div className="pw-welcome-shot">
-              <img src={welcomeShot} alt="A Fractal Audio FM3" />
+              <img src={unitShot} alt="" />
             </div>
             <h1 className="pw-welcome-head">{P1.head}</h1>
             <p className="pw-welcome-sub">{computer ? C3.welcomeSub : P1.sub}</p>

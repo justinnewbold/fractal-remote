@@ -47,6 +47,18 @@ export default function GearCard({ entry, entries = [], onGo, onBack }) {
   const touch = useRef(null)
   const box = useRef(null)
   const live = useRef({})
+  /*
+   * A PICTURE THAT DOES NOT ARRIVE IS NO PICTURE, never a broken frame.
+   * The 34 drawings of Fractal Audio's own models were taken off the website
+   * on 18 October 2026 (their letter: no logos, no artwork of theirs). This
+   * copy no longer asks for them, but a picture gone from the site, or a
+   * dropped connection, ends the same way: the website answers a missing
+   * file with its own front page, which no browser can draw. So the
+   * picture's address goes here when it fails, and the card shows the words
+   * alone, as it does for a model with no picture. By address, so the next
+   * model's is tried afresh.
+   */
+  const [failed, setFailed] = useState(null)
   live.current = { list, at, many, onGo, slide }
 
   const turn = (dir) => {
@@ -77,7 +89,8 @@ export default function GearCard({ entry, entries = [], onGo, onBack }) {
   })
 
   if (!entry) return null
-  const photo = photoFor(entry.name)
+  const found = photoFor(entry.name)
+  const photo = found && found.src !== failed ? found : null
   const about = paragraphsOf(descriptionFor(entry.slug, entry.name))
   const specs = specsFor(entry.slug, entry.name)
 
@@ -164,7 +177,7 @@ export default function GearCard({ entry, entries = [], onGo, onBack }) {
       */}
       {photo ? (
         <figure className="gear-photo">
-          <img src={photo.src} alt={photo.alt} loading="lazy" />
+          <img src={photo.src} alt={photo.alt} loading="lazy" onError={() => setFailed(photo.src)} />
           <figcaption className="hint">
             <a href={photo.rights} target="_blank" rel="noreferrer noopener">
               {photo.credit}

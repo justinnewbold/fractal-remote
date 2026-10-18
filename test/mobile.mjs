@@ -4483,17 +4483,25 @@ export function run(test) {
     assert.deepEqual(P1.features, ['PRESETS', 'SCENES', 'BLOCKS', 'TUNER', 'TAP TEMPO'], 'the five tiles are not his')
     assert.equal(P1.sub, 'Presets, scenes, blocks, tuner and tap tempo - all on the phone in your pocket.')
     const web = read('src/components/PhoneWalkthrough.jsx')
-    assert.match(web, /import welcomeShot from '\.\.\/\.\.\/mobile\/assets\/welcome\/fm3\.jpg'/, 'his photograph is not on the first screen')
-    assert.ok(statSync(fileURLToPath(new URL('../mobile/assets/welcome/fm3.jpg', import.meta.url))).size < 300000, 'the photograph is too heavy for a phone on a signal')
+    /*
+     * The unit in the card is the plain box the app drew itself since 18
+     * October 2026, not his FM3 photograph: Fractal Audio's letter asks for no
+     * official product photographs (test/independent.mjs holds the rest).
+     */
+    assert.match(web, /import unitShot from '\.\.\/\.\.\/mobile\/assets\/unit-plain\.png'/, 'the plain box is not on the first screen')
+    assert.match(web, /<div className="pw-welcome-shot">\s*<img src=\{unitShot\} alt="" \/>/, 'the first screen’s picture is not the plain box, or it is read aloud as something it is not')
+    assert.ok(statSync(fileURLToPath(new URL('../mobile/assets/unit-plain.png', import.meta.url))).size < 300000, 'the picture is too heavy for a phone on a signal')
     const flat = web.replace(/\s+/g, ' ')
     for (const piece of ['className="pw-welcome-shot"', '{P1.head}', 'computer ? C3.welcomeSub : P1.sub', 'P1.features.map', '{P1.go}', '{P1.haveCode}']) {
       assert.ok(flat.includes(piece), `the first screen lost ${piece}`)
     }
     assert.ok(!/official remote app/i.test(web + read('shared/onboarding.mjs')), 'THE OFFICIAL REMOTE APP is on the screen')
     /* "Also add a disclaimer at the bottom in small text that says this
-       product is not affiliated or endorsed by Fractal Audio Systems." */
-    const { WELCOME_NOTICE } = await import('../shared/affiliation.mjs')
-    assert.equal(WELCOME_NOTICE, 'This product is not affiliated or endorsed by Fractal Audio Systems.', 'the disclaimer is not his')
+       product is not affiliated or endorsed by Fractal Audio Systems." Since
+       18 October 2026 it is Fractal Audio's own sentence, the one every other
+       copy carries, and at a size that can be read. */
+    const { WELCOME_NOTICE, NOT_AFFILIATED } = await import('../shared/affiliation.mjs')
+    assert.equal(WELCOME_NOTICE, NOT_AFFILIATED, 'the first screen’s disclaimer is not Fractal Audio’s sentence')
     assert.match(flat, /\{P1\.haveCode\} <\/button> <p className="pw-welcome-notice">\{WELCOME_NOTICE\}<\/p>/, 'the disclaimer is not at the foot of the first screen')
   })
 
@@ -4505,13 +4513,16 @@ export function run(test) {
      */
     const phone = read('mobile/src/screens/Onboarding.js')
     const web = read('src/components/PhoneWalkthrough.jsx')
-    for (const file of ['fm3.jpg', 'presets.png', 'scenes.png', 'blocks.png', 'tuner.png', 'tempo.png']) {
+    for (const file of ['presets.png', 'scenes.png', 'blocks.png', 'tuner.png', 'tempo.png']) {
       assert.ok(phone.includes(`../../assets/welcome/${file}'`), `the phone does not draw ${file}`)
       assert.ok(web.includes(`../../mobile/assets/welcome/${file}'`), `the browser draws a different ${file} from the phone`)
     }
+    /* And the unit, the plain box, the same file at both ends. */
+    assert.ok(phone.includes("import unitPlain from '../../assets/unit-plain.png'"), 'the phone does not draw the plain box')
+    assert.ok(web.includes("'../../mobile/assets/unit-plain.png'"), 'the browser draws a different unit from the phone')
     const flat = phone.replace(/\s+/g, ' ')
     const welcome = flat.slice(flat.indexOf("{at === 'welcome' ? ("), flat.indexOf("{at === 'how' ? ("))
-    for (const piece of ['<Contours />', 'source={welcomeFm3}', '{P1.head}', '{P1.sub}', 'P1.features.map', 'label={P1.go}', '→', 'label={P1.haveCode}', '{WELCOME_NOTICE}']) {
+    for (const piece of ['<Contours />', 'source={unitPlain}', '{P1.head}', '{P1.sub}', 'P1.features.map', 'label={P1.go}', '→', 'label={P1.haveCode}', '{WELCOME_NOTICE}']) {
       assert.ok(welcome.includes(piece), `the phone’s first screen lost ${piece}`)
     }
     assert.ok(welcome.indexOf('label={P1.haveCode}') < welcome.indexOf('{WELCOME_NOTICE}'), 'the disclaimer is not at the foot')
@@ -8323,7 +8334,9 @@ export function run(test) {
      * under the name that this screen did not have.
      */
     const onboarding = read('mobile/src/screens/Onboarding.js')
-    for (const piece of ['piece-unit', 'piece-computer', 'piece-phone']) {
+    /* The unit is the plain box since 18 October 2026: his rack front wore
+       the FRACTAL AUDIO logo (test/independent.mjs). */
+    for (const piece of ['unit-plain', 'piece-computer', 'piece-phone']) {
       assert.ok(onboarding.includes(`assets/${piece}.png`), `the walkthrough still draws ${piece} rather than showing it`)
     }
     /* The shapes are gone, not merely unused: three assemblies of Views that
@@ -13723,7 +13736,8 @@ export function run(test) {
     /* Seen once, and reachable again from Settings under the name its own
        last screen promises. */
     const app = read('mobile/App.js')
-    assert.match(app, /walkthroughSeen\(\)\.then\(\(seen\) => \{[\s\S]{0,240}setSeenWalk\(seen\)/, 'nothing decides whether the walkthrough has been through')
+    /* With the startup card's answer, in one Promise.all since 18 October 2026, so the two land together. */
+    assert.match(app, /Promise\.all\(\[walkthroughSeen\(\), independentNoticeSeen\(\)\]\)\.then\(\(\[seen, noticed\]\) => \{[\s\S]{0,300}setSeenWalk\(seen\)/, 'nothing decides whether the walkthrough has been through')
     assert.match(app, /auth === 'out' && !seenWalk/, 'the walkthrough is not the way in')
     assert.match(app, /onReplay=\{/, 'there is no way back into the walkthrough')
     const set = read('mobile/src/screens/Settings.js')
@@ -18603,7 +18617,8 @@ export function run(test) {
     assert.match(coach, /const COLOURS_KEY = 'fractal\.coloursNoticed'/)
     assert.match(coach, /export function markColoursNotice\(\) \{\s+coloursSettled = true/, 'the first run’s mark can lose to Play’s read')
     /* A first run never saw the old colours. */
-    assert.match(read('mobile/App.js'), /walkthroughSeen\(\)\.then\(\(seen\) => \{[\s\S]{0,200}if \(!seen\) markColoursNotice\(\)/, 'a first run is told the colours changed')
+    /* Read with the startup card's answer since 18 October 2026, in one Promise.all (see independentDue). */
+    assert.match(read('mobile/App.js'), /walkthroughSeen\(\), independentNoticeSeen\(\)\]\)\.then\(\(\[seen, noticed\]\) => \{[\s\S]{0,200}if \(!seen\) markColoursNotice\(\)/, 'a first run is told the colours changed')
     assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} \/>[\s\S]{0,120}<ColoursNotice \/>/, 'Play does not say the colours changed')
     const notice = read('mobile/src/components/ColoursNotice.js')
     assert.match(notice, /if \(!alive \|\| v\) return\s+markColoursNotice\(\)\s+setSeen\(false\)/, 'the line is not remembered the moment it is shown')

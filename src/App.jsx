@@ -119,7 +119,7 @@ import {
 import { editButtonShows } from './lib/playMode'
 import { FIXES, FIRMWARE_NOTE, fixById, fixFor, versionsInSync } from '../shared/troubleshooting.mjs'
 import { osGuess, waysFor, waysWord } from '../shared/ways-in.mjs'
-import { AFFILIATION } from '../shared/affiliation.mjs'
+import { AFFILIATION, SUPPORT_LINE, SUPPORT_URL } from '../shared/affiliation.mjs'
 import { isAdmin } from '../shared/admin.mjs'
 import AccessTool from './components/AccessTool'
 import SalesTool from './components/SalesTool'
@@ -227,6 +227,7 @@ import ConnectScreen, { AccountCheck } from './components/ConnectScreen'
 import PhoneRemote from './components/PhoneRemote'
 import WifiQr from './components/WifiQr'
 import PhoneWalkthrough from './components/PhoneWalkthrough'
+import IndependentNotice, { independentNoticeSeen, markIndependentNotice } from './components/IndependentNotice'
 import { ChainCards, TipCard } from './components/Walk'
 import { linkChain } from '../shared/link-chain.mjs'
 import { UPDATE_STEPS } from '../shared/computer-update.mjs'
@@ -616,6 +617,16 @@ export default function App() {
   })
   /* Opened again from Settings, which is when the phone's walkthrough offers a way out at the top. */
   const [walkReplay, setWalkReplay] = useState(false)
+  /*
+   * WHETHER THE STARTUP CARD IS STILL OWED: "An independent app", Fractal
+   * Audio's sentence and where help comes from, once per browser
+   * (components/IndependentNotice). Decided in the very first render, like
+   * the walkthrough, so the card covers the page from its first frame rather
+   * than arriving over something already in use. A name of its own, and
+   * drawn after the walkthrough: the walkthrough's own condition is read as
+   * text by test/structure.mjs, and is never written anywhere above it.
+   */
+  const [independentDue, setIndependentDue] = useState(() => !independentNoticeSeen())
   /*
    * On the computer, whether the walkthrough has moved on from its phone-style
    * welcome and choice to the computer's own plug-in steps — which is where
@@ -5088,6 +5099,20 @@ export default function App() {
         paid={answeredFor && !paid.unknown ? paid.unlocked : null}
         onUnlock={openUnlock}
       />
+      {/*
+        "AN INDEPENDENT APP", ONCE, OVER EVERYTHING ABOVE (Fractal Audio's
+        letter, 18 October 2026). Opaque and over the walkthrough, which waits
+        under it; see components/IndependentNotice for why it covers the page
+        rather than replacing it.
+      */}
+      {independentDue ? (
+        <IndependentNotice
+          onDone={() => {
+            markIndependentNotice()
+            setIndependentDue(false)
+          }}
+        />
+      ) : null}
 
       <SignInSheet
         open={Boolean(signIn)}
@@ -6443,7 +6468,21 @@ export default function App() {
                   to go looking for. One string, shared with the phone — see
                   shared/affiliation.mjs for why it is not typed twice. */}
               <p className="hint">{AFFILIATION}</p>
+              {/*
+                AND WHERE HELP COMES FROM, which is never Fractal Audio: their
+                letter (18 October 2026) asks for support through the
+                developer's own channels, and nothing here named the support
+                page. The website's own address, never a local link: the
+                computer window is served from the computer's own copy of the
+                site, and the support page is website-only, so that copy of
+                it is never kept current (WEBSITE_ONLY in
+                scripts/computer-fingerprint.mjs).
+              */}
+              <p className="hint">{SUPPORT_LINE}</p>
               <div className="history-actions">
+                <a className="chip" href={SUPPORT_URL} target="_blank" rel="noreferrer">
+                  Help with this app
+                </a>
                 <a className="chip" href="/privacy.html" target="_blank" rel="noreferrer">
                   Privacy
                 </a>

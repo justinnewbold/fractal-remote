@@ -1083,7 +1083,7 @@ export function run(test) {
      * shape of this that draws an image with no attribution; this holds the
      * screen to using it that way.
      */
-    const { photoFor } = await import('../src/lib/gearPhotos.js')
+    const { photoFor, photoSlug } = await import('../src/lib/gearPhotos.js')
     const one = photoFor('1959SLP Treble')
     assert.ok(one?.src && one?.credit && one?.rights, 'photoFor no longer returns the credit with the picture')
     /* A name no model carries gets nothing, never a near miss. */
@@ -1094,11 +1094,24 @@ export function run(test) {
      * photograph or a drawing marked as one. A model added without one fails
      * here, by name, rather than going quietly blank on the gear card.
      */
+    /*
+     * WITH ONE GAP, ON PURPOSE (18 October 2026): Fractal Audio's own models.
+     * Their 34 drawings wore a FRACTAL AUDIO badge like a maker's, and
+     * Fractal's letter asks for no logos or artwork of theirs, so they were
+     * taken out and those models show their words alone. The list is exact
+     * both ways: a model that loses its picture by accident still fails here,
+     * and so does one of these if a drawing of it comes back.
+     */
     const bare = []
     for (const f of ['src/data/amp-types.json', 'src/data/cab-types.json', 'src/data/drive-types.json']) {
       for (const m of JSON.parse(read(f))) if (!photoFor(m.name)) bare.push(m.name)
     }
-    assert.deepEqual(bare, [], `these models have no picture: ${bare.join(', ')}`)
+    const { FRACTAL_ORIGINALS } = await import('./independent.mjs')
+    assert.deepEqual(
+      [...new Set(bare.map(photoSlug))].sort(),
+      [...FRACTAL_ORIGINALS].sort(),
+      `these models have no picture: ${bare.join(', ')}`
+    )
     /* A drawing says it is a drawing, and still names who it is from. */
     const drawn = photoFor('Bludojai Clean')
     assert.ok(drawn?.illustration && /^Illustration · /.test(drawn.credit), 'a drawing is being shown as if it were a photograph')
@@ -2604,7 +2617,7 @@ export function run(test) {
      * matched vite's own module list for a real build exactly, 251 files.
      */
     const bundle = fp.bundleInputs(root)
-    for (const want of ['src/main.jsx', 'src/App.jsx', 'src/styles.css', 'shared/link-chain.mjs', 'shared/versions.mjs', 'mobile/src/lib/downloadLink.js', 'desktop/lib/project.mjs', 'mobile/assets/welcome/fm3.jpg']) {
+    for (const want of ['src/main.jsx', 'src/App.jsx', 'src/styles.css', 'shared/link-chain.mjs', 'shared/versions.mjs', 'mobile/src/lib/downloadLink.js', 'desktop/lib/project.mjs', 'mobile/assets/unit-plain.png']) {
       assert.ok(bundle.includes(want), `the web app is built from ${want} and the computer fingerprint does not know it`)
     }
     assert.ok(bundle.length > 200, `the walk found only ${bundle.length} files of the web app`)
@@ -3385,7 +3398,7 @@ export function run(test) {
     /* The listing names VP4 and Fractal Audio, so its trademark line has to:
        the shared one does, and a hand-typed one left both out. */
     const { AFFILIATION } = await import('../shared/affiliation.mjs')
-    assert.ok(description.includes(AFFILIATION), 'the description no longer ends on the shared disclaimer')
+    assert.ok(description.includes(AFFILIATION), 'the description no longer carries the shared disclaimer')
     for (const [where, text] of [['promotional text', promo], ['description', description], ['Play summary', short], ['subtitle', subtitle]]) {
       assert.ok(!/\bfree\b[^.\n]{0,40}\bapp\b|\bapp\b[^.\n]{0,20}\bis free\b/i.test(text), `the ${where} calls an app free`)
     }
@@ -3512,10 +3525,13 @@ export function run(test) {
     const { AFFILIATION, NOT_AFFILIATED, TRADEMARKS } = await import('../shared/affiliation.mjs')
 
     /* The words themselves have to do the job. "Independent" alone is a
-       positioning word; the disclaimer is the part about endorsement. */
-    assert.match(NOT_AFFILIATED, /in no way affiliated with, endorsed by, or sponsored by/)
+       positioning word; the disclaimer is the part about endorsement. And
+       since 18 October 2026 they are Fractal Audio's own, word for word:
+       "supported by" (the one they care about most), and "LLC", which is
+       what they are. */
+    assert.match(NOT_AFFILIATED, /independently developed and is not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC\./)
     assert.match(NOT_AFFILIATED, /Fractal Audio Systems/)
-    assert.match(TRADEMARKS, /trademarks of Fractal Audio Systems/)
+    assert.match(TRADEMARKS, /trademarks of Fractal Audio Systems, LLC/)
     assert.ok(AFFILIATION.includes(NOT_AFFILIATED) && AFFILIATION.includes(TRADEMARKS))
 
     /* Both apps show it, from the shared string rather than a copy. */
@@ -3524,7 +3540,7 @@ export function run(test) {
       ['the phone', 'mobile/src/screens/Settings.js']
     ]) {
       const src = read(file)
-      assert.match(src, /import \{ AFFILIATION \}/, `${where} does not import the shared disclaimer`)
+      assert.match(src, /import \{ AFFILIATION\b[^}]*\} from '[./]+(?:shared\/affiliation\.mjs|lib\/affiliation)'/, `${where} does not import the shared disclaimer`)
       assert.match(src, /\{AFFILIATION\}/, `${where} imports the disclaimer and never shows it`)
     }
 
@@ -4320,7 +4336,7 @@ export function run(test) {
     assert.match(current, /HOW IT WORKS\nA phone needs something between it and your Fractal unit: the desktop app\. It runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to it\. Get it at fractal\.newbold\.cloud\/downloads\.\n/, 'HOW IT WORKS does not say the desktop app is what sits between the phone and the unit')
     /* The VP4 in part, in the purchase page's words: test/vp4-safety.mjs holds the line to them. */
     assert.match(current, /^SUPPORTED UNITS\nFM3, FM9, Axe-Fx III and AM4, and the VP4 in part\.\nOn a VP4, the app turns effects on and off, /m, 'the supported units changed')
-    assert.ok(current.includes(AFFILIATION), 'the Description no longer ends on the shared disclaimer')
+    assert.ok(current.includes(AFFILIATION), 'the Description no longer carries the shared disclaimer')
     assert.match(store, /\*\*This is the one written for 1\.87\.11, and the one the next version keeps\.\*\*\s+It says nothing about Bluetooth\./, 'the Description does not say it is the one for 1.87.11 and the next version, with no Bluetooth')
     assert.match(store, /\*\*On Google Play it can go on whenever\s+it suits:\*\* nothing in it waits for 1\.87\.11 any more\./)
 
@@ -4409,7 +4425,7 @@ export function run(test) {
     assert.match(playHand, /\*\*3\. The listing\*\* \(Grow users → Store presence → Store listings → the default\s+listing\), any time: nothing in it waits for 1\.87\.11 now\./)
     assert.ok(!/paste its \*\*Google Play\s+copy\*\* instead/.test(playHand), 'the Play checklist still offers the withdrawn Bluetooth draft')
     assert.match(playHand, /\*\*Short description:\*\* the one under \*Google Play: short description\*/, 'the Play checklist does not say to paste the lower-case short description')
-    assert.match(playHand, /\*\*The trademark line\*\* at the end has to be the one in this file, which\s+names the VP4/, 'the Play checklist does not say the trademark line must name the VP4')
+    assert.match(playHand, /\*\*The trademark line\*\* in the second paragraph has to be the one in this\s+file, which names the VP4/, 'the Play checklist does not say the trademark line must name the VP4')
     assert.ok(AFFILIATION.includes('“VP4”'), 'the shared trademark line no longer names the VP4, and the Play checklist says it does')
   })
 
@@ -4480,7 +4496,7 @@ export function run(test) {
        changed once. */
     assert.match(
       notices,
-      /affiliated with, endorsed by, or sponsored by/i,
+      /affiliated with, endorsed by, or supported by/i,
       'nothing disclaims affiliation with Fractal Audio Systems'
     )
 

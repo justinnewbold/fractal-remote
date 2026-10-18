@@ -1370,7 +1370,10 @@ export function run(test) {
   test('the store words say what is true on every unit', () => {
     const store = read('docs/app-store.md')
     assert.ok(!/match your unit's own screen/.test(store), 'the store says every colour is off the unit’s own screen, which is not true on an FM3')
-    assert.match(store, /Colors that match your Fractal unit and its editor/)
+    /* Without "and its editor" since 18 October 2026: it tied the app's look to
+       Fractal's own software, and their letter asks for nothing that reads as theirs. */
+    assert.match(store, /Colors that match your Fractal unit, so you find things by looking/)
+    assert.ok(!/and its editor/.test(store), 'the store ties the app’s colours to Fractal’s editor again')
   })
 
   test('on an Axe-Fx II the Colours page and the sheet show each effect in the colour Play draws it, in every look', async () => {
