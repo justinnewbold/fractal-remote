@@ -34,8 +34,10 @@
       after another under its own heading, and a line of links jumps to each.
 
       LIGHT AND DARK. The site's other pages are dark only; this one follows
-      the system, and the app's own Light or Dark choice when one was made in
-      this browser (the web app keeps it as fab.theme, on this same address).
+      the app's own choice in this browser (the web app keeps it as fab.theme,
+      on this same address): Light or Dark as chosen, the system on Auto, and
+      Dark when nothing was chosen, the app's own default since 18 October
+      2026.
 
       WHAT IT MAY CLAIM. The app has been started, the way a pedalboard Pi
       starts it, on GitHub's arm64 machines on every build. Nothing records it
@@ -56,14 +58,15 @@
       nothing loaded from anywhere.
     -->
     <script>
-      /* The app's own Light or Dark, if one was chosen in this browser. */
+      /* The app's own choice in this browser: Light or Dark, the system on Auto, Dark when nothing was chosen. */
       ;(function () {
+        var chosen = null
         try {
-          var chosen = window.localStorage.getItem('fab.theme')
-          if (chosen === 'light' || chosen === 'dark') document.documentElement.setAttribute('data-theme', chosen)
+          chosen = window.localStorage.getItem('fab.theme')
         } catch (e) {
-          /* Storage refused: the system's own choice stands. */
+          /* Storage refused: the app's default, Dark. */
         }
+        if (chosen !== 'auto') document.documentElement.setAttribute('data-theme', chosen === 'light' ? 'light' : 'dark')
       })()
     </script>
     <style>

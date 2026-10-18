@@ -11252,6 +11252,44 @@ test('the line under Next names what Next loads, says so when the set starts ove
   }
 })
 
+test('the browser starts dark until somebody chooses, and remembers Auto once chosen', async () => {
+  /*
+   * "Can we make the default dark mode on the app?" Justin, 18 October 2026.
+   * Auto used to be kept by writing nothing down, so nothing stored now means
+   * nobody chose, which is Dark; Auto is written down when chosen, so it
+   * sticks. Storage that refuses is Dark too.
+   */
+  const saved = { localStorage: globalThis.localStorage, document: globalThis.document, window: globalThis.window }
+  const box = new Map()
+  let refuse = false
+  globalThis.localStorage = {
+    getItem: (k) => { if (refuse) throw new Error('blocked'); return box.has(k) ? box.get(k) : null },
+    setItem: (k, v) => { if (refuse) throw new Error('blocked'); box.set(k, String(v)) },
+    removeItem: (k) => box.delete(k)
+  }
+  const root = { dataset: {} }
+  globalThis.document = { documentElement: root, querySelector: () => null }
+  globalThis.window = { matchMedia: () => ({ matches: true }) }
+  try {
+    const theme = await import('../src/lib/theme.js')
+    assert.equal(theme.getMode(), 'dark', 'a browser that never chose does not start dark')
+    assert.equal(theme.apply(theme.getMode()), 'dark', 'a browser set to light that never chose comes up light')
+    theme.setMode('auto')
+    assert.equal(box.get('fab.theme'), 'auto', 'choosing Auto is not written down, so it is lost on the next visit')
+    assert.equal(theme.getMode(), 'auto')
+    assert.equal(theme.apply('auto'), 'light', 'Auto does not follow a browser set to light')
+    theme.setMode('light')
+    assert.equal(theme.getMode(), 'light')
+    box.set('fab.theme', 'sepia')
+    assert.equal(theme.getMode(), 'dark', 'a value the app never writes is taken as a choice')
+    refuse = true
+    assert.equal(theme.getMode(), 'dark', 'storage that refuses does not start dark')
+    assert.doesNotThrow(() => theme.setMode('light'), 'storage that refuses breaks the Light button')
+  } finally {
+    Object.assign(globalThis, saved)
+  }
+})
+
 test('the line under Previous names what Previous loads, says so when it goes to the end, and never guesses', () => {
   /*
    * "The next button now shows the next song/preset. Can we add that to the

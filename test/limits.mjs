@@ -2344,11 +2344,13 @@ export function run(test) {
     assert.deepEqual(old.shown(), WAYS, 'a browser with no history to write is shown no way at all')
     assert.equal(old.byId('pick').hidden, true, 'a browser with no history to write is shown buttons that cannot work')
 
-    /* The app's own Light or Dark; the system's when it follows the system, or storage refuses. */
+    /* The app's own Light or Dark; the system's on Auto; Dark, the app's default, when nothing was chosen or storage refuses. */
     assert.equal(browser({ stored: 'light' }).root.getAttribute('data-theme'), 'light', 'the guide ignores the app’s Light choice')
     assert.equal(browser({ stored: 'dark' }).root.getAttribute('data-theme'), 'dark', 'the guide ignores the app’s Dark choice')
     assert.equal(browser({ stored: 'auto' }).root.getAttribute('data-theme'), null, 'the guide overrides the system when the app follows it')
-    assert.equal(browser({ refuse: true }).root.getAttribute('data-theme'), null, 'storage that refuses breaks the guide')
+    assert.equal(browser({}).root.getAttribute('data-theme'), 'dark', 'a browser that never chose sees the guide light, when the app it came from starts dark')
+    assert.equal(browser({ stored: 'sepia' }).root.getAttribute('data-theme'), 'dark', 'a value the app never writes is taken as a choice')
+    assert.equal(browser({ refuse: true }).root.getAttribute('data-theme'), 'dark', 'storage that refuses gives the guide a theme the app would not show')
   })
 
   /*

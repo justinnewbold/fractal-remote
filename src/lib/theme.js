@@ -1,16 +1,23 @@
 /**
  * Light, dark, or follow the system.
  *
- * Auto is the default and is genuinely useful here rather than a checkbox for
- * its own sake: this gets used at a desk in daylight and on a dark stage, and
- * the phone already knows which.
+ * DARK UNTIL SOMEBODY CHOOSES. "Can we make the default dark mode on the
+ * app?" Justin, 18 October 2026. Auto was the default, and it was kept by
+ * writing nothing down, so a browser that chose Auto before this looks the
+ * same as one that never chose and starts dark once; Auto is written down
+ * from now on, so choosing it again sticks. Storage that refuses is Dark too.
  */
 const KEY = 'fab.theme'
 const MODES = ['auto', 'light', 'dark']
+const DEFAULT = 'dark'
 
 export function getMode() {
-  const stored = localStorage.getItem(KEY)
-  return MODES.includes(stored) ? stored : 'auto'
+  try {
+    const stored = localStorage.getItem(KEY)
+    return MODES.includes(stored) ? stored : DEFAULT
+  } catch {
+    return DEFAULT
+  }
 }
 
 export function resolve(mode) {
@@ -30,8 +37,11 @@ export function apply(mode) {
 }
 
 export function setMode(mode) {
-  if (mode === 'auto') localStorage.removeItem(KEY)
-  else localStorage.setItem(KEY, mode)
+  try {
+    localStorage.setItem(KEY, MODES.includes(mode) ? mode : DEFAULT)
+  } catch {
+    /* Costs the next visit, not this press. */
+  }
   return apply(mode)
 }
 

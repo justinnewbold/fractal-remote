@@ -7512,7 +7512,9 @@ export function run(test) {
      * New lists the changes. iPhone only, so it sits after Play's five.
      */
     assert.equal(JSON.parse(read('mobile/app.json')).expo.userInterfaceStyle, 'automatic', 'the iPhone no longer follows its own light or dark setting; the notes and What’s New should stop saying it does')
-    assert.match(read('mobile/src/lib/theme.js'), /let mode = 'auto'/, 'Auto is no longer the default, and the notes say it is')
+    /* Dark is the default since 18 October 2026 ("Can we make the default dark mode on the app?"); the next version's notes say so (docs/app-store.md). */
+    assert.match(read('mobile/src/lib/theme.js'), /const DEFAULT = 'dark'\n\nlet mode = DEFAULT/, 'Dark is no longer the default, and the next version’s notes say it is')
+    assert.match(read('docs/app-store.md'), /For the next version's notes: Dark by default/, 'the next version’s notes do not say the app starts dark')
     /*
      * By where it is, not by a name it does not have: Settings draws Auto,
      * Light and Dark as an unlabelled row under Play screen, with no word
@@ -12250,6 +12252,23 @@ export function run(test) {
     theme.setMode('dark')
     assert.equal(theme.isDark(), true)
     assert.notEqual(theme.color.chassis, light, 'light and dark are the same colour')
+
+    /*
+     * DARK UNTIL SOMEBODY CHOOSES. "Can we make the default dark mode on the
+     * app?" A phone that never chose, or whose stored choice cannot be read,
+     * starts dark whatever the handset says; one that chose Auto or Light
+     * keeps it.
+     */
+    const store = (value) => ({ getItem: () => value, setItem: () => {} })
+    theme.setSystemDark(false)
+    assert.equal(theme.loadMode(store(null)), 'dark', 'a phone that never chose does not start dark')
+    assert.equal(theme.isDark(), true, 'a phone that never chose, set to light, comes up on the paper theme')
+    assert.equal(theme.loadMode(store('sepia')), 'dark', 'a value the app never writes is taken as a choice')
+    assert.equal(theme.loadMode({ getItem: () => { throw new Error('no storage') } }), 'dark', 'storage that throws does not start dark')
+    assert.equal(theme.loadMode(store('auto')), 'auto', 'a phone that chose Auto loses it')
+    assert.equal(theme.isDark(), false, 'Auto on a phone set to light is dark')
+    assert.equal(theme.loadMode(store('light')), 'light', 'a phone that chose Light loses it')
+    theme.setSystemDark(true)
 
     /* Auto follows the handset rather than guessing. */
     theme.setMode('auto')
