@@ -6296,7 +6296,8 @@ export function run(test) {
     for (const p of ['/join', '/join/', '/JOIN', '/signup']) assert.ok(arrivedToJoin({ pathname: p }), `${p} does not open Create Account`)
     for (const p of ['/', '/joined', '/downloads', '']) assert.ok(!arrivedToJoin({ pathname: p }), `${p} opens Create Account`)
     const app = read('src/App.jsx')
-    assert.match(app, /if \(!arrivedToJoin\(\)\) return\s+window\.history\.replaceState\(null, '', '\/'\)\s+setSignInStart\('up'\)\s+setSignIn\('account'\)/, 'the join link does not open the form on the Create Account side')
+    /* After the startup card's OK, never under it (test/independent.mjs holds the waiting). */
+    assert.match(app, /joinOwed\.current = arrivedToJoin\(\)[\s\S]{0,200}window\.history\.replaceState\(null, '', '\/'\)\s+setSignInStart\('up'\)\s+setSignIn\('account'\)/, 'the join link does not open the form on the Create Account side')
     assert.ok(!/"source": "\/join"/.test(read('vercel.json')), 'the join link is sent somewhere other than the app')
 
     /* "How do I see a list of who has set up an account?" */

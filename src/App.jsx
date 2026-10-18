@@ -1082,13 +1082,26 @@ export default function App() {
       if (!signIn) setSignInStart('in')
     }, [signIn])
     /* Opened from fractal.newbold.cloud/join: straight onto Create Account,
-       over the welcome, and the address back to plain `/`. See lib/joinLink. */
+       over the welcome, and the address back to plain `/`. See lib/joinLink.
+
+       AFTER THE STARTUP CARD, NEVER UNDER IT. A first visit through the
+       link owes the card too (independentDue), and the form used to open in
+       the same first moment: on a phone the sheet shut the page under it,
+       the card with it, and OK did nothing, over a form nobody could see.
+       The only way out was Back, which closed the form the link was sent
+       for. So the link is remembered from the first render and kept until
+       OK, and the address stays /join until then, so a reload while the
+       card is up still ends on Create Account. Then the card goes and the
+       form arrives, in sight, the way the link promised. */
+    const joinOwed = useRef(null)
+    if (joinOwed.current === null) joinOwed.current = arrivedToJoin()
     useEffect(() => {
-      if (!arrivedToJoin()) return
+      if (!joinOwed.current || independentDue) return
+      joinOwed.current = false
       window.history.replaceState(null, '', '/')
       setSignInStart('up')
       setSignIn('account')
-    }, [])
+    }, [independentDue])
   /*
    * Whether the phone has ever had the Mac answer this session. A blip after
    * that keeps the screen (the chip goes red; the loop retries); before it,
@@ -6472,7 +6485,7 @@ export default function App() {
               <SetupRow
                 key="help"
                 title="Help with this app"
-                status="The support page, and how to reach a person"
+                status="Questions, problems, a person"
                 onClick={() => window.open(SUPPORT_URL, '_blank', 'noopener')}
               />
             </div>

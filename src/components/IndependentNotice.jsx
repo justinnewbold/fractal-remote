@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 
+import { holdInert } from '../lib/inert'
 import { NOT_AFFILIATED, STARTUP_NOTICE_TITLE, SUPPORT_LINE } from '../../shared/affiliation.mjs'
 
 /*
@@ -70,6 +72,17 @@ export function markIndependentNotice() {
  * everything else on the page is inert (nothingBehind, below), and Tab has
  * nowhere to go but OK.
  *
+ * DRAWN INTO THE BODY, BESIDE THE APP RATHER THAN INSIDE IT. A sheet over
+ * the screen makes the app under it inert (components/Sheet), and the card
+ * used to be drawn inside the app, so a sheet that opened by itself took the
+ * card with it. The join link does exactly that: a first visit to
+ * fractal.newbold.cloud/join on a phone opened Create Account in the first
+ * moment, the sheet shut the app, the card in it, and OK did nothing over a
+ * form nobody could see. The join link now waits for OK (App.jsx), and the
+ * card sits beside the app in the body, where the sheets are, so no sheet
+ * can shut it whatever opens. It is over them anyway (--z-notice), and
+ * shuts them itself while it is up.
+ *
  * NEVER A DIALOG WHERE NOBODY IS LOOKING. A computer app started with no
  * window (a Raspberry Pi on a pedalboard, `--hidden`) has no page at all
  * until somebody opens the window, so nothing waits on this there: the
@@ -80,7 +93,7 @@ export function markIndependentNotice() {
 export default function IndependentNotice({ onDone }) {
   const own = useRef(null)
   useNothingBehind(own)
-  return (
+  return createPortal(
     <div ref={own} className="independent" role="dialog" aria-modal="true" aria-labelledby="independent-title">
       <div className="independent-card">
         <h1 id="independent-title" className="independent-title">
@@ -93,7 +106,8 @@ export default function IndependentNotice({ onDone }) {
           OK
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -111,18 +125,24 @@ export default function IndependentNotice({ onDone }) {
  * arrives, because a page that is still running under the card keeps adding
  * things. When the card goes, only what this made inert is given back.
  *
+ * Each one a hold (lib/inert), never a switch, because the card is not the
+ * only thing that shuts the app. A sheet open under the card holds it too,
+ * so OK gives back the card's hold and the app stays shut behind the sheet,
+ * and a sheet that closes under the card gives back its own and the app
+ * stays shut behind the card. Something that was inert already is held as
+ * well, and goes back to how it was.
+ *
  * Set on the elements themselves rather than written into App.jsx as an
  * attribute, so the card brings it and takes it away, and no other screen
  * has to know.
  */
 export function nothingBehind(card) {
   if (typeof MutationObserver === 'undefined') return () => {}
-  const made = []
+  const made = new Map()
   const shut = (el) => {
     /* Elements only (nodeType 1): text and comments have nothing to shut. */
-    if (el?.nodeType !== 1 || el === card || el.contains(card) || el.inert) return
-    el.inert = true
-    made.push(el)
+    if (el?.nodeType !== 1 || el === card || el.contains(card) || made.has(el)) return
+    made.set(el, holdInert(el))
   }
   const watching = []
   for (let at = card; at.parentElement && at !== document.body; at = at.parentElement) {
@@ -136,7 +156,7 @@ export function nothingBehind(card) {
   }
   return () => {
     for (const watch of watching) watch.disconnect()
-    for (const el of made) el.inert = false
+    for (const giveBack of made.values()) giveBack()
   }
 }
 

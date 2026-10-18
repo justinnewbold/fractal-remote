@@ -234,8 +234,8 @@ Google usually passes a text change within a day.
 The line right under the app's name on Play. It said "Control your Fractal
 from your phone", which, under the name Fractal Remote, reads as Fractal's
 own remote for your Fractal. Since 18 October 2026 it says whose app it is
-not instead, in Fractal Audio's own words cut to fit: 80 of 80, still opening
-on the computer, and in ordinary letters.
+not instead, cut to fit: 80 of 80, still opening on the computer, and in
+ordinary letters.
 
 ```
 Requires a computer and our desktop app. Not made or supported by Fractal Audio.

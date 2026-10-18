@@ -1521,11 +1521,13 @@ export default function Settings({
             come through the developer's own channels. The browser's way to
             the support page sat in its small print, which opens closed, so
             it went up beside Updates there, and here too, so the two lists
-            stay one list.
+            stay one list. Its line is short because a row's line is one line
+            (SetupRow): "The support page, and how to reach a person" stopped
+            at "a p…" on a 320-wide phone.
           */}
           <SetupRow
             title="Help with this app"
-            status="The support page, and how to reach a person"
+            status="Questions, problems, a person"
             onPress={() => Linking.openURL(SUPPORT_URL)}
           />
           </View>

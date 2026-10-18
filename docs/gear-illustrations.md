@@ -23,8 +23,7 @@ Notes:
   instead: another maker's amp under the name of a Fractal original, which
   is no better. They were taken out of the app, the website and
   `sources.csv`, and those models show their words with no picture (a test
-  holds the list). One is not drawn again without the name and the badge
-  gone, and a drawing of a Fractal original is better left out altogether.
+  holds the list). Their cards show words only.
 
 New batches are appended to the end of this table.
 

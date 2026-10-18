@@ -324,13 +324,33 @@ export function run(test) {
      * inert while it is up, and gives back exactly what it took when it goes.
      */
     const web = read('src/components/IndependentNotice.jsx')
-    assert.match(web, /const own = useRef\(null\)\s+useNothingBehind\(own\)\s+return \(\s+<div ref=\{own\} className="independent"/, 'the card no longer shuts the page behind it')
+    assert.match(web, /const own = useRef\(null\)\s+useNothingBehind\(own\)\s+return createPortal\(\s+<div ref=\{own\} className="independent"/, 'the card no longer shuts the page behind it, or is drawn inside the app again')
+    assert.match(web, /<\/div>,\s+document\.body\s+\)\s+\}/, 'the card is not drawn into the body, beside the app')
     assert.match(web, /useEffect\(\(\) => \(own\.current \? nothingBehind\(own\.current\) : undefined\), \[own\]\)/, 'what the card shut is not given back when it goes')
+    assert.match(web, /made\.set\(el, holdInert\(el\)\)/, 'the card shuts the page with a switch, which a sheet closing under it undoes')
+    /*
+     * Found in review, with a real browser at phone width: a first visit to
+     * fractal.newbold.cloud/join opened Create Account in the same moment as
+     * the card, the sheet made the app inert with the card inside it, and OK
+     * did nothing. So a sheet shuts the app with a hold too, never a switch,
+     * and keys a shut sheet hears are not its own.
+     */
+    const sheetCode = read('src/components/Sheet.jsx')
+    assert.match(sheetCode, /const giveBack = holdInert\(root\)/, 'a sheet shuts the app with a switch again')
+    assert.ok(!/root\.inert\s*=/.test(code(sheetCode)), 'a sheet sets the app inert by hand, and opens it under the card when it closes')
+    assert.match(sheetCode, /const key = \(e\) => \{\s+(?:\/\*[\s\S]*?\*\/\s+)?if \(panel\.current\?\.closest\?\.\('\[inert\]'\)\) return\s+if \(e\.key === 'Escape'\)/, 'Escape on the card closes a sheet nobody can see under it')
+    /* And the join link opens its form after OK, never under the card. */
+    const page = read('src/App.jsx')
+    assert.match(page, /if \(joinOwed\.current === null\) joinOwed\.current = arrivedToJoin\(\)\s+useEffect\(\(\) => \{\s+if \(!joinOwed\.current \|\| independentDue\) return\s+joinOwed\.current = false\s+window\.history\.replaceState\(null, '', '\/'\)\s+setSignInStart\('up'\)\s+setSignIn\('account'\)\s+\}, \[independentDue\]\)/, 'the join link opens Create Account under the startup card')
 
-    /* And run: the card's own function, bundled as the page bundles it, on a page of stand-in elements. */
+    /* And run: the card's own function and the holds, bundled as the page bundles them, on a page of stand-in elements. */
     const { build } = await import('esbuild')
     const out = await build({
-      stdin: { contents: "export { nothingBehind } from './src/components/IndependentNotice.jsx'", resolveDir: root, loader: 'js' },
+      stdin: {
+        contents: "export { nothingBehind } from './src/components/IndependentNotice.jsx'\nexport { holdInert } from './src/lib/inert.js'",
+        resolveDir: root,
+        loader: 'js'
+      },
       bundle: true,
       platform: 'node',
       format: 'cjs',
@@ -378,31 +398,64 @@ export function run(test) {
       }
     }
     try {
-      const { nothingBehind } = createRequire(import.meta.url)(file)
+      const { nothingBehind, holdInert } = createRequire(import.meta.url)(file)
       const el = (name) => new Element(name)
-      /* The page as it is: the app's shell holding the bar, Play and the card; a sheet drawn into the body; one thing inert already. */
+      /* Whether anything can reach it: inert is inherited, so it and everything it sits in. */
+      const reachable = (e) => {
+        for (let at = e; at; at = at.parentElement) if (at.inert) return false
+        return true
+      }
+      /* The page as it is: the app (its shell holding the bar and Play) and, beside it in the body, the card, a sheet, and one thing inert already. */
       const body = el('body')
       const root = el('#root')
       const shell = el('.shell')
       const [bar, play, card, sheet, already] = ['bar', 'play', 'card', 'sheet', 'already'].map(el)
       already.inert = true
-      body.append(root.append(shell.append(bar, play, card)), sheet, already)
+      body.append(root.append(shell.append(bar, play)), card, sheet, already)
       globalThis.document = { body }
 
       const giveBack = nothingBehind(card)
-      assert.deepEqual([bar, play, sheet].map((e) => e.inert), [true, true, true], 'something beside the card can still be reached')
-      assert.deepEqual([card, shell, root, body].map((e) => e.inert), [false, false, false, false], 'the card shut itself, or what holds it')
+      assert.deepEqual([bar, play, sheet].map(reachable), [false, false, false], 'something beside the card can still be reached')
+      assert.ok(reachable(card) && !body.inert, 'the card shut itself, or what holds it')
       /* What arrives while it is up: Play changing under it, a sheet opening by itself. */
       const later = el('settings sheet')
       const screen = el('connecting')
       body.append(later, { nodeType: 3, data: 'a text node' })
       shell.append(screen)
-      assert.ok(later.inert && screen.inert, 'something that arrived while the card was up can be reached')
+      assert.ok(!reachable(later) && !reachable(screen), 'something that arrived while the card was up can be reached')
+      /* A sheet that opens by itself and closes again while the card is up: OK stays OK, and the app stays shut behind the card. */
+      const sheetGoes = holdInert(root)
+      assert.ok(reachable(card), 'a sheet opening under the card shut the card')
+      sheetGoes()
+      assert.ok(!reachable(bar), 'a sheet closing under the card opened the app behind it')
 
       giveBack()
-      assert.deepEqual([bar, play, sheet, later, screen].map((e) => e.inert), [false, false, false, false, false], 'OK left part of the page dead')
+      assert.deepEqual([bar, play, sheet, later, screen].map(reachable), [true, true, true, true, true], 'OK left part of the page dead')
       assert.equal(already.inert, true, 'OK woke something the card never shut')
       assert.equal(watchers.size, 0, 'the card goes on watching the page after it has gone')
+
+      /* The other way round: a sheet already open (the join link, the unlock page after a reload) when the card comes up. */
+      const signUp = el('create account')
+      body.append(signUp)
+      const signUpGoes = holdInert(root)
+      const card2 = el('card again')
+      body.append(card2)
+      const giveBack2 = nothingBehind(card2)
+      assert.ok(reachable(card2), 'a sheet open under the card shut the card, and OK did nothing')
+      assert.ok(!reachable(signUp) && !reachable(play), 'the sheet, or the app, can be reached past the card')
+      giveBack2()
+      assert.ok(reachable(signUp), 'OK left the sheet that was waiting under it dead')
+      assert.ok(!reachable(play), 'OK opened the app behind a sheet that is still open')
+      signUpGoes()
+      assert.ok(reachable(play), 'the last sheet closed and the app stayed shut')
+      /* A hold given back twice is given back once. */
+      const one = holdInert(root)
+      const two = holdInert(root)
+      one()
+      one()
+      assert.ok(root.inert, 'a hold given back twice let go of somebody else’s')
+      two()
+      assert.equal(root.inert, false)
     } finally {
       for (const [k, v] of Object.entries(was)) {
         if (v === undefined) delete globalThis[k]
