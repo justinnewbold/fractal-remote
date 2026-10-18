@@ -7404,7 +7404,7 @@ export function run(test) {
     const offer = read('mobile/src/components/UnlockOffer.js')
     assert.match(offer, /purchase\.price \? `Unlock \$\{purchase\.price\}` : 'Unlock'/, 'the demo’s Unlock button is not called Unlock, and the notes send the reviewer to it')
     assert.match(read('mobile/src/lib/purchases.js'), /export const shouldOffer = \(\{ demo \}\) => Boolean\(demo\) && !shown\.unlocked/, 'the demo’s Unlock no longer shows in the demo, and the notes send the reviewer to it')
-    assert.match(read('mobile/src/screens/Stage.js'), /<UnlockOffer onUnlock=\{onUnlock\} \/>/, 'the Unlock offer is no longer on the Play screen')
+    assert.match(read('mobile/src/screens/Stage.js'), /<UnlockOffer onUnlock=\{onUnlock\} waiting=\{noteBefore\('offer'\)\} onWant=\{says\.offer\} \/>/, 'the Unlock offer is no longer on the Play screen')
     const paywall = read('mobile/src/screens/Paywall.js')
     assert.match(paywall, /<Press label="Restore a purchase"/, 'the paywall no longer says Restore a purchase')
 
@@ -15825,7 +15825,7 @@ export function run(test) {
     assert.match(only, /if \(stuck\) \{ return \( <View style=\{\{ gap: space\.sm \}\}> <Note tone="warn" onDismiss=\{\(\) => setGone\(true\)\}>\{said \|\| NOT_ACROSS\}<\/Note> <Press label=\{busy \? 'Trying…' : 'Restore a purchase'\}/, 'nothing on the stage says the purchase has not reached the account')
     assert.match(only, /const out = await restorePurchase\(\) setBusy\(false\) setSaid\(out\.ok \? null : out\.message\)/)
     assert.match(only, /<Note onDismiss=\{\(\) => setGone\(true\)\}>\{ONLY_HERE\}<\/Note>/, 'the line cannot be put away')
-    assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} \/>/)
+    assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} onWant=\{says\.only\} \/>/)
     const settings = withoutComments(read('mobile/src/screens/Settings.js')).replace(/\s+/g, ' ')
     assert.match(settings, /asked && !account\?\.email && purchase\.onlyHere && onMakeAccount \? \( <> <Note>\{ONLY_HERE\}<\/Note> <Press label="Make an account"/)
     assert.match(settings, /\{deleteCosts\(from\)\}/, 'the delete sheet promises a store purchase to everybody again')
@@ -18620,11 +18620,13 @@ export function run(test) {
     /* A first run never saw the old colours. */
     /* Read with the startup card's answer since 18 October 2026, in one Promise.all (see independentDue). */
     assert.match(read('mobile/App.js'), /walkthroughSeen\(\), independentNoticeSeen\(\)\]\)\.then\(\(\[seen, noticed\]\) => \{[\s\S]{0,200}if \(!seen\) markColoursNotice\(\)/, 'a first run is told the colours changed')
-    assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} \/>[\s\S]{0,120}<ColoursNotice \/>/, 'Play does not say the colours changed')
+    /* Last of Play's one-time notes since 18 October 2026: it waits for every other (test/independent.mjs, the startup messages take turns). */
+    assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} onWant=\{says\.only\} \/>[\s\S]{0,160}<ColoursNotice waiting=\{notesUp \|\| coach \|\| watchTip\} \/>/, 'Play does not say the colours changed')
     const notice = read('mobile/src/components/ColoursNotice.js')
-    assert.match(notice, /if \(!alive \|\| v\) return\s+markColoursNotice\(\)\s+setSeen\(false\)/, 'the line is not remembered the moment it is shown')
+    assert.match(notice, /if \(!alive \|\| v\) return\s+markColoursNotice\(\)\s+launch = 'showing'\s+setShown\(true\)/, 'the line is not remembered the moment it is shown')
     assert.match(notice, /<Note\s+onDismiss=/, 'the line cannot be put away')
-    assert.match(read('src/lib/colourPage.js'), /export const COLOURS_NOTICE = 'Colours now match your unit · Settings → Colours'/)
+    /* "Settings → Colours" held together, so a narrow screen never breaks it after "Settings". */
+    assert.match(read('src/lib/colourPage.js'), /export const COLOURS_NOTICE = 'Colours now match your unit · Settings\\u00a0→\\u00a0Colours'/)
   })
 
   test('a scene painted while a preset is loaded asks which presets, and the phone’s generated copy keeps them apart', async () => {

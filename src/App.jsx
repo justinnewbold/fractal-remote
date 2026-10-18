@@ -628,6 +628,14 @@ export default function App() {
    */
   const [independentDue, setIndependentDue] = useState(() => !independentNoticeSeen())
   /*
+   * WHAT PLAY'S ONE-TIME NOTES WAIT BEHIND: the startup card, then the
+   * walkthrough. Both are drawn over the page, with Play running under
+   * them, and a note "shown" under either is a note nobody saw but the app
+   * remembers as said. The startup card comes first and alone; the colours
+   * line waits for both (Gig `noteAbove`).
+   */
+  const startupOver = independentDue || walkthrough
+  /*
    * On the computer, whether the walkthrough has moved on from its phone-style
    * welcome and choice to the computer's own plug-in steps — which is where
    * "Use it on this computer" goes.
@@ -4622,8 +4630,8 @@ export default function App() {
            * computer's own window or its wifi page, never the demo.
            */
           down={linkShowsDown}
-          /* The hold tip above, or the demo's line, is up: the colours' one-time line waits for them. */
-          noteAbove={(!holdNoteSeen && holdOpensChannels) || (isDemo() && status === 'live' && !demoNoteSeen)}
+          /* The startup card or the walkthrough is over the page, or the hold tip above or the demo's line is up: the colours' one-time line waits for them all. */
+          noteAbove={startupOver || (!holdNoteSeen && holdOpensChannels) || (isDemo() && status === 'live' && !demoNoteSeen)}
           onError={setError}
           /* A VP4's words about a preset picked from the list, for the band over the tiles (vp4Said). */
           said={vp4Said}

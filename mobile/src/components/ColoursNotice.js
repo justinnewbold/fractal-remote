@@ -19,32 +19,55 @@ import Note from './Note'
  * stays above the preset name for good because nobody pressed its cross.
  * Hidden until the phone's storage has answered, so it never flashes up for
  * somebody who has seen it. Nothing here for a first run (see lib/coach).
+ *
+ * AND IT WAITS ITS TURN, as the browser's does: last of Play's one-time
+ * notes, never beside another (`waiting`, from Stage). On a 320 by 568 phone
+ * it stood under the demo card and pushed Tuner, Edit and Tap off the
+ * bottom of Play. Not asked for, and so not remembered, while another note
+ * is up; and once shown it steps aside for one that comes up after it, and
+ * is back when that one goes.
  */
-export default function ColoursNotice() {
-  const [seen, setSeen] = useState(true)
+export default function ColoursNotice({ waiting = false }) {
+  const [shown, setShown] = useState(launch === 'showing')
 
   useEffect(() => {
+    if (launch === 'showing') {
+      setShown(true)
+      return undefined
+    }
+    if (waiting) return undefined
     let alive = true
     coloursNoticeSeen().then((v) => {
       if (!alive || v) return
       markColoursNotice()
-      setSeen(false)
+      launch = 'showing'
+      setShown(true)
     })
     return () => {
       alive = false
     }
-  }, [])
+  }, [waiting])
 
-  if (seen) return null
+  if (!shown || waiting) return null
 
   return (
     <Note
       onDismiss={() => {
         tick()
-        setSeen(true)
+        launch = 'gone'
+        setShown(false)
       }}
     >
       {COLOURS_NOTICE}
     </Note>
   )
 }
+
+/*
+ * THIS LAUNCH'S ANSWER, kept outside the screen, like the browser's visit.
+ * Play is drawn afresh when somebody comes back to it from Settings or the
+ * preset list, and a line marked seen the first time it was drawn would be
+ * gone by the time anybody looked. So it stays for the launch once shown,
+ * until its cross. The next launch, it is seen.
+ */
+let launch = null

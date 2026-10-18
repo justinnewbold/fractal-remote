@@ -34,10 +34,11 @@ import { deviceNoun } from '../lib/device-word'
  */
 const KEY = 'fractal.offerDismissed'
 
-export default function UnlockOffer({ onUnlock }) {
+export default function UnlockOffer({ onUnlock, waiting = false, onWant }) {
   const demo = useDemo()
   const purchase = usePurchase()
-  const [gone, setGone] = useState(true)
+  /* Null until the phone's storage has answered: not known yet. */
+  const [gone, setGone] = useState(null)
 
   /* Start hidden and appear once disk has answered, rather than flashing on
      and then vanishing for somebody who put it away weeks ago. */
@@ -51,7 +52,19 @@ export default function UnlockOffer({ onUnlock }) {
     }
   }, [])
 
-  if (gone || !onUnlock || !shouldOffer({ demo })) return null
+  /*
+   * WHETHER IT WANTS THE TOP OF PLAY, said to the screen so the notes after
+   * it wait their turn (Stage's `wants`): null while the storage has not
+   * answered, so nothing flashes up in the moment before it knows. And it
+   * waits for its own turn behind the notes before it (`waiting`).
+   */
+  const offered = Boolean(onUnlock) && shouldOffer({ demo })
+  const wants = !offered ? false : gone === null ? null : !gone
+  useEffect(() => {
+    onWant?.(wants)
+  }, [onWant, wants])
+
+  if (wants !== true || waiting) return null
 
   const put = () => {
     tick()

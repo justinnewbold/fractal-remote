@@ -27,7 +27,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, w
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const read = (p) => readFileSync(join(root, p), 'utf8')
@@ -88,6 +88,193 @@ const shippedFiles = () =>
     join(root, 'desktop/main.js'),
     ...walk(join(root, 'desktop/lib'))
   ].filter((f) => /\.(m?js|jsx|cjs|html|css|json|txt)$/.test(f))
+
+/**
+ * The notes at the top of the phone's Play, as they are (UnlockOffer,
+ * Vp4DemoNote, OnlyOnThisPhone, ColoursNotice, and lib/coach with the rule
+ * for whose turn it is), their JSX turned into calls by esbuild and drawn
+ * against stand-ins: a hook store for each note that keeps its state across
+ * draws as a mounted component does, the phone's storage as a Map that
+ * outlives a launch, and the demo and the purchase as the bench says.
+ *
+ * Each call is one launch: the files are written afresh, so the notes' own
+ * memory of the launch (ColoursNotice's `launch`, lib/coach's) starts empty
+ * and only the storage carries over. `play()` draws the four the way Stage
+ * does, with Stage's props and lib/coach turnTaken, until nothing moves, and
+ * returns what each drew; `press(tree, label)` presses a button in one.
+ */
+async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 'am4' }, buy = {} } = {}) {
+  const { transformSync } = await import('esbuild')
+  const { COLOURS_NOTICE } = await import('../src/lib/colourPage.js')
+  const dir = mkdtempSync(join(tmpdir(), 'play-notes-'))
+  globalThis.__playNotes = { kept, demo, buy: { unlocked: false, onlyHere: false, stuck: false, held: null, price: '$9.99', ...buy } }
+  const files = {
+    'package.json': '{ "type": "module" }',
+    'react.mjs': `
+      export const h = (type, props, ...children) => ({ type, props: props || {}, children })
+      export const Frag = 'frag'
+      export const moved = { n: 0 }
+      const stores = new Map()
+      let cur = null
+      export function begin(name) {
+        if (!stores.has(name)) stores.set(name, { slots: [], deps: [], cleanups: [], effects: [] })
+        cur = stores.get(name)
+        cur.at = 0
+        cur.effects = []
+        return cur
+      }
+      export function unmount(name) {
+        const s = stores.get(name)
+        if (s) for (const c of s.cleanups) if (typeof c === 'function') c()
+        stores.delete(name)
+      }
+      export function useState(initial) {
+        const s = cur
+        const i = s.at++
+        if (!(i in s.slots)) s.slots[i] = initial
+        return [s.slots[i], (v) => { const next = typeof v === 'function' ? v(s.slots[i]) : v; if (next !== s.slots[i]) { s.slots[i] = next; moved.n++ } }]
+      }
+      export function useEffect(fn, inputs) {
+        const s = cur
+        const i = s.at++
+        const was = s.deps[i]
+        if (!was || inputs.length !== was.length || inputs.some((x, k) => x !== was[k])) { s.deps[i] = inputs; s.effects.push([i, fn]) }
+      }
+      export function runEffects(s) {
+        const ran = s.effects.length
+        for (const [i, fn] of s.effects) { const c = s.cleanups[i]; if (typeof c === 'function') c(); s.cleanups[i] = fn() }
+        s.effects = []
+        return ran
+      }
+    `,
+    'storage.mjs': `
+      const kept = globalThis.__playNotes.kept
+      export default {
+        getItem: async (k) => (kept.has(k) ? kept.get(k) : null),
+        setItem: async (k, v) => { kept.set(k, String(v)) }
+      }
+    `,
+    'rn.mjs': "export const View = 'View'\nexport const Text = 'Text'\nexport const Pressable = 'Pressable'\n",
+    'theme.mjs': 'const any = new Proxy({}, { get: () => 1 })\nexport const color = any\nexport const font = any\nexport const radius = any\nexport const space = any\n',
+    'feedback.mjs': 'export const tick = () => {}\n',
+    'purchases.mjs': `
+      const buy = globalThis.__playNotes.buy
+      export const shouldOffer = ({ demo }) => Boolean(demo) && !buy.unlocked
+      export const usePurchase = () => ({ ...buy })
+      export const NOT_ACROSS = 'NOT_ACROSS'
+      export const NOT_ACROSS_SIGNED_OUT = 'NOT_ACROSS_SIGNED_OUT'
+      export const ONLY_HERE = 'ONLY_HERE'
+      export const restorePurchase = async () => ({ ok: true })
+    `,
+    'demo.mjs': 'const d = globalThis.__playNotes.demo\nexport const useDemo = () => d.demo\nexport const useDemoUnit = () => d.unit\n',
+    'device-word.mjs': "export const deviceNoun = () => 'phone'\n",
+    'colourPage.mjs': `export const COLOURS_NOTICE = ${JSON.stringify(COLOURS_NOTICE)}\n`,
+    'parts.mjs': 'export default function Part() { return null }\n',
+    'demoUnits.js': read('mobile/src/lib/demoUnits.js'),
+    'vp4-safety.js': read('mobile/src/lib/vp4-safety.js'),
+    'swipe-hint.js': read('mobile/src/lib/swipe-hint.js')
+  }
+  const swaps = [
+    ['from "react"', "from './react.mjs'"],
+    ['from "react-native"', "from './rn.mjs'"],
+    ['from "@react-native-async-storage/async-storage"', "from './storage.mjs'"],
+    ['from "../lib/theme"', "from './theme.mjs'"],
+    ['from "../lib/feedback"', "from './feedback.mjs'"],
+    ['from "../lib/purchases"', "from './purchases.mjs'"],
+    ['from "../lib/demo"', "from './demo.mjs'"],
+    ['from "../lib/device-word"', "from './device-word.mjs'"],
+    ['from "../lib/demoUnits"', "from './demoUnits.js'"],
+    ['from "../lib/colourPage"', "from './colourPage.mjs'"],
+    ['from "../lib/coach"', "from './coach.mjs'"],
+    ['from "./Note"', "from './parts.mjs'"],
+    ['from "./Press"', "from './parts.mjs'"],
+    ['from "./swipe-hint"', "from './swipe-hint.js'"]
+  ]
+  const take = (from, as) => {
+    let src = transformSync(read(from), { loader: 'jsx', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'Frag', format: 'esm' }).code
+    for (const [a, b] of swaps) src = src.replaceAll(a, b)
+    const left = [...src.matchAll(/from\s+["']([^"']+)["']/g)].map((m) => m[1]).filter((m) => !m.startsWith('./'))
+    assert.deepEqual(left, [], `${from} imports something the bench has no stand-in for`)
+    files[as] = (/\bh\(/.test(src) ? "import { h, Frag } from './react.mjs'\n" : '') + src
+  }
+  take('mobile/src/lib/coach.js', 'coach.mjs')
+  take('mobile/src/components/UnlockOffer.js', 'UnlockOffer.mjs')
+  take('mobile/src/components/Vp4DemoNote.js', 'Vp4DemoNote.mjs')
+  take('mobile/src/components/OnlyOnThisPhone.js', 'OnlyOnThisPhone.mjs')
+  take('mobile/src/components/ColoursNotice.js', 'ColoursNotice.mjs')
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+  const at = (f) => pathToFileURL(join(dir, f)).href
+  try {
+    const react = await import(at('react.mjs'))
+    const coach = await import(at('coach.mjs'))
+    const notes = {
+      offer: (await import(at('UnlockOffer.mjs'))).default,
+      vp4: (await import(at('Vp4DemoNote.mjs'))).default,
+      only: (await import(at('OnlyOnThisPhone.mjs'))).default,
+      colours: (await import(at('ColoursNotice.mjs'))).default
+    }
+    /* Stage's `wants`, and its `says`: one function per note, made once. */
+    let wants = { only: null, vp4: null, offer: null }
+    const say = (which) => (up) => {
+      if (wants[which] === up) return
+      wants = { ...wants, [which]: up }
+      react.moved.n++
+    }
+    const says = { only: say('only'), vp4: say('vp4'), offer: say('offer') }
+    /* What else Stage waits for: the quick tip and the watch's sheet. */
+    const after = { coach: false, watchTip: false }
+    const draw = () => {
+      const noteBefore = (which) => coach.turnTaken(wants, which)
+      const notesUp = coach.turnTaken(wants)
+      const drawn = {}
+      const stores = []
+      const one = (name, props) => {
+        stores.push(react.begin(name))
+        drawn[name] = notes[name](props)
+      }
+      one('offer', { onUnlock: () => {}, waiting: noteBefore('offer'), onWant: says.offer })
+      one('vp4', { waiting: noteBefore('vp4'), onWant: says.vp4 })
+      one('only', { onAccount: () => {}, onWant: says.only })
+      one('colours', { waiting: notesUp || after.coach || after.watchTip })
+      return { drawn, stores }
+    }
+    const play = async () => {
+      for (let pass = 0; pass < 30; pass++) {
+        const was = react.moved.n
+        const { drawn, stores } = draw()
+        let ran = 0
+        for (const s of stores) ran += react.runEffects(s)
+        await new Promise((r) => setTimeout(r, 0))
+        if (!ran && react.moved.n === was) return Object.fromEntries(Object.entries(drawn).filter(([, v]) => v))
+      }
+      throw new Error('Play never settled')
+    }
+    /* The first frame, before any effect has run or the storage has answered; then put away unseen, so play() mounts afresh. */
+    const firstDraw = () => {
+      const shown = Object.fromEntries(Object.entries(draw().drawn).filter(([, v]) => v))
+      for (const name of Object.keys(notes)) react.unmount(name)
+      return shown
+    }
+    const find = (tree, test) => {
+      if (!tree || typeof tree !== 'object') return null
+      if (tree.props && test(tree.props)) return tree
+      for (const c of [...(tree.children || []), tree.props?.children].flat(Infinity)) {
+        const hit = find(c, test)
+        if (hit) return hit
+      }
+      return null
+    }
+    /* A button by what it is called, or a Note's cross. */
+    const press = (tree, label) => {
+      const hit = label ? find(tree, (p) => p.accessibilityLabel === label) : find(tree, (p) => typeof p.onDismiss === 'function')
+      assert.ok(hit, `nothing to press${label ? ` called ${label}` : ''}`)
+      ;(label ? hit.props.onPress : hit.props.onDismiss)()
+    }
+    return { play, firstDraw, press, after, kept, wants: () => wants, unmount: react.unmount, turnTaken: coach.turnTaken }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
 
 export function run(test) {
   test('Fractal Audio’s sentence is the one in shared/affiliation.mjs, word for word, with where help comes from', async () => {
@@ -312,6 +499,177 @@ export function run(test) {
     const rule = css.slice(css.indexOf('\n.independent {'), css.indexOf('}', css.indexOf('\n.independent {')))
     assert.match(rule, /position: fixed;\s+inset: 0;\s+z-index: var\(--z-notice\);/)
     assert.match(rule, /background: var\(--chassis\);/, 'the card lets the app show through')
+  })
+
+  /*
+   * THE STARTUP MESSAGES TAKE TURNS. On a first launch after the update that
+   * brought the startup card and the colours, a player could meet the card,
+   * the demo card, the quick tip and "Colours now match your unit" — and on a
+   * 320 by 568 phone the colours line stood under the demo card and pushed
+   * Tuner, Edit and Tap off the bottom of Play. So: the card first and alone,
+   * then one note at a time, and the colours line last, at both ends.
+   */
+  test('the startup messages take turns on the phone: the card alone, then one note at a time, the colours line last', async () => {
+    /* The card is drawn by the launch gate in place of the walkthrough and Play (the test above), so nothing on Play is ever up beside it. */
+    const app = read('mobile/App.js')
+    assert.ok(app.indexOf(') : independentDue ? (') < app.indexOf(') : seenWalk === false ? (') && app.indexOf(') : seenWalk === false ? (') < app.indexOf('<Stage'), 'Play can be drawn beside the startup card or the walkthrough')
+
+    /* Stage: the notes at the top in their turns, the quick tip and the watch's sheet after them, the colours line last. */
+    const stage = read('mobile/src/screens/Stage.js')
+    const coach = read('mobile/src/lib/coach.js')
+    assert.match(coach, /export const NOTE_TURNS = Object\.freeze\(\['only', 'vp4', 'offer'\]\)/, 'the order the notes take their turns in moved; say why here')
+    assert.match(stage, /const \[wants, setWants\] = useState\(\{ only: null, vp4: null, offer: null \}\)/, 'Play starts out sure of a note it has not heard from')
+    assert.match(stage, /const noteBefore = \(which\) => turnTaken\(wants, which\)\n\s+const notesUp = turnTaken\(wants\)/)
+    assert.match(stage, /<UnlockOffer onUnlock=\{onUnlock\} waiting=\{noteBefore\('offer'\)\} onWant=\{says\.offer\} \/>/)
+    assert.match(stage, /<Vp4DemoNote waiting=\{noteBefore\('vp4'\)\} onWant=\{says\.vp4\} \/>/)
+    assert.match(stage, /<OnlyOnThisPhone onAccount=\{onAccount\} onWant=\{says\.only\} \/>/)
+    assert.match(stage, /<ColoursNotice waiting=\{notesUp \|\| coach \|\| watchTip\} \/>/, 'the colours line does not wait for every other note')
+    assert.match(stage, /<Coach open=\{coach && !notesUp\} /, 'the quick tip is drawn beside a note at the top')
+    assert.match(stage, /if \(!holdDoesSomething\) return undefined\s+\/\*[^*]*\*\/\s+if \(notesUp\) return undefined[\s\S]{0,200}\}, \[holdDoesSomething, notesUp\]\)/, 'the quick tip comes up before its turn')
+    assert.match(stage, /if \(coach \|\| notesUp \|\| !watchPaired\(\)\) return undefined[\s\S]{0,250}\}, \[coach, notesUp\]\)/, 'the watch’s sheet is remembered as shown before its turn')
+    assert.match(stage, /<Sheet open=\{watchTip && !coach && !notesUp\} /)
+
+    /* The rule itself: only a plain no from every note before is a go-ahead. */
+    const { turnTaken } = await playNotesOnABench()
+    assert.equal(turnTaken({ only: false, vp4: false, offer: false }), false)
+    assert.equal(turnTaken({ only: false, vp4: null, offer: false }), true, 'a note that has not answered yet is passed over')
+    assert.equal(turnTaken({ only: true, vp4: false, offer: false }, 'vp4'), true)
+    assert.equal(turnTaken({ only: false, vp4: false, offer: true }, 'offer'), false, 'the demo card waits for itself')
+    assert.equal(turnTaken({ only: null, vp4: null, offer: null }, 'only'), false, 'the first note waits for something')
+    assert.equal(turnTaken({}, 'vp4'), true)
+
+    /*
+     * A RETURNING DEMO PLAYER, the first launch after the update: the demo
+     * card never put away, the colours line not yet said.
+     */
+    const kept = new Map([['fractal.walkthrough.v1', 'done']])
+    let p = await playNotesOnABench({ kept })
+    assert.deepEqual(Object.keys(p.firstDraw()), [], 'a note was drawn before the phone’s storage had answered')
+    let drawn = await p.play()
+    assert.deepEqual(Object.keys(drawn), ['offer'], 'the demo card is not alone at the top of Play')
+    assert.equal(kept.get('fractal.coloursNoticed'), undefined, 'the colours line was remembered as said while it waited')
+    p.press(drawn.offer, 'Put this away')
+    drawn = await p.play()
+    assert.deepEqual(Object.keys(drawn), ['colours'], 'the colours line does not come once the demo card is put away')
+    assert.equal(kept.get('fractal.coloursNoticed'), 'done', 'the colours line is not remembered the moment it is shown')
+    /* A note that comes up after it (the quick tip, on the first preset whose blocks have channels): it steps aside, and is back after. */
+    p.after.coach = true
+    assert.deepEqual(Object.keys(await p.play()), [], 'the colours line stayed up beside the quick tip')
+    p.after.coach = false
+    assert.deepEqual(Object.keys(await p.play()), ['colours'], 'the colours line did not come back after the quick tip')
+    /* Play drawn afresh in the same launch (back from Settings): still there, until its cross. */
+    p.unmount('colours')
+    drawn = await p.play()
+    assert.deepEqual(Object.keys(drawn), ['colours'], 'the colours line went with a trip to Settings')
+    p.press(drawn.colours)
+    assert.deepEqual(Object.keys(await p.play()), [])
+    p.unmount('colours')
+    assert.deepEqual(Object.keys(await p.play()), [], 'the colours line came back after its cross')
+    /* The next launch: nothing. */
+    p = await playNotesOnABench({ kept })
+    assert.deepEqual(Object.keys(await p.play()), [], 'a note came back on the next launch')
+
+    /* THE DEMO VP4: its sentence first, then the demo card, then the colours line. */
+    const vp4 = new Map([['fractal.walkthrough.v1', 'done']])
+    p = await playNotesOnABench({ kept: vp4, demo: { demo: true, unit: 'vp4' } })
+    drawn = await p.play()
+    assert.deepEqual(Object.keys(drawn), ['vp4'], 'the demo VP4’s sentence is not alone at the top of Play')
+    p.press(drawn.vp4)
+    drawn = await p.play()
+    assert.deepEqual(Object.keys(drawn), ['offer'])
+    p.press(drawn.offer, 'Put this away')
+    assert.deepEqual(Object.keys(await p.play()), ['colours'])
+    assert.equal(vp4.get('fractal.demo.note.vp4'), 'seen')
+
+    /* BOUGHT ON THIS PHONE with no account yet: that line first, the colours line after it is put away. */
+    const bought = new Map([['fractal.walkthrough.v1', 'done']])
+    p = await playNotesOnABench({ kept: bought, demo: { demo: true, unit: 'fm3' }, buy: { unlocked: true, onlyHere: true } })
+    drawn = await p.play()
+    assert.deepEqual(Object.keys(drawn), ['only'], 'the line about a purchase on this phone is not alone at the top of Play')
+    assert.equal(bought.get('fractal.coloursNoticed'), undefined)
+    p.press(drawn.only)
+    assert.deepEqual(Object.keys(await p.play()), ['colours'])
+
+    /* NOT THE DEMO, nothing else owed: the colours line at once, alone. */
+    const plain = new Map([['fractal.walkthrough.v1', 'done']])
+    p = await playNotesOnABench({ kept: plain, demo: { demo: false, unit: 'fm3' } })
+    assert.deepEqual(Object.keys(await p.play()), ['colours'])
+  })
+
+  test('the startup messages take turns in the browser: the colours line waits for the startup card and the walkthrough as well', async () => {
+    const page = read('src/App.jsx')
+    /* A named condition (test/structure.mjs reads App.jsx as text): the card, then the walkthrough. */
+    assert.match(page, /const startupOver = independentDue \|\| walkthrough\n/)
+    assert.ok(page.indexOf('const startupOver') > page.indexOf('const [independentDue, setIndependentDue]'), 'startupOver is read before the card’s answer')
+    assert.match(page, /noteAbove=\{startupOver \|\| \(!holdNoteSeen && holdOpensChannels\) \|\| \(isDemo\(\) && status === 'live' && !demoNoteSeen\)\}/, 'the colours line is said under the startup card or the walkthrough')
+    /* And the hold tip still waits for the demo's line: one note at a time under the bar. */
+    assert.match(page, /\{!holdNoteSeen && holdOpensChannels && !\(isDemo\(\) && status === 'live' && !demoNoteSeen\) \? \(/)
+
+    /* The line itself, run: never said or remembered while it waits; out of the way of a note after it; back when that one goes. */
+    const { transformSync } = await import('esbuild')
+    const { COLOURS_NOTICE } = await import('../src/lib/colourPage.js')
+    const dir = mkdtempSync(join(tmpdir(), 'web-colours-notice-'))
+    const stored = new Map()
+    globalThis.localStorage = { getItem: (k) => (stored.has(k) ? stored.get(k) : null), setItem: (k, v) => stored.set(k, String(v)) }
+    try {
+      let src = transformSync(read('src/components/ColoursNotice.jsx'), { loader: 'jsx', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'Frag', format: 'esm' }).code
+      src = src.replaceAll('from "react"', "from './react.mjs'").replaceAll('from "../lib/colourPage"', "from './colourPage.mjs'")
+      writeFileSync(join(dir, 'package.json'), '{ "type": "module" }')
+      writeFileSync(join(dir, 'colourPage.mjs'), `export const COLOURS_NOTICE = ${JSON.stringify(COLOURS_NOTICE)}\n`)
+      writeFileSync(
+        join(dir, 'react.mjs'),
+        `export const h = (type, props, ...children) => ({ type, props: props || {}, children })
+        export const Frag = 'frag'
+        let slots = [], deps = [], at = 0, effects = []
+        export const mount = () => { slots = []; deps = []; at = 0; effects = [] }
+        export const begin = () => { at = 0; effects = [] }
+        export const ran = () => effects
+        export function useState(initial) { const i = at++; if (!(i in slots)) slots[i] = initial; return [slots[i], (v) => { slots[i] = typeof v === 'function' ? v(slots[i]) : v }] }
+        export function useEffect(fn, inputs) { const i = at++; const was = deps[i]; if (!was || inputs.some((x, k) => x !== was[k])) { deps[i] = inputs; effects.push(fn) } }\n`
+      )
+      writeFileSync(join(dir, 'ColoursNotice.mjs'), "import { h, Frag } from './react.mjs'\n" + src)
+      const react = await import(pathToFileURL(join(dir, 'react.mjs')).href)
+      const notice = await import(pathToFileURL(join(dir, 'ColoursNotice.mjs')).href)
+      const draw = (props) => {
+        for (let pass = 0; pass < 3; pass++) {
+          react.begin()
+          notice.default(props)
+          for (const fn of react.ran()) fn()
+        }
+        react.begin()
+        return notice.default(props)
+      }
+      react.mount()
+      /* Under the startup card (noteAbove): nothing, and nothing kept. */
+      assert.equal(draw({ waiting: true }), null, 'the colours line is drawn under the startup card')
+      assert.equal(stored.get('fractal.coloursNoticed'), undefined, 'the colours line was remembered as said under the startup card')
+      /* OK pressed, nothing else owed: said, and remembered. */
+      const line = draw({ waiting: false })
+      assert.ok(line && JSON.stringify(line).includes('Colours now match your unit'))
+      assert.equal(stored.get('fractal.coloursNoticed'), 'done')
+      /* The hold tip comes up after it: out of the way, and back when that is put away. */
+      assert.equal(draw({ waiting: true }), null, 'the colours line stayed up beside a note after it')
+      const back = draw({ waiting: false })
+      assert.ok(back, 'the colours line did not come back')
+      /* Got it puts it away. */
+      const button = back.children.find((c) => c && c.type === 'button')
+      button.props.onClick()
+      react.mount()
+      assert.equal(draw({ waiting: false }), null, 'the colours line came back after Got it')
+    } finally {
+      delete globalThis.localStorage
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('“Settings → Colours” is never broken across two lines, at either end', async () => {
+    const { COLOURS_NOTICE } = await import('../src/lib/colourPage.js')
+    assert.ok(COLOURS_NOTICE.endsWith('Settings → Colours'), 'a narrow screen can break the colours line after “Settings”')
+    assert.equal(COLOURS_NOTICE.replace(/ /g, ' '), 'Colours now match your unit · Settings → Colours', 'the words of the colours line changed')
+    /* The phone's copy is the generated one, and both ends draw the constant as it is. */
+    assert.ok(read('mobile/src/lib/colourPage.js').includes("export const COLOURS_NOTICE = 'Colours now match your unit · Settings\\u00a0→\\u00a0Colours'"))
+    assert.match(read('mobile/src/components/ColoursNotice.js'), /\{COLOURS_NOTICE\}/)
+    assert.match(read('src/components/ColoursNotice.jsx'), /<span>\{COLOURS_NOTICE\}<\/span>/)
   })
 
   test('while the browser’s card is up, the keyboard reaches nothing behind it', async () => {

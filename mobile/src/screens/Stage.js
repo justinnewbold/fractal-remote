@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Image, PixelRatio, Pressable, RefreshControl, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { useKeepAwake } from 'expo-keep-awake'
 
@@ -52,7 +52,7 @@ import {
   writeTuner
 } from '../lib/rig'
 import { useDemoUnit } from '../lib/demo'
-import { coachSeen, markCoach, markWatchTip, watchTipSeen } from '../lib/coach'
+import { coachSeen, markCoach, markWatchTip, turnTaken, watchTipSeen } from '../lib/coach'
 import { nope, thud } from '../lib/feedback'
 import { blockColor } from '../lib/blockColors'
 import { blockIcon } from '../lib/blockIcons'
@@ -434,6 +434,39 @@ export default function Stage({
   const conflict = hostConflict(remoteHosts(), remoteChosenHost())
 
   /*
+   * PLAY'S ONE-TIME NOTES TAKE TURNS: ONE AT A TIME, IN THIS ORDER.
+   *
+   * On a 320 by 568 phone the demo card and "Colours now match your unit"
+   * stood one above the other and pushed Tuner, Edit and Tap off the bottom
+   * of Play. The browser had already learned it (its hold tip and its
+   * colours line wait for the demo's line), and this is the phone doing the
+   * same, for every note that can be up at the top of Play:
+   *
+   *   1. a purchase made on this phone that has not reached an account
+   *      (OnlyOnThisPhone), first because it is money;
+   *   2. the demo VP4's sentence (Vp4DemoNote), what a real VP4 does not do
+   *      from the app yet, before anything is offered for one;
+   *   3. the demo card (UnlockOffer);
+   *   4. the quick tip on holding a block (Coach, below);
+   *   5. how the watch is used (its sheet, below);
+   *   6. "Colours now match your unit" (ColoursNotice), last.
+   *
+   * The first three say whether they want the top of Play: true, false, or
+   * null while the phone's storage has not answered them yet, so nothing
+   * after them flashes up and away in the moment before they know. Each
+   * waits while any before it wants it or has not answered (lib/coach
+   * turnTaken). The startup card and the walkthrough are drawn by App in
+   * place of this screen, so nothing here is ever up beside them.
+   */
+  const [wants, setWants] = useState({ only: null, vp4: null, offer: null })
+  const says = useMemo(() => {
+    const say = (which) => (up) => setWants((was) => (was[which] === up ? was : { ...was, [which]: up }))
+    return { only: say('only'), vp4: say('vp4'), offer: say('offer') }
+  }, [])
+  const noteBefore = (which) => turnTaken(wants, which)
+  const notesUp = turnTaken(wants)
+
+  /*
    * The channel tip, and the conditions it waits for.
    *
    * "This tip appears here - exactly when the gesture becomes useful." So it
@@ -454,6 +487,8 @@ export default function Stage({
 
   useEffect(() => {
     if (!holdDoesSomething) return undefined
+    /* Its turn after the notes at the top of Play (`wants`, above). */
+    if (notesUp) return undefined
     let live = true
     coachSeen().then((seen) => {
       if (live && !seen) setCoach(true)
@@ -461,17 +496,19 @@ export default function Stage({
     return () => {
       live = false
     }
-  }, [holdDoesSomething])
+  }, [holdDoesSomething, notesUp])
 
   /*
    * HOW THE WATCH IS USED, once, the first time a paired watch with the app on
    * it is seen from here. "We don't need to do a swipe left and right as long
    * as there's a thing that pops up the first time explaining how the user
-   * uses the Apple Watch." Waits for the channel tip, so two cards never stack.
+   * uses the Apple Watch." Waits for the channel tip, so two cards never stack,
+   * and for the notes at the top of Play: it is remembered the moment it is
+   * shown, so it is not shown until its turn.
    */
   const [watchTip, setWatchTip] = useState(false)
   useEffect(() => {
-    if (coach || !watchPaired()) return undefined
+    if (coach || notesUp || !watchPaired()) return undefined
     let live = true
     watchTipSeen().then((seen) => {
       if (live && !seen) {
@@ -482,7 +519,7 @@ export default function Stage({
     return () => {
       live = false
     }
-  }, [coach])
+  }, [coach, notesUp])
 
   /* Shown once, and remembered the moment it is shown rather than when it is
      answered — killing the app with the card up is not an accident to correct
@@ -762,13 +799,14 @@ export default function Stage({
         {/* The first thing on the first screen, because the top of it is where
             an eye starts. A fault is not in here any more: it floats over the
             screen (the Toast at the end), so it never moves what is under it. */}
-        <UnlockOffer onUnlock={onUnlock} />
+        {/* One at a time, each in its turn (`wants`, above). */}
+        <UnlockOffer onUnlock={onUnlock} waiting={noteBefore('offer')} onWant={says.offer} />
         {/* The demo's VP4 says what a real one doesn't do from the app yet, once, as the browser's banner does. */}
-        <Vp4DemoNote />
+        <Vp4DemoNote waiting={noteBefore('vp4')} onWant={says.vp4} />
         {/* Paid in the demo with no account yet: see the component. */}
-        <OnlyOnThisPhone onAccount={onAccount} />
-        {/* "Colours now match your unit", once, for somebody who had the app before. */}
-        <ColoursNotice />
+        <OnlyOnThisPhone onAccount={onAccount} onWant={says.only} />
+        {/* "Colours now match your unit", once, for somebody who had the app before: last, after every other note. */}
+        <ColoursNotice waiting={notesUp || coach || watchTip} />
         {conflict ? <Note tone="fault">{conflict}</Note> : null}
 
         {/* ---------------------------------------------------------- preset */}
@@ -965,8 +1003,8 @@ export default function Stage({
             and a card up by the preset name would be describing something off
             the bottom of somebody's phone.
           */}
-          <Coach open={coach} stage={coachStage} onTry={tryCoach} onSkip={closeCoach} onDone={closeCoach} />
-          <Sheet open={watchTip && !coach} onClose={() => setWatchTip(false)} title="Your Apple Watch" note="Fractal Remote is on your watch">
+          <Coach open={coach && !notesUp} stage={coachStage} onTry={tryCoach} onSkip={closeCoach} onDone={closeCoach} />
+          <Sheet open={watchTip && !coach && !notesUp} onClose={() => setWatchTip(false)} title="Your Apple Watch" note="Fractal Remote is on your watch">
             <View style={{ gap: space.md }}>
               {watchHow().map((line) => (
                 <Text key={line} style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>

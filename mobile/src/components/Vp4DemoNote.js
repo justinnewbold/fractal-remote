@@ -26,11 +26,13 @@ import Note from './Note'
  */
 export const VP4_DEMO_NOTE_KEY = 'fractal.demo.note.vp4'
 
-export default function Vp4DemoNote() {
+export default function Vp4DemoNote({ waiting = false, onWant } = {}) {
   const demo = useDemo()
   const unit = useDemoUnit()
   const here = demo && unit === 'vp4'
   const [seen, setSeen] = useState(true)
+  /* Whether the phone's storage has answered, for the notes after this one (below). */
+  const [asked, setAsked] = useState(false)
 
   useEffect(() => {
     if (!here) return undefined
@@ -38,12 +40,24 @@ export default function Vp4DemoNote() {
     AsyncStorage.getItem(VP4_DEMO_NOTE_KEY)
       .then((v) => alive && setSeen(v === 'seen'))
       .catch(() => alive && setSeen(false))
+      .then(() => alive && setAsked(true))
     return () => {
       alive = false
     }
   }, [here])
 
-  if (!here || seen) return null
+  /*
+   * WHETHER IT WANTS THE TOP OF PLAY, said to the screen so the notes after
+   * it wait their turn (Stage's `wants`): null while the storage has not
+   * answered. It waits behind the note before it (`waiting`), and is
+   * remembered only when put away, so waiting loses nothing.
+   */
+  const wants = !here ? false : asked ? !seen : null
+  useEffect(() => {
+    onWant?.(wants)
+  }, [onWant, wants])
+
+  if (!here || seen || waiting) return null
 
   const put = () => {
     tick()

@@ -873,8 +873,14 @@ export const OFF_WORDS = Object.freeze({
  */
 export const PUT_BACK_WORDS = 'Back to Match my unit: every scene red, switched-off effects in their own colour'
 
-/** The one-time line on Play after the colours changed, for somebody who had the app before. */
-export const COLOURS_NOTICE = 'Colours now match your unit · Settings → Colours'
+/**
+ * The one-time line on Play after the colours changed, for somebody who had
+ * the app before. "Settings → Colours" is held together by no-break spaces
+ * (\u00a0): on a narrow screen it broke after "Settings", and a line that
+ * starts "→ Colours" reads as somewhere else. It moves to the next line
+ * whole instead, on both ends.
+ */
+export const COLOURS_NOTICE = 'Colours now match your unit · Settings\u00a0→\u00a0Colours'
 
 /** Whether a look is the one the phone still lifts (Tile), for a card drawn in a look not being worn. */
 export const liftedLook = (id) => id === FRACTAL_REMOTE_LOOK
