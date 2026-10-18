@@ -4,6 +4,11 @@ A remote for Fractal Audio units — the FM3, FM9, Axe-Fx III and AM4, and the V
 in part — on the phone, in the browser, and on the computer the unit is plugged
 into.
 
+Fractal Remote is independently developed and is not affiliated with, endorsed
+by, or supported by Fractal Audio Systems, LLC. For help with it, use Settings →
+Troubleshooting → Feedback in the app or https://fractal.newbold.cloud/support.html,
+never Fractal Audio.
+
 On a VP4, the app turns effects on and off, changes presets, and changes scenes
 once you set one number on the VP4 itself. Changing presets and scenes is new on
 a VP4, and nobody on our side has tried it on one yet. Knobs, the tuner, tap
@@ -302,5 +307,6 @@ to benefit.
 
 Device protocol by [ForgeFX](https://github.com/sKuhLight/ForgeFX) and
 [forgefx-midi](https://github.com/sKuhLight/forgefx-midi), both MIT/Apache-2.0 and
-independent of Fractal Audio Systems. "FM3", "Axe-Fx" and "FM9" are trademarks of
-Fractal Audio Systems, used here for identification only.
+independent of Fractal Audio Systems. “Fractal Audio”, “Axe-Fx”, “FM3”, “FM9”,
+“AM4” and “VP4” are trademarks of Fractal Audio Systems, LLC, used here only to
+say which hardware this app works with.

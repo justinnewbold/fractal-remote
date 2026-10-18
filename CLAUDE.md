@@ -287,6 +287,59 @@ binaries), with the review notes, What's New, the descriptions,
 support.html and /bluetooth saying so, and the build is asked for like any
 other.
 
+**Fractal Audio wrote on 18 October 2026, and the app does what it asked,
+except the name.** Their letter on Approved Vendor status asked for a clear
+statement at startup, no logos or product artwork, products named in plain
+text only, and support through Justin's own channels, and for a new name
+before vendor status goes ahead.
+
+> "I wanna comply as much as I can. I'm just not gonna change the app name
+> unless Fractal pushes back on it right now ... if they sent me like a cease
+> and desist, I'd probably remove it then, but until then, I'm gonna keep the
+> app name."
+
+So the name stays "Fractal Remote" unless Fractal sends a formal demand. Do
+not suggest renaming. Everything else is held, and is not to regress:
+
+- **The sentence is fixed, word for word**, and lives in
+  shared/affiliation.mjs: "Fractal Remote is independently developed and is
+  not affiliated with, endorsed by, or supported by Fractal Audio Systems,
+  LLC." "Supported by", never "sponsored by" in its place, and "LLC", never
+  "Inc." (the one "Inc." left is inside the codec's own upstream NOTICE,
+  carried as its author wrote it). Every copy (the website's pages, the store
+  text, NOTICES, licences/MODIFICATIONS.md, the computer app's tray) is held
+  to that file by a test.
+- **It is shown at startup**: a card, "An independent app", once on every
+  device under its own storage key (the phone's launch gate, and the
+  browser and computer window over everything, with the rest of the page
+  inert so the keyboard cannot reach Play under it), and the sentence
+  under the spinner and "Finding your computer…". A new key if the words
+  ever change enough to be shown again. One gap an update cannot close: a store build
+  made before 18 October 2026 (1.87.1 or 1.87.11) runs the copy built into
+  it on the first launch after a fresh install or a store update (see the
+  Bluetooth gap above). After a fresh install that is the old first screen,
+  FM3 photograph and all, with no card, once; after a store update, where
+  the walkthrough was seen long ago, it is only no card on that one launch.
+  The card comes from the next launch, once the update has downloaded. The
+  next build pair closes it.
+- **Never a Fractal logo, an official product photo, or artwork taken from
+  Fractal's editors, manuals or website**, in the app, on the website, or in
+  a screenshot, store video or feature graphic. Colour VALUES sampled from
+  their editors are fine (the colours work did that); the image files they
+  came from are never committed. Their own models' gear cards show words
+  only. The private review videos for Apple are the one place a real unit is
+  seen, and they are never made public.
+- **Never call the app official, certified, approved or endorsed**, anywhere.
+  If Approved Vendor status ever comes, it is forum participation only (the
+  letter says it "does not constitute certification or endorsement"), and
+  no badge or line presents it as more. And the letter is never "written
+  permission" for the app: it says plain-text product names are fine, and it
+  does not approve the name.
+- **Help with the app is Justin's own channels only**: Settings →
+  Troubleshooting → Feedback, the support page, his email. Nothing sends a
+  player to Fractal for help with the app (their own downloads, for the
+  unit's USB driver and firmware, are not help with the app).
+
 ## Things that cost real time to learn here
 
 **Every change needs a new version number.** The `version` job in

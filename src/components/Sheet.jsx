@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAsks } from '../lib/asks'
 import { pushEntry, listen, swallowedPop, popSelf } from '../lib/nav'
+import { holdInert } from '../lib/inert'
 import { createPortal } from 'react-dom'
 
 /**
@@ -202,7 +203,9 @@ export default function Sheet({
     const scroll = html.style.overflow
     cameFrom.current = document.activeElement
     html.style.overflow = 'hidden'
-    if (root) root.inert = true
+    /* A hold, not a switch (lib/inert): the startup card shuts the app too,
+       and a sheet closing under the card must not open it for the keyboard. */
+    const giveBack = holdInert(root)
     const id = requestAnimationFrame(() => {
       const first = panel.current?.querySelector(FOCUSABLE)
       ;(first || panel.current)?.focus?.({ preventScroll: true })
@@ -210,7 +213,7 @@ export default function Sheet({
     return () => {
       cancelAnimationFrame(id)
       html.style.overflow = scroll
-      if (root) root.inert = false
+      giveBack()
       cameFrom.current?.focus?.({ preventScroll: true })
     }
   }, [open, rail])
@@ -218,6 +221,9 @@ export default function Sheet({
   useEffect(() => {
     if (!open) return undefined
     const key = (e) => {
+      /* Shut behind something over it (the startup card), it answers no
+         keys: Escape on the card would close a sheet nobody can see. */
+      if (panel.current?.closest?.('[inert]')) return
       if (e.key === 'Escape') {
         e.stopPropagation()
         close()

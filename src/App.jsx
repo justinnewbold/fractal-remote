@@ -119,7 +119,7 @@ import {
 import { editButtonShows } from './lib/playMode'
 import { FIXES, FIRMWARE_NOTE, fixById, fixFor, versionsInSync } from '../shared/troubleshooting.mjs'
 import { osGuess, waysFor, waysWord } from '../shared/ways-in.mjs'
-import { AFFILIATION } from '../shared/affiliation.mjs'
+import { AFFILIATION, SUPPORT_LINE, SUPPORT_URL } from '../shared/affiliation.mjs'
 import { isAdmin } from '../shared/admin.mjs'
 import AccessTool from './components/AccessTool'
 import SalesTool from './components/SalesTool'
@@ -227,6 +227,7 @@ import ConnectScreen, { AccountCheck } from './components/ConnectScreen'
 import PhoneRemote from './components/PhoneRemote'
 import WifiQr from './components/WifiQr'
 import PhoneWalkthrough from './components/PhoneWalkthrough'
+import IndependentNotice, { independentNoticeSeen, markIndependentNotice } from './components/IndependentNotice'
 import { ChainCards, TipCard } from './components/Walk'
 import { linkChain } from '../shared/link-chain.mjs'
 import { UPDATE_STEPS } from '../shared/computer-update.mjs'
@@ -616,6 +617,16 @@ export default function App() {
   })
   /* Opened again from Settings, which is when the phone's walkthrough offers a way out at the top. */
   const [walkReplay, setWalkReplay] = useState(false)
+  /*
+   * WHETHER THE STARTUP CARD IS STILL OWED: "An independent app", Fractal
+   * Audio's sentence and where help comes from, once per browser
+   * (components/IndependentNotice). Decided in the very first render, like
+   * the walkthrough, so the card covers the page from its first frame rather
+   * than arriving over something already in use. A name of its own, and
+   * drawn after the walkthrough: the walkthrough's own condition is read as
+   * text by test/structure.mjs, and is never written anywhere above it.
+   */
+  const [independentDue, setIndependentDue] = useState(() => !independentNoticeSeen())
   /*
    * On the computer, whether the walkthrough has moved on from its phone-style
    * welcome and choice to the computer's own plug-in steps — which is where
@@ -1071,13 +1082,26 @@ export default function App() {
       if (!signIn) setSignInStart('in')
     }, [signIn])
     /* Opened from fractal.newbold.cloud/join: straight onto Create Account,
-       over the welcome, and the address back to plain `/`. See lib/joinLink. */
+       over the welcome, and the address back to plain `/`. See lib/joinLink.
+
+       AFTER THE STARTUP CARD, NEVER UNDER IT. A first visit through the
+       link owes the card too (independentDue), and the form used to open in
+       the same first moment: on a phone the sheet shut the page under it,
+       the card with it, and OK did nothing, over a form nobody could see.
+       The only way out was Back, which closed the form the link was sent
+       for. So the link is remembered from the first render and kept until
+       OK, and the address stays /join until then, so a reload while the
+       card is up still ends on Create Account. Then the card goes and the
+       form arrives, in sight, the way the link promised. */
+    const joinOwed = useRef(null)
+    if (joinOwed.current === null) joinOwed.current = arrivedToJoin()
     useEffect(() => {
-      if (!arrivedToJoin()) return
+      if (!joinOwed.current || independentDue) return
+      joinOwed.current = false
       window.history.replaceState(null, '', '/')
       setSignInStart('up')
       setSignIn('account')
-    }, [])
+    }, [independentDue])
   /*
    * Whether the phone has ever had the Mac answer this session. A blip after
    * that keeps the screen (the chip goes red; the loop retries); before it,
@@ -5088,6 +5112,21 @@ export default function App() {
         paid={answeredFor && !paid.unknown ? paid.unlocked : null}
         onUnlock={openUnlock}
       />
+      {/*
+        "AN INDEPENDENT APP", ONCE, OVER EVERYTHING ABOVE (Fractal Audio's
+        letter, 18 October 2026). Opaque and over the walkthrough, which waits
+        under it; see components/IndependentNotice for why it covers the page
+        rather than replacing it, and how it keeps the keyboard out of what
+        is under it.
+      */}
+      {independentDue ? (
+        <IndependentNotice
+          onDone={() => {
+            markIndependentNotice()
+            setIndependentDue(false)
+          }}
+        />
+      ) : null}
 
       <SignInSheet
         open={Boolean(signIn)}
@@ -6431,6 +6470,24 @@ export default function App() {
               {inDesktopApp() ? (
                 <SetupRow key="updates" title="Updates" status="This app, not your unit" onClick={() => setSetupPage('updates')} />
               ) : null}
+              {/*
+                HELP WITH THIS APP, IN SIGHT. Fractal Audio's letter (18
+                October 2026) asks for support through the developer's own
+                channels, and the way to them sat inside the small print
+                below, which opens closed, as a link in the browser's own
+                blue. The phone has it as a full row on the page; so does
+                this. The website's address, never a local link: the
+                computer window is served from the computer's own copy of
+                the site, and the support page is website-only, so that copy
+                of it is never kept current (WEBSITE_ONLY in
+                scripts/computer-fingerprint.mjs).
+              */}
+              <SetupRow
+                key="help"
+                title="Help with this app"
+                status="Questions, problems, a person"
+                onClick={() => window.open(SUPPORT_URL, '_blank', 'noopener')}
+              />
             </div>
             {/* The pedalboard computer's switch, under Updates because both are
                 about this app rather than the unit. Draws nothing unless the
@@ -6443,6 +6500,12 @@ export default function App() {
                   to go looking for. One string, shared with the phone — see
                   shared/affiliation.mjs for why it is not typed twice. */}
               <p className="hint">{AFFILIATION}</p>
+              {/*
+                AND WHERE HELP COMES FROM, which is never Fractal Audio, in
+                the same words as the phone's small print. The row that opens
+                the support page is up with Updates, in sight.
+              */}
+              <p className="hint">{SUPPORT_LINE}</p>
               <div className="history-actions">
                 <a className="chip" href="/privacy.html" target="_blank" rel="noreferrer">
                   Privacy

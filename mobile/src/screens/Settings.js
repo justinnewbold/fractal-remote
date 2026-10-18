@@ -3,7 +3,7 @@ import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, Text, Vie
 
 import { color, font, mono, radius, space, TAP, MODES, getMode, setMode } from '../lib/theme'
 import { APP_VERSION } from '../lib/version'
-import { AFFILIATION } from '../lib/affiliation'
+import { AFFILIATION, SUPPORT_LINE, SUPPORT_URL } from '../lib/affiliation'
 import { setDemo, useDemo, useDemoUnit, setDemoUnit } from '../lib/demo'
 import { UNITS as DEMO_UNITS, demoSentence } from '../lib/demoUnits'
 import { getDebugLog } from '../lib/debugLog'
@@ -1515,6 +1515,21 @@ export default function Settings({
             getting updates. Said here, quietly, for as long as it is true.
           */}
           {newer.note ? <SetupRow title={newer.note.row} status={newer.note.line} onPress={() => openStore(newer.note)} /> : null}
+          {/*
+            HELP WITH THIS APP, A ROW OF ITS OWN, at both ends in the same
+            place. Fractal Audio's letter (18 October 2026) asks that support
+            come through the developer's own channels. The browser's way to
+            the support page sat in its small print, which opens closed, so
+            it went up beside Updates there, and here too, so the two lists
+            stay one list. Its line is short because a row's line is one line
+            (SetupRow): "The support page, and how to reach a person" stopped
+            at "a p…" on a 320-wide phone.
+          */}
+          <SetupRow
+            title="Help with this app"
+            status="Questions, problems, a person"
+            onPress={() => Linking.openURL(SUPPORT_URL)}
+          />
           </View>
 
           {/*
@@ -1534,6 +1549,14 @@ export default function Settings({
             {/* Said in the app, not only in a file somebody would have to go
                 looking for. Same string as the browser — shared/affiliation.mjs. */}
             <Note>{AFFILIATION}</Note>
+            {/*
+              AND WHERE HELP COMES FROM, which is never Fractal Audio. Their
+              letter (18 October 2026) asks that support come through the
+              developer's own channels, and nothing in the app named the
+              support page until then. The line says both ways in; the row
+              that opens the page is up with Updates.
+            */}
+            <Note>{SUPPORT_LINE}</Note>
             <Press
               label="Privacy"
               sub="What this sends, and what it never does"

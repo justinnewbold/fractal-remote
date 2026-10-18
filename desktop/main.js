@@ -33,6 +33,18 @@ const net = require('node:net')
 /* Held to shared/ways-in.mjs REPO by a test — this cannot be the repository
    the code lives in and the download link be a different one. */
 const RELEASES_URL = 'https://github.com/justinnewbold/fractal-remote/releases/latest'
+
+/*
+ * WHOSE APP THIS IS NOT, in the tray, for anybody who opens it. Fractal
+ * Audio's letter of 18 October 2026 asks for its sentence at startup; the
+ * window is the web app and shows the startup card itself, but a computer
+ * started with no window (a Raspberry Pi on a pedalboard) has only this
+ * menu, and must never put up a box nobody can click. So one greyed line,
+ * and nothing that waits for anyone. Typed here because the packaged app
+ * carries main.js and lib/ only, not shared/; held to NOT_AFFILIATED_SHORT
+ * in shared/affiliation.mjs by a test.
+ */
+const NOT_AFFILIATED_SHORT = 'Not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC.'
 const LATEST_API_URL = 'https://api.github.com/repos/justinnewbold/fractal-remote/releases/latest'
 
 let tray = null
@@ -1089,6 +1101,8 @@ function buildTray() {
           }
         ]
       : []),
+    { type: 'separator' },
+    { label: NOT_AFFILIATED_SHORT, enabled: false },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() }
   ])

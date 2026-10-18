@@ -2093,8 +2093,9 @@ export function run(test) {
       assert.ok(web.includes(words), `the browser’s phone walkthrough does not say ${words}, and the phone’s does`)
     }
     assert.match(web, /from '\.\.\/\.\.\/shared\/onboarding\.mjs'/, 'the browser’s phone walkthrough has words of its own')
-    /* His pictures, the phone's own files. */
-    for (const art of ['unit-fm3.png', 'piece-unit.png', 'piece-computer.png', 'piece-phone.png']) {
+    /* His pictures, the phone's own files, and the plain box that took the
+       place of the two with Fractal's logo on them (test/independent.mjs). */
+    for (const art of ['unit-plain.png', 'piece-computer.png', 'piece-phone.png']) {
       assert.ok(web.includes(`mobile/assets/${art}`), `the browser’s phone walkthrough is missing ${art}`)
     }
   })

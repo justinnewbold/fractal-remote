@@ -28,7 +28,14 @@
  * A model with no picture answers null, and the screen shows nothing rather
  * than a placeholder. Since 1.86.50 every model in the catalog has one — a
  * photograph where an openly licensed one exists, a drawing (marked as one)
- * where it does not — so null now means a name the catalog does not carry.
+ * where it does not — with one exception on purpose: Fractal Audio's own
+ * models (the FAS amps, Thordendal, Big Hair, Supertweed, the Fractal-only
+ * drives and Buddah DuoMaster). Thirty-four of their drawings wore a FRACTAL
+ * AUDIO badge, and Fractal Audio's letter of 18 October 2026 asks for no
+ * logos or artwork of theirs, so they were taken out; FAS Buttery's, a Budda
+ * amp under the name of a Fractal original, went with them. Those 35 show
+ * their words alone.
+ * Otherwise null means a name the catalog does not carry.
  */
 import photos from '../data/gear-photos.json' with { type: 'json' }
 
