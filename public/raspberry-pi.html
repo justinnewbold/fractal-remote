@@ -34,8 +34,10 @@
       after another under its own heading, and a line of links jumps to each.
 
       LIGHT AND DARK. The site's other pages are dark only; this one follows
-      the system, and the app's own Light or Dark choice when one was made in
-      this browser (the web app keeps it as fab.theme, on this same address).
+      the app's own choice in this browser (the web app keeps it as fab.theme,
+      on this same address): Light or Dark as chosen, the system on Auto, and
+      Dark when nothing was chosen, the app's own default since 18 October
+      2026.
 
       WHAT IT MAY CLAIM. The app has been started, the way a pedalboard Pi
       starts it, on GitHub's arm64 machines on every build. Nothing records it
@@ -56,14 +58,15 @@
       nothing loaded from anywhere.
     -->
     <script>
-      /* The app's own Light or Dark, if one was chosen in this browser. */
+      /* The app's own choice in this browser: Light or Dark, the system on Auto, Dark when nothing was chosen. */
       ;(function () {
+        var chosen = null
         try {
-          var chosen = window.localStorage.getItem('fab.theme')
-          if (chosen === 'light' || chosen === 'dark') document.documentElement.setAttribute('data-theme', chosen)
+          chosen = window.localStorage.getItem('fab.theme')
         } catch (e) {
-          /* Storage refused: the system's own choice stands. */
+          /* Storage refused: the app's default, Dark. */
         }
+        if (chosen !== 'auto') document.documentElement.setAttribute('data-theme', chosen === 'light' ? 'light' : 'dark')
       })()
     </script>
     <style>
@@ -323,7 +326,7 @@
 
       <h2 id="setup">Setting it up</h2>
       <p>
-        You do this once. Set aside an hour or so, much of it waiting. Afterwards the Pi needs no
+        You do this once. Set aside an hour or so, much of it waiting. Afterward the Pi needs no
         screen.
       </p>
 
@@ -541,7 +544,7 @@
 
         <section class="way" id="screen" aria-labelledby="screen-h">
           <h3 id="screen-h">With a keyboard, mouse and screen on the Pi</h3>
-          <p class="way-lead">You plug a TV or monitor, a keyboard and a mouse into the Pi and set it up right there, like an ordinary computer. Afterwards you unplug them, and the Pi carries on without them.</p>
+          <p class="way-lead">You plug a TV or monitor, a keyboard and a mouse into the Pi and set it up right there, like an ordinary computer. Afterward you unplug them, and the Pi carries on without them.</p>
           <h4>1. Put the Pi in its case, and plug in the screen, the keyboard and the mouse</h4>
           <ol>
             <li>Put the Pi in its case, following the leaflet that comes with the case (a Pi 400, 500 or 500+ is its own case, so skip this). In the official Raspberry Pi 5 case, plug the fan’s small cable into the little socket marked FAN on the Pi before you put the lid on.</li>
@@ -723,7 +726,7 @@
           <a href="/downloads">Download the computer app</a> ·
           <a href="/support">Support</a> ·
           <a href="/privacy">Privacy</a> ·
-          <a href="/notices">Third-party licences</a>
+          <a href="/notices">Third-party licenses</a>
         </p>
       </footer>
     </main>

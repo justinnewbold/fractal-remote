@@ -1557,7 +1557,7 @@ export function run(test) {
         '# Play screen',
         'Tiles & scenes',
         /* "A section where a user can edit the colors": beside the other choices about how Play looks, as on the phone. */
-        'Colours'
+        'Colors'
       ],
       `Settings opens on ${rows.length} rows: ${rows.join(', ')}`
     )
@@ -5704,10 +5704,10 @@ export function run(test) {
     const play = front.slice(front.indexOf('setup-group">Play screen<'))
     assert.match(
       play,
-      /title="Tiles & scenes"[\s\S]*?<SetupRow key="colours" title="Colours" status=\{coloursStatus\(\{ unitName: device\?\.short \|\| device\?\.name \|\| undefined, capabilities: device\?\.capabilities \}\)\} onClick=\{\(\) => setSetupPage\('colours'\)\} \/>[\s\S]*?<Theme \/>/,
+      /title="Tiles & scenes"[\s\S]*?<SetupRow key="colours" title="Colors" status=\{coloursStatus\(\{ unitName: device\?\.short \|\| device\?\.name \|\| undefined, capabilities: device\?\.capabilities \}\)\} onClick=\{\(\) => setSetupPage\('colours'\)\} \/>[\s\S]*?<Theme \/>/,
       'the Colours row is not between Tiles & scenes and light or dark, as on the phone'
     )
-    assert.match(src, /\n  colours: 'Colours',\n/, 'the Colours page has no name of its own in SETUP_PAGES')
+    assert.match(src, /\n  colours: 'Colors',\n/, 'the Colours page has no name of its own in SETUP_PAGES')
     /*
      * WRITTEN ONCE, AND NOWHERE ELSE — not in a comment either. This file reads
      * App.jsx as text and takes the first hit for a page's condition; a second
@@ -5730,7 +5730,7 @@ export function run(test) {
     assert.match(page, /Math\.max\(0, from \+ UNDO_MS - Date\.now\(\)\)/, 'Undo does not go after UNDO_MS')
     assert.match(page, /onUndo=\{\(\) => setLook\(undo\.was\)\}/, 'Undo does not put the last look back on')
     /* Below everything else on the page, so its arriving moves nothing under the pointer. */
-    assert.ok(page.indexOf('<LookUndo') > page.indexOf('Put every colour back'), 'the Undo bar is drawn above part of the page')
+    assert.ok(page.indexOf('<LookUndo') > page.indexOf('Put every color back'), 'the Undo bar is drawn above part of the page')
     /* Each card a radio button, the whole card its label. */
     assert.match(page, /\{LOOKS\.map\(\(look\) => \(\s*<LookCard key=\{look\.id\} look=\{look\} on=\{look\.id === wearing\} onWear=\{\(\) => wear\(look\.id\)\} \/>/)
     assert.match(page, /<input\s+type="radio"\s+name="colours-look"/, 'a look card is not a radio button')
@@ -5751,8 +5751,8 @@ export function run(test) {
     assert.match(page, /const own = ownColourCount\(\{ scenes: sceneCount \}\)/, 'the page counts scenes the unit does not have')
     assert.match(page, /const allRed = scenesAllRed\(sceneCount\)/)
     /* Both ways a switched-off effect is drawn, each beside a tile drawn that way. */
-    assert.match(page, /<OffChoice\s+mode="colour"\s+label="Keep their colour"/)
-    assert.match(page, /<OffChoice mode="grey" label="Grey when off"/)
+    assert.match(page, /<OffChoice\s+mode="colour"\s+label="Keep their color"/)
+    assert.match(page, /<OffChoice mode="grey" label="Gray when off"/)
     assert.match(page, /data-off=\{mode === 'grey' \? 'grey' : undefined\}/)
     assert.match(page, /setOffMode\(mode\)/)
   })
@@ -5825,20 +5825,20 @@ export function run(test) {
     assert.match(drawn, /<input type="radio" name="colours-scenes" checked=""\/><span>All red, like the unit<\/span>/)
 
     /* Keep their colour is the default, and the grey choice shows a grey tile. */
-    assert.match(drawn, /<input type="radio" name="colours-off" checked=""\/><span>Keep their colour/)
+    assert.match(drawn, /<input type="radio" name="colours-off" checked=""\/><span>Keep their color/)
     assert.match(drawn, /class="gig-block off" data-off="grey"/, 'Grey when off is not shown as it will look')
 
     /* The device named by what it is (CLAUDE.md): never "this phone" in a browser. */
-    assert.match(drawn, /Your colours are kept in this browser\. The computer’s screen keeps its own\./)
+    assert.match(drawn, /Your colors are kept in this browser\. The computer’s screen keeps its own\./)
     c.setDevice('computer')
-    assert.match(c.draw(c.Colours, { blocks: [], icons: false }), /Your colours are kept on this computer\. A phone or tablet keeps its own\./)
+    assert.match(c.draw(c.Colours, { blocks: [], icons: false }), /Your colors are kept on this computer\. A phone or tablet keeps its own\./)
     c.setDevice('phone')
 
     /* Your own colour, said on its tile; the count and Clear them under the cards. */
     c.looks.setFamily('drive', '#ff99cc')
     const mine = c.draw(c.Colours, { blocks: [{ slug: 'drive1' }], icons: false })
-    assert.match(mine, /<span>Drive<\/span><\/span><span class="colours-yours">Your colour<\/span>/)
-    assert.match(mine, /<span>1 of your own colours on top<\/span><button type="button" class="chip">Clear them<\/button>/)
+    assert.match(mine, /<span>Drive<\/span><\/span><span class="colours-yours">Your color<\/span>/)
+    assert.match(mine, /<span>1 of your own colors on top<\/span><button type="button" class="chip">Clear them<\/button>/)
     c.looks.setColourUnit(null)
   })
 
@@ -5847,7 +5847,7 @@ export function run(test) {
     c.looks.setColourUnit('fm3')
     const drive = c.page.familyTarget('drive')
     const sheet = c.draw(c.ColourSheet, { target: drive, chain: [], icons: false, onClose: () => {} })
-    assert.match(sheet, /role="dialog" aria-modal="true" aria-label="Drive colour"/)
+    assert.match(sheet, /role="dialog" aria-modal="true" aria-label="Drive color"/)
     assert.match(sheet, /For every drive, in every preset/)
     const swatches = [...sheet.matchAll(/role="radio" aria-checked="(true|false)" aria-label="([^"]+)"[^>]*tabindex="(-?\d)"/g)]
     assert.equal(swatches.length, 24, 'an effect is not offered the twenty-four')
@@ -5858,19 +5858,19 @@ export function run(test) {
     assert.match(sheet, /class="gig-block on" style="--block-fill:#[0-9a-f]{6}/)
     assert.match(sheet, /class="gig-block off"/)
     assert.match(sheet, />Cancel<\/button><button type="button" class="primary">Use it<\/button>/)
-    assert.ok(!/Back to the unit’s colour/.test(sheet), 'Back to the unit’s colour is offered for a colour that is already the unit’s')
+    assert.ok(!/Back to the unit’s color/.test(sheet), 'Back to the unit’s colour is offered for a colour that is already the unit’s')
     /* A scene: no Orange, no second Red beside the unit's own, and red has no Darker. */
     const scene = c.draw(c.ColourSheet, { target: c.page.sceneTarget(1), chain: [], icons: false, onClose: () => {} })
     assert.equal((scene.match(/role="radio"/g) || []).length, 22)
     assert.equal((scene.match(/aria-checked="true"/g) || []).length, 1, 'the scene sheet opens with two swatches ticked')
-    assert.ok(!/Scene 2 colour, Red"/.test(scene), 'Fractal’s red is offered twice, as the unit’s own and as Red')
-    assert.ok(!/Scene 2 colour, Orange/.test(scene), 'a scene is offered the amber-like orange')
+    assert.ok(!/Scene 2 color, Red"/.test(scene), 'Fractal’s red is offered twice, as the unit’s own and as Red')
+    assert.ok(!/Scene 2 color, Orange/.test(scene), 'a scene is offered the amber-like orange')
     assert.match(scene, /<button type="button" aria-label="A step darker" disabled="">Darker<\/button>/, 'red is offered a Darker an unlit tile cannot carry')
     /* Yours, with the way back. */
     c.looks.setFamily('amp', '#66cc33')
     const amp = c.draw(c.ColourSheet, { target: c.page.familyTarget('amp'), chain: [], icons: false, onClose: () => {} })
-    assert.match(amp, /<button type="button" class="colour-back">Back to the unit’s colour<\/button>/)
-    assert.match(amp, /aria-label="Amp colour, Green, your own"/, 'your own colour is said as if somebody else chose it')
+    assert.match(amp, /<button type="button" class="colour-back">Back to the unit’s color<\/button>/)
+    assert.match(amp, /aria-label="Amp color, Green, your own"/, 'your own colour is said as if somebody else chose it')
     c.looks.setColourUnit(null)
   })
 
@@ -5896,30 +5896,30 @@ export function run(test) {
     c.page.paint(c.page.sceneTarget(2, { preset: lead, only: true }), '#66cc33', { only: true })
     const own = c.draw(c.ColourSheet, { target: c.page.sceneTarget(2, { preset: lead, only: true }), onClose: () => {} })
     assert.match(own, /<button type="button" class="colour-back">Same as every preset<\/button>/)
-    assert.match(own, /aria-label="Scene 3 colour, Green, your own"/)
+    assert.match(own, /aria-label="Scene 3 color, Green, your own"/)
 
     /* A preset's tag: drawn as its row, the twenty-three without the orange, no way back until it has one. */
     const target = c.page.presetTarget(45, { words: '045 Clean' })
     const tag = c.draw(c.ColourSheet, { target, onClose: () => {} })
     /* Titled "Preset colour", never cut; the row under it carries the name, and a screen reader is told it whole. */
-    assert.match(tag, /role="dialog" aria-modal="true" aria-label="Colour for 045 Clean"/)
-    assert.match(tag, /<span class="colour-panel-title">Preset colour<\/span>/)
+    assert.match(tag, /role="dialog" aria-modal="true" aria-label="Color for 045 Clean"/)
+    assert.match(tag, /<span class="colour-panel-title">Preset color<\/span>/)
     assert.match(tag, /Kept for this preset on this unit, like its star/)
     /* No tag yet: no bar, nothing ticked, "No colour", and Use it resting until a colour is picked. */
     assert.match(tag, /<span class="colour-tag-preview"><span class="colour-tag-preview-name">045 Clean<\/span><\/span>/, 'a preset with no tag is shown with a bar')
     assert.equal((tag.match(/aria-checked="true"/g) || []).length, 0, 'a preset with no tag opens with a colour ticked')
-    assert.match(tag, /<p class="colour-said">No colour<\/p>/)
+    assert.match(tag, /<p class="colour-said">No color<\/p>/)
     assert.match(tag, /<button type="button" class="primary" disabled="">Use it<\/button>/, 'Use it tags a preset before a colour is picked')
     assert.equal((tag.match(/role="radio"/g) || []).length, 22)
-    assert.ok(!/Colour for 045 Clean, Orange/.test(tag), 'a tag is offered the amber-like orange')
-    assert.match(tag, /aria-label="Colour for 045 Clean, Blue"/, 'a tag’s swatches are not said with the sheet’s title')
+    assert.ok(!/Color for 045 Clean, Orange/.test(tag), 'a tag is offered the amber-like orange')
+    assert.match(tag, /aria-label="Color for 045 Clean, Blue"/, 'a tag’s swatches are not said with the sheet’s title')
     assert.ok(!/class="gig-block|class="gig-scene/.test(tag), 'a tag is drawn as a tile')
     assert.ok(!/colour-back/.test(tag))
     c.page.paint(target, '#0055ff')
     const blue = c.draw(c.ColourSheet, { target, onClose: () => {} })
-    assert.match(blue, /<button type="button" class="colour-back">Take the colour off<\/button>/)
+    assert.match(blue, /<button type="button" class="colour-back">Take the color off<\/button>/)
     assert.match(blue, /<span class="colour-tag-preview" data-tagged="yes" style="--tag:#0055ff"><span class="colour-tag-preview-name">045 Clean<\/span><\/span>/, 'the tag is not shown as its row will look')
-    assert.match(blue, /aria-checked="true" aria-label="Colour for 045 Clean, Blue, your own"/)
+    assert.match(blue, /aria-checked="true" aria-label="Color for 045 Clean, Blue, your own"/)
     c.looks.setColourUnit(null)
   })
 

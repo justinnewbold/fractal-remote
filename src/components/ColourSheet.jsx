@@ -215,14 +215,14 @@ export default function ColourSheet({ target, chain = [], spelt, icons = true, o
   /* What the pick is called, for the line under the tiles. */
   const named = swatches.find((s) => s.fill === base)
   const baseName = !base
-    ? 'no colour'
+    ? 'no color'
     : named
       ? named.said
       : free && free.fill === base
-        ? 'the colour you picked'
+        ? 'the color you picked'
         : yours && base === yours
-          ? 'your own colour'
-          : 'the colour it has now'
+          ? 'your own color'
+          : 'the color it has now'
   const backLabel = target ? backWords(target, { only }) : ''
   /* A scene painted while a preset is loaded: the choice of presets is on the sheet, and says what the note would. */
   const choosing = !!target && target.kind === 'scene' && !!target.preset
@@ -532,12 +532,12 @@ export default function ColourSheet({ target, chain = [], spelt, icons = true, o
           */}
           {any === null ? (
             <button type="button" className="chip colour-any-open" onClick={() => setAny(free ? free.raw : base || '')}>
-              Any colour…
+              Any color…
             </button>
           ) : (
             <div className="colour-any">
               <label className="colour-any-field">
-                <span className="hint">Pick any colour</span>
+                <span className="hint">Pick any color</span>
                 <input
                   type="color"
                   value={colourOr(free?.raw || base)}
@@ -548,7 +548,7 @@ export default function ColourSheet({ target, chain = [], spelt, icons = true, o
                 />
               </label>
               <label className="colour-any-field">
-                <span className="hint">Or type its colour code</span>
+                <span className="hint">Or type its color code</span>
                 <input
                   type="text"
                   inputMode="text"

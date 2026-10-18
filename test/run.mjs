@@ -1366,7 +1366,7 @@ test('what a model really is reaches the screen', () => {
   // it for a maker called Custom Audio Amplifiers.
   assert.match(
     src('../src/components/Console.jsx'),
-    /Modelled on \$\{chosen\.manufacturer\}/,
+    /Modeled on \$\{chosen\.manufacturer\}/,
     'the picker says nothing for a model whose maker is all we know'
   )
 })
@@ -2639,7 +2639,7 @@ test('a scene cannot be sent to a channel this tone never dialled', () => {
   assert.equal(amp(0).channel, 'A', 'a channel this tone dialled is played')
   assert.equal(amp(1).channel, 'B')
   assert.equal(amp(2).channel, 'A', 'the scene was left on a channel nobody built')
-  assert.match(r.problems.join(' '), /never dialled/)
+  assert.match(r.problems.join(' '), /never dialed/)
 
   /*
    * Only for a block this build moves. A preset can have channels dialled by
@@ -11252,6 +11252,44 @@ test('the line under Next names what Next loads, says so when the set starts ove
   }
 })
 
+test('the browser starts dark until somebody chooses, and remembers Auto once chosen', async () => {
+  /*
+   * "Can we make the default dark mode on the app?" Justin, 18 October 2026.
+   * Auto used to be kept by writing nothing down, so nothing stored now means
+   * nobody chose, which is Dark; Auto is written down when chosen, so it
+   * sticks. Storage that refuses is Dark too.
+   */
+  const saved = { localStorage: globalThis.localStorage, document: globalThis.document, window: globalThis.window }
+  const box = new Map()
+  let refuse = false
+  globalThis.localStorage = {
+    getItem: (k) => { if (refuse) throw new Error('blocked'); return box.has(k) ? box.get(k) : null },
+    setItem: (k, v) => { if (refuse) throw new Error('blocked'); box.set(k, String(v)) },
+    removeItem: (k) => box.delete(k)
+  }
+  const root = { dataset: {} }
+  globalThis.document = { documentElement: root, querySelector: () => null }
+  globalThis.window = { matchMedia: () => ({ matches: true }) }
+  try {
+    const theme = await import('../src/lib/theme.js')
+    assert.equal(theme.getMode(), 'dark', 'a browser that never chose does not start dark')
+    assert.equal(theme.apply(theme.getMode()), 'dark', 'a browser set to light that never chose comes up light')
+    theme.setMode('auto')
+    assert.equal(box.get('fab.theme'), 'auto', 'choosing Auto is not written down, so it is lost on the next visit')
+    assert.equal(theme.getMode(), 'auto')
+    assert.equal(theme.apply('auto'), 'light', 'Auto does not follow a browser set to light')
+    theme.setMode('light')
+    assert.equal(theme.getMode(), 'light')
+    box.set('fab.theme', 'sepia')
+    assert.equal(theme.getMode(), 'dark', 'a value the app never writes is taken as a choice')
+    refuse = true
+    assert.equal(theme.getMode(), 'dark', 'storage that refuses does not start dark')
+    assert.doesNotThrow(() => theme.setMode('light'), 'storage that refuses breaks the Light button')
+  } finally {
+    Object.assign(globalThis, saved)
+  }
+})
+
 test('the line under Previous names what Previous loads, says so when it goes to the end, and never guesses', () => {
   /*
    * "The next button now shows the next song/preset. Can we add that to the
@@ -14668,7 +14706,7 @@ test('a switch is said in words: tap, hold, a typed label, and the light', async
   /* A number past the editor's twelve is still an answer with no name, not a failed read. */
   const odd = at({ tapCategory: 3, tapFunction: 0, holdCategory: 0, color: 42 })
   assert.deepEqual(odd.light, { name: null, hex: null }, 'a colour the unit did report is not a failed read')
-  assert.equal(lightWords(odd.light), 'Light: a colour this app can’t name yet')
+  assert.equal(lightWords(odd.light), 'Light: a color this app can’t name yet')
 })
 
 test('the demo FM3 answers a switch in the host’s shape', async () => {

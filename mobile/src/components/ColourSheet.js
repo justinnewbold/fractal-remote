@@ -89,7 +89,7 @@ export default function ColourSheet({ target, chain = [], spelt, onClose }) {
 
   /* What the pick is called, for the line under the tiles and for a screen reader. */
   const named = swatches.find((s) => s.fill === base)
-  const baseName = !base ? 'no colour' : named ? named.said : yours && base === yours ? 'your own colour' : 'the colour it has now'
+  const baseName = !base ? 'no color' : named ? named.said : yours && base === yours ? 'your own color' : 'the color it has now'
   const backLabel = target ? backWords(target, { only }) : ''
 
   /* Every preset, or just this one: the tiles show what each would be. */

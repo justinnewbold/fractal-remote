@@ -751,9 +751,9 @@ export const LOOKS = Object.freeze([
   {
     id: 'unit',
     name: 'Match my unit',
-    why: 'Each effect in the colour your unit gives it, a little brighter where a dark one would be lost on a dark stage. Every scene is red, like the scene switches.',
+    why: 'Each effect in the color your unit gives it, a little brighter where a dark one would be lost on a dark stage. Every scene is red, like the scene switches.',
     whyByUnit: Object.freeze({
-      gen2: 'Each effect in the colour your unit’s editor gives it, a little brighter where a dark one would be lost on a dark stage. Every scene is red, like the newer units’ scene switches.'
+      gen2: 'Each effect in the color your unit’s editor gives it, a little brighter where a dark one would be lost on a dark stage. Every scene is red, like the newer units’ scene switches.'
     }),
     families: PALETTES.gen3,
     byUnit: PALETTES,
@@ -762,7 +762,7 @@ export const LOOKS = Object.freeze([
   {
     id: 'fractalremote',
     name: 'Fractal Remote',
-    why: 'The app’s own colours, as they have always been.',
+    why: 'The app’s own colors, as they have always been.',
     families: Object.freeze(Object.fromEntries(Object.entries(FRACTAL_REMOTE).map(([k, v]) => [k, v.fill]))),
     scenes: FRACTAL_REMOTE_SCENES
   },
@@ -779,7 +779,7 @@ export const LOOKS = Object.freeze([
        so rather than claim a red scene switch it does not have. */
     id: 'rings',
     name: 'Footswitch lights',
-    why: 'What your feet see: every effect switch lights the same colour and every scene switch red. Effects are told apart by their names.',
+    why: 'What your feet see: every effect switch lights the same color and every scene switch red. Effects are told apart by their names.',
     whyByUnit: Object.freeze({
       gen2: 'What your feet see: the MFC-101 lights an effect that is on green, so every effect is green, told apart by its name. Scenes are red, like the newer units’.'
     }),
@@ -802,8 +802,8 @@ export const LOOKS = Object.freeze([
        the orange and the olive are scenes 2 and 5 now, a diagonal step on
        Play. */
     id: 'cvd',
-    name: 'Colour-blind safe',
-    why: 'Chosen so effects side by side stay easy to tell apart with red-green or blue-yellow colour blindness. Each scene gets its own colour.',
+    name: 'Color-blind safe',
+    why: 'Chosen so effects side by side stay easy to tell apart with red-green or blue-yellow color blindness. Each scene gets its own color.',
     families: COLOUR_BLIND,
     scenes: Object.freeze(['#0273b3', '#b84e02', '#fed0ba', '#68c5fb', '#777004', '#eade39', '#8e8dfc', '#b04d60'])
   },
@@ -819,7 +819,7 @@ export const LOOKS = Object.freeze([
        an unlit one still has an edge on the dark stage. */
     id: 'stompbox',
     name: 'Stompbox',
-    why: 'Each effect in the colour of the pedal everybody pictures for it: green overdrive, cyan chorus, purple flanger, orange phaser, cream delay.',
+    why: 'Each effect in the color of the pedal everybody pictures for it: green overdrive, cyan chorus, purple flanger, orange phaser, cream delay.',
     families: STOMPBOX,
     scenes: Object.freeze(['#e4ce65', '#28a5c1', '#c42041', '#e8732c', '#ab579b', '#d5cab8', '#83bf66', '#0275ba'])
   }

@@ -600,7 +600,7 @@ export default function Settings({
               onPress={() => setPage('appearance')}
             />
             {/* "Let's make the colors match better", and choose your own. */}
-            <SetupRow title="Colours" status={coloursStatus({ unitName: deviceName, capabilities: caps })} onPress={() => setPage('colours')} />
+            <SetupRow title="Colors" status={coloursStatus({ unitName: deviceName, capabilities: caps })} onPress={() => setPage('colours')} />
             {/* Light or dark right here: one tap, not a page to open for it. */}
             <View style={{ paddingVertical: space.md }}>
               <Appearance />
@@ -819,7 +819,7 @@ export default function Settings({
       {/* ---------------------------------------------------------- colours */}
       {page === 'colours' ? (
         <>
-          {head('Colours', 'back')}
+          {head('Colors', 'back')}
           <Colours />
         </>
       ) : null}
@@ -1563,7 +1563,7 @@ export default function Settings({
               onPress={() => Linking.openURL('https://fractal.newbold.cloud/privacy.html')}
             />
             <Press
-              label="Licences"
+              label="Licenses"
               sub="The open-source work this is built on"
               onPress={() => Linking.openURL('https://fractal.newbold.cloud/notices.txt')}
             />
@@ -1919,10 +1919,10 @@ function AccountCard({ asked, email, paired, unlocked, demo, onPress }) {
 /**
  * Light, dark, or the handset's own setting.
  *
- * Auto first, and it is the default: a phone that already knows whether its
- * owner wants light or dark is a better guess than anything this app could
- * make, and somebody who has never thought about it gets the right answer
- * without choosing.
+ * Auto first, then Light and Dark. Dark is the default since 18 October
+ * 2026 ("Can we make the default dark mode on the app?"): the stage is dark,
+ * and a phone set to light came up on the paper theme there. Auto still
+ * follows the handset for anybody who picks it.
  */
 function Appearance() {
   const [mode, setLocal] = useState(getMode())

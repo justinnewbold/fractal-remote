@@ -181,7 +181,7 @@ export default function Diagnostics() {
           )}
 
           <p className="hint diag-note">
-            Sent is the normalised 0–1 value that went to the device. Means is what that converts
+            Sent is the normalized 0–1 value that went to the device. Means is what that converts
             back to. If Wanted and Means disagree, the conversion is wrong. If Sent shows the raw
             number instead of a decimal, this build is stale.
           </p>
@@ -191,7 +191,7 @@ export default function Diagnostics() {
             the only trustworthy signal that a value stuck. Not checked means that read couldn&rsquo;t be
             made, so it isn&rsquo;t counted as a failure. Device said is the unit&rsquo;s own
             verdict, which an AM4 gets wrong: it reports <span className="mono">ok:false</span> on
-            continuous writes that landed correctly, because it waits for an acknowledgement the
+            continuous writes that landed correctly, because it waits for an acknowledgment the
             unit doesn&rsquo;t send. A row marked <span className="mono">retry</span> means the
             first encoding didn&rsquo;t take and the other one was tried.
           </p>

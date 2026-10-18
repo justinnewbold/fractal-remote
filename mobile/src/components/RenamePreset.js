@@ -112,7 +112,7 @@ export default function RenamePreset() {
                 here
                   ? {
                       fill: sceneColor(i, here.number).fill,
-                      said: `Colour for scene ${i + 1} in this preset`,
+                      said: `Color for scene ${i + 1} in this preset`,
                       onPress: () => setPainting(sceneTarget(i, { preset: here, only: true, called: scenes[i] }))
                     }
                   : null
@@ -219,7 +219,7 @@ function SceneColour({ fill, said, onPress }) {
         opacity: pressed ? 0.7 : 1
       })}
     >
-      <Text style={{ color: inkOn(fill), fontSize: font.micro, fontWeight: '600' }}>Colour</Text>
+      <Text style={{ color: inkOn(fill), fontSize: font.micro, fontWeight: '600' }}>Color</Text>
     </Pressable>
   )
 }

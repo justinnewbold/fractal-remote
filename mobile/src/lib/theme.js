@@ -132,7 +132,16 @@ export const MODES = ['auto', 'light', 'dark']
 
 const KEY = 'fractal.theme'
 
-let mode = 'auto'
+/*
+ * DARK UNTIL SOMEBODY CHOOSES. "Can we make the default dark mode on the
+ * app?" Justin, 18 October 2026. Auto was the default, and a phone set to
+ * light came up on the paper theme on a dark stage. Somebody who chose Auto
+ * (or Light) keeps it: the phone has always written the choice down, Auto
+ * included, so only a phone that never chose starts dark.
+ */
+const DEFAULT = 'dark'
+
+let mode = DEFAULT
 let systemDark = true
 const watchers = new Set()
 
@@ -158,7 +167,7 @@ function paint() {
 
 /** Choose one. Remembered on this phone. */
 export function setMode(next, storage) {
-  mode = MODES.includes(next) ? next : 'auto'
+  mode = MODES.includes(next) ? next : DEFAULT
   try {
     storage?.setItem(KEY, mode)
   } catch {
@@ -167,13 +176,13 @@ export function setMode(next, storage) {
   paint()
 }
 
-/** What was chosen last time. Anything unreadable is Auto. */
+/** What was chosen last time. Nothing chosen, or anything unreadable, is Dark. */
 export function loadMode(storage) {
   try {
     const saved = storage?.getItem(KEY)
-    mode = MODES.includes(saved) ? saved : 'auto'
+    mode = MODES.includes(saved) ? saved : DEFAULT
   } catch {
-    mode = 'auto'
+    mode = DEFAULT
   }
   paint()
   return mode

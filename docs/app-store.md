@@ -515,6 +515,15 @@ paragraph below as it stands. A later review could still ask. If one does, the
 choice is Justin's: show it to the review account too, with a video of it
 working, or a build without the module.
 
+**For the next version's notes: Dark by default** (18 October 2026). "Can
+we make the default dark mode on the app?" Settings → Play screen still has
+Auto, Light and Dark, and Auto still follows the iPhone's own setting
+(app.json keeps userInterfaceStyle "automatic"), but a phone, browser or
+computer that never chose now starts dark rather than on Auto. Anybody who
+chose Auto or Light keeps it. For the Notes for Review and What's New:
+"The app starts in Dark appearance; Settings, under Play screen, has Auto,
+Light and Dark."
+
 **For the next version's notes: the startup card** (18 October 2026). Since
 then the app opens, once on every device, on a card headed "An independent
 app", with Fractal Audio's sentence, where help comes from, and an OK

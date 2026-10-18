@@ -140,7 +140,7 @@ const lines = [
   '# Third-party notices',
   '',
   'Fractal Remote is built on other people’s work. This file is the list, and',
-  'it carries the notices those licences require rather than pointing at them.',
+  'it carries the notices those licenses require rather than pointing at them.',
   '',
   '**Generated — do not edit.** `npm run notices` rebuilds it from what is',
   'actually installed, and a test fails if it is stale. Edit the sources, not',
@@ -172,7 +172,7 @@ for (const v of VENDORED) {
     `${v.what}.`,
     '',
     `- Home: ${v.home}`,
-    `- Licence: ${v.licence}`,
+    `- License: ${v.licence}`,
     '',
     '```',
     read(v.file).trim(),
@@ -239,9 +239,9 @@ lines.push(
   '### Electron',
   '',
   'The runtime the Mac and Windows apps are built on — Chromium and Node.js,',
-  'each with their own notices. Licence: MIT · https://github.com/electron/electron',
+  'each with their own notices. License: MIT · https://github.com/electron/electron',
   '',
-  'Electron ships its own full licence file inside every app built with it, at',
+  'Electron ships its own full license file inside every app built with it, at',
   '`LICENSES.chromium.html` in the installed application folder. That file is',
   'the authoritative one for Chromium’s own dependencies and is not reproduced',
   'here, because it is 8 MB and it is already in the product.',
@@ -249,7 +249,7 @@ lines.push(
   ...NATIVE.flatMap((n) => [
     `### ${n.name}`,
     '',
-    `${n.what}. Licence: ${n.licence}`,
+    `${n.what}. License: ${n.licence}`,
     '',
     'Installed by the device server rather than by this project, and compiled',
     'for the machine the installer was built on.',
@@ -272,7 +272,7 @@ for (const app of apps) {
     lines.push(
       `### ${p.name} ${p.version}`,
       '',
-      `Licence: ${p.licence}${p.home ? ` · ${p.home}` : ''}`,
+      `License: ${p.licence}${p.home ? ` · ${p.home}` : ''}`,
       ''
     )
     if (p.text) lines.push('```', p.text, '```', '')

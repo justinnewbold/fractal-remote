@@ -123,7 +123,7 @@ export default function Colours() {
         label={FAMILY_NAMES[f] || f}
         /* "A small dot in a corner marks a colour you chose." Words rather than a
            dot, so it says what it means and a screen reader says it too. */
-        sub={yourFamily(f) ? 'Your colour' : undefined}
+        sub={yourFamily(f) ? 'Your color' : undefined}
         icon={icons ? blockIcon(f) : undefined}
         fill={hue.fill}
         ink={hue.ink}
@@ -141,7 +141,7 @@ export default function Colours() {
       {/* ------------------------------------------------------------ looks */}
       <View style={{ gap: space.md }}>
         <Heading>Looks</Heading>
-        <Note>One tap puts a whole look on every tile. Your own colours stay on top of it.</Note>
+        <Note>One tap puts a whole look on every tile. Your own colors stay on top of it.</Note>
         <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
           {LOOKS.map((look) => (
             <LookCard key={look.id} look={look} on={look.id === wearing} onPress={() => wear(look.id)} />
@@ -150,7 +150,7 @@ export default function Colours() {
         {own ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
             <Text style={{ flex: 1, color: color.silkDim, fontSize: font.small }}>
-              {own === 1 ? '1 of your own colours on top' : `${own} of your own colours on top`}
+              {own === 1 ? '1 of your own colors on top' : `${own} of your own colors on top`}
             </Text>
             <Press label="Clear them" onPress={() => setAsking('yours')} />
           </View>
@@ -160,7 +160,7 @@ export default function Colours() {
       {/* ---------------------------------------------------------- effects */}
       <View style={{ gap: space.md }}>
         <Heading>Effects</Heading>
-        <Note>Tap one to give it a colour of your own. It is used in every preset.</Note>
+        <Note>Tap one to give it a color of your own. It is used in every preset.</Note>
         {chain.length ? (
           <>
             <Text style={{ color: color.silkDim, fontSize: font.small }}>In this preset</Text>
@@ -193,7 +193,7 @@ export default function Colours() {
             onPress={() => chooseScenes(false, sync)}
           />
           <Press
-            label="A colour for each scene"
+            label="A color for each scene"
             tone="signal"
             on={!allRed}
             onPress={() => chooseScenes(true, sync)}
@@ -222,14 +222,14 @@ export default function Colours() {
           })}
         </View>
         <Text style={{ color: color.silkDim, fontSize: font.small }}>
-          Tap a scene to give it a colour, in every preset or just the one that is loaded.
+          Tap a scene to give it a color, in every preset or just the one that is loaded.
         </Text>
       </View>
 
       {/* ---------------------------------------------------------- presets */}
       <View style={{ gap: space.md }}>
         <Heading>Presets</Heading>
-        <Note>A preset’s colour is a bar beside its name: in the preset list, in your setlists and on Play.</Note>
+        <Note>A preset’s color is a bar beside its name: in the preset list, in your setlists and on Play.</Note>
         {/* The one that is loaded, with a tap; any other from the preset list, with a hold. */}
         {tagHere ? <TagRow words={tagHere.name} fill={presetTag(tagHere.number)} onPress={() => setPainting(tagHere)} /> : null}
         <Text style={{ color: color.silkDim, fontSize: font.small }}>{TAG_HOLD.phonePage}</Text>
@@ -242,15 +242,15 @@ export default function Colours() {
           {/* Words that hold on both pages (lib/colourPage OFF_WORDS): the tile
               beside them is dark on the stage and pale on the Light page,
               whichever way is chosen. */}
-          <OffChoice mode="colour" label="Keep their colour" sub={OFF_WORDS.colour} />
-          <OffChoice mode="grey" label="Grey when off" sub={OFF_WORDS.grey} />
+          <OffChoice mode="colour" label="Keep their color" sub={OFF_WORDS.colour} />
+          <OffChoice mode="grey" label="Gray when off" sub={OFF_WORDS.grey} />
         </View>
       </View>
 
       {/* -------------------------------------------------------- put back */}
       <View style={{ gap: space.md }}>
-        <Press label="Put every colour back" sub={PUT_BACK_WORDS} onPress={() => setAsking('all')} />
-        <Note>{`Your colours are kept on this ${deviceNoun()}. The computer’s screen keeps its own.`}</Note>
+        <Press label="Put every color back" sub={PUT_BACK_WORDS} onPress={() => setAsking('all')} />
+        <Note>{`Your colors are kept on this ${deviceNoun()}. The computer’s screen keeps its own.`}</Note>
       </View>
 
       <ColourSheet target={painting} chain={chain} spelt={spelt} onClose={() => setPainting(null)} />
@@ -263,7 +263,7 @@ export default function Colours() {
       <Sheet
         open={!!asking}
         onClose={() => setAsking(null)}
-        title={asking === 'yours' ? 'Clear your own colours?' : 'Put every colour back?'}
+        title={asking === 'yours' ? 'Clear your own colors?' : 'Put every color back?'}
         foot={
           <View style={{ flexDirection: 'row', gap: space.sm }}>
             <Press label="Keep mine" grow onPress={() => setAsking(null)} />
@@ -283,8 +283,8 @@ export default function Colours() {
       >
         <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
           {asking === 'yours'
-            ? 'Every effect and scene you gave a colour of your own goes back to the colours of the look you are wearing. The look stays.'
-            : 'Back to Match my unit: every effect in your unit’s own colours, every scene red, and switched-off effects in their own colour. Every colour you chose goes.'}
+            ? 'Every effect and scene you gave a color of your own goes back to the colors of the look you are wearing. The look stays.'
+            : 'Back to Match my unit: every effect in your unit’s own colors, every scene red, and switched-off effects in their own color. Every color you chose goes.'}
         </Text>
       </Sheet>
     </View>

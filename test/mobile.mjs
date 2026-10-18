@@ -7512,7 +7512,9 @@ export function run(test) {
      * New lists the changes. iPhone only, so it sits after Play's five.
      */
     assert.equal(JSON.parse(read('mobile/app.json')).expo.userInterfaceStyle, 'automatic', 'the iPhone no longer follows its own light or dark setting; the notes and What’s New should stop saying it does')
-    assert.match(read('mobile/src/lib/theme.js'), /let mode = 'auto'/, 'Auto is no longer the default, and the notes say it is')
+    /* Dark is the default since 18 October 2026 ("Can we make the default dark mode on the app?"); the next version's notes say so (docs/app-store.md). */
+    assert.match(read('mobile/src/lib/theme.js'), /const DEFAULT = 'dark'\n\nlet mode = DEFAULT/, 'Dark is no longer the default, and the next version’s notes say it is')
+    assert.match(read('docs/app-store.md'), /For the next version's notes: Dark by default/, 'the next version’s notes do not say the app starts dark')
     /*
      * By where it is, not by a name it does not have: Settings draws Auto,
      * Light and Dark as an unlabelled row under Play screen, with no word
@@ -8596,7 +8598,7 @@ export function run(test) {
       '# Play screen',
       'Tiles & scenes',
       /* "A section where a user can edit the colors": beside the other choices about how Play looks. */
-      'Colours'
+      'Colors'
     ], 'the Setup rows are not in the order he asked for')
     /* And the names are a tap from Edit too: "add the amps and pedals names as a link in the edit area". */
     assert.match(read('mobile/src/screens/Edit.js'), /<Press label="Amp & pedal names"[^>]*onPress=\{onOpenGear\}/, 'Edit has no way to the amp and pedal names')
@@ -9878,7 +9880,7 @@ export function run(test) {
       assert.ok(d, `${own} says nothing at all, not even what it does`)
       assert.match(
         d,
-        /Fractal|not a pedal|not analogue|no pedal behind/i,
+        /Fractal|not a pedal|not analog|no pedal behind/i,
         `${own} reads as if there were a real pedal behind it`
       )
     }
@@ -12250,6 +12252,23 @@ export function run(test) {
     theme.setMode('dark')
     assert.equal(theme.isDark(), true)
     assert.notEqual(theme.color.chassis, light, 'light and dark are the same colour')
+
+    /*
+     * DARK UNTIL SOMEBODY CHOOSES. "Can we make the default dark mode on the
+     * app?" A phone that never chose, or whose stored choice cannot be read,
+     * starts dark whatever the handset says; one that chose Auto or Light
+     * keeps it.
+     */
+    const store = (value) => ({ getItem: () => value, setItem: () => {} })
+    theme.setSystemDark(false)
+    assert.equal(theme.loadMode(store(null)), 'dark', 'a phone that never chose does not start dark')
+    assert.equal(theme.isDark(), true, 'a phone that never chose, set to light, comes up on the paper theme')
+    assert.equal(theme.loadMode(store('sepia')), 'dark', 'a value the app never writes is taken as a choice')
+    assert.equal(theme.loadMode({ getItem: () => { throw new Error('no storage') } }), 'dark', 'storage that throws does not start dark')
+    assert.equal(theme.loadMode(store('auto')), 'auto', 'a phone that chose Auto loses it')
+    assert.equal(theme.isDark(), false, 'Auto on a phone set to light is dark')
+    assert.equal(theme.loadMode(store('light')), 'light', 'a phone that chose Light loses it')
+    theme.setSystemDark(true)
 
     /* Auto follows the handset rather than guessing. */
     theme.setMode('auto')
@@ -18343,13 +18362,13 @@ export function run(test) {
     /* Between Tiles & scenes and the Auto / Light / Dark buttons, as the plan put it. */
     assert.match(
       play,
-      /title="Tiles & scenes"[\s\S]*?<SetupRow title="Colours" status=\{coloursStatus\(\{ unitName: deviceName, capabilities: caps \}\)\} onPress=\{\(\) => setPage\('colours'\)\} \/>[\s\S]*?<Appearance \/>/,
+      /title="Tiles & scenes"[\s\S]*?<SetupRow title="Colors" status=\{coloursStatus\(\{ unitName: deviceName, capabilities: caps \}\)\} onPress=\{\(\) => setPage\('colours'\)\} \/>[\s\S]*?<Appearance \/>/,
       'the Colours row is not between Tiles & scenes and light or dark'
     )
     /* The page condition written once, so a check that takes the first hit takes the page. */
     assert.equal(settings.split("{page === 'colours' ? (").length, 2, 'the Colours page condition is written more than once, or not at all')
     const pageText = settings.slice(settings.indexOf("{page === 'colours' ? ("), settings.indexOf("{page === 'trouble' ? ("))
-    assert.match(pageText, /head\('Colours', 'back'\)/, 'the Colours page has no title or way back')
+    assert.match(pageText, /head\('Colors', 'back'\)/, 'the Colours page has no title or way back')
     assert.match(pageText, /<Colours \/>/, 'the Colours page is empty')
     /* Undo floats over the screen, outside the scroll, so it never moves the cards. */
     assert.match(settings, /<\/ScrollView>\s*\{\/\*[\s\S]*?\*\/\}\s*<LookUndo \/>\s*<\/EdgeBack>/, 'the look Undo is inside the scrolling page, or missing')
@@ -18358,8 +18377,8 @@ export function run(test) {
   test('the Settings row names the look, and the unit when the look is the unit’s', async () => {
     const c = await coloursOnTheBench()
     c.setColourUnit('am4')
-    assert.equal(c.coloursStatus({ unitName: 'AM4' }), 'Match my unit · AM4 colours')
-    assert.equal(c.coloursStatus(), 'Match my unit · AM4 colours', 'with no name, the palette’s name')
+    assert.equal(c.coloursStatus({ unitName: 'AM4' }), 'Match my unit · AM4 colors')
+    assert.equal(c.coloursStatus(), 'Match my unit · AM4 colors', 'with no name, the palette’s name')
     c.setLook('sunlight', c.storage)
     c.setFamily('drive', '#ff99cc', c.storage)
     assert.equal(c.coloursStatus({ unitName: 'AM4' }), 'Sunlight · 1 of your own')
@@ -18429,7 +18448,7 @@ export function run(test) {
     assert.match(page, /<Press label="Keep mine" grow onPress=\{\(\) => setAsking\(null\)\} \/>/)
     assert.match(page, /label="Put back"[\s\S]{0,200}if \(asking === 'yours'\) clearYours\(sync\)\s+else resetAll\(sync\)/)
     assert.equal(page.split('resetAll(sync)').length, 2, 'Put every colour back happens somewhere other than its confirm')
-    assert.match(page, /<Press\s+label="Put every colour back"[\s\S]{0,200}onPress=\{\(\) => setAsking\('all'\)\}/)
+    assert.match(page, /<Press\s+label="Put every color back"[\s\S]{0,200}onPress=\{\(\) => setAsking\('all'\)\}/)
   })
 
   test('the colour sheet offers exactly the checked swatches, each one named for a screen reader', async () => {
@@ -18453,12 +18472,12 @@ export function run(test) {
       assert.ok(c.contrast(s.fill, c.inkOn(s.fill)) >= 4.5, `${s.name} ${s.fill} cannot carry its letters`)
     }
     /* "Drive colour, raspberry, your own." */
-    assert.equal(c.spokenSwatch(drive, grid[1]), 'Drive colour, Red')
-    assert.equal(c.spokenSwatch(drive, grid[1], { yours: true }), 'Drive colour, Red, your own')
-    assert.equal(c.spokenSwatch(drive, grid[0]), 'Drive colour, the unit’s own colour')
+    assert.equal(c.spokenSwatch(drive, grid[1]), 'Drive color, Red')
+    assert.equal(c.spokenSwatch(drive, grid[1], { yours: true }), 'Drive color, Red, your own')
+    assert.equal(c.spokenSwatch(drive, grid[0]), 'Drive color, the unit’s own color')
     c.setLook('sunlight', c.storage)
     assert.equal(c.sheetSwatches(drive)[0].name, 'Look')
-    assert.equal(c.spokenSwatch(drive, c.sheetSwatches(drive)[0]), 'Drive colour, Sunlight’s own colour')
+    assert.equal(c.spokenSwatch(drive, c.sheetSwatches(drive)[0]), 'Drive color, Sunlight’s own color')
     c.setColourUnit(null)
 
     const sheet = read('mobile/src/components/ColourSheet.js')
@@ -18519,7 +18538,7 @@ export function run(test) {
     assert.equal(c.nextToWarning(amp, '#cc0000'), 'Hard to tell from Drive next to it', 'a red amp next to the drive says nothing')
     assert.equal(c.nextToWarning(amp, c.lookOwn(amp)), null, 'the unit’s own amp colour is warned about')
     assert.equal(c.nextToWarning(amp, '#ffff00'), null, 'a yellow amp is called hard to tell from its neighbours')
-    assert.match(c.nextToWarning(amp, '#018901'), /^Hard to tell from \w+ next to it \(for some colour-blind players\)$/, 'a pick only colour-blind players would lose says nothing')
+    assert.match(c.nextToWarning(amp, '#018901'), /^Hard to tell from \w+ next to it \(for some color-blind players\)$/, 'a pick only colour-blind players would lose says nothing')
     /* The loaded preset's own order counts too. */
     assert.ok(c.neighboursOf('synth', ['drive', 'synth', 'looper']).includes('looper'))
     assert.ok(c.neighboursOf('drive').includes('amp') && c.neighboursOf('drive').includes('wah'))
@@ -18629,7 +18648,7 @@ export function run(test) {
     assert.match(notice, /useEffect\(\(\) => \{\s+if \(!drawn \|\| launch !== null\) return\s+markColoursNotice\(\)\s+launch = 'showing'\s+\}, \[drawn\]\)/, 'the line is not remembered the moment it is shown')
     assert.match(notice, /<Note\s+onDismiss=/, 'the line cannot be put away')
     /* "Settings → Colours" held together, so a narrow screen never breaks it after "Settings". */
-    assert.match(read('src/lib/colourPage.js'), /export const COLOURS_NOTICE = 'Colours now match your unit · Settings\\u00a0→\\u00a0Colours'/)
+    assert.match(read('src/lib/colourPage.js'), /export const COLOURS_NOTICE = 'Colors now match your unit · Settings\\u00a0→\\u00a0Colors'/)
   })
 
   test('a scene painted while a preset is loaded asks which presets, and the phone’s generated copy keeps them apart', async () => {
@@ -18662,7 +18681,7 @@ export function run(test) {
 
     /* The scene names on Edit: a colour beside each name, for this preset. */
     const rename = read('mobile/src/components/RenamePreset.js')
-    assert.match(rename, /fill: sceneColor\(i, here\.number\)\.fill,\s+said: `Colour for scene \$\{i \+ 1\} in this preset`/)
+    assert.match(rename, /fill: sceneColor\(i, here\.number\)\.fill,\s+said: `Color for scene \$\{i \+ 1\} in this preset`/)
     assert.match(rename, /\{colour \? <SceneColour \{\.\.\.colour\} \/> : null\}/)
     assert.match(rename, /<ColourSheet target=\{painting\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
     /* The loaded preset's row on the Colours page reads as a button: what it is, what its tag is, and a thumb's height. */
@@ -18689,6 +18708,6 @@ export function run(test) {
       const shown = read(file).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
       assert.ok(!/this (phone|iphone|ipad|device)\b/i.test(shown), `${file} says "this phone"`)
     }
-    assert.match(read('mobile/src/components/Colours.js'), /`Your colours are kept on this \$\{deviceNoun\(\)\}\. The computer’s screen keeps its own\.`/)
+    assert.match(read('mobile/src/components/Colours.js'), /`Your colors are kept on this \$\{deviceNoun\(\)\}\. The computer’s screen keeps its own\.`/)
   })
 }

@@ -366,13 +366,13 @@ export const offAmber = (t) => !!t && t.kind !== 'family'
  * 000 AM4 Gig Rig" came out "Colour for 000 AM4 Gi…", for almost every name
  * there is. The row drawn under the title carries the name, on two lines.
  */
-export const sheetTitle = (t) => (t.kind === 'preset' ? 'Preset colour' : `${t.name} colour`)
+export const sheetTitle = (t) => (t.kind === 'preset' ? 'Preset color' : `${t.name} color`)
 
 /**
  * The same, whole, for a screen reader, which is not shown the row under the
  * title: "Colour for 012 Lead Rig". Everything else is said as titled.
  */
-export const sheetSaid = (t) => (t.kind === 'preset' ? `Colour for ${t.name}` : sheetTitle(t))
+export const sheetSaid = (t) => (t.kind === 'preset' ? `Color for ${t.name}` : sheetTitle(t))
 
 /** What the sheet says it is painting, under its title. */
 export function sheetNote(t, { only = false } = {}) {
@@ -386,11 +386,11 @@ export function sheetNote(t, { only = false } = {}) {
  * preset's, to what the Scenes choice gives a scene, or no tag at all.
  */
 export function backWords(t, { only = false } = {}) {
-  if (t.kind === 'preset') return 'Take the colour off'
+  if (t.kind === 'preset') return 'Take the color off'
   if (within(t, only) !== null) return 'Same as every preset'
   if (t.kind === 'scene' && sceneBase(t.index).picked) return CHOICE_WORDS[sceneChoice()].back
   const look = lookById(lookId())
-  return look.id === 'unit' ? 'Back to the unit’s colour' : `Back to ${look.name}’s colour`
+  return look.id === 'unit' ? 'Back to the unit’s color' : `Back to ${look.name}’s color`
 }
 
 /*
@@ -400,7 +400,7 @@ export function backWords(t, { only = false } = {}) {
  */
 const CHOICE_WORDS = Object.freeze({
   red: Object.freeze({ name: 'Red', said: 'red, like the unit', back: 'Back to red, like the unit' }),
-  each: Object.freeze({ name: 'Each', said: 'the colour for each scene', back: 'Back to the colour for each scene' })
+  each: Object.freeze({ name: 'Each', said: 'the color for each scene', back: 'Back to the color for each scene' })
 })
 
 /**
@@ -457,14 +457,14 @@ export const presetTag = (number, unit = colourUnit()) => (Number.isInteger(numb
  */
 export const TAG_HOLD = Object.freeze({
   /* At the end of the list itself. */
-  phone: 'Hold a preset to give it a colour.',
-  browser: 'Hold or right-click a preset to give it a colour.',
+  phone: 'Hold a preset to give it a color.',
+  browser: 'Hold or right-click a preset to give it a color.',
   /* On the Colours page, which has to say which list. */
-  phonePage: 'In the preset list, hold any preset to give it a colour.',
-  browserPage: 'In the preset list, hold or right-click any preset to give it a colour.',
+  phonePage: 'In the preset list, hold any preset to give it a color.',
+  browserPage: 'In the preset list, hold or right-click any preset to give it a color.',
   /* What a screen reader adds to a row of the phone's list, and a pointer resting on a row of the browser's. */
-  hint: 'Hold to give it a colour',
-  browserHint: 'Hold or right-click to give it a colour'
+  hint: 'Hold to give it a color',
+  browserHint: 'Hold or right-click to give it a color'
 })
 
 /** How wide the bar is, in points on the phone and pixels in the browser. */
@@ -481,11 +481,11 @@ export const TAG_WIDTH = 4
 export const tagFill = (fill, { light = false } = {}) => (fill ? (light ? paperEdge(fill) : String(fill).toLowerCase()) : null)
 
 /** What a tag is called, for a screen reader: "Blue", or "a colour of your own" for one typed in. */
-export const tagName = (fill) => SWATCHES.find((s) => same(s.fill, fill))?.name || 'a colour of your own'
+export const tagName = (fill) => SWATCHES.find((s) => same(s.fill, fill))?.name || 'a color of your own'
 
 /** What the loaded preset's row on the Colours page says its tag is: "Blue", "A colour of your own", or "No colour". */
 export const tagSaid = (fill) => {
-  if (!fill) return 'No colour'
+  if (!fill) return 'No color'
   const name = tagName(fill)
   return name[0].toUpperCase() + name.slice(1)
 }
@@ -494,7 +494,7 @@ export const tagSaid = (fill) => {
  * What a screen reader says for the button that gives the loaded preset its
  * tag on the Colours page: what it is now, and what a press does.
  */
-export const tagButtonWords = (words, fill) => (fill ? `Colour for ${words}: ${tagName(fill)}. Change it` : `Give ${words} a colour`)
+export const tagButtonWords = (words, fill) => (fill ? `Color for ${words}: ${tagName(fill)}. Change it` : `Give ${words} a color`)
 
 /* ------------------------------------------------------------------ */
 /* The sheet's swatches                                                 */
@@ -520,7 +520,7 @@ export function sheetSwatches(t) {
       ? { ...s, said: s.name }
       : chosen
         ? { ...s, name: chosen.name, said: chosen.said }
-        : { ...s, name: lookId() === 'unit' ? 'Unit' : 'Look', said: lookId() === 'unit' ? 'the unit’s own colour' : `${lookName}’s own colour` }
+        : { ...s, name: lookId() === 'unit' ? 'Unit' : 'Look', said: lookId() === 'unit' ? 'the unit’s own color' : `${lookName}’s own color` }
   )
 }
 
@@ -658,8 +658,8 @@ export const FREE_PICK_WORDS = Object.freeze({
   stage: 'Brightened so it shows on a dark stage',
   lighter: 'Brightened a little so its letters stay readable',
   darker: 'Darkened a little so its letters stay readable',
-  amber: 'Too close to the amber ring that marks the scene you are on. Pick another colour for a scene.',
-  notYet: 'A colour code is a # and six letters or numbers, like #cc0000'
+  amber: 'Too close to the amber ring that marks the scene you are on. Pick another color for a scene.',
+  notYet: 'A color code is a # and six letters or numbers, like #cc0000'
 })
 
 /** The line for a free pick: refused for a scene, moved and why, or nothing. */
@@ -746,7 +746,7 @@ export function nextToWarning(t, pick, { chain = [], spelt = {}, colourOf, only 
     if (worst < NEIGHBOUR_GAP && (!hidden || worst < hidden.by)) hidden = { name: n.name, by: worst }
   }
   if (seen) return `Hard to tell from ${seen.name} next to it`
-  if (hidden) return `Hard to tell from ${hidden.name} next to it (for some colour-blind players)`
+  if (hidden) return `Hard to tell from ${hidden.name} next to it (for some color-blind players)`
   return null
 }
 
@@ -806,7 +806,7 @@ export function coloursStatus({ unitName, palette = currentPaletteId(), capabili
   const look = lookById(lookId())
   const count = ownColourCount({ scenes: pageSceneCount(capabilities) })
   const whose = unitName || PALETTE_NAMES[palette] || PALETTE_NAMES.gen3
-  return [look.name, look.id === 'unit' ? `${whose} colours` : null, count ? `${count} of your own` : null].filter(Boolean).join(' · ')
+  return [look.name, look.id === 'unit' ? `${whose} colors` : null, count ? `${count} of your own` : null].filter(Boolean).join(' · ')
 }
 
 /* ------------------------------------------------------------------ */
@@ -862,8 +862,8 @@ export const OFF_GREY = Object.freeze({
  * opposite of the picture beside it.
  */
 export const OFF_WORDS = Object.freeze({
-  colour: 'A faint wash of the effect’s own colour with an edge in that colour, so you still know which it is.',
-  grey: 'Greyed out, with a grey edge, the way the unit draws an effect that is off.'
+  colour: 'A faint wash of the effect’s own color with an edge in that color, so you still know which it is.',
+  grey: 'Grayed out, with a gray edge, the way the unit draws an effect that is off.'
 })
 
 /**
@@ -871,7 +871,7 @@ export const OFF_WORDS = Object.freeze({
  * said "Match my unit, the unit’s colours, and …", which is Match my unit
  * said twice.
  */
-export const PUT_BACK_WORDS = 'Back to Match my unit: every scene red, switched-off effects in their own colour'
+export const PUT_BACK_WORDS = 'Back to Match my unit: every scene red, switched-off effects in their own color'
 
 /**
  * The one-time line on Play after the colours changed, for somebody who had
@@ -880,7 +880,7 @@ export const PUT_BACK_WORDS = 'Back to Match my unit: every scene red, switched-
  * starts "→ Colours" reads as somewhere else. It moves to the next line
  * whole instead, on both ends.
  */
-export const COLOURS_NOTICE = 'Colours now match your unit · Settings\u00a0→\u00a0Colours'
+export const COLOURS_NOTICE = 'Colors now match your unit · Settings\u00a0→\u00a0Colors'
 
 /** Whether a look is the one the phone still lifts (Tile), for a card drawn in a look not being worn. */
 export const liftedLook = (id) => id === FRACTAL_REMOTE_LOOK

@@ -114,7 +114,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
           {/* "A small dot in a corner marks a colour you chose." Words rather
               than a dot, so it says what it means and a screen reader says it
               too — the phone's words. */}
-          {yourFamily(f) ? <span className="colours-yours">Your colour</span> : null}
+          {yourFamily(f) ? <span className="colours-yours">Your color</span> : null}
         </button>
       </div>
     )
@@ -123,8 +123,8 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
   /* Where your colours live, said by what this end is (shared/device-word.mjs). */
   const kept =
     deviceKind() === 'computer'
-      ? 'Your colours are kept on this computer. A phone or tablet keeps its own.'
-      : `Your colours are kept ${onThis()}. The computer’s screen keeps its own.`
+      ? 'Your colors are kept on this computer. A phone or tablet keeps its own.'
+      : `Your colors are kept ${onThis()}. The computer’s screen keeps its own.`
 
   return (
     <div className="colours">
@@ -133,7 +133,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
         <h3 className="silk-label setup-open-title" id="colours-looks">
           Looks
         </h3>
-        <p className="hint">One tap puts a whole look on every tile. Your own colours stay on top of it.</p>
+        <p className="hint">One tap puts a whole look on every tile. Your own colors stay on top of it.</p>
         <div className="colours-looks" role="radiogroup" aria-labelledby="colours-looks">
           {LOOKS.map((look) => (
             <LookCard key={look.id} look={look} on={look.id === wearing} onWear={() => wear(look.id)} />
@@ -141,7 +141,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
         </div>
         {own ? (
           <div className="colours-own">
-            <span>{own === 1 ? '1 of your own colours on top' : `${own} of your own colours on top`}</span>
+            <span>{own === 1 ? '1 of your own colors on top' : `${own} of your own colors on top`}</span>
             <button type="button" className="chip" onClick={() => setAsking('yours')}>
               Clear them
             </button>
@@ -154,7 +154,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
         <h3 className="silk-label setup-open-title" id="colours-effects">
           Effects
         </h3>
-        <p className="hint">Tap one to give it a colour of your own. It is used in every preset.</p>
+        <p className="hint">Tap one to give it a color of your own. It is used in every preset.</p>
         {chain.length ? (
           <>
             <p className="colours-sub">In this preset</p>
@@ -189,7 +189,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
           </label>
           <label className="rename-choice">
             <input type="radio" name="colours-scenes" checked={!allRed} onChange={() => chooseScenes(true)} />
-            <span>A colour for each scene</span>
+            <span>A color for each scene</span>
           </label>
         </div>
         {/* Lit, every one, so each one's colour can be seen: on Play only the
@@ -204,7 +204,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
                 className="gig-scene current named"
                 style={{ '--scene-fill': hue.fill, '--scene-ink': hue.ink }}
                 data-picked={hue.picked ? 'yes' : undefined}
-                aria-label={`Scene ${i + 1}${sceneNames?.[i] ? ` — ${sceneNames[i]}` : ''}${yourScene(i) ? ', your colour' : ''}`}
+                aria-label={`Scene ${i + 1}${sceneNames?.[i] ? ` — ${sceneNames[i]}` : ''}${yourScene(i) ? ', your color' : ''}`}
                 onClick={() => setPainting(sceneTarget(i, { preset, called: sceneNames?.[i] }))}
               >
                 <span className="gig-scene-num mono">{yourScene(i) ? `${i + 1} · yours` : String(i + 1)}</span>
@@ -213,7 +213,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
             )
           })}
         </div>
-        <p className="hint">Tap a scene to give it a colour, in every preset or just the one that is loaded.</p>
+        <p className="hint">Tap a scene to give it a color, in every preset or just the one that is loaded.</p>
       </section>
 
       {/* ---------------------------------------------------------- presets */}
@@ -221,7 +221,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
         <h3 className="silk-label setup-open-title" id="colours-presets">
           Presets
         </h3>
-        <p className="hint">A preset’s colour is a bar beside its name: in the preset list, in your setlists and on Play.</p>
+        <p className="hint">A preset’s color is a bar beside its name: in the preset list, in your setlists and on Play.</p>
         {/* The one that is loaded, with a click; any other from the preset list, with a hold or a right-click. */}
         {tagHere ? (
           <button
@@ -247,15 +247,15 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
         <div className="colours-choices" role="radiogroup" aria-labelledby="colours-off">
           {/* Words that hold on both pages: the tile beside them is dark on the
               stage and pale on the Light page, whichever way is chosen. */}
-          <OffChoice mode="colour" label="Keep their colour" sub={OFF_WORDS.colour} />
-          <OffChoice mode="grey" label="Grey when off" sub={OFF_WORDS.grey} />
+          <OffChoice mode="colour" label="Keep their color" sub={OFF_WORDS.colour} />
+          <OffChoice mode="grey" label="Gray when off" sub={OFF_WORDS.grey} />
         </div>
       </section>
 
       {/* -------------------------------------------------------- put back */}
       <section className="colours-section">
         <button type="button" className="colours-putback" onClick={() => setAsking('all')}>
-          <span>Put every colour back</span>
+          <span>Put every color back</span>
           <span className="hint">{PUT_BACK_WORDS}</span>
         </button>
         <p className="hint">{kept}</p>
@@ -273,7 +273,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
       <ColourPanel
         open={!!asking}
         onClose={() => setAsking(null)}
-        title={asking === 'yours' ? 'Clear your own colours?' : 'Put every colour back?'}
+        title={asking === 'yours' ? 'Clear your own colors?' : 'Put every color back?'}
         foot={
           <div className="colour-foot-row">
             <button type="button" data-first="yes" onClick={() => setAsking(null)}>
@@ -295,8 +295,8 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
       >
         <p className="colours-ask">
           {asking === 'yours'
-            ? 'Every effect and scene you gave a colour of your own goes back to the colours of the look you are wearing. The look stays.'
-            : 'Back to Match my unit: every effect in your unit’s own colours, every scene red, and switched-off effects in their own colour. Every colour you chose goes.'}
+            ? 'Every effect and scene you gave a color of your own goes back to the colors of the look you are wearing. The look stays.'
+            : 'Back to Match my unit: every effect in your unit’s own colors, every scene red, and switched-off effects in their own color. Every color you chose goes.'}
         </p>
       </ColourPanel>
     </div>

@@ -1,7 +1,7 @@
 # Third-party notices
 
 Fractal Remote is built on other people’s work. This file is the list, and
-it carries the notices those licences require rather than pointing at them.
+it carries the notices those licenses require rather than pointing at them.
 
 **Generated — do not edit.** `npm run notices` rebuilds it from what is
 actually installed, and a test fails if it is stale. Edit the sources, not
@@ -29,7 +29,7 @@ both — [what we changed](licences/MODIFICATIONS.md).
 the device server — the part that actually talks to the unit.
 
 - Home: https://github.com/sKuhLight/forgefx
-- Licence: MIT
+- License: MIT
 
 
 MIT License
@@ -60,7 +60,7 @@ SOFTWARE.
 the preset codec ForgeFX reads and writes presets with.
 
 - Home: https://github.com/sKuhLight/forgefx-midi
-- Licence: Apache-2.0
+- License: Apache-2.0
 
 
 Apache License
@@ -332,23 +332,23 @@ anything above, so they are named here rather than found by a walk.
 ### Electron
 
 The runtime the Mac and Windows apps are built on — Chromium and Node.js,
-each with their own notices. Licence: MIT · https://github.com/electron/electron
+each with their own notices. License: MIT · https://github.com/electron/electron
 
-Electron ships its own full licence file inside every app built with it, at
+Electron ships its own full license file inside every app built with it, at
 `LICENSES.chromium.html` in the installed application folder. That file is
 the authoritative one for Chromium’s own dependencies and is not reproduced
 here, because it is 8 MB and it is already in the product.
 
 ### serialport
 
-the USB serial link to the unit. Licence: MIT
+the USB serial link to the unit. License: MIT
 
 Installed by the device server rather than by this project, and compiled
 for the machine the installer was built on.
 
 ### @julusian/midi
 
-the MIDI link to the unit. Licence: MIT
+the MIDI link to the unit. License: MIT
 
 Installed by the device server rather than by this project, and compiled
 for the machine the installer was built on.
@@ -361,7 +361,7 @@ for the machine the installer was built on.
 
 ### @supabase/auth-js 2.112.4
 
-Licence: MIT · https://github.com/supabase/supabase-js
+License: MIT · https://github.com/supabase/supabase-js
 
 
 MIT License
@@ -389,7 +389,7 @@ SOFTWARE.
 
 ### @supabase/functions-js 2.112.4
 
-Licence: MIT · https://github.com/supabase/supabase-js
+License: MIT · https://github.com/supabase/supabase-js
 
 
 MIT License
@@ -417,7 +417,7 @@ SOFTWARE.
 
 ### @supabase/phoenix 0.4.5
 
-Licence: MIT · https://github.com/supabase/phoenix
+License: MIT · https://github.com/supabase/phoenix
 
 
 # MIT License
@@ -446,7 +446,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @supabase/postgrest-js 2.112.4
 
-Licence: MIT · https://github.com/supabase/supabase-js
+License: MIT · https://github.com/supabase/supabase-js
 
 
 MIT License
@@ -474,7 +474,7 @@ SOFTWARE.
 
 ### @supabase/realtime-js 2.112.4
 
-Licence: MIT · https://github.com/supabase/supabase-js
+License: MIT · https://github.com/supabase/supabase-js
 
 
 MIT License
@@ -502,7 +502,7 @@ SOFTWARE.
 
 ### @supabase/storage-js 2.112.4
 
-Licence: MIT · https://github.com/supabase/supabase-js
+License: MIT · https://github.com/supabase/supabase-js
 
 
 MIT License
@@ -530,7 +530,7 @@ SOFTWARE.
 
 ### @supabase/supabase-js 2.112.4
 
-Licence: MIT · https://github.com/supabase/supabase-js
+License: MIT · https://github.com/supabase/supabase-js
 
 
 MIT License
@@ -558,7 +558,7 @@ SOFTWARE.
 
 ### ansi-regex 5.0.1
 
-Licence: MIT · chalk/ansi-regex
+License: MIT · chalk/ansi-regex
 
 
 MIT License
@@ -574,7 +574,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### ansi-styles 4.3.0
 
-Licence: MIT · chalk/ansi-styles
+License: MIT · chalk/ansi-styles
 
 
 MIT License
@@ -590,7 +590,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### camelcase 5.3.1
 
-Licence: MIT · sindresorhus/camelcase
+License: MIT · sindresorhus/camelcase
 
 
 MIT License
@@ -606,7 +606,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### cliui 6.0.0
 
-Licence: ISC · http://github.com/yargs/cliui
+License: ISC · http://github.com/yargs/cliui
 
 
 Copyright (c) 2015, Contributors
@@ -627,7 +627,7 @@ ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### color-convert 2.0.1
 
-Licence: MIT · Qix-/color-convert
+License: MIT · Qix-/color-convert
 
 
 Copyright (c) 2011-2016 Heather Arthur <fayearthur@gmail.com>
@@ -654,7 +654,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### color-name 1.1.4
 
-Licence: MIT · git@github.com:colorjs/color-name
+License: MIT · git@github.com:colorjs/color-name
 
 
 The MIT License (MIT)
@@ -669,7 +669,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### decamelize 1.2.0
 
-Licence: MIT · sindresorhus/decamelize
+License: MIT · sindresorhus/decamelize
 
 
 The MIT License (MIT)
@@ -697,7 +697,7 @@ THE SOFTWARE.
 
 ### dijkstrajs 1.0.3
 
-Licence: MIT · https://github.com/tcort/dijkstrajs
+License: MIT · https://github.com/tcort/dijkstrajs
 
 
 
@@ -723,7 +723,7 @@ THE SOFTWARE.
 
 ### emoji-regex 8.0.0
 
-Licence: MIT · https://github.com/mathiasbynens/emoji-regex
+License: MIT · https://github.com/mathiasbynens/emoji-regex
 
 
 Copyright Mathias Bynens <https://mathiasbynens.be/>
@@ -750,7 +750,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### find-up 4.1.0
 
-Licence: MIT · sindresorhus/find-up
+License: MIT · sindresorhus/find-up
 
 
 MIT License
@@ -766,7 +766,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### get-caller-file 2.0.5
 
-Licence: ISC · https://github.com/stefanpenner/get-caller-file
+License: ISC · https://github.com/stefanpenner/get-caller-file
 
 
 ISC License (ISC)
@@ -779,7 +779,7 @@ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH RE
 
 ### iceberg-js 0.8.1
 
-Licence: MIT · https://github.com/supabase/iceberg-js
+License: MIT · https://github.com/supabase/iceberg-js
 
 
 MIT License
@@ -807,7 +807,7 @@ SOFTWARE.
 
 ### is-fullwidth-code-point 3.0.0
 
-Licence: MIT · sindresorhus/is-fullwidth-code-point
+License: MIT · sindresorhus/is-fullwidth-code-point
 
 
 MIT License
@@ -823,7 +823,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### js-tokens 4.0.0
 
-Licence: MIT · lydell/js-tokens
+License: MIT · lydell/js-tokens
 
 
 The MIT License (MIT)
@@ -851,7 +851,7 @@ THE SOFTWARE.
 
 ### locate-path 5.0.0
 
-Licence: MIT · sindresorhus/locate-path
+License: MIT · sindresorhus/locate-path
 
 
 MIT License
@@ -867,7 +867,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### loose-envify 1.4.0
 
-Licence: MIT · https://github.com/zertosh/loose-envify
+License: MIT · https://github.com/zertosh/loose-envify
 
 
 The MIT License (MIT)
@@ -895,7 +895,7 @@ THE SOFTWARE.
 
 ### p-limit 2.3.0
 
-Licence: MIT · sindresorhus/p-limit
+License: MIT · sindresorhus/p-limit
 
 
 MIT License
@@ -911,7 +911,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### p-locate 4.1.0
 
-Licence: MIT · sindresorhus/p-locate
+License: MIT · sindresorhus/p-locate
 
 
 MIT License
@@ -927,7 +927,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### p-try 2.2.0
 
-Licence: MIT · sindresorhus/p-try
+License: MIT · sindresorhus/p-try
 
 
 MIT License
@@ -943,7 +943,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### path-exists 4.0.0
 
-Licence: MIT · sindresorhus/path-exists
+License: MIT · sindresorhus/path-exists
 
 
 MIT License
@@ -959,7 +959,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### pngjs 5.0.0
 
-Licence: MIT · https://github.com/lukeapage/pngjs
+License: MIT · https://github.com/lukeapage/pngjs
 
 
 pngjs2 original work Copyright (c) 2015 Luke Page & Original Contributors
@@ -986,7 +986,7 @@ THE SOFTWARE.
 
 ### qrcode 1.5.4
 
-Licence: MIT · https://github.com/soldair/node-qrcode
+License: MIT · https://github.com/soldair/node-qrcode
 
 
 The MIT License (MIT)
@@ -1002,7 +1002,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### react 18.3.1
 
-Licence: MIT · https://github.com/facebook/react
+License: MIT · https://github.com/facebook/react
 
 
 MIT License
@@ -1030,7 +1030,7 @@ SOFTWARE.
 
 ### react-dom 18.3.1
 
-Licence: MIT · https://github.com/facebook/react
+License: MIT · https://github.com/facebook/react
 
 
 MIT License
@@ -1058,7 +1058,7 @@ SOFTWARE.
 
 ### require-directory 2.1.1
 
-Licence: MIT · https://github.com/troygoode/node-require-directory
+License: MIT · https://github.com/troygoode/node-require-directory
 
 
 The MIT License (MIT)
@@ -1087,7 +1087,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### require-main-filename 2.0.0
 
-Licence: ISC · ssh://git@github.com/yargs/require-main-filename
+License: ISC · ssh://git@github.com/yargs/require-main-filename
 
 
 Copyright (c) 2016, Contributors
@@ -1108,7 +1108,7 @@ ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### scheduler 0.23.2
 
-Licence: MIT · https://github.com/facebook/react
+License: MIT · https://github.com/facebook/react
 
 
 MIT License
@@ -1136,7 +1136,7 @@ SOFTWARE.
 
 ### set-blocking 2.0.0
 
-Licence: ISC · https://github.com/yargs/set-blocking
+License: ISC · https://github.com/yargs/set-blocking
 
 
 Copyright (c) 2016, Contributors
@@ -1157,7 +1157,7 @@ ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### string-width 4.2.3
 
-Licence: MIT · sindresorhus/string-width
+License: MIT · sindresorhus/string-width
 
 
 MIT License
@@ -1173,7 +1173,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### strip-ansi 6.0.1
 
-Licence: MIT · chalk/strip-ansi
+License: MIT · chalk/strip-ansi
 
 
 MIT License
@@ -1189,7 +1189,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### tslib 2.8.1
 
-Licence: 0BSD · https://github.com/Microsoft/tslib
+License: 0BSD · https://github.com/Microsoft/tslib
 
 
 Copyright (c) Microsoft Corporation.
@@ -1208,7 +1208,7 @@ PERFORMANCE OF THIS SOFTWARE.
 
 ### which-module 2.0.1
 
-Licence: ISC · https://github.com/nexdrew/which-module
+License: ISC · https://github.com/nexdrew/which-module
 
 
 Copyright (c) 2016, Contributors
@@ -1228,7 +1228,7 @@ THIS SOFTWARE.
 
 ### wrap-ansi 6.2.0
 
-Licence: MIT · chalk/wrap-ansi
+License: MIT · chalk/wrap-ansi
 
 
 MIT License
@@ -1244,7 +1244,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### y18n 4.0.3
 
-Licence: ISC · git@github.com:yargs/y18n
+License: ISC · git@github.com:yargs/y18n
 
 
 Copyright (c) 2015, Contributors
@@ -1264,7 +1264,7 @@ THIS SOFTWARE.
 
 ### yargs 15.4.1
 
-Licence: MIT · https://github.com/yargs/yargs
+License: MIT · https://github.com/yargs/yargs
 
 
 MIT License
@@ -1292,7 +1292,7 @@ THE SOFTWARE.
 
 ### yargs-parser 18.1.3
 
-Licence: ISC · https://github.com/yargs/yargs-parser
+License: ISC · https://github.com/yargs/yargs-parser
 
 
 Copyright (c) 2016, Contributors
@@ -1333,7 +1333,7 @@ _Not installed when this was generated._
 
 ### @babel/code-frame 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1362,7 +1362,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/compat-data 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1391,7 +1391,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/core 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1420,7 +1420,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/generator 7.29.8
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1449,7 +1449,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-annotate-as-pure 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1478,7 +1478,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-compilation-targets 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1507,7 +1507,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-create-class-features-plugin 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1536,7 +1536,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-create-regexp-features-plugin 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1565,7 +1565,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-define-polyfill-provider 0.6.8
 
-Licence: MIT · https://github.com/babel/babel-polyfills
+License: MIT · https://github.com/babel/babel-polyfills
 
 
 MIT License
@@ -1594,7 +1594,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-globals 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1623,7 +1623,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-member-expression-to-functions 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1652,7 +1652,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-module-imports 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1681,7 +1681,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-module-transforms 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1710,7 +1710,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-optimise-call-expression 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1739,7 +1739,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-plugin-utils 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1768,7 +1768,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-remap-async-to-generator 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1797,7 +1797,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-replace-supers 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1826,7 +1826,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-skip-transparent-expression-wrappers 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1855,7 +1855,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-string-parser 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1884,7 +1884,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-validator-identifier 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1913,7 +1913,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-validator-option 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1942,7 +1942,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helper-wrap-function 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -1971,7 +1971,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/helpers 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2001,7 +2001,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/parser 7.29.8
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 Copyright (C) 2012-2014 by various contributors (see AUTHORS)
@@ -2027,7 +2027,7 @@ THE SOFTWARE.
 
 ### @babel/plugin-proposal-decorators 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2056,7 +2056,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-proposal-export-default-from 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2085,7 +2085,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-syntax-decorators 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2114,7 +2114,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-syntax-dynamic-import 7.8.3
 
-Licence: MIT · https://github.com/babel/babel/tree/master/packages/babel-plugin-syntax-dynamic-import
+License: MIT · https://github.com/babel/babel/tree/master/packages/babel-plugin-syntax-dynamic-import
 
 
 MIT License
@@ -2143,7 +2143,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-syntax-export-default-from 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2172,7 +2172,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-syntax-flow 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2201,7 +2201,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-syntax-jsx 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2230,7 +2230,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-syntax-nullish-coalescing-operator 7.8.3
 
-Licence: MIT · https://github.com/babel/babel/tree/master/packages/babel-plugin-syntax-nullish-coalescing-operator
+License: MIT · https://github.com/babel/babel/tree/master/packages/babel-plugin-syntax-nullish-coalescing-operator
 
 
 MIT License
@@ -2259,7 +2259,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-syntax-optional-chaining 7.8.3
 
-Licence: MIT · https://github.com/babel/babel/tree/master/packages/babel-plugin-syntax-optional-chaining
+License: MIT · https://github.com/babel/babel/tree/master/packages/babel-plugin-syntax-optional-chaining
 
 
 MIT License
@@ -2288,7 +2288,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-syntax-typescript 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2317,7 +2317,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-async-generator-functions 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2346,7 +2346,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-async-to-generator 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2375,7 +2375,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-block-scoping 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2404,7 +2404,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-class-properties 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2433,7 +2433,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-class-static-block 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2462,7 +2462,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-classes 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2491,7 +2491,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-destructuring 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2520,7 +2520,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-export-namespace-from 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2549,7 +2549,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-flow-strip-types 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2578,7 +2578,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-for-of 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2607,7 +2607,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-logical-assignment-operators 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2636,7 +2636,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-modules-commonjs 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2665,7 +2665,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-named-capturing-groups-regex 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2694,7 +2694,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-nullish-coalescing-operator 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2723,7 +2723,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-object-rest-spread 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2752,7 +2752,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-optional-catch-binding 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2781,7 +2781,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-optional-chaining 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2810,7 +2810,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-parameters 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2839,7 +2839,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-private-methods 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2868,7 +2868,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-private-property-in-object 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2897,7 +2897,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-react-display-name 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2926,7 +2926,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-react-jsx 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2955,7 +2955,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-react-jsx-development 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -2984,7 +2984,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-react-pure-annotations 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -3013,7 +3013,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-runtime 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -3042,7 +3042,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-typescript 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -3071,7 +3071,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/plugin-transform-unicode-regex 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -3100,7 +3100,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/preset-typescript 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -3129,7 +3129,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/runtime 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -3158,7 +3158,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/template 7.29.7
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -3187,7 +3187,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/traverse 7.29.8
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -3216,7 +3216,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @babel/types 7.29.8
 
-Licence: MIT · https://github.com/babel/babel
+License: MIT · https://github.com/babel/babel
 
 
 MIT License
@@ -3249,7 +3249,7 @@ _Not installed when this was generated._
 
 ### @expo/code-signing-certificates 0.0.6
 
-Licence: MIT · https://github.com/expo/code-signing-certificates
+License: MIT · https://github.com/expo/code-signing-certificates
 
 
 The MIT License (MIT)
@@ -3277,7 +3277,7 @@ SOFTWARE.
 
 ### @expo/config 57.0.9
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -3305,7 +3305,7 @@ SOFTWARE.
 
 ### @expo/config-plugins 57.0.9
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -3333,7 +3333,7 @@ SOFTWARE.
 
 ### @expo/config-types 57.0.2
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -3361,7 +3361,7 @@ SOFTWARE.
 
 ### @expo/devtools 57.0.1
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -3393,7 +3393,7 @@ _Not installed when this was generated._
 
 ### @expo/env 2.4.3
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -3421,7 +3421,7 @@ SOFTWARE.
 
 ### @expo/expo-modules-macros-plugin 0.6.1
 
-Licence: MIT · https://github.com/expo/expo-modules-macros-plugin
+License: MIT · https://github.com/expo/expo-modules-macros-plugin
 
 
 The MIT License (MIT)
@@ -3449,7 +3449,7 @@ SOFTWARE.
 
 ### @expo/fingerprint 0.20.13
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -3477,7 +3477,7 @@ SOFTWARE.
 
 ### @expo/image-utils 0.11.5
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -3505,7 +3505,7 @@ SOFTWARE.
 
 ### @expo/json-file 11.0.1
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -3533,7 +3533,7 @@ SOFTWARE.
 
 ### @expo/local-build-cache-provider 57.0.8
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -3565,7 +3565,7 @@ _Not installed when this was generated._
 
 ### @expo/metro 56.0.2
 
-Licence: MIT · https://github.com/expo/expo-metro
+License: MIT · https://github.com/expo/expo-metro
 
 
 MIT License
@@ -3598,7 +3598,7 @@ _Not installed when this was generated._
 
 ### @expo/plist 0.8.1
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -3626,7 +3626,7 @@ SOFTWARE.
 
 ### @expo/require-utils 57.0.5
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -3654,11 +3654,11 @@ SOFTWARE.
 
 ### @expo/sdk-runtime-versions 1.0.0
 
-Licence: MIT
+License: MIT
 
 ### @expo/spawn-async 1.8.0
 
-Licence: MIT · https://github.com/expo/spawn-async
+License: MIT · https://github.com/expo/spawn-async
 
 
 The MIT License (MIT)
@@ -3686,7 +3686,7 @@ SOFTWARE.
 
 ### @isaacs/ttlcache 1.4.1
 
-Licence: ISC · https://github.com/isaacs/ttlcache
+License: ISC · https://github.com/isaacs/ttlcache
 
 
 The ISC License
@@ -3708,7 +3708,7 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### @jest/schemas 29.6.3
 
-Licence: MIT · https://github.com/jestjs/jest
+License: MIT · https://github.com/jestjs/jest
 
 
 MIT License
@@ -3736,7 +3736,7 @@ SOFTWARE.
 
 ### @jest/types 29.6.3
 
-Licence: MIT · https://github.com/jestjs/jest
+License: MIT · https://github.com/jestjs/jest
 
 
 MIT License
@@ -3764,7 +3764,7 @@ SOFTWARE.
 
 ### @jridgewell/gen-mapping 0.3.13
 
-Licence: MIT · https://github.com/jridgewell/sourcemaps
+License: MIT · https://github.com/jridgewell/sourcemaps
 
 
 Copyright 2024 Justin Ridgewell <justin@ridgewell.name>
@@ -3790,7 +3790,7 @@ SOFTWARE.
 
 ### @jridgewell/remapping 2.3.5
 
-Licence: MIT · https://github.com/jridgewell/sourcemaps
+License: MIT · https://github.com/jridgewell/sourcemaps
 
 
 Copyright 2024 Justin Ridgewell <justin@ridgewell.name>
@@ -3816,7 +3816,7 @@ SOFTWARE.
 
 ### @jridgewell/resolve-uri 3.1.2
 
-Licence: MIT · https://github.com/jridgewell/resolve-uri
+License: MIT · https://github.com/jridgewell/resolve-uri
 
 
 Copyright 2019 Justin Ridgewell <jridgewell@google.com>
@@ -3842,7 +3842,7 @@ SOFTWARE.
 
 ### @jridgewell/source-map 0.3.11
 
-Licence: MIT · https://github.com/jridgewell/sourcemaps
+License: MIT · https://github.com/jridgewell/sourcemaps
 
 
 Copyright 2024 Justin Ridgewell <justin@ridgewell.name>
@@ -3868,7 +3868,7 @@ SOFTWARE.
 
 ### @jridgewell/sourcemap-codec 1.6.0
 
-Licence: MIT · https://github.com/jridgewell/sourcemaps
+License: MIT · https://github.com/jridgewell/sourcemaps
 
 
 Copyright 2024 Justin Ridgewell <justin@ridgewell.name>
@@ -3894,7 +3894,7 @@ SOFTWARE.
 
 ### @jridgewell/trace-mapping 0.3.31
 
-Licence: MIT · https://github.com/jridgewell/sourcemaps
+License: MIT · https://github.com/jridgewell/sourcemaps
 
 
 Copyright 2024 Justin Ridgewell <justin@ridgewell.name>
@@ -3920,7 +3920,7 @@ SOFTWARE.
 
 ### @react-native-async-storage/async-storage 2.2.0
 
-Licence: MIT · https://github.com/react-native-async-storage/async-storage
+License: MIT · https://github.com/react-native-async-storage/async-storage
 
 
 MIT License
@@ -3948,51 +3948,51 @@ SOFTWARE.
 
 ### @react-native/assets-registry 0.86.3
 
-Licence: MIT · https://github.com/react/react-native
+License: MIT · https://github.com/react/react-native
 
 ### @react-native/babel-plugin-codegen 0.86.3
 
-Licence: MIT · https://github.com/react/react-native
+License: MIT · https://github.com/react/react-native
 
 ### @react-native/codegen 0.86.3
 
-Licence: MIT · https://github.com/react/react-native
+License: MIT · https://github.com/react/react-native
 
 ### @react-native/community-cli-plugin 0.86.3
 
-Licence: MIT · https://github.com/react/react-native
+License: MIT · https://github.com/react/react-native
 
 ### @react-native/debugger-frontend 0.86.3
 
-Licence: BSD-3-Clause · https://github.com/react/react-native
+License: BSD-3-Clause · https://github.com/react/react-native
 
 ### @react-native/debugger-shell 0.86.3
 
-Licence: MIT · https://github.com/react/react-native
+License: MIT · https://github.com/react/react-native
 
 ### @react-native/dev-middleware 0.86.3
 
-Licence: MIT · https://github.com/react/react-native
+License: MIT · https://github.com/react/react-native
 
 ### @react-native/gradle-plugin 0.86.3
 
-Licence: MIT · https://github.com/react/react-native
+License: MIT · https://github.com/react/react-native
 
 ### @react-native/js-polyfills 0.86.3
 
-Licence: MIT · https://github.com/react/react-native
+License: MIT · https://github.com/react/react-native
 
 ### @react-native/normalize-colors 0.86.3
 
-Licence: MIT · https://github.com/react/react-native
+License: MIT · https://github.com/react/react-native
 
 ### @react-native/virtualized-lists 0.86.3
 
-Licence: MIT · https://github.com/react/react-native
+License: MIT · https://github.com/react/react-native
 
 ### @sinclair/typebox 0.27.12
 
-Licence: MIT · https://github.com/sinclairzx81/sinclair-typebox
+License: MIT · https://github.com/sinclairzx81/sinclair-typebox
 
 
 TypeBox: JSON Schema Type Builder with Static Type Resolution for TypeScript 
@@ -4022,7 +4022,7 @@ THE SOFTWARE.
 
 ### @supabase/auth-js 2.115.0
 
-Licence: MIT · https://github.com/supabase/supabase-js
+License: MIT · https://github.com/supabase/supabase-js
 
 
 MIT License
@@ -4050,7 +4050,7 @@ SOFTWARE.
 
 ### @supabase/functions-js 2.115.0
 
-Licence: MIT · https://github.com/supabase/supabase-js
+License: MIT · https://github.com/supabase/supabase-js
 
 
 MIT License
@@ -4078,7 +4078,7 @@ SOFTWARE.
 
 ### @supabase/phoenix 0.4.5
 
-Licence: MIT · https://github.com/supabase/phoenix
+License: MIT · https://github.com/supabase/phoenix
 
 
 # MIT License
@@ -4107,7 +4107,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### @supabase/postgrest-js 2.115.0
 
-Licence: MIT · https://github.com/supabase/supabase-js
+License: MIT · https://github.com/supabase/supabase-js
 
 
 MIT License
@@ -4135,7 +4135,7 @@ SOFTWARE.
 
 ### @supabase/realtime-js 2.115.0
 
-Licence: MIT · https://github.com/supabase/supabase-js
+License: MIT · https://github.com/supabase/supabase-js
 
 
 MIT License
@@ -4163,7 +4163,7 @@ SOFTWARE.
 
 ### @supabase/storage-js 2.115.0
 
-Licence: MIT · https://github.com/supabase/supabase-js
+License: MIT · https://github.com/supabase/supabase-js
 
 
 MIT License
@@ -4191,7 +4191,7 @@ SOFTWARE.
 
 ### @supabase/supabase-js 2.115.0
 
-Licence: MIT · https://github.com/supabase/supabase-js
+License: MIT · https://github.com/supabase/supabase-js
 
 
 MIT License
@@ -4219,7 +4219,7 @@ SOFTWARE.
 
 ### @types/emscripten 1.41.6
 
-Licence: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
+License: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
 
 
 MIT License
@@ -4247,7 +4247,7 @@ MIT License
 
 ### @types/istanbul-lib-coverage 2.0.6
 
-Licence: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
+License: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
 
 
 MIT License
@@ -4275,7 +4275,7 @@ MIT License
 
 ### @types/istanbul-lib-report 3.0.3
 
-Licence: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
+License: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
 
 
 MIT License
@@ -4303,7 +4303,7 @@ MIT License
 
 ### @types/istanbul-reports 3.0.4
 
-Licence: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
+License: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
 
 
 MIT License
@@ -4331,7 +4331,7 @@ MIT License
 
 ### @types/node 26.4.1
 
-Licence: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
+License: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
 
 
 MIT License
@@ -4359,7 +4359,7 @@ MIT License
 
 ### @types/yargs 17.0.35
 
-Licence: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
+License: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
 
 
 MIT License
@@ -4387,7 +4387,7 @@ MIT License
 
 ### @types/yargs-parser 21.0.3
 
-Licence: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
+License: MIT · https://github.com/DefinitelyTyped/DefinitelyTyped
 
 
 MIT License
@@ -4415,7 +4415,7 @@ MIT License
 
 ### @ungap/structured-clone 1.4.0
 
-Licence: ISC · https://github.com/ungap/structured-clone
+License: ISC · https://github.com/ungap/structured-clone
 
 
 ISC License
@@ -4437,7 +4437,7 @@ PERFORMANCE OF THIS SOFTWARE.
 
 ### @xmldom/xmldom 0.8.15
 
-Licence: MIT · https://github.com/xmldom/xmldom
+License: MIT · https://github.com/xmldom/xmldom
 
 
 Copyright 2019 - present Christopher J. Brody and other contributors, as listed in: https://github.com/xmldom/xmldom/graphs/contributors
@@ -4452,7 +4452,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### abort-controller 3.0.0
 
-Licence: MIT · https://github.com/mysticatea/abort-controller
+License: MIT · https://github.com/mysticatea/abort-controller
 
 
 MIT License
@@ -4480,7 +4480,7 @@ SOFTWARE.
 
 ### accepts 1.3.8
 
-Licence: MIT · jshttp/accepts
+License: MIT · jshttp/accepts
 
 
 (The MIT License)
@@ -4510,7 +4510,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### acorn 8.18.0
 
-Licence: MIT · https://github.com/acornjs/acorn
+License: MIT · https://github.com/acornjs/acorn
 
 
 MIT License
@@ -4538,7 +4538,7 @@ THE SOFTWARE.
 
 ### agent-base 7.1.4
 
-Licence: MIT · https://github.com/TooTallNate/proxy-agents
+License: MIT · https://github.com/TooTallNate/proxy-agents
 
 
 (The MIT License)
@@ -4567,7 +4567,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### anser 1.4.10
 
-Licence: MIT · https://github.com/IonicaBizau/anser
+License: MIT · https://github.com/IonicaBizau/anser
 
 
 The MIT License (MIT)
@@ -4595,7 +4595,7 @@ SOFTWARE.
 
 ### ansi-regex 5.0.1
 
-Licence: MIT · chalk/ansi-regex
+License: MIT · chalk/ansi-regex
 
 
 MIT License
@@ -4611,7 +4611,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### ansi-styles 4.3.0
 
-Licence: MIT · chalk/ansi-styles
+License: MIT · chalk/ansi-styles
 
 
 MIT License
@@ -4627,7 +4627,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### arg 5.0.2
 
-Licence: MIT · vercel/arg
+License: MIT · vercel/arg
 
 
 The MIT License (MIT)
@@ -4655,7 +4655,7 @@ SOFTWARE.
 
 ### asap 2.0.6
 
-Licence: MIT · https://github.com/kriskowal/asap
+License: MIT · https://github.com/kriskowal/asap
 
 
 Copyright 2009–2014 Contributors. All rights reserved.
@@ -4681,7 +4681,7 @@ IN THE SOFTWARE.
 
 ### babel-plugin-polyfill-corejs2 0.4.17
 
-Licence: MIT · https://github.com/babel/babel-polyfills
+License: MIT · https://github.com/babel/babel-polyfills
 
 
 MIT License
@@ -4710,7 +4710,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### babel-plugin-polyfill-corejs3 0.13.0
 
-Licence: MIT · https://github.com/babel/babel-polyfills
+License: MIT · https://github.com/babel/babel-polyfills
 
 
 MIT License
@@ -4739,7 +4739,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### babel-plugin-polyfill-regenerator 0.6.8
 
-Licence: MIT · https://github.com/babel/babel-polyfills
+License: MIT · https://github.com/babel/babel-polyfills
 
 
 MIT License
@@ -4768,11 +4768,11 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### babel-plugin-react-compiler 1.0.0
 
-Licence: MIT · https://github.com/facebook/react
+License: MIT · https://github.com/facebook/react
 
 ### babel-plugin-react-native-web 0.21.2
 
-Licence: MIT · https://github.com/necolas/react-native-web
+License: MIT · https://github.com/necolas/react-native-web
 
 
 MIT License
@@ -4800,7 +4800,7 @@ SOFTWARE.
 
 ### babel-plugin-syntax-hermes-parser 0.36.1
 
-Licence: MIT · git@github.com:facebook/hermes
+License: MIT · git@github.com:facebook/hermes
 
 
 MIT License
@@ -4828,7 +4828,7 @@ SOFTWARE.
 
 ### babel-plugin-transform-flow-enums 0.0.2
 
-Licence: MIT · https://github.com/facebook/flow
+License: MIT · https://github.com/facebook/flow
 
 
 MIT License
@@ -4856,7 +4856,7 @@ SOFTWARE.
 
 ### babel-preset-expo 57.0.12
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -4884,7 +4884,7 @@ SOFTWARE.
 
 ### balanced-match 4.0.4
 
-Licence: MIT · https://github.com/juliangruber/balanced-match
+License: MIT · https://github.com/juliangruber/balanced-match
 
 
 (MIT)
@@ -4914,7 +4914,7 @@ SOFTWARE.
 
 ### barcode-detector 3.2.2
 
-Licence: MIT · https://github.com/Sec-ant/barcode-detector
+License: MIT · https://github.com/Sec-ant/barcode-detector
 
 
 MIT License
@@ -4942,7 +4942,7 @@ SOFTWARE.
 
 ### base64-js 1.5.1
 
-Licence: MIT · https://github.com/beatgammit/base64-js
+License: MIT · https://github.com/beatgammit/base64-js
 
 
 The MIT License (MIT)
@@ -4970,7 +4970,7 @@ THE SOFTWARE.
 
 ### baseline-browser-mapping 2.11.21
 
-Licence: Apache-2.0 · https://github.com/web-platform-dx/baseline-browser-mapping
+License: Apache-2.0 · https://github.com/web-platform-dx/baseline-browser-mapping
 
 
 Apache License
@@ -5178,7 +5178,7 @@ Apache License
 
 ### big-integer 1.6.52
 
-Licence: Unlicense · git@github.com:peterolson/BigInteger.js
+License: Unlicense · git@github.com:peterolson/BigInteger.js
 
 
 This is free and unencumbered software released into the public domain.
@@ -5209,7 +5209,7 @@ For more information, please refer to <http://unlicense.org>
 
 ### bplist-creator 0.1.0
 
-Licence: MIT · https://github.com/nearinfinity/node-bplist-creator
+License: MIT · https://github.com/nearinfinity/node-bplist-creator
 
 
 (The MIT License)
@@ -5234,11 +5234,11 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### bplist-parser 0.3.2
 
-Licence: MIT · https://github.com/nearinfinity/node-bplist-parser
+License: MIT · https://github.com/nearinfinity/node-bplist-parser
 
 ### brace-expansion 5.0.9
 
-Licence: MIT · https://github.com/juliangruber/brace-expansion
+License: MIT · https://github.com/juliangruber/brace-expansion
 
 
 MIT License
@@ -5268,7 +5268,7 @@ SOFTWARE.
 
 ### braces 3.0.3
 
-Licence: MIT · micromatch/braces
+License: MIT · micromatch/braces
 
 
 The MIT License (MIT)
@@ -5296,7 +5296,7 @@ THE SOFTWARE.
 
 ### browserslist 4.28.9
 
-Licence: MIT · browserslist/browserslist
+License: MIT · browserslist/browserslist
 
 
 The MIT License (MIT)
@@ -5323,11 +5323,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### bser 2.1.1
 
-Licence: Apache-2.0 · https://github.com/facebook/watchman
+License: Apache-2.0 · https://github.com/facebook/watchman
 
 ### buffer-from 1.1.2
 
-Licence: MIT · LinusU/buffer-from
+License: MIT · LinusU/buffer-from
 
 
 MIT License
@@ -5355,7 +5355,7 @@ SOFTWARE.
 
 ### camelcase 6.3.0
 
-Licence: MIT · sindresorhus/camelcase
+License: MIT · sindresorhus/camelcase
 
 
 MIT License
@@ -5371,7 +5371,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### caniuse-lite 1.0.30001810
 
-Licence: CC-BY-4.0 · browserslist/caniuse-lite
+License: CC-BY-4.0 · browserslist/caniuse-lite
 
 
 Attribution 4.0 International
@@ -5773,7 +5773,7 @@ Creative Commons may be contacted at creativecommons.org.
 
 ### chalk 4.1.2
 
-Licence: MIT · chalk/chalk
+License: MIT · chalk/chalk
 
 
 MIT License
@@ -5789,7 +5789,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### chrome-launcher 0.15.2
 
-Licence: Apache-2.0 · https://github.com/GoogleChrome/chrome-launcher/
+License: Apache-2.0 · https://github.com/GoogleChrome/chrome-launcher/
 
 
 Apache License
@@ -5997,7 +5997,7 @@ Apache License
 
 ### chromium-edge-launcher 0.3.0
 
-Licence: Apache-2.0 · https://github.com/cezaraugusto/chromium-edge-launcher/
+License: Apache-2.0 · https://github.com/cezaraugusto/chromium-edge-launcher/
 
 
 Apache License
@@ -6205,7 +6205,7 @@ Apache License
 
 ### ci-info 3.9.0
 
-Licence: MIT · https://github.com/watson/ci-info
+License: MIT · https://github.com/watson/ci-info
 
 
 The MIT License (MIT)
@@ -6233,7 +6233,7 @@ SOFTWARE.
 
 ### cliui 8.0.1
 
-Licence: ISC · yargs/cliui
+License: ISC · yargs/cliui
 
 
 Copyright (c) 2015, Contributors
@@ -6254,7 +6254,7 @@ ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### color-convert 2.0.1
 
-Licence: MIT · Qix-/color-convert
+License: MIT · Qix-/color-convert
 
 
 Copyright (c) 2011-2016 Heather Arthur <fayearthur@gmail.com>
@@ -6281,7 +6281,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### color-name 1.1.4
 
-Licence: MIT · git@github.com:colorjs/color-name
+License: MIT · git@github.com:colorjs/color-name
 
 
 The MIT License (MIT)
@@ -6296,7 +6296,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### commander 7.2.0
 
-Licence: MIT · https://github.com/tj/commander.js
+License: MIT · https://github.com/tj/commander.js
 
 
 (The MIT License)
@@ -6325,7 +6325,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### connect 3.7.0
 
-Licence: MIT · senchalabs/connect
+License: MIT · senchalabs/connect
 
 
 (The MIT License)
@@ -6357,7 +6357,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### convert-source-map 2.0.0
 
-Licence: MIT · https://github.com/thlorenz/convert-source-map
+License: MIT · https://github.com/thlorenz/convert-source-map
 
 
 Copyright 2013 Thorsten Lorenz. 
@@ -6387,7 +6387,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 ### core-js-compat 3.50.0
 
-Licence: MIT · https://github.com/zloirock/core-js
+License: MIT · https://github.com/zloirock/core-js
 
 
 Copyright (c) 2013–2025 Denis Pushkarev (zloirock.ru)
@@ -6414,7 +6414,7 @@ THE SOFTWARE.
 
 ### cross-spawn 7.0.6
 
-Licence: MIT · git@github.com:moxystudio/node-cross-spawn
+License: MIT · git@github.com:moxystudio/node-cross-spawn
 
 
 The MIT License (MIT)
@@ -6442,7 +6442,7 @@ THE SOFTWARE.
 
 ### debug 4.4.3
 
-Licence: MIT · https://github.com/debug-js/debug
+License: MIT · https://github.com/debug-js/debug
 
 
 (The MIT License)
@@ -6468,7 +6468,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### deepmerge 4.3.1
 
-Licence: MIT · https://github.com/TehShrike/deepmerge
+License: MIT · https://github.com/TehShrike/deepmerge
 
 
 The MIT License (MIT)
@@ -6496,7 +6496,7 @@ THE SOFTWARE.
 
 ### depd 2.0.0
 
-Licence: MIT · dougwilson/nodejs-depd
+License: MIT · dougwilson/nodejs-depd
 
 
 (The MIT License)
@@ -6525,7 +6525,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### destroy 1.2.0
 
-Licence: MIT · stream-utils/destroy
+License: MIT · stream-utils/destroy
 
 
 The MIT License (MIT)
@@ -6554,7 +6554,7 @@ THE SOFTWARE.
 
 ### ee-first 1.1.1
 
-Licence: MIT · jonathanong/ee-first
+License: MIT · jonathanong/ee-first
 
 
 The MIT License (MIT)
@@ -6582,7 +6582,7 @@ THE SOFTWARE.
 
 ### electron-to-chromium 1.5.422
 
-Licence: ISC · https://github.com/Kilian/electron-to-chromium
+License: ISC · https://github.com/Kilian/electron-to-chromium
 
 
 Copyright 2018 Kilian Valkhof
@@ -6594,7 +6594,7 @@ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH RE
 
 ### emoji-regex 8.0.0
 
-Licence: MIT · https://github.com/mathiasbynens/emoji-regex
+License: MIT · https://github.com/mathiasbynens/emoji-regex
 
 
 Copyright Mathias Bynens <https://mathiasbynens.be/>
@@ -6621,7 +6621,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### encodeurl 1.0.2
 
-Licence: MIT · pillarjs/encodeurl
+License: MIT · pillarjs/encodeurl
 
 
 (The MIT License)
@@ -6650,7 +6650,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### error-stack-parser 2.1.4
 
-Licence: MIT · https://github.com/stacktracejs/error-stack-parser
+License: MIT · https://github.com/stacktracejs/error-stack-parser
 
 
 Copyright (c) 2017 Eric Wendelin and other contributors
@@ -6676,7 +6676,7 @@ SOFTWARE.
 
 ### es-errors 1.3.0
 
-Licence: MIT · https://github.com/ljharb/es-errors
+License: MIT · https://github.com/ljharb/es-errors
 
 
 MIT License
@@ -6704,7 +6704,7 @@ SOFTWARE.
 
 ### escalade 3.2.0
 
-Licence: MIT · lukeed/escalade
+License: MIT · lukeed/escalade
 
 
 MIT License
@@ -6720,7 +6720,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### escape-html 1.0.3
 
-Licence: MIT · component/escape-html
+License: MIT · component/escape-html
 
 
 (The MIT License)
@@ -6751,7 +6751,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### escape-string-regexp 4.0.0
 
-Licence: MIT · sindresorhus/escape-string-regexp
+License: MIT · sindresorhus/escape-string-regexp
 
 
 MIT License
@@ -6767,7 +6767,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### etag 1.8.1
 
-Licence: MIT · jshttp/etag
+License: MIT · jshttp/etag
 
 
 (The MIT License)
@@ -6796,7 +6796,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### event-target-shim 5.0.1
 
-Licence: MIT · https://github.com/mysticatea/event-target-shim
+License: MIT · https://github.com/mysticatea/event-target-shim
 
 
 The MIT License (MIT)
@@ -6824,7 +6824,7 @@ SOFTWARE.
 
 ### expo 57.0.24
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -6856,7 +6856,7 @@ _Not installed when this was generated._
 
 ### expo-blur 57.0.3
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -6884,7 +6884,7 @@ SOFTWARE.
 
 ### expo-camera 57.0.5
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -6912,7 +6912,7 @@ SOFTWARE.
 
 ### expo-clipboard 57.0.2
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -6944,7 +6944,7 @@ _Not installed when this was generated._
 
 ### expo-eas-client 57.0.4
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -6980,7 +6980,7 @@ _Not installed when this was generated._
 
 ### expo-haptics 57.0.3
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -7008,7 +7008,7 @@ SOFTWARE.
 
 ### expo-json-utils 57.0.2
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -7036,7 +7036,7 @@ SOFTWARE.
 
 ### expo-keep-awake 57.0.2
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -7064,7 +7064,7 @@ SOFTWARE.
 
 ### expo-manifests 57.0.2
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -7092,7 +7092,7 @@ SOFTWARE.
 
 ### expo-modules-autolinking 57.0.13
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -7120,7 +7120,7 @@ SOFTWARE.
 
 ### expo-modules-core 57.0.18
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -7148,7 +7148,7 @@ SOFTWARE.
 
 ### expo-modules-jsi 57.1.0
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -7176,7 +7176,7 @@ SOFTWARE.
 
 ### expo-splash-screen 57.0.9
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -7204,7 +7204,7 @@ SOFTWARE.
 
 ### expo-status-bar 57.0.1
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -7232,15 +7232,15 @@ SOFTWARE.
 
 ### expo-structured-headers 57.0.1
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 ### expo-updates 57.0.23
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 ### expo-updates-interface 57.0.2
 
-Licence: MIT · https://github.com/expo/expo
+License: MIT · https://github.com/expo/expo
 
 
 The MIT License (MIT)
@@ -7268,7 +7268,7 @@ SOFTWARE.
 
 ### exponential-backoff 3.1.3
 
-Licence: Apache-2.0 · https://github.com/coveooss/exponential-backoff
+License: Apache-2.0 · https://github.com/coveooss/exponential-backoff
 
 
 Apache License
@@ -7476,15 +7476,15 @@ Apache License
 
 ### fb-dotslash 0.5.8
 
-Licence: (MIT OR Apache-2.0) · https://github.com/facebook/dotslash
+License: (MIT OR Apache-2.0) · https://github.com/facebook/dotslash
 
 ### fb-watchman 2.0.2
 
-Licence: Apache-2.0 · git@github.com:facebook/watchman
+License: Apache-2.0 · git@github.com:facebook/watchman
 
 ### fdir 6.5.0
 
-Licence: MIT · https://github.com/thecodrr/fdir
+License: MIT · https://github.com/thecodrr/fdir
 
 
 Copyright 2023 Abdullah Atta
@@ -7498,7 +7498,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### fflate 0.8.3
 
-Licence: MIT · https://github.com/101arrowz/fflate
+License: MIT · https://github.com/101arrowz/fflate
 
 
 MIT License
@@ -7526,7 +7526,7 @@ SOFTWARE.
 
 ### fill-range 7.1.1
 
-Licence: MIT · jonschlinkert/fill-range
+License: MIT · jonschlinkert/fill-range
 
 
 The MIT License (MIT)
@@ -7554,7 +7554,7 @@ THE SOFTWARE.
 
 ### finalhandler 1.1.2
 
-Licence: MIT · pillarjs/finalhandler
+License: MIT · pillarjs/finalhandler
 
 
 (The MIT License)
@@ -7583,7 +7583,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### flow-enums-runtime 0.0.6
 
-Licence: MIT · https://github.com/facebook/flow
+License: MIT · https://github.com/facebook/flow
 
 
 MIT License
@@ -7611,7 +7611,7 @@ SOFTWARE.
 
 ### fresh 0.5.2
 
-Licence: MIT · jshttp/fresh
+License: MIT · jshttp/fresh
 
 
 (The MIT License)
@@ -7641,7 +7641,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### function-bind 1.1.2
 
-Licence: MIT · https://github.com/Raynos/function-bind
+License: MIT · https://github.com/Raynos/function-bind
 
 
 Copyright (c) 2013 Raynos.
@@ -7667,7 +7667,7 @@ THE SOFTWARE.
 
 ### gensync 1.0.0-beta.2
 
-Licence: MIT · https://github.com/loganfsmyth/gensync
+License: MIT · https://github.com/loganfsmyth/gensync
 
 
 Copyright 2018 Logan Smyth <loganfsmyth@gmail.com>
@@ -7681,7 +7681,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### get-caller-file 2.0.5
 
-Licence: ISC · https://github.com/stefanpenner/get-caller-file
+License: ISC · https://github.com/stefanpenner/get-caller-file
 
 
 ISC License (ISC)
@@ -7694,7 +7694,7 @@ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH RE
 
 ### getenv 2.0.0
 
-Licence: MIT · https://github.com/ctavan/node-getenv
+License: MIT · https://github.com/ctavan/node-getenv
 
 
 The MIT License (MIT)
@@ -7721,7 +7721,7 @@ SOFTWARE.
 
 ### glob 13.0.6
 
-Licence: BlueOak-1.0.0 · git@github.com:isaacs/node-glob
+License: BlueOak-1.0.0 · git@github.com:isaacs/node-glob
 
 
 All packages under `src/` are licensed according to the terms in
@@ -7791,7 +7791,7 @@ software or this license, under any kind of legal claim.***
 
 ### graceful-fs 4.2.11
 
-Licence: ISC · https://github.com/isaacs/node-graceful-fs
+License: ISC · https://github.com/isaacs/node-graceful-fs
 
 
 The ISC License
@@ -7813,7 +7813,7 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### has-flag 4.0.0
 
-Licence: MIT · sindresorhus/has-flag
+License: MIT · sindresorhus/has-flag
 
 
 MIT License
@@ -7829,7 +7829,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### hasown 2.0.4
 
-Licence: MIT · https://github.com/inspect-js/hasOwn
+License: MIT · https://github.com/inspect-js/hasOwn
 
 
 MIT License
@@ -7857,11 +7857,11 @@ SOFTWARE.
 
 ### hermes-compiler 250829098.0.17
 
-Licence: MIT · ssh://git@github.com/facebook/hermes
+License: MIT · ssh://git@github.com/facebook/hermes
 
 ### hermes-estree 0.36.1
 
-Licence: MIT · git@github.com:facebook/hermes
+License: MIT · git@github.com:facebook/hermes
 
 
 MIT License
@@ -7889,7 +7889,7 @@ SOFTWARE.
 
 ### hermes-parser 0.36.1
 
-Licence: MIT · git@github.com:facebook/hermes
+License: MIT · git@github.com:facebook/hermes
 
 
 MIT License
@@ -7917,7 +7917,7 @@ SOFTWARE.
 
 ### http-errors 2.0.1
 
-Licence: MIT · jshttp/http-errors
+License: MIT · jshttp/http-errors
 
 
 The MIT License (MIT)
@@ -7946,7 +7946,7 @@ THE SOFTWARE.
 
 ### https-proxy-agent 7.0.6
 
-Licence: MIT · https://github.com/TooTallNate/proxy-agents
+License: MIT · https://github.com/TooTallNate/proxy-agents
 
 
 (The MIT License)
@@ -7975,7 +7975,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### iceberg-js 0.8.1
 
-Licence: MIT · https://github.com/supabase/iceberg-js
+License: MIT · https://github.com/supabase/iceberg-js
 
 
 MIT License
@@ -8003,7 +8003,7 @@ SOFTWARE.
 
 ### ignore 5.3.2
 
-Licence: MIT · git@github.com:kaelzhang/node-ignore
+License: MIT · git@github.com:kaelzhang/node-ignore
 
 
 Copyright (c) 2013 Kael Zhang <i@kael.me>, contributors
@@ -8031,7 +8031,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### inherits 2.0.4
 
-Licence: ISC · https://github.com/isaacs/inherits
+License: ISC · https://github.com/isaacs/inherits
 
 
 The ISC License
@@ -8053,7 +8053,7 @@ PERFORMANCE OF THIS SOFTWARE.
 
 ### invariant 2.2.4
 
-Licence: MIT · https://github.com/zertosh/invariant
+License: MIT · https://github.com/zertosh/invariant
 
 
 MIT License
@@ -8081,7 +8081,7 @@ SOFTWARE.
 
 ### is-core-module 2.16.2
 
-Licence: MIT · https://github.com/inspect-js/is-core-module
+License: MIT · https://github.com/inspect-js/is-core-module
 
 
 The MIT License (MIT)
@@ -8108,7 +8108,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### is-docker 2.2.1
 
-Licence: MIT · sindresorhus/is-docker
+License: MIT · sindresorhus/is-docker
 
 
 MIT License
@@ -8124,7 +8124,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### is-fullwidth-code-point 3.0.0
 
-Licence: MIT · sindresorhus/is-fullwidth-code-point
+License: MIT · sindresorhus/is-fullwidth-code-point
 
 
 MIT License
@@ -8140,7 +8140,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### is-number 7.0.0
 
-Licence: MIT · jonschlinkert/is-number
+License: MIT · jonschlinkert/is-number
 
 
 The MIT License (MIT)
@@ -8168,7 +8168,7 @@ THE SOFTWARE.
 
 ### is-plain-obj 2.1.0
 
-Licence: MIT · sindresorhus/is-plain-obj
+License: MIT · sindresorhus/is-plain-obj
 
 
 MIT License
@@ -8184,7 +8184,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### is-wsl 2.2.0
 
-Licence: MIT · sindresorhus/is-wsl
+License: MIT · sindresorhus/is-wsl
 
 
 MIT License
@@ -8200,7 +8200,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### isexe 2.0.0
 
-Licence: ISC · https://github.com/isaacs/isexe
+License: ISC · https://github.com/isaacs/isexe
 
 
 The ISC License
@@ -8222,7 +8222,7 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### jest-get-type 29.6.3
 
-Licence: MIT · https://github.com/jestjs/jest
+License: MIT · https://github.com/jestjs/jest
 
 
 MIT License
@@ -8250,7 +8250,7 @@ SOFTWARE.
 
 ### jest-util 29.7.0
 
-Licence: MIT · https://github.com/jestjs/jest
+License: MIT · https://github.com/jestjs/jest
 
 
 MIT License
@@ -8278,7 +8278,7 @@ SOFTWARE.
 
 ### jest-validate 29.7.0
 
-Licence: MIT · https://github.com/jestjs/jest
+License: MIT · https://github.com/jestjs/jest
 
 
 MIT License
@@ -8306,7 +8306,7 @@ SOFTWARE.
 
 ### jest-worker 29.7.0
 
-Licence: MIT · https://github.com/jestjs/jest
+License: MIT · https://github.com/jestjs/jest
 
 
 MIT License
@@ -8334,11 +8334,11 @@ SOFTWARE.
 
 ### jimp-compact 0.16.1
 
-Licence: MIT · nuxt-community/jimp-compact
+License: MIT · nuxt-community/jimp-compact
 
 ### js-tokens 4.0.0
 
-Licence: MIT · lydell/js-tokens
+License: MIT · lydell/js-tokens
 
 
 The MIT License (MIT)
@@ -8366,7 +8366,7 @@ THE SOFTWARE.
 
 ### jsc-safe-url 0.2.4
 
-Licence: 0BSD · https://github.com/robhogan/jsc-safe-url
+License: 0BSD · https://github.com/robhogan/jsc-safe-url
 
 
 Zero-Clause BSD
@@ -8386,7 +8386,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### jsesc 3.1.0
 
-Licence: MIT · https://github.com/mathiasbynens/jsesc
+License: MIT · https://github.com/mathiasbynens/jsesc
 
 
 Copyright Mathias Bynens <https://mathiasbynens.be/>
@@ -8413,7 +8413,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### json5 2.2.3
 
-Licence: MIT · https://github.com/json5/json5
+License: MIT · https://github.com/json5/json5
 
 
 MIT License
@@ -8443,7 +8443,7 @@ SOFTWARE.
 
 ### leven 3.1.0
 
-Licence: MIT · sindresorhus/leven
+License: MIT · sindresorhus/leven
 
 
 MIT License
@@ -8459,7 +8459,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### lighthouse-logger 1.4.2
 
-Licence: Apache-2.0
+License: Apache-2.0
 
 
 Apache License
@@ -8667,7 +8667,7 @@ Apache License
 
 ### lodash.debounce 4.0.8
 
-Licence: MIT · lodash/lodash
+License: MIT · lodash/lodash
 
 
 Copyright jQuery Foundation and other contributors <https://jquery.org/>
@@ -8721,7 +8721,7 @@ terms above.
 
 ### lodash.throttle 4.1.1
 
-Licence: MIT · lodash/lodash
+License: MIT · lodash/lodash
 
 
 Copyright jQuery Foundation and other contributors <https://jquery.org/>
@@ -8775,7 +8775,7 @@ terms above.
 
 ### loose-envify 1.4.0
 
-Licence: MIT · https://github.com/zertosh/loose-envify
+License: MIT · https://github.com/zertosh/loose-envify
 
 
 The MIT License (MIT)
@@ -8803,7 +8803,7 @@ THE SOFTWARE.
 
 ### lru-cache 5.1.1
 
-Licence: ISC · https://github.com/isaacs/node-lru-cache
+License: ISC · https://github.com/isaacs/node-lru-cache
 
 
 The ISC License
@@ -8825,7 +8825,7 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### makeerror 1.0.12
 
-Licence: BSD-3-Clause · https://github.com/daaku/nodejs-makeerror
+License: BSD-3-Clause · https://github.com/daaku/nodejs-makeerror
 
 
 BSD License
@@ -8860,7 +8860,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ### marky 1.3.0
 
-Licence: Apache-2.0 · https://github.com/nolanlawson/marky
+License: Apache-2.0 · https://github.com/nolanlawson/marky
 
 
 Apache License
@@ -9075,7 +9075,7 @@ APPENDIX: How to apply the Apache License to your work
 
 ### memoize-one 5.2.1
 
-Licence: MIT · https://github.com/alexreardon/memoize-one
+License: MIT · https://github.com/alexreardon/memoize-one
 
 
 MIT License
@@ -9103,7 +9103,7 @@ SOFTWARE.
 
 ### merge-options 3.0.4
 
-Licence: MIT · schnittstabil/merge-options
+License: MIT · schnittstabil/merge-options
 
 
 The MIT License (MIT)
@@ -9131,7 +9131,7 @@ SOFTWARE.
 
 ### merge-stream 2.0.0
 
-Licence: MIT · grncdr/merge-stream
+License: MIT · grncdr/merge-stream
 
 
 The MIT License (MIT)
@@ -9159,63 +9159,63 @@ THE SOFTWARE.
 
 ### metro 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-babel-transformer 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-cache 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-cache-key 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-config 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-core 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-file-map 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-minify-terser 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-resolver 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-runtime 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-source-map 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-symbolicate 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-transform-plugins 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### metro-transform-worker 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### micromatch 4.0.8
 
-Licence: MIT · micromatch/micromatch
+License: MIT · micromatch/micromatch
 
 
 The MIT License (MIT)
@@ -9243,7 +9243,7 @@ THE SOFTWARE.
 
 ### mime 1.6.0
 
-Licence: MIT · https://github.com/broofa/node-mime
+License: MIT · https://github.com/broofa/node-mime
 
 
 The MIT License (MIT)
@@ -9271,7 +9271,7 @@ THE SOFTWARE.
 
 ### mime-db 1.54.0
 
-Licence: MIT · jshttp/mime-db
+License: MIT · jshttp/mime-db
 
 
 (The MIT License)
@@ -9301,7 +9301,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### mime-types 2.1.35
 
-Licence: MIT · jshttp/mime-types
+License: MIT · jshttp/mime-types
 
 
 (The MIT License)
@@ -9331,7 +9331,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### minimatch 10.2.6
 
-Licence: BlueOak-1.0.0 · git@github.com:isaacs/minimatch
+License: BlueOak-1.0.0 · git@github.com:isaacs/minimatch
 
 
 # Blue Oak Model License
@@ -9393,7 +9393,7 @@ software or this license, under any kind of legal claim._**
 
 ### minipass 7.1.3
 
-Licence: BlueOak-1.0.0 · https://github.com/isaacs/minipass
+License: BlueOak-1.0.0 · https://github.com/isaacs/minipass
 
 
 # Blue Oak Model License
@@ -9455,7 +9455,7 @@ software or this license, under any kind of legal claim.***
 
 ### mkdirp 1.0.4
 
-Licence: MIT · https://github.com/isaacs/node-mkdirp
+License: MIT · https://github.com/isaacs/node-mkdirp
 
 
 Copyright James Halliday (mail@substack.net) and Isaac Z. Schlueter (i@izs.me)
@@ -9483,7 +9483,7 @@ THE SOFTWARE.
 
 ### ms 2.1.3
 
-Licence: MIT · vercel/ms
+License: MIT · vercel/ms
 
 
 The MIT License (MIT)
@@ -9511,7 +9511,7 @@ SOFTWARE.
 
 ### negotiator 0.6.3
 
-Licence: MIT · jshttp/negotiator
+License: MIT · jshttp/negotiator
 
 
 (The MIT License)
@@ -9542,7 +9542,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### node-forge 1.4.0
 
-Licence: (BSD-3-Clause OR GPL-2.0) · https://github.com/digitalbazaar/forge
+License: (BSD-3-Clause OR GPL-2.0) · https://github.com/digitalbazaar/forge
 
 
 You may use the Forge project under the terms of either the BSD License or the
@@ -9879,7 +9879,7 @@ POSSIBILITY OF SUCH DAMAGES.
 
 ### node-int64 0.4.0
 
-Licence: MIT · https://github.com/broofa/node-int64
+License: MIT · https://github.com/broofa/node-int64
 
 
 Copyright (c) 2014 Robert Kieffer
@@ -9905,7 +9905,7 @@ THE SOFTWARE.
 
 ### node-releases 2.0.54
 
-Licence: MIT · https://github.com/chicoxyzzy/node-releases
+License: MIT · https://github.com/chicoxyzzy/node-releases
 
 
 The MIT License
@@ -9933,7 +9933,7 @@ THE SOFTWARE.
 
 ### nullthrows 1.1.1
 
-Licence: MIT · https://github.com/zertosh/nullthrows
+License: MIT · https://github.com/zertosh/nullthrows
 
 
 The MIT License (MIT)
@@ -9948,11 +9948,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### ob1 0.84.5
 
-Licence: MIT · https://github.com/react/metro
+License: MIT · https://github.com/react/metro
 
 ### on-finished 2.3.0
 
-Licence: MIT · jshttp/on-finished
+License: MIT · jshttp/on-finished
 
 
 (The MIT License)
@@ -9982,7 +9982,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### open 7.4.2
 
-Licence: MIT · sindresorhus/open
+License: MIT · sindresorhus/open
 
 
 MIT License
@@ -9998,7 +9998,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### parse-png 2.1.0
 
-Licence: MIT · kevva/parse-png
+License: MIT · kevva/parse-png
 
 
 MIT License
@@ -10014,7 +10014,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### parseurl 1.3.3
 
-Licence: MIT · pillarjs/parseurl
+License: MIT · pillarjs/parseurl
 
 
 (The MIT License)
@@ -10044,7 +10044,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### path-key 3.1.1
 
-Licence: MIT · sindresorhus/path-key
+License: MIT · sindresorhus/path-key
 
 
 MIT License
@@ -10060,7 +10060,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### path-parse 1.0.7
 
-Licence: MIT · https://github.com/jbgutierrez/path-parse
+License: MIT · https://github.com/jbgutierrez/path-parse
 
 
 The MIT License (MIT)
@@ -10088,7 +10088,7 @@ SOFTWARE.
 
 ### path-scurry 2.0.2
 
-Licence: BlueOak-1.0.0 · https://github.com/isaacs/path-scurry
+License: BlueOak-1.0.0 · https://github.com/isaacs/path-scurry
 
 
 # Blue Oak Model License
@@ -10150,7 +10150,7 @@ software or this license, under any kind of legal claim.***
 
 ### picocolors 1.1.1
 
-Licence: ISC · alexeyraspopov/picocolors
+License: ISC · alexeyraspopov/picocolors
 
 
 ISC License
@@ -10172,7 +10172,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### picomatch 4.0.7
 
-Licence: MIT · micromatch/picomatch
+License: MIT · micromatch/picomatch
 
 
 The MIT License (MIT)
@@ -10200,7 +10200,7 @@ THE SOFTWARE.
 
 ### plist 3.1.1
 
-Licence: MIT · https://github.com/TooTallNate/node-plist
+License: MIT · https://github.com/TooTallNate/node-plist
 
 
 (The MIT License)
@@ -10231,7 +10231,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 ### pngjs 3.4.0
 
-Licence: MIT · https://github.com/lukeapage/pngjs2
+License: MIT · https://github.com/lukeapage/pngjs2
 
 
 pngjs2 original work Copyright (c) 2015 Luke Page & Original Contributors
@@ -10258,7 +10258,7 @@ THE SOFTWARE.
 
 ### pretty-format 29.7.0
 
-Licence: MIT · https://github.com/jestjs/jest
+License: MIT · https://github.com/jestjs/jest
 
 
 MIT License
@@ -10286,7 +10286,7 @@ SOFTWARE.
 
 ### promise 8.3.0
 
-Licence: MIT · https://github.com/then/promise
+License: MIT · https://github.com/then/promise
 
 
 Copyright (c) 2014 Forbes Lindesay
@@ -10312,7 +10312,7 @@ THE SOFTWARE.
 
 ### range-parser 1.2.1
 
-Licence: MIT · jshttp/range-parser
+License: MIT · jshttp/range-parser
 
 
 (The MIT License)
@@ -10342,7 +10342,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### react 19.2.3
 
-Licence: MIT · https://github.com/facebook/react
+License: MIT · https://github.com/facebook/react
 
 
 MIT License
@@ -10370,11 +10370,11 @@ SOFTWARE.
 
 ### react-devtools-core 6.1.5
 
-Licence: MIT · https://github.com/facebook/react
+License: MIT · https://github.com/facebook/react
 
 ### react-is 18.3.1
 
-Licence: MIT · https://github.com/facebook/react
+License: MIT · https://github.com/facebook/react
 
 
 MIT License
@@ -10402,7 +10402,7 @@ SOFTWARE.
 
 ### react-native 0.86.3
 
-Licence: MIT · https://github.com/react/react-native
+License: MIT · https://github.com/react/react-native
 
 
 MIT License
@@ -10430,7 +10430,7 @@ SOFTWARE.
 
 ### react-native-safe-area-context 5.7.0
 
-Licence: MIT · https://github.com/AppAndFlow/react-native-safe-area-context
+License: MIT · https://github.com/AppAndFlow/react-native-safe-area-context
 
 
 MIT License
@@ -10458,7 +10458,7 @@ SOFTWARE.
 
 ### react-native-url-polyfill 4.0.0
 
-Licence: MIT · https://github.com/charpeni/react-native-url-polyfill
+License: MIT · https://github.com/charpeni/react-native-url-polyfill
 
 
 MIT License
@@ -10486,7 +10486,7 @@ SOFTWARE.
 
 ### react-refresh 0.14.2
 
-Licence: MIT · https://github.com/facebook/react
+License: MIT · https://github.com/facebook/react
 
 
 MIT License
@@ -10514,7 +10514,7 @@ SOFTWARE.
 
 ### regenerate 1.4.2
 
-Licence: MIT · https://github.com/mathiasbynens/regenerate
+License: MIT · https://github.com/mathiasbynens/regenerate
 
 
 Copyright Mathias Bynens <https://mathiasbynens.be/>
@@ -10541,7 +10541,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### regenerate-unicode-properties 10.2.2
 
-Licence: MIT · https://github.com/mathiasbynens/regenerate-unicode-properties
+License: MIT · https://github.com/mathiasbynens/regenerate-unicode-properties
 
 
 Copyright Mathias Bynens <https://mathiasbynens.be/>
@@ -10568,7 +10568,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### regenerator-runtime 0.13.11
 
-Licence: MIT · https://github.com/facebook/regenerator/tree/main/packages/runtime
+License: MIT · https://github.com/facebook/regenerator/tree/main/packages/runtime
 
 
 MIT License
@@ -10596,7 +10596,7 @@ SOFTWARE.
 
 ### regexpu-core 6.4.0
 
-Licence: MIT · https://github.com/mathiasbynens/regexpu-core
+License: MIT · https://github.com/mathiasbynens/regexpu-core
 
 
 Copyright Mathias Bynens <https://mathiasbynens.be/>
@@ -10623,7 +10623,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### regjsgen 0.8.0
 
-Licence: MIT · https://github.com/bnjmnt4n/regjsgen
+License: MIT · https://github.com/bnjmnt4n/regjsgen
 
 
 The MIT License (MIT)
@@ -10652,7 +10652,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### regjsparser 0.13.2
 
-Licence: BSD-2-Clause · ssh://git@github.com/jviereck/regjsparser
+License: BSD-2-Clause · ssh://git@github.com/jviereck/regjsparser
 
 
 Copyright (c) Julian Viereck and Contributors, All Rights Reserved.
@@ -10680,7 +10680,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ### require-directory 2.1.1
 
-Licence: MIT · https://github.com/troygoode/node-require-directory
+License: MIT · https://github.com/troygoode/node-require-directory
 
 
 The MIT License (MIT)
@@ -10709,7 +10709,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### resolve 1.22.12
 
-Licence: MIT · ssh://github.com/browserify/resolve
+License: MIT · ssh://github.com/browserify/resolve
 
 
 MIT License
@@ -10737,7 +10737,7 @@ SOFTWARE.
 
 ### resolve-from 5.0.0
 
-Licence: MIT · sindresorhus/resolve-from
+License: MIT · sindresorhus/resolve-from
 
 
 MIT License
@@ -10753,7 +10753,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### resolve-workspace-root 2.0.1
 
-Licence: MIT · https://github.com/byCedric/resolve-workspace-root
+License: MIT · https://github.com/byCedric/resolve-workspace-root
 
 
 # The MIT License (MIT)
@@ -10781,7 +10781,7 @@ Copyright (c) 2024-present Cedric van Putten <me@cedric.dev>
 
 ### sax 1.6.1
 
-Licence: BlueOak-1.0.0 · ssh://git@github.com/isaacs/sax-js
+License: BlueOak-1.0.0 · ssh://git@github.com/isaacs/sax-js
 
 
 # Blue Oak Model License
@@ -10843,7 +10843,7 @@ software or this license, under any kind of legal claim.***
 
 ### scheduler 0.27.0
 
-Licence: MIT · https://github.com/facebook/react
+License: MIT · https://github.com/facebook/react
 
 
 MIT License
@@ -10871,7 +10871,7 @@ SOFTWARE.
 
 ### semver 6.3.1
 
-Licence: ISC · https://github.com/npm/node-semver
+License: ISC · https://github.com/npm/node-semver
 
 
 The ISC License
@@ -10893,7 +10893,7 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### send 0.19.2
 
-Licence: MIT · pillarjs/send
+License: MIT · pillarjs/send
 
 
 (The MIT License)
@@ -10923,7 +10923,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### serialize-error 2.1.0
 
-Licence: MIT · sindresorhus/serialize-error
+License: MIT · sindresorhus/serialize-error
 
 
 The MIT License (MIT)
@@ -10951,7 +10951,7 @@ THE SOFTWARE.
 
 ### serve-static 1.16.3
 
-Licence: MIT · expressjs/serve-static
+License: MIT · expressjs/serve-static
 
 
 (The MIT License)
@@ -10983,7 +10983,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### setprototypeof 1.2.0
 
-Licence: ISC · https://github.com/wesleytodd/setprototypeof
+License: ISC · https://github.com/wesleytodd/setprototypeof
 
 
 Copyright (c) 2015, Wes Todd
@@ -11003,7 +11003,7 @@ CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### shebang-command 2.0.0
 
-Licence: MIT · kevva/shebang-command
+License: MIT · kevva/shebang-command
 
 
 MIT License
@@ -11019,7 +11019,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### shebang-regex 3.0.0
 
-Licence: MIT · sindresorhus/shebang-regex
+License: MIT · sindresorhus/shebang-regex
 
 
 MIT License
@@ -11035,7 +11035,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### shell-quote 1.10.0
 
-Licence: MIT · http://github.com/ljharb/shell-quote
+License: MIT · http://github.com/ljharb/shell-quote
 
 
 The MIT License
@@ -11066,7 +11066,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### simple-plist 1.3.1
 
-Licence: MIT · https://github.com/wollardj/simple-plist
+License: MIT · https://github.com/wollardj/simple-plist
 
 
 The MIT License (MIT)
@@ -11093,7 +11093,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### slugify 1.6.9
 
-Licence: MIT · https://github.com/simov/slugify
+License: MIT · https://github.com/simov/slugify
 
 
 The MIT License (MIT)
@@ -11121,7 +11121,7 @@ SOFTWARE.
 
 ### source-map 0.5.7
 
-Licence: BSD-3-Clause · http://github.com/mozilla/source-map
+License: BSD-3-Clause · http://github.com/mozilla/source-map
 
 
 Copyright (c) 2009-2011, Mozilla Foundation and contributors
@@ -11155,7 +11155,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ### source-map-support 0.5.21
 
-Licence: MIT · https://github.com/evanw/node-source-map-support
+License: MIT · https://github.com/evanw/node-source-map-support
 
 
 The MIT License (MIT)
@@ -11183,7 +11183,7 @@ SOFTWARE.
 
 ### stackframe 1.3.4
 
-Licence: MIT · https://github.com/stacktracejs/stackframe
+License: MIT · https://github.com/stacktracejs/stackframe
 
 
 Copyright (c) 2017 Eric Wendelin and other contributors
@@ -11209,7 +11209,7 @@ SOFTWARE.
 
 ### stacktrace-parser 0.1.11
 
-Licence: MIT · https://github.com/errwischt/stacktrace-parser
+License: MIT · https://github.com/errwischt/stacktrace-parser
 
 
 MIT License
@@ -11237,7 +11237,7 @@ SOFTWARE.
 
 ### statuses 1.5.0
 
-Licence: MIT · jshttp/statuses
+License: MIT · jshttp/statuses
 
 
 The MIT License (MIT)
@@ -11266,11 +11266,11 @@ THE SOFTWARE.
 
 ### stream-buffers 2.2.0
 
-Licence: Unlicense · https://github.com/samcday/node-stream-buffer
+License: Unlicense · https://github.com/samcday/node-stream-buffer
 
 ### string-width 4.2.3
 
-Licence: MIT · sindresorhus/string-width
+License: MIT · sindresorhus/string-width
 
 
 MIT License
@@ -11286,7 +11286,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### strip-ansi 5.2.0
 
-Licence: MIT · chalk/strip-ansi
+License: MIT · chalk/strip-ansi
 
 
 MIT License
@@ -11302,7 +11302,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### supports-color 7.2.0
 
-Licence: MIT · chalk/supports-color
+License: MIT · chalk/supports-color
 
 
 MIT License
@@ -11318,7 +11318,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### supports-preserve-symlinks-flag 1.0.0
 
-Licence: MIT · https://github.com/inspect-js/node-supports-preserve-symlinks-flag
+License: MIT · https://github.com/inspect-js/node-supports-preserve-symlinks-flag
 
 
 MIT License
@@ -11346,7 +11346,7 @@ SOFTWARE.
 
 ### terser 5.51.2
 
-Licence: BSD-2-Clause · https://github.com/terser/terser
+License: BSD-2-Clause · https://github.com/terser/terser
 
 
 Copyright 2012-2018 (c) Mihai Bazon <mihai.bazon@gmail.com>
@@ -11380,7 +11380,7 @@ SUCH DAMAGE.
 
 ### throat 5.0.0
 
-Licence: MIT · https://github.com/ForbesLindesay/throat
+License: MIT · https://github.com/ForbesLindesay/throat
 
 
 Copyright (c) 2013 Forbes Lindesay
@@ -11406,7 +11406,7 @@ THE SOFTWARE.
 
 ### tinyglobby 0.2.17
 
-Licence: MIT · https://github.com/SuperchupuDev/tinyglobby
+License: MIT · https://github.com/SuperchupuDev/tinyglobby
 
 
 MIT License
@@ -11434,7 +11434,7 @@ SOFTWARE.
 
 ### tmpl 1.0.5
 
-Licence: BSD-3-Clause · https://github.com/daaku/nodejs-tmpl
+License: BSD-3-Clause · https://github.com/daaku/nodejs-tmpl
 
 
 BSD License
@@ -11469,7 +11469,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ### to-regex-range 5.0.1
 
-Licence: MIT · micromatch/to-regex-range
+License: MIT · micromatch/to-regex-range
 
 
 The MIT License (MIT)
@@ -11497,7 +11497,7 @@ THE SOFTWARE.
 
 ### toidentifier 1.0.1
 
-Licence: MIT · component/toidentifier
+License: MIT · component/toidentifier
 
 
 MIT License
@@ -11525,7 +11525,7 @@ SOFTWARE.
 
 ### tslib 2.8.1
 
-Licence: 0BSD · https://github.com/Microsoft/tslib
+License: 0BSD · https://github.com/Microsoft/tslib
 
 
 Copyright (c) Microsoft Corporation.
@@ -11544,7 +11544,7 @@ PERFORMANCE OF THIS SOFTWARE.
 
 ### type-fest 0.7.1
 
-Licence: (MIT OR CC0-1.0) · sindresorhus/type-fest
+License: (MIT OR CC0-1.0) · sindresorhus/type-fest
 
 
 MIT License
@@ -11560,7 +11560,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### undici-types 8.3.0
 
-Licence: MIT · https://github.com/nodejs/undici
+License: MIT · https://github.com/nodejs/undici
 
 
 MIT License
@@ -11588,7 +11588,7 @@ SOFTWARE.
 
 ### unicode-canonical-property-names-ecmascript 2.0.1
 
-Licence: MIT · https://github.com/mathiasbynens/unicode-canonical-property-names-ecmascript
+License: MIT · https://github.com/mathiasbynens/unicode-canonical-property-names-ecmascript
 
 
 Copyright Mathias Bynens <https://mathiasbynens.be/>
@@ -11615,7 +11615,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### unicode-match-property-ecmascript 2.0.0
 
-Licence: MIT · https://github.com/mathiasbynens/unicode-match-property-ecmascript
+License: MIT · https://github.com/mathiasbynens/unicode-match-property-ecmascript
 
 
 Copyright Mathias Bynens <https://mathiasbynens.be/>
@@ -11642,7 +11642,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### unicode-match-property-value-ecmascript 2.2.1
 
-Licence: MIT · https://github.com/mathiasbynens/unicode-match-property-value-ecmascript
+License: MIT · https://github.com/mathiasbynens/unicode-match-property-value-ecmascript
 
 
 Copyright Mathias Bynens <https://mathiasbynens.be/>
@@ -11669,7 +11669,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### unicode-property-aliases-ecmascript 2.2.0
 
-Licence: MIT · https://github.com/mathiasbynens/unicode-property-aliases-ecmascript
+License: MIT · https://github.com/mathiasbynens/unicode-property-aliases-ecmascript
 
 
 Copyright Mathias Bynens <https://mathiasbynens.be/>
@@ -11696,7 +11696,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### unpipe 1.0.0
 
-Licence: MIT · stream-utils/unpipe
+License: MIT · stream-utils/unpipe
 
 
 (The MIT License)
@@ -11725,7 +11725,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### update-browserslist-db 1.3.2
 
-Licence: MIT · browserslist/update-db
+License: MIT · browserslist/update-db
 
 
 The MIT License (MIT)
@@ -11752,7 +11752,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### utils-merge 1.0.1
 
-Licence: MIT · https://github.com/jaredhanson/utils-merge
+License: MIT · https://github.com/jaredhanson/utils-merge
 
 
 The MIT License (MIT)
@@ -11779,7 +11779,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### uuid 7.0.3
 
-Licence: MIT · https://github.com/uuidjs/uuid
+License: MIT · https://github.com/uuidjs/uuid
 
 
 The MIT License (MIT)
@@ -11807,7 +11807,7 @@ SOFTWARE.
 
 ### vlq 1.0.1
 
-Licence: MIT · https://github.com/Rich-Harris/vlq
+License: MIT · https://github.com/Rich-Harris/vlq
 
 
 Copyright (c) 2017 [these people](https://github.com/Rich-Harris/vlq/graphs/contributors)
@@ -11821,7 +11821,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### walker 1.0.8
 
-Licence: Apache-2.0 · https://github.com/daaku/nodejs-walker
+License: Apache-2.0 · https://github.com/daaku/nodejs-walker
 
 
 Copyright 2013 Naitik Shah
@@ -11841,7 +11841,7 @@ limitations under the License.
 
 ### whatwg-fetch 3.6.20
 
-Licence: MIT · github/fetch
+License: MIT · github/fetch
 
 
 Copyright (c) 2014-2023 GitHub, Inc.
@@ -11868,7 +11868,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### whatwg-url-minimum 0.1.2
 
-Licence: MIT · https://github.com/kitten/whatwg-url-minimum
+License: MIT · https://github.com/kitten/whatwg-url-minimum
 
 
 MIT License
@@ -11898,7 +11898,7 @@ SOFTWARE.
 
 ### which 2.0.2
 
-Licence: ISC · https://github.com/isaacs/node-which
+License: ISC · https://github.com/isaacs/node-which
 
 
 The ISC License
@@ -11920,7 +11920,7 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### wrap-ansi 7.0.0
 
-Licence: MIT · chalk/wrap-ansi
+License: MIT · chalk/wrap-ansi
 
 
 MIT License
@@ -11936,7 +11936,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ### ws 8.21.3
 
-Licence: MIT · https://github.com/websockets/ws
+License: MIT · https://github.com/websockets/ws
 
 
 Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>
@@ -11963,7 +11963,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ### xcode 3.0.1
 
-Licence: Apache-2.0 · github:apache/cordova-node-xcode
+License: Apache-2.0 · github:apache/cordova-node-xcode
 
 
 Apache License
@@ -12171,7 +12171,7 @@ Apache License
 
 ### xml2js 0.6.0
 
-Licence: MIT · https://github.com/Leonidas-from-XIV/node-xml2js
+License: MIT · https://github.com/Leonidas-from-XIV/node-xml2js
 
 
 Copyright 2010, 2011, 2012, 2013. All rights reserved.
@@ -12197,7 +12197,7 @@ IN THE SOFTWARE.
 
 ### xmlbuilder 15.1.1
 
-Licence: MIT · https://github.com/oozcitak/xmlbuilder-js
+License: MIT · https://github.com/oozcitak/xmlbuilder-js
 
 
 The MIT License (MIT)
@@ -12225,7 +12225,7 @@ THE SOFTWARE.
 
 ### y18n 5.0.8
 
-Licence: ISC · yargs/y18n
+License: ISC · yargs/y18n
 
 
 Copyright (c) 2015, Contributors
@@ -12245,7 +12245,7 @@ THIS SOFTWARE.
 
 ### yallist 3.1.1
 
-Licence: ISC · https://github.com/isaacs/yallist
+License: ISC · https://github.com/isaacs/yallist
 
 
 The ISC License
@@ -12267,7 +12267,7 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### yaml 2.9.0
 
-Licence: ISC · github:eemeli/yaml
+License: ISC · github:eemeli/yaml
 
 
 Copyright Eemeli Aro <eemeli@gmail.com>
@@ -12287,7 +12287,7 @@ THIS SOFTWARE.
 
 ### yargs 17.7.3
 
-Licence: MIT · https://github.com/yargs/yargs
+License: MIT · https://github.com/yargs/yargs
 
 
 MIT License
@@ -12315,7 +12315,7 @@ THE SOFTWARE.
 
 ### yargs-parser 21.1.1
 
-Licence: ISC · https://github.com/yargs/yargs-parser
+License: ISC · https://github.com/yargs/yargs-parser
 
 
 Copyright (c) 2016, Contributors
@@ -12336,7 +12336,7 @@ ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ### zxing-wasm 3.1.3
 
-Licence: MIT · https://github.com/Sec-ant/zxing-wasm
+License: MIT · https://github.com/Sec-ant/zxing-wasm
 
 
 MIT License

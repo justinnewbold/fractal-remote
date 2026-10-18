@@ -175,10 +175,10 @@ export default function Scenes({
           type="button"
           className="chip scene-colour"
           onClick={() => setPainting(sceneTarget(current, { preset: presetHere, only: true, called: names[current] }))}
-          aria-label={`Colour for scene ${current + 1} in this preset`}
+          aria-label={`Color for scene ${current + 1} in this preset`}
         >
           <span className="scene-colour-dot" aria-hidden="true" style={{ '--scene-fill': sceneColor(current, presetHere.number).fill }} />
-          Colour
+          Color
         </button>
       ) : null}
       <ColourSheet target={painting} onClose={() => setPainting(null)} />

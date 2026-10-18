@@ -18,7 +18,12 @@
  * likes it as it was.
  */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { parse } from '@babel/parser'
+import babelTraverse from '@babel/traverse'
+
+/* CommonJS interop, as in test/structure.mjs. */
+const traverse = babelTraverse.default || babelTraverse
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 
@@ -167,7 +172,7 @@ export function run(test) {
     const c = await load()
     assert.deepEqual(
       c.LOOKS.map((l) => l.name),
-      ['Match my unit', 'Fractal Remote', 'Footswitch lights', 'Colour-blind safe', 'Sunlight', 'Stompbox']
+      ['Match my unit', 'Fractal Remote', 'Footswitch lights', 'Color-blind safe', 'Sunlight', 'Stompbox']
     )
     assert.equal(c.DEFAULT_LOOK, 'unit')
     assert.equal(c.lookId(), 'unit', 'somebody who never chose a look is not in Match my unit')
@@ -963,7 +968,7 @@ export function run(test) {
     const looper = at({ tapCategory: 8, color: 0 }).light
     assert.deepEqual(looper, { name: 'Default', hex: null, shade: null }, 'a looper switch, which has no one default, is given one')
     assert.equal(lightWords(looper), 'Default light')
-    assert.equal(lightWords(at({ tapCategory: 3, color: 42 }).light), 'Light: a colour this app can’t name yet')
+    assert.equal(lightWords(at({ tapCategory: 3, color: 42 }).light), 'Light: a color this app can’t name yet')
     const mock = read('src/lib/mockDevice.js')
     assert.ok(!/#e23b3b|#9b59f5|#35c9d6/.test(mock), 'the demo still has the host’s approximate colours')
   })
@@ -1022,7 +1027,7 @@ export function run(test) {
     /* And Back, from this preset's own: to every preset's, said so. */
     c.paint(three, '#ff99cc', { only: true })
     assert.equal(c.backWords(three, { only: true }), 'Same as every preset')
-    assert.equal(c.backWords(three), 'Back to the unit’s colour')
+    assert.equal(c.backWords(three), 'Back to the unit’s color')
     assert.equal(c.sheetNote(three, { only: true }), 'For this scene in 012 Lead Rig only')
     assert.equal(c.sheetNote(three), 'For this scene in every preset')
     assert.ok(c.paint(three, null, { only: true }))
@@ -1064,14 +1069,14 @@ export function run(test) {
     /* No tag: the sheet opens on no colour at all, with nothing ticked and no way back to show. A Red ticked read as the colour it had. */
     assert.equal(c.colourNow(clean), null)
     assert.equal(c.yoursFor(clean), null)
-    assert.equal(c.tagButtonWords('045 Clean', null), 'Give 045 Clean a colour')
+    assert.equal(c.tagButtonWords('045 Clean', null), 'Give 045 Clean a color')
     assert.ok(c.paint(clean, '#0055ff'))
     assert.equal(c.presetTag(45), '#0055ff')
     assert.equal(c.yoursFor(clean), '#0055ff')
-    assert.equal(c.backWords(clean), 'Take the colour off')
+    assert.equal(c.backWords(clean), 'Take the color off')
     assert.equal(c.sheetNote(clean), 'Kept for this preset on this unit, like its star')
-    assert.equal(c.tagButtonWords('045 Clean', '#0055ff'), 'Colour for 045 Clean: Blue. Change it')
-    assert.equal(c.tagName('#123456'), 'a colour of your own')
+    assert.equal(c.tagButtonWords('045 Clean', '#0055ff'), 'Color for 045 Clean: Blue. Change it')
+    assert.equal(c.tagName('#123456'), 'a color of your own')
     /* Per unit and per number. */
     assert.equal(c.presetTag(46), null, 'a tag reached the preset next to it')
     c.setColourUnit('am4')
@@ -1184,16 +1189,16 @@ export function run(test) {
     assert.equal(c.scenesAllRed(4), false)
     for (let i = 0; i < 8; i++) assert.equal(c.yourScene(i), null, `scene ${i + 1} is marked as yours for a choice`)
     assert.equal(c.ownColourCount({ scenes: 4 }), 0)
-    assert.equal(c.coloursStatus({ unitName: 'AM4', capabilities: am4 }), 'Match my unit · AM4 colours', 'a choice is counted as colours of your own')
+    assert.equal(c.coloursStatus({ unitName: 'AM4', capabilities: am4 }), 'Match my unit · AM4 colors', 'a choice is counted as colours of your own')
     assert.deepEqual(Array.from({ length: 4 }, (_, i) => c.sceneColor(i).fill), c.lookById('cvd').scenes.slice(0, 4), 'a colour each is not Colour-blind safe’s')
     assert.equal(JSON.parse(store.kept['fractal.colours']).sceneChoice.mode, 'each', 'the choice is not kept for the next launch')
     /* One scene painted by hand is one of your own, and only the scenes the unit has are counted. */
     const two = c.sceneTarget(1)
     assert.equal(c.lookOwn(two), c.lookById('cvd').scenes[1], 'Back would not give the scene its colour from the choice')
-    assert.deepEqual(c.sheetSwatches(two)[0], { name: 'Each', fill: c.lookById('cvd').scenes[1], own: true, said: 'the colour for each scene' }, 'the first square is called the unit’s colour, which it is not')
+    assert.deepEqual(c.sheetSwatches(two)[0], { name: 'Each', fill: c.lookById('cvd').scenes[1], own: true, said: 'the color for each scene' }, 'the first square is called the unit’s colour, which it is not')
     c.paint(two, '#ffff00')
-    assert.equal(c.backWords(two), 'Back to the colour for each scene')
-    assert.equal(c.coloursStatus({ unitName: 'AM4', capabilities: am4 }), 'Match my unit · AM4 colours · 1 of your own')
+    assert.equal(c.backWords(two), 'Back to the color for each scene')
+    assert.equal(c.coloursStatus({ unitName: 'AM4', capabilities: am4 }), 'Match my unit · AM4 colors · 1 of your own')
     c.setScene(6, '#ffffff')
     assert.equal(c.ownColourCount({ scenes: 4 }), 1, 'a scene the AM4 does not have is counted')
     assert.equal(c.ownColourCount(), 2)
@@ -1384,11 +1389,11 @@ export function run(test) {
 
   test('the words under Put every colour back and Keep their colour say it once, plainly', async () => {
     const c = await withPage()
-    assert.equal(c.PUT_BACK_WORDS, 'Back to Match my unit: every scene red, switched-off effects in their own colour')
-    assert.equal(c.OFF_WORDS.colour, 'A faint wash of the effect’s own colour with an edge in that colour, so you still know which it is.')
+    assert.equal(c.PUT_BACK_WORDS, 'Back to Match my unit: every scene red, switched-off effects in their own color')
+    assert.equal(c.OFF_WORDS.colour, 'A faint wash of the effect’s own color with an edge in that color, so you still know which it is.')
     assert.match(read('src/components/Colours.jsx'), /<span className="hint">\{PUT_BACK_WORDS\}<\/span>/)
-    assert.match(read('mobile/src/components/Colours.js'), /<Press label="Put every colour back" sub=\{PUT_BACK_WORDS\} onPress=\{\(\) => setAsking\('all'\)\} \/>/)
-    for (const f of ['src/components/Colours.jsx', 'mobile/src/components/Colours.js']) assert.ok(!/the unit’s colours, and switched-off/.test(read(f)), `${f} says Match my unit twice again`)
+    assert.match(read('mobile/src/components/Colours.js'), /<Press label="Put every color back" sub=\{PUT_BACK_WORDS\} onPress=\{\(\) => setAsking\('all'\)\} \/>/)
+    for (const f of ['src/components/Colours.jsx', 'mobile/src/components/Colours.js']) assert.ok(!/the unit’s colors, and switched-off/.test(read(f)), `${f} says Match my unit twice again`)
   })
 
   test('the store words say what is true on every unit', () => {
@@ -1512,12 +1517,12 @@ export function run(test) {
     const c = await withPage()
     c.setColourUnit('fm3')
     const long = c.presetTarget(12, { words: '012 Shine On You Crazy Diamond Solo' })
-    assert.equal(c.sheetTitle(long), 'Preset colour')
-    assert.equal(c.sheetSaid(long), 'Colour for 012 Shine On You Crazy Diamond Solo')
-    assert.equal(c.sheetTitle(c.familyTarget('drive')), 'Drive colour')
-    assert.equal(c.sheetSaid(c.familyTarget('drive')), 'Drive colour')
-    assert.equal(c.sheetTitle(c.sceneTarget(1)), 'Scene 2 colour')
-    assert.equal(c.spokenSwatch(long, c.sheetSwatches(long)[0]), 'Colour for 012 Shine On You Crazy Diamond Solo, Red')
+    assert.equal(c.sheetTitle(long), 'Preset color')
+    assert.equal(c.sheetSaid(long), 'Color for 012 Shine On You Crazy Diamond Solo')
+    assert.equal(c.sheetTitle(c.familyTarget('drive')), 'Drive color')
+    assert.equal(c.sheetSaid(c.familyTarget('drive')), 'Drive color')
+    assert.equal(c.sheetTitle(c.sceneTarget(1)), 'Scene 2 color')
+    assert.equal(c.spokenSwatch(long, c.sheetSwatches(long)[0]), 'Color for 012 Shine On You Crazy Diamond Solo, Red')
     assert.match(read('mobile/src/components/PresetTag.js'), /export function TagPreview[\s\S]*?<Text numberOfLines=\{2\}/, 'the phone’s row under the title cuts the name to one line')
     for (const f of ['src/components/ColourSheet.jsx', 'mobile/src/components/ColourSheet.js']) assert.match(read(f), /title=\{target \? sheetTitle\(target\) : ''\}/, `${f} titles its sheet another way`)
     c.setColourUnit(null)
@@ -1581,5 +1586,126 @@ export function run(test) {
     }
     assert.deepEqual(c.lookCard('unit', 'vp4').filter((t) => t.slug).map((t) => t.slug), ['drive', 'comp', 'delay', 'reverb'], 'a VP4’s card is not its drive, compressor, delay and reverb')
     assert.deepEqual(c.lookCard('unit', 'am4').filter((t) => t.slug).map((t) => t.slug), ['drive', 'amp', 'delay', 'reverb'])
+  })
+
+  test('every word a player reads is spelled the American way: color, gray, favorite', () => {
+    /*
+     * "I'm in the US and I've noticed the words colors and gray are spelled
+     * colours and grey. Can we switch those back?" (18 October 2026). The
+     * app, the computer window and the website say color, gray and favorite
+     * now. What stays British is everything nobody reads: comments, file and
+     * function names, class names, the look and mode ids, and the storage keys
+     * ('fractal.colours', 'fractal.coloursNoticed'), which a rename would wipe
+     * off every phone that kept a choice under them.
+     *
+     * Simple on purpose. A string is read by somebody when it has a space in
+     * it (" colour" is the end of `${name} colour`), or when the word starts with a capital ("Colors", "Gray when off");
+     * an id is one lowercase word ('colour', 'grey', 'colours'). A word glued
+     * to a dot, a slash, a dash before it or a letter after it is part of a
+     * name ('.colour-layer', 'block-colour', 'ColourSheet') and is left alone.
+     */
+    const BRITISH = /(?<![\w./#-])(colou?rs?|coloured|uncoloured|greys?|greyed|favourites?)(?![\w/])/gi
+    const isBritish = (w) => /colour|grey|favourite/i.test(w)
+    /* Names, not words: an attribute whose value is an id, a class or a key. */
+    const ID_ATTRS = new Set(['className', 'id', 'name', 'mode', 'key', 'htmlFor', 'aria-labelledby', 'aria-describedby', 'aria-controls', 'testID', 'nativeID', 'type', 'role'])
+    const found = []
+    const check = (where, text) => {
+      const t = String(text)
+      for (const m of t.matchAll(BRITISH)) {
+        if (!isBritish(m[1])) continue
+        if (!/\s/.test(t) && !/^[A-Z]/.test(m[1])) continue
+        found.push(`${where}: “${t.trim().slice(0, 90)}”`)
+      }
+    }
+    const shownIn = (file, code) => {
+      const ast = parse(code, { sourceType: 'module', plugins: ['jsx'], allowAwaitOutsideFunction: true, allowReturnOutsideFunction: true })
+      const seen = []
+      traverse(ast, {
+        enter(p) {
+          const n = p.node
+          let text
+          if (n.type === 'StringLiteral' || n.type === 'JSXText') text = n.value
+          else if (n.type === 'TemplateElement') text = n.value.cooked ?? n.value.raw
+          else return
+          const par = p.parent
+          if (/^(Import|Export\w*)Declaration$/.test(par.type)) return
+          if (par.type === 'CallExpression' && (par.callee.type === 'Import' || par.callee.name === 'require')) return
+          if ((par.type === 'ObjectProperty' || par.type === 'ClassProperty') && par.key === n) return
+          if (par.type === 'MemberExpression' && par.property === n) return
+          const attr = p.findParent((q) => q.isJSXAttribute())
+          if (attr && (ID_ATTRS.has(attr.node.name.name) || /^data-/.test(attr.node.name.name))) {
+            const inside = p.findParent((q) => q.isJSXElement())
+            if (!inside || !inside.isDescendant(attr)) return
+          }
+          seen.push(text)
+          check(`${file}:${n.loc.start.line}`, text)
+        }
+      })
+      return seen
+    }
+
+    /* The checker itself, on a page it can be wrong about. */
+    const before = found.length
+    const planted = shownIn('planted', [
+      "// a comment about the colour sheet",
+      "const KEY = 'fractal.colours'",
+      "const a = { colour: 'A colour of your own', mode: 'grey' }",
+      "const b = <p className=\"colour-any\" data-off=\"grey\">Grey when off</p>",
+      "const c = `${name} colour`",
+      "const d = <Press label=\"Colours\" />"
+    ].join('\n'))
+    assert.ok(planted.length >= 5, 'the checker read nothing out of a page full of words')
+    assert.deepEqual(
+      found.splice(before).map((f) => f.replace(/^planted:\d+: /, '')),
+      ['“A colour of your own”', '“Grey when off”', '“colour”', '“Colours”'],
+      'the checker no longer tells a word somebody reads from a name in the code'
+    )
+
+    /* Both ends: the browser and the computer window, the phone and what it sends the watch, and what they share. */
+    const ROOT = new URL('../', import.meta.url)
+    const files = []
+    const walk = (dir) => {
+      for (const e of readdirSync(new URL(dir, ROOT), { withFileTypes: true })) {
+        if (e.name === 'node_modules') continue
+        const rel = `${dir}${e.name}`
+        if (e.isDirectory()) walk(`${rel}/`)
+        else if (/\.(jsx?|mjs|cjs|json)$/.test(e.name)) files.push(rel)
+      }
+    }
+    for (const dir of ['src/', 'shared/', 'mobile/src/', 'desktop/lib/']) walk(dir)
+    files.push('mobile/App.js', 'desktop/main.js', 'desktop/preload.js')
+    assert.ok(files.length > 300, `only ${files.length} files were read; this check would pass on nothing`)
+    const everything = []
+    for (const f of files) {
+      const code = read(f)
+      if (f.endsWith('.json')) {
+        const walkJson = (v) => {
+          if (typeof v === 'string') { everything.push(v); check(f, v) }
+          else if (v && typeof v === 'object') Object.values(v).forEach(walkJson)
+        }
+        walkJson(JSON.parse(code))
+      } else everything.push(...shownIn(f, code))
+    }
+    /* And the words it is about are really read: the check is not looking in the wrong place. */
+    for (const want of ['Gray when off', 'Keep their color', 'Color-blind safe', 'Put every color back']) {
+      assert.ok(everything.includes(want), `“${want}” was not found among the words the apps show`)
+    }
+
+    /* The website: what a page says, without its styles, its comments and its class names. */
+    const pages = readdirSync(new URL('public/', ROOT)).filter((f) => f.endsWith('.html'))
+    assert.ok(pages.length >= 6, 'the website pages were not found')
+    for (const page of pages) {
+      /* Blanked rather than cut, so a line number in the failure is the page's own. */
+      const blank = (m) => m.replace(/[^\n]/g, ' ')
+      const text = read(`public/${page}`)
+        .replace(/<!--[\s\S]*?-->/g, blank)
+        .replace(/<style[\s\S]*?<\/style>/g, blank)
+        .replace(/\/\*[\s\S]*?\*\//g, blank)
+        .replace(/^\s*\/\/.*$/gm, blank)
+        .replace(/\s(?:class|id|for|name|aria-labelledby|aria-describedby|aria-controls|data-[\w-]+)="[^"]*"/g, ' ')
+      text.split('\n').forEach((line, i) => check(`public/${page}:${i + 1}`, line))
+    }
+
+    assert.deepEqual(found, [], `these are shown with a British spelling (the US one is color, gray, favorite):\n  ${found.join('\n  ')}`)
   })
 }

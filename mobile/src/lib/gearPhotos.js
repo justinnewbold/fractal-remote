@@ -101,7 +101,7 @@ export function photoFor(name, base = GEAR_BASE) {
        Justin had the gear drawn, and a drawing passed off as a photograph is
        the one thing it must never be. docs/gear-illustrations.md lists them. */
     illustration: !!p.illustration,
-    alt: p.illustration ? `${name}, a drawing of the gear it is modelled on` : `${name}, the gear it is modelled on`
+    alt: p.illustration ? `${name}, a drawing of the gear it is modeled on` : `${name}, the gear it is modeled on`
   }
 }
 
