@@ -26,16 +26,17 @@ import {
   lookId,
   ownColourCount,
   presetColour,
+  sceneChoice,
   setFamily,
   setLook,
   setPresetColour,
   setScene,
-  setScenes,
+  setSceneChoice,
   yourFamily,
   yourScene
 } from './looks.js'
 import { blockColor, lookColour } from './blockColors.js'
-import { sceneColor } from './sceneColors.js'
+import { allRedLook, sceneBase, sceneColor } from './sceneColors.js'
 
 /* ------------------------------------------------------------------ */
 /* What things are called                                               */
@@ -239,8 +240,30 @@ export function colourNow(t, { only = false } = {}) {
   return blockColor(t.slug).fill
 }
 
-/** The look's own colour for it: what it is with nothing of yours on top. A preset's tag has none: no look tags a preset. */
-export const lookOwn = (t) => (t.kind === 'preset' ? null : t.kind === 'scene' ? lookById(lookId()).scenes[t.index] : lookColour(t.slug))
+/**
+ * The look's own colour for it: what it is with nothing of yours on top — for
+ * a scene, with the Scenes choice over the look (lib/sceneColors sceneBase),
+ * because that is what Back gives it. A preset's tag has none: no look tags a
+ * preset.
+ */
+export const lookOwn = (t) => (t.kind === 'preset' ? null : t.kind === 'scene' ? sceneBase(t.index).fill : lookColour(t.slug))
+
+/**
+ * Whether Play would draw this pick as a colour somebody picked rather than
+ * the look's own: what the sheet's tiles at the top are told, so they draw it
+ * the way Play will (lib/blockColors `picked` says why that matters). A pick
+ * for just this preset that is the colour every preset has is put away, not
+ * kept (paint, below), so it is drawn as every preset's is.
+ */
+export function pickIsPicked(t, pick, { only = false } = {}) {
+  if (!t || !pick || t.kind === 'preset') return false
+  if (t.kind === 'scene') {
+    /* What the scene falls back to when the pick is put away rather than kept. */
+    const under = within(t, only) !== null ? sceneColor(t.index) : sceneBase(t.index)
+    return !same(pick, under.fill) || !!under.picked
+  }
+  return !same(pick, lookOwn(t))
+}
 
 /** Your own colour for it, or null — this preset's own, when the sheet is painting just this one. */
 export function yoursFor(t, { only = false } = {}) {
@@ -290,13 +313,27 @@ export function sheetNote(t, { only = false } = {}) {
   return `For every ${inSentence(t.name)}, in every preset`
 }
 
-/** The words on the way back from a colour of your own: to the look's, to every preset's, or no tag at all. */
+/**
+ * The words on the way back from a colour of your own: to the look's, to every
+ * preset's, to what the Scenes choice gives a scene, or no tag at all.
+ */
 export function backWords(t, { only = false } = {}) {
   if (t.kind === 'preset') return 'Take the colour off'
   if (within(t, only) !== null) return 'Same as every preset'
+  if (t.kind === 'scene' && sceneBase(t.index).picked) return CHOICE_WORDS[sceneChoice()].back
   const look = lookById(lookId())
   return look.id === 'unit' ? 'Back to the unit’s colour' : `Back to ${look.name}’s colour`
 }
+
+/*
+ * What the first square of a scene's grid, and the way back to it, are called
+ * when the Scenes choice gave the scene its colour rather than the look: it is
+ * not the unit's colour then, and "Unit" on it would be a fib.
+ */
+const CHOICE_WORDS = Object.freeze({
+  red: Object.freeze({ name: 'Red', said: 'red, like the unit', back: 'Back to red, like the unit' }),
+  each: Object.freeze({ name: 'Each', said: 'the colour for each scene', back: 'Back to the colour for each scene' })
+})
 
 /**
  * The two answers to "which presets?", for a scene painted while a preset is
@@ -380,8 +417,13 @@ export function sheetSwatches(t) {
   if (t.kind === 'preset') return TAG_SWATCHES.map((s) => ({ ...s, said: s.name }))
   const scene = t.kind === 'scene'
   const lookName = lookById(lookId()).name
+  const chosen = scene && sceneBase(t.index).picked ? CHOICE_WORDS[sceneChoice()] : null
   return swatchesFor(lookOwn(t), { scene }).map((s) =>
-    s.own ? { ...s, name: lookId() === 'unit' ? 'Unit' : 'Look', said: lookId() === 'unit' ? 'the unit’s own colour' : `${lookName}’s own colour` } : { ...s, said: s.name }
+    !s.own
+      ? { ...s, said: s.name }
+      : chosen
+        ? { ...s, name: chosen.name, said: chosen.said }
+        : { ...s, name: lookId() === 'unit' ? 'Unit' : 'Look', said: lookId() === 'unit' ? 'the unit’s own colour' : `${lookName}’s own colour` }
   )
 }
 
@@ -642,14 +684,19 @@ export function lookCard(id, palette = currentPaletteId()) {
 /** The looks, in the order the page offers them, with Fractal Remote second. */
 export const LOOK_ORDER = Object.freeze(LOOKS.map((l) => l.id))
 
+/** Why somebody would wear a look, in the words that are true of this kind of unit (blockPalettes whyByUnit). */
+export const lookWhy = (look, palette = currentPaletteId()) => look?.whyByUnit?.[palette] || look?.why || ''
+
 /**
  * The line under the Settings row: "Match my unit · AM4 colours", "Sunlight ·
  * 2 of your own". `unitName` is the connected unit's own name where there is
  * one, which is shorter and truer than the three a gen-3 palette covers.
+ * `capabilities` is the unit's, so the count is of the scenes the page shows
+ * (pageSceneCount), as the page's own count is.
  */
-export function coloursStatus({ unitName, palette = currentPaletteId() } = {}) {
+export function coloursStatus({ unitName, palette = currentPaletteId(), capabilities } = {}) {
   const look = lookById(lookId())
-  const count = ownColourCount()
+  const count = ownColourCount({ scenes: pageSceneCount(capabilities) })
   const whose = unitName || PALETTE_NAMES[palette] || PALETTE_NAMES.gen3
   return [look.name, look.id === 'unit' ? `${whose} colours` : null, count ? `${count} of your own` : null].filter(Boolean).join(' · ')
 }
@@ -660,22 +707,26 @@ export function coloursStatus({ unitName, palette = currentPaletteId() } = {}) {
 
 const allRed = (fills) => fills.every((f) => String(f).toLowerCase() === SCENE_RED)
 
-/** Whether every scene is drawn red now, as on the unit. */
-export const scenesAllRed = () => allRed(Array.from({ length: SCENE_SLOTS }, (_, i) => sceneColor(i).fill))
+/** Whether every scene the unit has is drawn red now, as on the unit: eight before a unit has said (pageSceneCount). */
+export const scenesAllRed = (count = SCENE_SLOTS) => allRed(Array.from({ length: count }, (_, i) => sceneColor(i).fill))
 
 /**
- * "All red, like the unit" or "A colour for each scene", as one write.
+ * "All red, like the unit" or "A colour for each scene".
  *
- * Whichever of the two the look already is, choosing it puts your scene
- * colours away. The other one is written as your own: all red on a look that
- * gives each scene a colour, or a colour each — the look's eight if it has
- * them, Colour-blind safe's if it is all red — on one that does not.
+ * ONE CHOICE, kept as one (lib/looks sceneChoice): all red over a look that
+ * gives each scene a colour, or a colour each — Colour-blind safe's eight —
+ * over one that is all red, and nothing at all when the look already is what
+ * was chosen. It used to be written as eight colours of yours, and the page
+ * then said "8 of your own colours on top" to an AM4 owner with four scenes
+ * who had tapped one choice, and marked every scene "yours".
+ *
+ * Either way the scenes you painted one by one, for every preset, are put
+ * away, because "All red" means all red; one preset's own scene colours are
+ * that preset's and stay.
  */
 export function chooseScenes(each, storage) {
-  const look = lookById(lookId())
-  const lookRed = allRed(look.scenes)
-  if (each === !lookRed) return setScenes(Array(SCENE_SLOTS).fill(null), storage)
-  return setScenes(each ? [...lookById('cvd').scenes] : Array(SCENE_SLOTS).fill(SCENE_RED), storage)
+  const lookRed = allRedLook(lookById(lookId()))
+  return setSceneChoice(each === !lookRed ? null : each ? 'each' : 'red', { clearScenes: true }, storage)
 }
 
 /* ------------------------------------------------------------------ */
@@ -703,9 +754,16 @@ export const OFF_GREY = Object.freeze({
  * opposite of the picture beside it.
  */
 export const OFF_WORDS = Object.freeze({
-  colour: 'A faint wash of the effect’s own colour, with an edge in it, so you still know which it is.',
+  colour: 'A faint wash of the effect’s own colour with an edge in that colour, so you still know which it is.',
   grey: 'Greyed out, with a grey edge, the way the unit draws an effect that is off.'
 })
+
+/**
+ * What "Put every colour back" puts back, under the button on both ends. It
+ * said "Match my unit, the unit’s colours, and …", which is Match my unit
+ * said twice.
+ */
+export const PUT_BACK_WORDS = 'Back to Match my unit: every scene red, switched-off effects in their own colour'
 
 /** The one-time line on Play after the colours changed, for somebody who had the app before. */
 export const COLOURS_NOTICE = 'Colours now match your unit · Settings → Colours'

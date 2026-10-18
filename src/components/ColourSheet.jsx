@@ -17,6 +17,7 @@ import {
   nextToWarning,
   offAmber,
   paint,
+  pickIsPicked,
   shadeOf,
   shadeWords,
   shades,
@@ -184,6 +185,8 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
      though a step lighter or darker from it may be (shades keeps a scene's
      steps off the amber). */
   const refused = !!(free && free.amber && pick === free.fill)
+  /* Drawn as Play will draw it: a colour of his own at full strength in every look (lib/colourPage pickIsPicked). */
+  const picked = open ? pickIsPicked(target, pick, { only }) : false
 
   /* What the pick is called, for the line under the tiles. */
   const named = swatches.find((s) => s.fill === base)
@@ -318,6 +321,7 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
                     tabIndex={-1}
                     className={`gig-scene named${lit ? ' current' : ''}`}
                     style={{ '--scene-fill': pick, '--scene-ink': inkOn(pick) }}
+                    data-picked={picked ? 'yes' : undefined}
                   >
                     <span className="gig-scene-num mono">{target.index + 1}</span>
                     {/* The scene's own name where it has one, as Play draws it. */}
@@ -353,6 +357,35 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
               cannot have it, is said under the Any colour box rather than
               here: that is where the eye is when it matters. */}
           <p className="colour-said">{shadeWords(capital(baseName), step)}</p>
+
+          {/*
+            THE NEIGHBOUR LINE, right under the name of the pick, where the eye
+            is when a swatch has just been clicked — it sat under the grid, and
+            in a phone-sized window that is below the bottom of the panel.
+            Its room is kept when there is nothing to say (two lines, which
+            the colour-blind one takes in a narrow window), so the buttons
+            under it never jump as a swatch is tried. The phone's, in the same
+            place.
+          */}
+          <p className="colour-warning" aria-live="polite">
+            {warning || ''}
+          </p>
+
+          {/*
+            LIGHTER AND DARKER, three steps each way at most, and only as far
+            as the letters still read and an unlit tile still shows on the
+            black stage. Where a way has nothing left, its button rests: red
+            has no Darker at all. Up here beside the pick they change, not
+            under two dozen swatches.
+          */}
+          <div className="colour-steps">
+            <button type="button" aria-label="A step darker" disabled={step <= -steps.darker.length} onClick={() => setStep(step - 1)}>
+              Darker
+            </button>
+            <button type="button" aria-label="A step lighter" disabled={step >= steps.lighter.length} onClick={() => setStep(step + 1)}>
+              Lighter
+            </button>
+          </div>
 
           {/*
             EVERY PRESET, OR JUST THIS ONE, for a scene painted while a preset
@@ -408,21 +441,6 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
                 </button>
               )
             })}
-          </div>
-
-          {/*
-            LIGHTER AND DARKER, three steps each way at most, and only as far
-            as the letters still read and an unlit tile still shows on the
-            black stage. Where a way has nothing left, its button rests: red
-            has no Darker at all.
-          */}
-          <div className="colour-steps">
-            <button type="button" aria-label="A step darker" disabled={step <= -steps.darker.length} onClick={() => setStep(step - 1)}>
-              Darker
-            </button>
-            <button type="button" aria-label="A step lighter" disabled={step >= steps.lighter.length} onClick={() => setStep(step + 1)}>
-              Lighter
-            </button>
           </div>
 
           {/*
@@ -483,12 +501,6 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
               </p>
             </div>
           )}
-
-          {/* The neighbour line. Its room is kept when there is nothing to
-              say, so the buttons under it never jump as a swatch is tried. */}
-          <p className="colour-warning" aria-live="polite">
-            {warning || ''}
-          </p>
         </>
       ) : null}
     </ColourPanel>

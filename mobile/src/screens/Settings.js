@@ -577,7 +577,7 @@ export default function Settings({
               onPress={() => setPage('appearance')}
             />
             {/* "Let's make the colors match better", and choose your own. */}
-            <SetupRow title="Colours" status={coloursStatus({ unitName: deviceName })} onPress={() => setPage('colours')} />
+            <SetupRow title="Colours" status={coloursStatus({ unitName: deviceName, capabilities: caps })} onPress={() => setPage('colours')} />
             {/* Light or dark right here: one tap, not a page to open for it. */}
             <View style={{ paddingVertical: space.md }}>
               <Appearance />

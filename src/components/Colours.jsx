@@ -8,10 +8,12 @@ import { sceneColor } from '../lib/sceneColors'
 import {
   FAMILY_NAMES,
   OFF_WORDS,
+  PUT_BACK_WORDS,
   UNDO_MS,
   chooseScenes,
   familyTarget,
   lookCard,
+  lookWhy,
   pageSceneCount,
   presetFamilies,
   sceneTarget,
@@ -67,7 +69,10 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
   const [asking, setAsking] = useState(null)
   /* "Now: Sunlight · Undo", and what Undo puts back. Belongs to this page: leaving it takes the offer with it. */
   const [undo, setUndo] = useState(null)
-  const own = ownColourCount()
+  /* As many scene tiles as the unit has (an AM4 has four), and the count and the choice are of those. */
+  const sceneCount = pageSceneCount(capabilities)
+  const own = ownColourCount({ scenes: sceneCount })
+  const allRed = scenesAllRed(sceneCount)
 
   const wear = (id) => {
     const done = wearLook(id)
@@ -165,18 +170,18 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
         */}
         <div className="colours-choices" role="radiogroup" aria-labelledby="colours-scenes">
           <label className="rename-choice">
-            <input type="radio" name="colours-scenes" checked={scenesAllRed()} onChange={() => chooseScenes(false)} />
+            <input type="radio" name="colours-scenes" checked={allRed} onChange={() => chooseScenes(false)} />
             <span>All red, like the unit</span>
           </label>
           <label className="rename-choice">
-            <input type="radio" name="colours-scenes" checked={!scenesAllRed()} onChange={() => chooseScenes(true)} />
+            <input type="radio" name="colours-scenes" checked={!allRed} onChange={() => chooseScenes(true)} />
             <span>A colour for each scene</span>
           </label>
         </div>
         {/* Lit, every one, so each one's colour can be seen: on Play only the
             live one is. As many as the unit has (an AM4 has four). */}
         <div className="gig colours-scenes">
-          {Array.from({ length: pageSceneCount(capabilities) }, (_, i) => {
+          {Array.from({ length: sceneCount }, (_, i) => {
             const hue = sceneColor(i)
             return (
               <button
@@ -184,6 +189,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
                 type="button"
                 className="gig-scene current named"
                 style={{ '--scene-fill': hue.fill, '--scene-ink': hue.ink }}
+                data-picked={hue.picked ? 'yes' : undefined}
                 aria-label={`Scene ${i + 1}${sceneNames?.[i] ? ` — ${sceneNames[i]}` : ''}${yourScene(i) ? ', your colour' : ''}`}
                 onClick={() => setPainting(sceneTarget(i, { preset, called: sceneNames?.[i] }))}
               >
@@ -213,7 +219,7 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
       <section className="colours-section">
         <button type="button" className="colours-putback" onClick={() => setAsking('all')}>
           <span>Put every colour back</span>
-          <span className="hint">Match my unit, the unit’s colours, and switched-off effects in their own colour</span>
+          <span className="hint">{PUT_BACK_WORDS}</span>
         </button>
         <p className="hint">{kept}</p>
       </section>
@@ -294,7 +300,7 @@ function LookCard({ look, on, onWear }) {
           <span className="colours-look-name">{look.name}</span>
           {on ? <span className="colours-look-on">✓ Wearing</span> : null}
         </span>
-        <span className="colours-look-why">{look.why}</span>
+        <span className="colours-look-why">{lookWhy(look)}</span>
       </label>
       <span className="gig colours-look-tiles" aria-hidden="true">
         {tiles.map((t) =>

@@ -60,8 +60,9 @@
  * unit, so it is not mistaken for an amp or a wah.
  *
  * Not apart from the plumbing, though. Fractal gives Return a blue-grey too
- * (#394048 in the editors), and lifted for the stage that sits 2.7 from this;
- * the utility greys — shunt, Scene MIDI — are 6. An unknown block and a Return look alike
+ * (#394048 in the gen-3 editors, #394049 in gen-2's), and lifted for the
+ * stage that sits 2.7 from this (1.9 on gen-2, whose Return is #5f6670); the
+ * utility greys — shunt, Scene MIDI — are 6. An unknown block and a Return look alike
  * and are told apart by the name on the tile, which is how anybody tells two
  * of the greys apart on the unit itself.
  */
@@ -154,7 +155,7 @@ export const PALETTES = Object.freeze({
     delay: '#2266b6', // the editors' picture #14457e, lifted
     reverb: '#8349bc', // the editors' picture #562e7e, lifted
     comp: '#776a00', // the editors' picture #776a00
-    chorus: '#257ea0', // the editors' picture #2784a8, lifted
+    chorus: '#257ea0', // the editors' picture #2784a8, a shade darker
     flanger: '#974d7a', // the editors' picture #6a3455, lifted
     phaser: '#23751d', // the editors' picture #185814, lifted
     wah: '#666666', // the editors' picture #494949, lifted
@@ -202,46 +203,46 @@ export const PALETTES = Object.freeze({
     fxloop: '#696181' // no gen-3 block; the gen-2 editors' picture #3b364a, lifted
   }),
   am4: Object.freeze({
-    drive: '#ce0201', // the AM4 manual's picture, the bright end of its tile
+    drive: '#ce0201', // the AM4 manual's picture, the bright end of its tile, #920000, lifted
     /* Silver off the AM4, taken a few shades deeper: at #b9bec6 an amp that
        was ON read as switched off next to the pale off tiles on Play. */
     amp: '#7d8591',
-    delay: '#1451ff', // the AM4 manual's picture, the bright end of its tile
-    reverb: '#8520ff', // the AM4 manual's picture, the bright end of its tile
+    delay: '#1451ff', // the AM4 manual's picture, the bright end of its tile, #0000c2, lifted
+    reverb: '#8520ff', // the AM4 manual's picture, the bright end of its tile, #6200c3, lifted
     comp: '#867502', // the unit's #a59100, darkened just enough to carry white letters, as the unit does
     chorus: '#037ea8', // the unit's #0092c2, darkened just enough to carry white letters, as the unit does
-    flanger: '#a93a87', // the AM4 manual's picture, the bright end of its tile
+    flanger: '#a93a87', // the AM4 manual's picture, the bright end of its tile, #933175, lifted
     phaser: '#018901', // the unit's #009e00, darkened just enough to carry white letters, as the unit does
-    wah: '#506691', // the AM4 manual's picture, the bright end of its tile
-    filter: '#a8416b', // the AM4 manual's picture, the bright end of its tile
+    wah: '#506691', // the AM4 manual's picture, the bright end of its tile, #455a84, lifted
+    filter: '#a8416b', // the AM4 manual's picture, the bright end of its tile, #96395f, lifted
     cab: '#0e7365', // not on this unit; borrowed from gen-3
-    geq: '#5c4aec', // the AM4 manual's picture, the bright end of its tile
+    geq: '#5c4aec', // the AM4 manual's picture, the bright end of its tile, #3a1bae, lifted
     /* The unit's #b96d00 takes white letters like every tile on the AM4's
        screen, but darkened at its own hue for them it lands on the app's
        Light-page amber (0.7 from it). So it is darkened a step towards red
        instead, about 17°: white letters at 5:1, and 10 clear of all three
        ambers. */
     peq: '#b7510b',
-    tremolo: '#056f89', // the unit's, kept a step darker than Chorus, as the unit draws it
-    rotary: '#825f3f', // the AM4 manual's picture #865d35, a shade off the browser's Light-page amber
-    pitch: '#8e843a', // not on an AM4; the VP4 manual's picture, the bright end of its tile
-    synth: '#167542', // not on an AM4; the VP4 manual's picture, the bright end of its tile
-    multitap: '#03717c', // not on an AM4; the VP4 manual's picture, the bright end of its tile
-    megatap: '#566d3b', // not on an AM4; the VP4 manual's picture, the bright end of its tile
-    plex: '#0070b0', // not on an AM4; the VP4 manual's picture, the bright end of its tile
-    gate: '#806202', // the unit's, kept a step darker than Comp, as the unit draws it
-    volpan: '#706f5f', // the AM4 manual's picture, the bright end of its tile
+    tremolo: '#056f89', // the unit's #005f75, lifted, and kept a step darker than Chorus, as the unit draws it
+    rotary: '#825f3f', // the AM4 manual's picture #5a3406, lifted, and a shade off the browser's Light-page amber
+    pitch: '#8e843a', // not on an AM4; the VP4 manual's picture #8a8037, lifted
+    synth: '#167542', // not on an AM4; the VP4 manual's picture #147341, lifted
+    multitap: '#03717c', // not on an AM4; the VP4 manual's picture #00434a, lifted
+    megatap: '#566d3b', // not on an AM4; the VP4 manual's picture #42542c, lifted
+    plex: '#0070b0', // not on an AM4; the VP4 manual's picture #0070b0
+    gate: '#806202', // the unit's #997500, darkened a step, as the unit draws it a step darker than Comp
+    volpan: '#706f5f', // the AM4 manual's picture #706f5f
     mixer: '#5e6f8c', // not on this unit; borrowed from gen-3
     looper: '#3d6c7e', // not on this unit; borrowed from gen-3
-    enhancer: '#646194', // the AM4 manual's picture, the bright end of its tile
+    enhancer: '#646194', // the AM4 manual's picture #646194
     input: '#000066', // not on this unit; the gen-3 ends, drawn as an outline
     output: '#003300', // not on this unit; the gen-3 ends, drawn as an outline
-    ringmod: '#6b7b4f', // not on an AM4; the VP4 manual's picture, the bright end of its tile
-    formant: '#a26451', // not on an AM4; the VP4 manual's picture, the bright end of its tile
+    ringmod: '#6b7b4f', // not on an AM4; the VP4 manual's picture #6f8052, a shade darker for its letters
+    formant: '#a26451', // not on an AM4; the VP4 manual's picture #895444, lifted
     multicomp: '#ad4246', // not on this unit; borrowed from gen-3
     crossover: '#62898d', // not on this unit; borrowed from gen-3
     tentap: '#a73e7f', // not on this unit; borrowed from gen-3
-    resonator: '#894e9d', // not on an AM4; the VP4 manual's picture, the bright end of its tile
+    resonator: '#894e9d', // not on an AM4; the VP4 manual's picture #60356e, lifted
     send: '#7c5e5e', // not on this unit; borrowed from gen-3
     return: '#5f676f', // not on this unit; borrowed from gen-3
     multiplexer: '#5c695b', // not on this unit; borrowed from gen-3
@@ -267,31 +268,31 @@ export const PALETTES = Object.freeze({
     chorus: '#037ea8', // the unit's #0092c2, darkened just enough to carry white letters, as the unit does
     flanger: '#a93a87', // the same tile as the AM4's
     phaser: '#018901', // the unit's #009e00, darkened just enough to carry white letters, as the unit does
-    wah: '#646575', // the VP4 manual's picture, the bright end of its tile
+    wah: '#646575', // the VP4 manual's picture, the bright end of its tile, #595a6b, lifted
     filter: '#a8416b', // the same tile as the AM4's
     cab: '#0e7365', // not on this unit; borrowed from gen-3
     geq: '#5c4aec', // the same tile as the AM4's
     peq: '#b7510b', // the same tile as the AM4's, a step towards red for its white letters
     tremolo: '#056f89', // the unit's, kept a step darker than Chorus, as the unit draws it
     rotary: '#825f3f', // the same tile as the AM4's
-    pitch: '#8e843a', // the VP4 manual's picture, the bright end of its tile
-    synth: '#167542', // the VP4 manual's picture, the bright end of its tile
-    multitap: '#03717c', // the VP4 manual's picture, the bright end of its tile
-    megatap: '#566d3b', // the VP4 manual's picture, the bright end of its tile
-    plex: '#0070b0', // the VP4 manual's picture, the bright end of its tile
-    gate: '#806202', // the unit's, kept a step darker than Comp, as the unit draws it
+    pitch: '#8e843a', // the VP4 manual's picture, the bright end of its tile, #8a8037, lifted
+    synth: '#167542', // the VP4 manual's picture, the bright end of its tile, #147341, lifted
+    multitap: '#03717c', // the VP4 manual's picture, the bright end of its tile, #00434a, lifted
+    megatap: '#566d3b', // the VP4 manual's picture, the bright end of its tile, #42542c, lifted
+    plex: '#0070b0', // the VP4 manual's picture, the bright end of its tile, #0070b0
+    gate: '#806202', // the same tile as the AM4's, darkened a step like it
     volpan: '#706f5f', // the same tile as the AM4's
     mixer: '#5e6f8c', // not on this unit; borrowed from gen-3
     looper: '#3d6c7e', // not on this unit; borrowed from gen-3
     enhancer: '#646194', // the same tile as the AM4's
     input: '#000066', // not on this unit; the gen-3 ends, drawn as an outline
     output: '#003300', // not on this unit; the gen-3 ends, drawn as an outline
-    ringmod: '#6b7b4f', // the VP4 manual's picture, the bright end of its tile
-    formant: '#a26451', // the VP4 manual's picture, the bright end of its tile, a step lighter to stay apart from its neighbour
+    ringmod: '#6b7b4f', // the VP4 manual's picture, the bright end of its tile, #6f8052, a shade darker for its letters
+    formant: '#a26451', // the VP4 manual's picture, the bright end of its tile, #895444, lifted a step further to stay apart from its neighbour
     multicomp: '#ad4246', // not on this unit; borrowed from gen-3
     crossover: '#62898d', // not on this unit; borrowed from gen-3
     tentap: '#a73e7f', // not on this unit; borrowed from gen-3
-    resonator: '#894e9d', // the VP4 manual's picture, the bright end of its tile
+    resonator: '#894e9d', // the VP4 manual's picture, the bright end of its tile, #60356e, lifted
     send: '#7c5e5e', // not on this unit; borrowed from gen-3
     return: '#5f676f', // not on this unit; borrowed from gen-3
     multiplexer: '#5c695b', // not on this unit; borrowed from gen-3
@@ -312,17 +313,17 @@ export const PALETTES = Object.freeze({
     delay: '#0063cb', // the gen-2 editors' picture #003777, lifted
     reverb: '#7d4bc1', // the gen-2 editors' picture #5c3690, lifted
     comp: '#776a00', // the gen-2 editors' picture #776a00
-    chorus: '#257ea0', // the gen-2 editors' picture #2784a8, lifted
+    chorus: '#257ea0', // the gen-2 editors' picture #2784a8, a shade darker
     flanger: '#b05198', // the gen-2 editors' picture #6e305e, lifted
     phaser: '#23751e', // the gen-2 editors' picture #195915, lifted
     wah: '#636765', // the gen-2 editors' picture #525654, lifted
-    filter: '#ab5d7c', // the gen-2 editors' picture #af5f7f, lifted
+    filter: '#ab5d7c', // the gen-2 editors' picture #af5f7f, a shade darker
     cab: '#4b6c6c', // the gen-2 editors' picture #1e2e2e, lifted
     geq: '#676091', // the gen-2 editors' picture #363152, lifted
     peq: '#d3732a', // the gen-2 editors' #9e5c20, made lighter like gen-3's: kept clear of the app's amber
     tremolo: '#367b87', // the gen-2 editors' picture #1e4b53, lifted
     rotary: '#73644e', // the gen-2 editors' picture #483a26, lifted
-    pitch: '#7f7550', // the gen-2 editors' picture #807651, lifted
+    pitch: '#7f7550', // the gen-2 editors' picture #807651, a shade darker
     synth: '#427136', // the gen-2 editors' picture #39622e, lifted
     multitap: '#536497', // the gen-2 editors' picture #1a2444, lifted
     megatap: '#496e59', // the gen-2 editors' picture #203429, lifted
@@ -335,7 +336,7 @@ export const PALETTES = Object.freeze({
     volpan: '#696656', // the gen-2 editors' picture #4f4d40, lifted
     mixer: '#7084a5', // the gen-2 editors' picture #6c80a2, lifted
     looper: '#246f79', // the gen-2 editors' picture #0c3439, lifted
-    enhancer: '#767099', // the gen-2 editors' picture #7b769d, lifted
+    enhancer: '#767099', // the gen-2 editors' picture #7b769d, a shade darker
     input: '#2b2a2b', // the gen-2 editors' picture #2b2a2b, as it is: drawn as an outline
     output: '#312f31', // the gen-2 editors' picture #312f31, as it is: drawn as an outline
     ringmod: '#8c5474', // the gen-2 editors' picture #4a2a3c, lifted
@@ -403,6 +404,14 @@ export const paletteFor = (deviceSlug) => BY_SLUG[String(deviceSlug || '').toLow
  * why this look is the one the readability tests leave alone and a test pins
  * to these exact values instead. Only an unknown block differs, because the
  * old answer for one was the CSS variable the phone could not draw.
+ *
+ * And "unknown" means unknown to the old table, by the old table's own
+ * spellings. The names learned since — the Axe-Fx II's "Tremolo/Panner",
+ * "Graphic EQ", "Gate/Expander" and the rest in ALIASES — find their family
+ * in every other look, but this one is the app as it was, and as it was they
+ * had no colour: they are NEUTRAL here, the colour the old blank became
+ * (lib/blockColors). Giving them their family's old colour would be a nicer
+ * look, and not the one Justin asked to keep.
  *
  * What the old file said about them, kept with them:
  *
@@ -521,6 +530,14 @@ const every = (fill) => Object.freeze(Object.fromEntries(FAMILIES.map((f) => [f,
  * as far from its neighbours as before. And three more by a shade (1 to 2.3)
  * once the browser's darker Light-page amber was checked as well: the
  * colour-blind look's drive, Stompbox's cab, and its rotary again.
+ *
+ * And two oranges a step redder again, once the tile was measured as it is
+ * DRAWN rather than flat: the edit strip lightens the top of a tile with
+ * black letters by an eighth of white, and the top of Stompbox's phaser and
+ * Sunlight's ring mod came to 7.0 from the amber ring that marks the
+ * selected block (#ea8419 and #f58403 were 10.6 and 11.0 flat). Both are
+ * about 4 round towards red now, the top 10.7 clear, and neither is any
+ * nearer the rest of its look than it was.
  */
 const COLOUR_BLIND = Object.freeze({
   drive: '#b84e02',
@@ -599,7 +616,7 @@ const SUNLIGHT = Object.freeze({
   enhancer: '#079c2d',
   input: '#b8bcc2',
   output: '#b8bcc2',
-  ringmod: '#f58403',
+  ringmod: '#f97a07',
   formant: '#83878c',
   multicomp: '#ccbf0c',
   crossover: '#b8bcc2',
@@ -628,7 +645,7 @@ const STOMPBOX = Object.freeze({
   comp: '#0275ba',
   chorus: '#28a5c1',
   flanger: '#ab559b',
-  phaser: '#ea8419',
+  phaser: '#f17e20',
   wah: '#c0c4ca',
   filter: '#55ba64',
   cab: '#8f6548',
@@ -678,12 +695,21 @@ const red = Object.freeze(Array(8).fill(SCENE_RED))
  * has it, is the colour for the unit you are on, and wins. `scenes` is the
  * eight scene colours. No brand names anywhere, in a name or in a why: these
  * go in front of the App Store's reviewers too.
+ *
+ * `whyByUnit`, where a look has it, is the line for a kind of unit its usual
+ * one would not be true of (lib/colourPage lookWhy). The Axe-Fx II has no
+ * scene switch that lights red — it cannot use an FC, and its MFC-101's
+ * switches are green or red for on or off — so "like the scene switches" is
+ * not said to an Axe-Fx II owner.
  */
 export const LOOKS = Object.freeze([
   {
     id: 'unit',
     name: 'Match my unit',
     why: 'Each effect in the colour your unit gives it, a little brighter where a dark one would be lost on a dark stage. Every scene is red, like the scene switches.',
+    whyByUnit: Object.freeze({
+      gen2: 'Each effect in the colour your unit’s editor gives it, a little brighter where a dark one would be lost on a dark stage. Every scene is red, like the newer units’ scene switches.'
+    }),
     families: PALETTES.gen3,
     byUnit: PALETTES,
     scenes: red
@@ -697,12 +723,23 @@ export const LOOKS = Object.freeze([
   },
   {
     /* The FC system's defaults: every Effect switch Cyan (led-ring-cyan.svg),
-       every Scene switch Red. The AM4 and VP4 light Effects mode blue. */
+       every Scene switch Red. The AM4 and VP4 light Effects mode blue.
+
+       Not the Axe-Fx II's: it cannot use an FC. Its MFC-101 lights an effect
+       that is on green and one that is off red ("GREEN: Present & Active;
+       RED: Present & Bypassed", the MFC-101 Owner's Manual), so its effects
+       here are Fractal's own ring Green — the off ones the faint wash of it
+       that every look draws, or grey. Its scenes keep the red of the newer
+       units, which is the app's choice and not the MFC's, and its line says
+       so rather than claim a red scene switch it does not have. */
     id: 'rings',
     name: 'Footswitch lights',
     why: 'What your feet see: every effect switch lights the same colour and every scene switch red. Effects are told apart by their names.',
+    whyByUnit: Object.freeze({
+      gen2: 'What your feet see: the MFC-101 lights an effect that is on green, so every effect is green, told apart by its name. Scenes are red, like the newer units’.'
+    }),
     families: every('#00ccff'),
-    byUnit: Object.freeze({ gen3: every('#00ccff'), gen2: every('#00ccff'), am4: every('#0098ff'), vp4: every('#0098ff') }),
+    byUnit: Object.freeze({ gen3: every('#00ccff'), gen2: every('#66cc33'), am4: every('#0098ff'), vp4: every('#0098ff') }),
     scenes: red
   },
   {

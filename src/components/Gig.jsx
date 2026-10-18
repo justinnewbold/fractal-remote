@@ -1107,6 +1107,9 @@ export default function Gig({
                  In this preset's own colour where it has one ("Just this
                  preset"), then yours for every preset, then the look's. */
               style={{ '--scene-fill': sceneColor(i, preset?.number).fill, '--scene-ink': sceneColor(i, preset?.number).ink }}
+              /* A colour somebody picked, which Fractal Remote draws at full
+                 strength like every other look (styles.css, data-picked). */
+              data-picked={sceneColor(i, preset?.number).picked ? 'yes' : undefined}
               /* The word "Scene" belongs in the label even though it is left
                  off the face, for the same reason the group is named: a bare
                  "3" is not a control anyone can identify. */

@@ -19,6 +19,14 @@
  * in Fractal Remote, the app's look as it always was, which keeps the letters
  * it always had.
  *
+ * A colour somebody picked comes back marked `picked`, because Fractal
+ * Remote is DRAWN as it always was too — the phone lifts its colours (Tile)
+ * and the browser's edit strip shades them the old way — and that is right
+ * for the look's own colours only. A player's pink drive on top of it is his
+ * colour, chosen on a sheet that showed it as it is, with letters picked for
+ * it as it is: lifted, his white came out grey and his blues lost their
+ * letters. So the two ends draw a picked colour as picked, in every look.
+ *
  * Asked once per tile per render, so the answer is kept until the looks or
  * the unit change: after that it is an object lookup.
  */
@@ -29,9 +37,16 @@ import { currentPaletteId, lookId, looksVersion, yourFamily } from './looks.js'
 let keptFor = null
 const kept = new Map()
 
-/* Steps 2 to 4: what a look paints a family on a kind of unit, yours aside. */
+/*
+ * Steps 2 to 4: what a look paints a family on a kind of unit, yours aside.
+ *
+ * Fractal Remote by the spelling that came, never by the family it belongs
+ * to: the old table knew "volpan" and not the Axe-Fx II's "Volume/Pan", and
+ * the look as it was gave that block no colour. So it is NEUTRAL here, the
+ * colour the old blank became, and every other look finds it its family.
+ */
 function fromLook({ key, family }, id, palette) {
-  if (id === FRACTAL_REMOTE_LOOK) return FRACTAL_REMOTE[key] || FRACTAL_REMOTE[family] || NEUTRAL
+  if (id === FRACTAL_REMOTE_LOOK) return FRACTAL_REMOTE[key] || NEUTRAL
   const look = lookById(id)
   const forUnit = look.byUnit?.[palette]
   const fill = forUnit?.[key] || forUnit?.[family] || look.families[key] || look.families[family]
@@ -42,7 +57,7 @@ function resolve(slug) {
   const found = familyOf(slug)
   if (!found) return NEUTRAL
   const own = yourFamily(found.family)
-  if (own) return Object.freeze({ fill: own, ink: inkOn(own) })
+  if (own) return Object.freeze({ fill: own, ink: inkOn(own), picked: true })
   return fromLook(found, lookId(), currentPaletteId())
 }
 

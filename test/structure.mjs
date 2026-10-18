@@ -5703,7 +5703,7 @@ export function run(test) {
     const play = front.slice(front.indexOf('setup-group">Play screen<'))
     assert.match(
       play,
-      /title="Tiles & scenes"[\s\S]*?<SetupRow key="colours" title="Colours" status=\{coloursStatus\(\{ unitName: device\?\.short \|\| device\?\.name \|\| undefined \}\)\} onClick=\{\(\) => setSetupPage\('colours'\)\} \/>[\s\S]*?<Theme \/>/,
+      /title="Tiles & scenes"[\s\S]*?<SetupRow key="colours" title="Colours" status=\{coloursStatus\(\{ unitName: device\?\.short \|\| device\?\.name \|\| undefined, capabilities: device\?\.capabilities \}\)\} onClick=\{\(\) => setSetupPage\('colours'\)\} \/>[\s\S]*?<Theme \/>/,
       'the Colours row is not between Tiles & scenes and light or dark, as on the phone'
     )
     assert.match(src, /\n  colours: 'Colours',\n/, 'the Colours page has no name of its own in SETUP_PAGES')
@@ -5744,8 +5744,11 @@ export function run(test) {
     assert.match(page, /onChange=\{\(\) => chooseScenes\(true\)\}/)
     assert.match(page, /onClick=\{\(\) => setPainting\(familyTarget\(f\)\)\}/, 'an effect tile does not open the colour sheet')
     assert.match(page, /onClick=\{\(\) => setPainting\(sceneTarget\(i, \{ preset, called: sceneNames\?\.\[i\] \}\)\)\}/, 'a scene tile does not open the colour sheet, with the preset that is loaded and the scene’s own name')
-    /* As many scenes as the unit has: an AM4's four, not eight. */
-    assert.match(page, /Array\.from\(\{ length: pageSceneCount\(capabilities\) \}/, 'the page draws eight scenes whatever the unit has')
+    /* As many scenes as the unit has: an AM4's four, not eight — and the count of your own colours, and the choice, are of those four. */
+    assert.match(page, /const sceneCount = pageSceneCount\(capabilities\)/)
+    assert.match(page, /Array\.from\(\{ length: sceneCount \}/, 'the page draws eight scenes whatever the unit has')
+    assert.match(page, /const own = ownColourCount\(\{ scenes: sceneCount \}\)/, 'the page counts scenes the unit does not have')
+    assert.match(page, /const allRed = scenesAllRed\(sceneCount\)/)
     /* Both ways a switched-off effect is drawn, each beside a tile drawn that way. */
     assert.match(page, /<OffChoice\s+mode="colour"\s+label="Keep their colour"/)
     assert.match(page, /<OffChoice mode="grey" label="Grey when off"/)

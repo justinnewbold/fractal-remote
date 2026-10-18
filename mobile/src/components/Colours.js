@@ -8,10 +8,12 @@ import { blockColor } from '../lib/blockColors'
 import { sceneColor } from '../lib/sceneColors'
 import {
   FAMILY_NAMES,
+  PUT_BACK_WORDS,
   UNDO_MS,
   chooseScenes,
   familyTarget,
   lookCard,
+  lookWhy,
   OFF_WORDS,
   pageSceneCount,
   presetFamilies,
@@ -78,7 +80,9 @@ export default function Colours() {
   const [asking, setAsking] = useState(null)
   const [wide, setWide] = useState(0)
   const icons = loadIcons(sync)
-  const own = ownColourCount()
+  /* Of the scenes, only the ones this unit has: the page shows four on an AM4, and so does the count. */
+  const own = ownColourCount({ scenes: sceneCount })
+  const allRed = scenesAllRed(sceneCount)
 
   /* Undo belongs to this page: leaving it takes the offer with it. */
   useEffect(() => () => offerUndo(null), [])
@@ -91,6 +95,13 @@ export default function Colours() {
   /* Two across at TAP height, and four across for the scenes, as Play lays them out. */
   const half = wide ? Math.floor((wide - space.sm) / 2) : undefined
   const quarter = wide ? Math.floor((wide - space.sm * 3) / 4) : undefined
+  /*
+   * But two across on the narrowest phones, as Play draws its scenes there:
+   * at 320 wide a quarter is 66pt, and "IIC+ Hot Lead" came out "IIC+ Hot ..".
+   * "Scene names cut short" was the tester's complaint once already. From 72pt
+   * a quarter holds the AM4's and FM3's own names whole.
+   */
+  const sceneWidth = quarter !== undefined && quarter < 72 ? half : quarter
   const rest = unitFamilies().filter((f) => !chain.includes(f))
   const effectTile = (f) => {
     const hue = blockColor(f)
@@ -104,6 +115,7 @@ export default function Colours() {
         icon={icons ? blockIcon(f) : undefined}
         fill={hue.fill}
         ink={hue.ink}
+        picked={hue.picked}
         on
         height={TAP}
         onPress={() => setPainting(familyTarget(f))}
@@ -165,13 +177,13 @@ export default function Colours() {
           <Press
             label="All red, like the unit"
             tone="signal"
-            on={scenesAllRed()}
+            on={allRed}
             onPress={() => chooseScenes(false, sync)}
           />
           <Press
             label="A colour for each scene"
             tone="signal"
-            on={!scenesAllRed()}
+            on={!allRed}
             onPress={() => chooseScenes(true, sync)}
           />
         </View>
@@ -188,10 +200,11 @@ export default function Colours() {
                 wrap
                 fill={hue.fill}
                 ink={hue.ink}
+                picked={hue.picked}
                 on
                 height={TAP}
                 onPress={() => setPainting(sceneTarget(i, { preset: here, called: sceneNames?.[i] }))}
-                style={{ width: quarter }}
+                style={{ width: sceneWidth }}
               />
             )
           })}
@@ -215,11 +228,7 @@ export default function Colours() {
 
       {/* -------------------------------------------------------- put back */}
       <View style={{ gap: space.md }}>
-        <Press
-          label="Put every colour back"
-          sub="Match my unit, the unit’s colours, and switched-off effects in their own colour"
-          onPress={() => setAsking('all')}
-        />
+        <Press label="Put every colour back" sub={PUT_BACK_WORDS} onPress={() => setAsking('all')} />
         <Note>{`Your colours are kept on this ${deviceNoun()}. The computer’s screen keeps its own.`}</Note>
       </View>
 
@@ -273,7 +282,7 @@ function LookCard({ look, on, onPress }) {
     <Pressable
       accessibilityRole="radio"
       accessibilityState={{ checked: on }}
-      accessibilityLabel={`${look.name}. ${look.why}`}
+      accessibilityLabel={`${look.name}. ${lookWhy(look)}`}
       onPress={() => {
         tick()
         onPress()
@@ -292,7 +301,7 @@ function LookCard({ look, on, onPress }) {
         <Text style={{ flexShrink: 1, color: color.silk, fontSize: font.lead, fontWeight: '700' }}>{look.name}</Text>
         {on ? <Text style={{ color: color.signal, fontSize: font.small, fontWeight: '700' }}>✓ Wearing</Text> : null}
       </View>
-      <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>{look.why}</Text>
+      <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: 19 }}>{lookWhy(look)}</Text>
       <View
         pointerEvents="none"
         accessibilityElementsHidden
@@ -339,7 +348,7 @@ function OffChoice({ mode, label, sub }) {
       })}
     >
       <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <Tile label={shortName('drive')} topLeft="Off" effect offAs={mode} fill={hue.fill} ink={hue.ink} height={TAP} haptic={null} style={{ width: 84 }} />
+        <Tile label={shortName('drive')} topLeft="Off" effect offAs={mode} fill={hue.fill} ink={hue.ink} picked={hue.picked} height={TAP} haptic={null} style={{ width: 84 }} />
       </View>
       <View style={{ flex: 1, gap: space.xs }}>
         <Text style={{ color: color.silk, fontSize: font.body, fontWeight: '600' }}>{label}</Text>

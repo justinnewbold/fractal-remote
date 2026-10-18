@@ -31,22 +31,52 @@
  * you gave that one preset its own, which is what makes it learnable at all.
  *
  * In this order: this preset's colour for the scene, then your colour for it
- * in every preset, then the look's.
+ * in every preset, then the Scenes choice on the Colours page, then the
+ * look's. A colour that is not the look's own comes back `picked`, for the
+ * reason lib/blockColors gives: Fractal Remote is drawn the old way, and only
+ * its own colours are.
  */
-import { FRACTAL_REMOTE_LOOK, lookById } from './blockPalettes.js'
+import { FRACTAL_REMOTE_LOOK, SCENE_RED, lookById } from './blockPalettes.js'
 import { inkOn } from './ink.js'
-import { SCENE_SLOTS, colourUnit, lookId, looksVersion, yourScene } from './looks.js'
+import { SCENE_SLOTS, colourUnit, lookId, looksVersion, sceneChoice, yourScene } from './looks.js'
 
 let keptFor = null
 const kept = new Map()
 
+const slotOf = (i) => ((Number(i) % SCENE_SLOTS) + SCENE_SLOTS) % SCENE_SLOTS
+
+/** Whether a look draws every scene Fractal's red, as Match my unit and Footswitch lights do. */
+export const allRedLook = (look) => look.scenes.every((f) => f === SCENE_RED)
+
+/**
+ * A scene's colour with nothing of yours on it: the look's, or what the
+ * Colours page's Scenes choice puts over it.
+ *
+ * "All red, like the unit" on a look that gives each scene its own colour
+ * is Fractal's red on every one; "A colour for each scene" on a look that is
+ * all red is Colour-blind safe's eight, the ones picked to stay apart side by
+ * side. Either way it is ONE choice, kept as one (lib/looks sceneChoice), not
+ * eight colours of yours: "8 of your own colours" for one tap on an AM4 with
+ * four scenes was a count of something he never did. Asked of the look being
+ * worn, so a choice made on one look still means the same on the next.
+ *
+ * `picked` when the choice, not the look, gave it.
+ */
+export function sceneBase(i, { look = lookById(lookId()), choice = sceneChoice() } = {}) {
+  const slot = slotOf(i)
+  const red = allRedLook(look)
+  if (choice === 'red' && !red) return { fill: SCENE_RED, picked: true }
+  if (choice === 'each' && red) return { fill: lookById('cvd').scenes[slot], picked: true }
+  return { fill: look.scenes[slot], picked: false }
+}
+
 function resolve(slot, preset) {
   const own = (preset !== undefined && preset !== null && yourScene(slot, { preset })) || yourScene(slot)
-  if (own) return Object.freeze({ fill: own, ink: inkOn(own) })
-  const id = lookId()
-  const fill = lookById(id).scenes[slot]
+  if (own) return Object.freeze({ fill: own, ink: inkOn(own), picked: true })
+  const { fill, picked } = sceneBase(slot)
+  if (picked) return Object.freeze({ fill, ink: inkOn(fill), picked })
   /* The app's own look keeps the letters it always had: white on all eight. */
-  return Object.freeze({ fill, ink: id === FRACTAL_REMOTE_LOOK ? '#ffffff' : inkOn(fill) })
+  return Object.freeze({ fill, ink: lookId() === FRACTAL_REMOTE_LOOK ? '#ffffff' : inkOn(fill) })
 }
 
 /**
@@ -59,7 +89,7 @@ export function sceneColor(i, preset) {
     kept.clear()
     keptFor = stamp
   }
-  const slot = ((i % SCENE_SLOTS) + SCENE_SLOTS) % SCENE_SLOTS
+  const slot = slotOf(i)
   const k = `${slot}|${preset ?? ''}`
   let hit = kept.get(k)
   if (!hit) {

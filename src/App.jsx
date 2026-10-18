@@ -5548,7 +5548,7 @@ export default function App() {
             <div className="setup-rows">
               <SetupRow key="appearance" title="Tiles & scenes" status="Tile size, effect pictures, scene layout" onClick={() => setSetupPage('appearance')} />
               {/* "Let's make the colors match better", and choose your own. */}
-              <SetupRow key="colours" title="Colours" status={coloursStatus({ unitName: device?.short || device?.name || undefined })} onClick={() => setSetupPage('colours')} />
+              <SetupRow key="colours" title="Colours" status={coloursStatus({ unitName: device?.short || device?.name || undefined, capabilities: device?.capabilities })} onClick={() => setSetupPage('colours')} />
             </div>
             {/* Light or dark right here, as on the phone: one click, not a page. */}
             <div className="setup-inline-theme">

@@ -143,7 +143,18 @@ export function setDemoUnit(key) {
 }
 
 export function setDemo(on) {
+  const was = !!mock
   mock = on ? createMockDevice(demoUnit()) : null
+  /*
+   * Across the switch, the colours forget the unit they were told, which
+   * belongs to the side just left: off, with the computer out of reach,
+   * detect never answers to tell them again, and an AM4 owner kept the demo's
+   * FM3 colours and its "fm3:demo" drawer for the session. Until the next
+   * unit answers they wear the palette remembered for his own (lib/looks
+   * setColourUnit). Only across it: App says "demo off" on the way to a real
+   * unit that is already answering, and that unit's colours stay.
+   */
+  if (was !== !!mock) setColourUnit(null)
   /*
    * Remembering the demo across reloads is a browser's job, and this is not
    * only called in a browser: the tests drive the mock device through here to

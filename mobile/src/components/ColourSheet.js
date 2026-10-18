@@ -10,6 +10,7 @@ import {
   nextToWarning,
   offAmber,
   paint,
+  pickIsPicked,
   shadeOf,
   shadeWords,
   shades,
@@ -81,6 +82,8 @@ export default function ColourSheet({ target, chain = [], onClose }) {
   const pick = open ? shadeOf(base, step, { scene }) : null
   const steps = open ? shades(base, { scene }) : { darker: [], lighter: [] }
   const warning = open ? nextToWarning(target, pick, { chain, only }) : null
+  /* Drawn as Play will draw it: a colour of his own as he picked it, the look's own as the look draws it (Tile `picked`). */
+  const picked = open ? pickIsPicked(target, pick, { only }) : false
 
   /* What the pick is called, for the line under the tiles and for a screen reader. */
   const named = swatches.find((s) => s.fill === base)
@@ -164,6 +167,7 @@ export default function ColourSheet({ target, chain = [], onClose }) {
                     ring
                     wrap
                     fill={pick}
+                    picked={picked}
                     on={lit}
                     haptic={null}
                     style={{ flex: 1 }}
@@ -176,6 +180,7 @@ export default function ColourSheet({ target, chain = [], onClose }) {
                     topLeft={lit ? 'On' : 'Off'}
                     effect
                     fill={pick}
+                    picked={picked}
                     on={lit}
                     haptic={null}
                     style={{ flex: 1 }}
@@ -185,6 +190,48 @@ export default function ColourSheet({ target, chain = [], onClose }) {
             )}
           </View>
           <Text style={{ color: color.silkDim, fontSize: font.small }}>{shadeWords(capital(baseName), step)}</Text>
+
+          {/*
+            THE NEIGHBOUR LINE, right under the name of the pick, where the eye
+            is when a swatch has just been tapped. It sat under the grid and
+            under Lighter and Darker, which on a phone up to an iPhone 15 is
+            below the bottom of the sheet: Red tapped for the amp, "Hard to
+            tell from Drive next to it" said where nobody could see it. Its
+            room is kept when there is nothing to say — two lines, because the
+            colour-blind one takes two on any phone — so the buttons under it
+            never jump as a swatch is tried.
+          */}
+          <Text
+            accessibilityLiveRegion="polite"
+            style={{ color: color.signal, fontSize: font.small, minHeight: 40, lineHeight: 20 }}
+          >
+            {warning || ''}
+          </Text>
+
+          {/*
+            LIGHTER AND DARKER, three steps each way at most, and only as far
+            as the letters still read and an unlit tile still shows on the
+            black stage. Where a way has nothing left, its button rests: red
+            has no Darker at all. Up here beside the pick they change, rather
+            than under two dozen swatches where somebody who never scrolls the
+            sheet would never find them.
+          */}
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Press
+              label="Darker"
+              grow
+              accessibilityLabel="A step darker"
+              disabled={step <= -steps.darker.length}
+              onPress={() => setStep(step - 1)}
+            />
+            <Press
+              label="Lighter"
+              grow
+              accessibilityLabel="A step lighter"
+              disabled={step >= steps.lighter.length}
+              onPress={() => setStep(step + 1)}
+            />
+          </View>
 
           {/*
             EVERY PRESET, OR JUST THIS ONE, for a scene painted while a preset
@@ -240,38 +287,6 @@ export default function ColourSheet({ target, chain = [], onClose }) {
               )
             })}
           </View>
-
-          {/*
-            LIGHTER AND DARKER, three steps each way at most, and only as far
-            as the letters still read and an unlit tile still shows on the
-            black stage. Where a way has nothing left, its button rests: red
-            has no Darker at all.
-          */}
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            <Press
-              label="Darker"
-              grow
-              accessibilityLabel="A step darker"
-              disabled={step <= -steps.darker.length}
-              onPress={() => setStep(step - 1)}
-            />
-            <Press
-              label="Lighter"
-              grow
-              accessibilityLabel="A step lighter"
-              disabled={step >= steps.lighter.length}
-              onPress={() => setStep(step + 1)}
-            />
-          </View>
-
-          {/* The neighbour line. Its room is kept when there is nothing to
-              say, so the buttons under it never jump as a swatch is tried. */}
-          <Text
-            accessibilityLiveRegion="polite"
-            style={{ color: color.signal, fontSize: font.small, minHeight: 20, lineHeight: 20 }}
-          >
-            {warning || ''}
-          </Text>
         </>
       ) : null}
     </Sheet>

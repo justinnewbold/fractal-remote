@@ -13311,8 +13311,9 @@ export function run(test) {
     const palettes = read('mobile/src/lib/blockPalettes.js')
     assert.match(palettes, /'#b5502f', \/\/ 1 terracotta/, 'the app’s own scene colours were repainted rather than kept')
     const tile = read('mobile/src/components/Tile.js')
-    /* `asLook` is the Colours page drawing a look's card while another is worn: the same rule, asked of that look. */
-    assert.match(tile, /const asBefore = asLook \? liftedLook\(asLook\) : isFractalRemoteLook\(\)\n\s+const hue = asBefore \? vivid\(fill\) : fill/, 'the tiles are lifted in every look, or in none')
+    /* `asLook` is the Colours page drawing a look's card while another is worn: the same rule, asked of that look.
+       And only the look's own colours: one the player picked is drawn as picked (`picked`). */
+    assert.match(tile, /const asBefore = asLook \? liftedLook\(asLook\) : isFractalRemoteLook\(\)\n\s+const lift = asBefore && !picked\n\s+const hue = lift \? vivid\(fill\) : fill/, 'the tiles are lifted in every look, or in none, or a colour the player picked is lifted too')
 
     /*
      * AND THE GLASS COST NOTHING. expo-blur is already a dependency, which is
@@ -18327,7 +18328,7 @@ export function run(test) {
     /* Between Tiles & scenes and the Auto / Light / Dark buttons, as the plan put it. */
     assert.match(
       play,
-      /title="Tiles & scenes"[\s\S]*?<SetupRow title="Colours" status=\{coloursStatus\(\{ unitName: deviceName \}\)\} onPress=\{\(\) => setPage\('colours'\)\} \/>[\s\S]*?<Appearance \/>/,
+      /title="Tiles & scenes"[\s\S]*?<SetupRow title="Colours" status=\{coloursStatus\(\{ unitName: deviceName, capabilities: caps \}\)\} onPress=\{\(\) => setPage\('colours'\)\} \/>[\s\S]*?<Appearance \/>/,
       'the Colours row is not between Tiles & scenes and light or dark'
     )
     /* The page condition written once, so a check that takes the first hit takes the page. */
@@ -18585,7 +18586,11 @@ export function run(test) {
     assert.equal(c.scenesAllRed(), false)
     c.chooseScenes(false, c.storage)
     assert.equal(c.scenesAllRed(), true, 'all red does nothing on a look with a colour each')
-    assert.equal(c.yourScene(4), c.SCENE_RED)
+    /* One choice, kept as one: not eight colours of the player's own. */
+    assert.equal(c.yourScene(4), null, 'all red was written as eight colours of yours')
+    assert.equal(c.sceneChoice(), 'red')
+    assert.equal(c.ownColourCount(), 0, 'one choice counts as colours of your own')
+    assert.equal(c.sceneColor(4).picked, true, 'Fractal Remote would lift a red the player chose')
     assert.equal(c.setScenes(['#cc0000'], c.storage), false, 'seven scenes went missing from one write')
     c.setColourUnit(null)
   })

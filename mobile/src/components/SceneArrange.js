@@ -193,6 +193,7 @@ function Place({ place, scene, width, at, carried, target, offset, onStart, onMo
         bar
         fill={hue.fill}
         ink={hue.ink}
+        picked={hue.picked}
         on={carried || target}
         height={HEIGHT}
         style={{ width }}

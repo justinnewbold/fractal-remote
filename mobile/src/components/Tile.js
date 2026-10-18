@@ -115,6 +115,16 @@ export default function Tile({
   asLook,
   offAs,
   /*
+   * A colour somebody picked — his own, or the Colours page's Scenes choice —
+   * rather than the look's own (lib/blockColors and lib/sceneColors say which,
+   * as `picked`). Only matters in Fractal Remote, which this tile lifts the
+   * way it always did: that is right for the look's own colours and wrong for
+   * his. A white he chose came out grey, and five of the colours on the sheet
+   * lost their letters under the lift and the sheen, while the browser drew
+   * them as chosen. So a picked colour is drawn as it is, in every look.
+   */
+  picked = false,
+  /*
    * A name that may take a second line, a size down: "Crunch Bot UP" rather
    * than "Cru…". It began as the four-across scene tile's, which leaves room
    * for five letters at the usual size — and then the tester, at two across:
@@ -140,14 +150,18 @@ export default function Tile({
    * — which turned an AM4's red drive orange with black letters here. So the
    * lift is gone, except in Fractal Remote, the app's colours as they always
    * were, which is drawn exactly as it always was: "I just don't wanna lose
-   * all the colors and current color scheme cause I like those also."
+   * all the colors and current color scheme cause I like those also." Its own
+   * colours, that is: one somebody picked on top of it is his (`picked`), and
+   * drawn as he picked it, its glass falling away from its letters. The look's
+   * edges and words stay the look's, as they do in the browser.
    *
    * Off is the same hue at a seventh, over the chassis, rather than a flat
    * panel: the tile stays recognisably its own colour while being obviously
    * unlit, which is the distinction the whole grid rests on.
    */
   const asBefore = asLook ? liftedLook(asLook) : isFractalRemoteLook()
-  const hue = asBefore ? vivid(fill) : fill
+  const lift = asBefore && !picked
+  const hue = lift ? vivid(fill) : fill
   /*
    * GREY WHEN OFF, the other way a switched-off effect can look: as the units
    * draw a bypassed block, a dark tile, a grey outline and dim letters — the
@@ -308,8 +322,9 @@ export default function Tile({
     if (!isDark()) return paperEdge(hue)
     return on ? at(hue, 0.85) : hue
   })()
-  /* Which way the glass falls: see SHEEN and SHADE above. */
-  const shadeBelow = !asBefore && lit === LIGHT_INK
+  /* Which way the glass falls: see SHEEN and SHADE above. Over the top, as it
+     always was, only on a colour that is lifted. */
+  const shadeBelow = !lift && lit === LIGHT_INK
 
   const glow = on && !quiet
     ? Platform.select({

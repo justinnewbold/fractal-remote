@@ -307,9 +307,9 @@ export function run(test) {
     const console_ = read('src/components/Console.jsx')
     assert.match(console_, /'--tile-ink': inkFor\(block\.slug\)/, 'the strip does not hand its tiles their letters')
     assert.match(console_, /data-shade=\{shadeFor\(block\.slug\)\}/, 'the strip does not say which way a tile is shaded')
-    assert.match(console_, /isFractalRemoteLook\(\) \? undefined : inkFor\(slug\) === LIGHT_INK \? 'down' : 'up'/, 'Fractal Remote is shaded like the new looks')
+    assert.match(console_, /isFractalRemoteLook\(\) && !blockColor\(slug\)\.picked \? undefined : inkFor\(slug\) === LIGHT_INK \? 'down' : 'up'/, 'Fractal Remote is shaded like the new looks, or a colour picked on top of it the old way')
     const tile = read('mobile/src/components/Tile.js')
-    assert.match(tile, /const shadeBelow = !asBefore && lit === LIGHT_INK/, 'the phone lays a white sheen over white letters')
+    assert.match(tile, /const shadeBelow = !lift && lit === LIGHT_INK/, 'the phone lays a white sheen over white letters')
     assert.match(tile, /backgroundColor: shadeBelow \? SHADE : SHEEN/)
   })
 
@@ -420,6 +420,42 @@ export function run(test) {
     }
     for (const s of c.SWATCHES.filter((x) => x.scene !== false)) check(`scene swatch ${s.name}`, s.fill)
     assert.deepEqual(near, [], `too close to the amber:\n  ${near.join('\n  ')}`)
+
+    /*
+     * AND AS DRAWN, not only flat. The edit strip lightens the top of a tile
+     * with black letters by an eighth of white, and that is the half the
+     * amber ring sits round when the block is selected: Stompbox's phaser and
+     * Sunlight's ring mod were 10.6 and 11.0 flat and 7.0 at the top. Both
+     * ends of the strip's gradient against the ring's amber in each theme,
+     * and the phone's glass on a scene against the phone's two (the live
+     * scene is the one ringed there).
+     */
+    const styles = read('src/styles.css')
+    const drawn = []
+    const against = (where, ends, ambers) => {
+      for (const end of ends) for (const amber of ambers) {
+        const d = c.deltaE(end, amber)
+        if (d < 10) drawn.push(`${where} drawn ${end} is ${d.toFixed(1)} from ${amber}`)
+      }
+    }
+    const { sheen, shade } = glass()
+    for (const { look, unit } of everyLookAndUnit(c)) {
+      for (const { slug, fill, ink } of resolved(c, look, unit)) {
+        if (c.quietEnd(slug)) continue
+        const white = ink === c.LIGHT_INK
+        const where = `${look.name} on ${unit}: ${slug}`
+        against(where, gradient(c, styles, white ? "button.fx-tile[data-shade='down']" : 'button.fx-tile')(fill), ['#f0a73c'])
+        const light = gradient(c, styles, white ? "[data-theme='light'] button.fx-tile" : "[data-theme='light'] button.fx-tile[data-shade='up']")(fill)
+        if (LET_OFF[where]) for (const end of light) assert.ok(c.deltaE(end, LET_OFF[where]) >= 9.2, `${where} has crept closer to ${LET_OFF[where]} as drawn`)
+        else against(where, light, ['#9c5f12'])
+      }
+      for (let i = 0; i < 8; i++) {
+        const { fill, ink } = c.sceneColor(i)
+        const phone = ink === c.LIGHT_INK ? [fill, c.mix(fill, shade.rgb, shade.alpha)] : [c.mix(fill, sheen.rgb, sheen.alpha), fill]
+        against(`${look.name}: scene ${i + 1}`, phone, ['#f0a73c', '#a8650a'])
+      }
+    }
+    assert.deepEqual(drawn, [], `too close to the amber as drawn:\n  ${drawn.join('\n  ')}`)
     /* All three: the dark page's, the phone's Light page (theme.js) and the browser's (styles.css), which is darker still. */
     assert.deepEqual(c.AMBERS, ['#f0a73c', '#a8650a', '#9c5f12'], 'the ambers this checks against are not the app’s')
     const css = read('src/styles.css')
@@ -518,7 +554,7 @@ export function run(test) {
     /*
      * And in Match my unit, on every unit, from every effect: an unknown block
      * is not mistaken for any of them. Return is the one it looks like — the
-     * blue-grey Fractal gives a Return, 2.7 from it — and that is said where
+     * blue-grey Fractal gives a Return, 2.7 from it (1.9 on gen-2) — and that is said where
      * NEUTRAL is written down rather than passed over here.
      */
     for (const id of c.PALETTE_IDS) {
@@ -639,7 +675,7 @@ export function run(test) {
     c.setLook('sunlight')
     assert.equal(c.blockColor('delay').fill, c.lookById('sunlight').families.delay, 'a look with no table per unit is not its own colour')
     assert.ok(c.setFamily('delay', '#FF99CC'))
-    assert.deepEqual(c.blockColor('Delay 2'), { fill: '#ff99cc', ink: c.inkOn('#ff99cc') }, 'your colour is not on top of the look')
+    assert.deepEqual(c.blockColor('Delay 2'), { fill: '#ff99cc', ink: c.inkOn('#ff99cc'), picked: true }, 'your colour is not on top of the look, or not marked as yours')
     c.setLook('unit')
     assert.equal(c.blockColor('delay').fill, '#ff99cc', 'your colour did not survive a change of look')
     assert.ok(c.setFamily('delay', null))
@@ -829,13 +865,32 @@ export function run(test) {
     }
     /* The one thing allowed to differ: an unknown block is a colour the phone can draw. */
     assert.deepEqual(c.blockColor('somethingnew'), c.NEUTRAL)
+    /*
+     * And unknown means unknown to the old table: the Axe-Fx II's own names,
+     * learned since, had no colour in it, so they are the unknown block here
+     * — and their family's colour in every other look.
+     */
+    const LEARNED_SINCE = [
+      'Tremolo/Panner 1', 'Graphic EQ 2', 'Parametric EQ 1', 'Rotary Speaker', 'Multiband Compressor', 'Ring Modulator',
+      'Volume/Pan 3', 'Quad Chorus 1', 'Multi Delay 1', 'Megatap Delay', 'Feedback Send', 'Feedback Return', 'Gate/Expander 1',
+      'Input Noise Gate', 'Multitap Delay', 'NAM Player', 'Dynamic Distortion'
+    ]
+    c.setColourUnit('axefxii')
+    for (const name of LEARNED_SINCE) assert.deepEqual(c.blockColor(name), c.NEUTRAL, `${name} has a colour in Fractal Remote that it never had`)
+    /* Every spelling the old table did know is exactly as it was, in whatever shape it comes. */
+    for (const [name, slug] of [['Plex Delay', 'plex'], ['Ten-Tap', 'tentap'], ['Vol/Pan', 'volpan'], ['delay2', 'delay'], ['Compressor 2', 'compressor'], ['eq', 'eq']]) {
+      assert.deepEqual(c.blockColor(name), { fill: BEFORE[slug], ink: '#ffffff' }, `${name} is not the colour it always was`)
+    }
+    c.setLook('unit')
+    for (const name of LEARNED_SINCE) assert.notDeepEqual(c.blockColor(name), c.NEUTRAL, `${name} lost its family in Match my unit`)
+    c.setLook('fractalremote')
     assert.equal(c.quietEnd('input'), false, 'the phone draws the ends differently in the old look')
     assert.ok(c.isFractalRemoteLook())
 
     /* Drawn as it was: the phone lifts it, and only it, and keeps its edges. */
     const tile = read('mobile/src/components/Tile.js')
     assert.match(tile, /const asBefore = asLook \? liftedLook\(asLook\) : isFractalRemoteLook\(\)/)
-    assert.match(tile, /const hue = asBefore \? vivid\(fill\) : fill/, 'Fractal Remote is not lifted on the phone, or every look is')
+    assert.match(tile, /const lift = asBefore && !picked\n\s+const hue = lift \? vivid\(fill\) : fill/, 'Fractal Remote is not lifted on the phone, or every look is, or a colour picked on top of it is')
     assert.match(tile, /if \(asBefore\) return at\(hue, on \? 0\.85 : 0\.55\)/, 'Fractal Remote lost the edges it always had')
     const { vivid } = await import('../mobile/src/lib/vivid.js')
     assert.notEqual(vivid(BEFORE.drive), BEFORE.drive, 'the lift lifts nothing')
@@ -1034,6 +1089,249 @@ export function run(test) {
     c.paint(clean, null)
     assert.deepEqual(Object.keys(JSON.parse(store.kept['fractal.colours']).presets.fm3['45']).sort(), ['at', 'fill'])
     assert.equal(c.presetTag(45), null)
+  })
+
+  /*
+   * A COLOUR PICKED ON TOP OF FRACTAL REMOTE IS THE PLAYER'S. The look is
+   * drawn as it always was — the phone lifts its colours, the browser's strip
+   * keeps its old face — and that is right for its own colours only. Lifted,
+   * a White he chose came out grey, and five of the colours on the sheet fell
+   * under 4.5:1; the browser's old face put white letters on his mustard at
+   * 3.7. So every swatch he can pick there, and every step lighter or darker
+   * from one, is measured as each end now draws it.
+   */
+  test('a colour picked on top of Fractal Remote is drawn as picked, and reads at 4.5:1 as each end draws it', async () => {
+    const c = await withPage()
+    const css = read('src/styles.css')
+    c.setLook('fractalremote')
+    const misses = []
+    let checked = 0
+    for (const unit of ['fm3', 'am4', 'axefxii']) {
+      c.setColourUnit(unit)
+      for (const t of [c.familyTarget('drive'), c.sceneTarget(0)]) {
+        for (const s of c.sheetSwatches(t)) {
+          const { darker, lighter } = c.shades(s.fill, { scene: t.kind === 'scene' })
+          for (const fill of [s.fill, ...darker, ...lighter]) {
+            c.paint(t, fill)
+            const hue = t.kind === 'scene' ? c.sceneColor(0) : c.blockColor('drive')
+            if (fill === String(c.lookOwn(t)).toLowerCase()) {
+              assert.ok(!hue.picked, `${t.name}: the look’s own colour is marked as picked`)
+              continue
+            }
+            assert.equal(hue.picked, true, `${unit} ${t.name} ${fill}: a picked colour is not marked as picked`)
+            assert.equal(hue.ink, c.inkOn(fill), `${t.name} ${fill}: its letters were not chosen for it`)
+            for (const [where, ends] of Object.entries(surfaces(c, css, hue.fill, hue.ink))) {
+              if (t.kind === 'scene' && where.startsWith('edit strip')) continue
+              for (const end of ends) {
+                checked++
+                const r = c.contrast(hue.ink, end)
+                if (r < 4.5) misses.push(`${unit} ${t.name} ${s.name} ${fill} (${where}, ${end}) ${r.toFixed(2)}:1`)
+              }
+            }
+          }
+          c.paint(t, null)
+        }
+      }
+    }
+    assert.deepEqual(misses, [], `a picked colour under 4.5:1 on Fractal Remote:\n  ${misses.join('\n  ')}`)
+    assert.ok(checked > 1000, `only ${checked} surfaces were measured`)
+    /* The Scenes choice is picked too: Fractal's red over the look's eight. */
+    c.chooseScenes(false)
+    assert.equal(c.sceneColor(3).fill, c.SCENE_RED)
+    assert.equal(c.sceneColor(3).picked, true, 'All red on Fractal Remote would be lifted on the phone')
+    assert.equal(c.sceneColor(3).ink, c.inkOn(c.SCENE_RED))
+    c.chooseScenes(true)
+    assert.deepEqual(c.sceneColor(3), { fill: BEFORE_SCENES[3], ink: '#ffffff' }, 'Fractal Remote’s own scenes are not as they were once the choice is back')
+    c.setLook('unit')
+    c.setColourUnit(null)
+
+    /* And drawn so: the phone lifts only what is not picked, and every tile that can wear a picked colour says so. */
+    const tile = read('mobile/src/components/Tile.js')
+    assert.match(tile, /\n  picked = false,\n/, 'the phone’s tile cannot be told a colour was picked')
+    assert.match(tile, /const shadeBelow = !lift && lit === LIGHT_INK/, 'a picked colour’s glass falls over its letters')
+    for (const [f, n] of [['mobile/src/screens/Stage.js', 3], ['mobile/src/screens/Edit.js', 1], ['mobile/src/components/SceneArrange.js', 1], ['mobile/src/components/Colours.js', 3], ['mobile/src/components/ColourSheet.js', 2]]) {
+      const got = (read(f).match(/picked=\{(hue|looperHue)\.picked\}|picked=\{picked\}/g) || []).length
+      assert.equal(got, n, `${f}: ${got} of its ${n} tiles are told when a colour was picked`)
+    }
+    assert.match(read('mobile/src/components/ColourSheet.js'), /const picked = open \? pickIsPicked\(target, pick, \{ only \}\) : false/)
+    /* The browser: the strip shades a picked colour away from its letters, and a live scene's words are at full strength. */
+    assert.match(read('src/components/Gig.jsx'), /data-picked=\{sceneColor\(i, preset\?\.number\)\.picked \? 'yes' : undefined\}/, 'Play does not say a scene’s colour was picked')
+    assert.match(read('src/components/ColourSheet.jsx'), /data-picked=\{picked \? 'yes' : undefined\}/)
+    assert.match(read('src/components/Colours.jsx'), /data-picked=\{hue\.picked \? 'yes' : undefined\}/)
+    assert.match(css, /button\.gig-scene\.named\.current\[data-picked='yes'\] \.gig-scene-num,\nbutton\.gig-scene\.current\[data-picked='yes'\] \.gig-scene-name \{\n  opacity: 1;\n\}/, 'a picked scene colour’s words are faded on Fractal Remote')
+  })
+
+  /*
+   * THE SCENES CHOICE IS ONE CHOICE. "A colour for each scene" on an AM4 said
+   * "8 of your own colours on top" and marked all four scenes "yours": it was
+   * written as eight colours of the player's own, for one tap on a unit with
+   * four scenes.
+   */
+  test('the Scenes choice is one choice, never eight of your own colours, and the sheet calls its colour by it', async () => {
+    const c = await withPage()
+    const store = memory()
+    c.loadLooks(store)
+    c.setColourUnit('am4')
+    const am4 = { sceneCount: 4 }
+    c.chooseScenes(true)
+    assert.equal(c.sceneChoice(), 'each')
+    assert.equal(c.scenesAllRed(4), false)
+    for (let i = 0; i < 8; i++) assert.equal(c.yourScene(i), null, `scene ${i + 1} is marked as yours for a choice`)
+    assert.equal(c.ownColourCount({ scenes: 4 }), 0)
+    assert.equal(c.coloursStatus({ unitName: 'AM4', capabilities: am4 }), 'Match my unit · AM4 colours', 'a choice is counted as colours of your own')
+    assert.deepEqual(Array.from({ length: 4 }, (_, i) => c.sceneColor(i).fill), c.lookById('cvd').scenes.slice(0, 4), 'a colour each is not Colour-blind safe’s')
+    assert.equal(JSON.parse(store.kept['fractal.colours']).sceneChoice.mode, 'each', 'the choice is not kept for the next launch')
+    /* One scene painted by hand is one of your own, and only the scenes the unit has are counted. */
+    const two = c.sceneTarget(1)
+    assert.equal(c.lookOwn(two), c.lookById('cvd').scenes[1], 'Back would not give the scene its colour from the choice')
+    assert.deepEqual(c.sheetSwatches(two)[0], { name: 'Each', fill: c.lookById('cvd').scenes[1], own: true, said: 'the colour for each scene' }, 'the first square is called the unit’s colour, which it is not')
+    c.paint(two, '#ffff00')
+    assert.equal(c.backWords(two), 'Back to the colour for each scene')
+    assert.equal(c.coloursStatus({ unitName: 'AM4', capabilities: am4 }), 'Match my unit · AM4 colours · 1 of your own')
+    c.setScene(6, '#ffffff')
+    assert.equal(c.ownColourCount({ scenes: 4 }), 1, 'a scene the AM4 does not have is counted')
+    assert.equal(c.ownColourCount(), 2)
+    /* Picking the choice's own colour back is putting yours away. */
+    c.paint(two, c.lookById('cvd').scenes[1])
+    assert.equal(c.yourScene(1), null)
+    /* All red over a look with a colour each, and its words. */
+    c.setLook('sunlight')
+    assert.equal(c.scenesAllRed(4), false, 'Sunlight’s scenes are not its own colour each')
+    c.chooseScenes(false)
+    assert.equal(c.sceneChoice(), 'red')
+    assert.equal(c.yourScene(6), null, 'All red left a scene painted by hand')
+    assert.equal(c.scenesAllRed(4), true)
+    assert.equal(c.sheetSwatches(two)[0].name, 'Red')
+    c.paint(two, '#00ccff')
+    assert.equal(c.backWords(two), 'Back to red, like the unit')
+    /* Clear them leaves the choice, like the look; Put every colour back takes it, with a time. */
+    c.clearYours()
+    assert.equal(c.sceneChoice(), 'red', 'Clear them took the Scenes choice')
+    c.resetAll()
+    assert.equal(c.sceneChoice(), null)
+    const kept = JSON.parse(store.kept['fractal.colours'])
+    assert.equal(kept.sceneChoice.mode, null)
+    assert.ok(Number.isFinite(kept.sceneChoice.at), 'the choice was put back with no time on it')
+    /* Only the two choices, or null, come back from storage. */
+    assert.equal(c.parseLooks({ sceneChoice: { mode: 'pink', at: 1 } }).sceneChoice, null)
+    assert.deepEqual(c.parseLooks({ sceneChoice: { mode: 'each', at: 1 } }).sceneChoice, { mode: 'each', at: 1 })
+    assert.equal(c.setSceneChoice('pink'), false)
+    c.setColourUnit(null)
+    /* Both pages count and mark only what was painted by hand, of the scenes the unit has. */
+    for (const f of ['src/components/Colours.jsx', 'mobile/src/components/Colours.js']) {
+      assert.match(read(f), /const own = ownColourCount\(\{ scenes: sceneCount \}\)/, `${f} counts scenes the unit does not have`)
+      assert.match(read(f), /const allRed = scenesAllRed\(sceneCount\)/)
+    }
+  })
+
+  test('leaving or entering the demo forgets the unit the colours were told', async () => {
+    const c = await load()
+    const store = memory()
+    c.loadLooks(store)
+    c.setColourUnit('am4')
+    c.setColourUnit('fm3', { demo: true })
+    assert.equal(c.colourUnit(), 'fm3:demo')
+    /* The demo goes off with the computer out of reach: nothing answers, so nothing else tells the colours. */
+    c.setColourUnit(null)
+    assert.equal(c.currentPaletteId(), 'am4', 'the demo’s FM3 colours stayed on an AM4 owner’s app')
+    assert.equal(c.colourUnit(), null, 'a tag would still be filed under the demo')
+    /* Both ends tell them at the switch. */
+    const phone = read('mobile/src/lib/demo.js')
+    assert.match(phone, /import \{ setColourUnit \} from '\.\/looks'/)
+    assert.match(phone, /if \(want === isDemo\(\)\) return\n\s+mock = want \? createMockDevice\(unit\) : null[\s\S]{0,700}setColourUnit\(null\)\n\s+announce\(\)/, 'the phone’s demo switch does not tell the colours')
+    assert.match(read('src/lib/forgefx.js'), /const was = !!mock\n\s+mock = on \? createMockDevice\(demoUnit\(\)\) : null[\s\S]{0,700}if \(was !== !!mock\) setColourUnit\(null\)/, 'the browser’s demo switch does not tell the colours, or tells them when nothing changed')
+    c.setColourUnit(null)
+  })
+
+  test('Footswitch lights on an Axe-Fx II are its MFC-101’s green, and every look’s words are true of the unit', async () => {
+    const c = await withPage()
+    c.setLook('rings')
+    c.setColourUnit('axefxii')
+    assert.equal(c.blockColor('drive').fill, '#66cc33', 'an Axe-Fx II’s effects are an FC’s cyan, which it cannot use')
+    assert.equal(c.currentPaletteId(), 'gen2')
+    const rings = c.lookById('rings')
+    assert.match(c.lookWhy(rings), /MFC-101/)
+    assert.ok(!/scene switch red/.test(c.lookWhy(rings)), 'an Axe-Fx II owner is told his scene switches light red')
+    assert.ok(!/like the scene switches/.test(c.lookWhy(c.lookById('unit'))), 'Match my unit tells an Axe-Fx II owner his scene switches light red')
+    c.setColourUnit('fm3')
+    assert.equal(c.lookWhy(rings), rings.why)
+    assert.equal(c.blockColor('drive').fill, '#00ccff')
+    c.setLook('unit')
+    c.setColourUnit(null)
+    /* The same rules for every line a look has, by unit too. */
+    const brands = /tube ?screamer|ibanez|boss|mxr|electro-?harmonix|strymon|eventide|fulltone|klon|line ?6|helix|kemper|neural|marshall|fender|vox|mesa|tc electronic|dunlop|ehx/i
+    for (const l of c.LOOKS) {
+      for (const why of [l.why, ...Object.values(l.whyByUnit || {})]) {
+        assert.ok(!brands.test(why), `${l.name} names a brand`)
+        assert.ok(why.length < 200, `${l.name}: a long why`)
+        assert.ok(!/this phone/i.test(why), `${l.name} says "this phone"`)
+      }
+    }
+    /* Both pages show the unit's line. */
+    assert.match(read('src/components/Colours.jsx'), /\{lookWhy\(look\)\}/)
+    assert.match(read('mobile/src/components/Colours.js'), /\{lookWhy\(look\)\}/)
+  })
+
+  test('every colour that names Fractal’s own says which way it moved', async () => {
+    /*
+     * These comments are the only record of where each colour came from, and
+     * the next person to tune one reads them first. A line that says "lifted"
+     * over a colour taken darker, or names the plan's own value as the
+     * manual's, sends him the wrong way.
+     */
+    const ink = await import('../src/lib/ink.js')
+    const moved = { lighter: [], darker: [] }
+    const wrong = []
+    read('src/lib/blockPalettes.js').split('\n').forEach((line, i) => {
+      const m = /^\s+(\w+): '(#[0-9a-f]{6})',? \/\/ (.*)$/.exec(line)
+      const named = m && /(#[0-9a-f]{6})/.exec(m[3])
+      if (!named || named[1] === m[2]) return
+      const way = ink.luminance(m[2]) > ink.luminance(named[1]) ? 'lighter' : 'darker'
+      const says = way === 'lighter' ? /lifted|lighter/.test(m[3]) : /darker|darkened/.test(m[3])
+      moved[way].push(m[1])
+      if (!says) wrong.push(`line ${i + 1}: ${m[1]} ${m[2]} is ${way} than ${named[1]}, and its comment says "${m[3]}"`)
+    })
+    assert.deepEqual(wrong, [], `comments that say the wrong way:\n  ${wrong.join('\n  ')}`)
+    assert.ok(moved.lighter.length > 60 && moved.darker.length >= 5, 'this no longer reads the palette lines')
+    assert.match(read('src/lib/blockPalettes.js'), /rotary: '#825f3f', \/\/ the AM4 manual's picture #5a3406, lifted/, 'the AM4 rotary’s source is the plan’s value again')
+  })
+
+  test('on the colour sheet the neighbour line and Lighter and Darker sit by the pick, above the grid, on both ends', () => {
+    /*
+     * "Hard to tell from Drive next to it" was under the grid and under
+     * Lighter and Darker, which on most phones is below the bottom of the
+     * sheet: Red tapped for the amp, the line said where nobody saw it.
+     */
+    for (const [f, said, warning, steps, grid] of [
+      ['mobile/src/components/ColourSheet.js', '{shadeWords(capital(baseName), step)}', "{warning || ''}", 'label="Darker"', 'onLayout={(e) => setGrid('],
+      ['src/components/ColourSheet.jsx', '<p className="colour-said">', "{warning || ''}", 'aria-label="A step darker"', 'className="colour-swatches"']
+    ]) {
+      const sheet = read(f)
+      const at = (s) => {
+        const i = sheet.indexOf(s)
+        assert.ok(i >= 0, `${f}: no ${s} for this test to find`)
+        return i
+      }
+      assert.ok(at(said) < at(warning) && at(warning) < at(steps) && at(steps) < at(grid), `${f}: the neighbour line and Lighter and Darker are not between the pick’s name and the grid`)
+      assert.equal(sheet.split("{warning || ''}").length, 2, `${f} says the neighbour line twice`)
+    }
+    assert.match(read('mobile/src/components/ColourSheet.js'), /style=\{\{ color: color\.signal, fontSize: font\.small, minHeight: 40, lineHeight: 20 \}\}/, 'the phone’s neighbour line does not keep two lines of room')
+    assert.match(read('src/styles.css'), /\.colour-warning \{\n  min-height: 2\.8em;\n\}/, 'the browser’s neighbour line does not keep two lines of room')
+  })
+
+  test('the phone’s Colours page draws its scenes two across on the narrowest phones, as Play does', () => {
+    const page = read('mobile/src/components/Colours.js')
+    assert.match(page, /const sceneWidth = quarter !== undefined && quarter < 72 \? half : quarter/, '"IIC+ Hot Lead" is cut short at 320 wide again')
+    assert.match(page, /style=\{\{ width: sceneWidth \}\}/)
+  })
+
+  test('the words under Put every colour back and Keep their colour say it once, plainly', async () => {
+    const c = await withPage()
+    assert.equal(c.PUT_BACK_WORDS, 'Back to Match my unit: every scene red, switched-off effects in their own colour')
+    assert.equal(c.OFF_WORDS.colour, 'A faint wash of the effect’s own colour with an edge in that colour, so you still know which it is.')
+    assert.match(read('src/components/Colours.jsx'), /<span className="hint">\{PUT_BACK_WORDS\}<\/span>/)
+    assert.match(read('mobile/src/components/Colours.js'), /<Press label="Put every colour back" sub=\{PUT_BACK_WORDS\} onPress=\{\(\) => setAsking\('all'\)\} \/>/)
+    for (const f of ['src/components/Colours.jsx', 'mobile/src/components/Colours.js']) assert.ok(!/the unit’s colours, and switched-off/.test(read(f)), `${f} says Match my unit twice again`)
   })
 
   test('the store words say what is true on every unit', () => {

@@ -7811,6 +7811,14 @@ button.gig-block.off .gig-block-icon {
   opacity: 1;
 }
 
+/* And in Fractal Remote too, on a colour somebody picked rather than one of
+   the look's own (Gig, data-picked; lib/sceneColors): the old 85% was the old
+   muted colours' and came to 4.45:1 on the Red he may have picked. */
+button.gig-scene.named.current[data-picked='yes'] .gig-scene-num,
+button.gig-scene.current[data-picked='yes'] .gig-scene-name {
+  opacity: 1;
+}
+
 :root:not([data-theme='light']):not([data-look='fractalremote']) button.gig-scene.named:not(.current) .gig-scene-num {
   color: color-mix(in srgb, var(--silk) 50%, var(--silk-dim));
 }
@@ -14022,9 +14030,10 @@ button.chip.colour-any-open {
 }
 
 /* The neighbour line keeps its room when there is nothing to say, so the
-   buttons under it never jump as a swatch is tried. */
+   buttons under it never jump as a swatch is tried — two lines of it, which
+   the colour-blind one takes in a phone-sized window. */
 .colour-warning {
-  min-height: 1.4em;
+  min-height: 2.8em;
 }
 
 /* Fractal Remote's card on paper keeps the edges that look always had, and

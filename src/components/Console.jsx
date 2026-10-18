@@ -58,9 +58,12 @@ const inkFor = (slug) => blockColor(slug).ink
  * Which way the tile's face is shaded: away from its letters, so they are
  * never on a lighter colour than the one they were picked for (styles.css,
  * button.fx-tile[data-shade]). None in Fractal Remote, which keeps the face
- * it always had.
+ * it always had — for its own colours. One a player picked on top of it is
+ * shaded like any other (lib/blockColors `picked`): on the old face, white
+ * letters on his mustard came to 3.7:1 at the lighter top, and black ones on
+ * his silver 3.4 at the darker bottom of the Light page.
  */
-const shadeFor = (slug) => (isFractalRemoteLook() ? undefined : inkFor(slug) === LIGHT_INK ? 'down' : 'up')
+const shadeFor = (slug) => (isFractalRemoteLook() && !blockColor(slug).picked ? undefined : inkFor(slug) === LIGHT_INK ? 'down' : 'up')
 import Knob from './Knob'
 import {
   blockHelp,

@@ -362,6 +362,8 @@ export default function Stage({
    */
   const looperHere = findLooper(allBlocks)
   const looperTile = !chainNow.elsewhere && !!looperHere
+  /* Its colour, asked once: the look's, or the player's own (Tile `picked`). */
+  const looperHue = blockColor('looper')
   /*
    * ON A REAL VP4 IT OPENS ONE SENTENCE, not Rec and Play. No computer app can
    * work a VP4's looper (each of its eight buttons was refused, "The app can't
@@ -901,6 +903,7 @@ export default function Stage({
                     bar
                     fill={hue.fill}
                     ink={hue.ink}
+                    picked={hue.picked}
                     on={i === scene}
                     height={tileH}
                     haptic={thud}
@@ -1037,6 +1040,7 @@ export default function Stage({
                   topRight={block.channel || undefined}
                   fill={hue.fill}
                   ink={hue.ink}
+                  picked={hue.picked}
                   on={engaged}
                   /* A switch: grey when off, if that is the choice in Settings → Colours. */
                   effect
@@ -1079,8 +1083,9 @@ export default function Stage({
                 topLeft={vp4Looper ? looperState : 'Rec'}
                 topRight={vp4Looper ? undefined : 'Play'}
                 pair={!vp4Looper}
-                fill={blockColor('looper').fill}
-                ink={blockColor('looper').ink}
+                fill={looperHue.fill}
+                ink={looperHue.ink}
+                picked={looperHue.picked}
                 on={vp4Looper ? looperHere.bypassed === false : !looperHere.bypassed}
                 effect
                 height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}

@@ -25,7 +25,13 @@
  *     scenes:   { '0': { fill, at }, … }        your colour for scene 1…8
  *     presetScenes: { unit: { preset: { '0': { fill, at } } } }
  *     presets:      { unit: { preset: { fill, at } } }
- *     off: { mode: 'colour' | 'grey', at } }
+ *     off: { mode: 'colour' | 'grey', at }
+ *     sceneChoice: { mode: 'red' | 'each' | null, at } }
+ *
+ * The last is the Colours page's Scenes choice — "All red, like the unit" or
+ * "A colour for each scene" — over the look's own scenes; null is the look's
+ * own. One setting rather than eight colours of yours, for the reason
+ * lib/sceneColors sceneBase gives.
  *
  * Every entry carries the time it was set, and putting a colour back is a
  * `fill: null` WITH a time rather than a deletion. That is for the day these
@@ -57,7 +63,10 @@ export const SCENE_SLOTS = 8
 /** "Keep their colour", the default, and "Grey when off". */
 export const OFF_MODES = Object.freeze(['colour', 'grey'])
 
-const blank = () => ({ v: 1, theme: null, palette: null, families: {}, scenes: {}, presetScenes: {}, presets: {}, off: null })
+/** "All red, like the unit" and "A colour for each scene", over a look that is the other. */
+export const SCENE_CHOICES = Object.freeze(['red', 'each'])
+
+const blank = () => ({ v: 1, theme: null, palette: null, families: {}, scenes: {}, presetScenes: {}, presets: {}, off: null, sceneChoice: null })
 
 let doc = blank()
 let held = null
@@ -159,6 +168,10 @@ export function parseLooks(raw) {
   out.presets = perPreset(all.presets, entry)
   if (isObject(all.off) && isTime(all.off.at) && OFF_MODES.includes(all.off.mode)) {
     out.off = { mode: all.off.mode, at: all.off.at }
+  }
+  const choice = all.sceneChoice
+  if (isObject(choice) && isTime(choice.at) && (choice.mode === null || SCENE_CHOICES.includes(choice.mode))) {
+    out.sceneChoice = { mode: choice.mode, at: choice.at }
   }
   return out
 }
@@ -352,9 +365,10 @@ export function yourScene(i, { unit: u, preset } = {}) {
 }
 
 /**
- * All eight scenes at once, for every preset: one write rather than eight.
- * What the Colours page's "All red, like the unit" and "A colour for each
- * scene" each are. A null in a place puts that scene back to the look's.
+ * All eight scenes at once, for every preset: one write rather than eight. A
+ * null in a place puts that scene back to the look's — which is how the
+ * Scenes choice clears the scenes you painted one by one (lib/colourPage
+ * chooseScenes).
  */
 export function setScenes(fills, storage) {
   if (!Array.isArray(fills) || fills.length !== SCENE_SLOTS) return false
@@ -394,13 +408,37 @@ export function setOffMode(mode, storage) {
   return save(storage)
 }
 
-/** How many of your own colours sit on top of the look, every-preset ones only. */
-export const ownColourCount = () =>
-  Object.values(doc.families).filter((e) => e.fill).length + Object.values(doc.scenes).filter((e) => e.fill).length
+/** The Scenes choice over the look's own: 'red', 'each', or null for the look's own. */
+export const sceneChoice = () => doc.sceneChoice?.mode || null
+
+/**
+ * Make the Scenes choice. Null is the look's own scenes again, kept with a
+ * time like every reset here. `clearScenes` puts away the scenes you painted
+ * one by one for every preset, in the same write: "All red" is all red.
+ */
+export function setSceneChoice(mode, { clearScenes = false } = {}, storage) {
+  if (mode !== null && !SCENE_CHOICES.includes(mode)) return false
+  const at = Date.now()
+  doc.sceneChoice = { mode, at }
+  if (clearScenes) for (const [k, e] of Object.entries(doc.scenes)) if (e.fill) doc.scenes[k] = { fill: null, at }
+  return save(storage)
+}
+
+/**
+ * How many of your own colours sit on top of the look, every-preset ones only
+ * — and of the scenes, only as many as the unit has: an AM4 owner's page
+ * shows four, and a scene 7 he painted on somebody's FM3 is not one of the
+ * colours he is looking at. The Scenes choice is not counted: it is one
+ * choice, like the look, not a colour.
+ */
+export const ownColourCount = ({ scenes = SCENE_SLOTS } = {}) =>
+  Object.values(doc.families).filter((e) => e.fill).length +
+  Object.entries(doc.scenes).filter(([k, e]) => e.fill && Number(k) < scenes).length
 
 /**
  * Take off the colours ownColourCount counts and keep everything else: the
- * look, the switched-off choice, one preset's scenes and the preset tags.
+ * look, the Scenes and switched-off choices, one preset's scenes and the
+ * preset tags.
  * "3 of your own colours on top · Clear them". Resets with a time, like
  * resetAll, for the reason at the top of this file.
  */
@@ -413,10 +451,11 @@ export function clearYours(storage) {
 }
 
 /**
- * Put every colour back: Match my unit, the unit's colours, coloured outlines
- * for switched-off effects. Each colour of yours becomes a reset with today's
- * time rather than vanishing, for the reason at the top of this file. The
- * remembered palette stays: it is a fact about the unit, not a choice.
+ * Put every colour back: Match my unit, the unit's colours, every scene red,
+ * coloured outlines for switched-off effects. Each colour of yours becomes a
+ * reset with today's time rather than vanishing, for the reason at the top of
+ * this file. The remembered palette stays: it is a fact about the unit, not a
+ * choice.
  */
 export function resetAll(storage) {
   const at = Date.now()
@@ -429,6 +468,7 @@ export function resetAll(storage) {
   for (const presets of Object.values(doc.presetScenes)) for (const scenes of Object.values(presets)) back(scenes)
   for (const presets of Object.values(doc.presets)) back(presets)
   doc.off = { mode: 'colour', at }
+  doc.sceneChoice = { mode: null, at }
   return save(storage)
 }
 

@@ -451,6 +451,7 @@ export default function Edit({ onBack, onOpenGear }) {
               sub={under}
               fill={hue.fill}
               ink={hue.ink}
+              picked={hue.picked}
               /* Input and Output: an outline, as the browser's strip draws them. */
               quiet={quietEnd(b.slug)}
               on={open}
