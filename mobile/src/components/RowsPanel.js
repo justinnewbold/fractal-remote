@@ -4,7 +4,7 @@ import { Pressable, Text, View } from 'react-native'
 import { color, font, radius, space } from '../lib/theme'
 import { clearCell, gridCells, placeBlock, setCable } from '../lib/device'
 import { beginChainWrite, endChainWrite, refreshBlocks } from '../lib/rig'
-import { blockColor } from '../lib/blockColors'
+import { blockColor, quietEnd } from '../lib/blockColors'
 import { shortBlock } from '../lib/shortName'
 import { logDebug } from '../lib/debugLog'
 import { tick } from '../lib/feedback'
@@ -187,6 +187,9 @@ export default function RowsPanel({ blocks, caps, palette, onError }) {
                 )
               }
               const hue = blockColor(c.slug)
+              /* The chain's two ends are an outline here as in the strip above
+                 them and the browser's: the plumbing, not the tone. */
+              const quiet = quietEnd(c.slug)
               const chosen = picked && picked.row === c.row && picked.col === c.col
               return (
                 <Pressable
@@ -206,15 +209,15 @@ export default function RowsPanel({ blocks, caps, palette, onError }) {
                     width: W,
                     height: H,
                     borderRadius: radius.sm,
-                    backgroundColor: hue.fill,
-                    borderWidth: chosen ? 3 : 0,
-                    borderColor: color.signal,
+                    backgroundColor: quiet ? 'transparent' : hue.fill,
+                    borderWidth: chosen ? 3 : quiet ? 1 : 0,
+                    borderColor: chosen ? color.signal : color.rule,
                     alignItems: 'center',
                     justifyContent: 'center',
                     opacity: c.block?.bypassed ? 0.55 : 1
                   }}
                 >
-                  <Text numberOfLines={1} style={{ color: hue.ink, fontSize: font.small, fontWeight: '700' }}>
+                  <Text numberOfLines={1} style={{ color: quiet ? color.silkDim : hue.ink, fontSize: font.small, fontWeight: '700' }}>
                     {c.block ? shortBlock(c.block) : (c.name || '?').slice(0, 4).toUpperCase()}
                   </Text>
                 </Pressable>

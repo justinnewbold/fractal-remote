@@ -90,6 +90,12 @@
   --z-onb: 45;
   --z-scrim: 50;
   --z-sheet: 60;
+  /* A panel opened from inside a sheet — the colour sheet in Settings →
+     Colours — over that sheet, and still under a toast. */
+  --z-over-sheet: 65;
+  /* "An independent app", once, at startup (components/IndependentNotice):
+     over the walkthrough, every page and every sheet, still under a toast. */
+  --z-notice: 68;
   --z-toast: 70;
 
   /*
@@ -1299,6 +1305,31 @@ button.chip {
   padding: var(--s-1) var(--s-2);
   color: var(--silk-dim);
   background: transparent;
+}
+
+/* A chip that is a link (About's Privacy and Licences, Phone & computer's
+   store links), dressed as the button chips beside it. It had no style of
+   its own, so it came out in the browser's default link blue: about 1.9 to
+   1 on the dark panel, which is unreadable. */
+a.chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--body);
+  font-size: var(--f-1);
+  font-weight: 500;
+  padding: var(--s-1) var(--s-2);
+  color: var(--silk-dim);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  text-decoration: none;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+@media (hover: hover) {
+  a.chip:hover {
+    border-color: var(--silk-faint);
+  }
 }
 
 /* The row of them above Edit's search: a scene, the presets, Revert. At chip
@@ -4243,7 +4274,26 @@ button.fx-tile {
   border-radius: var(--r-1);
   background: linear-gradient(180deg, color-mix(in srgb, var(--tile) 88%, white), var(--tile));
   border: 2px solid transparent;
-  color: #fff;
+  /* The letters the app picked for this colour (lib/ink), set by the strip.
+     White was written here for every tile, and an AM4's pale chorus or a
+     Sunlight tile carried white letters it could not be read in. */
+  color: var(--tile-ink, #fff);
+}
+
+/*
+ * THE FACE NEVER LIGHTENS UNDER WHITE LETTERS.
+ *
+ * The lift above is lighter at the top, which is the half the letters sit in;
+ * on a colour chosen just dark enough for white letters it took them under
+ * 4:1. So a tile with white letters is shaded the other way — its colour at
+ * the top, a little darker below — and is never lighter anywhere than the
+ * colour its letters were chosen for. The strip says which (data-shade), and
+ * leaves Fractal Remote, the app's look as it always was, without one, so it
+ * is drawn as it always was. A test measures both ends of every gradient here
+ * against every look.
+ */
+button.fx-tile[data-shade='down'] {
+  background: linear-gradient(180deg, var(--tile), color-mix(in srgb, var(--tile) 88%, black));
 }
 
 button.fx-tile.selected {
@@ -5473,7 +5523,13 @@ ol.action-list li.destructive::marker {
    and light lettering rather than the lifted gradient used on the chassis. */
 [data-theme='light'] button.fx-tile {
   background: linear-gradient(180deg, var(--tile), color-mix(in srgb, var(--tile) 82%, black));
-  color: #fff;
+  color: var(--tile-ink, #fff);
+}
+
+/* And the other way on paper: a tile with black letters is never darker
+   anywhere than its colour, so the face lightens toward the top instead. */
+[data-theme='light'] button.fx-tile[data-shade='up'] {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tile) 82%, white), var(--tile));
 }
 
 /*
@@ -7741,6 +7797,75 @@ button.gig-block.off .gig-block-icon {
 
 .chain .block[data-bypassed='true'] {
   opacity: 0.55;
+}
+
+/*
+ * EDGES YOU CAN SEE, in every look but the app's old one.
+ *
+ * An unlit tile's edge is the only thing still naming it, and it has to stand
+ * 3:1 off the page. On the dark page that is the tile's own colour, at full
+ * strength — every look keeps its colours bright enough for it — where an
+ * unlit scene's edge had been its colour at 40%, 1.34:1 against the panel.
+ * On the Light page a pale colour is nearly the paper (a Sunlight tile came
+ * to 1.13:1), so there every tile's edge, lit or unlit, is its colour half
+ * way to black: the amount that holds 3:1 for white itself against the
+ * warmest paper. lib/ink's PAPER_EDGE is the same half, and a test holds the
+ * two together.
+ *
+ * Fractal Remote (data-look on <html>, lib/useLooks) keeps the edges it
+ * always had, as it keeps everything else.
+ */
+:root:not([data-look='fractalremote']) button.gig-scene {
+  border-color: var(--scene-fill, var(--rule));
+}
+
+/*
+ * THE SCENE'S WORDS AT A STRENGTH THEY CAN BE READ AT, in the same looks.
+ *
+ * The live scene's number and name were its letters at 85%, which on the
+ * old muted scene colours still read. On Fractal's red — every scene, for
+ * every customer, in Match my unit — that came to 4.45:1, and 3.8 on
+ * Stompbox's plum; the phone draws the same tile at full strength (5.9).
+ * So they are drawn at full strength here too.
+ *
+ * And an unlit scene's number, the dim grey on a seventh of the scene's
+ * colour, came to 3.2:1 on the dark page once the colours were the brighter
+ * ones of Sunlight or Colour-blind safe. Half way from the dim grey to the
+ * lettering colour holds 4.5 on all of them (a test measures every look's
+ * every scene); the Light page's darker grey already does, and is left.
+ */
+:root:not([data-look='fractalremote']) button.gig-scene.named.current .gig-scene-num,
+:root:not([data-look='fractalremote']) button.gig-scene.current .gig-scene-name {
+  opacity: 1;
+}
+
+/* And in Fractal Remote too, on a colour somebody picked rather than one of
+   the look's own (Gig, data-picked; lib/sceneColors): the old 85% was the old
+   muted colours' and came to 4.45:1 on the Red he may have picked. */
+button.gig-scene.named.current[data-picked='yes'] .gig-scene-num,
+button.gig-scene.current[data-picked='yes'] .gig-scene-name {
+  opacity: 1;
+}
+
+:root:not([data-theme='light']):not([data-look='fractalremote']) button.gig-scene.named:not(.current) .gig-scene-num {
+  color: color-mix(in srgb, var(--silk) 50%, var(--silk-dim));
+}
+
+:root:not([data-look='fractalremote']) button.fx-tile.bypassed:not(.selected) {
+  border-color: var(--tile);
+}
+
+[data-theme='light']:not([data-look='fractalremote']) button.gig-block.on,
+[data-theme='light']:not([data-look='fractalremote']) button.gig-block.off {
+  border-color: color-mix(in srgb, var(--block-fill, var(--rule)) 50%, black);
+}
+
+[data-theme='light']:not([data-look='fractalremote']) button.gig-scene {
+  border-color: color-mix(in srgb, var(--scene-fill, var(--rule)) 50%, black);
+}
+
+[data-theme='light']:not([data-look='fractalremote']) button.fx-tile:not(.io-tile):not(.selected) {
+  border-color: color-mix(in srgb, var(--tile) 50%, black);
 }
 
 /* ---------- the tuner and the pad, at stage size ---------- */
@@ -12169,7 +12294,11 @@ button.setup-back {
   place-items: center;
   padding: var(--s-2);
   border-radius: var(--r-3);
-  background: #f7f6f3;
+  /* The theme's own panel. It was the photograph's off-white, so the photo's
+     edges vanished into it; the plain box that replaced the photo
+     (mobile/assets/unit-plain.png, Fractal Audio's letter) is drawn on
+     clear and sits on either theme as it is. */
+  background: var(--panel);
   border: 1px solid var(--rule);
 }
 .pw-welcome-shot img {
@@ -12177,9 +12306,6 @@ button.setup-back {
   width: 100%;
   max-height: 25dvh;
   object-fit: contain;
-  /* The photo's own background fades into the card at its edges. */
-  -webkit-mask-image: radial-gradient(ellipse 72% 72% at center, #000 62%, transparent 100%);
-  mask-image: radial-gradient(ellipse 72% 72% at center, #000 62%, transparent 100%);
 }
 .pw-welcome-head {
   margin: var(--s-2) 0 0;
@@ -12258,12 +12384,14 @@ button.setup-back {
 .pw-sheet .chip.pw-go {
   font-size: var(--f-4);
 }
-/* The disclaimer at the foot, small and quiet. */
+/* Fractal Audio's sentence at the foot: small, and readable. It was the
+   faintest colour at the smallest size, small print in the sense of hoping
+   nobody reads it, and it is the one disclaimer a first visit meets here. */
 .pw-welcome-notice {
   margin: var(--s-2) 0 0;
-  color: var(--silk-faint);
-  font-size: var(--f-1);
-  line-height: 1.4;
+  color: var(--silk-dim);
+  font-size: var(--f-3);
+  line-height: 1.45;
 }
 .pw-sub {
   margin: 0;
@@ -13135,6 +13263,13 @@ button.rows-cell.off {
   opacity: 0.55;
 }
 
+/* The chain's two ends, quiet here as in the strip: the plumbing, not the tone. */
+button.rows-cell.io {
+  background: none;
+  border: 1px solid var(--rule);
+  color: var(--silk-dim);
+}
+
 button.rows-cell.chosen {
   box-shadow: 0 0 0 3px var(--signal);
 }
@@ -13374,4 +13509,971 @@ button.setup-account-card.out .setup-account-who {
   border-radius: var(--r-1);
   background: var(--panel);
   user-select: text;
+}
+
+/* ---------- Settings → Colours ----------
+
+   "Additionally i want to make a section where a user can edit the colors of
+   the blocks/presets and effects … Maybe even make some preset themes?"
+
+   The phone's page at this end (components/Colours, ColourSheet): six looks,
+   the unit's effects, the eight scenes, how a switched-off effect is drawn,
+   and the way back. Every tile on it is Play's own — gig-block and gig-scene,
+   inside a `.gig` so they take Play's corners too — so a card shows what the
+   stage will draw. One column on a phone, as many as fit on anything wider,
+   and nothing wider than a 320px screen: every grid here is minmax(0, …) or
+   min(100%, …), the min-content trap that had the effects stuck three to a
+   row and a long name pushing the page sideways. */
+
+.colours {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  margin-top: var(--s-4);
+  min-width: 0;
+}
+
+.colours-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.colours-sub {
+  margin: 0;
+  font-size: var(--f-2);
+  color: var(--silk-dim);
+}
+
+/* The six looks: a column on a phone, two across where there is room. */
+.colours-looks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--s-2);
+}
+
+/*
+ * One look, and the whole card is the radio button. The label is stretched
+ * over the card by its ::after, so a click anywhere on it — the tiles
+ * included, which take no clicks of their own — lands on the radio inside.
+ */
+.colours-look {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+  min-height: 64px;
+  padding: var(--s-3);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+}
+
+/* The one being worn, ringed in the app's amber, the mark for "this one". */
+.colours-look[data-on='yes'] {
+  border-color: var(--signal);
+  box-shadow: 0 0 0 1px var(--signal);
+}
+
+.colours-look-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  cursor: pointer;
+}
+
+.colours-look-pick::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--r-2);
+}
+
+/* The radio itself is the card: kept for the keyboard and a screen reader,
+   not drawn. Its focus is drawn round the whole card instead. */
+.colours-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.colours-look:has(.colours-radio:focus-visible) {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+.colours-look-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.colours-look-name {
+  min-width: 0;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: var(--f-4);
+  color: var(--silk);
+  overflow-wrap: anywhere;
+}
+
+.colours-look-on {
+  flex: 0 0 auto;
+  font-size: var(--f-2);
+  font-weight: 700;
+  color: var(--signal);
+}
+
+.colours-look-why {
+  font-size: var(--f-2);
+  line-height: 1.4;
+  color: var(--silk-dim);
+}
+
+/* Drive, Amp, Delay, Reverb and scene 1, five to a row however narrow. */
+.gig.colours-look-tiles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--s-1);
+  margin-top: 0;
+  pointer-events: none;
+}
+
+.colours-look-tiles button.gig-block,
+.colours-look-tiles button.gig-scene {
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--s-1);
+}
+
+.colours-look-tiles .gig-block-name,
+.colours-look-tiles .gig-scene-num {
+  font-size: var(--f-2);
+}
+
+/* "3 of your own colours on top · Clear them". */
+.colours-own {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  font-size: var(--f-2);
+  color: var(--silk-dim);
+}
+
+.colours-own > span {
+  flex: 1 1 160px;
+}
+
+.colours-own button.chip,
+button.chip.colours-more {
+  min-height: 44px;
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--f-2);
+}
+
+button.chip.colours-more {
+  align-self: flex-start;
+}
+
+/* The unit's effects, two across on a phone at a thumb's height, more on anything wider. */
+.gig.colours-effects {
+  --gig-tile: 56px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr));
+  gap: var(--s-2);
+  margin-top: 0;
+}
+
+.colours-effects button.gig-block {
+  min-width: 0;
+}
+
+.colours-effects .gig-block-name {
+  overflow-wrap: anywhere;
+}
+
+/* "Your colour", in the tile's own letters, under its name. */
+.colours-yours {
+  font-size: var(--f-1);
+  letter-spacing: 0.05em;
+  color: var(--block-ink, var(--silk-dim));
+  opacity: 0.85;
+}
+
+/* All eight scenes, lit, four to a row as Play lays them on a phone. Lit is
+   not live, so none of them wears the amber ring Play gives the live one. */
+.gig.colours-scenes {
+  --gig-tile: 56px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-2);
+  margin-top: 0;
+}
+
+.colours-scenes button.gig-scene {
+  min-width: 0;
+}
+
+.colours-scenes button.gig-scene.current {
+  box-shadow: none;
+}
+
+/* Two sizes down, on two lines at most, broken between words rather than
+   inside them: four to a row on a 320px phone leaves "CRUNCH BRIGHT" no room
+   at Play's own size, and "BRIGH / T" is not a name anybody reads. */
+.colours-scenes button.gig-scene {
+  padding-left: var(--s-1);
+  padding-right: var(--s-1);
+}
+
+.colours-scenes button.gig-scene.named .gig-scene-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--f-1);
+  letter-spacing: 0;
+  overflow-wrap: break-word;
+}
+
+.colours-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.colours-choices .rename-choice {
+  margin: 0;
+}
+
+/* A switched-off choice: an unlit drive drawn that way, beside its words, and
+   the whole row the radio's label. */
+.colours-off {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+}
+
+.colours-off[data-on='yes'] {
+  border-color: var(--signal);
+  box-shadow: 0 0 0 1px var(--signal);
+}
+
+.gig.colours-off-tile {
+  flex: 0 0 84px;
+  display: grid;
+  margin-top: 0;
+  pointer-events: none;
+}
+
+.colours-off-tile button.gig-block {
+  min-height: 56px;
+}
+
+.colours-off-pick {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.colours-off-pick::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-2);
+}
+
+/* Put every colour back: one full-width button, its consequence under it. */
+button.colours-putback {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-1);
+  width: 100%;
+  min-height: 56px;
+  padding: var(--s-3) var(--s-4);
+  text-align: left;
+  border-radius: var(--r-2);
+}
+
+/*
+ * "Now: Sunlight · Undo", held at the foot of the page while it scrolls, and
+ * drawn below everything else on it: arriving, it moves nothing that was
+ * under the pointer.
+ */
+.colours-undo {
+  position: sticky;
+  bottom: var(--s-2);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
+  font-size: var(--f-3);
+  color: var(--silk);
+  background: var(--chassis);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  box-shadow: var(--e-2);
+}
+
+.colours-undo > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.colours-undo button {
+  min-height: 44px;
+  color: var(--signal);
+}
+
+.colours-ask {
+  margin: 0;
+  font-size: var(--f-3);
+  line-height: 1.5;
+  color: var(--silk);
+}
+
+/* ---------- the colour sheet: a panel in the middle, over Settings ---------- */
+
+.colour-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-over-sheet);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-4);
+}
+
+.colour-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 7, 9, 0.58);
+}
+
+.colour-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(480px, 100%);
+  max-height: calc(100dvh - var(--s-6));
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  box-shadow: var(--e-3);
+  outline: none;
+}
+
+/* On a phone-sized window the margin round the panel is room the swatches
+   and the tiles need more: a thumb's width each, and Play's width. */
+@media (max-width: 420px) {
+  .colour-layer {
+    padding: var(--s-2);
+  }
+
+  .colour-panel {
+    max-height: calc(100dvh - var(--s-4));
+  }
+}
+
+.colour-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-4) var(--s-4) var(--s-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.colour-panel-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: var(--f-4);
+  color: var(--silk);
+}
+
+.colour-panel-note {
+  font-size: var(--f-2);
+  color: var(--silk-dim);
+}
+
+/*
+ * Between the title and the foot: what stays put (the tiles, Darker and
+ * Lighter, the pick's name, the neighbour line, the choice of presets) over
+ * the swatches, which are all that scroll — the phone's sheet. The whole
+ * middle used to scroll as one, and at 320 by 568 the panel opened with one
+ * row of colours above Cancel and Use it.
+ *
+ * In a window too short for both, the middle scrolls too, with the swatches
+ * kept two rows high inside it, so nothing is ever out of reach.
+ */
+.colour-panel-middle {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.colour-panel-top {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4) 0;
+}
+
+/* Its own scroller, and its own overscroll: a panel scrolled to the end does
+   not hand the wheel to the page under it. */
+.colour-panel-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-height: 140px;
+  padding: var(--s-3) var(--s-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.colour-panel-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4) var(--s-4);
+  border-top: 1px solid var(--rule);
+}
+
+.colour-foot-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+}
+
+.colour-foot-row button,
+button.colour-back {
+  min-height: 52px;
+  border-radius: var(--r-2);
+}
+
+/* Darker, the tile lit and unlit, Lighter: one row, as on the phone. The
+   two buttons no wider than their words, so on a 320px phone each tile is as
+   wide as Play draws it there. */
+.colour-top-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 52px;
+  gap: var(--s-2);
+}
+
+.colour-top-row > button {
+  min-height: 48px;
+  padding: 0 var(--s-1);
+  border-radius: var(--r-2);
+  font-size: var(--f-2);
+}
+
+/* The tile lit and unlit, side by side, at Play's size. */
+.gig.colour-preview {
+  --gig-tile: 62px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+  margin-top: 0;
+  pointer-events: none;
+}
+
+.colour-preview button.gig-block,
+.colour-preview button.gig-scene {
+  min-width: 0;
+}
+
+/* On a phone-sized window a tile here is a quarter of the row, and a scene's
+   name takes the Colours page's quarter-width rule: a size down, on two
+   lines, so "Pushed AC" reads as that rather than "PU…". */
+@media (max-width: 420px) {
+  .colour-preview button.gig-scene {
+    padding-left: var(--s-1);
+    padding-right: var(--s-1);
+  }
+
+  .colour-preview button.gig-scene.named .gig-scene-name {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: var(--f-1);
+    letter-spacing: 0;
+    overflow-wrap: break-word;
+  }
+}
+
+.colour-said {
+  margin: 0;
+  font-size: var(--f-2);
+  color: var(--silk-dim);
+}
+
+/*
+ * The swatches: as many across as fit at a thumb's width, never more than
+ * six. The shape is the gig-scenes trick — each may shrink to a sixth of the
+ * row, and never under 48px — so a 320px phone gets four across and a wide
+ * panel six, with nothing pushed off the side.
+ */
+.colour-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(max(48px, calc((100% - 5 * var(--s-2)) / 6)), 1fr));
+  gap: var(--s-2);
+}
+
+button.colour-swatch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 48px;
+  aspect-ratio: 1;
+  padding: 0;
+  font-size: var(--f-4);
+  font-weight: 700;
+  color: var(--swatch-ink);
+  background: var(--swatch);
+  border: 1px solid var(--swatch);
+  border-radius: var(--r-2);
+}
+
+/* On paper a pale swatch needs an edge, or white is a hole in the panel. */
+[data-theme='light'] button.colour-swatch {
+  border-color: var(--swatch-edge);
+}
+
+/* The one picked, ringed in amber, with a tick in its own letters. */
+button.colour-swatch.chosen,
+[data-theme='light'] button.colour-swatch.chosen {
+  border-color: var(--signal);
+  box-shadow: 0 0 0 2px var(--signal);
+}
+
+button.colour-swatch:focus-visible {
+  outline: 2px solid var(--silk);
+  outline-offset: 3px;
+}
+
+.colour-swatch-own {
+  font-size: var(--f-1);
+  letter-spacing: 0.05em;
+}
+
+button.chip.colour-any-open {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--f-2);
+}
+
+.colour-any {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s-3);
+}
+
+.colour-any-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.colour-any-field input[type='color'] {
+  width: 64px;
+  min-height: 44px;
+  padding: var(--s-1);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  background: var(--panel-hi);
+  cursor: pointer;
+}
+
+.colour-any-field input[type='text'] {
+  width: 9ch;
+  min-height: 44px;
+  font-family: var(--mono);
+}
+
+.colour-any-said,
+.colour-warning {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--f-2);
+  line-height: 1.4;
+  color: var(--signal);
+}
+
+/* The neighbour line keeps its room when there is nothing to say, so the
+   buttons under it never jump as a swatch is tried — two lines of it, which
+   the colour-blind one takes in a phone-sized window. */
+.colour-warning {
+  min-height: 2.8em;
+}
+
+/* Fractal Remote's card on paper keeps the edges that look always had, and
+   every other look's card keeps its darker one while Fractal Remote is worn:
+   a card shows its own look, whichever is being worn (data-look on <html>). */
+[data-theme='light'] .colours-look[data-look-card='fractalremote'] button.gig-block.on {
+  border-color: var(--block-fill);
+}
+
+[data-theme='light'] .colours-look[data-look-card='fractalremote'] button.gig-scene {
+  border-color: var(--scene-fill);
+}
+
+[data-theme='light'][data-look='fractalremote'] .colours-look:not([data-look-card='fractalremote']) button.gig-block.on {
+  border-color: color-mix(in srgb, var(--block-fill, var(--rule)) 50%, black);
+}
+
+[data-theme='light'][data-look='fractalremote'] .colours-look:not([data-look-card='fractalremote']) button.gig-scene {
+  border-color: color-mix(in srgb, var(--scene-fill, var(--rule)) 50%, black);
+}
+
+/* ---------- Grey when off ----------
+
+   The other way a switched-off effect can be drawn (Settings → Colours): as
+   the units draw a bypassed block — an FM3's is a black tile, a #666666
+   outline and dim letters — rather than an outline in its own colour. On
+   Play's pedals and looper (data-off on each tile, Gig's BlockTile) and on
+   the edit strip's bypassed blocks (Console's Chain); never on a scene, which
+   is not switched off when it is not the live one.
+
+   One grey for every unit and every look, Fractal Remote included, and a
+   paler one on paper. The letters are lifted from the FM3's own dim grey
+   (about 2.4:1) to 4.5:1 and the edge stands 3:1 off the page, on both
+   pages. The numbers are lib/colourPage's OFF_GREY, which the phone's Tile
+   draws with, and a test holds these to them. */
+
+button.gig-block.off[data-off='grey'],
+button.fx-tile.bypassed[data-off='grey'] {
+  --off-fill: #15181d;
+  --off-edge: #666666;
+  --off-ink: #878d97;
+}
+
+[data-theme='light'] button.gig-block.off[data-off='grey'],
+[data-theme='light'] button.fx-tile.bypassed[data-off='grey'] {
+  --off-fill: #e9e6e0;
+  --off-edge: #767d87;
+  --off-ink: #5b626c;
+}
+
+/* Over the light page's darker edge too: these come last, and weigh as much. */
+:root button.gig-block.off[data-off='grey'] {
+  background: var(--off-fill);
+  border: 2px solid var(--off-edge);
+}
+
+/* A VP4 pedal nobody has read keeps its dashes, in grey. */
+:root button.gig-block.off[data-off='grey'][data-unknown='yes'] {
+  border-style: dashed;
+}
+
+:root button.gig-block.off[data-off='grey'] .gig-block-name,
+:root button.gig-block.off[data-off='grey'] .gig-block-state,
+:root button.gig-block.off[data-off='grey'] .gig-block-channel {
+  color: var(--off-ink);
+}
+
+:root button.gig-block.off[data-off='grey'] .gig-block-icon {
+  background-color: var(--off-ink);
+}
+
+/* The strip keeps its dashed edge for bypassed — its own word for off — in grey. */
+:root button.fx-tile.bypassed[data-off='grey']:not(.io-tile) {
+  background: var(--off-fill);
+  color: var(--off-ink);
+}
+
+:root button.fx-tile.bypassed[data-off='grey']:not(.io-tile):not(.selected) {
+  border: 2px dashed var(--off-edge);
+}
+
+/* ---------- One preset's colours: its scenes, and its tag ----------
+
+   "Make a section where a user can edit the colors of the blocks/presets and
+   effects." A preset's colour tag — the editors' Assign Color — is a bar down
+   the left of its row in the preset list and in a setlist, and beside its
+   name on Play; never a fill, so the row is still the row and the amber that
+   marks the preset you are on is still the only thing in the list that says
+   so. The colour is set on the row by the component as --tag.
+
+   ONE RULE FOR THE BAR AT BOTH ENDS (lib/colourPage tagFill): the colour
+   itself on the dark page, where everything on offer stands 3:1 off the
+   black; on paper, the colour half way to black — lib/ink's PAPER_EDGE, the
+   edge a lit tile gets there, and the half the light page's tile edges above
+   are written with. A pale tag (white, yellow, lime) would otherwise be a
+   stripe of nothing on the page. A test holds the 50% to PAPER_EDGE. */
+
+button.preset-row[data-tag],
+.colours-tag[data-tagged],
+.gig-name-tag,
+.setlist-song.tagged,
+.colour-tag-preview {
+  --tag-drawn: var(--tag);
+}
+
+[data-theme='light'] button.preset-row[data-tag],
+[data-theme='light'] .colours-tag[data-tagged],
+[data-theme='light'] .gig-name-tag,
+[data-theme='light'] .setlist-song.tagged,
+[data-theme='light'] .colour-tag-preview {
+  --tag-drawn: color-mix(in srgb, var(--tag) 50%, black);
+}
+
+/* Inside the row's own 2px edge, which still says which row is loaded. */
+button.preset-row[data-tag] {
+  box-shadow: inset 4px 0 0 var(--tag-drawn);
+}
+
+.setlist-song.tagged {
+  box-shadow: inset 4px 0 0 var(--tag-drawn);
+}
+
+.setlist-song.tagged.lifted {
+  box-shadow: inset 4px 0 0 var(--tag-drawn), var(--e-2);
+}
+
+/* Beside the name on Play, the height of the name's line. Nothing at all for
+   a preset without a tag, so Play is as it was. */
+.gig-name-tag {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 4px;
+  height: 1.2em;
+  border-radius: var(--r-1);
+  background: var(--tag-drawn);
+}
+
+/* A preset is HELD for its tag, or right-clicked (lib/longPress): no iOS
+   callout or text selection over the sheet the hold opens. iOS sends no
+   contextmenu to cancel, so this is the only place it can be stopped. The
+   button that sat beside the star for it is gone: it came out of every
+   name's width, in the list a player reads most. */
+button.preset-row {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The loaded preset on the Colours page, drawn as its row in the list is —
+   the bar, if it has one — with what its tag is now on the right. */
+.colours-tag {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 52px;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  background: var(--panel);
+  color: var(--silk);
+  text-align: left;
+}
+
+.colours-tag[data-tagged] {
+  box-shadow: inset 4px 0 0 var(--tag-drawn);
+}
+
+.colours-tag-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--f-3);
+  font-weight: 600;
+}
+
+.colours-tag-now {
+  flex: 0 0 auto;
+  color: var(--silk-dim);
+  font-size: var(--f-1);
+}
+
+/* The colour sheet's picture of a preset's row, bar and all once it has a
+   tag. The name on two lines if it needs them: the title is "Preset colour",
+   so this is where the name is read. */
+.colour-tag-preview {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: var(--s-1) var(--s-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  background: var(--panel);
+  color: var(--silk);
+  font-size: var(--f-3);
+  font-weight: 600;
+}
+
+.colour-tag-preview[data-tagged] {
+  box-shadow: inset 4px 0 0 var(--tag-drawn);
+}
+
+.colour-tag-preview-name {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* Every preset, or just this one: the phone's two buttons, the one in force filled. */
+.colour-scope {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+}
+
+.colour-scope button {
+  min-height: 48px;
+  min-width: 0;
+  padding: var(--s-1) var(--s-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  background: var(--panel);
+  color: var(--silk-dim);
+  font-size: var(--f-2);
+  overflow-wrap: anywhere;
+}
+
+.colour-scope button.on {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--on-signal);
+}
+
+/* "012 Lead Rig" under "Just this preset", a size down: the phone's line under a button. */
+.colour-scope-which {
+  display: block;
+  font-size: var(--f-1);
+}
+
+/* The Colour button at the top of an open block, and beside a scene's Edit
+   name: the word, with a dot of the colour it opens on. */
+.block-colour {
+  display: flex;
+  justify-content: flex-end;
+}
+
+button.chip.block-colour-open,
+button.chip.scene-colour {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 44px;
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--f-2);
+}
+
+.block-colour-dot,
+.scene-colour-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.block-colour-dot {
+  background: var(--block-fill);
+}
+
+.scene-colour-dot {
+  background: var(--scene-fill);
+}
+
+[data-theme='light'] .block-colour-dot {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--block-fill) 50%, black);
+}
+
+[data-theme='light'] .scene-colour-dot {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--scene-fill) 50%, black);
+}
+
+/*
+ * "AN INDEPENDENT APP", ONCE, AT STARTUP (components/IndependentNotice).
+ *
+ * Fractal Audio's letter of 18 October 2026 asks for its sentence at
+ * startup. A page of its own over everything, opaque, so nothing behind it
+ * is seen until OK: the walkthrough, the connecting screen and Play all wait
+ * under it. Covering stops the mouse; the keyboard is stopped by the card
+ * making the rest of the page inert while it is up, which no style can do.
+ * The phone's card in this app's materials, at the walkthrough's width.
+ */
+.independent {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-notice);
+  display: grid;
+  place-items: center;
+  padding: var(--s-5) var(--s-4);
+  background: var(--chassis);
+  overflow: auto;
+}
+.independent-card {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  padding: var(--s-5);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  background: var(--panel);
+}
+.independent-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--f-6);
+  line-height: 1.15;
+}
+.independent-words {
+  margin: 0;
+  color: var(--silk);
+  font-size: var(--f-4);
+  line-height: 1.5;
+}
+.independent-help {
+  margin: 0;
+  color: var(--silk-dim);
+  font-size: var(--f-3);
+  line-height: 1.5;
+}
+.independent-ok {
+  width: 100%;
+  min-height: 48px;
+  font-size: var(--f-4);
+}
+
+/* Fractal Audio's sentence under "Finding your computer.", on the screen a
+   phone's browser shows while it starts up and looks: the screen's own small
+   type (.connect > p), set a little apart so it reads as the small print and
+   not as a line of what is happening. */
+.connect > p.connect-independent {
+  margin-top: var(--s-3);
 }

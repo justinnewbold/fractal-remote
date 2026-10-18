@@ -31,7 +31,7 @@ the very end. Both are kept for the record and are not for pasting.
 | Field | Limit | Value |
 |---|---|---|
 | **Name** | 30 | `Fractal Remote` |
-| **Subtitle** | 30 | `Phone remote, needs a computer` |
+| **Subtitle** | 30 | `Independent · needs a computer` |
 | **Category** | — | Primary: **Music**. Secondary: **Utilities** |
 | **Price** | — | **Free** (USD 0.00). The $9.99 unlock is an in-app purchase, set up separately under In-App Purchases |
 
@@ -45,6 +45,34 @@ says the demo is the one part that needs nothing.
 **Never call the computer app free.** "That could confuse people thinking the
 iOS/android app is free." Call it the desktop app. A test holds every block
 here to both rules.
+
+**And say whose app it is not, near the top** (18 October 2026). Fractal
+Audio's letter on Approved Vendor status asks for a clear statement that the
+app "is independently developed and is not affiliated with, endorsed by, or
+supported by Fractal Audio Systems, LLC", for their products to be named in
+plain text only to say what the app works with, and for support to come
+through Justin's own channels. Justin: "I wanna comply as much as I can. I'm
+just not gonna change the app name unless Fractal pushes back on it." So:
+
+- The **subtitle**, the one short line under the name, says it:
+  `Independent · needs a computer` (30 of 30, and it still says computer).
+  Apple changes the subtitle only with a new version, so it goes in with the
+  next one.
+- The **promotional text** carries the short form, after REQUIRES A COMPUTER.
+- The **Description** carries the full sentence and the trademark line as its
+  second paragraph, straight after REQUIRES A COMPUTER, not at the very end
+  where both stores' "more" hides it.
+- The **Google Play short description** says "Not made or supported by
+  Fractal Audio."
+- **Never "official", "certified", "approved" or "endorsed"** about the app,
+  here, on the website or in the app, and a test holds the listing to it. If
+  Approved Vendor status ever comes, the letter itself says it "does not
+  constitute certification or endorsement": it is forum participation, and
+  no badge or line in a listing presents it as more.
+- **The name stays "Fractal Remote"**, by Justin's decision, unless Fractal
+  sends a formal demand. The letter does not approve it; it says naming
+  Fractal's products in plain text to state compatibility is fine, which is
+  all the listing does.
 
 Each block below is pasted as it stands: one line per paragraph, so the store
 keeps the paragraphs and adds no line breaks of its own.
@@ -68,8 +96,21 @@ same five things the purchase page does, and gave up "and your phone
 controls it from there" and "The demo needs no gear" for the room: the
 Description says both straight after it.
 
+**And it says whose app it is not** (18 October 2026), in the short form of
+Fractal Audio's sentence (NOT_AFFILIATED_SHORT in shared/affiliation.mjs),
+because the live Description on the App Store keeps its old disclaimer, at
+its very end, until the next version. 170 characters do not hold the full
+sentence beside the computer and the VP4, so the order is the one that
+matters: the computer first, the disclaimer second, and the VP4 line
+shortened to fit ("knobs, tuner, tap tempo, channels and saving", the same
+five, without "the app's"). 169 of 170. It goes live only when the
+store-text workflow is run with **Write it**, which is Justin's call, not a
+merge's. And whether the App Store's web page shows promotional text at all
+(the App Store app on an iPhone does, above the description) is worth a look
+in a desktop browser before anybody is told it is there.
+
 ```
-REQUIRES A COMPUTER. Your Fractal plugs by USB into a computer running our desktop app. On a VP4, the app's knobs, tuner, tap tempo, channels and saving don't work yet.
+REQUIRES A COMPUTER. Not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC. On a VP4, knobs, tuner, tap tempo, channels and saving don't work yet.
 ```
 
 ### Keywords (100, commas, no spaces after them)
@@ -87,6 +128,17 @@ the people who make that gear.
 
 Changes only with a new version, so it goes in with the next build. The same
 text goes on Google Play, where it can change any time (see below).
+
+**The disclaimer is its second paragraph now** (18 October 2026), Fractal
+Audio's sentence and the trademark line, straight after REQUIRES A COMPUTER.
+It was the very last paragraph, below "more" on both stores, so a reader met
+the brand dozens of times before the line that says the app is not theirs.
+And WHAT IT DOES says "Colors that match your Fractal unit", without "and
+its editor", which tied the app's look to Fractal's own software. **On the
+App Store this waits for the next version**: the live 1.87.11 page keeps the
+old Description, whose last line says "Not affiliated with, authorised by,
+or endorsed by Fractal Audio Systems", until then. On Google Play it can go
+on now.
 
 **This is the one written for 1.87.11, and the one the next version keeps.**
 It says nothing about Bluetooth. If the live App Store page does not show it,
@@ -128,6 +180,8 @@ together.
 ```
 REQUIRES A COMPUTER. Your Fractal unit plugs into a Mac, Windows or Linux computer with a USB cable, and that computer runs the Fractal Remote desktop app (get it at fractal.newbold.cloud/downloads). Your phone controls the unit through it, so the computer has to stay on and connected while you play.
 
+Fractal Remote is independently developed and is not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC. “Fractal Audio”, “Axe-Fx”, “FM3”, “FM9”, “AM4” and “VP4” are trademarks of Fractal Audio Systems, LLC, used here only to say which hardware this app works with.
+
 Fractal Remote turns your phone into a remote control for your Fractal Audio rig. Switch presets and scenes, turn blocks on and off, change channels, tune up and tap tempo, without walking back to your unit. Build a setlist for tonight and step through it with two big buttons you can hit in the dark.
 
 SUPPORTED UNITS
@@ -145,7 +199,7 @@ WHAT IT DOES
 • Tuner, with the note and how far off you are
 • Tap tempo, with the tempo on the button
 • Setlists and starred presets, kept with your account across devices
-• Colors that match your unit's own screen, so you find things by looking
+• Colors that match your Fractal unit, so you find things by looking
 
 HOW IT WORKS
 A phone needs something between it and your Fractal unit: the desktop app. It runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to it. Get it at fractal.newbold.cloud/downloads.
@@ -154,8 +208,6 @@ Once the two are paired, the phone works from anywhere: the same room, the far s
 
 ONE PAYMENT, LIFETIME UNLOCK
 Controlling real hardware is a single purchase. It unlocks the full app on every device you own, forever, including every future update, on all supported Fractal units (on a VP4, what SUPPORTED UNITS says). No subscription.
-
-Fractal Remote is an independent app. It is in no way affiliated with, endorsed by, or sponsored by Fractal Audio Systems, Inc. “Fractal Audio”, “Axe-Fx”, “FM3”, “FM9”, “AM4” and “VP4” are trademarks of Fractal Audio Systems, Inc., used here only to say which hardware this app works with.
 ```
 
 ### Google Play
@@ -179,8 +231,14 @@ Google usually passes a text change within a day.
 
 ### Google Play: short description (80)
 
+The line right under the app's name on Play. It said "Control your Fractal
+from your phone", which, under the name Fractal Remote, reads as Fractal's
+own remote for your Fractal. Since 18 October 2026 it says whose app it is
+not instead, cut to fit: 80 of 80, still opening on the computer, and in
+ordinary letters.
+
 ```
-Requires a computer and our desktop app. Control your Fractal from your phone.
+Requires a computer and our desktop app. Not made or supported by Fractal Audio.
 ```
 
 ### URLs
@@ -209,6 +267,18 @@ Worth showing, in this order:
 3. The tuner
 4. A setlist
 5. Setup, showing it connected
+
+**Never a Fractal logo, a product photo or a real Fractal unit** (18 October
+2026), in any screenshot, App Preview, Play feature graphic, store video or
+picture on the website. Fractal Audio's letter asks for no logos, no
+official product photographs and no other proprietary artwork, and names in
+plain text are the one use it allows. That includes a photograph of
+Justin's own FM3: the hardware wears Fractal's logo. Google Play's welcome
+screenshot, with the FM3 photograph that has since left the app, is exactly
+what this rule is for. **The one exception is the review videos** linked in
+App Review Information (*Notes for App Review*, below): they have to show the
+real hardware, under Apple's 2.1, and they stay private links for the
+reviewer. Never an App Preview, never on the website, never posted.
 
 ---
 
@@ -257,11 +327,25 @@ is never shown to anyone else.
 
 ## Content rights
 
-**Yes, it contains third-party content** — the names of Fractal Audio's
-hardware (FM3, FM9, Axe-Fx, AM4, VP4) and pictures of those units. Answer
-**Yes** to having the rights only if the unit pictures are photos you took or
-were given permission to use; the names are used only to say which hardware
-the app works with, which the affiliation line in the description covers.
+**Yes, it contains third-party content**: the names of Fractal Audio's
+hardware (FM3, FM9, Axe-Fx, AM4, VP4), in plain text only, to say which
+hardware the app works with. **Yes, it has the rights to use it**: naming a
+product to say truthfully what yours works with is ordinary, and the
+affiliation line near the top of the Description says the app is not
+theirs.
+
+No pictures of those units any more (18 October 2026). The FM3 photograph,
+the FM3 with Fractal's logo on its screen, the rack front with the FRACTAL
+AUDIO logo and the 35 gear drawings of Fractal's own models (34 of them with
+a FRACTAL AUDIO badge) are all gone from the app and the website, so there
+is no Fractal logo, product photo or artwork left for this answer to cover.
+
+**What Fractal's letter does and does not say.** Fractal Audio's letter of
+18 October 2026 says naming its products in plain text to state
+compatibility is fine. It does not approve the name "Fractal Remote", which
+it asked to be changed before Approved Vendor status goes ahead, and it is
+not a licence for the app. Never call it written permission for the app, here
+or anywhere.
 
 ---
 
@@ -430,6 +514,27 @@ have pushed back, and with 1.87.11 it did not: the build was approved with the
 paragraph below as it stands. A later review could still ask. If one does, the
 choice is Justin's: show it to the review account too, with a video of it
 working, or a build without the module.
+
+**For the next version's notes: the startup card** (18 October 2026). Since
+then the app opens, once on every device, on a card headed "An independent
+app", with Fractal Audio's sentence, where help comes from, and an OK
+button, before the walkthrough or anything else; and Fractal's sentence sits
+under the spinner and "Finding your computer…" while the app starts. A
+reviewer's first launch meets the card before "Get started", so the next
+version's demo steps open on it: "1. Tap "OK" on the card that says the app
+is independent", then the four taps as they are. 2.3.1(a) wants what is new
+described, so *New since 1.87.11* gets one paragraph on it, and nothing in
+the notes calls the app approved by, or connected with, Fractal. A test
+holds the steps to the walkthrough's own words, and that test learns the
+card's OK on the day those notes are written. (The next build carries the
+card inside it, so a reviewer's very first launch has it. The 1.87.1 and
+1.87.11 builds do not: on the first launch after a fresh install or a store
+update they run the copy built into them, `fallbackToCacheTimeout` being 0.
+After a fresh install that is the old first screen, with the FM3 photograph
+and no card, once; after a store update, the walkthrough long since seen, it
+is only no card on that one launch. The card and the plain box come with the
+update, from the next launch. Only the next build pair closes that, and it
+is asked for like any other.)
 
 **For the next version's notes: the VP4** (15 October 2026). Its presets and
 scenes reach phones by an update and the computer app, not by a build, and
@@ -784,13 +889,23 @@ take the build only if they insist.
 listing), any time: nothing in it waits for 1.87.11 now. Checked on 11
 October 2026, the live listing had two faults below, in the short
 description and the trademark line; checked again on 15 October, both had
-been put right on Play, and what it still lacks is the VP4 line (the last
-one). Google reviews the listing along with a
+been put right on Play, and what it still lacked was the VP4 line (the last
+one). Since 18 October 2026 it also lacks Fractal Audio's sentence near the
+top, the new short description, and a screenshot set without the FM3
+photograph, each below. Google reviews the listing along with a
 build, so the next one is cheapest done in the same sitting.
 
 - **Short description:** the one under *Google Play: short description*,
-  which starts "Requires a computer" in ordinary letters. On Play since
-  before 15 October 2026.
+  which starts "Requires a computer" in ordinary letters and, since 18
+  October 2026, ends "Not made or supported by Fractal Audio." That second
+  half is new and is still to be pasted.
+- **The welcome-screen screenshot.** One of the phone screenshots is the
+  walkthrough's old first screen, with the FM3 product photograph and
+  "CONTROL YOUR FRACTAL FROM YOUR PHONE", which is exactly what Fractal's
+  letter asks not to be used (*Screenshots*, above). Delete it; the other
+  three are enough. Look in the 7-inch tablet, 10-inch tablet and
+  Chromebook boxes and at the feature graphic too, and take out any copy of
+  that screen there.
 - **Full description:** the Description at the top of this file. It says
   nothing about Bluetooth, because customers cannot open it. It once said
   Bluetooth (beta) could take the computer's place, partly so that the
@@ -798,11 +913,14 @@ build, so the next one is cheapest done in the same sitting.
   promoted; the App access note above now says why that permission is
   declared and when it is asked for instead, and the risk that leaves is
   named under it.
-- **The trademark line** at the end has to be the one in this file, which
-  names the VP4 and Fractal Audio. Play has had it since before 15 October
-  2026. The live App Store page still says "FM3, FM9, Axe-Fx and AM4 are
-  trademarks of their respective owner" and leaves the VP4 out; it goes
-  right with the next version, which brings this Description.
+- **The trademark line** in the second paragraph has to be the one in this
+  file, which names the VP4 and Fractal Audio, with Fractal's sentence
+  before it (18 October 2026: "independently developed", "supported by",
+  "LLC"). Play had the old one, at the end, since before 15 October 2026;
+  delete that paragraph at the end when pasting the new one up top. The
+  live App Store page still says "FM3, FM9, Axe-Fx and AM4 are trademarks
+  of their respective owner" and leaves the VP4 out; it goes right with the
+  next version, which brings this Description.
 - **The VP4 line** under SUPPORTED UNITS (15 October 2026). The live
   listing still says "FM3, FM9, Axe-Fx III, AM4 and VP4." and promises all
   five presets, scenes, channels, the tuner and tap tempo. Paste the whole

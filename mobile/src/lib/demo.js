@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createMockDevice } from './mockDevice'
 import { DEFAULT_UNIT, UNIT_KEYS } from './demoUnits'
 import { useDemoStorage } from './demoMemory'
+import { setColourUnit } from './looks'
 import { hydrate, sync } from './store'
 
 /* What the demo saves — presets and scene names — is kept in the phone's own
@@ -81,6 +82,15 @@ export function setDemo(on) {
   const want = !!on
   if (want === isDemo()) return
   mock = want ? createMockDevice(unit) : null
+  /*
+   * And the colours forget the unit they were told, which belongs to the side
+   * of the switch just left. Off, with the computer out of reach, nothing
+   * would tell them again — so an AM4 owner kept the demo's FM3 colours, its
+   * effect list and its "fm3:demo" drawer for the rest of the session. Until
+   * the next unit answers they wear the palette remembered for his own, and
+   * file nothing anywhere (lib/looks setColourUnit).
+   */
+  setColourUnit(null)
   announce()
   AsyncStorage.setItem(KEY, want ? '1' : '0').catch(() => {
     /* Costs the next launch its demo, and nothing else. */

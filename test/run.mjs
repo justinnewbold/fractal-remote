@@ -6062,6 +6062,14 @@ console.log('\nwhat the app keeps away from a VP4')
 const { run: vp4Safety } = await import('./vp4-safety.mjs')
 vp4Safety(test)
 
+console.log('\nthe colours: the units’ own, readable, and the ones you choose')
+const { run: colours } = await import('./colours.mjs')
+colours(test)
+
+console.log('\nwhose app this is not: Fractal Audio’s letter')
+const { run: independent } = await import('./independent.mjs')
+independent(test)
+
 console.log('\nthe server')
 const { run: server } = await import('./server.mjs')
 server(test)
@@ -6119,18 +6127,17 @@ test('a design file survives the round trip', async () => {
   assert.deepEqual(back.spec, entry.spec)
 })
 
-test('every block colour is real CSS', async () => {
+test('every block colour is real CSS, and a colour the phone can draw', async () => {
   // A Cyrillic а slipped into the reverb hex on first writing: identical on
   // screen, invalid to CSS, and the colour just never appears — no error, no
-  // clue. Colour strings must be plain ASCII hex or a var() reference.
+  // clue. Colour strings must be plain ASCII hex — no var() any more either:
+  // React Native cannot draw one, which is why an unknown block on the phone
+  // used to have no fill at all. test/colours.mjs checks every look and unit.
   const { blockColor } = await import('../src/lib/blockColors.js')
   for (const slug of ['drive', 'amp', 'delay', 'reverb', 'cab', 'chorus', 'pitch', 'mystery']) {
     const { fill, ink } = blockColor(slug)
     for (const value of [fill, ink]) {
-      assert.ok(
-        /^#[0-9a-f]{6}$/.test(value) || /^var\(--[\w-]+\)$/.test(value),
-        `${slug}: "${value}" is not valid CSS`
-      )
+      assert.ok(/^#[0-9a-f]{6}$/.test(value), `${slug}: "${value}" is not a colour both ends can draw`)
     }
   }
 })
@@ -6149,8 +6156,71 @@ test('instance suffixes and unknowns resolve sensibly', async () => {
   const { blockColor } = await import('../src/lib/blockColors.js')
   assert.deepEqual(blockColor('delay2'), blockColor('delay'))
   assert.deepEqual(blockColor('drive1'), blockColor('drive'))
-  assert.equal(blockColor('definitely-new-block').fill, 'var(--panel-hi)')
-  assert.equal(blockColor(null).fill, 'var(--panel-hi)')
+  /* A blue-grey of its own (lib/blockPalettes NEUTRAL), where it was var(--panel-hi). */
+  assert.equal(blockColor('definitely-new-block').fill, '#5b616b')
+  assert.equal(blockColor(null).fill, '#5b616b')
+})
+
+test('any colour picked in the browser is made readable first, and a scene is never given the amber', async () => {
+  /*
+   * "Any colour…" on the browser's colour sheet: its own colour picker and a
+   * box for a colour code. Whatever comes out goes through lib/colourPage
+   * freePick — the hue kept, the lightness moved just far enough for the
+   * letters to read and a lit tile to stand off an unlit one — and the sheet
+   * says when it moved. The phone has no free picker (it would need a build),
+   * so this is the only way a colour nobody checked reaches a tile.
+   */
+  const { colourCode, freePick, FREE_PICK_WORDS } = await import('../src/lib/colourPage.js')
+  const { AMBERS } = await import('../src/lib/blockPalettes.js')
+  const { contrast, deltaE, inkOn, luminance } = await import('../src/lib/ink.js')
+  /* The ways a colour code gets typed, and the ones that are not one yet. */
+  assert.equal(colourCode('#CC0000'), '#cc0000')
+  assert.equal(colourCode(' cc0000 '), '#cc0000')
+  assert.equal(colourCode('#c00'), '#cc0000')
+  for (const half of ['', '#', '#cc00', 'cc00000', 'red', 'var(--signal)', null, undefined]) assert.equal(colourCode(half), null, `"${half}" was taken for a colour`)
+  assert.equal(freePick('#cc00'), null, 'half a code was used')
+  /* One already readable is used exactly as picked, and nothing is said. */
+  assert.deepEqual({ ...freePick('#0055ff') }, { raw: '#0055ff', fill: '#0055ff', moved: null, why: null, amber: false })
+  /* And one of the grid's own is the grid's, whichever way it was reached: Fractal's red typed is Fractal's red. */
+  assert.notEqual(freePick('#cc0000').fill, '#cc0000', 'this no longer shows that the grid is let through')
+  assert.equal(freePick('#CC0000', { offered: ['#cc0000'] }).fill, '#cc0000', 'a swatch typed in was moved off itself')
+  assert.equal(freePick('#cc0000', { offered: ['#cc0000'] }).moved, null)
+  /* Across the whole wheel, light and dark: every pick comes out readable and still lit. */
+  for (let h = 0; h < 360; h += 15) {
+    for (const l of [0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95]) {
+      const c = (1 - Math.abs(2 * l - 1)) * 0.9
+      const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+      const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
+      const hex = '#' + [r, g, b].map((v) => Math.round((v + l - c / 2) * 255).toString(16).padStart(2, '0')).join('')
+      const got = freePick(hex)
+      assert.ok(contrast(got.fill, inkOn(got.fill)) >= 4.5, `${hex} came out as ${got.fill}, which cannot carry its letters`)
+      assert.ok(contrast(got.fill, '#0d0f12') >= 3, `${hex} came out as ${got.fill}, lost on the dark stage when unlit`)
+      if (got.moved) assert.equal(got.moved, luminance(got.fill) > luminance(hex) ? 'lighter' : 'darker', `${hex}: the line says the wrong way`)
+      if (got.moved) assert.ok(FREE_PICK_WORDS[got.moved], 'a moved pick has nothing to say for itself')
+    }
+  }
+  assert.equal(freePick('#101010').moved, 'lighter')
+  /* And the line says WHY it moved. A dark pick is brightened for the stage —
+     a lit tile has to stand out from an unlit one on the black — and not for
+     its letters, which read better on #330066 than on what it becomes. One
+     in between is moved for its letters, a little. */
+  const { freePickSaid } = await import('../src/lib/colourPage.js')
+  for (const dark of ['#330066', '#202020', '#cd0000']) {
+    assert.equal(freePick(dark).why, 'stage', dark)
+    assert.equal(freePickSaid(freePick(dark)), 'Brightened so it shows on a dark stage', `${dark} is said to be brightened for its letters`)
+  }
+  const between = freePick('#7a7a7a')
+  assert.equal(between.why, 'letters')
+  assert.equal(freePickSaid(between), FREE_PICK_WORDS[between.moved])
+  assert.match(FREE_PICK_WORDS.lighter, /^Brightened a little so its letters stay readable$/)
+  assert.equal(freePickSaid(freePick('#0055ff')), '', 'a pick used as it was says something')
+  assert.equal(freePickSaid(freePick('#f0a73c', { scene: true })), FREE_PICK_WORDS.amber)
+  /* The amber rings the scene you are on: a scene is never given it, an effect may be. */
+  const amber = freePick('#f0a73c', { scene: true })
+  assert.equal(amber.amber, true, 'a scene was let have the amber')
+  assert.ok(AMBERS.some((a) => deltaE(amber.fill, a) < 10))
+  assert.equal(freePick('#f0a73c').amber, false, 'an effect was refused a colour only a scene must not have')
+  assert.equal(freePick('#0055ff', { scene: true }).amber, false)
 })
 
 
@@ -6560,6 +6630,50 @@ test('a hold is a press that stays put, and a right-click is not a middle-click'
   // Diagonal, so the distance is the hypotenuse rather than the larger axis.
   assert.equal(hold.movedOut(from, 108, 108), true, 'a diagonal drag is measured one axis at a time')
   assert.equal(hold.movedOut(null, 999, 999), false, 'a move with no press behind it counts as one')
+})
+
+test('the click a hold ends in is swallowed wherever it lands, once, and never later', async () => {
+  /*
+   * After a touch the browser aims the lift's click at whatever is under the
+   * finger, and a hold that opened the colour sheet put the sheet there: the
+   * lift pressed Use it and tagged the preset red. So the next click on the
+   * page is eaten, whatever it lands on — once, and only that one.
+   */
+  const page = new EventTarget()
+  const click = () => {
+    const e = new Event('click', { cancelable: true })
+    page.dispatchEvent(e)
+    return e.defaultPrevented
+  }
+  let done = 0
+  hold.swallowNextClick(page, { ms: 5, done: () => done++ })
+  page.dispatchEvent(new Event('pointerup'))
+  assert.equal(click(), true, 'the click a hold ends in pressed what the hold opened')
+  assert.equal(click(), false, 'the click after it is eaten too')
+  assert.equal(done, 1)
+
+  /* A new press stands it down: that press's click is its own. */
+  hold.swallowNextClick(page, { ms: 5, done: () => done++ })
+  page.dispatchEvent(new Event('pointerdown'))
+  assert.equal(click(), false, 'a press after a hold lost its click')
+  assert.equal(done, 2)
+
+  /* And a lift with no click after it (a scroll, a menu of the browser's) stands it down a moment later. */
+  hold.swallowNextClick(page, { ms: 5, done: () => done++ })
+  page.dispatchEvent(new Event('pointercancel'))
+  await new Promise((r) => setTimeout(r, 25))
+  assert.equal(click(), false, 'a click long after the hold, from the keyboard, was eaten')
+  assert.equal(done, 3)
+
+  /* Nowhere to listen, nothing to break. */
+  assert.equal(typeof hold.swallowNextClick(undefined), 'function')
+
+  /* The hook arms it only with a press still down: a right-click sends no click to eat. */
+  const press = readSrc(new URL('../src/lib/longPress.js', import.meta.url), 'utf8')
+  assert.match(press, /const pressing = from\.current !== null\s+stop\(\)\s+if \(pressing\) \{\s+fired\.current = true\s+swallowNextClick\(globalThis\.window,/, 'the click after a hold is swallowed only where it was aimed')
+  /* And a press keeps where it went down: put the last one away first, or a hold never knows a finger is on it and a drag never stops it. */
+  const down = press.slice(press.indexOf('onPointerDown:'), press.indexOf('onPointerMove:'))
+  assert.match(down.replace(/\/\*[\s\S]*?\*\//g, ''), /stop\(\)\s+from\.current = \{ x: e\.clientX, y: e\.clientY \}\s+timer\.current = setTimeout\(fire, HOLD_MS\)/, 'a press forgets where it went down as soon as it is made')
 })
 
 test('a tuner the unit cannot run turns itself back off', async () => {
@@ -9923,6 +10037,27 @@ function loadDesktopMain({
 }
 const ENTRY = '/home/pi/.config/autostart/fractal-remote.desktop'
 const trayItem = (menu, label) => (menu || []).find((item) => typeof item.label === 'string' && item.label.startsWith(label))
+
+test('the tray says whose app this is not, greyed, just above Quit, and asks nobody anything', async () => {
+  /*
+   * Fractal Audio's letter of 18 October 2026 asks for its sentence at
+   * startup. A computer started with no window (a Raspberry Pi on a
+   * pedalboard) has only this menu, and must never put up a box nobody can
+   * click: one line that cannot be pressed, the shared short form.
+   */
+  const { NOT_AFFILIATED_SHORT } = await import('../shared/affiliation.mjs')
+  const main = loadDesktopMain()
+  main.run('buildTray()')
+  const menu = main.menus.at(-1)
+  const line = trayItem(menu, 'Not affiliated')
+  assert.ok(line, 'the tray does not say whose app this is not')
+  assert.equal(line.label, NOT_AFFILIATED_SHORT)
+  assert.equal(line.enabled, false, 'the line can be pressed')
+  const at = menu.indexOf(line)
+  assert.equal(menu[at + 1]?.type, 'separator')
+  assert.equal(menu[at + 2]?.label, 'Quit', 'the line is not just above Quit')
+  assert.deepEqual(main.dialogs, [], 'drawing the tray put up a dialog')
+})
 
 test('the menu draws with the phone remote on and the phones told — main.js’s own buildTray, run', () => {
   const main = loadDesktopMain()
@@ -14502,7 +14637,8 @@ test('a switch is said in words: tap, hold, a typed label, and the light', async
   assert.equal(one.tap.label, 'CLEAN', 'a stored label is shown, without its padding')
   assert.equal(one.hold.action, 'Tap Tempo', '“Utility · Tap Tempo” is two words for one thing')
   assert.equal(one.hold.label, null, 'an empty label is drawn as a label')
-  assert.deepEqual(one.light, { name: 'Red', hex: '#e23b3b' })
+  /* The editors' own Red, not the host's approximation of it (see RING_COLOURS). */
+  assert.deepEqual(one.light, { name: 'Red', hex: '#cc0000' })
   assert.equal(lightWords(one.light), 'Red light')
   assert.equal(one.unread, false)
 
@@ -14525,8 +14661,12 @@ test('a switch is said in words: tap, hold, a typed label, and the light', async
   assert.equal(at({ tapCategory: 4, tapFunction: 7, holdCategory: 0, color: 1 }).tap.action, 'Effect', 'a function this app has no word for hides the kind it does know')
   assert.equal(at({ tapCategory: 42, holdCategory: 0, color: 1 }).tap.action, 'Something this app can’t name yet')
 
-  /* The FM3's colour list starts at 1, so a 0 is an answer with no name, not a failed read. */
-  const odd = at({ tapCategory: 3, tapFunction: 0, holdCategory: 0, color: 0 })
+  /* 0 is Default: a Scene switch left on it lights red, as every Scene switch does out of the box. */
+  const plain = at({ tapCategory: 3, tapFunction: 0, holdCategory: 0, color: 0 })
+  assert.deepEqual(plain.light, { name: 'Default', hex: '#cc0000', shade: 'Red' }, 'a switch on Default reads as a colour nobody can name')
+  assert.equal(lightWords(plain.light), 'Red light (the default)')
+  /* A number past the editor's twelve is still an answer with no name, not a failed read. */
+  const odd = at({ tapCategory: 3, tapFunction: 0, holdCategory: 0, color: 42 })
   assert.deepEqual(odd.light, { name: null, hex: null }, 'a colour the unit did report is not a failed read')
   assert.equal(lightWords(odd.light), 'Light: a colour this app can’t name yet')
 })

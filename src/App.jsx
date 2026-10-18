@@ -86,7 +86,7 @@ import Updates, { UpdateReadyNotice } from './components/Updates'
 import StartAtBoot from './components/StartAtBoot'
 import Am4Check from './components/Am4Check'
 import RenamePreset from './components/RenamePreset'
-import { countFromRefusal, slotCount, slotOutside, slotProblem, slotsForChat, timeLeft } from './lib/slots'
+import { countFromRefusal, slotCount, slotLabel, slotOutside, slotProblem, slotsForChat, timeLeft } from './lib/slots'
 import { checkRevert, noteEdit, revertSaid, revertTook, stuckLines } from './lib/revertCheck'
 import { inDesktopApp } from './lib/desktop'
 import { createNameScan } from './lib/nameScan'
@@ -96,6 +96,10 @@ import { findLooper } from '../shared/looper.mjs'
 import { useChain } from './components/ChainWait'
 import Screens, { viewsFor } from './components/Screens'
 import SceneArrange from './components/SceneArrange'
+import Colours from './components/Colours'
+import { markColoursNotice } from './components/ColoursNotice'
+import { coloursStatus } from './lib/colourPage'
+import { useLooks } from './lib/useLooks'
 import { useAsks } from './lib/asks'
 import {
   SIZES,
@@ -115,7 +119,7 @@ import {
 import { editButtonShows } from './lib/playMode'
 import { FIXES, FIRMWARE_NOTE, fixById, fixFor, versionsInSync } from '../shared/troubleshooting.mjs'
 import { osGuess, waysFor, waysWord } from '../shared/ways-in.mjs'
-import { AFFILIATION } from '../shared/affiliation.mjs'
+import { AFFILIATION, SUPPORT_LINE, SUPPORT_URL } from '../shared/affiliation.mjs'
 import { isAdmin } from '../shared/admin.mjs'
 import AccessTool from './components/AccessTool'
 import SalesTool from './components/SalesTool'
@@ -223,6 +227,7 @@ import ConnectScreen, { AccountCheck } from './components/ConnectScreen'
 import PhoneRemote from './components/PhoneRemote'
 import WifiQr from './components/WifiQr'
 import PhoneWalkthrough from './components/PhoneWalkthrough'
+import IndependentNotice, { independentNoticeSeen, markIndependentNotice } from './components/IndependentNotice'
 import { ChainCards, TipCard } from './components/Walk'
 import { linkChain } from '../shared/link-chain.mjs'
 import { UPDATE_STEPS } from '../shared/computer-update.mjs'
@@ -235,7 +240,7 @@ import { firmwareOf } from '../shared/firmware.mjs'
 import LinkDetails from './components/LinkDetails'
 import SignInSheet from './components/SignInSheet'
 import { arrivedToJoin } from './lib/joinLink.js'
-import { loadedNote } from './lib/presetName.js'
+import { loadedNote, presetLabel } from './lib/presetName.js'
 import {
   bootLink,
   linkState,
@@ -535,6 +540,8 @@ const SETUP_PAGES = {
   updating: UPDATE_STEPS.title,
   account: 'Account',
   appearance: 'Tiles & scenes',
+  /* "Let's make the colors match better", and choose your own: the phone's page, from the same lib/colourPage. */
+  colours: 'Colours',
   help: 'Troubleshooting',
   updates: 'Updates',
   about: 'About',
@@ -599,10 +606,41 @@ export default function App() {
    * finishes. Somebody who opens it, reads a screen and closes the tab has
    * seen it; offering it again treats closing as an accident, and a tutorial
    * that keeps coming back is the thing everybody remembers hating.
+   *
+   * "Opens" is when it can be seen, not when it is drawn: on a first visit it
+   * is drawn under the startup card (`independentDue`, below), which is
+   * opaque, and a tab closed with the card still up has seen none of it. So
+   * it is marked once OK has been pressed, and that visitor meets the card
+   * and then the walkthrough next time.
    */
-  const [walkthrough, setWalkthrough] = useState(() => !onboarded())
+  const [walkthrough, setWalkthrough] = useState(() => {
+    const first = !onboarded()
+    /* A first run never saw the old colours, so it is never told they
+       changed (components/ColoursNotice) — marked here, in the very first
+       render, before Play can be drawn and ask. */
+    if (first) markColoursNotice()
+    return first
+  })
   /* Opened again from Settings, which is when the phone's walkthrough offers a way out at the top. */
   const [walkReplay, setWalkReplay] = useState(false)
+  /*
+   * WHETHER THE STARTUP CARD IS STILL OWED: "An independent app", Fractal
+   * Audio's sentence and where help comes from, once per browser
+   * (components/IndependentNotice). Decided in the very first render, like
+   * the walkthrough, so the card covers the page from its first frame rather
+   * than arriving over something already in use. A name of its own, and
+   * drawn after the walkthrough: the walkthrough's own condition is read as
+   * text by test/structure.mjs, and is never written anywhere above it.
+   */
+  const [independentDue, setIndependentDue] = useState(() => !independentNoticeSeen())
+  /*
+   * WHAT PLAY'S ONE-TIME NOTES WAIT BEHIND: the startup card, then the
+   * walkthrough. Both are drawn over the page, with Play running under
+   * them, and a note "shown" under either is a note nobody saw but the app
+   * remembers as said. The startup card comes first and alone; the colours
+   * line waits for both, and for the sign-in sheet (Gig `noteAbove`).
+   */
+  const startupOver = independentDue || walkthrough
   /*
    * On the computer, whether the walkthrough has moved on from its phone-style
    * welcome and choice to the computer's own plug-in steps — which is where
@@ -610,8 +648,8 @@ export default function App() {
    */
   const [computerSetup, setComputerSetup] = useState(false)
   useEffect(() => {
-    if (walkthrough) markOnboarded()
-  }, [walkthrough])
+    if (walkthrough && !independentDue) markOnboarded()
+  }, [walkthrough, independentDue])
   const [device, setDevice] = useState(null)
   /*
    * The unit's own state comes from the store, not from here.
@@ -1058,13 +1096,35 @@ export default function App() {
       if (!signIn) setSignInStart('in')
     }, [signIn])
     /* Opened from fractal.newbold.cloud/join: straight onto Create Account,
-       over the welcome, and the address back to plain `/`. See lib/joinLink. */
+       over the welcome, and the address back to plain `/`. See lib/joinLink.
+
+       AFTER THE STARTUP CARD, NEVER UNDER IT. A first visit through the
+       link owes the card too (independentDue), and the form used to open in
+       the same first moment: on a phone the sheet shut the page under it,
+       the card with it, and OK did nothing, over a form nobody could see.
+       The only way out was Back, which closed the form the link was sent
+       for. So the link is remembered from the first render and kept until
+       OK, and the address stays /join until then, so a reload while the
+       card is up still ends on Create Account. Then the card goes and the
+       form arrives, in sight, the way the link promised. */
+    const joinOwed = useRef(null)
+    if (joinOwed.current === null) joinOwed.current = arrivedToJoin()
     useEffect(() => {
-      if (!arrivedToJoin()) return
+      if (!joinOwed.current || independentDue) return
+      joinOwed.current = false
       window.history.replaceState(null, '', '/')
       setSignInStart('up')
       setSignIn('account')
-    }, [])
+    }, [independentDue])
+    /* WHETHER THE SIGN-IN SHEET IS OVER PLAY, or the join link's is owed:
+       Play's colours line waits for it (Gig `noteAbove`), as it waits for the
+       startup card. The link's own answer counts as well as the sheet,
+       because the line's effect runs before the one above that opens the
+       sheet, in the same moment OK is pressed: waiting on the sheet alone,
+       the line was said and remembered under it, and a sign-in from the demo
+       then reloads the page, so a player who came in through the link was
+       never told where the old colours went. */
+    const signInOver = Boolean(signIn) || Boolean(joinOwed.current)
   /*
    * Whether the phone has ever had the Mac answer this session. A blip after
    * that keeps the screen (the chip goes red; the loop retries); before it,
@@ -1354,6 +1414,9 @@ export default function App() {
     []
   )
   const [setupPage, setSetupPage] = useState(null)
+  /* The Colours row's line names the look and the unit's colours, so it is
+     redrawn when either changes (lib/useLooks). */
+  useLooks()
   /* A real VP4 on the computer, not the demo's: it gets the Scene Select card (components/Vp4Setup). Follows each detect through `device`. */
   const onRealVp4 = Boolean(device) && vp4Here()
   /*
@@ -1445,7 +1508,8 @@ export default function App() {
   /* A tap outside and Escape are the two ways anyone expects to dismiss a
      menu; without them the only way out is finding the button again. The
      sheet on a phone brings its own, so the listener stands down under it. */
-  useDismiss(presetMenuRef, () => setPresetMenu(false), { open: presetMenu && !narrow, ignore: '.topbar-preset' })
+  /* The colour panel a preset held or right-clicked opens is drawn over the page, not in the menu: a click in it is not a click away. */
+  useDismiss(presetMenuRef, () => setPresetMenu(false), { open: presetMenu && !narrow, ignore: '.topbar-preset, .colour-layer' })
   const [slots, setSlots] = useState([])
   const [scanning, setScanning] = useState(false)
   const scene = useDevice(ofScene)
@@ -3949,6 +4013,14 @@ export default function App() {
     }
   }, [status, namesTotal, remote, readNames])
 
+  /*
+   * The preset that is loaded, as the colour sheet names it — "012 Lead Rig" —
+   * so a scene can be painted for just this one (lib/colourPage sceneTarget).
+   */
+  const presetHere = Number.isInteger(preset?.number)
+    ? { number: preset.number, words: `${slotLabel(preset.number, device?.capabilities?.presets?.addressing)} ${presetLabel(preset)}` }
+    : undefined
+
   // The picker: eager while it is open; quiet — or, over the relay, stopped — when it closes.
   const pickerOpen = presetMenu || sheet === 'presets'
   useEffect(() => {
@@ -4573,6 +4645,8 @@ export default function App() {
            * computer's own window or its wifi page, never the demo.
            */
           down={linkShowsDown}
+          /* The startup card or the walkthrough is over the page, or the sign-in sheet is (the join link opens it the moment OK is pressed, and a sign-in from the demo reloads the page under it), or the hold tip above or the demo's line is up: the colours' one-time line waits for them all. */
+          noteAbove={startupOver || signInOver || (!holdNoteSeen && holdOpensChannels) || (isDemo() && status === 'live' && !demoNoteSeen)}
           onError={setError}
           /* A VP4's words about a preset picked from the list, for the band over the tiles (vp4Said). */
           said={vp4Said}
@@ -5061,6 +5135,21 @@ export default function App() {
         paid={answeredFor && !paid.unknown ? paid.unlocked : null}
         onUnlock={openUnlock}
       />
+      {/*
+        "AN INDEPENDENT APP", ONCE, OVER EVERYTHING ABOVE (Fractal Audio's
+        letter, 18 October 2026). Opaque and over the walkthrough, which waits
+        under it; see components/IndependentNotice for why it covers the page
+        rather than replacing it, and how it keeps the keyboard out of what
+        is under it.
+      */}
+      {independentDue ? (
+        <IndependentNotice
+          onDone={() => {
+            markIndependentNotice()
+            setIndependentDue(false)
+          }}
+        />
+      ) : null}
 
       <SignInSheet
         open={Boolean(signIn)}
@@ -5262,6 +5351,7 @@ export default function App() {
           channelNames={device?.capabilities?.channelNames}
           hasScenes={hasScenes}
           canRename={!onRealVp4}
+          presetHere={presetHere}
           busy={busy}
           onChanged={(summary, { reread = true } = {}) => {
             record('scene', summary)
@@ -5519,6 +5609,8 @@ export default function App() {
             <p className="silk-label setup-group">Play screen</p>
             <div className="setup-rows">
               <SetupRow key="appearance" title="Tiles & scenes" status="Tile size, effect pictures, scene layout" onClick={() => setSetupPage('appearance')} />
+              {/* "Let's make the colors match better", and choose your own. */}
+              <SetupRow key="colours" title="Colours" status={coloursStatus({ unitName: device?.short || device?.name || undefined, capabilities: device?.capabilities })} onClick={() => setSetupPage('colours')} />
             </div>
             {/* Light or dark right here, as on the phone: one click, not a page. */}
             <div className="setup-inline-theme">
@@ -5665,6 +5757,18 @@ export default function App() {
                 ) : null}
               </div>
             </div>
+          </div>
+        ) : null}
+
+        {setupPage === 'colours' ? (
+          <div className="setup-page">
+            <button type="button" className="setup-back" onClick={() => setSetupPage(null)}>
+              ‹ Settings
+            </button>
+            <p className="setup-page-title">{SETUP_PAGES.colours}</p>
+            {/* The loaded preset's effects go first, and the scene tiles carry
+                their names — as many of them as the unit has scenes. */}
+            <Colours blocks={blocks} sceneNames={sceneNames} preset={presetHere} capabilities={device?.capabilities} icons={icons} />
           </div>
         ) : null}
 
@@ -6389,6 +6493,24 @@ export default function App() {
               {inDesktopApp() ? (
                 <SetupRow key="updates" title="Updates" status="This app, not your unit" onClick={() => setSetupPage('updates')} />
               ) : null}
+              {/*
+                HELP WITH THIS APP, IN SIGHT. Fractal Audio's letter (18
+                October 2026) asks for support through the developer's own
+                channels, and the way to them sat inside the small print
+                below, which opens closed, as a link in the browser's own
+                blue. The phone has it as a full row on the page; so does
+                this. The website's address, never a local link: the
+                computer window is served from the computer's own copy of
+                the site, and the support page is website-only, so that copy
+                of it is never kept current (WEBSITE_ONLY in
+                scripts/computer-fingerprint.mjs).
+              */}
+              <SetupRow
+                key="help"
+                title="Help with this app"
+                status="Questions, problems, a person"
+                onClick={() => window.open(SUPPORT_URL, '_blank', 'noopener')}
+              />
             </div>
             {/* The pedalboard computer's switch, under Updates because both are
                 about this app rather than the unit. Draws nothing unless the
@@ -6401,6 +6523,12 @@ export default function App() {
                   to go looking for. One string, shared with the phone — see
                   shared/affiliation.mjs for why it is not typed twice. */}
               <p className="hint">{AFFILIATION}</p>
+              {/*
+                AND WHERE HELP COMES FROM, which is never Fractal Audio, in
+                the same words as the phone's small print. The row that opens
+                the support page is up with Updates, in sight.
+              */}
+              <p className="hint">{SUPPORT_LINE}</p>
               <div className="history-actions">
                 <a className="chip" href="/privacy.html" target="_blank" rel="noreferrer">
                   Privacy

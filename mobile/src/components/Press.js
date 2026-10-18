@@ -91,7 +91,9 @@ export default function Press({
    * they sit either side of is told nothing at all. Passing this was silently
    * ignored before, which is worse than not offering it.
    */
-  accessibilityLabel
+  accessibilityLabel,
+  /* What a hold does, where a button has one nobody can see: "Hold to give it a colour". */
+  accessibilityHint
 }) {
   const accent = tone === 'signal' ? color.signal : tone === 'live' ? color.live : color.silk
   const background = on ? accent : color.panel
@@ -102,6 +104,7 @@ export default function Press({
       accessibilityRole="button"
       accessibilityState={{ selected: on, disabled }}
       accessibilityLabel={accessibilityLabel || [caption, label, sub].filter(Boolean).join(', ')}
+      accessibilityHint={accessibilityHint}
       disabled={disabled}
       onPress={() => {
         haptic?.()

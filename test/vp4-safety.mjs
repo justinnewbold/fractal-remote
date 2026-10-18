@@ -1260,7 +1260,8 @@ export function run(test) {
     assert.match(flat('mobile/src/components/Vp4DemoNote.js'), /const \[seen, setSeen\] = useState\(true\)/, 'the VP4 demo note flashes up before the phone knows it was put away')
     /* At the top of Play, under the offer, and once. */
     const stage = flat('mobile/src/screens/Stage.js')
-    assert.match(stage, /<UnlockOffer onUnlock=\{onUnlock\} \/> \{\/\*[^*]*\*\/\} <Vp4DemoNote \/>/, 'the phone’s Play does not put the demo’s VP4 sentence at its top')
+    /* Each in its turn since 18 October 2026: the VP4's sentence before the offer, never beside it (Stage's `wants`, test/independent.mjs). */
+    assert.match(stage, /<UnlockOffer onUnlock=\{onUnlock\} waiting=\{noteBefore\('offer'\)\} onWant=\{says\.offer\} \/> \{\/\*[^*]*\*\/\} <Vp4DemoNote waiting=\{noteBefore\('vp4'\)\} onWant=\{says\.vp4\} \/>/, 'the phone’s Play does not put the demo’s VP4 sentence at its top')
     assert.equal((stage.match(/<Vp4DemoNote /g) || []).length, 1)
     /* The browser: its banner over Play, kept for a VP4 apart (held, run, above). */
     const web = flat('src/App.jsx')

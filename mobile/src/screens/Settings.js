@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native'
 
 import { color, font, mono, radius, space, TAP, MODES, getMode, setMode } from '../lib/theme'
 import { APP_VERSION } from '../lib/version'
-import { AFFILIATION } from '../lib/affiliation'
+import { AFFILIATION, SUPPORT_LINE, SUPPORT_URL } from '../lib/affiliation'
 import { setDemo, useDemo, useDemoUnit, setDemoUnit } from '../lib/demo'
 import { UNITS as DEMO_UNITS, demoSentence } from '../lib/demoUnits'
 import { getDebugLog } from '../lib/debugLog'
@@ -29,6 +29,8 @@ import { setFlashTiming, setMetronome, useFlashTiming, useMetronome, useUnitHear
 import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, nudgeFloor, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
 import { fcReadable } from '../lib/footswitches'
 import Footswitches from '../components/Footswitches'
+import Colours, { LookUndo } from '../components/Colours'
+import { coloursStatus } from '../lib/colourPage'
 import {
   SIZES,
   clampSize,
@@ -296,6 +298,23 @@ export default function Settings({
   useEffect(() => {
     onPage?.(page)
   }, [page, onPage])
+  /*
+   * EVERY PAGE OPENS AT ITS TOP. One scroll holds every page here, so a page
+   * opened from a row far down Settings opened as far down itself: Colours,
+   * from near the bottom of the list, came up with its title, its way back
+   * and its first heading above the screen. Going back up a page returns to
+   * where its row was, so the list is not read from the top again.
+   */
+  const scroller = useRef(null)
+  const offsets = useRef({})
+  const lastPage = useRef(page)
+  useEffect(() => {
+    const from = lastPage.current
+    lastPage.current = page
+    if (from === page) return
+    const up = upFrom(from) === page
+    scroller.current?.scrollTo({ y: up ? offsets.current[page ?? ''] || 0 : 0, animated: false })
+  }, [page])
   const purchase = usePurchase()
   const updates = useUpdates()
   /* This phone's copy older than the store's: the card at the top, once, and the line under Updates. See lib/store-rule.js. */
@@ -394,10 +413,16 @@ export default function Settings({
   return (
     <EdgeBack onBack={goBack}>
     <ScrollView
+      ref={scroller}
       style={{ flex: 1 }}
       contentContainerStyle={{ padding: space.lg, gap: space.xl, paddingBottom: space.xxl }}
       keyboardShouldPersistTaps="handled"
       scrollEnabled={!held}
+      /* Where each page is scrolled to, for coming back up to it (above). */
+      onScroll={(e) => {
+        offsets.current[page ?? ''] = e.nativeEvent.contentOffset.y
+      }}
+      scrollEventThrottle={100}
     >
       {page === null ? (
         <>
@@ -574,6 +599,8 @@ export default function Settings({
               status="Tile size, effect pictures, scene layout"
               onPress={() => setPage('appearance')}
             />
+            {/* "Let's make the colors match better", and choose your own. */}
+            <SetupRow title="Colours" status={coloursStatus({ unitName: deviceName, capabilities: caps })} onPress={() => setPage('colours')} />
             {/* Light or dark right here: one tap, not a page to open for it. */}
             <View style={{ paddingVertical: space.md }}>
               <Appearance />
@@ -786,6 +813,14 @@ export default function Settings({
             <Section>Stage tiles</Section>
             <TileSize onScrollLock={setHeld} />
           </View>
+        </>
+      ) : null}
+
+      {/* ---------------------------------------------------------- colours */}
+      {page === 'colours' ? (
+        <>
+          {head('Colours', 'back')}
+          <Colours />
         </>
       ) : null}
 
@@ -1480,6 +1515,21 @@ export default function Settings({
             getting updates. Said here, quietly, for as long as it is true.
           */}
           {newer.note ? <SetupRow title={newer.note.row} status={newer.note.line} onPress={() => openStore(newer.note)} /> : null}
+          {/*
+            HELP WITH THIS APP, A ROW OF ITS OWN, at both ends in the same
+            place. Fractal Audio's letter (18 October 2026) asks that support
+            come through the developer's own channels. The browser's way to
+            the support page sat in its small print, which opens closed, so
+            it went up beside Updates there, and here too, so the two lists
+            stay one list. Its line is short because a row's line is one line
+            (SetupRow): "The support page, and how to reach a person" stopped
+            at "a p…" on a 320-wide phone.
+          */}
+          <SetupRow
+            title="Help with this app"
+            status="Questions, problems, a person"
+            onPress={() => Linking.openURL(SUPPORT_URL)}
+          />
           </View>
 
           {/*
@@ -1499,6 +1549,14 @@ export default function Settings({
             {/* Said in the app, not only in a file somebody would have to go
                 looking for. Same string as the browser — shared/affiliation.mjs. */}
             <Note>{AFFILIATION}</Note>
+            {/*
+              AND WHERE HELP COMES FROM, which is never Fractal Audio. Their
+              letter (18 October 2026) asks that support come through the
+              developer's own channels, and nothing in the app named the
+              support page until then. The line says both ways in; the row
+              that opens the page is up with Updates.
+            */}
+            <Note>{SUPPORT_LINE}</Note>
             <Press
               label="Privacy"
               sub="What this sends, and what it never does"
@@ -1513,6 +1571,9 @@ export default function Settings({
         </>
       ) : null}
     </ScrollView>
+    {/* The Colours page's Undo, floating over the bottom of the screen for a
+        moment after a look goes on (components/Colours). Nothing otherwise. */}
+    <LookUndo />
     </EdgeBack>
   )
 }

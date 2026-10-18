@@ -6,6 +6,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 
 import { color, font, space, isDark, loadMode, setSystemDark, themeVersion, watchTheme } from './src/lib/theme'
+import { loadLooks, looksVersion, watchLooks } from './src/lib/looks'
 import { haveSession, linkState, probeNow, startLink, stopLink, subscribeLink } from './src/lib/link'
 import { currentAccount, signOut } from './src/lib/relay'
 import { useComputerElsewhere } from './src/lib/useComputerElsewhere'
@@ -28,7 +29,10 @@ import Settings from './src/screens/Settings'
 import EdgeBack from './src/components/EdgeBack'
 import SignIn from './src/screens/SignIn'
 import Onboarding from './src/screens/Onboarding'
+import IndependentNotice, { independentNoticeSeen, markIndependentNotice } from './src/components/IndependentNotice'
+import { NOT_AFFILIATED } from './src/lib/affiliation'
 import { walkthroughSeen, markWalkthrough } from './src/lib/walkthrough'
+import { markColoursNotice } from './src/lib/coach'
 import Edit from './src/screens/Edit'
 import Connect from './src/screens/Connect'
 import Fixes from './src/screens/Fixes'
@@ -83,6 +87,13 @@ export default function App() {
    * on `color` for why that works and what it depends on.
    */
   useSyncExternalStore(watchTheme, themeVersion, themeVersion)
+  /*
+   * And the colours, by the same trick and for the same reason. A look picked
+   * in Settings, a colour of your own, or a unit with its own palette
+   * answering — every tile on every screen reads blockColor and sceneColor
+   * while it renders, so one re-render here repaints them all. See lib/looks.
+   */
+  useSyncExternalStore(watchLooks, looksVersion, looksVersion)
   useEffect(() => {
     setSystemDark(Appearance.getColorScheme() !== 'light')
     const off = Appearance.addChangeListener(({ colorScheme }) => {
@@ -121,8 +132,23 @@ export default function App() {
    * out that changes nothing.
    */
   const [replaying, setReplaying] = useState(false)
+  /*
+   * WHETHER THE STARTUP CARD IS STILL OWED: "An independent app", Fractal
+   * Audio's sentence and where help comes from, once on every install
+   * (components/IndependentNotice). Read with the walkthrough's answer and
+   * set in the same moment, so the spinner covers both and nothing is drawn
+   * on a guess: the card is decided before the walkthrough, the sign-in or
+   * Play can be, and so it is never laid over any of them.
+   */
+  const [independentDue, setIndependentDue] = useState(false)
   useEffect(() => {
-    walkthroughSeen().then(setSeenWalk)
+    Promise.all([walkthroughSeen(), independentNoticeSeen()]).then(([seen, noticed]) => {
+      /* A first run never saw the old colours, so it is never told they
+         changed (components/ColoursNotice). */
+      if (!seen) markColoursNotice()
+      setIndependentDue(!noticed)
+      setSeenWalk(seen)
+    })
   }, [])
   const [screen, setScreen] = useState('stage')
   /*
@@ -509,6 +535,10 @@ export default function App() {
        that it is Auto, which follows the handset — the right answer to show
        somebody on their first launch anyway. */
     hydrate().then(() => loadMode(sync))
+    /* The colours too, from the same store. Until they land, the look and the
+       last unit's palette are not known yet, and Match my unit in gen-3's
+       colours is what is drawn — for a moment, as the theme is Auto. */
+    hydrate().then(() => loadLooks(sync))
   }, [])
 
   /* Ask the store what this person owns. Never throws, never blocks a frame,
@@ -802,9 +832,30 @@ export default function App() {
             two of them together, and acting on the first to arrive is what
             flashed a sign-in form at somebody's first launch. */}
         {auth === 'checking' || seenWalk === null ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.lg, padding: space.xl }}>
             <ActivityIndicator color={color.silkDim} />
+            {/* Fractal Audio's sentence, every launch, while the app starts:
+                in small type that can be read, and costing no wait, because
+                this screen is only up while two stored answers load (a
+                fraction of a second). The card below is the one that is sure
+                to be seen; this is the reminder. */}
+            <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: Math.round(font.small * 1.45), textAlign: 'center' }}>
+              {NOT_AFFILIATED}
+            </Text>
           </View>
+        ) : independentDue ? (
+          /*
+           * "An independent app", once, before anything else (Fractal
+           * Audio's letter, 18 October 2026): in place of the walkthrough,
+           * the sign-in or Play, never over them. OK remembers it and the
+           * app opens where it would have.
+           */
+          <IndependentNotice
+            onDone={() => {
+              markIndependentNotice()
+              setIndependentDue(false)
+            }}
+          />
         ) : seenWalk === false ? (
           /*
            * NOT `auth === 'out' && !seenWalk`, WHICH IS THE BUG THIS LINE HAD.
@@ -1625,6 +1676,18 @@ function Waking({ link, long, onRetry, onSwitch, onTroubleshoot, onBluetooth, on
           {onSetlists ? <Press label="Setlists" sub="These work with nothing connected" onPress={onSetlists} /> : null}
         </View>
       ) : null}
+      {/*
+        FRACTAL AUDIO'S SENTENCE, WHILE IT LOOKS. The screen every signed-in
+        player meets at startup, for as long as the computer takes to answer
+        (often under a second, sometimes much longer), so it says whose app
+        this is not, at the foot, where it reads as small print. There from
+        the first frame, so it never moves anything while the screen is up.
+        The demo skips this screen; the startup card and About carry it
+        there.
+      */}
+      <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: Math.round(font.small * 1.45), textAlign: 'center' }}>
+        {NOT_AFFILIATED}
+      </Text>
     </ScrollView>
   )
 }

@@ -37,6 +37,7 @@ import { cleanPresetName, isEmptySlotName } from './presetName.js'
 import { zeroBasedChain, wrongSlot } from './slots.js'
 import { cableColumns, toWireCable, toWireCell } from '../../shared/grid-plan.mjs'
 import { DEFAULT_SLUG, deviceSlug } from '../../shared/device-slug.mjs'
+import { setColourUnit } from './looks.js'
 import { firmwareOf } from '../../shared/firmware.mjs'
 import { fixRead } from '../../shared/param-fixes.mjs'
 import { cancelledSave, pendingSaveDoc, saveProgressDoc, saveResultDoc } from '../../shared/save-wait.mjs'
@@ -142,7 +143,18 @@ export function setDemoUnit(key) {
 }
 
 export function setDemo(on) {
+  const was = !!mock
   mock = on ? createMockDevice(demoUnit()) : null
+  /*
+   * Across the switch, the colours forget the unit they were told, which
+   * belongs to the side just left: off, with the computer out of reach,
+   * detect never answers to tell them again, and an AM4 owner kept the demo's
+   * FM3 colours and its "fm3:demo" drawer for the session. Until the next
+   * unit answers they wear the palette remembered for his own (lib/looks
+   * setColourUnit). Only across it: App says "demo off" on the way to a real
+   * unit that is already answering, and that unit's colours stay.
+   */
+  if (was !== !!mock) setColourUnit(null)
   /*
    * Remembering the demo across reloads is a browser's job, and this is not
    * only called in a browser: the tests drive the mock device through here to
@@ -596,6 +608,13 @@ export const detect = async () => {
   let res = mock ? (await tick(), mock.detect()) : await request('/device/detect')
   const label = res?.short || res?.name
   if (label) unitSlug = deviceSlug(label)
+  /* Which unit's colours the tiles wear — an AM4's are its own — told where
+     the unit is learned, the demo's included and kept to itself (lib/looks).
+     An answer that names no unit is told as one, 'device', the phone's word
+     for it: unitSlug keeps the last name it heard, and after the demo that
+     is the demo's FM3, which the colours would then have kept as the real
+     unit's (lib/looks setColourUnit). */
+  setColourUnit(label ? unitSlug : DEFAULT_SLUG, { demo: !!mock })
   lastCaps = res?.capabilities ?? null
   unitIsVp4 = !mock && isVp4(res)
   vp4Name = null

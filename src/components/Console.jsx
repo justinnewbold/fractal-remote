@@ -3,6 +3,12 @@ import { useDevice, writeBypass, refreshSceneState, getSnapshot, bufferReloaded 
 import { copyChannel } from '../../shared/copy-tools.mjs'
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import { blockColor } from '../lib/blockColors'
+import { LIGHT_INK } from '../lib/ink'
+import { isFractalRemoteLook, offMode } from '../lib/looks'
+import { useLooks } from '../lib/useLooks'
+import { TAG_HOLD, familyTarget, paintable, presetFamilies, presetSpelling, presetTag, presetTarget } from '../lib/colourPage'
+import { useLongPress } from '../lib/longPress'
+import ColourSheet from './ColourSheet'
 import { useDismiss } from '../lib/dismiss'
 import { marksFor, toggleFavourite } from '../lib/presetMarks'
 import { jumpsFor } from '../lib/presetJumps'
@@ -47,6 +53,18 @@ const shortName = (slug) => SHORT[slug] || (slug || '??').slice(0, 3).toUpperCas
  * is — and with the photo-corrected hues, they briefly did.
  */
 const colorFor = (slug) => blockColor(slug).fill
+/* And its letters, which the stylesheet used to write as white for every tile. */
+const inkFor = (slug) => blockColor(slug).ink
+/*
+ * Which way the tile's face is shaded: away from its letters, so they are
+ * never on a lighter colour than the one they were picked for (styles.css,
+ * button.fx-tile[data-shade]). None in Fractal Remote, which keeps the face
+ * it always had — for its own colours. One a player picked on top of it is
+ * shaded like any other (lib/blockColors `picked`): on the old face, white
+ * letters on his mustard came to 3.7:1 at the lighter top, and black ones on
+ * his silver 3.4 at the darker bottom of the Light page.
+ */
+const shadeFor = (slug) => (isFractalRemoteLook() && !blockColor(slug).picked ? undefined : inkFor(slug) === LIGHT_INK ? 'down' : 'up')
 import Knob from './Knob'
 import {
   blockHelp,
@@ -214,6 +232,8 @@ const LEVEL_FLOOR_DB = -20
 const TABS_SHOWN = 4
 
 export function Chain({ blocks, selected, onSelect, onToggle }) {
+  /* Repaint when the colours change (lib/useLooks). */
+  useLooks()
   const chain = blocks.filter((b) => !['input', 'output'].includes(b.slug))
   /*
    * The two ends of the signal path, which this used to draw as arrows.
@@ -352,7 +372,10 @@ export function Chain({ blocks, selected, onSelect, onToggle }) {
               className={`fx-tile ${selected === block.effectId ? 'selected' : ''} ${
                 block.bypassed ? 'bypassed' : ''
               }`}
-              style={{ '--tile': colorFor(block.slug) }}
+              style={{ '--tile': colorFor(block.slug), '--tile-ink': inkFor(block.slug) }}
+              data-shade={shadeFor(block.slug)}
+              /* Grey when off (Settings → Colours): a bypassed block as the unit draws one. */
+              data-off={offMode() === 'grey' ? 'grey' : undefined}
               onClick={() => tap(block)}
               title={block.name}
             >
@@ -473,6 +496,19 @@ export function PresetList({
   const [marks, setMarks] = useState(() => marksFor(device))
   const [view, setView] = useState('all')
   const star = (n) => setMarks((m) => ({ ...m, favourites: toggleFavourite(device, n, undefined) }))
+  /*
+   * AND ITS COLOUR, by holding the row or right-clicking it: a tag, the
+   * editors' Assign Color, drawn as a bar down the row's left edge here, in a
+   * setlist and on Play, and kept per unit and preset number like the star
+   * (lib/colourPage TAG_HOLD). Not a button beside the star: that came out of
+   * every name's width, in the list a player reads most. `painting` is the
+   * preset the colour sheet is open on; the list repaints when a tag changes,
+   * here or anywhere (lib/useLooks).
+   */
+  useLooks()
+  const [painting, setPainting] = useState(null)
+  /* What the colour sheet calls a preset: "012 Lead Rig", or the slot alone before its name is read. */
+  const wordsFor = (slot) => [slotLabel(slot.number, addressing), (slot.name || '').trim()].filter(Boolean).join(' ')
   /* Which preset we have already centred on, so typing in the filter does not
      get yanked back and a re-render does not re-scroll a list being read. */
   const centredOn = useRef(null)
@@ -867,13 +903,23 @@ export function PresetList({
             >
               {marks.favourites.includes(slot.number) ? '★' : '☆'}
             </button>
+            {/* Held or right-clicked, its colour tag: never a load, because the
+                click a hold ends in is swallowed (lib/longPress). Nothing to
+                file a tag under before a unit has answered. */}
+            <Held onHold={presetTarget(slot.number) ? () => setPainting(presetTarget(slot.number, { words: wordsFor(slot) })) : null}>
+            {(hold) => (
             <button
+              {...hold}
               className={`preset-row ${slot.number === current ? 'current' : ''} ${
                 !needle && startsBank(slot.number, i === 0 ? null : shown[i - 1].number, addressing)
                   ? 'bank-start'
                   : ''
               }`}
               data-slot={slot.number}
+              /* Its colour tag, down the row's left edge (styles.css .preset-row[data-tag]). */
+              data-tag={presetTag(slot.number) ? 'yes' : undefined}
+              style={presetTag(slot.number) ? { '--tag': presetTag(slot.number) } : undefined}
+              title={presetTarget(slot.number) ? TAG_HOLD.browserHint : undefined}
               onClick={() => onSelect(slot.number)}
             >
               <span className="preset-id mono">{slotLabel(slot.number, addressing)}:</span>
@@ -892,9 +938,13 @@ export function PresetList({
                 )}
               </span>
             </button>
+            )}
+            </Held>
             </span>
           ))
         )}
+        {/* How a preset gets its colour, at the end of the list where it costs no row its width. */}
+        {shown.length && presetTarget(shown[0].number) ? <p className="hint pad preset-hold-hint">{TAG_HOLD.browser}</p> : null}
         {!needle && hidden > 0 && !noNames ? (
           <p className="hint pad preset-unread-note">
             {named.length && unread > 0 ? (
@@ -913,6 +963,9 @@ export function PresetList({
           </p>
         ) : null}
       </div>
+      {/* The colour sheet every colour is chosen on, here for a preset's tag. */}
+      <ColourSheet target={painting} onClose={() => setPainting(null)} />
+
       {deviceSlots && named.length && !noNames ? (
         <p className="hint pad">
           {named.length} of {deviceSlots} named
@@ -936,6 +989,37 @@ export function PresetList({
           ) : null}
         </p>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * A row that can be held, or right-clicked: `children` is handed the props
+ * that make it so (lib/longPress), for a list that draws its rows in a map
+ * where a hook cannot be called. Nothing at all when there is nothing to do.
+ */
+function Held({ onHold, children }) {
+  return children(useLongPress(onHold, { enabled: !!onHold }))
+}
+
+/**
+ * The Colour button at the top of an open block, with a dot of the colour it
+ * wears now, and the colour sheet it opens for that block's family. The
+ * loaded preset's chain goes with it, so the sheet can say when a colour is
+ * hard to tell from the block beside it.
+ */
+const ofBlocks = (s) => s.blocks
+function BlockColour({ slug }) {
+  useLooks()
+  const blocks = useDevice(ofBlocks)
+  const [painting, setPainting] = useState(null)
+  return (
+    <div className="block-colour">
+      <button type="button" className="chip block-colour-open" onClick={() => setPainting(familyTarget(slug))}>
+        <span className="block-colour-dot" aria-hidden="true" style={{ '--block-fill': blockColor(slug).fill }} />
+        Colour
+      </button>
+      <ColourSheet target={painting} chain={presetFamilies(blocks)} spelt={presetSpelling(blocks)} onClose={() => setPainting(null)} />
     </div>
   )
 }
@@ -1210,6 +1294,10 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   // Which kind of pointer pressed the button that opened it, if any.
   const openedWith = useRef(null)
   useDismiss(picker, () => setPicking(false), { open: picking, ignore: '.type-open' })
+  /* A model's picture that does not arrive is none at all, never a broken
+     frame: the same rule as the gear card (components/GearCard.jsx says why).
+     Up here with the other hooks, above the empty panel's early return. */
+  const [photoFailed, setPhotoFailed] = useState(null)
 
   // Open where you already are. A native menu does this and a list that starts
   // at the top of three hundred names would be a step backwards without it.
@@ -1275,7 +1363,8 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   /* Looked up by the model's own name, the same key lineage joins on — the
      unit reports a name and nothing else, so it is the only thing both ends
      agree about. */
-  const chosenPhoto = chosen ? photoFor(chosen.name) : null
+  const chosenFound = chosen ? photoFor(chosen.name) : null
+  const chosenPhoto = chosenFound && chosenFound.src !== photoFailed ? chosenFound : null
 
   /* And what the real thing is like to play. The line above says which amp it
      is; this says what that means, for the many people who have never had one
@@ -1695,6 +1784,15 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   return (
     <div className="block-panel">
       {/*
+        ITS COLOUR, from here as well as from Settings → Colours: the bench is
+        where a player looks at a block and decides it should not be the same
+        red as the drive beside it. The colour is the family's — every drive,
+        in every preset — and the sheet says so. Not for the chain's two ends,
+        which are outlines nobody sees a colour on. The phone's Edit puts the
+        same button in the block's header.
+      */}
+      {paintable(block?.slug) ? <BlockColour slug={block.slug} /> : null}
+      {/*
         Everything that isn't a knob, in two rows.
         It used to be a 190px column down the left of a four-column grid,
         because this panel was the bottom strip of a desktop console. It opens
@@ -1904,7 +2002,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
       {models.length && chosenAbout ? <GearAbout key={chosenAbout} text={chosenAbout} /> : null}
       {models.length && chosenPhoto ? (
         <figure className="gear-photo">
-          <img src={chosenPhoto.src} alt={chosenPhoto.alt} loading="lazy" />
+          <img src={chosenPhoto.src} alt={chosenPhoto.alt} loading="lazy" onError={() => setPhotoFailed(chosenPhoto.src)} />
           <figcaption className="hint">
             <a href={chosenPhoto.rights} target="_blank" rel="noreferrer noopener">
               {chosenPhoto.credit}

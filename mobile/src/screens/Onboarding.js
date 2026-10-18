@@ -10,14 +10,24 @@ import { walkthroughTips } from '../lib/vp4-safety'
 import { tick } from '../lib/feedback'
 /* An ES import rather than require(): Metro resolves both, but require is not
    a name this app has anywhere, and a test is right to refuse it. */
-import unitFm3 from '../../assets/unit-fm3.png'
-import pieceUnit from '../../assets/piece-unit.png'
+/*
+ * THE UNIT, AS A PLAIN BOX THE APP DREW ITSELF. Three pictures stood here
+ * until 18 October 2026: an FM3 photograph on the first screen, an FM3 with
+ * Fractal's logo on its screen on the demo card, and a rack front with the
+ * FRACTAL AUDIO logo in the three boxes. All three came from the mockup, and
+ * Fractal Audio's letter of that day asks for no logos, no official product
+ * photographs and no other proprietary artwork. So one drawing serves all
+ * three places: a dark box with six knobs and an amber lamp, drawn from
+ * nothing for this app. No name, no logo, no screen, and not modelled on any
+ * Fractal unit (no footswitch row, no FM3 face). A picture in mobile/assets
+ * ships in an update and moves no fingerprint.
+ */
+import unitPlain from '../../assets/unit-plain.png'
 import pieceComputer from '../../assets/piece-computer.png'
 import piecePhone from '../../assets/piece-phone.png'
-/* The first screen's pictures: his FM3 photograph, sent for it, and the five
-   tile pictures cut out of his mockup of the screen, white so they take the
-   theme's colour. The browser draws the same files. */
-import welcomeFm3 from '../../assets/welcome/fm3.jpg'
+/* The first screen's five tile pictures, cut out of his mockup of the
+   screen, white so they take the theme's colour. The browser draws the same
+   files. */
 import featurePresets from '../../assets/welcome/presets.png'
 import featureScenes from '../../assets/welcome/scenes.png'
 import featureBlocks from '../../assets/welcome/blocks.png'
@@ -182,9 +192,10 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
         THE FIRST SCREEN, FROM HIS MOCKUP, as the browser's is. "The changes we
         made with the walk-through screen on the web, we need to make those
         exact same changes using the same screen mockups that I sent you for
-        the mobile versions as well." His FM3 in a card, the heading and the
-        line under it centred, the five tiles, the two ways in, his
-        disclaimer, and the contour lines down both edges.
+        the mobile versions as well." The unit in a card (the plain box now,
+        not his FM3 photograph: see the import), the heading and the line
+        under it centred, the five tiles, the two ways in, Fractal Audio's
+        sentence, and the contour lines down both edges.
       */}
       {at === 'welcome' ? (
         <View style={{ gap: space.md }}>
@@ -196,16 +207,17 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
               borderRadius: radius.lg * 1.4,
               borderWidth: 1,
               borderColor: color.rule,
-              /* His photograph's own off-white, so its edges vanish into the
-                 card in either theme. */
-              backgroundColor: '#f7f6f3'
+              /* The theme's own panel: the drawing is on clear, so it sits
+                 on whichever theme is up, where the photograph needed its
+                 own off-white. */
+              backgroundColor: color.panel
             }}
           >
             <Image
-              source={welcomeFm3}
+              source={unitPlain}
               style={{ width: '100%', height: Math.round(Dimensions.get('window').height * 0.24) }}
               resizeMode="contain"
-              accessibilityLabel="A Fractal Audio FM3"
+              accessible={false}
             />
           </View>
           <Text
@@ -271,7 +283,11 @@ export default function Onboarding({ onEnterDemo, onSettings, onAccount, onUnloc
               Somebody who has been here before has an ACCOUNT now, and that
               is the one door. */}
           <Press label={P1.haveCode} height={TAP} onPress={() => onAccount?.()} style={{ borderRadius: radius.lg * 1.4 }} />
-          <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: font.micro * 1.45, textAlign: 'center', marginTop: space.xs }}>
+          {/* Fractal Audio's sentence at the foot, where his disclaimer was,
+              and at a size and colour that can be read: it was the faintest
+              colour at the smallest size, which is small print in the sense
+              of hoping nobody reads it. */}
+          <Text style={{ color: color.silkDim, fontSize: font.small, lineHeight: Math.round(font.small * 1.45), textAlign: 'center', marginTop: space.xs }}>
             {WELCOME_NOTICE}
           </Text>
         </View>
@@ -699,12 +715,11 @@ const Eyebrow = ({ children }) => (
 )
 
 /**
- * The FM3 from his mockup, as an asset.
+ * The unit on the demo card.
  *
- * "I sent the photo with the FM3 in it. Use that exact mockup." So this is
- * literally that picture: cropped out of the screenshot he sent, with its
- * edges faded to transparent so it melts into the card rather than sitting in
- * a visible dark rectangle over the amber wash.
+ * It was the FM3 from his mockup, cropped out of the screenshot he sent, with
+ * Fractal's logo on its screen. It is the plain box now (see the import), for
+ * the reason Fractal Audio's letter gives: no logos and no product artwork.
  *
  * Measured, because it decides whether this costs him anything: an image in
  * mobile/assets does NOT move the Expo fingerprint. Artwork ships over the
@@ -714,7 +729,7 @@ const Eyebrow = ({ children }) => (
  */
 const UnitShot = () => (
   <Image
-    source={unitFm3}
+    source={unitPlain}
     style={{ width: 132, height: 105 }}
     resizeMode="contain"
     accessible={false}
@@ -869,8 +884,12 @@ const Footnote = ({ question, links }) => (
  * Kept as `Art` with the same `kind` so the three boxes below did not have to
  * learn anything new, and at the same 92×56 box so nothing above or below
  * moves.
+ *
+ * EXCEPT THE UNIT, since 18 October 2026: his rack front carried the FRACTAL
+ * AUDIO logo, and it is the plain box the app drew itself now (see the
+ * import), for Fractal Audio's letter.
  */
-const PIECES = { unit: pieceUnit, computer: pieceComputer, phone: piecePhone }
+const PIECES = { unit: unitPlain, computer: pieceComputer, phone: piecePhone }
 
 const Art = ({ kind }) => (
   <Image

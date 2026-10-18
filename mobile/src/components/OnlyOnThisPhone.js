@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View } from 'react-native'
 
 import { space } from '../lib/theme'
@@ -30,11 +30,16 @@ import Press from './Press'
  * rest of this run; it comes back next time only while it is still true.
  * Nothing waits on it and nothing is locked behind it.
  */
-export default function OnlyOnThisPhone({ onAccount }) {
+export default function OnlyOnThisPhone({ onAccount, onWant }) {
   const { onlyHere, stuck, held } = usePurchase()
   const [gone, setGone] = useState(false)
   const [busy, setBusy] = useState(false)
   const [said, setSaid] = useState(null)
+  /* Whether it is up, said to the screen: the other notes at the top of Play wait while it is (Stage's `wants`). */
+  const wants = !gone && (Boolean(stuck) || (Boolean(onAccount) && Boolean(onlyHere)))
+  useEffect(() => {
+    onWant?.(wants)
+  }, [onWant, wants])
   if (gone) return null
   if (stuck && held === NOT_ACROSS_SIGNED_OUT) {
     return (

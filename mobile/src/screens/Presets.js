@@ -11,8 +11,11 @@ import { marksFor, toggleFavourite } from '../lib/lists'
 import { useStored } from '../lib/store'
 import { loadPreset, useRig } from '../lib/rig'
 import { thud, tick } from '../lib/feedback'
+import { TAG_HOLD, presetTag, presetTarget } from '../lib/colourPage'
 import Note from '../components/Note'
 import Press from '../components/Press'
+import ColourSheet from '../components/ColourSheet'
+import { tagEdge } from '../components/PresetTag'
 
 const face = Platform.select(mono)
 
@@ -62,6 +65,18 @@ const STRIDE = ROW + GAP
  * three things Previous and Next can walk, and the star belongs where you are
  * looking at the preset — so it is the right-hand end of every row, on its own
  * target, away from the part of the row that loads the preset.
+ *
+ * AND ITS COLOUR, by holding the row: "make a section where a user can edit
+ * the colors of the blocks/presets and effects". A tag, the editors' Assign
+ * Color, drawn as a bar down the row's left edge here, in a setlist and on
+ * Play, and kept per unit and preset number like the star. It had a button
+ * of its own between the row and the star, and that button came out of the
+ * name's width on every row of the screen a player reads most: the names
+ * were cut short to make room for something done once a song. So a hold
+ * opens it — a press that becomes a hold never loads (Press), so tagging can
+ * never change what the unit is playing — and the bar stays on the row. The
+ * line at the end of the list says so, and so does Settings → Colours,
+ * which can tag the loaded preset with a tap.
  */
 export default function Presets({ onBack }) {
   const preset = useRig(ofPreset)
@@ -101,6 +116,8 @@ export default function Presets({ onBack }) {
   const favourites = marksFor(device).favourites
 
   const [query, setQuery] = useState('')
+  /* The preset whose colour tag the colour sheet is open on, or null. */
+  const [painting, setPainting] = useState(null)
 
   /*
    * Refresh: the computer's list again, and the rows on screen read again.
@@ -370,6 +387,10 @@ export default function Presets({ onBack }) {
           const name = nameHere(n)
           const here = n === preset?.number
           const starred = favourites.includes(n)
+          const tag = presetTag(n)
+          /* What the colour sheet calls it: "012 Lead Rig", or the slot alone before its name is known. */
+          const words = typeof name === 'string' && name.trim() ? `${slotLabel(n, addressing)} ${name.trim()}` : slotLabel(n, addressing)
+          const target = presetTarget(n, { words })
           return (
             <View style={{ flexDirection: 'row', gap: space.sm, height: ROW, marginBottom: GAP }}>
               {/*
@@ -401,6 +422,11 @@ export default function Presets({ onBack }) {
                   loadPreset(n)
                   onBack?.()
                 }}
+                /* Held, its colour tag — nothing to file one under before a unit has answered (colourPage presetTarget). */
+                onLongPress={target ? () => setPainting(target) : undefined}
+                accessibilityHint={target ? TAG_HOLD.hint : undefined}
+                /* Its colour tag, down the left edge: none for a preset without one. */
+                style={tagEdge(tag)}
               />
               <Star
                 on={starred}
@@ -424,7 +450,18 @@ export default function Presets({ onBack }) {
             </View>
           )
         }
+        /* How a preset gets its colour, at the end of the list where it costs no row its width. */
+        ListFooterComponent={
+          shown.length && presetTarget(shown[0]) ? (
+            <Text style={{ color: color.silkFaint, fontSize: font.small, textAlign: 'center', paddingTop: space.sm }}>
+              {TAG_HOLD.phone}
+            </Text>
+          ) : null
+        }
       />
+
+      {/* The colour sheet every colour is chosen on, here for a preset's tag. */}
+      <ColourSheet target={painting} onClose={() => setPainting(null)} />
     </View>
   )
 }

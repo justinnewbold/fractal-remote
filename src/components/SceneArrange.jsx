@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 
 import { sceneColor } from '../lib/sceneColors'
+import { useLooks } from '../lib/useLooks'
 import { swapScenes } from '../lib/gigSize'
 
 /**
@@ -18,6 +19,8 @@ import { swapScenes } from '../lib/gigSize'
  * rest along: one change to check afterwards, not eight.
  */
 export default function SceneArrange({ order, onChange }) {
+  /* Repaint when the colours change (lib/useLooks). */
+  useLooks()
   const [drag, setDrag] = useState(null)
   /* Tap one, then tap the one to swap it with — the phone's rule too, for a
      drag that does not take. */

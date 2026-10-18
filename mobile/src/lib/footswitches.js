@@ -92,6 +92,72 @@ function actionWords(category, fn, model) {
   return `${kind} · ${named}`
 }
 
+/*
+ * THE LIGHTS, IN THE EDITORS' OWN COLOURS AND WORDS.
+ *
+ * These were the host's dictionary (GET /fc/model), and ForgeFX's table is an
+ * approximation: Red #e23b3b where FM3-Edit's ring is #cc0000, Purple #9b59f5
+ * against #6633cc, a golden Yellow, a hot Pink, Teal called "Turquoise" — and
+ * no Default at all, which is what most switches are set to, so most of them
+ * read "a colour this app can't name yet". This is the most literal "button
+ * colors" the app has, so the app keeps its own table: the fills of FM3-Edit's
+ * footswitch/led-ring-*.svg, under the names the Footswitch Functions Guide
+ * uses, by the numbers the official .fclayout files use for them (the Master
+ * layout's Presets, Scenes and Effects switches are 4, 1 and 6: Green, Red,
+ * Cyan). Off is the editor's unlit ring.
+ */
+export const RING_COLOURS = Object.freeze({
+  1: { name: 'Red', hex: '#cc0000' },
+  2: { name: 'Orange', hex: '#ff9933' },
+  3: { name: 'Yellow', hex: '#ffff00' },
+  4: { name: 'Green', hex: '#66cc33' },
+  5: { name: 'Blue', hex: '#0055ff' },
+  6: { name: 'Cyan', hex: '#00ccff' },
+  7: { name: 'Purple', hex: '#6633cc' },
+  8: { name: 'White', hex: '#ffffff' },
+  9: { name: 'Pink', hex: '#ff99cc' },
+  10: { name: 'Teal', hex: '#009999' },
+  11: { name: 'Lime', hex: '#ccff33' },
+  12: { name: 'Off', hex: '#777777' }
+})
+
+/*
+ * 0 IS "DEFAULT": the switch lights whatever its kind lights by default, from
+ * the Footswitch Functions Guide v1.3 — Scene red, Effect cyan, Preset green,
+ * Bank orange, Utility blue, Layout yellow, Control Switch purple, View teal.
+ * That 0 means Default on the wire is inferred from the layout files, where
+ * 77 of 108 switches in each OMG layout carry it; no live read has shown one
+ * yet. A kind the guide gives no single colour (the looper's switches each
+ * have their own) is said as Default with no colour drawn.
+ */
+const KIND_DEFAULT = {
+  Scene: 1,
+  Effect: 6,
+  Preset: 4,
+  Bank: 2,
+  Utility: 5,
+  Layout: 3,
+  Control: 7,
+  'Control Switch': 7,
+  View: 10,
+  Setlist: 2,
+  Song: 4,
+  'Song Section': 1
+}
+
+/** One switch's light: { name, hex }, Default with the colour its kind lights, or a number nobody has a name for. */
+function lightOf(ord, kind, model) {
+  if (ord === 0) {
+    const shade = RING_COLOURS[KIND_DEFAULT[kind]]
+    return { name: 'Default', hex: shade?.hex ?? null, shade: shade?.name ?? null }
+  }
+  const known = RING_COLOURS[ord]
+  if (known) return { name: known.name, hex: known.hex }
+  /* A number past the editor's twelve: the host's word for it, if it has one. */
+  const host = model?.colors?.[ord]
+  return host?.name ? { name: host.name, hex: host.hex ?? null } : { name: null, hex: null }
+}
+
 /** A label the unit has stored, or null. Padding is not a label. */
 const labelOf = (s) => {
   const t = typeof s === 'string' ? s.trim() : ''
@@ -103,16 +169,19 @@ const labelOf = (s) => {
  *
  *   { number, tap: { action, label }, hold: { action, label }, light, unread }
  *
- * `light` is { name, hex }, or { name: null, hex: null } when the unit gave a
+ * `light` is { name, hex }, or { name: 'Default', hex, shade } for a switch
+ * left on its kind's colour, or { name: null, hex: null } when the unit gave a
  * colour this app has no name for, or null when the unit did not say. "Off"
  * is a colour the unit has, not a missing one.
  */
 export function describeSwitch(state, model) {
   const f = state?.fields || {}
   const ord = f.color
-  const known = ord == null ? null : model?.colors?.[ord]
+  /* What the switch does on a tap decides its default colour; a switch that
+     only does something on a hold takes that. */
+  const kind = model?.categories?.[f.tapCategory || f.holdCategory] ?? null
   /* A number with no name is still an answer, not a failed read. */
-  const light = ord == null ? null : known ? { name: known.name, hex: known.hex } : { name: null, hex: null }
+  const light = ord == null ? null : lightOf(ord, kind, model)
   return {
     number: Number.isInteger(state?.switch) ? state.switch + 1 : null,
     tap: { action: actionWords(f.tapCategory, f.tapFunction, model), label: labelOf(state?.tapLabel) },
@@ -125,7 +194,17 @@ export function describeSwitch(state, model) {
 
 /** What the light line says. */
 export const lightWords = (light) =>
-  !light ? 'Light: couldn’t read' : !light.name ? 'Light: a colour this app can’t name yet' : light.name === 'Off' ? 'Light off' : `${light.name} light`
+  !light
+    ? 'Light: couldn’t read'
+    : !light.name
+      ? 'Light: a colour this app can’t name yet'
+      : light.name === 'Off'
+        ? 'Light off'
+        : light.name === 'Default'
+          ? light.shade
+            ? `${light.shade} light (the default)`
+            : 'Default light'
+          : `${light.name} light`
 
 const sleep = (ms) => new Promise((go) => setTimeout(go, ms))
 

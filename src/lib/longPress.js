@@ -46,6 +46,59 @@ export function movedOut(from, x, y) {
   return Math.hypot(x - from.x, y - from.y) > HOLD_SLOP
 }
 
+/** How long after the finger lifts a click may still come from it. */
+export const SWALLOW_MS = 400
+
+/* Heard on the way down, before anything on the page; written as an object, which every EventTarget reads alike on the way off too. */
+const CAPTURE = { capture: true }
+
+/**
+ * AND THE CLICK A HOLD ENDS IN, WHEREVER IT LANDS.
+ *
+ * The held thing's own onClickCapture (below) only hears a click aimed at
+ * it. After a touch the browser aims that click at whatever is under the
+ * finger when it lifts — and a hold that opened something over the finger
+ * has put that something there. In the preset list a hold opens the colour
+ * sheet, and the lift pressed whatever square or button of it was under the
+ * thumb: Use it, and the preset was red before anybody had chosen a colour.
+ * On Play it would be a channel picked from the menu the hold opened.
+ *
+ * So from the moment a hold fires with the finger still down, the next click
+ * anywhere on the page is swallowed, once. It stands down at the next press,
+ * or a moment after the finger lifts if no click came: a click that never
+ * arrives must not take the Enter key's click on the sheet later. `done` is
+ * told when it stands down, either way. Returns the way to stand it down now.
+ */
+export function swallowNextClick(on, { ms = SWALLOW_MS, done } = {}) {
+  if (!on?.addEventListener) return () => {}
+  let timer = null
+  let over = false
+  const off = () => {
+    if (over) return
+    over = true
+    clearTimeout(timer)
+    on.removeEventListener('click', eat, CAPTURE)
+    on.removeEventListener('pointerdown', off, CAPTURE)
+    on.removeEventListener('pointerup', soon, CAPTURE)
+    on.removeEventListener('pointercancel', soon, CAPTURE)
+    done?.()
+  }
+  function eat(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    off()
+  }
+  function soon() {
+    clearTimeout(timer)
+    timer = setTimeout(off, ms)
+  }
+  on.addEventListener('click', eat, CAPTURE)
+  on.addEventListener('pointerdown', off, CAPTURE)
+  on.addEventListener('pointerup', soon, CAPTURE)
+  on.addEventListener('pointercancel', soon, CAPTURE)
+  return off
+}
+
 /**
  * Returns props to spread on the element that can be held.
  *
@@ -53,10 +106,10 @@ export function movedOut(from, x, y) {
  * never twice for the same one — Android fires its own contextmenu on a long
  * press, which would otherwise open the thing and immediately reopen it.
  *
- * The click that a press produces afterwards is swallowed. Without that, the
- * tile you held to change its channel also toggles the block off, which on a
- * stage is the failure that matters: silence, mid-song, from a gesture meant
- * to be safe.
+ * The click that a press produces afterwards is swallowed, wherever it lands
+ * (swallowNextClick, above). Without that, the tile you held to change its
+ * channel also toggles the block off, which on a stage is the failure that
+ * matters: silence, mid-song, from a gesture meant to be safe.
  */
 export function useLongPress(onLong, { enabled = true } = {}) {
   const timer = useRef(null)
@@ -75,8 +128,19 @@ export function useLongPress(onLong, { enabled = true } = {}) {
   useEffect(() => stop, [stop])
 
   const fire = useCallback(() => {
+    /* Still pressing: the timer, or Android's own long-press menu arriving
+       with the finger down. A right-click comes with no press behind it,
+       and no click after it either. */
+    const pressing = from.current !== null
     stop()
-    fired.current = true
+    if (pressing) {
+      fired.current = true
+      swallowNextClick(globalThis.window, {
+        done: () => {
+          fired.current = false
+        }
+      })
+    }
     latest.current?.()
   }, [stop])
 
@@ -92,8 +156,11 @@ export function useLongPress(onLong, { enabled = true } = {}) {
          middle-click is not a hold. */
       if (!holdStarts(e)) return
       fired.current = false
-      from.current = { x: e.clientX, y: e.clientY }
+      /* Any press before this one put away first, then this one's start kept:
+         the other way round, stop() forgot where the finger went down, so a
+         drag never stopped a hold and a hold never knew a finger was on it. */
       stop()
+      from.current = { x: e.clientX, y: e.clientY }
       timer.current = setTimeout(fire, HOLD_MS)
     },
     onPointerMove: (e) => {

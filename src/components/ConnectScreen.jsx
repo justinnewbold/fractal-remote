@@ -26,6 +26,7 @@
  * save stays on the phone.
  */
 import { useEffect, useState } from 'react'
+import { NOT_AFFILIATED } from '../../shared/affiliation.mjs'
 import SignIn from './SignIn'
 import { isPairAccount } from '../lib/link'
 import { computerElsewhere } from '../lib/remote'
@@ -162,6 +163,14 @@ export default function ConnectScreen({
         <>
           <h2>Connecting…</h2>
           <p>Finding your computer.</p>
+          {/*
+            FRACTAL AUDIO'S SENTENCE, while the phone's browser starts up and
+            looks for the computer (their letter, 18 October 2026, asks for it
+            at startup). Honestly, this screen is up only while it is still
+            finding the computer, which can be under a second; the startup
+            card, once per browser, is the one that is sure to be seen.
+          */}
+          <p className="connect-independent">{NOT_AFFILIATED}</p>
           {/* Not beside "No computer is signed in with this account yet", which
               already names the account, and to which "make sure you're
               connected" is advice about a computer that is not there. */}

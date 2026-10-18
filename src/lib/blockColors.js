@@ -1,101 +1,106 @@
 /**
- * The colours Fractal paints its blocks, so this app's blocks match the unit.
+ * The colour a block is drawn in, so this app's blocks match the unit.
  *
  * The point is recognition on a dark stage: on the AM4's own screen the drive
  * is red and the delay is blue, and a screen pretending to be that hardware
  * should agree with it.
  *
- * Two grades of confidence live here, deliberately. drive, amp, delay and
- * reverb are read straight off an AM4's display. Everything else carries the
- * hue this app has always used for that family — continuity for families the
- * photo doesn't show — and is meant to be tuned by holding the app next to the
- * unit, not defended.
+ * The colours themselves are in lib/blockPalettes — one table per kind of
+ * unit, read out of Fractal's own pictures, and the looks a player can wear
+ * instead. This only decides which of them a tile gets, in this order:
  *
- * Keys are the slugs ForgeFX reports. Unknown families get the neutral the app
- * used everywhere before colours existed.
+ *   1. your own colour for that family, from Settings → Colours
+ *   2. the look's colour for the unit you are on (Match my unit has one table
+ *      per kind of unit; Footswitch lights one ring colour per kind)
+ *   3. the look's own colour for the family
+ *   4. NEUTRAL, for a block nobody here can name
+ *
+ * The letters are worked out from the colour (lib/ink), never stored — except
+ * in Fractal Remote, the app's look as it always was, which keeps the letters
+ * it always had.
+ *
+ * A colour somebody picked comes back marked `picked`, because Fractal
+ * Remote is DRAWN as it always was too — the phone lifts its colours (Tile)
+ * and the browser's edit strip shades them the old way — and that is right
+ * for the look's own colours only. A player's pink drive on top of it is his
+ * colour, chosen on a sheet that showed it as it is, with letters picked for
+ * it as it is: lifted, his white came out grey and his blues lost their
+ * letters. So the two ends draw a picked colour as picked, in every look.
+ *
+ * Asked once per tile per render, so the answer is kept until the looks or
+ * the unit change: after that it is an object lookup.
  */
-const VERIFIED = {
-  drive: { fill: '#c23b26', ink: '#ffffff' },
-  /* Silver off the AM4, taken a few shades deeper: at #b9bec6 an amp that
-     was ON read as switched off next to the pale off tiles on Play. */
-  amp: { fill: '#7d8591', ink: '#ffffff' },
-  delay: { fill: '#2857c9', ink: '#ffffff' },
-  reverb: { fill: '#5a3fc0', ink: '#ffffff' }
-}
+import { FRACTAL_REMOTE, FRACTAL_REMOTE_LOOK, NEUTRAL, familyOf, lookById } from './blockPalettes.js'
+import { inkOn } from './ink.js'
+import { currentPaletteId, lookId, looksVersion, yourFamily } from './looks.js'
+
+let keptFor = null
+const kept = new Map()
 
 /*
- * Read off an FM3-Edit screenshot of a full chain. Note the one conflict found:
- * FM3-Edit draws the amp tile dark graphite where the AM4's screen draws it
- * silver — the generations genuinely differ. Silver wins here because the AM4
- * is the unit on the board and its photo is device truth; if a per-device
- * palette is ever wanted, this is the entry that motivates it.
+ * Steps 2 to 4: what a look paints a family on a kind of unit, yours aside.
+ *
+ * Fractal Remote by the spelling that came, never by the family it belongs
+ * to: the old table knew "volpan" and not the Axe-Fx II's "Volume/Pan", and
+ * the look as it was gave that block no colour. So it is NEUTRAL here, the
+ * colour the old blank became, and every other look finds it its family.
  */
-const VERIFIED_FM3EDIT = {
-  comp: { fill: '#8f8a2f', ink: '#ffffff' },
-  compressor: { fill: '#8f8a2f', ink: '#ffffff' },
-  chorus: { fill: '#2f8f9c', ink: '#ffffff' },
-  flanger: { fill: '#a2439a', ink: '#ffffff' },
-  phaser: { fill: '#3f8a4f', ink: '#ffffff' }
+function fromLook({ key, family }, id, palette) {
+  if (id === FRACTAL_REMOTE_LOOK) return FRACTAL_REMOTE[key] || NEUTRAL
+  const look = lookById(id)
+  const forUnit = look.byUnit?.[palette]
+  const fill = forUnit?.[key] || forUnit?.[family] || look.families[key] || look.families[family]
+  return fill ? Object.freeze({ fill, ink: inkOn(fill) }) : NEUTRAL
 }
 
-const APPROXIMATE = {
-  wah: { fill: '#3f63c8', ink: '#ffffff' },
-  filter: { fill: '#3f63c8', ink: '#ffffff' },
-  cab: { fill: '#3f8f5c', ink: '#ffffff' },
-  geq: { fill: '#c07a2a', ink: '#ffffff' },
-  peq: { fill: '#c07a2a', ink: '#ffffff' },
-  eq: { fill: '#c07a2a', ink: '#ffffff' },
-  tremolo: { fill: '#8a5fb0', ink: '#ffffff' },
-  rotary: { fill: '#8a5fb0', ink: '#ffffff' },
-  pitch: { fill: '#a04f8a', ink: '#ffffff' },
-  synth: { fill: '#a04f8a', ink: '#ffffff' },
-  multitap: { fill: '#2a7f9c', ink: '#ffffff' },
-  megatap: { fill: '#2a7f9c', ink: '#ffffff' },
-  plex: { fill: '#2a7f9c', ink: '#ffffff' },
-  plexdelay: { fill: '#2a7f9c', ink: '#ffffff' },
-  gate: { fill: '#6f7480', ink: '#ffffff' },
-  ingate: { fill: '#6f7480', ink: '#ffffff' },
-  volume: { fill: '#6f7480', ink: '#ffffff' },
-  volpan: { fill: '#6f7480', ink: '#ffffff' },
-  mixer: { fill: '#6f7480', ink: '#ffffff' },
-  looper: { fill: '#6f7480', ink: '#ffffff' },
-  enhancer: { fill: '#4a8f7a', ink: '#ffffff' },
-  input: { fill: '#555b66', ink: '#ffffff' },
-  output: { fill: '#555b66', ink: '#ffffff' },
-
-  /*
-   * Families learned from Axis's category map — its coverage, not its colours.
-   * Axis paints by its own design language (an orange amp, one hue for all of
-   * time), which is a choice for their app and the wrong one for this one: the
-   * brief here is to agree with the unit's screen. So these take the hue of the
-   * family Axis groups them with, in our palette.
-   */
-  ringmod: { fill: '#4a5fb8', ink: '#ffffff' },
-  formant: { fill: '#4a5fb8', ink: '#ffffff' },
-  multicomp: { fill: '#2f8f8f', ink: '#ffffff' },
-  crossover: { fill: '#2f8f8f', ink: '#ffffff' },
-  tentap: { fill: '#2a7f9c', ink: '#ffffff' },
-  resonator: { fill: '#2a7f9c', ink: '#ffffff' },
-  send: { fill: '#555b66', ink: '#ffffff' },
-  return: { fill: '#555b66', ink: '#ffffff' },
-  multiplexer: { fill: '#555b66', ink: '#ffffff' },
-  shunt: { fill: '#555b66', ink: '#ffffff' }
+function resolve(slug) {
+  const found = familyOf(slug)
+  if (!found) return NEUTRAL
+  const own = yourFamily(found.family)
+  if (own) return Object.freeze({ fill: own, ink: inkOn(own), picked: true })
+  return fromLook(found, lookId(), currentPaletteId())
 }
 
-const FAMILIES = { ...APPROXIMATE, ...VERIFIED_FM3EDIT, ...VERIFIED }
-
-const NEUTRAL = { fill: 'var(--panel-hi)', ink: 'var(--silk)' }
+/**
+ * The colour a look gives a block when you have chosen none for it — the
+ * same steps as blockColor, without step 1.
+ *
+ * The look being worn and the unit connected unless told otherwise, which is
+ * what the colour sheet's first swatch and its "Back to the unit's colour"
+ * are. The Colours page asks about the looks NOT being worn too, to draw each
+ * one's card as Play would draw it.
+ */
+export function lookColour(slug, { look = lookId(), palette = currentPaletteId() } = {}) {
+  const found = familyOf(slug)
+  return found ? fromLook(found, look, palette).fill : NEUTRAL.fill
+}
 
 /** The colour for a block, by its slug. Unknown families stay neutral. */
 export function blockColor(slug) {
-  if (!slug) return NEUTRAL
-  const key = String(slug).toLowerCase()
-  if (FAMILIES[key]) return FAMILIES[key]
-  // Slugs sometimes carry an instance suffix — delay2, drive1.
-  const bare = key.replace(/\d+$/, '')
-  if (FAMILIES[bare]) return FAMILIES[bare]
-  // Display names arrive with spaces, hyphens and slashes — "Plex Delay",
-  // "Ten-Tap", "Vol/Pan" — a normalisation Axis's map taught us to expect.
-  const squeezed = bare.replace(/[^a-z]/g, '')
-  return FAMILIES[squeezed] || NEUTRAL
+  const stamp = `${looksVersion()}|${currentPaletteId()}`
+  if (stamp !== keptFor) {
+    kept.clear()
+    keptFor = stamp
+  }
+  const k = slug == null ? '' : String(slug)
+  let hit = kept.get(k)
+  if (!hit) {
+    hit = resolve(k)
+    kept.set(k, hit)
+  }
+  return hit
+}
+
+/**
+ * Whether a block is one of the chain's two ends, which are drawn as a quiet
+ * outline rather than a lit tile on both ends of the app. "The plumbing, not
+ * the tone": neither has an on or off, and an Input and an Output lit up like
+ * pedals competed with the amp for a strip you read left to right. The
+ * browser's edit strip has always drawn them so; now the phone and the rows
+ * do too. Fractal Remote, the app's look as it always was, keeps them as the
+ * phone always drew them.
+ */
+export function quietEnd(slug) {
+  const family = familyOf(slug)?.family
+  return (family === 'input' || family === 'output') && lookId() !== FRACTAL_REMOTE_LOOK
 }

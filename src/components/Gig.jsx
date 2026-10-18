@@ -40,6 +40,10 @@ import Looper from './Looper'
 import { blockColor } from '../lib/blockColors'
 import { blockIcon } from '../lib/blockIcons'
 import { sceneColor } from '../lib/sceneColors'
+import { useLooks } from '../lib/useLooks'
+import { offMode } from '../lib/looks'
+import { presetTag } from '../lib/colourPage'
+import ColoursNotice from './ColoursNotice'
 import { shortBlock } from '../lib/shortName'
 import { presetLabel } from '../lib/presetName'
 import { setlistCloudReady } from '../lib/cloudSetlists'
@@ -119,6 +123,9 @@ export default function Gig({
    * floating word: nothing on the screen moves.
    */
   down = false,
+  /* Another of Play's one-time notes is up above this screen (App's hold tip,
+     the demo's line), so the colours' one waits its turn. */
+  noteAbove = false,
   onError: raiseInPage,
   /* A VP4's words App was handed — a preset picked from the list — for the band below: { words, at }. */
   said = null,
@@ -139,6 +146,8 @@ export default function Gig({
    */
   onChain
 }) {
+  /* Repaint the scenes when the colours change (lib/useLooks); each block tile subscribes for itself. */
+  useLooks()
   /* Smallest, or Fit: both are the trimmed layout. The literal is what the
      meter poll and the tests read. */
   const compact = fit || size === 0
@@ -934,6 +943,9 @@ export default function Gig({
         that into a mystery about the app. A unit whose outputs aren't a block
         on a grid is not accused of anything.
       */}
+      {/* "Colours now match your unit", once, for somebody who had the app before. */}
+      <ColoursNotice waiting={noteAbove} />
+
       {meterEid === null && chain === 'ok' && !shown.elsewhere && blocks.length && capabilities?.slotModel !== 'linear' ? (
         <p className="gig-note">
           This preset has no Output block, so nothing reaches your amp and there is no volume to
@@ -971,6 +983,13 @@ export default function Gig({
               straight against the button they sat at its top edge, with the
               rest of the tile empty under them. */}
           <span className="gig-name-row">
+            {/* The preset's colour tag, beside its name, as it is on its row in
+                the list and in a setlist (lib/colourPage tagFill: the one rule
+                both ends draw the bar by). Nothing at all for a preset without
+                one, so Play is as it was for everybody who never tags one. */}
+            {presetTag(preset?.number) ? (
+              <span className="gig-name-tag" aria-hidden="true" style={{ '--tag': presetTag(preset.number) }} />
+            ) : null}
             {/* Padded as the preset list pads it: "0 59 Bassguy" read as a typo
                 on the play test — slot 0, a preset called 59 Bassguy. */}
             <span className="gig-name-num mono">
@@ -1084,8 +1103,13 @@ export default function Gig({
                 names[i] ? 'named' : ''
               }`}
               /* Identity, not state. See sceneColors: the fill says which
-                 scene, the edge-against-fill says whether it is the live one. */
-              style={{ '--scene-fill': sceneColor(i).fill, '--scene-ink': sceneColor(i).ink }}
+                 scene, the edge-against-fill says whether it is the live one.
+                 In this preset's own colour where it has one ("Just this
+                 preset"), then yours for every preset, then the look's. */
+              style={{ '--scene-fill': sceneColor(i, preset?.number).fill, '--scene-ink': sceneColor(i, preset?.number).ink }}
+              /* A colour somebody picked, which Fractal Remote draws at full
+                 strength like every other look (styles.css, data-picked). */
+              data-picked={sceneColor(i, preset?.number).picked ? 'yes' : undefined}
               /* The word "Scene" belongs in the label even though it is left
                  off the face, for the same reason the group is named: a bare
                  "3" is not a control anyone can identify. */
@@ -1520,6 +1544,8 @@ function useCornerFit({ tile, picture, band, left, right }, pair, again) {
  * only says it was held.
  */
 function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, icon, door = false }) {
+  /* Repaint when the colours change (lib/useLooks). */
+  useLooks()
   /* Only where there is something to choose. Not every block is channelled,
      and a menu with one entry in it is a menu that wasted a gesture. And not
      on the outline drawn ahead of the chain read: a channel waits for it. */
@@ -1582,6 +1608,9 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
            Off) looked like it did nothing and invited a second (styles.css).
            No apostrophes in here: test/both-ends.mjs reads this tag by hand. */
         data-unknown={unknown && vp4Here() ? 'yes' : undefined}
+        /* Grey when off, if that is the choice in Settings → Colours: a dark
+           tile with a grey edge, as the unit draws a bypassed block (styles.css). */
+        data-off={offMode() === 'grey' ? 'grey' : undefined}
         style={{
           '--block-fill': blockColor(block.slug).fill,
           '--block-ink': blockColor(block.slug).ink
