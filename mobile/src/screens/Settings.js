@@ -1515,6 +1515,19 @@ export default function Settings({
             getting updates. Said here, quietly, for as long as it is true.
           */}
           {newer.note ? <SetupRow title={newer.note.row} status={newer.note.line} onPress={() => openStore(newer.note)} /> : null}
+          {/*
+            HELP WITH THIS APP, A ROW OF ITS OWN, at both ends in the same
+            place. Fractal Audio's letter (18 October 2026) asks that support
+            come through the developer's own channels. The browser's way to
+            the support page sat in its small print, which opens closed, so
+            it went up beside Updates there, and here too, so the two lists
+            stay one list.
+          */}
+          <SetupRow
+            title="Help with this app"
+            status="The support page, and how to reach a person"
+            onPress={() => Linking.openURL(SUPPORT_URL)}
+          />
           </View>
 
           {/*
@@ -1538,15 +1551,10 @@ export default function Settings({
               AND WHERE HELP COMES FROM, which is never Fractal Audio. Their
               letter (18 October 2026) asks that support come through the
               developer's own channels, and nothing in the app named the
-              support page until now. The line says both ways in, and the row
-              under it opens the page.
+              support page until then. The line says both ways in; the row
+              that opens the page is up with Updates.
             */}
             <Note>{SUPPORT_LINE}</Note>
-            <Press
-              label="Help with this app"
-              sub="The support page, and how to reach a person"
-              onPress={() => Linking.openURL(SUPPORT_URL)}
-            />
             <Press
               label="Privacy"
               sub="What this sends, and what it never does"

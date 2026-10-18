@@ -5103,7 +5103,8 @@ export default function App() {
         "AN INDEPENDENT APP", ONCE, OVER EVERYTHING ABOVE (Fractal Audio's
         letter, 18 October 2026). Opaque and over the walkthrough, which waits
         under it; see components/IndependentNotice for why it covers the page
-        rather than replacing it.
+        rather than replacing it, and how it keeps the keyboard out of what
+        is under it.
       */}
       {independentDue ? (
         <IndependentNotice
@@ -6456,6 +6457,24 @@ export default function App() {
               {inDesktopApp() ? (
                 <SetupRow key="updates" title="Updates" status="This app, not your unit" onClick={() => setSetupPage('updates')} />
               ) : null}
+              {/*
+                HELP WITH THIS APP, IN SIGHT. Fractal Audio's letter (18
+                October 2026) asks for support through the developer's own
+                channels, and the way to them sat inside the small print
+                below, which opens closed, as a link in the browser's own
+                blue. The phone has it as a full row on the page; so does
+                this. The website's address, never a local link: the
+                computer window is served from the computer's own copy of
+                the site, and the support page is website-only, so that copy
+                of it is never kept current (WEBSITE_ONLY in
+                scripts/computer-fingerprint.mjs).
+              */}
+              <SetupRow
+                key="help"
+                title="Help with this app"
+                status="The support page, and how to reach a person"
+                onClick={() => window.open(SUPPORT_URL, '_blank', 'noopener')}
+              />
             </div>
             {/* The pedalboard computer's switch, under Updates because both are
                 about this app rather than the unit. Draws nothing unless the
@@ -6469,20 +6488,12 @@ export default function App() {
                   shared/affiliation.mjs for why it is not typed twice. */}
               <p className="hint">{AFFILIATION}</p>
               {/*
-                AND WHERE HELP COMES FROM, which is never Fractal Audio: their
-                letter (18 October 2026) asks for support through the
-                developer's own channels, and nothing here named the support
-                page. The website's own address, never a local link: the
-                computer window is served from the computer's own copy of the
-                site, and the support page is website-only, so that copy of
-                it is never kept current (WEBSITE_ONLY in
-                scripts/computer-fingerprint.mjs).
+                AND WHERE HELP COMES FROM, which is never Fractal Audio, in
+                the same words as the phone's small print. The row that opens
+                the support page is up with Updates, in sight.
               */}
               <p className="hint">{SUPPORT_LINE}</p>
               <div className="history-actions">
-                <a className="chip" href={SUPPORT_URL} target="_blank" rel="noreferrer">
-                  Help with this app
-                </a>
                 <a className="chip" href="/privacy.html" target="_blank" rel="noreferrer">
                   Privacy
                 </a>

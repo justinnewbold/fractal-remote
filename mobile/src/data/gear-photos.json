@@ -762,13 +762,6 @@
     "licence": "CC BY 2.0",
     "rights": "https://commons.wikimedia.org/wiki/File:Dallas_Arbiter_Fuzz_Face.jpg"
   },
-  "fas-buttery": {
-    "file": "fas-buttery.jpg",
-    "holder": "Justin Newbold",
-    "licence": "Original illustration",
-    "rights": "https://github.com/justinnewbold/fractal-remote/blob/main/docs/gear-illustrations.md",
-    "illustration": true
-  },
   "fat-rat": {
     "file": "fat-rat.jpg",
     "holder": "Justin Newbold",

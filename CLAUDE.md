@@ -311,12 +311,17 @@ not suggest renaming. Everything else is held, and is not to regress:
   to that file by a test.
 - **It is shown at startup**: a card, "An independent app", once on every
   device under its own storage key (the phone's launch gate, and the
-  browser and computer window over everything), and the sentence under the
-  spinner and "Finding your computer…". A new key if the words ever change
-  enough to be shown again. One gap an update cannot close: a fresh install
-  of a store build made before 18 October 2026 (1.87.11) runs the copy built
-  into it on its very first launch, so it shows the old first screen, FM3
-  photograph and all, with no card, once. The next build pair closes it.
+  browser and computer window over everything, with the rest of the page
+  inert so the keyboard cannot reach Play under it), and the sentence
+  under the spinner and "Finding your computer…". A new key if the words
+  ever change enough to be shown again. One gap an update cannot close: a store build
+  made before 18 October 2026 (1.87.1 or 1.87.11) runs the copy built into
+  it on the first launch after a fresh install or a store update (see the
+  Bluetooth gap above). After a fresh install that is the old first screen,
+  FM3 photograph and all, with no card, once; after a store update, where
+  the walkthrough was seen long ago, it is only no card on that one launch.
+  The card comes from the next launch, once the update has downloaded. The
+  next build pair closes it.
 - **Never a Fractal logo, an official product photo, or artwork taken from
   Fractal's editors, manuals or website**, in the app, on the website, or in
   a screenshot, store video or feature graphic. Colour VALUES sampled from

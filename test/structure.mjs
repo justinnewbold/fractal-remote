@@ -1564,9 +1564,9 @@ export function run(test) {
     /* Light or dark on the front, under Play screen, as on the phone. */
     assert.match(front, /setup-group">Play screen<[\s\S]{0,800}<Theme \/>/, 'light and dark are not on the front of Settings')
 
-    /* About holds Updates now, and the small print; Troubleshooting and the walkthrough moved up to Help. */
+    /* About holds Updates now, Help with this app (Fractal Audio's letter: help through our own channels, in sight), and the small print; Troubleshooting and the walkthrough moved up to Help. */
     const about = setup.slice(setup.indexOf("setupPage === 'about'"))
-    assert.deepEqual(rowsIn(frontList(about)), ['Updates'], 'the About page is not what the phone has')
+    assert.deepEqual(rowsIn(frontList(about)), ['Updates', 'Help with this app'], 'the About page is not what the phone has')
     assert.ok(!setup.includes('<Group'), 'the doors are back')
 
     /*

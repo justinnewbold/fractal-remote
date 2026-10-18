@@ -1307,6 +1307,31 @@ button.chip {
   background: transparent;
 }
 
+/* A chip that is a link (About's Privacy and Licences, Phone & computer's
+   store links), dressed as the button chips beside it. It had no style of
+   its own, so it came out in the browser's default link blue: about 1.9 to
+   1 on the dark panel, which is unreadable. */
+a.chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--body);
+  font-size: var(--f-1);
+  font-weight: 500;
+  padding: var(--s-1) var(--s-2);
+  color: var(--silk-dim);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  text-decoration: none;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+@media (hover: hover) {
+  a.chip:hover {
+    border-color: var(--silk-faint);
+  }
+}
+
 /* The row of them above Edit's search: a scene, the presets, Revert. At chip
    size with no fill they read as tags, and "S1 Rhythm" as a caption. These
    are buttons that open things, and they are dressed as the buttons on Play
@@ -14319,9 +14344,10 @@ button.chip.scene-colour {
  *
  * Fractal Audio's letter of 18 October 2026 asks for its sentence at
  * startup. A page of its own over everything, opaque, so nothing behind it
- * is seen or reached until OK: the walkthrough, the connecting screen and
- * Play all wait under it. The phone's card in this app's materials, at the
- * walkthrough's width.
+ * is seen until OK: the walkthrough, the connecting screen and Play all wait
+ * under it. Covering stops the mouse; the keyboard is stopped by the card
+ * making the rest of the page inert while it is up, which no style can do.
+ * The phone's card in this app's materials, at the walkthrough's width.
  */
 .independent {
   position: fixed;

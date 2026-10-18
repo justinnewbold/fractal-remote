@@ -14,12 +14,14 @@ All brand names, logos and product designs depicted are trademarks of their resp
 
 Notes:
 - `sonic-drive` depicts the Ibanez SD-9 Sonic Distortion.
-- **No drawing of Fractal Audio's own models, ever.** 34 were here until 18
+- **No drawing of Fractal Audio's own models, ever.** 35 were here until 18
   October 2026: the FAS amps, Thordendal, Big Hair, Supertweed, the
-  Fractal-only drives and Buddah DuoMaster, each with "FRACTAL AUDIO" painted
-  on it like a maker's badge. Fractal Audio's letter of that day asks for no
-  logos and no artwork of theirs, and a drawing of their own design wearing
-  their name is both. They were taken out of the app, the website and
+  Fractal-only drives and Buddah DuoMaster, 34 of them with "FRACTAL AUDIO"
+  painted on like a maker's badge. Fractal Audio's letter of that day asks
+  for no logos and no artwork of theirs, and a drawing of their own design
+  wearing their name is both. The 35th, FAS Buttery, wore a Budda badge
+  instead: another maker's amp under the name of a Fractal original, which
+  is no better. They were taken out of the app, the website and
   `sources.csv`, and those models show their words with no picture (a test
   holds the list). One is not drawn again without the name and the badge
   gone, and a drawing of a Fractal original is better left out altogether.
@@ -43,7 +45,6 @@ New batches are appended to the end of this table.
 | brit-jm45 | Marshall | JTM 45 | Marshall Amplification plc |
 | brit-pre | Marshall | JMP-1 preamp | Marshall Amplification plc |
 | brit-super | Marshall | AFD100, Slash's signature amp | Marshall Amplification plc |
-| fas-buttery | Budda | Twinmaster | Budda Amplification (Peavey Electronics) |
 | carol-ann-od-2 | Carol-Ann | OD2 | Carol-Ann Custom Amplifiers (Alan Phillips) |
 | carol-ann-triptik | Carol-Ann | Triptik | Carol-Ann Custom Amplifiers (Alan Phillips) |
 | carol-ann-tucana | Carol-Ann | Tucana 3 | Carol-Ann Custom Amplifiers (Alan Phillips) |

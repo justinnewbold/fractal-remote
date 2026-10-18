@@ -1096,9 +1096,10 @@ export function run(test) {
      */
     /*
      * WITH ONE GAP, ON PURPOSE (18 October 2026): Fractal Audio's own models.
-     * Their 34 drawings wore a FRACTAL AUDIO badge like a maker's, and
+     * 34 of their drawings wore a FRACTAL AUDIO badge like a maker's, and
      * Fractal's letter asks for no logos or artwork of theirs, so they were
-     * taken out and those models show their words alone. The list is exact
+     * taken out, with FAS Buttery's (a Budda amp under a Fractal original's
+     * name), and those 35 models show their words alone. The list is exact
      * both ways: a model that loses its picture by accident still fails here,
      * and so does one of these if a drawing of it comes back.
      */

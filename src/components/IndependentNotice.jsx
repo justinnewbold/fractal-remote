@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+
 import { NOT_AFFILIATED, STARTUP_NOTICE_TITLE, SUPPORT_LINE } from '../../shared/affiliation.mjs'
 
 /*
@@ -55,9 +57,18 @@ export function markIndependentNotice() {
  * instead, from the first render, so the page's own work (the link to the
  * computer, the update check) carries on while it waits for OK rather than
  * starting only after it. Covered from the first frame, nothing behind it
- * is seen or reached until OK, so it comes before the walkthrough, the
- * connecting screen and Play, and is never laid over a Play somebody was
- * using. The walkthrough waits under it, and is there when it goes.
+ * is seen until OK, so it comes before the walkthrough, the connecting
+ * screen and Play, and is never laid over a Play somebody was using. The
+ * walkthrough waits under it, and is there when it goes.
+ *
+ * AND NOTHING BEHIND IT IS REACHED, BY THE KEYBOARD EITHER. Covering the
+ * page stops a mouse and a finger, and aria-modal stops a screen reader, but
+ * neither stops Tab: from OK it walked on into the page underneath, to
+ * Settings, NO DEVICE, and on Play to Next, where Enter changed the preset
+ * on a unit nobody could see. On the computer app, with a unit plugged in,
+ * that is a real preset change made blind. So while the card is up,
+ * everything else on the page is inert (nothingBehind, below), and Tab has
+ * nowhere to go but OK.
  *
  * NEVER A DIALOG WHERE NOBODY IS LOOKING. A computer app started with no
  * window (a Raspberry Pi on a pedalboard, `--hidden`) has no page at all
@@ -67,8 +78,10 @@ export function markIndependentNotice() {
  * shows its own.
  */
 export default function IndependentNotice({ onDone }) {
+  const own = useRef(null)
+  useNothingBehind(own)
   return (
-    <div className="independent" role="dialog" aria-modal="true" aria-labelledby="independent-title">
+    <div ref={own} className="independent" role="dialog" aria-modal="true" aria-labelledby="independent-title">
       <div className="independent-card">
         <h1 id="independent-title" className="independent-title">
           {STARTUP_NOTICE_TITLE}
@@ -82,4 +95,51 @@ export default function IndependentNotice({ onDone }) {
       </div>
     </div>
   )
+}
+
+/**
+ * EVERYTHING ON THE PAGE BUT THE CARD, INERT, FOR AS LONG AS IT IS UP.
+ * Returns what puts it back, which the card runs as it goes.
+ *
+ * `inert` is the browser's own word for "not there": nothing in it takes
+ * focus, a click, a key or a screen reader, and Electron's Chromium has it as
+ * the browsers do. Set on every sibling of the card and of each element it
+ * sits in, up to the body, which is everything else on the page: the rest
+ * of the app beside it, and the sheets, which are drawn straight into the
+ * body (components/Sheet). Anything that arrives while the card is up (a
+ * screen changing under it, a sheet opening by itself) is made inert as it
+ * arrives, because a page that is still running under the card keeps adding
+ * things. When the card goes, only what this made inert is given back.
+ *
+ * Set on the elements themselves rather than written into App.jsx as an
+ * attribute, so the card brings it and takes it away, and no other screen
+ * has to know.
+ */
+export function nothingBehind(card) {
+  if (typeof MutationObserver === 'undefined') return () => {}
+  const made = []
+  const shut = (el) => {
+    /* Elements only (nodeType 1): text and comments have nothing to shut. */
+    if (el?.nodeType !== 1 || el === card || el.contains(card) || el.inert) return
+    el.inert = true
+    made.push(el)
+  }
+  const watching = []
+  for (let at = card; at.parentElement && at !== document.body; at = at.parentElement) {
+    const parent = at.parentElement
+    for (const other of parent.children) shut(other)
+    const watch = new MutationObserver((changes) => {
+      for (const change of changes) for (const added of change.addedNodes) shut(added)
+    })
+    watch.observe(parent, { childList: true })
+    watching.push(watch)
+  }
+  return () => {
+    for (const watch of watching) watch.disconnect()
+    for (const el of made) el.inert = false
+  }
+}
+
+function useNothingBehind(own) {
+  useEffect(() => (own.current ? nothingBehind(own.current) : undefined), [own])
 }

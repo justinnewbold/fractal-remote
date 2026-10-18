@@ -44,6 +44,17 @@ export async function independentNoticeSeen() {
   }
 }
 
+/*
+ * THE ADDRESS BREAKS AT ITS SLASH, IF IT HAS TO BREAK. On a 320-wide phone
+ * "fractal.newbold.cloud/support.html." is wider than the card's column, and
+ * a word with nowhere to break is cut wherever the line runs out: it read
+ * "…/support.ht" and then "ml." on the next line. A zero-width space after
+ * the slash is somewhere to break that nobody sees or hears, so a narrow
+ * screen or a large text size gets "fractal.newbold.cloud/" and then
+ * "support.html.", and a wide one gets the line exactly as written.
+ */
+const HELP_LINE = SUPPORT_LINE.replace('.cloud/', '.cloud/\u200B')
+
 export function markIndependentNotice() {
   AsyncStorage.setItem(KEY, 'done').catch(() => {
     /* Costs one more showing at the next launch, and nothing else. */
@@ -76,7 +87,7 @@ export default function IndependentNotice({ onDone }) {
           {NOT_AFFILIATED}
         </Text>
         <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: Math.round(font.body * 1.45) }}>
-          {SUPPORT_LINE}
+          {HELP_LINE}
         </Text>
         <Press label="OK" tone="signal" on height={TAP} onPress={() => onDone?.()} />
       </View>

@@ -23,7 +23,9 @@
  * What can be run is run: the gear lookup, at both ends.
  */
 import assert from 'node:assert/strict'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -58,14 +60,15 @@ const rel = (p) => p.slice(root.length).replaceAll('\\', '/')
 const THEIR_SENTENCE = 'Fractal Remote is independently developed and is not affiliated with, endorsed by, or supported by Fractal Audio Systems, LLC.'
 
 /**
- * Fractal Audio's own models, whose drawings wore a FRACTAL AUDIO badge and
- * were taken out. Their gear cards show words only; test/limits.mjs holds the
- * rest of the catalog to having a picture, with these 34 as the one gap.
+ * Fractal Audio's own models, whose drawings were taken out: 34 wore a
+ * FRACTAL AUDIO badge, and FAS Buttery's showed a Budda amp under the name of
+ * a Fractal original. Their gear cards show words only; test/limits.mjs holds
+ * the rest of the catalog to having a picture, with these 35 as the one gap.
  */
 export const FRACTAL_ORIGINALS = [
   'big-hair', 'bit-crusher', 'brit-brown', 'buddah-duomaster', 'fas-6160', 'fas-bass', 'fas-boost', 'fas-brootalz',
   'fas-brown', 'fas-class-a', 'fas-crunch', 'fas-express', 'fas-hot-rod', 'fas-lead-1', 'fas-lead-2', 'fas-led-drive',
-  'fas-modern', 'fas-modern-ii', 'fas-modern-iii', 'fas-rhythm', 'fas-skull-crusher', 'fas-stealth-blue', 'fas-wreck',
+  'fas-modern', 'fas-modern-ii', 'fas-modern-iii', 'fas-rhythm', 'fas-skull-crusher', 'fas-stealth-blue', 'fas-wreck', 'fas-buttery',
   'fet-boost', 'fet-preamp', 'hard-fuzz', 'mid-boost', 'shimmer-drive', 'supertweed', 'tape-distortion',
   'thordendal-modern', 'thordendal-vintage', 'treble-boost', 'tube-pre'
 ]
@@ -247,13 +250,25 @@ export function run(test) {
     }
   })
 
-  test('the startup card: once on every device, under its own key, before anything else, at both ends', () => {
+  test('the startup card: once on every device, under its own key, before anything else, at both ends', async () => {
     /* THE PHONE. The card, from the shared words, and OK. */
     const card = read('mobile/src/components/IndependentNotice.js')
     assert.match(card, /import \{ NOT_AFFILIATED, STARTUP_NOTICE_TITLE, SUPPORT_LINE \} from '\.\.\/lib\/affiliation'/)
-    for (const piece of ['{STARTUP_NOTICE_TITLE}', '{NOT_AFFILIATED}', '{SUPPORT_LINE}', 'label="OK"']) {
+    for (const piece of ['{STARTUP_NOTICE_TITLE}', '{NOT_AFFILIATED}', '{HELP_LINE}', 'label="OK"']) {
       assert.ok(card.includes(piece), `the phone’s card has lost ${piece}`)
     }
+    /*
+     * The help line is the shared one with one unseen place to break, after
+     * the address's slash: on a 320-wide phone the address cut mid-word at
+     * "support.ht" / "ml." without it. Run here as the card runs it.
+     */
+    const { SUPPORT_LINE } = await import('../shared/affiliation.mjs')
+    const made = card.match(/const HELP_LINE = SUPPORT_LINE\.replace\('([^']+)', '([^']+)'\)/)
+    assert.ok(made, 'the phone’s help line is not made from the shared one')
+    const helpLine = SUPPORT_LINE.replace(made[1], JSON.parse(`"${made[2]}"`))
+    assert.notEqual(helpLine, SUPPORT_LINE, 'the address has nowhere to break; the shared line no longer has what the card looks for')
+    assert.equal(helpLine.replace(/\u200B/g, ''), SUPPORT_LINE, 'the phone’s help line says something besides the shared one')
+    assert.ok(helpLine.includes('fractal.newbold.cloud/\u200Bsupport.html'))
     /* Its own key, not the walkthrough's, so every phone that had the app sees it once. */
     assert.match(card, /const KEY = 'fractal\.independent\.v1'/)
     assert.doesNotMatch(read('mobile/src/lib/walkthrough.js'), /fractal\.independent/, 'the card shares the walkthrough’s key, so nobody who had the app sees it')
@@ -299,6 +314,104 @@ export function run(test) {
     assert.match(rule, /background: var\(--chassis\);/, 'the card lets the app show through')
   })
 
+  test('while the browser’s card is up, the keyboard reaches nothing behind it', async () => {
+    /*
+     * Found in review, with a real browser: from OK, Tab walked on into the
+     * page under the card (Settings, NO DEVICE, and on Play the Next button),
+     * and Enter pressed them where nobody could see, a preset change on a
+     * real unit included. Covering the page stops a mouse; aria-modal stops a
+     * screen reader; only inert stops Tab. So the card makes everything else
+     * inert while it is up, and gives back exactly what it took when it goes.
+     */
+    const web = read('src/components/IndependentNotice.jsx')
+    assert.match(web, /const own = useRef\(null\)\s+useNothingBehind\(own\)\s+return \(\s+<div ref=\{own\} className="independent"/, 'the card no longer shuts the page behind it')
+    assert.match(web, /useEffect\(\(\) => \(own\.current \? nothingBehind\(own\.current\) : undefined\), \[own\]\)/, 'what the card shut is not given back when it goes')
+
+    /* And run: the card's own function, bundled as the page bundles it, on a page of stand-in elements. */
+    const { build } = await import('esbuild')
+    const out = await build({
+      stdin: { contents: "export { nothingBehind } from './src/components/IndependentNotice.jsx'", resolveDir: root, loader: 'js' },
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      write: false,
+      jsx: 'automatic',
+      logLevel: 'silent',
+      define: { 'process.env.NODE_ENV': '"production"' }
+    })
+    const dir = mkdtempSync(join(tmpdir(), 'independent-'))
+    const file = join(dir, 'card.cjs')
+    writeFileSync(file, out.outputFiles[0].text)
+    const watchers = new Set()
+    class Element {
+      constructor(name) {
+        this.name = name
+        this.nodeType = 1
+        this.children = []
+        this.parentElement = null
+        this.inert = false
+      }
+      append(...kids) {
+        for (const kid of kids) {
+          kid.parentElement = this
+          this.children.push(kid)
+          for (const w of watchers) if (w.target === this) w.fn([{ addedNodes: [kid] }])
+        }
+        return this
+      }
+      contains(other) {
+        for (let at = other; at; at = at.parentElement) if (at === this) return true
+        return false
+      }
+    }
+    const was = { MutationObserver: globalThis.MutationObserver, document: globalThis.document }
+    globalThis.MutationObserver = class {
+      constructor(fn) {
+        this.fn = fn
+      }
+      observe(target) {
+        this.target = target
+        watchers.add(this)
+      }
+      disconnect() {
+        watchers.delete(this)
+      }
+    }
+    try {
+      const { nothingBehind } = createRequire(import.meta.url)(file)
+      const el = (name) => new Element(name)
+      /* The page as it is: the app's shell holding the bar, Play and the card; a sheet drawn into the body; one thing inert already. */
+      const body = el('body')
+      const root = el('#root')
+      const shell = el('.shell')
+      const [bar, play, card, sheet, already] = ['bar', 'play', 'card', 'sheet', 'already'].map(el)
+      already.inert = true
+      body.append(root.append(shell.append(bar, play, card)), sheet, already)
+      globalThis.document = { body }
+
+      const giveBack = nothingBehind(card)
+      assert.deepEqual([bar, play, sheet].map((e) => e.inert), [true, true, true], 'something beside the card can still be reached')
+      assert.deepEqual([card, shell, root, body].map((e) => e.inert), [false, false, false, false], 'the card shut itself, or what holds it')
+      /* What arrives while it is up: Play changing under it, a sheet opening by itself. */
+      const later = el('settings sheet')
+      const screen = el('connecting')
+      body.append(later, { nodeType: 3, data: 'a text node' })
+      shell.append(screen)
+      assert.ok(later.inert && screen.inert, 'something that arrived while the card was up can be reached')
+
+      giveBack()
+      assert.deepEqual([bar, play, sheet, later, screen].map((e) => e.inert), [false, false, false, false, false], 'OK left part of the page dead')
+      assert.equal(already.inert, true, 'OK woke something the card never shut')
+      assert.equal(watchers.size, 0, 'the card goes on watching the page after it has gone')
+    } finally {
+      for (const [k, v] of Object.entries(was)) {
+        if (v === undefined) delete globalThis[k]
+        else globalThis[k] = v
+      }
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   test('Fractal Audio’s sentence on the startup screens, and readable on the first one', () => {
     const app = read('mobile/App.js')
     /* Under the phone's spinner. */
@@ -326,11 +439,28 @@ export function run(test) {
 
   test('About says where help comes from and opens the support page, at both ends', () => {
     const phone = read('mobile/src/screens/Settings.js')
-    const small = phone.slice(phone.indexOf('<Section>The small print</Section>'))
-    assert.match(small, /<Note>\{AFFILIATION\}<\/Note>[\s\S]{0,600}<Note>\{SUPPORT_LINE\}<\/Note>\s+<Press\s+label="Help with this app"[\s\S]{0,120}onPress=\{\(\) => Linking\.openURL\(SUPPORT_URL\)\}/, 'the phone’s About has no Help with this app')
+    const aboutPage = phone.slice(phone.indexOf("{page === 'about' ? ("))
+    const phoneRows = aboutPage.slice(0, aboutPage.indexOf('<Section>The small print</Section>'))
+    assert.match(phoneRows, /<SetupRow\s+title="Help with this app"[\s\S]{0,120}onPress=\{\(\) => Linking\.openURL\(SUPPORT_URL\)\}/, 'the phone’s About has no Help with this app')
+    const small = aboutPage.slice(aboutPage.indexOf('<Section>The small print</Section>'))
+    assert.match(small, /<Note>\{AFFILIATION\}<\/Note>[\s\S]{0,600}<Note>\{SUPPORT_LINE\}<\/Note>/, 'the phone’s small print does not say where help comes from')
+    /*
+     * The browser's, in sight: a row on the About page itself, as on the
+     * phone, not a link inside the small print, which opens closed. Found in
+     * review, where it was also the browser's own link blue on the dark panel.
+     */
     const web = read('src/App.jsx')
-    const about = web.slice(web.indexOf('<Section key="small-print"'))
-    assert.match(about, /<p className="hint">\{SUPPORT_LINE\}<\/p>\s+<div className="history-actions">\s+<a className="chip" href=\{SUPPORT_URL\} target="_blank" rel="noreferrer">\s+Help with this app/, 'the browser’s About has no Help with this app')
+    const page = web.slice(web.indexOf("{setupPage === 'about' ? ("))
+    const rows = page.slice(page.indexOf('<div className="setup-rows">'), page.indexOf('<Section key="small-print"'))
+    assert.match(rows, /<SetupRow\s+key="help"\s+title="Help with this app"[\s\S]{0,160}onClick=\{\(\) => window\.open\(SUPPORT_URL, '_blank', 'noopener'\)\}/, 'the browser’s About has no Help with this app in sight')
+    assert.ok(rows.indexOf('key="help"') < rows.indexOf('</div>'), 'Help with this app is not one of the About page’s rows')
+    const about = page.slice(page.indexOf('<Section key="small-print"'))
+    assert.match(about, /<p className="hint">\{AFFILIATION\}<\/p>[\s\S]{0,400}<p className="hint">\{SUPPORT_LINE\}<\/p>/, 'the browser’s small print does not say where help comes from')
+    /* And a link dressed as a chip reads as one, never the browser's own blue. */
+    const css = read('src/styles.css')
+    const chip = css.slice(css.indexOf('\na.chip {'), css.indexOf('}', css.indexOf('\na.chip {')))
+    assert.match(chip, /color: var\(--silk-dim\);/, 'a link chip is the browser’s default link colour')
+    assert.match(chip, /text-decoration: none;/)
   })
 
   test('no Fractal logo, product photo or unit picture is left, and the plain box is drawn in their place', () => {
@@ -355,7 +485,7 @@ export function run(test) {
   })
 
   test('Fractal Audio’s own models show their words alone, and a picture that does not arrive is never a broken frame', async () => {
-    /* None of the 34 is in either list, on the website, or in the record of where pictures came from. */
+    /* None of the 35 is in either list, on the website, or in the record of where pictures came from. */
     for (const f of ['src/data/gear-photos.json', 'mobile/src/data/gear-photos.json']) {
       const photos = JSON.parse(read(f))
       for (const key of FRACTAL_ORIGINALS) assert.ok(!(key in photos), `${f} still has ${key}`)
@@ -370,7 +500,7 @@ export function run(test) {
     /* Run, at both ends: no picture for any of them, and none of them lands on somebody else's by the family rule. */
     const web = await import('../src/lib/gearPhotos.js')
     const phone = await import('../mobile/src/lib/gearPhotos.js')
-    for (const name of ['FAS Modern', 'FAS Modern III', 'Thordendal Vintage', 'Big Hair', 'Supertweed', 'Buddah DuoMaster', 'Tube Pre', 'Treble Boost']) {
+    for (const name of ['FAS Modern', 'FAS Modern III', 'FAS Buttery', 'Thordendal Vintage', 'Big Hair', 'Supertweed', 'Buddah DuoMaster', 'Tube Pre', 'Treble Boost']) {
       assert.equal(web.photoFor(name), null, `the browser shows a picture for ${name}`)
       assert.equal(phone.photoFor(name, '/gear'), null, `the phone shows a picture for ${name}`)
     }

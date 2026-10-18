@@ -336,9 +336,9 @@ theirs.
 
 No pictures of those units any more (18 October 2026). The FM3 photograph,
 the FM3 with Fractal's logo on its screen, the rack front with the FRACTAL
-AUDIO logo and the 34 gear drawings with a FRACTAL AUDIO badge are all gone
-from the app and the website, so there is no Fractal logo, product photo or
-artwork left for this answer to cover.
+AUDIO logo and the 35 gear drawings of Fractal's own models (34 of them with
+a FRACTAL AUDIO badge) are all gone from the app and the website, so there
+is no Fractal logo, product photo or artwork left for this answer to cover.
 
 **What Fractal's letter does and does not say.** Fractal Audio's letter of
 18 October 2026 says naming its products in plain text to state
@@ -527,12 +527,14 @@ described, so *New since 1.87.11* gets one paragraph on it, and nothing in
 the notes calls the app approved by, or connected with, Fractal. A test
 holds the steps to the walkthrough's own words, and that test learns the
 card's OK on the day those notes are written. (The next build carries the
-card inside it, so a reviewer's very first launch has it. The 1.87.11 builds
-do not: a fresh install of one runs the copy built into it on its first
-launch, `fallbackToCacheTimeout` being 0, and meets the old first screen,
-with the FM3 photograph and no card, once. The card and the plain box come
-with the update, from the second launch. Only the next build pair closes
-that, and it is asked for like any other.)
+card inside it, so a reviewer's very first launch has it. The 1.87.1 and
+1.87.11 builds do not: on the first launch after a fresh install or a store
+update they run the copy built into them, `fallbackToCacheTimeout` being 0.
+After a fresh install that is the old first screen, with the FM3 photograph
+and no card, once; after a store update, the walkthrough long since seen, it
+is only no card on that one launch. The card and the plain box come with the
+update, from the next launch. Only the next build pair closes that, and it
+is asked for like any other.)
 
 **For the next version's notes: the VP4** (15 October 2026). Its presets and
 scenes reach phones by an update and the computer app, not by a build, and
