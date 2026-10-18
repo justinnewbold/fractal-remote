@@ -23,6 +23,7 @@ import {
   shades,
   sheetNote,
   sheetSwatches,
+  sheetTitle,
   spokenSwatch,
   yoursFor
 } from '../lib/colourPage'
@@ -121,8 +122,8 @@ export function ColourPanel({ open, title, note, onClose, foot, children }) {
 /**
  * THE COLOUR SHEET: one effect, one scene, or one preset's tag, and the
  * colours it can be — one panel wherever it is opened from (the Colours page,
- * a preset's row, the Scenes sheet, a block on Edit), so a colour is chosen
- * the same way everywhere.
+ * a preset held or right-clicked in the list, the Scenes sheet, a block on
+ * Edit), so a colour is chosen the same way everywhere.
  *
  * "A section where a user can edit the colors of the blocks/presets and
  * effects." The phone's sheet, word for word and swatch for swatch — the tile
@@ -267,7 +268,7 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
     <ColourPanel
       open={open}
       onClose={onClose}
-      title={target ? `${target.name} colour` : ''}
+      title={target ? sheetTitle(target) : ''}
       /*
        * WHERE IT APPLIES. A family's colour is the family's, on every unit and
        * in every preset: a drive that is red in one song and green in the next
@@ -410,7 +411,7 @@ export default function ColourSheet({ target, chain = [], icons = true, onClose 
             className="colour-swatches"
             ref={grid}
             role="radiogroup"
-            aria-label={`${target.name} colour`}
+            aria-label={sheetTitle(target)}
           >
             {swatches.map((s, i) => {
               const chosen = s.fill === base

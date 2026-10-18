@@ -147,6 +147,40 @@ export const ALIASES = Object.freeze({
 })
 
 /**
+ * THE SPELLING A UNIT SENDS A FAMILY UNDER, where it is not the family's own.
+ *
+ * The Axe-Fx II names its blocks the long way ("Tremolo/Panner 1"), and in
+ * Fractal Remote — the app's look as it was — those names have no colour of
+ * their own (FRACTAL_REMOTE, below), so an Axe-Fx II's Tremolo is drawn
+ * NEUTRAL on Play. The Colours page shows one tile per family, and asks for
+ * its colour by the name the unit really sends, so the page and the sheet
+ * show what Play draws rather than a colour no tile of this unit ever wears.
+ * Read off ForgeFX's gen-2 block list (ax2blockTypes.ts), squeezed the way
+ * familyOf squeezes them.
+ */
+export const SENT_AS = Object.freeze({
+  gen2: Object.freeze({
+    comp: 'compressor',
+    geq: 'graphiceq',
+    peq: 'parametriceq',
+    multitap: 'multidelay',
+    rotary: 'rotaryspeaker',
+    volpan: 'volumepan',
+    tremolo: 'tremolopanner',
+    gate: 'gateexpander',
+    ringmod: 'ringmodulator',
+    multicomp: 'multibandcompressor',
+    megatap: 'megatapdelay',
+    send: 'feedbacksend',
+    return: 'feedbackreturn',
+    input: 'inputnoisegate'
+  })
+})
+
+/** The name a kind of unit sends a family under: the family's own, unless SENT_AS says otherwise. */
+export const sentAs = (family, palette) => SENT_AS[palette]?.[family] || family
+
+/**
  * MATCH MY UNIT, one table per kind of unit.
  *
  * The Axe-Fx II's own Quad Chorus has a picture of its own in Axe-Edit II, so
@@ -166,7 +200,7 @@ export const PALETTES = Object.freeze({
     filter: '#9f6278', // the editors' picture #8b5569, lifted
     cab: '#0e7365', // the unit's own screen (manual p49) #03332c, lifted
     geq: '#6d6dab', // the editors' picture #464385, lifted
-    peq: '#d3732a', // the editors' #9e5b1f, made lighter: kept clear of the app's amber
+    peq: '#d3732a', // the editors' #9e5b1f, made lighter and turned about 5° towards red: kept clear of the app's amber
     tremolo: '#306e79', // the editors' picture #1e4b53, lifted
     rotary: '#73644e', // the editors' picture #483a26, lifted
     pitch: '#846d38', // the editors' picture #846d38
@@ -174,9 +208,9 @@ export const PALETTES = Object.freeze({
     multitap: '#57629b', // the editors' picture, its body #1f2549 (not the glow in the middle), lifted
     /* The editors' picture at its edge, #2b403b (not the olive glow in the
        middle), lifted. Fractal's flat block inventory draws Megatap a darker
-       blue-teal, #0b212e — but lifted for the stage that is Looper's colour,
-       5.8 from it, so this keeps the edge's greener teal, about 40° round
-       from Fractal's own. */
+       blue-teal, #0b212e to #10242d — but lifted for the stage that is
+       Looper's colour, 5.8 from it, so this keeps the edge's greener teal:
+       50° to 60° round from Fractal's own, and 27 from it as it is. */
     megatap: '#4b6c64',
     plex: '#0091aa', // the editors' picture #0091aa
     gate: '#a47d4d', // the editors' #744a00, made lighter: at its own depth it was the app's amber on the Light page
@@ -200,7 +234,12 @@ export const PALETTES = Object.freeze({
     vocoder: '#07827b', // the editors' picture #055752, lifted
     tonematch: '#2b7254', // the editors' picture #1d513b, lifted
     rta: '#416897', // the editors' picture #3e6391, lifted
-    nam: '#7742e0', // Axe-Edit III's picture, its body #3c197a (not the glow in the middle), lifted
+    /* Axe-Edit III's picture is a dark indigo, #241f4d at its body, with
+       violet streaks across it. The body lifted is Multitap's colour, 4.0
+       from it, so this is the violet of the streaks, #3c197a, lifted: the
+       day ForgeFX names the block (DORMANT) it may well sit beside a
+       Multitap, and should not be mistaken for one. */
+    nam: '#7742e0',
     dynadist: '#95553b', // Axe-Edit III's picture #6f3219, lifted
     scenemidi: '#666666', // the editors' picture #535353, lifted
     controllers: '#666666', // the editors' picture #535353, lifted
@@ -229,7 +268,7 @@ export const PALETTES = Object.freeze({
     peq: '#b7510b',
     tremolo: '#056f89', // the unit's #005f75, lifted, and kept a step darker than Chorus, as the unit draws it
     rotary: '#825f3f', // the AM4 manual's picture #5a3406, lifted, and a shade off the browser's Light-page amber
-    pitch: '#8e843a', // not on an AM4; the VP4 manual's picture #8a8037, lifted
+    pitch: '#80762c', // not on an AM4; the VP4's, below
     synth: '#167542', // not on an AM4; the VP4 manual's picture #147341, lifted
     multitap: '#03717c', // not on an AM4; the VP4 manual's picture #00434a, lifted
     megatap: '#566d3b', // not on an AM4; the VP4 manual's picture #42542c, lifted
@@ -279,7 +318,7 @@ export const PALETTES = Object.freeze({
     peq: '#b7510b', // the same tile as the AM4's, a step towards red for its white letters
     tremolo: '#056f89', // the unit's, kept a step darker than Chorus, as the unit draws it
     rotary: '#825f3f', // the same tile as the AM4's
-    pitch: '#8e843a', // the VP4 manual's picture, the bright end of its tile, #8a8037, lifted
+    pitch: '#80762c', // the VP4 manual's picture, the bright end of its tile, #8a8037, darkened just enough to carry white letters, as the unit does
     synth: '#167542', // the VP4 manual's picture, the bright end of its tile, #147341, lifted
     multitap: '#03717c', // the VP4 manual's picture, the bright end of its tile, #00434a, lifted
     megatap: '#566d3b', // the VP4 manual's picture, the bright end of its tile, #42542c, lifted
@@ -324,7 +363,7 @@ export const PALETTES = Object.freeze({
     filter: '#ab5d7c', // the gen-2 editors' picture #af5f7f, a shade darker
     cab: '#4b6c6c', // the gen-2 editors' picture #1e2e2e, lifted
     geq: '#676091', // the gen-2 editors' picture #363152, lifted
-    peq: '#d3732a', // the gen-2 editors' #9e5c20, made lighter like gen-3's: kept clear of the app's amber
+    peq: '#d3732a', // the gen-2 editors' #9e5c20, made lighter and turned about 5° towards red, like gen-3's: kept clear of the app's amber
     tremolo: '#367b87', // the gen-2 editors' picture #1e4b53, lifted
     rotary: '#73644e', // the gen-2 editors' picture #483a26, lifted
     pitch: '#7f7550', // the gen-2 editors' picture #807651, a shade darker
@@ -563,7 +602,12 @@ const COLOUR_BLIND = Object.freeze({
   synth: '#dedf7c',
   multitap: '#88ecd9',
   megatap: '#88ecd9',
-  plex: '#88ecd9',
+  /* Its own, not Multitap's aqua: the two sit side by side in the chain the
+     app checks neighbours by (lib/colourPage NEXT_TO), and this look is the
+     one named for telling neighbours apart. A dark green, 23 or more from
+     Multitap, Reverb and Delay in every kind of vision, and 22 from every
+     other colour in the look. */
+  plex: '#137c3c',
   gate: '#f8c42b',
   volpan: '#cdbc67',
   mixer: '#b7bcc5',

@@ -21,7 +21,7 @@
  * Shared with the phone by `npm run sync:rules`, so it imports only its
  * neighbours, by explicit './x.js' paths, and no React.
  */
-import { AMBERS, DORMANT, FRACTAL_REMOTE_LOOK, LOOKS, SCENE_RED, SWATCHES, familyOf, lookById, swatchesFor } from './blockPalettes.js'
+import { AMBERS, DORMANT, FRACTAL_REMOTE_LOOK, LOOKS, SCENE_RED, SWATCHES, familyOf, lookById, sentAs, swatchesFor } from './blockPalettes.js'
 import { contrast, darker, deltaE, inkOn, lighter, luminance, paperEdge, readable, seenWith, VISIONS, WHITE_WINDOW } from './ink.js'
 import {
   SCENE_SLOTS,
@@ -171,11 +171,35 @@ export function presetFamilies(blocks) {
 /* What is being painted                                                */
 /* ------------------------------------------------------------------ */
 
-/** An effect family, as the colour sheet is handed it. Null for a block nobody here can name. */
+/*
+ * A FAMILY'S COLOUR AS PLAY DRAWS IT on the unit that is connected. Play asks
+ * by the name the unit sends, and the page by the family — the same thing on
+ * every unit but one: the Axe-Fx II's "Tremolo/Panner" is the tremolo
+ * family, and in Fractal Remote that name has no colour (lib/blockPalettes
+ * SENT_AS). So the page, the sheet and the neighbour line all ask by the
+ * name the unit sends, and never show a colour Play does not draw.
+ */
+const asSent = (family) => sentAs(family, currentPaletteId())
+
+/** The colour a family's tiles wear on Play, yours included: what the Colours page draws its tile in. */
+export const pageColour = (family) => blockColor(asSent(family))
+
+/**
+ * An effect family, as the colour sheet is handed it. Null for a block nobody
+ * here can name. `key` is the name it came by, where that is not the
+ * family's: the block open on Edit is an Axe-Fx II's "Quad Chorus", which
+ * Match my unit paints apart from its Chorus, and the sheet opens on the
+ * colour that block wears.
+ */
 export function familyTarget(slug) {
-  const family = familyOf(slug)?.family
-  return family ? Object.freeze({ kind: 'family', slug: family, name: FAMILY_NAMES[family] || family }) : null
+  const found = familyOf(slug)
+  if (!found) return null
+  const { family, key } = found
+  return Object.freeze({ kind: 'family', slug: family, name: FAMILY_NAMES[family] || family, ...(key !== family ? { key } : {}) })
 }
+
+/* The name to ask a family target's colour by: the block's own, else the one this unit sends the family under. */
+const sentFor = (t) => t.key || asSent(t.slug)
 
 /**
  * Whether a block's colour is one anybody would see: a family the app can
@@ -241,7 +265,7 @@ const within = (t, only) => (t.kind === 'scene' && only && t.preset ? t.preset.n
 export function colourNow(t, { only = false } = {}) {
   if (t.kind === 'preset') return presetColour(t.unit, t.number) || TAG_SWATCHES[0].fill
   if (t.kind === 'scene') return sceneColor(t.index, within(t, only)).fill
-  return blockColor(t.slug).fill
+  return blockColor(sentFor(t)).fill
 }
 
 /**
@@ -250,7 +274,7 @@ export function colourNow(t, { only = false } = {}) {
  * because that is what Back gives it. A preset's tag has none: no look tags a
  * preset.
  */
-export const lookOwn = (t) => (t.kind === 'preset' ? null : t.kind === 'scene' ? sceneBase(t.index).fill : lookColour(t.slug))
+export const lookOwn = (t) => (t.kind === 'preset' ? null : t.kind === 'scene' ? sceneBase(t.index).fill : lookColour(sentFor(t)))
 
 /**
  * Whether Play would draw this pick as a colour somebody picked rather than
@@ -309,6 +333,14 @@ export function paint(t, fill, { only = false } = {}, storage) {
  * colour is the unit's, and an AM4's PEQ is the AM4's orange.
  */
 export const offAmber = (t) => !!t && t.kind !== 'family'
+
+/**
+ * The sheet's title: "Drive colour", "Scene 2 colour" — and for a preset's
+ * tag "Colour for 012 Lead Rig", the word first, because a title one line
+ * long cuts a long name short, and it must cut the name rather than lose
+ * what the sheet is for.
+ */
+export const sheetTitle = (t) => (t.kind === 'preset' ? `Colour for ${t.name}` : `${t.name} colour`)
 
 /** What the sheet says it is painting, under its title. */
 export function sheetNote(t, { only = false } = {}) {
@@ -381,6 +413,28 @@ export function presetTarget(number, { words, unit = colourUnit() } = {}) {
 /** That preset's tag on the unit that is connected, or null. */
 export const presetTag = (number, unit = colourUnit()) => (Number.isInteger(number) && unit ? presetColour(unit, number) : null)
 
+/*
+ * HOW A PRESET GETS ITS TAG: by holding its row in the preset list (or a
+ * right-click, at a computer). It had a Colour button on every row, and that
+ * button came out of the width of every name in the list — the screen a
+ * player reads most, for something done once a song. A hold never loads the
+ * preset (a press that becomes a hold is not a press), so tagging between
+ * songs cannot change what the unit plays. Said at the end of the list, to a
+ * screen reader on every row, and on the Colours page, which also tags the
+ * loaded preset with a tap.
+ */
+export const TAG_HOLD = Object.freeze({
+  /* At the end of the list itself. */
+  phone: 'Hold a preset to give it a colour.',
+  browser: 'Hold or right-click a preset to give it a colour.',
+  /* On the Colours page, which has to say which list. */
+  phonePage: 'In the preset list, hold any preset to give it a colour.',
+  browserPage: 'In the preset list, hold or right-click any preset to give it a colour.',
+  /* What a screen reader adds to a row of the phone's list, and a pointer resting on a row of the browser's. */
+  hint: 'Hold to give it a colour',
+  browserHint: 'Hold or right-click to give it a colour'
+})
+
 /** How wide the bar is, in points on the phone and pixels in the browser. */
 export const TAG_WIDTH = 4
 
@@ -397,9 +451,16 @@ export const tagFill = (fill, { light = false } = {}) => (fill ? (light ? paperE
 /** What a tag is called, for a screen reader: "Blue", or "a colour of your own" for one typed in. */
 export const tagName = (fill) => SWATCHES.find((s) => same(s.fill, fill))?.name || 'a colour of your own'
 
+/** What the loaded preset's row on the Colours page says its tag is: "Blue", "A colour of your own", or "No colour". */
+export const tagSaid = (fill) => {
+  if (!fill) return 'No colour'
+  const name = tagName(fill)
+  return name[0].toUpperCase() + name.slice(1)
+}
+
 /**
- * What a screen reader says for the Colour button beside a preset's star:
- * what it is now, and what a press does.
+ * What a screen reader says for the button that gives the loaded preset its
+ * tag on the Colours page: what it is now, and what a press does.
  */
 export const tagButtonWords = (words, fill) => (fill ? `Colour for ${words}: ${tagName(fill)}. Change it` : `Give ${words} a colour`)
 
@@ -438,7 +499,7 @@ export function sheetSwatches(t) {
  * without names it is two dozen identical buttons.
  */
 export const spokenSwatch = (t, swatch, { yours = false } = {}) =>
-  `${t.name} colour, ${swatch.said || swatch.name}${yours ? ', your own' : ''}`
+  `${sheetTitle(t)}, ${swatch.said || swatch.name}${yours ? ', your own' : ''}`
 
 /* ------------------------------------------------------------------ */
 /* Lighter and Darker                                                   */
@@ -641,7 +702,7 @@ export function nextToWarning(t, pick, { chain = [], colourOf, only = false } = 
   const around =
     t.kind === 'scene'
       ? [t.index - 1, t.index + 1].filter((j) => j >= 0 && j < SCENE_SLOTS).map((j) => ({ name: `scene ${j + 1}`, fill: (colourOf || ((x) => sceneColor(x, p).fill))(j) }))
-      : neighboursOf(t.slug, chain).map((f) => ({ name: FAMILY_NAMES[f] || f, fill: (colourOf || ((x) => blockColor(x).fill))(f) }))
+      : neighboursOf(t.slug, chain).map((f) => ({ name: FAMILY_NAMES[f] || f, fill: (colourOf || ((x) => pageColour(x).fill))(f) }))
   let seen = null
   let hidden = null
   for (const n of around) {
@@ -680,7 +741,7 @@ export function wearLook(id, storage) {
 export function lookCard(id, palette = currentPaletteId()) {
   const look = lookById(id)
   return [
-    ...['drive', 'amp', 'delay', 'reverb'].map((slug) => ({ slug, fill: lookColour(slug, { look: look.id, palette }) })),
+    ...['drive', 'amp', 'delay', 'reverb'].map((slug) => ({ slug, fill: lookColour(sentAs(slug, palette), { look: look.id, palette }) })),
     { scene: 0, fill: look.scenes[0] }
   ]
 }

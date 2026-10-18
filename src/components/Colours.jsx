@@ -9,15 +9,21 @@ import {
   FAMILY_NAMES,
   OFF_WORDS,
   PUT_BACK_WORDS,
+  TAG_HOLD,
   UNDO_MS,
   chooseScenes,
   familyTarget,
   lookCard,
   lookWhy,
+  pageColour,
   pageSceneCount,
   presetFamilies,
+  presetTag,
+  presetTarget,
   sceneTarget,
   scenesAllRed,
+  tagButtonWords,
+  tagSaid,
   unitFamilies,
   wearLook
 } from '../lib/colourPage'
@@ -40,8 +46,9 @@ import ColourSheet, { ColourPanel } from './ColourSheet'
  * once in lib/colourPage and both ends draw from it. Top to bottom, in the
  * order somebody arrives with: a whole look in one click (and Undo for a
  * moment after, because one click repaints the whole app), then one effect at
- * a time, then the scenes, then how a switched-off effect is drawn, and last
- * the button that puts everything back.
+ * a time, then the scenes, then a preset's own colour, then how a
+ * switched-off effect is drawn, and last the button that puts everything
+ * back.
  *
  * NOTHING HERE IS ON PLAY. Play's tiles are footswitches — a tap switches and
  * a hold picks a channel — and a colour control among them would be a
@@ -61,6 +68,9 @@ import ColourSheet, { ColourPanel } from './ColourSheet'
 export default function Colours({ blocks = [], sceneNames = [], preset, capabilities, icons = true }) {
   /* Repaint on any change to the colours, from here or from the unit answering. */
   useLooks()
+  /* The loaded preset's tag, as the colour sheet is handed it: none before a unit has answered. */
+  const tagHere = preset ? presetTarget(preset.number, { words: preset.words }) : null
+  const tagNow = tagHere ? presetTag(tagHere.number) : null
   const wearing = lookId()
   const chain = presetFamilies(blocks)
   const [painting, setPainting] = useState(null)
@@ -81,7 +91,8 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
 
   const rest = unitFamilies().filter((f) => !chain.includes(f))
   const effectTile = (f) => {
-    const hue = blockColor(f)
+    /* As Play draws this family on this unit: an Axe-Fx II asks by its own names (colourPage pageColour). */
+    const hue = pageColour(f)
     const icon = icons ? blockIcon(f) : null
     return (
       <div className="gig-block-cell" key={f}>
@@ -200,6 +211,29 @@ export default function Colours({ blocks = [], sceneNames = [], preset, capabili
           })}
         </div>
         <p className="hint">Tap a scene to give it a colour, in every preset or just the one that is loaded.</p>
+      </section>
+
+      {/* ---------------------------------------------------------- presets */}
+      <section className="colours-section" aria-labelledby="colours-presets">
+        <h3 className="silk-label setup-open-title" id="colours-presets">
+          Presets
+        </h3>
+        <p className="hint">A preset’s colour is a bar beside its name: in the preset list, in your setlists and on Play.</p>
+        {/* The one that is loaded, with a click; any other from the preset list, with a hold or a right-click. */}
+        {tagHere ? (
+          <button
+            type="button"
+            className="colours-tag"
+            data-tagged={tagNow ? 'yes' : undefined}
+            style={tagNow ? { '--tag': tagNow } : undefined}
+            aria-label={tagButtonWords(tagHere.name, tagNow)}
+            onClick={() => setPainting(tagHere)}
+          >
+            <span className="colours-tag-name">{tagHere.name}</span>
+            <span className="colours-tag-now">{tagSaid(tagNow)}</span>
+          </button>
+        ) : null}
+        <p className="hint">{TAG_HOLD.browserPage}</p>
       </section>
 
       {/* ---------------------------------------------------- switched off */}

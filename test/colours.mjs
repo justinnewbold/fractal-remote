@@ -639,7 +639,8 @@ export function run(test) {
       ['gen3 multitap (the tile’s body)', c.PALETTES.gen3.multitap, '#1f2549'],
       /* The edge of the editors' picture, not Fractal's flat inventory: lifted, that one is Looper's colour (blockPalettes). */
       ['gen3 megatap (the edge of its picture)', c.PALETTES.gen3.megatap, '#2b403b'],
-      ['gen3 NAM (the tile’s body)', c.PALETTES.gen3.nam, '#3c197a'],
+      /* The violet streaks across Axe-Edit III's picture, not its indigo body, which lifted is Multitap's colour (blockPalettes). */
+      ['gen3 NAM (the violet across its picture)', c.PALETTES.gen3.nam, '#3c197a'],
       ['AM4 chorus', c.PALETTES.am4.chorus, '#0092c2'],
       ['AM4 comp', c.PALETTES.am4.comp, '#a59100'],
       ['AM4 phaser', c.PALETTES.am4.phaser, '#009e00'],
@@ -652,15 +653,20 @@ export function run(test) {
       const d = Math.min(Math.abs(a - b), 360 - Math.abs(a - b))
       assert.ok(d <= 3, `${what}: ${fill} is ${d.toFixed(1)}° from Fractal's ${official}`)
     }
-    /* The AM4 and VP4 draw white letters on these, and so does the app now —
-       the PEQ too, which takes a step towards red for it rather than land on
-       the app's amber at its own hue. */
+    /* The AM4 and VP4 draw white letters on every effect, and so does the app
+       now — the PEQ too, which takes a step towards red for it rather than
+       land on the app's amber at its own hue, and the VP4's Pitch, which had
+       black. Every effect each unit has, but the amp: its silver is taken a
+       few shades deeper than the AM4's screen already, and its letters are
+       whichever reads (blockPalettes). */
+    const { unitFamilies } = await import('../src/lib/colourPage.js')
     for (const id of ['am4', 'vp4']) {
-      for (const slug of ['chorus', 'comp', 'phaser', 'peq']) {
+      for (const slug of unitFamilies(id).filter((f) => f !== 'amp')) {
         assert.equal(c.inkOn(c.PALETTES[id][slug]), c.LIGHT_INK, `${id} ${slug} has black letters where the unit has white`)
         assert.ok(c.contrast(c.PALETTES[id][slug], c.LIGHT_INK) >= 4.5, `${id} ${slug}`)
       }
     }
+    assert.equal(c.PALETTES.am4.pitch, c.PALETTES.vp4.pitch, 'the AM4 borrows a Pitch that is not the VP4’s')
     assert.equal(c.PALETTES.am4.peq, '#b7510b')
   })
 
@@ -1302,18 +1308,45 @@ export function run(test) {
      * Lighter and Darker, which on most phones is below the bottom of the
      * sheet: Red tapped for the amp, the line said where nobody saw it.
      */
-    for (const [f, said, warning, steps, grid] of [
-      ['mobile/src/components/ColourSheet.js', '{shadeWords(capital(baseName), step)}', "{warning || ''}", 'label="Darker"', 'onLayout={(e) => setGrid('],
-      ['src/components/ColourSheet.jsx', '<p className="colour-said">', "{warning || ''}", 'aria-label="A step darker"', 'className="colour-swatches"']
-    ]) {
+    const finder = (f) => {
       const sheet = read(f)
-      const at = (s) => {
-        const i = sheet.indexOf(s)
-        assert.ok(i >= 0, `${f}: no ${s} for this test to find`)
-        return i
-      }
-      assert.ok(at(said) < at(warning) && at(warning) < at(steps) && at(steps) < at(grid), `${f}: the neighbour line and Lighter and Darker are not between the pick’s name and the grid`)
+      return [
+        sheet,
+        (s) => {
+          const i = sheet.indexOf(s)
+          assert.ok(i >= 0, `${f}: no ${s} for this test to find`)
+          return i
+        }
+      ]
+    }
+    {
+      const f = 'src/components/ColourSheet.jsx'
+      const [sheet, at] = finder(f)
+      assert.ok(at('<p className="colour-said">') < at("{warning || ''}") && at("{warning || ''}") < at('aria-label="A step darker"') && at('aria-label="A step darker"') < at('className="colour-swatches"'), `${f}: the neighbour line and Lighter and Darker are not between the pick’s name and the grid`)
       assert.equal(sheet.split("{warning || ''}").length, 2, `${f} says the neighbour line twice`)
+    }
+    {
+      /*
+       * The phone's go further: Darker and Lighter either side of the tiles,
+       * the name and the neighbour line under them, all in the sheet's head,
+       * which does not scroll — and only the grid scrolls, between it and
+       * Cancel and Use it. On a 568-point phone the grid had started under the
+       * fold, and the sheet opened with no colour in it to pick.
+       */
+      const f = 'mobile/src/components/ColourSheet.js'
+      const [sheet, at] = finder(f)
+      assert.ok(
+        at('head={') < at('label="Darker"') &&
+          at('label="Darker"') < at('label="Lighter"') &&
+          at('label="Lighter"') < at('{shadeWords(capital(baseName), step)}') &&
+          at('{shadeWords(capital(baseName), step)}') < at("{warning || ''}") &&
+          at("{warning || ''}") < at('foot={') &&
+          at('foot={') < at('onLayout={(e) => setGrid('),
+        `${f}: the tiles, Lighter and Darker, the pick’s name and the neighbour line are not in the head above a grid that scrolls`
+      )
+      assert.equal(sheet.split("{warning || ''}").length, 2, `${f} says the neighbour line twice`)
+      assert.match(sheet, /^\s+tall$/m, 'the colour sheet is four fifths of a small phone again')
+      assert.match(read('mobile/src/components/Sheet.js'), /\{head \? <View[^>]*>\{head\}<\/View> : null\}\s+<ScrollView/, 'the sheet’s head scrolls with the rest')
     }
     assert.match(read('mobile/src/components/ColourSheet.js'), /style=\{\{ color: color\.signal, fontSize: font\.small, minHeight: 40, lineHeight: 20 \}\}/, 'the phone’s neighbour line does not keep two lines of room')
     assert.match(read('src/styles.css'), /\.colour-warning \{\n  min-height: 2\.8em;\n\}/, 'the browser’s neighbour line does not keep two lines of room')
@@ -1338,5 +1371,105 @@ export function run(test) {
     const store = read('docs/app-store.md')
     assert.ok(!/match your unit's own screen/.test(store), 'the store says every colour is off the unit’s own screen, which is not true on an FM3')
     assert.match(store, /Colors that match your Fractal unit and its editor/)
+  })
+
+  test('on an Axe-Fx II the Colours page and the sheet show each effect in the colour Play draws it, in every look', async () => {
+    /*
+     * The Axe-Fx II names its blocks the long way, and in Fractal Remote those
+     * names have no colour: its "Tremolo/Panner 1" is drawn NEUTRAL on Play.
+     * The page showed the tremolo family's old purple for it, and the sheet
+     * offered that purple as the way back — a colour no tile on that unit
+     * ever wore. Names from ForgeFX's gen-2 block list (ax2blockTypes.ts).
+     */
+    const c = await withPage()
+    const GEN2_NAMES = {
+      drive: 'Drive 1', amp: 'Amp 1', cab: 'Cab 1', delay: 'Delay 1', reverb: 'Reverb 1', comp: 'Compressor 1',
+      gate: 'Gate Expander', wah: 'Wah 1', chorus: 'Chorus 1', flanger: 'Flanger 1', phaser: 'Phaser 1',
+      tremolo: 'Tremolo/Panner 1', rotary: 'Rotary Speaker 1', pitch: 'Pitch 1', filter: 'Filter 1', geq: 'Graphic EQ 1',
+      peq: 'Parametric EQ 1', volpan: 'Volume/Pan 1', enhancer: 'Enhancer', multitap: 'Multi Delay 1',
+      megatap: 'Megatap Delay', synth: 'Synth 1', formant: 'Formant', ringmod: 'Ring Modulator', resonator: 'Resonator 1',
+      multicomp: 'Multiband Compressor 1', mixer: 'Mixer', looper: 'Looper', crossover: 'Crossover 1',
+      send: 'Feedback Send', return: 'Feedback Return', vocoder: 'Vocoder', tonematch: 'Tone Match', fxloop: 'FX Loop',
+      input: 'Input Noise Gate'
+    }
+    c.setColourUnit('axefxii')
+    const wrong = []
+    for (const look of c.LOOKS) {
+      c.setLook(look.id)
+      for (const f of c.unitFamilies('gen2')) {
+        const name = GEN2_NAMES[f]
+        assert.ok(name, `the gen-2 page shows ${f}, which this test has no Axe-Fx II name for`)
+        assert.equal(c.familyOf(name).family, f, `${name} is not the ${f} family`)
+        const play = c.blockColor(name).fill
+        if (c.pageColour(f).fill !== play) wrong.push(`${look.name}: the page’s ${f} is ${c.pageColour(f).fill}, Play draws ${name} ${play}`)
+        const t = c.familyTarget(f)
+        if (c.colourNow(t) !== play) wrong.push(`${look.name}: the sheet opens ${f} on ${c.colourNow(t)}, Play draws ${play}`)
+        if (c.lookOwn(t) !== c.lookColour(name)) wrong.push(`${look.name}: the way back for ${f} is ${c.lookOwn(t)}, not the look’s ${c.lookColour(name)}`)
+      }
+    }
+    assert.deepEqual(wrong, [], wrong.join('\n'))
+    /* The case it was found by: Fractal Remote's tremolo on an Axe-Fx II is the unknown block's colour, page and Play alike. */
+    c.setLook('fractalremote')
+    assert.deepEqual(c.pageColour('tremolo'), c.NEUTRAL)
+    /* And a colour of yours for the family still reaches the block by its long name. */
+    c.paint(c.familyTarget('tremolo'), '#ff99cc')
+    assert.equal(c.blockColor('Tremolo/Panner 2').fill, '#ff99cc')
+    assert.equal(c.pageColour('tremolo').fill, '#ff99cc')
+    /* And the block open on Edit opens the sheet on the colour it wears, by the name it came by: Match my unit paints an Axe-Fx II's Quad Chorus apart from its Chorus. */
+    c.setLook('unit')
+    const quad = c.familyTarget('Quad Chorus 1')
+    assert.equal(quad.slug, 'chorus')
+    assert.equal(c.colourNow(quad), c.blockColor('Quad Chorus 1').fill)
+    assert.equal(c.lookOwn(quad), c.PALETTES.gen2.quadchorus)
+    assert.notEqual(c.lookOwn(quad), c.lookOwn(c.familyTarget('chorus')))
+    /* Every other unit sends the family's own name. */
+    for (const id of ['gen3', 'am4', 'vp4']) for (const f of c.unitFamilies(id)) assert.equal(c.sentAs(f, id), f)
+    for (const name of Object.values(c.SENT_AS.gen2)) assert.ok(c.ALIASES[name], `${name} is not a name familyOf knows`)
+    /* Both pages draw their effect tiles by it. */
+    for (const f of ['src/components/Colours.jsx', 'mobile/src/components/Colours.js']) assert.match(read(f), /const hue = pageColour\(f\)/, `${f} draws an effect in a colour Play may not`)
+    c.setColourUnit(null)
+  })
+
+  test('Colour-blind safe keeps every pair of neighbours the app knows apart, in every vision', async () => {
+    /*
+     * The look is named for telling neighbours apart, and the sheet's
+     * neighbour line works from the same list (lib/colourPage NEXT_TO). Its
+     * Multitap and Plex were one aqua, side by side in that very list.
+     */
+    const c = await withPage()
+    const t = c.lookById('cvd').families
+    const far = (a, b) => Math.min(...c.VISIONS.map((v) => c.deltaE(c.seenWith(a, v), c.seenWith(b, v))))
+    const close = []
+    for (const [a, list] of Object.entries(c.NEXT_TO)) {
+      for (const b of list) if (a < b && far(t[a], t[b]) < c.NEIGHBOUR_GAP) close.push(`${a} and ${b}, ${far(t[a], t[b]).toFixed(1)}`)
+    }
+    assert.deepEqual(close, [], `side by side and too alike:\n  ${close.join('\n  ')}`)
+  })
+
+  test('a preset’s tag sheet keeps the word colour in its title, however long the name', async () => {
+    const c = await withPage()
+    c.setColourUnit('fm3')
+    const long = c.presetTarget(12, { words: '012 Shine On You Crazy Diamond Solo' })
+    assert.equal(c.sheetTitle(long), 'Colour for 012 Shine On You Crazy Diamond Solo')
+    assert.equal(c.sheetTitle(c.familyTarget('drive')), 'Drive colour')
+    assert.equal(c.sheetTitle(c.sceneTarget(1)), 'Scene 2 colour')
+    assert.equal(c.spokenSwatch(long, c.sheetSwatches(long)[0]), 'Colour for 012 Shine On You Crazy Diamond Solo, Red')
+    for (const f of ['src/components/ColourSheet.jsx', 'mobile/src/components/ColourSheet.js']) assert.match(read(f), /title=\{target \? sheetTitle\(target\) : ''\}/, `${f} titles its sheet another way`)
+    c.setColourUnit(null)
+  })
+
+  test('every page of the phone’s Settings opens at its top, and going back up returns to the row', () => {
+    /*
+     * One scroll holds every Settings page, so Colours — opened from near the
+     * bottom of the list — came up part-way down itself, its title, its way
+     * back and its Looks heading above the screen.
+     */
+    const settings = read('mobile/src/screens/Settings.js')
+    assert.match(settings, /const scroller = useRef\(null\)/)
+    assert.match(settings, /const up = upFrom\(from\) === page\s+scroller\.current\?\.scrollTo\(\{ y: up \? offsets\.current\[page \?\? ''\] \|\| 0 : 0, animated: false \}\)\s+\}, \[page\]\)/, 'a page opens where the last one was scrolled to')
+    assert.match(settings, /<ScrollView\s+ref=\{scroller\}/)
+    assert.match(settings, /onScroll=\{\(e\) => \{\s+offsets\.current\[page \?\? ''\] = e\.nativeEvent\.contentOffset\.y\s+\}\}/)
+    /* The effect reads `page` after it is declared: Hermes forgives the other order, a browser does not. */
+    assert.ok(settings.indexOf('const [page, setPage] = useState(startPage)') < settings.indexOf('const lastPage = useRef(page)'))
   })
 }

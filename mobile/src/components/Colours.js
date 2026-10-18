@@ -9,14 +9,18 @@ import { sceneColor } from '../lib/sceneColors'
 import {
   FAMILY_NAMES,
   PUT_BACK_WORDS,
+  TAG_HOLD,
   UNDO_MS,
   chooseScenes,
   familyTarget,
   lookCard,
   lookWhy,
   OFF_WORDS,
+  pageColour,
   pageSceneCount,
   presetFamilies,
+  presetTag,
+  presetTarget,
   sceneTarget,
   scenesAllRed,
   unitFamilies,
@@ -35,6 +39,7 @@ import Note from './Note'
 import Press from './Press'
 import Sheet from './Sheet'
 import Tile from './Tile'
+import { TagRow } from './PresetTag'
 import { useStillNews } from './Toast'
 
 /**
@@ -46,8 +51,9 @@ import { useStillNews } from './Toast'
  *
  * Top to bottom, in the order somebody arrives with: a whole look in one tap
  * (and Undo for a moment after, because one tap repaints the whole app), then
- * one effect at a time, then the scenes, then how a switched-off effect is
- * drawn, and last the button that puts everything back.
+ * one effect at a time, then the scenes, then a preset's own colour, then how
+ * a switched-off effect is drawn, and last the button that puts everything
+ * back.
  *
  * NOTHING HERE IS ON PLAY. Play's tiles are footswitches — a tap switches and
  * a hold picks a channel — and a colour control among them would be a
@@ -72,6 +78,8 @@ export default function Colours() {
   const here = Number.isInteger(preset?.number)
     ? { number: preset.number, words: `${slotLabel(preset.number, addressing)} ${presetLabel(preset)}` }
     : undefined
+  /* The loaded preset's tag, as the colour sheet is handed it: none before a unit has answered. */
+  const tagHere = here ? presetTarget(here.number, { words: here.words }) : null
   const wearing = lookId()
   const chain = presetFamilies(blocks)
   const [painting, setPainting] = useState(null)
@@ -104,7 +112,8 @@ export default function Colours() {
   const sceneWidth = quarter !== undefined && quarter < 72 ? half : quarter
   const rest = unitFamilies().filter((f) => !chain.includes(f))
   const effectTile = (f) => {
-    const hue = blockColor(f)
+    /* As Play draws this family on this unit: an Axe-Fx II asks by its own names (colourPage pageColour). */
+    const hue = pageColour(f)
     return (
       <Tile
         key={f}
@@ -212,6 +221,15 @@ export default function Colours() {
         <Text style={{ color: color.silkDim, fontSize: font.small }}>
           Tap a scene to give it a colour, in every preset or just the one that is loaded.
         </Text>
+      </View>
+
+      {/* ---------------------------------------------------------- presets */}
+      <View style={{ gap: space.md }}>
+        <Heading>Presets</Heading>
+        <Note>A preset’s colour is a bar beside its name: in the preset list, in your setlists and on Play.</Note>
+        {/* The one that is loaded, with a tap; any other from the preset list, with a hold. */}
+        {tagHere ? <TagRow words={tagHere.name} fill={presetTag(tagHere.number)} onPress={() => setPainting(tagHere)} /> : null}
+        <Text style={{ color: color.silkDim, fontSize: font.small }}>{TAG_HOLD.phonePage}</Text>
       </View>
 
       {/* ---------------------------------------------------- switched off */}

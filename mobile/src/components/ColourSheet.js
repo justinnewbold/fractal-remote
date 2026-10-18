@@ -16,6 +16,7 @@ import {
   shades,
   sheetNote,
   sheetSwatches,
+  sheetTitle,
   spokenSwatch,
   yoursFor
 } from '../lib/colourPage'
@@ -39,9 +40,9 @@ import { TagPreview } from './PresetTag'
  * Cancel and Use it in the sheet's foot, which stays at the bottom however
  * far the grid scrolls.
  *
- * One sheet wherever it is opened from — the Colours page, a preset's row,
- * the scene names and the block on Edit — so a colour is chosen the same way
- * everywhere, by the same rules (lib/colourPage).
+ * One sheet wherever it is opened from — the Colours page, a preset held in
+ * the preset list, the scene names and the block on Edit — so a colour is
+ * chosen the same way everywhere, by the same rules (lib/colourPage).
  *
  * WHY A GRID AND NOT A COLOUR WHEEL. A wheel would need a package with
  * native code, which moves the fingerprint and costs a build for the sake of
@@ -98,159 +99,177 @@ export default function ColourSheet({ target, chain = [], onClose }) {
   }
 
   /*
-   * As many 56-point squares across as fit, never fewer than four or more
-   * than six — "everything you press is at least 56pt" (Press) holds for a
-   * swatch too, and on a phone six of them do not fit across with a gap
-   * between, where on a tablet they do.
+   * Squares a thumb wide — "everything you press is at least 56pt" (Press)
+   * holds for a swatch too — and no wider: on a 320-point phone four across
+   * came to 66 points a side, and every point a row is taller is a point
+   * less of the second row above Cancel and Use it. As many across as fit,
+   * four at the least and eight on a tablet, and what the squares do not use
+   * goes between them.
    */
   const gap = space.sm
-  const cols = Math.max(4, Math.min(6, Math.floor((grid + gap) / (TAP + gap)) || 4))
-  const side = grid ? Math.max(TAP, Math.floor((grid - gap * (cols - 1)) / cols)) : TAP
+  const side = TAP
+  const cols = Math.max(4, Math.min(8, Math.floor((grid + gap) / (side + gap)) || 4))
+  const across = grid && cols > 1 ? Math.max(gap, Math.floor((grid - side * cols) / (cols - 1))) : gap
 
   const use = (fill) => {
     paint(target, fill, { only }, sync)
     onClose?.()
   }
 
+  /* A scene painted while a preset is loaded: the choice of presets is on the sheet, and says what the note would. */
+  const choosing = !!target && target.kind === 'scene' && !!target.preset
+
   return (
     <Sheet
       open={open}
       onClose={onClose}
-      title={target ? `${target.name} colour` : ''}
+      title={target ? sheetTitle(target) : ''}
       /*
        * WHERE IT APPLIES. A family's colour is the family's, on every unit and
        * in every preset: a drive that is red in one song and green in the next
        * is exactly what these colours exist to stop. A scene's is for every
-       * preset, or for the one that is loaded (the choice under the tiles); a
-       * preset's tag is that preset's on this unit, like its star.
+       * preset, or for the one that is loaded — and there the two buttons
+       * that choose between them say it, so the line is left off for their
+       * room; a preset's tag is that preset's on this unit, like its star.
        */
-      note={target ? sheetNote(target, { only }) : null}
-      foot={
+      note={target && !choosing ? sheetNote(target, { only }) : null}
+      /*
+       * TALL, AND ONLY THE GRID SCROLLS. The tiles, the pick's name, Lighter
+       * and Darker and the choice of presets stay put under the title, and
+       * Cancel and Use it at the bottom; the swatches scroll between them.
+       * On a 568-point phone the grid used to start under the fold of a sheet
+       * four fifths high: the sheet opened with no colour in it to pick.
+       */
+      tall
+      head={
         open ? (
           <>
-            {yours ? <Press label={backLabel} onPress={() => use(null)} /> : null}
+            {/*
+              THE TILE, LIT AND UNLIT, at the size Play draws it, side by side:
+              the colour is chosen for both. Drawn by Play's own Tile, so what
+              is here is what the stage will show — the switched-off one in
+              grey if that is what Settings says. Silent and untouchable: the
+              sheet's title already says what it is. A preset's tag is drawn as
+              its row in the list is, bar and all.
+
+              DARKER AND LIGHTER either side of it, three steps each way at
+              most, and only as far as the letters still read and an unlit tile
+              still shows on the black stage. Where a way has nothing left, its
+              button rests: red has no Darker at all. Beside the tiles they
+              change rather than in a row of their own, which on a small phone
+              was the row of colours the sheet had no room left for.
+            */}
             <View style={{ flexDirection: 'row', gap: space.sm }}>
-              <Press label="Cancel" grow onPress={onClose} />
-              <Press label="Use it" grow tone="signal" on onPress={() => use(pick)} />
+              <Press
+                label="Darker"
+                labelSize={font.small}
+                accessibilityLabel="A step darker"
+                disabled={step <= -steps.darker.length}
+                onPress={() => setStep(step - 1)}
+                style={{ width: STEP_WIDTH, paddingHorizontal: space.xs }}
+              />
+              <View
+                pointerEvents="none"
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                style={{ flex: 1, flexDirection: 'row', gap: space.sm }}
+              >
+                {target.kind === 'preset' ? (
+                  <TagPreview words={target.name} fill={pick} />
+                ) : (
+                  [true, false].map((lit) =>
+                    target.kind === 'scene' ? (
+                      <Tile
+                        key={String(lit)}
+                        caption={String(target.index + 1)}
+                        /* The scene's own name where it has one, as Play draws it. */
+                        label={target.label || target.name}
+                        bar
+                        ring
+                        wrap
+                        fill={pick}
+                        picked={picked}
+                        on={lit}
+                        haptic={null}
+                        style={{ flex: 1 }}
+                      />
+                    ) : (
+                      <Tile
+                        key={String(lit)}
+                        label={shortName(target.slug)}
+                        icon={loadIcons(sync) ? blockIcon(target.slug) : undefined}
+                        topLeft={lit ? 'On' : 'Off'}
+                        effect
+                        fill={pick}
+                        picked={picked}
+                        on={lit}
+                        haptic={null}
+                        style={{ flex: 1 }}
+                      />
+                    )
+                  )
+                )}
+              </View>
+              <Press
+                label="Lighter"
+                labelSize={font.small}
+                accessibilityLabel="A step lighter"
+                disabled={step >= steps.lighter.length}
+                onPress={() => setStep(step + 1)}
+                style={{ width: STEP_WIDTH, paddingHorizontal: space.xs }}
+              />
             </View>
+            <Text style={{ color: color.silkDim, fontSize: font.small }}>{shadeWords(capital(baseName), step)}</Text>
+
+            {/*
+              THE NEIGHBOUR LINE, right under the name of the pick, where the
+              eye is when a swatch has just been tapped. Its room is kept when
+              there is nothing to say — two lines, because the colour-blind one
+              takes two on any phone — so the grid under it never jumps as a
+              swatch is tried. Not for a tag: a bar beside a name has no
+              neighbour to be mistaken for.
+            */}
+            {target.kind === 'preset' ? null : (
+              <Text
+                accessibilityLiveRegion="polite"
+                style={{ color: color.signal, fontSize: font.small, minHeight: 40, lineHeight: 20 }}
+              >
+                {warning || ''}
+              </Text>
+            )}
+
+            {/*
+              EVERY PRESET, OR JUST THIS ONE, for a scene painted while a preset
+              is loaded: Fractal's own PERFORM layout makes Clean, Crunch and
+              Lead green, yellow and red in the one preset that wants them.
+              Above the grid, because it changes what the grid is painting —
+              the tiles over it change to the colour the scene has in the
+              presets chosen.
+            */}
+            {choosing ? (
+              <View accessibilityRole="radiogroup" accessibilityLabel="Which presets" style={{ flexDirection: 'row', gap: space.sm }}>
+                <Press label={SCOPE_WORDS.every} grow tone="signal" on={!only} onPress={() => scope(false)} />
+                <Press label={SCOPE_WORDS.only} sub={target.preset.words} grow tone="signal" on={only} onPress={() => scope(true)} />
+              </View>
+            ) : null}
           </>
+        ) : null
+      }
+      foot={
+        open ? (
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Press label="Cancel" grow onPress={onClose} />
+            <Press label="Use it" grow tone="signal" on onPress={() => use(pick)} />
+          </View>
         ) : null
       }
     >
       {open ? (
         <>
-          {/*
-            THE TILE, LIT AND UNLIT, at the size Play draws it, side by side:
-            the colour is chosen for both. Drawn by Play's own Tile, so what is
-            here is what the stage will show — the switched-off one in grey if
-            that is what Settings says. Silent and untouchable: the sheet's
-            title already says what it is. A preset's tag is drawn as its row
-            in the list is, bar and all.
-          */}
-          <View
-            pointerEvents="none"
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={{ flexDirection: 'row', gap: space.sm }}
-          >
-            {target.kind === 'preset' ? (
-              <TagPreview words={target.name} fill={pick} />
-            ) : (
-              [true, false].map((lit) =>
-                target.kind === 'scene' ? (
-                  <Tile
-                    key={String(lit)}
-                    caption={String(target.index + 1)}
-                    /* The scene's own name where it has one, as Play draws it. */
-                    label={target.label || target.name}
-                    bar
-                    ring
-                    wrap
-                    fill={pick}
-                    picked={picked}
-                    on={lit}
-                    haptic={null}
-                    style={{ flex: 1 }}
-                  />
-                ) : (
-                  <Tile
-                    key={String(lit)}
-                    label={shortName(target.slug)}
-                    icon={loadIcons(sync) ? blockIcon(target.slug) : undefined}
-                    topLeft={lit ? 'On' : 'Off'}
-                    effect
-                    fill={pick}
-                    picked={picked}
-                    on={lit}
-                    haptic={null}
-                    style={{ flex: 1 }}
-                  />
-                )
-              )
-            )}
-          </View>
-          <Text style={{ color: color.silkDim, fontSize: font.small }}>{shadeWords(capital(baseName), step)}</Text>
-
-          {/*
-            THE NEIGHBOUR LINE, right under the name of the pick, where the eye
-            is when a swatch has just been tapped. It sat under the grid and
-            under Lighter and Darker, which on a phone up to an iPhone 15 is
-            below the bottom of the sheet: Red tapped for the amp, "Hard to
-            tell from Drive next to it" said where nobody could see it. Its
-            room is kept when there is nothing to say — two lines, because the
-            colour-blind one takes two on any phone — so the buttons under it
-            never jump as a swatch is tried.
-          */}
-          <Text
-            accessibilityLiveRegion="polite"
-            style={{ color: color.signal, fontSize: font.small, minHeight: 40, lineHeight: 20 }}
-          >
-            {warning || ''}
-          </Text>
-
-          {/*
-            LIGHTER AND DARKER, three steps each way at most, and only as far
-            as the letters still read and an unlit tile still shows on the
-            black stage. Where a way has nothing left, its button rests: red
-            has no Darker at all. Up here beside the pick they change, rather
-            than under two dozen swatches where somebody who never scrolls the
-            sheet would never find them.
-          */}
-          <View style={{ flexDirection: 'row', gap: space.sm }}>
-            <Press
-              label="Darker"
-              grow
-              accessibilityLabel="A step darker"
-              disabled={step <= -steps.darker.length}
-              onPress={() => setStep(step - 1)}
-            />
-            <Press
-              label="Lighter"
-              grow
-              accessibilityLabel="A step lighter"
-              disabled={step >= steps.lighter.length}
-              onPress={() => setStep(step + 1)}
-            />
-          </View>
-
-          {/*
-            EVERY PRESET, OR JUST THIS ONE, for a scene painted while a preset
-            is loaded: Fractal's own PERFORM layout makes Clean, Crunch and
-            Lead green, yellow and red in the one preset that wants them. Above
-            the grid, because it changes what the grid is painting — the tiles
-            over it change to the colour the scene has in the presets chosen.
-          */}
-          {target.kind === 'scene' && target.preset ? (
-            <View accessibilityRole="radiogroup" accessibilityLabel="Which presets" style={{ flexDirection: 'row', gap: space.sm }}>
-              <Press label={SCOPE_WORDS.every} grow tone="signal" on={!only} onPress={() => scope(false)} />
-              <Press label={SCOPE_WORDS.only} sub={target.preset.words} grow tone="signal" on={only} onPress={() => scope(true)} />
-            </View>
-          ) : null}
-
           <View
             onLayout={(e) => setGrid(e.nativeEvent.layout.width)}
             accessibilityRole="radiogroup"
-            style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}
+            style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: gap, columnGap: across }}
           >
             {swatches.map((s, i) => {
               const chosen = s.fill === base
@@ -287,10 +306,24 @@ export default function ColourSheet({ target, chain = [], onClose }) {
               )
             })}
           </View>
+
+          {/*
+            THE WAY BACK, from a colour of your own: to the unit's (or the
+            look's), to every preset's, or no tag at all. Under the grid, in
+            the part that scrolls, because the foot is Cancel and Use it and a
+            third big button there was the second row of colours a small phone
+            had no room for. The grid's first square is the same colour for an
+            effect or a scene, so most of the time this is one tap less, not
+            the only way.
+          */}
+          {yours ? <Press label={backLabel} onPress={() => use(null)} /> : null}
         </>
       ) : null}
     </Sheet>
   )
 }
+
+/* Darker and Lighter, either side of the tiles: wide enough for the word, and no wider, so the tiles keep Play's width on a small phone. */
+const STEP_WIDTH = 64
 
 const capital = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s)

@@ -18449,7 +18449,9 @@ export function run(test) {
     const sheet = read('mobile/src/components/ColourSheet.js')
     assert.match(sheet, /const swatches = target \? sheetSwatches\(target\) : \[\]/, 'the sheet draws swatches of its own')
     assert.match(sheet, /accessibilityLabel=\{spokenSwatch\(target, s, \{ yours: s\.fill === yours && !s\.own \}\)\}/, 'a swatch has no name for a screen reader')
-    assert.match(sheet, /Math\.max\(TAP, Math\.floor/, 'a swatch can be drawn smaller than a thumb')
+    /* A thumb wide, and no wider: a bigger square on a small phone was the second row of colours under the fold. */
+    assert.match(sheet, /const side = TAP\n/, 'a swatch is drawn some other size than a thumb')
+    assert.match(sheet, /width: side,\s+height: side,/)
     assert.ok(!/TextInput/.test(sheet), 'the phone grew a free colour picker')
     /* Cancel and Use it in the sheet's foot, which stays at the bottom where the thumb is. */
     assert.match(sheet, /foot=\{[\s\S]*?<Press label="Cancel" grow onPress=\{onClose\} \/>\s*<Press label="Use it" grow tone="signal" on onPress=\{\(\) => use\(pick\)\} \/>/)
@@ -18629,7 +18631,9 @@ export function run(test) {
     assert.match(sheet, /setOnly\(!!target\?\.only\)\s+setBase\(target \? colourNow\(target, \{ only: !!target\.only \}\) : null\)/, 'the sheet does not open on the presets the opener asked for')
     assert.match(sheet, /<Press label=\{SCOPE_WORDS\.every\} grow tone="signal" on=\{!only\} onPress=\{\(\) => scope\(false\)\} \/>\s*<Press label=\{SCOPE_WORDS\.only\} sub=\{target\.preset\.words\} grow tone="signal" on=\{only\} onPress=\{\(\) => scope\(true\)\} \/>/)
     assert.ok(sheet.indexOf('SCOPE_WORDS.every') < sheet.indexOf('{swatches.map('), 'the choice of presets is under the grid it changes')
-    assert.match(sheet, /note=\{target \? sheetNote\(target, \{ only \}\) : null\}/)
+    /* Where the two buttons say which presets, the line under the title that would say it too gives them its room. */
+    assert.match(sheet, /const choosing = !!target && target\.kind === 'scene' && !!target\.preset/)
+    assert.match(sheet, /note=\{target && !choosing \? sheetNote\(target, \{ only \}\) : null\}/)
     assert.match(sheet, /const backLabel = target \? backWords\(target, \{ only \}\) : ''/)
     /* A tag is drawn as its row is. */
     assert.match(sheet, /\{target\.kind === 'preset' \? \(\s*<TagPreview words=\{target\.name\} fill=\{pick\} \/>/)
@@ -18640,11 +18644,12 @@ export function run(test) {
     assert.match(rename, /fill: sceneColor\(i, here\.number\)\.fill,\s+said: `Colour for scene \$\{i \+ 1\} in this preset`/)
     assert.match(rename, /\{colour \? <SceneColour \{\.\.\.colour\} \/> : null\}/)
     assert.match(rename, /<ColourSheet target=\{painting\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
-    /* The Colour button on a tag reads as one: a dot and the word, its own target beside the star. */
+    /* The loaded preset's row on the Colours page reads as a button: what it is, what its tag is, and a thumb's height. */
     const tag = read('mobile/src/components/PresetTag.js')
-    assert.match(tag, /accessibilityLabel=\{tagButtonWords\(words, fill\)\}/)
-    assert.match(tag, />Colour<\/Text>/)
-    assert.match(tag, /width: TAP,\s+minHeight: TAP/, 'the Colour button is smaller than a thumb')
+    assert.match(tag, /export function TagRow[\s\S]*?accessibilityLabel=\{tagButtonWords\(words, fill\)\}/)
+    assert.match(tag, /\{tagSaid\(fill\)\}/)
+    assert.match(tag, /minHeight: TAP,/, 'the preset’s row on the Colours page is smaller than a thumb')
+    assert.ok(!/export function TagButton/.test(tag), 'the Colour button is back on every row of the preset list')
     /* Edit's open block, its family's colour, with the loaded chain for the neighbour line. */
     const edit = read('mobile/src/screens/Edit.js')
     assert.match(edit, /<ColourSheet target=\{painting\} chain=\{presetFamilies\(blocks\)\} onClose=\{\(\) => setPainting\(null\)\} \/>/)

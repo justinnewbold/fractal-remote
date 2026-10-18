@@ -6,7 +6,8 @@ import { blockColor } from '../lib/blockColors'
 import { LIGHT_INK } from '../lib/ink'
 import { isFractalRemoteLook, offMode } from '../lib/looks'
 import { useLooks } from '../lib/useLooks'
-import { familyTarget, paintable, presetFamilies, presetTag, presetTarget, tagButtonWords } from '../lib/colourPage'
+import { TAG_HOLD, familyTarget, paintable, presetFamilies, presetTag, presetTarget } from '../lib/colourPage'
+import { useLongPress } from '../lib/longPress'
 import ColourSheet from './ColourSheet'
 import { useDismiss } from '../lib/dismiss'
 import { marksFor, toggleFavourite } from '../lib/presetMarks'
@@ -496,11 +497,13 @@ export function PresetList({
   const [view, setView] = useState('all')
   const star = (n) => setMarks((m) => ({ ...m, favourites: toggleFavourite(device, n, undefined) }))
   /*
-   * AND ITS COLOUR, beside the star: a tag, the editors' Assign Color, drawn
-   * as a bar down the row's left edge here, in a setlist and on Play, and kept
-   * per unit and preset number like the star (lib/colourPage). `painting` is
-   * the preset the colour sheet is open on; the list repaints when a tag
-   * changes, here or anywhere (lib/useLooks).
+   * AND ITS COLOUR, by holding the row or right-clicking it: a tag, the
+   * editors' Assign Color, drawn as a bar down the row's left edge here, in a
+   * setlist and on Play, and kept per unit and preset number like the star
+   * (lib/colourPage TAG_HOLD). Not a button beside the star: that came out of
+   * every name's width, in the list a player reads most. `painting` is the
+   * preset the colour sheet is open on; the list repaints when a tag changes,
+   * here or anywhere (lib/useLooks).
    */
   useLooks()
   const [painting, setPainting] = useState(null)
@@ -900,28 +903,13 @@ export function PresetList({
             >
               {marks.favourites.includes(slot.number) ? '★' : '☆'}
             </button>
-            {/* Its colour, beside the star and on its own target for the same
-                reason: tagging a preset must never load it by a near miss.
-                Nothing to file a tag under before a unit has answered. The
-                dot and the word, as the phone's button has them: a bare ring
-                with only a hover to name it is a mystery on a touch screen. */}
-            {presetTarget(slot.number, { words: wordsFor(slot) }) ? (
-              <button
-                type="button"
-                className="preset-colour"
-                style={presetTag(slot.number) ? { '--tag': presetTag(slot.number) } : undefined}
-                data-tagged={presetTag(slot.number) ? 'yes' : undefined}
-                onClick={() => setPainting(presetTarget(slot.number, { words: wordsFor(slot) }))}
-                aria-label={tagButtonWords(wordsFor(slot), presetTag(slot.number))}
-                title="Give this preset a colour"
-              >
-                <span className="preset-colour-dot" aria-hidden="true" />
-                <span className="preset-colour-word" aria-hidden="true">
-                  Colour
-                </span>
-              </button>
-            ) : null}
+            {/* Held or right-clicked, its colour tag: never a load, because the
+                click a hold ends in is swallowed (lib/longPress). Nothing to
+                file a tag under before a unit has answered. */}
+            <Held onHold={presetTarget(slot.number) ? () => setPainting(presetTarget(slot.number, { words: wordsFor(slot) })) : null}>
+            {(hold) => (
             <button
+              {...hold}
               className={`preset-row ${slot.number === current ? 'current' : ''} ${
                 !needle && startsBank(slot.number, i === 0 ? null : shown[i - 1].number, addressing)
                   ? 'bank-start'
@@ -931,6 +919,7 @@ export function PresetList({
               /* Its colour tag, down the row's left edge (styles.css .preset-row[data-tag]). */
               data-tag={presetTag(slot.number) ? 'yes' : undefined}
               style={presetTag(slot.number) ? { '--tag': presetTag(slot.number) } : undefined}
+              title={presetTarget(slot.number) ? TAG_HOLD.browserHint : undefined}
               onClick={() => onSelect(slot.number)}
             >
               <span className="preset-id mono">{slotLabel(slot.number, addressing)}:</span>
@@ -949,9 +938,13 @@ export function PresetList({
                 )}
               </span>
             </button>
+            )}
+            </Held>
             </span>
           ))
         )}
+        {/* How a preset gets its colour, at the end of the list where it costs no row its width. */}
+        {shown.length && presetTarget(shown[0].number) ? <p className="hint pad preset-hold-hint">{TAG_HOLD.browser}</p> : null}
         {!needle && hidden > 0 && !noNames ? (
           <p className="hint pad preset-unread-note">
             {named.length && unread > 0 ? (
@@ -998,6 +991,15 @@ export function PresetList({
       ) : null}
     </div>
   )
+}
+
+/**
+ * A row that can be held, or right-clicked: `children` is handed the props
+ * that make it so (lib/longPress), for a list that draws its rows in a map
+ * where a hook cannot be called. Nothing at all when there is nothing to do.
+ */
+function Held({ onHold, children }) {
+  return children(useLongPress(onHold, { enabled: !!onHold }))
 }
 
 /**

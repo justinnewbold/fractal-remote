@@ -1251,8 +1251,8 @@ export function run(test) {
    * this holds is everything around that: that Play at both ends asks for
    * this preset's scene colours (and Scene arrange, which is every preset's
    * layout, does not), that the tag is drawn in the same places by the same
-   * rule, and that the ways in — the preset list beside the star, the scene
-   * names, the open block on Edit — are at both ends.
+   * rule, and that the ways in — a hold on a row of the preset list, the
+   * Colours page, the scene names, the open block on Edit — are at both ends.
    */
   test('one preset’s colours are the same at both ends: its scenes on Play, its tag, and the ways in', async () => {
     const gig = read('src/components/Gig.jsx')
@@ -1267,16 +1267,40 @@ export function run(test) {
     /* The tag beside the name on Play, at both ends, and nothing for a preset without one. */
     assert.match(gig, /\{presetTag\(preset\?\.number\) \? \(\s*<span className="gig-name-tag" aria-hidden="true" style=\{\{ '--tag': presetTag\(preset\.number\) \}\} \/>\s*\) : null\}/)
     assert.match(stage, /style=\{\[\{ paddingHorizontal: space\.lg \}, tagEdge\(presetTag\(preset\?\.number\)\)\]\}/)
-    /* On every preset's row in the preset list, with a Colour button beside the star. */
+    /*
+     * In the preset list, by HOLDING a row (or right-clicking it, at a
+     * computer), and the bar on the row. Not a button beside the star: one on
+     * every row came out of every name's width, in the list a player reads
+     * most. A hold never loads — RN keeps a hold from being a press, and
+     * lib/longPress swallows the click a hold ends in — and the row and the
+     * star are the only things on a line, as they were before colours.
+     */
     const list = read('src/components/Console.jsx')
     const rows = list.slice(list.indexOf('export function PresetList('), list.indexOf('export function BlockPanel('))
-    assert.ok(rows.indexOf('className="preset-colour"') > rows.indexOf('className={`preset-star') && rows.indexOf('className="preset-colour"') < rows.indexOf('className={`preset-row'), 'the browser’s Colour button is not between the star and the row')
+    assert.ok(!/preset-colour/.test(rows), 'the browser’s Colour button is back beside the star')
+    assert.match(rows, /<Held onHold=\{presetTarget\(slot\.number\) \? \(\) => setPainting\(presetTarget\(slot\.number, \{ words: wordsFor\(slot\) \}\)\) : null\}>\s*\{\(hold\) => \(\s*<button\s+\{\.\.\.hold\}\s+className=\{`preset-row/, 'a browser row cannot be held for its colour')
+    assert.match(list, /function Held\(\{ onHold, children \}\) \{\s+return children\(useLongPress\(onHold, \{ enabled: !!onHold \}\)\)/)
     assert.match(rows, /data-tag=\{presetTag\(slot\.number\) \? 'yes' : undefined\}\s+style=\{presetTag\(slot\.number\) \? \{ '--tag': presetTag\(slot\.number\) \} : undefined\}/)
-    assert.match(rows, /onClick=\{\(\) => setPainting\(presetTarget\(slot\.number, \{ words: wordsFor\(slot\) \}\)\)\}/)
+    assert.match(rows, /title=\{presetTarget\(slot\.number\) \? TAG_HOLD\.browserHint : undefined\}/)
+    assert.match(rows, /\{shown\.length && presetTarget\(shown\[0\]\.number\) \? <p className="hint pad preset-hold-hint">\{TAG_HOLD\.browser\}<\/p> : null\}/, 'the browser’s list does not say how a preset gets its colour')
     assert.match(rows, /<ColourSheet target=\{painting\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
     const presets = read('mobile/src/screens/Presets.js')
-    assert.match(presets, /style=\{tagEdge\(tag\)\}\s*\/>\s*\{\/\*[^*]*\*\/\}\s*\{presetTarget\(n, \{ words \}\) \? \(\s*<TagButton words=\{words\} fill=\{tag\} onPress=\{\(\) => setPainting\(presetTarget\(n, \{ words \}\)\)\} \/>\s*\) : null\}\s*<Star/, 'the phone’s Colour button is not between the row and the star')
+    assert.ok(!/TagButton/.test(presets), 'the phone’s Colour button is back beside the star')
+    assert.match(presets, /onLongPress=\{target \? \(\) => setPainting\(target\) : undefined\}\s+accessibilityHint=\{target \? TAG_HOLD\.hint : undefined\}/, 'a phone row cannot be held for its colour')
+    assert.match(presets, /style=\{tagEdge\(tag\)\}\s*\/>\s*<Star/, 'something sits between the phone’s row and its star again')
+    assert.match(presets, /ListFooterComponent=\{\s*shown\.length && presetTarget\(shown\[0\]\) \? \([\s\S]{0,200}\{TAG_HOLD\.phone\}/, 'the phone’s list does not say how a preset gets its colour')
     assert.match(presets, /<ColourSheet target=\{painting\} onClose=\{\(\) => setPainting\(null\)\} \/>/)
+    /* The Press a hold is wired through keeps a hold from loading. */
+    assert.match(read('mobile/src/components/Press.js'), /onLongPress=\{\s+onLongPress\s+\? \(\) => \{/)
+    /* And from Settings → Colours, the loaded preset with a tap, and the hold said there too. */
+    const webPage = read('src/components/Colours.jsx')
+    assert.match(webPage, /const tagHere = preset \? presetTarget\(preset\.number, \{ words: preset\.words \}\) : null/)
+    assert.match(webPage, /onClick=\{\(\) => setPainting\(tagHere\)\}/)
+    assert.match(webPage, /<p className="hint">\{TAG_HOLD\.browserPage\}<\/p>/)
+    const phonePage = read('mobile/src/components/Colours.js')
+    assert.match(phonePage, /const tagHere = here \? presetTarget\(here\.number, \{ words: here\.words \}\) : null/)
+    assert.match(phonePage, /<TagRow words=\{tagHere\.name\} fill=\{presetTag\(tagHere\.number\)\} onPress=\{\(\) => setPainting\(tagHere\)\} \/>/)
+    assert.match(phonePage, /\{TAG_HOLD\.phonePage\}/)
     /* And on a song's row in a setlist. */
     assert.match(read('src/components/Setlists.jsx'), /\$\{presetTag\(n\) \? ' tagged' : ''\}[\s\S]{0,400}\.\.\.\(presetTag\(n\) \? \{ '--tag': presetTag\(n\) \} : \{\}\)/)
     assert.match(read('mobile/src/screens/Setlists.js'), /tag=\{presetTag\(n\)\}/)
@@ -1288,9 +1312,9 @@ export function run(test) {
     assert.equal(page.TAG_WIDTH, 4)
     const css = read('src/styles.css')
     const half = Math.round(ink.PAPER_EDGE * 100)
-    assert.match(css, /button\.preset-row\[data-tag\],\nbutton\.preset-colour\[data-tagged\],\n\.gig-name-tag,\n\.setlist-song\.tagged,\n\.colour-tag-preview \{\n  --tag-drawn: var\(--tag\);\n\}/, 'the browser draws the bar in something other than the colour on the dark page')
+    assert.match(css, /button\.preset-row\[data-tag\],\n\.colours-tag\[data-tagged\],\n\.gig-name-tag,\n\.setlist-song\.tagged,\n\.colour-tag-preview \{\n  --tag-drawn: var\(--tag\);\n\}/, 'the browser draws the bar in something other than the colour on the dark page')
     assert.match(css, new RegExp(`\\[data-theme='light'\\] \\.colour-tag-preview \\{\\n  --tag-drawn: color-mix\\(in srgb, var\\(--tag\\) ${half}%, black\\);`), 'the browser’s bar on paper is not the colour half way to black, as lib/ink’s PAPER_EDGE is')
-    for (const where of ['button.preset-row[data-tag]', '.setlist-song.tagged']) {
+    for (const where of ['button.preset-row[data-tag]', '.setlist-song.tagged', '.colours-tag[data-tagged]']) {
       assert.ok(css.includes(`${where} {\n  box-shadow: inset ${page.TAG_WIDTH}px 0 0 var(--tag-drawn);`), `${where} is not a bar ${page.TAG_WIDTH} wide`)
     }
     const tag = read('mobile/src/components/PresetTag.js')
@@ -1328,7 +1352,7 @@ export function run(test) {
       assert.match(sheet, /setBase\(colourNow\(target, \{ only: to \}\)\)/, `${f} does not show the colour the presets chosen have`)
       assert.match(sheet, /\{SCOPE_WORDS\.every\}|label=\{SCOPE_WORDS\.every\}/, `${f} does not offer every preset`)
       assert.match(sheet, /\{SCOPE_WORDS\.only\}<\/span> <span className="colour-scope-which">\{target\.preset\.words\}|label=\{SCOPE_WORDS\.only\} sub=\{target\.preset\.words\}/, `${f} does not offer just this preset, named`)
-      assert.match(sheet, /target\.kind === 'scene' && target\.preset \?/, `${f} offers the choice where there is no preset to make it about`)
+      assert.match(sheet, /target\.kind === 'scene' && target\.preset \?|const choosing = !!target && target\.kind === 'scene' && !!target\.preset[\s\S]*\{choosing \? \(/, `${f} offers the choice where there is no preset to make it about`)
     }
   })
 

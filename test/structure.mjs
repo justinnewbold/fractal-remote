@@ -5897,11 +5897,13 @@ export function run(test) {
     /* A preset's tag: drawn as its row, the twenty-three without the orange, no way back until it has one. */
     const target = c.page.presetTarget(45, { words: '045 Clean' })
     const tag = c.draw(c.ColourSheet, { target, onClose: () => {} })
-    assert.match(tag, /role="dialog" aria-modal="true" aria-label="045 Clean colour"/)
+    /* "Colour for", first: a title one line long cuts a long name short, and must not cut the word that says what the sheet is for. */
+    assert.match(tag, /role="dialog" aria-modal="true" aria-label="Colour for 045 Clean"/)
     assert.match(tag, /Kept for this preset on this unit, like its star/)
     assert.match(tag, /<span class="colour-tag-preview" style="--tag:#cc0000">045 Clean<\/span>/, 'the tag is not shown as its row will look')
     assert.equal((tag.match(/role="radio"/g) || []).length, 22)
-    assert.ok(!/045 Clean colour, Orange/.test(tag), 'a tag is offered the amber-like orange')
+    assert.ok(!/Colour for 045 Clean, Orange/.test(tag), 'a tag is offered the amber-like orange')
+    assert.match(tag, /aria-label="Colour for 045 Clean, Blue"/, 'a tag’s swatches are not said with the sheet’s title')
     assert.ok(!/class="gig-block|class="gig-scene/.test(tag), 'a tag is drawn as a tile')
     assert.ok(!/colour-back/.test(tag))
     c.page.paint(target, '#0055ff')

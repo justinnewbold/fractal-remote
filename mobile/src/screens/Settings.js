@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, BackHandler, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native'
 
 import { color, font, mono, radius, space, TAP, MODES, getMode, setMode } from '../lib/theme'
@@ -298,6 +298,23 @@ export default function Settings({
   useEffect(() => {
     onPage?.(page)
   }, [page, onPage])
+  /*
+   * EVERY PAGE OPENS AT ITS TOP. One scroll holds every page here, so a page
+   * opened from a row far down Settings opened as far down itself: Colours,
+   * from near the bottom of the list, came up with its title, its way back
+   * and its first heading above the screen. Going back up a page returns to
+   * where its row was, so the list is not read from the top again.
+   */
+  const scroller = useRef(null)
+  const offsets = useRef({})
+  const lastPage = useRef(page)
+  useEffect(() => {
+    const from = lastPage.current
+    lastPage.current = page
+    if (from === page) return
+    const up = upFrom(from) === page
+    scroller.current?.scrollTo({ y: up ? offsets.current[page ?? ''] || 0 : 0, animated: false })
+  }, [page])
   const purchase = usePurchase()
   const updates = useUpdates()
   /* This phone's copy older than the store's: the card at the top, once, and the line under Updates. See lib/store-rule.js. */
@@ -396,10 +413,16 @@ export default function Settings({
   return (
     <EdgeBack onBack={goBack}>
     <ScrollView
+      ref={scroller}
       style={{ flex: 1 }}
       contentContainerStyle={{ padding: space.lg, gap: space.xl, paddingBottom: space.xxl }}
       keyboardShouldPersistTaps="handled"
       scrollEnabled={!held}
+      /* Where each page is scrolled to, for coming back up to it (above). */
+      onScroll={(e) => {
+        offsets.current[page ?? ''] = e.nativeEvent.contentOffset.y
+      }}
+      scrollEventThrottle={100}
     >
       {page === null ? (
         <>

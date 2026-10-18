@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native'
 
 import { color, font, isDark, radius, space, TAP } from '../lib/theme'
-import { TAG_WIDTH, tagButtonWords, tagFill } from '../lib/colourPage'
+import { TAG_WIDTH, tagButtonWords, tagFill, tagSaid } from '../lib/colourPage'
 import { tick } from '../lib/feedback'
 
 /**
@@ -9,7 +9,8 @@ import { tick } from '../lib/feedback'
  * in the preset list and in a setlist, and down the left of its button on
  * Play, so a set of presets can be told apart by eye — the clean ones blue,
  * the heavy ones red. Kept per unit and preset number like a star (lib/looks
- * setPresetColour), and chosen on the colour sheet every other colour is.
+ * setPresetColour), and chosen on the colour sheet every other colour is:
+ * by holding the preset in the list, or from Settings → Colours.
  *
  * A bar, never a fill: the row is still the row, its letters the app's own,
  * and the amber that marks the preset you are on still the one thing in the
@@ -28,14 +29,13 @@ export function tagEdge(fill) {
 }
 
 /**
- * The Colour button beside a preset's star: a dot in the preset's colour, or
- * an empty ring for one without, over the word. Its own target, like the
- * star, because it does the opposite of the row beside it — the row loads a
- * preset, and a mis-hit while tagging between songs must not change what the
- * unit is playing.
+ * The loaded preset, on the Colours page, drawn as its row in the list is —
+ * the bar, if it has one — and a press opens its colour sheet. What its tag
+ * is now is said on the right, so the row reads as a choice already made or
+ * still to make. In the list itself a preset is held for this instead
+ * (screens/Presets): a button on every row there cost every name its width.
  */
-export function TagButton({ words, fill, onPress }) {
-  const dot = fill ? tagFill(fill, { light: !isDark() }) : null
+export function TagRow({ words, fill, onPress }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -45,29 +45,22 @@ export function TagButton({ words, fill, onPress }) {
         onPress()
       }}
       style={({ pressed }) => ({
-        width: TAP,
-        minHeight: TAP,
+        flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: space.xs,
+        gap: space.md,
+        minHeight: TAP,
+        paddingHorizontal: space.md,
         borderRadius: radius.md,
         borderWidth: 1,
         borderColor: color.rule,
-        backgroundColor: color.panel,
-        opacity: pressed ? 0.7 : 1
+        backgroundColor: pressed ? color.panelHi : color.panel,
+        ...tagEdge(fill)
       })}
     >
-      <View
-        style={{
-          width: 16,
-          height: 16,
-          borderRadius: 8,
-          borderWidth: dot ? 0 : 2,
-          borderColor: color.silkFaint,
-          backgroundColor: dot || 'transparent'
-        }}
-      />
-      <Text style={{ color: color.silkDim, fontSize: font.micro }}>Colour</Text>
+      <Text numberOfLines={1} style={{ flex: 1, color: color.silk, fontSize: font.body, fontWeight: '600' }}>
+        {words}
+      </Text>
+      <Text style={{ color: color.silkDim, fontSize: font.small }}>{tagSaid(fill)}</Text>
     </Pressable>
   )
 }
