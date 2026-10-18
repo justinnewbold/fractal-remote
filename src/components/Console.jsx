@@ -1017,7 +1017,7 @@ function BlockColour({ slug }) {
     <div className="block-colour">
       <button type="button" className="chip block-colour-open" onClick={() => setPainting(familyTarget(slug))}>
         <span className="block-colour-dot" aria-hidden="true" style={{ '--block-fill': blockColor(slug).fill }} />
-        Colour
+        Color
       </button>
       <ColourSheet target={painting} chain={presetFamilies(blocks)} spelt={presetSpelling(blocks)} onClose={() => setPainting(null)} />
     </div>
@@ -1357,7 +1357,7 @@ export function BlockPanel({ block, channels, onError, onChanged, busy, focus })
   const gear = chosen?.basedOn
     ? `Based on ${chosen.basedOn}`
     : chosen?.manufacturer
-      ? `Modelled on ${chosen.manufacturer}`
+      ? `Modeled on ${chosen.manufacturer}`
       : null
 
   /* Looked up by the model's own name, the same key lineage joins on — the

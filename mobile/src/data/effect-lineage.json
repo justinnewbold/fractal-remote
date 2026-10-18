@@ -38,7 +38,7 @@
     {
       "family": "Funk Wah",
       "manufacturer": null,
-      "basedOn": "Modelled after the wah on “Shaft”"
+      "basedOn": "Modeled after the wah on “Shaft”"
     },
     {
       "family": "FAS Wah",
@@ -85,7 +85,7 @@
     {
       "family": "Studio FF Sustainer",
       "manufacturer": null,
-      "basedOn": "The same feed-forward studio design, compressing upwards"
+      "basedOn": "The same feed-forward studio design, compressing upward"
     },
     {
       "family": "Studio FB Compressor",
@@ -95,7 +95,7 @@
     {
       "family": "Studio FB Sustainer",
       "manufacturer": null,
-      "basedOn": "The same feedback studio design, compressing upwards"
+      "basedOn": "The same feedback studio design, compressing upward"
     },
     {
       "family": "Analog Compressor",
@@ -105,7 +105,7 @@
     {
       "family": "Analog Sustainer",
       "manufacturer": null,
-      "basedOn": "The same analog design, compressing upwards"
+      "basedOn": "The same analog design, compressing upward"
     },
     {
       "family": "Pedal 1",

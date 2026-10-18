@@ -71,7 +71,7 @@ export const SAVE_LATE_WORDS = 'Still saving. The computer hasn’t answered yet
 export const SAVE_WORKING_WORDS = 'The computer has it and is writing the preset. Waiting for it to say it’s done…'
 export const SAVE_TIMED_OUT =
   'The computer didn’t answer, so nothing was saved. Check Fractal Remote is open on the computer, then save again.'
-export const SAVE_CANCELLED = 'Cancelled. Nothing was saved.'
+export const SAVE_CANCELLED = 'Canceled. Nothing was saved.'
 export const SAVE_REFUSED = 'The computer could not save it.'
 /*
  * Two ends where "nothing was saved" would be a guess. Once the computer has

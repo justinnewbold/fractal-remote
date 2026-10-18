@@ -157,7 +157,7 @@ export default function GearCard({ entry, entries = [], onGo, onBack }) {
   const lineage = entry.basedOn
     ? `Based on ${entry.basedOn}`
     : entry.manufacturer
-      ? `Modelled on ${entry.manufacturer}`
+      ? `Modeled on ${entry.manufacturer}`
       : entry.gear
         ? `Based on ${entry.gear}`
         : null

@@ -5,7 +5,7 @@
     "manufacturer": null,
     "basedOn": "Pro Co RAT",
     "specs": "Op-amp · LM308 · 1978",
-    "description": "The Pro Co RAT. Hard clipping, a filter knob that works backwards, and one of the three or four genuinely distinct distortion sounds that exist.\n\nThe LM308 op-amp at its heart is deliberately slow, which rounds off the harshest edges and gives the RAT its thick, slightly compressed grind. The Filter control removes treble as you turn it up — clockwise is darker, which catches everyone out once.\n\nJeff Beck, Thom Yorke, Kurt Cobain, Dave Grohl. It sits somewhere between an overdrive and a fuzz and sounds like neither."
+    "description": "The Pro Co RAT. Hard clipping, a filter knob that works backward, and one of the three or four genuinely distinct distortion sounds that exist.\n\nThe LM308 op-amp at its heart is deliberately slow, which rounds off the harshest edges and gives the RAT its thick, slightly compressed grind. The Filter control removes treble as you turn it up — clockwise is darker, which catches everyone out once.\n\nJeff Beck, Thom Yorke, Kurt Cobain, Dave Grohl. It sits somewhere between an overdrive and a fuzz and sounds like neither."
   },
   {
     "value": 1,
@@ -13,7 +13,7 @@
     "manufacturer": null,
     "basedOn": "Electro-Harmonix Big Muff Pi, current",
     "specs": "Four transistors · 1969 circuit",
-    "description": "The Electro-Harmonix Big Muff Pi, in its current production form.\n\nFour transistor stages, enormous sustain and a tone control that scoops the midrange out in the middle of its travel — which is why a Muff can sound huge alone and vanish completely in a band. Keep the tone knob off centre.\n\nGilmour's lead sound, Smashing Pumpkins' wall, and every stoner rock record ever made."
+    "description": "The Electro-Harmonix Big Muff Pi, in its current production form.\n\nFour transistor stages, enormous sustain and a tone control that scoops the midrange out in the middle of its travel — which is why a Muff can sound huge alone and vanish completely in a band. Keep the tone knob off center.\n\nGilmour's lead sound, Smashing Pumpkins' wall, and every stoner rock record ever made."
   },
   {
     "value": 2,
@@ -125,7 +125,7 @@
     "manufacturer": null,
     "basedOn": "Marshall Bluesbreaker Mk1",
     "specs": "Op-amp · soft clipping · 1991",
-    "description": "The Marshall Bluesbreaker: barely any gain, an enormous amount of warmth, and a pedal Marshall discontinued before realising what they had.\n\nIt is the ancestor of a whole family of transparent overdrives, and originals now sell for many times what they cost new."
+    "description": "The Marshall Bluesbreaker: barely any gain, an enormous amount of warmth, and a pedal Marshall discontinued before realizing what they had.\n\nIt is the ancestor of a whole family of transparent overdrives, and originals now sell for many times what they cost new."
   },
   {
     "value": 16,
@@ -173,7 +173,7 @@
     "manufacturer": null,
     "basedOn": "Dallas-Arbiter Fuzz Face",
     "specs": "Two transistors · 1966",
-    "description": "The Dallas-Arbiter Fuzz Face. Two transistors, two knobs, a circuit simple enough to sketch from memory, and the sound of the late sixties.\n\nIts defining behaviour is how it responds to your guitar's volume knob: full up it is a thick, splatty fuzz, and rolled back to seven it cleans up into a warm overdrive. That interaction is the pedal. It only works properly straight into the guitar, with nothing buffered in front of it.\n\nHendrix, almost entirely. Everything anybody knows about fuzz came out of one man using one of these."
+    "description": "The Dallas-Arbiter Fuzz Face. Two transistors, two knobs, a circuit simple enough to sketch from memory, and the sound of the late sixties.\n\nIts defining behavior is how it responds to your guitar's volume knob: full up it is a thick, splatty fuzz, and rolled back to seven it cleans up into a warm overdrive. That interaction is the pedal. It only works properly straight into the guitar, with nothing buffered in front of it.\n\nHendrix, almost entirely. Everything anybody knows about fuzz came out of one man using one of these."
   },
   {
     "value": 22,
@@ -181,7 +181,7 @@
     "manufacturer": null,
     "basedOn": "custom model",
     "specs": "Fractal original · digital",
-    "description": "Not a pedal and not analogue: this throws away bits of resolution and sample rate on purpose.\n\nThe result is the harsh, gritty, slightly metallic sound of early samplers and broken digital gear. Nothing that happens in a valve or a diode sounds like this."
+    "description": "Not a pedal and not analog: this throws away bits of resolution and sample rate on purpose.\n\nThe result is the harsh, gritty, slightly metallic sound of early samplers and broken digital gear. Nothing that happens in a valve or a diode sounds like this."
   },
   {
     "value": 23,
@@ -221,7 +221,7 @@
     "manufacturer": null,
     "basedOn": "Butler Tube Driver",
     "specs": "12AX7 valve · 1979",
-    "description": "The four-knob Tube Driver, which adds a tone control to the original three.\n\nSame valve, same amp-like behaviour, with one more way to shape it."
+    "description": "The four-knob Tube Driver, which adds a tone control to the original three.\n\nSame valve, same amp-like behavior, with one more way to shape it."
   },
   {
     "value": 28,
@@ -236,7 +236,7 @@
     "name": "SDD Preamp",
     "manufacturer": null,
     "basedOn": "Korg SDD-3000 preamp",
-    "specs": "Analogue preamp · 1982",
+    "specs": "Analog preamp · 1982",
     "description": "The preamp section of the Korg SDD-3000 delay, which nobody set out to use as an effect until The Edge did.\n\nHis entire U2 sound runs through this front end — it adds a compressed, slightly hi-fi sheen and a lift in the upper mids that makes a clean guitar sound enormous before any delay arrives."
   },
   {
@@ -269,7 +269,7 @@
     "manufacturer": null,
     "basedOn": "custom model",
     "specs": "Fractal original · no pedal behind it",
-    "description": "Fractal's own clean boost. There is no pedal behind it and no story to tell about it.\n\nIt adds level with as little colour as the block can manage, which is exactly what you want in front of an amp that is already doing the right thing."
+    "description": "Fractal's own clean boost. There is no pedal behind it and no story to tell about it.\n\nIt adds level with as little color as the block can manage, which is exactly what you want in front of an amp that is already doing the right thing."
   },
   {
     "value": 34,
@@ -325,7 +325,7 @@
     "manufacturer": null,
     "basedOn": "Lovepedal OD11 / Amp Eleven",
     "specs": "Op-amp · high gain",
-    "description": "Lovepedal's OD11 — considerably more gain than the Eternity and voiced towards a cranked British amp.\n\nCloser to a distortion than an overdrive, with a thick midrange."
+    "description": "Lovepedal's OD11 — considerably more gain than the Eternity and voiced toward a cranked British amp.\n\nCloser to a distortion than an overdrive, with a thick midrange."
   },
   {
     "value": 41,
@@ -380,8 +380,8 @@
     "name": "OD 250 Gray",
     "manufacturer": null,
     "basedOn": "DOD Overdrive Preamp 250: original",
-    "specs": "Op-amp · original grey · 1974",
-    "description": "The original grey DOD 250, which sounds slightly different from the reissue and costs a great deal more because of it.\n\nYngwie Malmsteen used one in front of a Marshall, which is most of why anybody still looks for them."
+    "specs": "Op-amp · original gray · 1974",
+    "description": "The original gray DOD 250, which sounds slightly different from the reissue and costs a great deal more because of it.\n\nYngwie Malmsteen used one in front of a Marshall, which is most of why anybody still looks for them."
   },
   {
     "value": 48,
@@ -556,7 +556,7 @@
     "name": "Integral Pre",
     "manufacturer": null,
     "basedOn": "TC Electronics Integrated Preamp",
-    "specs": "Analogue preamp",
+    "specs": "Analog preamp",
     "description": "TC Electronic's Integrated Preamp: a clean, high-headroom front end with EQ, built to sit at the start of a rack rig.\n\nMore a tone-shaping stage than a drive: headroom and EQ, with distortion left to whatever comes after it."
   },
   {
@@ -597,7 +597,7 @@
     "manufacturer": null,
     "basedOn": "Ibanez MT10 Mostortion",
     "specs": "MOSFET · three-band EQ",
-    "description": "The Ibanez Mostortion — MOSFET clipping and a real three-band EQ, and a quiet favourite of Nashville session players for decades.\n\nIt stays clean and natural at low gain in a way most distortion pedals cannot."
+    "description": "The Ibanez Mostortion — MOSFET clipping and a real three-band EQ, and a quiet favorite of Nashville session players for decades.\n\nIt stays clean and natural at low gain in a way most distortion pedals cannot."
   },
   {
     "value": 75,
@@ -677,7 +677,7 @@
     "manufacturer": null,
     "basedOn": null,
     "specs": "Fractal original · bass preamp",
-    "description": "A bass preamp with EQ and no amplifier modelling behind it — shaping and level, straight to the desk.\n\nFor the very common case where the bass never goes near a speaker."
+    "description": "A bass preamp with EQ and no amplifier modeling behind it — shaping and level, straight to the desk.\n\nFor the very common case where the bass never goes near a speaker."
   },
   {
     "value": 85,

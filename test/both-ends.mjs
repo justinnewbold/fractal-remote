@@ -299,8 +299,8 @@ export const AREAS = [
       },
       {
         does: 'give the open block’s kind a colour of its own, on the colour sheet',
-        web: 'Colour',
-        phone: 'Colour',
+        web: 'Color',
+        phone: 'Color',
         /* The browser's is at the top of the block panel (Console.jsx BlockColour),
            which this area's files do not hold; the per-preset colours test
            further down holds it there, beside the phone's. */
@@ -629,7 +629,7 @@ export const AREAS = [
     web: ['src/components/Colours.jsx', 'src/components/ColourSheet.jsx'],
     phone: ['mobile/src/components/Colours.js', 'mobile/src/components/ColourSheet.js'],
     notButtons: {
-      'Your colour': 'the word on an effect tile that wears a colour you chose — the tile is the button, and what it opens is the colour sheet',
+      'Your color': 'the word on an effect tile that wears a colour you chose — the tile is the button, and what it opens is the colour sheet',
       On: 'the corner word on the lit tile at the top of the colour sheet, a picture of Play’s tile rather than a control',
       Off: 'the corner word on the unlit tiles drawn beside the switched-off choices and at the top of the sheet, pictures of Play’s tile'
     },
@@ -639,11 +639,11 @@ export const AREAS = [
       {
         does: 'draw switched-off effects in their own colour',
         /* A radio button's label at this end, which the scan of <button>s cannot see: the words are held by the test below. */
-        web: 'Keep their colour',
-        phone: 'Keep their colour',
+        web: 'Keep their color',
+        phone: 'Keep their color',
         unreadable: ['web']
       },
-      { does: 'draw switched-off effects grey, as the unit does', web: 'Grey when off', phone: 'Grey when off', unreadable: ['web'] },
+      { does: 'draw switched-off effects grey, as the unit does', web: 'Gray when off', phone: 'Gray when off', unreadable: ['web'] },
       { does: 'change your mind about putting the colours back', web: 'Keep mine', phone: 'Keep mine' },
       { does: 'put the colours back, once asked', web: 'Put back', phone: 'Put back' },
       { does: 'wear the look you had before, a moment after a new one went on', web: 'Undo', phone: 'Undo' },
@@ -653,7 +653,7 @@ export const AREAS = [
       { does: 'take the colour a step lighter', web: 'Lighter', phone: 'Lighter' },
       {
         does: 'pick any colour at all, or type its colour code',
-        web: 'Any colour…',
+        web: 'Any color…',
         phone: null,
         why: 'the browser has a colour picker of its own; the phone would need a package with native code for one, which moves the fingerprint and costs a build, and the grid with Lighter and Darker covers it (lib/colourPage freePick says what a free pick goes through, for both)'
       }
@@ -1162,18 +1162,18 @@ export function run(test) {
     const traverse = babelTraverse.default || babelTraverse
     /* What only one end says, and why. Unexplained fails; explained passes. */
     const WEB_ONLY = {
-      'Your colours are kept on this computer. A phone or tablet keeps its own.':
+      'Your colors are kept on this computer. A phone or tablet keeps its own.':
         'the computer app’s own window, which is not the remote: it says what a phone or tablet does instead',
-      'Your colours are kept {}. The computer’s screen keeps its own.':
+      'Your colors are kept {}. The computer’s screen keeps its own.':
         'the phone’s sentence, with the device said by onThis() — "in this browser", "on this iPad" — where the phone says "on this {deviceNoun()}" (held word for word below)',
-      'Any colour…': 'the browser’s free colour picker, which the phone cannot have without a build (AREAS above)',
-      'Pick any colour': 'the label on that picker',
-      'Or type its colour code': 'the label on the box beside it',
+      'Any color…': 'the browser’s free colour picker, which the phone cannot have without a build (AREAS above)',
+      'Pick any color': 'the label on that picker',
+      'Or type its color code': 'the label on the box beside it',
       'Got it': 'the browser’s one-time notes on Play are put away with Got it (the hold tip’s, the demo’s); the phone’s Note has a cross',
       'Scene {}{}{}': 'what a screen reader says for a scene tile, its name and "your colour" with it; the phone’s Tile says its own caption and label'
     }
     const PHONE_ONLY = {
-      'Your colours are kept on this {}. The computer’s screen keeps its own.': 'the same sentence as the browser’s, which names the device by onThis() rather than "on this" and deviceNoun()'
+      'Your colors are kept on this {}. The computer’s screen keeps its own.': 'the same sentence as the browser’s, which names the device by onThis() rather than "on this" and deviceNoun()'
     }
     const KEYS = new Set(['Escape', 'Enter', 'Tab', 'ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'])
     const shown = (files) => {
@@ -1211,8 +1211,8 @@ export function run(test) {
       for (const w of Object.keys(excused)) assert.ok(mine.has(w) && !theirs.has(w), `"${w}" is excused as ${where}-only and is ${mine.has(w) ? 'at both ends' : 'gone'} now. Take it out.`)
     }
     /* The remote's own sentence is the phone's, the device named by what it is. */
-    assert.match(read('src/components/Colours.jsx'), /`Your colours are kept \$\{onThis\(\)\}\. The computer’s screen keeps its own\.`/)
-    assert.match(read('mobile/src/components/Colours.js'), /`Your colours are kept on this \$\{deviceNoun\(\)\}\. The computer’s screen keeps its own\.`/)
+    assert.match(read('src/components/Colours.jsx'), /`Your colors are kept \$\{onThis\(\)\}\. The computer’s screen keeps its own\.`/)
+    assert.match(read('mobile/src/components/Colours.js'), /`Your colors are kept on this \$\{deviceNoun\(\)\}\. The computer’s screen keeps its own\.`/)
 
     /* The same looks, in the same order, each card in its own look's colours. */
     for (const f of ['src/components/Colours.jsx', 'mobile/src/components/Colours.js']) {
@@ -1335,10 +1335,10 @@ export function run(test) {
     /* The open block on Edit, for its family, never for the chain's two ends. */
     const block = list.slice(list.indexOf('export function BlockPanel('))
     assert.match(block, /\{paintable\(block\?\.slug\) \? <BlockColour slug=\{block\.slug\} \/> : null\}/)
-    assert.match(list, /setPainting\(familyTarget\(slug\)\)\}>\s*<span className="block-colour-dot"[^>]*\/>\s*Colour\s*<\/button>/)
+    assert.match(list, /setPainting\(familyTarget\(slug\)\)\}>\s*<span className="block-colour-dot"[^>]*\/>\s*Color\s*<\/button>/)
     const edit = read('mobile/src/screens/Edit.js')
     assert.match(edit, /\{paintable\(block\.slug\) \? <BlockColour slug=\{block\.slug\} \/> : null\}/)
-    assert.match(edit, /<Press label="Colour" height=\{40\} onPress=\{\(\) => setPainting\(familyTarget\(slug\)\)\} \/>/)
+    assert.match(edit, /<Press label="Color" height=\{40\} onPress=\{\(\) => setPainting\(familyTarget\(slug\)\)\} \/>/)
     assert.equal(page.paintable('Input 1'), false)
     assert.equal(page.paintable('drive2'), true)
     /* The preset is named the same way at both ends: "012 Lead Rig". */

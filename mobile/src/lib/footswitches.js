@@ -197,7 +197,7 @@ export const lightWords = (light) =>
   !light
     ? 'Light: couldn’t read'
     : !light.name
-      ? 'Light: a colour this app can’t name yet'
+      ? 'Light: a color this app can’t name yet'
       : light.name === 'Off'
         ? 'Light off'
         : light.name === 'Default'

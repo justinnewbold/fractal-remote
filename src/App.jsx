@@ -541,7 +541,7 @@ const SETUP_PAGES = {
   account: 'Account',
   appearance: 'Tiles & scenes',
   /* "Let's make the colors match better", and choose your own: the phone's page, from the same lib/colourPage. */
-  colours: 'Colours',
+  colours: 'Colors',
   help: 'Troubleshooting',
   updates: 'Updates',
   about: 'About',
@@ -2533,7 +2533,7 @@ export default function App() {
         step('checking it is still wanted')
         const still = await takeParkedSave()
         if (still && (still.id !== req.id || still.cancelled)) {
-          record('save', `The phone cancelled its save to slot ${req.slot}; nothing was written`)
+          record('save', `The phone canceled its save to slot ${req.slot}; nothing was written`)
           /* Said, too: the phone saw "picked up" and is waiting to hear. */
           await reportSave({ id: req.id, ok: false, cancelled: true, slot: req.slot, error: SAVE_CANCELLED }).catch(() => {})
           return
@@ -2818,7 +2818,7 @@ export default function App() {
         loadedAs.current = { number: res.slot, name: (queuedSave.name || '').trim() }
         presetSaved(res.slot, queuedSave.name)
       } else if (said.cancelled) {
-        record('save', `Cancelled the save to slot ${queuedSave.slot}; nothing was saved`)
+        record('save', `Canceled the save to slot ${queuedSave.slot}; nothing was saved`)
       } else {
         /* On the bar's page as well as in the sheet: the sheet closed when
            the save was asked for, and a failure only inside it said nothing. */
@@ -5610,7 +5610,7 @@ export default function App() {
             <div className="setup-rows">
               <SetupRow key="appearance" title="Tiles & scenes" status="Tile size, effect pictures, scene layout" onClick={() => setSetupPage('appearance')} />
               {/* "Let's make the colors match better", and choose your own. */}
-              <SetupRow key="colours" title="Colours" status={coloursStatus({ unitName: device?.short || device?.name || undefined, capabilities: device?.capabilities })} onClick={() => setSetupPage('colours')} />
+              <SetupRow key="colours" title="Colors" status={coloursStatus({ unitName: device?.short || device?.name || undefined, capabilities: device?.capabilities })} onClick={() => setSetupPage('colours')} />
             </div>
             {/* Light or dark right here, as on the phone: one click, not a page. */}
             <div className="setup-inline-theme">
@@ -6534,7 +6534,7 @@ export default function App() {
                   Privacy
                 </a>
                 <a className="chip" href="/notices.txt" target="_blank" rel="noreferrer">
-                  Licences
+                  Licenses
                 </a>
               </div>
             </Section>

@@ -600,7 +600,7 @@ export default function Settings({
               onPress={() => setPage('appearance')}
             />
             {/* "Let's make the colors match better", and choose your own. */}
-            <SetupRow title="Colours" status={coloursStatus({ unitName: deviceName, capabilities: caps })} onPress={() => setPage('colours')} />
+            <SetupRow title="Colors" status={coloursStatus({ unitName: deviceName, capabilities: caps })} onPress={() => setPage('colours')} />
             {/* Light or dark right here: one tap, not a page to open for it. */}
             <View style={{ paddingVertical: space.md }}>
               <Appearance />
@@ -819,7 +819,7 @@ export default function Settings({
       {/* ---------------------------------------------------------- colours */}
       {page === 'colours' ? (
         <>
-          {head('Colours', 'back')}
+          {head('Colors', 'back')}
           <Colours />
         </>
       ) : null}
@@ -1563,7 +1563,7 @@ export default function Settings({
               onPress={() => Linking.openURL('https://fractal.newbold.cloud/privacy.html')}
             />
             <Press
-              label="Licences"
+              label="Licenses"
               sub="The open-source work this is built on"
               onPress={() => Linking.openURL('https://fractal.newbold.cloud/notices.txt')}
             />

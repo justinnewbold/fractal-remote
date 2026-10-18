@@ -1366,7 +1366,7 @@ test('what a model really is reaches the screen', () => {
   // it for a maker called Custom Audio Amplifiers.
   assert.match(
     src('../src/components/Console.jsx'),
-    /Modelled on \$\{chosen\.manufacturer\}/,
+    /Modeled on \$\{chosen\.manufacturer\}/,
     'the picker says nothing for a model whose maker is all we know'
   )
 })
@@ -2639,7 +2639,7 @@ test('a scene cannot be sent to a channel this tone never dialled', () => {
   assert.equal(amp(0).channel, 'A', 'a channel this tone dialled is played')
   assert.equal(amp(1).channel, 'B')
   assert.equal(amp(2).channel, 'A', 'the scene was left on a channel nobody built')
-  assert.match(r.problems.join(' '), /never dialled/)
+  assert.match(r.problems.join(' '), /never dialed/)
 
   /*
    * Only for a block this build moves. A preset can have channels dialled by
@@ -14668,7 +14668,7 @@ test('a switch is said in words: tap, hold, a typed label, and the light', async
   /* A number past the editor's twelve is still an answer with no name, not a failed read. */
   const odd = at({ tapCategory: 3, tapFunction: 0, holdCategory: 0, color: 42 })
   assert.deepEqual(odd.light, { name: null, hex: null }, 'a colour the unit did report is not a failed read')
-  assert.equal(lightWords(odd.light), 'Light: a colour this app can’t name yet')
+  assert.equal(lightWords(odd.light), 'Light: a color this app can’t name yet')
 })
 
 test('the demo FM3 answers a switch in the host’s shape', async () => {

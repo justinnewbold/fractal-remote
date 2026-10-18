@@ -700,7 +700,7 @@ export function run(test) {
       assert.equal(stored.get('fractal.coloursNoticed'), undefined, 'the colours line was remembered as said under the startup card')
       /* OK pressed, nothing else owed: said, and remembered. */
       const line = draw({ waiting: false })
-      assert.ok(line && JSON.stringify(line).includes('Colours now match your unit'))
+      assert.ok(line && JSON.stringify(line).includes('Colors now match your unit'))
       assert.equal(stored.get('fractal.coloursNoticed'), 'done')
       /* The hold tip comes up after it: out of the way, and back when that is put away. */
       assert.equal(draw({ waiting: true }), null, 'the colours line stayed up beside a note after it')
@@ -719,10 +719,10 @@ export function run(test) {
 
   test('“Settings → Colours” is never broken across two lines, at either end', async () => {
     const { COLOURS_NOTICE } = await import('../src/lib/colourPage.js')
-    assert.ok(COLOURS_NOTICE.endsWith('Settings → Colours'), 'a narrow screen can break the colours line after “Settings”')
-    assert.equal(COLOURS_NOTICE.replace(/ /g, ' '), 'Colours now match your unit · Settings → Colours', 'the words of the colours line changed')
+    assert.ok(COLOURS_NOTICE.endsWith('Settings → Colors'), 'a narrow screen can break the colours line after “Settings”')
+    assert.equal(COLOURS_NOTICE.replace(/ /g, ' '), 'Colors now match your unit · Settings → Colors', 'the words of the colours line changed')
     /* The phone's copy is the generated one, and both ends draw the constant as it is. */
-    assert.ok(read('mobile/src/lib/colourPage.js').includes("export const COLOURS_NOTICE = 'Colours now match your unit · Settings\\u00a0→\\u00a0Colours'"))
+    assert.ok(read('mobile/src/lib/colourPage.js').includes("export const COLOURS_NOTICE = 'Colors now match your unit · Settings\\u00a0→\\u00a0Colors'"))
     assert.match(read('mobile/src/components/ColoursNotice.js'), /\{COLOURS_NOTICE\}/)
     assert.match(read('src/components/ColoursNotice.jsx'), /<span>\{COLOURS_NOTICE\}<\/span>/)
   })

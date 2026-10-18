@@ -72,7 +72,7 @@ export default function GearNames() {
   return (
     <div className="gear-names">
       <p className="hint">
-        The unit&rsquo;s name for a model, and the real amp or pedal it was modelled on &mdash;{' '}
+        The unit&rsquo;s name for a model, and the real amp or pedal it was modeled on &mdash;{' '}
         {GEAR_TOTAL} of them. From Yek&rsquo;s guide to the amp models and Fractal&rsquo;s own
         blocks guide. Models Fractal designed themselves say so rather than borrowing a name.
       </p>

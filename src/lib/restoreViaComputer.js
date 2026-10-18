@@ -48,7 +48,7 @@ export const RESTORE_FRESH_MS = SAVE_FRESH_MS
 
 /** Words, for a guitarist. */
 export const RESTORE_TIMED_OUT = 'The computer didn’t answer — it may need updating. Nothing was changed.'
-export const RESTORE_CANCELLED = 'Cancelled. Nothing was changed.'
+export const RESTORE_CANCELLED = 'Canceled. Nothing was changed.'
 export const RESTORE_REFUSED = 'The computer couldn’t put that snapshot back.'
 export const RESTORE_UNSURE = 'The computer took it but didn’t say how it went. Check the unit before trying again.'
 export const RESTORE_UNSENT = 'Couldn’t reach the computer to call it off, so it may still happen. Check the unit before trying again.'

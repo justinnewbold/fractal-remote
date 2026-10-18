@@ -74,7 +74,7 @@
     "manufacturer": "Engl",
     "basedOn": "Engl Savage 120",
     "specs": "120 watt · ECC83 / EL34",
-    "description": "The Engl Savage: a lot of gain, a lot of control, and a very tight low end.\n\nGerman high gain is a recognisable thing — more compressed and more focused than British or American amps, with an almost synthetic evenness to the distortion. This is the archetype."
+    "description": "The Engl Savage: a lot of gain, a lot of control, and a very tight low end.\n\nGerman high gain is a recognizable thing — more compressed and more focused than British or American amps, with an almost synthetic evenness to the distortion. This is the archetype."
   },
   {
     "family": "Archean",
@@ -88,7 +88,7 @@
     "manufacturer": "Cameron",
     "basedOn": "Cameron Atomica",
     "specs": "100 watt · 12AX7 / EL34",
-    "description": "Mark Cameron built his reputation modifying Marshalls to an extreme degree, and the Atomica is one of his own designs rather than a modified amp.\n\nMade in small numbers and rarely seen. If you own one you know more about it than this catalogue does."
+    "description": "Mark Cameron built his reputation modifying Marshalls to an extreme degree, and the Atomica is one of his own designs rather than a modified amp.\n\nMade in small numbers and rarely seen. If you own one you know more about it than this catalog does."
   },
   {
     "family": "Band-Commander",
@@ -116,7 +116,7 @@
     "manufacturer": "Bogner",
     "basedOn": "Bogner Fish preamp",
     "specs": "ECC83 · preamp only",
-    "description": "The Fish — Bogner's rack preamp from the early nineties, and one of the strangest-looking pieces of gear in this catalogue.\n\nFive voicings covering the Bogner range, all in one rack unit. Steve Vai used one for years."
+    "description": "The Fish — Bogner's rack preamp from the early nineties, and one of the strangest-looking pieces of gear in this catalog.\n\nFive voicings covering the Bogner range, all in one rack unit. Steve Vai used one for years."
   },
   {
     "family": "Brit 800",
@@ -144,7 +144,7 @@
     "manufacturer": "Marshall",
     "basedOn": "Marshall AFD100, Slash's signature amp",
     "specs": "100 watt · ECC83 / EL34",
-    "description": "The other side of the AFD100 — Marshall's signature Slash head, voiced towards the older, cleaner Super Lead behaviour rather than its modified channel.\n\nUse it where you want the Appetite amp's body without its gain."
+    "description": "The other side of the AFD100 — Marshall's signature Slash head, voiced toward the older, cleaner Super Lead behavior rather than its modified channel.\n\nUse it where you want the Appetite amp's body without its gain."
   },
   {
     "family": "Brit JM45",
@@ -165,14 +165,14 @@
     "manufacturer": "Marshall",
     "basedOn": "Marshall JMP-1 preamp",
     "specs": "ECC83 · preamp only",
-    "description": "The JMP-1, a rack preamp from 1992, and for a decade the quiet centre of an awful lot of professional rigs.\n\nIt is Marshall's voicings under MIDI control with no power section of its own, which made it the first Marshall you could switch silently mid-song. That convenience is why it turns up on so many records from that period."
+    "description": "The JMP-1, a rack preamp from 1992, and for a decade the quiet center of an awful lot of professional rigs.\n\nIt is Marshall's voicings under MIDI control with no power section of its own, which made it the first Marshall you could switch silently mid-song. That convenience is why it turns up on so many records from that period."
   },
   {
     "family": "Brit Silver",
     "manufacturer": "Marshall",
     "basedOn": "Marshall Silver Jubilee",
     "specs": "100 watt · ECC83 / EL34",
-    "description": "The Silver Jubilee, built in 1987 for Marshall's twenty-fifth year and then wanted forever afterwards.\n\nIt runs its output valves in a half-power pentode mode and uses diode clipping in the preamp, which sounds like it should be a compromise and instead produces a thick, vocal midrange that no other Marshall has. Slash toured on them; Frusciante recorded on one.\n\nMore gain than a JCM800 and more body than a JVM. The rhythm/lead clip switch is the whole amp in one button."
+    "description": "The Silver Jubilee, built in 1987 for Marshall's twenty-fifth year and then wanted forever afterward.\n\nIt runs its output valves in a half-power pentode mode and uses diode clipping in the preamp, which sounds like it should be a compromise and instead produces a thick, vocal midrange that no other Marshall has. Slash toured on them; Frusciante recorded on one.\n\nMore gain than a JCM800 and more body than a JVM. The rhythm/lead clip switch is the whole amp in one button."
   },
   {
     "family": "Buddah DuoMaster",
@@ -200,7 +200,7 @@
     "manufacturer": "HOOK",
     "basedOn": "HOOK Captain 34",
     "specs": "34 watt · 12AX7 / EL34",
-    "description": "The HOOK Captain 34 — a hand-built European boutique amp made in very small numbers.\n\nThere is little written about it anywhere, and this catalogue would rather say that than guess."
+    "description": "The HOOK Captain 34 — a hand-built European boutique amp made in very small numbers.\n\nThere is little written about it anywhere, and this catalog would rather say that than guess."
   },
   {
     "family": "Car Ambler",
@@ -242,7 +242,7 @@
     "manufacturer": "Orange",
     "basedOn": "Orange AD200B",
     "specs": "200 watt · ECC83 / KT88",
-    "description": "Orange's AD200B: valve bass amplification with the Orange midrange, which is thick, warm and slightly rude.\n\nLess scooped than an SVT and more obviously coloured. Geezer Butler's sound in a box."
+    "description": "Orange's AD200B: valve bass amplification with the Orange midrange, which is thick, warm and slightly rude.\n\nLess scooped than an SVT and more obviously colored. Geezer Butler's sound in a box."
   },
   {
     "family": "Citrus RV50",
@@ -368,14 +368,14 @@
     "manufacturer": "Fender",
     "basedOn": "Fender Twin Reverb",
     "specs": "85 watt · 12AX7 / 6L6",
-    "description": "The Twin Reverb. Eighty-five watts into two 12s, and effectively impossible to make distort at any volume a human can be in a room with.\n\nThat is the point of it. It is the reference clean amp — country, jazz, funk, anything with a pedalboard in front of it — and the loudest clean sound in this catalogue."
+    "description": "The Twin Reverb. Eighty-five watts into two 12s, and effectively impossible to make distort at any volume a human can be in a room with.\n\nThat is the point of it. It is the reference clean amp — country, jazz, funk, anything with a pedalboard in front of it — and the loudest clean sound in this catalog."
   },
   {
     "family": "Dweezil's Bassguy",
     "manufacturer": "Fender",
     "basedOn": "Dweezil Zappa's modded 1965 blackface Fender Bassman, AB165",
     "specs": "50 watt · 12AX7 / 6L6",
-    "description": "Dweezil Zappa's blackface Bassman, modified away from clean and towards gain.\n\nThe blackface chassis with more preamp in front of it: the tight, scooped bottom end of the original with something to push against."
+    "description": "Dweezil Zappa's blackface Bassman, modified away from clean and toward gain.\n\nThe blackface chassis with more preamp in front of it: the tight, scooped bottom end of the original with something to push against."
   },
   {
     "family": "Energyball",
@@ -438,7 +438,7 @@
     "manufacturer": "Gibson",
     "basedOn": "1964 Gibson Scout",
     "specs": "15 watt · 12AX7 / 6V6",
-    "description": "A mid-sixties Gibson Scout. Gibson made amplifiers for decades and almost nobody remembers them, which is why the good ones are still affordable.\n\nDark, loose and woody, with a soft break-up. A different flavour of American small amp from the Fenders everyone reaches for."
+    "description": "A mid-sixties Gibson Scout. Gibson made amplifiers for decades and almost nobody remembers them, which is why the good ones are still affordable.\n\nDark, loose and woody, with a soft break-up. A different flavor of American small amp from the Fenders everyone reaches for."
   },
   {
     "family": "Herbie",
@@ -543,7 +543,7 @@
     "manufacturer": "Dumble",
     "basedOn": "Dumble Overdrive Special",
     "specs": "100 watt · 12AX7 / 6L6",
-    "description": "A Dumble Overdrive Special, which is the most mythologised amplifier in existence: Howard Dumble built them one at a time, for people he approved of, and potted the circuit so nobody could copy it.\n\nWhat it actually does is turn a clean Fender voice into a singing overdrive that keeps every bit of the guitar's character underneath. Robben Ford and Larry Carlton built entire careers on that sound.\n\nIt is extremely responsive to the guitar's volume control. Roll back and it cleans up completely."
+    "description": "A Dumble Overdrive Special, which is the most mythologized amplifier in existence: Howard Dumble built them one at a time, for people he approved of, and potted the circuit so nobody could copy it.\n\nWhat it actually does is turn a clean Fender voice into a singing overdrive that keeps every bit of the guitar's character underneath. Robben Ford and Larry Carlton built entire careers on that sound.\n\nIt is extremely responsive to the guitar's volume control. Roll back and it cleans up completely."
   },
   {
     "family": "PVH 6160 Block",
@@ -571,7 +571,7 @@
     "manufacturer": "Marshall",
     "basedOn": "Marshall Studio Vintage SV20, a 20-watt Plexi",
     "specs": "20 watt · ECC83 / EL34",
-    "description": "A Plexi that fits in a cupboard. Marshall built the Studio Vintage as a real 20-watt valve amp rather than a smaller-sounding imitation of a big one.\n\nThe point is that it saturates at a volume you can use. Everything the big Plexi does at deafening it does at loud, which on a modelled version matters less — but the voicing is genuinely a little tighter and drier, and that is worth having as a choice."
+    "description": "A Plexi that fits in a cupboard. Marshall built the Studio Vintage as a real 20-watt valve amp rather than a smaller-sounding imitation of a big one.\n\nThe point is that it saturates at a volume you can use. Everything the big Plexi does at deafening it does at loud, which on a modeled version matters less — but the voicing is genuinely a little tighter and drier, and that is worth having as a choice."
   },
   {
     "family": "Princetone",
@@ -830,6 +830,6 @@
     "manufacturer": "Trainwreck",
     "basedOn": "Trainwreck Rocket",
     "specs": "30 watt · 12AX7 / 6V6",
-    "description": "The Rocket: the smallest Trainwreck, with 6V6s and an American flavour.\n\nWarmer and rounder than the other two, and the most forgiving of the three — which for a Trainwreck is not saying a great deal."
+    "description": "The Rocket: the smallest Trainwreck, with 6V6s and an American flavor.\n\nWarmer and rounder than the other two, and the most forgiving of the three — which for a Trainwreck is not saying a great deal."
   }
 ]

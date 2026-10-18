@@ -345,7 +345,7 @@ function validateScenes(
         const instead = built.has(home) ? home : [...built][0]
         problems.push(
           `Scene ${index + 1}: ${block.name || block.slug} was sent to channel ${wanted}, ` +
-            `which this tone never dialled — it plays channel ${instead} instead.`
+            `which this tone never dialed — it plays channel ${instead} instead.`
         )
         channelFor.set(block.eid, instead)
         continue

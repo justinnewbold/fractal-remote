@@ -1325,7 +1325,7 @@ function BlockColour({ slug }) {
   const [painting, setPainting] = useState(null)
   return (
     <>
-      <Press label="Colour" height={40} onPress={() => setPainting(familyTarget(slug))} />
+      <Press label="Color" height={40} onPress={() => setPainting(familyTarget(slug))} />
       <ColourSheet target={painting} chain={presetFamilies(blocks)} spelt={presetSpelling(blocks)} onClose={() => setPainting(null)} />
     </>
   )
@@ -2287,7 +2287,7 @@ function gearLine(model) {
    * English — "based on" wants a thing, and an article does not save it.
    * "Modelled on Mesa" reads correctly for every maker in the catalog.
    */
-  if (model.manufacturer) return `Modelled on ${model.manufacturer}`
+  if (model.manufacturer) return `Modeled on ${model.manufacturer}`
   return null
 }
 
