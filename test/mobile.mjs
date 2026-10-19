@@ -18662,7 +18662,15 @@ export function run(test) {
     assert.match(notice, /<Note\s+onPress=\{\(\) => \{\s+away\(\)\s+onOpen\?\.\(\)\s+\}\}\s+onDismiss=\{away\}/, 'the line cannot be pressed, or put away')
     /* The Note's words are a button when it is given onPress, beside the cross. */
     const note = read('mobile/src/components/Note.js')
-    assert.match(note, /\{onPress \? \(\s+<Pressable accessibilityRole="button" onPress=\{onPress\}/, 'a Note’s words cannot be pressed')
+    assert.match(note, /\{onPress \? \(\s+<Pressable\s+accessibilityRole="button"\s+onPress=\{onPress\}/, 'a Note’s words cannot be pressed')
+    /* The whole note, not its 20pt line of words: a thumb on its top or bottom edge opened nothing (review, 19 October 2026). */
+    assert.match(
+      note,
+      /alignSelf: 'stretch',\s+marginVertical: -space\.md,\s+paddingVertical: space\.md,\s+marginLeft: -\(space\.md \+ EDGE\),\s+paddingLeft: space\.md \+ EDGE,/,
+      'only the line of words opens Colors; a tap on the rest of the note does nothing'
+    )
+    assert.match(note, /paddingVertical: space\.md,\n\s+paddingHorizontal: space\.md\n/, 'the note’s padding moved, and the button no longer covers it exactly')
+    assert.match(note, /borderLeftWidth: EDGE,/)
     assert.match(read('src/lib/colourPage.js'), /export const COLOURS_NOTICE = 'Match your unit’s colors in Settings'/)
   })
 

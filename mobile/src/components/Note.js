@@ -34,7 +34,18 @@ import { color, font, radius, space } from '../lib/theme'
  * `onPress` makes the words a button of their own, beside the cross: the
  * colours' one-time line on Play opens Settings → Colors (ColoursNotice).
  * Pressing the words is the way in; the cross is still the way out.
+ *
+ * THE WHOLE NOTE IS THE BUTTON, not its line of words. Drawn as words alone,
+ * the button was 20pt tall in a 46pt note, and a thumb on the note's top or
+ * bottom edge did nothing at all. So the button reaches out over the note's
+ * padding and its coloured edge (a negative margin, given straight back as
+ * padding, so the words sit exactly where they did) and stretches to the
+ * note's full height: 46pt, past the 44 a thumb wants, the same floor the
+ * browser gives the same words. Only the gap before the cross is not the
+ * button's, and the cross's own hit slop covers that.
  */
+const EDGE = 3
+
 export default function Note({ tone = 'hint', onDismiss, onPress, size, strong, children }) {
   const accent = tone === 'fault' ? color.fault : tone === 'warn' ? color.signal : color.rule
   const words = (
@@ -60,7 +71,7 @@ export default function Note({ tone = 'hint', onDismiss, onPress, size, strong, 
         flexDirection: 'row',
         alignItems: 'flex-start',
         gap: space.sm,
-        borderLeftWidth: 3,
+        borderLeftWidth: EDGE,
         borderLeftColor: accent,
         backgroundColor: color.panel,
         borderRadius: radius.sm,
@@ -69,7 +80,19 @@ export default function Note({ tone = 'hint', onDismiss, onPress, size, strong, 
       }}
     >
       {onPress ? (
-        <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.6 : 1 })}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onPress}
+          style={({ pressed }) => ({
+            flex: 1,
+            alignSelf: 'stretch',
+            marginVertical: -space.md,
+            paddingVertical: space.md,
+            marginLeft: -(space.md + EDGE),
+            paddingLeft: space.md + EDGE,
+            opacity: pressed ? 0.6 : 1
+          })}
+        >
           {words}
         </Pressable>
       ) : (
