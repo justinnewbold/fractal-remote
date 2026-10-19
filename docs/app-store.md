@@ -537,13 +537,15 @@ keeps it. Once on every device, after the startup card, the walkthrough
 and Play's other one-time notes, Play says "Match your unit’s colors in
 Settings", and pressing it opens Settings → Colors. The looks and
 Settings → Colors are not in the app Apple reviewed: they came after
-1.87.11, by update (1.87.39, 17 October 2026), so 2.3.1(a) wants the next
+1.87.11, by update (1.87.40, 18 October 2026), so 2.3.1(a) wants the next
 version's *New since 1.87.11* to describe the Colors page as new, with the
 looks it offers and which one a first launch wears. For the Notes for
-Review and What's New: "New: Settings → Colors. The app starts in its own
-colors (Fractal Remote); Match my unit, the colors of your Fractal unit, is
-the other look there." The Description above already says it ("Colors
-that can match your Fractal unit (Settings → Colors)").
+Review and What's New: "New: Settings → Colors, with six looks for the
+tiles and scenes: Fractal Remote (the app's own colors, which a first
+launch wears), Match my unit (the colors of your Fractal unit), Footswitch
+lights, Color-blind safe, Sunlight and Stompbox." The Description above
+already says it ("Colors that can match your Fractal unit (Settings →
+Colors)").
 
 **For the next version's notes: the startup card** (18 October 2026). Since
 then the app opens, once on every device, on a card headed "An independent

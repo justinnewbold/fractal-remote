@@ -833,7 +833,7 @@ export const FRACTAL_REMOTE_LOOK = 'fractalremote'
  * colours, since 19 October 2026. "Can we change it so the fractal remote
  * colors scene is the default? But then the first time the app loads, also
  * let people know that they can change the theme to match their actual unit
- * in settings?" It had been Match my unit since the looks came (1.87.39).
+ * in settings?" It had been Match my unit since the looks came (1.87.40).
  * A look somebody chose is kept as it was; only "never chose" moved, and the
  * one-time line on Play says where Match my unit is (lib/colourPage
  * COLOURS_NOTICE).
