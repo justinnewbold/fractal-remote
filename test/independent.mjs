@@ -103,11 +103,11 @@ const shippedFiles = () =>
  * does, with Stage's props and lib/coach turnTaken, until nothing moves, and
  * returns what each drew; `press(tree, label)` presses a button in one.
  */
-async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 'am4' }, buy = {} } = {}) {
+async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 'am4' }, buy = {}, look = { loaded: true, id: 'fractalremote' } } = {}) {
   const { transformSync } = await import('esbuild')
   const { COLOURS_NOTICE } = await import('../src/lib/colourPage.js')
   const dir = mkdtempSync(join(tmpdir(), 'play-notes-'))
-  globalThis.__playNotes = { kept, demo, buy: { unlocked: false, onlyHere: false, stuck: false, held: null, price: '$9.99', ...buy } }
+  globalThis.__playNotes = { kept, demo, look, buy: { unlocked: false, onlyHere: false, stuck: false, held: null, price: '$9.99', ...buy } }
   const files = {
     'package.json': '{ "type": "module" }',
     'react.mjs': `
@@ -169,6 +169,8 @@ async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 
     'demo.mjs': 'const d = globalThis.__playNotes.demo\nexport const useDemo = () => d.demo\nexport const useDemoUnit = () => d.unit\n',
     'device-word.mjs': "export const deviceNoun = () => 'phone'\n",
     'colourPage.mjs': `export const COLOURS_NOTICE = ${JSON.stringify(COLOURS_NOTICE)}\n`,
+    /* Which look is worn, and whether the phone's storage has said yet: `look`, which a test can change between draws. */
+    'looks.mjs': "const l = globalThis.__playNotes.look\nexport const looksLoaded = () => l.loaded\nexport const isFractalRemoteLook = () => l.id === 'fractalremote'\n",
     'parts.mjs': 'export default function Part() { return null }\n',
     'demoUnits.js': read('mobile/src/lib/demoUnits.js'),
     'vp4-safety.js': read('mobile/src/lib/vp4-safety.js'),
@@ -185,6 +187,7 @@ async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 
     ['from "../lib/device-word"', "from './device-word.mjs'"],
     ['from "../lib/demoUnits"', "from './demoUnits.js'"],
     ['from "../lib/colourPage"', "from './colourPage.mjs'"],
+    ['from "../lib/looks"', "from './looks.mjs'"],
     ['from "../lib/coach"', "from './coach.mjs'"],
     ['from "./Note"', "from './parts.mjs'"],
     ['from "./Press"', "from './parts.mjs'"],
@@ -223,6 +226,8 @@ async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 
     const says = { only: say('only'), vp4: say('vp4'), offer: say('offer') }
     /* What else Stage waits for: the quick tip and the watch's sheet, up, or not yet answered by the phone's storage. */
     const after = { coach: false, watchTip: false, coachPending: false, watchPending: false }
+    /* How many times the colours line opened Settings → Colors (App's openSettings('colours')). */
+    const opened = { n: 0 }
     const draw = () => {
       const noteBefore = (which) => coach.turnTaken(wants, which)
       const notesUp = coach.turnTaken(wants)
@@ -235,7 +240,7 @@ async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 
       one('offer', { onUnlock: () => {}, waiting: noteBefore('offer'), onWant: says.offer })
       one('vp4', { waiting: noteBefore('vp4'), onWant: says.vp4 })
       one('only', { onAccount: () => {}, onWant: says.only })
-      one('colours', { waiting: notesUp || after.coach || after.watchTip, unanswered: after.coachPending || after.watchPending })
+      one('colours', { waiting: notesUp || after.coach || after.watchTip, unanswered: after.coachPending || after.watchPending, onOpen: () => opened.n++ })
       return { drawn, stores }
     }
     const play = async () => {
@@ -270,7 +275,13 @@ async function playNotesOnABench({ kept = new Map(), demo = { demo: true, unit: 
       assert.ok(hit, `nothing to press${label ? ` called ${label}` : ''}`)
       ;(label ? hit.props.onPress : hit.props.onDismiss)()
     }
-    return { play, firstDraw, press, after, kept, wants: () => wants, unmount: react.unmount, turnTaken: coach.turnTaken }
+    /* A Note's words, where they are a button of their own (Note's onPress). */
+    const pressWords = (tree) => {
+      const hit = find(tree, (p) => typeof p.onPress === 'function' && typeof p.onDismiss === 'function')
+      assert.ok(hit, 'the note’s words cannot be pressed')
+      hit.props.onPress()
+    }
+    return { play, firstDraw, press, pressWords, opened, after, kept, look, wants: () => wants, unmount: react.unmount, turnTaken: coach.turnTaken }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -504,10 +515,12 @@ export function run(test) {
   /*
    * THE STARTUP MESSAGES TAKE TURNS. On a first launch after the update that
    * brought the startup card and the colours, a player could meet the card,
-   * the demo card, the quick tip and "Colours now match your unit" — and on a
-   * 320 by 568 phone the colours line stood under the demo card and pushed
-   * Tuner, Edit and Tap off the bottom of Play. So: the card first and alone,
-   * then one note at a time, and the colours line last, at both ends.
+   * the demo card, the quick tip and the colours line ("Colours now match
+   * your unit" then, "Match your unit’s colors in Settings" since 19 October
+   * 2026) — and on a 320 by 568 phone the colours line stood under the demo
+   * card and pushed Tuner, Edit and Tap off the bottom of Play. So: the card
+   * first and alone, then one note at a time, and the colours line last, at
+   * both ends.
    */
   test('the startup messages take turns on the phone: the card alone, then one note at a time, the colours line last', async () => {
     /* The card is drawn by the launch gate in place of the walkthrough and Play (the test above), so nothing on Play is ever up beside it. */
@@ -523,7 +536,7 @@ export function run(test) {
     assert.match(stage, /<UnlockOffer onUnlock=\{onUnlock\} waiting=\{noteBefore\('offer'\)\} onWant=\{says\.offer\} \/>/)
     assert.match(stage, /<Vp4DemoNote waiting=\{noteBefore\('vp4'\)\} onWant=\{says\.vp4\} \/>/)
     assert.match(stage, /<OnlyOnThisPhone onAccount=\{onAccount\} onWant=\{says\.only\} \/>/)
-    assert.match(stage, /<ColoursNotice waiting=\{notesUp \|\| coach \|\| watchTip\} unanswered=\{coachPending \|\| watchPending\} \/>/, 'the colours line does not wait for every other note, or for one that has not answered yet')
+    assert.match(stage, /<ColoursNotice waiting=\{notesUp \|\| coach \|\| watchTip\} unanswered=\{coachPending \|\| watchPending\} onOpen=\{onOpenColours\} \/>/, 'the colours line does not wait for every other note, or for one that has not answered yet')
     /* The quick tip's and the watch's "not answered yet" (found in review: the line was remembered as said, then the tip came up over it before it was drawn). */
     assert.match(stage, /const \[coachHeard, setCoachHeard\] = useState\(false\)\n\s+const coachPending = holdDoesSomething && !coachHeard\n/, 'the quick tip has no unanswered moment for the colours line to wait out')
     assert.match(stage, /coachSeen\(\)\.then\(\(seen\) => \{\s+if \(!live\) return\s+if \(!seen\) setCoach\(true\)\s+setCoachHeard\(true\)/, 'the quick tip is heard from before it is up')
@@ -552,11 +565,11 @@ export function run(test) {
     assert.deepEqual(Object.keys(p.firstDraw()), [], 'a note was drawn before the phone’s storage had answered')
     let drawn = await p.play()
     assert.deepEqual(Object.keys(drawn), ['offer'], 'the demo card is not alone at the top of Play')
-    assert.equal(kept.get('fractal.coloursNoticed'), undefined, 'the colours line was remembered as said while it waited')
+    assert.equal(kept.get('fractal.coloursOffer.v1'), undefined, 'the colours line was remembered as said while it waited')
     p.press(drawn.offer, 'Put this away')
     drawn = await p.play()
     assert.deepEqual(Object.keys(drawn), ['colours'], 'the colours line does not come once the demo card is put away')
-    assert.equal(kept.get('fractal.coloursNoticed'), 'done', 'the colours line is not remembered the moment it is shown')
+    assert.equal(kept.get('fractal.coloursOffer.v1'), 'done', 'the colours line is not remembered the moment it is shown')
     /* A note that comes up after it (the quick tip, on the first preset whose blocks have channels): it steps aside, and is back after. */
     p.after.coach = true
     assert.deepEqual(Object.keys(await p.play()), [], 'the colours line stayed up beside the quick tip')
@@ -588,17 +601,17 @@ export function run(test) {
     p.after.coachPending = true
     p.press(drawn.offer, 'Put this away')
     assert.deepEqual(Object.keys(await p.play()), [], 'the colours line was drawn while the quick tip might still take the turn')
-    assert.equal(race.get('fractal.coloursNoticed'), undefined, 'the colours line was remembered as said while the quick tip had not answered')
+    assert.equal(race.get('fractal.coloursOffer.v1'), undefined, 'the colours line was remembered as said while the quick tip had not answered')
     /* The tip is owed and comes up; Try it, no hold; the app is closed under it. */
     p.after.coachPending = false
     p.after.coach = true
     assert.deepEqual(Object.keys(await p.play()), [])
-    assert.equal(race.get('fractal.coloursNoticed'), undefined, 'the colours line was remembered as said under the quick tip')
+    assert.equal(race.get('fractal.coloursOffer.v1'), undefined, 'the colours line was remembered as said under the quick tip')
     /* The next launch, the tip seen: the line, and only now remembered. */
     p = await playNotesOnABench({ kept: race })
     drawn = await p.play()
     assert.deepEqual(Object.keys(drawn), ['colours'], 'the colours line never came, after a launch where the quick tip took its turn')
-    assert.equal(race.get('fractal.coloursNoticed'), 'done')
+    assert.equal(race.get('fractal.coloursOffer.v1'), 'done')
     /* Said, and then a question opens before it (the first preset with channels, read late): it stays where it is rather than going and coming back. */
     p.after.coachPending = true
     assert.deepEqual(Object.keys(await p.play()), ['colours'], 'the colours line went away for a question, not a note')
@@ -609,7 +622,7 @@ export function run(test) {
     p = await playNotesOnABench({ kept: watched, demo: { demo: false, unit: 'fm3' } })
     p.after.watchPending = true
     assert.deepEqual(Object.keys(await p.play()), [], 'the colours line was drawn while the watch’s sheet might still take the turn')
-    assert.equal(watched.get('fractal.coloursNoticed'), undefined)
+    assert.equal(watched.get('fractal.coloursOffer.v1'), undefined)
     p.after.watchPending = false
     assert.deepEqual(Object.keys(await p.play()), ['colours'], 'the colours line did not come once the watch’s sheet answered that it is seen')
 
@@ -630,7 +643,7 @@ export function run(test) {
     p = await playNotesOnABench({ kept: bought, demo: { demo: true, unit: 'fm3' }, buy: { unlocked: true, onlyHere: true } })
     drawn = await p.play()
     assert.deepEqual(Object.keys(drawn), ['only'], 'the line about a purchase on this phone is not alone at the top of Play')
-    assert.equal(bought.get('fractal.coloursNoticed'), undefined)
+    assert.equal(bought.get('fractal.coloursOffer.v1'), undefined)
     p.press(drawn.only)
     assert.deepEqual(Object.keys(await p.play()), ['colours'])
 
@@ -638,6 +651,69 @@ export function run(test) {
     const plain = new Map([['fractal.walkthrough.v1', 'done']])
     p = await playNotesOnABench({ kept: plain, demo: { demo: false, unit: 'fm3' } })
     assert.deepEqual(Object.keys(await p.play()), ['colours'])
+
+    /*
+     * SINCE 19 OCTOBER 2026 the line says where Match my unit is: "Can we
+     * change it so the fractal remote colors scene is the default? But then
+     * the first time the app loads, also let people know that they can change
+     * the theme to match their actual unit in settings?"
+     */
+    /* Somebody who heard the old line, whose words are no longer true, hears this one: a new key. */
+    const heardOld = new Map([['fractal.walkthrough.v1', 'done'], ['fractal.coloursNoticed', 'done']])
+    p = await playNotesOnABench({ kept: heardOld, demo: { demo: false, unit: 'fm3' } })
+    assert.deepEqual(Object.keys(await p.play()), ['colours'], 'somebody who heard “Colours now match your unit” is never told where Match my unit is')
+    /* A first run too, on Play after the walkthrough (App draws the walkthrough in place of Play, so nothing is under it). */
+    const firstRun = new Map()
+    p = await playNotesOnABench({ kept: firstRun, demo: { demo: false, unit: 'fm3' } })
+    drawn = await p.play()
+    assert.deepEqual(Object.keys(drawn), ['colours'], 'a first run is not told where Match my unit is')
+    assert.equal(firstRun.get('fractal.coloursOffer.v1'), 'done')
+    /* Pressed: Settings → Colors, once, and the line is put away for this launch and the next. */
+    p.pressWords(drawn.colours)
+    assert.equal(p.opened.n, 1, 'pressing the line did not open Settings → Colors')
+    assert.deepEqual(Object.keys(await p.play()), [], 'the line stayed up after it was pressed')
+    p.unmount('colours')
+    assert.deepEqual(Object.keys(await p.play()), [], 'the line came back on Play after Settings → Colors')
+    p = await playNotesOnABench({ kept: firstRun, demo: { demo: false, unit: 'fm3' } })
+    assert.deepEqual(Object.keys(await p.play()), [], 'the line came back on the next launch')
+
+    /* SOMEBODY WHO CHOSE ANOTHER LOOK has found the page already: never said, and put away for good at its turn. */
+    const chose = new Map([['fractal.walkthrough.v1', 'done']])
+    p = await playNotesOnABench({ kept: chose, demo: { demo: false, unit: 'fm3' }, look: { loaded: true, id: 'unit' } })
+    assert.deepEqual(Object.keys(await p.play()), [], 'somebody in Match my unit is told where Match my unit is')
+    assert.equal(chose.get('fractal.coloursOffer.v1'), 'done', 'somebody in another look is asked again later')
+    p.look.id = 'fractalremote'
+    assert.deepEqual(Object.keys(await p.play()), [], 'back on Fractal Remote, somebody who had found the page is told about it')
+    p = await playNotesOnABench({ kept: chose, demo: { demo: false, unit: 'fm3' } })
+    assert.deepEqual(Object.keys(await p.play()), [])
+
+    /* NOT BEFORE THE PHONE'S STORAGE HAS SAID WHICH LOOK: until then everybody reads as wearing the default. */
+    const early = new Map([['fractal.walkthrough.v1', 'done']])
+    const unknown = { loaded: false, id: 'fractalremote' }
+    p = await playNotesOnABench({ kept: early, demo: { demo: false, unit: 'fm3' }, look: unknown })
+    assert.deepEqual(Object.keys(await p.play()), [], 'the line was drawn before the look was known')
+    assert.equal(early.get('fractal.coloursOffer.v1'), undefined, 'the line was remembered as said before the look was known')
+    /* The colours land: Stompbox, chosen. Put away unsaid. */
+    unknown.loaded = true
+    unknown.id = 'stompbox'
+    assert.deepEqual(Object.keys(await p.play()), [])
+    assert.equal(early.get('fractal.coloursOffer.v1'), 'done')
+    /* And the colours land on Fractal Remote: said. */
+    const lateFr = new Map([['fractal.walkthrough.v1', 'done']])
+    const later = { loaded: false, id: 'fractalremote' }
+    p = await playNotesOnABench({ kept: lateFr, demo: { demo: false, unit: 'fm3' }, look: later })
+    assert.deepEqual(Object.keys(await p.play()), [])
+    later.loaded = true
+    assert.deepEqual(Object.keys(await p.play()), ['colours'], 'the line never came once the look was known to be Fractal Remote')
+
+    /* A look chosen while the line is up (from Settings, not from the line): gone, and it stays gone. */
+    const switched = new Map([['fractal.walkthrough.v1', 'done']])
+    p = await playNotesOnABench({ kept: switched, demo: { demo: false, unit: 'fm3' } })
+    assert.deepEqual(Object.keys(await p.play()), ['colours'])
+    p.look.id = 'sunlight'
+    assert.deepEqual(Object.keys(await p.play()), [], 'the line stayed up in another look')
+    p.look.id = 'fractalremote'
+    assert.deepEqual(Object.keys(await p.play()), [], 'the line came back after a look was chosen and put back')
   })
 
   test('the startup messages take turns in the browser: the colours line waits for the startup card and the walkthrough as well', async () => {
@@ -668,9 +744,12 @@ export function run(test) {
     globalThis.localStorage = { getItem: (k) => (stored.has(k) ? stored.get(k) : null), setItem: (k, v) => stored.set(k, String(v)) }
     try {
       let src = transformSync(read('src/components/ColoursNotice.jsx'), { loader: 'jsx', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'Frag', format: 'esm' }).code
-      src = src.replaceAll('from "react"', "from './react.mjs'").replaceAll('from "../lib/colourPage"', "from './colourPage.mjs'")
+      src = src.replaceAll('from "react"', "from './react.mjs'").replaceAll('from "../lib/colourPage"', "from './colourPage.mjs'").replaceAll('from "../lib/looks"', "from './looks.mjs'")
       writeFileSync(join(dir, 'package.json'), '{ "type": "module" }')
       writeFileSync(join(dir, 'colourPage.mjs'), `export const COLOURS_NOTICE = ${JSON.stringify(COLOURS_NOTICE)}\n`)
+      /* The look worn, which the test changes between draws (Gig repaints on a change of look). */
+      globalThis.__webLook = { id: 'fractalremote' }
+      writeFileSync(join(dir, 'looks.mjs'), "export const isFractalRemoteLook = () => globalThis.__webLook.id === 'fractalremote'\n")
       writeFileSync(
         join(dir, 'react.mjs'),
         `export const h = (type, props, ...children) => ({ type, props: props || {}, children })
@@ -684,7 +763,7 @@ export function run(test) {
       )
       writeFileSync(join(dir, 'ColoursNotice.mjs'), "import { h, Frag } from './react.mjs'\n" + src)
       const react = await import(pathToFileURL(join(dir, 'react.mjs')).href)
-      const notice = await import(pathToFileURL(join(dir, 'ColoursNotice.mjs')).href)
+      let notice = await import(pathToFileURL(join(dir, 'ColoursNotice.mjs')).href)
       const draw = (props) => {
         for (let pass = 0; pass < 3; pass++) {
           react.begin()
@@ -694,37 +773,92 @@ export function run(test) {
         react.begin()
         return notice.default(props)
       }
+      /* Another visit to the page: the module afresh, with whatever the storage kept. */
+      const visitAgain = async (name) => {
+        notice = await import(`${pathToFileURL(join(dir, 'ColoursNotice.mjs')).href}?${name}`)
+        react.mount()
+      }
       react.mount()
       /* Under the startup card (noteAbove): nothing, and nothing kept. */
       assert.equal(draw({ waiting: true }), null, 'the colours line is drawn under the startup card')
-      assert.equal(stored.get('fractal.coloursNoticed'), undefined, 'the colours line was remembered as said under the startup card')
+      assert.equal(stored.get('fractal.coloursOffer.v1'), undefined, 'the colours line was remembered as said under the startup card')
       /* OK pressed, nothing else owed: said, and remembered. */
-      const line = draw({ waiting: false })
-      assert.ok(line && JSON.stringify(line).includes('Colors now match your unit'))
-      assert.equal(stored.get('fractal.coloursNoticed'), 'done')
+      let opened = 0
+      const open = () => opened++
+      const line = draw({ waiting: false, onOpen: open })
+      assert.ok(line && JSON.stringify(line).includes('Match your unit’s colors in Settings'))
+      assert.equal(stored.get('fractal.coloursOffer.v1'), 'done')
       /* The hold tip comes up after it: out of the way, and back when that is put away. */
-      assert.equal(draw({ waiting: true }), null, 'the colours line stayed up beside a note after it')
-      const back = draw({ waiting: false })
+      assert.equal(draw({ waiting: true, onOpen: open }), null, 'the colours line stayed up beside a note after it')
+      const back = draw({ waiting: false, onOpen: open })
       assert.ok(back, 'the colours line did not come back')
-      /* Got it puts it away. */
-      const button = back.children.find((c) => c && c.type === 'button')
-      button.props.onClick()
+      /* Two buttons: the words, which open Settings → Colors, and the cross. */
+      const [words, cross] = back.children.filter((c) => c && c.type === 'button')
+      assert.equal(words.props.className, 'colours-notice-open')
+      assert.equal(cross.props['aria-label'], 'Dismiss')
+      /* The cross puts it away, and opens nothing. */
+      cross.props.onClick()
+      assert.equal(opened, 0, 'the cross opened Settings')
       react.mount()
-      assert.equal(draw({ waiting: false }), null, 'the colours line came back after Got it')
+      assert.equal(draw({ waiting: false, onOpen: open }), null, 'the colours line came back after its cross')
+      await visitAgain('next')
+      assert.equal(draw({ waiting: false, onOpen: open }), null, 'the colours line came back on the next visit')
+
+      /* A first visit, after the walkthrough: pressing the words opens Settings → Colors, and the line is put away. */
+      stored.clear()
+      await visitAgain('pressed')
+      const fresh = draw({ waiting: false, onOpen: open })
+      assert.ok(fresh, 'a first visit is not told where Match my unit is')
+      fresh.children.find((c) => c && c.props?.className === 'colours-notice-open').props.onClick()
+      assert.equal(opened, 1, 'pressing the line did not open Settings → Colors')
+      react.mount()
+      assert.equal(draw({ waiting: false, onOpen: open }), null, 'the colours line came back after it was pressed')
+
+      /* Somebody who chose another look: never said, and put away for good at its turn. */
+      stored.clear()
+      globalThis.__webLook.id = 'unit'
+      await visitAgain('elsewhere')
+      assert.equal(draw({ waiting: true }), null)
+      assert.equal(stored.get('fractal.coloursOffer.v1'), undefined, 'the line was put away before its turn')
+      assert.equal(draw({ waiting: false }), null, 'somebody in Match my unit is told where Match my unit is')
+      assert.equal(stored.get('fractal.coloursOffer.v1'), 'done', 'somebody in another look is asked again later')
+      globalThis.__webLook.id = 'fractalremote'
+      assert.equal(draw({ waiting: false }), null, 'back on Fractal Remote, somebody who had found the page is told about it')
+
+      /* A look chosen while the line is up: gone, and it stays gone. */
+      stored.clear()
+      await visitAgain('switched')
+      assert.ok(draw({ waiting: false }))
+      globalThis.__webLook.id = 'sunlight'
+      assert.equal(draw({ waiting: false }), null, 'the line stayed up in another look')
+      globalThis.__webLook.id = 'fractalremote'
+      assert.equal(draw({ waiting: false }), null, 'the line came back after a look was chosen and put back')
     } finally {
+      delete globalThis.__webLook
       delete globalThis.localStorage
       rmSync(dir, { recursive: true, force: true })
     }
   })
 
-  test('“Settings → Colours” is never broken across two lines, at either end', async () => {
+  /*
+   * ONE LINE AT 320 WIDE, AT BOTH ENDS. The line before it ("Colours now
+   * match your unit · Settings → Colours") took two on a narrow phone, and
+   * broke after "Settings" until no-break spaces held the path together. Its
+   * successor is short enough not to break at all: measured in Inter at 13pt
+   * (a little wider than the iPhone's own face), Roboto at 13 and Archivo at
+   * 12px, it is about 215, 202 and 183 wide, where the phone's Note leaves
+   * 235 beside its cross and the browser's row 206 beside its 44-wide one.
+   * No fonts here to measure with, so its length is held instead.
+   */
+  test('the colours line is one short line, the same words at both ends', async () => {
     const { COLOURS_NOTICE } = await import('../src/lib/colourPage.js')
-    assert.ok(COLOURS_NOTICE.endsWith('Settings → Colors'), 'a narrow screen can break the colours line after “Settings”')
-    assert.equal(COLOURS_NOTICE.replace(/ /g, ' '), 'Colors now match your unit · Settings → Colors', 'the words of the colours line changed')
+    assert.equal(COLOURS_NOTICE, 'Match your unit’s colors in Settings', 'the words of the colours line changed; measure them at 320 wide at both ends first')
+    assert.ok(COLOURS_NOTICE.length <= 36, 'the colours line is too long for one line at 320 wide')
+    assert.ok(!/colou?rs now match|this phone|colours/i.test(COLOURS_NOTICE), 'the line says the colours match, names the device, or is spelled the British way')
     /* The phone's copy is the generated one, and both ends draw the constant as it is. */
-    assert.ok(read('mobile/src/lib/colourPage.js').includes("export const COLOURS_NOTICE = 'Colors now match your unit · Settings\\u00a0→\\u00a0Colors'"))
+    assert.ok(read('mobile/src/lib/colourPage.js').includes("export const COLOURS_NOTICE = 'Match your unit’s colors in Settings'"))
     assert.match(read('mobile/src/components/ColoursNotice.js'), /\{COLOURS_NOTICE\}/)
-    assert.match(read('src/components/ColoursNotice.jsx'), /<span>\{COLOURS_NOTICE\}<\/span>/)
+    assert.match(read('src/components/ColoursNotice.jsx'), /className="colours-notice-open"[\s\S]{0,120}\{COLOURS_NOTICE\}/)
   })
 
   test('while the browser’s card is up, the keyboard reaches nothing behind it', async () => {

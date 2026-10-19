@@ -738,7 +738,8 @@ const STOMPBOX = Object.freeze({
 const red = Object.freeze(Array(8).fill(SCENE_RED))
 
 /**
- * The looks, in the order the Colours page offers them.
+ * The looks, in the order the Colours page offers them: the default,
+ * Fractal Remote, first, and Match my unit straight after it.
  *
  * `families` is the look's own colour for each family; `byUnit`, where a look
  * has it, is the colour for the unit you are on, and wins. `scenes` is the
@@ -753,6 +754,13 @@ const red = Object.freeze(Array(8).fill(SCENE_RED))
  */
 export const LOOKS = Object.freeze([
   {
+    id: 'fractalremote',
+    name: 'Fractal Remote',
+    why: 'The app’s own colors, as they have always been.',
+    families: Object.freeze(Object.fromEntries(Object.entries(FRACTAL_REMOTE).map(([k, v]) => [k, v.fill]))),
+    scenes: FRACTAL_REMOTE_SCENES
+  },
+  {
     id: 'unit',
     name: 'Match my unit',
     why: 'Each effect in the color your unit gives it, a little brighter where a dark one would be lost on a dark stage. Every scene is red, like the scene switches.',
@@ -762,13 +770,6 @@ export const LOOKS = Object.freeze([
     families: PALETTES.gen3,
     byUnit: PALETTES,
     scenes: red
-  },
-  {
-    id: 'fractalremote',
-    name: 'Fractal Remote',
-    why: 'The app’s own colors, as they have always been.',
-    families: Object.freeze(Object.fromEntries(Object.entries(FRACTAL_REMOTE).map(([k, v]) => [k, v.fill]))),
-    scenes: FRACTAL_REMOTE_SCENES
   },
   {
     /* The FC system's defaults: every Effect switch Cyan (led-ring-cyan.svg),
@@ -829,12 +830,22 @@ export const LOOKS = Object.freeze([
   }
 ])
 
-export const DEFAULT_LOOK = 'unit'
 /** The look drawn exactly as the app drew before there were looks — see Tile on the phone. */
 export const FRACTAL_REMOTE_LOOK = 'fractalremote'
+/**
+ * The look of somebody who never chose one: Fractal Remote, the app's own
+ * colours, since 19 October 2026. "Can we change it so the fractal remote
+ * colors scene is the default? But then the first time the app loads, also
+ * let people know that they can change the theme to match their actual unit
+ * in settings?" It had been Match my unit since the looks came (1.87.40).
+ * A look somebody chose is kept as it was; only "never chose" moved, and the
+ * one-time line on Play says where Match my unit is (lib/colourPage
+ * COLOURS_NOTICE).
+ */
+export const DEFAULT_LOOK = FRACTAL_REMOTE_LOOK
 
 const BY_ID = Object.fromEntries(LOOKS.map((l) => [l.id, l]))
-/** A look by its id, or Match my unit for anything else. */
+/** A look by its id, or the default, Fractal Remote, for anything else. */
 export const lookById = (id) => BY_ID[id] || BY_ID[DEFAULT_LOOK]
 export const isLookId = (id) => typeof id === 'string' && Object.prototype.hasOwnProperty.call(BY_ID, id)
 

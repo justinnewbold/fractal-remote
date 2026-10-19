@@ -284,7 +284,7 @@ export default function Colours() {
         <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
           {asking === 'yours'
             ? 'Every effect and scene you gave a color of your own goes back to the colors of the look you are wearing. The look stays.'
-            : 'Back to Match my unit: every effect in your unit’s own colors, every scene red, and switched-off effects in their own color. Every color you chose goes.'}
+            : 'Back to Fractal Remote: every effect and scene in the app’s own colors, and switched-off effects in their own color. Every color you chose goes.'}
         </Text>
       </Sheet>
     </View>

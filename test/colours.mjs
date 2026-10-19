@@ -57,7 +57,8 @@ const memory = (seed = {}) => {
 }
 
 export function run(test) {
-  const load = async () => {
+  /* `look` wears one from the start, for a test about that look: since 19 October 2026 nothing chosen is Fractal Remote. */
+  const load = async ({ look } = {}) => {
     const [palettes, ink, looks, blocks, scenes] = await Promise.all([
       import('../src/lib/blockPalettes.js'),
       import('../src/lib/ink.js'),
@@ -70,6 +71,7 @@ export function run(test) {
        demo's detect among them) tell it which unit answered. */
     looks.loadLooks(memory())
     looks.setColourUnit(null)
+    if (look) looks.setLook(look)
     return { ...palettes, ...ink, ...looks, ...blocks, ...scenes }
   }
 
@@ -168,14 +170,27 @@ export function run(test) {
     assert.ok(all.length > 800, `only ${all.length} colours were checked`)
   })
 
-  test('every look has a name a guitarist reads, no brand in it, and Match my unit comes first, Fractal Remote second', async () => {
+  test('every look has a name a guitarist reads, no brand in it, and Fractal Remote, the default, comes first, Match my unit second', async () => {
     const c = await load()
     assert.deepEqual(
       c.LOOKS.map((l) => l.name),
-      ['Match my unit', 'Fractal Remote', 'Footswitch lights', 'Color-blind safe', 'Sunlight', 'Stompbox']
+      ['Fractal Remote', 'Match my unit', 'Footswitch lights', 'Color-blind safe', 'Sunlight', 'Stompbox']
     )
-    assert.equal(c.DEFAULT_LOOK, 'unit')
-    assert.equal(c.lookId(), 'unit', 'somebody who never chose a look is not in Match my unit')
+    /* "Can we change it so the fractal remote colors scene is the default?" (19 October 2026) */
+    assert.equal(c.DEFAULT_LOOK, 'fractalremote')
+    assert.equal(c.DEFAULT_LOOK, c.FRACTAL_REMOTE_LOOK)
+    assert.equal(c.lookId(), 'fractalremote', 'somebody who never chose a look is not in Fractal Remote')
+    assert.equal(c.isFractalRemoteLook(), true)
+    assert.equal(c.lookById('nonsense').id, 'fractalremote', 'a look that does not exist is not the default')
+    /* Put back by Put every color back is not a choice either: the default. */
+    c.loadLooks(memory({ 'fractal.colours': JSON.stringify({ v: 1, theme: { id: null, at: 1 } }) }))
+    assert.equal(c.lookId(), 'fractalremote', 'a reset is not the default look')
+    /* A look somebody chose is kept, Match my unit included: only "never chose" moved. */
+    for (const id of ['unit', 'rings', 'cvd', 'sunlight', 'stompbox', 'fractalremote']) {
+      c.loadLooks(memory({ 'fractal.colours': JSON.stringify({ v: 1, theme: { id, at: 1 } }) }))
+      assert.equal(c.lookId(), id, `somebody who chose ${id} lost it when the default changed`)
+    }
+    c.loadLooks(memory())
     /* App Store 4.1 and 5.2.1: a look named after a pedal maker's pedal is a trademark in a menu. */
     const brands = /tube ?screamer|ibanez|boss|mxr|electro-?harmonix|strymon|eventide|fulltone|klon|line ?6|helix|kemper|neural|marshall|fender|vox|mesa|tc electronic|dunlop|ehx/i
     for (const l of c.LOOKS) {
@@ -211,6 +226,7 @@ export function run(test) {
     assert.equal(c.PALETTES.vp4.amp, '#7d8591')
     assert.equal(c.SCENE_RED, '#cc0000', 'FM3-Edit’s led-ring-red.svg')
     for (const id of ['unit', 'rings']) assert.deepEqual([...c.lookById(id).scenes], Array(8).fill('#cc0000'), `${id}: every scene is the scene switches’ red`)
+    c.setLook('unit')
     c.setColourUnit('am4')
     assert.deepEqual(c.blockColor('drive'), { fill: '#ce0201', ink: '#ffffff' })
     assert.deepEqual(c.sceneColor(5), { fill: '#cc0000', ink: '#ffffff' })
@@ -574,7 +590,8 @@ export function run(test) {
   })
 
   test('a block’s name, in any shape it arrives, finds its family', async () => {
-    const c = await load()
+    /* In a look that colours by family: Fractal Remote goes by the spelling that came (lib/blockColors fromLook). */
+    const c = await load({ look: 'unit' })
     const same = (a, b) => assert.deepEqual(c.blockColor(a), c.blockColor(b), `${a} is not ${b}`)
     /* Axis's map: spaces, hyphens, slashes, instance numbers. */
     same('Plex Delay', 'plex')
@@ -676,7 +693,7 @@ export function run(test) {
   })
 
   test('a colour is resolved in order: yours, the look on this unit, the look, then neutral', async () => {
-    const c = await load()
+    const c = await load({ look: 'unit' })
     c.setColourUnit('am4')
     assert.equal(c.blockColor('delay').fill, c.PALETTES.am4.delay, 'Match my unit on an AM4 is not the AM4’s')
     c.setLook('rings')
@@ -779,7 +796,7 @@ export function run(test) {
     }
     /* A storage that throws is a session with nothing saved, never a crash. */
     const broken = { getItem: () => { throw new Error('blocked') }, setItem: () => { throw new Error('full') } }
-    assert.equal(c.loadLooks(broken), 'unit')
+    assert.equal(c.loadLooks(broken), 'fractalremote', 'a storage that throws is not the default look')
     assert.ok(c.setLook('cvd'), 'a full store refused the look for this session too')
     assert.equal(c.lookId(), 'cvd')
   })
@@ -807,9 +824,10 @@ export function run(test) {
     assert.equal(kept.presets.vp4['4'].fill, null)
     assert.equal(kept.off.mode, 'colour')
     assert.equal(kept.palette.id, 'vp4', 'putting colours back forgot which unit this is')
-    assert.equal(c.lookId(), 'unit')
-    assert.equal(c.blockColor('drive').fill, c.PALETTES.vp4.drive)
-    assert.equal(c.sceneColor(1, 4).fill, '#cc0000')
+    /* Back to the default, Fractal Remote, since 19 October 2026: the app's own drive and scene 2. */
+    assert.equal(c.lookId(), 'fractalremote')
+    assert.equal(c.blockColor('drive').fill, c.FRACTAL_REMOTE.drive.fill)
+    assert.equal(c.sceneColor(1, 4).fill, c.lookById('fractalremote').scenes[1])
     assert.equal(c.ownColourCount(), 0)
     /* And the resets read back as resets. */
     const back = c.parseLooks(store.kept['fractal.colours'])
@@ -821,6 +839,7 @@ export function run(test) {
     const c = await load()
     const store = memory()
     c.loadLooks(store)
+    c.setLook('unit')
     c.setColourUnit('am4')
     assert.equal(JSON.parse(store.kept['fractal.colours']).palette.id, 'am4', 'the unit’s palette was not written down')
     /* Next launch: the phone is 'device' until the unit answers. */
@@ -990,6 +1009,7 @@ export function run(test) {
     const store = memory()
     c.loadLooks(store)
     c.setColourUnit('fm3')
+    c.setLook('unit')
     const lead = { number: 12, words: '012 Lead Rig' }
     const three = c.sceneTarget(2, { preset: lead, only: true })
     assert.deepEqual([three.preset, three.only], [{ number: 12, words: '012 Lead Rig' }, true])
@@ -1182,6 +1202,7 @@ export function run(test) {
     const c = await withPage()
     const store = memory()
     c.loadLooks(store)
+    c.setLook('unit')
     c.setColourUnit('am4')
     const am4 = { sceneCount: 4 }
     c.chooseScenes(true)
@@ -1389,11 +1410,17 @@ export function run(test) {
 
   test('the words under Put every colour back and Keep their colour say it once, plainly', async () => {
     const c = await withPage()
-    assert.equal(c.PUT_BACK_WORDS, 'Back to Match my unit: every scene red, switched-off effects in their own color')
+    /* The default look since 19 October 2026, and what Put back puts on. */
+    assert.equal(c.PUT_BACK_WORDS, 'Back to Fractal Remote: the app’s own colors, switched-off effects in their own color')
     assert.equal(c.OFF_WORDS.colour, 'A faint wash of the effect’s own color with an edge in that color, so you still know which it is.')
     assert.match(read('src/components/Colours.jsx'), /<span className="hint">\{PUT_BACK_WORDS\}<\/span>/)
     assert.match(read('mobile/src/components/Colours.js'), /<Press label="Put every color back" sub=\{PUT_BACK_WORDS\} onPress=\{\(\) => setAsking\('all'\)\} \/>/)
-    for (const f of ['src/components/Colours.jsx', 'mobile/src/components/Colours.js']) assert.ok(!/the unit’s colors, and switched-off/.test(read(f)), `${f} says Match my unit twice again`)
+    for (const f of ['src/components/Colours.jsx', 'mobile/src/components/Colours.js']) {
+      assert.ok(!/the unit’s colors, and switched-off/.test(read(f)), `${f} says Match my unit twice again`)
+      /* The question before it says the same look. */
+      assert.ok(read(f).includes("'Back to Fractal Remote: every effect and scene in the app’s own colors, and switched-off effects in their own color. Every color you chose goes.'"), `${f} asks about putting back a look that is not the default`)
+      assert.ok(!/Back to Match my unit/.test(read(f)), `${f} still says Put back is Match my unit`)
+    }
   })
 
   test('the store words say what is true on every unit', () => {
@@ -1401,7 +1428,9 @@ export function run(test) {
     assert.ok(!/match your unit's own screen/.test(store), 'the store says every colour is off the unit’s own screen, which is not true on an FM3')
     /* Without "and its editor" since 18 October 2026: it tied the app's look to
        Fractal's own software, and their letter asks for nothing that reads as theirs. */
-    assert.match(store, /Colors that match your Fractal unit, so you find things by looking/)
+    /* "Can", with where, since 19 October 2026: the app starts in its own colors, and matching the unit is a look you pick. */
+    assert.match(store, /• Colors that can match your Fractal unit \(Settings → Colors\), so you find things by looking/)
+    assert.ok(!/• Colors that match your Fractal unit/.test(store), 'the store says the colors match the unit by themselves, which they do not by default')
     assert.ok(!/and its editor/.test(store), 'the store ties the app’s colours to Fractal’s editor again')
   })
 

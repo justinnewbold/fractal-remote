@@ -32,7 +32,6 @@ import Onboarding from './src/screens/Onboarding'
 import IndependentNotice, { independentNoticeSeen, markIndependentNotice } from './src/components/IndependentNotice'
 import { NOT_AFFILIATED } from './src/lib/affiliation'
 import { walkthroughSeen, markWalkthrough } from './src/lib/walkthrough'
-import { markColoursNotice } from './src/lib/coach'
 import Edit from './src/screens/Edit'
 import Connect from './src/screens/Connect'
 import Fixes from './src/screens/Fixes'
@@ -142,10 +141,8 @@ export default function App() {
    */
   const [independentDue, setIndependentDue] = useState(false)
   useEffect(() => {
+    /* A first run is told where Match my unit is too, on Play after the walkthrough (components/ColoursNotice): nothing is marked here for it. */
     Promise.all([walkthroughSeen(), independentNoticeSeen()]).then(([seen, noticed]) => {
-      /* A first run never saw the old colours, so it is never told they
-         changed (components/ColoursNotice). */
-      if (!seen) markColoursNotice()
       setIndependentDue(!noticed)
       setSeenWalk(seen)
     })
@@ -536,8 +533,8 @@ export default function App() {
        somebody on their first launch anyway. */
     hydrate().then(() => loadMode(sync))
     /* The colours too, from the same store. Until they land, the look and the
-       last unit's palette are not known yet, and Match my unit in gen-3's
-       colours is what is drawn — for a moment, as the theme is Auto. */
+       last unit's palette are not known yet, and the default look, Fractal
+       Remote, is what is drawn — for a moment, as the theme is Auto. */
     hydrate().then(() => loadLooks(sync))
   }, [])
 
@@ -1342,6 +1339,8 @@ export default function App() {
                 }
                 onUnlock={() => setBuying(true)}
                 onAccount={toMakeAccount}
+                /* The colours' one-time line, pressed: Settings, open on Colors. */
+                onOpenColours={() => openSettings('colours')}
                 /*
                  * THE COMPUTER GONE FOR FIFTEEN SECONDS WITH A RIG ON SCREEN:
                  * the waiting screen's advice and its two buttons, floated

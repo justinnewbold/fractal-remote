@@ -5280,8 +5280,8 @@ export function run(test) {
     /* Seen once. Marked on open rather than on finish — closing the tab is
        not an accident to be corrected next launch. */
     const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
-    /* The first run is also when the colours' one-time line is put away unsaid (ColoursNotice): read in the same breath. */
-    assert.match(app, /useState\(\(\) => \{\s*const first = !onboarded\(\)[\s\S]{0,400}return first\s*\}\)/, 'the walkthrough does not open itself on a first run')
+    /* Nothing else is decided in the same breath since 19 October 2026: a first run is told where Match my unit is too (ColoursNotice). */
+    assert.match(app, /const \[walkthrough, setWalkthrough\] = useState\(\(\) => !onboarded\(\)\)/, 'the walkthrough does not open itself on a first run')
     /* Remembered once it can be seen: on a first visit it is drawn under the opaque startup card, and a tab closed there has seen none of it. */
     assert.match(app, /useEffect\(\(\) => \{\s+if \(walkthrough && !independentDue\) markOnboarded\(\)\s+\}, \[walkthrough, independentDue\]\)/, 'the walkthrough is not remembered, so it returns every load, or it is remembered under the startup card')
   })
@@ -5792,21 +5792,28 @@ export function run(test) {
     const c = await coloursOnABench()
     c.setDevice('browser')
     c.looks.setColourUnit('am4')
-    const drawn = c.draw(c.Colours, { blocks: [{ slug: 'input' }, { slug: 'drive1' }, { slug: 'drive2' }, { slug: 'delay1' }, { slug: 'output' }], sceneNames: ['Clean'], icons: false })
+    const props = { blocks: [{ slug: 'input' }, { slug: 'drive1' }, { slug: 'drive2' }, { slug: 'delay1' }, { slug: 'output' }], sceneNames: ['Clean'], icons: false }
+    const cardsOf = (html) => [...html.matchAll(/<div class="colours-look"( data-on="yes")? data-look-card="(\w+)">([\s\S]*?)<\/span><\/div>/g)]
+    /* Nobody chose yet: the default, Fractal Remote, is the one worn, and first (19 October 2026). */
+    assert.deepEqual(cardsOf(c.draw(c.Colours, props)).filter((m) => m[1]).map((m) => m[2]), ['fractalremote'], 'the default look is not the one marked')
+    /* The rest of the page in Match my unit, which an AM4 draws in its own colours. */
+    c.looks.setLook('unit')
+    const drawn = c.draw(c.Colours, props)
 
     /* Six cards, in the page's order, the one worn marked, each with five of Play's tiles. */
-    const cards = [...drawn.matchAll(/<div class="colours-look"( data-on="yes")? data-look-card="(\w+)">([\s\S]*?)<\/span><\/div>/g)]
+    const cards = cardsOf(drawn)
     assert.deepEqual(cards.map((m) => m[2]), [...c.page.LOOK_ORDER], 'the looks are not the six, in order')
-    assert.equal(cards[1][2], 'fractalremote', 'Fractal Remote is not straight after Match my unit')
+    assert.equal(cards[0][2], 'fractalremote', 'Fractal Remote, the default, is not first')
+    assert.equal(cards[1][2], 'unit', 'Match my unit is not straight after Fractal Remote')
     assert.deepEqual(cards.filter((m) => m[1]).map((m) => m[2]), ['unit'], 'the look worn is not the one marked')
     for (const m of cards) {
       assert.equal((m[3].match(/class="gig-block on"/g) || []).length, 4, `${m[2]}: the card does not show Drive, Amp, Delay and Reverb lit`)
       assert.equal((m[3].match(/class="gig-scene current"/g) || []).length, 1, `${m[2]}: the card has no scene 1`)
     }
     /* Fractal Remote's card keeps the white letters that look always had. */
-    assert.ok(!/--block-ink:#15181d/.test(cards[1][3]), 'Fractal Remote’s card has the new letters')
+    assert.ok(!/--block-ink:#15181d/.test(cards[0][3]), 'Fractal Remote’s card has the new letters')
     /* An AM4's drive, as the AM4 draws it. */
-    assert.match(cards[0][3], /--block-fill:#ce0201/, 'Match my unit’s card is not in the AM4’s colours on an AM4')
+    assert.match(cards[1][3], /--block-fill:#ce0201/, 'Match my unit’s card is not in the AM4’s colours on an AM4')
 
     /* The preset's effects first, each family once, without the chain's two ends. */
     const first = drawn.slice(drawn.indexOf('In this preset'), drawn.indexOf('More effects'))
@@ -5844,6 +5851,8 @@ export function run(test) {
 
   test('the browser’s colour sheet, drawn: the checked swatches named for a screen reader, Lighter and Darker, and Cancel or Use it', async () => {
     const c = await coloursOnABench()
+    /* In Match my unit, whose scenes are all Fractal's red (the default is Fractal Remote since 19 October 2026). */
+    c.looks.setLook('unit')
     c.looks.setColourUnit('fm3')
     const drive = c.page.familyTarget('drive')
     const sheet = c.draw(c.ColourSheet, { target: drive, chain: [], icons: false, onClose: () => {} })
@@ -5959,21 +5968,31 @@ export function run(test) {
     assert.match(strip, /data-off=\{offMode\(\) === 'grey' \? 'grey' : undefined\}/, 'the edit strip’s bypassed blocks do not go grey')
   })
 
-  test('“Colours now match your unit”, once on Play, and never on a first run', () => {
+  test('“Match your unit’s colors in Settings”, once on Play, a first run included, and it opens Settings → Colors', () => {
     const notice = readFileSync(new URL('../src/components/ColoursNotice.jsx', import.meta.url), 'utf8')
-    /* The phone's key, in this browser's storage. */
-    assert.match(notice, /const KEY = 'fractal\.coloursNoticed'/)
-    assert.match(notice, /export function markColoursNotice\(\) \{\s+settled = true/, 'the first run’s mark can lose to Play’s read')
+    /* The phone's key, in this browser's storage: a new one on 19 October 2026, so everybody hears these words once. */
+    assert.match(notice, /const KEY = 'fractal\.coloursOffer\.v1'/)
+    assert.match(notice, /export function markColoursNotice\(\) \{\s+settled = true/, 'a private window says the line twice in a visit')
     assert.match(notice, /if \(waiting \|\| coloursNoticeSeen\(\)\) return undefined\s+markColoursNotice\(\)/, 'the line is not remembered the moment it is shown')
     assert.match(notice, /\{COLOURS_NOTICE\}/, 'the line is not the phone’s words')
-    assert.match(notice, /visit = 'gone'/, 'the line cannot be put away')
-    /* A first run never saw the old colours: marked in App's very first render. */
-    assert.match(src, /const first = !onboarded\(\)[\s\S]{0,300}if \(first\) markColoursNotice\(\)/, 'a first run is told the colours changed')
+    /* Only in Fractal Remote: somebody in another look has found the page, and is not asked again. */
+    assert.match(notice, /const elsewhere = !isFractalRemoteLook\(\)/)
+    assert.match(notice, /if \(!shown \|\| waiting \|\| elsewhere\) return null/, 'the line is said in another look')
+    /* Pressed, it opens Settings → Colors; its cross puts it away. */
+    assert.match(notice, /className="colours-notice-open"\s+onClick=\{\(\) => \{\s+away\(\)\s+onOpen\?\.\(\)\s+\}\}/, 'the line opens nothing')
+    assert.match(notice, /className="chip colours-notice-close" aria-label="Dismiss" onClick=\{away\}/, 'the line cannot be put away')
+    /* A first run is told too, after the walkthrough: App no longer puts it away unsaid. */
+    assert.ok(!/markColoursNotice/.test(src), 'a first run is never told where Match my unit is')
+    assert.match(src, /onOpenColours=\{\(\) => \{\s+setSheet\('settings'\)\s+setSetupPage\('colours'\)\s+\}\}/, 'the line does not open Settings on Colors')
     /* On Play, waiting while another one-time note is up. */
     const gig = readFileSync(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8')
-    assert.match(gig, /<ColoursNotice waiting=\{noteAbove\} \/>/, 'Play does not say the colours changed')
+    assert.match(gig, /<ColoursNotice waiting=\{noteAbove\} onOpen=\{onOpenColours\} \/>/, 'Play does not say where Match my unit is')
     assert.match(src, /noteAbove=\{startupOver \|\| signInOver \|\| \(!holdNoteSeen && holdOpensChannels\) \|\| \(isDemo\(\) && status === 'live' && !demoNoteSeen\)\}/, 'the line stacks on the hold tip or the demo’s, or is said under the startup card, the walkthrough or the sign-in sheet')
     assert.match(src, /const startupOver = independentDue \|\| walkthrough\n/, 'the line is said under the startup card or the walkthrough')
+    /* One row at 320: the cross never wraps under the words, and both are a thumb's size on a touch screen. */
+    const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+    assert.match(css, /\.colours-notice \{\s+flex-wrap: nowrap;\s+\}/, 'the cross can wrap under the words')
+    assert.match(css, /button\.colours-notice-open \{\s+flex: 1 1 auto;\s+min-width: 0;/)
   })
 
   test('nothing on the browser’s Colours page says “this phone”', () => {
