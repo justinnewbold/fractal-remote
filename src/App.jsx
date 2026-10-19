@@ -97,7 +97,6 @@ import { useChain } from './components/ChainWait'
 import Screens, { viewsFor } from './components/Screens'
 import SceneArrange from './components/SceneArrange'
 import Colours from './components/Colours'
-import { markColoursNotice } from './components/ColoursNotice'
 import { coloursStatus } from './lib/colourPage'
 import { useLooks } from './lib/useLooks'
 import { useAsks } from './lib/asks'
@@ -613,14 +612,7 @@ export default function App() {
    * it is marked once OK has been pressed, and that visitor meets the card
    * and then the walkthrough next time.
    */
-  const [walkthrough, setWalkthrough] = useState(() => {
-    const first = !onboarded()
-    /* A first run never saw the old colours, so it is never told they
-       changed (components/ColoursNotice) — marked here, in the very first
-       render, before Play can be drawn and ask. */
-    if (first) markColoursNotice()
-    return first
-  })
+  const [walkthrough, setWalkthrough] = useState(() => !onboarded())
   /* Opened again from Settings, which is when the phone's walkthrough offers a way out at the top. */
   const [walkReplay, setWalkReplay] = useState(false)
   /*
@@ -1123,7 +1115,7 @@ export default function App() {
        sheet, in the same moment OK is pressed: waiting on the sheet alone,
        the line was said and remembered under it, and a sign-in from the demo
        then reloads the page, so a player who came in through the link was
-       never told where the old colours went. */
+       never told where the unit's colours are. */
     const signInOver = Boolean(signIn) || Boolean(joinOwed.current)
   /*
    * Whether the phone has ever had the Mac answer this session. A blip after
@@ -4647,6 +4639,11 @@ export default function App() {
           down={linkShowsDown}
           /* The startup card or the walkthrough is over the page, or the sign-in sheet is (the join link opens it the moment OK is pressed, and a sign-in from the demo reloads the page under it), or the hold tip above or the demo's line is up: the colours' one-time line waits for them all. */
           noteAbove={startupOver || signInOver || (!holdNoteSeen && holdOpensChannels) || (isDemo() && status === 'live' && !demoNoteSeen)}
+          /* The colours' line, pressed: Setup is a sheet, so open it AND land on the page. */
+          onOpenColours={() => {
+            setSheet('settings')
+            setSetupPage('colours')
+          }}
           onError={setError}
           /* A VP4's words about a preset picked from the list, for the band over the tiles (vp4Said). */
           said={vp4Said}

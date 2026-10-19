@@ -30,8 +30,29 @@ import { color, font, radius, space } from '../lib/theme'
  * bright ink rather than the hint's grey, because it is the answer to the
  * button just pressed.
  */
-export default function Note({ tone = 'hint', onDismiss, size, strong, children }) {
+/*
+ * `onPress` makes the words a button of their own, beside the cross: the
+ * colours' one-time line on Play opens Settings → Colors (ColoursNotice).
+ * Pressing the words is the way in; the cross is still the way out.
+ */
+export default function Note({ tone = 'hint', onDismiss, onPress, size, strong, children }) {
   const accent = tone === 'fault' ? color.fault : tone === 'warn' ? color.signal : color.rule
+  const words = (
+    <Text
+      style={{
+        /* Inside a button the button takes the room, and the words their own height. */
+        flex: onPress ? undefined : 1,
+        color: tone === 'hint' && !strong ? color.silkDim : color.silk,
+        fontSize: size || font.small,
+        fontWeight: strong ? '700' : undefined,
+        /* The default stays the exact 20 every other note has had, rather
+           than a ratio that would nudge all of them. */
+        lineHeight: size ? Math.round(size * 1.45) : 20
+      }}
+    >
+      {children}
+    </Text>
+  )
   return (
     <View
       accessibilityLiveRegion={tone === 'hint' ? 'none' : 'polite'}
@@ -47,19 +68,13 @@ export default function Note({ tone = 'hint', onDismiss, size, strong, children 
         paddingHorizontal: space.md
       }}
     >
-      <Text
-        style={{
-          flex: 1,
-          color: tone === 'hint' && !strong ? color.silkDim : color.silk,
-          fontSize: size || font.small,
-          fontWeight: strong ? '700' : undefined,
-          /* The default stays the exact 20 every other note has had, rather
-             than a ratio that would nudge all of them. */
-          lineHeight: size ? Math.round(size * 1.45) : 20
-        }}
-      >
-        {children}
-      </Text>
+      {onPress ? (
+        <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.6 : 1 })}>
+          {words}
+        </Pressable>
+      ) : (
+        words
+      )}
       {onDismiss ? (
         <Pressable
           accessibilityRole="button"

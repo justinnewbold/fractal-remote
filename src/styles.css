@@ -2458,6 +2458,42 @@ button.scene.current .scene-num {
   flex: 1 1 260px;
 }
 
+/*
+ * Where the unit's colours are (components/ColoursNotice): the line is the
+ * button to Settings → Colors, and a cross beside it puts it away. One row
+ * at 320 wide, the cross never wrapped under the words.
+ */
+.colours-notice {
+  flex-wrap: nowrap;
+}
+
+button.colours-notice-open {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+}
+
+@media (hover: hover) {
+  button.colours-notice-open:hover {
+    color: var(--silk);
+  }
+}
+
+button.chip.colours-notice-close {
+  flex: 0 0 auto;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  font-size: var(--f-4);
+  line-height: 1;
+}
+
 /* ---------- what the agent knows about you ---------- */
 
 .memory-settings {
@@ -5338,6 +5374,19 @@ ol.action-list li.destructive::marker {
   }
 }
 
+/* The colours' one-time line on Play (above, components/ColoursNotice): a
+   thumb's floor, and the cross a thumb wide as well. The words still fit
+   beside it on one line at 320. */
+@media (pointer: coarse) {
+  button.colours-notice-open {
+    min-height: 44px;
+  }
+  button.chip.colours-notice-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 @media (max-width: 700px) {
   /* Tabs shouldn't wrap into three rows and push the content off screen. */
   .views {
@@ -7823,8 +7872,8 @@ button.gig-block.off .gig-block-icon {
  * THE SCENE'S WORDS AT A STRENGTH THEY CAN BE READ AT, in the same looks.
  *
  * The live scene's number and name were its letters at 85%, which on the
- * old muted scene colours still read. On Fractal's red — every scene, for
- * every customer, in Match my unit — that came to 4.45:1, and 3.8 on
+ * old muted scene colours still read. On Fractal's red — every scene in
+ * Match my unit and Footswitch lights — that came to 4.45:1, and 3.8 on
  * Stompbox's plum; the phone draws the same tile at full strength (5.9).
  * So they are drawn at full strength here too.
  *

@@ -126,6 +126,8 @@ export default function Gig({
   /* Another of Play's one-time notes is up above this screen (App's hold tip,
      the demo's line), so the colours' one waits its turn. */
   noteAbove = false,
+  /* Settings → Colors, which the colours' one-time line opens when pressed. */
+  onOpenColours,
   onError: raiseInPage,
   /* A VP4's words App was handed — a preset picked from the list — for the band below: { words, at }. */
   said = null,
@@ -943,8 +945,8 @@ export default function Gig({
         that into a mystery about the app. A unit whose outputs aren't a block
         on a grid is not accused of anything.
       */}
-      {/* "Colours now match your unit", once, for somebody who had the app before. */}
-      <ColoursNotice waiting={noteAbove} />
+      {/* "Match your unit’s colors in Settings", once, in its turn: pressed, it opens Settings → Colors. */}
+      <ColoursNotice waiting={noteAbove} onOpen={onOpenColours} />
 
       {meterEid === null && chain === 'ok' && !shown.elsewhere && blocks.length && capabilities?.slotModel !== 'linear' ? (
         <p className="gig-note">

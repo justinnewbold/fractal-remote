@@ -789,15 +789,15 @@ export function lookCard(id, palette = currentPaletteId()) {
   ]
 }
 
-/** The looks, in the order the page offers them, with Fractal Remote second. */
+/** The looks, in the order the page offers them: the default, Fractal Remote, first, and Match my unit second. */
 export const LOOK_ORDER = Object.freeze(LOOKS.map((l) => l.id))
 
 /** Why somebody would wear a look, in the words that are true of this kind of unit (blockPalettes whyByUnit). */
 export const lookWhy = (look, palette = currentPaletteId()) => look?.whyByUnit?.[palette] || look?.why || ''
 
 /**
- * The line under the Settings row: "Match my unit · AM4 colours", "Sunlight ·
- * 2 of your own". `unitName` is the connected unit's own name where there is
+ * The line under the Settings row: "Fractal Remote", "Match my unit · AM4
+ * colours", "Sunlight · 2 of your own". `unitName` is the connected unit's own name where there is
  * one, which is shorter and truer than the three a gen-3 palette covers.
  * `capabilities` is the unit's, so the count is of the scenes the page shows
  * (pageSceneCount), as the page's own count is.
@@ -867,20 +867,32 @@ export const OFF_WORDS = Object.freeze({
 })
 
 /**
- * What "Put every colour back" puts back, under the button on both ends. It
- * said "Match my unit, the unit’s colours, and …", which is Match my unit
- * said twice.
+ * What "Put every colour back" puts back, under the button on both ends:
+ * the default look, which is Fractal Remote since 19 October 2026 (it was
+ * Match my unit, and the line said "every scene red"). Not "the unit’s
+ * colours" beside a look's name, which once said Match my unit twice.
  */
-export const PUT_BACK_WORDS = 'Back to Match my unit: every scene red, switched-off effects in their own color'
+export const PUT_BACK_WORDS = 'Back to Fractal Remote: the app’s own colors, switched-off effects in their own color'
 
 /**
- * The one-time line on Play after the colours changed, for somebody who had
- * the app before. "Settings → Colours" is held together by no-break spaces
- * (\u00a0): on a narrow screen it broke after "Settings", and a line that
- * starts "→ Colours" reads as somewhere else. It moves to the next line
- * whole instead, on both ends.
+ * THE ONE-TIME LINE ON PLAY, since 19 October 2026: where Match my unit is.
+ *
+ * "Can we change it so the fractal remote colors scene is the default? But
+ * then the first time the app loads, also let people know that they can
+ * change the theme to match their actual unit in settings?" So the colours
+ * start as the app's own (DEFAULT_LOOK), and once on every device, after
+ * the startup card, the walkthrough and Play's other one-time notes, Play
+ * says where the unit's colours are. Tapping it opens Settings → Colors;
+ * its cross puts it away (components/ColoursNotice, at both ends).
+ *
+ * It replaced "Colours now match your unit · Settings → Colours", which was
+ * said after the update that made Match my unit the default and is no longer
+ * true. One line at 320 wide at both ends — about 215 of the phone's 235
+ * points beside its cross at 13pt, and 185 of the browser's 206 beside its
+ * thumb-wide cross at 12px — where the old one took two, and with nothing in
+ * it a narrow screen can break in the wrong place.
  */
-export const COLOURS_NOTICE = 'Colors now match your unit · Settings\u00a0→\u00a0Colors'
+export const COLOURS_NOTICE = 'Match your unit’s colors in Settings'
 
 /** Whether a look is the one the phone still lifts (Tile), for a card drawn in a look not being worn. */
 export const liftedLook = (id) => id === FRACTAL_REMOTE_LOOK

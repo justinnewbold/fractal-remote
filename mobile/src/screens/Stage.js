@@ -133,6 +133,8 @@ export default function Stage({
   onOpenFix,
   onUnlock,
   onAccount,
+  /* Settings → Colors, which the colours' one-time line opens when pressed (components/ColoursNotice). */
+  onOpenColours,
   /*
    * NO COMPUTER HAS EVER SIGNED IN WITH THIS ACCOUNT, for certain: the email
    * to name, from App (lib/useNoComputer.js), and null for anything less
@@ -436,7 +438,7 @@ export default function Stage({
   /*
    * PLAY'S ONE-TIME NOTES TAKE TURNS: ONE AT A TIME, IN THIS ORDER.
    *
-   * On a 320 by 568 phone the demo card and "Colours now match your unit"
+   * On a 320 by 568 phone the demo card and the colours' one-time line
    * stood one above the other and pushed Tuner, Edit and Tap off the bottom
    * of Play. The browser had already learned it (its hold tip and its
    * colours line wait for the demo's line), and this is the phone doing the
@@ -449,7 +451,7 @@ export default function Stage({
    *   3. the demo card (UnlockOffer);
    *   4. the quick tip on holding a block (Coach, below);
    *   5. how the watch is used (its sheet, below);
-   *   6. "Colours now match your unit" (ColoursNotice), last.
+   *   6. "Match your unit’s colors in Settings" (ColoursNotice), last.
    *
    * The first three say whether they want the top of Play: true, false, or
    * null while the phone's storage has not answered them yet, so nothing
@@ -833,8 +835,8 @@ export default function Stage({
         <Vp4DemoNote waiting={noteBefore('vp4')} onWant={says.vp4} />
         {/* Paid in the demo with no account yet: see the component. */}
         <OnlyOnThisPhone onAccount={onAccount} onWant={says.only} />
-        {/* "Colours now match your unit", once, for somebody who had the app before: last, after every other note. */}
-        <ColoursNotice waiting={notesUp || coach || watchTip} unanswered={coachPending || watchPending} />
+        {/* "Match your unit’s colors in Settings", once: last, after every other note. Pressed, it opens Settings → Colors. */}
+        <ColoursNotice waiting={notesUp || coach || watchTip} unanswered={coachPending || watchPending} onOpen={onOpenColours} />
         {conflict ? <Note tone="fault">{conflict}</Note> : null}
 
         {/* ---------------------------------------------------------- preset */}

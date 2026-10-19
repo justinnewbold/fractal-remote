@@ -133,8 +133,11 @@ text goes on Google Play, where it can change any time (see below).
 Audio's sentence and the trademark line, straight after REQUIRES A COMPUTER.
 It was the very last paragraph, below "more" on both stores, so a reader met
 the brand dozens of times before the line that says the app is not theirs.
-And WHAT IT DOES says "Colors that match your Fractal unit", without "and
-its editor", which tied the app's look to Fractal's own software. **On the
+And WHAT IT DOES says "Colors that can match your Fractal unit (Settings →
+Colors)": since 18 October 2026 without the words that tied the app's look
+to Fractal's own editing software, and since 19 October 2026 with "can" and
+where, because the app starts in its own colors (Fractal Remote) now and
+matching the unit is a look you pick. **On the
 App Store this waits for the next version**: the live 1.87.11 page keeps the
 old Description, whose last line says "Not affiliated with, authorised by,
 or endorsed by Fractal Audio Systems", until then. On Google Play it can go
@@ -199,7 +202,7 @@ WHAT IT DOES
 • Tuner, with the note and how far off you are
 • Tap tempo, with the tempo on the button
 • Setlists and starred presets, kept with your account across devices
-• Colors that match your Fractal unit, so you find things by looking
+• Colors that can match your Fractal unit (Settings → Colors), so you find things by looking
 
 HOW IT WORKS
 A phone needs something between it and your Fractal unit: the desktop app. It runs on your Mac, Windows PC or Linux computer, holds the USB cable, and your phone talks to it. Get it at fractal.newbold.cloud/downloads.
@@ -523,6 +526,21 @@ computer that never chose now starts dark rather than on Auto. Anybody who
 chose Auto or Light keeps it. For the Notes for Review and What's New:
 "The app starts in Dark appearance; Settings, under Play screen, has Auto,
 Light and Dark."
+
+**For the next version's notes: the app's own colors by default** (19
+October 2026). "Can we change it so the fractal remote colors scene is the
+default? But then the first time the app loads, also let people know that
+they can change the theme to match their actual unit in settings?" A phone,
+browser or computer that never chose a look now starts in Fractal Remote,
+the app's own colors, rather than Match my unit; anybody who chose a look
+keeps it. Once on every device, after the startup card, the walkthrough
+and Play's other one-time notes, Play says "Match your unit’s colors in
+Settings", and pressing it opens Settings → Colors. Nothing is switched on
+or hidden by it: both looks were already in the app Apple reviewed. For
+the Notes for Review and What's New: "The app starts in its own colors
+(Fractal Remote); Match my unit, the colors of your Fractal unit, is in
+Settings → Colors." The Description above already says it ("Colors that
+can match your Fractal unit (Settings → Colors)").
 
 **For the next version's notes: the startup card** (18 October 2026). Since
 then the app opens, once on every device, on a card headed "An independent

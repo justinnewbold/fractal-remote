@@ -290,8 +290,17 @@ export const colourUnit = () => unit.key
 /* The look                                                             */
 /* ------------------------------------------------------------------ */
 
-/** The look being worn. */
+/** The look being worn: the one chosen, or Fractal Remote (DEFAULT_LOOK) for somebody who never chose one. */
 export const lookId = () => (isLookId(doc.theme?.id) ? doc.theme.id : DEFAULT_LOOK)
+
+/**
+ * Whether the colours have been read yet. Before, lookId says the default
+ * for everybody, which on the phone, whose storage lands a moment after the
+ * first screen, is not yet true of somebody who chose another look — and the
+ * one-time line on Play is only for somebody wearing Fractal Remote
+ * (components/ColoursNotice).
+ */
+export const looksLoaded = () => loaded
 export const currentLook = () => lookById(lookId())
 
 /**
@@ -455,11 +464,11 @@ export function clearYours(storage) {
 }
 
 /**
- * Put every colour back: Match my unit, the unit's colours, every scene red,
- * coloured outlines for switched-off effects. Each colour of yours becomes a
- * reset with today's time rather than vanishing, for the reason at the top of
- * this file. The remembered palette stays: it is a fact about the unit, not a
- * choice.
+ * Put every colour back: the default look, Fractal Remote (Match my unit
+ * until 19 October 2026), its own scene colours, coloured outlines for
+ * switched-off effects. Each colour of yours becomes a reset with today's
+ * time rather than vanishing, for the reason at the top of this file. The
+ * remembered palette stays: it is a fact about the unit, not a choice.
  */
 export function resetAll(storage) {
   const at = Date.now()

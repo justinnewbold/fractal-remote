@@ -7897,7 +7897,8 @@ export function run(test) {
     const { inkOn, lighter, readHex } = await import('../mobile/src/lib/vivid.js')
     const { blockColor } = await import('../src/lib/blockColors.js')
     const { loadLooks, setColourUnit } = await import('../src/lib/looks.js')
-    loadLooks({ getItem: () => null, setItem: () => {} })
+    /* In Match my unit, which draws the palette as authored (the default is Fractal Remote since 19 October 2026). */
+    loadLooks({ getItem: (k) => (k === 'fractal.colours' ? JSON.stringify({ v: 1, theme: { id: 'unit', at: 1 } }) : null), setItem: () => {} })
     setColourUnit('fm3')
     const dark = '#15181d'
     for (const slug of ['plex', 'peq', 'gate', 'enhancer']) assert.equal(inkOn(blockColor(slug).fill), dark, `${slug} has white letters on a light tile`)
@@ -18338,7 +18339,8 @@ export function run(test) {
    * plain and imported — the phone's own generated copy, so these hold the
    * file the phone actually runs.
    */
-  const coloursOnTheBench = async () => {
+  /* `look` wears one from the start, for a test about that look: since 19 October 2026 nothing chosen is Fractal Remote. */
+  const coloursOnTheBench = async ({ look } = {}) => {
     const [looks, page, blocks, scenes, palettes, ink] = await Promise.all([
       import('../mobile/src/lib/looks.js'),
       import('../mobile/src/lib/colourPage.js'),
@@ -18352,6 +18354,7 @@ export function run(test) {
     /* A clean start: nothing chosen, no unit — the colours are one store for the whole module. */
     looks.loadLooks(storage)
     looks.setColourUnit(null)
+    if (look) looks.setLook(look, storage)
     return { ...looks, ...page, ...blocks, ...scenes, ...palettes, ...ink, storage }
   }
 
@@ -18377,6 +18380,8 @@ export function run(test) {
   test('the Settings row names the look, and the unit when the look is the unit’s', async () => {
     const c = await coloursOnTheBench()
     c.setColourUnit('am4')
+    assert.equal(c.coloursStatus({ unitName: 'AM4' }), 'Fractal Remote', 'somebody who never chose a look is not told the default, Fractal Remote')
+    c.setLook('unit', c.storage)
     assert.equal(c.coloursStatus({ unitName: 'AM4' }), 'Match my unit · AM4 colors')
     assert.equal(c.coloursStatus(), 'Match my unit · AM4 colors', 'with no name, the palette’s name')
     c.setLook('sunlight', c.storage)
@@ -18386,7 +18391,7 @@ export function run(test) {
   })
 
   test('a look goes on in one tap, and Undo puts the last one back', async () => {
-    const c = await coloursOnTheBench()
+    const c = await coloursOnTheBench({ look: 'unit' })
     c.setColourUnit('am4')
     assert.equal(c.blockColor('drive').fill, c.PALETTES.am4.drive, 'Match my unit is not the AM4’s colours on an AM4')
     const done = c.wearLook('sunlight', c.storage)
@@ -18406,9 +18411,9 @@ export function run(test) {
     assert.match(page, /Math\.max\(0, offer\.at \+ UNDO_MS - Date\.now\(\)\)/, 'Undo does not go after UNDO_MS')
     assert.match(page, /setLook\(offer\.was, sync\)/, 'Undo does not put the last look back on')
     assert.match(page, /useEffect\(\(\) => \(\) => offerUndo\(null\), \[\]\)/, 'leaving the page leaves the Undo offer up over the next one')
-    /* Every look is a card, Fractal Remote second, and each card is drawn in its own look. */
+    /* Every look is a card, Fractal Remote, the default, first and Match my unit second, and each card is drawn in its own look. */
     assert.match(page, /\{LOOKS\.map\(\(look\) => \(\s*<LookCard key=\{look\.id\}/)
-    assert.deepEqual(c.LOOK_ORDER.slice(0, 2), ['unit', 'fractalremote'], 'Fractal Remote is not straight after Match my unit')
+    assert.deepEqual(c.LOOK_ORDER.slice(0, 2), ['fractalremote', 'unit'], 'Fractal Remote, the default, is not first, with Match my unit straight after it')
     assert.match(page, /asLook=\{look\.id\}/, 'a look’s card is drawn in the look being worn rather than its own')
   })
 
@@ -18431,8 +18436,9 @@ export function run(test) {
     c.loadLooks(c.storage)
     assert.equal(c.looksDoc().families.drive.fill, null)
     assert.ok(Number.isFinite(c.looksDoc().families.drive.at), 'the reset lost its time on the way back in')
-    assert.equal(c.blockColor('drive').fill, c.PALETTES.gen3.drive, 'the drive is not the unit’s again')
-    assert.equal(c.lookId(), 'unit')
+    /* Back to the default, Fractal Remote, since 19 October 2026: the app's own drive. */
+    assert.equal(c.blockColor('drive').fill, c.FRACTAL_REMOTE.drive.fill, 'the drive is not the app’s own again')
+    assert.equal(c.lookId(), 'fractalremote')
 
     /* Clear them: your colours go, the look stays. */
     c.setLook('sunlight', c.storage)
@@ -18452,7 +18458,7 @@ export function run(test) {
   })
 
   test('the colour sheet offers exactly the checked swatches, each one named for a screen reader', async () => {
-    const c = await coloursOnTheBench()
+    const c = await coloursOnTheBench({ look: 'unit' })
     c.setColourUnit('fm3')
     const drive = c.familyTarget('Drive 2')
     assert.deepEqual(drive, { kind: 'family', slug: 'drive', name: 'Drive' })
@@ -18532,7 +18538,7 @@ export function run(test) {
   })
 
   test('the sheet warns, in a line, about a red next to the drive, and never about the unit’s own colour', async () => {
-    const c = await coloursOnTheBench()
+    const c = await coloursOnTheBench({ look: 'unit' })
     c.setColourUnit('fm3')
     const amp = c.familyTarget('amp')
     assert.equal(c.nextToWarning(amp, '#cc0000'), 'Hard to tell from Drive next to it', 'a red amp next to the drive says nothing')
@@ -18608,7 +18614,7 @@ export function run(test) {
   })
 
   test('scenes are all red like the unit, or a colour each, in one write', async () => {
-    const c = await coloursOnTheBench()
+    const c = await coloursOnTheBench({ look: 'unit' })
     c.setColourUnit('fm3')
     assert.equal(c.scenesAllRed(), true, 'Match my unit’s scenes are not all red')
     const cvd = c.LOOKS.find((l) => l.id === 'cvd').scenes
@@ -18631,28 +18637,37 @@ export function run(test) {
     c.setColourUnit(null)
   })
 
-  test('“Colours now match your unit”, once, and only to somebody who had the app before', () => {
+  test('“Match your unit’s colors in Settings”, once, to everybody in Fractal Remote, a first run included, and it opens Settings → Colors', () => {
     const coach = read('mobile/src/lib/coach.js')
-    /* The phone's store carries only keys that start fractal. */
-    assert.match(coach, /const COLOURS_KEY = 'fractal\.coloursNoticed'/)
-    assert.match(coach, /export function markColoursNotice\(\) \{\s+coloursSettled = true/, 'the first run’s mark can lose to Play’s read')
-    /* A first run never saw the old colours. */
-    /* Read with the startup card's answer since 18 October 2026, in one Promise.all (see independentDue). */
-    assert.match(read('mobile/App.js'), /walkthroughSeen\(\), independentNoticeSeen\(\)\]\)\.then\(\(\[seen, noticed\]\) => \{[\s\S]{0,200}if \(!seen\) markColoursNotice\(\)/, 'a first run is told the colours changed')
+    /* The phone's store carries only keys that start fractal. A new key on 19 October 2026: the line before it is no longer true, so everybody hears this one once. */
+    assert.match(coach, /const COLOURS_KEY = 'fractal\.coloursOffer\.v1'/)
+    assert.ok(!/fractal\.coloursNoticed/.test(coach.replace(/\/\*[\s\S]*?\*\//g, ' ')), 'the line is kept under the old key, so somebody who heard the old words never hears these')
+    assert.match(coach, /export function markColoursNotice\(\) \{\s+coloursSettled = true/, 'the mark can lose to a second read in the same launch')
+    /* A first run is told too, after the walkthrough: App no longer puts it away unsaid. */
+    const app = read('mobile/App.js')
+    assert.ok(!/markColoursNotice/.test(app), 'a first run is never told where Match my unit is')
+    assert.match(app, /walkthroughSeen\(\), independentNoticeSeen\(\)\]\)\.then\(\(\[seen, noticed\]\) => \{\s+setIndependentDue\(!noticed\)\s+setSeenWalk\(seen\)/)
+    /* Pressed, it opens Settings on Colors. */
+    assert.match(app, /onOpenColours=\{\(\) => openSettings\('colours'\)\}/, 'the line does not open Settings → Colors')
     /* Last of Play's one-time notes since 18 October 2026: it waits for every other (test/independent.mjs, the startup messages take turns). */
-    assert.match(read('mobile/src/screens/Stage.js'), /<OnlyOnThisPhone onAccount=\{onAccount\} onWant=\{says\.only\} \/>[\s\S]{0,160}<ColoursNotice waiting=\{notesUp \|\| coach \|\| watchTip\} unanswered=\{coachPending \|\| watchPending\} \/>/, 'Play does not say the colours changed')
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /<OnlyOnThisPhone onAccount=\{onAccount\} onWant=\{says\.only\} \/>[\s\S]{0,200}<ColoursNotice waiting=\{notesUp \|\| coach \|\| watchTip\} unanswered=\{coachPending \|\| watchPending\} onOpen=\{onOpenColours\} \/>/, 'Play does not say where Match my unit is, or it opens nothing')
     const notice = read('mobile/src/components/ColoursNotice.js')
     /* Remembered once it is drawn, not when the storage answers: a note that comes up in that moment would leave it said and never seen. */
     assert.match(notice, /if \(alive && !v\) setDue\(true\)/)
-    assert.match(notice, /const drawn = due && !waiting && \(launch === 'showing' \|\| !unanswered\)/)
+    /* Only in Fractal Remote, and only once the phone's storage has said which look it is. */
+    assert.match(notice, /const known = looksLoaded\(\)\n\s+const elsewhere = known && !isFractalRemoteLook\(\)\n\s+const drawn = due && known && !elsewhere && !waiting && \(launch === 'showing' \|\| !unanswered\)/, 'the line is said in another look, or before the look is known')
     assert.match(notice, /useEffect\(\(\) => \{\s+if \(!drawn \|\| launch !== null\) return\s+markColoursNotice\(\)\s+launch = 'showing'\s+\}, \[drawn\]\)/, 'the line is not remembered the moment it is shown')
-    assert.match(notice, /<Note\s+onDismiss=/, 'the line cannot be put away')
-    /* "Settings → Colours" held together, so a narrow screen never breaks it after "Settings". */
-    assert.match(read('src/lib/colourPage.js'), /export const COLOURS_NOTICE = 'Colors now match your unit · Settings\\u00a0→\\u00a0Colors'/)
+    assert.match(notice, /if \(!due \|\| !elsewhere \|\| launch === 'gone'\) return\s+markColoursNotice\(\)\s+launch = 'gone'/, 'somebody in another look is asked again later')
+    assert.match(notice, /<Note\s+onPress=\{\(\) => \{\s+away\(\)\s+onOpen\?\.\(\)\s+\}\}\s+onDismiss=\{away\}/, 'the line cannot be pressed, or put away')
+    /* The Note's words are a button when it is given onPress, beside the cross. */
+    const note = read('mobile/src/components/Note.js')
+    assert.match(note, /\{onPress \? \(\s+<Pressable accessibilityRole="button" onPress=\{onPress\}/, 'a Note’s words cannot be pressed')
+    assert.match(read('src/lib/colourPage.js'), /export const COLOURS_NOTICE = 'Match your unit’s colors in Settings'/)
   })
 
   test('a scene painted while a preset is loaded asks which presets, and the phone’s generated copy keeps them apart', async () => {
-    const c = await coloursOnTheBench()
+    const c = await coloursOnTheBench({ look: 'unit' })
     c.setColourUnit('am4')
     const here = { number: 7, words: '007 B4 Crunch' }
     const two = c.sceneTarget(1, { preset: here })

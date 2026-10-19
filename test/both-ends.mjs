@@ -1169,7 +1169,7 @@ export function run(test) {
       'Any color…': 'the browser’s free colour picker, which the phone cannot have without a build (AREAS above)',
       'Pick any color': 'the label on that picker',
       'Or type its color code': 'the label on the box beside it',
-      'Got it': 'the browser’s one-time notes on Play are put away with Got it (the hold tip’s, the demo’s); the phone’s Note has a cross',
+      Dismiss: 'what the browser’s cross on the colours’ one-time line says to a screen reader; the phone’s Note says the same from its own file (components/Note)',
       'Scene {}{}{}': 'what a screen reader says for a scene tile, its name and "your colour" with it; the phone’s Tile says its own caption and label'
     }
     const PHONE_ONLY = {

@@ -70,17 +70,19 @@ export function markWatchTip() {
 }
 
 /*
- * "Colours now match your unit · Settings → Colours", once, on Play, after
- * the update that changed them. Every tile on the stage changed colour in
- * one go, and somebody who had learned the old ones deserves to be told why
- * and where the way back is (Fractal Remote, the app's own look as it was).
+ * "Match your unit’s colors in Settings", once, on Play (components/
+ * ColoursNotice): the colours start as the app's own, Fractal Remote, since
+ * 19 October 2026, and Match my unit is a look on Settings → Colors.
  *
- * Only for somebody who HAD the app: a first run never saw the old colours,
- * so App marks this the moment it finds the walkthrough not yet done.
- * Remembered in memory too, because that write and the Play screen's read
- * can meet on the first launch and the read must not win.
+ * For everybody, a first run included, after the startup card and the
+ * walkthrough (App draws those in place of Play, so the line is never under
+ * them). A new key: the line before it ("Colours now match your unit",
+ * under 'fractal.coloursNoticed') stopped being true when the default
+ * changed, so somebody who heard that one hears this one once as well.
+ * Remembered in memory too, so the write and a second read in the same
+ * launch can never disagree.
  */
-const COLOURS_KEY = 'fractal.coloursNoticed'
+const COLOURS_KEY = 'fractal.coloursOffer.v1'
 let coloursSettled = false
 
 export async function coloursNoticeSeen() {
@@ -104,8 +106,8 @@ export function markColoursNotice() {
  * this phone that has not reached an account, first because it is money; the
  * demo VP4's sentence, what a real VP4 does not do from the app yet, before
  * anything is offered for one; then the demo card. After them, in Stage, the
- * quick tip on holding a block, how the watch is used, and last "Colours now
- * match your unit".
+ * quick tip on holding a block, how the watch is used, and last "Match your
+ * unit’s colors in Settings".
  */
 export const NOTE_TURNS = Object.freeze(['only', 'vp4', 'offer'])
 
