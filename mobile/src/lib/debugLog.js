@@ -171,6 +171,7 @@ export function formatMacDiag(d) {
      * rather than a guess.
      */
     typeof d.metersWanted === 'boolean' ? `level readings: ${d.metersWanted ? 'on' : 'off'}` : null,
+    ...linuxMidiLines(d),
     d.listError ? `port listing error: ${d.listError}` : null,
     reopens
       ? `port lost and reopened: ${reopens.length} time${reopens.length === 1 ? '' : 's'}`
@@ -180,6 +181,111 @@ export function formatMacDiag(d) {
   ]
     .filter((l) => l !== null)
     .join('\n')
+}
+
+/*
+ * WHAT LINUX HOLDS FOR THE UNIT'S REPLIES: ForgeFX's /diag `linuxMidi`, said
+ * only by a computer on Linux reaching its unit over USB-MIDI (computer app
+ * 1.87.47 on). "The same names are not showing up again at all. on the AM4"
+ * (Justin, 21 October 2026): on his Raspberry Pi 3 every AM4 preset read
+ * came back as 3,095 of 12,352 bytes, because the kernel takes a USB-MIDI
+ * port's input into a buffer one memory page long and drops the rest. Which
+ * Pi, which buffer, and whether anything was lost could only be had by
+ * somebody typing into a Terminal on it. Now they are in the report:
+ *
+ *   the page size, which is that buffer unless the Pi was told otherwise;
+ *   snd-seq-midi's input buffer, which is what the one-line fix sets;
+ *   the unit's own input lines in /proc/asound (bytes in, buffer, overruns);
+ *   RtMidi's input pool lines, the queue that can overflow once the buffer
+ *   holds a whole dump (a Pi 5's 16 KB pages, or a Pi given the fix).
+ *
+ * And which road the input takes, ForgeFX's own ALSA client or RtMidi's,
+ * when a line the server said is still in its log to say so, and "not
+ * said" when it is not: /diag lists only RtMidi's queues, so without that
+ * line a reader would take RtMidi's 200 cells for the input on a computer
+ * whose input is ForgeFX's 2000. RtMidi's lines say whose they are for the
+ * same reason, and that they are not the input while ForgeFX's client is.
+ * Bounded, so the summary stays a summary (shared/report-rules.mjs
+ * COMPUTER_HEAD_LINES): at most LINUX_MIDI_MOST ports and pools each.
+ * Nothing at all from a computer that does not say: a Mac, Windows,
+ * serial, or an older one.
+ */
+const LINUX_MIDI_MOST = 4
+function linuxMidiLines(d) {
+  const lm = d.linuxMidi
+  if (!lm || typeof lm !== 'object') return []
+  const bytes = (n) => (Number.isInteger(n) ? `${n} bytes` : null)
+  const plain = (line) => String(line).trim().replace(/\s*:\s*/, ': ').replace(/\s+/g, ' ')
+  const out = ['linux midi:']
+  const road = inputRoad(d.recent)
+  out.push(`  input: ${road ?? "not said (the line that says it has left the computer's log)"}`)
+  out.push(`  page size: ${bytes(lm.pageSize) ?? 'not known'}`)
+  out.push(
+    `  snd-seq-midi input buffer: ${bytes(lm.seqMidiInputBufferSize) ?? 'not shown (the module is built in or not loaded)'}` +
+      (Number.isInteger(lm.seqMidiOutputBufferSize) ? ` · output ${lm.seqMidiOutputBufferSize} bytes` : '')
+  )
+  const ports = Array.isArray(lm.ports) ? lm.ports.filter((p) => p && typeof p === 'object') : []
+  for (const p of ports.slice(0, LINUX_MIDI_MOST)) {
+    const lines = Array.isArray(p.lines) ? p.lines.map(plain) : []
+    out.push(`  unit's port: card ${p.card ?? '?'} ${p.id || p.name || '?'} ${p.device || ''}`.trimEnd() + (lines.length ? ` · ${lines.join(' · ')}` : ' · no input lines'))
+  }
+  if (!ports.length) out.push("  unit's port: not found in /proc/asound")
+  if (ports.length > LINUX_MIDI_MOST) out.push(`  … and ${ports.length - LINUX_MIDI_MOST} more`)
+  const pools = Array.isArray(lm.inputPools) ? lm.inputPools.map(plain) : []
+  const theirs = road?.startsWith("ForgeFX's") ? "RtMidi's queue (not the input now)" : "RtMidi's queue"
+  for (const line of pools.slice(0, LINUX_MIDI_MOST)) out.push(`  ${theirs}: ${line}`)
+  if (!pools.length) out.push(`  ${theirs}: none listed`)
+  return out
+}
+
+/*
+ * Which road the unit's replies take in, from the newest line the server
+ * said about it: its MIDI port's open line ("· input via ForgeFX's ALSA
+ * client (queue 2000)", or nothing after the ports, which is RtMidi), or
+ * the own reader giving way to RtMidi afterwards. A plain open line says
+ * why the reader is not in use when the server said so just before it
+ * (readerRefused): "spawn python3 ENOENT" on a computer with no python3.
+ * null when no such line is left in the log: its ring is 400 lines, which
+ * an AM4's traffic fills in seconds, and a guess is worse than nothing.
+ */
+function inputRoad(recent) {
+  if (!Array.isArray(recent)) return null
+  for (let i = recent.length - 1; i >= 0; i--) {
+    const line = String(recent[i] ?? '')
+    const gave = /\[forgefx\]\[midi\] own ALSA reader (.+?) — back to RtMidi input/.exec(line)
+    if (gave) return `RtMidi (ForgeFX's ALSA client ${gave[1]})`
+    if (!/\[forgefx\]\[midi\] opened:/.test(line)) continue
+    const via = /· input via (ForgeFX's ALSA client \(queue \d+\))/.exec(line)
+    if (via) return via[1]
+    const why = readerRefused(recent, i)
+    return why === null ? 'RtMidi' : `RtMidi (ForgeFX's ALSA client could not start${why ? `: ${why}` : ''})`
+  }
+  return null
+}
+
+/*
+ * Why ForgeFX's own reader did not start for the open line at `at`, from
+ * what the server said in the few lines before it, back to the open or
+ * give-way line before that: "alsa reader: not started: …", "stopped
+ * before it was ready (…)" or "no answer in …ms", and then "own ALSA reader
+ * unavailable". The reason, '' when only the last of those is left, and
+ * null when the reader was not tried at all (it was turned off, or the
+ * port has no sequencer address), which is plain RtMidi.
+ */
+const READER_LOOK_BACK = 20
+function readerRefused(recent, at) {
+  let tried = false
+  for (let i = at - 1; i >= 0 && i >= at - READER_LOOK_BACK; i--) {
+    const line = String(recent[i] ?? '')
+    if (/\[forgefx\]\[midi\] (opened:|own ALSA reader .+ — back to RtMidi input)/.test(line)) break
+    if (/\[forgefx\]\[midi\] own ALSA reader unavailable/.test(line)) tried = true
+    const why = /\[forgefx\]\[midi\] alsa reader: (?:not started: (.+)|(stopped before it was ready .+|no answer in .+))$/.exec(line)
+    if (why) {
+      const said = String(why[1] ?? why[2]).trim()
+      return said.length > 120 ? `${said.slice(0, 119)}…` : said
+    }
+  }
+  return tried ? '' : null
 }
 
 /**

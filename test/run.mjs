@@ -1618,6 +1618,23 @@ test('the server is told to serve this app — the whole of local mode', () => {
   assert.equal(env.PATH, '/bin', 'the rest of the environment must survive')
 })
 
+/*
+ * On Linux ForgeFX starts one Python, its ALSA reader (`python3 -c`), from
+ * the server's working folder: the home folder, for the start-up entry. A
+ * `signal.py` left there is run in place of Python's own (tried, with
+ * `python3 -c`), and so is anything PYTHONPATH or the user's own
+ * site-packages name. Its children are kept to Python's own modules.
+ */
+test('the device server’s Python is kept to its own modules', () => {
+  const env = host.serverEnv({ env: { PATH: '/bin', PYTHONPATH: '/home/pi', PYTHONHOME: '/home/pi/py', LANG: 'C.UTF-8' }, port: 5056, dist: '/app/dist', asNode: true })
+  assert.equal(env.PYTHONSAFEPATH, '1', 'the working folder is on the reader’s module path')
+  assert.equal(env.PYTHONNOUSERSITE, '1', 'the user’s own site-packages are on the reader’s module path')
+  assert.ok(!('PYTHONPATH' in env) && !('PYTHONHOME' in env), 'PYTHONPATH or PYTHONHOME reached the reader')
+  assert.equal(env.PATH, '/bin', 'the rest of the environment must survive')
+  assert.equal(env.LANG, 'C.UTF-8')
+  assert.equal(env.ELECTRON_RUN_AS_NODE, '1')
+})
+
 test('ForgeFX is started already able to host a phone', async () => {
   /*
    * The three account variables used to be a `.env` edit on the Mac — the one
@@ -2192,6 +2209,87 @@ test('the debug report carries the computer’s own account of its port', async 
   assert.match(formatMacDiag({}), /port lost and reopened: this computer app does not say/)
   assert.match(formatMacDiag({}), /server log: this computer app does not keep one/)
   assert.match(formatMacDiag({ reopens: [], recent: [] }), /port lost and reopened: 0 times\nserver log: nothing said yet/)
+
+  /*
+   * What Linux holds for the unit's replies (ForgeFX's /diag linuxMidi, a
+   * computer on Linux over USB-MIDI only). "The same names are not showing
+   * up again at all. on the AM4": a Raspberry Pi 3 cut every AM4 preset to
+   * 3,095 bytes, and which buffer did it could only be had in a Terminal.
+   */
+  const pi3 = {
+    transportOpen: true,
+    transportLabel: 'AM4:AM4 MIDI 1 20:0',
+    resolved: { transport: 'midi', id: 'AM4:AM4 MIDI 1 20:0' },
+    ports: { serial: [] },
+    reopens: [],
+    linuxMidi: {
+      pageSize: 4096,
+      pageSizeFrom: 'auxv',
+      seqMidiInputBufferSize: 4096,
+      seqMidiOutputBufferSize: 4096,
+      ports: [{ card: 1, id: 'AM4', name: 'AM4', device: 'midi0', lines: ['Input 0', 'Rx bytes     : 3095', 'Buffer size  : 4096', 'Overruns     : 0'] }],
+      inputPools: ['client 129 "RtMidi Input Client" input pool: 0 of 200 cells in use, peak 169, 0 alloc failures']
+    },
+    recent: [
+      '2026-10-21T15:10:00.000Z log [forgefx][midi] opened: in="AM4:AM4 MIDI 1 20:0"(1) out="AM4:AM4 MIDI 1 20:0"(1) · input via ForgeFX\'s ALSA client (queue 2000)',
+      '2026-10-21T15:10:01.000Z log [forgefx][midi] RX 13B: f0 00 01 74 15 77'
+    ]
+  }
+  const linux = formatMacDiag(pi3)
+  assert.match(linux, /\nlinux midi:\n  input: ForgeFX's ALSA client \(queue 2000\)\n  page size: 4096 bytes\n  snd-seq-midi input buffer: 4096 bytes · output 4096 bytes\n/)
+  assert.match(linux, /\n  unit's port: card 1 AM4 midi0 · Input 0 · Rx bytes: 3095 · Buffer size: 4096 · Overruns: 0\n/)
+  /* RtMidi's queue says whose it is, and that it is not the input while ForgeFX's client reads: /diag lists only RtMidi's. */
+  assert.match(linux, /\n  RtMidi's queue \(not the input now\): client 129 "RtMidi Input Client" input pool: 0 of 200 cells in use, peak 169, 0 alloc failures\n/)
+  /* Above the port history and the server's own lines, where a summary is read first. */
+  assert.ok(linux.indexOf('linux midi:') < linux.indexOf('port lost and reopened'))
+  /* The road as the newest line says it: the own reader giving way afterwards is RtMidi; a plain open line is RtMidi. */
+  const gave = formatMacDiag({ ...pi3, recent: [...pi3.recent, "2026-10-21T15:10:05.000Z warn [forgefx][midi] own ALSA reader heard nothing from the unit — back to RtMidi input"] })
+  assert.match(gave, /\n  input: RtMidi \(ForgeFX's ALSA client heard nothing from the unit\)\n/)
+  assert.match(gave, /\n  RtMidi's queue: client 129 /, 'RtMidi’s queue is said not to be the input on a computer whose input it is')
+  const plainOpen = formatMacDiag({ ...pi3, recent: ['… log [forgefx][midi] opened: in="AM4"(1) out="AM4"(1)'] })
+  assert.match(plainOpen, /\n  input: RtMidi\n/)
+  /* A reader that never started says why, from the lines just before its port's open (a computer with no python3, a reader that went quiet). */
+  const refused = (...why) => formatMacDiag({ ...pi3, recent: [
+    '… log [forgefx][midi] opened: in="AM4"(1) out="AM4"(1) · input via ForgeFX\'s ALSA client (queue 2000)',
+    '… warn [forgefx][midi] alsa reader: lost input (-12)',
+    '… warn [forgefx][midi] own ALSA reader stopped (exit 1) — back to RtMidi input',
+    ...why,
+    '… log [forgefx][midi] opened: in="AM4"(1) out="AM4"(1)'
+  ] })
+  assert.match(refused('… warn [forgefx][midi] alsa reader: not started: spawn python3 ENOENT', '… warn [forgefx][midi] own ALSA reader unavailable — using RtMidi input'), /\n  input: RtMidi \(ForgeFX's ALSA client could not start: spawn python3 ENOENT\)\n/)
+  assert.match(refused('… warn [forgefx][midi] alsa reader: no answer in 4000ms', '… log [forgefx][midi] TX 6B: f0 00 01 74 15 f7', '… warn [forgefx][midi] own ALSA reader unavailable — using RtMidi input'), /\n  input: RtMidi \(ForgeFX's ALSA client could not start: no answer in 4000ms\)\n/)
+  assert.match(refused('… warn [forgefx][midi] alsa reader: stopped before it was ready (no sequencer)', '… warn [forgefx][midi] own ALSA reader unavailable — using RtMidi input'), /\n  input: RtMidi \(ForgeFX's ALSA client could not start: stopped before it was ready \(no sequencer\)\)\n/)
+  assert.match(refused('… warn [forgefx][midi] own ALSA reader unavailable — using RtMidi input'), /\n  input: RtMidi \(ForgeFX's ALSA client could not start\)\n/)
+  /* Not tried (turned off, or no sequencer address): plain RtMidi, and nothing from the open before it is taken for this one's reason. */
+  assert.match(refused(), /\n  input: RtMidi\n/)
+  /* No such line left in the ring (an AM4 fills it in seconds): not said, rather than guessed, and RtMidi's queue is not taken for the input. */
+  const unsaid = formatMacDiag({ ...pi3, recent: ['… log [forgefx][midi] RX 13B: f0'] })
+  assert.match(unsaid, /\nlinux midi:\n  input: not said \(the line that says it has left the computer's log\)\n/)
+  assert.match(unsaid, /\n  RtMidi's queue: client 129 "RtMidi Input Client" input pool: /)
+  /* The module built in or not loaded, nothing found, nothing listed: said, not left out. */
+  const bare = formatMacDiag({ linuxMidi: { pageSize: 16384, seqMidiInputBufferSize: null, seqMidiOutputBufferSize: null, ports: [], inputPools: [] } })
+  assert.match(bare, /\nlinux midi:\n  input: not said \(the line that says it has left the computer's log\)\n  page size: 16384 bytes\n  snd-seq-midi input buffer: not shown \(the module is built in or not loaded\)\n  unit's port: not found in \/proc\/asound\n  RtMidi's queue: none listed\n/)
+  /* Bounded, so the summary stays a summary (shared/report-rules.mjs COMPUTER_HEAD_LINES). */
+  const lots = formatMacDiag({ linuxMidi: { ...pi3.linuxMidi, ports: Array(9).fill(pi3.linuxMidi.ports[0]), inputPools: Array(9).fill(pi3.linuxMidi.inputPools[0]) }, recent: pi3.recent })
+  assert.equal(lots.split('\n').filter((l) => /^ {2}unit's port: /.test(l)).length, 4)
+  assert.match(lots, /\n {2}… and 5 more\n/)
+  assert.equal(lots.split('\n').filter((l) => /input pool:/.test(l)).length, 4)
+  const block = lots.split('\n')
+  const from = block.indexOf('linux midi:')
+  let to = from + 1
+  while (to < block.length && block[to].startsWith('  ')) to++
+  assert.ok(to - from <= 13, `the Linux lines are ${to - from} long, more than the 13 the report's head allows for`)
+  /* A Mac, Windows, serial, or a computer app before 1.87.47: nothing new. */
+  for (const d of [{}, { recent: pi3.recent }, { linuxMidi: null }, { ...pi3, linuxMidi: undefined }]) {
+    assert.doesNotMatch(formatMacDiag(d), /linux midi|\n {2}input: /, 'a computer that says nothing of Linux has something said for it')
+  }
+  assert.doesNotMatch(out, /linux midi/, 'a Mac’s report says something about Linux')
+
+  /* And the piece of a cut SysEx the computer's MIDI input dropped is kept from the middle of a long log, as its held lines are. */
+  const rules = await import('../shared/report-rules.mjs')
+  assert.ok(rules.COMPUTER_HELD.test('2026-10-21T15:10:02.000Z log [forgefx][midi] dropped 768B with no F7, held by the MIDI input and joined to the next message (a cut SysEx): f0 00 01 74 15 78'))
+  assert.ok(rules.COMPUTER_HELD.test('… log [forgefx][am4] dump scene names: not asked again, the computer\'s MIDI buffer is 4096 bytes, too small for an AM4 preset (12352).'))
+  assert.ok(!rules.COMPUTER_HELD.test('… log [forgefx][midi] RX 64B: f0 00 01 74 15'), 'every MIDI line counts as held')
 
   const panel = readSrc(new URL('../src/components/DebugLog.jsx', import.meta.url), 'utf8')
   assert.match(panel, /const t = text\(await macReport\(\)\)/, 'Copy Logs does not ask the computer')
@@ -8004,6 +8102,65 @@ onTheBench('on an Axe-Fx II the Mac window never asks for the computer’s copy 
   await clock.advance(3000)
   await ds.refreshLoadedSceneNames(21)
   assert.equal(asked('GET /preset/grid'), 0, 'an Axe-Fx II was asked for a second full read of the preset')
+})
+
+/*
+ * An AM4's names off its loaded preset are believed only under the preset on
+ * screen (lib/forgefx.js readSceneNames, test/link-now.mjs), so the store
+ * says what that is when the answer lands, not when it was asked; and an
+ * answer that lands after the next preset is not put up at all.
+ */
+onTheBench('the browser’s scene names that land after the next preset are not put on its tiles', async () => {
+  let land = null
+  let said = null
+  ds.attachDriver({
+    readSceneNames: (n, opts) => {
+      said = opts?.shown
+      return new Promise((go) => (land = go))
+    }
+  })
+  ds.put({ preset: { number: 53, name: 'Recto 1' }, sceneNames: ['', '', '', ''] })
+  const read = ds.refreshSceneNames(53)
+  assert.equal(typeof said, 'function', 'the read is not told what is on screen')
+  assert.equal(said(), 'Recto 1')
+  ds.put({ preset: { number: 54, name: 'Revv Gen' }, sceneNames: ['', '', '', ''] })
+  assert.equal(said(), undefined, 'the read is told a preset already left is on screen')
+  land(['FREAK ON A LEASH', 'BLIND', '', ''])
+  await read
+  assert.deepEqual(ds.getSnapshot().sceneNames, ['', '', '', ''], 'the last song’s names went on this song’s tiles')
+  /* Still the same preset: put up, as before. */
+  const again = ds.refreshSceneNames(54)
+  land(['LEAD', '', '', ''])
+  await again
+  assert.equal(ds.getSnapshot().sceneNames[0], 'LEAD')
+
+  /*
+   * Saved over another slot while the read was out: the same buffer under a
+   * new number, so its names are still its names and go up, as they did
+   * before the drop above. The read is told so; and not after another preset.
+   */
+  let still = null
+  ds.attachDriver({
+    readSceneNames: (n, opts) => {
+      still = opts?.still
+      return new Promise((go) => (land = go))
+    }
+  })
+  ds.put({ preset: { number: 53, name: 'Recto 1' }, sceneNames: ['', '', '', ''] })
+  const saved = ds.refreshSceneNames(53)
+  await ds.presetSaved(60, 'Recto 1')
+  assert.equal(ds.getSnapshot().preset.number, 60)
+  assert.equal(still(), true, 'the read is told a preset saved over another slot has gone')
+  land(['FREAK ON A LEASH', 'BLIND', '', ''])
+  await saved
+  assert.deepEqual(ds.getSnapshot().sceneNames.slice(0, 2), ['FREAK ON A LEASH', 'BLIND'], 'the buffer’s own names were dropped after a save')
+  const thenLeft = ds.refreshSceneNames(60)
+  await ds.presetSaved(61, 'Recto 1')
+  ds.put({ preset: { number: 70, name: 'Revv Gen' }, sceneNames: ['', '', '', ''] })
+  assert.equal(still(), false, 'the read is told a preset already left is still on screen')
+  land(['LEAD', '', '', ''])
+  await thenLeft
+  assert.notEqual(ds.getSnapshot().sceneNames[0], 'LEAD', 'the last song’s names went on this song’s tiles after a save')
 })
 
 onTheBench('an AM4 saying its own preset was edited costs the Mac window the chain, not a dump of the stored slot', async () => {
@@ -15296,6 +15453,37 @@ test('the computer app carries the server that changes a VP4’s presets and sce
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   assert.match(lock.forgefx.commit, /^[0-9a-f]{40}$/, 'the pin is not a full commit')
   assert.ok(lock._why.some((line) => /\bVP4\b/.test(line) && /Program Change/.test(line) && /Scene Select/.test(line)), 'the lock does not say why it moved')
+})
+
+/*
+ * "The same names are not showing up again at all. on the AM4" (Justin, 21
+ * October 2026, a Raspberry Pi 3). The computer app carries the server that
+ * reads MIDI in on Linux through its own ALSA client, answers an AM4's loaded
+ * preset's scene names from the structure read (which the phone and the
+ * browser now ask first), and says on /diag what Linux holds for the unit's
+ * replies (which their reports now print).
+ */
+test('the computer app carries the server with the Linux MIDI reader, the AM4’s loaded scene names and the Linux facts', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+am4dumpretry\+alsaseqin\+am4structnames\+linuxmidi$/, 'the computer app does not carry the server the phone’s AM4 names and its report read')
+  for (const piece of ['gridgen', 'looper', 'am4scenes', 'am4tempo', 'am4fw', 'am4tempoparam', 'am4tunercc', 'meterGate', 'relayheal', 'quietMeters', 'vp4midi', 'am4dumpretry']) {
+    assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
+  }
+  assert.equal(lock.forgefx.commit, 'f8be44ebf5e5d2dd97b9b2025d0720c4f4452924')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  /* The codec is not moved by it. */
+  assert.equal(lock['forgefx-midi'].commit, 'a17eb4a51d6d86985d8d8040966caa8da295f364')
+  const why = lock._why.slice(-3)
+  assert.ok(/ALSA sequencer client/.test(why[0]) && /python3/.test(why[0]) && /FORGEFX_ALSA_SEQ_READER=0/.test(why[0]) && /f0d5c8b/.test(why[0]), 'the lock does not say why the input reader moved')
+  assert.ok(/structure read/.test(why[1]) && /0x30, 0x50, 0x70 and 0x90/.test(why[1]) && /296a1ac/.test(why[1]) && /never a dump/.test(why[1]), 'the lock does not say where the loaded names come from')
+  assert.ok(/linuxMidi/.test(why[2]) && /F0/.test(why[2]) && /input_buffer_size=65536/.test(why[2]) && /5a2989e/.test(why[2]) && /17a9f0d/.test(why[2]) && /f8be44e/.test(why[2]), 'the lock does not say what the Linux facts, the cut and the stop are')
+  /* And the notice of what we changed says the same three. */
+  const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
+  assert.match(mods, /own ALSA sequencer client/)
+  assert.match(mods, /loaded-preset scene names from the structure read/)
+  assert.match(mods, /cut a glued SysEx at each `F0`/)
+  /* The phone works with an older computer by falling back, so no computer is told it must update for this. */
+  assert.match(readSrc(new URL('../shared/versions.mjs', import.meta.url), 'utf8'), /COMPUTER_NEEDED = '1\.87\.23'/)
 })
 
 /*

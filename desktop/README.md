@@ -208,6 +208,29 @@ AppImage file where it is — it is the app itself, and the start-up entry
 names it. If you move it, open it once from its new place and the entry
 follows it.
 
+### The unit's MIDI on Linux
+
+What follows is for whoever reads a report from a Pi; the report's
+`linux midi:` lines say each of these facts for that computer.
+
+- **The kernel's buffer.** snd-seq-midi takes a USB-MIDI port's input into
+  a buffer one memory page long, 4 KB on a Pi 3 or 4, and drops the rest:
+  an AM4 preset is 12,352 bytes. The fix is one line,
+  `options snd-seq-midi input_buffer_size=65536`, in a file under
+  `/etc/modprobe.d/`, and a restart. A Pi 5's pages are 16 KB.
+- **ForgeFX's own reader.** From computer app 1.87.47 the unit's replies
+  come in through ForgeFX's own ALSA client (a small `python3` reader with
+  a 2000-cell queue, where RtMidi's has 200); output stays on RtMidi. It
+  gives way to RtMidi's input by itself when python3 or the sequencer is
+  missing, when the reader stops, or when it hears nothing on the first
+  request. It does not when it hears the unit and later loses events
+  (`alsa reader: lost input` in the computer's log). To rule it out on such
+  a Pi, `FORGEFX_ALSA_SEQ_READER=0` turns it off, and only the environment
+  the app starts in carries it: quit the app from its tray menu, then start
+  the AppImage from a Terminal as `FORGEFX_ALSA_SEQ_READER=0 ./<the AppImage>`. It lasts
+  for that run. The start-up entry is written again on every launch, so an
+  edit to it does not stay, and nothing in the app turns the reader off.
+
 ## Building it
 
 **Each one on its own kind of machine.** The native serial and MIDI modules

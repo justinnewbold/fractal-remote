@@ -125,8 +125,29 @@ export function serverEnv({
   project = DEFAULT_PROJECT,
   asNode = false
 }) {
+  /* Not passed on: see PYTHON, below. */
+  const { PYTHONPATH: _path, PYTHONHOME: _home, ...rest } = env
   return {
-    ...env,
+    ...rest,
+    /*
+     * PYTHON, KEPT TO ITS OWN MODULES. On Linux ForgeFX reads the unit's
+     * replies through a small `python3 -c` reader (computer app 1.87.47 on),
+     * started from the server's working folder, which is wherever the app
+     * was opened from: the home folder, for the start-up entry and the
+     * menu. A `signal.py` or `ctypes.py` left there would be run in place
+     * of Python's own every time the unit's port opened, and so would
+     * anything PYTHONPATH or the person's own site-packages pointed at.
+     * Every way that goes wrong falls back to RtMidi's input, but one of
+     * them quietly leaves readers running after the server has stopped.
+     *
+     * So the server's children leave the working folder off the module path
+     * (PYTHONSAFEPATH, Python 3.11 on: Raspberry Pi OS from Bookworm) and the
+     * person's own site-packages out, and are told no PYTHONPATH or
+     * PYTHONHOME. It is ForgeFX's one Python; the full fix is its own `-I`
+     * on that command, in a later ForgeFX.
+     */
+    PYTHONSAFEPATH: '1',
+    PYTHONNOUSERSITE: '1',
     /*
      * Electron, told to be Node.
      *

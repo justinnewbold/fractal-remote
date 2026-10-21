@@ -47,6 +47,7 @@ import { withLineage } from './lineage.js'
 import { remoteActive, remoteRequest, subscribeHostSeen, subscribeRemoteEvents, subscribeRemoteState } from './remote.js'
 import { linkIsDown, tapsRelayed } from './tapGate.js'
 import { notSentError, sendsOnce } from '../../shared/relay-rules.mjs'
+import { judgeCopy } from '../../shared/own-echo.mjs'
 import {
   rosterCache,
   helpTextCache,
@@ -2632,7 +2633,19 @@ function recallSceneNames(number) {
 export let sceneNameTrace = []
 const traceStep = (step) => sceneNameTrace.push(step)
 
-export async function readSceneNames(number) {
+/*
+ * `shown` says what the preset on screen is called now, or undefined when
+ * the preset on screen is no longer `number` or its name is not known yet.
+ * Only an AM4's loaded-preset read asks it; see that step below.
+ *
+ * `still` says whether the preset on screen is still the one this read is
+ * for. Once it is not, the read stops before the slot's own dump: its answer
+ * would only be dropped (deviceState refreshSceneNames), and the dump would
+ * land on a unit loading the next preset. The phone stops there too
+ * (mobile/src/lib/rig.js namesOfLoaded). null then.
+ */
+export async function readSceneNames(number, { shown, still } = {}) {
+  const movedOn = () => typeof still === 'function' && !still()
   if (mock) {
     await tick()
     return mock.getScene().names
@@ -2660,12 +2673,48 @@ export async function readSceneNames(number) {
   }
 
   /*
+   * AN AM4'S LOADED PRESET, OFF THE COMPUTER'S STRUCTURE READ: the phone's
+   * rule (mobile/src/lib/rig.js am4LoadedNames).
+   *
+   * "The same names are not showing up again at all. on the AM4." The read
+   * below is the stored slot's whole dump, 12,352 bytes, which a Raspberry
+   * Pi 3's MIDI input cut to 3,095 every time. The small read of the
+   * preset's structure the computer already makes every few seconds carries
+   * the loaded preset's four names as well, and GET /preset/grid hands them
+   * over with the preset's name: one short request, nothing new sent to the
+   * unit, never a dump. Believed only when that name is the one on screen
+   * (judgeCopy), since a footswitch can have moved the unit on; and not when
+   * every name is blank, which is also what a computer app from before
+   * 1.87.47 answers, so the dump after this stays exactly what it had.
+   * Two slots holding presets of the same name are the one case the name
+   * cannot see; see judgeCopy, which takes the slot's number for the day a
+   * computer app says it.
+   */
+  if (typeof number === 'number' && unitSlug === 'am4' && typeof shown === 'function') {
+    const copy = await presetCopy()
+    const here = judgeCopy(copy, shown(), number)
+    if (here === 'stale') {
+      traceStep(`loaded: the computer read another preset ("${copy.name}"${Number.isInteger(copy.number) ? `, in ${copy.number}` : ''}) — ignored`)
+    } else if (Array.isArray(here) && here.some((n) => n)) {
+      rememberSceneNames(number, here)
+      traceStep('loaded: found names')
+      return here
+    } else {
+      traceStep(here ? 'loaded: every scene blank (unnamed, or a computer app before 1.87.47)' : 'loaded: nothing to tie to the preset on screen')
+    }
+  }
+
+  /*
    * The unit's own dump, as a read. "Some of them work some of them don't."
    * GET /presets/{n}/scenes returns only the names, and a GET crosses the
    * relay where the backup below does not — so a browser away from the
    * computer can read an AM4's names too. An older computer app answers 404,
    * and the backup is still there for it.
    */
+  if (movedOn()) {
+    traceStep('the preset on screen moved on: the slot is not read')
+    return null
+  }
   if (typeof number === 'number') {
     try {
       const res = await request(`/presets/${number}/scenes`)
@@ -2689,6 +2738,10 @@ export async function readSceneNames(number) {
     }
   }
 
+  if (movedOn()) {
+    traceStep('the preset on screen moved on: the slot is not read')
+    return null
+  }
   try {
     const dump = await backupPreset(number)
     const names = dump?.sceneNames
@@ -2761,7 +2814,9 @@ export async function readSceneNames(number) {
  * name out of it is shown or kept.
  *
  * null when there is no answer (an older computer, a failed read). An AM4's
- * scene list is always empty: its chain carries no names.
+ * answer is its computer's small read of the preset's structure rather than
+ * a copy, and from computer app 1.87.47 carries the loaded preset's scene
+ * names (readSceneNames asks it); before that its list was always empty.
  */
 export async function presetCopy() {
   if (mock) {
@@ -2777,7 +2832,9 @@ export async function presetCopy() {
   if (!Array.isArray(res?.scenes)) return null
   return {
     name: typeof res.name === 'string' ? cleanPresetName(res.name) : null,
-    scenes: res.scenes.map((n) => (typeof n === 'string' ? n.trim() : ''))
+    scenes: res.scenes.map((n) => (typeof n === 'string' ? n.trim() : '')),
+    /* Which slot it is of, when the computer says (none does yet; see judgeCopy). */
+    ...(Number.isInteger(res.number) && res.number >= 0 ? { number: res.number } : {})
   }
 }
 

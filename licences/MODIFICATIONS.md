@@ -46,6 +46,9 @@ no reason to care about because upstream has no phone on the other end.
 | Wait for the port to go quiet before re-requesting an incomplete dump | The re-request sent into the previous dump's tail collected the same stale terminator three times over. |
 | Allow the looper's buttons (`POST /preset/looper/control`) over the remote channel | A phone could see the Looper block and never press Record or Play. It is a performance control like a scene tap: no parameter written, nothing stored, no slot reached. |
 | Retry an AM4's whole-preset dump, take only the dump that was asked for, and keep each failed attempt in `/diag` | One short, merged or stale dump was a 503, so a phone showed an AM4's scenes as 1–4 for good, most of all through a slow computer such as a Raspberry Pi 3. |
+| On Linux, read MIDI input through ForgeFX's own ALSA sequencer client (a small `python3` + libasound reader); output stays on RtMidi | RtMidi's sequencer input pool holds about 4.6 KB of SysEx, less than two chunks of an AM4 preset dump, and the kernel throws away what does not fit. The new reader's pool is the largest the kernel allows, about 46 KB, and it gives way to RtMidi when python3 or the sequencer is missing. |
+| Return an AM4's loaded-preset scene names from the structure read the server already makes | `GET /preset/scenes` answered nothing on an AM4, so the only road to its scene names was a 12,352-byte dump that a Raspberry Pi's MIDI input cut short. Nothing new is sent to the unit. |
+| Say on `/diag` what Linux holds for a USB-MIDI unit, cut a glued SysEx at each `F0`, and stop an AM4 dump read that the kernel's buffer cut, with the fix in its words | On a Raspberry Pi 3 the kernel's 4 KB buffer cut every AM4 preset dump to 3,095 bytes, RtMidi glued what was left to the next reply, and each retry lost the same bytes. |
 
 ## forgefx-midi — the preset codec
 

@@ -360,6 +360,8 @@ async function rigOnTheBench(over = {}) {
         const summary = path.match(/^\/presets\/(-?\d+)\/summary$/)
         /* `unit.stored[n]` is what a stored slot's summary lists, for the read-ahead. */
         if (summary) {
+          /* `noSummary`: an AM4's computer, which has no summary to give (501). */
+          if (unit.noSummary) throw Object.assign(new Error('unsupported'), { status: 501 })
           const n = Number(summary[1])
           return { number: n, scenes: unit.scenes, ...(unit.stored?.[n] ? { blocks: unit.stored[n] } : {}) }
         }
@@ -9223,7 +9225,7 @@ export function run(test) {
     assert.ok(part.length < theirs.length, 'the computer’s part was not cut, so this proves nothing')
 
     /* The held lines from the middle, in order, just above the note saying what went. */
-    const note = part.match(/\n… (\d+) lines in between left out to fit; 3 dump lines from among them kept above\n/)
+    const note = part.match(/\n… (\d+) lines in between left out to fit; 3 held lines from among them kept above\n/)
     assert.ok(note, 'the cut does not say the held lines from the middle were kept')
     const above = part.slice(0, note.index)
     const i1 = above.indexOf('dump scene names: attempt 1/3 failed')
@@ -18005,6 +18007,125 @@ export function run(test) {
     assert.equal(await rig.arrivedCurrent(), false, 'a chain read before a gap in the relay counts as followed')
     rig.stopListening()
     assert.equal(rig.chainFollowed(), false, 'a store that is not listening says it has followed the unit')
+  })
+
+  /*
+   * "The same names are not showing up again at all. on the AM4" (Justin, 21
+   * October 2026, a Raspberry Pi 3). Through a computer an AM4's names came
+   * only from the stored slot's dump, which that Pi cut to 3,095 of 12,352
+   * bytes every time. The computer's small structure read carries the LOADED
+   * preset's names (ForgeFX 296a1ac), and GET /preset/grid hands them over
+   * with the preset's name. Asked first, believed only under the preset on
+   * screen, and with anything less the slot is read as it always was.
+   */
+  const AM4_PI = { short: 'AM4', capabilities: { scenes: 4, sceneCount: 4, slotModel: 'linear', meters: { outputLevels: false } }, namesInChain: false, noSummary: true }
+  const KORN = ['FREAK ON A LEASH', 'BLIND', 'FALLING AWAY', 'GOT THE LIFE']
+  const SLOT_READ = /^GET \/presets\/\d+\/scenes$/
+
+  test('through a computer an AM4’s scene names come off its loaded preset, with no dump of the slot', async () => {
+    const { rig, clock, unit, asked, wire } = await rigOnTheBench({ ...AM4_PI, scenes: ['STORED', '', '', ''] })
+    unit.copy = () => ({ name: `SONG ${unit.number}`, scenes: [...KORN], cells: [] })
+    assert.equal(rig.getState().deviceSlug, 'am4')
+    rig.loadPreset(53)
+    await clock.advance(3000)
+    assert.deepEqual(rig.getState().sceneNames, KORN, 'the loaded preset’s names are not on the tiles')
+    assert.equal(asked(SLOT_READ), 0, 'the stored slot was dumped for names the computer already had')
+    assert.equal(asked(SUMMARY), 0)
+    assert.equal(asked('GET /preset/grid'), 1, 'the loaded preset was not asked, or asked more than once')
+    /* Kept for the slot, on the computer too, so the next device has them at once. */
+    assert.equal(asked('PUT /store/config/scene-names-am4%3A53'), 1, 'the names were not kept on the computer')
+    /* Refresh names asks the same, and still dumps nothing. */
+    unit.copy = () => ({ name: `SONG ${unit.number}`, scenes: ['RENAMED', ...KORN.slice(1)], cells: [] })
+    assert.equal(await rig.rereadSceneNames(), 'found')
+    assert.equal(rig.getState().sceneNames[0], 'RENAMED')
+    assert.equal(asked(SLOT_READ), 0, 'Refresh names dumped the slot')
+    assert.ok(!wire.some((l) => /^POST \/preset\/backup/.test(l)))
+  })
+
+  test('an AM4’s loaded-preset names are never put on another preset’s tiles', async () => {
+    /* The computer read the last song (a footswitch, a read that started before the tap): not believed, the slot is read. */
+    const last = await rigOnTheBench({ ...AM4_PI, scenes: ['CLEAN', 'LEAD', '', ''] })
+    last.unit.copy = () => ({ name: 'SONG 52', scenes: [...KORN], cells: [] })
+    last.rig.loadPreset(53)
+    await last.clock.advance(3000)
+    assert.deepEqual(last.rig.getState().sceneNames.slice(0, 2), ['CLEAN', 'LEAD'], 'another preset’s names were believed')
+    assert.equal(last.asked(/^GET \/presets\/53\/scenes$/), 1, 'the slot was not read when the loaded preset was another')
+    assert.equal(last.asked('PUT /store/config/scene-names-am4%3A53'), 1)
+
+    /*
+     * A preset of the same name in another slot, a working copy one along:
+     * the one case the name cannot see. A computer that says which slot its
+     * read is of is believed on that too (none does yet; see judgeCopy).
+     */
+    const twin = await rigOnTheBench({ ...AM4_PI, scenes: ['CLEAN', 'LEAD', '', ''] })
+    twin.unit.copy = () => ({ name: 'SONG 53', number: 54, scenes: [...KORN], cells: [] })
+    twin.rig.loadPreset(53)
+    await twin.clock.advance(3000)
+    assert.deepEqual(twin.rig.getState().sceneNames.slice(0, 2), ['CLEAN', 'LEAD'], 'a same-named preset in another slot gave this one its names')
+    assert.equal(twin.asked(/^GET \/presets\/53\/scenes$/), 1)
+    const said = await rigOnTheBench({ ...AM4_PI, scenes: ['CLEAN', 'LEAD', '', ''] })
+    said.unit.copy = () => ({ name: 'SONG 53', number: 53, scenes: [...KORN], cells: [] })
+    said.rig.loadPreset(53)
+    await said.clock.advance(3000)
+    assert.deepEqual(said.rig.getState().sceneNames, KORN)
+    assert.equal(said.asked(/^GET \/presets\/53\/scenes$/), 0)
+
+    /* A slow answer that lands after the next tap is dropped, and the next preset gets its own. */
+    const slow = await rigOnTheBench({ ...AM4_PI, scenes: ['', '', '', ''] })
+    const seen = []
+    slow.rig.useRig((s) => s)
+    const off = globalThis.__rigSub(() => seen.push([slow.rig.getState().preset?.number, (slow.rig.getState().sceneNames || []).join('|')]))
+    /* The first ask is read while 53 is loaded and answers four seconds later; any other answers for what is loaded then. */
+    let firstAt = null
+    slow.unit.lag = (line) => (line === 'GET /preset/grid' && firstAt === null ? ((firstAt = slow.clock.now()), 4000) : 0)
+    slow.unit.copy = () =>
+      firstAt !== null && slow.clock.now() === firstAt + 4000
+        ? { name: 'SONG 53', scenes: [...KORN], cells: [] }
+        : { name: `SONG ${slow.unit.number}`, scenes: ['', '', '', ''], cells: [] }
+    slow.rig.loadPreset(53)
+    await slow.clock.advance(1500)
+    assert.equal(slow.asked('GET /preset/grid'), 1, 'this is not the moment in question')
+    slow.rig.loadPreset(54)
+    await slow.clock.advance(8000)
+    off()
+    assert.equal(slow.rig.getState().preset.number, 54)
+    assert.ok(!seen.some(([n, names]) => n === 54 && names.includes('FREAK')), 'preset 53’s names were put on 54’s tiles')
+    assert.equal(slow.asked('PUT /store/config/scene-names-am4%3A54'), 0, '53’s names were kept for 54')
+    assert.equal(slow.asked('PUT /store/config/scene-names-am4%3A53'), 0, 'a read that landed on another preset was kept anyway')
+  })
+
+  test('an AM4 whose loaded preset has no names, or whose computer is older, is read the way it always was', async () => {
+    for (const [why, copy] of [
+      ['a computer app from before 1.87.47 answers no names', (unit) => ({ name: `SONG ${unit.number}`, scenes: [], cells: [] })],
+      ['every scene blank', (unit) => ({ name: `SONG ${unit.number}`, scenes: ['', '', '', ''], cells: [] })],
+      ['no preset name to tie them to', () => ({ scenes: [...KORN], cells: [] })],
+      ['the read refused', () => { throw Object.assign(new Error('unsupported'), { status: 501 }) }]
+    ]) {
+      const { rig, clock, unit, asked } = await rigOnTheBench({ ...AM4_PI, scenes: ['CLEAN', 'LEAD', '', ''] })
+      unit.copy = () => copy(unit)
+      rig.loadPreset(53)
+      await clock.advance(3000)
+      assert.equal(asked(/^GET \/presets\/53\/scenes$/), 1, `${why}: the slot was not read as before`)
+      assert.deepEqual(rig.getState().sceneNames.slice(0, 2), ['CLEAN', 'LEAD'], `${why}: the slot’s names are not on the tiles`)
+      assert.ok(!(rig.getState().sceneNames || []).includes('FREAK ON A LEASH'), `${why}: names that cannot be tied to the preset were used`)
+    }
+  })
+
+  test('over Bluetooth, or on any other unit, the loaded-preset read for an AM4 is never asked', async () => {
+    const ble = await rigOnTheBench({ short: 'AM4', capabilities: { via: 'bluetooth', scenes: 4, sceneCount: 4, slotModel: 'linear' }, namesInChain: false, scenes: ['CLEAN', '', '', ''] })
+    ble.rig.loadPreset(40)
+    await ble.clock.advance(ble.rig.AM4_NAMES_QUIET_MS + 5000)
+    assert.equal(ble.asked('GET /preset/grid'), 0, 'Bluetooth asked a computer it does not have')
+    assert.equal(ble.asked(/^GET \/presets\/40\/scenes$/), 1)
+    /* An FM3-shaped unit whose computer keeps no copy, as an Axe-Fx II: unchanged, below. */
+    const other = await rigOnTheBench({ capabilities: { scenes: 8, meters: { outputLevels: false } }, namesInChain: false })
+    other.rig.loadPreset(21)
+    await other.clock.advance(3000)
+    assert.equal(other.asked('GET /preset/grid'), 0)
+    const rig = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
+    assert.match(rig, /async function am4LoadedNames\(number\) \{ if \(state\.deviceSlug !== 'am4' \|\| viaBluetooth\(\) \|\| hostKeepsCopy\(\) === true\) return null/)
+    /* Before the summary and the slot's dump, on every route that reads names (the read of a preset, Refresh names). */
+    assert.match(rig, /if \(here\?\.length\) return here const loaded = await am4LoadedNames\(number\) if \(loaded \|\| state\.preset\?\.number !== number\) return loaded/)
   })
 
   test('on an Axe-Fx II the phone never asks for the computer’s copy of the preset', async () => {
