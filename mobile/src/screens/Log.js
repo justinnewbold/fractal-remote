@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { FlatList, Platform, Text, View } from 'react-native'
+import { AccessibilityInfo, FlatList, Platform, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
 import { color, font, mono, radius, space } from '../lib/theme'
@@ -86,6 +86,13 @@ export default function Log({ onBack }) {
    * Never twice at once: the ref is set before the first await, so a second
    * tap that lands before the screen has redrawn is turned away as surely as
    * one on the grayed-out button. What it said stays until the screen is left.
+   *
+   * SAID SO IT IS SEEN, AND HEARD. The answer is the bright, bold, body-sized
+   * note every tool here gives the button just pressed, never the gray hint
+   * a sent line was at first (quieter than a failure beside it). And it is
+   * said out loud: a 'hint' note is no live region, so a screen reader heard
+   * a failure and nothing at all when it went. A failure's red note is a
+   * live region on Android, so that one is spoken here on the iPhone only.
    */
   const [sending, setSending] = useState(false)
   const [sentSaid, setSentSaid] = useState(null)
@@ -98,8 +105,11 @@ export default function Log({ onBack }) {
     try {
       await sendLogs({ deviceName })
       setSentSaid({ ok: true, words: SENT_WORDS })
+      AccessibilityInfo.announceForAccessibility?.(SENT_WORDS)
     } catch (err) {
-      setSentSaid({ ok: false, words: err?.message || String(err) })
+      const words = err?.message || String(err)
+      setSentSaid({ ok: false, words })
+      if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility?.(words)
     } finally {
       inFlight.current = false
       setSending(false)
@@ -277,8 +287,13 @@ export default function Log({ onBack }) {
             disabled={sending}
             onPress={send}
           />
-          {sentSaid ? <Note tone={sentSaid.ok ? 'hint' : 'fault'}>{sentSaid.words}</Note> : null}
-          <Press label="Clear Logs" onPress={() => { clearDebugLog(); setLines([]) }} />
+          {sentSaid ? (
+            <Note tone={sentSaid.ok ? 'hint' : 'fault'} strong size={font.body}>
+              {sentSaid.words}
+            </Note>
+          ) : null}
+          {/* Not while a send is on its way: it reads the log after the computer has answered. */}
+          <Press label="Clear Logs" disabled={sending} onPress={() => { clearDebugLog(); setLines([]) }} />
         </View>
       ) : null}
     </View>

@@ -8878,8 +8878,19 @@ export function run(test) {
 
     /* Said under the button, in the Feedback form's own words, or the reason it did not go. */
     assert.match(log, /setSentSaid\(\{ ok: true, words: SENT_WORDS \}\)/)
-    assert.match(log, /setSentSaid\(\{ ok: false, words: err\?\.message \|\| String\(err\) \}\)/, 'a failed send says nothing')
-    assert.match(log, /\{sentSaid \? <Note tone=\{sentSaid\.ok \? 'hint' : 'fault'\}>\{sentSaid\.words\}<\/Note> : null\}/)
+    assert.match(log, /const words = err\?\.message \|\| String\(err\) setSentSaid\(\{ ok: false, words \}\)/, 'a failed send says nothing')
+    /*
+     * "There was no confirmation." Not the gray hint, quieter than the red
+     * failure beside it: the bold, body-sized note every tool gives the
+     * answer to the button just pressed. And said out loud, because a 'hint'
+     * note is no live region (a failure's red one is, on Android).
+     */
+    assert.match(log, /\{sentSaid \? \( <Note tone=\{sentSaid\.ok \? 'hint' : 'fault'\} strong size=\{font\.body\}> \{sentSaid\.words\} <\/Note> \) : null\}/, 'the sent line is the quiet gray hint')
+    assert.match(read('mobile/src/components/Note.js'), /accessibilityLiveRegion=\{tone === 'hint' \? 'none' : 'polite'\}/)
+    assert.match(log, /setSentSaid\(\{ ok: true, words: SENT_WORDS \}\) AccessibilityInfo\.announceForAccessibility\?\.\(SENT_WORDS\)/, 'a screen reader is not told it went')
+    assert.match(log, /if \(Platform\.OS === 'ios'\) AccessibilityInfo\.announceForAccessibility\?\.\(words\)/, 'VoiceOver is not told it did not go')
+    /* Clear Logs waits while a send is on its way: the send reads the log after the computer answers, and a clear then would empty the report. */
+    assert.match(log, /<Press label="Clear Logs" disabled=\{sending\} onPress=/, 'Clear Logs can empty a report on its way')
     /* And it stays until the screen is left: nothing clears it on a timer, the way the copy line clears. */
     assert.doesNotMatch(log, /setSentSaid\(null\), \d+/, 'the sent line goes away on a timer')
     assert.equal((log.match(/setSentSaid\(null\)/g) || []).length, 1, 'something other than a new send clears the sent line')
@@ -9019,8 +9030,17 @@ export function run(test) {
         return true
       })
       assert.equal(log.getDebugLog().at(-1).message, 'logs not sent to the developer')
+      /* Any other refusal is said plainly, and its own words go into the log for the developer, once. */
       bench.insertError = { message: 'new row violates row-level security policy' }
-      await assert.rejects(reports.sendLogs({ deviceName: 'AM4' }), /^Error: That didn't send: new row violates row-level security policy$/)
+      await assert.rejects(reports.sendLogs({ deviceName: 'AM4' }), (err) => {
+        assert.equal(err.message, "That didn't send. Try again in a moment, or use Copy Logs instead.")
+        assert.equal(err.reason, 'new row violates row-level security policy')
+        return true
+      })
+      const [refused, notSentLine] = log.getDebugLog().slice(-2)
+      assert.deepEqual([refused.message, refused.detail], ['report not sent', 'new row violates row-level security policy'], 'the database’s reason is not in the log')
+      assert.equal(notSentLine.message, 'logs not sent to the developer')
+      assert.ok(!notSentLine.detail, 'the reason is written into the log twice')
       bench.insertError = null
       await reports.sendLogs({ deviceName: 'AM4' })
       log.clearDebugLog()
@@ -9052,9 +9072,17 @@ export function run(test) {
     const net = new Error('TypeError: Failed to fetch')
     assert.equal(r.notSentWords(net), "Couldn't reach the internet to send that. What you wrote is still here — try again in a moment.")
     assert.equal(r.notSentWords(net, { wrote: false }), "Couldn't reach the internet to send that. Try again in a moment.")
-    assert.equal(r.notSentWords({ message: 'duplicate key' }), "That didn't send: duplicate key")
+    /* Any other refusal in plain words: the database's own are nothing a guitarist can act on. */
+    assert.equal(r.notSentWords({ message: 'duplicate key' }), "That didn't send. What you wrote is still here — try again in a moment.")
+    assert.equal(r.notSentWords({ message: 'new row violates row-level security policy for table "feedback"' }, { wrote: false }), "That didn't send. Try again in a moment, or use Copy Logs instead.")
+    const refused = r.notSent({ message: 'duplicate key' }, { wrote: false })
+    assert.equal(refused.message, "That didn't send. Try again in a moment, or use Copy Logs instead.")
+    assert.equal(refused.reason, 'duplicate key', 'the database’s reason is lost')
+    for (const words of [r.notSentWords({ message: 'x' }), r.notSentWords({ message: 'x' }, { wrote: false })]) {
+      assert.doesNotMatch(words, /: x|policy|row/, 'the database’s own words reach the screen')
+    }
     for (const where of ['src/lib/reports.js', 'mobile/src/lib/reports.js']) {
-      assert.match(read(where), /notSentWords\(error, \{ wrote: row\.message !== LOGS_ONLY_MESSAGE \}\)/, `${where} words a failed send by itself`)
+      assert.match(read(where).replace(/\s+/g, ' '), /const err = notSent\(error, \{ wrote: row\.message !== LOGS_ONLY_MESSAGE \}\) logDebug\('app', 'report not sent', err\.reason\) throw err/, `${where} words a failed send by itself, or loses the reason`)
     }
   })
 
@@ -9162,6 +9190,79 @@ export function run(test) {
     assert.equal(r.buildReport({ kind: 'idea', message: 'x', lines, format, computer: 'COMPUTER' }).log, null, 'an idea carried the computer’s log')
   })
 
+  test('the computer’s held lines still in its ring survive the cut, from the middle of a long AM4 log', async () => {
+    /*
+     * ForgeFX puts a held line at the head of /diag's lines only once its
+     * 400-line ring has let it go (recentLog: `l.n < oldest`). Until then it
+     * is where it was said, in the middle, the part the cut throws away. An
+     * AM4 over MIDI fills the ring with TX/RX lines of about 250 bytes, so a
+     * full ring is about 100 KB and beside a 40 KB phone log it is cut.
+     */
+    const r = await import('../shared/report-rules.mjs')
+    const { formatMacDiag } = await import('../src/lib/debugLog.js')
+    const bytes = (v) => new TextEncoder().encode(v).length
+    const at = (n) => `2026-10-21T10:${String(Math.floor(n / 60) % 60).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}.000Z`
+    const midi = (n) => `${at(n)} log [forgefx][midi] ${n % 2 ? 'RX' : 'TX'} 64B: ${'f0 00 01 74 15 '.repeat(13)}${n}`
+    const ring = [...Array(400)].map((_, i) => midi(i))
+    /* Held lines said 250–300 lines ago: still in the ring. */
+    ring[120] = `${at(120)} log [forgefx][am4] dump scene names: attempt 1/3 failed, 3 frame(s) [77 78 78]: timed out`
+    ring[121] = `${at(121)} log [forgefx][am4] dump scene names: alsa 0 queued`
+    ring[150] = `${at(150)} log [forgefx][am4] backup A01 "Clean" 6144B crc=ok on attempt 2/3`
+    /* A plain backup, and a plain line about the tuner, are not held. */
+    ring[160] = `${at(160)} log [forgefx][am4] backup A02 "Lead" 6144B crc=ok`
+    /* And one held line among the newest, which the cut keeps anyway: kept once, not twice. */
+    ring[395] = `${at(395)} log [forgefx][am4] dump preset: attempt 1/3 failed, 0 frame(s) []: timed out`
+    const theirs = formatMacDiag({ transportOpen: true, transportLabel: 'MIDI AM4', ports: { serial: [] }, reopens: [], recent: ring })
+    assert.ok(bytes(theirs) > 90_000, `the stand-in ring is ${bytes(theirs)} bytes, not a full AM4 ring`)
+
+    const mine = [...Array(200)].map((_, i) => `phone ${i} ${'p'.repeat(190)}`).join('\n')
+    const both = r.fitLog(mine, theirs)
+    assert.ok(bytes(both) <= r.LOG_BYTES, `${bytes(both)} bytes, over the ${r.LOG_BYTES} cap`)
+    assert.ok(both.startsWith(mine + '\n\n'), 'the phone’s lines were cut for the computer’s')
+    const part = both.slice(mine.length + 2)
+    assert.ok(part.length < theirs.length, 'the computer’s part was not cut, so this proves nothing')
+
+    /* The held lines from the middle, in order, just above the note saying what went. */
+    const note = part.match(/\n… (\d+) lines in between left out to fit; 3 dump lines from among them kept above\n/)
+    assert.ok(note, 'the cut does not say the held lines from the middle were kept')
+    const above = part.slice(0, note.index)
+    const i1 = above.indexOf('dump scene names: attempt 1/3 failed')
+    const i2 = above.indexOf('dump scene names: alsa 0 queued')
+    const i3 = above.indexOf('backup A01 "Clean" 6144B crc=ok on attempt 2/3')
+    assert.ok(i1 > 0 && i2 > i1 && i3 > i2, 'a held line still in the ring was cut, or kept out of order')
+    assert.ok(!part.includes('backup A02 "Lead"'), 'a backup that went first time was kept as if held')
+    /* The newest still go, the held one among them once. */
+    assert.match(part, /\[forgefx\]\[midi\] RX 64B: [0-9a-f ]+399$/, 'the computer’s newest line was cut')
+    assert.equal(part.split('dump preset: attempt 1/3 failed').length, 2, 'a held line among the newest went twice')
+    /* And the count adds up: every line is kept, said kept, or counted as gone. */
+    const kept = part.split('\n').length - 1
+    assert.equal(kept + Number(note[1]), theirs.split('\n').length, 'the count of lines left out is wrong')
+
+    /* A long run of held lines takes no more than ForgeFX's own 24, the newest of them. */
+    const many = [...ring]
+    for (let i = 40; i < 100; i++) many[i] = `${at(i)} log [forgefx][am4] dump scene names: alsa ${i} queued ${'x'.repeat(150)}`
+    const lots = r.trimComputer(formatMacDiag({ transportOpen: true, ports: { serial: [] }, reopens: [], recent: many }), 40_000)
+    assert.ok(bytes(lots) <= 40_000)
+    assert.ok(lots.includes('alsa 99 queued') && !lots.includes('alsa 50 queued'), 'more than 24 held lines kept, or not the newest')
+    assert.ok(lots.split('\n').filter((l) => r.COMPUTER_HELD.test(l)).length <= r.COMPUTER_HELD_LINES + 4)
+  })
+
+  test('a report never carries a character the table cannot hold', async () => {
+    /*
+     * Postgres text refuses U+0000, and PostgREST turns the whole row away
+     * for it. One NUL in a name the unit sent, said in the computer's log,
+     * would make every send fail until the line had left the computer's ring.
+     */
+    const r = await import('../shared/report-rules.mjs')
+    const theirs = "COMPUTER'S DEVICE SERVER\nname: Cle\u0000an\u0007\ttab\r\nend"
+    const both = r.fitLog('phone\u0000 line\u001b[0m', theirs)
+    assert.equal(both, "phone line[0m\n\nCOMPUTER'S DEVICE SERVER\nname: Clean\ttab\r\nend")
+    assert.doesNotMatch(r.fitLog('a\u0000b'), /\u0000/)
+    const row = r.buildReport({ kind: 'bug', message: r.LOGS_ONLY_MESSAGE, lines: [{ message: 'x\u0000y' }], format: (l) => l.message, computer: theirs })
+    assert.doesNotMatch(row.log, /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/, 'a control character reached the row')
+  })
+
+
   test('the website’s Debug log has Send logs to developer, and it sends through the browser’s own report code', async () => {
     /*
      * "Nothing says send logs to developer anymore." Settings → Troubleshooting
@@ -9170,7 +9271,22 @@ export function run(test) {
      */
     const panel = read('src/components/DebugLog.jsx').replace(/\s+/g, ' ')
     assert.match(panel, /import \{ SENT_WORDS, context, sendLogs \} from '\.\.\/lib\/reports'/, 'the panel does not use the browser’s own report code')
-    assert.match(panel, /<button className="chip" onClick=\{sendNow\} disabled=\{sending\}> \{sending \? 'Sending…' : 'Send logs to developer'\} <\/button> <button className="chip" onClick=\{shareFile\}>/, 'there is no Send logs to developer beside Share as file and Copy Logs')
+    assert.match(
+      panel,
+      /<button className="chip send-logs" onClick=\{sendNow\} disabled=\{sending \|\| !all\.length\}> <span className=\{sending \? 'send-logs-off' : undefined\}>Send logs to developer<\/span> <span className=\{sending \? undefined : 'send-logs-off'\}>Sending…<\/span> <\/button> <button className="chip" onClick=\{shareFile\}>/,
+      'there is no Send logs to developer beside Share as file and Copy Logs, or it can send an empty log'
+    )
+    /*
+     * Nothing beside it moves while it sends: both labels sit in one cell, the
+     * unused one hidden, so the chip keeps the longer one's width. "Sending…"
+     * alone narrowed it by 70px and slid Clear Logs onto Copy Logs' spot.
+     */
+    const css = read('src/styles.css')
+    assert.match(css, /button\.chip\.send-logs \{\s+display: inline-grid;/)
+    assert.match(css, /\.send-logs > span \{\s+grid-area: 1 \/ 1;\s+\}/)
+    assert.match(css, /\.send-logs > \.send-logs-off \{\s+visibility: hidden;\s+\}/, 'the hidden label takes no room, so the chip changes width')
+    /* And Clear Logs waits while a send is on its way, which reads the log after the computer answers. */
+    assert.match(panel, /disabled=\{!all\.length \|\| sending\} > Clear Logs/, 'Clear Logs can empty a report on its way')
     assert.match(panel, /if \(inFlight\.current\) return inFlight\.current = true/, 'a double click sends two reports')
     assert.match(
       panel,
@@ -9178,7 +9294,15 @@ export function run(test) {
       'the browser’s send does not carry the form’s context, or the computer’s account as Copy Logs builds it'
     )
     assert.match(panel, /setSentSaid\(\{ ok: true, words: SENT_WORDS \}\)/)
-    assert.match(panel, /<p className=\{sentSaid\.ok \? 'hint' : 'hint problem'\} role="status"> \{sentSaid\.words\} <\/p>/, 'the panel does not say whether it went')
+    /* Said in the bright ink at body size, not the gray of the help under it, by a status line that is always there. */
+    assert.match(panel, /<p className=\{`send-logs-said\$\{sentSaid && !sentSaid\.ok \? ' failed' : ''\}`\} role="status"> \{sentSaid\?\.words \|\| ''\} <\/p>/, 'the panel does not say whether it went, or its status line comes and goes')
+    assert.doesNotMatch(panel, /\{sentSaid \? \(/, 'the status line is mounted only once there is something to say')
+    assert.match(css, /\.send-logs-said \{[^}]*font-size: var\(--f-4\);[^}]*font-weight: 600;[^}]*color: var\(--silk\);/, 'the sent line is the help’s small gray')
+    assert.match(css, /\.send-logs-said\.failed \{\s+color: var\(--fault\);/)
+    /* The panel's first words, and the help under the buttons, say send it, not "attach that to the chat". */
+    assert.match(read('src/App.jsx'), /title="Debug log" note="Send it to the developer when something goes wrong"/)
+    assert.doesNotMatch(panel, /to the chat —|attach that to the chat/, 'the help still sends people to a chat only the developer has')
+    assert.match(panel, /When something goes wrong, press Send logs to developer\. To keep a copy as well, share it as a file or copy it\./)
     /* The Feedback section stays as it was. */
     assert.match(read('src/App.jsx'), /<Feedback device=\{device\} link=\{link\} platform=\{platform\(\)\} macVersion=\{link\.macVersion\} \/>/)
 

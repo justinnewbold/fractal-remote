@@ -31,7 +31,7 @@ import {
   carriesLog,
   contextFrom,
   lastErrorFrom,
-  notSentWords,
+  notSent,
   pickForReport,
   trimToBytes
 } from '../../shared/report-rules.mjs'
@@ -138,8 +138,13 @@ export async function sendReport({ kind, message, contact, context: ctx = {}, wi
 
   const { error } = await c.from('feedback').insert({ ...row, user_id: userId })
 
-  /* Nothing was written for a log sent in one tap, so nothing is "still here". */
-  if (error) throw new Error(notSentWords(error, { wrote: row.message !== LOGS_ONLY_MESSAGE }))
+  /* Nothing was written for a log sent in one tap, so nothing is "still here".
+     The database's own words go into the log, never onto the screen. */
+  if (error) {
+    const err = notSent(error, { wrote: row.message !== LOGS_ONLY_MESSAGE })
+    logDebug('app', 'report not sent', err.reason)
+    throw err
+  }
   return true
 }
 
@@ -168,7 +173,8 @@ async function sendLogsNow({ context: ctx = {}, computer = '' } = {}) {
   try {
     await sendReport({ kind: 'bug', message: LOGS_ONLY_MESSAGE, context: ctx, withLog: true, computer })
   } catch (err) {
-    logDebug('app', 'logs not sent to the developer', err?.message)
+    /* A refusal's own words are on the line sendReport wrote just before; anything else's are here. */
+    logDebug('app', 'logs not sent to the developer', err?.reason ? '' : err?.message)
     throw err
   }
   logDebug('app', 'logs sent to the developer')

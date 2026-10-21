@@ -3093,8 +3093,15 @@ export const remoteStatus = () => directRequest('/remote/status')
  * nowhere on a Mac app opened from the Finder, so until this the whole of
  * that was invisible, and from a phone every failure at the unit read as
  * the one sentence "port not open". Travels the relay like any other GET.
+ *
+ * FIVE SECONDS ONLY ON THE FETCH TO THIS COMPUTER'S OWN SERVER, where it stops
+ * a hung fetch. Over the relay, a timeout of a request's own is taken as the
+ * computer being gone (seen(false), and Play dims), and a slow Pi part way
+ * through an AM4 dump is not gone; there the relay's own timeout stands, as it
+ * does on the phone. The press is held to five seconds either way, by
+ * askComputer (shared/report-rules), which every caller here goes through.
  */
-export const serverDiag = () => request('/diag', { timeoutMs: 5000 })
+export const serverDiag = () => request('/diag', remoteActive() ? {} : { timeoutMs: 5000 })
 
 export const remoteEnable = (on) =>
   directRequest('/remote/enable', { method: 'POST', body: JSON.stringify({ on }) })

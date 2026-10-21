@@ -2117,6 +2117,39 @@ textarea.debug-log-text {
   margin-top: var(--s-2);
 }
 
+/* Send logs to developer: its two labels in one cell, so the chip keeps the
+   width of the longer while it sends and nothing beside it moves. */
+button.chip.send-logs {
+  display: inline-grid;
+  align-items: center;
+  justify-items: center;
+}
+
+.send-logs > span {
+  grid-area: 1 / 1;
+}
+
+.send-logs > .send-logs-off {
+  visibility: hidden;
+}
+
+/* What it said: the Feedback form's sent look, at body size, or the fault red. */
+.send-logs-said {
+  margin: var(--s-2) 0 0;
+  font-size: var(--f-4);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--silk);
+}
+
+.send-logs-said:empty {
+  margin: 0;
+}
+
+.send-logs-said.failed {
+  color: var(--fault);
+}
+
 /*
  * The preset report: what the unit says about the preset you are on.
  *

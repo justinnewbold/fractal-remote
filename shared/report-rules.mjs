@@ -141,7 +141,14 @@ export const SENT_WORDS = 'Sent to the developer — thank you.'
  *
  * The network sentence promises that what was written is still on screen,
  * which is true on the Feedback form and false for a log sent with nothing
- * written, so that one is told only to try again.
+ * written, so that one is told only to try again (or to copy the log, which
+ * needs no network).
+ *
+ * ANY OTHER REFUSAL IS SAID PLAINLY TOO. The database's own words ('new row
+ * violates row-level security policy for table "feedback"') are nothing a
+ * guitarist can act on, and on the one-tap button nothing was typed to give
+ * them a clue. The reason is kept for the developer instead: notSent puts it
+ * on the error as `reason`, and the sender writes it into the log.
  */
 export function notSentWords(error, { wrote = true } = {}) {
   const said = String(error?.message || error || '')
@@ -150,7 +157,14 @@ export function notSentWords(error, { wrote = true } = {}) {
       ? "Couldn't reach the internet to send that. What you wrote is still here — try again in a moment."
       : "Couldn't reach the internet to send that. Try again in a moment."
   }
-  return `That didn't send: ${said}`
+  return wrote
+    ? "That didn't send. What you wrote is still here — try again in a moment."
+    : "That didn't send. Try again in a moment, or use Copy Logs instead."
+}
+
+/** The error a sender throws: notSentWords to show, and the database's own words as `reason`, for the log. */
+export function notSent(error, options) {
+  return Object.assign(new Error(notSentWords(error, options)), { reason: String(error?.message || error || '') })
 }
 
 /**
@@ -185,10 +199,26 @@ export const COMPUTER_BYTES = 30_000
  * cut: its summary (formatMacDiag, at most 23 lines) and the lines ForgeFX
  * holds at the head of its server log (logHeld in its recent.ts keeps 24).
  * Those held lines are the evidence of a failure kept past the ring on
- * purpose, and they sit at the FRONT, so cutting from the front the way
- * trimToBytes does would throw away exactly them. This cuts the middle.
+ * purpose, and once the ring has let them go they sit at the FRONT, so
+ * cutting from the front the way trimToBytes does would throw away exactly
+ * them. This cuts the middle.
  */
 export const COMPUTER_HEAD_LINES = 48
+
+/**
+ * AND THE HELD LINES STILL IN THE RING, which are in that middle.
+ *
+ * ForgeFX puts a held line at the head only after its 400-line ring has let
+ * it go (recentLog: `l.n < oldest`). Until then it sits where it was said,
+ * among the ring's lines, and with the AM4's MIDI lines a full ring is about
+ * 100 KB, so a "dump scene names: attempt 1/3 failed" said a few hundred
+ * lines ago is in the part the cut throws away. So the cut keeps these from
+ * its middle as well, up to ForgeFX's own HOLD of 24, newest first, just
+ * under the head: every line its am4 driver writes about a dump, and a
+ * backup that took more than one attempt (the two kinds #logHeld writes).
+ */
+export const COMPUTER_HELD = /\[forgefx\]\[am4\] (dump |backup .* on attempt \d+\/\d+$)/
+export const COMPUTER_HELD_LINES = 24
 
 /** The one line said in place of the computer's log. Copy Logs' own words. */
 export const computerUnasked = (why) => `COMPUTER'S DEVICE SERVER — could not be asked: ${why}`
@@ -236,11 +266,12 @@ export async function askComputer(ask, format, { wait = COMPUTER_WAIT_MS, why = 
 }
 
 /**
- * The computer's part cut to `cap`, keeping its head and its newest lines.
+ * The computer's part cut to `cap`, keeping its head, the held lines from its
+ * middle (COMPUTER_HELD), and its newest lines.
  *
- * The middle goes, and says so. A head too big to leave room for anything
- * after it is cut from the front instead, like every other log here, so the
- * newest lines are what survive either way.
+ * The rest of the middle goes, and says so. A head too big to leave room for
+ * anything after it is cut from the front instead, like every other log here,
+ * so the newest lines are what survive either way.
  */
 export function trimComputer(text, cap = COMPUTER_BYTES, head = COMPUTER_HEAD_LINES) {
   const s = String(text ?? '')
@@ -250,17 +281,43 @@ export function trimComputer(text, cap = COMPUTER_BYTES, head = COMPUTER_HEAD_LI
   const topBytes = top.reduce((n, l) => n + bytesOf(l) + 1, 0)
   if (lines.length <= head || topBytes > cap / 2) return trimToBytes(s, cap)
 
-  const kept = []
-  let bytes = topBytes
-  for (let i = lines.length - 1; i >= head; i--) {
-    const cost = bytesOf(lines[i]) + 1
-    if (bytes + cost > cap - 80) break
-    kept.unshift(lines[i])
-    bytes += cost
+  /* The held lines below the head, the newest of them, paid for first: never more than a quarter of the cap. */
+  let held = []
+  for (let i = lines.length - 1; i >= head && held.length < COMPUTER_HELD_LINES; i--) {
+    if (COMPUTER_HELD.test(lines[i])) held.unshift(i)
   }
-  const gone = lines.length - head - kept.length
-  return [...top, `… ${gone} line${gone === 1 ? '' : 's'} in between left out to fit`, ...kept].join('\n')
+  const cost = (i) => bytesOf(lines[i]) + 1
+  let heldBytes = held.reduce((n, i) => n + cost(i), 0)
+  while (held.length && heldBytes > cap / 4) heldBytes -= cost(held.shift())
+
+  /* Then the newest lines, in what is left. A held line among them is already paid for. */
+  const paid = new Set(held)
+  let bytes = topBytes + heldBytes
+  let from = lines.length
+  for (let i = lines.length - 1; i >= head; i--) {
+    const more = paid.has(i) ? 0 : cost(i)
+    if (bytes + more > cap - 120) break
+    bytes += more
+    from = i
+  }
+  const between = held.filter((i) => i < from)
+  const gone = from - head - between.length
+  const note = `… ${gone} line${gone === 1 ? '' : 's'} in between left out to fit${
+    between.length ? `; ${between.length} dump line${between.length === 1 ? '' : 's'} from among them kept above` : ''
+  }`
+  return [...top, ...between.map((i) => lines[i]), note, ...lines.slice(from)].join('\n')
 }
+
+/*
+ * Characters a row cannot hold. Postgres text refuses U+0000 and PostgREST
+ * turns the whole row away for it, so one NUL in a name the unit sent, said
+ * in the computer's log, would make every send fail until the line had left
+ * its ring. The other control characters go with it; a tab and a line break
+ * are kept.
+ */
+// eslint-disable-next-line no-control-regex
+const UNSENDABLE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g
+const sendable = (v) => String(v ?? '').replace(UNSENDABLE, '')
 
 /**
  * The sender's lines and the computer's, together inside LOG_BYTES.
@@ -270,8 +327,9 @@ export function trimComputer(text, cap = COMPUTER_BYTES, head = COMPUTER_HEAD_LI
  * lose their OLDEST lines if anything, so the newest always go. The computer
  * then has whatever room is left, which is never less than that share.
  */
-export function fitLog(mine, computer = '', cap = LOG_BYTES) {
-  const theirs = String(computer ?? '').trim()
+export function fitLog(given, computer = '', cap = LOG_BYTES) {
+  const mine = sendable(given)
+  const theirs = sendable(computer).trim()
   if (!theirs) return trimToBytes(mine, cap)
   const gap = '\n\n'
   const share = Math.min(bytesOf(theirs), COMPUTER_BYTES)

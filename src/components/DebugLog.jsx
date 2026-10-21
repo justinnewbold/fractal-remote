@@ -200,8 +200,15 @@ export default function DebugLog({ device, link }) {
   return (
     <section className="debug-log">
       <div className="diag-actions">
-        <button className="chip" onClick={sendNow} disabled={sending}>
-          {sending ? 'Sending…' : 'Send logs to developer'}
+        {/*
+          Both labels are drawn, one over the other, and the one not wanted is
+          hidden: the chip is always as wide as the longer, so "Sending…" does
+          not narrow it and slide Clear Logs under a thumb aimed at Copy Logs.
+          Nothing to send on an empty log, as Clear Logs beside it says.
+        */}
+        <button className="chip send-logs" onClick={sendNow} disabled={sending || !all.length}>
+          <span className={sending ? 'send-logs-off' : undefined}>Send logs to developer</span>
+          <span className={sending ? undefined : 'send-logs-off'}>Sending…</span>
         </button>
         <button className="chip" onClick={shareFile}>
           {copied || 'Share as file'}
@@ -215,7 +222,8 @@ export default function DebugLog({ device, link }) {
             clearDebugLog()
             setFallback('')
           }}
-          disabled={!all.length}
+          /* Not while a send is on its way: it reads the log after the computer has answered. */
+          disabled={!all.length || sending}
         >
           Clear Logs
         </button>
@@ -224,17 +232,20 @@ export default function DebugLog({ device, link }) {
         </span>
       </div>
 
-      {sentSaid ? (
-        <p className={sentSaid.ok ? 'hint' : 'hint problem'} role="status">
-          {sentSaid.words}
-        </p>
-      ) : null}
+      {/*
+        The answer to the button just pressed, in the bright ink and at body
+        size, not the gray of the help under it: "There was no confirmation."
+        Always there, empty until a send has said something, so a screen
+        reader hears the words change rather than a new element appear.
+      */}
+      <p className={`send-logs-said${sentSaid && !sentSaid.ok ? ' failed' : ''}`} role="status">
+        {sentSaid?.words || ''}
+      </p>
 
       <p className="hint">
         Everything that happened this session, in order — what was written to the unit and what it
-        said back, every error. When something goes wrong, press Send logs to developer and it goes
-        straight to the developer. Or share it as a file and attach that to the chat, or copy it and
-        paste, if you would rather.
+        said back, every error. When something goes wrong, press Send logs to developer. To keep a
+        copy as well, share it as a file or copy it.
       </p>
 
       {fallback ? (

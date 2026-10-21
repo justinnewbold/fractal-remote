@@ -2200,6 +2200,72 @@ test('the debug report carries the computer’s own account of its port', async 
   assert.match(readSrc(new URL('../shared/report-rules.mjs', import.meta.url), 'utf8'), /could not be asked/, 'a computer that does not answer is not said so')
   const fx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
   assert.match(fx, /export const serverDiag = \(\) => request\('\/diag'/, 'the diag has to travel the relay like every other GET, so a phone can ask')
+  /* Over the relay its own timeout would be read as the computer gone (seen(false), Play dims): five seconds only on the direct fetch. */
+  assert.match(fx, /export const serverDiag = \(\) => request\('\/diag', remoteActive\(\) \? \{\} : \{ timeoutMs: 5000 \}\)/, 'a slow /diag over the relay marks a working computer as gone')
+})
+
+test('the browser’s Copy Logs and Send logs to developer, run: the computer’s account, or one line, and never a long wait', async () => {
+  /*
+   * DebugLog's macReport is askComputer(serverDiag, formatMacDiag); this is
+   * that, through the browser's own request(), with the computer's server
+   * answering, refusing, never answering, and the demo on. The deadline is
+   * shortened so the case where it passes costs no real time.
+   */
+  const store = { 'forgefx.host': 'http://unit.test' }
+  globalThis.localStorage = {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => {
+      store[k] = String(v)
+    },
+    removeItem: (k) => {
+      delete store[k]
+    }
+  }
+  const asked = []
+  let answer = 'open'
+  globalThis.fetch = async (url, options = {}) => {
+    asked.push({ path: String(url).replace('http://unit.test', ''), signal: options.signal })
+    if (answer === 'never') return new Promise(() => {})
+    if (answer === 'refuse') throw new TypeError('Failed to fetch')
+    return { ok: true, status: 200, statusText: 'OK', text: async () => JSON.stringify({ transportOpen: true, transportLabel: 'USB FM3', recent: [], reopens: [] }) }
+  }
+  try {
+    const fx = await import('../src/lib/forgefx.js')
+    const { askComputer } = await import('../shared/report-rules.mjs')
+    const { formatMacDiag } = await import('../src/lib/debugLog.js')
+    fx.setDemo(false)
+    const macReport = (wait) => askComputer(fx.serverDiag, formatMacDiag, { wait })
+
+    /* Answering: its account, asked once, with the five seconds on the fetch to its own server. */
+    assert.match(await macReport(2000), /^COMPUTER'S DEVICE SERVER\nport to the unit: open · USB FM3/)
+    assert.deepEqual(asked.map((a) => a.path), ['/diag'])
+    assert.ok(asked[0].signal && typeof asked[0].signal.aborted === 'boolean', 'the direct fetch to the computer has no deadline of its own')
+
+    /* Not answering at all: one line, at the deadline and no later. */
+    answer = 'never'
+    let began = Date.now()
+    assert.equal(await macReport(60), "COMPUTER'S DEVICE SERVER — could not be asked: it did not answer within 60 ms")
+    assert.ok(Date.now() - began < 1500, 'the press waited past the deadline')
+
+    /* Not there: one line in the browser's own words, at once. */
+    answer = 'refuse'
+    began = Date.now()
+    assert.match(await macReport(2000), /^COMPUTER'S DEVICE SERVER — could not be asked: Can’t reach the Fractal Remote app on your computer\./)
+    assert.ok(Date.now() - began < 1500, 'a computer that is not there held the press')
+
+    /* The demo: no computer to blame. */
+    fx.setDemo(true)
+    assert.match(await macReport(2000), /could not be asked: This is the demo, so there is no Fractal Remote app to reach\./)
+  } finally {
+    try {
+      const fx = await import('../src/lib/forgefx.js')
+      fx.setDemo(false)
+    } catch {
+      /* nothing to put back */
+    }
+    delete globalThis.fetch
+    delete globalThis.localStorage
+  }
 })
 
 test('the computer app says which version it is, where the phone already looks', async () => {
