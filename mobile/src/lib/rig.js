@@ -1649,6 +1649,12 @@ async function namesOfLoaded(number, copy) {
  * be unnamed, or a computer app from before 1.87.47 answered with none,
  * and the slot's own read after this is what that computer always had.
  *
+ * The one case the name cannot see: two slots holding presets of the same
+ * name, a working copy one along with other scene names, while the unit is
+ * on the other one. The structure read carries the slot it was stored from
+ * as well, and no computer app says it beside the names yet; the day one
+ * does, judgeCopy refuses another slot's number whatever its name.
+ *
  * null for anything else: another unit, Bluetooth (no computer), an answer
  * that cannot be tied to the preset on screen, a read that failed.
  */
@@ -1656,7 +1662,7 @@ async function am4LoadedNames(number) {
   if (state.deviceSlug !== 'am4' || viaBluetooth() || hostKeepsCopy() === true) return null
   const copy = await device.presetCopy()
   if (state.preset?.number !== number) return null
-  const here = judgeCopy(copy, state.preset?.pending ? undefined : state.preset?.name)
+  const here = judgeCopy(copy, state.preset?.pending ? undefined : state.preset?.name, number)
   if (here === 'stale') logDebug('scenes', `the AM4's loaded preset was not ${number} when the computer read it; reading the stored slot instead`)
   if (!Array.isArray(here) || !here.some((n) => n)) return null
   logDebug('scenes', `the scene names for ${number} came off the AM4's loaded preset`)

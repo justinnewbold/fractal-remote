@@ -2566,9 +2566,45 @@ export function run(test) {
     await blind.ffx.readSceneNames(53)
     assert.equal(blind.asked('/preset/grid'), 0)
 
-    /* And the store asks what is on screen when the answer lands, and drops an answer for a preset already left. */
+    /*
+     * Two slots holding presets of the same name are the one case the name
+     * cannot see. A computer that says which slot its read is of is believed
+     * on the number too: another slot's is the stored slot read, whatever the
+     * name (none says it yet: ForgeFX's grid leaves the location out).
+     */
+    const twin = await bench('AM4', () => ({ name: 'Recto 1', number: 54, scenes: [...KORN], cells: [] }))
+    assert.deepEqual(await twin.ffx.readSceneNames(53, shown('Recto 1')), ['STORED', '', '', ''], 'a same-named preset in another slot gave this one its names')
+    assert.equal(twin.asked('/presets/53/scenes'), 1)
+    const said = await bench('AM4', () => ({ name: 'Recto 1', number: 53, scenes: [...KORN], cells: [] }))
+    assert.deepEqual(await said.ffx.readSceneNames(53, shown('Recto 1')), KORN)
+    assert.equal(said.asked('/presets/53/scenes'), 0)
+
+    /*
+     * The preset on screen moved on while the grid was read: the read stops
+     * there, as the phone's does, rather than dumping the slot just left at
+     * a unit loading the next one. Its answer would only be dropped.
+     */
+    let here2 = true
+    const moved = await bench('AM4', () => {
+      here2 = false
+      return { name: 'Recto 1', scenes: [...KORN], cells: [] }
+    })
+    assert.equal(await moved.ffx.readSceneNames(53, { shown: () => (here2 ? 'Recto 1' : undefined), still: () => here2 }), null)
+    assert.equal(moved.asked('/presets/53/scenes'), 0, 'the slot just left was dumped after the preset on screen moved on')
+    assert.ok(!moved.relay.handed.some((h) => /^\/preset\/backup/.test(h.path)), 'the slot just left was backed up after the preset on screen moved on')
+    assert.ok(moved.ffx.sceneNameTrace.includes('the preset on screen moved on: the slot is not read'))
+    /* Any unit: after its summary, not on to the slot. Still on screen: on, as before. */
+    const fm3moved = await bench('FM3', () => ({ name: 'Recto 1', scenes: [...KORN] }))
+    assert.equal(await fm3moved.ffx.readSceneNames(53, { shown: () => undefined, still: () => false }), null)
+    assert.equal(fm3moved.asked('/presets/53/summary'), 1)
+    assert.equal(fm3moved.asked('/presets/53/scenes'), 0)
+    const stays = await bench('AM4', () => ({ name: 'Recto 1', scenes: [], cells: [] }))
+    assert.deepEqual(await stays.ffx.readSceneNames(53, { shown: () => 'Recto 1', still: () => true }), ['STORED', '', '', ''])
+
+    /* And the store asks what is on screen when the answer lands, and drops an answer for a preset already left (test/run.mjs). */
     const ds = read('src/lib/deviceState.js').replace(/\s+/g, ' ')
-    assert.match(ds, /const shown = \(\) => \(state\.preset\?\.number === number \? state\.preset\?\.name : undefined\) try \{ const found = await driver\.readSceneNames\(number, \{ shown \}\) \/\*[^*]*\*\/ if \(state\.preset\?\.number !== number\) return/)
+    assert.match(ds, /const shown = \(\) => \(state\.preset\?\.number === number \? state\.preset\?\.name : undefined\)/)
+    assert.match(ds, /const found = await driver\.readSceneNames\(number, \{ shown, still \}\) \/\*[^*]*\*\/ if \(!still\(\)\) return/)
   })
 
   /*

@@ -315,7 +315,7 @@ export function trimComputer(text, cap = COMPUTER_BYTES, head = COMPUTER_HEAD_LI
   const between = held.filter((i) => i < from)
   const gone = from - head - between.length
   const note = `… ${gone} line${gone === 1 ? '' : 's'} in between left out to fit${
-    between.length ? `; ${between.length} dump line${between.length === 1 ? '' : 's'} from among them kept above` : ''
+    between.length ? `; ${between.length} held line${between.length === 1 ? '' : 's'} from among them kept above` : ''
   }`
   return [...top, ...between.map((i) => lines[i]), note, ...lines.slice(from)].join('\n')
 }

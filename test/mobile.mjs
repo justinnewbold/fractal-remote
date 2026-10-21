@@ -9225,7 +9225,7 @@ export function run(test) {
     assert.ok(part.length < theirs.length, 'the computer’s part was not cut, so this proves nothing')
 
     /* The held lines from the middle, in order, just above the note saying what went. */
-    const note = part.match(/\n… (\d+) lines in between left out to fit; 3 dump lines from among them kept above\n/)
+    const note = part.match(/\n… (\d+) lines in between left out to fit; 3 held lines from among them kept above\n/)
     assert.ok(note, 'the cut does not say the held lines from the middle were kept')
     const above = part.slice(0, note.index)
     const i1 = above.indexOf('dump scene names: attempt 1/3 failed')
@@ -18051,6 +18051,24 @@ export function run(test) {
     assert.deepEqual(last.rig.getState().sceneNames.slice(0, 2), ['CLEAN', 'LEAD'], 'another preset’s names were believed')
     assert.equal(last.asked(/^GET \/presets\/53\/scenes$/), 1, 'the slot was not read when the loaded preset was another')
     assert.equal(last.asked('PUT /store/config/scene-names-am4%3A53'), 1)
+
+    /*
+     * A preset of the same name in another slot, a working copy one along:
+     * the one case the name cannot see. A computer that says which slot its
+     * read is of is believed on that too (none does yet; see judgeCopy).
+     */
+    const twin = await rigOnTheBench({ ...AM4_PI, scenes: ['CLEAN', 'LEAD', '', ''] })
+    twin.unit.copy = () => ({ name: 'SONG 53', number: 54, scenes: [...KORN], cells: [] })
+    twin.rig.loadPreset(53)
+    await twin.clock.advance(3000)
+    assert.deepEqual(twin.rig.getState().sceneNames.slice(0, 2), ['CLEAN', 'LEAD'], 'a same-named preset in another slot gave this one its names')
+    assert.equal(twin.asked(/^GET \/presets\/53\/scenes$/), 1)
+    const said = await rigOnTheBench({ ...AM4_PI, scenes: ['CLEAN', 'LEAD', '', ''] })
+    said.unit.copy = () => ({ name: 'SONG 53', number: 53, scenes: [...KORN], cells: [] })
+    said.rig.loadPreset(53)
+    await said.clock.advance(3000)
+    assert.deepEqual(said.rig.getState().sceneNames, KORN)
+    assert.equal(said.asked(/^GET \/presets\/53\/scenes$/), 0)
 
     /* A slow answer that lands after the next tap is dropped, and the next preset gets its own. */
     const slow = await rigOnTheBench({ ...AM4_PI, scenes: ['', '', '', ''] })

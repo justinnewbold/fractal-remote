@@ -2637,8 +2637,15 @@ const traceStep = (step) => sceneNameTrace.push(step)
  * `shown` says what the preset on screen is called now, or undefined when
  * the preset on screen is no longer `number` or its name is not known yet.
  * Only an AM4's loaded-preset read asks it; see that step below.
+ *
+ * `still` says whether the preset on screen is still the one this read is
+ * for. Once it is not, the read stops before the slot's own dump: its answer
+ * would only be dropped (deviceState refreshSceneNames), and the dump would
+ * land on a unit loading the next preset. The phone stops there too
+ * (mobile/src/lib/rig.js namesOfLoaded). null then.
  */
-export async function readSceneNames(number, { shown } = {}) {
+export async function readSceneNames(number, { shown, still } = {}) {
+  const movedOn = () => typeof still === 'function' && !still()
   if (mock) {
     await tick()
     return mock.getScene().names
@@ -2679,12 +2686,15 @@ export async function readSceneNames(number, { shown } = {}) {
    * (judgeCopy), since a footswitch can have moved the unit on; and not when
    * every name is blank, which is also what a computer app from before
    * 1.87.47 answers, so the dump after this stays exactly what it had.
+   * Two slots holding presets of the same name are the one case the name
+   * cannot see; see judgeCopy, which takes the slot's number for the day a
+   * computer app says it.
    */
   if (typeof number === 'number' && unitSlug === 'am4' && typeof shown === 'function') {
     const copy = await presetCopy()
-    const here = judgeCopy(copy, shown())
+    const here = judgeCopy(copy, shown(), number)
     if (here === 'stale') {
-      traceStep(`loaded: the computer read another preset ("${copy.name}") — ignored`)
+      traceStep(`loaded: the computer read another preset ("${copy.name}"${Number.isInteger(copy.number) ? `, in ${copy.number}` : ''}) — ignored`)
     } else if (Array.isArray(here) && here.some((n) => n)) {
       rememberSceneNames(number, here)
       traceStep('loaded: found names')
@@ -2701,6 +2711,10 @@ export async function readSceneNames(number, { shown } = {}) {
    * computer can read an AM4's names too. An older computer app answers 404,
    * and the backup is still there for it.
    */
+  if (movedOn()) {
+    traceStep('the preset on screen moved on: the slot is not read')
+    return null
+  }
   if (typeof number === 'number') {
     try {
       const res = await request(`/presets/${number}/scenes`)
@@ -2724,6 +2738,10 @@ export async function readSceneNames(number, { shown } = {}) {
     }
   }
 
+  if (movedOn()) {
+    traceStep('the preset on screen moved on: the slot is not read')
+    return null
+  }
   try {
     const dump = await backupPreset(number)
     const names = dump?.sceneNames
@@ -2814,7 +2832,9 @@ export async function presetCopy() {
   if (!Array.isArray(res?.scenes)) return null
   return {
     name: typeof res.name === 'string' ? cleanPresetName(res.name) : null,
-    scenes: res.scenes.map((n) => (typeof n === 'string' ? n.trim() : ''))
+    scenes: res.scenes.map((n) => (typeof n === 'string' ? n.trim() : '')),
+    /* Which slot it is of, when the computer says (none does yet; see judgeCopy). */
+    ...(Number.isInteger(res.number) && res.number >= 0 ? { number: res.number } : {})
   }
 }
 

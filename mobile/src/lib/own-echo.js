@@ -164,8 +164,15 @@ export function classifyGridNews(shown, states, known = new Set(), idOf = (b) =>
  * structure, not a copy, and is judged by the same name before its names are
  * believed (mobile/src/lib/rig.js am4LoadedNames, src/lib/forgefx.js
  * readSceneNames).
+ *
+ * A name cannot tell apart two slots holding presets of the same name: a
+ * working copy one slot along, say, with other scene names. That read also
+ * carries the slot the preset was stored from, and no computer app says it
+ * beside the name yet. `shownNumber` is for the day one does: an answer that
+ * says another slot's number is 'stale' whatever its name. Not passed, or not
+ * said, and the name decides alone, as it always has.
  */
-export function judgeCopy(copy, shownName) {
+export function judgeCopy(copy, shownName, shownNumber) {
   const scenes = Array.isArray(copy?.scenes) ? copy.scenes : null
   if (!scenes?.length || typeof copy.name !== 'string') return null
   /*
@@ -176,5 +183,6 @@ export function judgeCopy(copy, shownName) {
    * second), each time a block went in.
    */
   if (typeof shownName !== 'string') return null
+  if (Number.isInteger(shownNumber) && Number.isInteger(copy.number) && copy.number >= 0 && copy.number !== shownNumber) return 'stale'
   return copy.name.trim() === shownName.trim() ? scenes : 'stale'
 }

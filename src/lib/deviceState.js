@@ -830,16 +830,22 @@ export function tapBeat() {
 
 export async function refreshSceneNames(number) {
   if (!driver?.readSceneNames) return
+  const run = presetRun
   /* What the preset on screen is called now, while it is still `number`: an AM4's
      loaded-preset names are believed only under it (lib/forgefx.js readSceneNames). */
   const shown = () => (state.preset?.number === number ? state.preset?.name : undefined)
+  /* Whether the preset on screen is still the one asked about: the same number, or
+     the same buffer saved over another slot since (presetSaved moves the number, not
+     the preset, and the names read for the buffer are still its names). */
+  const still = () =>
+    state.preset?.number === number || (run === presetRun && savedOver?.from === number && savedOver.to === state.preset?.number)
   try {
-    const found = await driver.readSceneNames(number, { shown })
+    const found = await driver.readSceneNames(number, { shown, still })
     /* A slow read that lands after the next preset would put the last song's names on this song's tiles. */
-    if (state.preset?.number !== number) return
+    if (!still()) return
     set({ sceneNames: Array.isArray(found) ? found : NO_NAMES })
   } catch {
-    if (state.preset?.number !== number) return
+    if (!still()) return
     set({ sceneNames: NO_NAMES })
   }
 }
@@ -1126,6 +1132,8 @@ function layStates(states) {
  */
 let presetRun = 0
 let presetLoads = 0
+/* The buffer on screen saved over another slot ({ from, to }), until another preset comes: see refreshSceneNames. */
+let savedOver = null
 let settleTimer = null
 let settleWaiting = []
 let settleReading = null
@@ -1405,6 +1413,7 @@ async function refreshPresetOnly() {
 
 /* A different preset means different blocks, values and scene names. */
 function enterPreset(fresh) {
+  savedOver = null
   resetSchemaCache()
   seePreset(fresh)
   /* A chain up from memory for another preset than the one the unit is on is nobody's now. */
@@ -1449,6 +1458,7 @@ export async function presetSaved(number, name) {
     return state.chainFor === state.preset?.number ? { chainFor: to } : {}
   }
   set({ ...carry(number), preset: { ...(was || {}), number, ...(kept ? { name: kept, empty: false } : {}) } })
+  savedOver = Number.isInteger(was?.number) && was.number !== number ? { from: was.number, to: number } : null
   seePreset(state.preset)
   if (!driver?.currentPreset) return
   for (let i = 0; i < SETTLING_TRIES; i++) {
@@ -1490,6 +1500,7 @@ export async function loadPreset(number, { selected, at = Date.now() } = {}) {
   const run = ++presetRun
   /* No read owes this tap a name until it lands: see takeVp4Name. */
   vp4Owed = null
+  savedOver = null
   presetLoads += 1
   /*
    * A preset loaded here before goes up on the tap: its name, its scene
@@ -2104,6 +2115,7 @@ export function reset() {
   sceneMissed = false
   presetLoads = 0
   presetRun += 1
+  savedOver = null
   chainRead = null
   clock.clearTimeout(staleTimer)
   staleTimer = null

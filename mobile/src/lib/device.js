@@ -413,7 +413,9 @@ export async function presetCopy() {
     if (!Array.isArray(res?.scenes)) return null
     return {
       name: typeof res.name === 'string' ? cleanPresetName(res.name) : null,
-      scenes: res.scenes.map((n) => (typeof n === 'string' ? n.trim() : ''))
+      scenes: res.scenes.map((n) => (typeof n === 'string' ? n.trim() : '')),
+      /* Which slot it is of, when the computer says (none does yet; see judgeCopy). */
+      ...(Number.isInteger(res.number) && res.number >= 0 ? { number: res.number } : {})
     }
   } catch {
     return null
