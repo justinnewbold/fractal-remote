@@ -206,6 +206,11 @@ export const COMPUTER_BYTES = 30_000
  * purpose, and once the ring has let them go they sit at the FRONT, so
  * cutting from the front the way trimToBytes does would throw away exactly
  * them. This cuts the middle.
+ *
+ * A Linux computer that says what its MIDI input holds adds up to 13 lines
+ * to the summary (formatMacDiag's linux midi lines), usually 6 or 7. A held
+ * line that pushes past the head then is in the middle, where COMPUTER_HELD
+ * below keeps it: every kind ForgeFX holds is one it matches.
  */
 export const COMPUTER_HEAD_LINES = 48
 
@@ -219,9 +224,12 @@ export const COMPUTER_HEAD_LINES = 48
  * lines ago is in the part the cut throws away. So the cut keeps these from
  * its middle as well, up to ForgeFX's own HOLD of 24, newest first, just
  * under the head: every line its am4 driver writes about a dump, and a
- * backup that took more than one attempt (the two kinds #logHeld writes).
+ * backup that took more than one attempt (the two kinds #logHeld writes),
+ * and the piece of a cut SysEx its MIDI input dropped (computer app 1.87.47
+ * on, the third kind: on a Raspberry Pi it is the trace of a dump the
+ * kernel cut, and the reply it would have eaten).
  */
-export const COMPUTER_HELD = /\[forgefx\]\[am4\] (dump |backup .* on attempt \d+\/\d+$)/
+export const COMPUTER_HELD = /\[forgefx\]\[am4\] (dump |backup .* on attempt \d+\/\d+$)|\[forgefx\]\[midi\] dropped \d+B with no F7/
 export const COMPUTER_HELD_LINES = 24
 
 /** The one line said in place of the computer's log. Copy Logs' own words. */

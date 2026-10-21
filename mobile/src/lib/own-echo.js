@@ -156,9 +156,14 @@ export function classifyGridNews(shown, states, known = new Set(), idOf = (b) =>
  *
  * GET /preset/grid is answered out of the same copy and carries its name.
  * Returns the scene names when the copy is this preset, 'stale' when it is
- * another, and null when it cannot say: an AM4, whose copy holds no names; a
- * computer that did not answer; a preset whose name is not known yet (pass
- * undefined for that, not '').
+ * another, and null when it cannot say: an AM4 on a computer app from before
+ * 1.87.47, whose answer holds no names; a computer that did not answer; a
+ * preset whose name is not known yet (pass undefined for that, not '').
+ *
+ * An AM4's answer is its computer's small read of the loaded preset's
+ * structure, not a copy, and is judged by the same name before its names are
+ * believed (mobile/src/lib/rig.js am4LoadedNames, src/lib/forgefx.js
+ * readSceneNames).
  */
 export function judgeCopy(copy, shownName) {
   const scenes = Array.isArray(copy?.scenes) ? copy.scenes : null

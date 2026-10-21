@@ -1601,7 +1601,9 @@ export async function refreshTempo() {
  *
  * The summary is only asked when that has nothing (an AM4, whose chain read
  * carries no names, or a computer that could not answer), and then once. An
- * AM4's own read of the slot comes last, as it always did.
+ * AM4 through a computer asks the computer for its loaded preset's names
+ * first (am4LoadedNames), and its own read of the slot comes last, as it
+ * always did.
  *
  * `copy` is judgeCopy's answer when the caller has just asked for it.
  *
@@ -1618,6 +1620,8 @@ async function namesOfLoaded(number, copy) {
     return null
   }
   if (here?.length) return here
+  const loaded = await am4LoadedNames(number)
+  if (loaded || state.preset?.number !== number) return loaded
   /* An AM4 over Bluetooth has no summary to give: its names are read whole,
      straight off the unit (lib/bleWire am4SceneNames). */
   if (!bluetoothAm4()) {
@@ -1625,6 +1629,38 @@ async function namesOfLoaded(number, copy) {
     if (summary.length || state.preset?.number !== number) return summary
   }
   return device.unitSceneNames(number)
+}
+
+/*
+ * AN AM4'S LOADED PRESET, OFF THE COMPUTER'S STRUCTURE READ.
+ *
+ * "The same names are not showing up again at all. on the AM4." Through a
+ * computer an AM4's names came only from the stored slot's dump, 12,352
+ * bytes, and a Raspberry Pi 3's MIDI input cut that to 3,095 every time.
+ * The small read of the preset's structure the computer already makes
+ * every few seconds carries the loaded preset's four names as well, and
+ * GET /preset/grid hands them over with the preset's name beside them:
+ * one short request, nothing new sent to the unit, never a dump.
+ *
+ * Believed only when that name is the one on screen (judgeCopy). The read
+ * is of whatever is loaded, which a footswitch can have moved on from, and
+ * names put up from it are kept for the slot for good: the last song's,
+ * on this song's tiles. All blank is not believed either: the scenes may
+ * be unnamed, or a computer app from before 1.87.47 answered with none,
+ * and the slot's own read after this is what that computer always had.
+ *
+ * null for anything else: another unit, Bluetooth (no computer), an answer
+ * that cannot be tied to the preset on screen, a read that failed.
+ */
+async function am4LoadedNames(number) {
+  if (state.deviceSlug !== 'am4' || viaBluetooth() || hostKeepsCopy() === true) return null
+  const copy = await device.presetCopy()
+  if (state.preset?.number !== number) return null
+  const here = judgeCopy(copy, state.preset?.pending ? undefined : state.preset?.name)
+  if (here === 'stale') logDebug('scenes', `the AM4's loaded preset was not ${number} when the computer read it; reading the stored slot instead`)
+  if (!Array.isArray(here) || !here.some((n) => n)) return null
+  logDebug('scenes', `the scene names for ${number} came off the AM4's loaded preset`)
+  return here
 }
 
 /* Whether the unit is reached over Bluetooth (beta): no computer, no computer's store.

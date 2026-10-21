@@ -402,7 +402,10 @@ export async function sceneNames(number) {
  * the preset on screen at all; see judgeCopy in own-echo.
  *
  * null when there is no answer (an older computer, a read that failed). An
- * AM4's scene list is always empty — its chain read carries no names.
+ * AM4's answer comes out of the computer's small read of the preset's
+ * structure rather than a copy of it, and from computer app 1.87.47 carries
+ * the loaded preset's four scene names (rig.js am4LoadedNames); before that
+ * its scene list was always empty.
  */
 export async function presetCopy() {
   try {

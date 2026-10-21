@@ -2508,6 +2508,70 @@ export function run(test) {
   })
 
   /*
+   * "The same names are not showing up again at all. on the AM4" (Justin, 21
+   * October 2026, a Raspberry Pi 3). The browser's AM4 names came only from
+   * the stored slot's dump, which that Pi cut short every time. The
+   * computer's structure read carries the loaded preset's names with its
+   * name (ForgeFX 296a1ac): asked before the dump, believed only under the
+   * preset on screen, and with anything less the dump is asked as before.
+   * The phone's rule (test/mobile.mjs), run on the browser's own driver.
+   */
+  test('browser: an AM4’s scene names come off its loaded preset through the computer, only when it is the preset on screen', async () => {
+    const KORN = ['FREAK ON A LEASH', 'BLIND', 'FALLING AWAY', 'GOT THE LIFE']
+    const bench = async (unit, grid) => {
+      const { ffx, relay } = await forgefxOnABench()
+      relay.answer = async (path) => {
+        if (path === '/device/detect') return { connected: true, name: unit, short: unit, capabilities: { scenes: 4, slotModel: 'linear' } }
+        if (path === '/device') return {}
+        if (path === '/presets/53/summary') throw Object.assign(new Error('unsupported'), { status: 501 })
+        if (path === '/preset/grid') return grid()
+        if (path === '/presets/53/scenes') return { number: 53, names: ['STORED', '', '', ''] }
+        return null
+      }
+      await ffx.detect()
+      relay.handed.length = 0
+      const asked = (p) => relay.handed.filter((h) => h.path === p).length
+      return { ffx, relay, asked }
+    }
+    const shown = (name) => ({ shown: () => name })
+
+    /* The loaded preset is the one on screen: its names, and no dump. */
+    const here = await bench('AM4', () => ({ name: 'Recto 1', scenes: [...KORN], cells: [] }))
+    assert.deepEqual(await here.ffx.readSceneNames(53, shown('Recto 1')), KORN)
+    assert.equal(here.asked('/presets/53/scenes'), 0, 'the stored slot was dumped for names the computer had')
+    assert.equal(here.asked('/preset/grid'), 1)
+    assert.ok(here.ffx.sceneNameTrace.includes('loaded: found names'))
+    /* Kept on the computer for the slot, as every route that finds names does (not awaited by the read). */
+    for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r))
+    assert.ok(here.relay.handed.some((h) => h.path === '/store/config/scene-names-am4%3A53' && h.method === 'PUT'), 'the names were not kept on the computer')
+
+    /* Another preset (the last song), an older computer, every scene blank, no name to go on, a refused read: the dump, as before. */
+    for (const [why, grid, name] of [
+      ['another preset', () => ({ name: 'Bad Wolf Rising LM', scenes: [...KORN] }), 'Recto 1'],
+      ['a computer app from before 1.87.47', () => ({ name: 'Recto 1', scenes: [] }), 'Recto 1'],
+      ['every scene blank', () => ({ name: 'Recto 1', scenes: ['', '', '', ''] }), 'Recto 1'],
+      ['no name on screen yet', () => ({ name: 'Recto 1', scenes: [...KORN] }), undefined],
+      ['a refused read', () => { throw Object.assign(new Error('unsupported'), { status: 501 }) }, 'Recto 1']
+    ]) {
+      const b = await bench('AM4', grid)
+      assert.deepEqual(await b.ffx.readSceneNames(53, shown(name)), ['STORED', '', '', ''], `${why}: not the stored slot’s names`)
+      assert.equal(b.asked('/presets/53/scenes'), 1, `${why}: the slot was not read as before`)
+    }
+
+    /* Not an AM4, or asked without the preset on screen: the loaded read is never asked. */
+    const fm3 = await bench('FM3', () => ({ name: 'Recto 1', scenes: [...KORN] }))
+    await fm3.ffx.readSceneNames(53, shown('Recto 1'))
+    assert.equal(fm3.asked('/preset/grid'), 0, 'an FM3’s name read asked the loaded preset')
+    const blind = await bench('AM4', () => ({ name: 'Recto 1', scenes: [...KORN] }))
+    await blind.ffx.readSceneNames(53)
+    assert.equal(blind.asked('/preset/grid'), 0)
+
+    /* And the store asks what is on screen when the answer lands, and drops an answer for a preset already left. */
+    const ds = read('src/lib/deviceState.js').replace(/\s+/g, ' ')
+    assert.match(ds, /const shown = \(\) => \(state\.preset\?\.number === number \? state\.preset\?\.name : undefined\) try \{ const found = await driver\.readSceneNames\(number, \{ shown \}\) \/\*[^*]*\*\/ if \(state\.preset\?\.number !== number\) return/)
+  })
+
+  /*
    * NOT CONNECTED IS NEVER UNDER A CARD AT THE TOP.
    *
    * Measured on the real phone app at 320 by 568 (the first iPhone SE, or a

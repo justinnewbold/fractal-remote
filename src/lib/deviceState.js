@@ -830,10 +830,16 @@ export function tapBeat() {
 
 export async function refreshSceneNames(number) {
   if (!driver?.readSceneNames) return
+  /* What the preset on screen is called now, while it is still `number`: an AM4's
+     loaded-preset names are believed only under it (lib/forgefx.js readSceneNames). */
+  const shown = () => (state.preset?.number === number ? state.preset?.name : undefined)
   try {
-    const found = await driver.readSceneNames(number)
+    const found = await driver.readSceneNames(number, { shown })
+    /* A slow read that lands after the next preset would put the last song's names on this song's tiles. */
+    if (state.preset?.number !== number) return
     set({ sceneNames: Array.isArray(found) ? found : NO_NAMES })
   } catch {
+    if (state.preset?.number !== number) return
     set({ sceneNames: NO_NAMES })
   }
 }
