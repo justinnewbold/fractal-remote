@@ -24,19 +24,22 @@
  */
 import {
   KINDS,
+  LOGS_ONLY_MESSAGE,
   MAX_MESSAGE,
+  SENT_WORDS,
   buildReport,
   carriesLog,
   contextFrom,
   lastErrorFrom,
+  notSentWords,
   pickForReport,
   trimToBytes
 } from '../../shared/report-rules.mjs'
-import { formatLine, getDebugLog } from './debugLog.js'
+import { formatLine, getDebugLog, logDebug } from './debugLog.js'
 import { DEFAULT_PROJECT, supabaseClient } from './remote.js'
 import { VERSION } from './version.js'
 
-export { KINDS, MAX_MESSAGE, carriesLog }
+export { KINDS, MAX_MESSAGE, SENT_WORDS, carriesLog }
 
 /**
  * What was going on when they wrote it.
@@ -94,7 +97,7 @@ export function logPreview(kind) {
  * no network at all, which is common enough on a stage and must not lose what
  * they typed — the caller keeps the text on screen when this rejects.
  */
-export async function sendReport({ kind, message, contact, context: ctx = {}, withLog = true }) {
+export async function sendReport({ kind, message, contact, context: ctx = {}, withLog = true, computer = '' }) {
   const row = buildReport({
     kind,
     message,
@@ -109,7 +112,9 @@ export async function sendReport({ kind, message, contact, context: ctx = {}, wi
      * into a null column rather than an empty one.
      */
     lines: withLog ? getDebugLog() : [],
-    format: withLog ? formatLine : null
+    format: withLog ? formatLine : null,
+    /* The computer's own log, when the caller asked for it (sendLogs). */
+    computer: withLog ? computer : ''
   })
 
   /*
@@ -133,12 +138,39 @@ export async function sendReport({ kind, message, contact, context: ctx = {}, wi
 
   const { error } = await c.from('feedback').insert({ ...row, user_id: userId })
 
-  if (error) {
-    throw new Error(
-      /fetch|network/i.test(error.message || '')
-        ? "Couldn't reach the internet to send that. What you wrote is still here — try again in a moment."
-        : `That didn't send: ${error.message}`
-    )
+  /* Nothing was written for a log sent in one tap, so nothing is "still here". */
+  if (error) throw new Error(notSentWords(error, { wrote: row.message !== LOGS_ONLY_MESSAGE }))
+  return true
+}
+
+/**
+ * "Send logs to developer", from Settings → Troubleshooting → Debug log: a
+ * bug report in one press, the phone's button at this end too.
+ *
+ * No form. The message is the app's own sentence (LOGS_ONLY_MESSAGE), the
+ * context is the one the Feedback form sends, the log goes, and `computer`
+ * is the computer's own account as Copy Logs builds it (DebugLog's
+ * macReport), which the caller has already asked for. Throws in words a
+ * person can read, like sendReport, and writes into the log whether it went.
+ */
+let sendingLogs = null
+export function sendLogs(options) {
+  /* Never two at once: a second call while one is going is handed that one. */
+  if (!sendingLogs) {
+    sendingLogs = sendLogsNow(options).finally(() => {
+      sendingLogs = null
+    })
   }
+  return sendingLogs
+}
+
+async function sendLogsNow({ context: ctx = {}, computer = '' } = {}) {
+  try {
+    await sendReport({ kind: 'bug', message: LOGS_ONLY_MESSAGE, context: ctx, withLog: true, computer })
+  } catch (err) {
+    logDebug('app', 'logs not sent to the developer', err?.message)
+    throw err
+  }
+  logDebug('app', 'logs sent to the developer')
   return true
 }

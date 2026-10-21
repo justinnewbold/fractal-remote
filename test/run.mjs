@@ -2195,8 +2195,9 @@ test('the debug report carries the computer’s own account of its port', async 
 
   const panel = readSrc(new URL('../src/components/DebugLog.jsx', import.meta.url), 'utf8')
   assert.match(panel, /const t = text\(await macReport\(\)\)/, 'Copy Logs does not ask the computer')
-  assert.match(panel, /formatMacDiag\(await serverDiag\(\)\)/)
-  assert.match(panel, /could not be asked/, 'a computer that does not answer is not said so')
+  /* Through the rule Send logs to developer uses too (shared/report-rules askComputer), which says so in words and never waits past its deadline. */
+  assert.match(panel, /const macReport = \(\) => askComputer\(serverDiag, formatMacDiag\)/)
+  assert.match(readSrc(new URL('../shared/report-rules.mjs', import.meta.url), 'utf8'), /could not be asked/, 'a computer that does not answer is not said so')
   const fx = readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8')
   assert.match(fx, /export const serverDiag = \(\) => request\('\/diag'/, 'the diag has to travel the relay like every other GET, so a phone can ask')
 })

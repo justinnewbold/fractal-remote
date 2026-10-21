@@ -8840,10 +8840,398 @@ export function run(test) {
       assert.match(src, /setPreview\(null\)/, `${where} keeps a preview across a change of kind`)
     }
 
-    /* Setup and the log screen both reach it on the phone, which is where the
-       log is being looked at when somebody decides to send it. */
+    /* Setup reaches the form on the phone. The log screen sends by itself
+       now (the next test), so it no longer opens the form at all. */
     assert.match(read('mobile/App.js'), /screen === 'report'/, 'the phone cannot open the report screen')
-    assert.match(read('mobile/src/screens/Log.js'), /onReport/, 'the log screen offers no way to send it')
+    assert.match(read('mobile/src/screens/Log.js'), /sendLogs\(\{ deviceName \}\)/, 'the log screen offers no way to send it')
+  })
+
+  test('Send logs to developer sends from the log screen in one tap, with no form, and says so', () => {
+    /*
+     * "Check if the log was sent. There was no confirmation." It was not. The
+     * button opened the Feedback form, whose Send stays dark until something
+     * is typed, and his log read "press Send logs to developer" then "press
+     * Done": nothing went, and nothing said so. Read as text, because the
+     * screen is React Native; what it calls is run in the next test.
+     */
+    const log = read('mobile/src/screens/Log.js').replace(/\s+/g, ' ')
+
+    /* No form opens: the screen is not handed a way to open one, and App.js no longer gives it one. */
+    assert.doesNotMatch(log, /onReport/, 'the log screen still opens the Feedback form instead of sending')
+    assert.match(log, /export default function Log\(\{ onBack \}\)/)
+    const app = read('mobile/App.js').replace(/\s+/g, ' ')
+    assert.match(app, /<Log onBack=\{\(\) => setScreen\('settings'\)\} \/>/, 'App.js hands the log screen a way into the form')
+    assert.doesNotMatch(app, /setReportFrom\('log'\)/, 'the log screen still goes to the form')
+    /* The form is still there for anybody with something to write. */
+    assert.match(read('mobile/src/screens/Settings.js'), /onPress=\{onOpenReport\}/, 'Setup lost its way into the Feedback form')
+
+    /* The button sends, says Sending… while it does, and cannot be pressed again meanwhile. */
+    assert.match(log, /import \{ SENT_WORDS, sendLogs \} from '\.\.\/lib\/reports'/)
+    assert.match(log, /<Press label=\{sending \? 'Sending…' : 'Send logs to developer'\} tone="signal" disabled=\{sending\} onPress=\{send\} \/>/, 'the button does not send, or does not say it is sending')
+    /* Never twice in flight: the ref is checked and set before the first await. */
+    assert.match(
+      log,
+      /const send = async \(\) => \{ if \(inFlight\.current\) return inFlight\.current = true setSending\(true\) setSentSaid\(null\) try \{ await sendLogs\(\{ deviceName \}\)/,
+      'a second tap can start a second report before the first has gone'
+    )
+    assert.match(log, /finally \{ inFlight\.current = false setSending\(false\) \}/, 'a failed send leaves the button dead')
+
+    /* Said under the button, in the Feedback form's own words, or the reason it did not go. */
+    assert.match(log, /setSentSaid\(\{ ok: true, words: SENT_WORDS \}\)/)
+    assert.match(log, /setSentSaid\(\{ ok: false, words: err\?\.message \|\| String\(err\) \}\)/, 'a failed send says nothing')
+    assert.match(log, /\{sentSaid \? <Note tone=\{sentSaid\.ok \? 'hint' : 'fault'\}>\{sentSaid\.words\}<\/Note> : null\}/)
+    /* And it stays until the screen is left: nothing clears it on a timer, the way the copy line clears. */
+    assert.doesNotMatch(log, /setSentSaid\(null\), \d+/, 'the sent line goes away on a timer')
+    assert.equal((log.match(/setSentSaid\(null\)/g) || []).length, 1, 'something other than a new send clears the sent line')
+  })
+
+  test('Send logs to developer sends a bug with the log, a fixed message and the computer’s own log', async () => {
+    /*
+     * The phone's lib/reports.js, run: copied beside the real report rules
+     * and the real debug log, with the relay, the link and React Native
+     * stood in for. What reaches the table is the row the test reads.
+     */
+    const dir = mkdtempSync(join(tmpdir(), 'send-logs-'))
+    const esm = (src) => src.replace(/from '\.\/([\w.-]+)'/g, (whole, name) => (/\.m?js$/.test(name) ? whole : `from './${name}.js'`))
+    const bench = (globalThis.__sendLogsBench = {
+      via: 'computer',
+      link: { link: 'connected', hostVersion: '1.87.40' },
+      asked: [],
+      inserts: [],
+      insertError: null,
+      diag: async () => ({ transportOpen: true, recent: ['2026-10-21T10:00:00.000Z log [forgefx][am4] dump scene names: attempt 1/3 failed'], reopens: [] })
+    })
+    const files = {
+      'package.json': '{ "type": "module" }',
+      'rn.js': "export const Platform = { OS: 'ios', Version: '18.0' }\nexport const Dimensions = { get: () => ({ width: 393, height: 852 }) }\n",
+      'relay.js': `
+        const b = globalThis.__sendLogsBench
+        export const DEFAULT_PROJECT = { url: 'https://example.invalid', anonKey: 'anon' }
+        export const remoteRequest = (path, options) => { b.asked.push({ path, options }); return b.diag(path, options) }
+        export const supabaseClient = () => ({
+          auth: { getUser: async () => ({ data: { user: { id: 'user-1' } } }) },
+          from: (table) => ({
+            insert: async (row) => {
+              b.inserts.push({ table, row })
+              if (b.hold) await b.hold
+              return { error: b.insertError }
+            }
+          })
+        })
+      `,
+      'version.js': "export const APP_VERSION = '1.87.46'\n",
+      'link.js': 'const b = globalThis.__sendLogsBench\nexport const linkState = () => b.link\nexport const linkVia = () => b.via\n',
+      'debugLog.js': read('mobile/src/lib/debugLog.js'),
+      /* The computer's deadline shortened, so the case where it passes costs no real time. */
+      'report-rules.js': read('mobile/src/lib/report-rules.js').replace('export const COMPUTER_WAIT_MS = 5000', 'export const COMPUTER_WAIT_MS = 40'),
+      'reports.js': esm(read('mobile/src/lib/reports.js')).replace("from 'react-native'", "from './rn.js'")
+    }
+    try {
+      for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+      const at = (f) => pathToFileURL(join(dir, f)).href
+      const reports = await import(at('reports.js'))
+      const rules = await import(at('report-rules.js'))
+      const log = await import(at('debugLog.js'))
+
+      log.clearDebugLog()
+      log.logDebug('tap', 'press Send logs to developer')
+      log.logDebug('error', 'GET /preset/blocks failed', 'port not open')
+
+      /* Connected: one bug report, the app's own message, the phone's lines, then the computer's. */
+      await reports.sendLogs({ deviceName: 'AM4' })
+      assert.equal(bench.inserts.length, 1, 'the log was not sent')
+      const { table, row } = bench.inserts[0]
+      assert.equal(table, 'feedback')
+      assert.equal(row.kind, 'bug')
+      assert.equal(row.message, rules.LOGS_ONLY_MESSAGE, 'the message is not the fixed sentence')
+      assert.equal(row.user_id, 'user-1')
+      assert.equal(row.contact, null)
+      /* The context the Feedback form sends. */
+      assert.equal(row.context.version, '1.87.46')
+      assert.equal(row.context.macVersion, '1.87.40')
+      assert.equal(row.context.unit, 'AM4')
+      assert.equal(row.context.platform, 'phone')
+      assert.equal(row.context.lastError, 'GET /preset/blocks failed')
+      assert.match(row.log, /\[tap\] press Send logs to developer/, 'the phone’s own lines did not go')
+      assert.match(row.log, /\n\nCOMPUTER'S DEVICE SERVER\nport to the unit: open/, 'the computer’s own log did not go after the phone’s')
+      assert.match(row.log, /\[forgefx\]\[am4\] dump scene names: attempt 1\/3 failed/, 'the computer’s held dump lines did not go')
+      assert.ok(row.log.indexOf('[tap] press Send logs') < row.log.indexOf("COMPUTER'S DEVICE SERVER"), 'the computer’s log came before the phone’s')
+      /* Asked straight, with no wait for a dropped channel. */
+      assert.deepEqual(bench.asked, [{ path: '/diag', options: { graceMs: 0 } }])
+      /* And the log itself says it went, for the next copy of it. */
+      assert.equal(log.getDebugLog().at(-1).message, 'logs sent to the developer')
+
+      /* Nobody to ask: sent at once without it, with one line saying why, and the computer never asked. */
+      for (const [via, link, why] of [
+        ['demo', 'connected', /could not be asked: the demo is on, so there is no computer to ask/],
+        ['bluetooth', 'connected', /could not be asked: Bluetooth \(beta\) is on, so the unit is reached without a computer/],
+        ['computer', 'no-answer', /could not be asked: not connected to a computer \(no-answer\)/]
+      ]) {
+        bench.via = via
+        bench.link = { link }
+        bench.asked = []
+        bench.inserts = []
+        await reports.sendLogs({ deviceName: 'AM4' })
+        assert.equal(bench.asked.length, 0, `the computer was asked with ${via} / ${link}`)
+        assert.equal(bench.inserts.length, 1, `nothing was sent with ${via} / ${link}`)
+        const text = bench.inserts[0].row.log
+        assert.match(text, why)
+        assert.equal(text.match(/COMPUTER'S DEVICE SERVER/g).length, 1, 'more than one line about the computer')
+        assert.match(text, /\[tap\] press Send logs to developer/)
+      }
+
+      /* The computer asked and failing, or never answering: one line, and the report still goes, on time. */
+      bench.via = 'computer'
+      bench.link = { link: 'connected' }
+      for (const [diag, why] of [
+        [async () => { throw new Error('Your computer didn’t answer.') }, /could not be asked: Your computer didn’t answer\./],
+        [() => new Promise(() => {}), /could not be asked: it did not answer within/]
+      ]) {
+        bench.diag = diag
+        bench.inserts = []
+        const began = Date.now()
+        await reports.sendLogs({ deviceName: 'AM4' })
+        assert.ok(Date.now() - began < 2000, 'the send waited past the computer’s deadline')
+        assert.equal(bench.inserts.length, 1, 'a computer that could not answer stopped the report')
+        assert.match(bench.inserts[0].row.log, why)
+      }
+
+      /* Never twice in flight: a second press while one is going gets the same one. */
+      let release
+      bench.hold = new Promise((go) => (release = go))
+      bench.inserts = []
+      const first = reports.sendLogs({ deviceName: 'AM4' })
+      const second = reports.sendLogs({ deviceName: 'AM4' })
+      assert.equal(first, second, 'a second press started a second report')
+      for (let i = 0; i < 20 && !bench.inserts.length; i++) await new Promise((r) => setTimeout(r, 5))
+      release()
+      await first
+      assert.equal(bench.inserts.length, 1, 'two reports went for two quick presses')
+      bench.hold = null
+      /* And once it has gone, the next press is a new report. */
+      await reports.sendLogs({ deviceName: 'AM4' })
+      assert.equal(bench.inserts.length, 2)
+
+      /* A send that fails says why in words, never that "what you wrote" is still there, and can be pressed again. */
+      bench.insertError = { message: 'TypeError: Network request failed' }
+      await assert.rejects(reports.sendLogs({ deviceName: 'AM4' }), (err) => {
+        assert.equal(err.message, "Couldn't reach the internet to send that. Try again in a moment.")
+        return true
+      })
+      assert.equal(log.getDebugLog().at(-1).message, 'logs not sent to the developer')
+      bench.insertError = { message: 'new row violates row-level security policy' }
+      await assert.rejects(reports.sendLogs({ deviceName: 'AM4' }), /^Error: That didn't send: new row violates row-level security policy$/)
+      bench.insertError = null
+      await reports.sendLogs({ deviceName: 'AM4' })
+      log.clearDebugLog()
+    } finally {
+      delete globalThis.__sendLogsBench
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('the log sent in one tap has words of its own, and the form keeps its own', async () => {
+    const r = await import('../shared/report-rules.mjs')
+
+    /* A fixed message, which buildReport takes (an empty one is refused), short enough to be the email's subject. */
+    assert.ok(r.LOGS_ONLY_MESSAGE.trim().length > 0)
+    assert.ok(r.LOGS_ONLY_MESSAGE.length <= r.MAX_MESSAGE)
+    assert.ok(`Bug: ${r.LOGS_ONLY_MESSAGE}`.length <= 75, 'the email subject cuts the fixed message short')
+    assert.match(r.LOGS_ONLY_MESSAGE, /^Send logs to developer/, 'the message does not say which button sent it')
+    assert.doesNotMatch(r.LOGS_ONLY_MESSAGE, /this phone/i)
+    const row = r.buildReport({ kind: 'bug', message: r.LOGS_ONLY_MESSAGE, lines: [{ at: 0, source: 'app', message: 'x', detail: '' }], format: (l) => l.message })
+    assert.equal(row.message, r.LOGS_ONLY_MESSAGE)
+    assert.equal(row.log, 'x')
+
+    /* "Sent to the developer — thank you." — the form's own words, at both ends. */
+    assert.equal(r.SENT_WORDS, 'Sent to the developer — thank you.')
+    assert.ok(read('mobile/src/screens/Report.js').includes(r.SENT_WORDS), 'the phone’s form says something else when it has sent')
+    assert.ok(read('src/components/Feedback.jsx').includes(r.SENT_WORDS), 'the browser’s form says something else when it has sent')
+
+    /* The words for one that did not go. The form keeps its promise that the words are still there; the one-tap send makes none. */
+    const net = new Error('TypeError: Failed to fetch')
+    assert.equal(r.notSentWords(net), "Couldn't reach the internet to send that. What you wrote is still here — try again in a moment.")
+    assert.equal(r.notSentWords(net, { wrote: false }), "Couldn't reach the internet to send that. Try again in a moment.")
+    assert.equal(r.notSentWords({ message: 'duplicate key' }), "That didn't send: duplicate key")
+    for (const where of ['src/lib/reports.js', 'mobile/src/lib/reports.js']) {
+      assert.match(read(where), /notSentWords\(error, \{ wrote: row\.message !== LOGS_ONLY_MESSAGE \}\)/, `${where} words a failed send by itself`)
+    }
+  })
+
+  test('the computer is asked once, never for longer than its deadline, and a refusal is one line', async () => {
+    const r = await import('../shared/report-rules.mjs')
+    const format = (d) => `COMPUTER'S DEVICE SERVER\nup ${d.up}`
+
+    assert.equal(r.COMPUTER_WAIT_MS, 5000, 'the computer is given longer than about five seconds')
+    assert.equal(await r.askComputer(async () => ({ up: 3 }), format), "COMPUTER'S DEVICE SERVER\nup 3")
+    /* Asked as nobody: not asked at all. */
+    let asked = 0
+    assert.equal(
+      await r.askComputer(() => { asked++ }, format, { why: 'the demo is on, so there is no computer to ask' }),
+      "COMPUTER'S DEVICE SERVER — could not be asked: the demo is on, so there is no computer to ask"
+    )
+    assert.equal(asked, 0)
+    /* An error, a throw before any promise, an empty answer: each one line, never a throw. */
+    assert.equal(await r.askComputer(async () => { throw new Error('403') }, format), "COMPUTER'S DEVICE SERVER — could not be asked: 403")
+    assert.equal(await r.askComputer(() => { throw new Error('no relay') }, format), "COMPUTER'S DEVICE SERVER — could not be asked: no relay")
+    assert.equal(await r.askComputer(async () => null, () => ''), "COMPUTER'S DEVICE SERVER — could not be asked: it answered with nothing to say")
+    /* And a computer that never answers costs the deadline and no more. */
+    const began = Date.now()
+    assert.equal(await r.askComputer(() => new Promise(() => {}), format, { wait: 30 }), "COMPUTER'S DEVICE SERVER — could not be asked: it did not answer within 30 ms")
+    assert.ok(Date.now() - began < 1000, 'it waited past its deadline')
+
+    /* Who is asked: only a connected computer. */
+    assert.equal(r.computerUnaskedWhy({ via: 'computer', link: 'connected' }), null)
+    assert.match(r.computerUnaskedWhy({ via: 'demo', link: 'connected' }), /demo/)
+    assert.match(r.computerUnaskedWhy({ via: 'bluetooth', link: 'connected' }), /Bluetooth \(beta\)/)
+    assert.equal(r.computerUnaskedWhy({ via: 'computer', link: 'off' }), 'not connected to a computer (off)')
+    assert.equal(r.computerUnaskedWhy({ via: 'computer', link: null }), 'not connected to a computer (off)')
+
+    /* The browser's Copy Logs, Share as file and Send logs to developer all ask through the same rule. */
+    const panel = read('src/components/DebugLog.jsx')
+    assert.match(panel, /const macReport = \(\) => askComputer\(serverDiag, formatMacDiag\)/)
+  })
+
+  test('the byte cap keeps the phone’s newest lines, and the computer’s held lines, whatever the computer says', async () => {
+    const r = await import('../shared/report-rules.mjs')
+    const bytes = (v) => new TextEncoder().encode(v).length
+
+    const phoneLines = (n, width = 60) => [...Array(n)].map((_, i) => `phone ${i} ${'p'.repeat(width)}`).join('\n')
+    const computerLog = (n, width = 160) =>
+      [
+        "COMPUTER'S DEVICE SERVER",
+        'port to the unit: open',
+        '',
+        `server log, last ${n + 2} lines:`,
+        'HELD 1 [forgefx][am4] dump scene names: attempt 1/3 failed',
+        'HELD 2 [forgefx][am4] dump scene names: attempt 2/3 failed',
+        ...[...Array(n)].map((_, i) => `ring ${i} ${'c'.repeat(width)}`)
+      ].join('\n')
+
+    /* Both short: everything goes, the phone's first, the computer's after a blank line. */
+    assert.equal(r.fitLog('a\nb', 'COMPUTER\nc'), 'a\nb\n\nCOMPUTER\nc')
+    /* No computer part: exactly what it always was. */
+    assert.equal(r.fitLog(phoneLines(3), ''), phoneLines(3))
+    const huge = phoneLines(3000)
+    assert.equal(r.fitLog(huge, ''), r.trimToBytes(huge))
+
+    /* A long computer log never pushes the phone's lines out: a normal phone log goes whole beside it. */
+    const mine = phoneLines(210, 120)
+    const theirs = computerLog(2000)
+    const both = r.fitLog(mine, theirs)
+    assert.ok(bytes(both) <= r.LOG_BYTES, `${bytes(both)} bytes, over the ${r.LOG_BYTES} cap`)
+    assert.ok(both.startsWith(mine + '\n\n'), 'the phone’s lines were cut for the computer’s')
+    /* The computer's part keeps its summary, its held lines and its newest, and says what it left out. */
+    assert.match(both, /COMPUTER'S DEVICE SERVER\nport to the unit: open/)
+    assert.match(both, /HELD 1 .*\nHELD 2 /, 'the computer’s held lines were cut')
+    assert.match(both, /ring 1999 c+$/, 'the computer’s newest line was cut')
+    assert.match(both, /… \d+ lines in between left out to fit/, 'the computer’s log was cut without saying so')
+
+    /* A phone log bigger than the cap: its OLDEST lines go, its newest stay, and the computer keeps its share. */
+    const fat = phoneLines(3000, 120)
+    const squeezed = r.fitLog(fat, theirs)
+    assert.ok(bytes(squeezed) <= r.LOG_BYTES, `${bytes(squeezed)} bytes, over the ${r.LOG_BYTES} cap`)
+    const [phonePart, computerPart] = squeezed.split("\n\nCOMPUTER'S DEVICE SERVER")
+    assert.match(phonePart, /^… \d+ earlier lines left out to fit/, 'the phone’s log was cut without saying so')
+    assert.match(phonePart, /phone 2999 p+$/, 'the phone’s newest line was cut')
+    /* All but the computer's share, less a line's width and the note saying what went. */
+    assert.ok(bytes(phonePart) > r.LOG_BYTES - r.COMPUTER_BYTES - 300, 'the computer took more than its share from the phone')
+    assert.ok(bytes(computerPart) >= r.COMPUTER_BYTES - 200, 'the computer was left less than its share')
+    assert.match(computerPart, /HELD 1 .*\nHELD 2 /)
+    assert.match(computerPart, /ring 1999 c+$/)
+
+    /* A short computer part is kept back whole and costs the phone only what it needs. */
+    const reason = r.computerUnasked('not connected to a computer (off)')
+    const withReason = r.fitLog(fat, reason)
+    assert.ok(withReason.endsWith(`\n\n${reason}`), 'the one line about the computer was cut')
+    assert.ok(bytes(withReason) <= r.LOG_BYTES)
+    assert.ok(bytes(withReason) > r.LOG_BYTES - 400, 'the phone was cut by more than the one line needed')
+
+    /* trimComputer alone: a head too big to keep falls back to the newest lines. */
+    const wide = [...Array(60)].map((_, i) => `${i} ${'w'.repeat(2000)}`).join('\n')
+    const cut = r.trimComputer(wide, 20_000)
+    assert.ok(bytes(cut) <= 20_000)
+    assert.match(cut, /^… \d+ earlier lines left out to fit/)
+    assert.match(cut, /\n59 w+$/)
+
+    /* And the row: the computer's part rides only with the log. */
+    const lines = [{ at: 0, source: 'app', message: 'one', detail: '' }]
+    const format = (l) => l.message
+    assert.equal(r.buildReport({ kind: 'bug', message: 'x', lines, format, computer: 'COMPUTER' }).log, 'one\n\nCOMPUTER')
+    assert.equal(r.buildReport({ kind: 'bug', message: 'x', lines: [], format: null, computer: 'COMPUTER' }).log, null, 'the computer’s log went with no log')
+    assert.equal(r.buildReport({ kind: 'idea', message: 'x', lines, format, computer: 'COMPUTER' }).log, null, 'an idea carried the computer’s log')
+  })
+
+  test('the website’s Debug log has Send logs to developer, and it sends through the browser’s own report code', async () => {
+    /*
+     * "Nothing says send logs to developer anymore." Settings → Troubleshooting
+     * → Debug log had Share as file, Copy Logs and Clear Logs, and no way to
+     * send. Read as text for the panel; the browser's lib/reports.js is run.
+     */
+    const panel = read('src/components/DebugLog.jsx').replace(/\s+/g, ' ')
+    assert.match(panel, /import \{ SENT_WORDS, context, sendLogs \} from '\.\.\/lib\/reports'/, 'the panel does not use the browser’s own report code')
+    assert.match(panel, /<button className="chip" onClick=\{sendNow\} disabled=\{sending\}> \{sending \? 'Sending…' : 'Send logs to developer'\} <\/button> <button className="chip" onClick=\{shareFile\}>/, 'there is no Send logs to developer beside Share as file and Copy Logs')
+    assert.match(panel, /if \(inFlight\.current\) return inFlight\.current = true/, 'a double click sends two reports')
+    assert.match(
+      panel,
+      /await sendLogs\(\{ context: context\(\{ device, link, platform: platform\(\), macVersion: link\?\.macVersion \}\), computer: await macReport\(\) \}\)/,
+      'the browser’s send does not carry the form’s context, or the computer’s account as Copy Logs builds it'
+    )
+    assert.match(panel, /setSentSaid\(\{ ok: true, words: SENT_WORDS \}\)/)
+    assert.match(panel, /<p className=\{sentSaid\.ok \? 'hint' : 'hint problem'\} role="status"> \{sentSaid\.words\} <\/p>/, 'the panel does not say whether it went')
+    /* The Feedback section stays as it was. */
+    assert.match(read('src/App.jsx'), /<Feedback device=\{device\} link=\{link\} platform=\{platform\(\)\} macVersion=\{link\.macVersion\} \/>/)
+
+    const dir = mkdtempSync(join(tmpdir(), 'web-send-logs-'))
+    const bench = (globalThis.__webSendLogsBench = { inserts: [], insertError: null })
+    try {
+      const files = {
+        'package.json': '{ "type": "module" }',
+        'remote.js': `
+          const b = globalThis.__webSendLogsBench
+          export const DEFAULT_PROJECT = { url: 'https://example.invalid', anonKey: 'anon' }
+          export const supabaseClient = () => ({
+            auth: { getUser: async () => ({ data: { user: null } }) },
+            from: (table) => ({ insert: async (row) => { b.inserts.push({ table, row }); return { error: b.insertError } } })
+          })
+        `,
+        'version.js': "export const VERSION = '1.87.46'\n",
+        'debugLog.js': read('src/lib/debugLog.js'),
+        'report-rules.mjs': read('shared/report-rules.mjs'),
+        'reports.js': read('src/lib/reports.js').replace("from '../../shared/report-rules.mjs'", "from './report-rules.mjs'")
+      }
+      for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+      const at = (f) => pathToFileURL(join(dir, f)).href
+      const reports = await import(at('reports.js'))
+      const rules = await import(at('report-rules.mjs'))
+      const log = await import(at('debugLog.js'))
+      log.clearDebugLog()
+      log.logDebug('tap', 'press Send logs to developer')
+
+      const computer = rules.computerUnasked('This is the demo, so there is no Fractal Remote app to reach.')
+      await reports.sendLogs({ context: { version: '1.87.46', platform: 'browser' }, computer })
+      assert.equal(bench.inserts.length, 1)
+      const { row } = bench.inserts[0]
+      assert.equal(row.kind, 'bug')
+      assert.equal(row.message, rules.LOGS_ONLY_MESSAGE)
+      assert.equal(row.user_id, null)
+      assert.deepEqual(row.context, { version: '1.87.46', platform: 'browser' })
+      assert.match(row.log, /\[tap\] press Send logs to developer\n\nCOMPUTER'S DEVICE SERVER — could not be asked: This is the demo/)
+
+      /* Never two at once. */
+      bench.inserts = []
+      const a = reports.sendLogs({ computer })
+      assert.equal(reports.sendLogs({ computer }), a, 'a double click started a second report')
+      await a
+      assert.equal(bench.inserts.length, 1)
+
+      bench.insertError = { message: 'Failed to fetch' }
+      await assert.rejects(reports.sendLogs({ computer }), /^Error: Couldn't reach the internet to send that\. Try again in a moment\.$/)
+      log.clearDebugLog()
+    } finally {
+      delete globalThis.__webSendLogsBench
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   test('the three ways in are sorted for this computer, and never guessed at on a phone', async () => {

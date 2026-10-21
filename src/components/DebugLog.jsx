@@ -5,6 +5,8 @@ import { serverDiag } from '../lib/forgefx'
 import { describeLink } from '../lib/link'
 import { FULL, BUILT_AT } from '../lib/version'
 import { platform } from '../lib/platform'
+import { SENT_WORDS, context, sendLogs } from '../lib/reports'
+import { askComputer } from '../../shared/report-rules.mjs'
 
 /**
  * The one log, and the one button.
@@ -45,13 +47,40 @@ export default function DebugLog({ device, link }) {
    * The Mac's own account, fetched when the log is copied rather than kept
    * live: it is one request, it can take a few seconds over the relay, and
    * it is only wanted in the paste. A Mac that does not answer is said so
-   * in the same place, which is itself a finding.
+   * in the same place, which is itself a finding ("could not be asked", in
+   * shared/report-rules askComputer, which also never waits past
+   * COMPUTER_WAIT_MS: over the relay, the wait for a dropped channel comes
+   * before serverDiag's own five seconds, and could hold a press for longer).
    */
-  const macReport = async () => {
+  const macReport = () => askComputer(serverDiag, formatMacDiag)
+
+  /*
+   * SEND LOGS TO DEVELOPER: the phone's one-tap button, at this end too.
+   * "Nothing says send logs to developer anymore." The log goes as a bug
+   * report with the app's own one-line message, the computer's account as
+   * Copy Logs builds it goes with it, and the answer is said under the
+   * buttons until the panel is closed. Never twice at once: the ref is set
+   * before the first await, so a double click is one report.
+   */
+  const [sending, setSending] = useState(false)
+  const [sentSaid, setSentSaid] = useState(null)
+  const inFlight = useRef(false)
+  const sendNow = async () => {
+    if (inFlight.current) return
+    inFlight.current = true
+    setSending(true)
+    setSentSaid(null)
     try {
-      return formatMacDiag(await serverDiag())
-    } catch (e) {
-      return `COMPUTER'S DEVICE SERVER — could not be asked: ${e?.message || e}`
+      await sendLogs({
+        context: context({ device, link, platform: platform(), macVersion: link?.macVersion }),
+        computer: await macReport()
+      })
+      setSentSaid({ ok: true, words: SENT_WORDS })
+    } catch (err) {
+      setSentSaid({ ok: false, words: err?.message || String(err) })
+    } finally {
+      inFlight.current = false
+      setSending(false)
     }
   }
 
@@ -171,6 +200,9 @@ export default function DebugLog({ device, link }) {
   return (
     <section className="debug-log">
       <div className="diag-actions">
+        <button className="chip" onClick={sendNow} disabled={sending}>
+          {sending ? 'Sending…' : 'Send logs to developer'}
+        </button>
         <button className="chip" onClick={shareFile}>
           {copied || 'Share as file'}
         </button>
@@ -192,10 +224,17 @@ export default function DebugLog({ device, link }) {
         </span>
       </div>
 
+      {sentSaid ? (
+        <p className={sentSaid.ok ? 'hint' : 'hint problem'} role="status">
+          {sentSaid.words}
+        </p>
+      ) : null}
+
       <p className="hint">
         Everything that happened this session, in order — what was written to the unit and what it
-        said back, every error. When something goes wrong, share it as a file and attach that to the
-        chat — or copy it and paste, if you would rather.
+        said back, every error. When something goes wrong, press Send logs to developer and it goes
+        straight to the developer. Or share it as a file and attach that to the chat, or copy it and
+        paste, if you would rather.
       </p>
 
       {fallback ? (
