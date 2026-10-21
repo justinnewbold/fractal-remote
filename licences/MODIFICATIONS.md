@@ -45,6 +45,7 @@ no reason to care about because upstream has no phone on the other end.
 | Slice a block's channels by the unit's own item count | The per-channel stride came from a table that can disagree with the bulk read, so channel A read correctly and every other channel was offset — knobs that "did not take". |
 | Wait for the port to go quiet before re-requesting an incomplete dump | The re-request sent into the previous dump's tail collected the same stale terminator three times over. |
 | Allow the looper's buttons (`POST /preset/looper/control`) over the remote channel | A phone could see the Looper block and never press Record or Play. It is a performance control like a scene tap: no parameter written, nothing stored, no slot reached. |
+| Retry an AM4's whole-preset dump, take only the dump that was asked for, and keep each failed attempt in `/diag` | One short, merged or stale dump was a 503, so a phone showed an AM4's scenes as 1–4 for good, most of all through a slow computer such as a Raspberry Pi 3. |
 
 ## forgefx-midi — the preset codec
 
