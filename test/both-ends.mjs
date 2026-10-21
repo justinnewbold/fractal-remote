@@ -476,6 +476,8 @@ export const AREAS = [
     web: ['src/components/DebugLog.jsx'],
     phone: ['mobile/src/screens/Log.js'],
     buttons: [
+      /* Four words, so the scan above reads it as a sentence rather than a button; written down for a reader all the same. */
+      { does: 'send the log to the developer in one press, with nothing to write', web: 'Send logs to developer', phone: 'Send logs to developer' },
       { does: 'put the whole log on the clipboard', web: 'Copy Logs', phone: 'Copy Logs' },
       { does: 'throw the log away', web: 'Clear Logs', phone: 'Clear Logs' },
       {

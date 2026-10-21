@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { FlatList, Platform, Text, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { AccessibilityInfo, FlatList, Platform, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
 import { color, font, mono, radius, space } from '../lib/theme'
@@ -9,6 +9,7 @@ import { linkState } from '../lib/link'
 import { bluetoothOn } from '../lib/bleSwitch'
 import { isDemo } from '../lib/demo'
 import { pastRuns } from '../lib/logKeep'
+import { SENT_WORDS, sendLogs } from '../lib/reports'
 import { useRig } from '../lib/rig'
 import Note from '../components/Note'
 import Press from '../components/Press'
@@ -65,11 +66,55 @@ function Line({ text, hot }) {
  * are which build, which unit and which end of the link — and none of them can
  * be read off the lines themselves.
  */
-export default function Log({ onBack, onReport }) {
+export default function Log({ onBack }) {
   const [lines, setLines] = useState(() => getDebugLog())
   const [said, setSaid] = useState(null)
   const deviceName = useRig(ofDeviceName)
   const preset = useRig(ofPreset)
+
+  /*
+   * SEND LOGS TO DEVELOPER SENDS, HERE, IN ONE TAP.
+   *
+   * "Check if the log was sent. There was no confirmation." It had not been:
+   * the button opened the Feedback form, whose Send waits for something to
+   * be typed, and Done there went back having sent nothing. Now it sends the
+   * log there and then (lib/reports sendLogs: the app's own one-line
+   * message, the log, and the computer's own log when there is a computer),
+   * and says under itself that it went, or why not. The form is still in
+   * Settings → Troubleshooting → Feedback for anybody with something to say.
+   *
+   * Never twice at once: the ref is set before the first await, so a second
+   * tap that lands before the screen has redrawn is turned away as surely as
+   * one on the grayed-out button. What it said stays until the screen is left.
+   *
+   * SAID SO IT IS SEEN, AND HEARD. The answer is the bright, bold, body-sized
+   * note every tool here gives the button just pressed, never the gray hint
+   * a sent line was at first (quieter than a failure beside it). And it is
+   * said out loud: a 'hint' note is no live region, so a screen reader heard
+   * a failure and nothing at all when it went. A failure's red note is a
+   * live region on Android, so that one is spoken here on the iPhone only.
+   */
+  const [sending, setSending] = useState(false)
+  const [sentSaid, setSentSaid] = useState(null)
+  const inFlight = useRef(false)
+  const send = async () => {
+    if (inFlight.current) return
+    inFlight.current = true
+    setSending(true)
+    setSentSaid(null)
+    try {
+      await sendLogs({ deviceName })
+      setSentSaid({ ok: true, words: SENT_WORDS })
+      AccessibilityInfo.announceForAccessibility?.(SENT_WORDS)
+    } catch (err) {
+      const words = err?.message || String(err)
+      setSentSaid({ ok: false, words })
+      if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility?.(words)
+    } finally {
+      inFlight.current = false
+      setSending(false)
+    }
+  }
 
   useEffect(() => onDebugLog(() => setLines(getDebugLog())), [])
 
@@ -225,7 +270,7 @@ export default function Log({ onBack, onReport }) {
       />
 
       {lines.length ? (
-        <View style={{ padding: space.lg }}>
+        <View style={{ padding: space.lg, gap: space.sm }}>
           {/*
             Newest first on screen, oldest first in the copy. Reading on a phone
             you want the thing that just happened; reading a paste you want the
@@ -236,8 +281,19 @@ export default function Log({ onBack, onReport }) {
               pasted somewhere, from a phone, after the thing that went wrong.
               Copy stays — a log pasted into a message to a bandmate is a real
               use — but this is the one that reaches the person who can fix it. */}
-          {onReport ? <Press label="Send logs to developer" tone="signal" onPress={onReport} /> : null}
-          <Press label="Clear Logs" onPress={() => { clearDebugLog(); setLines([]) }} />
+          <Press
+            label={sending ? 'Sending…' : 'Send logs to developer'}
+            tone="signal"
+            disabled={sending}
+            onPress={send}
+          />
+          {sentSaid ? (
+            <Note tone={sentSaid.ok ? 'hint' : 'fault'} strong size={font.body}>
+              {sentSaid.words}
+            </Note>
+          ) : null}
+          {/* Not while a send is on its way: it reads the log after the computer has answered. */}
+          <Press label="Clear Logs" disabled={sending} onPress={() => { clearDebugLog(); setLines([]) }} />
         </View>
       ) : null}
     </View>

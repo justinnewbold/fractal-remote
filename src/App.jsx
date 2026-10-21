@@ -6127,7 +6127,7 @@ export default function App() {
           >
             <PresetReport device={device} link={link} />
           </Section>
-<Section key="debug-log" title="Debug log" note="Share it as a file to the chat when something goes wrong">
+<Section key="debug-log" title="Debug log" note="Send it to the developer when something goes wrong">
             {/*
               One log, one Copy button. "Make a unified debug log with a copy
               log button to send back to you for debugging in the settings menu.

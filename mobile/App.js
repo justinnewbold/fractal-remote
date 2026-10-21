@@ -181,9 +181,9 @@ export default function App() {
     setFixFrom('stage')
     setScreen('fixes')
   }
-  /* Where Done goes back to, for the same reason `fixFrom` exists: this screen
-     is reached from Setup and from the log, and returning somebody to Setup
-     from the log they were reading is the wrong room. */
+  /* Where Done goes back to, for the same reason `fixFrom` exists. Only Setup
+     opens the form today (the log sends its own report now, see Log.js), but
+     a second way in should not have to remember to add this back. */
   const [reportFrom, setReportFrom] = useState('settings')
   const [link, setLink] = useState(linkState())
 
@@ -192,9 +192,8 @@ export default function App() {
    *
    * The same targets the Done buttons already use, named in one place so the
    * gesture and the button cannot drift into disagreeing. Two of them are not
-   * constants — the guide and the feedback form are reached from Setup AND
-   * from the log, and returning somebody to Setup from the log they were
-   * reading is the wrong room.
+   * constants — the guide is reached from Setup AND from the stage, and the
+   * feedback form keeps its own way back (reportFrom) for the same reason.
    *
    * Nothing for `stage`: it is the bottom of the stack. Nothing for
    * `settings` either — it wraps itself, because it is the one screen with
@@ -1186,17 +1185,12 @@ export default function App() {
             ) : screen === 'gear' ? (
               <Gear onBack={() => setScreen(gearBack)} />
             ) : screen === 'log' ? (
-              /* And a way to send it from the one screen where somebody is
-                 already looking at the thing worth sending. Copying the log
-                 and pasting it into a message later, from another device,
-                 after the gig, was the only route there had ever been. */
-              <Log
-                onBack={() => setScreen('settings')}
-                onReport={() => {
-                  setReportFrom('log')
-                  setScreen('report')
-                }}
-              />
+              /* It sends the log itself now, from the one screen where
+                 somebody is already looking at the thing worth sending: Send
+                 logs to developer went to the Feedback form, which sends
+                 nothing until something is typed, and so it sent nothing.
+                 The form is still reached from Setup. */
+              <Log onBack={() => setScreen('settings')} />
             ) : screen === 'report' ? (
               <Report onBack={() => setScreen(reportFrom)} />
             ) : screen === 'fixes' ? (

@@ -20,20 +20,25 @@ import { Dimensions, Platform } from 'react-native'
 
 import {
   KINDS,
+  LOGS_ONLY_MESSAGE,
   MAX_MESSAGE,
+  SENT_WORDS,
+  askComputer,
   buildReport,
   carriesLog,
+  computerUnaskedWhy,
   contextFrom,
   lastErrorFrom,
+  notSent,
   pickForReport,
   trimToBytes
 } from './report-rules'
-import { DEFAULT_PROJECT, supabaseClient } from './relay'
+import { DEFAULT_PROJECT, remoteRequest, supabaseClient } from './relay'
 import { APP_VERSION } from './version'
-import { formatLine, getDebugLog } from './debugLog'
-import { linkState } from './link'
+import { formatLine, formatMacDiag, getDebugLog, logDebug } from './debugLog'
+import { linkState, linkVia } from './link'
 
-export { KINDS, MAX_MESSAGE, carriesLog }
+export { KINDS, MAX_MESSAGE, SENT_WORDS, carriesLog }
 
 /**
  * What was going on when they wrote it.
@@ -84,7 +89,7 @@ export function logPreview(kind) {
  * no network at all — common on a stage, and it must not lose what they typed,
  * so the caller keeps the text on screen when this rejects.
  */
-export async function sendReport({ kind, message, contact, context: ctx = {}, withLog = true }) {
+export async function sendReport({ kind, message, contact, context: ctx = {}, withLog = true, computer = '' }) {
   const row = buildReport({
     kind,
     message,
@@ -93,7 +98,9 @@ export async function sendReport({ kind, message, contact, context: ctx = {}, wi
     /* Read at send and at no other moment. Nothing is gathered while somebody
        types, so a report abandoned half-written leaves no copy anywhere. */
     lines: withLog ? getDebugLog() : [],
-    format: withLog ? formatLine : null
+    format: withLog ? formatLine : null,
+    /* The computer's own log, when the caller asked for it (sendLogs). */
+    computer: withLog ? computer : ''
   })
 
   let c = supabaseClient()
@@ -112,12 +119,70 @@ export async function sendReport({ kind, message, contact, context: ctx = {}, wi
 
   const { error } = await c.from('feedback').insert({ ...row, user_id: userId })
 
+  /* Nothing was written for a log sent in one tap, so nothing is "still here".
+     The database's own words go into the log, never onto the screen. */
   if (error) {
-    throw new Error(
-      /fetch|network/i.test(error.message || '')
-        ? "Couldn't reach the internet to send that. What you wrote is still here — try again in a moment."
-        : `That didn't send: ${error.message}`
-    )
+    const err = notSent(error, { wrote: row.message !== LOGS_ONLY_MESSAGE })
+    logDebug('app', 'report not sent', err.reason)
+    throw err
   }
+  return true
+}
+
+/**
+ * The computer's own log for a report: its /diag, or one line saying why not.
+ *
+ * Asked only when the phone is connected to a computer: not in the demo, not
+ * over Bluetooth (beta), not while the link is down (shared/report-rules
+ * computerUnaskedWhy). Straight to the relay with no wait for a dropped
+ * channel, and given COMPUTER_WAIT_MS by askComputer, which answers in words
+ * whatever happens. The relay's own, longer timeout is left as it is: a slow
+ * answer to this one read is not taken as the computer being gone.
+ */
+export function computerPart() {
+  return askComputer(() => remoteRequest('/diag', { graceMs: 0 }), formatMacDiag, {
+    why: computerUnaskedWhy({ via: linkVia(), link: linkState()?.link })
+  })
+}
+
+/**
+ * "Send logs to developer", from the log screen: a bug report in one tap.
+ *
+ * No form. The message is the app's own sentence (LOGS_ONLY_MESSAGE), the
+ * context is what the Feedback form sends, the log goes, and the computer's
+ * own log goes with it when there is a computer to ask. Throws in words a
+ * person can read, like sendReport. Whether it went is written into the log
+ * as well, so the next copy of the log can say.
+ *
+ * NEVER TWO AT ONCE. A second call while one is on its way is handed the one
+ * already going, rather than starting another report: the screen grays its
+ * button too, but two taps can land before it has redrawn.
+ */
+let sendingLogs = null
+export function sendLogs(options) {
+  if (!sendingLogs) {
+    sendingLogs = sendLogsNow(options).finally(() => {
+      sendingLogs = null
+    })
+  }
+  return sendingLogs
+}
+
+async function sendLogsNow({ deviceName } = {}) {
+  const computer = await computerPart()
+  try {
+    await sendReport({
+      kind: 'bug',
+      message: LOGS_ONLY_MESSAGE,
+      context: context({ deviceName }),
+      withLog: true,
+      computer
+    })
+  } catch (err) {
+    /* A refusal's own words are on the line sendReport wrote just before; anything else's are here. */
+    logDebug('app', 'logs not sent to the developer', err?.reason ? '' : err?.message)
+    throw err
+  }
+  logDebug('app', 'logs sent to the developer')
   return true
 }
