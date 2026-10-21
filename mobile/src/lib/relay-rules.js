@@ -748,3 +748,63 @@ export function firstUnitHost(hostNames = [], units = {}) {
   const once = hostNames.filter((name, i) => hostNames.indexOf(name) === i && hostNames.lastIndexOf(name) === i)
   return once.find((name) => units?.[name]?.plugged) || once[0] || null
 }
+
+/**
+ * THE COMPUTER WITH THE UNIT, WHEN THE ONE PICKED HAS NONE.
+ *
+ * Two Raspberry Pis on one account, an FM3 on one and an AM4 on the other,
+ * and the AM4's picked under Which unit. With only the FM3 plugged in that
+ * evening, the pick answers "No unit plugged in" and the phone sat on a
+ * computer with nothing to drive while the other had a unit. So: when the
+ * pick says so for certain, and exactly one other computer has a unit, that
+ * one is driven. The pick is not forgotten (nothing here writes it down),
+ * so the next launch with the AM4 back drives the AM4 again.
+ *
+ * Only a definite answer moves it. A pick that did not answer alone has no
+ * entry in `units` (unitFrom), and a computer that was slow is never a
+ * reason to hand the taps to another unit: the pick stays.
+ */
+export function hostWithUnit(hostNames = [], units = {}, pick = null) {
+  if (!pick || units?.[pick]?.plugged !== false) return pick
+  const once = hostNames.filter((name, i) => hostNames.indexOf(name) === i && hostNames.lastIndexOf(name) === i)
+  const others = once.filter((name) => name !== pick && units?.[name]?.plugged === true)
+  return others.length === 1 ? others[0] : pick
+}
+
+/**
+ * THE ROLL CALL, IN ONE LINE OF THE LOG.
+ *
+ * "The roll call is never logged": a log from two computers on one account
+ * said "the computer is fractalpi" at every launch and nothing about the
+ * other one answering too, so nobody reading it could tell which computer
+ * the phone was driving, or why. Said once per roll call that found more
+ * than one, or that did not find the one picked:
+ *
+ *   two computers answered: fractalpi (FM3), raspberry pi 3 (AM4); driving
+ *   raspberry pi 3, the one picked under Which unit, addressed
+ *
+ * `why` is how the one driven was chosen: 'pick' (picked under Which unit),
+ * 'unit' (the pick had no unit and this one had: hostWithUnit), or 'first'
+ * (nobody picked: firstUnitHost). `missing` is a pick that did not answer.
+ */
+export function rollCallLine({ hosts = [], units = {}, chosen = null, why = null, pick = null, addressed = false, missing = null } = {}) {
+  const count = ['no computers', 'one computer', 'two computers', 'three computers'][hosts.length] || `${hosts.length} computers`
+  const unitOf = (name) => {
+    const unit = units?.[name]
+    if (!unit) return hosts.length > 1 ? ' (unit not known)' : ''
+    return ` (${unit.plugged ? unit.model : 'no unit plugged in'})`
+  }
+  const heard = `${count} answered${hosts.length ? `: ${hosts.map((name) => `${name}${unitOf(name)}`).join(', ')}` : ''}`
+  const gone = missing ? `; ${missing}, the one picked under Which unit, did not answer` : ''
+  if (hosts.length < 2 || !chosen) return `${heard}${gone}${hosts.length > 1 ? '; driving none of them: two share a name' : ''}`
+  const reason =
+    why === 'pick'
+      ? 'the one picked under Which unit'
+      : why === 'unit'
+        ? `the one with a unit (${pick}, the one picked under Which unit, has none plugged in)`
+        : units?.[chosen]?.plugged
+          ? 'the first with a unit plugged in'
+          : 'the first to answer'
+  const how = addressed ? 'addressed' : 'not addressed: a computer app on one of them is too old to be asked alone'
+  return `${heard}${gone}; driving ${chosen}, ${reason}, ${how}`
+}

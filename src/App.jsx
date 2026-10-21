@@ -78,8 +78,10 @@ import {
   writeTuner,
   onConfigDoc,
   presetSaved,
-  chainChanged
+  chainChanged,
+  unitRead
 } from './lib/deviceState'
+import { tempoRange } from '../shared/tempo.mjs'
 import ParamSearch from './components/ParamSearch'
 import UpdateNotice from './components/UpdateNotice'
 import Updates, { UpdateReadyNotice } from './components/Updates'
@@ -337,7 +339,9 @@ attachDriver({
   /* The slots either side of this one, read ahead for Play: see deviceState.readAhead. */
   presetSummary,
   /* Which unit a remembered chain belongs to: see deviceState.knownChain. */
-  unitKey: () => `${isDemo() ? `demo:${demoUnit()}` : remoteActive() ? 'away' : 'rig'}:${currentDeviceSlug()}`
+  unitKey: () => `${isDemo() ? `demo:${demoUnit()}` : remoteActive() ? 'away' : 'rig'}:${currentDeviceSlug()}`,
+  /* The tempos this unit takes: a read back outside them, 0 among them, is no answer (shared/tempo heardTempo). */
+  tempoRange: () => tempoRange(currentDeviceSlug())
 })
 
 /* Hoisted so each is one function for the life of the module: a selector
@@ -1710,6 +1714,8 @@ export default function App() {
        * reported without tearing down a working screen. See the catch.
        */
       answered = true
+      /* Another unit than the last real one: what was read off that one goes before this one is read (deviceState.unitRead). */
+      unitRead(currentDeviceSlug())
       doneReading = beginChainRead()
       const [p, b] = await Promise.all([currentPreset(), presetBlocks()])
       setPreset(p)

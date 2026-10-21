@@ -45,6 +45,20 @@ export function tempoRange(slug, via) {
 }
 
 /**
+ * WHETHER A TEMPO READ BACK IS ONE, or the unit not answering.
+ *
+ * "Tap showed 180 and then 0." An AM4's computer answers bpm 0 when the unit
+ * did not answer it (ForgeFX's am4.ts), and so does the Bluetooth wire, and
+ * both ends put that 0 on the Tap button as the unit's tempo. No unit plays
+ * at 0: anything outside what this unit takes (tempoRange), 0 included, is no
+ * answer, and the last figure stays up.
+ */
+export function heardTempo(bpm, range = ANY_BPM) {
+  const { min, max } = usable(range)
+  return Number.isFinite(bpm) && bpm >= min && bpm <= max
+}
+
+/**
  * What typed text means as a tempo.
  *
  *   { bpm }    — a whole number the unit will take

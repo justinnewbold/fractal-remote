@@ -15,6 +15,8 @@ import { STAGE_HIDDEN } from './guardrails.js'
 import { linkIsDown } from './tapGate.js'
 import { notSentError, pressesInTheAir, tapDeadline } from '../../shared/relay-rules.mjs'
 import { vp4PresetCode, vp4PresetOn, vp4RecordNames } from '../../shared/vp4-safety.mjs'
+import { heardTempo } from '../../shared/tempo.mjs'
+import { DEFAULT_SLUG, unitMoved } from '../../shared/device-slug.mjs'
 
 export { CHAIN_FRESH_MS, OWN_ECHO_MS, OWN_SETTLE_MS, PRESET_SETTLE_MS } from '../../shared/own-echo.mjs'
 export { OUTLINE_AFTER_MS, READ_AHEAD_MS } from '../../shared/chain-outline.mjs'
@@ -305,7 +307,8 @@ export function handleEvent(event) {
     if (!isEcho('sceneIndex', event.index)) set({ sceneIndex: event.index })
   }
 
-  if (event.type === 'tempo' && typeof event.bpm === 'number') {
+  /* A tempo outside what the unit takes, 0 among them, is the unit not answering: the last figure stays (heardTempo). */
+  if (event.type === 'tempo' && typeof event.bpm === 'number' && heardTempo(event.bpm, driver?.tempoRange?.())) {
     if (!isEcho('bpm', event.bpm)) set({ bpm: event.bpm })
   }
 
@@ -786,7 +789,10 @@ export async function confirmedChain({
 export async function refreshScene() {
   if (!driver?.getScene) return
   try {
+    const era = unitEra
     const res = await driver.getScene()
+    /* An answer from before the unit changed is the other unit's (startClean). */
+    if (era !== unitEra) return
     const patch = {}
     if (typeof res?.index === 'number' && res.index >= 0) patch.sceneIndex = res.index
     if (Array.isArray(res?.names)) patch.sceneNames = res.names
@@ -799,8 +805,14 @@ export async function refreshScene() {
 export async function refreshTempo() {
   if (!driver?.getTempo) return
   try {
+    const era = unitEra
     const res = await driver.getTempo()
-    if (typeof res?.bpm === 'number') set({ bpm: res.bpm })
+    /*
+     * "Tap showed 180 and then 0": an AM4's computer answers 0 when the unit
+     * did not answer it. No answer, so the last figure stays up, as on the
+     * phone (shared/tempo heardTempo). And not one from before the unit changed.
+     */
+    if (heardTempo(res?.bpm, driver.tempoRange?.()) && era === unitEra) set({ bpm: res.bpm })
   } catch {
     /* keep the last known value */
   }
@@ -831,14 +843,18 @@ export function tapBeat() {
 export async function refreshSceneNames(number) {
   if (!driver?.readSceneNames) return
   const run = presetRun
+  /* Which unit they are read for: a late answer after another unit came is dropped, not put on its tiles (startClean). */
+  const era = unitEra
   /* What the preset on screen is called now, while it is still `number`: an AM4's
      loaded-preset names are believed only under it (lib/forgefx.js readSceneNames). */
   const shown = () => (state.preset?.number === number ? state.preset?.name : undefined)
   /* Whether the preset on screen is still the one asked about: the same number, or
      the same buffer saved over another slot since (presetSaved moves the number, not
-     the preset, and the names read for the buffer are still its names). */
+     the preset, and the names read for the buffer are still its names). And still
+     the same unit. */
   const still = () =>
-    state.preset?.number === number || (run === presetRun && savedOver?.from === number && savedOver.to === state.preset?.number)
+    era === unitEra &&
+    (state.preset?.number === number || (run === presetRun && savedOver?.from === number && savedOver.to === state.preset?.number))
   try {
     const found = await driver.readSceneNames(number, { shown, still })
     /* A slow read that lands after the next preset would put the last song's names on this song's tiles. */
@@ -871,13 +887,15 @@ export async function refreshLoadedSceneNames(number) {
   /* Only where the copy is free: on an Axe-Fx II GET /preset/grid is a whole
      second read of the preset, and a gen-1 has no copy at all. */
   if (driver?.presetCopy && hostKeepsCopy() === true) {
+    const era = unitEra
     let copy = null
     try {
       copy = await driver.presetCopy()
     } catch {
       copy = null
     }
-    if (state.preset?.number !== number) return
+    /* The preset moved on, or another unit came (startClean): this copy is nobody's on screen. */
+    if (state.preset?.number !== number || era !== unitEra) return
     const here = judgeCopy(copy, state.preset?.name)
     if (here === 'stale') {
       if (staleAgain !== number) {
@@ -2145,8 +2163,70 @@ export function reset() {
   aheadChains.clear()
   ahead.stop()
   stopListening()
+  /* The unit that was, for startClean: the next one read is a first one. */
+  realUnit = null
+  cleanOwed = false
+  unitEra += 1
   state = BLANK
   for (const listener of [...listeners]) listener()
+}
+
+/*
+ * A CLEAN START FOR ANOTHER UNIT: the phone's rule (mobile/src/lib/rig.js
+ * startClean says why). When the computer driven changes (link.js, after the
+ * roll call or Which unit: computerChanged) or the unit read is another than
+ * the last real one (unitRead), what was read off the other goes: the scene
+ * names, the chain and its stale-copy wait, the tempo, and every read of
+ * names still on its way (unitEra). The read that follows fills it in again.
+ */
+let unitEra = 0
+/* The last real unit read (never the starting 'device'), for unitMoved. */
+let realUnit = null
+/* The computer driven changed, and App's next read starts clean: see computerChanged. */
+let cleanOwed = false
+
+export function startClean() {
+  cleanOwed = false
+  unitEra += 1
+  clock.clearTimeout(staleTimer)
+  staleTimer = null
+  staleAgain = null
+  staleOwn = false
+  judging = null
+  chainRead = null
+  lastRead = null
+  chainForBefore = null
+  knownChains.clear()
+  knownPresets.clear()
+  aheadChains.clear()
+  ahead.stop()
+  set({ sceneNames: NO_NAMES, chainFor: null, chainKnown: null, bpm: null })
+  syncChainBusy()
+}
+
+/** The unit a read found, by its slug: another than the last real one starts clean (shared/device-slug unitMoved), as does one on another computer. */
+export function unitRead(slug) {
+  const moved = unitMoved(realUnit, slug) || cleanOwed
+  if (slug && slug !== DEFAULT_SLUG) realUnit = slug
+  if (moved) startClean()
+  return moved
+}
+
+/*
+ * ANOTHER COMPUTER IS DRIVEN NOW (link.js): every read of names on its way
+ * is the last computer's and is dropped from here (unitEra), and the stale-copy
+ * wait goes. What is on screen goes when App's read of the new one has the
+ * unit's answer in hand (unitRead), so the chain is never shown as one that
+ * could not be read while that read is still asking.
+ */
+export function computerChanged() {
+  unitEra += 1
+  cleanOwed = true
+  clock.clearTimeout(staleTimer)
+  staleTimer = null
+  staleAgain = null
+  staleOwn = false
+  syncChainBusy()
 }
 
 /* ------------------------------------------------------------------ react -- */

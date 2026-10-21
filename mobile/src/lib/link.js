@@ -33,6 +33,7 @@ import {
   remoteDisconnect,
   remoteHostSeen,
   remoteHosts,
+  remoteReadsAskedOf,
   remoteRequest,
   remoteUnits,
   pickHost,
@@ -40,7 +41,7 @@ import {
   subscribeHostSeen,
   subscribeRemoteState
 } from './relay'
-import { listen, refreshAll, reset as resetRig, watchUnit, stopWatching } from './rig'
+import { listen, refreshAll, reset as resetRig, startClean, watchUnit, stopWatching } from './rig'
 import { PHONE_NOTE_PATH, phoneNote, timeToTell } from './phone-note'
 
 export const PROBE_FIRST = 3000
@@ -458,13 +459,28 @@ async function join() {
 
 async function countHosts() {
   try {
-    const before = remoteChosenHost()
+    let before = remoteChosenHost()
     await censusHosts()
-    set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+    heardHosts()
     /* The roll call picked a computer: that one is told about the level readings, whatever answered first before (see metersAgain). */
     if (remoteChosenHost() !== before) {
       metersAgain()
       quietMeters()
+    }
+    /*
+     * One of two picked: its name, for Settings and the log's header, read
+     * again now that it is asked of that computer alone (the read at join
+     * went to whichever answered first). Then what was read while the roll
+     * call listened: where every one of those reads was asked of this
+     * computer (a pick made before, relay.js holdReads), it is this unit's
+     * already and nothing is read twice. Otherwise it came from whichever
+     * computer answered first, and it goes, names, chain, tempo and all
+     * (rig.startClean), before the unit is read again.
+     */
+    if (remoteHosts().length > 1 && remoteChosenHost() !== before) {
+      readMacName()
+      if (remoteReadsAskedOf() === remoteChosenHost()) before = remoteChosenHost()
+      else startClean()
     }
     /* The roll call picked one of two (firstUnitHost): what was read while it
        listened came from whichever answered first, so read it again. */
@@ -474,6 +490,9 @@ async function countHosts() {
   }
 }
 
+/** What the roll call found, into the link's state, for Settings and Which unit. */
+const heardHosts = () => set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+
 /**
  * Drive this unit and no other: the Which unit buttons.
  *
@@ -482,12 +501,20 @@ async function countHosts() {
  * chain and different presets in the same slots, and everything on screen
  * was read off the other one. refreshAll is what tells a new unit from an
  * old one and drops the names that belonged to it.
+ *
+ * Another computer than the one driven is a clean start (rig.startClean):
+ * the scene names, the chain and the tempo on screen were the other unit's,
+ * and a row of named tiles is never asked again. And its name, for Settings
+ * and the log's header, read off it.
  */
 export async function chooseHost(name) {
   const ok = await pickHost(name)
-  set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+  const moved = state.chosenHost !== remoteChosenHost()
+  heardHosts()
   metersAgain()
   quietMeters()
+  if (moved) startClean()
+  readMacName()
   try {
     await refreshAll()
   } catch {

@@ -3036,6 +3036,7 @@ export function run(test) {
             ["from '../../shared/relay-rules.mjs'", "from './relay-rules.mjs'"],
             ["from '../../shared/confirm-code.mjs'", "from './confirm-code.mjs'"],
             ["from '../../shared/device-word.mjs'", "from './device-word.mjs'"],
+            ["from './debugLog.js'", "from './nothing.mjs'"],
             ["import('@supabase/supabase-js')", "import('./service.mjs')"]
           ]
     let src = read(end === 'phone' ? 'mobile/src/lib/relay.js' : 'src/lib/remote.js')

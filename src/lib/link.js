@@ -49,10 +49,12 @@ import {
   remoteHosts,
   remoteUnits,
   remoteChosenHost,
+  remoteReadsAskedOf,
   pickHost,
   signOut,
   remoteSignUp
 } from './remote.js'
+import { computerChanged } from './deviceState.js'
 /*
  * Only `isPairAccount` survives the codes.
  *
@@ -668,6 +670,18 @@ async function countHosts() {
   try {
     const before = remoteChosenHost()
     await censusHosts()
+    /*
+     * One of two picked: its name, read again now that it is asked of that
+     * computer alone, and what was read while the roll call listened goes
+     * (deviceState.computerChanged), unless every one of those reads was
+     * asked of this computer already (remote.js holdReads). App reads the
+     * unit again for the computer chosen (its effect on chosenHost), from a
+     * clean start. The phone's link.js does the same.
+     */
+    if (remoteHosts().length > 1 && remoteChosenHost() !== before) {
+      if (remoteReadsAskedOf() !== remoteChosenHost()) computerChanged()
+      readMacName()
+    }
     set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
     /* The roll call picked a computer: tell that one, whatever answered first before (see metersAgain). */
     if (remoteChosenHost() !== before) {
@@ -688,9 +702,12 @@ async function countHosts() {
  */
 export async function chooseHost(name) {
   await pickHost(name)
+  /* Another computer: another unit, read by App from a clean start (deviceState.computerChanged), and its own name. */
+  if (state.chosenHost !== remoteChosenHost()) computerChanged()
   set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
   metersAgain()
   quietMeters()
+  readMacName()
   return state.clash
 }
 

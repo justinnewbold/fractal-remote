@@ -37,6 +37,8 @@ import {
   hostConflict as conflictBetween,
   hostNamesFrom as namesFrom,
   firstUnitHost,
+  hostWithUnit,
+  rollCallLine,
   unitChoices,
   unitFrom,
   repeatable,
@@ -75,12 +77,28 @@ const seers = new Set()
 let hosts = []
 /** Which of them requests are addressed to. Null while there is only one. */
 let chosen = null
+/** How that one was chosen, for the log: 'pick', 'unit' or 'first' (see rollCallLine). */
+let chosenWhy = null
 /** Whether addressing one Mac has been PROVED to leave the others out. */
 let targeted = false
 /** Which unit each of them is driving, by name, when it could be told: see readUnits. */
 let units = {}
 /** Roll calls in progress: an id, and every answer that has come back to it. */
 const censuses = new Map()
+/*
+ * The computer picked under Which unit, as last written down (recallHost):
+ * undefined until the disk has been read, null for none. Kept here so a
+ * fresh link can hold its first reads for it without waiting on the disk.
+ */
+let picked
+/** Reads waiting for the roll call to say who they are asked of: see holdReads. */
+let readsHeld = null
+/** Whether a read goes to `chosen` by name before the proof is in: see holdReads. */
+let readsAddressed = false
+/** Who each read the roll call let through was asked of ('' for nobody in particular). */
+let readsAsked = null
+/** The same, for the last roll call that finished: see remoteReadsAskedOf. */
+let rollCallAsked = null
 
 /* ------------------------------------------------------------------ */
 /* Signing in                                                          */
@@ -350,6 +368,16 @@ export const remoteUnits = () => units
 export { unitChoices }
 export const remoteChosenHost = () => chosen
 
+/**
+ * The computer every read of the last roll call was asked of, by name, or
+ * null when any of them went elsewhere or to nobody in particular. With a
+ * pick, every read waits for the roll call and goes to the pick (holdReads),
+ * so the unit on screen was read off the computer driven and link.js has
+ * nothing to read again.
+ */
+export const remoteReadsAskedOf = () =>
+  Array.isArray(rollCallAsked) && rollCallAsked.length === 1 && rollCallAsked[0] && rollCallAsked[0] === chosen ? chosen : null
+
 export const hostConflict = (list = hosts, pick = chosen, proved = targeted) =>
   conflictBetween(list, pick, proved)
 
@@ -457,6 +485,8 @@ export function canReuseChannel(chan, sess, c) {
 export const HEARTBEAT_MS = 10000
 
 export async function remoteConnect() {
+  /* The pick, off the disk while the link is being joined: see holdReads. */
+  if (picked === undefined) recallHost()
   if (!userId) await restoreSession()
   if (!userId) throw new Error('Sign in first.')
   if (canReuseChannel(channel, session, supabase())) return userId
@@ -565,6 +595,8 @@ async function joinChannel() {
         channel = chan
         chan.track({ at: Date.now() }).catch(() => {})
         if (!settled) {
+          /* A fresh link, and a computer was picked before: no read goes to whoever answers first (holdReads). Before anybody hears it is up. */
+          holdForPick()
           settled = true
           clearTimeout(timer)
           resolve()
@@ -620,6 +652,11 @@ export async function remoteDisconnect() {
   chosen = null
   targeted = false
   censuses.clear()
+  chosenWhy = null
+  /* Reads held for a roll call on this link are let go: the link they were waiting on has gone. */
+  readsHeld?.open()
+  readsAddressed = false
+  rollCallAsked = null
   failWaiting('Disconnected.')
   announce()
 
@@ -657,23 +694,121 @@ async function takeCensus({
   sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 } = {}) {
   if (!channel || !isJoined(channel)) return hosts
-  // A read every host allows and every host answers differently: its own name,
-  // written into its store by the launcher on that Mac.
-  const answers = await collectAnswers({ path: '/store/config/host.name', windowMs, sleep })
-  hosts = await namesFrom(answers, decode)
+  /*
+   * Reads while it counts: on to the pick already proved, held for a pick
+   * made before, or as they always went when nothing was ever picked (see
+   * holdReads).
+   */
+  const proved = Boolean(hosts.length > 1 && chosen && targeted)
+  const pickBefore = chosen || picked || null
+  const held = proved || (!pickBefore && picked !== undefined) ? null : holdReads()
+  if (held) held.until = Date.now() + COUNT_WAIT_MS
+  readsAddressed = proved
+  readsAsked = []
+  try {
+    // A read every host allows and every host answers differently: its own name,
+    // written into its store by the launcher on that Mac.
+    const answers = await collectAnswers({ path: '/store/config/host.name', windowMs, sleep })
+    hosts = await namesFrom(answers, decode)
 
-  // A choice made before is honoured if that Mac is still one of the answers.
-  if (!hosts.includes(chosen)) chosen = null
-  if (hosts.length > 1 && !chosen) {
-    const remembered = await recallHost()
-    if (hosts.includes(remembered)) chosen = remembered
+    // A choice made before is honoured if that Mac is still one of the answers.
+    if (!hosts.includes(chosen)) chosen = null
+    if (hosts.length > 1 && !chosen) {
+      const remembered = await recallHost()
+      if (hosts.includes(remembered)) chosen = remembered
+      if (chosen) chosenWhy = 'pick'
+    }
+    /*
+     * The first window is in. The pick among two or more: reads are asked of
+     * it from here on, while the count goes on. One computer: reads go as
+     * they always went. A pick that did not answer: they wait for the end of
+     * the count, which says where they go.
+     */
+    if (hosts.length > 1 && chosen) readsAddressed = true
+    if (held && (hosts.length < 2 || chosen || !picked)) held.open()
+    const pick = chosen
+    units = hosts.length > 1 ? await readUnits({ windowMs, sleep }) : {}
+    /* The pick has no unit and exactly one other computer has (hostWithUnit): that one, the pick kept for next time. */
+    if (hosts.length > 1 && chosen) chosen = hostWithUnit(hosts, units, chosen)
+    if (chosen !== pick) chosenWhy = 'unit'
+    if (!pick) chosenWhy = 'first'
+    /* Nobody said which: drive one rather than all of them (firstUnitHost). */
+    if (hosts.length > 1 && !chosen) chosen = firstUnitHost(hosts, units)
+    targeted = false
+    if (hosts.length > 1 && chosen) await confirmTargeting({ windowMs, sleep })
+    /* Said once, so a log shows which computer the phone drives and why (rollCallLine). */
+    const missing = !proved && picked && !hosts.includes(picked) ? picked : null
+    if (hosts.length > 1 || missing) logDebug('link', rollCallLine({ hosts, units, chosen, why: chosenWhy, pick, addressed: targeted, missing }))
+    return hosts
+  } finally {
+    readsAddressed = false
+    rollCallAsked = readsAsked
+    readsAsked = null
+    held?.open()
   }
-  units = hosts.length > 1 ? await readUnits({ windowMs, sleep }) : {}
-  /* Nobody said which: drive one rather than all of them (firstUnitHost). */
-  if (hosts.length > 1 && !chosen) chosen = firstUnitHost(hosts, units)
-  targeted = false
-  if (hosts.length > 1 && chosen) await confirmTargeting({ windowMs, sleep })
-  return hosts
+}
+
+/*
+ * NO READ GOES TO WHOEVER ANSWERS FIRST, ON AN ACCOUNT WHERE A COMPUTER WAS PICKED.
+ *
+ * Two Raspberry Pis on one account, an FM3 on "fractalpi" and an AM4 on
+ * "raspberry pi 3", the AM4 picked under Which unit. At every launch the
+ * first reads went to nobody in particular, the FM3's computer answered them
+ * first, and for the first few seconds the phone was on the FM3: the AM4's
+ * chain blanked for about fifteen seconds, the FM3's scene names for slot 53
+ * on the AM4's preset 53, the tempo 180 and then 0, and the log naming the
+ * wrong computer.
+ *
+ * So on a fresh link, with a computer picked before, a read waits for the
+ * roll call's first window. Once that lists the pick, reads are asked of it
+ * by name from then on, while the rest of the count goes on; a pick the
+ * window did not list holds them for the rest of the count, which then says
+ * where they go. Never longer than COUNT_WAIT_MS from the moment the count
+ * (or the link) started: a link where no count comes reads as it always did.
+ *
+ * Writes are not part of this. They wait for the whole count and for its
+ * proof (countDone), as they always did, and are addressed only once that
+ * proof is in.
+ *
+ * An account with one computer has never picked one (only Which unit picks,
+ * and it is offered only when two answer), so nothing here waits and nothing
+ * is addressed: exactly as before. Two reads are never held: /healthz, which
+ * only asks whether anything is there, and the computer's own name, which
+ * link.js reads again once the count has picked (countHosts).
+ */
+function holdReads() {
+  if (readsHeld) return readsHeld
+  let open = null
+  const gate = new Promise((go) => (open = go))
+  const held = { gate, until: Date.now() + COUNT_WAIT_MS }
+  held.open = () => {
+    if (readsHeld === held) readsHeld = null
+    open()
+  }
+  readsHeld = held
+  return held
+}
+
+/* On a fresh link: held when a pick is written down, and let go once the disk says there is none. */
+function holdForPick() {
+  if (picked === null) return
+  const held = holdReads()
+  if (picked === undefined) recallHost().then((pick) => !pick && !chosen && held.open())
+}
+
+const neverHeld = (path) => path === '/healthz' || path === '/store/config/host.name'
+
+/** Resolves once reads may go (holdReads), or at the hold's end, or at a read's own deadline. */
+async function readsWait(deadline) {
+  for (;;) {
+    const held = readsHeld
+    if (!held) return
+    const end = Number.isFinite(deadline) ? Math.min(held.until, deadline) : held.until
+    if (Date.now() >= end) return
+    let timer = null
+    await Promise.race([held.gate, new Promise((go) => (timer = setTimeout(go, end - Date.now())))])
+    clearTimeout(timer)
+  }
 }
 
 /*
@@ -788,21 +923,49 @@ export async function pickHost(
 ) {
   if (!hosts.includes(name)) return false
   chosen = name
+  chosenWhy = 'pick'
   await rememberHost(name)
   targeted = false
-  if (hosts.length > 1) await confirmTargeting({ windowMs, sleep })
+  if (hosts.length > 1) await whileProving(confirmTargeting({ windowMs, sleep }))
   return targeted
 }
 
+/*
+ * AND A PICK UNDER WHICH UNIT IS PROVED BEFORE A WRITE GOES. Between the tap
+ * and the proof (confirmTargeting), nothing was addressed: a scene tapped in
+ * that second and a half went to every computer on the account, both units.
+ * Now a write waits for the proof as it waits for the roll call (countDone),
+ * and a read goes to the one just picked.
+ */
+function whileProving(run) {
+  counting = run
+  readsAddressed = true
+  run
+    .finally(() => {
+      if (counting === run) counting = null
+      readsAddressed = false
+    })
+    .catch(() => {})
+  return run
+}
+
 const HOST_KEY = 'fractal.remote.host'
+/* A pick written while the disk was being read wins over what the read finds. */
+let pickWrites = 0
 const recallHost = async () => {
+  const writes = pickWrites
+  let found = null
   try {
-    return await AsyncStorage.getItem(HOST_KEY)
+    found = await AsyncStorage.getItem(HOST_KEY)
   } catch {
-    return null
+    found = null
   }
+  if (writes === pickWrites) picked = found || null
+  return picked ?? null
 }
 const rememberHost = async (name) => {
+  picked = name
+  pickWrites += 1
   try {
     await AsyncStorage.setItem(HOST_KEY, name)
   } catch {
@@ -1059,6 +1222,8 @@ async function requestOnce(path, method, options, trip = { went: false }) {
     if (attempt > 0 && once && trip.went) break
     try {
       await relayReady(until - Date.now(), tap)
+      /* A read on a fresh link waits for the roll call to say who it is asked of: see holdReads. */
+      if (method === 'GET' && readsHeld && !neverHeld(path)) await readsWait(options.deadline)
       const answer = await relaySend(method, path, options, trip)
       const took = Date.now() - began
       /* Only the slow ones. Logging every read would bury the one line that
@@ -1197,6 +1362,10 @@ async function relaySend(method, path, options, trip = { went: false }) {
    */
   const ask = { id, method, path, body: options.body ?? null }
   if (hosts.length > 1 && chosen && targeted) ask.host = chosen
+  /* A read while the pick is still being proved: asked of it already (holdReads). A write never is. */
+  else if (method === 'GET' && readsAddressed && hosts.length > 1 && chosen) ask.host = chosen
+  /* Who the roll call's reads were asked of, for link.js (remoteReadsAskedOf). */
+  if (readsAsked && method === 'GET' && !neverHeld(path) && !readsAsked.includes(ask.host || '')) readsAsked.push(ask.host || '')
 
   const before = trip.went
   try {

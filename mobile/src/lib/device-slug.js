@@ -37,3 +37,22 @@ export function deviceSlug(unit) {
   if (!label) return DEFAULT_SLUG
   return String(label).toLowerCase().replace(/[^a-z0-9]/g, '') || DEFAULT_SLUG
 }
+
+/**
+ * WHETHER ANOTHER UNIT ANSWERED THAN THE LAST REAL ONE.
+ *
+ * Two computers on one account, an FM3 on one and an AM4 on the other: at
+ * launch the FM3's answered first, and once the AM4's was found, the AM4's
+ * preset 53 kept the FM3's scene names for preset 53 ("FREAK ON A LEASH"),
+ * because a row of tiles that has names is never asked again. A unit that
+ * changed is a clean start for both ends (rig.startClean on the phone,
+ * deviceState.startClean in the browser).
+ *
+ * `was` is the last REAL unit read, not the starting 'device', or the first
+ * connect of every launch would start clean too; and a unit that went
+ * missing and came back the same is not another one.
+ */
+export function unitMoved(was, now) {
+  const real = (slug) => typeof slug === 'string' && slug !== '' && slug !== DEFAULT_SLUG
+  return real(was) && real(now) && was !== now
+}
