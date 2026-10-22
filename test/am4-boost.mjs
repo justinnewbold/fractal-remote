@@ -77,27 +77,68 @@ export function run(test) {
     assert.equal(b.ampPedal('am4', { ...amp, effectId: 59 }), 'other')
     for (const slug of ['fm3', 'fm9', 'axefxiii', 'vp4', 'device', '', null, undefined]) assert.equal(b.ampPedal(slug, amp), null, `${slug}’s amp is a boost`)
     for (const block of [{ slug: 'drive', effectId: 118 }, { slug: 'reverb', effectId: 66 }, { slug: 'cab', effectId: 62 }, null]) assert.equal(b.ampPedal('am4', block), null)
+    /*
+     * The unit the pedals are judged by while the computer says no unit is
+     * there: the last real one, whose chain is still up. A detect of "no
+     * device" turned the amp's pedal back into an on and off for those
+     * seconds, and its tap a bypass that reached the AM4 once it answered.
+     */
+    assert.equal(b.pedalUnit('device', 'am4'), 'am4')
+    assert.equal(b.pedalUnit('', 'am4'), 'am4')
+    assert.equal(b.pedalUnit(undefined, 'am4'), 'am4')
+    assert.equal(b.pedalUnit('fm3', 'am4'), 'fm3', 'another real unit is judged by the last one')
+    assert.equal(b.pedalUnit('device', null), 'device')
+    assert.equal(b.pedalUnit('device', 'device'), 'device')
+    assert.equal(b.ampPedal(b.pedalUnit('device', 'am4'), amp), 'boost')
+    assert.equal(b.unitMissing('device', 'am4'), true)
+    assert.equal(b.unitMissing('am4', 'am4'), false)
+    assert.equal(b.unitMissing('device', null), false)
+    /* And one pedal state for both ends' tiles: the boost, 'other', or nothing for any other pedal. */
+    const at = b.boostAt(1, 2, 12)
+    assert.equal(b.pedalBoost('am4', amp, b.keptBoost(at, 'A', true), at), 'on')
+    assert.equal(b.pedalBoost('am4', { ...amp, effectId: 59 }, null, at), 'other')
+    assert.equal(b.pedalBoost('fm3', amp, b.keptBoost(at, 'A', true), at), null)
+    assert.equal(b.pedalBoost('am4', { slug: 'drive', effectId: 118 }, null, at), null)
   })
 
-  test('the pedal says Boost on, Boost off, Amp off, or nothing, only for the preset and channel it was read for', async () => {
+  test('the pedal says Boost on, Boost off, Amp off, or nothing, only for the load of the preset and the channel it was read for', async () => {
     const b = await import('../shared/am4-boost.mjs')
     const amp = { slug: 'amp', effectId: 58, channel: 'B', bypassed: false }
-    const kept = b.keptBoost(12, 'B', true)
-    assert.equal(b.boostState(kept, 12, amp), 'on')
-    assert.equal(b.boostState(b.keptBoost(12, 'B', false), 12, amp), 'off')
-    assert.equal(b.boostState(kept, 13, amp), 'unknown', 'one preset’s boost was shown on another')
-    assert.equal(b.boostState(kept, 12, { ...amp, channel: 'C' }), 'unknown', 'one channel’s boost was shown on another')
-    assert.equal(b.boostState(b.keptBoost(12, 'B', null), 12, amp), 'unknown')
-    assert.equal(b.boostState(null, 12, amp), 'unknown')
-    assert.equal(b.boostState(kept, 12, { ...amp, bypassed: true }), 'amp-off', 'a boost was offered on an amp that is off')
+    const at = b.boostAt(3, 7, 12)
+    const kept = b.keptBoost(at, 'B', true)
+    assert.deepEqual(kept, { at: '3:7:12', channel: 'B', on: true })
+    assert.equal(b.boostState(kept, at, amp), 'on')
+    assert.equal(b.boostState(b.keptBoost(at, 'B', false), at, amp), 'off')
+    assert.equal(b.boostState(kept, b.boostAt(3, 7, 13), amp), 'unknown', 'one preset’s boost was shown on another')
+    assert.equal(b.boostState(kept, at, { ...amp, channel: 'C' }), 'unknown', 'one channel’s boost was shown on another')
+    /*
+     * The same preset loaded again is another load: the unit has its stored
+     * boost back, whatever was sent before. Over Bluetooth, where nothing
+     * reads, the phone showed what it last sent over a unit that had reloaded.
+     */
+    assert.equal(b.boostState(kept, b.boostAt(3, 8, 12), amp), 'unknown', 'a preset loaded again kept the boost from before')
+    /* Another computer, or another unit (the unit era): never the one left's. */
+    assert.equal(b.boostState(kept, b.boostAt(4, 7, 12), amp), 'unknown', 'another unit’s boost was shown')
+    assert.equal(b.boostState(b.keptBoost(at, 'B', null), at, amp), 'unknown')
+    assert.equal(b.boostState(b.keptBoost(null, 'B', true), null, amp), 'unknown', 'a boost kept for nowhere was shown')
+    assert.equal(b.boostState(null, at, amp), 'unknown')
+    assert.equal(b.boostState(kept, at, { ...amp, bypassed: true }), 'amp-off', 'a boost was offered on an amp that is off')
     assert.equal(b.boostWord('on'), 'Boost on')
     assert.equal(b.boostWord('off'), 'Boost off')
     assert.equal(b.boostWord('amp-off'), 'Amp off')
     assert.equal(b.boostWord('unknown'), null)
+    assert.equal(b.boostWord('other'), null, 'an amp whose boost cannot be switched says On or Off')
+    /* What a screen reader hears: the word, or why there is none, never an empty item. */
+    assert.equal(b.boostLabel('on'), 'Boost on')
+    assert.equal(b.boostLabel('unknown'), 'Boost not read yet')
+    assert.equal(b.boostLabel('other'), 'Boost can’t be switched yet')
     /* Plain words, US spelling, never "this phone". */
-    for (const w of [b.BOOST_ON, b.BOOST_OFF, b.AMP_OFF, b.AMP_OFF_SAYS, b.BOOST_UNREAD, b.OTHER_AMP_SAYS]) {
-      assert.ok(!/this phone|colour|grey|favourite/i.test(w), w)
+    for (const w of [b.BOOST_ON, b.BOOST_OFF, b.AMP_OFF, b.AMP_OFF_SAYS, b.BOOST_UNREAD, b.OTHER_AMP_SAYS, b.BOOST_WAIT, b.BOOST_NO_UNIT, b.BOOST_NOT_READ, b.BOOST_CANT, b.PLAY_HINT_TAP_AM4]) {
+      assert.ok(!/this phone|colour|grey|favourite|first amp/i.test(w), w)
     }
+    /* One sentence for an amp at another code, at every end: Play's and Bluetooth's guard. */
+    assert.equal(b.OTHER_AMP_SAYS, 'The app can’t switch this amp’s boost yet.')
+    assert.ok(read('mobile/src/lib/bleWire.js').includes(`badInput('${b.OTHER_AMP_SAYS}')`), 'Bluetooth says another amp’s refusal in other words')
   })
 
   test('the watch’s AM4 amp pedal is lit for Boost on, as on Play, and nothing else on the wrist changes', async () => {
@@ -106,19 +147,22 @@ export function run(test) {
       { slug: 'drive', effectId: 118, channel: 'A', bypassed: false },
       { slug: 'amp', effectId: 58, channel: 'A', bypassed: false }
     ]
-    const on = b.boostPedals(chain, { slug: 'am4', boost: b.keptBoost(4, 'A', true), number: 4 })
+    const on = b.boostPedals(chain, { slug: 'am4', shown: 'on' })
     assert.deepEqual(on.map((p) => p.bypassed), [false, false])
-    const off = b.boostPedals(chain, { slug: 'am4', boost: b.keptBoost(4, 'A', false), number: 4 })
+    const off = b.boostPedals(chain, { slug: 'am4', shown: 'off' })
     assert.deepEqual(off.map((p) => p.bypassed), [false, true], 'the wrist shows the amp lit over Boost off')
-    assert.deepEqual(b.boostPedals(chain, { slug: 'am4', boost: null, number: 4 }).map((p) => p.bypassed), [false, true], 'an unread boost is lit on the wrist')
-    assert.equal(b.boostPedals(chain, { slug: 'fm3', boost: b.keptBoost(4, 'A', false), number: 4 }), chain, 'another unit’s pedals were touched')
-    /* The phone's end: the picture is mapped before it is sent, and a wrist tap is still rig.writeBypass, which sends the boost there. */
+    assert.deepEqual(b.boostPedals(chain, { slug: 'am4', shown: 'unknown' }).map((p) => p.bypassed), [false, true], 'an unread boost is lit on the wrist')
+    assert.deepEqual(b.boostPedals(chain, { slug: 'am4', shown: 'amp-off' }).map((p) => p.bypassed), [false, true])
+    assert.equal(b.boostPedals(chain, { slug: 'fm3', shown: 'off' }), chain, 'another unit’s pedals were touched')
+    /* An amp whose boost cannot be switched is dark on the wrist, as it is on Play. */
+    assert.deepEqual(b.boostPedals([{ slug: 'amp', effectId: 59, bypassed: false }], { slug: 'am4', shown: 'on' }).map((p) => p.bypassed), [true])
+    /* The phone's end: the picture is mapped from what Play shows before it is sent, and a wrist tap is still rig.writeBypass, which sends the boost the wrist asked for there. */
     const bridge = flat('mobile/src/lib/watchBridge.js')
-    assert.match(bridge, /import \{ boostPedals \} from '\.\/am4-boost'/)
-    assert.match(bridge, /picture = \{ \.\.\.picture, chain: boostPedals\(picture\?\.chain, \{ slug: rig\.deviceSlug, boost: rig\.boost, number: rig\.preset\?\.number \}\) \}/)
+    assert.match(bridge, /import \{ boostPedals \} from '\.\/am4-boost' import \{ boostNow, pedalSlug \} from '\.\/rig'/)
+    assert.match(bridge, /picture = \{ \.\.\.picture, chain: boostPedals\(picture\?\.chain, \{ slug: pedalSlug\(\), shown: boostNow\(\) \}\) \}/)
     assert.match(bridge, /if \(cmd\.do === 'pedal'\) return writeBypass\(cmd\.id, !cmd\.on, receivedAt\)/)
     const rig = flat('mobile/src/lib/rig.js')
-    assert.match(rig, /export function writeBypass\(id, bypassed, at = Date\.now\(\)\) \{ const pedal = ampPedal\(state\.deviceSlug, blockNow\(id\)\) if \(pedal === 'boost'\) return tapBoost\(id, at\)/, 'a pedal tap on an AM4 amp can bypass it')
+    assert.match(rig, /export function writeBypass\(id, bypassed, at = Date\.now\(\)\) \{ if \(ampPedal\(pedalSlug\(\), blockNow\(id\)\)\) return tapBoost\(id, at, bypassed === true \|\| bypassed === false \? !bypassed : undefined\)/, 'a pedal tap on an AM4 amp can bypass it, or a wrist tap is a toggle')
   })
 
   test('the amp’s own on and off stays where the block is edited, at both ends, and Copy a scene copies the amp itself', () => {
@@ -131,23 +175,80 @@ export function run(test) {
     assert.ok(!/tapBoost/.test(consoleSrc), 'the browser’s editor switches a boost')
     assert.match(consoleSrc, /className=\{`bypass-btn /, 'the browser’s block panel lost its Engaged / Bypassed')
     const gig = flat('src/components/Gig.jsx')
-    assert.match(gig, /const boosts = ampPedal\(deviceKey, block\) !== null setToggling\(eid\) try \{ if \(boosts\) await tapBoost\(eid\) else await writeBypass\(eid, wanted\)/)
-    assert.match(gig, /boost=\{ampPedal\(deviceKey, block\) === 'boost' \? boostState\(boostKept, preset\?\.number, block\) : null\}/)
+    assert.match(gig, /const boosts = boostOf\(block\) !== null if \(!boosts\) setToggling\(eid\) try \{ if \(boosts\) await tapBoost\(eid\) else await writeBypass\(eid, wanted\)/)
+    assert.match(gig, /boost=\{boostOf\(block\)\}/)
+    assert.match(gig, /const boostOf = \(block\) => pedalBoost\(pedalUnit\(deviceKey, lastUnit\), block, boostKept, boostKey\(\)\)/)
+    /*
+     * A boost tap is not held disabled while its write is answered: it is up
+     * at once and puts itself back, and an older computer took over half a
+     * second to answer one, which lost a quick second tap.
+     */
+    assert.match(gig, /\} finally \{ if \(!boosts\) setToggling\(null\) \}/, 'the browser’s boost tile stays disabled for the whole answer')
   })
 
   test('the stage tile says Boost on or Boost off, lit only for on, at both ends, and says it to a screen reader too', () => {
     const stage = flat('mobile/src/screens/Stage.js')
-    assert.match(stage, /const boost = ampPedal\(device, block\) === 'boost' \? boostState\(boostKept, preset\?\.number, block\) : null/)
-    /* Its tap is the pedal's tap (rig.writeBypass), which on an AM4 amp is the boost; never the block's own switch. */
-    assert.match(stage, /writeBypass\(idOf\(block\), !block\.bypassed\)/)
+    assert.match(stage, /const boost = pedalBoost\(pedalUnit\(device, lastUnit\), block, boostKept, boostKey\(\)\)/)
+    /* Its tap is the boost's own toggle (rig.tapBoost); every other pedal's is the pedal's tap; never the block's own switch. */
+    assert.match(stage, /if \(boost\) tapBoost\(idOf\(block\)\) else writeBypass\(idOf\(block\), !block\.bypassed\)/)
     assert.ok(!/writeBlockBypass/.test(stage), 'Play switches an AM4 amp itself')
     assert.match(stage, /const engaged = boost \? boost === BOOST\.on : !unknown && !block\.bypassed/, 'the phone’s boost pedal is lit for anything but Boost on')
     assert.match(stage, /const state = boost \? boostWord\(boost\) \|\| '\\u00a0' : unknown \? '\\u00a0' : engaged \? 'On' : 'Off'/)
-    /* The phone's tile reads its corner words out (components/Tile accessibilityLabel). */
-    assert.match(flat('mobile/src/components/Tile.js'), /accessibilityLabel=\{\[label, topLeft, topRight, sub, caption\]\.filter\(Boolean\)\.join\(', '\)\}/)
+    /* Always seen, said to a screen reader in words, and dashed while unread (components/Tile). */
+    assert.match(stage, /mustSay=\{!!boost\} saysLeft=\{boost \? boostLabel\(boost\) : undefined\} unread=\{!!boost && unread\}/)
+    /* The phone's tile reads its corner words out, never an empty item ("AMP,  , C"). */
+    const tile = flat('mobile/src/components/Tile.js')
+    assert.match(tile, /accessibilityLabel=\{\[label, saysLeft \?\? topLeft, topRight, sub, caption\]\.filter\(\(part\) => !!String\(part \?\? ''\)\.trim\(\)\)\.join\(', '\)\}/)
+    assert.equal(String('\u00a0').trim(), '', 'a no-break space is not taken for blank')
+    assert.match(tile, /borderStyle: unread \? 'dashed' : 'solid'/)
     const gig = flat('src/components/Gig.jsx')
     assert.match(gig, /aria-pressed=\{door \|\| unknown \? undefined : !dark\}/)
-    assert.match(gig, /\[block\.name \|\| block\.slug, boost \? boostWord\(boost\) : unknown \? null : block\.bypassed \? 'Off' : 'On', block\.channel\]\.filter\(Boolean\)\.join\(', '\)/)
+    assert.match(gig, /\[block\.name \|\| block\.slug, boost \? boostLabel\(boost\) : unknown \? null : block\.bypassed \? 'Off' : 'On', block\.channel\]\.filter\(Boolean\)\.join\(', '\)/)
+    /* An unread boost, or one that cannot be switched, wears the browser's dashed ring, as an unread VP4 pedal does. */
+    assert.match(gig, /data-unknown=\{unknown && \(vp4Here\(\) \|\| boost\) \? 'yes' : undefined\}/)
+    assert.match(gig, /const unknown = boost \? boost === BOOST\.unknown \|\| boost === BOOST\.other :/)
+  })
+
+  /*
+   * "It should say Boost on, Boost off when they tap it." On most phones the
+   * corner had no room for the word beside the picture, so it was hidden and
+   * the tile was a dark AMP that looked bypassed. Now the word goes in the
+   * picture's place, across the tile, whenever its corner is crowded, at both
+   * ends; the channel shows only where it clears it.
+   */
+  test('an AM4 amp’s Boost on, Boost off and Amp off are always seen: in the corner, or in the picture’s place, at both ends', async () => {
+    const tile = flat('mobile/src/components/Tile.js')
+    assert.match(tile, /const middle = mustSay && cornered && !!String\(topLeft \|\| ''\)\.trim\(\) && current && !shows\.left/, 'the phone’s word is not moved when its corner is crowded')
+    /* Over the picture's own box, across the tile's whole inside, and the picture kept in its place, unseen, so the corner rule's inputs never move. */
+    assert.match(tile, /position: 'absolute', left: 0, right: 0, top: picture \? Math\.max\(0, \(laid\.top \?\? BORDER\) - BORDER\) : 3, height: picture \|\| undefined/)
+    assert.match(tile, /opacity: middle \? 1 : 0 \}\}/)
+    assert.match(tile, /tintColor: quiet \? foreground : pictureTint, opacity: middle \? 0 : 1/)
+    const gig = flat('src/components/Gig.jsx')
+    assert.match(gig, /const m = middle\?\.current if \(m && !next\.left && Number\.isFinite\(corners\.inset\)\)/, 'the browser’s word is not moved when its corner is crowded')
+    assert.match(gig, /className="gig-block-state gig-block-said"/)
+    assert.match(gig, /data-said=\{shows\.middle \? 'yes' : undefined\}/)
+    const css = read('src/styles.css')
+    assert.match(css, /button\.gig-block \.gig-block-state\.gig-block-said \{[^}]*left: 2px;[^}]*right: 2px;[^}]*visibility: hidden;/)
+    assert.match(css, /button\.gig-block \.gig-block-state\.gig-block-said\[data-shown='yes'\] \{\s*visibility: visible;/)
+    assert.match(css, /\.gig-block-icon\[data-said='yes'\] \{\s*visibility: hidden;/)
+    /*
+     * And there is room for it across every tile Play draws at 320 and 375,
+     * every size: the phone's grid at each step (tileWidth), less the two
+     * borders, against the widest of the three words at 11pt bold: "Boost
+     * off", 48 points in Arial's measure (a phone's own font is near it) and
+     * 56 in DejaVu Sans, a wide one, so 58 with room to spare. Fit's
+     * narrowest tile is 56, the floor it never goes under.
+     */
+    const { SIZES } = await import('../src/lib/gigSize.js')
+    const { tileWidth } = await import('../mobile/src/lib/tileGrid.js')
+    const WIDEST_WORD = 58
+    for (const screen of [320, 375]) {
+      for (const size of SIZES) {
+        const w = tileWidth(screen - 16 * 2, size.fx, 8, 3)
+        assert.ok(w - 4 >= WIDEST_WORD, `${screen} wide at ${size.name}: a tile ${w} wide has no room across for the boost’s word`)
+      }
+    }
+    assert.ok(56 - 4 >= 49, 'Fit’s narrowest tile has no room for the word in a phone’s own font')
   })
 
   /* --------------------------------------------------------------- the browser's store -- */
@@ -175,6 +276,12 @@ export function run(test) {
         unit.reads += 1
         calls.push(['blockParams', eid])
         if (unit.paramsFail) throw Object.assign(new Error('the unit did not answer'), { status: 503 })
+        /* `lag`: a read slow to come back, answered with the value it is handed (what the computer's copy held when it was asked). */
+        if (unit.lag) {
+          const lag = unit.lag
+          unit.lag = null
+          return ampParams(await lag)
+        }
         return ampParams(unit.boosts[ch()])
       },
       setAmpBoost: async (ask, opts) => {
@@ -200,7 +307,8 @@ export function run(test) {
     const { unit, calls } = am4()
     await ds.refreshBlocks()
     await settled()
-    assert.deepEqual(ds.getSnapshot().boost, { number: 12, channel: 'A', on: false }, 'the boost was not read after the chain')
+    assert.deepEqual({ ...ds.getSnapshot().boost, at: undefined }, { at: undefined, channel: 'A', on: false }, 'the boost was not read after the chain')
+    assert.equal(ds.getSnapshot().boost.at, ds.boostKey(), 'the boost was kept for another load of the preset')
     assert.equal(ds.boostNow(), 'off')
     const before = Date.now()
     await ds.tapBoost(58)
@@ -237,7 +345,7 @@ export function run(test) {
     unit.paramsFail = true
     await ds.refreshBlocks()
     await settled()
-    assert.equal(ds.getSnapshot().boost?.number, 12, 'a failed read was kept as an answer')
+    assert.ok(ds.getSnapshot().boost?.at !== ds.boostKey(), 'a failed read was kept as an answer')
     assert.equal(ds.boostNow(), 'unknown')
     await assert.rejects(ds.tapBoost(58), (e) => e.nothingSent === true && e.message === 'The amp’s boost couldn’t be read from the unit, so nothing was sent. Try it again in a moment.')
     assert.ok(!calls.some((c) => c[0] === 'setAmpBoost' || c[0] === 'setBypass'), 'an unread boost was sent, or fell back to a bypass')
@@ -300,6 +408,149 @@ export function run(test) {
     /* A clean start for another unit forgets it. */
     ds.startClean()
     assert.equal(ds.getSnapshot().boost, null)
+  })
+
+  /*
+   * Two computers on one account, an FM3 on one and an AM4 on the other (his
+   * own rig). Under Which unit, or at the launch's roll call, the AM4's chain
+   * stays up until the new unit says what it is, and a write made in that
+   * gap is held and handed to the new computer: an amp tap there went to the
+   * FM3 as PUT /preset/blocks/58/params/150, Amp 1's setting 150 on a unit
+   * nobody has read it on. Now the kept boost goes with the computer, and a
+   * tap sends nothing until the new unit has said what it is.
+   */
+  test('browser: another computer driven, a boost tap sends nothing, reads nothing, and says why, until the new unit is read', async () => {
+    const { calls } = am4()
+    await ds.refreshBlocks()
+    await settled()
+    assert.equal(ds.boostNow(), 'off')
+    ds.computerChanged()
+    assert.equal(ds.getSnapshot().boost, null, 'the AM4’s boost stayed up over the next computer')
+    assert.equal(ds.boostNow(), 'unknown')
+    const before = calls.length
+    await assert.rejects(ds.tapBoost(58), (e) => e.nothingSent === true && e.message === 'The unit is still being found, so the boost wasn’t sent. Try it again in a moment.')
+    assert.deepEqual(calls.slice(before), [], 'a boost tap reached the next computer before it said what unit it has')
+    /* And once it has (App's read: unitRead), the tap goes again. */
+    ds.unitRead('am4', { demo: false })
+    await ds.refreshBlocks()
+    await settled()
+    await ds.tapBoost(58)
+    assert.deepEqual(calls.filter((c) => c[0] === 'setAmpBoost').at(-1)[2], { value: 1, continuous: false })
+  })
+
+  /*
+   * A detect that finds no unit (a cable out for a moment, AM4-Edit holding
+   * the port) made the live slug 'device', and the amp's pedal an ordinary
+   * on and off whose tap was a bypass. The pedals are judged by the last
+   * real unit while none is there, and a boost tap then sends nothing.
+   */
+  test('browser: while the computer says no unit is there, the AM4 amp’s pedal is still its boost and a tap sends nothing', async () => {
+    const { unit, calls } = am4()
+    ds.unitRead('am4', { demo: false })
+    await ds.refreshBlocks()
+    await settled()
+    unit.slug = 'device'
+    ds.unitRead('device', { demo: false })
+    assert.equal(ds.getSnapshot().lastUnit, 'am4')
+    assert.equal(ds.pedalOf(ds.getSnapshot().blocks.find((b) => b.effectId === 58)), 'boost', 'the amp’s pedal turned back into an on and off')
+    const before = calls.length
+    await assert.rejects(ds.tapBoost(58), (e) => e.nothingSent === true && e.message === 'The unit isn’t answering, so the boost wasn’t sent.')
+    assert.deepEqual(calls.slice(before), [], 'a tap with no unit there sent something')
+    const gig = flat('src/components/Gig.jsx')
+    assert.match(gig, /pedalBoost\(pedalUnit\(deviceKey, lastUnit\), block, boostKept, boostKey\(\)\)/, 'the stage judges the amp by the live slug alone')
+  })
+
+  /*
+   * A read on its way when the pedal is tapped answers with what the unit had
+   * before the tap (the computer answers it out of its copy until the write
+   * lands), and it was put over the tap: the tile said Boost off over a unit
+   * that was boosted, and the next tap sent Boost on again.
+   */
+  test('browser: a boost read asked before a tap and answered after it is not put over the tap', async () => {
+    const { unit, calls } = am4()
+    await ds.refreshBlocks()
+    await settled()
+    assert.equal(ds.boostNow(), 'off')
+    /* A scene's chain read asks the boost; it is slow to come back. */
+    let answer
+    const real = unit.boosts.A
+    unit.lag = new Promise((go) => (answer = go))
+    const reading = ds.refreshBoost()
+    await ds.tapBoost(58)
+    assert.equal(unit.boosts.A, 1)
+    assert.equal(ds.boostNow(), 'on')
+    answer(real)
+    await reading
+    await settled()
+    assert.equal(ds.boostNow(), 'on', 'the read from before the tap put Boost off back over a boosted unit')
+    /* And a tap waiting on a read in flight asks for no second read beside its write. */
+    ds.set({ boost: null })
+    let answer2
+    unit.lag = new Promise((go) => (answer2 = go))
+    const reads = unit.reads
+    const reading2 = ds.refreshBoost()
+    const tapping = ds.tapBoost(58)
+    answer2(1)
+    await reading2
+    await tapping
+    await settled()
+    assert.equal(unit.reads, reads + 1, 'the tap that waited for a read asked for another beside its write')
+    assert.equal(ds.boostNow(), 'off', 'the tap did not send the other way from what the read said')
+  })
+
+  test('browser: a tap whose read first lands on another preset or channel sends nothing there', async () => {
+    const { unit, calls } = am4()
+    await ds.refreshBlocks()
+    await settled()
+    ds.set({ boost: null })
+    let answer
+    unit.lag = new Promise((go) => (answer = go))
+    const tapping = ds.tapBoost(58)
+    /* Next, while the read is out. */
+    ds.set({ preset: { number: 13, name: 'NEXT' } })
+    answer(0)
+    await assert.rejects(tapping, (e) => e.notThisChain === true)
+    assert.ok(!calls.some((c) => c[0] === 'setAmpBoost'), 'a tap made on one preset was sent to the next')
+  })
+
+  /*
+   * The demo answers as a computer that keeps a copy, so every chain read is
+   * held to be judged, and the boost read after it was skipped and never
+   * asked again: the demo's AM4 amp had no word on it until it was tapped.
+   * A held read is judged in markJudged, which now reads the boost; a scene
+   * that moves the amp to a channel whose boost is not known reads it too.
+   */
+  test('browser: a judged chain read and a scene that moves the amp’s channel read the boost, with no tap', async () => {
+    const { unit, driver } = am4()
+    driver.hostKeepsCopy = () => true
+    driver.presetCopy = async () => ({ name: 'SONG', scenes: ['VERSE', 'CHORUS', '', ''] })
+    driver.sceneState = async () => unit.chain.map((b) => ({ effectId: b.effectId, bypassed: b.bypassed, channel: b.channel }))
+    await ds.retryChain()
+    await settled()
+    assert.equal(ds.boostNow(), 'off', 'a judged read never read the boost')
+    assert.equal(unit.reads, 1)
+    /* A scene that moves the amp to B, laid from the status read (the demo's road). */
+    unit.chain.find((b) => b.effectId === 58).channel = 'B'
+    await ds.refreshSceneState()
+    await settled()
+    assert.equal(ds.boostNow(), 'on', 'a scene that moved the amp to B left its boost unknown')
+    assert.equal(unit.reads, 2)
+    /* One that moves nothing reads nothing. */
+    await ds.refreshSceneState()
+    await settled()
+    assert.equal(unit.reads, 2, 'a status read that moved nothing read the boost again')
+  })
+
+  test('browser: the hold tip says what the amp’s tap does on an AM4, in the shared words', async () => {
+    const b = await import('../shared/am4-boost.mjs')
+    assert.equal(b.playHintTap('am4'), b.PLAY_HINT_TAP_AM4)
+    assert.equal(b.playHintTap('fm3'), 'A tap just switches it on and off.')
+    assert.match(b.PLAY_HINT_TAP_AM4, /boost/)
+    assert.match(b.PLAY_HINT_TAP_AM4, /in Edit/)
+    const app = flat('src/App.jsx')
+    assert.match(app, /<p className="play-hint"> \{\/\*[^]*?\*\/\} <span> \{PLAY_HINT_HOLD\} \{playHintTap\(currentDeviceSlug\(\)\)\} <\/span>/, 'the hold tip promises an AM4 player that a tap on the amp turns it off')
+    /* And App's own first read of the chain reads the boost after it, or Play opened on an unread amp. */
+    assert.match(app, /chainWasRead\(p\?\.number\) \/\*[^]*?\*\/ refreshBoost\(\)\.catch\(\(\) => \{\}\)/)
   })
 
   /* ------------------------------------------------------------------- the demo -- */

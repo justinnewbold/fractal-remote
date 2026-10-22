@@ -51,6 +51,8 @@ import { cornerFit } from '../lib/tile-corners'
  */
 const SHEEN = 'rgba(255,255,255,0.10)'
 const SHADE = 'rgba(0,0,0,0.10)'
+/* Two pixels, because the edge is doing real work when the tile is off. An absolute child's offsets are taken inside it. */
+const BORDER = 2
 
 export default function Tile({
   label,
@@ -75,6 +77,27 @@ export default function Tile({
    * this off and each of its corners shows on its own.
    */
   pair = false,
+  /*
+   * A top-left word that is ALWAYS seen: an AM4 amp's Boost on, Boost off or
+   * Amp off (lib/am4-boost), which is the whole of what its tap does. "It
+   * should say Boost on, Boost off when they tap it", and at the sizes most
+   * phones use the corner had no room for it beside the picture, so it was
+   * hidden and the tile was a dark AMP that read as a bypassed amp. Where its
+   * corner has no room, it takes the picture's place instead, across the
+   * tile, and the channel letter shows only where it clears it. The tile's
+   * height does not move: the word is laid over the picture's own box.
+   */
+  mustSay = false,
+  /*
+   * What a screen reader says for the top-left word, where that is not the
+   * word itself: an unread boost has no word on it and says it is not read.
+   */
+  saysLeft,
+  /*
+   * A state not read from the unit yet, drawn with a dashed edge so it is
+   * never taken for an Off (the browser's own unread VP4 pedal does the same).
+   */
+  unread = false,
   /*
    * The picture above the letters, cut from Justin's mockup of this screen.
    * White in the file and tinted here, so one copy serves every hue — see
@@ -299,9 +322,30 @@ export default function Tile({
     right: topRight ? laid.right : 0,
     pair
   })
+  /*
+   * THE WORD THAT MUST BE SEEN, in the picture's place when its corner has
+   * no room (`mustSay`). Decided from the corner's own measurements at this
+   * size, which the move does not change: the picture keeps its box, drawn
+   * clear, so nothing under the rule moves and the word cannot go back and
+   * forth. Across the tile's whole inside rather than the picture's width,
+   * since a 320 phone's tile has less room inside its padding than "Boost
+   * off" needs. The channel then shows only where it clears the word.
+   */
+  const middle = mustSay && cornered && !!String(topLeft || '').trim() && current && !shows.left
+  const across = middle
+    ? cornerFit({
+        width: laid.width,
+        picture: laid.middle ?? laid.width,
+        pictureTop: picture ? laid.top : 0,
+        bandBottom: laid.band,
+        inset: laid.inset,
+        left: 0,
+        right: topRight ? laid.right : 0
+      }).right
+    : shows.right
   const cornerInk = quiet || grey ? foreground : on ? lit : quietWords
   const leftWord = { color: cornerInk, fontSize: font.micro, fontWeight: '600', opacity: shows.left ? 1 : 0 }
-  const rightWord = { color: cornerInk, fontSize: font.micro, fontWeight: '700', opacity: shows.right ? 1 : 0 }
+  const rightWord = { color: cornerInk, fontSize: font.micro, fontWeight: '700', opacity: across ? 1 : 0 }
 
   /*
    * THE EDGE, which on an unlit tile is the only thing still naming the block.
@@ -342,7 +386,8 @@ export default function Tile({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: on }}
-      accessibilityLabel={[label, topLeft, topRight, sub, caption].filter(Boolean).join(', ')}
+      /* Blank parts left out: an unread pedal's corner holds a space, and "AMP,  , C" read an empty item out. */
+      accessibilityLabel={[label, saysLeft ?? topLeft, topRight, sub, caption].filter((part) => !!String(part ?? '').trim()).join(', ')}
       onPress={() => {
         haptic?.()
         fire(`press ${said(label, sub || topLeft)}`, onPress)
@@ -370,8 +415,9 @@ export default function Tile({
           borderRadius: radius.md,
           /* Two pixels, because the edge is doing real work when the tile is
              off — it is the only thing still naming the block. */
-          borderWidth: 2,
+          borderWidth: BORDER,
           borderColor: edge,
+          borderStyle: unread ? 'dashed' : 'solid',
           backgroundColor: background,
           opacity: pressed ? 0.7 : 1,
           ...glow
@@ -434,6 +480,29 @@ export default function Tile({
           </Text>
         </View>
       ) : null}
+      {mustSay && cornered ? (
+        <View
+          pointerEvents="none"
+          /* Over the picture's own box (the column's top, less the border the
+             offsets are taken inside of), or the corner row's place on a tile
+             with no picture. Laid out always, so its word is measured before
+             it is needed; seen only in place of the corner. */
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: picture ? Math.max(0, (laid.top ?? BORDER) - BORDER) : 3,
+            height: picture || undefined,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: middle ? 1 : 0
+          }}
+        >
+          <Text numberOfLines={1} onLayout={(e) => keep('middle', e.nativeEvent.layout.width)} style={{ color: cornerInk, fontSize: font.micro, fontWeight: '700' }}>
+            {topLeft || ''}
+          </Text>
+        </View>
+      ) : null}
       <View
         /* The picture is this column's first child, so its top is the
            picture's top. */
@@ -447,7 +516,8 @@ export default function Tile({
                state, and a second announcement for the picture of it would
                make every tile read itself out twice. */
             accessible={false}
-            style={{ width: picture, height: picture, marginBottom: 2, tintColor: quiet ? foreground : pictureTint }}
+            /* Clear, keeping its box, while a word that must be seen is over it (`mustSay`). */
+            style={{ width: picture, height: picture, marginBottom: 2, tintColor: quiet ? foreground : pictureTint, opacity: middle ? 0 : 1 }}
             resizeMode="contain"
           />
         ) : null}

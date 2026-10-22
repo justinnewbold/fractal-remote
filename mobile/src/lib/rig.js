@@ -47,7 +47,7 @@ import { chainActs, chainSwitches, chainView } from './chain-view'
 import { OUTLINE_AFTER_MS, READ_AHEAD_ON, aheadChain, createReadAhead, fillOutline, outlineChain } from './chain-outline'
 import { blockCatalog } from './blockCatalog'
 import { unitByKey } from './demoUnits'
-import { AMP_BOOST, AMP_OFF_SAYS, BOOST, BOOST_UNREAD, OTHER_AMP_SAYS, ampPedal, boostFor, boostOf, boostReadPath, boostRequest, boostState, isAm4, keptBoost } from './am4-boost'
+import { AMP_BOOST, AMP_OFF_SAYS, BOOST, BOOST_NO_UNIT, BOOST_UNREAD, BOOST_WAIT, OTHER_AMP_SAYS, ampPedal, boostAt, boostFor, boostOf, boostReadPath, boostRequest, boostState, isAm4, keptBoost, pedalUnit, unitMissing } from './am4-boost'
 
 export { CHAIN_FRESH_MS, OWN_ECHO_MS, OWN_SETTLE_MS, PRESET_SETTLE_MS } from './own-echo'
 export { OUTLINE_AFTER_MS, READ_AHEAD_MS } from './chain-outline'
@@ -104,12 +104,19 @@ const initial = {
   chain: 'idle',
   /*
    * ON AN AM4, WHAT ITS AMP'S BOOST IS: the pedal on Play is the boost there
-   * (lib/am4-boost). Which preset and channel it was read or sent for, and
-   * on, off or null (read, and nothing that can be shown). null until then,
-   * and on every other unit. Play shows it only for the preset and the
-   * channel it was kept for; see boostState.
+   * (lib/am4-boost). Which load of the preset (boostAt: this unit, this
+   * computer, this preset, this time it was loaded) and which channel it was
+   * read or sent for, and on, off or null (read, and nothing that can be
+   * shown). null until then, and on every other unit. Play shows it only for
+   * the load and the channel it was kept for; see boostNow.
    */
   boost: null,
+  /*
+   * The last real unit read (realUnit), for the pedals on screen while the
+   * computer says no unit is there: the chain still up is that unit's, and
+   * an AM4 amp's pedal stays its boost (lib/am4-boost pedalUnit).
+   */
+  lastUnit: null,
   /*
    * Which preset the blocks on screen were read for, and whether a read of
    * the chain is on its way — a wait before one included.
@@ -337,8 +344,9 @@ export function computerChanged() {
   unitEra += 1
   unitSettled = false
   changedAt = Date.now()
-  /* An AM4 amp's boost read off the computer left is not this one's. */
+  /* An AM4 amp's boost read off the computer left is not this one's, and is not shown over the new one's pedal (tapBoost waits for the new unit to say what it is). */
   boostEra += 1
+  set({ boost: null })
   clearTimeout(staleTimer)
   staleTimer = null
   staleAgain = null
@@ -1210,6 +1218,8 @@ async function readAll() {
        one leaves this null and the screen draws nothing. */
     firmware: firmwareOf(caps),
     deviceSlug: slug,
+    /* The last real unit, for the pedals on screen while this one says no unit (lib/am4-boost pedalUnit). */
+    lastUnit: realUnit,
     simulated,
     unit,
     /*
@@ -1368,6 +1378,13 @@ function markJudged(n) {
     set(patch)
   } else set({ chainFor: n })
   syncChainBusy()
+  /*
+   * And an AM4 amp's boost, now the chain is this preset's: the read held
+   * for judging skipped it (readBlocks), and nothing else came back for it,
+   * so the demo's AM4 amp, whose reads are all judged, had no word on it at
+   * all until somebody tapped it.
+   */
+  refreshBoost().catch(() => {})
 }
 function copyWasStale(number) {
   if (staleAgain === number) {
@@ -2499,6 +2516,12 @@ function layStates(states) {
     return s ? { ...b, bypassed: vp4 ? s.bypassed ?? null : s.bypassed ?? b.bypassed, channel: s.channel ?? b.channel } : b
   }
   set({ blocks: state.blocks.map(lay), allBlocks: state.allBlocks.map(lay) })
+  /*
+   * A scene that moved an AM4's amp to a channel whose boost is not known
+   * (lib/am4-boost): read it. The chain read does this after every scene on
+   * a real AM4; this is the road a status read takes, the demo's among them.
+   */
+  if (boostAmp() && !boostFor(state.boost, boostAtNow(), boostAmp())) refreshBoost().catch(() => {})
 }
 
 /*
@@ -2539,24 +2562,20 @@ const notThisChain = () => !chainActs(chainViewOf(state))
 const notSwitchable = (id) => !chainSwitches(chainViewOf(state)) || !state.allBlocks.some((b) => sameBlock(b, id))
 
 /*
- * A PEDAL'S TAP: the Play screen's tiles, and the Apple Watch's pedals (lib/
- * watchBridge comes here by this name). On an AM4 the amp's pedal is its
- * boost and never turns the amp off (lib/am4-boost): that one goes to
- * tapBoost, and `bypassed` is not used. Every other pedal, and every pedal
- * of every other unit, is switched on or off as it always was.
+ * A PEDAL SET ON OR OFF: the Apple Watch's pedals (lib/watchBridge comes here
+ * by this name, with the state the wrist asked for) and every pedal of Play's
+ * but an AM4's amp. On an AM4 the amp's pedal is its boost and never turns
+ * the amp off (lib/am4-boost): from here that is the boost the wrist asked
+ * for, `bypassed` false for Boost on, sent as it is, so a message the watch
+ * sends twice is the same boost twice. Play's own amp tile toggles it, and
+ * calls tapBoost. Every other pedal, and every pedal of every other unit, is
+ * switched on or off as it always was.
  *
  * The block's own page in Edit, and Copy a scene, switch the block itself,
  * the AM4's amp included: they call writeBlockBypass.
  */
 export function writeBypass(id, bypassed, at = Date.now()) {
-  const pedal = ampPedal(state.deviceSlug, blockNow(id))
-  if (pedal === 'boost') return tapBoost(id, at)
-  if (pedal === 'other') {
-    if (notSwitchable(id)) return Promise.resolve(false)
-    logDebug('write', `block ${id}: an AM4 amp at another code, whose boost is not known — nothing sent`)
-    sayFault(OTHER_AMP_SAYS)
-    return Promise.resolve(false)
-  }
+  if (ampPedal(pedalSlug(), blockNow(id))) return tapBoost(id, at, bypassed === true || bypassed === false ? !bypassed : undefined)
   return writeBlockBypass(id, bypassed, at)
 }
 
@@ -2593,12 +2612,15 @@ export function writeChannel(id, channel, at = Date.now()) {
   const was = asWas()
   noteEdited()
   const air = blockAir(id, 'channel', channel)
-  /* An AM4 amp's boost is the channel's own: read again for the one it is on now (lib/am4-boost). */
-  const boosted = ampPedal(state.deviceSlug, blockNow(id)) === 'boost'
-  return optimistic(patchBlock(id, { channel }), was, () => device.setChannel(id, channel, { deadline }), air).then((landed) => {
-    if (landed && boosted) refreshBoost().catch(() => {})
-    return landed
-  })
+  /*
+   * An AM4 amp's boost is the channel's own, so on the new channel it is
+   * unknown (lib/am4-boost), and it is NOT read here: the computer threw its
+   * copy of the preset away when it wrote the channel, so the read would be a
+   * dump of the whole preset straight after a channel swap, which is when
+   * ForgeFX heard dumps glitch an AM4's sound (FORGEFX-25). The next chain
+   * read reads it, at the next scene or preset; a tap before that reads first.
+   */
+  return optimistic(patchBlock(id, { channel }), was, () => device.setChannel(id, channel, { deadline }), air)
 }
 
 /* ---------------------------------------------------------------- */
@@ -2607,27 +2629,44 @@ export function writeChannel(id, channel, at = Date.now()) {
 
 /*
  * ON AN AM4 THE AMP'S PEDAL IS ITS BOOST (lib/am4-boost, the browser's rule
- * too). The switch is read after every chain read and every channel change,
- * which the computer answers out of the copy it made for that chain read,
- * and after nothing else: never on a timer, and never after a tap, whose
- * read-back would be a whole dump of the preset (the write throws the copy
- * away). Over Bluetooth it is not read at all: there is no read for it yet.
+ * too). The switch is read after every chain read, which the computer answers
+ * out of the copy it made for that chain read, and after a status read that
+ * moved the amp to a channel whose boost is not known; and after nothing
+ * else: never on a timer, never after a channel change (the computer has
+ * just thrown its copy away), and never after a tap, whose read-back would be
+ * a whole dump of the preset (the write throws the copy away). Over Bluetooth
+ * it is not read at all: there is no read for it yet.
  */
 const readsBoost = () => isAm4(state.deviceSlug) && !viaBluetooth()
+/* The unit the pedals on screen are judged by: the live one, or while the computer says none is there, the last real one (lib/am4-boost pedalUnit). */
+export const pedalSlug = () => pedalUnit(state.deviceSlug, realUnit)
 /* The AM4 amp on screen whose pedal is its boost, or null. */
 const boostAmp = () => {
   const amp = blockNow(AMP_BOOST.eid)
-  return ampPedal(state.deviceSlug, amp) === 'boost' ? amp : null
+  return ampPedal(pedalSlug(), amp) === 'boost' ? amp : null
 }
-/* What its pedal shows now: see lib/am4-boost boostState. */
-export const boostNow = () => boostState(state.boost, state.preset?.number, boostAmp())
+/* Which load of which preset, on which unit through which computer, a boost is kept for (lib/am4-boost boostAt). */
+const boostAtNow = () => boostAt(unitEra, presetRun, state.preset?.number)
+/** What the AM4 amp's pedal shows now, the watch's picture included: see lib/am4-boost boostState. */
+export const boostNow = () => boostState(state.boost, boostAtNow(), boostAmp())
+/** The load key Play's tile is drawn with (lib/am4-boost pedalBoost): moved by another unit or computer, and by every preset load. */
+export const boostKey = () => boostAtNow()
 
 let boostInFlight = null
 let boostAgain = false
-/* Moved by a clean start and a reset: a read from before either lands on nothing. */
+/* Moved by a clean start, a reset and another computer: a read from before any of them lands on nothing. */
 let boostEra = 0
+/*
+ * Moved by every boost press. A read asked before a press, and answered
+ * after it, says what the unit had before the press (the computer answers it
+ * out of its copy until the write lands): it is dropped, never put over the
+ * press on the tile.
+ */
+let boostPresses = 0
+/* Boost writes on their way. A read asked while one is may be answered out of the copy from before it: it is not asked. */
+let boostWriting = 0
 
-/** Read the AM4 amp's boost for the preset and channel on screen; one read at a time, and one more if asked meanwhile. */
+/** Read the AM4 amp's boost for the load and channel on screen; one read at a time, and one more if asked meanwhile. */
 export async function refreshBoost() {
   if (!readsBoost() || !boostAmp()) return undefined
   if (boostInFlight) {
@@ -2649,13 +2688,16 @@ export async function refreshBoost() {
 /*
  * true, false, or null (read, and nothing that can be shown, which is kept
  * so a tap does not ask again); undefined when nothing came back, or what
- * came back is for a preset or a channel left since, and nothing is kept.
+ * came back is for a load or a channel left since, or a boost was pressed
+ * while it was asked, and nothing is kept.
  */
 async function readBoost() {
+  if (boostWriting > 0) return undefined
   const amp = boostAmp()
-  const number = state.preset?.number ?? null
+  const at = boostAtNow()
   const channel = amp?.channel ?? null
   const era = boostEra
+  const presses = boostPresses
   let on
   try {
     on = boostOf(await device.readAmpBoost(boostReadPath()))
@@ -2663,16 +2705,23 @@ async function readBoost() {
     logDebug('chain', 'the amp’s boost could not be read', err?.message)
     return undefined
   }
-  if (era !== boostEra || (state.preset?.number ?? null) !== number || (boostAmp()?.channel ?? null) !== channel) return undefined
+  if (era !== boostEra || boostAtNow() !== at || (boostAmp()?.channel ?? null) !== channel) return undefined
+  if (presses !== boostPresses) {
+    logDebug('chain', 'the amp’s boost read was asked before a tap of it, and is not shown over the tap')
+    return undefined
+  }
   if (on === null) logDebug('chain', 'the amp’s boost was read, and said nothing that can be shown')
-  set({ boost: keptBoost(number, channel, on) })
+  set({ boost: keptBoost(at, channel, on) })
   return on
 }
 
 /*
- * ONE TAP OF AN AM4'S AMP PEDAL. Never a bypass, and never a blind toggle:
- * the value sent is the opposite of what the unit said, or of what this
- * phone last sent it, for this preset and this channel.
+ * ONE TAP OF AN AM4'S AMP PEDAL. Never a bypass, and never a blind toggle.
+ *
+ * `want` is the boost asked for, true for Boost on: the watch says which it
+ * wants, and that is sent as it is (writeBypass). Play's own tile leaves it
+ * out, and the value sent is the opposite of what the unit said, or of what
+ * this phone last sent it, for this load of this preset and this channel:
  *
  *   - The amp itself off in this scene: nothing is sent (its boost could not
  *     be heard, and Play does not turn an amp on), and the words say so.
@@ -2681,23 +2730,58 @@ async function readBoost() {
  *     Boost on, as a VP4's unread pedal is turned off by its first tap.
  *   - Known: the other one goes, shown at once and put back if it fails.
  *
+ * And nothing at all while the unit is still being found (another computer
+ * picked under Which unit, or the launch's roll call, until the new one has
+ * said what it is: the write would be held and handed to it, and an FM3's
+ * amp takes 150 as another setting altogether), or while the computer says
+ * no unit is there.
+ *
  * A press like any other: refused while the link is down, bound by the
  * deadline from the press, and marked as unsaved work. The AM4 answers ok:
  * false to writes that landed, so only a throw is a failure.
  */
-export async function tapBoost(id, at = Date.now()) {
+export async function tapBoost(id, at = Date.now(), want) {
   if (notSwitchable(id)) return false
+  if (ampPedal(pedalSlug(), blockNow(id)) === 'other') {
+    logDebug('write', `block ${id}: an AM4 amp at another code, whose boost is not known — nothing sent`)
+    sayFault(OTHER_AMP_SAYS)
+    return false
+  }
+  if (!boostAmp() || !sameBlock(boostAmp(), id)) return false
   if (refusedNow('amp boost')) return false
+  if (!unitSettled) {
+    logDebug('write', 'amp boost: the unit is still being found — nothing sent')
+    sayFault(BOOST_WAIT)
+    return false
+  }
+  if (unitMissing(state.deviceSlug, realUnit)) {
+    logDebug('write', 'amp boost: the computer says no unit is there — nothing sent')
+    sayFault(BOOST_NO_UNIT)
+    return false
+  }
   const deadline = tapDeadline(at)
+  /* Where it was pressed: a read first that lands on another load or channel sends nothing. */
+  const where = boostAtNow()
+  const pressedOn = boostAmp()?.channel ?? null
   let shown = boostNow()
   if (shown === BOOST.ampOff) {
     logDebug('write', 'amp boost: the amp is off in this scene — nothing sent')
     sayFault(AMP_OFF_SAYS)
     return false
   }
-  if (shown === BOOST.unknown && readsBoost()) {
-    /* Read once for this preset and channel, and not again: an answer that said nothing is kept (readBoost). */
-    if (!boostFor(state.boost, state.preset?.number, boostAmp())) await refreshBoost()
+  const asked = want === true || want === false
+  if (!asked && shown === BOOST.unknown && readsBoost()) {
+    /*
+     * Read once for this load and channel, and not again: an answer that said
+     * nothing is kept (readBoost). One already on its way is waited for, and
+     * no second one is asked for after it: that one would go beside this
+     * tap's write, and be answered out of the copy from before it.
+     */
+    if (!boostFor(state.boost, where, boostAmp())) await (boostInFlight || refreshBoost())
+    if (boostAtNow() !== where || (boostAmp()?.channel ?? null) !== pressedOn || notSwitchable(id)) {
+      logDebug('write', 'amp boost: the preset or the channel moved while its boost was read — nothing sent')
+      return false
+    }
     shown = boostNow()
     if (shown === BOOST.ampOff) {
       sayFault(AMP_OFF_SAYS)
@@ -2708,21 +2792,28 @@ export async function tapBoost(id, at = Date.now()) {
       sayFault(BOOST_UNREAD)
       return false
     }
+    /* The deadline is the press's, read first or not: a read that took past it (a whole dump on a slow computer) leaves a boost that would land late, and the link drops it, as every late tap is. Said here so the log says why. */
+    if (Date.now() > deadline) logDebug('write', 'amp boost: reading it first took past the tap’s deadline, so it is not sent late')
   }
   if (notSwitchable(id) || !boostAmp()) return false
-  const want = shown !== BOOST.on
-  const number = state.preset?.number ?? null
+  const on = asked ? want : shown !== BOOST.on
   const channel = boostAmp()?.channel ?? null
   const was = state.boost
-  const press = keptBoost(number, channel, want)
+  const press = keptBoost(where, channel, on)
   noteEdited()
   const air = {
     control: `boost ${id}`,
     before: { boost: was },
-    shows: () => state.boost?.on === want && state.boost?.number === number && state.boost?.channel === channel,
+    shows: () => state.boost?.on === on && state.boost?.at === where && state.boost?.channel === channel,
     undo: (before) => before
   }
-  return optimistic({ boost: press }, { boost: was }, () => device.setAmpBoost(boostRequest(want), { deadline }), air)
+  boostPresses += 1
+  boostWriting += 1
+  try {
+    return await optimistic({ boost: press }, { boost: was }, () => device.setAmpBoost(boostRequest(on), { deadline }), air)
+  } finally {
+    boostWriting -= 1
+  }
 }
 
 /**

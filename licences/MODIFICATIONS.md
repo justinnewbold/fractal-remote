@@ -49,6 +49,7 @@ no reason to care about because upstream has no phone on the other end.
 | On Linux, read MIDI input through ForgeFX's own ALSA sequencer client (a small `python3` + libasound reader); output stays on RtMidi | RtMidi's sequencer input pool holds about 4.6 KB of SysEx, less than two chunks of an AM4 preset dump, and the kernel throws away what does not fit. The new reader's pool is the largest the kernel allows, about 46 KB, and it gives way to RtMidi when python3 or the sequencer is missing. |
 | Return an AM4's loaded-preset scene names from the structure read the server already makes | `GET /preset/scenes` answered nothing on an AM4, so the only road to its scene names was a 12,352-byte dump that a Raspberry Pi's MIDI input cut short. Nothing new is sent to the unit. |
 | Say on `/diag` what Linux holds for a USB-MIDI unit, cut a glued SysEx at each `F0`, and stop an AM4 dump read that the kernel's buffer cut, with the fix in its words | On a Raspberry Pi 3 the kernel's 4 KB buffer cut every AM4 preset dump to 3,095 bytes, RtMidi glued what was left to the next reply, and each retry lost the same bytes. |
+| Send an AM4 amp's Out Boost switch, written from a phone's Play screen, the way a bypass is sent: queued, without waiting for the command ack | The AM4 never sends that ack over USB-MIDI, so each boost tap held the one MIDI queue for 600 ms and a scene tapped just after it went out late. Same bytes as before; every other parameter write is unchanged. |
 
 ## forgefx-midi — the preset codec
 

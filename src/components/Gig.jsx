@@ -19,7 +19,8 @@ import {
   writeBypass,
   writeTuner,
   retryChain,
-  tapBoost
+  tapBoost,
+  boostKey
 } from '../lib/deviceState'
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import {
@@ -37,7 +38,7 @@ import { downBandTop } from '../lib/downBand'
 import { STAGE_HIDDEN } from '../lib/guardrails'
 import { findLooper, LOOPER_LABEL } from '../../shared/looper.mjs'
 import { cornerFit } from '../../shared/tile-corners.mjs'
-import { BOOST, ampPedal, boostState, boostWord } from '../../shared/am4-boost.mjs'
+import { BOOST, boostLabel, boostTitle, boostWord, pedalBoost, pedalUnit } from '../../shared/am4-boost.mjs'
 import Looper from './Looper'
 import { blockColor } from '../lib/blockColors'
 import { blockIcon } from '../lib/blockIcons'
@@ -90,6 +91,7 @@ const ofBlocks = (s) => s.blocks
 const ofTunerOn = (s) => s.tunerOn
 const ofTuning = (s) => s.tuning
 const ofBoost = (s) => s.boost
+const ofLastUnit = (s) => s.lastUnit
 
 /* How long a preset's scenes stay nameless before Play says how to name them. */
 const UNNAMED_AFTER_MS = 1500
@@ -177,6 +179,10 @@ export default function Gig({
   const tuning = useDevice(ofTuning)
   /* On an AM4, what its amp's boost is: the amp's pedal shows it (shared/am4-boost.mjs). */
   const boostKept = useDevice(ofBoost)
+  /* The last real unit, which the pedals on screen are judged by while the computer says no unit is there (shared/am4-boost.mjs pedalUnit). */
+  const lastUnit = useDevice(ofLastUnit)
+  /* What an AM4 amp's pedal shows (its boost), or null for every other pedal. */
+  const boostOf = (block) => pedalBoost(pedalUnit(deviceKey, lastUnit), block, boostKept, boostKey())
   /*
    * Whose blocks these are. The name of a new preset is up the moment it is
    * picked and its blocks a moment later, and in between the tiles here were
@@ -534,9 +540,15 @@ export default function Gig({
     haptic()
     const eid = block.effectId
     const wanted = !block.bypassed
-    /* On an AM4 the amp's pedal is its boost (shared/am4-boost.mjs): it switches that, and never turns the amp off. */
-    const boosts = ampPedal(deviceKey, block) !== null
-    setToggling(eid)
+    /*
+     * On an AM4 the amp's pedal is its boost (shared/am4-boost.mjs): it
+     * switches that, and never turns the amp off. Not held disabled while
+     * its write is answered: the boost goes up at once and puts itself back
+     * if it fails, and an older computer takes over half a second to answer
+     * one, which lost a quick second tap.
+     */
+    const boosts = boostOf(block) !== null
+    if (!boosts) setToggling(eid)
     try {
       if (boosts) await tapBoost(eid)
       else await writeBypass(eid, wanted)
@@ -561,7 +573,7 @@ export default function Gig({
       // What the unit actually has on: the status read, not the chain.
       if (!err?.unitGone) await refreshSceneState()
     } finally {
-      setToggling(null)
+      if (!boosts) setToggling(null)
     }
   }
 
@@ -1218,7 +1230,7 @@ export default function Gig({
               busy={toggling === block.effectId}
               outline={shown.outline}
               /* An AM4 amp's pedal is its boost: what it shows (shared/am4-boost.mjs), or null for any other pedal. */
-              boost={ampPedal(deviceKey, block) === 'boost' ? boostState(boostKept, preset?.number, block) : null}
+              boost={boostOf(block)}
               onToggle={() => toggle(block)}
               onHold={() => setChanEid(block.effectId)}
               icon={icons ? blockIcon(block.slug) : null}
@@ -1438,7 +1450,7 @@ export default function Gig({
  * text; what is measured is the text, which no answer changes, so a second
  * measure gets the same answer. And the answer is only set when it changes.
  */
-function useCornerFit({ tile, picture, band, left, right }, pair, again) {
+function useCornerFit({ tile, picture, band, left, right, middle = null }, pair, again) {
   const [fit, setFit] = useState(null)
   const measure = useRef(null)
   measure.current = () => {
@@ -1485,7 +1497,7 @@ function useCornerFit({ tile, picture, band, left, right }, pair, again) {
     /* The row's own gap between its two words, which the rule keeps clear
        too: two words that only fit by being squeezed into it are cut short. */
     const between = band.current ? parseFloat(getComputedStyle(band.current).columnGap) : NaN
-    const next = cornerFit({
+    const corners = {
       width: box.offsetWidth,
       picture: icon ? icon.width : 0,
       pictureTop: icon?.top,
@@ -1495,8 +1507,25 @@ function useCornerFit({ tile, picture, band, left, right }, pair, again) {
       right: r ? whole(r) : null,
       between: Number.isFinite(between) ? between : 0,
       pair
-    })
-    setFit((was) => (was && was.left === next.left && was.right === next.right ? was : next))
+    }
+    let next = { ...cornerFit(corners), middle: false, top: 0, height: 0 }
+    /*
+     * A WORD THAT MUST BE SEEN (an AM4 amp's boost) with no room in its
+     * corner goes in the picture's place, across the tile: the picture's own
+     * box, which stays where it is, unseen, so nothing the rule measured
+     * moves and the word cannot go back and forth; or the corner row's, on a
+     * tile with no picture. The word across from it is then measured against
+     * the word, as it is against a picture.
+     */
+    const m = middle?.current
+    if (m && !next.left && Number.isFinite(corners.inset)) {
+      const spot = icon || row
+      const across = cornerFit({ ...corners, picture: whole(m.firstElementChild || m), pictureTop: spot ? spot.top : undefined, left: null })
+      next = { left: false, right: across.right, middle: true, top: spot ? spot.top : 0, height: spot ? spot.bottom - spot.top : 0 }
+    }
+    setFit((was) =>
+      was && was.left === next.left && was.right === next.right && was.middle === next.middle && was.top === next.top && was.height === next.height ? was : next
+    )
   }
   /* Before the first paint, so the words are never drawn in the wrong place
      even for a frame. */
@@ -1528,7 +1557,7 @@ function useCornerFit({ tile, picture, band, left, right }, pair, again) {
       else measure.current()
     }
     const watch = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(look)
-    for (const ref of [tile, picture, left, right]) if (watch && ref.current) watch.observe(ref.current)
+    for (const ref of [tile, picture, left, right, middle]) if (watch && ref?.current) watch.observe(ref.current)
     /* Outside the frame's own work, so at once is always safe here. */
     document.fonts?.ready?.then(now)
     return () => {
@@ -1539,7 +1568,7 @@ function useCornerFit({ tile, picture, band, left, right }, pair, again) {
   }, again)
   /* Hidden until measured: a word that will not fit never flashes over the
      picture on the first frame. */
-  return fit || { left: false, right: false }
+  return fit || { left: false, right: false, middle: false, top: 0, height: 0 }
 }
 
 /**
@@ -1596,8 +1625,10 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
    * itself is off in this scene, or nothing until the unit has said. Lit for
    * Boost on only. The amp's own on and off stays in the editor.
    */
-  const unknown = boost ? boost === BOOST.unknown : !rec && (outline || vp4Here()) && typeof block.bypassed !== 'boolean'
+  const unknown = boost ? boost === BOOST.unknown || boost === BOOST.other : !rec && (outline || vp4Here()) && typeof block.bypassed !== 'boolean'
   const dark = boost ? boost !== BOOST.on : unknown || block.bypassed
+  /* Its word, which is always seen: in its corner, or in the picture's place where the corner has no room. */
+  const said = boost ? boostWord(boost) : null
 
   /*
    * THE TWO CORNERS. An effect says On or Off at the top left and its channel
@@ -1615,8 +1646,9 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
   const bandRef = useRef(null)
   const wordRef = useRef(null)
   const acrossRef = useRef(null)
+  const middleRef = useRef(null)
   const shows = useCornerFit(
-    { tile: tileRef, picture: pictureRef, band: bandRef, left: wordRef, right: acrossRef },
+    { tile: tileRef, picture: pictureRef, band: bandRef, left: wordRef, right: acrossRef, middle: said ? middleRef : null },
     rec,
     [rec, unknown, block.bypassed, block.channel, !!icon, boost]
   )
@@ -1631,7 +1663,7 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
            room, and the two were the same tile, so a first tap (which sends
            Off) looked like it did nothing and invited a second (styles.css).
            No apostrophes in here: test/both-ends.mjs reads this tag by hand. */
-        data-unknown={unknown && vp4Here() ? 'yes' : undefined}
+        data-unknown={unknown && (vp4Here() || boost) ? 'yes' : undefined}
         /* Grey when off, if that is the choice in Settings → Colours: a dark
            tile with a grey edge, as the unit draws a bypassed block (styles.css). */
         data-off={offMode() === 'grey' ? 'grey' : undefined}
@@ -1650,12 +1682,12 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
         aria-label={
           rec
             ? 'Looper — open Record, Play and Stop'
-            : [block.name || block.slug, boost ? boostWord(boost) : unknown ? null : block.bypassed ? 'Off' : 'On', block.channel].filter(Boolean).join(', ')
+            : [block.name || block.slug, boost ? boostLabel(boost) : unknown ? null : block.bypassed ? 'Off' : 'On', block.channel].filter(Boolean).join(', ')
         }
         /* The phone says "Hold to switch channels" beside CHAIN; this screen
            has no heading there to carry it, so the tile says it when a mouse
            rests on it. */
-        title={boost ? `Tap to switch its boost on or off.${has ? ' Hold, or right-click, to switch channels.' : ''}` : has ? 'Tap to switch on or off. Hold, or right-click, to switch channels.' : undefined}
+        title={boost ? boostTitle(boost, has) : has ? 'Tap to switch on or off. Hold, or right-click, to switch channels.' : undefined}
         {...hold}
       >
         {/*
@@ -1678,6 +1710,8 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
               ref={pictureRef}
               className="gig-block-icon"
               aria-hidden="true"
+              /* Kept in its place, unseen, while a word that must be seen is over it. */
+              data-said={shows.middle ? 'yes' : undefined}
               style={{ WebkitMaskImage: `url(${icon})`, maskImage: `url(${icon})` }}
             />
           ) : null}
@@ -1723,6 +1757,25 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
             </span>
           ) : null}
         </span>
+        {/*
+          An AM4 amp's Boost on, Boost off or Amp off, which is the whole of
+          what its tap does, and so is always seen: where its corner has no
+          room beside the picture (most phone widths), it is drawn here, in the
+          picture's own place and across the tile, the picture kept unseen
+          under it and the channel shown only where it clears it. Laid out
+          always so it is measured before it is needed.
+        */}
+        {said ? (
+          <span
+            className="gig-block-state gig-block-said"
+            ref={middleRef}
+            aria-hidden="true"
+            data-shown={shows.middle ? 'yes' : undefined}
+            style={shows.middle ? { top: `${shows.top}px`, height: `${shows.height}px` } : undefined}
+          >
+            <span>{said}</span>
+          </span>
+        ) : null}
       </button>
     </div>
   )

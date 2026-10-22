@@ -26,12 +26,20 @@
  *   - read:  GET /preset/blocks/58/params. Its `enums` carry the switch, for
  *            the channel the amp is on. The computer answers it out of the
  *            copy of the preset it made for the chain read just before, so
- *            asked straight after one it costs the unit nothing.
+ *            asked straight after one it costs the unit nothing. Never asked
+ *            after a channel change: the computer throws its copy away when
+ *            it writes a channel, so that read would be a dump of the whole
+ *            preset just as the unit switches (ForgeFX's FORGEFX-25 heard
+ *            dumps after a channel swap glitch an AM4's sound). The boost is
+ *            unknown for the new channel until the next chain read or a tap.
  *   - write: PUT /preset/blocks/58/params/150 { value: 0 or 1, continuous:
  *            false }, which the computer turns into one frame, byte for byte
  *            the codec's own buildSetParam('amp.out_boost', value). Always the
  *            value wanted, never a toggle: an absolute value is safe to send
- *            again, a toggle sent twice is no change at all.
+ *            again, a toggle sent twice is no change at all. A computer app
+ *            from 1.87.49 sends it as it sends a bypass, at once; an older
+ *            one waits up to 0.6 s for an answer the AM4 never gives over USB
+ *            before the next tap goes, which is the same frame, only later.
  *
  * Justin's other app (Axiom) writes the same switch with `continuous: true`,
  * the normalised path. This writes the captured one instead, the action
@@ -43,16 +51,25 @@
  * IT IS PER CHANNEL. The AM4's block read holds four copies of every setting,
  * one per channel A to D, and the switch sits inside each copy; so a scene or
  * a channel that moves the amp to another channel can move the boost with it,
- * and a preset change always may. What was read is kept with the preset and
- * the channel it was read for, and shown only while both are still the ones on
- * screen: otherwise it is unknown until it is read again, which each end does
- * after every chain read.
+ * and a preset change always may. What was read is kept with the load of the
+ * preset it was read for (`at`, which each end makes from the unit, the
+ * computer it came through, the preset and the time that preset was loaded)
+ * and the channel, and shown only while both are still the ones on screen:
+ * otherwise it is unknown until it is read again, which each end does after
+ * every chain read. A preset loaded again is a new load: the unit has its
+ * stored boost back, whatever was sent before.
  *
  * OVER BLUETOOTH (Justin's only) the phone has no way to read it yet: the
  * AM4's answer to that read has never been seen, and the AM4 has frozen on
  * messages it did not expect. So the write goes (the same frame, on the
  * phone's allowlist) and nothing reads: unknown until tapped, and the first
  * tap sends Boost on, as a VP4's unread pedal is turned off by its first tap.
+ * A preset loaded again makes it unknown again (see `at` above).
+ *
+ * THE WATCH asks for a state, not a change: its pedal says Boost on or Boost
+ * off, which is sent as it is, so a message the watch sends twice (it does,
+ * when the phone's answer is late) is the same boost twice, never on and then
+ * off again. Play's own tile is the one that toggles.
  *
  * Zero imports: plain ESM for Node, Vite and Metro alike.
  */
@@ -66,23 +83,60 @@ export const BOOST_OFF = 'Boost off'
 /* The amp itself is off in this scene (from Edit, or the scene): its boost could not be heard. */
 export const AMP_OFF = 'Amp off'
 
+/* What a screen reader hears for a boost pedal with no word on it. */
+export const BOOST_NOT_READ = 'Boost not read yet'
+export const BOOST_CANT = 'Boost can’t be switched yet'
+
 /* What a tap that sent nothing says, and why. */
 export const AMP_OFF_SAYS = 'The amp is off in this scene, so its boost can’t be heard. Turn the amp on in Edit.'
 export const BOOST_UNREAD = 'The amp’s boost couldn’t be read from the unit, so nothing was sent. Try it again in a moment.'
-export const OTHER_AMP_SAYS = 'The app can switch the boost of the AM4’s first amp only.'
+/* An amp at another code than the AM4's own (a second amp, whose addressing nobody has seen). The same words at every end, Bluetooth's guard included. */
+export const OTHER_AMP_SAYS = 'The app can’t switch this amp’s boost yet.'
+/* Another computer, or another unit, is being found, and has not said what it is yet: a boost sent now could reach a unit that is not an AM4. */
+export const BOOST_WAIT = 'The unit is still being found, so the boost wasn’t sent. Try it again in a moment.'
+/* The computer says no unit is there now. */
+export const BOOST_NO_UNIT = 'The unit isn’t answering, so the boost wasn’t sent.'
 
-/** The four things a boost pedal can show. */
-export const BOOST = Object.freeze({ on: 'on', off: 'off', ampOff: 'amp-off', unknown: 'unknown' })
+/*
+ * The one-time note over the browser's Play: the hold, and what a tap does.
+ * On an AM4 the amp is the one block the note names whose tap is not an on
+ * and off any more, so there it says so, and where the amp's own on and off
+ * went. Here so the phone can use the same words if it ever has the note.
+ */
+export const PLAY_HINT_HOLD = 'Hold a block — the amp, the drive, any of them — to bring up its channels and pick the one this scene plays.'
+export const PLAY_HINT_TAP = 'A tap just switches it on and off.'
+export const PLAY_HINT_TAP_AM4 = 'A tap just switches it on and off, except the AM4’s amp: its tap switches the amp’s boost, and the amp itself goes on and off in Edit.'
+export const playHintTap = (slug) => (isAm4(slug) ? PLAY_HINT_TAP_AM4 : PLAY_HINT_TAP)
+
+/** The five things a boost pedal can show: 'other' is an AM4 amp whose boost the app cannot switch. */
+export const BOOST = Object.freeze({ on: 'on', off: 'off', ampOff: 'amp-off', unknown: 'unknown', other: 'other' })
 
 /** Whether the unit is an AM4, by the slug both ends file it under (shared/device-slug). */
-export const isAm4 = (slug) => String(slug || '').toLowerCase() === 'am4'
+export function isAm4(slug) {
+  return String(slug || '').toLowerCase() === 'am4'
+}
+
+/* The slug a detect gives when the computer names no unit (shared/device-slug DEFAULT_SLUG), or none yet. */
+const noUnit = (slug) => !slug || slug === 'device'
+
+/**
+ * WHICH UNIT A PEDAL ON SCREEN IS JUDGED BY: the live one, or, while the
+ * computer says no unit is there (a cable out for a moment, AM4-Edit holding
+ * the port), the last real one read, `last`, whose chain is the one still up.
+ * Otherwise an AM4 amp's pedal turned back into an on and off for those
+ * seconds, and its tap a bypass that reached the AM4 the moment it answered.
+ */
+export const pedalUnit = (live, last) => (noUnit(live) && !noUnit(last) ? last : live)
+
+/** Whether the live unit is missing while the chain on screen is a real unit's: a pedal tap then sends nothing. */
+export const unitMissing = (live, last) => noUnit(live) && !noUnit(last)
 
 /**
  * What an AM4's amp pedal is: 'boost' for the amp at its own block code, the
  * one whose Out Boost the codec has verified; 'other' for an amp at any other
  * code (a second amp, whose addressing nobody has seen), which switches
  * nothing from Play and never falls back to a bypass; null for every other
- * block, and for every block of every other unit.
+ * block, and for every block of every other unit. `slug` is pedalUnit's.
  */
 export function ampPedal(slug, block) {
   if (!isAm4(slug) || block?.slug !== 'amp') return null
@@ -131,37 +185,67 @@ export function boostRequest(on) {
 }
 
 /**
- * What one end knows of the switch, kept: which preset and which channel it
- * was read (or written) for, and `on` true, false or null (read, and not
+ * Which load of which preset, on which unit through which computer, a boost
+ * is kept for: each end makes it from what it already counts (its unit era,
+ * moved by another computer or another unit, and its preset run, moved by
+ * every preset load), with the preset's number. Opaque everywhere else.
+ */
+export const boostAt = (unitEra, presetRun, number) => `${unitEra}:${presetRun}:${number ?? ''}`
+
+/**
+ * What one end knows of the switch, kept: which load (`at`) and which channel
+ * it was read (or written) for, and `on` true, false or null (read, and not
  * readable).
  */
-export const keptBoost = (number, channel, on) => ({ number: number ?? null, channel: channel ?? null, on: on === true || on === false ? on : null })
+export const keptBoost = (at, channel, on) => ({ at: at ?? null, channel: channel ?? null, on: on === true || on === false ? on : null })
 
-/** Whether `boost` was kept for this preset and this amp's channel. */
-export const boostFor = (boost, number, block) =>
-  !!boost && boost.number === (number ?? null) && boost.channel === (block?.channel ?? null)
+/** Whether `boost` was kept for this load and this amp's channel. */
+export const boostFor = (boost, at, block) => !!boost && boost.at !== null && boost.at === (at ?? null) && boost.channel === (block?.channel ?? null)
 
 /**
  * What a boost pedal shows: Amp off when the unit says the amp itself is off
  * (its boost would not be heard, and Play cannot turn it on again); otherwise
- * on or off as last read or sent for this preset and this channel; otherwise
+ * on or off as last read or sent for this load and this channel; otherwise
  * unknown.
  */
-export function boostState(boost, number, block) {
+export function boostState(boost, at, block) {
   if (block?.bypassed === true) return BOOST.ampOff
-  if (!boostFor(boost, number, block)) return BOOST.unknown
+  if (!boostFor(boost, at, block)) return BOOST.unknown
   return boost.on === true ? BOOST.on : boost.on === false ? BOOST.off : BOOST.unknown
 }
 
-/** The word in the tile's corner: Boost on, Boost off, Amp off, or none while unknown. */
+/** What a pedal on Play shows for an AM4's amp: its boost state, 'other' for an amp whose boost cannot be switched, and null for any other pedal. */
+export function pedalBoost(slug, block, boost, at) {
+  const pedal = ampPedal(slug, block)
+  return pedal === 'boost' ? boostState(boost, at, block) : pedal === 'other' ? BOOST.other : null
+}
+
+/** The word on the tile: Boost on, Boost off, Amp off, or none while unknown, or for an amp whose boost cannot be switched. */
 export const boostWord = (state) => (state === BOOST.on ? BOOST_ON : state === BOOST.off ? BOOST_OFF : state === BOOST.ampOff ? AMP_OFF : null)
+
+/** What a screen reader says for it: the word, or why there is none. */
+export const boostLabel = (state) => boostWord(state) || (state === BOOST.other ? BOOST_CANT : BOOST_NOT_READ)
+
+/** The words the browser's tile says when a mouse rests on it. */
+export function boostTitle(state, holds) {
+  if (state === BOOST.ampOff) return AMP_OFF_SAYS
+  if (state === BOOST.other) return OTHER_AMP_SAYS
+  return `Tap to switch the amp’s boost on or off.${holds ? ' Hold, or right-click, to switch channels.' : ''}`
+}
 
 /**
  * The stage's pedals for a picture that knows only on and off, the Apple
- * Watch's: an AM4's boost pedal is lit for Boost on and dark otherwise, so the
- * wrist shows what Play shows. Everything else is passed through untouched.
+ * Watch's: an AM4's boost pedal is lit for Boost on and dark otherwise (`shown`
+ * is what Play shows for it, rig.boostNow), so the wrist shows what Play
+ * shows; an amp whose boost cannot be switched is dark. Everything else is
+ * passed through untouched.
  */
-export function boostPedals(chain, { slug, boost, number } = {}) {
+export function boostPedals(chain, { slug, shown } = {}) {
   if (!isAm4(slug) || !Array.isArray(chain)) return chain
-  return chain.map((b) => (ampPedal(slug, b) === 'boost' ? { ...b, bypassed: boostState(boost, number, b) !== BOOST.on } : b))
+  return chain.map((b) => {
+    const pedal = ampPedal(slug, b)
+    if (pedal === 'boost') return { ...b, bypassed: shown !== BOOST.on }
+    if (pedal === 'other') return { ...b, bypassed: true }
+    return b
+  })
 }

@@ -1637,7 +1637,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * it over Bluetooth, so the phone shows what it sent.
    */
   async function am4WriteBoost(eid, body) {
-    if (eid !== AM4_BLOCKS.amp) throw badInput('Only the AM4’s first amp has a boost the app can switch.')
+    /* The same words as Play's (lib/am4-boost OTHER_AMP_SAYS; a test holds the two together, so this file imports only what it is allowed to). */
+    if (eid !== AM4_BLOCKS.amp) throw badInput('The app can’t switch this amp’s boost yet.')
     if (!body || body.continuous !== false || (body.value !== 0 && body.value !== 1)) throw badInput('The boost is set on or off, never anything else.')
     const on = body.value === 1
     const r = await fire(buildAm4AmpBoost(on), `amp boost ${on ? 'on' : 'off'}`)

@@ -14775,17 +14775,19 @@ test('the looper’s Rec and Play sit in the two top corners, and no corner word
   /* An effect is unchanged: On or Off on the left, its channel on the right, and the same rule. */
   assert.match(tile, /\{block\.channel && !door \? \(\s*<span className="gig-block-channel" ref=\{acrossRef\} data-crowded=\{shows\.right \? undefined : 'yes'\}>/, 'the channel letter is drawn on the picture')
   /* The door's two words are one phrase; an effect's are two facts. */
-  assert.match(tile, /useCornerFit\(\s*\{ tile: tileRef, picture: pictureRef, band: bandRef, left: wordRef, right: acrossRef \},\s*rec,/, 'Rec and Play are not held together, or an effect’s corners are')
+  assert.match(tile, /useCornerFit\(\s*\{ tile: tileRef, picture: pictureRef, band: bandRef, left: wordRef, right: acrossRef, middle: said \? middleRef : null \},\s*rec,/, 'Rec and Play are not held together, or an effect’s corners are')
   /* Rec and Play are the door's words off a real VP4 only: on one, no computer app can work its looper (test/vp4-safety.mjs). */
   assert.match(tile, /const rec = door && !vp4Here\(\)/, 'the door says Rec and Play on a VP4, or nowhere')
   /* A hidden word is not read out, so the label carries the words. */
   /* (An AM4 amp's says Boost on or Boost off there instead: shared/am4-boost.mjs.) */
-  assert.match(tile, /\[block\.name \|\| block\.slug, boost \? boostWord\(boost\) : unknown \? null : block\.bypassed \? 'Off' : 'On', block\.channel\]\.filter\(Boolean\)\.join\(', '\)/, 'a hidden On or channel letter is lost to a screen reader')
+  assert.match(tile, /\[block\.name \|\| block\.slug, boost \? boostLabel\(boost\) : unknown \? null : block\.bypassed \? 'Off' : 'On', block\.channel\]\.filter\(Boolean\)\.join\(', '\)/, 'a hidden On or channel letter is lost to a screen reader')
   assert.match(tile, /'Looper — open Record, Play and Stop'/)
 
   const hook = gig.slice(gig.indexOf('function useCornerFit('), gig.indexOf('function BlockTile('))
   assert.ok(hook.length > 0, 'the corner measure is not where this test reads it')
-  assert.match(hook, /const next = cornerFit\(\{[\s\S]{0,400}?pair\s*\}\)/, 'the browser does not ask the rule')
+  assert.match(hook, /const corners = \{[\s\S]{0,400}?pair\s*\}\s+let next = \{ \.\.\.cornerFit\(corners\), middle: false, top: 0, height: 0 \}/, 'the browser does not ask the rule')
+  /* A word that must be seen and has no room in its corner is measured against, in the picture's place, by the same rule. */
+  assert.match(hook, /const across = cornerFit\(\{ \.\.\.corners, picture: whole\(m\.firstElementChild \|\| m\), pictureTop: spot \? spot\.top : undefined, left: null \}\)/, 'the word across from a word in the picture’s place is not measured against it')
   /* The row's own gap, read from the row, so two words that each fit but not
      together are not squeezed into it and cut to "R… Pl…". */
   assert.match(hook, /parseFloat\(getComputedStyle\(band\.current\)\.columnGap\)/, 'the space between the two corner words is not measured')
@@ -14816,9 +14818,9 @@ test('the looper’s Rec and Play sit in the two top corners, and no corner word
   assert.match(hook, /watch\?\.disconnect\(\)/, 'a tile that goes keeps being watched')
   assert.match(hook, /useLayoutEffect\(\(\) => \{\s*measure\.current\(\)\s*\}, again\)/, 'a word that changes is not measured again before it is drawn')
   /* Only when the answer changes, so a measure cannot set off another. */
-  assert.match(hook, /setFit\(\(was\) => \(was && was\.left === next\.left && was\.right === next\.right \? was : next\)\)/, 'every measure sets state')
+  assert.match(hook, /setFit\(\(was\) =>\s+was && was\.left === next\.left && was\.right === next\.right && was\.middle === next\.middle && was\.top === next\.top && was\.height === next\.height \? was : next\s+\)/, 'every measure sets state')
   /* Hidden until measured, so a word that will not fit never flashes over the picture. */
-  assert.match(hook, /return fit \|\| \{ left: false, right: false \}/, 'the corner words are drawn before they are measured')
+  assert.match(hook, /return fit \|\| \{ left: false, right: false, middle: false, top: 0, height: 0 \}/, 'the corner words are drawn before they are measured')
 
   /*
    * The stylesheet: hidden, not removed, so a word keeps its place and can be
@@ -15470,15 +15472,17 @@ test('the computer app carries the server that changes a VP4’s presets and sce
  */
 test('the computer app carries the server with the Linux MIDI reader, the AM4’s loaded scene names and the Linux facts', () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
-  assert.match(lock.forgefx.tag, /\+am4dumpretry\+alsaseqin\+am4structnames\+linuxmidi$/, 'the computer app does not carry the server the phone’s AM4 names and its report read')
+  assert.match(lock.forgefx.tag, /\+am4dumpretry\+alsaseqin\+am4structnames\+linuxmidi(\+|$)/, 'the computer app does not carry the server the phone’s AM4 names and its report read')
   for (const piece of ['gridgen', 'looper', 'am4scenes', 'am4tempo', 'am4fw', 'am4tempoparam', 'am4tunercc', 'meterGate', 'relayheal', 'quietMeters', 'vp4midi', 'am4dumpretry']) {
     assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
   }
-  assert.equal(lock.forgefx.commit, 'f8be44ebf5e5d2dd97b9b2025d0720c4f4452924')
+  /* Carried by every pin from f8be44e on: the boost tap's (below) is one commit on top of it. */
+  assert.match(lock.forgefx.commit, /^[0-9a-f]{40}$/)
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   /* The codec is not moved by it. */
   assert.equal(lock['forgefx-midi'].commit, 'a17eb4a51d6d86985d8d8040966caa8da295f364')
-  const why = lock._why.slice(-3)
+  const linux = lock._why.findIndex((line) => /ALSA sequencer client/.test(line) && /f0d5c8b/.test(line))
+  const why = lock._why.slice(linux, linux + 3)
   assert.ok(/ALSA sequencer client/.test(why[0]) && /python3/.test(why[0]) && /FORGEFX_ALSA_SEQ_READER=0/.test(why[0]) && /f0d5c8b/.test(why[0]), 'the lock does not say why the input reader moved')
   assert.ok(/structure read/.test(why[1]) && /0x30, 0x50, 0x70 and 0x90/.test(why[1]) && /296a1ac/.test(why[1]) && /never a dump/.test(why[1]), 'the lock does not say where the loaded names come from')
   assert.ok(/linuxMidi/.test(why[2]) && /F0/.test(why[2]) && /input_buffer_size=65536/.test(why[2]) && /5a2989e/.test(why[2]) && /17a9f0d/.test(why[2]) && /f8be44e/.test(why[2]), 'the lock does not say what the Linux facts, the cut and the stop are')
@@ -15488,6 +15492,31 @@ test('the computer app carries the server with the Linux MIDI reader, the AM4’
   assert.match(mods, /loaded-preset scene names from the structure read/)
   assert.match(mods, /cut a glued SysEx at each `F0`/)
   /* The phone works with an older computer by falling back, so no computer is told it must update for this. */
+  assert.match(readSrc(new URL('../shared/versions.mjs', import.meta.url), 'utf8'), /COMPUTER_NEEDED = '1\.87\.23'/)
+})
+
+/*
+ * "On the AM4 the amp on off button should do an amp boost instead of turning
+ * the amp completely off" (Justin, 22 October 2026). The boost goes out with
+ * PUT /preset/blocks/58/params/150, which every computer app already answers;
+ * the server the computer carries from 1.87.49 sends it as it sends a bypass,
+ * where the one before held the MIDI queue 600 ms for an ack the AM4 never
+ * sends, and a scene tapped just after a boost went out late. The phone needs
+ * nothing from it, so no computer is told to update.
+ */
+test('the computer app carries the server that sends an AM4 amp’s boost tap at once, and nothing is told to update for it', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+linuxmidi\+am4boosttap$/, 'the computer app holds every scene tapped after a boost for 600 ms')
+  for (const piece of ['gridgen', 'looper', 'am4scenes', 'am4tempo', 'am4fw', 'am4tempoparam', 'am4tunercc', 'meterGate', 'relayheal', 'quietMeters', 'vp4midi', 'am4dumpretry', 'alsaseqin', 'am4structnames', 'linuxmidi']) {
+    assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
+  }
+  assert.equal(lock.forgefx.commit, 'e2bfe70d74cf8ab183abfe025987d15546a82e33')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  assert.equal(lock['forgefx-midi'].commit, 'a17eb4a51d6d86985d8d8040966caa8da295f364', 'the codec moved with it')
+  const why = lock._why.at(-1)
+  assert.ok(/Out Boost/.test(why) && /setTapSwitch/.test(why) && /600 ms/.test(why) && /e2bfe70/.test(why) && /COMPUTER_NEEDED does not move/.test(why), 'the lock does not say why it moved')
+  const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
+  assert.match(mods, /Out Boost switch, written from a phone's Play screen, the way a bypass is sent/)
   assert.match(readSrc(new URL('../shared/versions.mjs', import.meta.url), 'utf8'), /COMPUTER_NEEDED = '1\.87\.23'/)
 })
 

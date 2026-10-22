@@ -7,7 +7,7 @@ import { bandTop, tileWidth as tileWidthIn } from '../lib/tileGrid'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
 import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot, vp4Here } from '../lib/device'
 import { VP4_ON_OFF_UNKNOWN, vp4StepWords } from '../lib/vp4-safety'
-import { BOOST, ampPedal, boostState, boostWord } from '../lib/am4-boost'
+import { BOOST, boostLabel, boostWord, pedalBoost, pedalUnit } from '../lib/am4-boost'
 import {
   applySong,
   listsFor,
@@ -41,9 +41,11 @@ import {
   readAhead,
   refreshAll,
   awayNow,
+  boostKey,
   rereadSceneNames,
   sayFault,
   songLate,
+  tapBoost,
   tapTempo,
   useRig,
   writeBypass,
@@ -115,6 +117,7 @@ const ofDroppedAt = (s) => s.droppedAt
 const ofFaultAt = (s) => s.faultAt
 const ofSlug = (s) => s.deviceSlug
 const ofBoost = (s) => s.boost
+const ofLastUnit = (s) => s.lastUnit
 
 /**
  * The stand, not the bench.
@@ -183,6 +186,8 @@ export default function Stage({
   const device = useRig(ofSlug)
   /* On an AM4, what its amp's boost is: the amp's pedal shows it (lib/am4-boost). */
   const boostKept = useRig(ofBoost)
+  /* The last real unit, which the pedals on screen are judged by while the computer says no unit is there (lib/am4-boost pedalUnit). */
+  const lastUnit = useRig(ofLastUnit)
   /*
    * What Previous and Next step through, and where you are in it.
    *
@@ -1102,11 +1107,13 @@ export default function Stage({
                  tap still goes — it turns the effect off first. */
               /* On an AM4 the amp's pedal is its boost (lib/am4-boost): Boost on, Boost
                  off, Amp off while the amp itself is off in this scene, and no word
-                 until the unit has said. Lit for Boost on only. Its tap is
-                 rig.writeBypass's, which sends the boost there and never a bypass;
-                 the amp's own on and off is on its page in Edit. */
-              const boost = ampPedal(device, block) === 'boost' ? boostState(boostKept, preset?.number, block) : null
-              const unknown = boost ? boost === BOOST.unknown : (chainNow.outline || vp4Here()) && typeof block.bypassed !== 'boolean'
+                 until the unit has said, with a dashed edge. Lit for Boost on only.
+                 The word is always seen (Tile mustSay). Its tap is rig.tapBoost,
+                 which sends the boost and never a bypass; the amp's own on and off
+                 is on its page in Edit. */
+              const boost = pedalBoost(pedalUnit(device, lastUnit), block, boostKept, boostKey())
+              const unread = boost === BOOST.unknown || boost === BOOST.other
+              const unknown = boost ? unread : (chainNow.outline || vp4Here()) && typeof block.bypassed !== 'boolean'
               const engaged = boost ? boost === BOOST.on : !unknown && !block.bypassed
               const state = boost ? boostWord(boost) || '\u00a0' : unknown ? '\u00a0' : engaged ? 'On' : 'Off'
               return (
@@ -1116,6 +1123,9 @@ export default function Stage({
                   icon={showIcons ? blockIcon(block.slug) : undefined}
                   topLeft={state}
                   topRight={block.channel || undefined}
+                  mustSay={!!boost}
+                  saysLeft={boost ? boostLabel(boost) : undefined}
+                  unread={!!boost && unread}
                   fill={hue.fill}
                   ink={hue.ink}
                   picked={hue.picked}
@@ -1127,7 +1137,8 @@ export default function Stage({
                      has not said yet: a tap would be a guess, so it waits. */
                   onPress={() => {
                     if (chainNow.outline && typeof block.bypassed !== 'boolean') return
-                    writeBypass(idOf(block), !block.bypassed)
+                    if (boost) tapBoost(idOf(block))
+                    else writeBypass(idOf(block), !block.bypassed)
                   }}
                   /* Not on the outline: a channel waits for the chain read. */
                   onLongPress={

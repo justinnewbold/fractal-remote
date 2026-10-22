@@ -2775,7 +2775,7 @@ export function run(test) {
    * So users know that they can just hold the things to switch between
    * channels, A B C and D."
    */
-  test('the chain says a block can be held to switch channels, at both ends', () => {
+  test('the chain says a block can be held to switch channels, at both ends', async () => {
     const stage = read('mobile/src/screens/Stage.js')
     assert.match(stage, /export const HOLD_FOR_CHANNELS = 'Hold to switch channels'/)
     assert.match(stage, /\{channels\?\.length > 1 && blocks\.length \? \(\s*<Text[^>]*>\s*\{HOLD_FOR_CHANNELS\}/, 'the words are not beside CHAIN, or show on a unit with no channels')
@@ -2783,7 +2783,11 @@ export function run(test) {
     assert.match(stage, /onLongPress=\{\s*channels\?\.length > 1/)
     const gig = read('src/components/Gig.jsx')
     /* An AM4 amp's pedal says it switches the boost (shared/am4-boost.mjs), and can be held the same. */
-    assert.match(gig, /title=\{boost \? `Tap to switch its boost on or off\.\$\{has \? ' Hold, or right-click, to switch channels\.' : ''\}` : has \? 'Tap to switch on or off\. Hold, or right-click, to switch channels\.' : undefined\}/, 'the browser’s tiles do not say they can be held')
+    assert.match(gig, /title=\{boost \? boostTitle\(boost, has\) : has \? 'Tap to switch on or off\. Hold, or right-click, to switch channels\.' : undefined\}/, 'the browser’s tiles do not say they can be held')
+    /* An AM4 amp's tile says its boost, and that it can be held, in the shared words; and the amp's own off words when the amp is off (shared/am4-boost.mjs). */
+    const boostWords = await import('../shared/am4-boost.mjs')
+    assert.equal(boostWords.boostTitle('on', true), 'Tap to switch the amp’s boost on or off. Hold, or right-click, to switch channels.')
+    assert.equal(boostWords.boostTitle('amp-off', true), boostWords.AMP_OFF_SAYS, 'a mouse over an amp that is off is promised a boost the tap refuses')
   })
 
   /*
