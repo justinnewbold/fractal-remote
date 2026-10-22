@@ -816,3 +816,17 @@ export function pickEntry(entry) {
   const name = typeof entry?.name === 'string' && entry.name ? entry.name : null
   return { name, many: entry?.many === true ? true : entry?.many === false ? false : null }
 }
+
+/**
+ * WHETHER AN ACCOUNT'S RECORD SAYS IT MAY HAVE TWO COMPUTERS: its last roll
+ * call heard two or more, or it has a pick from before it was ever counted
+ * (the bare name 1.87.47 kept, which only Which unit wrote, and Which unit
+ * is only offered with two answering). Only then is anything at a join done
+ * otherwise than in 1.87.47: the roll call begun before the computer's name
+ * is read, and a count at the first answer of a link whose join went
+ * unanswered holding the taps. Everything else is one computer's, exactly as
+ * 1.87.47 did it: a count that heard one, an account never counted with no
+ * pick, a record not read off the disk yet (null), and storage that could not
+ * be read at all.
+ */
+export const mayBeTwo = (record) => Boolean(record && (record.many === true || (record.many === null && record.name)))

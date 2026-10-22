@@ -91,7 +91,8 @@ import {
   tapDeadline,
   readPicks,
   writePicks,
-  pickEntry
+  pickEntry,
+  mayBeTwo
 } from '../../shared/relay-rules.mjs'
 import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, cleanCode, codeRefused } from '../../shared/confirm-code.mjs'
 import { deviceNoun } from '../../shared/device-word.mjs'
@@ -280,20 +281,20 @@ async function takeCensus({
   readsTo = proved ? chosen : null
   if (!readsAsked) readsAsked = []
   try {
-    /* The pick's own answer, as it comes in: reads are asked of it from that moment (the phone's relay.js says why). */
-    const heard =
-      held && picked
-        ? (payload) => {
-            hostNamesFrom([payload]).then(
-              ([name]) => {
-                if (name !== picked || readsHeld !== held || session !== link) return
-                if (readsOnlyTo(picked)) readsTo = picked
-                held.open()
-              },
-              () => {}
-            )
-          }
-        : null
+    /* The pick's own answer, as it comes in: reads are asked of it from that moment; and a second answer is two computers known, so a write waits from then in a count that let writes go at once (the phone's relay.js says why). */
+    let answered = 0
+    const heard = (payload) => {
+      if (++answered > 1 && session === link) countFree = false
+      if (!held || !picked) return
+      hostNamesFrom([payload]).then(
+        ([name]) => {
+          if (name !== picked || readsHeld !== held || session !== link) return
+          if (readsOnlyTo(picked)) readsTo = picked
+          held.open()
+        },
+        () => {}
+      )
+    }
     // A read every host allows and every host answers differently: its own name,
     // written into its store by the launcher on that Mac.
     const answers = await collectAnswers({ path: '/store/config/host.name', windowMs, sleep, heard })
@@ -426,7 +427,7 @@ let counting = null
 let countingLink = null
 /** When the run writes are waiting on began: a proof chained behind a count begins when the count ends (countDone). */
 let countingSince = 0
-/** Whether writes go at once while this count runs, as before it, until it hears two (censusHosts). */
+/** Whether writes go at once while this count runs, as before it, until it hears a second computer (censusHosts, takeCensus). */
 let countFree = false
 const COUNT_WAIT_MS = 6000
 
@@ -436,15 +437,16 @@ const writesWaitOn = () => (counting && !countFree ? counting : null)
 /*
  * One at a time: a roll call asked for while another, or a pick's proof, is
  * running starts when it ends. `late` is the count at the computer's first
- * answer on a link whose join went unanswered (link.js countIfDue): on an
- * account whose last count heard one computer, writes go at once while it
- * runs, as they did there in 1.87.47, until it hears two (the phone's
- * relay.js says more).
+ * answer on a link whose join went unanswered (link.js countIfDue): on every
+ * account whose record does not say it may have two (shared relay-rules
+ * mayBeTwo), storage that cannot be read among them, writes go at once while
+ * it runs, as they did there in 1.87.47, until it hears a second computer
+ * (the phone's relay.js says more).
  */
 export function censusHosts(options = {}) {
   /* Only one on this link: a count left running by a link that has gone is nothing to wait for. */
   const before = counting && countingLink === session ? counting : null
-  const free = !before && options?.late === true && readPick()?.many === false
+  const free = !before && options?.late === true && !mayBeTwo(readPick())
   const run = before
     ? before
         .catch(() => {})

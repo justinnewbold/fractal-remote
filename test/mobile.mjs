@@ -338,6 +338,8 @@ async function rigOnTheBench(over = {}) {
     })
     answer = (method, path, body) => {
       if (method === 'GET') {
+        /* \`detectFails\`: the computer refusing the detect (a unit busy, or the read lost and given up on). */
+        if (path === '/device/detect' && unit.detectFails?.()) throw Object.assign(new Error('the unit did not answer'), { status: 503 })
         if (path === '/device/detect')
           return { connected: true, name: unit.short ?? 'FM3', short: unit.short ?? 'FM3', capabilities: unit.capabilities ?? { scenes: 8, meters: { outputLevels: true } } }
         if (path === '/device') return {}
@@ -19475,6 +19477,36 @@ export function run(test) {
     assert.deepEqual(now.sceneNames.slice(0, 2), ['CLEAN', 'LEAD'])
     assert.equal(now.bpm, 99)
     assert.ok(!relay.handed.some((h) => h.method === 'PUT' && /scene-names-fm3/.test(h.line) && /CLEAN/.test(String(h.body))), 'the AM4’s names were kept under the FM3’s slot')
+  })
+
+  test('phone: a unit whose read was lost after a change of computer is read again within one watch tick, and Try again reads it whole', async () => {
+    for (const how of ['watch', 'try again']) {
+      const { rig, clock, unit } = await rigOnTheBench({ number: 53, scenes: FM3_53, capabilities: { scenes: 8, meters: { outputLevels: false } }, namesInChain: false })
+      assert.equal(rig.getState().sceneNames[0], 'FREAK ON A LEASH')
+      if (how === 'watch') rig.watchUnit()
+      const since = clock.now()
+      /* Which unit picks the AM4's computer, and the read after the clean start has its detect refused. */
+      rig.computerChanged()
+      Object.assign(unit, AM4_HERE, { copy: () => ({ name: 'SONG 53', scenes: ['CLEAN', 'LEAD', '', ''], cells: [] }), scenes: ['CLEAN', 'LEAD', '', ''], bpm: 99 })
+      let refused = 1
+      unit.detectFails = () => refused-- > 0
+      rig.startClean()
+      await rig.refreshAll().catch(() => {})
+      assert.equal(rig.unitReadSince(since), false, 'a detect that was refused was taken for the unit read')
+      assert.equal(rig.getState().chainFor, null, 'the bench did not lose the read')
+      if (how === 'watch') await clock.advance(31000)
+      else {
+        await rig.retryChain()
+        await clock.advance(2000)
+      }
+      const now = rig.getState()
+      assert.equal(now.deviceSlug, 'am4', `${how}: the AM4 was never read`)
+      assert.deepEqual(now.sceneNames.slice(0, 2), ['CLEAN', 'LEAD'], `${how}: the AM4's scene names never came`)
+      assert.equal(now.bpm, 99, `${how}: the tempo stayed blank`)
+      assert.equal(now.chainFor, 53, `${how}: the pedals stayed on "Couldn't read this preset's chain"`)
+      assert.equal(rig.unitReadSince(since), true)
+      rig.stopWatching()
+    }
   })
 
   test('phone: a tempo of 0 is the unit not answering, and Tap keeps its last figure', async () => {

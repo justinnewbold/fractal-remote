@@ -311,7 +311,7 @@ async function linkOnABench() {
     'bleLink.mjs': 'export const pokeBluetooth = () => {}\nexport const startBluetoothLink = () => {}\nexport const stopBluetoothLink = () => {}\n',
     'tapGate.mjs': read('mobile/src/lib/tapGate.js'),
     'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
-    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const startClean = () => { bench.order.push('startClean') }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\n",
+    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const startClean = () => { bench.order.push('startClean') }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const unitReadSince = () => bench.unitRead !== false\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\n",
     'phone-note.mjs': "export const PHONE_NOTE_PATH = '/store/config/phone'\nexport const phoneNote = () => ({})\nexport const timeToTell = () => false\n",
     /* The relay as link.js hears it: the same order of news as relay.js gives it. */
     'relay.mjs': `
@@ -358,8 +358,8 @@ async function linkOnABench() {
       export const remoteReadsAskedOf = () => bench.askedOf ?? null
       /* Whether a roll call is due (relay.js remoteCountDue): \`bench.countDue\`, false unless a test says. */
       export const remoteCountDue = () => (typeof bench.countDue === 'function' ? bench.countDue() : bench.countDue === true)
-      /* What the account's last count heard (relay.js remoteCountedMany): \`bench.many\`, never counted unless a test says. */
-      export const remoteCountedMany = () => bench.many ?? null
+      /* Whether the account's record says it may have two (relay.js remoteMayBeTwo): \`bench.many\` true, which a test says. */
+      export const remoteMayBeTwo = () => bench.many === true
       /* Which unit (relay.js pickHost): \`bench.pick\` runs inside it; \`bench.switched(name)\` tells link.js it moved, as relay.js does before the proof. */
       export const pickHost = async (name) => (bench.pick ? bench.pick(name) : false)
       const switchWatchers = new Set()
@@ -2967,11 +2967,12 @@ export function run(test) {
     assert.ok(join.indexOf('quietMeters()') > join.indexOf('await hostResponds()') && join.indexOf('quietMeters()') < join.indexOf('countHosts()'), 'the phone says it after the roll call has begun holding writes, or not at join at all')
     /*
      * And the roll call begins before the computer's name is read on an account that may have two: a tap made while
-     * that read was out went to both units. One whose last count heard one goes in 1.87.47's order, the name first.
+     * that read was out went to both units. Every other goes in 1.87.47's order, the name first: one whose last count
+     * heard one, one never counted, one whose record is not off the disk yet.
      */
     assert.match(
       join,
-      /if \(remoteCountedMany\(\) === false\) \{\s*await readMacName\(\)\s*quietMeters\(\)\s*countHosts\(\)\s*\} else \{\s*quietMeters\(\)\s*countHosts\(\)\s*await readMacName\(\)\s*\}/,
+      /if \(!remoteMayBeTwo\(\)\) \{\s*await readMacName\(\)\s*quietMeters\(\)\s*countHosts\(\)\s*\} else \{\s*quietMeters\(\)\s*countHosts\(\)\s*await readMacName\(\)\s*\}/,
       'the phone reads the computer’s name before the roll call holds writes, on an account that may have two'
     )
     assert.ok(!/await remoteRequest\(METERS_OFF_PATH/.test(phone), 'the link waits on it')
@@ -3408,16 +3409,33 @@ export function run(test) {
       await t.clock.advance(3000)
       assert.equal(late.done, true)
       assert.equal(keptFor(t.store, end)?.many, false, 'what the count heard was not kept for an account with no pick')
-      /* Never counted on this version: held, as at any join. */
-      const never = await relayOnABench(end)
-      never.bench.computers = [computer('Studio', 'FM3')]
-      never.watch(never.relay.censusHosts({ late: true, windowMs: 1500, sleep: (ms) => new Promise((go) => never.clock.setTimeout(go, ms)) }))
-      await never.clock.advance(0)
-      const held = never.watch(never.tap())
-      await never.clock.advance(100)
-      assert.equal(held.done, false, 'a tap on an account never counted went before the count')
-      await never.clock.advance(3000)
-      assert.equal(keptFor(never.store, end)?.many, false, 'a first count of one was not kept')
+      /*
+       * Never counted on this version, and nothing picked: one computer's first launch on it, or a store that
+       * cannot be read. At once too, as 1.87.47: held, it held every tap of one computer for a second and a half.
+       */
+      for (const disk of [null, 'throws']) {
+        const never = await relayOnABench(end, { disk })
+        never.bench.computers = [computer('Studio', 'FM3')]
+        never.watch(never.relay.censusHosts({ late: true, windowMs: 1500, sleep: (ms) => new Promise((go) => never.clock.setTimeout(go, ms)) }))
+        await never.clock.advance(0)
+        const at = never.clock.now()
+        const went = never.watch(never.tap())
+        await never.clock.advance(100)
+        assert.equal(went.done && !went.error, true, `a tap of one computer never counted (store ${disk ?? 'read'}) waited for the count at its first answer`)
+        assert.equal(posts(never.bench)[0]?.at, at)
+        await never.clock.advance(3000)
+        if (!disk) assert.equal(keptFor(never.store, end)?.many, false, 'a first count of one was not kept')
+      }
+      /* The pick 1.87.47 kept, never counted since: an account that had two, held as at any join. */
+      const legacy = await relayOnABench(end, { picked: 'Studio', legacy: true })
+      legacy.bench.computers = [computer('Studio', 'FM3')]
+      legacy.watch(legacy.relay.censusHosts({ late: true, windowMs: 1500, sleep: (ms) => new Promise((go) => legacy.clock.setTimeout(go, ms)) }))
+      await legacy.clock.advance(0)
+      const held = legacy.watch(legacy.tap())
+      await legacy.clock.advance(100)
+      assert.equal(held.done, false, 'a tap on an account with a 1.87.47 pick went before the count')
+      await legacy.clock.advance(3000)
+      assert.equal(keptFor(legacy.store, end)?.many, false, 'a first count of one was not kept')
       /* Two at the first answer, the last count having heard one: at once until the first window says two, held from then, and never to both. */
       const two = await relayOnABench(end, { many: false })
       two.bench.computers = [PI5(), PI3()]
@@ -3425,7 +3443,12 @@ export function run(test) {
       await two.clock.advance(0)
       const t0 = two.clock.now()
       two.tap('/scene', { index: 1 }).catch(() => {})
-      await two.clock.advance(1600)
+      /* Both have answered by 300 ms: two known, so a tap after that waits, though the first window runs to 1500 ms. */
+      await two.clock.advance(350)
+      two.tap('/scene', { index: 3 }).catch(() => {})
+      await two.clock.advance(50)
+      assert.equal(posts(two.bench).length, 1, 'a tap went to both units after both had answered the count, in its first window')
+      await two.clock.advance(1200)
       two.tap('/scene', { index: 2 }).catch(() => {})
       const edit = two.watch(two.relay.remoteRequest('/preset/blocks/2/params', { method: 'PUT', body: JSON.stringify({ gain: 5 }) }))
       await two.clock.advance(100)
@@ -3617,8 +3640,72 @@ export function run(test) {
     }
   })
 
+  test('phone: a disk slower than the join holds nothing of one computer: a read and a tap the moment the link is up go at once, as in 1.87.47', async () => {
+    for (const slow of [200, 3000, 'never']) {
+      /* The record many:false is on the disk, not read yet: the link came up a tenth of a second ago. */
+      const t = await relayOnABench('phone', { many: false, disk: slow })
+      const { bench, clock, relay, watch, tap } = t
+      bench.computers = [computer('Studio', 'FM3')]
+      const made = clock.now()
+      const read = watch(relay.remoteRequest('/scene'))
+      const pressed = watch(tap())
+      await clock.advance(0)
+      assert.equal(sentAt(bench, '/scene'), made, `a read of one computer waited ${sentAt(bench, '/scene') - made} ms on a disk that ${slow === 'never' ? 'never answers' : `takes ${slow} ms`}`)
+      assert.equal(bench.sent.filter((s) => s.msg.payload.method === 'POST')[0]?.at, made, `a tap of one computer waited on a disk that ${slow === 'never' ? 'never answers' : `takes ${slow} ms`}`)
+      await clock.advance(400)
+      assert.equal(read.done && !read.error, true)
+      assert.equal(pressed.done && !pressed.error, true, pressed.error?.message)
+    }
+    /* Two computers, the pick's record off the disk after the link is up but before any read: held from then, as at a disk that is quick. */
+    const t = await relayOnABench('phone', { picked: 'raspberry pi 3', many: true })
+    t.bench.computers = [PI5(), PI3()]
+    const early = t.watch(t.relay.remoteRequest('/device/detect'))
+    await t.clock.advance(200)
+    assert.deepEqual(sentOf(t.bench, '/device/detect'), [], 'a read went to whoever answers first')
+    counted(t)
+    await t.clock.advance(6000)
+    assert.equal(early.value?.short, 'AM4')
+  })
+
+  test('both ends: only a record that says two, or a 1.87.47 pick never counted since, is an account that may have two (shared mayBeTwo)', async () => {
+    const { mayBeTwo } = await import('../shared/relay-rules.mjs')
+    assert.equal(mayBeTwo(null), false, 'a record not read yet held one computer')
+    assert.equal(mayBeTwo({ name: null, many: null }), false, 'an account never counted, with no pick, held one computer')
+    assert.equal(mayBeTwo({ name: null, many: false }), false)
+    assert.equal(mayBeTwo({ name: 'Studio', many: false }), false, 'a pick left over from two, counted one since, held one computer')
+    assert.equal(mayBeTwo({ name: 'raspberry pi 3', many: null }), true, 'the pick 1.87.47 kept was not taken for an account that had two')
+    assert.equal(mayBeTwo({ name: 'raspberry pi 3', many: true }), true)
+    assert.equal(mayBeTwo({ name: null, many: true }), true)
+    /* The phone's join goes by it, read off the account's own record. */
+    for (const [opts, two] of [[{}, false], [{ many: false }, false], [{ picked: 'Studio', legacy: true }, true], [{ picked: 'raspberry pi 3', many: true }, true], [{ disk: 'never' }, false], [{ disk: 'throws' }, false]]) {
+      const t = await relayOnABench('phone', opts)
+      await t.clock.advance(0)
+      assert.equal(t.relay.remoteMayBeTwo(), two, `record ${JSON.stringify(opts)}`)
+    }
+  })
+
+  test('phone: a roll call that picked one of two reads the unit again when the read of it while it counted did not get it, as 1.87.47 always did', async () => {
+    /* Every read went to the pick (relay holdReads), and its detect was lost: Play would wait on "Asking your unit what it is" for good. */
+    const t = await linkOnABench()
+    t.bench.unitRead = false
+    t.bench.census = async () => {
+      await new Promise((go) => t.clock.setTimeout(go, 4500))
+      t.bench.hosts = ['fractalpi', 'raspberry pi 3']
+      t.bench.chosen = 'raspberry pi 3'
+      t.bench.askedOf = 'raspberry pi 3'
+    }
+    t.link.startLink()
+    await t.clock.advance(6000)
+    assert.deepEqual(t.bench.order.filter((x) => x === 'refreshAll' || x === 'startClean'), ['refreshAll', 'refreshAll'], 'a unit whose read was lost was never read again')
+    /* And the rig says whether it has, from its own detect (rig.unitReadSince). */
+    const rig = read('mobile/src/lib/rig.js')
+    assert.match(rig, /export const unitReadSince = \(t\) => unitSettled && unitReadAt >= t/)
+    assert.match(rig, /setColourUnit\(slug, \{ demo: simulated \}\)\n {2}\/\*[^*]*\*\/\n {2}unitReadAt = Date\.now\(\)\n/)
+  })
+
   test('phone: an account whose last count heard one computer reads the computer’s name before the roll call at join, as in 1.87.47; one that may have two, after', async () => {
-    for (const [many, first] of [[false, 'name'], [null, 'census'], [true, 'census']]) {
+    /* `many` here is the record's own word (relay.js remoteMayBeTwo): null is never counted, or not off the disk yet, and goes as 1.87.47. */
+    for (const [many, first] of [[false, 'name'], [null, 'name'], [true, 'census']]) {
       const t = await linkOnABench()
       t.bench.many = many
       t.link.startLink()

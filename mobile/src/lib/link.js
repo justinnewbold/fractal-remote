@@ -32,7 +32,7 @@ import {
   remoteConnect,
   remoteDisconnect,
   remoteCountDue,
-  remoteCountedMany,
+  remoteMayBeTwo,
   remoteHostSeen,
   remoteHosts,
   remoteReadsAskedOf,
@@ -44,7 +44,7 @@ import {
   subscribeSwitching,
   subscribeRemoteState
 } from './relay'
-import { computerChanged, listen, refreshAll, reset as resetRig, startClean, watchUnit, stopWatching } from './rig'
+import { computerChanged, listen, refreshAll, reset as resetRig, startClean, unitReadSince, watchUnit, stopWatching } from './rig'
 import { PHONE_NOTE_PATH, phoneNote, timeToTell } from './phone-note'
 
 export const PROBE_FIRST = 3000
@@ -454,12 +454,13 @@ async function joinOnce() {
    * listening and the ordinary case has nothing to report, so it must not
    * stand between someone and their unit. Writes are refused from the moment
    * the count lands. Begun before the computer's name is read on an account
-   * that may have two: a tap made while that read was out went to every
-   * computer on the account, both units. An account whose last count heard
-   * one goes in 1.87.47's order, the name first, so its taps are held exactly
-   * when they were then.
+   * that may have two (relay.js remoteMayBeTwo): a tap made while that read
+   * was out went to every computer on the account, both units. Every other
+   * account goes in 1.87.47's order, the name first, so its taps are held
+   * exactly when they were then: one whose last count heard one, one never
+   * counted, and one whose record is not off the disk yet.
    */
-  if (remoteCountedMany() === false) {
+  if (!remoteMayBeTwo()) {
     await readMacName()
     quietMeters()
     countHosts()
@@ -493,6 +494,7 @@ async function countHosts() {
 
 /** What a roll call found, put to use: `run` is the count, `was` the computer driven as it began. */
 async function afterCount(was, run) {
+  const began = Date.now()
   try {
     let before = was
     await run
@@ -508,14 +510,17 @@ async function afterCount(was, run) {
      * went to whichever answered first). Then what was read while the roll
      * call listened: where every one of those reads was asked of this
      * computer (a pick made before, relay.js holdReads), it is this unit's
-     * already and nothing is read twice. Otherwise it came from whichever
-     * computer answered first, and it goes, names, chain, tempo and all
-     * (rig.startClean), before the unit is read again.
+     * already, and once the unit has answered it (rig.unitReadSince) nothing
+     * is read twice. One whose detect was lost or refused is read again, as
+     * 1.87.47 always did: nothing else would ever ask, and Play would wait on
+     * "Asking your unit what it is" for good. Otherwise it came from
+     * whichever computer answered first, and it goes, names, chain, tempo
+     * and all (rig.startClean), before the unit is read again.
      */
     if (remoteHosts().length > 1 && remoteChosenHost() !== before) {
       readMacName()
-      if (remoteReadsAskedOf() === remoteChosenHost()) before = remoteChosenHost()
-      else startClean()
+      if (remoteReadsAskedOf() !== remoteChosenHost()) startClean()
+      else if (unitReadSince(began)) before = remoteChosenHost()
     }
     /* The roll call picked one of two (firstUnitHost): what was read while it
        listened came from whichever answered first, so read it again. */

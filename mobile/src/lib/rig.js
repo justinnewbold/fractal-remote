@@ -301,6 +301,18 @@ let unitEra = 0
 let realUnit = null
 /* Whether the unit has been read since the last clean start or change of computer: see startClean. */
 let unitSettled = true
+/* When it last said what it is, off the computer driven (readAll): see unitReadSince. */
+let unitReadAt = 0
+/* Reads of the whole unit under way (refreshAll): see watchUnit. */
+let readingAll = 0
+
+/*
+ * Whether the unit has said what it is since `t`, off the computer driven,
+ * and nothing has changed since. link.js reads it again after a roll call
+ * that picked one of two only when it has not: its detect lost or refused,
+ * nothing else would ask again, and Play would wait for good.
+ */
+export const unitReadSince = (t) => unitSettled && unitReadAt >= t
 
 /*
  * ANOTHER COMPUTER IS DRIVEN FROM NOW (link.js chooseHost, told by relay.js
@@ -817,6 +829,11 @@ function syncChainBusy() {
 export async function retryChain() {
   const done = chainWorking()
   try {
+    /* The unit not read since the computer driven changed (that read lost): read whole, the chain with it (see watchUnit). */
+    if (!unitSettled) {
+      await refreshAll()
+      return unitSettled
+    }
     return await readChainAndNames()
   } catch {
     return false
@@ -993,6 +1010,28 @@ export function watchUnit() {
     const { said, heard } = await probeUnit({ vp4: Boolean(device.vp4Here?.()), currentPreset: () => device.currentPreset(), getScene: () => device.getScene() })
     if (run !== watchRun) return
     /*
+     * AND A UNIT NOT READ SINCE THE COMPUTER DRIVEN CHANGED. The read after
+     * a clean start (link.js, after the roll call or Which unit) is the one
+     * that says which unit the new computer has, and until it has said,
+     * nothing a read brings is taken (sameUnit). One whose detect was lost
+     * or refused was never asked again: no scene names, no tempo, the lit
+     * scene stuck, and "Couldn't read this preset's chain" through every Try
+     * again, until a pull-down. The unit answering this check, with no read
+     * of it under way, is read whole, at the missing unit's pace.
+     */
+    if (said === 'answering' && !unitSettled && readingAll === 0) {
+      logDebug('unit', 'reading the unit again: the read after the change of computer did not answer')
+      quiet = 0
+      try {
+        await refreshAll()
+      } catch {
+        /* refreshAll records its own failure; the next tick tries again. */
+      }
+      if (run !== watchRun) return
+      watchTimer = setTimeout(tick, nextWatch())
+      return
+    }
+    /*
      * AND WHICH PRESET IT IS, which this read always knew and threw away. A
      * preset changed on the front panel that opens on the same scene is
      * announced by nothing at all, so this is the only thing that notices —
@@ -1053,7 +1092,7 @@ export function watchUnit() {
  */
 const MISSING_WATCH_MS = 10000
 const nextWatch = () =>
-  state.unit === 'missing' || state.unit === 'silent' ? MISSING_WATCH_MS : watchEvery(true)
+  !unitSettled || state.unit === 'missing' || state.unit === 'silent' ? MISSING_WATCH_MS : watchEvery(true)
 
 export function stopWatching() {
   watchRun += 1
@@ -1078,9 +1117,11 @@ export async function refreshAll() {
   /* The preset goes up before its chain is read; in between, this is the
      chain on its way rather than another preset's that nobody is reading. */
   const done = chainWorking()
+  readingAll += 1
   try {
     await readAll()
   } finally {
+    readingAll -= 1
     done()
   }
 }
@@ -1121,6 +1162,8 @@ async function readAll() {
    * for the next launch, and keeps the demo's to itself).
    */
   setColourUnit(slug, { demo: simulated })
+  /* And when, for link.js after a roll call (unitReadSince). */
+  unitReadAt = Date.now()
   const unit = caps?.connected === false ? 'missing' : 'present'
   /* Over Bluetooth (beta) the answer came through the adapter, not a computer
      (bleWire's detect carries capabilities.via 'bluetooth'). */

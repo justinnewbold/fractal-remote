@@ -49,7 +49,8 @@ import {
   tapDeadline,
   readPicks,
   writePicks,
-  pickEntry
+  pickEntry,
+  mayBeTwo
 } from './relay-rules'
 import { CODE_DIDNT_WORK, CODE_NOT_DIGITS, CONFIRMED_SIGN_IN, cleanCode, codeRefused } from './confirm-code'
 import { deviceNoun } from './device-word'
@@ -104,8 +105,6 @@ let rollCallAsked = null
 /** Whether a roll call has been started on this link, and whether one has finished with anybody in it. */
 let countTried = false
 let countedOnLink = false
-/** When this account's record was last asked of the disk: see holdForPick. */
-let pickAskedAt = 0
 
 /* ------------------------------------------------------------------ */
 /* Signing in                                                          */
@@ -409,11 +408,12 @@ export function remoteCountDue() {
 }
 
 /**
- * What this account's last finished roll call heard: true for two or more,
- * false for one, null for never counted on this version or not read off the
- * disk yet. link.js keeps 1.87.47's order at join for an account of one.
+ * Whether this account's record says it may have two computers (shared
+ * relay-rules mayBeTwo): its last count heard two, or it has a 1.87.47 pick
+ * not counted since. link.js keeps 1.87.47's order at join for every other
+ * account, a record not read off the disk yet among them.
  */
-export const remoteCountedMany = () => pickOf()?.many ?? null
+export const remoteMayBeTwo = () => mayBeTwo(pickOf())
 
 export const hostConflict = (list = hosts, pick = chosen, proved = targeted) =>
   conflictBetween(list, pick, proved)
@@ -525,10 +525,7 @@ export async function remoteConnect() {
   if (!userId) await restoreSession()
   if (!userId) throw new Error('Sign in first.')
   /* This account's pick, off the disk while the link is being joined: see holdReads. */
-  if (!pickOf()) {
-    pickAskedAt = Date.now()
-    readPick()
-  }
+  if (!pickOf()) readPick()
   if (canReuseChannel(channel, session, supabase())) return userId
   connecting = true
   try {
@@ -746,11 +743,10 @@ async function takeCensus({
    * Reads while it counts: on to the pick already proved, held for this
    * account's pick when its last roll call heard two or more, or as they
    * always went (see holdReads). The account's record is the one read off
-   * the disk while the link was joined, and the count never waits for it: a
-   * record not read yet is held for by the join's own short hold
-   * (holdForPick), which the disk makes a pick's hold if it says so in time,
-   * and is taken up here when it is in. A disk that is slow is no pick, and
-   * one computer is never held for it.
+   * the disk while the link was joined, and nothing waits for it: a record
+   * not read when the link came up held nothing (holdForPick), and is taken
+   * up here if it is in by now and every read so far has waited. A disk that
+   * is slow is no pick, and one computer is never held for it.
    */
   const proved = Boolean(hosts.length > 1 && chosen && targeted)
   const known = pickOf()
@@ -763,21 +759,26 @@ async function takeCensus({
      * The pick's own answer, as it comes in: reads are asked of it by name
      * from that moment rather than from the end of the window. With only the
      * pick switched on tonight, that answer is the whole of the wait.
+     *
+     * And a second answer is two computers known: a write waits for the
+     * count from that moment, in a count that let writes go at once
+     * (censusHosts), not from the end of the window.
      */
-    const heard = proved
-      ? null
-      : (payload) => {
-          namesFrom([payload], decode).then(
-            ([name]) => {
-              const held = readsHeld
-              const record = pickOf()
-              if (!held || session !== link || !holdsFor(record) || name !== record.name) return
-              if (readsOnlyTo(name)) readsTo = name
-              held.open()
-            },
-            () => {}
-          )
-        }
+    let answered = 0
+    const heard = (payload) => {
+      if (++answered > 1 && session === link) countFree = false
+      if (proved) return
+      namesFrom([payload], decode).then(
+        ([name]) => {
+          const held = readsHeld
+          const record = pickOf()
+          if (!held || session !== link || !holdsFor(record) || name !== record.name) return
+          if (readsOnlyTo(name)) readsTo = name
+          held.open()
+        },
+        () => {}
+      )
+    }
     // A read every host allows and every host answers differently: its own name,
     // written into its store by the launcher on that Mac.
     const answers = await collectAnswers({ path: '/store/config/host.name', windowMs, sleep, heard })
@@ -823,7 +824,7 @@ async function takeCensus({
     /* Said once, so a log shows which computer the phone drives and why (rollCallLine). */
     const missing = !proved && pick && !hosts.includes(pick) && (hosts.length > 1 || record?.many === true) ? pick : null
     if (hosts.length > 1 || missing) logDebug('link', rollCallLine({ hosts, units, chosen, why: chosenWhy, addressed: targeted, missing }))
-    /* Counted on this link; and whether it heard two or more, which the next fresh link goes by (holdsFor, remoteCountedMany). */
+    /* Counted on this link; and whether it heard two or more, which the next fresh link goes by (holdsFor, remoteMayBeTwo). */
     if (session === link && hosts.length) {
       countedOnLink = true
       noteCount(hosts.length > 1)
@@ -884,24 +885,19 @@ function within(promise, ms, value = null) {
  * when there were two: the first launch that counts one is the last that
  * waits. The pick is the account's own (readPick), so another account
  * signed in on this phone never waits for it. Nor for the disk: the record
- * is read while the link is joined, and a disk that has not answered within
- * DISK_WAIT_MS of being asked is no pick (holdForPick). Two reads are never
- * held: /healthz, which only asks whether anything is there, and the
+ * is read while the link is joined, and one not read by the time the link
+ * is up is no pick (holdForPick): nothing waits on a disk. Two reads are
+ * never held: /healthz, which only asks whether anything is there, and the
  * computer's own name, which link.js reads again once the count has picked
  * (countHosts).
  */
-function holdReads(ms = COUNT_WAIT_MS) {
-  if (readsHeld && Date.now() < readsHeld.until) {
-    /* The join's short hold while the disk was read (holdForPick), made as long as this one asks: still from when it was made. */
-    readsHeld.until = Math.max(readsHeld.until, readsHeld.made + ms)
-    return readsHeld
-  }
+function holdReads() {
+  if (readsHeld && Date.now() < readsHeld.until) return readsHeld
   /* One that ran out is over: a count after it holds again, for its own six seconds. */
   readsHeld?.open()
   let open = null
   const gate = new Promise((go) => (open = go))
-  const made = Date.now()
-  const held = { gate, made, until: made + ms }
+  const held = { gate, until: Date.now() + COUNT_WAIT_MS }
   held.open = () => {
     if (readsHeld === held) readsHeld = null
     open()
@@ -911,22 +907,19 @@ function holdReads(ms = COUNT_WAIT_MS) {
 }
 
 /*
- * How long the account's record may take off the disk, from when it was
- * asked (remoteConnect), before it is taken for no pick. A phone's disk
- * answers in a few milliseconds and the join takes longer, so the record is
- * almost always in before anything waits for it. An Android disk with other
- * work queued ahead of it at a cold start can take seconds, or never answer:
- * then nothing waits on it more than this, and one computer not at all.
- */
-const DISK_WAIT_MS = 250
-
-/*
  * On a fresh link, before anybody hears it is up: held when this account's
- * pick holds reads (holdsFor). A record not read yet holds them for what is
- * left of DISK_WAIT_MS since the disk was asked, made as long as a pick's
- * hold if the disk says so in time, and let go at once if it says not. And
- * from here on, who each read is asked of is written down, for the roll call
- * to come (remoteReadsAskedOf).
+ * pick holds reads (holdsFor). And from here on, who each read is asked of
+ * is written down, for the roll call to come (remoteReadsAskedOf).
+ *
+ * A RECORD NOT READ YET HOLDS NOTHING. The record is asked of the disk as
+ * the link is joined (remoteConnect), and a phone's disk answers in a few
+ * milliseconds, long before the join does. An Android disk with other work
+ * queued ahead of it at a cold start can take seconds, or never answer, and
+ * a short hold for it held the reads and the taps of one computer, the
+ * earliest tap dropped, at every launch on such a phone: a slow disk is no
+ * pick, as in 1.87.47. When the record does come, a pick that holds holds
+ * from then, so long as no read on this link has gone to anybody else and
+ * no roll call has finished on it (takeCensus takes it up the same way).
  */
 function holdForPick() {
   readsAsked = []
@@ -935,16 +928,13 @@ function holdForPick() {
     if (holdsFor(record)) holdReads()
     return
   }
-  const left = pickAskedAt + DISK_WAIT_MS - Date.now()
-  if (!userId || left <= 0) return
-  const held = holdReads(left)
+  const link = session
   readPick().then(
     (found) => {
-      if (readsHeld !== held) return
-      if (holdsFor(found) && Date.now() < held.until) held.until = held.made + COUNT_WAIT_MS
-      else held.open()
+      if (session !== link || countedOnLink || readsHeld || !holdsFor(found) || !readsOnlyTo(found.name)) return
+      holdReads()
     },
-    () => held.open()
+    () => {}
   )
 }
 
@@ -980,8 +970,8 @@ let countingSince = 0
 /*
  * Whether writes go at once while this count runs, as they did before it:
  * the count at the computer's first answer on a link whose join was not
- * answered, on an account whose last count heard one computer (censusHosts).
- * Until it hears two.
+ * answered, on an account whose record does not say it may have two
+ * (censusHosts). Until it hears two: the second answer (takeCensus).
  */
 let countFree = false
 const COUNT_WAIT_MS = 6000
@@ -996,15 +986,18 @@ const writesWaitOn = () => (counting && !countFree ? counting : null)
  *
  * `late` is the count link.js takes at the computer's first answer on a link
  * whose join went unanswered (countIfDue). 1.87.47 took none there, and sent
- * every tap at once: on an account whose last count heard one computer, a
- * write still goes at once while it runs, rather than being held a second
- * and a half or dropped, until it hears two. An account never counted, or
- * whose last count heard two, holds them as at any join.
+ * every tap at once: so a write still goes at once while it runs, rather
+ * than being held a second and a half or dropped, until it hears a second
+ * computer, on every account whose record does not say it may have two
+ * (shared relay-rules mayBeTwo). That is one computer's every case: a count
+ * that heard one, never counted, the record not read off the disk yet, a
+ * disk that cannot be read. An account whose last count heard two, or with
+ * a 1.87.47 pick not counted since, holds them as at any join.
  */
 export function censusHosts(options = {}) {
   /* Only one on this link: a count left running by a link that has gone is nothing to wait for. */
   const before = counting && countingLink === session ? counting : null
-  const free = !before && options?.late === true && pickOf()?.many === false
+  const free = !before && options?.late === true && !mayBeTwo(pickOf())
   const run = before
     ? before
         .catch(() => {})
@@ -1224,7 +1217,7 @@ function whileProving(run) {
  * 1.87.47 and earlier kept for the whole phone is taken as the account's
  * that reads it first, and then is gone. What the count heard is kept for
  * every account, a pick or none: one computer goes as in 1.87.47 from its
- * second launch on (censusHosts, remoteCountedMany).
+ * second launch on (censusHosts, remoteMayBeTwo).
  *
  * A disk that could not be read is no pick for now, and it is never written
  * over: every other account's pick is still on it, and the next read asks
