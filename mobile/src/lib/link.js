@@ -32,6 +32,7 @@ import {
   remoteConnect,
   remoteDisconnect,
   remoteCountDue,
+  remoteCountedMany,
   remoteHostSeen,
   remoteHosts,
   remoteReadsAskedOf,
@@ -39,11 +40,11 @@ import {
   remoteUnits,
   pickHost,
   restoreSession,
-  subscribeCountDue,
   subscribeHostSeen,
+  subscribeSwitching,
   subscribeRemoteState
 } from './relay'
-import { listen, refreshAll, reset as resetRig, startClean, watchUnit, stopWatching } from './rig'
+import { computerChanged, listen, refreshAll, reset as resetRig, startClean, watchUnit, stopWatching } from './rig'
 import { PHONE_NOTE_PATH, phoneNote, timeToTell } from './phone-note'
 
 export const PROBE_FIRST = 3000
@@ -386,7 +387,7 @@ async function turn() {
     refresh()
   }
 
-  /* A link where no roll call was taken, or a second computer heard since the last one: counted now (countIfDue). */
+  /* A link where no roll call was taken: counted now (countIfDue). */
   countIfDue()
   // A computer that was updated while this phone watched says so within a
   // couple of minutes, rather than at the next join.
@@ -448,15 +449,25 @@ async function joinOnce() {
    * unit's one port: from here on it stops asking the unit for its levels.
    * Sent to every computer on the account, which is what is wanted. Not
    * awaited. See quietMeters.
+   *
+   * And the roll call, not awaited: it costs a second and a half of
+   * listening and the ordinary case has nothing to report, so it must not
+   * stand between someone and their unit. Writes are refused from the moment
+   * the count lands. Begun before the computer's name is read on an account
+   * that may have two: a tap made while that read was out went to every
+   * computer on the account, both units. An account whose last count heard
+   * one goes in 1.87.47's order, the name first, so its taps are held exactly
+   * when they were then.
    */
-  quietMeters()
-  // Not awaited: the roll call costs a second and a half of listening and the
-  // ordinary case has nothing to report, so it must not stand between someone
-  // and their unit. Writes are refused from the moment the count lands.
-  // Begun before the computer's name is read: a tap made while that read was
-  // out went to every computer on the account, both units.
-  countHosts()
-  await readMacName()
+  if (remoteCountedMany() === false) {
+    await readMacName()
+    quietMeters()
+    countHosts()
+  } else {
+    quietMeters()
+    countHosts()
+    await readMacName()
+  }
 
   try {
     await refreshAll()
@@ -477,9 +488,14 @@ async function joinOnce() {
 }
 
 async function countHosts() {
+  await afterCount(remoteChosenHost(), censusHosts())
+}
+
+/** What a roll call found, put to use: `run` is the count, `was` the computer driven as it began. */
+async function afterCount(was, run) {
   try {
-    let before = remoteChosenHost()
-    await censusHosts()
+    let before = was
+    await run
     heardHosts()
     /* The roll call picked a computer: that one is told about the level readings, whatever answered first before (see metersAgain). */
     if (remoteChosenHost() !== before) {
@@ -516,14 +532,27 @@ async function countHosts() {
  * and nothing took it after: every read went to whoever answered first and
  * every write to every computer, for the life of the link. So the first
  * answer on a link with no count takes it, from wherever the answer came,
- * and the loop asks too. And a second computer heard answering after a
- * count that found one (relay.js anotherAnswered) is counted again, at most
- * once a minute. Never on a timer alone, never in the demo or over
- * Bluetooth, and never inside join, which takes its own.
+ * and the loop asks too. Once per link and never again on it: a count
+ * mid-set holds every tap for its window (relay.js remoteCountDue). Not
+ * held at all for an account whose last count heard one computer, which
+ * 1.87.47 sent at once here (`late`, relay.js censusHosts). Never in the
+ * demo or over Bluetooth, and never inside join, which takes its own.
  */
 function countIfDue() {
   if (!running || joinBusy || isDemo() || bluetoothOn() || !remoteHostSeen() || !remoteCountDue()) return
-  countHosts()
+  afterCount(remoteChosenHost(), censusHosts({ late: true }))
+}
+
+/*
+ * Which unit moved to another computer (relay.js subscribeSwitching), told
+ * before a read is asked of it: what is on its way from the one left is
+ * dropped, and nothing is filed until the new unit is read (rig
+ * computerChanged); chooseHost starts clean once the pick is proved.
+ */
+let switchOwed = false
+function switchedComputer() {
+  switchOwed = true
+  computerChanged()
 }
 
 /** What the roll call found, into the link's state, for Settings and Which unit. */
@@ -542,10 +571,17 @@ const heardHosts = () => set({ hosts: remoteHosts(), units: remoteUnits(), chose
  * the scene names, the chain and the tempo on screen were the other unit's,
  * and a row of named tiles is never asked again. And its name, for Settings
  * and the log's header, read off it.
+ *
+ * Told by relay.js the moment it switches, before any read is asked of the
+ * new computer (rig.computerChanged): a read made during the proof was asked
+ * of the new one and filed under the unit on screen, the old one's. Only a
+ * computer actually switched to starts clean: a tap that found nothing to
+ * switch (the name not listed) leaves the screen as it is.
  */
 export async function chooseHost(name) {
   const ok = await pickHost(name)
-  const moved = state.chosenHost !== remoteChosenHost()
+  const moved = switchOwed
+  switchOwed = false
   heardHosts()
   metersAgain()
   quietMeters()
@@ -765,8 +801,8 @@ export function startLink() {
       /* Answering, on a link that has had no roll call: taken now (countIfDue). */
       if (seen) countIfDue()
     }),
-    /* A second computer heard since the last count found one: counted again (countIfDue). */
-    subscribeCountDue(() => countIfDue()),
+    /* Which unit moving to another computer, before a read is asked of it (switchedComputer). */
+    subscribeSwitching(switchedComputer),
     AppState.addEventListener('change', (status) => {
       /*
        * Said in the log, because without it a paste reads as a link that

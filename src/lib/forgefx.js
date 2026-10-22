@@ -2651,12 +2651,24 @@ export async function readSceneNames(number, { shown, still } = {}) {
    * unit answered (the roll call moved to the AM4's computer while the FM3's
    * answer was on its way) are that other unit's, and are neither returned
    * nor kept under this one's slot (the phone's rig.js readNamesOf too).
+   * `still.unit` says whether the store still has this unit on screen: once
+   * another computer is driven, an answer from it would pass for this unit's
+   * by its slug until its own unit has been read (deviceState
+   * computerChanged), where the preset moving on is no reason not to keep
+   * what was read for its slot.
    */
+  const unit = typeof still?.unit === 'function' ? still.unit : null
   const slug = unitSlug
   const elsewhere = () => {
-    if (unitSlug === slug) return false
-    traceStep(`another unit answered (${unitSlug}, not ${slug}) — dropped`)
-    return true
+    if (unitSlug !== slug) {
+      traceStep(`another unit answered (${unitSlug}, not ${slug}) — dropped`)
+      return true
+    }
+    if (unit && !unit()) {
+      traceStep('another computer is driven now — dropped')
+      return true
+    }
+    return false
   }
   if (mock) {
     await tick()

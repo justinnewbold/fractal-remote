@@ -776,7 +776,9 @@ export function rollCallLine({ hosts = [], units = {}, chosen = null, why = null
   const gone = missing ? `; ${missing}, the one picked under Which unit, did not answer` : ''
   if (hosts.length < 2 || !chosen) return `${heard}${gone}${hosts.length > 1 ? '; driving none of them: two share a name' : ''}`
   const reason = why === 'pick' ? 'the one picked under Which unit' : units?.[chosen]?.plugged ? 'the first with a unit plugged in' : 'the first to answer'
-  const how = addressed ? 'addressed' : 'not addressed: a computer app on one of them is too old to be asked alone'
+  /* Two answering to the one name (two Pis left at "raspberrypi"): asked by it, both answer, and no computer app is to blame. */
+  const shared = hosts.filter((name) => name === chosen).length > 1
+  const how = addressed ? 'addressed' : shared ? 'not addressed: two computers share its name' : 'not addressed: a computer app on one of them is too old to be asked alone'
   return `${heard}${gone}; driving ${chosen}, ${reason}, ${how}`
 }
 
@@ -790,16 +792,24 @@ export function rollCallLine({ hosts = [], units = {}, chosen = null, why = null
  * whoever was signed in: a pick made on one account went on deciding for the
  * next. That bare name is `legacy` here, for the first account that reads it
  * to take as its own; nothing else ever reads it.
+ *
+ * Only text that is not a JSON object is a bare name (a name may read as a
+ * number, "123"). An object of any other shape ({"accounts":null}, or what a
+ * later version writes, read after an update is rolled back) is no pick, and
+ * never the first account's computer under the whole of its text.
  */
 export function readPicks(text) {
   if (typeof text !== 'string' || !text) return { accounts: {}, legacy: null }
+  let kept
   try {
-    const kept = JSON.parse(text)
-    if (kept && typeof kept === 'object' && kept.accounts && typeof kept.accounts === 'object') return { accounts: { ...kept.accounts }, legacy: null }
+    kept = JSON.parse(text)
   } catch {
     // A bare name: the one pick kept before.
+    return { accounts: {}, legacy: text }
   }
-  return { accounts: {}, legacy: text }
+  if (!kept || typeof kept !== 'object') return { accounts: {}, legacy: text }
+  const accounts = kept.accounts && typeof kept.accounts === 'object' && !Array.isArray(kept.accounts) ? { ...kept.accounts } : {}
+  return { accounts, legacy: null }
 }
 
 /** The same, to be written back whole. */

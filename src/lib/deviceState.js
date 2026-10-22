@@ -791,8 +791,8 @@ export async function refreshScene() {
   try {
     const era = unitEra
     const res = await driver.getScene()
-    /* An answer from before the unit changed is the other unit's (startClean). */
-    if (era !== unitEra) return
+    /* An answer from before the unit changed is the other unit's (startClean), and so is one before the new computer's unit is read (computerChanged). */
+    if (!sameUnit(era)) return
     const patch = {}
     if (typeof res?.index === 'number' && res.index >= 0) patch.sceneIndex = res.index
     if (Array.isArray(res?.names)) patch.sceneNames = res.names
@@ -812,7 +812,7 @@ export async function refreshTempo() {
      * did not answer it. No answer, so the last figure stays up, as on the
      * phone (shared/tempo heardTempo). And not one from before the unit changed.
      */
-    if (heardTempo(res?.bpm, driver.tempoRange?.()) && era === unitEra) set({ bpm: res.bpm })
+    if (heardTempo(res?.bpm, driver.tempoRange?.()) && sameUnit(era)) set({ bpm: res.bpm })
   } catch {
     /* keep the last known value */
   }
@@ -853,8 +853,10 @@ export async function refreshSceneNames(number) {
      the preset, and the names read for the buffer are still its names). And still
      the same unit. */
   const still = () =>
-    era === unitEra &&
+    sameUnit(era) &&
     (state.preset?.number === number || (run === presetRun && savedOver?.from === number && savedOver.to === state.preset?.number))
+  /* And, on it, whether the unit is: names read once another computer is driven are neither returned nor kept under this one's slot (lib/forgefx.js readSceneNames). */
+  still.unit = () => sameUnit(era)
   try {
     const found = await driver.readSceneNames(number, { shown, still })
     /* A slow read that lands after the next preset would put the last song's names on this song's tiles. */
@@ -894,8 +896,8 @@ export async function refreshLoadedSceneNames(number) {
     } catch {
       copy = null
     }
-    /* The preset moved on, or another unit came (startClean): this copy is nobody's on screen. */
-    if (state.preset?.number !== number || era !== unitEra) return
+    /* The preset moved on, or another unit came (startClean), or another computer is driven (computerChanged): this copy is nobody's on screen. */
+    if (state.preset?.number !== number || !sameUnit(era)) return
     const here = judgeCopy(copy, state.preset?.name)
     if (here === 'stale') {
       if (staleAgain !== number) {
@@ -2165,6 +2167,7 @@ export function reset() {
   stopListening()
   /* The unit that was, for startClean: the next one read is a first one. */
   realUnit = null
+  realDemo = false
   cleanOwed = false
   unitEra += 1
   state = BLANK
@@ -2184,6 +2187,14 @@ let unitEra = 0
 let realUnit = null
 /* The computer driven changed, and App's next read starts clean: see computerChanged. */
 let cleanOwed = false
+/* Whether the last unit read was the demo's: from one demo unit to the next is never a clean start, as on the phone (rig.js readAll). */
+let realDemo = false
+
+/* Whether what was asked in `era` is still the unit on screen's, and that unit has been read since another computer was driven. */
+const sameUnit = (era) => era === unitEra && !cleanOwed
+
+/* Where the eras stand, for App's read to hand back to unitRead: see there. */
+export const unitEraNow = () => unitEra
 
 export function startClean() {
   cleanOwed = false
@@ -2204,10 +2215,24 @@ export function startClean() {
   syncChainBusy()
 }
 
-/** The unit a read found, by its slug: another than the last real one starts clean (shared/device-slug unitMoved), as does one on another computer. */
-export function unitRead(slug) {
-  const moved = unitMoved(realUnit, slug) || cleanOwed
-  if (slug && slug !== DEFAULT_SLUG) realUnit = slug
+/**
+ * The unit a read found, by its slug: another than the last real one starts
+ * clean (shared/device-slug unitMoved), as does one on another computer.
+ * Never from one demo unit to the next (`demo`: this read and the last were
+ * both the demo's), which the phone has never done either: the demo keeps
+ * the last one's pedals up until the next is read. `since` is unitEraNow()
+ * as App's read began: a read that asked before another computer was driven
+ * may have been answered by the one left, and is not what starts the new
+ * one clean; the read App makes for the new one is.
+ */
+export function unitRead(slug, { demo = false, since } = {}) {
+  if (since !== undefined && since !== unitEra) return false
+  const both = demo && realDemo
+  const moved = (unitMoved(realUnit, slug) && !both) || cleanOwed
+  if (slug && slug !== DEFAULT_SLUG) {
+    realUnit = slug
+    realDemo = demo
+  }
   if (moved) startClean()
   return moved
 }

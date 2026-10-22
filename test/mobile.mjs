@@ -19441,6 +19441,42 @@ export function run(test) {
     assert.match(flat, /device\.freshSceneNames\?\.\(\) const slug = state\.deviceSlug const era = unitEra const names = await namesOfLoaded\(number\) \/\*[^*]*\*\/ if \(!sameUnit\(slug, era\)\) return 'failed'/)
   })
 
+  test('phone: once another computer is picked, nothing a read brings is put up or filed until its unit has been read', async () => {
+    const { rig, clock, unit, relay } = await rigOnTheBench({ number: 53, scenes: FM3_53, capabilities: { scenes: 8, meters: { outputLevels: false } }, namesInChain: false })
+    assert.equal(rig.getState().sceneNames[0], 'FREAK ON A LEASH')
+    const before = rig.getState().bpm
+    /* Which unit picks the AM4's computer: relay.js says so before any read is asked of it. The proof takes a second and a half. */
+    rig.computerChanged()
+    /* The computer answering from here is the AM4's, while the rig still holds the FM3's slug. */
+    Object.assign(unit, AM4_HERE, { copy: () => ({ name: 'SONG 53', scenes: ['CLEAN', 'LEAD', '', ''], cells: [] }), scenes: ['CLEAN', 'LEAD', '', ''], bpm: 99 })
+    relay.handed.length = 0
+    assert.equal(await rig.rereadSceneNames(), 'failed', 'a names read made in the proof was taken for the FM3’s')
+    await rig.refreshTempo()
+    await clock.advance(1000)
+    assert.equal(rig.getState().sceneNames[0], 'FREAK ON A LEASH', 'the AM4’s names went on the FM3’s tiles')
+    assert.equal(rig.getState().bpm, before, 'the AM4’s tempo was taken for the FM3’s')
+    assert.ok(!relay.handed.some((h) => h.method === 'PUT' && /scene-names-fm3/.test(h.line)), 'the AM4’s names were kept under the FM3’s slot')
+    /* A read of the unit that asked before the change: its answer may be the computer left's, and settles nothing. */
+    unit.lag = (line) => (line === 'GET /device/detect' ? 500 : 0)
+    const stale = rig.refreshAll()
+    await clock.advance(100)
+    rig.computerChanged()
+    await clock.advance(1000)
+    await stale
+    await rig.refreshTempo()
+    assert.equal(rig.getState().bpm, before, 'a read that asked before the change settled the unit')
+    unit.lag = undefined
+    /* The proof in: a clean start, the unit read off the new computer, and its own names filed under its own slot. */
+    rig.startClean()
+    await rig.refreshAll()
+    await clock.advance(2000)
+    const now = rig.getState()
+    assert.equal(now.deviceSlug, 'am4')
+    assert.deepEqual(now.sceneNames.slice(0, 2), ['CLEAN', 'LEAD'])
+    assert.equal(now.bpm, 99)
+    assert.ok(!relay.handed.some((h) => h.method === 'PUT' && /scene-names-fm3/.test(h.line) && /CLEAN/.test(String(h.body))), 'the AM4’s names were kept under the FM3’s slot')
+  })
+
   test('phone: a tempo of 0 is the unit not answering, and Tap keeps its last figure', async () => {
     const { rig, unit } = await rigOnTheBench({ bpm: 120 })
     assert.equal(rig.getState().bpm, 120)

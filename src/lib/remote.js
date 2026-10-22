@@ -197,15 +197,6 @@ let rollCallAsked = null
 /** Whether a roll call has been started on this link, and whether one has finished with anybody in it. */
 let countTried = false
 let countedOnLink = false
-/** When the last roll call on this link ended, and when the last one taken on evidence began: see remoteCountDue. */
-let lastCountAt = 0
-let evidenceCountAt = 0
-/** When a second answer to a request asked of nobody was heard while fewer than two were counted: see anotherAnswered. */
-let anotherHeardAt = 0
-/** Requests asked of nobody that have had their answer, by id, for telling a second one. */
-const answeredOpen = new Map()
-/** Told when a roll call is due on evidence (link.js counts again then). */
-const dueWatchers = new Set()
 
 /**
  * Which Macs are answering for this account.
@@ -271,8 +262,8 @@ function hostsChanged() {
  * Slow on purpose: it has to wait out the window even when the first answer
  * comes back instantly, because "no second answer yet" and "no second answer at
  * all" are the same thing until the clock runs out. Taken once per link, when
- * the computer first answers on it, and again only on evidence
- * (remoteCountDue) or when a write meets a clash (conflictNow).
+ * the computer first answers on it (remoteCountDue), and again when a write
+ * meets a clash (conflictNow) or somebody asks (link.js recheckHosts).
  */
 async function takeCensus({
   windowMs = 1500,
@@ -281,13 +272,11 @@ async function takeCensus({
   if (!channel || !isJoined(channel)) return hosts
   const link = session
   countTried = true
-  /* Taken on the evidence of a second computer: the next on evidence waits a minute (remoteCountDue). */
-  if (anotherHeardAt > lastCountAt) evidenceCountAt = Date.now()
-  /* Reads while it counts: on to the pick already proved, held for this account's pick when its last roll call heard two or more, or as they always went (holdReads). */
+  /* Reads while it counts: on to the pick already proved, held for this account's pick when its last roll call heard two or more, or as they always went (holdReads). Held only while every read on this link has waited (the phone's relay.js says why). */
   const record = readPick()
   const picked = record?.name || null
   const proved = Boolean(hosts.length > 1 && chosen && targeted)
-  const held = !proved && holdsFor(record) ? holdReads() : null
+  const held = !proved && holdsFor(record) && readsOnlyTo(picked) ? holdReads() : null
   readsTo = proved ? chosen : null
   if (!readsAsked) readsAsked = []
   try {
@@ -298,7 +287,7 @@ async function takeCensus({
             hostNamesFrom([payload]).then(
               ([name]) => {
                 if (name !== picked || readsHeld !== held || session !== link) return
-                readsTo = picked
+                if (readsOnlyTo(picked)) readsTo = picked
                 held.open()
               },
               () => {}
@@ -311,6 +300,8 @@ async function takeCensus({
     /* A link that went while it counted: what it heard is not the next link's. */
     if (session !== link) return hosts
     hosts = await hostNamesFrom(answers)
+    /* Two or more heard: a write waits for the rest of this count, even one taken while writes went at once (censusHosts). */
+    if (hosts.length > 1) countFree = false
 
     // A choice made before is honoured if that Mac is still one of the answers.
     if (!hosts.includes(chosen)) chosen = null
@@ -318,8 +309,8 @@ async function takeCensus({
       chosen = picked
       chosenWhy = 'pick'
     }
-    /* The first window is in: reads to the pick it listed, as they always went with one computer, or held to the end for a pick that did not answer (holdReads). */
-    readsTo = hosts.length > 1 && chosen ? chosen : null
+    /* The first window is in: reads to the pick it listed if every read so far went to it too (one asked of nobody put another unit's answer up, and a read asked of the pick now would be filed under that unit), as they always went with one computer, or held to the end for a pick that did not answer (holdReads). */
+    readsTo = hosts.length > 1 && chosen && readsOnlyTo(chosen) ? chosen : null
     if (held && (hosts.length < 2 || chosen)) held.open()
     units = hosts.length > 1 ? await readUnits({ windowMs, sleep }) : {}
     if (session !== link) return hosts
@@ -342,7 +333,6 @@ async function takeCensus({
       readsTo = null
       rollCallAsked = readsAsked
       readsAsked = null
-      lastCountAt = Date.now()
     }
     held?.open()
   }
@@ -378,6 +368,9 @@ function holdReads() {
   return held
 }
 
+/** Whether every read on this link so far was asked of `name` (none at all counts): see takeCensus. */
+const readsOnlyTo = (name) => !readsAsked || readsAsked.every((host) => host === name)
+
 /* On a fresh link, before anybody hears it is up: held when this account's pick holds reads, and who each read is asked of written down from here (remoteReadsAskedOf). */
 function holdForPick() {
   readsAsked = []
@@ -412,22 +405,12 @@ export const remoteReadsAskedOf = () =>
 
 /**
  * Whether link.js should take the roll call now, with the computer
- * answering: none on this link yet, or, at most once a minute, a second
- * computer heard answering since the last one counted fewer than two, or a
- * roll call that found nobody (the phone's relay.js remoteCountDue). Never on
- * a timer alone.
+ * answering: only when none has been taken on this link yet. Once per link,
+ * as in 1.87.47: not again on a second computer heard mid-set, nor a minute
+ * after one that heard nobody (the phone's relay.js remoteCountDue says why).
  */
-export const RECOUNT_MS = 60 * 1000
-export function remoteCountDue(now = Date.now()) {
-  if (!channel || !isJoined(channel) || !hostSeen || counting) return false
-  if (!countTried) return true
-  if (!countedOnLink) return now - lastCountAt >= RECOUNT_MS
-  return hosts.length < 2 && anotherHeardAt > lastCountAt && now - evidenceCountAt >= RECOUNT_MS
-}
-
-export function subscribeCountDue(fn) {
-  dueWatchers.add(fn)
-  return () => dueWatchers.delete(fn)
+export function remoteCountDue() {
+  return Boolean(channel && isJoined(channel) && hostSeen && !counting && !countTried)
 }
 
 /*
@@ -441,17 +424,43 @@ export function subscribeCountDue(fn) {
 let counting = null
 /** The link that count (or proof) is on. */
 let countingLink = null
+/** When the run writes are waiting on began: a proof chained behind a count begins when the count ends (countDone). */
+let countingSince = 0
+/** Whether writes go at once while this count runs, as before it, until it hears two (censusHosts). */
+let countFree = false
 const COUNT_WAIT_MS = 6000
 
-/* One at a time: a roll call asked for while another, or a pick's proof, is running starts when it ends. */
-export function censusHosts(options) {
+/** The run a write waits on, if any. */
+const writesWaitOn = () => (counting && !countFree ? counting : null)
+
+/*
+ * One at a time: a roll call asked for while another, or a pick's proof, is
+ * running starts when it ends. `late` is the count at the computer's first
+ * answer on a link whose join went unanswered (link.js countIfDue): on an
+ * account whose last count heard one computer, writes go at once while it
+ * runs, as they did there in 1.87.47, until it hears two (the phone's
+ * relay.js says more).
+ */
+export function censusHosts(options = {}) {
   /* Only one on this link: a count left running by a link that has gone is nothing to wait for. */
   const before = counting && countingLink === session ? counting : null
-  const run = before ? before.catch(() => {}).then(() => takeCensus(options)) : takeCensus(options)
+  const free = !before && options?.late === true && readPick()?.many === false
+  const run = before
+    ? before
+        .catch(() => {})
+        .then(() => {
+          countingSince = Date.now()
+          return takeCensus(options)
+        })
+    : takeCensus(options)
   counting = run
   countingLink = session
+  countingSince = Date.now()
+  countFree = free
   run.finally(() => {
-    if (counting === run) counting = null
+    if (counting !== run) return
+    counting = null
+    countFree = false
   }).catch(() => {})
   return run
 }
@@ -461,14 +470,18 @@ export function censusHosts(options) {
  * most — and for a tap no later than its deadline, as on the phone
  * (mobile/src/lib/relay.js): the count is not cut short for it, the tap is
  * dropped if it outlasts it. A tap before the first count of a link, on an
- * account of two with a pick, waits as its reads do (holdReads).
+ * account of two with a pick, waits as its reads do (holdReads). Each run, a
+ * count or a pick's proof chained behind it, is waited for COUNT_WAIT_MS from
+ * when it began, and a write never less than that from when it was made.
  */
 async function countDone(deadline) {
-  const most = Math.min(Date.now() + COUNT_WAIT_MS, Number.isFinite(deadline) ? deadline : Infinity)
+  const made = Date.now()
+  const cap = Number.isFinite(deadline) ? deadline : Infinity
   for (;;) {
-    const run = counting
+    const run = writesWaitOn()
     const held = run ? null : pickHeld(deadline)
     if (!run && !held) return
+    const most = Math.min(cap, (run ? Math.max(made, countingSince) : made) + COUNT_WAIT_MS)
     const end = held ? Math.min(most, held.until) : most
     const left = end - Date.now()
     if (left <= 0) return
@@ -572,16 +585,40 @@ async function confirmTargeting({ windowMs, sleep }) {
  * Remembered, because the answer does not change between one visit and the
  * next: the phone in your pocket belongs to the rig you play, not to whichever
  * Mac happened to answer first. A pick tapped while a roll call is running
- * waits for it to end, and writes wait for both (the phone's relay.js).
+ * waits for it to end, the first window of a fresh link included, and
+ * writes wait for both; whoever subscribed (subscribeSwitching) is told the
+ * moment another computer than the one driven is picked, before any read is
+ * asked of it (the phone's relay.js).
  */
 export async function pickHost(name, { windowMs = 1500, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
-  if (!hosts.includes(name)) return false
-  return whileProving(provePick(name, countingLink === session ? counting : null, { windowMs, sleep }))
+  const before = countingLink === session ? counting : null
+  if (!before && !hosts.includes(name)) return false
+  return whileProving(provePick(name, before, { windowMs, sleep }))
+}
+
+/** Told when Which unit moves to another computer, before a read is asked of it: see pickHost. */
+const switchWatchers = new Set()
+export function subscribeSwitching(fn) {
+  switchWatchers.add(fn)
+  return () => switchWatchers.delete(fn)
 }
 
 async function provePick(name, before, { windowMs, sleep }) {
-  if (before) await before.catch(() => {})
+  if (before) {
+    await before.catch(() => {})
+    countingSince = Date.now()
+  }
   if (!hosts.includes(name)) return false
+  if (name !== chosen) {
+    rollCallAsked = null
+    for (const fn of [...switchWatchers]) {
+      try {
+        fn(name)
+      } catch {
+        // The pick stands, whatever the screen made of it.
+      }
+    }
+  }
   chosen = name
   chosenWhy = 'pick'
   targeted = false
@@ -600,6 +637,8 @@ async function provePick(name, before, { windowMs, sleep }) {
 function whileProving(run) {
   counting = run
   countingLink = session
+  countingSince = Date.now()
+  countFree = false
   run
     .finally(() => {
       if (counting !== run) return
@@ -618,7 +657,9 @@ export const remoteChosenHost = () => chosen
  * why): kept under its id, with whether its last roll call heard two or more
  * beside it, all in the one key it was always kept in (shared/relay-rules
  * readPicks). The one bare name kept for the whole browser before is taken
- * as the account's that reads it first, and then is gone.
+ * as the account's that reads it first, and then is gone. What the count
+ * heard is kept for every account, a pick or none. Storage that could not be
+ * read is never written over: every other account's pick is in it still.
  */
 const HOST_KEY = 'fab.remote.host'
 /* Where it is kept: this browser's storage. */
@@ -633,11 +674,12 @@ function loadBook() {
     return readPicks(pickStore()?.getItem(HOST_KEY) ?? null)
   } catch {
     // Storage that cannot be read is no pick: everything goes as it always did.
-    return readPicks(null)
+    return { ...readPicks(null), unread: true }
   }
 }
 
-function saveBook(accounts) {
+function saveBook(accounts, kept) {
+  if (kept?.unread) return
   try {
     pickStore()?.setItem(HOST_KEY, writePicks(accounts))
   } catch {
@@ -650,9 +692,11 @@ function readPick() {
   if (!uid) return null
   if (pickRecord?.uid === uid) return pickRecord
   const kept = loadBook()
+  /* Not read: no pick this time, and asked again next time. */
+  if (kept.unread) return { uid, ...pickEntry(null) }
   if (!kept.accounts[uid] && kept.legacy) {
     kept.accounts[uid] = { name: kept.legacy, many: null }
-    saveBook(kept.accounts)
+    saveBook(kept.accounts, kept)
   }
   pickRecord = { uid, ...pickEntry(kept.accounts[uid]) }
   return pickRecord
@@ -664,18 +708,17 @@ const rememberHost = (name) => {
   pickRecord = { uid, name, many: pickRecord?.uid === uid ? pickRecord.many : null }
   const kept = loadBook()
   kept.accounts[uid] = { name, many: pickRecord.many }
-  saveBook(kept.accounts)
+  saveBook(kept.accounts, kept)
 }
 
-/** Whether the roll call just finished heard two or more: kept for the account's next visit, written down when it has a pick. */
+/** Whether the roll call just finished heard two or more: kept for the account's next visit, a pick or none. */
 function noteCount(many) {
   const record = readPick()
   if (!record || record.many === many) return
   record.many = many
-  if (!record.name) return
   const kept = loadBook()
   kept.accounts[record.uid] = { name: record.name, many }
-  saveBook(kept.accounts)
+  saveBook(kept.accounts, kept)
 }
 
 /** The account is gone: its pick and its count go too. */
@@ -685,26 +728,7 @@ function dropPick(uid) {
   const kept = loadBook()
   if (!(uid in kept.accounts)) return
   delete kept.accounts[uid]
-  saveBook(kept.accounts)
-}
-
-/* A second computer, heard: a second answer to a question asked of nobody after a count that found one (the phone's relay.js says more). */
-function heardOnce(id) {
-  answeredOpen.set(id, Date.now())
-  if (answeredOpen.size > 32) answeredOpen.delete(answeredOpen.keys().next().value)
-}
-
-function anotherAnswered() {
-  if (!countedOnLink || hosts.length > 1) return
-  anotherHeardAt = Date.now()
-  if (!remoteCountDue()) return
-  for (const fn of dueWatchers) {
-    try {
-      fn()
-    } catch {
-      // One bad watcher shouldn't stop the others.
-    }
-  }
+  saveBook(kept.accounts, kept)
 }
 
 /**
@@ -1275,11 +1299,7 @@ async function joinChannel() {
     const pending = payload?.id && waiting.get(payload.id)
     if (pending) {
       waiting.delete(payload.id)
-      if (pending.open) heardOnce(payload.id)
       pending.resolve(payload)
-    } else if (payload?.id && !census && answeredOpen.has(payload.id)) {
-      /* A second answer to a question asked of nobody: another computer is answering (anotherAnswered). */
-      anotherAnswered()
     }
   })
 
@@ -1383,10 +1403,6 @@ export async function remoteDisconnect() {
   /* And the next link counts again from the start (remoteCountDue). */
   countTried = false
   countedOnLink = false
-  lastCountAt = 0
-  evidenceCountAt = 0
-  anotherHeardAt = 0
-  answeredOpen.clear()
   failWaiting('Disconnected.')
   announce()
 
@@ -1459,11 +1475,13 @@ export async function remoteRequest(path, options = {}) {
    * goes off a millisecond early let a tap through mid-count, addressed to
    * nobody, and computer app 1.87.4 carries that out on every computer).
    */
-  if (Number.isFinite(options.deadline) && ((method !== 'GET' && (counting || pickHeld(options.deadline))) || pastDeadline(options.deadline, Date.now()))) {
+  if (Number.isFinite(options.deadline) && ((method !== 'GET' && (writesWaitOn() || pickHeld(options.deadline))) || pastDeadline(options.deadline, Date.now()))) {
     /* With a newer press of its control held too, that one's business: see the end of this function. */
     const over = presses.overtaken(path, options.body, options.deadline)
     throw notSentError({ late: over || linkLooksUp(), overtaken: over })
   }
+  /* Never asked of nobody while two answer and the one driven is not proved: an edit that waited out a count or a proof that hangs is refused, not sent to both (the phone's relay.js). */
+  if (method !== 'GET' && writesWaitOn() && hosts.length > 1 && !(chosen && targeted)) throw notSentError({ late: linkLooksUp() })
 
   /*
    * Nothing is changed while two Macs are listening.
@@ -1675,9 +1693,6 @@ async function relaySend(method, path, options, trip = { went: false }) {
   else if (method === 'GET' && readsTo) ask.host = readsTo
   /* Who the roll call's reads were asked of, for link.js (remoteReadsAskedOf). */
   if (readsAsked && method === 'GET' && !neverHeld(path) && !readsAsked.includes(ask.host || '')) readsAsked.push(ask.host || '')
-  /* Asked of nobody: a second answer to it is a second computer (anotherAnswered). */
-  const entry = waiting.get(id)
-  if (entry) entry.open = !ask.host
 
   const before = trip.went
   try {

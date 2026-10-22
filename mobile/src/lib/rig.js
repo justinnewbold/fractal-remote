@@ -260,6 +260,7 @@ export function reset() {
   /* The unit that was, for startClean: the next one read is a first one. */
   realUnit = null
   unitEra += 1
+  unitSettled = true
   set(initial)
 }
 
@@ -284,13 +285,43 @@ export function reset() {
  * another. Never from one demo unit to the next, which no computer is
  * behind: the demo keeps the last one's pedals up until the next is read,
  * as it always did.
+ *
+ * AND NOTHING IS FILED UNTIL THE NEW UNIT HAS SAID WHAT IT IS. Between the
+ * clean start and the next read's detect, the rig still holds the slug the
+ * other computer gave it, so an answer from the new one would pass for the
+ * old unit's and be kept under its slot: a names read made in the second and
+ * a half a pick under Which unit takes to prove was asked of the new
+ * computer and filed under the unit being left. Until readAll's detect is in
+ * (unitSettled), no scene names, scene, tempo or stale-copy verdict is taken
+ * from any read; readAll's own, which asked after the clean start, is the
+ * first that is.
  */
 let unitEra = 0
 /* The last real unit read (never the starting 'device'), for unitMoved. */
 let realUnit = null
+/* Whether the unit has been read since the last clean start or change of computer: see startClean. */
+let unitSettled = true
+
+/*
+ * ANOTHER COMPUTER IS DRIVEN FROM NOW (link.js chooseHost, told by relay.js
+ * before any read is asked of it): what is on its way from the one left is
+ * dropped (unitEra), and nothing is filed until the unit is read again
+ * (unitSettled). What is on screen stays up until the proof is in and
+ * startClean takes it down, as before.
+ */
+export function computerChanged() {
+  unitEra += 1
+  unitSettled = false
+  clearTimeout(staleTimer)
+  staleTimer = null
+  staleAgain = null
+  staleOwn = false
+  syncChainBusy()
+}
 
 export function startClean() {
   unitEra += 1
+  unitSettled = false
   clearTimeout(staleTimer)
   staleTimer = null
   staleAgain = null
@@ -321,8 +352,8 @@ function anotherUnit(slug) {
   return moved
 }
 
-/* Whether names read for `slug` in `era` are still the unit's on screen: see startClean. */
-const sameUnit = (slug, era) => state.deviceSlug === slug && unitEra === era
+/* Whether names read for `slug` in `era` are still the unit's on screen, and that unit has been read since the last clean start: see startClean. */
+const sameUnit = (slug, era) => unitSettled && state.deviceSlug === slug && unitEra === era
 
 /**
  * Put the last failure away.
@@ -1055,7 +1086,10 @@ export async function refreshAll() {
 }
 
 async function readAll() {
+  /* A clean start while the unit was being asked (another computer picked meanwhile): this answer may be the one left's, and the read that follows the clean start reads it all. */
+  const era = unitEra
   const caps = await device.detect()
+  if (era !== unitEra) return
   const slug = deviceSlug(caps)
   /*
    * A different unit means the names read off the last one are wrong, not
@@ -1077,6 +1111,8 @@ async function readAll() {
   const simulated = isDemo()
   if (slug !== state.deviceSlug || simulated !== state.simulated) forgetNames()
   if (anotherUnit(slug) && !(simulated && state.simulated)) startClean()
+  /* The unit has said what it is, off the computer driven: what is read from here is its own (sameUnit). */
+  unitSettled = true
   /*
    * And which unit's colours the tiles wear. "The button and effects pedal
    * colors dont match the colors on real fractal units": an AM4 has its own,
@@ -1154,6 +1190,9 @@ async function readAll() {
  */
 async function readChainAndNames({ names = true } = {}) {
   const number = state.preset?.number
+  /* The unit this read is for: a copy read after another computer was picked is the other unit's, and is neither judged nor kept (startClean). */
+  const slug = state.deviceSlug
+  const era = unitEra
   /* The names this phone or the computer already has, before the chain: a
      small read, and the tiles are named while the chain is still coming. */
   const quick = names ? await quickSceneNames() : true
@@ -1177,7 +1216,7 @@ async function readChainAndNames({ names = true } = {}) {
     if (names && read && state.preset?.number === number) {
       /* Whether the copy the chain came out of is this preset at all. */
       const copy = await loadedCopy()
-      if (state.preset?.number !== number) return read
+      if (state.preset?.number !== number || !sameUnit(slug, era)) return read
       if (copy === 'stale' && copyWasStale(number)) return read
       markJudged(number)
       /* The chain this preset had, for the next time it is chosen. */
