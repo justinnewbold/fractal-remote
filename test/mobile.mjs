@@ -7849,13 +7849,15 @@ export function run(test) {
      * so a sentence about the fix cannot stand in for it.
      */
     const tile = withoutComments(read('mobile/src/components/Tile.js'))
-    assert.match(tile, /import \{ cornerFit \} from '\.\.\/lib\/tile-corners'/, 'the tile has its own idea of when a corner word fits')
+    assert.match(tile, /import \{ cornerFit(, mustSayFit)? \} from '\.\.\/lib\/tile-corners'/, 'the tile has its own idea of when a corner word fits')
     assert.match(tile, /const shows = cornerFit\(\{[\s\S]{0,260}?picture,[\s\S]{0,260}?pair\s*\}\)/, 'the tile does not ask the rule, or not about this tile’s picture')
     assert.match(tile, /\n\s*pair = false,/, 'an effect tile’s two corners are held together like the looper’s')
-    assert.match(tile, /opacity: shows\.left \? 1 : 0/, 'a top-left word with no room is still drawn')
-    assert.match(tile, /const rightWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '700', opacity: across \? 1 : 0 \}/, 'a top-right word with no room is still drawn')
-    /* And across is the corner rule's own answer, or, beside a word that must be seen in the picture's place, the same rule against that word. */
-    assert.match(tile, /const across = middle\s+\?\s+cornerFit\(\{[^}]*picture: laid\.middle \?\? laid\.width,[^}]*left: 0,[^}]*\}\)\.right\s+:\s+shows\.right/, 'the channel is drawn over a word in the picture’s place')
+    /* Each corner word is drawn as the rule says: the corner rule's own answer, or, for a word that must be seen, the shared rule for it (mustSayFit), which also says where the channel is drawn. */
+    assert.match(tile, /const leftShown = say \? say\.at !== 'across' : shows\.left/, 'a top-left word with no room is still drawn')
+    assert.match(tile, /const rightShown = say \? say\.right : shows\.right/, 'a top-right word with no room is still drawn')
+    assert.match(tile, /opacity: leftShown \? 1 : 0/, 'a top-left word with no room is still drawn')
+    assert.match(tile, /const rightWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '700', marginLeft: 'auto', opacity: rightShown \? 1 : 0,/, 'a top-right word with no room is still drawn')
+    assert.match(tile, /\? mustSayFit\(\s*\{[^}]*picture,[^}]*left: laid\.left,[^}]*\},\s*\{ moved: laid\.left, movedTop: picture \? laid\.top : 0 \}\s*\)/, 'the channel is drawn over a word that must be seen')
     assert.match(tile, /onLayout=\{\(e\) => keep\('left', e\.nativeEvent\.layout\.width\)\}/, 'the top-left word is not measured')
     assert.match(tile, /onLayout=\{\(e\) => keep\('right', e\.nativeEvent\.layout\.width\)\}/, 'the top-right word is not measured')
     assert.match(tile, /keep\('band', y \+ tall\)/, 'the bottom of the corner row is not measured')
@@ -19990,5 +19992,136 @@ export function run(test) {
     await clock.advance(3000)
     assert.equal(rig.boostNow(), 'on', 'a scene that moved the amp to B left its boost unknown')
     assert.ok(asked(BOOST_READ) > reads)
+  })
+
+  /*
+   * THE COMPUTER'S COPY OF THE PRESET, as ForgeFX keeps one for an AM4 (its
+   * am4.ts readPreset): a chain read is a dump of the whole preset, which
+   * reads the amp first, so the copy holds the boost as it was when the dump
+   * began; the copy is kept for `ttl` from when the dump is done, and a boost
+   * read is answered out of it while it is kept. A write throws it away when
+   * the write is answered: at once from a 1.87.49 computer, 600 ms later from
+   * an older one. A dump already on its way keeps its copy when it is done,
+   * whatever was written meanwhile. And on an AM4 the computer has no status
+   * read (501), so a scene costs a chain read.
+   */
+  const computerCopy = (unit, clock, { dumpMs = 400, putMs = 20, ttl = 1200 } = {}) => {
+    let copy = null
+    const kept = () => copy && clock.now() - copy.at < ttl
+    unit.status = () => {
+      throw Object.assign(new Error('unsupported'), { status: 501 })
+    }
+    unit.lag = (line) => {
+      if (line === 'POST /scene' || line === 'POST /preset/select') copy = null
+      if (line === BOOST_PUT) return putMs
+      if (line !== 'GET /preset/blocks' || kept()) return 0
+      const boosts = { ...unit.boosts }
+      clock.setTimeout(() => (copy = { boosts, at: clock.now() }), dumpMs)
+      return dumpMs
+    }
+    const params = unit.params
+    unit.params = function (eid) {
+      const now = params.call(this, eid)
+      const ch = this.blocks.find((b) => b.effectId === 58)?.channel || 'A'
+      if (eid === 58 && kept()) now.enums.at(-1).value = copy.boosts[ch]
+      return now
+    }
+    const put = unit.put
+    unit.put = function (path, body) {
+      copy = null
+      return put.call(this, path, body)
+    }
+  }
+
+  /*
+   * A boost tapped while a chain read is on its way: the computer keeps the
+   * copy that read was made from, taken before the tap, and the boost read
+   * after the chain was answered out of it. The 1.87.49 computer answers the
+   * boost at once, so the write no longer held the read off; an older one on
+   * a slow read (a Raspberry Pi) did the same. On stage: tap the solo scene,
+   * tap Boost, and the tile flips back to Boost off over a boosted amp, and
+   * turning it off at the end of the solo takes a third tap.
+   */
+  test('phone: a boost tapped while a chain read is on its way is not put back by the copy that read was made from', async () => {
+    for (const [what, opts] of [
+      ['a 1.87.49 computer', { dumpMs: 400, putMs: 20 }],
+      ['an older computer on a slow read', { dumpMs: 1500, putMs: 600 }]
+    ]) {
+      const { rig, clock, unit, asked } = await rigOnTheBench(AM4_BOOST_BENCH())
+      await clock.advance(0)
+      assert.equal(rig.boostNow(), 'off')
+      computerCopy(unit, clock, opts)
+      const scene = rig.writeScene(1)
+      await clock.advance(50)
+      assert.equal(asked('GET /preset/blocks'), 1, 'the scene asked for no chain read')
+      const tap = rig.tapBoost(58)
+      await clock.advance(5000)
+      assert.equal(await scene, true)
+      assert.equal(await tap, true)
+      assert.equal(unit.boosts.A, 1)
+      assert.equal(rig.boostNow(), 'on', `${what}: the copy made before the tap put Boost off back over a boosted amp`)
+      /* And the next tap turns it off: the tile was right. */
+      const off = rig.tapBoost(58)
+      await clock.advance(1000)
+      assert.equal(await off, true)
+      assert.equal(unit.boosts.A, 0, `${what}: the next tap sent Boost on again`)
+    }
+  })
+
+  /*
+   * A preset loaded again starts a new load, whose boost is unknown until its
+   * own chain read, which waits for the unit to settle; a chain remembered
+   * from an earlier visit puts the amp's pedal up at once. A tap in that gap
+   * read first, and on a real computer that read is a whole preset dump sent
+   * to an AM4 still loading the preset (the drop in sound PRESET_SETTLE_MS is
+   * there to avoid). It sends nothing and reads nothing now, and says why.
+   */
+  test('phone: an AM4 amp tapped while its preset is still loading reads nothing and sends nothing, and says why', async () => {
+    const { rig, clock, unit, asked, heard } = await rigOnTheBench(AM4_BOOST_BENCH())
+    await clock.advance(0)
+    const away = rig.loadPreset(13)
+    await clock.advance(3000)
+    await away
+    const back = rig.loadPreset(12)
+    const pickedAt = clock.now()
+    await clock.advance(50)
+    assert.equal(rig.getState().chainKnown, 12, 'the bench did not put 12’s remembered chain up')
+    assert.equal(rig.boostNow(), 'unknown')
+    const reads = asked(BOOST_READ)
+    assert.equal(await rig.tapBoost(58), false)
+    assert.equal(asked(BOOST_READ), reads, 'a boost tap read the amp while the preset was still loading')
+    assert.equal(asked(BOOST_PUT), 0, 'a boost nobody had read was sent while the preset was loading')
+    assert.equal(rig.getState().error, 'The preset is still loading, so the boost wasn’t sent. Try it again in a moment.')
+    await clock.advance(3000)
+    await back
+    /* Its own chain read came, after the wait, and read the boost out of it. */
+    const chainAt = heard.find(([t, l]) => t >= pickedAt && l === 'GET /preset/blocks')?.[0]
+    const boostAt = heard.find(([t, l]) => t >= pickedAt && l === BOOST_READ)?.[0]
+    assert.ok(Number.isFinite(chainAt) && boostAt >= chainAt, 'the boost was read before the loaded preset’s own chain read')
+    assert.equal(rig.boostNow(), 'off')
+    assert.equal(await rig.tapBoost(58), true)
+    assert.equal(unit.boosts.A, 1)
+  })
+
+  /*
+   * A chain read on its way when another computer is picked (Which unit)
+   * lands while the new one is still being proved, and the boost read after
+   * it went to the new computer: Amp 1's settings read off an FM3 on Justin's
+   * other Pi, kept under the new computer as if they were an AM4's. A tap is
+   * held back until the new unit has said what it is (BOOST_WAIT); the read
+   * is now too.
+   */
+  test('phone: a chain read that lands after another computer is picked reads no boost until the new unit has said what it is', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench(AM4_BOOST_BENCH())
+    await clock.advance(0)
+    unit.lag = (line) => (line === 'GET /preset/blocks' ? 500 : 0)
+    const reading = rig.refreshBlocks({ quiet: true })
+    await clock.advance(100)
+    rig.computerChanged()
+    const reads = asked(BOOST_READ)
+    await clock.advance(450)
+    await reading
+    assert.equal(asked(BOOST_READ), reads, 'the amp’s boost was read off a computer that has not said what unit it has')
+    assert.equal(rig.getState().boost, null, 'a boost read off the next computer was kept as the AM4’s')
   })
 }

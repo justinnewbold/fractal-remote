@@ -8,7 +8,7 @@ import { isFractalRemoteLook, offMode } from '../lib/looks'
 import { OFF_GREY, liftedLook } from '../lib/colourPage'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
-import { cornerFit } from '../lib/tile-corners'
+import { cornerFit, mustSayFit } from '../lib/tile-corners'
 
 /**
  * A coloured tile, for the two things on this screen that have an identity.
@@ -83,9 +83,12 @@ export default function Tile({
    * should say Boost on, Boost off when they tap it", and at the sizes most
    * phones use the corner had no room for it beside the picture, so it was
    * hidden and the tile was a dark AMP that read as a bypassed amp. Where its
-   * corner has no room, it takes the picture's place instead, across the
-   * tile, and the channel letter shows only where it clears it. The tile's
-   * height does not move: the word is laid over the picture's own box.
+   * corner has no room beside the picture, the picture is cleared from under
+   * it and the word stays in its corner, with the channel letter beside it
+   * wherever the row holds both (the corner rule's own choice where it does
+   * not: the word, as for every tile). Only a word too wide for its row even
+   * then (a large system text size) goes across the tile, in the picture's
+   * place. The tile's height does not move.
    */
   mustSay = false,
   /*
@@ -323,29 +326,48 @@ export default function Tile({
     pair
   })
   /*
-   * THE WORD THAT MUST BE SEEN, in the picture's place when its corner has
-   * no room (`mustSay`). Decided from the corner's own measurements at this
-   * size, which the move does not change: the picture keeps its box, drawn
-   * clear, so nothing under the rule moves and the word cannot go back and
-   * forth. Across the tile's whole inside rather than the picture's width,
-   * since a 320 phone's tile has less room inside its padding than "Boost
-   * off" needs. The channel then shows only where it clears the word.
+   * THE WORD THAT MUST BE SEEN (`mustSay`): beside the picture where it fits
+   * there; otherwise in its own corner with the picture cleared from under
+   * it, the channel beside it where the row holds both; only a word too wide
+   * for its row goes across the tile, in the picture's place. The browser's
+   * rule too (shared/tile-corners.mjs mustSayFit). Decided from the corner's
+   * own measurements at this size, which the decision does not change: the
+   * picture keeps its box, drawn clear, and the word across the tile is the
+   * same word in the same face, so it is the corner word's width that is
+   * measured. The phone's edge is the same lit or not, so nothing is lifted.
    */
-  const middle = mustSay && cornered && !!String(topLeft || '').trim() && current && !shows.left
-  const across = middle
-    ? cornerFit({
-        width: laid.width,
-        picture: laid.middle ?? laid.width,
-        pictureTop: picture ? laid.top : 0,
-        bandBottom: laid.band,
-        inset: laid.inset,
-        left: 0,
-        right: topRight ? laid.right : 0
-      }).right
-    : shows.right
+  const say =
+    mustSay && cornered && !!String(topLeft || '').trim() && current
+      ? mustSayFit(
+          {
+            width: laid.width,
+            picture,
+            pictureTop: laid.top,
+            bandBottom: laid.band,
+            inset: laid.inset,
+            left: laid.left,
+            right: topRight ? laid.right : 0,
+            pair
+          },
+          { moved: laid.left, movedTop: picture ? laid.top : 0 }
+        )
+      : null
+  /* The picture cleared from under a word that has moved, and the word across the tile. */
+  const cleared = !!say?.at
+  const middle = say?.at === 'across'
+  const leftShown = say ? say.at !== 'across' : shows.left
+  const rightShown = say ? say.right : shows.right
   const cornerInk = quiet || grey ? foreground : on ? lit : quietWords
-  const leftWord = { color: cornerInk, fontSize: font.micro, fontWeight: '600', opacity: shows.left ? 1 : 0 }
-  const rightWord = { color: cornerInk, fontSize: font.micro, fontWeight: '700', opacity: across ? 1 : 0 }
+  /*
+   * A corner word that is not drawn gives its room to the one that is, as the
+   * browser's does (styles.css [data-crowded]): out of the row, where it is
+   * still laid out and measured whole, but takes no width. Kept in the row
+   * unseen, a hidden C still took its 8pt, and on a 320 phone with pictures
+   * off "Boost off" was cut to "Boost…" beside it. The channel keeps to the
+   * right by its own margin either way.
+   */
+  const leftWord = { color: cornerInk, fontSize: font.micro, fontWeight: '600', opacity: leftShown ? 1 : 0, ...(leftShown ? null : { position: 'absolute', left: 0 }) }
+  const rightWord = { color: cornerInk, fontSize: font.micro, fontWeight: '700', marginLeft: 'auto', opacity: rightShown ? 1 : 0, ...(rightShown ? null : { position: 'absolute', right: 0 }) }
 
   /*
    * THE EDGE, which on an unlit tile is the only thing still naming the block.
@@ -485,8 +507,8 @@ export default function Tile({
           pointerEvents="none"
           /* Over the picture's own box (the column's top, less the border the
              offsets are taken inside of), or the corner row's place on a tile
-             with no picture. Laid out always, so its word is measured before
-             it is needed; seen only in place of the corner. */
+             with no picture, for a word too wide for its corner row. The
+             corner word's own face, so its width is the corner word's. */
           style={{
             position: 'absolute',
             left: 0,
@@ -498,7 +520,7 @@ export default function Tile({
             opacity: middle ? 1 : 0
           }}
         >
-          <Text numberOfLines={1} onLayout={(e) => keep('middle', e.nativeEvent.layout.width)} style={{ color: cornerInk, fontSize: font.micro, fontWeight: '700' }}>
+          <Text numberOfLines={1} style={{ color: cornerInk, fontSize: font.micro, fontWeight: '600' }}>
             {topLeft || ''}
           </Text>
         </View>
@@ -516,8 +538,8 @@ export default function Tile({
                state, and a second announcement for the picture of it would
                make every tile read itself out twice. */
             accessible={false}
-            /* Clear, keeping its box, while a word that must be seen is over it (`mustSay`). */
-            style={{ width: picture, height: picture, marginBottom: 2, tintColor: quiet ? foreground : pictureTint, opacity: middle ? 0 : 1 }}
+            /* Clear, keeping its box, while a word that must be seen is in its place or over it (`mustSay`). */
+            style={{ width: picture, height: picture, marginBottom: 2, tintColor: quiet ? foreground : pictureTint, opacity: cleared ? 0 : 1 }}
             resizeMode="contain"
           />
         ) : null}

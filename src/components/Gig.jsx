@@ -37,7 +37,7 @@ import { linkAwayMs } from '../lib/tapGate'
 import { downBandTop } from '../lib/downBand'
 import { STAGE_HIDDEN } from '../lib/guardrails'
 import { findLooper, LOOPER_LABEL } from '../../shared/looper.mjs'
-import { cornerFit } from '../../shared/tile-corners.mjs'
+import { cornerFit, mustSayFit } from '../../shared/tile-corners.mjs'
 import { BOOST, boostLabel, boostTitle, boostWord, pedalBoost, pedalUnit } from '../../shared/am4-boost.mjs'
 import Looper from './Looper'
 import { blockColor } from '../lib/blockColors'
@@ -1508,23 +1508,41 @@ function useCornerFit({ tile, picture, band, left, right, middle = null }, pair,
       between: Number.isFinite(between) ? between : 0,
       pair
     }
-    let next = { ...cornerFit(corners), middle: false, top: 0, height: 0 }
+    let next = { ...cornerFit(corners), middle: false, at: null, top: 0, height: 0 }
     /*
-     * A WORD THAT MUST BE SEEN (an AM4 amp's boost) with no room in its
-     * corner goes in the picture's place, across the tile: the picture's own
-     * box, which stays where it is, unseen, so nothing the rule measured
-     * moves and the word cannot go back and forth; or the corner row's, on a
-     * tile with no picture. The word across from it is then measured against
-     * the word, as it is against a picture.
+     * A WORD THAT MUST BE SEEN (an AM4 amp's boost), placed by the phone's
+     * rule (shared/tile-corners.mjs mustSayFit): beside the picture where it
+     * fits there; otherwise in its own corner with the picture cleared from
+     * under it (`at` 'corner'), the channel beside it where the row holds
+     * both; only a word too wide for its row goes across the tile, over the
+     * picture's box (`at` 'across'), the channel measured against where the
+     * word is drawn there. The moved word is in the body face, narrower than
+     * the corner's, and is measured as itself. The picture keeps its box,
+     * unseen, so nothing the rule measured moves.
+     *
+     * Taken on the unlit tile's corner row, lit or not: an unlit tile's 2px
+     * edge (styles.css button.gig-block.off) sets the row a pixel lower and
+     * further in than a lit tile's 1px, and measured as drawn the picture
+     * was in the row when unlit and under it when lit, so every tap moved the
+     * word, the picture and the channel.
      */
     const m = middle?.current
-    if (m && !next.left && Number.isFinite(corners.inset)) {
+    if (m && Number.isFinite(corners.inset)) {
+      const lift = Math.max(0, UNLIT_EDGE - (parseFloat(getComputedStyle(box).borderTopWidth) || 0))
+      const word = m.firstElementChild || m
       const spot = icon || row
-      const across = cornerFit({ ...corners, picture: whole(m.firstElementChild || m), pictureTop: spot ? spot.top : undefined, left: null })
-      next = { left: false, right: across.right, middle: true, top: spot ? spot.top : 0, height: spot ? spot.bottom - spot.top : 0 }
+      const top = spot ? spot.top : 0
+      const height = spot ? spot.bottom - spot.top : 0
+      const tall = word.getBoundingClientRect().height / k
+      const say = mustSayFit(corners, { moved: whole(word), movedTop: top + Math.max(0, (height - tall) / 2), lift })
+      next = say.at
+        ? { left: false, right: say.right, middle: true, at: say.at, top, height }
+        : { left: say.left, right: say.right, middle: false, at: null, top: 0, height: 0 }
     }
     setFit((was) =>
-      was && was.left === next.left && was.right === next.right && was.middle === next.middle && was.top === next.top && was.height === next.height ? was : next
+      was && was.left === next.left && was.right === next.right && was.middle === next.middle && was.at === next.at && was.top === next.top && was.height === next.height
+        ? was
+        : next
     )
   }
   /* Before the first paint, so the words are never drawn in the wrong place
@@ -1568,8 +1586,11 @@ function useCornerFit({ tile, picture, band, left, right, middle = null }, pair,
   }, again)
   /* Hidden until measured: a word that will not fit never flashes over the
      picture on the first frame. */
-  return fit || { left: false, right: false, middle: false, top: 0, height: 0 }
+  return fit || { left: false, right: false, middle: false, at: null, top: 0, height: 0 }
 }
+
+/* The edge of an unlit block tile (styles.css button.gig-block.off), which a word that must be seen is measured with, lit or not (useCornerFit). */
+const UNLIT_EDGE = 2
 
 /**
  * One block on the stage screen: tap to switch it, hold to change its channel.
@@ -1760,10 +1781,11 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
         {/*
           An AM4 amp's Boost on, Boost off or Amp off, which is the whole of
           what its tap does, and so is always seen: where its corner has no
-          room beside the picture (most phone widths), it is drawn here, in the
-          picture's own place and across the tile, the picture kept unseen
-          under it and the channel shown only where it clears it. Laid out
-          always so it is measured before it is needed.
+          room beside the picture (most phone widths), it is drawn here, in
+          its own corner with the picture kept unseen under it and the
+          channel beside it where the row holds both, or, too wide for the
+          row, across the tile over the picture's box (useCornerFit). Laid
+          out always so it is measured before it is needed.
         */}
         {said ? (
           <span
@@ -1771,7 +1793,8 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
             ref={middleRef}
             aria-hidden="true"
             data-shown={shows.middle ? 'yes' : undefined}
-            style={shows.middle ? { top: `${shows.top}px`, height: `${shows.height}px` } : undefined}
+            data-at={shows.middle ? shows.at : undefined}
+            style={shows.at === 'across' ? { top: `${shows.top}px`, height: `${shows.height}px` } : undefined}
           >
             <span>{said}</span>
           </span>

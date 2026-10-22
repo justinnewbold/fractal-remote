@@ -36,14 +36,22 @@
  *            preset just as the unit switches (ForgeFX's FORGEFX-25 heard
  *            dumps after a channel swap glitch an AM4's sound). The boost is
  *            unknown for the new channel until the next chain read or a tap.
+ *            Never asked while a preset is still loading, before its own
+ *            chain read (BOOST_LOADING), for the same reason. And never
+ *            believed out of a chain read asked before a boost tap: that copy
+ *            was begun before the tap, and the computer keeps it after the
+ *            tap's write, so it says the boost the unit had before.
  *   - write: PUT /preset/blocks/58/params/150 { value: 0 or 1, continuous:
  *            false }, which the computer turns into one frame, byte for byte
  *            the codec's own buildSetParam('amp.out_boost', value). Always the
  *            value wanted, never a toggle: an absolute value is safe to send
  *            again, a toggle sent twice is no change at all. A computer app
- *            from 1.87.49 sends it as it sends a bypass, at once; an older
- *            one waits up to 0.6 s for an answer the AM4 never gives over USB
- *            before the next tap goes, which is the same frame, only later.
+ *            from 1.87.49 sends it as it sends a bypass, at once. An older
+ *            one sends the same frame at once too, but then holds its one
+ *            MIDI queue up to 0.6 s for an answer the AM4 never gives over
+ *            USB, so a scene or a preset tapped in that time goes out up to
+ *            0.6 s late. The boost works on every computer, so the computer
+ *            is not asked to update for it (COMPUTER_NEEDED, versions.mjs).
  *
  * Justin's other app (Axiom) writes the same switch with `continuous: true`,
  * the normalised path. This writes the captured one instead, the action
@@ -100,6 +108,13 @@ export const OTHER_AMP_SAYS = 'The app can’t switch this amp’s boost yet.'
 export const BOOST_WAIT = 'The unit is still being found, so the boost wasn’t sent. Try it again in a moment.'
 /* The computer says no unit is there now. */
 export const BOOST_NO_UNIT = 'The unit isn’t answering, so the boost wasn’t sent.'
+/*
+ * A preset picked a moment ago, whose own chain read (which reads the boost
+ * with it) waits for the unit to finish loading it: a boost not read yet is
+ * not read before then, since that read would be a whole preset dump sent to
+ * a unit still loading.
+ */
+export const BOOST_LOADING = 'The preset is still loading, so the boost wasn’t sent. Try it again in a moment.'
 
 /*
  * The one-time note over the browser's Play: the hold, and what a tap does.

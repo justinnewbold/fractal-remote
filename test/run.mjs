@@ -7009,7 +7009,31 @@ function windowOnTheBench(over = {}) {
       return () => {}
     },
     /* A real VP4, and the name its chain read carried (lib/forgefx.js vp4PresetName): only where a test says so. */
-    ...(unit.vp4 ? { vp4Here: () => true, vp4PresetName: () => unit.vp4Name ?? null, vp4SceneNames: () => (unit.vp4Scenes ? [...unit.vp4Scenes] : null) } : {})
+    ...(unit.vp4 ? { vp4Here: () => true, vp4PresetName: () => unit.vp4Name ?? null, vp4SceneNames: () => (unit.vp4Scenes ? [...unit.vp4Scenes] : null) } : {}),
+    /*
+     * An AM4 through a computer, where a test says so (`unit.boosts`): its
+     * amp's params read carries the Out Boost for the channel the amp is on
+     * (`unit.params`, which a test may answer out of a copy), and the boost's
+     * write lands on that channel (shared/am4-boost.mjs).
+     */
+    ...(unit.boosts
+      ? {
+          unitSlug: () => 'am4',
+          blockParams: (eid) =>
+            answer(`GET /preset/blocks/${eid}/params`, () => {
+              const ch = unit.blocks.find((b) => b.effectId === 58)?.channel || 'A'
+              const value = unit.params ? unit.params(ch) : unit.boosts[ch]
+              return { slug: 'amp', named: [], enums: [{ id: 150, name: 'Out Boost', value, options: [{ value: 0, label: 'OFF' }, { value: 1, label: 'ON' }] }] }
+            }),
+          setAmpBoost: (ask, opts) =>
+            hand(`PUT ${ask.path}`, opts) &&
+            answer(`PUT ${ask.path}`, () => {
+              unit.boosts[unit.blocks.find((b) => b.effectId === 58)?.channel || 'A'] = ask.body.value
+              unit.wrote?.()
+              return { ok: false }
+            })
+        }
+      : {})
   })
   ds.put({
     preset: { number: unit.number, name: unit.presetName ?? nameOf(unit.number) },
@@ -7054,6 +7078,109 @@ onTheBench('Previous and Next never read another slot — reading one moved the 
   await load
   assert.equal(ds.chainViewOf(ds.getSnapshot()), 'ready', 'a preset change does not still work without the read-ahead')
   assert.equal(asked(SUMMARY), 0)
+})
+
+/*
+ * AN AM4 AMP'S BOOST AT THE BROWSER'S END, with the computer's copy of the
+ * preset as ForgeFX keeps one for an AM4 (the phone's bench in
+ * test/mobile.mjs has the same model): a chain read is a dump that reads the
+ * amp first, kept for `ttl` from when it is done, and the boost read is
+ * answered out of it; a write throws it away when it is answered (at once
+ * from a 1.87.49 computer, 600 ms later from an older one), and a dump on its
+ * way keeps its copy when it is done. On an AM4 the computer has no status
+ * read, so a scene costs a chain read.
+ */
+const BOOST_READ_LINE = 'GET /preset/blocks/58/params'
+const BOOST_PUT_LINE = 'PUT /preset/blocks/58/params/150'
+const am4Copy = (unit, clock, { dumpMs = 400, putMs = 20, ttl = 1200 } = {}) => {
+  let copy = null
+  const kept = () => copy && clock.now() - copy.at < ttl
+  unit.status = () => {
+    throw Object.assign(new Error('unsupported'), { status: 501 })
+  }
+  unit.lag = (line) => {
+    if (line === 'POST /scene' || line === 'POST /preset/select') copy = null
+    if (line === BOOST_PUT_LINE) return putMs
+    if (line !== CHAIN || kept()) return 0
+    const boosts = { ...unit.boosts }
+    clock.setTimeout(() => (copy = { boosts, at: clock.now() }), dumpMs)
+    return dumpMs
+  }
+  unit.params = (ch) => (kept() ? copy.boosts[ch] : unit.boosts[ch])
+  unit.wrote = () => {
+    copy = null
+  }
+}
+const am4Window = () => windowOnTheBench({ boosts: { A: 0, B: 1, C: 0, D: 0 }, unitKey: 'rig:am4', namesInChain: false })
+
+onTheBench('browser: a boost tapped while a chain read is on its way is not put back by the copy that read was made from', async () => {
+  for (const [what, opts] of [
+    ['a 1.87.49 computer', { dumpMs: 400, putMs: 20 }],
+    ['an older computer on a slow read', { dumpMs: 1500, putMs: 600 }]
+  ]) {
+    const { clock, unit, asked } = am4Window()
+    await ds.refreshBoost()
+    assert.equal(ds.boostNow(), 'off')
+    am4Copy(unit, clock, opts)
+    const scene = ds.writeScene(1)
+    await clock.advance(50)
+    assert.equal(asked(CHAIN), 1, 'the scene asked for no chain read')
+    const tap = ds.tapBoost(58)
+    await clock.advance(5000)
+    await scene
+    await tap
+    assert.equal(unit.boosts.A, 1)
+    assert.equal(ds.boostNow(), 'on', `${what}: the copy made before the tap put Boost off back over a boosted amp`)
+    const off = ds.tapBoost(58)
+    await clock.advance(1000)
+    await off
+    assert.equal(unit.boosts.A, 0, `${what}: the next tap sent Boost on again`)
+    ds.reset()
+  }
+})
+
+onTheBench('browser: an AM4 amp tapped while its preset is still loading reads nothing and sends nothing, and says why', async () => {
+  const { clock, unit, asked, heard } = am4Window()
+  await ds.refreshBoost()
+  /* Away and back, twice: the second time, 12 was loaded here before, and its chain goes up on the tap. */
+  for (const n of [13, 12, 13]) {
+    const load = ds.loadPreset(n)
+    await clock.advance(3000)
+    await load
+  }
+  const back = ds.loadPreset(12)
+  const pickedAt = clock.now()
+  await clock.advance(50)
+  assert.equal(ds.getSnapshot().chainKnown, 12, 'the bench did not put 12’s remembered chain up')
+  assert.equal(ds.boostNow(), 'unknown')
+  const reads = asked(BOOST_READ_LINE)
+  await assert.rejects(ds.tapBoost(58), (e) => e.nothingSent === true && e.message === 'The preset is still loading, so the boost wasn’t sent. Try it again in a moment.')
+  assert.equal(asked(BOOST_READ_LINE), reads, 'a boost tap read the amp while the preset was still loading')
+  assert.equal(asked(BOOST_PUT_LINE), 0, 'a boost nobody had read was sent while the preset was loading')
+  await clock.advance(3000)
+  await back
+  const chainAt = heard.find(([t, l]) => t >= pickedAt && l === CHAIN)?.[0]
+  const boostAt = heard.find(([t, l]) => t >= pickedAt && l === BOOST_READ_LINE)?.[0]
+  assert.ok(Number.isFinite(chainAt) && boostAt >= chainAt, 'the boost was read before the loaded preset’s own chain read')
+  assert.equal(ds.boostNow(), 'off')
+  const tap = ds.tapBoost(58)
+  await clock.advance(100)
+  await tap
+  assert.equal(unit.boosts.A, 1)
+})
+
+onTheBench('browser: a chain read that lands after another computer is picked reads no boost until the new unit has said what it is', async () => {
+  const { clock, unit, asked } = am4Window()
+  await ds.refreshBoost()
+  unit.lag = (line) => (line === CHAIN ? 500 : 0)
+  const reading = ds.refreshBlocks()
+  await clock.advance(100)
+  ds.computerChanged()
+  const reads = asked(BOOST_READ_LINE)
+  await clock.advance(450)
+  await reading
+  assert.equal(asked(BOOST_READ_LINE), reads, 'the amp’s boost was read off a computer that has not said what unit it has')
+  assert.equal(ds.getSnapshot().boost, null, 'a boost read off the next computer was kept as the AM4’s')
 })
 
 /*
@@ -14751,7 +14878,7 @@ test('the looper’s Rec and Play sit in the two top corners, and no corner word
    */
   const bare = (t) => t.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ' ')
   const gig = bare(readSrc(new URL('../src/components/Gig.jsx', import.meta.url), 'utf8'))
-  assert.match(gig, /import \{ cornerFit \} from '\.\.\/\.\.\/shared\/tile-corners\.mjs'/, 'the browser has its own idea of when a corner word fits')
+  assert.match(gig, /import \{ cornerFit(, mustSayFit)? \} from '\.\.\/\.\.\/shared\/tile-corners\.mjs'/, 'the browser has its own idea of when a corner word fits')
   const tile = gig.slice(gig.indexOf('function BlockTile('), gig.indexOf('function ChannelSheet('))
   assert.ok(tile.length > 0, 'BlockTile is not where this test reads it')
   assert.ok(!/Rec · Play/.test(gig), 'the whole phrase is back in one corner, on the picture')
@@ -14785,9 +14912,9 @@ test('the looper’s Rec and Play sit in the two top corners, and no corner word
 
   const hook = gig.slice(gig.indexOf('function useCornerFit('), gig.indexOf('function BlockTile('))
   assert.ok(hook.length > 0, 'the corner measure is not where this test reads it')
-  assert.match(hook, /const corners = \{[\s\S]{0,400}?pair\s*\}\s+let next = \{ \.\.\.cornerFit\(corners\), middle: false, top: 0, height: 0 \}/, 'the browser does not ask the rule')
-  /* A word that must be seen and has no room in its corner is measured against, in the picture's place, by the same rule. */
-  assert.match(hook, /const across = cornerFit\(\{ \.\.\.corners, picture: whole\(m\.firstElementChild \|\| m\), pictureTop: spot \? spot\.top : undefined, left: null \}\)/, 'the word across from a word in the picture’s place is not measured against it')
+  assert.match(hook, /const corners = \{[\s\S]{0,400}?pair\s*\}\s+let next = \{ \.\.\.cornerFit\(corners\), middle: false, at: null, top: 0, height: 0 \}/, 'the browser does not ask the rule')
+  /* A word that must be seen and has no room in its corner is placed, and the word across from it measured against it, by the shared rule for it (shared/tile-corners.mjs mustSayFit), from the same corners. */
+  assert.match(hook, /const say = mustSayFit\(corners, \{ moved: whole\(word\), movedTop: top \+ Math\.max\(0, \(height - tall\) \/ 2\), lift \}\)/, 'the word across from a word that must be seen is not measured against it')
   /* The row's own gap, read from the row, so two words that each fit but not
      together are not squeezed into it and cut to "R… Pl…". */
   assert.match(hook, /parseFloat\(getComputedStyle\(band\.current\)\.columnGap\)/, 'the space between the two corner words is not measured')
@@ -14818,9 +14945,9 @@ test('the looper’s Rec and Play sit in the two top corners, and no corner word
   assert.match(hook, /watch\?\.disconnect\(\)/, 'a tile that goes keeps being watched')
   assert.match(hook, /useLayoutEffect\(\(\) => \{\s*measure\.current\(\)\s*\}, again\)/, 'a word that changes is not measured again before it is drawn')
   /* Only when the answer changes, so a measure cannot set off another. */
-  assert.match(hook, /setFit\(\(was\) =>\s+was && was\.left === next\.left && was\.right === next\.right && was\.middle === next\.middle && was\.top === next\.top && was\.height === next\.height \? was : next\s+\)/, 'every measure sets state')
+  assert.match(hook, /setFit\(\(was\) =>\s+was && was\.left === next\.left && was\.right === next\.right && was\.middle === next\.middle && was\.at === next\.at && was\.top === next\.top && was\.height === next\.height\s+\? was\s+: next\s+\)/, 'every measure sets state')
   /* Hidden until measured, so a word that will not fit never flashes over the picture. */
-  assert.match(hook, /return fit \|\| \{ left: false, right: false, middle: false, top: 0, height: 0 \}/, 'the corner words are drawn before they are measured')
+  assert.match(hook, /return fit \|\| \{ left: false, right: false, middle: false, at: null, top: 0, height: 0 \}/, 'the corner words are drawn before they are measured')
 
   /*
    * The stylesheet: hidden, not removed, so a word keeps its place and can be

@@ -588,9 +588,12 @@ October 2026). "On the AM4 the amp on off button should do an amp boost
 instead of turning the amp completely off. It should say Boost on, Boost off
 when they tap it." Since 1.87.49, by update, on an AM4 the amp's pedal on
 Play, on the phone, the watch and the browser, switches the amp's Out Boost
-and says Boost on or Boost off; Amp off when the amp itself is off in that
-scene; no word, with a dashed edge, until the unit has said. The amp's own
-on and off is where a block is edited: Edit, the amp, Engaged / Bypassed.
+and never turns the amp off. On the phone and in the browser it says Boost
+on or Boost off; Amp off when the amp itself is off in that scene; no word,
+with a dashed edge, until the unit has said. The watch shows no words: its
+AMP pedal is lit for Boost on and dark otherwise, and the words on the wrist
+come with the next build (docs/later.md). The amp's own on and off is where
+a block is edited: Edit, the amp, Engaged / Bypassed.
 That is a change to what a control in the reviewed app does, so 2.3.1(a)
 wants it in the next *New since 1.87.11*: one paragraph, saying the demo's
 AM4 shows it. What's New gets one line: "On an AM4, the amp's pedal on Play

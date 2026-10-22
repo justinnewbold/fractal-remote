@@ -6721,28 +6721,33 @@ button.gig-block {
 }
 
 /*
- * A word that must be seen, in the picture's place.
+ * A word that must be seen, with the picture cleared from under it.
  *
  * "It should say Boost on, Boost off when they tap it." An AM4 amp's word is
  * the whole of what its tap does, and at every phone width its corner had no
  * room beside the picture, so it was hidden and the tile read as a bypassed
- * amp. Where its corner is crowded it goes here instead (Gig.jsx BlockTile,
- * useCornerFit): over the picture's own box, top and height from its
- * measurement, across the tile rather than inside its padding, in the body
- * face, which "Boost off" fits a 320 phone's tile in. The picture keeps its
- * box, unseen, so nothing the corner rule measured moves.
+ * amp. Where its corner is crowded it is drawn here instead (Gig.jsx
+ * BlockTile, useCornerFit), in the body face, which is narrower than the
+ * corner's: in its own corner, where the corner row is, with the channel
+ * beside it where the row holds both; or, too wide for the row, across the
+ * tile over the picture's own box (data-at='across', top and height from its
+ * measurement), rather than inside its padding. The picture keeps its box,
+ * unseen, so nothing the corner rule measured moves.
  */
 button.gig-block .gig-block-state.gig-block-said {
-  left: 2px;
-  right: 2px;
-  justify-content: center;
-  align-items: center;
   font-family: var(--body);
   font-size: var(--f-1);
   font-weight: 600;
   letter-spacing: 0;
   white-space: nowrap;
   visibility: hidden;
+}
+
+button.gig-block .gig-block-state.gig-block-said[data-at='across'] {
+  left: 2px;
+  right: 2px;
+  justify-content: center;
+  align-items: center;
 }
 
 button.gig-block .gig-block-state.gig-block-said[data-shown='yes'] {

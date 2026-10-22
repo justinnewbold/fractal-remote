@@ -212,29 +212,44 @@ export function run(test) {
   /*
    * "It should say Boost on, Boost off when they tap it." On most phones the
    * corner had no room for the word beside the picture, so it was hidden and
-   * the tile was a dark AMP that looked bypassed. Now the word goes in the
-   * picture's place, across the tile, whenever its corner is crowded, at both
-   * ends; the channel shows only where it clears it.
+   * the tile was a dark AMP that looked bypassed. Now, wherever its corner is
+   * crowded, the picture is cleared from under it and the word stays in its
+   * corner, the channel beside it where the row holds both; only a word too
+   * wide for its row goes across the tile. One rule at both ends
+   * (shared/tile-corners.mjs mustSayFit), held to numbers below.
    */
   test('an AM4 amp’s Boost on, Boost off and Amp off are always seen: in the corner, or in the picture’s place, at both ends', async () => {
     const tile = flat('mobile/src/components/Tile.js')
-    assert.match(tile, /const middle = mustSay && cornered && !!String\(topLeft \|\| ''\)\.trim\(\) && current && !shows\.left/, 'the phone’s word is not moved when its corner is crowded')
-    /* Over the picture's own box, across the tile's whole inside, and the picture kept in its place, unseen, so the corner rule's inputs never move. */
+    assert.match(tile, /import \{ cornerFit, mustSayFit \} from '\.\.\/lib\/tile-corners'/)
+    assert.match(tile, /const say = mustSay && cornered && !!String\(topLeft \|\| ''\)\.trim\(\) && current \? mustSayFit\(/, 'the phone’s word is not placed by the shared rule when its corner is crowded')
+    /* The moved word is the corner word, in its own face, so it is the corner word's width that decides. */
+    assert.match(tile, /\{ moved: laid\.left, movedTop: picture \? laid\.top : 0 \}/)
+    assert.match(tile, /const leftShown = say \? say\.at !== 'across' : shows\.left const rightShown = say \? say\.right : shows\.right/)
+    /* Over the picture's own box, across the tile's whole inside, only for a word too wide for its row; and the picture kept in its place, unseen, whenever the word has moved. */
     assert.match(tile, /position: 'absolute', left: 0, right: 0, top: picture \? Math\.max\(0, \(laid\.top \?\? BORDER\) - BORDER\) : 3, height: picture \|\| undefined/)
     assert.match(tile, /opacity: middle \? 1 : 0 \}\}/)
-    assert.match(tile, /tintColor: quiet \? foreground : pictureTint, opacity: middle \? 0 : 1/)
+    assert.match(tile, /tintColor: quiet \? foreground : pictureTint, opacity: cleared \? 0 : 1/)
     const gig = flat('src/components/Gig.jsx')
-    assert.match(gig, /const m = middle\?\.current if \(m && !next\.left && Number\.isFinite\(corners\.inset\)\)/, 'the browser’s word is not moved when its corner is crowded')
+    assert.match(gig, /import \{ cornerFit, mustSayFit \} from '\.\.\/\.\.\/shared\/tile-corners\.mjs'/)
+    assert.match(gig, /const say = mustSayFit\(corners, \{ moved: whole\(word\), movedTop: top \+ Math\.max\(0, \(height - tall\) \/ 2\), lift \}\)/, 'the browser’s word is not placed by the shared rule')
     assert.match(gig, /className="gig-block-state gig-block-said"/)
     assert.match(gig, /data-said=\{shows\.middle \? 'yes' : undefined\}/)
+    assert.match(gig, /data-at=\{shows\.middle \? shows\.at : undefined\} style=\{shows\.at === 'across' \? \{ top: `\$\{shows\.top\}px`, height: `\$\{shows\.height\}px` \} : undefined\}/)
     const css = read('src/styles.css')
-    assert.match(css, /button\.gig-block \.gig-block-state\.gig-block-said \{[^}]*left: 2px;[^}]*right: 2px;[^}]*visibility: hidden;/)
+    assert.match(css, /button\.gig-block \.gig-block-state\.gig-block-said \{[^}]*font-family: var\(--body\);[^}]*visibility: hidden;\s*\}/)
+    assert.ok(!/button\.gig-block \.gig-block-state\.gig-block-said \{[^}]*left: 2px/.test(css), 'the moved word is drawn across the tile even where its corner has room')
+    assert.match(css, /button\.gig-block \.gig-block-state\.gig-block-said\[data-at='across'\] \{\s*left: 2px;\s*right: 2px;\s*justify-content: center;\s*align-items: center;\s*\}/)
     assert.match(css, /button\.gig-block \.gig-block-state\.gig-block-said\[data-shown='yes'\] \{\s*visibility: visible;/)
     assert.match(css, /\.gig-block-icon\[data-said='yes'\] \{\s*visibility: hidden;/)
+    /* Taken on the unlit tile's row, lit or not: the lift is the unlit edge's 2px less this tile's own, and the 2px is the stylesheet's. */
+    assert.match(gig, /const lift = Math\.max\(0, UNLIT_EDGE - \(parseFloat\(getComputedStyle\(box\)\.borderTopWidth\) \|\| 0\)\)/)
+    assert.match(gig, /const UNLIT_EDGE = 2\b/)
+    assert.match(css, /button\.gig-block\.off \{\s*border: 2px solid/, 'the browser’s unlit edge is not the 2px the boost word is measured with')
+    assert.match(css, /button\.gig-block \{[^}]*border: 1px solid var\(--rule\);/, 'the browser’s lit edge is not the 1px the lift makes up')
     /*
      * And there is room for it across every tile Play draws at 320 and 375,
      * every size: the phone's grid at each step (tileWidth), less the two
-     * borders, against the widest of the three words at 11pt bold: "Boost
+     * borders, against the widest of the three words at 11pt: "Boost
      * off", 48 points in Arial's measure (a phone's own font is near it) and
      * 56 in DejaVu Sans, a wide one, so 58 with room to spare. Fit's
      * narrowest tile is 56, the floor it never goes under.
@@ -249,6 +264,92 @@ export function run(test) {
       }
     }
     assert.ok(56 - 4 >= 49, 'Fit’s narrowest tile has no room for the word in a phone’s own font')
+  })
+
+  /*
+   * THE RULE, HELD TO NUMBERS. The phone's are an AMP tile on Play, measured
+   * in the phone's own layout (react-native-web, the iOS face): 65.5 wide at
+   * 320, 79 at 375 and 75.5 at 360 Small, its corner words 7 in, the row
+   * ending at 15, the picture 14 square starting at 4, Boost off 48 wide and
+   * the channel 8. In 1.87.49's first build the word went to the middle of
+   * the tile at all three widths and the channel went with it; 1.87.48 showed
+   * On and C at each. The browser's: 390 Medium, row bottom 19.8 and the
+   * picture's top 18.9 on the unlit tile, a pixel higher and further in on
+   * the lit one, whose edge is 1px to the unlit's 2px.
+   */
+  test('a word that must be seen keeps its corner, with the channel beside it where the row holds both, and lit or not is placed alike', async () => {
+    const { mustSayFit } = await import('../shared/tile-corners.mjs')
+    const phone = (width, more = {}) => ({ width, picture: 14, pictureTop: 4, bandBottom: 15, inset: 7, left: 48, right: 8, ...more })
+    const at = (corners, moved = corners.left, extra = {}) => mustSayFit(corners, { moved, movedTop: corners.picture ? corners.pictureTop : 0, ...extra })
+    /* The picture is cleared and the word stays in its corner; the channel beside it at 360 and 375. */
+    assert.deepEqual(at(phone(79)), { left: false, right: true, at: 'corner' }, '375: the channel was crowded out by a word moved to the middle')
+    assert.deepEqual(at(phone(75.5)), { left: false, right: true, at: 'corner' }, '360: the channel was crowded out')
+    /* At 320 the two do not fit one row: the word stays, the channel goes, as cornerFit chooses for every tile. */
+    assert.deepEqual(at(phone(65.5)), { left: false, right: false, at: 'corner' })
+    /* Amp off is shorter, and has its channel at 320. */
+    assert.deepEqual(at(phone(65.5, { left: 40 })), { left: false, right: true, at: 'corner' })
+    /* Beside the picture where it fits there, as any corner word (a tall tile, its picture under the row). */
+    assert.deepEqual(at(phone(83, { pictureTop: 20 })), { left: true, right: true, at: null })
+    /* Pictures off: nothing to clear, the word in its corner and the channel left out where both do not fit. */
+    assert.deepEqual(at(phone(65.5, { picture: 0 })), { left: true, right: false, at: null })
+    /* A word too wide for its row (a large system text size): across the tile, the channel only where it clears it. */
+    assert.deepEqual(at(phone(65.5, { left: 56 })), { left: false, right: false, at: 'across' })
+    assert.deepEqual(at(phone(100, { left: 56 })), { left: false, right: true, at: 'corner' })
+    /*
+     * The browser's tile, the same placement lit and unlit: measured as
+     * drawn, the lit tile's row ended under the picture's top and the unlit
+     * one's above it, and every tap moved the word, the picture and the
+     * channel. Boost on in the corner's face is 58, Boost off 65; moved, in
+     * the body face, 42 and 46. The channel's pill is 18 with its padding.
+     */
+    const unlit = { width: 114, picture: 28, pictureTop: 18.9, bandBottom: 19.8, inset: 10, left: 65, right: 18, between: 8 }
+    const lit = { ...unlit, bandBottom: 18.8, inset: 9, left: 58 }
+    const onUnlit = mustSayFit(unlit, { moved: 46, movedTop: 20.9 })
+    const onLit = mustSayFit(lit, { moved: 42, movedTop: 20.9, lift: 1 })
+    assert.deepEqual(onUnlit, { left: false, right: true, at: 'corner' })
+    assert.deepEqual(onLit, onUnlit, 'a tap changed where the boost’s word, the picture and the channel are')
+    assert.notDeepEqual(mustSayFit(lit, { moved: 42, movedTop: 20.9 }), onUnlit, 'the bench no longer shows the lit tile’s own row placing the word apart')
+    /* Across the tile, the channel is measured against where the word is drawn, not the picture's top: a word wholly under the row leaves the channel alone. */
+    const narrow = { width: 60, picture: 28, pictureTop: 18.9, bandBottom: 19.8, inset: 10, left: 65, right: 10, between: 8 }
+    assert.deepEqual(mustSayFit(narrow, { moved: 46, movedTop: 20.9 }), { left: false, right: true, at: 'across' })
+    assert.deepEqual(mustSayFit(narrow, { moved: 46, movedTop: 18.9 }), { left: false, right: false, at: 'across' })
+    /* The phone's copy is the shared one (npm run sync:rules). */
+    const copy = await import('../mobile/src/lib/tile-corners.js')
+    assert.deepEqual(copy.mustSayFit(phone(79), { moved: 48, movedTop: 4 }), at(phone(79)))
+  })
+
+  /*
+   * A corner word the rule does not draw keeps its width out of the row. On
+   * the phone it stayed in the row, unseen, and on a 320 phone with pictures
+   * off "Boost off" was cut to "Boost…" beside a hidden channel letter's 8pt.
+   * The browser's [data-crowded] word already gave its room away.
+   */
+  test('a corner word that is not drawn gives its room to the one that is, on the phone as in the browser', () => {
+    const tile = flat('mobile/src/components/Tile.js')
+    assert.match(tile, /const leftWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '600', opacity: leftShown \? 1 : 0, \.\.\.\(leftShown \? null : \{ position: 'absolute', left: 0 \}\) \}/, 'a hidden word on the left keeps its room in the row')
+    assert.match(tile, /const rightWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '700', marginLeft: 'auto', opacity: rightShown \? 1 : 0, \.\.\.\(rightShown \? null : \{ position: 'absolute', right: 0 \}\) \}/, 'a hidden channel keeps its room in the row, or the channel leaves its corner')
+    assert.match(read('src/styles.css'), /\.gig-block-state \[data-crowded\] \{\s*visibility: hidden;\s*min-width: 0;/)
+  })
+
+  /*
+   * What the notes say about this change, where a reader acts on them. The
+   * notes for the App Store's next review said the watch's pedal shows the
+   * words, which it does not; the lock said an older computer sends "the
+   * same frame, only later", leaving out the scene that waits behind it.
+   */
+  test('the notes say what the watch shows and what an older computer does after a boost', () => {
+    const store = read('docs/app-store.md')
+    const para = store.slice(store.indexOf("**For the next version's notes: the AM4's amp pedal is its boost**"), store.indexOf('### Notes for App Review, 1.87.11'))
+    assert.ok(para.length > 200, 'the next version’s boost paragraph is gone')
+    assert.match(para.replace(/\s+/g, ' '), /The watch shows no words: its AMP pedal is lit for Boost on and dark otherwise/)
+    assert.ok(!/the watch and the browser, switches the amp's Out Boost and says Boost on/.test(para.replace(/\s+/g, ' ')), 'the review notes promise words on the watch')
+    const lock = JSON.parse(read('desktop/forgefx.lock.json'))
+    const why = lock._why.find((w) => /e2bfe70/.test(w))
+    assert.ok(why, 'the lock says nothing of the boost tap commit')
+    assert.match(why, /a scene or a preset tapped within 0\.6 s of a boost still goes out up to 0\.6 s late/)
+    assert.ok(!/nothing on the phone waits for this/.test(why))
+    assert.match(read('shared/versions.mjs').replace(/\s*\n\s*\*\s*/g, ' ').replace(/ +/g, ' '), /1\.87\.49 an AM4 amp's boost tap \(its pedal on Play\) goes out like a bypass \(ForgeFX \+am4boosttap\)\. Older, the boost still switches, but the computer holds its MIDI queue up to 0\.6 s after it, so a scene or a preset tapped in that time goes out that much late\. Degrades\./)
+    assert.ok(!/same frame, only later/.test(read('shared/am4-boost.mjs')))
   })
 
   /* --------------------------------------------------------------- the browser's store -- */
