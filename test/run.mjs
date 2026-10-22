@@ -7111,7 +7111,7 @@ const am4Copy = (unit, clock, { dumpMs = 400, putMs = 20, ttl = 1200 } = {}) => 
     copy = null
   }
 }
-const am4Window = () => windowOnTheBench({ boosts: { A: 0, B: 1, C: 0, D: 0 }, unitKey: 'rig:am4', namesInChain: false })
+const am4Window = (over = {}) => windowOnTheBench({ boosts: { A: 0, B: 1, C: 0, D: 0 }, unitKey: 'rig:am4', namesInChain: false, ...over })
 
 onTheBench('browser: a boost tapped while a chain read is on its way is not put back by the copy that read was made from', async () => {
   for (const [what, opts] of [
@@ -7181,6 +7181,70 @@ onTheBench('browser: a chain read that lands after another computer is picked re
   await reading
   assert.equal(asked(BOOST_READ_LINE), reads, 'the amp’s boost was read off a computer that has not said what unit it has')
   assert.equal(ds.getSnapshot().boost, null, 'a boost read off the next computer was kept as the AM4’s')
+})
+
+/*
+ * "Still loading" is a preset whose chain read is not over, landed or not
+ * (presetBusy): the phone's rig.js, the same. It was one whose chain read had
+ * landed, and the preset picked again with every chain read failing (the
+ * unit answering "got 0x78") was "still loading" for good: every tap on the
+ * unread amp said so, long after the load, and nothing read the boost.
+ */
+onTheBench('browser: an AM4 amp tapped after a load whose chain reads all failed reads first and sends, it is not “still loading” for good', async () => {
+  const { clock, unit, asked } = am4Window()
+  await ds.refreshBoost()
+  assert.equal(ds.boostNow(), 'off')
+  let fail = true
+  unit.chain = () => {
+    if (fail) throw Object.assign(new Error('PRESET_DUMP_HEADER: expected func 0x77 at offset 0, got 0x78'), { status: 503 })
+    return unit.blocks.map((b) => ({ ...b }))
+  }
+  const again = ds.loadPreset(12)
+  await clock.advance(30000)
+  await again.catch(() => {})
+  fail = false
+  assert.ok(asked(CHAIN) >= 2, 'the bench’s chain reads were not asked')
+  assert.equal(ds.boostNow(), 'unknown')
+  for (const [wait, want] of [[0, 1], [120000, 0]]) {
+    await clock.advance(wait)
+    const puts = asked(BOOST_PUT_LINE)
+    const tap = ds.tapBoost(58).then(() => null, (err) => err)
+    await clock.advance(1000)
+    const refused = await tap
+    assert.equal(refused?.message, undefined, `+${wait / 1000}s: the tap sent nothing`)
+    assert.equal(asked(BOOST_PUT_LINE), puts + 1, `+${wait / 1000}s: the boost was not sent`)
+    assert.equal(unit.boosts.A, want)
+  }
+})
+
+/*
+ * A chain read asked for one preset and landing after the next was picked
+ * (Next pressed while it was on its way, on a slow computer) read the boost
+ * straight after it: a whole dump at a unit still loading the next preset,
+ * the computer's copy gone with the select. A computer that keeps no copy
+ * to judge, as an AM4's does not. Nothing reads it now before the next
+ * preset's own chain read is asked.
+ */
+onTheBench('browser: a chain read that lands after another preset is picked reads no boost before that preset’s own chain read', async () => {
+  const { clock, unit, heard } = am4Window({ keepsCopy: false })
+  await ds.refreshBoost()
+  unit.lag = (line) => (line === CHAIN ? 1500 : 0)
+  const t0 = clock.now()
+  const a = ds.loadPreset(13)
+  await clock.advance(2250)
+  const b = ds.loadPreset(14)
+  await clock.advance(10000)
+  await a.catch(() => {})
+  await b.catch(() => {})
+  const picked = heard.filter(([t, l]) => t >= t0 && l === 'POST /preset/select')
+  assert.equal(picked.length, 2)
+  const at14 = picked[1][0]
+  const own = heard.find(([t, l]) => t >= at14 && l === CHAIN)?.[0]
+  assert.ok(Number.isFinite(own), 'the bench’s second preset had no chain read')
+  const early = heard.filter(([t, l]) => t >= at14 && t < own && l === BOOST_READ_LINE).map(([t]) => t - t0)
+  assert.deepEqual(early, [], 'the boost was read while the next preset was loading, before its own chain read')
+  assert.equal(ds.getSnapshot().preset.number, 14)
+  assert.equal(ds.boostNow(), 'off', 'the next preset’s own chain read did not read the boost')
 })
 
 /*

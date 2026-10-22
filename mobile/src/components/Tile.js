@@ -332,9 +332,12 @@ export default function Tile({
    * for its row goes across the tile, in the picture's place. The browser's
    * rule too (shared/tile-corners.mjs mustSayFit). Decided from the corner's
    * own measurements at this size, which the decision does not change: the
-   * picture keeps its box, drawn clear, and the word across the tile is the
-   * same word in the same face, so it is the corner word's width that is
-   * measured. The phone's edge is the same lit or not, so nothing is lifted.
+   * picture keeps its box, drawn clear. The word's width is taken on the
+   * word across the tile (the same word in the same face, `laid.middle`),
+   * which its row does not cut short: the corner word is laid out no wider
+   * than its row, so measured there a word too wide for the row (a large
+   * system text size) always fitted it, and was drawn "Boost …" in its
+   * corner. The phone's edge is the same lit or not, so nothing is lifted.
    */
   const say =
     mustSay && cornered && !!String(topLeft || '').trim() && current
@@ -345,11 +348,11 @@ export default function Tile({
             pictureTop: laid.top,
             bandBottom: laid.band,
             inset: laid.inset,
-            left: laid.left,
+            left: laid.middle,
             right: topRight ? laid.right : 0,
             pair
           },
-          { moved: laid.left, movedTop: picture ? laid.top : 0 }
+          { moved: laid.middle, movedTop: picture ? laid.top : 0 }
         )
       : null
   /* The picture cleared from under a word that has moved, and the word across the tile. */
@@ -365,9 +368,19 @@ export default function Tile({
    * unseen, a hidden C still took its 8pt, and on a 320 phone with pictures
    * off "Boost off" was cut to "Boost…" beside it. The channel keeps to the
    * right by its own margin either way.
+   *
+   * Only while the other word is drawn, though: the row's height is the
+   * bottom of the corner band (keep('band')), and with both words out of it
+   * the row had no height at all. The looper's Rec and Play, hidden
+   * together, took the band from 15 to 3, which put the picture below the
+   * row, which drew the words, which put the row back, and round again, the
+   * words on the picture every other frame. A word that is drawn keeps one
+   * line of the corner face in the row, so the band never moves.
    */
-  const leftWord = { color: cornerInk, fontSize: font.micro, fontWeight: '600', opacity: leftShown ? 1 : 0, ...(leftShown ? null : { position: 'absolute', left: 0 }) }
-  const rightWord = { color: cornerInk, fontSize: font.micro, fontWeight: '700', marginLeft: 'auto', opacity: rightShown ? 1 : 0, ...(rightShown ? null : { position: 'absolute', right: 0 }) }
+  const leftOut = !leftShown && rightShown && !!String(topRight || '').trim()
+  const rightOut = !rightShown && leftShown && !!String(topLeft || '').trim()
+  const leftWord = { color: cornerInk, fontSize: font.micro, fontWeight: '600', opacity: leftShown ? 1 : 0, ...(leftOut ? { position: 'absolute', left: 0 } : null) }
+  const rightWord = { color: cornerInk, fontSize: font.micro, fontWeight: '700', marginLeft: 'auto', opacity: rightShown ? 1 : 0, ...(rightOut ? { position: 'absolute', right: 0 } : null) }
 
   /*
    * THE EDGE, which on an unlit tile is the only thing still naming the block.
@@ -508,7 +521,9 @@ export default function Tile({
           /* Over the picture's own box (the column's top, less the border the
              offsets are taken inside of), or the corner row's place on a tile
              with no picture, for a word too wide for its corner row. The
-             corner word's own face, so its width is the corner word's. */
+             corner word's own face, and laid out always, unseen unless it is
+             drawn here: its width is the word's whole width, which the rule
+             places it by (laid.middle). */
           style={{
             position: 'absolute',
             left: 0,
@@ -520,7 +535,7 @@ export default function Tile({
             opacity: middle ? 1 : 0
           }}
         >
-          <Text numberOfLines={1} style={{ color: cornerInk, fontSize: font.micro, fontWeight: '600' }}>
+          <Text numberOfLines={1} onLayout={(e) => keep('middle', e.nativeEvent.layout.width)} style={{ color: cornerInk, fontSize: font.micro, fontWeight: '600' }}>
             {topLeft || ''}
           </Text>
         </View>

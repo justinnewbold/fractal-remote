@@ -7857,7 +7857,7 @@ export function run(test) {
     assert.match(tile, /const rightShown = say \? say\.right : shows\.right/, 'a top-right word with no room is still drawn')
     assert.match(tile, /opacity: leftShown \? 1 : 0/, 'a top-left word with no room is still drawn')
     assert.match(tile, /const rightWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '700', marginLeft: 'auto', opacity: rightShown \? 1 : 0,/, 'a top-right word with no room is still drawn')
-    assert.match(tile, /\? mustSayFit\(\s*\{[^}]*picture,[^}]*left: laid\.left,[^}]*\},\s*\{ moved: laid\.left, movedTop: picture \? laid\.top : 0 \}\s*\)/, 'the channel is drawn over a word that must be seen')
+    assert.match(tile, /\? mustSayFit\(\s*\{[^}]*picture,[^}]*left: laid\.middle,[^}]*\},\s*\{ moved: laid\.middle, movedTop: picture \? laid\.top : 0 \}\s*\)/, 'the channel is drawn over a word that must be seen')
     assert.match(tile, /onLayout=\{\(e\) => keep\('left', e\.nativeEvent\.layout\.width\)\}/, 'the top-left word is not measured')
     assert.match(tile, /onLayout=\{\(e\) => keep\('right', e\.nativeEvent\.layout\.width\)\}/, 'the top-right word is not measured')
     assert.match(tile, /keep\('band', y \+ tall\)/, 'the bottom of the corner row is not measured')
@@ -20123,5 +20123,76 @@ export function run(test) {
     await reading
     assert.equal(asked(BOOST_READ), reads, 'the amp’s boost was read off a computer that has not said what unit it has')
     assert.equal(rig.getState().boost, null, 'a boost read off the next computer was kept as the AM4’s')
+  })
+
+  /*
+   * "Still loading" is a preset whose chain read is not over yet, landed or
+   * not (presetBusy). It was a preset whose chain read had LANDED, and a load
+   * whose reads all failed never got there: the preset picked again (its
+   * chain kept, so the pedal stays up and live) and its reads answered "got
+   * 0x78", or another computer with the same unit whose first chain read
+   * failed. Every tap on the unread amp said "The preset is still loading"
+   * for good, long after the load was over, and nothing read the boost.
+   */
+  test('phone: an AM4 amp tapped after a load whose chain reads all failed reads first and sends, it is not “still loading” for good', async () => {
+    for (const way of ['the preset picked again', 'another computer with an AM4']) {
+      const { rig, clock, unit, asked } = await rigOnTheBench(AM4_BOOST_BENCH())
+      await clock.advance(0)
+      assert.equal(rig.boostNow(), 'off')
+      unit.chainFails = true
+      if (way === 'the preset picked again') {
+        const again = rig.loadPreset(12)
+        await clock.advance(10000)
+        await again
+      } else {
+        rig.computerChanged()
+        const all = rig.refreshAll()
+        await clock.advance(5000)
+        await all.catch(() => {})
+      }
+      unit.chainFails = false
+      assert.equal(rig.getState().chain, 'failed', `${way}: the bench’s chain reads did not fail`)
+      assert.equal(rig.boostNow(), 'unknown')
+      for (const [wait, want] of [[0, 1], [60000, 0]]) {
+        await clock.advance(wait)
+        rig.clearError()
+        const puts = asked(BOOST_PUT)
+        const tap = rig.tapBoost(58)
+        await clock.advance(2000)
+        assert.equal(await tap, true, `${way}, +${wait / 1000}s: ${rig.getState().error}`)
+        assert.equal(asked(BOOST_PUT), puts + 1)
+        assert.equal(unit.boosts.A, want)
+      }
+    }
+  })
+
+  /*
+   * A chain read asked for one preset and landing after the next was picked
+   * (Next pressed while it was on its way, on a slow computer: an AM4's dump
+   * on a Pi takes about 1.5 s) asked the boost straight after: a whole dump
+   * of the preset at a unit still loading the next one, the computer's copy
+   * gone with the select. Nothing reads the boost now until the next preset's
+   * own chain read is asked.
+   */
+  test('phone: a chain read that lands after another preset is picked reads no boost before that preset’s own chain read', async () => {
+    const { rig, clock, unit, heard } = await rigOnTheBench(AM4_BOOST_BENCH())
+    await clock.advance(0)
+    unit.lag = (line) => (line === 'GET /preset/blocks' ? 1500 : 0)
+    const t0 = clock.now()
+    const a = rig.loadPreset(13)
+    await clock.advance(2250)
+    const b = rig.loadPreset(14)
+    await clock.advance(8000)
+    await a
+    await b
+    const picked = heard.filter(([t, l]) => t >= t0 && l === 'POST /preset/select')
+    assert.equal(picked.length, 2)
+    const at14 = picked[1][0]
+    const own = heard.find(([t, l]) => t >= at14 && l === 'GET /preset/blocks')?.[0]
+    assert.ok(Number.isFinite(own), 'the bench’s second preset had no chain read')
+    const early = heard.filter(([t, l]) => t >= at14 && t < own && l === BOOST_READ).map(([t]) => t - t0)
+    assert.deepEqual(early, [], 'the boost was read while the next preset was loading, before its own chain read')
+    assert.equal(rig.getState().preset.number, 14)
+    assert.equal(rig.boostNow(), 'off', 'the next preset’s own chain read did not read the boost')
   })
 }

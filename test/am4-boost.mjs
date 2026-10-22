@@ -222,8 +222,14 @@ export function run(test) {
     const tile = flat('mobile/src/components/Tile.js')
     assert.match(tile, /import \{ cornerFit, mustSayFit \} from '\.\.\/lib\/tile-corners'/)
     assert.match(tile, /const say = mustSay && cornered && !!String\(topLeft \|\| ''\)\.trim\(\) && current \? mustSayFit\(/, 'the phone’s word is not placed by the shared rule when its corner is crowded')
-    /* The moved word is the corner word, in its own face, so it is the corner word's width that decides. */
-    assert.match(tile, /\{ moved: laid\.left, movedTop: picture \? laid\.top : 0 \}/)
+    /*
+     * The moved word is the corner word, in its own face, and its whole width
+     * decides: taken on the word across the tile, which its row does not cut
+     * short (laid.middle). Taken on the corner word, laid out no wider than
+     * its row, a word too wide for the row always fitted it.
+     */
+    assert.match(tile, /\{ moved: laid\.middle, movedTop: picture \? laid\.top : 0 \}/)
+    assert.match(tile, /<Text numberOfLines=\{1\} onLayout=\{\(e\) => keep\('middle', e\.nativeEvent\.layout\.width\)\} style=\{\{ color: cornerInk, fontSize: font\.micro, fontWeight: '600' \}\}>\s*\{topLeft \|\| ''\}/, 'the word that must be seen is measured where its row cuts it short')
     assert.match(tile, /const leftShown = say \? say\.at !== 'across' : shows\.left const rightShown = say \? say\.right : shows\.right/)
     /* Over the picture's own box, across the tile's whole inside, only for a word too wide for its row; and the picture kept in its place, unseen, whenever the word has moved. */
     assert.match(tile, /position: 'absolute', left: 0, right: 0, top: picture \? Math\.max\(0, \(laid\.top \?\? BORDER\) - BORDER\) : 3, height: picture \|\| undefined/)
@@ -326,8 +332,8 @@ export function run(test) {
    */
   test('a corner word that is not drawn gives its room to the one that is, on the phone as in the browser', () => {
     const tile = flat('mobile/src/components/Tile.js')
-    assert.match(tile, /const leftWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '600', opacity: leftShown \? 1 : 0, \.\.\.\(leftShown \? null : \{ position: 'absolute', left: 0 \}\) \}/, 'a hidden word on the left keeps its room in the row')
-    assert.match(tile, /const rightWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '700', marginLeft: 'auto', opacity: rightShown \? 1 : 0, \.\.\.\(rightShown \? null : \{ position: 'absolute', right: 0 \}\) \}/, 'a hidden channel keeps its room in the row, or the channel leaves its corner')
+    assert.match(tile, /const leftWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '600', opacity: leftShown \? 1 : 0, \.\.\.\(leftOut \? \{ position: 'absolute', left: 0 \} : null\) \}/, 'a hidden word on the left keeps its room in the row')
+    assert.match(tile, /const rightWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '700', marginLeft: 'auto', opacity: rightShown \? 1 : 0, \.\.\.\(rightOut \? \{ position: 'absolute', right: 0 \} : null\) \}/, 'a hidden channel keeps its room in the row, or the channel leaves its corner')
     assert.match(read('src/styles.css'), /\.gig-block-state \[data-crowded\] \{\s*visibility: hidden;\s*min-width: 0;/)
   })
 
@@ -599,6 +605,49 @@ export function run(test) {
     assert.equal(ds.boostNow(), 'off', 'the tap did not send the other way from what the read said')
   })
 
+  /*
+   * App's own chain read (on connecting and reconnecting, a lost unit found
+   * again, the timed check, Try again) read the boost after it with the tap
+   * count of the moment it landed, not of the moment it was asked: a boost
+   * tapped while it was on its way was answered out of the copy that read
+   * was made from, taken before the tap, and Boost off went back over a
+   * boosted amp, the very flip the store's own reads were fixed for. App
+   * notes the count as it asks, as refreshBlocks does. Driven here the way
+   * App.jsx drives it, and App.jsx held to that.
+   */
+  test('browser: a boost tapped while App’s own chain read is on its way is not put back by the copy that read was made from', async () => {
+    const app = flat('src/App.jsx')
+    assert.match(app, /const pressed = boostPressCount\(\)((?!await)[^])*?doneReading = beginChainRead\(\) const \[p, b\] = await Promise\.all\(\[currentPreset\(\), presetBlocks\(\)\]\)/, 'App’s chain read does not note the boost taps as it is asked')
+    assert.match(app, /chainWasRead\(p\?\.number\) \/\*[^]*?\*\/ refreshBoost\(pressed\)\.catch\(\(\) => \{\}\)/, 'App’s boost read believes a copy from before a tap')
+    const { unit, driver } = am4()
+    await ds.refreshBlocks()
+    await settled()
+    assert.equal(ds.boostNow(), 'off')
+    /* App.jsx read(): the count, the chain asked (slow to come back), and a tap meanwhile. */
+    let land
+    const slow = new Promise((go) => (land = go))
+    const chain = driver.presetBlocks
+    driver.presetBlocks = async () => (await slow, chain())
+    const pressed = ds.boostPressCount()
+    const done = ds.beginChainRead()
+    const reading = (async () => {
+      const b = await driver.presetBlocks()
+      ds.chainWasRead(12)
+      /* The computer answers out of the copy that dump began with: Boost off. */
+      unit.lag = Promise.resolve(0)
+      await ds.refreshBoost(pressed)
+      done()
+      return b
+    })()
+    await ds.tapBoost(58)
+    assert.equal(unit.boosts.A, 1)
+    land()
+    await reading
+    await settled()
+    assert.equal(ds.boostNow(), 'on', 'the copy App’s read was made from put Boost off back over a boosted amp')
+    unit.lag = null
+  })
+
   test('browser: a tap whose read first lands on another preset or channel sends nothing there', async () => {
     const { unit, calls } = am4()
     await ds.refreshBlocks()
@@ -642,6 +691,77 @@ export function run(test) {
     assert.equal(unit.reads, 2, 'a status read that moved nothing read the boost again')
   })
 
+  /*
+   * "The preset is still loading, so the boost wasn't sent. Try it again in
+   * a moment." has the word preset in it, and the phone's notice put "A
+   * preset will not load — What to try" under it, whose first step is to
+   * pick the preset again: a reload, which throws away what has not been
+   * saved, when all it needed was a moment. The browser showed no link. No
+   * boost sentence takes one, at either end.
+   */
+  test('the boost’s sentences offer no help link, at either end: “still loading” is not a preset that will not load', async () => {
+    const b = await import('../shared/am4-boost.mjs')
+    const shared = (await import('../shared/troubleshooting.mjs')).fixFor
+    const phone = (await import('../mobile/src/lib/troubleshooting.js')).fixFor
+    const sentences = [b.BOOST_LOADING, b.BOOST_WAIT, b.BOOST_NO_UNIT, b.BOOST_UNREAD, b.AMP_OFF_SAYS, b.OTHER_AMP_SAYS]
+    for (const words of sentences) {
+      assert.equal(shared(words), null, `“${words}” offers ${shared(words)}`)
+      assert.equal(phone(words), null, `the phone’s copy: “${words}” offers ${phone(words)}`)
+    }
+    /* And a preset that would not load still has its help. */
+    assert.equal(shared('The unit didn’t load that preset.'), 'preset')
+  })
+
+  /*
+   * The phone's corner row is the band the picture is judged against, and
+   * its height is the line of the word in it. A word the rule does not draw
+   * gives its room to the one that is, out of the row; with both out (the
+   * looper's Rec and Play hidden together, at 320 and 360 on Smallest and
+   * Small) the row had no height at all, the band fell from 15 to 3, the
+   * picture was below it, so the words were drawn, so the row came back:
+   * round every frame, Rec and Play on the picture every other one. A word
+   * leaves the row only while the other one is drawn.
+   */
+  test('the phone’s corner row keeps its height whichever words are drawn, so the looper’s hidden Rec and Play stay hidden', () => {
+    const tile = flat('mobile/src/components/Tile.js')
+    assert.match(tile, /const leftOut = !leftShown && rightShown && !!String\(topRight \|\| ''\)\.trim\(\)/, 'a hidden top-left word leaves the row with nothing drawn beside it')
+    assert.match(tile, /const rightOut = !rightShown && leftShown && !!String\(topLeft \|\| ''\)\.trim\(\)/, 'a hidden channel or Play leaves the row with nothing drawn beside it')
+    assert.match(tile, /keep\('band', y \+ tall\)/, 'the band is not the corner row’s own bottom')
+    assert.ok(!/\.\.\.\((leftShown|rightShown) \? null : \{ position: 'absolute'/.test(tile), 'a word the rule hides always leaves the row, and two hidden words leave it empty')
+  })
+
+  /*
+   * In the browser the boost's word was drawn in the corner's own face where
+   * it fitted beside the picture, and in the body face, narrower, wherever it
+   * did not: with pictures off, Boost on fitted in the corner's face and
+   * Boost off did not, so each tap changed the face (360 Smallest), and at
+   * 390 Medium the channel came and went with it. It is drawn in the body
+   * face at every placement now, and placed by its width in that face, as
+   * the phone's is in its own one face. The numbers are the browser's AMP
+   * tile with pictures off, measured as the hook measures it: at 390 Medium
+   * 114 wide, 10 in, the channel's pill 24 and the row's gap 8; at 360
+   * Smallest 76 wide and 6 in, the pill 16. Boost off is 65 and Boost on 58
+   * in the corner's face, and either is 46 in the body's.
+   */
+  test('browser: the boost’s word is in one face wherever it goes, so a tap changes the word and the lighting and not the face or the channel', async () => {
+    const gig = flat('src/components/Gig.jsx')
+    assert.match(gig, /corners\.left = whole\(word\) const say = mustSayFit\(corners, \{ moved: whole\(word\)/, 'the word is placed by its width in a face it is not drawn in')
+    assert.match(gig, /next = \{ left: false, right: say\.right, middle: !!say\.at, at: say\.at \|\| 'beside', top, height \}/, 'the word beside the picture is drawn in the corner’s face')
+    assert.match(gig, /data-shown=\{shows\.at \? 'yes' : undefined\}/)
+    assert.match(gig, /data-said=\{shows\.middle \? 'yes' : undefined\}/, 'the picture is cleared when the word beside it has room')
+    const { mustSayFit } = await import('../shared/tile-corners.mjs')
+    const medium = { width: 114, picture: 0, bandBottom: 19.8, inset: 10, right: 24, between: 8 }
+    const smallest = { width: 76, picture: 0, bandBottom: 18.6, inset: 6, right: 16, between: 8 }
+    /* As it was: the corner's face beside where it fitted, the body face where it did not. */
+    const was = (row, corner) => mustSayFit({ ...row, left: corner }, { moved: 46, movedTop: 0 })
+    assert.notDeepEqual(was(medium, 65), was(medium, 58), 'the bench no longer shows the channel coming and going at 390 Medium')
+    assert.notDeepEqual(was(smallest, 65).at, was(smallest, 58).at, 'the bench no longer shows the face changing at 360 Smallest')
+    /* Now: the word as drawn, the same for Boost on and Boost off. */
+    const now = (row) => mustSayFit({ ...row, left: 46 }, { moved: 46, movedTop: 0 })
+    assert.deepEqual(now(medium), { left: true, right: true, at: null }, '390 Medium: the channel is not beside the word')
+    assert.deepEqual(now(smallest), { left: true, right: false, at: null })
+  })
+
   test('browser: the hold tip says what the amp’s tap does on an AM4, in the shared words', async () => {
     const b = await import('../shared/am4-boost.mjs')
     assert.equal(b.playHintTap('am4'), b.PLAY_HINT_TAP_AM4)
@@ -651,7 +771,7 @@ export function run(test) {
     const app = flat('src/App.jsx')
     assert.match(app, /<p className="play-hint"> \{\/\*[^]*?\*\/\} <span> \{PLAY_HINT_HOLD\} \{playHintTap\(currentDeviceSlug\(\)\)\} <\/span>/, 'the hold tip promises an AM4 player that a tap on the amp turns it off')
     /* And App's own first read of the chain reads the boost after it, or Play opened on an unread amp. */
-    assert.match(app, /chainWasRead\(p\?\.number\) \/\*[^]*?\*\/ refreshBoost\(\)\.catch\(\(\) => \{\}\)/)
+    assert.match(app, /chainWasRead\(p\?\.number\) \/\*[^]*?\*\/ refreshBoost\(pressed\)\.catch\(\(\) => \{\}\)/)
   })
 
   /* ------------------------------------------------------------------- the demo -- */

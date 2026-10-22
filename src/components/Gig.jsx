@@ -1516,9 +1516,17 @@ function useCornerFit({ tile, picture, band, left, right, middle = null }, pair,
      * under it (`at` 'corner'), the channel beside it where the row holds
      * both; only a word too wide for its row goes across the tile, over the
      * picture's box (`at` 'across'), the channel measured against where the
-     * word is drawn there. The moved word is in the body face, narrower than
-     * the corner's, and is measured as itself. The picture keeps its box,
-     * unseen, so nothing the rule measured moves.
+     * word is drawn there. The picture keeps its box, unseen, so nothing the
+     * rule measured moves.
+     *
+     * Drawn here at every placement, beside the picture too, in the body
+     * face, and measured as itself: drawn beside the picture in the corner's
+     * own face, wider than the body's, a tap changed the face and the channel
+     * with the word. With pictures off, Boost on in the corner's face fitted
+     * its row and Boost off did not, so Boost off was drawn in the body face
+     * and Boost on in the corner's, and at 390 Medium the channel came and
+     * went with each tap. The phone's word is in one face at every placement
+     * too.
      *
      * Taken on the unlit tile's corner row, lit or not: an unlit tile's 2px
      * edge (styles.css button.gig-block.off) sets the row a pixel lower and
@@ -1534,10 +1542,11 @@ function useCornerFit({ tile, picture, band, left, right, middle = null }, pair,
       const top = spot ? spot.top : 0
       const height = spot ? spot.bottom - spot.top : 0
       const tall = word.getBoundingClientRect().height / k
+      /* The word as it is drawn, in the body face, is the one the rule places, beside the picture too. */
+      corners.left = whole(word)
       const say = mustSayFit(corners, { moved: whole(word), movedTop: top + Math.max(0, (height - tall) / 2), lift })
-      next = say.at
-        ? { left: false, right: say.right, middle: true, at: say.at, top, height }
-        : { left: say.left, right: say.right, middle: false, at: null, top: 0, height: 0 }
+      /* Drawn here wherever it goes ('beside' the picture too); the picture cleared only when it has moved. */
+      next = { left: false, right: say.right, middle: !!say.at, at: say.at || 'beside', top, height }
     }
     setFit((was) =>
       was && was.left === next.left && was.right === next.right && was.middle === next.middle && was.at === next.at && was.top === next.top && was.height === next.height
@@ -1731,7 +1740,7 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
               ref={pictureRef}
               className="gig-block-icon"
               aria-hidden="true"
-              /* Kept in its place, unseen, while a word that must be seen is over it. */
+              /* Kept in its place, unseen, while a word that must be seen is in its place or over it. */
               data-said={shows.middle ? 'yes' : undefined}
               style={{ WebkitMaskImage: `url(${icon})`, maskImage: `url(${icon})` }}
             />
@@ -1792,7 +1801,7 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
             className="gig-block-state gig-block-said"
             ref={middleRef}
             aria-hidden="true"
-            data-shown={shows.middle ? 'yes' : undefined}
+            data-shown={shows.at ? 'yes' : undefined}
             data-at={shows.middle ? shows.at : undefined}
             style={shows.at === 'across' ? { top: `${shows.top}px`, height: `${shows.height}px` } : undefined}
           >

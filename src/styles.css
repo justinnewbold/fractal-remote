@@ -6721,14 +6721,16 @@ button.gig-block {
 }
 
 /*
- * A word that must be seen, with the picture cleared from under it.
+ * A word that must be seen, with the picture cleared from under it where
+ * there is no room beside it.
  *
  * "It should say Boost on, Boost off when they tap it." An AM4 amp's word is
  * the whole of what its tap does, and at every phone width its corner had no
  * room beside the picture, so it was hidden and the tile read as a bypassed
- * amp. Where its corner is crowded it is drawn here instead (Gig.jsx
- * BlockTile, useCornerFit), in the body face, which is narrower than the
- * corner's: in its own corner, where the corner row is, with the channel
+ * amp. It is drawn here wherever it goes (Gig.jsx BlockTile, useCornerFit),
+ * in the body face, which is narrower than the corner's, so a tap never
+ * changes its face: beside the picture where it fits there; in its own
+ * corner, where the corner row is, with the picture cleared and the channel
  * beside it where the row holds both; or, too wide for the row, across the
  * tile over the picture's own box (data-at='across', top and height from its
  * measurement), rather than inside its padding. The picture keeps its box,

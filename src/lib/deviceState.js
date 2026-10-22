@@ -677,9 +677,8 @@ export async function refreshBlocks({ reloaded = false } = {}) {
   /* Which preset tap this read went out under: see takeVp4Name. */
   const era = vp4Era
   const gen = followGen
-  /* Which boost taps this read was asked after, and which load of the preset it is for: see refreshBoost and boostLoadRead. */
+  /* Which boost taps this read was asked after: see refreshBoost. */
   const pressed = boostPresses
-  const loadAt = boostAtNow()
   const done = beginChainRead()
   try {
     const list = await driver.presetBlocks()
@@ -736,11 +735,9 @@ export async function refreshBlocks({ reloaded = false } = {}) {
      * And an AM4 amp's boost, straight after: the computer answers it out of
      * the copy this read was made from. That copy is as old as this read's
      * ask, so a boost tapped since says more than it does (refreshBoost).
+     * Not while another preset picked since is still loading (loadWaits).
      */
-    if (!held) {
-      if (boostAtNow() === loadAt) boostLoadRead = loadAt
-      refreshBoost(pressed).catch(() => {})
-    }
+    if (!held) refreshBoost(pressed).catch(() => {})
     return list
   } catch (err) {
     // The last known chain stays on screen: better than emptying it because
@@ -987,8 +984,7 @@ const markJudged = (n) => {
     revOwed = false
   } else set({ chainFor: n })
   syncChainBusy()
-  /* And an AM4 amp's boost, now the chain is this preset's: the read held for judging skipped it (refreshBlocks), and the demo's, whose reads are all judged, had no word until a tap. This load's chain is read now (boostLoadRead). */
-  if (state.preset?.number === n) boostLoadRead = boostAtNow()
+  /* And an AM4 amp's boost, now the chain is this preset's: the read held for judging skipped it (refreshBlocks), and the demo's, whose reads are all judged, had no word until a tap. */
   refreshBoost().catch(() => {})
 }
 function copyWasStale(number) {
@@ -1291,8 +1287,6 @@ export function chainWasRead(number = state.preset?.number, gen = followGen) {
   noteChainRead(number, gen)
   chainForBefore = state.chainFor
   set({ chainFor: Number.isInteger(number) ? number : null, chainKnown: null })
-  /* This load's own chain, read: an AM4 amp's boost may be read after it (boostLoadRead). */
-  if ((state.preset?.number ?? null) === (Number.isInteger(number) ? number : null)) boostLoadRead = boostAtNow()
 }
 
 function noteChainRead(number, gen) {
@@ -2152,10 +2146,12 @@ let boostEra = 0
 let boostPresses = 0
 /* Boost writes on their way: a read asked while one is may be answered out of the copy from before it, and is not asked. */
 let boostWriting = 0
-/* The load of the preset (boostAt) whose own chain read has landed: before it, the unit may still be loading it, and a boost not read yet is not read then (the phone's rig.js, the same). */
-let boostLoadRead = null
+/* A preset picked a moment ago, whose chain read has not been asked yet: the unit may still be loading it, and nothing reads the boost then (the phone's rig.js loadWaits, the same). */
+const loadWaits = () => presetLoads > 0 || settleTimer !== null
 /* The oldest press count the one more read owes its answer to (refreshBoost). */
 let boostAgainSince = null
+/** How many boost taps there have been: App's own chain read notes it as it asks, as refreshBlocks does, and hands it to refreshBoost. */
+export const boostPressCount = () => boostPresses
 
 /**
  * Read the AM4 amp's boost for the load and channel on screen; one read at a
@@ -2166,7 +2162,7 @@ let boostAgainSince = null
  * for a chain read asked before a tap. The phone's rig.refreshBoost, the same.
  */
 export async function refreshBoost(since = boostPresses) {
-  if (!readsBoost() || !boostAmp()) return undefined
+  if (!readsBoost() || !boostAmp() || loadWaits()) return undefined
   if (boostInFlight) {
     boostAgain = true
     boostAgainSince = Math.min(boostAgainSince ?? since, since)
@@ -2232,8 +2228,8 @@ export async function tapBoost(effectId, at = Date.now()) {
   let shown = boostNow()
   if (shown === BOOST.ampOff) throw sentNothing(AMP_OFF_SAYS)
   if (shown === BOOST.unknown) {
-    /* Not before this load's own chain read: the preset may still be loading, and the read would be a whole dump at it (boostLoadRead). */
-    if (boostLoadRead !== where) throw sentNothing(BOOST_LOADING)
+    /* Not while the preset is still loading, before its chain read is over, landed or not (presetBusy): the read would be a whole dump at it (loadWaits). */
+    if (presetBusy()) throw sentNothing(BOOST_LOADING)
     /* Read once for this load and channel, and not again: an answer that said nothing is kept (readBoost). One on its way is waited for, with no second read asked after it beside this tap's write. */
     if (!boostFor(state.boost, where, boostAmp())) await (boostInFlight || refreshBoost())
     if (boostAtNow() !== where || (boostAmp()?.channel ?? null) !== pressedOn || !onScreen(effectId)) {

@@ -112,7 +112,8 @@ export const BOOST_NO_UNIT = 'The unit isn’t answering, so the boost wasn’t 
  * A preset picked a moment ago, whose own chain read (which reads the boost
  * with it) waits for the unit to finish loading it: a boost not read yet is
  * not read before then, since that read would be a whole preset dump sent to
- * a unit still loading.
+ * a unit still loading. Said until that read is over, landed or not: once it
+ * is, a tap reads the boost first, as at any other time.
  */
 export const BOOST_LOADING = 'The preset is still loading, so the boost wasn’t sent. Try it again in a moment.'
 

@@ -76,6 +76,7 @@ import {
   SETTLING_MS,
   writeBypass,
   refreshBoost,
+  boostPressCount,
   writeTuner,
   onConfigDoc,
   presetSaved,
@@ -1719,6 +1720,8 @@ export default function App() {
         setError('Your computer is connected, but no Fractal is plugged into it.')
         return
       }
+      /* How many boost taps there had been as the chain below is asked: its boost read believes nothing past a tap since (deviceState.refreshBoost). */
+      const pressed = boostPressCount()
       /*
        * Past here the unit has answered. Anything that fails now is one read
        * that lost a race for the port, not a unit that has gone — so it is
@@ -1749,8 +1752,8 @@ export default function App() {
       if (vp4Here()) takeVp4Record(p?.number ?? null)
       /* So a screen that appears next does not read the same chain again. */
       chainWasRead(p?.number)
-      /* And an AM4 amp's boost, which its pedal on Play shows: out of the copy this chain was just read from (shared/am4-boost.mjs). Every later chain read asks it itself; this first one is App's own, and asked nothing, so Play opened with the pedal unread. */
-      refreshBoost().catch(() => {})
+      /* And an AM4 amp's boost, which its pedal on Play shows: out of the copy this chain was just read from (shared/am4-boost.mjs). Every later chain read asks it itself; this first one is App's own, and asked nothing, so Play opened with the pedal unread. A boost tapped while this read was on its way is newer than that copy, and is not put back by it. */
+      refreshBoost(pressed).catch(() => {})
       setFaultReason(null)
       setStatus('live')
       // The unit answered, so whatever was lost is back.
