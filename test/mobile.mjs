@@ -338,6 +338,8 @@ async function rigOnTheBench(over = {}) {
     })
     answer = (method, path, body) => {
       if (method === 'GET') {
+        /* \`detectFails\`: the computer refusing the detect (a unit busy, or the read lost and given up on). */
+        if (path === '/device/detect' && unit.detectFails?.()) throw Object.assign(new Error('the unit did not answer'), { status: 503 })
         if (path === '/device/detect')
           return { connected: true, name: unit.short ?? 'FM3', short: unit.short ?? 'FM3', capabilities: unit.capabilities ?? { scenes: 8, meters: { outputLevels: true } } }
         if (path === '/device') return {}
@@ -367,7 +369,8 @@ async function rigOnTheBench(over = {}) {
         }
         const slot = path.match(/^\/presets\/(-?\d+)\/scenes$/)
         if (slot) return { number: Number(slot[1]), names: unit.scenes }
-        if (path.startsWith('/store/config/')) return null
+        /* `unit.store` is what the computer's store holds, by document: the scene names it filed, say. */
+        if (path.startsWith('/store/config/')) return unit.store?.[decodeURIComponent(path.slice('/store/config/'.length))] ?? null
       }
       if (method === 'PUT' && path.startsWith('/store/config/')) return { ok: true }
       if (method === 'POST' && path === '/preset/select') {
@@ -19365,5 +19368,187 @@ export function run(test) {
       assert.ok(!/this (phone|iphone|ipad|device)\b/i.test(shown), `${file} says "this phone"`)
     }
     assert.match(read('mobile/src/components/Colours.js'), /`Your colors are kept on this \$\{deviceNoun\(\)\}\. The computer’s screen keeps its own\.`/)
+  })
+
+  /*
+   * TWO COMPUTERS ON ONE ACCOUNT (1.87.48). "fractalpi" with the FM3 and
+   * "raspberry pi 3" with the AM4: read first off the FM3's computer and then
+   * off the AM4's, the phone kept the FM3's scene names for slot 53 ("FREAK
+   * ON A LEASH") on the AM4's preset 53, a quarter of a minute of blank pedals
+   * waiting out a copy only an FM3's computer keeps, and the FM3's tempo.
+   */
+  const AM4_HERE = { short: 'AM4', capabilities: { scenes: 4, sceneCount: 4, slotModel: 'linear', meters: { outputLevels: false } }, namesInChain: false }
+  const FM3_53 = ['FREAK ON A LEASH', 'BLIND', 'HERE TO STAY', '', '', '', '', '']
+
+  test('phone: another unit after a real one starts clean: not the FM3’s names on the AM4, its tempo, or its wait', async () => {
+    /*
+     * The FM3's computer answered first: its store's names for 53, and a copy
+     * of the preset under another name, which the read waits out with the
+     * pedals blank (copyWasStale).
+     */
+    const { rig, clock, unit } = await rigOnTheBench({
+      number: 53,
+      scenes: FM3_53,
+      store: { 'scene-names-fm3:53': { data: FM3_53 } },
+      copy: () => ({ name: 'SOMETHING ELSE', scenes: FM3_53, cells: [] })
+    })
+    rig.handleEvent({ type: 'tempo', bpm: 180 })
+    assert.equal(rig.getState().sceneNames[0], 'FREAK ON A LEASH', 'the bench FM3 has no names to carry over')
+    assert.equal(rig.getState().chainFor, null, 'the bench did not make the FM3’s stale-copy wait')
+    assert.equal(rig.getState().bpm, 180)
+    /* And then the AM4 answers: the roll call moved to its computer. Its own names are only in its slot. */
+    Object.assign(unit, AM4_HERE, { copy: undefined, scenes: ['CLEAN', 'LEAD', '', ''], bpm: 0 })
+    await rig.refreshAll()
+    await clock.advance(2000)
+    const now = rig.getState()
+    assert.equal(now.deviceSlug, 'am4')
+    assert.deepEqual(now.sceneNames.slice(0, 2), ['CLEAN', 'LEAD'], `the AM4’s preset 53 kept the FM3’s names: ${now.sceneNames.join(', ')}`)
+    assert.equal(now.chainFor, 53, 'the AM4’s pedals waited out the FM3’s copy')
+    assert.equal(now.bpm, null, 'Tap kept the FM3’s tempo, or showed the AM4’s 0')
+    /* The same unit read again is not another one: nothing goes. */
+    await rig.refreshAll()
+    assert.deepEqual(rig.getState().sceneNames.slice(0, 2), ['CLEAN', 'LEAD'])
+    /* The rule: only a real unit after another real one (shared/device-slug unitMoved). */
+    const { unitMoved } = await import('../shared/device-slug.mjs')
+    assert.equal(unitMoved('device', 'fm3'), false, 'every first connect would start clean')
+    assert.equal(unitMoved('fm3', 'device'), false)
+    assert.equal(unitMoved('fm3', 'fm3'), false)
+    assert.equal(unitMoved('fm3', 'am4'), true)
+    assert.equal(unitMoved(null, 'am4'), false)
+    /* The forgetNames line stays as it was, and the clean start is the statement after it: never between two demo units, as it always was. */
+    const rigSrc = read('mobile/src/lib/rig.js')
+    assert.match(rigSrc, /if \(slug !== state\.deviceSlug \|\| simulated !== state\.simulated\) forgetNames\(\)\n {2}if \(anotherUnit\(slug\) && !\(simulated && state\.simulated\)\) startClean\(\)\n/)
+  })
+
+  test('phone: a scene-name answer that lands after the unit changed is dropped, not put on the new unit’s tiles or kept under its slot', async () => {
+    const { rig, clock, unit, relay } = await rigOnTheBench({ number: 53, scenes: FM3_53, capabilities: { scenes: 8, meters: { outputLevels: false } }, namesInChain: false })
+    assert.equal(rig.getState().sceneNames[0], 'FREAK ON A LEASH')
+    /* Refresh names, on the FM3: its slot's names, slow to come. */
+    unit.lag = (line) => (line === 'GET /presets/53/summary' ? 3000 : 0)
+    const late = rig.rereadSceneNames()
+    await clock.advance(100)
+    /* Meanwhile the AM4's computer answers, with its loaded preset's names in its structure read. */
+    Object.assign(unit, AM4_HERE, { copy: () => ({ name: 'SONG 53', scenes: ['CLEAN', 'LEAD', '', ''], cells: [] }) })
+    await rig.refreshAll()
+    assert.deepEqual(rig.getState().sceneNames.slice(0, 2), ['CLEAN', 'LEAD'])
+    relay.handed.length = 0
+    await clock.advance(4000)
+    assert.equal(await late, 'failed', 'the FM3’s answer was taken for the AM4’s')
+    assert.deepEqual(rig.getState().sceneNames.slice(0, 2), ['CLEAN', 'LEAD'], 'the FM3’s late names went on the AM4’s tiles')
+    const kept = relay.handed.filter((h) => h.method === 'PUT' && /scene-names-am4/.test(h.line))
+    assert.ok(!kept.some((h) => /FREAK/.test(String(h.body))), 'the FM3’s names were kept on the computer under the AM4’s slot')
+    /* Every read of names holds its answer to the unit it started on. */
+    const flat = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
+    assert.match(flat, /const slug = state\.deviceSlug const era = unitEra const names = await namesOfLoaded\(number, copy\) if \(!sameUnit\(slug, era\)\) return/)
+    assert.match(flat, /device\.freshSceneNames\?\.\(\) const slug = state\.deviceSlug const era = unitEra const names = await namesOfLoaded\(number\) \/\*[^*]*\*\/ if \(!sameUnit\(slug, era\)\) return 'failed'/)
+  })
+
+  test('phone: once another computer is picked, nothing a read brings is put up or filed until its unit has been read', async () => {
+    const { rig, clock, unit, relay } = await rigOnTheBench({ number: 53, scenes: FM3_53, capabilities: { scenes: 8, meters: { outputLevels: false } }, namesInChain: false })
+    assert.equal(rig.getState().sceneNames[0], 'FREAK ON A LEASH')
+    const before = rig.getState().bpm
+    /* Which unit picks the AM4's computer: relay.js says so before any read is asked of it. The proof takes a second and a half. */
+    rig.computerChanged()
+    /* The computer answering from here is the AM4's, while the rig still holds the FM3's slug. */
+    Object.assign(unit, AM4_HERE, { copy: () => ({ name: 'SONG 53', scenes: ['CLEAN', 'LEAD', '', ''], cells: [] }), scenes: ['CLEAN', 'LEAD', '', ''], bpm: 99 })
+    relay.handed.length = 0
+    assert.equal(await rig.rereadSceneNames(), 'failed', 'a names read made in the proof was taken for the FM3’s')
+    await rig.refreshTempo()
+    await clock.advance(1000)
+    assert.equal(rig.getState().sceneNames[0], 'FREAK ON A LEASH', 'the AM4’s names went on the FM3’s tiles')
+    assert.equal(rig.getState().bpm, before, 'the AM4’s tempo was taken for the FM3’s')
+    assert.ok(!relay.handed.some((h) => h.method === 'PUT' && /scene-names-fm3/.test(h.line)), 'the AM4’s names were kept under the FM3’s slot')
+    /* A read of the unit that asked before the change: its answer may be the computer left's, and settles nothing. */
+    unit.lag = (line) => (line === 'GET /device/detect' ? 500 : 0)
+    const stale = rig.refreshAll()
+    await clock.advance(100)
+    rig.computerChanged()
+    await clock.advance(1000)
+    await stale
+    await rig.refreshTempo()
+    assert.equal(rig.getState().bpm, before, 'a read that asked before the change settled the unit')
+    unit.lag = undefined
+    /* The proof in: a clean start, the unit read off the new computer, and its own names filed under its own slot. */
+    rig.startClean()
+    await rig.refreshAll()
+    await clock.advance(2000)
+    const now = rig.getState()
+    assert.equal(now.deviceSlug, 'am4')
+    assert.deepEqual(now.sceneNames.slice(0, 2), ['CLEAN', 'LEAD'])
+    assert.equal(now.bpm, 99)
+    assert.ok(!relay.handed.some((h) => h.method === 'PUT' && /scene-names-fm3/.test(h.line) && /CLEAN/.test(String(h.body))), 'the AM4’s names were kept under the FM3’s slot')
+  })
+
+  test('phone: a unit whose read was lost after a change of computer is read again within one watch tick, and Try again reads it whole', async () => {
+    for (const how of ['watch', 'try again']) {
+      const { rig, clock, unit } = await rigOnTheBench({ number: 53, scenes: FM3_53, capabilities: { scenes: 8, meters: { outputLevels: false } }, namesInChain: false })
+      assert.equal(rig.getState().sceneNames[0], 'FREAK ON A LEASH')
+      if (how === 'watch') rig.watchUnit()
+      const since = clock.now()
+      /* Which unit picks the AM4's computer, and the read after the clean start has its detect refused. */
+      rig.computerChanged()
+      Object.assign(unit, AM4_HERE, { copy: () => ({ name: 'SONG 53', scenes: ['CLEAN', 'LEAD', '', ''], cells: [] }), scenes: ['CLEAN', 'LEAD', '', ''], bpm: 99 })
+      let refused = 1
+      unit.detectFails = () => refused-- > 0
+      rig.startClean()
+      await rig.refreshAll().catch(() => {})
+      assert.equal(rig.unitReadSince(since), false, 'a detect that was refused was taken for the unit read')
+      assert.equal(rig.getState().chainFor, null, 'the bench did not lose the read')
+      if (how === 'watch') await clock.advance(31000)
+      else {
+        await rig.retryChain()
+        await clock.advance(2000)
+      }
+      const now = rig.getState()
+      assert.equal(now.deviceSlug, 'am4', `${how}: the AM4 was never read`)
+      assert.deepEqual(now.sceneNames.slice(0, 2), ['CLEAN', 'LEAD'], `${how}: the AM4's scene names never came`)
+      assert.equal(now.bpm, 99, `${how}: the tempo stayed blank`)
+      assert.equal(now.chainFor, 53, `${how}: the pedals stayed on "Couldn't read this preset's chain"`)
+      assert.equal(rig.unitReadSince(since), true)
+      rig.stopWatching()
+    }
+  })
+
+  test('phone: Which unit reads the new unit whole once: the unit watch does not read it again while the pick is being proved', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench({ number: 53, scenes: FM3_53, capabilities: { scenes: 8, meters: { outputLevels: false } }, namesInChain: false })
+    rig.watchUnit()
+    /* Which unit is tapped 200 ms before the watch's half-minute check, and the pick's proof takes a second and a half. */
+    await clock.advance(30000 - 200)
+    rig.computerChanged()
+    Object.assign(unit, AM4_HERE, { copy: () => ({ name: 'SONG 53', scenes: ['CLEAN', 'LEAD', '', ''], cells: [] }), scenes: ['CLEAN', 'LEAD', '', ''], bpm: 99 })
+    await clock.advance(1500)
+    assert.equal(asked('GET /device/detect'), 0, 'the unit watch read the new unit whole while Which unit was still proving the pick')
+    /* The pick proved: the clean start and its own read (link.js chooseHost). */
+    rig.startClean()
+    await rig.refreshAll()
+    await clock.advance(30000)
+    assert.equal(asked('GET /device/detect'), 1, 'the new unit was read whole twice')
+    assert.equal(rig.getState().deviceSlug, 'am4')
+    rig.stopWatching()
+  })
+
+  test('phone: a tempo of 0 is the unit not answering, and Tap keeps its last figure', async () => {
+    const { rig, unit } = await rigOnTheBench({ bpm: 120 })
+    assert.equal(rig.getState().bpm, 120)
+    unit.bpm = 0
+    await rig.refreshTempo()
+    assert.equal(rig.getState().bpm, 120, 'Tap showed 0 for a unit that did not answer')
+    rig.handleEvent({ type: 'tempo', bpm: 0 })
+    assert.equal(rig.getState().bpm, 120, 'an announced 0 was shown')
+    /* Past what the unit takes is no answer either (an FM3 takes 24 to 250). */
+    unit.bpm = 300
+    await rig.refreshTempo()
+    assert.equal(rig.getState().bpm, 120)
+    unit.bpm = 141
+    await rig.refreshTempo()
+    assert.equal(rig.getState().bpm, 141, 'a real tempo is not followed')
+    rig.handleEvent({ type: 'tempo', bpm: 96 })
+    assert.equal(rig.getState().bpm, 96)
+    const { heardTempo, tempoRange } = await import('../shared/tempo.mjs')
+    assert.equal(heardTempo(0, tempoRange('am4')), false)
+    assert.equal(heardTempo(24, tempoRange('am4')), true)
+    assert.equal(heardTempo(251, tempoRange('am4')), false)
+    assert.equal(heardTempo(undefined), false)
+    assert.equal(heardTempo(400), true, 'a unit that has not said what it is takes 20 to 400')
   })
 }

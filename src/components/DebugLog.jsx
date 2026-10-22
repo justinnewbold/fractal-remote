@@ -104,6 +104,9 @@ export default function DebugLog({ device, link }) {
                 : ''
             }`
           : undefined,
+        /* With more than one computer on the account, which answered and which is driven (the phone's Log.js too). */
+        computers:
+          link?.role === 'remote' && link.hosts?.length > 1 ? `${link.hosts.join(', ')}; driving ${link.chosenHost || 'none of them'}` : undefined,
         platform: platform(),
         screen: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : undefined,
         browser: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,

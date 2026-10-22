@@ -748,3 +748,89 @@ export function firstUnitHost(hostNames = [], units = {}) {
   const once = hostNames.filter((name, i) => hostNames.indexOf(name) === i && hostNames.lastIndexOf(name) === i)
   return once.find((name) => units?.[name]?.plugged) || once[0] || null
 }
+
+/**
+ * THE ROLL CALL, IN ONE LINE OF THE LOG.
+ *
+ * "The roll call is never logged": a log from two computers on one account
+ * said "the computer is fractalpi" at every launch and nothing about the
+ * other one answering too, so nobody reading it could tell which computer
+ * the phone was driving, or why. Said once per roll call that found more
+ * than one, or that did not find the one picked:
+ *
+ *   two computers answered: fractalpi (FM3), raspberry pi 3 (AM4); driving
+ *   raspberry pi 3, the one picked under Which unit, addressed
+ *
+ * `why` is how the one driven was chosen: 'pick' (picked under Which unit)
+ * or 'first' (nobody picked: firstUnitHost). `missing` is a pick that did
+ * not answer.
+ */
+export function rollCallLine({ hosts = [], units = {}, chosen = null, why = null, addressed = false, missing = null } = {}) {
+  const count = ['no computers', 'one computer', 'two computers', 'three computers'][hosts.length] || `${hosts.length} computers`
+  const unitOf = (name) => {
+    const unit = units?.[name]
+    if (!unit) return hosts.length > 1 ? ' (unit not known)' : ''
+    return ` (${unit.plugged ? unit.model : 'no unit plugged in'})`
+  }
+  const heard = `${count} answered${hosts.length ? `: ${hosts.map((name) => `${name}${unitOf(name)}`).join(', ')}` : ''}`
+  const gone = missing ? `; ${missing}, the one picked under Which unit, did not answer` : ''
+  if (hosts.length < 2 || !chosen) return `${heard}${gone}${hosts.length > 1 ? '; driving none of them: two share a name' : ''}`
+  const reason = why === 'pick' ? 'the one picked under Which unit' : units?.[chosen]?.plugged ? 'the first with a unit plugged in' : 'the first to answer'
+  /* Two answering to the one name (two Pis left at "raspberrypi"): asked by it, both answer, and no computer app is to blame. */
+  const shared = hosts.filter((name) => name === chosen).length > 1
+  const how = addressed ? 'addressed' : shared ? 'not addressed: two computers share its name' : 'not addressed: a computer app on one of them is too old to be asked alone'
+  return `${heard}${gone}; driving ${chosen}, ${reason}, ${how}`
+}
+
+/**
+ * THE PICK, KEPT FOR EACH ACCOUNT. What Which unit picked, and whether the
+ * last roll call that account finished heard two or more computers (`many`),
+ * under the account's id, all in the one key each end has always kept its
+ * pick in: `{"accounts":{"<id>":{"name":"raspberry pi 3","many":true}}}`.
+ *
+ * Until 1.87.48 the key held one bare name for the whole phone or browser,
+ * whoever was signed in: a pick made on one account went on deciding for the
+ * next. That bare name is `legacy` here, for the first account that reads it
+ * to take as its own; nothing else ever reads it.
+ *
+ * Only text that is not a JSON object is a bare name (a name may read as a
+ * number, "123"). An object of any other shape ({"accounts":null}, or what a
+ * later version writes, read after an update is rolled back) is no pick, and
+ * never the first account's computer under the whole of its text.
+ */
+export function readPicks(text) {
+  if (typeof text !== 'string' || !text) return { accounts: {}, legacy: null }
+  let kept
+  try {
+    kept = JSON.parse(text)
+  } catch {
+    // A bare name: the one pick kept before.
+    return { accounts: {}, legacy: text }
+  }
+  if (!kept || typeof kept !== 'object') return { accounts: {}, legacy: text }
+  const accounts = kept.accounts && typeof kept.accounts === 'object' && !Array.isArray(kept.accounts) ? { ...kept.accounts } : {}
+  return { accounts, legacy: null }
+}
+
+/** The same, to be written back whole. */
+export const writePicks = (accounts = {}) => JSON.stringify({ accounts })
+
+/** One account's entry, as each end holds it: the pick or null, and `many` true, false or null for never counted. */
+export function pickEntry(entry) {
+  const name = typeof entry?.name === 'string' && entry.name ? entry.name : null
+  return { name, many: entry?.many === true ? true : entry?.many === false ? false : null }
+}
+
+/**
+ * WHETHER AN ACCOUNT'S RECORD SAYS IT MAY HAVE TWO COMPUTERS: its last roll
+ * call heard two or more, or it has a pick from before it was ever counted
+ * (the bare name 1.87.47 kept, which only Which unit wrote, and Which unit
+ * is only offered with two answering). Only then is anything at a join done
+ * otherwise than in 1.87.47: the roll call begun before the computer's name
+ * is read, and a count at the first answer of a link whose join went
+ * unanswered holding the taps. Everything else is one computer's, exactly as
+ * 1.87.47 did it: a count that heard one, an account never counted with no
+ * pick, a record not read off the disk yet (null), and storage that could not
+ * be read at all.
+ */
+export const mayBeTwo = (record) => Boolean(record && (record.many === true || (record.many === null && record.name)))

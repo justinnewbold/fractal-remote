@@ -31,16 +31,20 @@ import {
   remoteChosenHost,
   remoteConnect,
   remoteDisconnect,
+  remoteCountDue,
+  remoteMayBeTwo,
   remoteHostSeen,
   remoteHosts,
+  remoteReadsAskedOf,
   remoteRequest,
   remoteUnits,
   pickHost,
   restoreSession,
   subscribeHostSeen,
+  subscribeSwitching,
   subscribeRemoteState
 } from './relay'
-import { listen, refreshAll, reset as resetRig, watchUnit, stopWatching } from './rig'
+import { computerChanged, listen, refreshAll, reset as resetRig, startClean, unitReadSince, watchUnit, stopWatching } from './rig'
 import { PHONE_NOTE_PATH, phoneNote, timeToTell } from './phone-note'
 
 export const PROBE_FIRST = 3000
@@ -383,6 +387,8 @@ async function turn() {
     refresh()
   }
 
+  /* A link where no roll call was taken: counted now (countIfDue). */
+  countIfDue()
   // A computer that was updated while this phone watched says so within a
   // couple of minutes, rather than at the next join.
   if (running && state.link === 'connected' && Date.now() - namedAt > NAME_AGAIN) await readMacName()
@@ -404,6 +410,18 @@ async function turn() {
 }
 
 async function join() {
+  joinBusy = true
+  try {
+    await joinOnce()
+  } finally {
+    joinBusy = false
+  }
+}
+
+/* Inside join, which takes the roll call itself: countIfDue leaves it to it. */
+let joinBusy = false
+
+async function joinOnce() {
   set({ link: 'joining' })
   const began = Date.now()
   try {
@@ -420,23 +438,37 @@ async function join() {
   listen()
   refresh()
 
+  /* Not answered yet: the roll call is taken when it does (countIfDue, from the loop and from the first answer). */
   const answered = await hostResponds()
   refresh()
   if (!answered) return
 
-  await readMacName()
   /*
    * The moment the computer answers, before the roll call holds every write
    * for up to six seconds and before refreshAll's reads queue up on the
    * unit's one port: from here on it stops asking the unit for its levels.
    * Sent to every computer on the account, which is what is wanted. Not
    * awaited. See quietMeters.
+   *
+   * And the roll call, not awaited: it costs a second and a half of
+   * listening and the ordinary case has nothing to report, so it must not
+   * stand between someone and their unit. Writes are refused from the moment
+   * the count lands. Begun before the computer's name is read on an account
+   * that may have two (relay.js remoteMayBeTwo): a tap made while that read
+   * was out went to every computer on the account, both units. Every other
+   * account goes in 1.87.47's order, the name first, so its taps are held
+   * exactly when they were then: one whose last count heard one, one never
+   * counted, and one whose record is not off the disk yet.
    */
-  quietMeters()
-  // Not awaited: the roll call costs a second and a half of listening and the
-  // ordinary case has nothing to report, so it must not stand between someone
-  // and their unit. Writes are refused from the moment the count lands.
-  countHosts()
+  if (!remoteMayBeTwo()) {
+    await readMacName()
+    quietMeters()
+    countHosts()
+  } else {
+    quietMeters()
+    countHosts()
+    await readMacName()
+  }
 
   try {
     await refreshAll()
@@ -457,14 +489,38 @@ async function join() {
 }
 
 async function countHosts() {
+  await afterCount(remoteChosenHost(), censusHosts())
+}
+
+/** What a roll call found, put to use: `run` is the count, `was` the computer driven as it began. */
+async function afterCount(was, run) {
+  const began = Date.now()
   try {
-    const before = remoteChosenHost()
-    await censusHosts()
-    set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+    let before = was
+    await run
+    heardHosts()
     /* The roll call picked a computer: that one is told about the level readings, whatever answered first before (see metersAgain). */
     if (remoteChosenHost() !== before) {
       metersAgain()
       quietMeters()
+    }
+    /*
+     * One of two picked: its name, for Settings and the log's header, read
+     * again now that it is asked of that computer alone (the read at join
+     * went to whichever answered first). Then what was read while the roll
+     * call listened: where every one of those reads was asked of this
+     * computer (a pick made before, relay.js holdReads), it is this unit's
+     * already, and once the unit has answered it (rig.unitReadSince) nothing
+     * is read twice. One whose detect was lost or refused is read again, as
+     * 1.87.47 always did: nothing else would ever ask, and Play would wait on
+     * "Asking your unit what it is" for good. Otherwise it came from
+     * whichever computer answered first, and it goes, names, chain, tempo
+     * and all (rig.startClean), before the unit is read again.
+     */
+    if (remoteHosts().length > 1 && remoteChosenHost() !== before) {
+      readMacName()
+      if (remoteReadsAskedOf() !== remoteChosenHost()) startClean()
+      else if (unitReadSince(began)) before = remoteChosenHost()
     }
     /* The roll call picked one of two (firstUnitHost): what was read while it
        listened came from whichever answered first, so read it again. */
@@ -474,6 +530,39 @@ async function countHosts() {
   }
 }
 
+/*
+ * THE ROLL CALL IS TAKEN WHEN THE COMPUTER FIRST ANSWERS, whenever that is.
+ * Join takes it once the first /healthz is answered; a join whose first
+ * /healthz went unanswered (the Pis still starting) returned without one,
+ * and nothing took it after: every read went to whoever answered first and
+ * every write to every computer, for the life of the link. So the first
+ * answer on a link with no count takes it, from wherever the answer came,
+ * and the loop asks too. Once per link and never again on it: a count
+ * mid-set holds every tap for its window (relay.js remoteCountDue). Not
+ * held at all for an account whose last count heard one computer, which
+ * 1.87.47 sent at once here (`late`, relay.js censusHosts). Never in the
+ * demo or over Bluetooth, and never inside join, which takes its own.
+ */
+function countIfDue() {
+  if (!running || joinBusy || isDemo() || bluetoothOn() || !remoteHostSeen() || !remoteCountDue()) return
+  afterCount(remoteChosenHost(), censusHosts({ late: true }))
+}
+
+/*
+ * Which unit moved to another computer (relay.js subscribeSwitching), told
+ * before a read is asked of it: what is on its way from the one left is
+ * dropped, and nothing is filed until the new unit is read (rig
+ * computerChanged); chooseHost starts clean once the pick is proved.
+ */
+let switchOwed = false
+function switchedComputer() {
+  switchOwed = true
+  computerChanged()
+}
+
+/** What the roll call found, into the link's state, for Settings and Which unit. */
+const heardHosts = () => set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+
 /**
  * Drive this unit and no other: the Which unit buttons.
  *
@@ -482,12 +571,27 @@ async function countHosts() {
  * chain and different presets in the same slots, and everything on screen
  * was read off the other one. refreshAll is what tells a new unit from an
  * old one and drops the names that belonged to it.
+ *
+ * Another computer than the one driven is a clean start (rig.startClean):
+ * the scene names, the chain and the tempo on screen were the other unit's,
+ * and a row of named tiles is never asked again. And its name, for Settings
+ * and the log's header, read off it.
+ *
+ * Told by relay.js the moment it switches, before any read is asked of the
+ * new computer (rig.computerChanged): a read made during the proof was asked
+ * of the new one and filed under the unit on screen, the old one's. Only a
+ * computer actually switched to starts clean: a tap that found nothing to
+ * switch (the name not listed) leaves the screen as it is.
  */
 export async function chooseHost(name) {
   const ok = await pickHost(name)
-  set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+  const moved = switchOwed
+  switchOwed = false
+  heardHosts()
   metersAgain()
   quietMeters()
+  if (moved) startClean()
+  readMacName()
   try {
     await refreshAll()
   } catch {
@@ -699,7 +803,11 @@ export function startLink() {
       refresh()
       /* Stopped answering on a channel that is up: ask once more, at once. See doubt. */
       if (!seen) doubt()
+      /* Answering, on a link that has had no roll call: taken now (countIfDue). */
+      if (seen) countIfDue()
     }),
+    /* Which unit moving to another computer, before a read is asked of it (switchedComputer). */
+    subscribeSwitching(switchedComputer),
     AppState.addEventListener('change', (status) => {
       /*
        * Said in the log, because without it a paste reads as a link that

@@ -49,10 +49,14 @@ import {
   remoteHosts,
   remoteUnits,
   remoteChosenHost,
+  remoteReadsAskedOf,
+  remoteCountDue,
   pickHost,
+  subscribeSwitching,
   signOut,
   remoteSignUp
 } from './remote.js'
+import { computerChanged } from './deviceState.js'
 /*
  * Only `isPairAccount` survives the codes.
  *
@@ -665,9 +669,25 @@ async function join({ fresh = false } = {}) {
  * screen — and until then the app behaves exactly as it did before.
  */
 async function countHosts() {
+  await afterCount(remoteChosenHost(), censusHosts())
+}
+
+/** What a roll call found, put to use: `run` is the count, `before` the computer driven as it began. */
+async function afterCount(before, run) {
   try {
-    const before = remoteChosenHost()
-    await censusHosts()
+    await run
+    /*
+     * One of two picked: its name, read again now that it is asked of that
+     * computer alone, and what was read while the roll call listened goes
+     * (deviceState.computerChanged), unless every one of those reads was
+     * asked of this computer already (remote.js holdReads). App reads the
+     * unit again for the computer chosen (its effect on chosenHost), from a
+     * clean start. The phone's link.js does the same.
+     */
+    if (remoteHosts().length > 1 && remoteChosenHost() !== before) {
+      if (remoteReadsAskedOf() !== remoteChosenHost()) computerChanged()
+      readMacName()
+    }
     set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
     /* The roll call picked a computer: tell that one, whatever answered first before (see metersAgain). */
     if (remoteChosenHost() !== before) {
@@ -679,18 +699,37 @@ async function countHosts() {
   }
 }
 
+/*
+ * THE ROLL CALL IS TAKEN WHEN THE COMPUTER FIRST ANSWERS, whenever that is,
+ * as on the phone (countIfDue in mobile/src/lib/link.js says why): a join
+ * whose first /healthz went unanswered took none, and every write went to
+ * every computer for the life of the link. Once per link, and not held at
+ * all for an account whose last count heard one computer (`late`, remote.js
+ * censusHosts). Never inside join, which takes its own, and only for a phone
+ * on the web app.
+ */
+function countIfDue() {
+  if (state.role !== 'remote' || !state.account || joining || !remoteHostSeen() || !remoteCountDue()) return
+  afterCount(remoteChosenHost(), censusHosts({ late: true }))
+}
+
 /**
  * Drive one of them, and leave the other alone.
  *
  * Proving that the choice is honoured is the slow part and it happens inside
  * pickHost, so by the time this returns the notice is either gone or has been
  * replaced by the reason it could not be.
+ *
+ * Another computer: another unit, read by App from a clean start
+ * (deviceState.computerChanged), told by remote.js the moment it switches,
+ * before any read is asked of the new one; and its own name.
  */
 export async function chooseHost(name) {
   await pickHost(name)
   set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
   metersAgain()
   quietMeters()
+  readMacName()
   return state.clash
 }
 
@@ -777,6 +816,8 @@ async function turn() {
     await hostResponds()
     refresh()
   }
+  /* A link where no roll call was taken: counted now. */
+  countIfDue()
   /*
    * Re-derive on the clock, not only after a probe.
    *
@@ -1017,7 +1058,11 @@ export async function bootLink() {
     refresh()
     /* Stopped answering on a channel that is up: ask once more, at once. See doubt. */
     if (!seen) doubt()
+    /* Answering, on a link that has had no roll call: taken now (countIfDue). */
+    if (seen) countIfDue()
   })
+  /* Which unit moving to another computer, before a read is asked of it: the unit's reads from the one left are dropped (deviceState.computerChanged). */
+  subscribeSwitching(() => computerChanged())
   /*
    * The roll call is re-taken by the write gate now, not only here, so its
    * answer has to reach the screen from wherever it was taken. Without this the

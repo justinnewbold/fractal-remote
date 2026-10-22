@@ -160,7 +160,13 @@ export default function Log({ onBack }) {
              * answer, so that case is named rather than left blank.
              */
             'computer app': link.hostVersion || 'did not say (older than 7.205.0, or could not write it)',
-            link: link.link
+            link: link.link,
+            /*
+             * And with more than one on the account, which answered and which
+             * is driven: "computer: fractalpi" in a log from the AM4's Pi was
+             * whichever answered first. Absent with one computer, as before.
+             */
+            computers: link.hosts?.length > 1 ? `${link.hosts.join(', ')}; driving ${link.chosenHost || 'none of them'}` : undefined
           })
     },
     /*

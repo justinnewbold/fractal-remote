@@ -78,8 +78,11 @@ import {
   writeTuner,
   onConfigDoc,
   presetSaved,
-  chainChanged
+  chainChanged,
+  unitRead,
+  unitEraNow
 } from './lib/deviceState'
+import { tempoRange } from '../shared/tempo.mjs'
 import ParamSearch from './components/ParamSearch'
 import UpdateNotice from './components/UpdateNotice'
 import Updates, { UpdateReadyNotice } from './components/Updates'
@@ -267,6 +270,7 @@ import {
   deleteAccount,
   remoteActive,
   remoteHostSeen,
+  remoteReadsAskedOf,
   hostResponds,
   loadRemoteConfig,
   sendPasswordReset,
@@ -337,7 +341,9 @@ attachDriver({
   /* The slots either side of this one, read ahead for Play: see deviceState.readAhead. */
   presetSummary,
   /* Which unit a remembered chain belongs to: see deviceState.knownChain. */
-  unitKey: () => `${isDemo() ? `demo:${demoUnit()}` : remoteActive() ? 'away' : 'rig'}:${currentDeviceSlug()}`
+  unitKey: () => `${isDemo() ? `demo:${demoUnit()}` : remoteActive() ? 'away' : 'rig'}:${currentDeviceSlug()}`,
+  /* The tempos this unit takes: a read back outside them, 0 among them, is no answer (shared/tempo heardTempo). */
+  tempoRange: () => tempoRange(currentDeviceSlug())
 })
 
 /* Hoisted so each is one function for the life of the module: a selector
@@ -1681,6 +1687,8 @@ export default function App() {
        * busy, and the answer is "no unit". See confirmedDetect.
        */
       let asked = 0
+      /* Where the unit's eras stood as this read asked: see deviceState.unitRead. */
+      const unitAt = unitEraNow()
       const info = await confirmedDetect({
         detect,
         wait: (ms) => new Promise((go) => setTimeout(go, ms)),
@@ -1710,6 +1718,8 @@ export default function App() {
        * reported without tearing down a working screen. See the catch.
        */
       answered = true
+      /* Another unit than the last real one: what was read off that one goes before this one is read (deviceState.unitRead). Never between two demo units, as on the phone. */
+      unitRead(currentDeviceSlug(), { demo: isDemo(), since: unitAt })
       doneReading = beginChainRead()
       const [p, b] = await Promise.all([currentPreset(), presetBlocks()])
       setPreset(p)
@@ -1840,11 +1850,16 @@ export default function App() {
    * Picked under Which unit, or by the roll call when two answered and this
    * browser had never been told which (firstUnitHost in shared/relay-rules):
    * either way what is on screen was read off the other one, or off both.
+   * Not when every read of the roll call was asked of the computer it then
+   * chose (remote.js holdReads): what is on screen is that unit's already,
+   * and reading it again doubled the load in a slow computer's first seconds.
+   * The phone's link.js keeps it the same way.
    */
   const lastHost = useRef(link.chosenHost)
   useEffect(() => {
     if (lastHost.current === link.chosenHost) return
     lastHost.current = link.chosenHost
+    if (remoteReadsAskedOf() === link.chosenHost) return
     if (link.role === 'remote' && link.chosenHost) read()
   }, [link.chosenHost, link.role, read])
 

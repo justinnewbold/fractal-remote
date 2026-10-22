@@ -2646,6 +2646,30 @@ const traceStep = (step) => sceneNameTrace.push(step)
  */
 export async function readSceneNames(number, { shown, still } = {}) {
   const movedOn = () => typeof still === 'function' && !still()
+  /*
+   * And the unit it is read for, taken now: names that land after another
+   * unit answered (the roll call moved to the AM4's computer while the FM3's
+   * answer was on its way) are that other unit's, and are neither returned
+   * nor kept under this one's slot (the phone's rig.js readNamesOf too).
+   * `still.unit` says whether the store still has this unit on screen: once
+   * another computer is driven, an answer from it would pass for this unit's
+   * by its slug until its own unit has been read (deviceState
+   * computerChanged), where the preset moving on is no reason not to keep
+   * what was read for its slot.
+   */
+  const unit = typeof still?.unit === 'function' ? still.unit : null
+  const slug = unitSlug
+  const elsewhere = () => {
+    if (unitSlug !== slug) {
+      traceStep(`another unit answered (${unitSlug}, not ${slug}) — dropped`)
+      return true
+    }
+    if (unit && !unit()) {
+      traceStep('another computer is driven now — dropped')
+      return true
+    }
+    return false
+  }
   if (mock) {
     await tick()
     return mock.getScene().names
@@ -2657,6 +2681,7 @@ export async function readSceneNames(number, { shown, still } = {}) {
     try {
       const summary = await presetSummary(number)
       const names = summary?.scenes
+      if (elsewhere()) return null
       if (wrongSlot(number, summary?.number)) {
         traceStep(`summary: answered for ${summary?.number}, not ${number} — ignored`)
       } else if (Array.isArray(names) && names.some((n) => (n || '').trim())) {
@@ -2692,6 +2717,7 @@ export async function readSceneNames(number, { shown, still } = {}) {
    */
   if (typeof number === 'number' && unitSlug === 'am4' && typeof shown === 'function') {
     const copy = await presetCopy()
+    if (elsewhere()) return null
     const here = judgeCopy(copy, shown(), number)
     if (here === 'stale') {
       traceStep(`loaded: the computer read another preset ("${copy.name}"${Number.isInteger(copy.number) ? `, in ${copy.number}` : ''}) — ignored`)
@@ -2719,6 +2745,7 @@ export async function readSceneNames(number, { shown, still } = {}) {
     try {
       const res = await request(`/presets/${number}/scenes`)
       const names = res?.names
+      if (elsewhere()) return null
       if (wrongSlot(number, res?.number)) {
         traceStep(`scenes: answered for ${res?.number}, not ${number} — ignored`)
       } else if (Array.isArray(names) && names.some((n) => (n || '').trim())) {
@@ -2745,6 +2772,7 @@ export async function readSceneNames(number, { shown, still } = {}) {
   try {
     const dump = await backupPreset(number)
     const names = dump?.sceneNames
+    if (elsewhere()) return null
     /*
      * A dump that is not the slot we asked for names somebody else's scenes.
      *
@@ -2785,6 +2813,7 @@ export async function readSceneNames(number, { shown, still } = {}) {
 
   if (typeof number === 'number') {
     const held = await readHostDoc(`scene-names-${sceneNameKey(number)}`)
+    if (elsewhere()) return null
     traceStep(held === null ? 'host store: nothing under this key' : 'host store: found an entry')
     if (Array.isArray(held) && held.some((n) => (n || '').trim())) {
       const clean = held.map((n) => (n || '').trim())

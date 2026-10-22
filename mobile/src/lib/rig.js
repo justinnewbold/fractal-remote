@@ -21,9 +21,9 @@ import { faultFrom, faultLeft, withdrawsDropped, withdrawsFault } from './fault-
 import * as device from './device'
 import { VP4_NO_TEMPO, aboutVp4, vp4PresetCode, vp4PresetOn, vp4RecordNames } from './vp4-safety'
 import { idOf, sameBlock } from './unit.mjs'
-import { TAP_REREAD_MS, keepTaps, tappedBpm, tempoRange, tempoSender } from './tempo'
+import { TAP_REREAD_MS, heardTempo, keepTaps, tappedBpm, tempoRange, tempoSender } from './tempo'
 import { watchEvery, probeUnit, countQuiet, unitGone } from './unit-watch'
-import { DEFAULT_SLUG, deviceSlug } from './device-slug'
+import { DEFAULT_SLUG, deviceSlug, unitMoved } from './device-slug'
 import { setColourUnit } from './looks'
 import { adopt as adoptNames, forget as forgetNames, learn as learnName, nameOf } from './presetNames'
 import { forget as forgetControls } from './paramIndex'
@@ -257,8 +257,119 @@ export function reset() {
   quietTimer = null
   pressedAt = 0
   echoes.clear()
+  /* The unit that was, for startClean: the next one read is a first one. */
+  realUnit = null
+  unitEra += 1
+  unitSettled = true
   set(initial)
 }
+
+/*
+ * A CLEAN START FOR ANOTHER UNIT.
+ *
+ * Two computers on one account, an FM3 on one and an AM4 on the other. Read
+ * first off the FM3's computer, and then off the AM4's, the phone kept what
+ * the FM3 had said: its scene names for slot 53 ("FREAK ON A LEASH") on the
+ * AM4's preset 53, because a row of tiles that has names is never asked
+ * again; a quarter of a minute of blank pedals, held for a copy of the
+ * preset only an FM3's computer keeps; and the FM3's tempo on Tap.
+ *
+ * So when the computer driven changes (link.js, after the roll call or a tap
+ * under Which unit), or the unit read is another than the last real one
+ * (readAll), what was read off the other goes: the scene names, the chain
+ * and its stale-copy wait, the tempo, and every read of names still on its
+ * way (unitEra, which a late answer is held to). The read that follows is
+ * the one that fills it all in again. Only then: the first unit read after
+ * launch is not another one (unitMoved), so an ordinary connect never comes
+ * here, and a rig with one computer only when its unit is swapped for
+ * another. Never from one demo unit to the next, which no computer is
+ * behind: the demo keeps the last one's pedals up until the next is read,
+ * as it always did.
+ *
+ * AND NOTHING IS FILED UNTIL THE NEW UNIT HAS SAID WHAT IT IS. Between the
+ * clean start and the next read's detect, the rig still holds the slug the
+ * other computer gave it, so an answer from the new one would pass for the
+ * old unit's and be kept under its slot: a names read made in the second and
+ * a half a pick under Which unit takes to prove was asked of the new
+ * computer and filed under the unit being left. Until readAll's detect is in
+ * (unitSettled), no scene names, scene, tempo or stale-copy verdict is taken
+ * from any read; readAll's own, which asked after the clean start, is the
+ * first that is.
+ */
+let unitEra = 0
+/* The last real unit read (never the starting 'device'), for unitMoved. */
+let realUnit = null
+/* Whether the unit has been read since the last clean start or change of computer: see startClean. */
+let unitSettled = true
+/* When it last said what it is, off the computer driven (readAll): see unitReadSince. */
+let unitReadAt = 0
+/* Reads of the whole unit under way (refreshAll): see watchUnit. */
+let readingAll = 0
+/* When Which unit moved to another computer whose clean start has not come yet (computerChanged): see watchUnit. */
+let changedAt = 0
+
+/*
+ * Whether the unit has said what it is since `t`, off the computer driven,
+ * and nothing has changed since. link.js reads it again after a roll call
+ * that picked one of two only when it has not: its detect lost or refused,
+ * nothing else would ask again, and Play would wait for good.
+ */
+export const unitReadSince = (t) => unitSettled && unitReadAt >= t
+
+/*
+ * ANOTHER COMPUTER IS DRIVEN FROM NOW (link.js chooseHost, told by relay.js
+ * before any read is asked of it): what is on its way from the one left is
+ * dropped (unitEra), and nothing is filed until the unit is read again
+ * (unitSettled). What is on screen stays up until the proof is in and
+ * startClean takes it down, as before.
+ */
+export function computerChanged() {
+  unitEra += 1
+  unitSettled = false
+  changedAt = Date.now()
+  clearTimeout(staleTimer)
+  staleTimer = null
+  staleAgain = null
+  staleOwn = false
+  syncChainBusy()
+}
+
+export function startClean() {
+  unitEra += 1
+  unitSettled = false
+  changedAt = 0
+  clearTimeout(staleTimer)
+  staleTimer = null
+  staleAgain = null
+  staleOwn = false
+  judging = null
+  chainRead = null
+  lastRead = null
+  chainForBefore = null
+  knownChains.clear()
+  aheadChains.clear()
+  ahead.stop()
+  namesRead = null
+  following = null
+  earlyNames = null
+  clearTimeout(quietTimer)
+  quietTimer = null
+  tempoSetAt = 0
+  taps = []
+  unitBpm = null
+  set({ sceneNames: [], chain: 'idle', chainFor: null, chainKnown: null, bpm: null })
+  syncChainBusy()
+}
+
+/* Whether this read is of another unit than the last real one (unitMoved), and that one remembered. */
+function anotherUnit(slug) {
+  const moved = unitMoved(realUnit, slug)
+  if (slug !== DEFAULT_SLUG) realUnit = slug
+  return moved
+}
+
+/* Whether names read for `slug` in `era` are still the unit's on screen, and that unit has been read since the last clean start: see startClean. */
+const sameUnit = (slug, era) => unitSettled && state.deviceSlug === slug && unitEra === era
 
 /**
  * Put the last failure away.
@@ -469,7 +580,8 @@ export function handleEvent(event) {
     if (!isEcho('sceneIndex', event.index)) set({ sceneIndex: event.index })
   }
 
-  if (event.type === 'tempo' && typeof event.bpm === 'number') {
+  /* A tempo outside what the unit takes, 0 among them, is the unit not answering: the last figure stays (heardTempo). */
+  if (event.type === 'tempo' && typeof event.bpm === 'number' && heardTempo(event.bpm, unitTempos())) {
     if (!isEcho('bpm', event.bpm)) set({ bpm: event.bpm })
   }
 
@@ -721,6 +833,11 @@ function syncChainBusy() {
 export async function retryChain() {
   const done = chainWorking()
   try {
+    /* The unit not read since the computer driven changed (that read lost): read whole, the chain with it (see watchUnit). */
+    if (!unitSettled) {
+      await refreshAll()
+      return unitSettled
+    }
     return await readChainAndNames()
   } catch {
     return false
@@ -897,6 +1014,32 @@ export function watchUnit() {
     const { said, heard } = await probeUnit({ vp4: Boolean(device.vp4Here?.()), currentPreset: () => device.currentPreset(), getScene: () => device.getScene() })
     if (run !== watchRun) return
     /*
+     * AND A UNIT NOT READ SINCE THE COMPUTER DRIVEN CHANGED. The read after
+     * a clean start (link.js, after the roll call or Which unit) is the one
+     * that says which unit the new computer has, and until it has said,
+     * nothing a read brings is taken (sameUnit). One whose detect was lost
+     * or refused was never asked again: no scene names, no tempo, the lit
+     * scene stuck, and "Couldn't read this preset's chain" through every Try
+     * again, until a pull-down. The unit answering this check, with no read
+     * of it under way, is read whole, at the missing unit's pace. Not while
+     * Which unit's own read is still to come (the pick proved, then a clean
+     * start and its read, link.js chooseHost), for up to MISSING_WATCH_MS: a
+     * tick inside that second and a half read the new unit whole twice, and
+     * a scene tapped on a Pi 3 then waited behind the second chain dump.
+     */
+    if (said === 'answering' && !unitSettled && readingAll === 0 && Date.now() - changedAt >= MISSING_WATCH_MS) {
+      logDebug('unit', 'reading the unit again: the read after the change of computer did not answer')
+      quiet = 0
+      try {
+        await refreshAll()
+      } catch {
+        /* refreshAll records its own failure; the next tick tries again. */
+      }
+      if (run !== watchRun) return
+      watchTimer = setTimeout(tick, nextWatch())
+      return
+    }
+    /*
      * AND WHICH PRESET IT IS, which this read always knew and threw away. A
      * preset changed on the front panel that opens on the same scene is
      * announced by nothing at all, so this is the only thing that notices —
@@ -957,7 +1100,7 @@ export function watchUnit() {
  */
 const MISSING_WATCH_MS = 10000
 const nextWatch = () =>
-  state.unit === 'missing' || state.unit === 'silent' ? MISSING_WATCH_MS : watchEvery(true)
+  !unitSettled || state.unit === 'missing' || state.unit === 'silent' ? MISSING_WATCH_MS : watchEvery(true)
 
 export function stopWatching() {
   watchRun += 1
@@ -982,15 +1125,20 @@ export async function refreshAll() {
   /* The preset goes up before its chain is read; in between, this is the
      chain on its way rather than another preset's that nobody is reading. */
   const done = chainWorking()
+  readingAll += 1
   try {
     await readAll()
   } finally {
+    readingAll -= 1
     done()
   }
 }
 
 async function readAll() {
+  /* A clean start while the unit was being asked (another computer picked meanwhile): this answer may be the one left's, and the read that follows the clean start reads it all. */
+  const era = unitEra
   const caps = await device.detect()
+  if (era !== unitEra) return
   const slug = deviceSlug(caps)
   /*
    * A different unit means the names read off the last one are wrong, not
@@ -1011,6 +1159,9 @@ async function readAll() {
    */
   const simulated = isDemo()
   if (slug !== state.deviceSlug || simulated !== state.simulated) forgetNames()
+  if (anotherUnit(slug) && !(simulated && state.simulated)) startClean()
+  /* The unit has said what it is, off the computer driven: what is read from here is its own (sameUnit). */
+  unitSettled = true
   /*
    * And which unit's colours the tiles wear. "The button and effects pedal
    * colors dont match the colors on real fractal units": an AM4 has its own,
@@ -1019,6 +1170,8 @@ async function readAll() {
    * for the next launch, and keeps the demo's to itself).
    */
   setColourUnit(slug, { demo: simulated })
+  /* And when, for link.js after a roll call (unitReadSince). */
+  unitReadAt = Date.now()
   const unit = caps?.connected === false ? 'missing' : 'present'
   /* Over Bluetooth (beta) the answer came through the adapter, not a computer
      (bleWire's detect carries capabilities.via 'bluetooth'). */
@@ -1088,6 +1241,9 @@ async function readAll() {
  */
 async function readChainAndNames({ names = true } = {}) {
   const number = state.preset?.number
+  /* The unit this read is for: a copy read after another computer was picked is the other unit's, and is neither judged nor kept (startClean). */
+  const slug = state.deviceSlug
+  const era = unitEra
   /* The names this phone or the computer already has, before the chain: a
      small read, and the tiles are named while the chain is still coming. */
   const quick = names ? await quickSceneNames() : true
@@ -1111,7 +1267,7 @@ async function readChainAndNames({ names = true } = {}) {
     if (names && read && state.preset?.number === number) {
       /* Whether the copy the chain came out of is this preset at all. */
       const copy = await loadedCopy()
-      if (state.preset?.number !== number) return read
+      if (state.preset?.number !== number || !sameUnit(slug, era)) return read
       if (copy === 'stale' && copyWasStale(number)) return read
       markJudged(number)
       /* The chain this preset had, for the next time it is chosen. */
@@ -1534,7 +1690,11 @@ function takePreset(fresh) {
 
 export async function refreshScene() {
   try {
+    const slug = state.deviceSlug
+    const era = unitEra
     const res = await device.getScene()
+    /* An answer from before the unit changed is the other unit's (startClean). */
+    if (!sameUnit(slug, era)) return
     const index = typeof res === 'number' ? res : res?.index
     if (Number.isInteger(index)) set({ sceneIndex: index })
     /*
@@ -1569,11 +1729,21 @@ export const TEMPO_KEEP_MS = 20 * 1000
 let tempoSetAt = 0
 const tempoJustSet = () => Date.now() - tempoSetAt < TEMPO_KEEP_MS
 
+/* The tempos this unit takes: a read back outside them is no answer (shared/tempo heardTempo). */
+const unitTempos = () => tempoRange(state.deviceSlug, state.capabilities?.via)
+
 export async function refreshTempo() {
   try {
+    const slug = state.deviceSlug
+    const era = unitEra
     const res = await device.getTempo()
     const bpm = typeof res === 'number' ? res : res?.bpm
-    if (!Number.isFinite(bpm)) return
+    /*
+     * "Tap showed 180 and then 0": an AM4's computer answers 0 when the unit
+     * did not answer it. No answer, so the last figure stays up. And an
+     * answer from before the unit changed is the other unit's (startClean).
+     */
+    if (!heardTempo(bpm, unitTempos()) || !sameUnit(slug, era)) return
     if (tempoJustSet() && Number.isFinite(state.bpm) && bpm !== state.bpm) return
     set({ bpm })
   } catch {
@@ -1613,8 +1783,12 @@ export async function refreshTempo() {
 async function namesOfLoaded(number, copy) {
   /* A VP4's come with its chain, off the one record it is read by (vp4ScenesFor), and the routes below are ones it has none of: a 501, and nothing to put up. */
   if (device.vp4Here?.()) return null
+  /* Whose they are, taken before anything is asked: the unit can change under a read (startClean). Nothing more is asked for it then, and what was asked is dropped by the caller (readNamesOf, rereadSceneNames). */
+  const slug = state.deviceSlug
+  const era = unitEra
+  const gone = () => state.preset?.number !== number || !sameUnit(slug, era)
   const here = copy === undefined ? await loadedCopy() : copy
-  if (state.preset?.number !== number) return null
+  if (gone()) return null
   if (here === 'stale') {
     copyWasStale(number)
     return null
@@ -1622,6 +1796,7 @@ async function namesOfLoaded(number, copy) {
   if (here?.length) return here
   const loaded = await am4LoadedNames(number)
   if (loaded || state.preset?.number !== number) return loaded
+  if (gone()) return null
   /* An AM4 over Bluetooth has no summary to give: its names are read whole,
      straight off the unit (lib/bleWire am4SceneNames). */
   if (!bluetoothAm4()) {
@@ -1660,8 +1835,9 @@ async function namesOfLoaded(number, copy) {
  */
 async function am4LoadedNames(number) {
   if (state.deviceSlug !== 'am4' || viaBluetooth() || hostKeepsCopy() === true) return null
+  const era = unitEra
   const copy = await device.presetCopy()
-  if (state.preset?.number !== number) return null
+  if (state.preset?.number !== number || !sameUnit('am4', era)) return null
   const here = judgeCopy(copy, state.preset?.pending ? undefined : state.preset?.name, number)
   if (here === 'stale') logDebug('scenes', `the AM4's loaded preset was not ${number} when the computer read it; reading the stored slot instead`)
   if (!Array.isArray(here) || !here.some((n) => n)) return null
@@ -1706,7 +1882,16 @@ export async function refreshSceneNames(copy) {
 }
 
 async function readNamesOf(number, copy) {
+  /*
+   * Which unit they are read for, taken at the start. A late answer after the
+   * unit changed (the roll call moved to the AM4's computer while the FM3's
+   * answer was still on its way) is dropped, not put on the AM4's tiles and
+   * filed under the AM4's slot for good. See startClean.
+   */
+  const slug = state.deviceSlug
+  const era = unitEra
   const names = await namesOfLoaded(number, copy)
+  if (!sameUnit(slug, era)) return
   /* Over Bluetooth, a slot read and found unnamed is written down too, so
      it is not read again after the next reconnect. */
   if (Array.isArray(names) && names.length && !names.some((n) => n) && viaBluetooth() && state.preset?.number === number) {
@@ -1718,7 +1903,6 @@ async function readNamesOf(number, copy) {
   set({ sceneNames: names })
   /* Read the slow way once; never again on this phone, and not on the next
      device either. */
-  const slug = state.deviceSlug
   rememberSceneNames(device.nameOwner(slug), number, names)
   device.keepSceneNames(slug, number, names)
 }
@@ -1740,11 +1924,14 @@ export async function rereadSceneNames() {
   const number = state.preset?.number
   if (!Number.isInteger(number)) return 'failed'
   device.freshSceneNames?.()
+  const slug = state.deviceSlug
+  const era = unitEra
   const names = await namesOfLoaded(number)
+  /* Read for a unit that has gone since (startClean): nothing was read for this one. */
+  if (!sameUnit(slug, era)) return 'failed'
   if (names === null || state.preset?.number !== number) return 'failed'
   if (!names.some((n) => n)) return 'none'
   set({ sceneNames: names })
-  const slug = state.deviceSlug
   rememberSceneNames(device.nameOwner(slug), number, names)
   device.keepSceneNames(slug, number, names)
   logDebug('scenes', `re-read the scene names for ${number} off the unit`)
@@ -1788,9 +1975,15 @@ export async function quickSceneNames() {
      the computer's store is still asked. */
   if (state.sceneNames !== earlyNames && (state.sceneNames || []).some((n) => (n || '').trim())) return true
   const slug = state.deviceSlug
+  const era = unitEra
   const owner = device.nameOwner(slug)
   const kept = await recallSceneNames(owner, number)
   if (kept.length && state.preset?.number === number) set({ sceneNames: kept })
+  /* Kept for the unit this started on: another since (startClean) is not given them, and they come down again. */
+  if (!sameUnit(slug, era)) {
+    if (kept.length && state.sceneNames === kept) set({ sceneNames: [] })
+    return false
+  }
   /*
    * Over Bluetooth there is no computer's store to ask, and what this phone
    * kept IS the record. "It doesn't have to constantly be rereading them once
@@ -1804,7 +1997,7 @@ export async function quickSceneNames() {
   } catch {
     held = null
   }
-  if (!held || state.preset?.number !== number) return false
+  if (!held || state.preset?.number !== number || !sameUnit(slug, era)) return false
   set({ sceneNames: held })
   rememberSceneNames(owner, number, held)
   return true
@@ -1876,17 +2069,20 @@ function followComputerNames() {
   const key = `${presetRun}:${keyFor(number)}`
   if (following?.key === key && Date.now() < following.until) return
   following = { key, until: Date.now() + COMPUTER_NAMES_AFTER_MS[COMPUTER_NAMES_AFTER_MS.length - 1] }
+  /* The unit they are followed for: another since is not asked for this one's (startClean). */
+  const slug = state.deviceSlug
+  const era = unitEra
   for (const wait of COMPUTER_NAMES_AFTER_MS) {
     setTimeout(async () => {
       if (state.preset?.number !== number || named()) return
-      const slug = state.deviceSlug
+      if (!sameUnit(slug, era)) return
       let held = null
       try {
         held = await device.storedSceneNames(slug, number)
       } catch {
         held = null
       }
-      if (!held || state.preset?.number !== number || named()) return
+      if (!held || state.preset?.number !== number || named() || !sameUnit(slug, era)) return
       set({ sceneNames: held })
       rememberSceneNames(device.nameOwner(slug), number, held)
       logDebug('scenes', `the computer had the scene names for ${number} after ${wait / 1000}s`)
@@ -2991,10 +3187,12 @@ async function drawOutline(number, run, sentAt) {
  */
 let earlyNames = null
 function namesAtOnce(number, run) {
-  const owner = device.nameOwner(state.deviceSlug)
+  const slug = state.deviceSlug
+  const era = unitEra
+  const owner = device.nameOwner(slug)
   recallSceneNames(owner, number)
     .then((kept) => {
-      if (run !== presetRun || state.preset?.number !== number || !kept.length) return
+      if (run !== presetRun || state.preset?.number !== number || !kept.length || !sameUnit(slug, era)) return
       if ((state.sceneNames || []).some((n) => (n || '').trim())) return
       earlyNames = kept
       set({ sceneNames: kept })
