@@ -376,6 +376,8 @@ function fakeAm4(sx, o) {
       [0x77, 2]
     ]),
     bpm: 120,
+    /* The amp's Out Boost, 0 or 1, as last written: it is never read over Bluetooth. */
+    boost: 0,
     stored: new Map([
       [0, 'Interface'],
       [5, 'Clean Room'],
@@ -564,6 +566,7 @@ function fakeAm4(sx, o) {
       state.name = name === '<EMPTY>' ? '' : name
       state.scene = 0
     } else if (pidHigh === 0x0003) state.bypass.set(pidLow, value === 1)
+    else if (pidLow === 0x003a && pidHigh === 0x0096) state.boost = value
     else if (pidHigh === 0x07d2) state.channel.set(pidLow, value)
     else if (pidLow === 0x0002) state.bpm = Math.round(24 + value * 226)
     /* And the 64-byte write echo it always sends after a SET. */
@@ -1070,7 +1073,16 @@ export function run(test) {
     ['tuner note', 'F0 00 01 74 15 01 23 00 01 00 10 00 00 00 00 00 23 F7', true, (sx) => sx.buildAm4TunerPoll(1)],
     ['tuner frequency', 'F0 00 01 74 15 01 23 00 02 00 10 00 00 00 00 00 20 F7', true, (sx) => sx.buildAm4TunerPoll(2)],
     ['tuner cents', 'F0 00 01 74 15 01 23 00 03 00 10 00 00 00 00 00 21 F7', true, (sx) => sx.buildAm4TunerPoll(3)],
-    ['tuner string', 'F0 00 01 74 15 01 23 00 04 00 10 00 00 00 00 00 26 F7', true, (sx) => sx.buildAm4TunerPoll(4)]
+    ['tuner string', 'F0 00 01 74 15 01 23 00 04 00 10 00 00 00 00 00 26 F7', true, (sx) => sx.buildAm4TunerPoll(4)],
+    /*
+     * The amp's Out Boost: on an AM4 the amp's pedal is its boost (shared/
+     * am4-boost.mjs). Byte for byte forgefx-midi's buildSetParam('amp.out_boost',
+     * 1 and 0) at the commit the computer app ships (a17eb4a), which the codec
+     * wire-verified against AM4-Edit's own toggle (its session-29 capture, not
+     * in that repository, so not marked a golden here).
+     */
+    ['amp boost on', 'F0 00 01 74 15 01 3A 00 16 01 01 00 00 00 04 00 00 00 10 03 78 52 F7', false, (sx) => sx.buildAm4AmpBoost(true)],
+    ['amp boost off', 'F0 00 01 74 15 01 3A 00 16 01 01 00 00 00 04 00 00 00 00 00 00 39 F7', false, (sx) => sx.buildAm4AmpBoost(false)]
   ]
 
   test('every AM4 capture golden, byte for byte', async () => {
@@ -1239,7 +1251,8 @@ export function run(test) {
         { name: 'MIDI channel read', fn: 0x01, pidLow: 0x0001, pidHigh: 0x003a, action: 0x000d, hdr4: 0, size: 18 }
       ]
     )
-    assert.equal(sx.AM4_ALLOWED.length, 16, 'the AM4’s list grew by more than the two reads')
+    /* And one more since, on 22 October 2026: the amp's Out Boost, written only (its own test, below). */
+    assert.equal(sx.AM4_ALLOWED.length, 17, 'the AM4’s list grew by more than the two reads and the amp’s boost')
     assert.ok(!('AM4_TUNER_CC' in sx), 'a default tuner number is back in the codec: it would be sent to every AM4')
     /* Their neighbours on the same page stay off it: other assignments, any write to either, the short read. */
     const made = (fields) => sx.am4Frame(fields)
@@ -3542,6 +3555,11 @@ export function run(test) {
       await tryIt(`/preset/blocks/${eid}/bypass`, 'POST', { bypassed: false })
       for (const channel of ['A', 'B', 'C', 'D']) await tryIt(`/preset/blocks/${eid}/channel`, 'POST', { channel })
     }
+    /* The amp's Out Boost, both ways, and every body it refuses with nothing sent. */
+    for (const body of [{ value: 1, continuous: false }, { value: 0, continuous: false }, { value: 2, continuous: false }, { value: 1, continuous: true }, { value: 0.5, continuous: false }, {}]) {
+      await tryIt('/preset/blocks/58/params/150', 'PUT', body)
+    }
+    await tryIt('/preset/blocks/59/params/150', 'PUT', { value: 1, continuous: false })
     for (const bpm of [24, 120, 250]) await tryIt('/tempo', 'POST', { bpm })
     await tryIt('/tempo/tap', 'POST', {})
     await tryIt('/tuner', 'POST', { on: true })
@@ -3572,6 +3590,45 @@ export function run(test) {
     /* Every kind of frame on the list was actually exercised, so the rule is about something. */
     const seen = new Set(frames.filter((f) => f[0] === 0xf0).map((f) => t.sx.am4Allowed(f).name))
     for (const entry of t.sx.AM4_ALLOWED) assert.ok(seen.has(entry.name), `the safety test never sent a ${entry.name}`)
+  })
+
+  /*
+   * ON AN AM4 THE AMP'S PEDAL IS ITS BOOST (1.87.49, shared/am4-boost.mjs).
+   * Over Bluetooth the phone sends it itself: the codec's own frame for the
+   * amp's Out Boost, at the amp's code, 0 or 1, and nothing else. It is never
+   * read, because the AM4's answer to that read has never been seen.
+   */
+  test('over Bluetooth the AM4’s amp boost is written as its own frame, 0 or 1 only, and never read', async () => {
+    const t = await onTheLine('am4')
+    const put = (path, body) => drive(t.clock, t.wire.request(path, { method: 'PUT', body: JSON.stringify(body) }))
+    await put('/preset/blocks/58/params/150', { value: 1, continuous: false })
+    assert.equal(t.unit.state.boost, 1, 'the AM4’s boost did not go on')
+    assert.deepEqual(t.frames().map(hex), [hex(H('F0 00 01 74 15 01 3A 00 16 01 01 00 00 00 04 00 00 00 10 03 78 52 F7'))], 'not exactly the codec’s Boost on')
+    assert.equal(t.unit.state.bypass.get(0x3a), false, 'the amp was turned off')
+    await put('/preset/blocks/58/params/150', { value: 0, continuous: false })
+    assert.equal(t.unit.state.boost, 0)
+    assert.equal(hex(t.frames().at(-1)), hex(H('F0 00 01 74 15 01 3A 00 16 01 01 00 00 00 04 00 00 00 00 00 00 39 F7')))
+    /* Anything but a whole 0 or 1, on the discrete path, at the amp's own code and its boost: refused, with nothing sent. */
+    const before = t.frames().length
+    for (const [path, body] of [
+      ['/preset/blocks/58/params/150', { value: 2, continuous: false }],
+      ['/preset/blocks/58/params/150', { value: 1, continuous: true }],
+      ['/preset/blocks/58/params/150', { value: 0.5, continuous: false }],
+      ['/preset/blocks/58/params/150', {}],
+      ['/preset/blocks/59/params/150', { value: 1, continuous: false }],
+      ['/preset/blocks/58/params/8', { value: 1, continuous: false }]
+    ]) {
+      await assert.rejects(put(path, body), (e) => e.status === 400 || e.status === 501, `${path} ${JSON.stringify(body)} was not refused`)
+    }
+    assert.equal(t.frames().length, before, 'a write the AM4 has never been sent went out')
+    /* And never read: the route stays refused here. */
+    await assert.rejects(t.get('/preset/blocks/58/params'), (e) => e.status === 501)
+    assert.equal(t.frames().length, before)
+    assert.equal(t.unit.state.frozen, false)
+    /* A gen-3 unit over Bluetooth has no such route at all. */
+    const fm3 = await onTheLine('fm3')
+    await assert.rejects(drive(fm3.clock, fm3.wire.request('/preset/blocks/58/params/150', { method: 'PUT', body: JSON.stringify({ value: 1, continuous: false }) })), (e) => e.status === 501)
+    assert.equal(fm3.frames().length, 0)
   })
 
   /* ---------------------------------------------------------------- */

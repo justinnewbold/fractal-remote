@@ -50,7 +50,7 @@ import { isSilencingParam } from '../lib/guardrails'
 import { editPages, pageFor, pageHolding } from '../lib/editPages'
 import { withUnit } from '../lib/param-fixes'
 import { asOnPages, buildParamIndex, findControls, indexFor } from '../lib/paramIndex'
-import { beginChainWrite, chainChanged, endChainWrite, getState, noteEdited, orStop, refreshBlocks, useRig, writeBypass, writeChannel } from '../lib/rig'
+import { beginChainWrite, chainChanged, endChainWrite, getState, noteEdited, orStop, refreshBlocks, useRig, writeBlockBypass, writeChannel } from '../lib/rig'
 import { useKeepAwake } from 'expo-keep-awake'
 import { logDebug } from '../lib/debugLog'
 import { oneWriteAtATime } from '../lib/knob-keys'
@@ -1112,13 +1112,16 @@ function BlockPanel({
         The two ends of the chain have no on/off, and that is the unit's rule
         rather than a choice: a preset with its output bypassed is a preset
         nobody can hear.
+
+        The block itself, always: on an AM4 the amp's pedal on Play is its
+        boost (lib/am4-boost), so this is where its real on and off is.
       */}
       {['input', 'output'].includes(block.slug) ? null : (
         <Press
           label={unsure ? 'Turn it off' : engaged ? 'Engaged' : 'Bypassed'}
           tone="signal"
           on={engaged && !unsure}
-          onPress={() => writeBypass(eid, engaged)}
+          onPress={() => writeBlockBypass(eid, engaged)}
         />
       )}
 

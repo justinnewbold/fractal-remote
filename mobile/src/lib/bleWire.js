@@ -27,6 +27,7 @@
  */
 import {
   AM4,
+  AM4_BLOCKS,
   FN,
   MODELS,
   am4Allowed,
@@ -38,6 +39,7 @@ import {
   am4Note,
   am4ShortAllowed,
   am4TunerCcNamed,
+  buildAm4AmpBoost,
   buildAm4Bypass,
   buildAm4BypassRead,
   buildAm4Channel,
@@ -1628,6 +1630,21 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     return { ok: true }
   }
 
+  /*
+   * THE AMP'S OUT BOOST: on an AM4 the amp's pedal on Play is its boost (lib/
+   * am4-boost). Written only, at the amp's own code, 0 or 1 exactly: a whole
+   * value, never a toggle, and nothing else in the body. There is no read of
+   * it over Bluetooth, so the phone shows what it sent.
+   */
+  async function am4WriteBoost(eid, body) {
+    if (eid !== AM4_BLOCKS.amp) throw badInput('Only the AM4’s first amp has a boost the app can switch.')
+    if (!body || body.continuous !== false || (body.value !== 0 && body.value !== 1)) throw badInput('The boost is set on or off, never anything else.')
+    const on = body.value === 1
+    const r = await fire(buildAm4AmpBoost(on), `amp boost ${on ? 'on' : 'off'}`)
+    if (rejected(r)) throw refusedBy(r.rejected)
+    return { ok: true }
+  }
+
   async function am4WriteChannel(eid, channel) {
     blockNumber(eid)
     const c = channelIndex(channel)
@@ -2059,6 +2076,10 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         if (part[3] === 'channel') return () => (am4 ? am4WriteChannel(eid, body?.channel) : gen3WriteChannel(eid, body?.channel))
       }
     }
+    /* One PUT only, on an AM4 only: the amp's Out Boost (lib/am4-boost). Every other setting stays at the computer. */
+    if (method === 'PUT' && am4 && path === `/preset/blocks/${AM4_BLOCKS.amp}/params/${AM4.OUT_BOOST}`) {
+      return () => am4WriteBoost(AM4_BLOCKS.amp, body)
+    }
     return null
   }
 
@@ -2081,7 +2102,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     } catch {
       body = null
     }
-    const route = method === 'GET' || method === 'POST' ? routeFor(method, clean, part, body) : null
+    const route = method === 'GET' || method === 'POST' || method === 'PUT' ? routeFor(method, clean, part, body) : null
     if (!route) {
       /*
        * WHAT BLUETOOTH NEVER ANSWERS IS SAID ONCE A CONNECTION. "Don't know if

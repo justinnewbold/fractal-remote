@@ -6239,6 +6239,10 @@ console.log('\nthe server')
 const { run: server } = await import('./server.mjs')
 server(test)
 
+console.log('\non an AM4 the amp’s pedal is its boost')
+const { run: am4Boost } = await import('./am4-boost.mjs')
+am4Boost(test)
+
 test('both file kinds are listed and told apart', async () => {
   // A .syx goes back to the unit verbatim; a design re-validates first. Load
   // treating one as the other would either corrupt or silently no-op.
@@ -14759,7 +14763,7 @@ test('the looper’s Rec and Play sit in the two top corners, and no corner word
   /* On and Off stay written in the tile, where test/both-ends.mjs reads them. */
   assert.match(
     tile,
-    /<span className="gig-block-word" ref=\{wordRef\} data-crowded=\{shows\.left \? undefined : 'yes'\}>\s*\{rec \? LOOPER_LABEL\.record : unknown \? '\\u00a0' : block\.bypassed \? 'Off' : 'On'\}/,
+    /<span className="gig-block-word" ref=\{wordRef\} data-crowded=\{shows\.left \? undefined : 'yes'\}>\s*\{rec \? LOOPER_LABEL\.record : boost \? boostWord\(boost\) \|\| '\\u00a0' : unknown \? '\\u00a0' : block\.bypassed \? 'Off' : 'On'\}/,
     'the door’s top left does not say Rec, or the top-left word is drawn whether or not it has room'
   )
   /* Play looks like the word it finishes, not like the channel's pill. */
@@ -14775,7 +14779,8 @@ test('the looper’s Rec and Play sit in the two top corners, and no corner word
   /* Rec and Play are the door's words off a real VP4 only: on one, no computer app can work its looper (test/vp4-safety.mjs). */
   assert.match(tile, /const rec = door && !vp4Here\(\)/, 'the door says Rec and Play on a VP4, or nowhere')
   /* A hidden word is not read out, so the label carries the words. */
-  assert.match(tile, /\[block\.name \|\| block\.slug, unknown \? null : block\.bypassed \? 'Off' : 'On', block\.channel\]\.filter\(Boolean\)\.join\(', '\)/, 'a hidden On or channel letter is lost to a screen reader')
+  /* (An AM4 amp's says Boost on or Boost off there instead: shared/am4-boost.mjs.) */
+  assert.match(tile, /\[block\.name \|\| block\.slug, boost \? boostWord\(boost\) : unknown \? null : block\.bypassed \? 'Off' : 'On', block\.channel\]\.filter\(Boolean\)\.join\(', '\)/, 'a hidden On or channel letter is lost to a screen reader')
   assert.match(tile, /'Looper — open Record, Play and Stop'/)
 
   const hook = gig.slice(gig.indexOf('function useCornerFit('), gig.indexOf('function BlockTile('))

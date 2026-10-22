@@ -18,7 +18,8 @@ import {
   writeTempo,
   writeBypass,
   writeTuner,
-  retryChain
+  retryChain,
+  tapBoost
 } from '../lib/deviceState'
 import ChainWait, { ChainUpdating, useChain } from './ChainWait'
 import {
@@ -36,6 +37,7 @@ import { downBandTop } from '../lib/downBand'
 import { STAGE_HIDDEN } from '../lib/guardrails'
 import { findLooper, LOOPER_LABEL } from '../../shared/looper.mjs'
 import { cornerFit } from '../../shared/tile-corners.mjs'
+import { BOOST, ampPedal, boostState, boostWord } from '../../shared/am4-boost.mjs'
 import Looper from './Looper'
 import { blockColor } from '../lib/blockColors'
 import { blockIcon } from '../lib/blockIcons'
@@ -87,6 +89,7 @@ const ofSceneNames = (s) => s.sceneNames
 const ofBlocks = (s) => s.blocks
 const ofTunerOn = (s) => s.tunerOn
 const ofTuning = (s) => s.tuning
+const ofBoost = (s) => s.boost
 
 /* How long a preset's scenes stay nameless before Play says how to name them. */
 const UNNAMED_AFTER_MS = 1500
@@ -172,6 +175,8 @@ export default function Gig({
   const allBlocks = useDevice(ofBlocks)
   const tunerOn = useDevice(ofTunerOn)
   const tuning = useDevice(ofTuning)
+  /* On an AM4, what its amp's boost is: the amp's pedal shows it (shared/am4-boost.mjs). */
+  const boostKept = useDevice(ofBoost)
   /*
    * Whose blocks these are. The name of a new preset is up the moment it is
    * picked and its blocks a moment later, and in between the tiles here were
@@ -529,9 +534,12 @@ export default function Gig({
     haptic()
     const eid = block.effectId
     const wanted = !block.bypassed
+    /* On an AM4 the amp's pedal is its boost (shared/am4-boost.mjs): it switches that, and never turns the amp off. */
+    const boosts = ampPedal(deviceKey, block) !== null
     setToggling(eid)
     try {
-      await writeBypass(eid, wanted)
+      if (boosts) await tapBoost(eid)
+      else await writeBypass(eid, wanted)
     } catch (err) {
       /* A tap on a tile drawn for the preset just left: nothing was sent,
          so there is nothing to report and nothing to read back. */
@@ -539,6 +547,11 @@ export default function Gig({
       /* Dropped before it left: the tile is still what the unit is on, and there is nothing to read back. */
       if (err?.notSent) {
         sayNotSent(err)
+        return
+      }
+      /* A boost tap that sent nothing, and says why (the amp off in this scene, a boost that could not be read): said over the tiles for long enough to read, with nothing to read back. */
+      if (err?.nothingSent) {
+        setDropped({ words: err.message, at: Date.now(), ms: VP4_SAID_MS })
         return
       }
       // The error itself: the app reads `unitGone` off it to tell a refused
@@ -1204,6 +1217,8 @@ export default function Gig({
               channels={channels}
               busy={toggling === block.effectId}
               outline={shown.outline}
+              /* An AM4 amp's pedal is its boost: what it shows (shared/am4-boost.mjs), or null for any other pedal. */
+              boost={ampPedal(deviceKey, block) === 'boost' ? boostState(boostKept, preset?.number, block) : null}
               onToggle={() => toggle(block)}
               onHold={() => setChanEid(block.effectId)}
               icon={icons ? blockIcon(block.slug) : null}
@@ -1545,7 +1560,7 @@ function useCornerFit({ tile, picture, band, left, right }, pair, again) {
  * The hold is answered by Gig, which owns the one channel sheet; the tile
  * only says it was held.
  */
-function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, icon, door = false }) {
+function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, icon, door = false, boost = null }) {
   /* Repaint when the colours change (lib/useLooks). */
   useLooks()
   /* Only where there is something to choose. Not every block is channelled,
@@ -1575,7 +1590,14 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
    */
   const rec = door && !vp4Here()
   /* And every pedal of a real VP4 that the player has not tapped: nothing reads a VP4's on/off (shared/vp4-safety.mjs VP4_ON_OFF_UNKNOWN). */
-  const unknown = !rec && (outline || vp4Here()) && typeof block.bypassed !== 'boolean'
+  /*
+   * And an AM4's amp, whose pedal is its boost (shared/am4-boost.mjs):
+   * `boost` is what it shows, Boost on, Boost off, Amp off while the amp
+   * itself is off in this scene, or nothing until the unit has said. Lit for
+   * Boost on only. The amp's own on and off stays in the editor.
+   */
+  const unknown = boost ? boost === BOOST.unknown : !rec && (outline || vp4Here()) && typeof block.bypassed !== 'boolean'
+  const dark = boost ? boost !== BOOST.on : unknown || block.bypassed
 
   /*
    * THE TWO CORNERS. An effect says On or Off at the top left and its channel
@@ -1596,14 +1618,14 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
   const shows = useCornerFit(
     { tile: tileRef, picture: pictureRef, band: bandRef, left: wordRef, right: acrossRef },
     rec,
-    [rec, unknown, block.bypassed, block.channel, !!icon]
+    [rec, unknown, block.bypassed, block.channel, !!icon, boost]
   )
 
   return (
     <div className="gig-block-cell">
       <button
         ref={tileRef}
-        className={`gig-block ${unknown || block.bypassed ? 'off' : 'on'}`}
+        className={`gig-block ${dark ? 'off' : 'on'}`}
         /* A VP4 pedal nobody has tapped is drawn with a dashed ring, so it is
            never mistaken for an Off: at a narrow width the corner word has no
            room, and the two were the same tile, so a first tap (which sends
@@ -1621,19 +1643,19 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
         disabled={busy}
         /* The looper pedal opens its buttons rather than switching it, so it
            is not a toggle and does not say it is one. */
-        aria-pressed={door || unknown ? undefined : !block.bypassed}
+        aria-pressed={door || unknown ? undefined : !dark}
         /* Said in words rather than left to the corners: a corner word with
            no room is hidden, and a hidden word is not read out either. The
            same three things the tile read before, in the order it drew them. */
         aria-label={
           rec
             ? 'Looper — open Record, Play and Stop'
-            : [block.name || block.slug, unknown ? null : block.bypassed ? 'Off' : 'On', block.channel].filter(Boolean).join(', ')
+            : [block.name || block.slug, boost ? boostWord(boost) : unknown ? null : block.bypassed ? 'Off' : 'On', block.channel].filter(Boolean).join(', ')
         }
         /* The phone says "Hold to switch channels" beside CHAIN; this screen
            has no heading there to carry it, so the tile says it when a mouse
            rests on it. */
-        title={has ? 'Tap to switch on or off. Hold, or right-click, to switch channels.' : undefined}
+        title={boost ? `Tap to switch its boost on or off.${has ? ' Hold, or right-click, to switch channels.' : ''}` : has ? 'Tap to switch on or off. Hold, or right-click, to switch channels.' : undefined}
         {...hold}
       >
         {/*
@@ -1670,7 +1692,7 @@ function BlockTile({ block, channels, busy, outline = false, onToggle, onHold, i
               door's words are the looper's own names for the two buttons
               it opens, so the tile and the sheet cannot disagree. */}
           <span className="gig-block-word" ref={wordRef} data-crowded={shows.left ? undefined : 'yes'}>
-            {rec ? LOOPER_LABEL.record : unknown ? '\u00a0' : block.bypassed ? 'Off' : 'On'}
+            {rec ? LOOPER_LABEL.record : boost ? boostWord(boost) || '\u00a0' : unknown ? '\u00a0' : block.bypassed ? 'Off' : 'On'}
           </span>
           {/* The door's other half, in the corner an effect keeps for its
               channel — set like the word across from it, not like the

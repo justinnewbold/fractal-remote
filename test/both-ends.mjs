@@ -2782,7 +2782,8 @@ export function run(test) {
     /* The same condition as the hold itself, so the words never promise a hold that does nothing. */
     assert.match(stage, /onLongPress=\{\s*channels\?\.length > 1/)
     const gig = read('src/components/Gig.jsx')
-    assert.match(gig, /title=\{has \? 'Tap to switch on or off\. Hold, or right-click, to switch channels\.' : undefined\}/, 'the browser’s tiles do not say they can be held')
+    /* An AM4 amp's pedal says it switches the boost (shared/am4-boost.mjs), and can be held the same. */
+    assert.match(gig, /title=\{boost \? `Tap to switch its boost on or off\.\$\{has \? ' Hold, or right-click, to switch channels\.' : ''\}` : has \? 'Tap to switch on or off\. Hold, or right-click, to switch channels\.' : undefined\}/, 'the browser’s tiles do not say they can be held')
   })
 
   /*

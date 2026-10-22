@@ -219,7 +219,8 @@ import {
   vp4Here,
   vp4PresetName,
   vp4SceneNames,
-  vp4Setup
+  vp4Setup,
+  setAmpBoost
 } from './lib/forgefx'
 import Vp4Setup from './components/Vp4Setup'
 import { MIDI_SETUP_TITLE, VP4_NO_EDITS, VP4_NO_KNOBS, VP4_NO_RENAME, vp4ComputerLacks, vp4SetupStatus } from '../shared/vp4-safety.mjs'
@@ -343,7 +344,11 @@ attachDriver({
   /* Which unit a remembered chain belongs to: see deviceState.knownChain. */
   unitKey: () => `${isDemo() ? `demo:${demoUnit()}` : remoteActive() ? 'away' : 'rig'}:${currentDeviceSlug()}`,
   /* The tempos this unit takes: a read back outside them, 0 among them, is no answer (shared/tempo heardTempo). */
-  tempoRange: () => tempoRange(currentDeviceSlug())
+  tempoRange: () => tempoRange(currentDeviceSlug()),
+  /* An AM4's amp pedal is its boost: which unit, the read and the write (shared/am4-boost.mjs, deviceState.tapBoost). */
+  unitSlug: () => currentDeviceSlug(),
+  blockParams,
+  setAmpBoost
 })
 
 /* Hoisted so each is one function for the life of the module: a selector

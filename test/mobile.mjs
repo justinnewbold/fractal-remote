@@ -294,7 +294,7 @@ async function rigOnTheBench(over = {}) {
   files['blockCatalog.js'] = `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
   /* The gate a tap asks while the link is down, and the rules its deadline and its words come from: both real, as they are. */
   /* And the colours, which rig.js tells which unit answered (lib/looks), with the colour sums the palettes use (lib/ink). */
-  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js']) {
+  for (const f of ['own-echo.js', 'chain-view.js', 'chain-outline.js', 'demoUnits.js', 'firmware.js', 'fault-rule.js', 'tempo.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'scale.js', 'presetName.js', 'slots.js', 'unit.mjs', 'param-fixes.js', 'metronome-rules.js', 'device-word.js', 'unsupported.js', 'vp4-safety.js', 'tapGate.js', 'relay-rules.js', 'looks.js', 'blockPalettes.js', 'ink.js', 'am4-boost.js']) {
     files[f] = esm(lib(f))
   }
   files['device.js'] = clocked(esm(lib('device.js')))
@@ -369,10 +369,15 @@ async function rigOnTheBench(over = {}) {
         }
         const slot = path.match(/^\/presets\/(-?\d+)\/scenes$/)
         if (slot) return { number: Number(slot[1]), names: unit.scenes }
+        /* `unit.params(eid)` is the computer's answer to one block's params read: an AM4 amp's boost rides in it. */
+        const params = path.match(/^\/preset\/blocks\/(\d+)\/params$/)
+        if (params && unit.params) return unit.params(Number(params[1]))
         /* `unit.store` is what the computer's store holds, by document: the scene names it filed, say. */
         if (path.startsWith('/store/config/')) return unit.store?.[decodeURIComponent(path.slice('/store/config/'.length))] ?? null
       }
       if (method === 'PUT' && path.startsWith('/store/config/')) return { ok: true }
+      /* `unit.put(path, body)` answers one setting written: an AM4 amp's boost, say. */
+      if (method === 'PUT' && /^\/preset\/blocks\/\d+\/params\/\d+$/.test(path) && unit.put) return unit.put(path, body)
       if (method === 'POST' && path === '/preset/select') {
         if (unit.refuseSelect) throw Object.assign(new Error('The unit refused that preset.'), { status: 409 })
         unit.number = body.number
@@ -387,6 +392,9 @@ async function rigOnTheBench(over = {}) {
       if (method === 'DELETE' && path === '/device/cache') return { ok: true, deleted: true }
       /* The tuner; `tunerAnswer` is what the answer says of the unit's own tuner screen. */
       if (method === 'POST' && path === '/tuner') return unit.tunerAnswer ? unit.tunerAnswer(body) : { ok: true }
+      /* `unit.post(method, path, body)` answers what the bench has no line for: a block's channel, say. */
+      const more = unit.post?.(method, path, body)
+      if (more !== undefined) return more
       throw new Error(`the bench unit has no ${method} ${path}`)
     }
     /* Connected, read once, and the log cleared: what follows is what a tap costs. */
@@ -1634,7 +1642,9 @@ export function run(test) {
          just left (see lib/chain-view), which has edited nothing. */
       /* And after the other, since 13 October 2026: a tap refused because the
          link is down (refusedNow), which has edited nothing either. */
-      ['export function writeBypass\\(id, bypassed, at = Date\\.now\\(\\)\\) \\{ if \\(notSwitchable\\(id\\)\\) return Promise\\.resolve\\(false\\) if \\(refusedNow\\([^)]*\\)\\) return Promise\\.resolve\\(false\\) const deadline = tapDeadline\\(at\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a bypass'],
+      ['export function writeBlockBypass\\(id, bypassed, at = Date\\.now\\(\\)\\) \\{ if \\(notSwitchable\\(id\\)\\) return Promise\\.resolve\\(false\\) if \\(refusedNow\\([^)]*\\)\\) return Promise\\.resolve\\(false\\) const deadline = tapDeadline\\(at\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a bypass'],
+      /* An AM4 amp's boost lands in the edit buffer too (lib/am4-boost): marked once it is going, never for a tap that sent nothing. */
+      ['const press = keptBoost\\(number, channel, want\\) noteEdited\\(\\)', 'an AM4 amp’s boost'],
       ['export function writeChannel\\(id, channel, at = Date\\.now\\(\\)\\) \\{ if \\(notThisChain\\(\\)\\) return Promise\\.resolve\\(false\\) if \\(refusedNow\\([^)]*\\)\\) return Promise\\.resolve\\(false\\) const deadline = tapDeadline\\(at\\) const was = asWas\\(\\) noteEdited\\(\\)', 'a channel'],
       ['export function beginChainWrite\\(\\) \\{ [^}]*noteEdited\\(\\)', 'a chain move'],
       ['export function writeTempo\\(bpm, at = Date\\.now\\(\\)\\) \\{ if \\(refusedNow\\([^)]*\\)\\) return Promise\\.resolve\\(false\\) const deadline = tapDeadline\\(at\\) const was = state\\.bpm noteEdited\\(\\)', 'a typed tempo']
@@ -18499,7 +18509,7 @@ export function run(test) {
   test('a scene or channel copy whose first switch is refused or dropped writes nothing and says it stopped', async () => {
     const { rig, clock, wire, gate, relay, device } = await rigOnTheBench()
     const { copyScene, copyChannel } = await import('../shared/copy-tools.mjs')
-    const sceneWire = { setScene: rig.orStop(rig.writeScene), sceneState: device.sceneState, setBypass: rig.orStop(rig.writeBypass), setChannel: rig.orStop(rig.writeChannel) }
+    const sceneWire = { setScene: rig.orStop(rig.writeScene), sceneState: device.sceneState, setBypass: rig.orStop(rig.writeBlockBypass), setChannel: rig.orStop(rig.writeChannel) }
     /* With the link up, a copy goes as it always did. */
     assert.deepEqual(await copyScene({ from: 1, to: 3, wire: sceneWire }), { ok: true, changed: 0 })
     assert.equal(wire.filter((l) => l === 'POST /scene').length, 2)
@@ -18523,10 +18533,11 @@ export function run(test) {
     assert.deepEqual(wire, ['POST /scene'], 'the copy read and wrote on after a switch that did not go')
     /* A write turned away before it was tried says so, never an older note's words. */
     rig.set({ error: 'An older fault.' })
-    await assert.rejects(rig.orStop(rig.writeBypass)(999, true), (e) => e.message === rig.WRITE_DID_NOT_GO && !e.notSent)
+    await assert.rejects(rig.orStop(rig.writeBlockBypass)(999, true), (e) => e.message === rig.WRITE_DID_NOT_GO && !e.notSent)
     /* And both of the phone's copy tools are handed that wire. */
     const bare = (t) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
-    assert.match(bare(read('mobile/src/components/SceneCopy.js')), /wire: \{ setScene: orStop\(writeScene\), sceneState, setBypass: orStop\(writeBypass\), setChannel: orStop\(writeChannel\) \}/, 'the scene copy goes on after a switch that did not go')
+    /* And the blocks themselves, an AM4's amp included: a scene's on and off is not the amp's boost (lib/am4-boost). */
+    assert.match(bare(read('mobile/src/components/SceneCopy.js')), /wire: \{ setScene: orStop\(writeScene\), sceneState, setBypass: orStop\(writeBlockBypass\), setChannel: orStop\(writeChannel\) \}/, 'the scene copy goes on after a switch that did not go, or copies an AM4 amp’s boost for its on and off')
     assert.match(bare(read('mobile/src/screens/Edit.js')), /wire: \{ setChannel: orStop\(writeChannel\), readBlock: blockParams, setType, setParam, setEnum \}/, 'the channel copy goes on after a switch that did not go')
   })
 
@@ -19550,5 +19561,214 @@ export function run(test) {
     assert.equal(heardTempo(251, tempoRange('am4')), false)
     assert.equal(heardTempo(undefined), false)
     assert.equal(heardTempo(400), true, 'a unit that has not said what it is takes 20 to 400')
+  })
+
+  /*
+   * ON AN AM4 THE AMP'S PEDAL IS ITS BOOST (1.87.49, shared/am4-boost.mjs).
+   * "On the AM4 the amp on off button should do an amp boost instead of
+   * turning the amp completely off. It should say Boost on, Boost off when
+   * they tap it." Run on the bench: an AM4 through a computer, whose params
+   * read carries the amp's Out Boost for the channel it is on, among the
+   * entries it must never be taken for.
+   */
+  const AM4_BOOST_BENCH = (over = {}) => {
+    const boosts = { A: 0, B: 1, C: 0, D: 0 }
+    return {
+      short: 'AM4',
+      capabilities: { scenes: 4, sceneCount: 4, slotModel: 'linear', channelNames: ['A', 'B', 'C', 'D'], meters: { outputLevels: false } },
+      namesInChain: false,
+      boosts,
+      params(eid) {
+        if (eid !== 58) return { slug: 'drive', named: [], enums: [] }
+        const ch = this.blocks.find((b) => b.effectId === 58)?.channel || 'A'
+        return {
+          block: 'amp',
+          slug: 'amp',
+          named: [
+            { id: 8, name: 'Out Boost Level', value: 4, min: 0, max: 4 },
+            { id: 10, name: 'Gain', value: 6, min: 0, max: 10 }
+          ],
+          enums: [
+            /* The computer's made-up Bypass entry, at the head of the list, and two boosts that are not the amp's. */
+            { id: 0xffff, name: 'Bypass', value: 1, options: [{ value: 0, label: 'Engaged' }, { value: 1, label: 'Bypassed' }] },
+            { id: 42, name: 'Input Boost', value: 1, options: [{ value: 0, label: 'OFF' }, { value: 1, label: 'ON' }] },
+            { id: 0x3a0096, name: 'Out Boost', value: 1, options: [{ value: 0, label: 'OFF' }, { value: 1, label: 'ON' }] },
+            { id: 150, name: 'Out Boost', value: this.boosts[ch], options: [{ value: 0, label: 'OFF' }, { value: 1, label: 'ON' }] }
+          ]
+        }
+      },
+      /* A block's channel, as the computer writes it. */
+      post(method, path, body) {
+        const m = path.match(/^\/preset\/blocks\/(\d+)\/channel$/)
+        if (method !== 'POST' || !m) return undefined
+        const b = this.blocks.find((x) => x.effectId === Number(m[1]))
+        if (b) b.channel = body.channel
+        return { ok: true }
+      },
+      /* The AM4 never confirms a write over USB: the computer answers ok:false to every one that lands. */
+      put(path, body) {
+        const ch = this.blocks.find((b) => b.effectId === 58)?.channel || 'A'
+        if (path === '/preset/blocks/58/params/150') this.boosts[ch] = body.value
+        return { ok: false }
+      },
+      ...over
+    }
+  }
+  const BOOST_PUT = 'PUT /preset/blocks/58/params/150'
+  const BOOST_READ = 'GET /preset/blocks/58/params'
+
+  test('phone: on an AM4 the amp’s pedal sends its Out Boost, the opposite of what the unit said, and never a bypass', async () => {
+    const { rig, clock, unit, wire, asked, relay } = await rigOnTheBench(AM4_BOOST_BENCH())
+    await clock.advance(0)
+    assert.equal(rig.getState().deviceSlug, 'am4')
+    assert.deepEqual(rig.getState().boost, { number: 12, channel: 'A', on: false }, 'the boost was not read after the chain, or read off the wrong entry')
+    assert.equal(rig.boostNow(), 'off')
+    assert.equal(await rig.writeBypass(58, true), true, 'the boost tap did not go')
+    assert.equal(asked(BOOST_PUT), 1)
+    assert.ok(!wire.some((l) => /\/preset\/blocks\/58\/bypass$/.test(l)), 'the amp was turned off')
+    const sent = relay.handed.find((h) => h.line === BOOST_PUT)
+    assert.deepEqual(JSON.parse(sent.body), { value: 1, continuous: false }, 'not the captured discrete write of Boost on')
+    assert.ok(Number.isFinite(sent.deadline) && sent.deadline >= 1000000 + 1500 - 1, 'the boost is not a tap with a deadline')
+    assert.equal(unit.boosts.A, 1)
+    /* The AM4's ok:false is no refusal: it shows what went. */
+    assert.equal(rig.boostNow(), 'on')
+    assert.equal(rig.getState().error, null, 'the AM4’s ok:false was taken for a no')
+    /* And the next tap the other way, by its value, never a toggle. */
+    assert.equal(await rig.writeBypass(58, false), true)
+    assert.deepEqual(JSON.parse(relay.handed.filter((h) => h.line === BOOST_PUT).at(-1).body), { value: 0, continuous: false })
+    assert.equal(rig.boostNow(), 'off')
+    /* No read-back after a tap: that would be a dump of the whole preset. */
+    assert.equal(asked(BOOST_READ), 0, 'a tap read the amp back')
+    /* The watch's pedal comes the same way (lib/watchBridge: writeBypass(cmd.id, !cmd.on)), whatever it asks for. */
+    await rig.writeBypass(58, true)
+    assert.equal(rig.boostNow(), 'on')
+    assert.ok(!wire.some((l) => /\/bypass$/.test(l)), 'a pedal tap on an AM4 amp ever bypassed it')
+    /* Unsaved work, as any change in the edit buffer. */
+    assert.equal(rig.getState().unsaved?.number, 12, 'the boost does not count as unsaved work')
+  })
+
+  test('phone: the boost follows the unit, per channel and per preset, and is read again after a channel or a preset change', async () => {
+    const bench = AM4_BOOST_BENCH()
+    const { rig, clock, unit, asked } = await rigOnTheBench(bench)
+    await clock.advance(0)
+    assert.equal(rig.boostNow(), 'off')
+    /* Channel B has its boost on: the pedal says so once the channel is B, read for B. */
+    assert.equal(await rig.writeChannel(58, 'B'), true)
+    assert.equal(unit.blocks.find((b) => b.effectId === 58).channel, 'B')
+    await clock.advance(0)
+    assert.equal(asked(BOOST_READ), 1, 'a channel change did not read the boost of the channel the amp is on now')
+    assert.deepEqual(rig.getState().boost, { number: 12, channel: 'B', on: true })
+    assert.equal(rig.boostNow(), 'on')
+    /* Kept for B: the screen moving the amp back to A says nothing about A's until read. */
+    rig.set({ blocks: rig.getState().blocks.map((b) => (b.effectId === 58 ? { ...b, channel: 'A' } : b)), allBlocks: rig.getState().allBlocks.map((b) => (b.effectId === 58 ? { ...b, channel: 'A' } : b)) })
+    assert.equal(rig.boostNow(), 'unknown', 'channel B’s boost was shown on channel A')
+    /* Another preset: unknown until its chain read, then read with it. */
+    unit.blocks.find((b) => b.effectId === 58).channel = 'A'
+    unit.boosts.A = 1
+    const loaded = rig.loadPreset(13)
+    await clock.advance(3000)
+    await loaded
+    assert.equal(rig.getState().preset.number, 13)
+    assert.deepEqual(rig.getState().boost, { number: 13, channel: 'A', on: true }, 'the new preset’s boost was not read with its chain')
+    assert.equal(rig.boostNow(), 'on')
+  })
+
+  test('phone: a boost not known is read first, and one the unit cannot say sends nothing and says so', async () => {
+    let answers = 'nothing'
+    const bench = AM4_BOOST_BENCH()
+    const real = bench.params
+    bench.params = function (eid) {
+      if (answers === 'fails') throw Object.assign(new Error('the unit did not answer'), { status: 503 })
+      if (answers === 'nothing') return { slug: 'amp', named: [], enums: [{ id: 150, name: 'Out Boost', value: 65534, options: [{ value: 0, label: 'OFF' }, { value: 1, label: 'ON' }] }] }
+      return real.call(this, eid)
+    }
+    const { rig, clock, asked, wire, relay } = await rigOnTheBench(bench)
+    await clock.advance(0)
+    /* Read, and nothing that can be shown (not exactly 0 or 1): kept, so a tap does not read again, and sends nothing. */
+    assert.deepEqual(rig.getState().boost, { number: 12, channel: 'A', on: null })
+    assert.equal(rig.boostNow(), 'unknown')
+    const reads = asked(BOOST_READ)
+    assert.equal(await rig.writeBypass(58, true), false)
+    assert.equal(asked(BOOST_READ), reads, 'a tap on an unreadable boost read the amp again')
+    assert.equal(asked(BOOST_PUT), 0, 'a boost nobody could read was sent anyway')
+    assert.ok(!wire.some((l) => /\/bypass$/.test(l)), 'an unread boost fell back to a bypass')
+    assert.equal(rig.getState().error, "The amp’s boost couldn’t be read from the unit, so nothing was sent. Try it again in a moment.")
+    /* A read that failed keeps nothing, so the next tap reads first, and goes once it knows. */
+    rig.set({ boost: null })
+    answers = 'fails'
+    assert.equal(await rig.writeBypass(58, true), false)
+    assert.equal(asked(BOOST_READ), reads + 1, 'a tap on a boost never read did not read it first')
+    assert.equal(asked(BOOST_PUT), 0)
+    answers = 'works'
+    assert.equal(await rig.writeBypass(58, true), true)
+    assert.equal(asked(BOOST_READ), reads + 2)
+    assert.deepEqual(JSON.parse(relay.handed.filter((h) => h.line === BOOST_PUT).at(-1).body), { value: 1, continuous: false })
+    assert.equal(rig.boostNow(), 'on')
+  })
+
+  test('phone: an AM4 amp switched off in this scene says so, sends nothing, and Edit still turns it on', async () => {
+    const { rig, clock, asked, wire } = await rigOnTheBench(
+      AM4_BOOST_BENCH({
+        blocks: [
+          { slug: 'drive', name: 'Drive 1', effectId: 118, bypassed: true, channel: 'A' },
+          { slug: 'amp', name: 'Amp 1', effectId: 58, bypassed: true, channel: 'A' }
+        ]
+      })
+    )
+    await clock.advance(0)
+    assert.equal(rig.boostNow(), 'amp-off')
+    assert.equal(await rig.writeBypass(58, false), false)
+    assert.equal(asked(BOOST_PUT), 0)
+    assert.ok(!wire.some((l) => /\/bypass$/.test(l)), 'Play turned the amp on')
+    assert.equal(rig.getState().error, 'The amp is off in this scene, so its boost can’t be heard. Turn the amp on in Edit.')
+    /* The block itself, from its page in Edit (and Copy a scene): the real on and off, as it always was. */
+    assert.equal(await rig.writeBlockBypass(58, false), true)
+    assert.equal(asked('POST /preset/blocks/58/bypass'), 1, 'the amp’s own on and off is gone from the phone')
+    /* And every other AM4 pedal is still an on and off. */
+    assert.equal(await rig.writeBypass(118, false), true)
+    assert.equal(asked('POST /preset/blocks/118/bypass'), 1, 'the AM4’s drive stopped switching')
+  })
+
+  test('phone: every other unit’s amp pedal still turns the amp on and off, and nothing reads a boost there', async () => {
+    const { rig, clock, asked } = await rigOnTheBench({ params: () => assert.fail('an FM3’s amp was read for a boost') })
+    await clock.advance(0)
+    assert.equal(rig.getState().deviceSlug, 'fm3')
+    assert.equal(rig.boostNow(), 'unknown')
+    assert.equal(rig.getState().boost, null)
+    assert.equal(await rig.writeBypass(58, true), true)
+    assert.equal(asked('POST /preset/blocks/58/bypass'), 1, 'an FM3’s amp pedal no longer turns it off')
+    assert.equal(asked(BOOST_PUT), 0, 'an FM3 was sent the AM4’s boost')
+    assert.equal(asked(BOOST_READ), 0)
+  })
+
+  test('phone: over Bluetooth an AM4’s boost is never read; the first tap sends Boost on, and the next the other way', async () => {
+    const { rig, clock, asked, relay } = await rigOnTheBench(AM4_BOOST_BENCH({ capabilities: { via: 'bluetooth', scenes: 4, sceneCount: 4, slotModel: 'linear' } }))
+    await clock.advance(0)
+    assert.equal(asked(BOOST_READ), 0, 'the boost was read over Bluetooth, which has no read for it')
+    assert.equal(rig.boostNow(), 'unknown')
+    assert.equal(await rig.writeBypass(58, true), true)
+    assert.equal(asked(BOOST_READ), 0)
+    assert.deepEqual(JSON.parse(relay.handed.filter((h) => h.line === BOOST_PUT).at(-1).body), { value: 1, continuous: false }, 'an unread boost’s first tap is not Boost on')
+    assert.equal(rig.boostNow(), 'on')
+    assert.equal(await rig.writeBypass(58, true), true)
+    assert.deepEqual(JSON.parse(relay.handed.filter((h) => h.line === BOOST_PUT).at(-1).body), { value: 0, continuous: false })
+    assert.equal(rig.boostNow(), 'off')
+  })
+
+  test('phone: a boost tap is a tap: refused while NOT CONNECTED, and put back when it does not land', async () => {
+    const bench = AM4_BOOST_BENCH()
+    const { rig, clock, gate, asked, unit } = await rigOnTheBench(bench)
+    await clock.advance(0)
+    gate.setLinkDown(true)
+    assert.equal(await rig.writeBypass(58, true), false)
+    assert.equal(asked(BOOST_PUT), 0, 'a boost went while the link was down')
+    assert.equal(rig.getState().dropped, 'Not sent — not connected')
+    assert.equal(rig.boostNow(), 'off', 'a boost that never left is shown')
+    gate.setLinkDown(false)
+    unit.put = () => {
+      throw Object.assign(new Error('The unit refused it.'), { status: 409 })
+    }
+    assert.equal(await rig.writeBypass(58, true), false)
+    assert.equal(rig.boostNow(), 'off', 'a refused boost stayed on screen')
   })
 }

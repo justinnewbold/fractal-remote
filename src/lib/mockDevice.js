@@ -658,6 +658,17 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
     blockParams: (eid) => {
       const block = state.blocks.find((b) => b.effectId === eid)
       if (!block) return { block: '', slug: '', page: -1, named: [], enums: [], type: null }
+      /*
+       * ON AN AM4 THE AMP'S PEDAL IS ITS BOOST (shared/am4-boost.mjs), so the
+       * demo's AM4 amp reports its Out Boost switch where a real AM4's
+       * computer does: in `enums`, as 150, OFF or ON, for the channel it is
+       * on. Kept per channel beside its model by setEnum, and saved with it.
+       * Every other block, and every other unit's amp, reports none, as before.
+       */
+      const enums =
+        UNIT === 'am4' && block.slug === 'amp' && eid === 58
+          ? [{ id: 150, name: 'Out Boost', value: selectorOf(eid, 150, 0), options: [{ value: 0, label: 'OFF' }, { value: 1, label: 'ON' }] }]
+          : []
       // `type` is how the device says which model this block is on. It is the
       // only place that answers it — /preset/blocks does not carry a typeName,
       // which is why the model picker showed "331 models…" and never a model.
@@ -668,7 +679,7 @@ export function createMockDevice(unitKey = DEFAULT_UNIT) {
         slug: block.slug,
         page: eid,
         named: clone(paramsOf(eid)),
-        enums: [],
+        enums,
         type: chosen ? { value: chosen.value, name: chosen.name } : null,
         layout: layoutOf(block.slug)
       }
