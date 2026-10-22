@@ -19509,6 +19509,24 @@ export function run(test) {
     }
   })
 
+  test('phone: Which unit reads the new unit whole once: the unit watch does not read it again while the pick is being proved', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench({ number: 53, scenes: FM3_53, capabilities: { scenes: 8, meters: { outputLevels: false } }, namesInChain: false })
+    rig.watchUnit()
+    /* Which unit is tapped 200 ms before the watch's half-minute check, and the pick's proof takes a second and a half. */
+    await clock.advance(30000 - 200)
+    rig.computerChanged()
+    Object.assign(unit, AM4_HERE, { copy: () => ({ name: 'SONG 53', scenes: ['CLEAN', 'LEAD', '', ''], cells: [] }), scenes: ['CLEAN', 'LEAD', '', ''], bpm: 99 })
+    await clock.advance(1500)
+    assert.equal(asked('GET /device/detect'), 0, 'the unit watch read the new unit whole while Which unit was still proving the pick')
+    /* The pick proved: the clean start and its own read (link.js chooseHost). */
+    rig.startClean()
+    await rig.refreshAll()
+    await clock.advance(30000)
+    assert.equal(asked('GET /device/detect'), 1, 'the new unit was read whole twice')
+    assert.equal(rig.getState().deviceSlug, 'am4')
+    rig.stopWatching()
+  })
+
   test('phone: a tempo of 0 is the unit not answering, and Tap keeps its last figure', async () => {
     const { rig, unit } = await rigOnTheBench({ bpm: 120 })
     assert.equal(rig.getState().bpm, 120)

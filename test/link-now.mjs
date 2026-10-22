@@ -3667,6 +3667,34 @@ export function run(test) {
     assert.equal(early.value?.short, 'AM4')
   })
 
+  test('phone: two computers, and the record still not off the disk when the roll call’s first window closes: it is looked for while their units are read, and the unit picked is driven, as 1.87.47 did', async () => {
+    /* The first window closes 1.6 s after the link came up, and the units are read until 3.1 s; the AM4 is picked under Which unit. */
+    for (const slow of [1700, 3000]) {
+      const t = await relayOnABench('phone', { picked: 'raspberry pi 3', many: true, disk: slow })
+      const { bench, clock, relay, watch, tap } = t
+      bench.computers = [PI5(), PI3()]
+      const census = counted(t)
+      await clock.advance(9000)
+      assert.equal(census.done, true)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', `a disk that took ${slow} ms handed the taps to the FM3, the first to answer`)
+      const after = watch(tap())
+      await clock.advance(400)
+      assert.equal(after.done && !after.error, true, after.error?.message)
+      assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']])
+    }
+    /* Slower than that, or never: no pick, as with nothing picked, and the count takes not a moment longer for the disk. */
+    for (const slow of [4000, 'never']) {
+      const t = await relayOnABench('phone', { picked: 'raspberry pi 3', many: true, disk: slow })
+      t.bench.computers = [PI5(), PI3()]
+      const began = t.clock.now()
+      const census = counted(t)
+      await t.clock.advance(1500 + 1500 + 1500 + 50)
+      assert.equal(census.done, true, `the count was still waiting on a disk that ${slow === 'never' ? 'never answers' : `takes ${slow} ms`}, ${t.clock.now() - began} ms on`)
+      assert.equal(t.relay.remoteChosenHost(), 'fractalpi')
+      assert.deepEqual(writes(t.bench), [])
+    }
+  })
+
   test('both ends: only a record that says two, or a 1.87.47 pick never counted since, is an account that may have two (shared mayBeTwo)', async () => {
     const { mayBeTwo } = await import('../shared/relay-rules.mjs')
     assert.equal(mayBeTwo(null), false, 'a record not read yet held one computer')

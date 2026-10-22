@@ -743,10 +743,11 @@ async function takeCensus({
    * Reads while it counts: on to the pick already proved, held for this
    * account's pick when its last roll call heard two or more, or as they
    * always went (see holdReads). The account's record is the one read off
-   * the disk while the link was joined, and nothing waits for it: a record
+   * the disk while the link was joined, and no read waits for it: a record
    * not read when the link came up held nothing (holdForPick), and is taken
-   * up here if it is in by now and every read so far has waited. A disk that
-   * is slow is no pick, and one computer is never held for it.
+   * up here if it is in by now and every read so far has waited. One
+   * computer is never held for it; only the choice between two waits for it,
+   * while the units are read.
    */
   const proved = Boolean(hosts.length > 1 && chosen && targeted)
   const known = pickOf()
@@ -787,12 +788,23 @@ async function takeCensus({
     hosts = await namesFrom(answers, decode)
     /* Two or more heard: a write waits for the rest of this count, even one taken while writes went at once (censusHosts). */
     if (hosts.length > 1) countFree = false
-    /* The record as it stands now, the disk's answer in if it has come since the count began: it says which was picked. */
-    const record = pickOf()
-    const pick = record?.name || null
 
     // A choice made before is honoured if that Mac is still one of the answers.
     if (!hosts.includes(chosen)) chosen = null
+    /*
+     * The record as it stands now, the disk's answer in if it has come since
+     * the count began: it says which was picked. Two heard and nothing chosen,
+     * with the record still not off the disk (a slow Android disk at a cold
+     * start): it is looked for while the units are read, as 1.87.47 waited
+     * for the disk here (it read it at this very line), and no longer, so the
+     * count takes no longer for it. Taken for no pick at once, it drove
+     * whichever answered first for the whole link, the FM3 with the AM4
+     * picked, and moved to the AM4 by itself at the next rejoin. Writes are
+     * held here already (two heard), and one computer never comes this far.
+     */
+    let record = pickOf()
+    const looking = hosts.length > 1 && !chosen && !record ? within(readPick().catch(() => null), windowMs) : null
+    let pick = record?.name || null
     if (hosts.length > 1 && !chosen && hosts.includes(pick)) {
       chosen = pick
       chosenWhy = 'pick'
@@ -812,6 +824,18 @@ async function takeCensus({
     if (readsHeld && (hosts.length < 2 || chosen)) readsHeld.open()
     units = hosts.length > 1 ? await readUnits({ windowMs, sleep }) : {}
     if (session !== link) return hosts
+    /* The record, in while the units were read: its pick is driven as if it had been in at the first window. */
+    if (looking) {
+      record = await looking
+      pick = record?.name || null
+      if (session !== link) return hosts
+      if (!chosen && hosts.includes(pick)) {
+        chosen = pick
+        chosenWhy = 'pick'
+        readsTo = readsOnlyTo(chosen) ? chosen : null
+        readsHeld?.open()
+      }
+    }
     /*
      * Nobody said which: drive one rather than all of them (firstUnitHost).
      * A pick is never left for another, not even for one with a unit when the
@@ -886,7 +910,9 @@ function within(promise, ms, value = null) {
  * waits. The pick is the account's own (readPick), so another account
  * signed in on this phone never waits for it. Nor for the disk: the record
  * is read while the link is joined, and one not read by the time the link
- * is up is no pick (holdForPick): nothing waits on a disk. Two reads are
+ * is up is no pick (holdForPick): nothing waits on a disk (a roll call
+ * that has heard two looks for it while it reads their units, takeCensus,
+ * and takes no longer for it). Two reads are
  * never held: /healthz, which only asks whether anything is there, and the
  * computer's own name, which link.js reads again once the count has picked
  * (countHosts).

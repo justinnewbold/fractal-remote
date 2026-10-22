@@ -305,6 +305,8 @@ let unitSettled = true
 let unitReadAt = 0
 /* Reads of the whole unit under way (refreshAll): see watchUnit. */
 let readingAll = 0
+/* When Which unit moved to another computer whose clean start has not come yet (computerChanged): see watchUnit. */
+let changedAt = 0
 
 /*
  * Whether the unit has said what it is since `t`, off the computer driven,
@@ -324,6 +326,7 @@ export const unitReadSince = (t) => unitSettled && unitReadAt >= t
 export function computerChanged() {
   unitEra += 1
   unitSettled = false
+  changedAt = Date.now()
   clearTimeout(staleTimer)
   staleTimer = null
   staleAgain = null
@@ -334,6 +337,7 @@ export function computerChanged() {
 export function startClean() {
   unitEra += 1
   unitSettled = false
+  changedAt = 0
   clearTimeout(staleTimer)
   staleTimer = null
   staleAgain = null
@@ -1017,9 +1021,13 @@ export function watchUnit() {
      * or refused was never asked again: no scene names, no tempo, the lit
      * scene stuck, and "Couldn't read this preset's chain" through every Try
      * again, until a pull-down. The unit answering this check, with no read
-     * of it under way, is read whole, at the missing unit's pace.
+     * of it under way, is read whole, at the missing unit's pace. Not while
+     * Which unit's own read is still to come (the pick proved, then a clean
+     * start and its read, link.js chooseHost), for up to MISSING_WATCH_MS: a
+     * tick inside that second and a half read the new unit whole twice, and
+     * a scene tapped on a Pi 3 then waited behind the second chain dump.
      */
-    if (said === 'answering' && !unitSettled && readingAll === 0) {
+    if (said === 'answering' && !unitSettled && readingAll === 0 && Date.now() - changedAt >= MISSING_WATCH_MS) {
       logDebug('unit', 'reading the unit again: the read after the change of computer did not answer')
       quiet = 0
       try {
