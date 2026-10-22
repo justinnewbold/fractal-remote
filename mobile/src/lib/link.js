@@ -409,17 +409,31 @@ async function turn() {
   schedule(delay)
 }
 
+/*
+ * ONE JOIN AT A TIME. A turn that finds one already under way waits for that
+ * one and starts nothing of its own. iOS says the app is back on screen while
+ * the launch is still joining (134 ms in, in Justin's log of 22 October
+ * 2026), probeNow starts a second turn, and nothing was joined yet, so it
+ * joined again: the second join took the first one's channel, the first
+ * could then only end on its twelve-second timer, and its clean-up closed
+ * the socket both were on. The link dropped twelve seconds after launch, for
+ * sixteen, under a Which unit tap. The browser has always had this guard
+ * (src/lib/link.js, `if (joining) return`).
+ */
 async function join() {
+  if (joinRun) return joinRun
   joinBusy = true
-  try {
-    await joinOnce()
-  } finally {
+  joinRun = joinOnce().finally(() => {
     joinBusy = false
-  }
+    joinRun = null
+  })
+  return joinRun
 }
 
 /* Inside join, which takes the roll call itself: countIfDue leaves it to it. */
 let joinBusy = false
+/* The join under way, which a second turn waits on rather than starting its own. */
+let joinRun = null
 
 async function joinOnce() {
   set({ link: 'joining' })
@@ -428,6 +442,16 @@ async function joinOnce() {
     await remoteConnect()
     if (!running) return
   } catch (err) {
+    /*
+     * Replaced, not failed: its channel was taken down for a newer join's
+     * (relay.js joinChannel), which says how it went. Nothing said when the
+     * loop was stopped instead, with no newer join to come.
+     */
+    if (err?.replaced) {
+      if (running) logDebug('link', 'join replaced by a newer one')
+      refresh()
+      return
+    }
     // A join that failed is a Mac that isn't there yet. The loop is the retry.
     // Said in the log with why and how long, because "joining" for minutes
     // with nothing between the state lines was a log that could not be read.

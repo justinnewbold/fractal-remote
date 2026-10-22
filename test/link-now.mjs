@@ -83,7 +83,7 @@ const clocked = (src) =>
  */
 const SERVICE = `
   import * as clock from './clock.mjs'
-  export const bench = { sent: [], socket: true, silent: false, lag: 40, reply: null, chan: null, handlers: {}, status: null, uid: 'u1' }
+  export const bench = { sent: [], socket: true, silent: false, lag: 40, reply: null, chan: null, handlers: {}, status: null, uid: 'u1', joinLag: null, chans: [], disconnects: 0 }
   export function drop() {
     if (!bench.chan) return
     bench.chan.state = 'errored'
@@ -127,9 +127,32 @@ const SERVICE = `
         getSession: async () => ({ data: { session: bench.uid ? { user: { id: bench.uid }, access_token: 't' } : null } }),
         signOut: async () => ({ error: null })
       },
-      realtime: { isConnected: () => bench.socket, disconnect: async () => {} },
+      /*
+       * With \`bench.joinLag\` set, a channel takes that long to join, and the
+       * socket is one for every channel, as realtime-js's is: closed, every
+       * channel still on it errors. Otherwise a join is at once, and closing
+       * the socket is only counted.
+       */
+      realtime: {
+        isConnected: () => bench.socket,
+        disconnect: async () => {
+          bench.disconnects += 1
+          if (bench.joinLag === null) return
+          bench.socket = false
+          for (const chan of bench.chans.filter((c) => !c.removed)) {
+            chan.state = 'errored'
+            chan.cb?.('CHANNEL_ERROR', new Error('socket closed: 1000'))
+          }
+        }
+      },
       getChannels: () => [],
-      removeChannel: async () => {},
+      removeChannel: async (chan) => {
+        if (!chan || chan.removed) return
+        chan.removed = true
+        if (bench.joinLag === null) return
+        chan.state = 'closed'
+        chan.cb?.('CLOSED')
+      },
       channel: () => {
         const chan = {
           state: 'closed',
@@ -139,6 +162,17 @@ const SERVICE = `
           },
           subscribe(cb) {
             bench.status = cb
+            chan.cb = cb
+            if (bench.joinLag !== null) {
+              bench.socket = true
+              chan.state = 'joining'
+              clock.setTimeout(() => {
+                if (chan.removed) return
+                chan.state = 'joined'
+                cb('SUBSCRIBED')
+              }, bench.joinLag)
+              return chan
+            }
             chan.state = 'joined'
             cb('SUBSCRIBED')
             return chan
@@ -151,6 +185,7 @@ const SERVICE = `
           }
         }
         bench.chan = chan
+        bench.chans.push(chan)
         return chan
       }
     }
@@ -343,7 +378,10 @@ async function linkOnABench() {
         seen(ok)
         return bench.hostSeen
       }
+      /* Every join begun is counted in \`bench.joins\`; \`bench.joinMs\` is how long one takes, at once unless a test says. */
       export async function remoteConnect() {
+        bench.joins = (bench.joins || 0) + 1
+        if (bench.joinMs) await new Promise((r) => clock.setTimeout(r, bench.joinMs))
         if (!bench.canJoin) throw new Error('the bench will not join')
         channelUp(true)
         return 'u1'
@@ -428,6 +466,181 @@ async function connectedLoop() {
   assert.equal(t.link.linkState().link, 'connected', 'the bench loop did not connect')
   t.told.length = 0
   return t
+}
+
+/* -------------------------------------------------------------------- */
+/* The phone's whole link, run: link.js, relay.js, rig.js, device.js      */
+/* -------------------------------------------------------------------- */
+
+/*
+ * Every file of mobile/src/lib as it is, on the hand-turned clock, beside a
+ * pretend relay server with `bench.computers` on the account, each with its
+ * own lag and its own unit or none, answering the way ForgeFX does: a
+ * computer with nothing plugged in says "FM3" for /device, no for /healthz
+ * and a 503 for every unit read. Its socket is one for every channel, as
+ * realtime-js's is: `disconnect` closes it with 1000 and every channel still
+ * on it errors. `bench.joinLag` is how long a channel takes to join.
+ * `pick` is what the phone's disk holds for Which unit.
+ */
+const STACK_SERVICE = `
+  import * as clock from './clock.mjs'
+  export const bench = { computers: [], joinLag: 450, chans: [], socket: false, uid: 'u1', disconnects: 0 }
+  const FM3_CAPS = { scenes: 8 }
+  const AM4_CAPS = { scenes: 4 }
+  const NO_UNIT = 'No Fractal device found on any serial or MIDI port.'
+  function forgefx(c, p) {
+    const path = p.path
+    if (path === '/store/config/host.name') return { data: { name: c.name, version: c.version || '1.87.48' } }
+    if (path === '/healthz') return { ok: !!c.unit }
+    if (path === '/device') return { model: c.unit || 'FM3', capabilities: c.unit === 'AM4' ? AM4_CAPS : FM3_CAPS }
+    if (path === '/device/detect') return c.unit ? { connected: true, name: c.unit, short: c.unit, capabilities: c.unit === 'AM4' ? AM4_CAPS : FM3_CAPS } : { connected: false, modelId: -1, name: 'No device', short: '—', gen: 0, supported: false, capabilities: null }
+    if (path.startsWith('/store/config/')) return p.method === 'GET' ? { data: null } : { ok: true }
+    if (path === '/telemetry/meters') return { ok: true }
+    if (!c.unit) return { status: 503, body: JSON.stringify({ error: NO_UNIT }) }
+    if (path === '/preset') return c.unit === 'FM3' ? { number: 479, name: 'Nothing Else Matters' } : { number: 53, name: 'AM4 53' }
+    if (path === '/scene') return { index: c.unit === 'FM3' ? 6 : 1 }
+    if (path === '/tempo') return { bpm: c.unit === 'FM3' ? 120 : 0 }
+    if (path === '/preset/blocks') return [{ slug: 'amp', name: 'Amp 1', effectId: 58, bypassed: false, channel: 'A' }]
+    if (path === '/preset/grid') return { name: 'grid', scenes: c.unit === 'FM3' ? ['VERSE', 'CHORUS', '', '', '', '', 'SOLO', ''] : ['A', 'B', 'C', 'D'], cells: [] }
+    if (/^\\/presets\\/\\d+\\/scenes$/.test(path)) return { names: c.unit === 'FM3' ? ['VERSE', 'CHORUS', '', '', '', '', 'SOLO', ''] : ['A', 'B', 'C', 'D'] }
+    if (/^\\/presets\\/\\d+\\/summary$/.test(path)) return { status: 501, body: JSON.stringify({ error: 'unsupported' }) }
+    if (path === '/preset/scene-state') return []
+    return { ok: true }
+  }
+  function answer(chan, payload) {
+    for (const c of bench.computers) {
+      if (payload.host && payload.host !== c.name) continue
+      const said = forgefx(c, payload)
+      const res = said && typeof said === 'object' && 'status' in said ? said : { status: 200, body: JSON.stringify(said) }
+      clock.setTimeout(() => {
+        if (chan.removed || chan.state !== 'joined') return
+        chan.handlers['broadcast:res']?.({ payload: { id: payload.id, encoding: 'utf8', ...res } })
+      }, typeof c.lag === 'function' ? c.lag(payload) : c.lag)
+    }
+  }
+  export const createClient = () => ({
+    auth: {
+      getSession: async () => ({ data: { session: bench.uid ? { user: { id: bench.uid }, access_token: 't' } : null } }),
+      getUser: async () => ({ data: { user: bench.uid ? { id: bench.uid } : null } }),
+      signOut: async () => ({ error: null }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } })
+    },
+    realtime: {
+      isConnected: () => bench.socket,
+      disconnect: async () => {
+        bench.disconnects += 1
+        bench.socket = false
+        for (const chan of bench.chans.filter((c) => !c.removed)) {
+          chan.state = 'errored'
+          chan.cb?.('CHANNEL_ERROR', new Error('socket closed: 1000'))
+        }
+      }
+    },
+    getChannels: () => bench.chans.filter((c) => !c.removed),
+    removeChannel: async (chan) => {
+      if (chan.removed) return 'ok'
+      chan.removed = true
+      chan.state = 'closed'
+      chan.cb?.('CLOSED')
+      return 'ok'
+    },
+    channel: () => {
+      const chan = {
+        state: 'closed',
+        handlers: {},
+        on(type, filter, fn) {
+          chan.handlers[type + ':' + (filter?.event || '')] = fn
+          return chan
+        },
+        subscribe(cb) {
+          chan.cb = cb
+          bench.socket = true
+          chan.state = 'joining'
+          clock.setTimeout(() => {
+            if (chan.removed) return
+            chan.state = 'joined'
+            cb('SUBSCRIBED')
+          }, bench.joinLag)
+          return chan
+        },
+        track: async () => 'ok',
+        async send(msg) {
+          if (chan.state === 'joined') answer(chan, msg.payload)
+          return 'ok'
+        }
+      }
+      bench.chans.push(chan)
+      return chan
+    },
+    from: () => ({ insert: async () => ({ error: null }) })
+  })
+`
+async function stackOnABench({ pick = null } = {}) {
+  const lib = 'mobile/src/lib'
+  const dir = mkdtempSync(join(tmpdir(), 'link-now-stack-'))
+  const have = new Set(readdirSync(new URL(`../${lib}`, import.meta.url)))
+  const named = (name) => (/\.m?js$/.test(name) ? name : have.has(`${name}.mjs`) && !have.has(`${name}.js`) ? `${name}.mjs` : `${name}.js`)
+  const local = (src) =>
+    src
+      .replace(/from 'react'/g, "from './react.mjs'")
+      .replace(/from 'react-native'/g, "from './react-native.mjs'")
+      .replace(/from '@react-native-async-storage\/async-storage'/g, "from './storage.mjs'")
+      .replace(/from '@supabase\/supabase-js'/g, "from './service.mjs'")
+      .replace(/from '\.\/([\w.-]+)'/g, (whole, name) => `from './${named(name)}'`)
+  /* Every timer and Date.now() the bench's, and only the bare ones: never one already on an object. */
+  const timed = (src) =>
+    "import * as __clock from './clock.mjs'\n" +
+    src
+      .replace(/\bDate\.now\(\)/g, '__clock.now()')
+      .replace(/(?<![.\w])(setTimeout|clearTimeout|setInterval|clearInterval)\(/g, '__clock.$1(')
+  const files = {}
+  for (const f of have) if (/\.m?js$/.test(f)) files[f] = timed(local(read(`${lib}/${f}`)))
+  Object.assign(files, {
+    'package.json': '{ "type": "module" }',
+    'clock.mjs':
+      CLOCK +
+      'export const setInterval = (fn, ms) => setTimeout(function again() { fn(); setTimeout(again, ms) }, ms)\nexport const clearInterval = clearTimeout\n',
+    'service.mjs': STACK_SERVICE,
+    'storage.mjs': `export const kept = ${JSON.stringify(pick === null ? {} : { 'fractal.remote.host': pick })}\nexport default { getItem: async (k) => kept[k] ?? null, setItem: async (k, v) => { kept[k] = String(v) }, removeItem: async (k) => { delete kept[k] } }\n`,
+    'react-native.mjs':
+      "export const heard = []\nexport const AppState = { currentState: 'active', addEventListener: (type, fn) => { heard.push(fn); return { remove() { heard.splice(heard.indexOf(fn) >>> 0, 1) } } } }\nexport const Platform = { OS: 'ios', Version: '27.0.1' }\nexport const Dimensions = { get: () => ({ width: 440, height: 956 }) }\n",
+    'react.mjs': 'export const useSyncExternalStore = () => null\nexport const useEffect = () => {}\nexport const useState = (v) => [v, () => {}]\n',
+    /* What reaches no computer, or needs the app around it: stood in for. */
+    'demo.js': "export const isDemo = () => false\nexport const demoDevice = () => null\nexport const demoUnit = () => 'fm3'\nexport const useDemo = () => false\n",
+    'demoWire.js': "export const demoRequest = () => { throw new Error('no demo on the bench') }\n",
+    'bleSwitch.js': "export const bluetoothWire = () => null\nexport const bluetoothOn = () => false\nexport const overBluetooth = (caps) => caps?.via === 'bluetooth'\n",
+    'bleLink.js': 'export const pokeBluetooth = () => {}\nexport const startBluetoothLink = () => {}\nexport const stopBluetoothLink = () => {}\n',
+    'lineage.js': 'export const withLineage = (x) => x\n',
+    'presetNames.js': 'export const adopt = async () => 0\nexport const forget = () => {}\nexport const learn = () => {}\nexport const nameOf = () => undefined\n',
+    'paramIndex.js': 'export const forget = () => {}\n',
+    'sceneNameCache.js': 'export const forgetSceneNames = () => true\nexport const recallSceneNames = async () => []\nexport const rememberSceneNames = () => true\nexport const sceneNamesKnown = async () => false\n',
+    'notForever.js': 'export const notForever = (...a) => fetch(...a)\n',
+    'decode.mjs': 'export const decode = async (p) => p.body\n',
+    'phone-note.js': "export const PHONE_NOTE_PATH = '/store/config/phone.seen'\nexport const phoneNote = () => ({})\nexport const timeToTell = () => false\n",
+    'blockCatalog.js': `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
+  })
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+  const at = (f) => pathToFileURL(join(dir, f)).href
+  try {
+    const clock = await import(at('clock.mjs'))
+    const { bench } = await import(at('service.mjs'))
+    const rn = await import(at('react-native.mjs'))
+    const debug = await import(at('debugLog.js'))
+    const relay = await import(at('relay.js'))
+    const rig = await import(at('rig.js'))
+    const link = await import(at('link.js'))
+    const app = {
+      change(status) {
+        rn.AppState.currentState = status
+        for (const fn of [...rn.heard]) fn(status)
+      }
+    }
+    /* The phone's log as Copy Logs words it, one line each. */
+    const lines = () => debug.getDebugLog().map((e) => `[${e.source}] ${e.message}${e.detail ? ` — ${e.detail}` : ''}`)
+    return { link, relay, rig, clock, bench, app, lines }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 /* -------------------------------------------------------------------- */
@@ -1667,6 +1880,104 @@ export function run(test) {
     await t.clock.advance(1000)
     assert.equal(t.link.linkState().link, 'connected')
     assert.ok(!t.told.some((s) => s.down || s.gate), 'NOT CONNECTED over the first join')
+  })
+
+  /* ------------------------------------------------------------------ */
+  /* One join at a time                                                   */
+  /* ------------------------------------------------------------------ */
+
+  /*
+   * Justin's launch of 22 October 2026, 16:48:55: "off → joining", then
+   * "back on screen" 134 ms later while that join was still out. That
+   * started a second join, which took the first one's channel; the first
+   * then ended on its twelve-second timer, and its clean-up closed the
+   * socket both were on: "socket closed: 1000", "join failed after 12.2s",
+   * and the link gone for sixteen seconds under a Which unit tap. The
+   * browser never did it (src/lib/link.js `if (joining) return`).
+   */
+  test('phone: back on screen while the launch is still joining starts no second join', async () => {
+    const t = await linkOnABench()
+    t.bench.joinMs = 450
+    t.link.startLink()
+    await t.clock.advance(134)
+    t.app.change('active')
+    await t.clock.advance(13000)
+    assert.equal(t.bench.joins, 1, 'back on screen during the launch’s join began a second one')
+    assert.equal(t.bench.order.filter((x) => x === 'refreshAll').length, 1, 'the unit was read once for each join')
+    assert.equal(t.bench.order.filter((x) => x === 'census').length, 1, 'a roll call was taken for each join')
+    assert.equal(t.link.linkState().link, 'connected')
+    assert.ok(!t.told.some((s) => s.down), 'Play said NOT CONNECTED over the launch')
+  })
+
+  test('phone: a join asked for while one is under way waits for it, and one let go never closes the socket of the join after it', async () => {
+    const r = await relayOnABench('phone')
+    await r.relay.remoteDisconnect()
+    r.bench.joinLag = 450
+    const made = r.bench.chans.length
+    /* Two at once, as the launch asked for them. */
+    const first = r.watch(r.relay.remoteConnect())
+    await r.clock.advance(134)
+    const second = r.watch(r.relay.remoteConnect())
+    await r.clock.advance(13000)
+    assert.equal(r.bench.chans.length - made, 1, 'a second channel was made while the first was joining')
+    assert.ok(first.done && !first.error, first.error?.message || 'the first join never ended')
+    assert.ok(second.done && !second.error, second.error?.message || 'the second never ended')
+    assert.equal(r.bench.disconnects, 0, 'the socket was closed under a working channel')
+    assert.equal(r.relay.remoteActive(), true)
+    /* Let go while joining (remoteDisconnect, as stopLink does), then joined again: the first ends at once, as replaced, and leaves the socket alone. */
+    await r.relay.remoteDisconnect()
+    const gone = r.watch(r.relay.remoteConnect())
+    await r.clock.advance(134)
+    await r.relay.remoteDisconnect()
+    await r.clock.advance(1)
+    assert.ok(gone.done, 'a join let go waited out its twelve seconds')
+    assert.equal(gone.error?.replaced, true, gone.error?.message || 'a join let go was said to have joined')
+    const next = r.watch(r.relay.remoteConnect())
+    await r.clock.advance(13000)
+    assert.ok(next.done && !next.error, next.error?.message || 'the join after it never ended')
+    assert.equal(r.bench.disconnects, 0, 'the join let go closed the socket the next one is on')
+    assert.equal(r.relay.remoteActive(), true, 'the next channel was dropped by the one it came after')
+    /* A join that really failed still closes its socket: a dead one is never handed on. */
+    await r.relay.remoteDisconnect()
+    r.bench.joinLag = 60000
+    const stuck = r.watch(r.relay.remoteConnect())
+    await r.clock.advance(12100)
+    assert.ok(stuck.done && /timed out/.test(stuck.error?.message), stuck.error?.message || 'a join that never got through never ended')
+    assert.equal(r.bench.disconnects, 1, 'a failed join handed the next attempt the same socket')
+  })
+
+  test('phone: Which unit tapped 10.7 s into such a launch is done in under five seconds, and the link never drops', async () => {
+    /* Justin's rig: the MacBook's FM3, a Pi 5 with nothing plugged in, and the Pi 3's AM4, picked. */
+    const s = await stackOnABench({ pick: JSON.stringify({ accounts: { u1: { name: 'raspberry pi 3', many: true } } }) })
+    const dump = (p) => /^\/preset\/(blocks|grid)$/.test(p.path)
+    s.bench.computers = [
+      { name: 'MacBook Pro SG 566', unit: 'FM3', version: '1.87.47', lag: (p) => (dump(p) ? 750 : 150) },
+      { name: 'raspberry pi 5', unit: null, lag: 170 },
+      { name: 'raspberry pi 3', unit: 'AM4', lag: (p) => (dump(p) ? 2500 : 320) }
+    ]
+    const told = []
+    s.link.subscribeLink((st) => told.push({ at: s.clock.now(), link: st.link, down: st.down }))
+    const t0 = s.clock.now()
+    s.link.startLink()
+    await s.clock.advance(134)
+    s.app.change('active')
+    await s.clock.advance(10720 - 134)
+    const tapped = s.clock.now()
+    let took = null
+    s.link.chooseHost('MacBook Pro SG 566').finally(() => {
+      took = s.clock.now() - tapped
+    })
+    await s.clock.advance(25000)
+    const log = s.lines()
+    assert.ok(took !== null && took < 5000, `the tap took ${took} ms\n${log.join('\n')}`)
+    assert.equal(s.bench.disconnects, 0, `the phone closed the socket\n${log.join('\n')}`)
+    assert.equal(s.bench.chans.length, 1, 'the launch joined twice')
+    assert.ok(!log.some((l) => /join failed|socket closed|channel error/.test(l)), log.join('\n'))
+    const up = told.find((x) => x.link === 'connected')
+    assert.ok(up && up.at - t0 < 2000, 'the launch never connected')
+    assert.ok(!told.some((x) => x.at > up.at && (x.link !== 'connected' || x.down)), `the link dropped after it was up: ${JSON.stringify(told.filter((x) => x.at > up.at))}`)
+    assert.equal(s.link.linkState().chosenHost, 'MacBook Pro SG 566')
+    assert.equal(s.rig.getState().deviceName, 'FM3')
   })
 
   /* ------------------------------------------------------------------ */
