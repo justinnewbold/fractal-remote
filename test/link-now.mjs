@@ -83,7 +83,7 @@ const clocked = (src) =>
  */
 const SERVICE = `
   import * as clock from './clock.mjs'
-  export const bench = { sent: [], socket: true, silent: false, lag: 40, reply: null, chan: null, handlers: {}, status: null }
+  export const bench = { sent: [], socket: true, silent: false, lag: 40, reply: null, chan: null, handlers: {}, status: null, uid: 'u1' }
   export function drop() {
     if (!bench.chan) return
     bench.chan.state = 'errored'
@@ -99,11 +99,13 @@ const SERVICE = `
     /*
      * Two or more computers on the account (bench.computers): each answers
      * what is asked of nobody in particular and what is asked of it by name,
-     * after its own lag, as computer app 1.87.4 and later do.
+     * after its own lag, as computer app 1.87.4 and later do; one marked
+     * \`old\` answers whatever name was asked, as a computer app too old to
+     * know names.
      */
     if (bench.computers) {
       for (const c of bench.computers) {
-        if (payload.host && payload.host !== c.name) continue
+        if (payload.host && payload.host !== c.name && !c.old) continue
         const said = c.reply ? c.reply(payload) : null
         if (said === 'silent') continue
         const res = said && typeof said === 'object' && 'status' in said ? said : { status: 200, body: JSON.stringify(said ?? { ok: true, from: c.name }) }
@@ -118,7 +120,11 @@ const SERVICE = `
   }
   export const createClient = () => {
     const client = {
-      auth: { getSession: async () => ({ data: { session: { user: { id: 'u1' }, access_token: 't' } } }) },
+      auth: {
+        /* Signed in as \`bench.uid\`, or nobody once signed out. */
+        getSession: async () => ({ data: { session: bench.uid ? { user: { id: bench.uid }, access_token: 't' } : null } }),
+        signOut: async () => ({ error: null })
+      },
       realtime: { isConnected: () => bench.socket, disconnect: async () => {} },
       getChannels: () => [],
       removeChannel: async () => {},
@@ -152,20 +158,35 @@ const SERVICE = `
 
 /**
  * One end's relay on a bench: 'phone' is mobile/src/lib/relay.js, 'web' is src/lib/remote.js.
- * `picked` is the computer picked under Which unit on an earlier visit, as each end keeps it.
+ * `picked` is the computer picked under Which unit on an earlier visit, as each end keeps it for
+ * the account (u1); `many` whether the last roll call that account finished heard two or more
+ * (true), one (false), or was never written down (null); `legacy` keeps the pick the way 1.87.47
+ * did, once for the whole phone or browser.
  */
-async function relayOnABench(end, { picked = null } = {}) {
+const PICK_KEY = { phone: 'fractal.remote.host', web: 'fab.remote.host' }
+/* One account's entry in that key, as the bench's disk holds it now. */
+const keptFor = (store, end, uid = 'u1') => {
+  try {
+    return JSON.parse(store.kept[PICK_KEY[end]]).accounts[uid] ?? null
+  } catch {
+    return null
+  }
+}
+async function relayOnABench(end, { picked = null, many = null, legacy = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), `link-now-${end}-`))
+  const disk = {}
+  if (picked) disk[PICK_KEY[end]] = legacy ? picked : JSON.stringify({ accounts: { u1: { name: picked, many } } })
   const files = {
     'package.json': '{ "type": "module" }',
     'clock.mjs': CLOCK,
     'service.mjs': SERVICE,
-    /* The phone's disk (AsyncStorage) and the browser's (the pick's key in localStorage), the same few keys. */
+    /* The phone's disk (AsyncStorage) and the browser's (the pick's keys in localStorage), the same few keys; and the log, kept. */
     'nothing.mjs':
-      'export const logDebug = () => {}\nexport const notForever = (...a) => fetch(...a)\nexport const decode = async (p) => p.body\n' +
-      `const kept = ${JSON.stringify(picked ? { 'fractal.remote.host': picked, 'fab.remote.host': picked } : {})}\n` +
-      'export const pickStore = { getItem: (k) => kept[k] ?? null, setItem: (k, v) => { kept[k] = v } }\n' +
-      'export default { getItem: async (k) => kept[k] ?? null, setItem: async (k, v) => { kept[k] = v } }\n',
+      'export const logged = []\nexport const logDebug = (...a) => { logged.push(a.filter((x) => x !== undefined).join(" ")) }\n' +
+      'export const notForever = (...a) => fetch(...a)\nexport const decode = async (p) => p.body\n' +
+      `export const kept = ${JSON.stringify(disk)}\n` +
+      'export const pickStore = { getItem: (k) => kept[k] ?? null, setItem: (k, v) => { kept[k] = String(v) }, removeItem: (k) => { delete kept[k] } }\n' +
+      'export default { getItem: async (k) => kept[k] ?? null, setItem: async (k, v) => { kept[k] = String(v) }, removeItem: async (k) => { delete kept[k] } }\n',
     'retry.mjs': clocked(read('mobile/src/lib/retry.js')),
     /* On the bench's clock too: its deadlines are counted in the bench's time. */
     'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
@@ -194,9 +215,8 @@ async function relayOnABench(end, { picked = null } = {}) {
           ["from '../../shared/device-word.mjs'", "from './device-word.mjs'"],
           ["from './debugLog.js'", "from './nothing.mjs'"],
           ["import('@supabase/supabase-js')", "import('./service.mjs')"],
-          /* The pick's key on the bench's disk rather than the runtime's localStorage, which Node may not have. */
-          ['localStorage.getItem(HOST_KEY)', '__pick.getItem(HOST_KEY)'],
-          ['localStorage.setItem(HOST_KEY, name)', '__pick.setItem(HOST_KEY, name)']
+          /* The pick's keys on the bench's disk rather than the runtime's localStorage, which Node may not have. */
+          ["const pickStore = () => (typeof localStorage === 'undefined' ? null : localStorage)", 'const pickStore = () => __pick']
         ]
   let src = read(end === 'phone' ? 'mobile/src/lib/relay.js' : 'src/lib/remote.js')
   for (const [from, to] of swaps) {
@@ -326,6 +346,11 @@ async function linkOnABench() {
       export const remoteHosts = () => bench.hosts || []
       export const remoteUnits = () => ({})
       export const remoteReadsAskedOf = () => bench.askedOf ?? null
+      /* Whether a roll call is due (relay.js remoteCountDue): \`bench.countDue\`, false unless a test says; \`bench.due()\` tells link.js one is. */
+      export const remoteCountDue = () => (typeof bench.countDue === 'function' ? bench.countDue() : bench.countDue === true)
+      const dueWatchers = new Set()
+      export const subscribeCountDue = (fn) => (dueWatchers.add(fn), () => dueWatchers.delete(fn))
+      bench.due = () => [...dueWatchers].forEach((fn) => fn())
       export const pickHost = async () => false
       export const restoreSession = async () => 'u1'
       /* A computer older than 7 September refuses the level-readings route (refuseMeters); one that never answers holds it (holdMeters). */
@@ -489,12 +514,14 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       export const remoteSignIn = async () => {}
       export const remoteSignUp = async () => {}
       export const signOut = async () => {}
-      export const censusHosts = async () => []
+      export const censusHosts = async () => { bench.censuses = (bench.censuses || 0) + 1; return [] }
       export const hostConflict = () => null
       export const remoteHosts = () => []
       export const remoteUnits = () => ({})
       export const remoteChosenHost = () => null
       export const remoteReadsAskedOf = () => null
+      export const remoteCountDue = () => (typeof bench.countDue === 'function' ? bench.countDue() : false)
+      export const subscribeCountDue = () => () => {}
       export const pickHost = async () => false
     `,
     /* The unit store, which a computer change starts clean (deviceState.computerChanged). */
@@ -2922,7 +2949,9 @@ export function run(test) {
     const turn = phone.slice(phone.indexOf('async function turn()'), phone.indexOf('async function join()'))
     assert.match(turn, /\n {2}if \(running\) quietMeters\(\)\n/, 'the phone’s loop never says it again')
     const join = phone.slice(phone.indexOf('async function join()'), phone.indexOf('async function countHosts()'))
-    assert.ok(join.indexOf('quietMeters()') > join.indexOf('await readMacName()') && join.indexOf('quietMeters()') < join.indexOf('countHosts()'), 'the phone says it after the roll call has begun holding writes, or not at join at all')
+    assert.ok(join.indexOf('quietMeters()') > join.indexOf('await hostResponds()') && join.indexOf('quietMeters()') < join.indexOf('countHosts()'), 'the phone says it after the roll call has begun holding writes, or not at join at all')
+    /* And the roll call begins before the computer's name is read: a tap made while that read was out went to both units. */
+    assert.ok(join.indexOf('countHosts()') < join.indexOf('await readMacName()'), 'the phone reads the computer’s name before the roll call holds writes')
     assert.ok(!/await remoteRequest\(METERS_OFF_PATH/.test(phone), 'the link waits on it')
     assert.match(phone, /remoteRequest\(METERS_OFF_PATH, \{ method: 'POST', body: metersOffBody\(\) \}\)/)
     const start = phone.slice(phone.indexOf('export function startLink()'))
@@ -2946,9 +2975,11 @@ export function run(test) {
    * every launch the phone was on the FM3. Each computer here answers what
    * is asked of nobody in particular and what is asked of it by name.
    */
-  const computer = (name, model, { plugged = true, lag = 40, quiet = false } = {}) => ({
+  const computer = (name, model, { plugged = true, lag = 40, quiet = false, old = false } = {}) => ({
     name,
     lag,
+    /* `old`: a computer app too old to know names, which answers whatever name was asked. */
+    old,
     reply: (p) => {
       if (p.path === '/store/config/host.name') return { data: { name, version: '1.87.48' } }
       /* `quiet`: never says which unit it has, as a computer too slow for the roll call's window. */
@@ -2960,32 +2991,47 @@ export function run(test) {
       return { ok: true, from: name }
     }
   })
-  const PI5 = () => computer('fractalpi', 'FM3', { lag: 40 })
+  const PI5 = (opts = {}) => computer('fractalpi', 'FM3', { lag: 40, ...opts })
   const PI3 = (opts = {}) => computer('raspberry pi 3', 'AM4', { lag: 300, ...opts })
   /* Every request that went, by path, with whom it was asked of: '' for nobody in particular. */
   const sentOf = (bench, path) => bench.sent.filter((s) => s.msg.payload.path === path).map((s) => s.msg.payload.host ?? '')
+  /* When the first request for a path went, on the bench clock. */
+  const sentAt = (bench, path) => bench.sent.find((s) => s.msg.payload.path === path)?.at
   /* Writes, as the computers saw them: never one asked of nobody while two answer. */
   const writes = (bench) => bench.sent.filter((s) => s.msg.payload.method !== 'GET').map((s) => [s.msg.payload.path, s.msg.payload.host ?? ''])
+  /* The roll call on the bench's clock. */
+  const counted = (t) => t.watch(t.relay.censusHosts({ windowMs: 1500, sleep: (ms) => new Promise((go) => t.clock.setTimeout(go, ms)) }))
+  /* A link of its own, the account's record kept: what the next launch is. */
+  const newLink = async (t) => {
+    await t.relay.remoteDisconnect()
+    await t.relay.remoteConnect()
+    await t.clock.advance(0)
+    t.bench.sent.length = 0
+  }
 
   for (const end of ['phone', 'web']) {
+
     test(`${end}: two computers at launch, one picked before: no read goes to whoever answers first, and no write to both`, async () => {
-      const { bench, clock, relay, watch, tap } = await relayOnABench(end, { picked: 'raspberry pi 3' })
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch, tap } = t
       bench.computers = [PI5(), PI3()]
-      const sleep = (ms) => new Promise((go) => clock.setTimeout(go, ms))
       /* A read the Play screen makes the moment the link is up, before the roll call has begun. */
       const early = watch(relay.remoteRequest('/device/detect'))
       await clock.advance(200)
       assert.deepEqual(sentOf(bench, '/device/detect'), [], 'a read went before the roll call had found the computer picked')
-      const census = watch(relay.censusHosts({ windowMs: 1500, sleep }))
+      const census = counted(t)
       await clock.advance(0)
+      const began = clock.now()
       const during = watch(relay.remoteRequest('/tempo'))
       const pressed = watch(tap())
-      await clock.advance(1200)
-      assert.deepEqual([...sentOf(bench, '/device/detect'), ...sentOf(bench, '/tempo')], [], 'a read went inside the first window, to whoever answers first')
-      /* The first window has listed the pick: reads go to it by name, while the count goes on. */
-      await clock.advance(700)
+      /* The FM3's computer answers the roll call first, at 40 ms: not the pick, and nothing goes. */
+      await clock.advance(200)
+      assert.deepEqual([...sentOf(bench, '/device/detect'), ...sentOf(bench, '/tempo')], [], 'a read went to whoever answers first')
+      /* The pick's own answer, at 300 ms: reads go to it by name then, not at the end of the window. */
+      await clock.advance(200)
       assert.deepEqual(sentOf(bench, '/device/detect'), ['raspberry pi 3'], 'the held read was not asked of the computer picked')
       assert.deepEqual(sentOf(bench, '/tempo'), ['raspberry pi 3'])
+      assert.ok(sentAt(bench, '/device/detect') - began < 400, `the held read waited ${sentAt(bench, '/device/detect') - began} ms, past the pick's own answer`)
       assert.equal(census.done, false, 'the count was over before the first reads went: this does not test the hold')
       await clock.advance(5000)
       assert.equal(census.done, true)
@@ -3002,6 +3048,7 @@ export function run(test) {
       await clock.advance(400)
       assert.equal(after.done && !after.error, true, after.error?.message)
       assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']])
+      assert.equal(keptFor(t.store, end)?.many, true, 'the count of two was not written down for the next launch')
     })
 
     test(`${end}: one computer and nothing picked: reads go at once and unaddressed, exactly as before`, async () => {
@@ -3027,55 +3074,264 @@ export function run(test) {
       assert.deepEqual([...new Set(bench.sent.map((x) => x.msg.payload.path))], ['/store/config/host.name', '/preset'])
     })
 
-    test(`${end}: the pick with no unit plugged in drives the one computer that has one, and the pick is kept`, async () => {
-      const { bench, clock, relay, watch, store } = await relayOnABench(end, { picked: 'raspberry pi 3' })
+    /*
+     * ONE COMPUTER, WITH A PICK LEFT OVER FROM WHEN THERE WERE TWO: nothing
+     * slower and nothing different once a count of one has been seen. A pick
+     * that is the one computer answering, and a pick that is not there at all.
+     */
+    for (const picked of ['Studio', 'Old Mac']) {
+      test(`${end}: one computer, "${picked}" picked when there were two, and a count of one since: reads go at once and unaddressed`, async () => {
+        const t = await relayOnABench(end, { picked, many: false })
+        const { bench, clock, relay, watch, store } = t
+        bench.computers = [computer('Studio', 'FM3')]
+        /* The Play screen's read the moment the link is up, and refreshAll's once the count has begun. */
+        const t0 = clock.now()
+        watch(relay.remoteRequest('/device/detect'))
+        await clock.advance(0)
+        const census = counted(t)
+        await clock.advance(0)
+        watch(relay.remoteRequest('/preset'))
+        await clock.advance(0)
+        for (const path of ['/device/detect', '/preset']) {
+          const sent = bench.sent.find((x) => x.msg.payload.path === path)
+          assert.ok(sent, `${path} was held for a computer that is not the only one`)
+          assert.equal(sent.at, t0, `${path} waited ${sent.at - t0} ms on an account of one computer`)
+          assert.equal(sent.msg.payload.host, undefined, `${path} was addressed on an account of one computer`)
+        }
+        await clock.advance(3000)
+        assert.equal(census.done, true)
+        assert.equal(relay.remoteChosenHost(), null)
+        assert.ok(!store.logged.some((line) => /did not answer|two computers/.test(line)), `the log names a computer this account does not have: ${store.logged.join(' | ')}`)
+      })
+    }
+
+    test(`${end}: an account of two with only the pick switched on waits only for the pick's own answer, and the next launch not at all`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch, store } = t
+      bench.computers = [PI3({ lag: 40 })]
+      const census = counted(t)
+      await clock.advance(0)
+      const began = clock.now()
+      watch(relay.remoteRequest('/preset'))
+      await clock.advance(100)
+      assert.ok(sentAt(bench, '/preset') - began <= 60, `the read waited ${sentAt(bench, '/preset') - began} ms for a pick that had answered in 40`)
+      await clock.advance(2000)
+      assert.equal(census.done, true)
+      assert.deepEqual(relay.remoteHosts(), ['raspberry pi 3'])
+      assert.equal(keptFor(store, end)?.many, false, 'a count of one was not written down')
+      /* The next launch: one computer counted last time, so nothing waits, and nothing is addressed. */
+      await newLink(t)
+      const t1 = clock.now()
+      watch(relay.remoteRequest('/preset'))
+      await clock.advance(0)
+      assert.equal(sentAt(bench, '/preset'), t1, 'an account back to one computer still waits at launch')
+      assert.deepEqual(sentOf(bench, '/preset'), [''])
+    })
+
+    test(`${end}: the pick with no unit plugged in is still the one driven, and the log says it has none`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, store } = t
       bench.computers = [PI5(), PI3({ plugged: false })]
-      const sleep = (ms) => new Promise((go) => clock.setTimeout(go, ms))
-      const census = watch(relay.censusHosts({ windowMs: 1500, sleep }))
+      const census = counted(t)
       await clock.advance(6000)
       assert.equal(census.done, true)
-      assert.equal(relay.remoteChosenHost(), 'fractalpi', 'the phone sat on a computer with nothing plugged in while the other had a unit')
-      assert.equal(store.pickStore.getItem(end === 'phone' ? 'fractal.remote.host' : 'fab.remote.host'), 'raspberry pi 3', 'the pick was forgotten')
-      assert.equal(relay.remoteReadsAskedOf(), null)
-      /* A pick that is merely slow to say which unit it has is never left for another: no switch on a timeout. */
-      const slow = await relayOnABench(end, { picked: 'raspberry pi 3' })
+      /* Never handed to the other unit: nothing would hand the taps back when the pick's unit came on. */
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', 'the taps went to the other unit')
+      assert.equal(keptFor(store, end)?.name, 'raspberry pi 3', 'the pick was forgotten')
+      assert.ok(
+        store.logged.some((line) => line.includes('raspberry pi 3 (no unit plugged in); driving raspberry pi 3, the one picked under Which unit, addressed')),
+        store.logged.join(' | ')
+      )
+      /* A pick that is merely slow to say which unit it has is the one driven too. */
+      const slow = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
       slow.bench.computers = [PI5(), PI3({ quiet: true })]
-      const again = slow.watch(slow.relay.censusHosts({ windowMs: 1500, sleep: (ms) => new Promise((go) => slow.clock.setTimeout(go, ms)) }))
+      const again = counted(slow)
       await slow.clock.advance(6000)
       assert.equal(again.done, true)
       assert.equal(slow.relay.remoteChosenHost(), 'raspberry pi 3', 'the pick was left on a timeout')
     })
 
     test(`${end}: a pick that did not answer holds reads to the end of the count; one computer then is only the first window`, async () => {
-      const { bench, clock, relay, watch } = await relayOnABench(end, { picked: 'Old Mac' })
+      const t = await relayOnABench(end, { picked: 'Old Mac', many: true })
+      const { bench, clock, relay, watch, store } = t
       bench.computers = [PI5(), PI3()]
-      const sleep = (ms) => new Promise((go) => clock.setTimeout(go, ms))
-      const census = watch(relay.censusHosts({ windowMs: 1500, sleep }))
+      const census = counted(t)
       await clock.advance(0)
       const r = watch(relay.remoteRequest('/preset'))
       await clock.advance(4000)
       assert.deepEqual(sentOf(bench, '/preset'), [], 'a read went before the count said where')
-      await clock.advance(2000)
+      await clock.advance(1500)
       assert.equal(census.done, true)
       /* Nobody picked among these two: the first with a unit (firstUnitHost), and the held read asked of it. */
       assert.equal(relay.remoteChosenHost(), 'fractalpi')
       assert.deepEqual(sentOf(bench, '/preset'), ['fractalpi'])
       await clock.advance(400)
       assert.equal(r.done && !r.error, true)
+      assert.ok(store.logged.some((line) => line.includes('Old Mac, the one picked under Which unit, did not answer')), store.logged.join(' | '))
       /* The same old pick, with one computer answering now: held for the first window, then as it always went. */
-      const one = await relayOnABench(end, { picked: 'Old Mac' })
+      const one = await relayOnABench(end, { picked: 'Old Mac', many: true })
       one.bench.computers = [computer('Studio', 'FM3')]
       const t0 = one.clock.now()
-      const first = one.watch(one.relay.censusHosts({ windowMs: 1500, sleep: (ms) => new Promise((go) => one.clock.setTimeout(go, ms)) }))
+      const first = counted(one)
       await one.clock.advance(0)
       one.watch(one.relay.remoteRequest('/preset'))
       await one.clock.advance(1400)
       assert.deepEqual(sentOf(one.bench, '/preset'), [])
       await one.clock.advance(400)
       assert.deepEqual(sentOf(one.bench, '/preset'), [''], 'one computer answering, and the read was not let go after the first window')
-      assert.ok(one.bench.sent.find((x) => x.msg.payload.path === '/preset').at - t0 < 1600)
+      assert.ok(sentAt(one.bench, '/preset') - t0 < 1600)
       await one.clock.advance(2000)
       assert.equal(first.done, true)
+      /* And from the next launch, nothing waits: one computer was counted. */
+      await newLink(one)
+      const t1 = one.clock.now()
+      one.watch(one.relay.remoteRequest('/preset'))
+      await one.clock.advance(0)
+      assert.equal(sentAt(one.bench, '/preset'), t1, 'a pick left over from two computers held the next launch too')
+    })
+
+    test(`${end}: no read waits past six seconds from when it was made, a count that starts late included, and one let go so is read again`, async () => {
+      const t = await relayOnABench(end, { picked: 'Old Mac', many: true })
+      const { bench, clock, relay, watch } = t
+      bench.computers = [PI5(), PI3()]
+      /* The Play screen's read as the link comes up; the first /healthz is slow, and the count begins five seconds on. */
+      const t0 = clock.now()
+      watch(relay.remoteRequest('/preset'))
+      await clock.advance(5000)
+      const census = counted(t)
+      await clock.advance(100)
+      /* And one made as the count begins: the hold is not made longer for it. */
+      watch(relay.remoteRequest('/tempo'))
+      await clock.advance(1100)
+      const at = sentAt(bench, '/preset')
+      assert.ok(at, 'the read was still held six seconds on')
+      assert.ok(at - t0 > 4000 && at - t0 <= 6000, `the read went ${at - t0} ms after it was made`)
+      assert.deepEqual(sentOf(bench, '/preset'), [''], 'a read let go by the end of its hold was asked of somebody')
+      assert.ok(sentAt(bench, '/tempo') - t0 <= 6000, 'the count that began late held reads for six seconds more: the hold outlasted six seconds')
+      await clock.advance(4000)
+      assert.equal(census.done, true)
+      /* It went to nobody in particular: link.js reads the unit again off the one driven. */
+      assert.equal(relay.remoteReadsAskedOf(), null)
+    })
+
+    test(`${end}: a read asked of the pick is not taken for the pick's when another computer there is too old to know names`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch } = t
+      bench.computers = [PI5({ old: true }), PI3()]
+      const census = counted(t)
+      await clock.advance(0)
+      const r = watch(relay.remoteRequest('/device/detect'))
+      await clock.advance(6000)
+      assert.equal(census.done, true)
+      assert.deepEqual(sentOf(bench, '/device/detect'), ['raspberry pi 3'])
+      /* The old one answered it too, first: nothing proved it was the pick's. */
+      assert.equal(r.value?.short, 'FM3')
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+      assert.equal(relay.remoteReadsAskedOf(), null, 'what the old computer answered was kept as the pick’s')
+    })
+
+    test(`${end}: the pick is the account's: another account signed in on the same ${end === 'phone' ? 'phone' : 'browser'} never waits for it, nor logs it`, async () => {
+      const t = await relayOnABench(end, { picked: 'fractalpi', many: true })
+      const { bench, clock, relay, watch, store } = t
+      await relay.signOut()
+      bench.uid = 'u2'
+      if (end === 'phone') await relay.restoreSession()
+      else await relay.restoreSession({})
+      await relay.remoteConnect()
+      await clock.advance(0)
+      bench.sent.length = 0
+      bench.computers = [computer('Studio', 'FM3')]
+      const t0 = clock.now()
+      watch(relay.remoteRequest('/preset'))
+      await clock.advance(0)
+      const census = counted(t)
+      await clock.advance(3000)
+      assert.equal(census.done, true)
+      assert.equal(sentAt(bench, '/preset'), t0, 'another account’s pick held this one’s reads')
+      assert.deepEqual(sentOf(bench, '/preset'), [''])
+      assert.ok(!store.logged.some((line) => line.includes('fractalpi')), `another account’s computer is in this one’s log: ${store.logged.join(' | ')}`)
+      /* And the first account's is still its own when it signs back in. */
+      await relay.signOut()
+      bench.uid = 'u1'
+      if (end === 'phone') await relay.restoreSession()
+      else await relay.restoreSession({})
+      await relay.remoteConnect()
+      await clock.advance(0)
+      bench.sent.length = 0
+      watch(relay.remoteRequest('/preset'))
+      await clock.advance(100)
+      assert.deepEqual(sentOf(bench, '/preset'), [], 'the first account’s pick was lost at the sign-out')
+    })
+
+    test(`${end}: the one pick 1.87.47 kept for the whole ${end === 'phone' ? 'phone' : 'browser'} becomes the account's, and the launch that finds it waits for nothing`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', legacy: true })
+      const { bench, clock, relay, watch, store } = t
+      assert.equal(keptFor(store, end)?.name, 'raspberry pi 3', 'the old pick was not taken for the account')
+      assert.notEqual(store.kept[PICK_KEY[end]], 'raspberry pi 3', 'the old pick was left for the next account to find')
+      bench.computers = [PI5(), PI3()]
+      const t0 = clock.now()
+      watch(relay.remoteRequest('/preset'))
+      await clock.advance(0)
+      assert.equal(sentAt(bench, '/preset'), t0, 'a pick never counted on this version held the launch')
+      const census = counted(t)
+      await clock.advance(6000)
+      assert.equal(census.done, true)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+      assert.equal(keptFor(store, end)?.many, true)
+    })
+
+    test(`${end}: a tap before the first count, on an account of two with a pick, is never sent to both`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, watch, tap } = t
+      bench.computers = [PI5(), PI3()]
+      /* The link is up and nothing is counted yet: Android back on screen, the name read still out. */
+      const pressed = watch(tap())
+      await clock.advance(1000)
+      assert.deepEqual(writes(bench), [], 'a tap went before the roll call, to both units')
+      assert.equal(pressed.done, false, 'the tap was dropped at once rather than held for the count')
+      /* The count begins inside its deadline, and outlasts it: dropped, as any tap the count holds. */
+      counted(t)
+      await clock.advance(6000)
+      assert.equal(pressed.error?.notSent, true)
+      assert.deepEqual(writes(bench), [], 'a tap went to both units')
+      /* One computer counted last time: a tap before the count goes at once, as it always did. */
+      const one = await relayOnABench(end, { picked: 'raspberry pi 3', many: false })
+      one.bench.computers = [computer('Studio', 'FM3')]
+      const t0 = one.clock.now()
+      const sent = one.watch(one.tap())
+      await one.clock.advance(100)
+      assert.equal(sent.done && !sent.error, true, sent.error?.message)
+      assert.equal(one.bench.sent.find((x) => x.msg.payload.method === 'POST').at, t0)
+    })
+
+    test(`${end}: a count that heard one computer is taken again when a second is heard answering, and only then`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch } = t
+      assert.equal(relay.remoteCountDue(), true, 'a fresh link is not due a roll call')
+      let told = 0
+      relay.subscribeCountDue(() => (told += 1))
+      /* The Pi 3 still starting: only the Pi 5 answers the count. */
+      bench.computers = [PI5()]
+      const census = counted(t)
+      assert.equal(relay.remoteCountDue(), false, 'a roll call is due while one is running')
+      await clock.advance(3000)
+      assert.equal(census.done, true)
+      assert.deepEqual(relay.remoteHosts(), ['fractalpi'])
+      watch(relay.remoteRequest('/preset'))
+      await clock.advance(500)
+      assert.equal(relay.remoteCountDue(), false, 'one computer answering one question is evidence of another')
+      /* The Pi 3 is up: a question asked of nobody has two answers. */
+      bench.computers = [PI5(), PI3()]
+      watch(relay.remoteRequest('/preset'))
+      await clock.advance(500)
+      assert.equal(relay.remoteCountDue(), true, 'a second computer answering was not taken for one')
+      assert.equal(told, 1, 'link.js was not told to count again')
+      const again = counted(t)
+      await clock.advance(6000)
+      assert.equal(again.done, true)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', 'the count again did not find the pick')
+      /* Two counted: a question asked of nobody has two answers by design, and is no reason to count again. */
+      assert.equal(relay.remoteCountDue(), false)
     })
 
     test(`${end}: a unit picked under Which unit is proved before a write goes, and a read goes to it meanwhile`, async () => {
@@ -3099,48 +3355,81 @@ export function run(test) {
       assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']], 'the tap held through the proof did not go to the pick alone')
       assert.equal(pressed.done && !pressed.error, true, pressed.error?.message)
     })
+
+    test(`${end}: a unit picked while a count is running waits for it, and a write made then goes to the pick alone`, async () => {
+      const { bench, clock, relay, watch } = await relayOnABench(end)
+      bench.computers = [PI5(), PI3()]
+      const sleep = (ms) => new Promise((go) => clock.setTimeout(go, ms))
+      relay.censusHosts({ windowMs: 1500, sleep })
+      await clock.advance(6000)
+      assert.equal(relay.remoteChosenHost(), 'fractalpi')
+      /* Check again, and Which unit tapped while it counts; a write with no deadline in the middle of both. */
+      const count = watch(relay.censusHosts({ windowMs: 1500, sleep }))
+      await clock.advance(1600)
+      const picking = watch(relay.pickHost('raspberry pi 3', { windowMs: 1500, sleep }))
+      await clock.advance(50)
+      const saved = watch(relay.remoteRequest('/scene', { method: 'POST', body: JSON.stringify({ index: 1 }) }))
+      await clock.advance(2000)
+      assert.equal(count.done, false, 'the count was over before the pick: this does not test the overlap')
+      assert.deepEqual(writes(bench), [], 'a write went while the count and the pick were both still running')
+      await clock.advance(5000)
+      assert.equal(count.done && picking.done, true)
+      assert.equal(picking.value, true, 'the pick was not proved')
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', 'the count’s own choice landed over the pick made after it began')
+      assert.equal(saved.done && !saved.error, true, saved.error?.message)
+      assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']], 'the write did not go to the pick alone')
+    })
   }
 
-  test('the roll call’s rules: the unit’s computer over a pick with none, and one line in the log', async () => {
+  test('the roll call’s rules: one line in the log, and a pick is never left for another unit', async () => {
     const r = await import('../shared/relay-rules.mjs')
     const units = { fractalpi: { model: 'FM3', plugged: true }, 'raspberry pi 3': { model: 'AM4', plugged: false } }
     const both = ['fractalpi', 'raspberry pi 3']
-    assert.equal(r.hostWithUnit(both, units, 'raspberry pi 3'), 'fractalpi')
-    assert.equal(r.hostWithUnit(both, units, 'fractalpi'), 'fractalpi')
-    /* Not on a timeout: no answer about the pick's unit is no entry, and the pick stays. */
-    assert.equal(r.hostWithUnit(both, { fractalpi: units.fractalpi }, 'raspberry pi 3'), 'raspberry pi 3')
-    /* Not when two others have a unit: which one is not this rule's to guess. */
-    assert.equal(r.hostWithUnit([...both, 'Mac'], { ...units, Mac: { model: 'FM9', plugged: true } }, 'raspberry pi 3'), 'raspberry pi 3')
-    assert.equal(r.hostWithUnit(both, units, null), null)
+    assert.equal(r.hostWithUnit, undefined, 'the pick is handed to another unit again: nothing would hand it back')
     const line = r.rollCallLine({ hosts: both, units: { fractalpi: units.fractalpi, 'raspberry pi 3': { model: 'AM4', plugged: true } }, chosen: 'raspberry pi 3', why: 'pick', addressed: true })
     assert.equal(line, 'two computers answered: fractalpi (FM3), raspberry pi 3 (AM4); driving raspberry pi 3, the one picked under Which unit, addressed')
     assert.equal(
-      r.rollCallLine({ hosts: both, units, chosen: 'fractalpi', why: 'unit', pick: 'raspberry pi 3', addressed: true }),
-      'two computers answered: fractalpi (FM3), raspberry pi 3 (no unit plugged in); driving fractalpi, the one with a unit (raspberry pi 3, the one picked under Which unit, has none plugged in), addressed'
+      r.rollCallLine({ hosts: both, units, chosen: 'raspberry pi 3', why: 'pick', addressed: true }),
+      'two computers answered: fractalpi (FM3), raspberry pi 3 (no unit plugged in); driving raspberry pi 3, the one picked under Which unit, addressed'
     )
     assert.match(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', why: 'first', addressed: false }), /driving fractalpi, the first to answer, not addressed: a computer app on one of them is too old to be asked alone$/)
     assert.equal(r.rollCallLine({ hosts: ['Studio'], missing: 'Old Mac' }), 'one computer answered: Studio; Old Mac, the one picked under Which unit, did not answer')
     /* Words a person may read: plain, and never "this phone". */
-    for (const words of [line, r.rollCallLine({ hosts: both, units, chosen: 'fractalpi', why: 'unit', pick: 'raspberry pi 3' })]) assert.ok(!/this phone|\bMac\b/.test(words), words)
-    /* Both ends log it from the same rule, once per roll call that found two or missed the pick. */
+    for (const words of [line, r.rollCallLine({ hosts: both, units, chosen: 'fractalpi', why: 'first' })]) assert.ok(!/this phone|\bMac\b/.test(words), words)
+    /* The pick, kept for each account in the one key; the bare name 1.87.47 kept is there for the first account to take. */
+    assert.deepEqual(r.readPicks('raspberry pi 3'), { accounts: {}, legacy: 'raspberry pi 3' })
+    assert.deepEqual(r.readPicks(null), { accounts: {}, legacy: null })
+    const kept = r.writePicks({ u1: { name: 'raspberry pi 3', many: true } })
+    assert.deepEqual(r.readPicks(kept), { accounts: { u1: { name: 'raspberry pi 3', many: true } }, legacy: null })
+    assert.deepEqual(r.pickEntry(undefined), { name: null, many: null })
+    assert.deepEqual(r.pickEntry({ name: 'fractalpi', many: 'yes' }), { name: 'fractalpi', many: null })
+    /* A name that happens to read as JSON is still a name. */
+    assert.deepEqual(r.readPicks('123'), { accounts: {}, legacy: '123' })
+    /* Both ends log it from the same rule, once per roll call that found two or missed the pick, and neither hands the pick to another computer. */
     for (const file of ['mobile/src/lib/relay.js', 'src/lib/remote.js']) {
       const src = read(file)
-      assert.match(src, /if \(hosts\.length > 1 \|\| missing\) logDebug\('link', rollCallLine\(\{ hosts, units, chosen, why: chosenWhy, pick, addressed: targeted, missing \}\)\)/, `${file} does not say the roll call`)
-      assert.match(src, /if \(hosts\.length > 1 && chosen\) chosen = hostWithUnit\(hosts, units, chosen\)/, `${file} sits on a pick with no unit`)
+      assert.match(src, /if \(hosts\.length > 1 \|\| missing\) logDebug\('link', rollCallLine\(\{ hosts, units, chosen, why: chosenWhy, addressed: targeted, missing \}\)\)/, `${file} does not say the roll call`)
+      assert.ok(!/hostWithUnit/.test(src), `${file} hands the pick to another unit`)
+      /* The pick is kept per account. */
+      assert.match(src, /accounts\[uid\] = \{ name, many: /, `${file} keeps one pick for every account`)
     }
   })
 
   test('phone: one of two picked by the roll call has its name read again, and a unit read off another computer is read again from a clean start', async () => {
     /* Every read of the roll call went to the pick (relay holdReads): its name again, and nothing read twice. */
     const t = await linkOnABench()
+    /* A roll call takes its three windows: the name read at join is answered long before it ends. */
     t.bench.census = async () => {
+      await new Promise((go) => t.clock.setTimeout(go, 4500))
       t.bench.hosts = ['fractalpi', 'raspberry pi 3']
       t.bench.chosen = 'raspberry pi 3'
       t.bench.askedOf = 'raspberry pi 3'
       t.bench.named = 'raspberry pi 3'
     }
     t.link.startLink()
-    await t.clock.advance(2000)
+    await t.clock.advance(1000)
+    assert.equal(t.link.linkState().macName, 'Studio', 'the bench did not read the name at join from whoever answered first')
+    await t.clock.advance(5000)
     assert.equal(t.link.linkState().macName, 'raspberry pi 3', 'Settings and the log name the computer that answered first')
     assert.equal(t.bench.requests.filter((x) => x.path === '/store/config/host.name').length, 2, 'the name is not read again after the pick')
     assert.deepEqual(t.bench.order.filter((x) => x === 'refreshAll' || x === 'startClean'), ['refreshAll'], 'a unit read off the pick alone was read again')
@@ -3148,12 +3437,13 @@ export function run(test) {
     /* Nobody picked: what was read while it listened came from whoever answered first, and goes before the second read. */
     const u = await linkOnABench()
     u.bench.census = async () => {
+      await new Promise((go) => u.clock.setTimeout(go, 4500))
       u.bench.hosts = ['fractalpi', 'raspberry pi 3']
       u.bench.chosen = 'fractalpi'
       u.bench.askedOf = null
     }
     u.link.startLink()
-    await u.clock.advance(2000)
+    await u.clock.advance(6000)
     assert.deepEqual(u.bench.order.filter((x) => x === 'refreshAll' || x === 'startClean'), ['refreshAll', 'startClean', 'refreshAll'])
     /* One computer: nothing of this. */
     const one = await linkOnABench()
@@ -3169,6 +3459,50 @@ export function run(test) {
     assert.match(read('src/App.jsx'), /answered = true\s*\/\*[^*]*\*\/\s*unitRead\(currentDeviceSlug\(\)\)\s*doneReading = beginChainRead\(\)/)
     const phone = read('mobile/src/lib/link.js')
     assert.match(phone, /const moved = state\.chosenHost !== remoteChosenHost\(\)[\s\S]{0,120}if \(moved\) startClean\(\)\s*readMacName\(\)/)
+  })
+
+  test('phone: a link whose first /healthz went unanswered takes the roll call when the computer first answers, and on evidence of a second', async () => {
+    const t = await linkOnABench()
+    /* The Pis still starting: the first three /healthz go unanswered, and the next is answered. */
+    let asked = 0
+    t.bench.answer = () => new Promise((r) => t.clock.setTimeout(() => r(asked++ > 2), 300))
+    t.bench.countDue = () => !t.bench.order.includes('census')
+    /* Whether the computer was answering when each roll call was taken. */
+    const answering = []
+    t.bench.census = async () => {
+      answering.push(t.bench.hostSeen)
+    }
+    t.link.startLink()
+    await t.clock.advance(60000)
+    assert.equal(t.link.linkState().link, 'connected', 'the bench computer never answered')
+    assert.ok(asked > 3, 'the bench never had a /healthz go unanswered')
+    assert.deepEqual(answering, [true], 'the computer answered and no roll call was taken on the link (every write went to every computer), or one was taken with nobody answering')
+    /* Its name is read after the roll call has begun holding writes, not before. */
+    const order = t.bench.order
+    assert.ok(order.indexOf('census') < order.indexOf('/store/config/host.name'), order.join(', '))
+    /* A second computer heard since: counted again, at once. */
+    t.bench.countDue = true
+    t.bench.due()
+    await t.clock.advance(0)
+    assert.equal(t.bench.order.filter((x) => x === 'census').length, 2, 'a second computer heard and not counted')
+    /* And never in the demo. */
+    t.bench.demo = true
+    t.bench.due()
+    await t.clock.advance(0)
+    assert.equal(t.bench.order.filter((x) => x === 'census').length, 2)
+  })
+
+  test('browser: a link whose first /healthz went unanswered takes the roll call when the computer first answers', async () => {
+    const t = await webLinkOnABench()
+    assert.equal(t.bench.censuses, 1, 'the bench browser’s join took no roll call')
+    /* A link of its own, its first /healthz unanswered, and then answered. */
+    let asked = 0
+    t.bench.answer = () => new Promise((r) => t.clock.setTimeout(() => r(asked++ > 0), 300))
+    t.bench.countDue = () => t.bench.censuses < 2
+    t.remote.channelUp(false)
+    await t.clock.advance(30000)
+    assert.equal(t.link.linkState().link, 'connected', 'the bench computer never answered')
+    assert.equal(t.bench.censuses, 2, 'the computer answered and no roll call was taken on the link')
   })
 
   test('phone: the log header names every computer and the one driven only when two answer, and never over Bluetooth', () => {

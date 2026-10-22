@@ -31,6 +31,7 @@ import {
   remoteChosenHost,
   remoteConnect,
   remoteDisconnect,
+  remoteCountDue,
   remoteHostSeen,
   remoteHosts,
   remoteReadsAskedOf,
@@ -38,6 +39,7 @@ import {
   remoteUnits,
   pickHost,
   restoreSession,
+  subscribeCountDue,
   subscribeHostSeen,
   subscribeRemoteState
 } from './relay'
@@ -384,6 +386,8 @@ async function turn() {
     refresh()
   }
 
+  /* A link where no roll call was taken, or a second computer heard since the last one: counted now (countIfDue). */
+  countIfDue()
   // A computer that was updated while this phone watched says so within a
   // couple of minutes, rather than at the next join.
   if (running && state.link === 'connected' && Date.now() - namedAt > NAME_AGAIN) await readMacName()
@@ -405,6 +409,18 @@ async function turn() {
 }
 
 async function join() {
+  joinBusy = true
+  try {
+    await joinOnce()
+  } finally {
+    joinBusy = false
+  }
+}
+
+/* Inside join, which takes the roll call itself: countIfDue leaves it to it. */
+let joinBusy = false
+
+async function joinOnce() {
   set({ link: 'joining' })
   const began = Date.now()
   try {
@@ -421,11 +437,11 @@ async function join() {
   listen()
   refresh()
 
+  /* Not answered yet: the roll call is taken when it does (countIfDue, from the loop and from the first answer). */
   const answered = await hostResponds()
   refresh()
   if (!answered) return
 
-  await readMacName()
   /*
    * The moment the computer answers, before the roll call holds every write
    * for up to six seconds and before refreshAll's reads queue up on the
@@ -437,7 +453,10 @@ async function join() {
   // Not awaited: the roll call costs a second and a half of listening and the
   // ordinary case has nothing to report, so it must not stand between someone
   // and their unit. Writes are refused from the moment the count lands.
+  // Begun before the computer's name is read: a tap made while that read was
+  // out went to every computer on the account, both units.
   countHosts()
+  await readMacName()
 
   try {
     await refreshAll()
@@ -488,6 +507,23 @@ async function countHosts() {
   } catch {
     // A roll call that fails is not a reason to distrust the link.
   }
+}
+
+/*
+ * THE ROLL CALL IS TAKEN WHEN THE COMPUTER FIRST ANSWERS, whenever that is.
+ * Join takes it once the first /healthz is answered; a join whose first
+ * /healthz went unanswered (the Pis still starting) returned without one,
+ * and nothing took it after: every read went to whoever answered first and
+ * every write to every computer, for the life of the link. So the first
+ * answer on a link with no count takes it, from wherever the answer came,
+ * and the loop asks too. And a second computer heard answering after a
+ * count that found one (relay.js anotherAnswered) is counted again, at most
+ * once a minute. Never on a timer alone, never in the demo or over
+ * Bluetooth, and never inside join, which takes its own.
+ */
+function countIfDue() {
+  if (!running || joinBusy || isDemo() || bluetoothOn() || !remoteHostSeen() || !remoteCountDue()) return
+  countHosts()
 }
 
 /** What the roll call found, into the link's state, for Settings and Which unit. */
@@ -726,7 +762,11 @@ export function startLink() {
       refresh()
       /* Stopped answering on a channel that is up: ask once more, at once. See doubt. */
       if (!seen) doubt()
+      /* Answering, on a link that has had no roll call: taken now (countIfDue). */
+      if (seen) countIfDue()
     }),
+    /* A second computer heard since the last count found one: counted again (countIfDue). */
+    subscribeCountDue(() => countIfDue()),
     AppState.addEventListener('change', (status) => {
       /*
        * Said in the log, because without it a paste reads as a link that

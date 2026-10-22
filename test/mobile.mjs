@@ -19413,9 +19413,9 @@ export function run(test) {
     assert.equal(unitMoved('fm3', 'fm3'), false)
     assert.equal(unitMoved('fm3', 'am4'), true)
     assert.equal(unitMoved(null, 'am4'), false)
-    /* The forgetNames line stays as it was, and the clean start is the statement after it. */
+    /* The forgetNames line stays as it was, and the clean start is the statement after it: never between two demo units, as it always was. */
     const rigSrc = read('mobile/src/lib/rig.js')
-    assert.match(rigSrc, /if \(slug !== state\.deviceSlug \|\| simulated !== state\.simulated\) forgetNames\(\)\n {2}if \(anotherUnit\(slug\)\) startClean\(\)\n/)
+    assert.match(rigSrc, /if \(slug !== state\.deviceSlug \|\| simulated !== state\.simulated\) forgetNames\(\)\n {2}if \(anotherUnit\(slug\) && !\(simulated && state\.simulated\)\) startClean\(\)\n/)
   })
 
   test('phone: a scene-name answer that lands after the unit changed is dropped, not put on the new unit’s tiles or kept under its slot', async () => {

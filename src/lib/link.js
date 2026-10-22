@@ -50,6 +50,8 @@ import {
   remoteUnits,
   remoteChosenHost,
   remoteReadsAskedOf,
+  remoteCountDue,
+  subscribeCountDue,
   pickHost,
   signOut,
   remoteSignUp
@@ -693,6 +695,19 @@ async function countHosts() {
   }
 }
 
+/*
+ * THE ROLL CALL IS TAKEN WHEN THE COMPUTER FIRST ANSWERS, whenever that is,
+ * as on the phone (countIfDue in mobile/src/lib/link.js says why): a join
+ * whose first /healthz went unanswered took none, and every write went to
+ * every computer for the life of the link. And again when a second computer
+ * is heard after a count that found one, at most once a minute. Never inside
+ * join, which takes its own, and only for a phone on the web app.
+ */
+function countIfDue() {
+  if (state.role !== 'remote' || !state.account || joining || !remoteHostSeen() || !remoteCountDue()) return
+  countHosts()
+}
+
 /**
  * Drive one of them, and leave the other alone.
  *
@@ -794,6 +809,8 @@ async function turn() {
     await hostResponds()
     refresh()
   }
+  /* A link where no roll call was taken, or a second computer heard since the last one: counted now. */
+  countIfDue()
   /*
    * Re-derive on the clock, not only after a probe.
    *
@@ -1034,7 +1051,11 @@ export async function bootLink() {
     refresh()
     /* Stopped answering on a channel that is up: ask once more, at once. See doubt. */
     if (!seen) doubt()
+    /* Answering, on a link that has had no roll call: taken now (countIfDue). */
+    if (seen) countIfDue()
   })
+  /* A second computer heard since the last count found one: counted again (countIfDue). */
+  subscribeCountDue(() => countIfDue())
   /*
    * The roll call is re-taken by the write gate now, not only here, so its
    * answer has to reach the screen from wherever it was taken. Without this the

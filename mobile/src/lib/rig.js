@@ -281,7 +281,9 @@ export function reset() {
  * the one that fills it all in again. Only then: the first unit read after
  * launch is not another one (unitMoved), so an ordinary connect never comes
  * here, and a rig with one computer only when its unit is swapped for
- * another.
+ * another. Never from one demo unit to the next, which no computer is
+ * behind: the demo keeps the last one's pedals up until the next is read,
+ * as it always did.
  */
 let unitEra = 0
 /* The last real unit read (never the starting 'device'), for unitMoved. */
@@ -1074,7 +1076,7 @@ async function readAll() {
    */
   const simulated = isDemo()
   if (slug !== state.deviceSlug || simulated !== state.simulated) forgetNames()
-  if (anotherUnit(slug)) startClean()
+  if (anotherUnit(slug) && !(simulated && state.simulated)) startClean()
   /*
    * And which unit's colours the tiles wear. "The button and effects pedal
    * colors dont match the colors on real fractal units": an AM4 has its own,
