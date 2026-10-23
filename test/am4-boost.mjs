@@ -435,6 +435,8 @@ export function run(test) {
         unit.reads += 1
         calls.push(['blockParams', eid])
         if (unit.paramsFail) throw Object.assign(new Error('the unit did not answer'), { status: 503 })
+        /* `empty`: what the computer answers when its read of the preset failed (ForgeFX am4.ts blockParams with no snapshot). */
+        if (unit.empty) return { block: 'amp', slug: 'amp', page: -1, named: [], enums: [] }
         /* `lag`: a read slow to come back, answered with the value it is handed (what the computer's copy held when it was asked). */
         if (unit.lag) {
           const lag = unit.lag
@@ -508,18 +510,43 @@ export function run(test) {
     assert.equal(ds.boostNow(), 'unknown')
     await assert.rejects(ds.tapBoost(58), (e) => e.nothingSent === true && e.message === 'The amp’s boost couldn’t be read from the unit, so nothing was sent. Try it again in a moment.')
     assert.ok(!calls.some((c) => c[0] === 'setAmpBoost' || c[0] === 'setBypass'), 'an unread boost was sent, or fell back to a bypass')
-    /* Read, and said nothing that can be shown: kept, and a tap does not ask again. */
+    /* Read, and said nothing that can be shown: nothing kept, so a tap reads it again, and goes once the unit says. */
     unit.paramsFail = false
     unit.boosts.B = 65534
     await ds.refreshBoost()
+    assert.ok(ds.getSnapshot().boost?.at !== ds.boostKey(), 'an answer with no boost that can be shown was kept as read')
     const reads = unit.reads
     await assert.rejects(ds.tapBoost(58), (e) => e.nothingSent === true)
-    assert.equal(unit.reads, reads, 'a tap on an unreadable boost read the amp again')
-    /* And once it can be read, the tap reads first and goes. */
+    assert.equal(unit.reads, reads + 1, 'a tap on a boost not read did not read it first')
     unit.boosts.B = 0
-    ds.set({ boost: null })
     await ds.tapBoost(58)
+    assert.equal(unit.reads, reads + 2)
     assert.deepEqual(calls.filter((c) => c[0] === 'setAmpBoost').at(-1)[2], { value: 1, continuous: false })
+  })
+
+  /*
+   * When the computer's read of the preset fails (a unit still busy, "got
+   * 0x78"), it answers the amp's params with none of them: named and enums
+   * both empty. That answer was kept as "read, nothing to show" for the rest
+   * of that load, and every tap after it said the boost couldn't be read and
+   * never asked again, until a scene or another preset. It keeps nothing
+   * now, so the next tap reads first, and sends once the unit answers.
+   */
+  test('browser: an empty answer to the boost read (the computer’s read of the preset failed) leaves it unknown, and the next tap reads again and sends', async () => {
+    const { unit, calls } = am4()
+    unit.empty = true
+    await ds.refreshBlocks()
+    await settled()
+    assert.equal(unit.reads, 1)
+    assert.equal(ds.boostNow(), 'unknown')
+    assert.ok(ds.getSnapshot().boost?.at !== ds.boostKey(), 'an empty answer was kept as the boost read')
+    await assert.rejects(ds.tapBoost(58), (e) => e.nothingSent === true && e.message === 'The amp’s boost couldn’t be read from the unit, so nothing was sent. Try it again in a moment.')
+    assert.equal(unit.reads, 2, 'a tap after an empty answer did not read again')
+    unit.empty = false
+    await ds.tapBoost(58)
+    assert.equal(unit.reads, 3, 'a tap after an empty answer did not read again')
+    assert.deepEqual(calls.filter((c) => c[0] === 'setAmpBoost').map((c) => c[2]), [{ value: 1, continuous: false }], 'the boost was never sent after an empty answer')
+    assert.equal(ds.boostNow(), 'on')
   })
 
   test('browser: an AM4 amp off in this scene sends nothing and says so; other pedals and units are unchanged', async () => {

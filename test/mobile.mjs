@@ -19732,25 +19732,73 @@ export function run(test) {
     }
     const { rig, clock, asked, wire, relay } = await rigOnTheBench(bench)
     await clock.advance(0)
-    /* Read, and nothing that can be shown (not exactly 0 or 1): kept, so a tap does not read again, and sends nothing. */
-    assert.deepEqual({ ...rig.getState().boost, at: undefined }, { at: undefined, channel: 'A', on: null })
+    /* Read, and nothing that can be shown (not exactly 0 or 1): nothing kept, so a tap reads again, and sends nothing. */
+    assert.equal(rig.getState().boost, null, 'an answer with no boost that can be shown was kept as read')
     assert.equal(rig.boostNow(), 'unknown')
     const reads = asked(BOOST_READ)
     assert.equal(await rig.tapBoost(58), false)
-    assert.equal(asked(BOOST_READ), reads, 'a tap on an unreadable boost read the amp again')
+    assert.equal(asked(BOOST_READ), reads + 1, 'a tap on a boost not read did not read it first')
     assert.equal(asked(BOOST_PUT), 0, 'a boost nobody could read was sent anyway')
     assert.ok(!wire.some((l) => /\/bypass$/.test(l)), 'an unread boost fell back to a bypass')
     assert.equal(rig.getState().error, "The amp’s boost couldn’t be read from the unit, so nothing was sent. Try it again in a moment.")
     /* A read that failed keeps nothing, so the next tap reads first, and goes once it knows. */
-    rig.set({ boost: null })
     answers = 'fails'
     assert.equal(await rig.tapBoost(58), false)
-    assert.equal(asked(BOOST_READ), reads + 1, 'a tap on a boost never read did not read it first')
+    assert.equal(asked(BOOST_READ), reads + 2, 'a tap on a boost never read did not read it first')
     assert.equal(asked(BOOST_PUT), 0)
     answers = 'works'
     assert.equal(await rig.tapBoost(58), true)
-    assert.equal(asked(BOOST_READ), reads + 2)
+    assert.equal(asked(BOOST_READ), reads + 3)
     assert.deepEqual(JSON.parse(relay.handed.filter((h) => h.line === BOOST_PUT).at(-1).body), { value: 1, continuous: false })
+    assert.equal(rig.boostNow(), 'on')
+  })
+
+  /*
+   * When the computer's read of the preset fails (a unit still busy loading
+   * a preset picked again, "got 0x78"), the chain read fails and the amp's
+   * params come back with none of them: named and enums both empty. That
+   * answer was kept as "read, nothing to show" for the load, and every tap
+   * after it was refused with "couldn't be read" and never read again, until
+   * a scene or another preset. It keeps nothing now: the next tap reads
+   * first, and sends once the unit answers.
+   */
+  test('phone: an empty answer to the boost read after a load whose reads failed keeps nothing; the next tap reads again and sends', async () => {
+    let empty = false
+    const bench = AM4_BOOST_BENCH()
+    const real = bench.params
+    bench.params = function (eid) {
+      if (empty && eid === 58) return { block: 'amp', slug: 'amp', page: -1, named: [], enums: [] }
+      return real.call(this, eid)
+    }
+    const { rig, clock, unit, asked, relay } = await rigOnTheBench(bench)
+    await clock.advance(0)
+    assert.equal(rig.boostNow(), 'off')
+    /* The same preset picked again; the unit stays busy: its chain reads fail, and the params read comes back empty. */
+    unit.chainFails = true
+    empty = true
+    const again = rig.loadPreset(12)
+    await clock.advance(10000)
+    await again
+    unit.chainFails = false
+    assert.equal(rig.getState().chain, 'failed', 'the bench’s chain reads did not fail')
+    assert.equal(rig.boostNow(), 'unknown')
+    const tapOnce = async () => {
+      rig.clearError()
+      const tap = rig.tapBoost(58)
+      await clock.advance(2000)
+      return tap
+    }
+    const reads = asked(BOOST_READ)
+    assert.equal(await tapOnce(), false)
+    assert.equal(asked(BOOST_READ), reads + 1, 'a tap on the unread boost did not read it first')
+    assert.equal(rig.getState().error, 'The amp’s boost couldn’t be read from the unit, so nothing was sent. Try it again in a moment.')
+    assert.equal(rig.getState().boost?.at === rig.boostKey(), false, 'an empty answer was kept as the boost read')
+    /* The unit answers again: the next tap reads first, and goes. */
+    empty = false
+    assert.equal(await tapOnce(), true, `the tap after an empty answer was refused: ${rig.getState().error}`)
+    assert.equal(asked(BOOST_READ), reads + 2, 'the tap after an empty answer did not read again')
+    assert.deepEqual(JSON.parse(relay.handed.filter((h) => h.line === BOOST_PUT).at(-1).body), { value: 1, continuous: false })
+    assert.equal(unit.boosts.A, 1)
     assert.equal(rig.boostNow(), 'on')
   })
 

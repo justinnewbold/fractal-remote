@@ -106,8 +106,8 @@ const initial = {
    * ON AN AM4, WHAT ITS AMP'S BOOST IS: the pedal on Play is the boost there
    * (lib/am4-boost). Which load of the preset (boostAt: this unit, this
    * computer, this preset, this time it was loaded) and which channel it was
-   * read or sent for, and on, off or null (read, and nothing that can be
-   * shown). null until then, and on every other unit. Play shows it only for
+   * read or sent for, and on or off. null until then, and on every other
+   * unit. Play shows it only for
    * the load and the channel it was kept for; see boostNow.
    */
   boost: null,
@@ -2721,10 +2721,13 @@ export async function refreshBoost(since = boostPresses) {
 }
 
 /*
- * true, false, or null (read, and nothing that can be shown, which is kept
- * so a tap does not ask again); undefined when nothing came back, or what
- * came back is for a load or a channel left since, or a boost was pressed
- * while it was asked, and nothing is kept.
+ * true or false, kept for this load and channel; undefined, with nothing
+ * kept, when nothing came back, or what came back is for a load or a channel
+ * left since, or a boost was pressed while it was asked, or it has no Out
+ * Boost in it that can be shown. That last is what the computer answers when
+ * its read of the preset failed (named and enums both empty, a unit still
+ * busy): kept as read, it refused every tap of that load for good. Nothing
+ * kept, the next tap reads it again.
  */
 async function readBoost(presses = boostPresses) {
   if (boostWriting > 0) return undefined
@@ -2748,7 +2751,10 @@ async function readBoost(presses = boostPresses) {
     logDebug('chain', 'the amp’s boost read was asked before a tap of it, and is not shown over the tap')
     return undefined
   }
-  if (on === null) logDebug('chain', 'the amp’s boost was read, and said nothing that can be shown')
+  if (on === null) {
+    logDebug('chain', 'the amp’s boost was read, and said nothing that can be shown: nothing kept, so a tap reads it again')
+    return undefined
+  }
   set({ boost: keptBoost(at, channel, on) })
   return on
 }
@@ -2820,12 +2826,11 @@ export async function tapBoost(id, at = Date.now(), want) {
       return false
     }
     /*
-     * Read once for this load and channel, and not again: an answer that said
-     * nothing is kept (readBoost). One already on its way is waited for, and
-     * no second one is asked for after it: that one would go beside this
-     * tap's write, and be answered out of the copy from before it.
+     * Read first. One already on its way is waited for, and no second one is
+     * asked for after it: that one would go beside this tap's write, and be
+     * answered out of the copy from before it.
      */
-    if (!boostFor(state.boost, where, boostAmp())) await (boostInFlight || refreshBoost())
+    await (boostInFlight || refreshBoost())
     if (boostAtNow() !== where || (boostAmp()?.channel ?? null) !== pressedOn || notSwitchable(id)) {
       logDebug('write', 'amp boost: the preset or the channel moved while its boost was read — nothing sent')
       return false

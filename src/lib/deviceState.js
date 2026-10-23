@@ -109,8 +109,8 @@ const BLANK = {
    * ON AN AM4, WHAT ITS AMP'S BOOST IS: its pedal on Play is the boost there
    * (shared/am4-boost.mjs). Which load of the preset (boostAt: this unit,
    * this computer, this preset, this time it was loaded) and which channel
-   * it was read or sent for, and on, off or null (read, and nothing that can
-   * be shown). null until then, and on every other unit. The phone keeps the
+   * it was read or sent for, and on or off. null until then, and on every
+   * other unit. The phone keeps the
    * same.
    */
   boost: null,
@@ -2182,7 +2182,7 @@ export async function refreshBoost(since = boostPresses) {
   }
 }
 
-/* true, false, or null (read, and nothing that can be shown: kept, so a tap does not ask again); undefined when nothing is kept. */
+/* true or false, kept; undefined when nothing is kept, an answer with no Out Boost in it that can be shown among them (what the computer answers when its read of the preset failed): the next tap reads it again. The phone's rig.readBoost, the same. */
 async function readBoost(presses = boostPresses) {
   if (boostWriting > 0 || presses !== boostPresses) return undefined
   const at = boostAtNow()
@@ -2194,7 +2194,7 @@ async function readBoost(presses = boostPresses) {
   } catch {
     return undefined
   }
-  if (era !== boostEra || boostAtNow() !== at || (boostAmp()?.channel ?? null) !== channel || presses !== boostPresses) return undefined
+  if (era !== boostEra || boostAtNow() !== at || (boostAmp()?.channel ?? null) !== channel || presses !== boostPresses || on === null) return undefined
   set({ boost: keptBoost(at, channel, on) })
   return on
 }
@@ -2230,8 +2230,8 @@ export async function tapBoost(effectId, at = Date.now()) {
   if (shown === BOOST.unknown) {
     /* Not while the preset is still loading, before its chain read is over, landed or not (presetBusy): the read would be a whole dump at it (loadWaits). */
     if (presetBusy()) throw sentNothing(BOOST_LOADING)
-    /* Read once for this load and channel, and not again: an answer that said nothing is kept (readBoost). One on its way is waited for, with no second read asked after it beside this tap's write. */
-    if (!boostFor(state.boost, where, boostAmp())) await (boostInFlight || refreshBoost())
+    /* Read first. One on its way is waited for, with no second read asked after it beside this tap's write. */
+    await (boostInFlight || refreshBoost())
     if (boostAtNow() !== where || (boostAmp()?.channel ?? null) !== pressedOn || !onScreen(effectId)) {
       throw Object.assign(new Error(CHAIN_WORDS.refused), { notThisChain: true })
     }

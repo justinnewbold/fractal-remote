@@ -214,8 +214,9 @@ export const boostAt = (unitEra, presetRun, number) => `${unitEra}:${presetRun}:
 
 /**
  * What one end knows of the switch, kept: which load (`at`) and which channel
- * it was read (or written) for, and `on` true, false or null (read, and not
- * readable).
+ * it was read (or written) for, and `on` true or false (null for anything
+ * else, which no end keeps: an answer with no switch that can be shown is
+ * not an answer, and the next tap reads again).
  */
 export const keptBoost = (at, channel, on) => ({ at: at ?? null, channel: channel ?? null, on: on === true || on === false ? on : null })
 
