@@ -26,6 +26,7 @@ import {
 } from '../lib/relay'
 import { askUnknownUnits, chooseHost, forgetMissing } from '../lib/link'
 import MissingPick from '../components/MissingPick'
+import { notUsingOne } from '../lib/relay-rules'
 import { useRig } from '../lib/rig'
 import { setFlashTiming, setMetronome, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
 import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, nudgeFloor, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
@@ -1160,6 +1161,8 @@ export default function Settings({
                   setMissing(remoteMissingPick())
                 }}
               />
+              {/* How one you don't use comes off this list: at that computer (relay-rules notUsingOne). */}
+              <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{notUsingOne('app')}</Text>
             </View>
           ) : null}
 

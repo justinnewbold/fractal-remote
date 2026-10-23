@@ -287,7 +287,8 @@ import {
   unitChoices,
   missingPickCard,
   missingPickRow,
-  unitElsewhereCard
+  unitElsewhereCard,
+  notUsingOne
 } from './lib/remote'
 import { CardButtons, MissingRow } from './components/ComputerCard'
 import { newEntry, append } from './lib/log'
@@ -5012,6 +5013,8 @@ export default function App() {
           ))}
           {missingRow ? <MissingRow row={missingRow} onForget={() => forgetMissing()} /> : null}
         </div>
+        {/* How one you don't use comes off this list: at that computer (shared/relay-rules.mjs notUsingOne). Only with two or more listed, as on the page. */}
+        {link.hosts.length > 1 ? <p className="hint">{notUsingOne('page')}</p> : null}
       </Sheet>
 
       <Sheet
@@ -6058,6 +6061,8 @@ export default function App() {
                   ))}
                   {missingRow ? <MissingRow row={missingRow} onForget={() => forgetMissing()} /> : null}
                 </div>
+                {/* How one you don't use comes off this list, at that computer: the phone's line, with a reload for a fresh roll call. */}
+                <p className="hint">{notUsingOne('page')}</p>
               </Section>
             ) : null}
             {/*

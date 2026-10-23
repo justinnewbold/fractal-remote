@@ -15,9 +15,9 @@
  */
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parse } from '@babel/parser'
 import babelTraverse from '@babel/traverse'
@@ -3592,6 +3592,47 @@ export function run(test) {
         !/expo-target\.config\.js$|^mobile\/modules\/|^mobile\/app\.json$|package(-lock)?\.json$/.test(file),
         `watch-channels.patch touches ${file}, which moves the phones' fingerprint: a build with it would stop updates reaching the phones already out there`
       )
+    }
+  })
+
+  test('the patches waiting for a build apply one after another, in the README’s order', () => {
+    /*
+     * The day a build is agreed, the README says to apply them "in the order
+     * of the table". Each one applying alone (above) is not that: on 23
+     * October 2026 photo-picker.patch applied alone and stopped once r8.patch
+     * was in ("patch failed: mobile/package.json:21"), because both add to
+     * mobile/package.json beside each other and its context was the line r8
+     * puts a package after. So they are tried as the build will take them, in
+     * a copy of the files they touch, never in the tree.
+     */
+    const root = fileURLToPath(new URL('../', import.meta.url))
+    const readme = readFileSync(join(root, 'docs/pending/README.md'), 'utf8')
+    const order = [...readme.matchAll(/^\| `([^`]+\.patch)` \|/gm)].map((m) => m[1])
+    assert.ok(order.length > 1, 'the README’s table lists fewer than two patches: nothing to try in order')
+    const copy = mkdtempSync(join(tmpdir(), 'pending-'))
+    try {
+      for (const name of order) {
+        const patch = readFileSync(join(root, 'docs/pending', name), 'utf8')
+        for (const [, file] of patch.matchAll(/^--- a\/(\S+)$/gm)) {
+          if (existsSync(join(copy, file)) || !existsSync(join(root, file))) continue
+          mkdirSync(dirname(join(copy, file)), { recursive: true })
+          copyFileSync(join(root, file), join(copy, file))
+        }
+      }
+      /* Git outside any repository, so it applies to the copy and to nothing else. */
+      const plain = { ...process.env, GIT_CEILING_DIRECTORIES: dirname(copy) }
+      for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) delete plain[key]
+      const done = []
+      for (const name of order) {
+        try {
+          execFileSync('git', ['apply', join(root, 'docs/pending', name)], { cwd: copy, stdio: 'pipe', env: plain })
+        } catch (err) {
+          assert.fail(`docs/pending/${name} does not apply after ${done.join(', ') || 'nothing'}, the order the README asks for: ${String(err.stderr || err.message).trim()}`)
+        }
+        done.push(name)
+      }
+    } finally {
+      rmSync(copy, { recursive: true, force: true })
     }
   })
 

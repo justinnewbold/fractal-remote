@@ -341,7 +341,8 @@ async function linkOnABench() {
       }
     `,
     'demo.mjs': "import { bench } from './bench.mjs'\nexport const isDemo = () => bench.demo\n",
-    'debugLog.mjs': 'export const logDebug = () => {}\n',
+    /* What the phone wrote in its log, as `bench.logged`: "<tag> <line>". */
+    'debugLog.mjs': "import { bench } from './bench.mjs'\nexport const logDebug = (tag, line) => { (bench.logged = bench.logged || []).push(`${tag} ${line}`) }\n",
     'bleSwitch.mjs': 'export const bluetoothOn = () => false\n',
     'bleLink.mjs': 'export const pokeBluetooth = () => {}\nexport const startBluetoothLink = () => {}\nexport const stopBluetoothLink = () => {}\n',
     'tapGate.mjs': read('mobile/src/lib/tapGate.js'),
@@ -2433,6 +2434,216 @@ export function run(test) {
       assert.equal(t.link.linkState().unitsAsking, false)
     })
   }
+
+  /*
+   * TWO COMPUTERS ANSWERING TO ONE NAME are never asked their unit
+   * (readUnits: asked by it, both answer), so they are never asked again
+   * either: no "Asking it which unit…" under them that cannot end, and no
+   * "did not say its unit, asked again for 4 s" in the log about a name
+   * nothing asked. A new Pi 5 given the old one's Hostname by Imager.
+   */
+  for (const end of ['phone', 'browser']) {
+    test(`${end}: two computers sharing a name are not asked again, and Which unit never says it is asking about them`, async () => {
+      const t = end === 'phone' ? await linkOnABench() : await webLinkOnABench()
+      const { UNIT_ASK_MS } = await import('../shared/relay-rules.mjs')
+      t.bench.unitsAsked = 0
+      t.bench.unitsAskedWith = []
+      t.bench.logged = []
+      t.bench.hosts = ['raspberry pi 5', 'MacBook Pro SG 566', 'raspberry pi 5']
+      t.bench.unitsNow = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true } }
+      const asking = []
+      const stop = t.link.subscribeLink((st) => asking.push(st.unitsAsking))
+      await t.link.askUnknownUnits()
+      await t.clock.advance(0)
+      assert.equal(t.bench.unitsAsked, 0, 'two computers that share a name were asked again, though neither can be asked alone')
+      assert.ok(!asking.includes(true), 'Which unit said it was asking two computers that are never asked')
+      assert.equal(t.link.linkState().unitsAsking, false)
+      /* A third that has not said is asked, alone; the shared name is not in the ask, nor in the log. */
+      t.bench.hosts = ['raspberry pi 5', 'MacBook Pro SG 566', 'raspberry pi 5', 'raspberry pi 3']
+      await t.link.askUnknownUnits()
+      assert.equal(t.bench.unitsAsked, 1)
+      assert.deepEqual(t.bench.unitsAskedWith[0], { windowMs: UNIT_ASK_MS, only: ['raspberry pi 3'] })
+      if (end === 'phone') {
+        const said = t.bench.logged.filter((l) => /asked again/.test(l))
+        assert.deepEqual(said, [`link raspberry pi 3 did not say its unit, asked again for ${UNIT_ASK_MS / 1000} s`], said.join('\n'))
+      }
+      stop?.()
+    })
+  }
+
+  /*
+   * "How can a user remove old units they aren't connected to." The list is
+   * a roll call: a computer leaves it by not answering, and only that
+   * computer can stop answering. So under Which unit, the way, in words that
+   * are true of the code they describe.
+   */
+  test('Which unit says how to take a computer off the list, at that computer, true of the computer app', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const app = r.notUsingOne('app')
+    const page = r.notUsingOne('page')
+    assert.equal(
+      app,
+      'Not using one of these? On that computer, open Fractal Remote, go to Settings → Phone & computer → Phone remote and press Turn off, or switch that computer off. Then close Fractal Remote here all the way (swipe it away) and open it again: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.'
+    )
+    assert.equal(
+      page,
+      'Not using one of these? On that computer, open Fractal Remote, go to Settings → Phone & computer → Phone remote and press Turn off, or switch that computer off. Then reload this page: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.'
+    )
+    for (const words of [app, page]) {
+      for (const must of ['On that computer, open Fractal Remote', 'Settings → Phone & computer → Phone remote', 'press Turn off', 'switch that computer off', 'gone from this list', 'press Forget', 'Turn off lasts until someone presses Turn on there.']) {
+        assert.ok(words.includes(must), `the line lost "${must}": ${words}`)
+      }
+      for (const never of [/this phone/i, /sign out/i, /official/i, /grey/i, /Inc\./]) assert.ok(!never.test(words), `${never} in: ${words}`)
+    }
+    /* Each end its own way to a fresh roll call: the app closed and opened, the page reloaded. Never the other's. */
+    assert.ok(app.includes('close Fractal Remote here all the way (swipe it away) and open it again') && !/reload/i.test(app), app)
+    assert.ok(page.includes('Then reload this page:') && !/swipe/i.test(page), page)
+
+    /* The words are the computer's: its Settings sheet, its page, the fold, the button, and Turn off kept through a restart. */
+    const web = read('src/App.jsx')
+    assert.match(web, /title="Settings"/)
+    assert.match(web, /link: 'Phone & computer',/, 'the computer’s page is not called Phone & computer: say what it is')
+    assert.match(web, /<Section key="phone-remote" title="Phone remote"[\s\S]{0,400}<PhoneRemote /, 'Turn off is not in the Phone remote fold')
+    const panel = read('src/components/PhoneRemote.jsx')
+    assert.match(panel, /onAction\('mac-off'\)[^>]*>\s*Turn off\s*</)
+    assert.match(panel, /onAction\('mac-on'\)[^>]*>\s*Turn on\s*</)
+    assert.match(read('src/lib/link.js'), /export async function setMacRemote\(on\)[\s\S]{0,300}writeHostDoc\('remote\.host', \{ wanted: !!on/, 'Turn off is not written down, so a restart undoes it')
+    assert.match(read('desktop/lib/host.mjs'), /if \(wanted && wanted\.wanted === false\) \{\s*log\('Phone remote: off — it was turned off in the app\.'\)\s*return \{ on: false, reason: 'turned-off'/, 'the computer app no longer keeps Turn off through a restart')
+    /* And a fresh link forgets who answered on the last one (relay.js remoteDisconnect), so one that no longer answers is not listed. */
+    for (const file of ['mobile/src/lib/relay.js', 'src/lib/remote.js']) assert.match(read(file), /export async function remoteDisconnect\(\)[\s\S]{0,700}hosts = \[\]/, file)
+    /* The pick that did not answer is the one left, grayed, with Forget. */
+    assert.deepEqual(r.missingPickRow('raspberry pi 5'), { name: 'raspberry pi 5', label: 'raspberry pi 5 — not answering', forget: 'Forget' })
+  })
+
+  /*
+   * On the phone, the line sits under the Which unit buttons and the pick
+   * that does not answer, in Settings and in the sheet off the unit's name,
+   * dim as each button's own line, and only with two or more computers
+   * listed: one computer has no list to take one off. The app's words, never
+   * the page's. And it keeps nothing: no storage, no new key.
+   */
+  test('phone: how to take a computer off the list is under Which unit, in Settings and the sheet, only with two or more', () => {
+    const detail = "<Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>"
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const settings = read('mobile/src/screens/Settings.js')
+    /* The live one: the demo has a Which unit of its own, for its five pretend units. */
+    const open = settings.indexOf('{hosts.length > 1 ? (')
+    const at = settings.indexOf('<Section>Which unit</Section>', open)
+    assert.ok(open !== -1 && at !== -1 && at - open < 120, 'Which unit is not inside its two-or-more check')
+    const block = settings.slice(open, settings.indexOf(') : null}', at))
+    assert.ok(block.includes(`${detail}{row.detail}</Text>`), 'each button’s own line changed its look: say how')
+    assert.match(block, new RegExp(`<MissingPick[\\s\\S]*?/>\\s*\\{/\\*[^*]*\\*/\\}\\s*${esc(detail)}\\{notUsingOne\\('app'\\)\\}</Text>\\s*</View>\\s*$`), 'the line is not last under Which unit, after the pick that does not answer, dim as a button’s line')
+    assert.match(settings, /import \{ notUsingOne \} from '\.\.\/lib\/relay-rules'/)
+    const sheet = read('mobile/src/components/LiveUnit.js')
+    assert.match(sheet, new RegExp(`<MissingPick name=\\{missing\\} onForget=\\{\\(\\) => forgetMissing\\(\\)\\} />\\s*\\{/\\*[^*]*\\*/\\}\\s*\\{hosts\\.length > 1 \\? ${esc(detail)}\\{notUsingOne\\('app'\\)\\}</Text> : null\\}\\s*</View>\\s*</Sheet>`), 'the sheet off the unit’s name does not end on the line, behind two or more computers')
+    for (const [src, where] of [[settings, 'Settings'], [sheet, 'the sheet']]) {
+      assert.equal(src.match(/notUsingOne\(/g)?.length, 1, `${where} says it more than once, or not at all`)
+      assert.ok(!src.includes("notUsingOne('page')"), `${where} tells a phone to reload a page`)
+    }
+    for (const src of [block, sheet]) assert.ok(!/AsyncStorage|setItem|localStorage/.test(src), 'Which unit keeps something now')
+  })
+
+  /*
+   * On the website, the same line with a reload for the fresh roll call,
+   * under both of its Which unit lists (the section on Phone & computer and
+   * the sheet off the unit's name), after the rows, and only with two or
+   * more computers listed. The section's own opening is written once in
+   * App.jsx and nowhere else (test/structure.mjs reads the file as text).
+   */
+  test('browser: how to take a computer off the list is under both Which unit lists, only with two or more', () => {
+    const app = read('src/App.jsx')
+    const line = `<p className="hint">{notUsingOne('page')}</p>`
+    const opening = "{link.role === 'remote' && link.hosts.length > 1 ? ("
+    assert.equal(app.split(opening).length - 1, 1, 'the Which unit section’s opening is written twice in App.jsx')
+    const at = app.indexOf(opening)
+    const section = app.slice(at, app.indexOf('</Section>', at) + '</Section>'.length)
+    assert.match(section, /^\{link\.role === 'remote' && link\.hosts\.length > 1 \? \(\s*<Section key="which-unit" title="Which unit"/, 'Which unit is not inside its two-or-more check')
+    assert.ok(section.endsWith(`</div>\n                {/* How one you don't use comes off this list, at that computer: the phone's line, with a reload for a fresh roll call. */}\n                ${line}\n              </Section>`), `the line is not last in the Which unit section, after its rows:\n${section.slice(-400)}`)
+    const sheetAt = app.indexOf("<Sheet open={sheet === 'units'}")
+    assert.ok(sheetAt !== -1, 'the Which unit sheet moved: say where')
+    const sheet = app.slice(sheetAt, app.indexOf('</Sheet>', sheetAt) + '</Sheet>'.length)
+    assert.match(sheet, /<\/div>\s*\{\/\*[^*]*\*\/\}\s*\{link\.hosts\.length > 1 \? <p className="hint">\{notUsingOne\('page'\)\}<\/p> : null\}\s*<\/Sheet>$/, 'the sheet off the unit’s name does not end on the line, behind two or more computers')
+    assert.ok(/setSheet\('units'\)/.test(app) && /if \(!isDemo\(\) && link\.role === 'remote' && link\.hosts\.length > 1\) \{\s*setSheet\('units'\)/.test(app), 'the sheet opens with fewer than two computers')
+    assert.equal(app.match(/notUsingOne\('page'\)/g)?.length, 2, 'the line is not under both lists, or is somewhere else too')
+    assert.ok(!app.includes("notUsingOne('app')"), 'the website tells somebody to swipe a page away')
+    assert.equal(app.match(/unitChoices\(link\.hosts, /g)?.length, 2, 'the website has a third Which unit list, or lost one')
+    assert.match(read('src/lib/remote.js'), /\n  notUsingOne\n\} from '\.\.\/\.\.\/shared\/relay-rules\.mjs'/)
+    for (const src of [section, sheet]) assert.ok(!/localStorage|sessionStorage|setItem/.test(src), 'Which unit keeps something now')
+  })
+
+  /*
+   * And under each of two computers with one name, that it is shared: never
+   * "Asking it which unit…", which is never going to end.
+   */
+  test('Which unit says two computers share a name under each, and nothing else moves', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const shared = 'Two computers are called raspberry pi 5, so they can’t be told apart. Switch one off, or give one a new name and restart it.'
+    assert.equal(r.sharedName('raspberry pi 5'), shared)
+    assert.deepEqual(r.onceNames(['raspberry pi 5', 'MacBook Pro SG 566', 'raspberry pi 5', 'raspberry pi 3']), ['MacBook Pro SG 566', 'raspberry pi 3'])
+    assert.deepEqual(r.onceNames([]), [])
+    const hosts = ['raspberry pi 5', 'MacBook Pro SG 566', 'raspberry pi 5', 'raspberry pi 3']
+    const units = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true } }
+    for (const asking of [false, true]) {
+      const rows = r.unitChoices(hosts, units, 'MacBook Pro SG 566', asking)
+      assert.deepEqual(
+        rows.map((x) => [x.name, x.label, x.detail, x.on]),
+        [
+          ['MacBook Pro SG 566', 'FM3', 'on MacBook Pro SG 566', true],
+          ['raspberry pi 5', 'raspberry pi 5', shared, false],
+          ['raspberry pi 5', 'raspberry pi 5', shared, false],
+          ['raspberry pi 3', 'raspberry pi 3', r.unitNotSaid(asking), false]
+        ]
+      )
+      assert.equal(new Set(rows.map((x) => x.key)).size, rows.length, 'two rows share a key')
+    }
+    /* With no name heard twice, exactly as 1.87.52 had it. */
+    const before = (hostNames = [], units = {}, chosen = null, asking = false) => {
+      const rows = hostNames.map((name, i) => {
+        const unit = units?.[name] || null
+        return { name, key: `${name}-${i}`, label: unit ? (unit.plugged ? unit.model : 'No unit plugged in') : name, detail: unit ? `on ${name}` : r.unitNotSaid(asking), plugged: Boolean(unit?.plugged), on: name === chosen }
+      })
+      return [...rows.filter((x) => x.plugged), ...rows.filter((x) => !x.plugged)]
+    }
+    const cases = [
+      [[], {}, null, false],
+      [['raspberry pi 5', 'MacBook Pro SG 566', 'raspberry pi 3'], { 'raspberry pi 5': { model: 'FM3', plugged: false }, 'MacBook Pro SG 566': { model: 'FM3', plugged: true }, 'raspberry pi 3': { model: 'AM4', plugged: true } }, 'raspberry pi 3', false],
+      [['Old Mac', 'MacBook Pro'], { 'MacBook Pro': { model: 'FM3', plugged: true } }, null, true],
+      [['Old Mac', 'MacBook Pro'], {}, 'Old Mac', false]
+    ]
+    for (const args of cases) assert.deepEqual(r.unitChoices(...args), before(...args), JSON.stringify(args))
+  })
+
+  /*
+   * Three answering to one name are three, not two, and switching one off
+   * leaves two. Three Pis set up the keyboard-and-screen way, which never
+   * asks for a Hostname, all keep the default. And answers whose name could
+   * not be read are all called 'a computer' (hostNamesFrom): neither computer
+   * is called that, and a new name would not make the answer readable.
+   */
+  test('Which unit says how many share a name, and never calls an unreadable answer a name to change', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const three = 'Three computers are called raspberrypi, so they can’t be told apart. Switch all but one off, or give the others new names and restart them.'
+    assert.equal(r.sharedName('raspberrypi', 3), three)
+    assert.equal(r.sharedName('raspberrypi', 2), r.sharedName('raspberrypi'))
+    assert.match(r.sharedName('raspberrypi', 4), /^Four computers are called raspberrypi,/)
+    for (const asking of [false, true]) {
+      const rows = r.unitChoices(['raspberrypi', 'MacBook Pro SG 566', 'raspberrypi', 'raspberrypi'], { 'MacBook Pro SG 566': { model: 'FM3', plugged: true } }, null, asking)
+      assert.deepEqual(rows.map((x) => [x.label, x.detail]), [['FM3', 'on MacBook Pro SG 566'], ['raspberrypi', three], ['raspberrypi', three], ['raspberrypi', three]])
+      assert.equal(new Set(rows.map((x) => x.key)).size, rows.length, 'two rows share a key')
+    }
+    /* What hostNamesFrom calls an answer it cannot read, so the two are held to each other. */
+    const unread = await r.hostNamesFrom(['not json', '{"data":{}}', '{"data":{"name":"MacBook Pro"}}'], async (a) => a)
+    assert.deepEqual(unread, [r.NO_NAME, r.NO_NAME, 'MacBook Pro'])
+    for (const asking of [false, true]) {
+      const rows = r.unitChoices(unread, { 'MacBook Pro': { model: 'FM3', plugged: true } }, 'MacBook Pro', asking)
+      assert.deepEqual(rows.map((x) => [x.label, x.detail]), [['FM3', 'on MacBook Pro'], [r.NO_NAME, r.NO_NAME_SAID], [r.NO_NAME, r.NO_NAME_SAID]])
+      for (const x of rows) assert.ok(!/computers are called|new name|Asking it/.test(x.detail), `an answer with no name is told to rename, or is said to be asked: ${x.detail}`)
+    }
+    assert.equal(r.NO_NAME_SAID, 'It answered, but didn’t say its name, so it can’t be asked which unit.')
+    /* One such answer alone is as it was: it is asked, so it says so while it is. */
+    assert.equal(r.unitChoices([r.NO_NAME, 'MacBook Pro'], {}, null, true).find((x) => x.name === r.NO_NAME).detail, r.unitNotSaid(true))
+    for (const words of [three, r.NO_NAME_SAID]) for (const never of [/this phone/i, /official/i, /grey/i, /Inc\./]) assert.ok(!never.test(words), `${never} in: ${words}`)
+  })
 
   test('a computer that has not said its unit is asked again once the count is done and whenever Which unit opens', () => {
     const phone = read('mobile/src/lib/link.js')

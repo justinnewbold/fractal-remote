@@ -20,7 +20,7 @@ import { logDebug } from './debugLog'
 import { bluetoothOn } from './bleSwitch'
 import { pokeBluetooth, startBluetoothLink, stopBluetoothLink } from './bleLink'
 import { setLinkAway, setLinkDown } from './tapGate'
-import { ELSEWHERE_WATCH_MS, LINK_DOWN_HOLD_MS, linkDownAt, METERS_OFF_PATH, metersOffBody, metersRefused, timeToQuietMeters, UNIT_ASK_MS } from './relay-rules'
+import { ELSEWHERE_WATCH_MS, LINK_DOWN_HOLD_MS, linkDownAt, METERS_OFF_PATH, metersOffBody, metersRefused, onceNames, timeToQuietMeters, UNIT_ASK_MS } from './relay-rules'
 
 import {
   censusHosts,
@@ -723,7 +723,8 @@ export function askUnknownUnits() {
   if (askingUnits) return askingUnits
   const hosts = remoteHosts()
   const known = remoteUnits()
-  const unknown = hosts.filter((name) => !known[name])
+  /* Only a name one computer answers to: a shared one is never asked (readUnits), so it is never said to be asked again either. */
+  const unknown = onceNames(hosts).filter((name) => !known[name])
   if (hosts.length < 2 || !unknown.length) return Promise.resolve(known)
   set({ unitsAsking: true })
   askingUnits = (async () => {
