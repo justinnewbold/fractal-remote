@@ -124,6 +124,49 @@ function stageLines(from, to, names) {
   }
 }
 
+/**
+ * A run of a phone file's own lines as one mounted component, render after
+ * render: React's useRef and useState stood in for (each kept by the order it
+ * is asked for, as React keeps them, and a set state seen from the next
+ * render), and every effect run after the render that asked for it, as React
+ * runs them. A fresh mount is a fresh call to this. Names the lines assign to
+ * (a module's own `let`) are read back after the effects through `result`'s
+ * closures, since an effect assigns to the name the lines were given.
+ */
+function mountLines(file, from, to, names, result) {
+  const src = read(file)
+  const start = src.indexOf(from)
+  assert.ok(start > 0, `${file} no longer has ${from.trim()}; this check reads it`)
+  const end = src.indexOf(to, start)
+  assert.ok(end > start, `${file} no longer has ${to.trim()} after ${from.trim()}; this check reads it`)
+  const body = src.slice(start, end + to.length)
+  // eslint-disable-next-line no-new-func
+  const lines = new Function('useRef', 'useState', 'useEffect', ...names, `${body}\nreturn ${result}`)
+  const refs = []
+  const states = []
+  return (values) => {
+    let r = 0
+    let st = 0
+    const effects = []
+    const useRef = (initial) => {
+      if (!refs[r]) refs[r] = { current: initial }
+      return refs[r++]
+    }
+    const useState = (initial) => {
+      const at = st++
+      if (!states[at]) states[at] = { value: typeof initial === 'function' ? initial() : initial }
+      const set = (v) => {
+        states[at].value = typeof v === 'function' ? v(states[at].value) : v
+      }
+      return [states[at].value, set]
+    }
+    const useEffect = (f) => effects.push(f)
+    const out = lines(useRef, useState, useEffect, ...names.map((n) => values[n]))
+    for (const f of effects) f()
+    return out
+  }
+}
+
 export function run(test) {
   test('the app’s frame and Add songs keep clear of the phone’s own on every side, not only the top and the bottom', async () => {
     /*
@@ -194,23 +237,138 @@ export function run(test) {
     assert.deepEqual([0, 20, 21, 24, 32, 34, 48].map(foot), [32, 32, 32, 32, 32, 34, 48])
   })
 
-  test('Play’s width is measured on Play, in the same moment as its height, and never read from the window', () => {
+  test('Play’s width is measured on Play, in the same moment as its height, and kept as measured, fraction and all', () => {
     const stage = code(read('mobile/src/screens/Stage.js'))
     assert.match(
       stage,
-      /onLayout=\{\(e\) => \{\s*setViewport\(e\.nativeEvent\.layout\.height\)\s*setPlayWidth\(Math\.round\(e\.nativeEvent\.layout\.width\)\)\s*\}\}/,
-      'Play’s width is not measured with its height, so the two can change in different moments'
+      /onLayout=\{\(e\) => \{\s*setViewport\(e\.nativeEvent\.layout\.height\)\s*setPlayWidth\(e\.nativeEvent\.layout\.width\)\s*\}\}/,
+      'Play’s width is not measured with its height, or is rounded, so an Android phone’s 411.43 is drawn as 411'
     )
     assert.equal(stage.match(/setPlayWidth\(/g).length, 1, 'Play’s width is set from something other than its own measurement')
-    /* Its first frame, before it can be measured, is the width it was last measured at, kept while the app runs, and only ever its own. */
-    assert.match(stage, /const \[playWidth, setPlayWidth\] = useState\(lastPlayWidth\)/)
-    assert.match(stage, /^let lastPlayWidth = 0$/m)
-    assert.deepEqual(stage.match(/lastPlayWidth = [^\n]*/g), ['lastPlayWidth = 0', 'lastPlayWidth = playWidth'], 'the kept width is taken from something other than Play’s own measurement')
-    /* The window is read once, for the first frame's tile width only, and only before Play has ever been measured. */
+    /* Taken to the point only where one width is told from another: the fit's key and the held pedal room. */
+    assert.match(stage, /const widthKey = Math\.round\(playWidth\)\n/)
+    assert.equal(stage.match(/Math\.round\(playWidth\)/g).length, 1)
+    /* Its first frame, before it can be measured: lib/screenShape firstFrame, from what Play itself last measured and the window it measured it in. */
+    assert.match(stage, /const \[first\] = useState\(\(\) => firstFrame\(screen, \[lastPlay\], insets\)\)/)
+    assert.match(stage, /const \[playWidth, setPlayWidth\] = useState\(first\.width\)/)
+    assert.match(stage, /const shapeWas = useRef\(first\.shape\)/)
+    assert.match(stage, /^let lastPlay = null$/m)
+    assert.deepEqual(stage.match(/lastPlay = [^\n]*/g), ['lastPlay = null', 'lastPlay = { width: playWidth, window: screen, shape }'], 'the kept width is taken from something other than Play’s own')
+    /* The window is read once, for the first frame and the window that goes with what is kept, and nothing else. */
     assert.equal(stage.match(/useWindowDimensions\(\)/g).length, 1)
-    assert.equal(stage.match(/\bscreen\b/g).length, 2, 'the window’s width is used for more than the first frame')
-    assert.match(stage, /const row = grid \|\| \(playWidth > 0 \? Math\.max\(0, pageRow\(playWidth, space\.lg\) - fold\.left - fold\.right\) : Math\.max\(0, screen - space\.lg \* 2\)\)/)
+    assert.equal(stage.match(/\bscreen\b/g).length, 3, 'the window’s width is used for more than the first frame')
+    assert.match(stage, /const row = grid \|\| Math\.max\(0, pageRow\(playWidth, space\.lg\) - fold\.left - fold\.right\)\n/)
     assert.doesNotMatch(stage, /Platform\.isPad|isTablet|orientation/, 'Play decides something by the kind of device or which way up it is')
+  })
+
+  test('Play’s first frame, mount after mount: a phone’s is today’s to the fraction, and a window that changed while Play was away is the window’s', async () => {
+    const g = await import('../mobile/src/lib/gigSize.js')
+    const { firstFrame } = await screenShape()
+    /*
+     * Stage's own lines from the window to the row, run as React would run
+     * them: a mount draws its first frame, Play measures itself, and the
+     * next mount (back from Setlists) starts from what was kept.
+     */
+    let kept = null
+    const mount = (window, { insets = { left: 0, right: 0 }, step = 0, layout = 'across' } = {}) => {
+      const lines = mountLines(
+        'mobile/src/screens/Stage.js',
+        '  const { width: screen } = useWindowDimensions()\n',
+        '  const row = grid || Math.max(0, pageRow(playWidth, space.lg) - fold.left - fold.right)\n',
+        ['useWindowDimensions', 'useSafeAreaInsets', 'firstFrame', 'lastPlay', 'SIZES', 'loadSize', 'sync', 'loadIcons', 'loadSceneLayout', 'playShape', 'pageRow', 'space', 'foldInset', 'NO_FOLD', 'grid'],
+        '{ row, shape, playWidth, setPlayWidth, kept: () => lastPlay }'
+      )
+      const render = (grid = 0) => {
+        const out = lines({
+          useWindowDimensions: () => ({ width: window }),
+          useSafeAreaInsets: () => insets,
+          firstFrame,
+          lastPlay: kept,
+          SIZES: g.SIZES,
+          loadSize: () => step,
+          sync: null,
+          loadIcons: () => true,
+          loadSceneLayout: () => layout,
+          playShape: g.playShape,
+          pageRow: g.pageRow,
+          space: { lg: 16 },
+          foldInset: g.foldInset,
+          NO_FOLD: { left: 0, right: 0 },
+          grid
+        })
+        kept = out.kept()
+        return out
+      }
+      return { render }
+    }
+    const today = (out) => [out.shape.wide, out.shape.spread, out.shape.sceneCols, out.shape.fxCols, out.shape.footFixed, out.shape.names]
+    /* And Play's own onLayout, as it is written, for the measurement. */
+    const handler = read('mobile/src/screens/Stage.js').match(/onLayout=\{(\(e\) => \{\s*setViewport\([^\n]*\)\s*setPlayWidth\([^\n]*\)\s*\})\}/)
+    assert.ok(handler, 'Play’s onLayout was not found; this check reads it')
+    // eslint-disable-next-line no-new-func
+    const measure = (out, width) => new Function('setViewport', 'setPlayWidth', `return ${handler[1]}`)(() => {}, out.setPlayWidth)({ nativeEvent: { layout: { x: 0, y: 0, width, height: 700 } } })
+
+    /*
+     * Every phone held upright, iPhones' whole points and Android's 1080
+     * pixels at 2.625 (411.43, the Pixels and the Galaxy A phones) and at
+     * 2.75 (392.73): the first frame of the first mount, the measured frame,
+     * and the first frame of every mount after it are today's, the row the
+     * window less 16 a side to the last fraction, as it always was.
+     */
+    for (const window of [320, 360, 375, 390, 393, 402, 1080 / 2.75, 412, 1080 / 2.625, 414, 428, 430, 440]) {
+      for (const [step, layout] of [[0, 'across'], [1, 'four'], [2, 'down'], [4, 'mine']]) {
+        kept = null
+        const want = [false, false, g.sceneColsFor(g.SIZES[step], layout), g.SIZES[step].fx, false, false]
+        for (let m = 0; m < 3; m += 1) {
+          const play = mount(window, { step, layout })
+          const firstOut = play.render()
+          assert.equal(firstOut.row, Math.max(0, window - 32), `${window}, mount ${m + 1}: the first frame’s row is not the window less 16 a side`)
+          assert.deepEqual(today(firstOut), want, `${window}, mount ${m + 1}: the first frame is not today’s Play`)
+          /* Play measures itself: the same width, fraction and all, so nothing it draws moves. */
+          measure(firstOut, window)
+          const measured = play.render(window - 32)
+          assert.equal(measured.playWidth, window)
+          assert.deepEqual(today(measured), want)
+        }
+      }
+    }
+
+    /*
+     * And measured as the layout rounds it (Android's 411.43 comes back as
+     * 411.428558), the next first frame is still the window's own number, so
+     * it is the first frame it always was, pixel for pixel.
+     */
+    kept = { width: Math.fround(1080 / 2.625), window: 1080 / 2.625, shape: null }
+    assert.notEqual(kept.width, 1080 / 2.625)
+    const again = mount(1080 / 2.625).render()
+    assert.equal(again.row, 1080 / 2.625 - 32, 'the first frame after a measurement in the layout’s rounding is not the window’s')
+    assert.equal(firstFrame(393, [{ width: 393.4, window: 393, shape: 'kept' }]).shape, 'kept', 'the shape kept within a point of the window was not remembered')
+
+    /* An iPad on its side, cold: its first frame is already the spread layout, not a phone's stretched across it. */
+    kept = null
+    const ipad = mount(1133).render()
+    assert.deepEqual([ipad.shape.wide, ipad.shape.spread, ipad.shape.sceneCols, ipad.shape.fxCols], [true, true, 4, 8], 'an iPad’s first frame is a phone’s Play stretched across it')
+    assert.equal(ipad.row, g.pageRow(1133))
+    /* And the window less what the phone keeps down its sides: the Duo open with its strip on the right. */
+    kept = null
+    const duo = mount(951, { insets: { left: 0, right: 44 } }).render()
+    assert.equal(duo.playWidth, 907)
+
+    /* Left at 951, the window 466 when Play comes back (a Fold folded on Setlists, an iPad's divider dragged on Settings): today's Play from the first frame. */
+    kept = null
+    const open = mount(951)
+    measure(open.render(), 951)
+    open.render(919)
+    assert.equal(kept.width, 951)
+    const folded = mount(466).render()
+    assert.equal(folded.row, 434, 'the first frame after the window changed is the old window’s row')
+    assert.deepEqual(today(folded), [false, false, 2, 4, false, false], 'the first frame after the window changed is the old window’s shape')
+
+    /* Back at the width it left at, it comes back in the shape it left in, even where the window's own size has not followed a fold (the Duo's, before its scene support). */
+    kept = { width: 951, window: 466, shape: g.playShape(919, 0, 'across', null) }
+    const stale = mount(466).render()
+    assert.equal(stale.playWidth, 951)
+    assert.equal(stale.shape.spread, true)
   })
 
   test('Play’s fit throws its correction away when Play only changes width, and keeps it while nothing changes', () => {
@@ -223,14 +381,15 @@ export function run(test) {
     const fit = stageLines(
       '  const fitKey = `',
       '    if (trim !== 0) setTrim(0)\n  }\n',
-      ['viewport', 'playWidth', 'scenes', 'fitBlocks', 'fitOn', 'sceneCols', 'chainNow', 'trim', 'setTrim']
+      ['viewport', 'widthKey', 'scenes', 'fitBlocks', 'fitOn', 'sceneCols', 'chainNow', 'trim', 'setTrim']
     )
     const resets = []
+    /* Play's width to the point, as Stage takes it for the key (const widthKey = Math.round(playWidth)). */
     const at = (viewport, playWidth, trim) =>
       fit(
         {
           viewport,
-          playWidth,
+          widthKey: Math.round(playWidth),
           scenes: { hasScenes: true, count: 8 },
           fitBlocks: 9,
           fitOn: true,
@@ -259,6 +418,13 @@ export function run(test) {
     assert.deepEqual(resets, [0, 0, 0])
     /* The key tells widths apart and nothing else changed in it. */
     assert.notEqual(at(707, 393, 0), at(707, 394, 0))
+    /* But not a fraction of a point: an Android phone's 411.43 measured as 411.428 keeps its correction. */
+    resets.length = 0
+    at(707, 1080 / 2.625, 18)
+    resets.length = 0
+    at(707, 411.428, 18)
+    at(707, 411.4286, 18)
+    assert.deepEqual(resets, [], 'a fraction of a point of layout threw the fit’s correction away')
   })
 
   test('the room kept for the pedals while a preset loads is forgotten when Play changes width, and kept while it does not', () => {
@@ -639,11 +805,11 @@ export function run(test) {
       const shapeLines = stageLines(
         '  const shapeWas = useRef(',
         '  const sceneCols = shape.sceneCols\n',
-        ['playShape', 'pageRow', 'playWidth', 'space', 'SIZES', 'size', 'sceneLayout', 'lastShape', 'useEffect']
+        ['playShape', 'pageRow', 'playWidth', 'space', 'SIZES', 'size', 'sceneLayout', 'first', 'useEffect']
       )
       const at = (playWidth, step = 0, layout = 'across') =>
         shapeLines(
-          { playShape: g.playShape, pageRow: g.pageRow, playWidth, space: { lg: 16 }, SIZES: gig.SIZES, size: gig.SIZES[step], sceneLayout: layout, lastShape: null, useEffect: () => {} },
+          { playShape: g.playShape, pageRow: g.pageRow, playWidth, space: { lg: 16 }, SIZES: gig.SIZES, size: gig.SIZES[step], sceneLayout: layout, first: { shape: null }, useEffect: () => {} },
           'shape'
         )
       /* A phone held upright: today's, render after render. */

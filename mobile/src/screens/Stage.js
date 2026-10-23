@@ -5,6 +5,7 @@ import { useKeepAwake } from 'expo-keep-awake'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
 import { bandTop, pedalName, tileWidth as tileWidthIn } from '../lib/tileGrid'
+import { firstFrame } from '../lib/screenShape'
 import { hostConflict, remoteChosenHost, remoteHosts } from '../lib/relay'
 import { idOf, presetLabel, sameBlock, sceneShape, slotCount, slotLabel, stepSlot, vp4Here } from '../lib/device'
 import { VP4_ON_OFF_UNKNOWN, vp4StepWords } from '../lib/vp4-safety'
@@ -126,15 +127,17 @@ const ofBoost = (s) => s.boost
 const ofLastUnit = (s) => s.lastUnit
 const ofUnit = (s) => s.unit
 /*
- * The width Play was last measured at, kept while the app runs. Play is drawn
- * afresh every time it comes back (from Setlists, Settings, Edit), and its
- * first frame is drawn before it can be measured: in its last shape, rather
- * than a phone's for a frame on an iPad or a Duo open. 0 until Play has been
- * measured once in this run of the app.
+ * Play as it was last drawn, kept while the app runs: { width, window, shape },
+ * the width Play measured, how wide the window said it was at that moment,
+ * and the shape it was drawn in (gigSize playShape `was`, so a line Play was
+ * inside the gap of is remembered across a return too). Play is drawn afresh
+ * every time it comes back (from Setlists, Settings, Edit), and its first
+ * frame is drawn before it can be measured: from this while the window is the
+ * width it was (lib/screenShape firstFrame), rather than a phone's shape for
+ * a frame on an iPad or a Duo opened. null until Play has been drawn once in
+ * this run of the app.
  */
-let lastPlayWidth = 0
-/* And the shape it was drawn in then, so a line Play was inside the gap of is remembered across a return too (gigSize playShape `was`). */
-let lastShape = null
+let lastPlay = null
 /* No extra padding on either side: every shape but the spread one. */
 const NO_FOLD = { left: 0, right: 0 }
 /* The raw words a computer with nothing plugged in answers every unit read with (ForgeFX, registryCore). */
@@ -322,6 +325,16 @@ export default function Stage({
    * a tablet in split view among them.
    */
   const { width: screen } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
+  /*
+   * Play's first frame, before it can be measured (lib/screenShape
+   * firstFrame): the width and shape it was last drawn in while the window
+   * is the width it was then, and otherwise the window's width less the
+   * phone's own down its sides. On a phone held upright that is the window's
+   * width, to the fraction an Android phone's has: what the first frame was
+   * always drawn at.
+   */
+  const [first] = useState(() => firstFrame(screen, [lastPlay], insets))
   /*
    * HOW WIDE PLAY ITSELF IS, measured on the page that fills it, with the
    * height the fit already measures there: never the window's width, and
@@ -329,16 +342,12 @@ export default function Stage({
    * beside another app, a Galaxy Fold opened, and the iPhone Duo opened or
    * closed each change it while a song plays, and a measurement of Play
    * itself hears every one of them, whatever the window's own size says.
-   * Rounded, so a fraction of a point of layout is not a new width. On a
-   * phone held upright it is measured once, in the same moment as the
-   * height, and never changes again.
+   * Kept as measured, fraction and all, so the row is the one the grid
+   * measures; only where one width is told from another is it taken to the
+   * point (`widthKey`). On a phone held upright it is measured once, in the
+   * same moment as the height, and is the number the first frame had.
    */
-  const [playWidth, setPlayWidth] = useState(lastPlayWidth)
-  /* Kept for the next time Play is drawn (see lastPlayWidth): a Play that
-     comes back from Setlists draws its first frame in the shape it left in. */
-  useEffect(() => {
-    if (playWidth > 0) lastPlayWidth = playWidth
-  }, [playWidth])
+  const [playWidth, setPlayWidth] = useState(first.width)
   /*
    * How big the tiles are, chosen in Setup and kept under the browser's own
    * key. Read here rather than passed down, because `useStored` above already
@@ -360,11 +369,14 @@ export default function Stage({
    * four scenes and six pedals to a row and the buttons in one row. The last
    * shape is remembered so each line goes off 40 under where it came on.
    */
-  const shapeWas = useRef(lastShape)
+  const shapeWas = useRef(first.shape)
   const shape = playShape(pageRow(playWidth, space.lg), SIZES.indexOf(size), sceneLayout, shapeWas.current)
   shapeWas.current = shape
+  /* Kept for the next time Play is drawn (see lastPlay): a Play that comes
+     back from Setlists to a window the same width draws its first frame in
+     the shape it left in. */
   useEffect(() => {
-    lastShape = shape
+    if (playWidth > 0) lastPlay = { width: playWidth, window: screen, shape }
   })
   const sceneCols = shape.sceneCols
   /*
@@ -374,16 +386,14 @@ export default function Stage({
    * without them is padded out to match and every row's middle gap is the
    * fold. Nothing on any other shape.
    */
-  const insets = useSafeAreaInsets()
   const fold = shape.foldPad ? foldInset(insets.left, insets.right) : NO_FOLD
   /*
    * The row the tiles share: measured, or until it is (the first frame of
-   * every mount) the width Play was last measured at, less its padding, by
-   * the same rule the shape is worked out with. Only before Play has ever
-   * been measured in this run of the app is it the window's width, as it
-   * always was: a phone held upright is the same number either way.
+   * every mount) Play's own width less its padding, by the same rule the
+   * shape is worked out with. On a phone held upright that is the window's
+   * width less 16 a side, exactly the number it always was.
    */
-  const row = grid || (playWidth > 0 ? Math.max(0, pageRow(playWidth, space.lg) - fold.left - fold.right) : Math.max(0, screen - space.lg * 2))
+  const row = grid || Math.max(0, pageRow(playWidth, space.lg) - fold.left - fold.right)
   /*
    * SMALLEST MEANS IT FITS. "On the smallest setting, if we could make it so
    * the screen won't scroll and everything fits on the screen — it's barely
@@ -497,10 +507,12 @@ export default function Stage({
    * the wait is drawn as it is on a first load, with no room to keep. The
    * first measurement is not a change: there was nothing kept before it.
    */
-  const heldAt = useRef(playWidth)
-  if (heldAt.current !== playWidth) {
+  /* Play's width to the point: what tells one width from another, so a fraction of a point of layout is never a new width. */
+  const widthKey = Math.round(playWidth)
+  const heldAt = useRef(widthKey)
+  if (heldAt.current !== widthKey) {
     if (heldAt.current > 0) heldGrid.current = { count: 0, height: 0 }
-    heldAt.current = playWidth
+    heldAt.current = widthKey
   }
   if (!chainNow.elsewhere && tiles > 0 && blockGrid > 0) heldGrid.current = { count: tiles, height: blockGrid }
   const held = chainNow.elsewhere && heldGrid.current.height > 0 ? heldGrid.current : null
@@ -513,7 +525,7 @@ export default function Stage({
      divider dragged, a Duo opened sideways) kept the narrow screen's
      correction and drew every tile smaller than it had room for until the
      next preset. */
-  const fitKey = `${viewport}:${playWidth}:${scenes.hasScenes ? scenes.count : 0}:${fitBlocks}:${fitOn}:${sceneCols}:${chainNow.late}`
+  const fitKey = `${viewport}:${widthKey}:${scenes.hasScenes ? scenes.count : 0}:${fitBlocks}:${fitOn}:${sceneCols}:${chainNow.late}`
   const lastKey = useRef(fitKey)
   if (lastKey.current !== fitKey) {
     lastKey.current = fitKey
@@ -971,7 +983,7 @@ export default function Stage({
            measurement, so the two always change together. */
         onLayout={(e) => {
           setViewport(e.nativeEvent.layout.height)
-          setPlayWidth(Math.round(e.nativeEvent.layout.width))
+          setPlayWidth(e.nativeEvent.layout.width)
         }}
         onContentSizeChange={(_w, h) => setContent(h)}
         contentContainerStyle={

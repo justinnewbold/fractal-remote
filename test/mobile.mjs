@@ -2569,10 +2569,10 @@ export function run(test) {
      * the same answer the measurement gives, and `onLayout` still wins the
      * moment it lands.
      */
-    /* Or, from the second time Play is drawn in a run of the app, the width it was last measured at, by the same rule (test/duo.mjs). */
+    /* Play's own width less its padding: on its first frame the window's less the phone's own down its sides, or, back to a window the same width, the width it was last measured at (lib/screenShape firstFrame; test/duo.mjs runs it, mount after mount). */
     assert.match(
       stage,
-      /const row = grid \|\| \(playWidth > 0 \? Math\.max\(0, pageRow\(playWidth, space\.lg\) - fold\.left - fold\.right\) : Math\.max\(0, screen - space\.lg \* 2\)\)/,
+      /const row = grid \|\| Math\.max\(0, pageRow\(playWidth, space\.lg\) - fold\.left - fold\.right\)\n/,
       'the tiles are drawn from a width that is zero until the screen has been measured'
     )
     assert.match(stage, /setGrid\(e\.nativeEvent\.layout\.width\)/, 'nothing measures the row any more, so an unusual screen stays guessed at')
@@ -8038,7 +8038,7 @@ export function run(test) {
 
     const stage = read('mobile/src/screens/Stage.js')
     /* Through Play's shape (gigSize playShape), which is the layout's own sceneColsFor under 621 points of row: test/duo.mjs holds that. */
-    assert.match(stage, /const sceneLayout = loadSceneLayout\(sync\)\n[\s\S]{0,1200}const shape = playShape\(pageRow\(playWidth, space\.lg\), SIZES\.indexOf\(size\), sceneLayout, shapeWas\.current\)\n[\s\S]{0,80}const sceneCols = shape\.sceneCols\n/, 'the phone ignores the choice')
+    assert.match(stage, /const sceneLayout = loadSceneLayout\(sync\)\n[\s\S]{0,1200}const shape = playShape\(pageRow\(playWidth, space\.lg\), SIZES\.indexOf\(size\), sceneLayout, shapeWas\.current\)\n[\s\S]{0,600}const sceneCols = shape\.sceneCols\n/, 'the phone ignores the choice')
     assert.match(stage, /sceneOrderFor\(sceneLayout, scenes\.count, loadSceneOrder\(sync\)\)\.map\(\(i\) => \{/, 'the phone draws the scenes in their own order whatever was chosen')
     assert.match(stage, /caption=\{String\(i \+ 1\)\}[\s\S]{0,600}onPress=\{\(\) => writeScene\(i\)\}/, 'a moved tile no longer picks its own scene')
     assert.match(stage, /tileWidth\(row, sceneCols\)/, 'the phone draws scenes at the size step’s width regardless')
@@ -13590,7 +13590,7 @@ export function run(test) {
        only gets wider or narrower (test/duo.mjs runs that part). */
     assert.match(
       stage,
-      /const fitKey = `\$\{viewport\}:\$\{playWidth\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{fitBlocks\}:\$\{fitOn\}:\$\{sceneCols\}:\$\{chainNow\.late\}`/,
+      /const fitKey = `\$\{viewport\}:\$\{widthKey\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{fitBlocks\}:\$\{fitOn\}:\$\{sceneCols\}:\$\{chainNow\.late\}`/,
       'the trim is not thrown away when the rig or the screen changes'
     )
     assert.match(stage, /if \(trim !== 0\) setTrim\(0\)/, 'the trim survives a change of preset, so a smaller rig gets a smaller tile')

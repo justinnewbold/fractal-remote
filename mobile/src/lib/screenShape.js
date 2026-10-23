@@ -36,3 +36,38 @@ export const SAFE_EDGES = ['top', 'bottom', 'left', 'right']
  * is holding it, as an iPad's always has.
  */
 export const ANY_WAY_UP = ['portrait', 'portrait-upside-down', 'landscape-left', 'landscape-right']
+
+/**
+ * HOW WIDE TO DRAW SOMETHING BEFORE IT HAS MEASURED ITSELF: Play's first
+ * frame every time it comes back (from Setlists, Settings, Edit), and a
+ * sheet's every time it opens. The measurement corrects it one frame later,
+ * as it always has, and every line is decided by that measurement from then
+ * on; this is only the frame before it exists.
+ *
+ * `kept` is what was measured before, newest first, each { width, window }:
+ * the width measured, and how wide the window said it was at that moment.
+ * The first of them measured in a window the width it is now is believed,
+ * so a Play that left an iPad or a Duo opened comes back in the shape it left
+ * in, even where the window's own size does not follow a fold. One measured
+ * in a window of any other width is not: the window changed while it was
+ * away (a Galaxy Fold folded on Setlists, an iPad's divider dragged on
+ * Settings), and the old width would draw the old shape for a frame.
+ *
+ * With nothing believed, the window's width less the phone's own down its
+ * sides (`insets`), which is the width the app's frame leaves Play wherever
+ * the window follows a resize. On a phone held upright that is the window's
+ * own width, to the fraction an Android phone's has (411.43 on most of
+ * them): the width Play's first frame was always drawn at. And so is one
+ * believed within a point of it: a measurement is that same width in the
+ * layout's own rounding (411.428558 for 411.428571), and the window's own
+ * number keeps the first frame the one it always was, pixel for pixel. Only
+ * the shape it was in is taken from what was kept, for the lines' memory.
+ */
+export function firstFrame(window, kept = [], insets = null) {
+  const across = Math.max(0, Number(window) || 0)
+  const side = (n) => Math.max(0, Number(n) || 0)
+  const guess = Math.max(0, across - side(insets?.left) - side(insets?.right))
+  const same = kept.find((k) => k && k.width > 0 && k.window === across)
+  if (!same) return { width: guess, window: across, shape: null }
+  return Math.abs(same.width - guess) < 1 ? { ...same, width: guess } : same
+}
