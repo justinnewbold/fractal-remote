@@ -47,6 +47,7 @@ import {
   restoreSession,
   subscribeHostSeen,
   subscribeSwitching,
+  subscribeMixed,
   subscribeRemoteState
 } from './relay'
 import { computerChanged, listen, refreshAll, reset as resetRig, startClean, unitReadSince, watchUnit, stopWatching } from './rig'
@@ -952,6 +953,15 @@ export function startLink() {
     }),
     /* Which unit moving to another computer, before a read is asked of it (switchedComputer). */
     subscribeSwitching(switchedComputer),
+    /*
+     * A mix of computers' answers on screen (relay.js takeCensus): the header,
+     * the card and the preset with the rest, so Play says Looking… until the
+     * one driven is read, and nothing on its way from before is filed.
+     */
+    subscribeMixed(() => {
+      computerChanged()
+      startClean({ header: true })
+    }),
     AppState.addEventListener('change', (status) => {
       /*
        * Said in the log, because without it a paste reads as a link that

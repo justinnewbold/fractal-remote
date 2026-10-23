@@ -903,7 +903,30 @@ async function takeCensus({
      * pick that did not answer: they wait for the end of the count, which
      * says where they go.
      */
-    readsTo = hosts.length > 1 && chosen && readsOnlyTo(chosen) ? chosen : null
+    /*
+     * A MIX ON SCREEN. Two or more heard, and a read already answered by
+     * whoever was first: the screen may be holding several computers'
+     * answers. Justin's launch of 22 October 2026 put the MacBook's FM3 in
+     * the header and its scene 7 lit, beside a Pi's "No Fractal device
+     * found" card and blank pedals, for three and a half seconds. Whoever
+     * subscribed (subscribeMixed) is told now, and link.js takes it all down
+     * to Looking… (rig.startClean, header and all), so it is read again
+     * off the one driven once the count has said which. From here on reads
+     * go to the pick by name where it was heard (nothing from before is
+     * filed under it now), and wait for the end of the count where it was not.
+     */
+    const mixed = hosts.length > 1 && !proved && Array.isArray(readsAsked) && readsAsked.includes('')
+    if (mixed) {
+      for (const fn of [...mixedWatchers]) {
+        try {
+          fn()
+        } catch {
+          // The count goes on, whatever the screen made of it.
+        }
+      }
+      if (!chosen) holdReads()
+    }
+    readsTo = hosts.length > 1 && chosen && (mixed || readsOnlyTo(chosen)) ? chosen : null
     if (readsHeld && (hosts.length < 2 || chosen)) readsHeld.open()
     /*
      * A SLOW PICK IS STILL THE PICK. One that did not answer inside the first
@@ -925,7 +948,7 @@ async function takeCensus({
       if (!chosen && hosts.includes(pick)) {
         chosen = pick
         chosenWhy = 'pick'
-        readsTo = readsOnlyTo(chosen) ? chosen : null
+        readsTo = mixed || readsOnlyTo(chosen) ? chosen : null
         readsHeld?.open()
       }
     }
@@ -939,7 +962,7 @@ async function takeCensus({
         if (asked.unit) units = { ...units, [pick]: asked.unit }
         chosen = pick
         chosenWhy = 'pick'
-        readsTo = readsOnlyTo(chosen) ? chosen : null
+        readsTo = mixed || readsOnlyTo(chosen) ? chosen : null
         readsHeld?.open()
       }
     }
@@ -1455,6 +1478,13 @@ export function forgetMissingPick() {
   missingPick = null
   dropName(name).catch(() => {})
   return true
+}
+
+/** Told when a roll call's first window heard two or more after a read went to whoever answered first: see takeCensus. */
+const mixedWatchers = new Set()
+export function subscribeMixed(fn) {
+  mixedWatchers.add(fn)
+  return () => mixedWatchers.delete(fn)
 }
 
 /** Told when Which unit moves to another computer, before a read is asked of it: see pickHost. */

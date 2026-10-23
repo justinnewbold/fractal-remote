@@ -411,6 +411,10 @@ async function linkOnABench() {
       const switchWatchers = new Set()
       export const subscribeSwitching = (fn) => (switchWatchers.add(fn), () => switchWatchers.delete(fn))
       bench.switched = (name) => [...switchWatchers].forEach((fn) => fn(name))
+      /* A mix of computers' answers on screen (relay.js subscribeMixed): \`bench.mixed()\` tells link.js. */
+      const mixedWatchers = new Set()
+      export const subscribeMixed = (fn) => (mixedWatchers.add(fn), () => mixedWatchers.delete(fn))
+      bench.mixed = () => [...mixedWatchers].forEach((fn) => fn())
       export const restoreSession = async () => 'u1'
       /* A computer older than 7 September refuses the level-readings route (refuseMeters); one that never answers holds it (holdMeters). */
       export async function remoteRequest(path, options = {}) {
@@ -767,6 +771,7 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       /* Which unit (remote.js pickHost): \`bench.pick\` runs inside it. */
       export const pickHost = async (name) => (bench.pick ? bench.pick(name) : false)
       export const subscribeSwitching = () => () => {}
+      export const subscribeMixed = () => () => {}
     `,
     /* The unit store, which a computer change starts clean (deviceState.computerChanged): counted in \`bench.changed\`. */
     'deviceState.mjs': "import { bench } from './bench.mjs'\nexport const computerChanged = () => { bench.changed = (bench.changed || 0) + 1 }\n"
@@ -2158,6 +2163,75 @@ export function run(test) {
     assert.equal(s.link.linkState().chosenHost, 'MacBook Pro SG 566')
     assert.equal(s.rig.getState().deviceName, 'FM3', log())
     assert.equal(card(), null, 'the card stayed up over the FM3')
+  })
+
+  /*
+   * NEVER ONE COMPUTER'S UNIT IN THE HEADER OVER ANOTHER'S CARD. Justin's
+   * screenshot: the MacBook's FM3 in the header, its scene 7 lit, a Pi's "No
+   * Fractal device found" card and blank pedals, three and a half seconds
+   * of it, on the launch whose record held nothing (the 1.87.47 pick never
+   * counted since). Now the roll call's first window takes that down to
+   * Looking… and the screen waits for the one driven; and with a record
+   * that holds, it never appears at all.
+   */
+  test('phone: three computers at launch, Play shows a mix of two computers no longer than the roll call’s first window, then Looking… until the one driven answers', async () => {
+    for (const pick of ['raspberry pi 3', JSON.stringify({ accounts: { u1: { name: 'raspberry pi 3', many: true } } })]) {
+      const s = await stackOnABench({ pick })
+      const dump = (p) => /^\/preset\/(blocks|grid)$/.test(p.path)
+      s.bench.computers = [
+        { name: 'MacBook Pro SG 566', unit: 'FM3', lag: (p) => (dump(p) ? 750 : 150) },
+        { name: 'raspberry pi 5', unit: null, lag: () => 170 },
+        { name: 'raspberry pi 3', unit: null, lag: () => 320 }
+      ]
+      const t0 = s.clock.now()
+      /* Play opening as the launch gate lets go: its own reload (Stage.js reload({ arriving: true })). */
+      let mounted = false
+      s.link.subscribeLink((st) => {
+        if (mounted || st.link !== 'connected') return
+        mounted = true
+        s.clock.setTimeout(() => s.rig.arrivedCurrent().then((cur) => (cur ? null : s.rig.refreshAll())).catch(() => {}), 150)
+      })
+      s.link.startLink()
+      const seen = []
+      for (let i = 0; i < 40; i++) {
+        await s.clock.advance(250)
+        const r = s.rig.getState()
+        seen.push({ at: s.clock.now() - t0, header: r.deviceName, unit: r.unit, card: r.error ? String(r.error) : '', driving: s.link.linkState().chosenHost })
+      }
+      const log = `${seen.map((x) => `+${x.at} ${x.header || 'Looking…'} ${x.unit} ${x.card.slice(0, 20)} ${x.driving || ''}`).join('\n')}\n${s.lines().join('\n')}`
+      /* The roll call began when the computer answered, and its first window is a second and a half. */
+      const counted = s.lines().findIndex((l) => /no-answer → connected/.test(l))
+      assert.ok(counted !== -1, log)
+      const mixed = seen.filter((x) => x.header === 'FM3' && /No Fractal device found/.test(x.card))
+      const legacy = pick === 'raspberry pi 3'
+      if (!legacy) assert.deepEqual(mixed, [], `a record that holds showed the FM3 over a Pi's card\n${log}`)
+      else assert.ok(mixed.every((x) => x.at <= 2250), `the FM3 stayed in the header over a Pi's card past the first window\n${log}`)
+      /* Never the FM3 in the header once the count has said which: Looking…, then the one driven, which has none. */
+      assert.ok(!seen.some((x) => x.at > 2250 && x.header === 'FM3'), `the FM3 was in the header while another computer was driven\n${log}`)
+      const end = seen.at(-1)
+      assert.equal(end.driving, 'raspberry pi 3', log)
+      assert.equal(end.unit, 'missing', log)
+    }
+  })
+
+  test('phone: a clean start for a mix on screen takes the header, the card and the preset with it; one for another computer leaves them', async () => {
+    const s = await stackOnABench()
+    s.rig.set({ deviceName: 'FM3', unit: 'present', error: 'No Fractal device found on any serial or MIDI port.', errorLink: false, preset: { number: 479, name: 'Nothing Else Matters' }, sceneIndex: 6, sceneNames: ['VERSE'] })
+    s.rig.startClean()
+    const kept = s.rig.getState()
+    assert.deepEqual([kept.deviceName, kept.unit, kept.preset?.number, kept.sceneIndex, kept.sceneNames], ['FM3', 'present', 479, 6, []])
+    s.rig.startClean({ header: true })
+    const gone = s.rig.getState()
+    assert.deepEqual([gone.deviceName, gone.unit, gone.error, gone.preset, gone.sceneIndex], ['', 'unknown', null, null, 0])
+    /* link.js takes it down so, told by the relay, and the browser takes its own down from the same news. */
+    const link = read('mobile/src/lib/link.js')
+    assert.match(link, /subscribeMixed\(\(\) => \{\s*computerChanged\(\)\s*startClean\(\{ header: true \}\)\s*\}\)/)
+    const web = read('src/lib/link.js')
+    assert.match(web, /subscribeMixed\(\(\) => \{\s*computerChanged\(\)\s*set\(\{ mixedAt: Date\.now\(\) \}\)\s*\}\)/)
+    const app = read('src/App.jsx')
+    assert.match(app, /mixedRef\.current = link\.mixedAt\s*setDevice\(null\)\s*setStatus\('idle'\)\s*setError\(null\)/)
+    /* And a read that was out when the mix was found puts nothing up. */
+    assert.equal(app.match(/if \(mixedRef\.current !== mixAt\) return null/g)?.length, 2)
   })
 
   test('phone: the units are asked again at once and every ten seconds while the card is up, and not after', async () => {
@@ -4041,24 +4115,50 @@ export function run(test) {
       assert.equal(keptFor(two.store, end)?.many, true)
     })
 
-    test(`${end}: a read made after the first window, with no hold, is not asked of the pick while those before it went to nobody`, async () => {
+    /*
+     * 1.87.51: A MIX ON SCREEN IS TAKEN DOWN, AND THEN THE PICK IS ASKED. In
+     * 1.87.48 a read after the first window went on to whoever answered
+     * first, because the unit on screen had come off the other computer and
+     * a read of the pick would be filed under it. The screen then stayed a
+     * mix to the end of the count: the MacBook's FM3 in the header over a
+     * Pi's "No Fractal device found", Justin's screenshot. Now the first
+     * window that hears two after such a read tells whoever subscribed
+     * (subscribeMixed: link.js takes the screen down, header and all, so
+     * nothing is filed under the other unit), and the reads after it go to
+     * the pick. What was read off the other computer is still never kept as
+     * the pick's (remoteReadsAskedOf).
+     */
+    test(`${end}: a read made after the first window, those before it gone to nobody, comes after the mix on screen is told, and is asked of the pick`, async () => {
       /* Justin's first launch after the update: the pick 1.87.47 kept, never counted on this version, so nothing is held. */
       const t = await relayOnABench(end, { picked: 'raspberry pi 3', legacy: true })
       const { bench, clock, relay, watch } = t
       bench.computers = [PI5(), PI3()]
+      let told = 0
+      relay.subscribeMixed(() => (told += 1))
       watch(relay.remoteRequest('/device/detect'))
       await clock.advance(0)
       assert.deepEqual(sentOf(bench, '/device/detect'), [''], 'the bench held a read: this does not test the window')
       const census = counted(t)
-      await clock.advance(1600)
+      await clock.advance(1400)
+      assert.equal(told, 0, 'the mix was told before two had answered')
+      await clock.advance(200)
       assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', 'the first window did not find the pick')
-      /* The FM3's computer answered the unit read first: a names read asked of the pick now is the AM4's names under the FM3's slot. */
+      assert.equal(told, 1, 'a screen built out of two computers’ answers was not told at the first window')
       watch(relay.remoteRequest('/presets/53/scenes'))
       await clock.advance(0)
-      assert.deepEqual(sentOf(bench, '/presets/53/scenes'), [''], 'a read was asked of the pick while the unit on screen came off the other computer')
+      assert.deepEqual(sentOf(bench, '/presets/53/scenes'), ['raspberry pi 3'], 'a read after the mix was taken down went to whoever answers first')
       await clock.advance(5000)
       assert.equal(census.done, true)
+      assert.equal(told, 1)
       assert.equal(relay.remoteReadsAskedOf(), null, 'what was read off the other computer was kept as the pick’s')
+      /* No read to nobody before the count: nothing is told. */
+      const quiet = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      quiet.bench.computers = [PI5(), PI3()]
+      let heard = 0
+      quiet.relay.subscribeMixed(() => (heard += 1))
+      counted(quiet)
+      await quiet.clock.advance(6000)
+      assert.equal(heard, 0, 'a screen read off the pick alone was told it was a mix')
     })
 
     test(`${end}: Which unit is told before a read goes to the new computer, waits for a count in a fresh link's first window, and a read is never taken for the wrong one's`, async () => {

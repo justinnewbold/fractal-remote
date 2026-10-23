@@ -354,7 +354,14 @@ export function computerChanged() {
   syncChainBusy()
 }
 
-export function startClean() {
+/*
+ * `header`: what the bar and the card at the top say goes too, the unit's
+ * name, whether it is there, the fault and the preset, for a screen built
+ * out of several computers' answers (link.js, relay.js subscribeMixed): Play
+ * says Looking… until the computer driven has been read, rather than one
+ * computer's unit over another's card.
+ */
+export function startClean({ header = false } = {}) {
   unitEra += 1
   unitSettled = false
   changedAt = 0
@@ -378,7 +385,15 @@ export function startClean() {
   taps = []
   unitBpm = null
   boostEra += 1
-  set({ sceneNames: [], chain: 'idle', chainFor: null, chainKnown: null, bpm: null, boost: null })
+  set({
+    sceneNames: [],
+    chain: 'idle',
+    chainFor: null,
+    chainKnown: null,
+    bpm: null,
+    boost: null,
+    ...(header ? { deviceName: '', unit: 'unknown', error: null, errorLink: false, preset: null, sceneIndex: 0 } : {})
+  })
   syncChainBusy()
 }
 

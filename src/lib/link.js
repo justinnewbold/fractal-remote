@@ -58,6 +58,7 @@ import {
   forgetMissingPick,
   pickHost,
   subscribeSwitching,
+  subscribeMixed,
   signOut,
   remoteSignUp
 } from './remote.js'
@@ -499,6 +500,12 @@ let state = {
   chosenHost: null,
   /** remote role: a pick that did not answer while another is driven in its place (remote.js remoteMissingPick): Play says so. */
   missingPick: null,
+  /**
+   * remote role: when a roll call last found the screen built out of several
+   * computers' answers (remote.js subscribeMixed), or 0. App takes the unit
+   * off the screen then, Looking… in the bar, until the one driven is read.
+   */
+  mixedAt: 0,
   // Why the last pairing from a scanned code failed, for the connect screen.
   pairError: null,
   /*
@@ -1120,6 +1127,11 @@ export async function bootLink() {
   })
   /* Which unit moving to another computer, before a read is asked of it: the unit's reads from the one left are dropped (deviceState.computerChanged). */
   subscribeSwitching(() => computerChanged())
+  /* A screen built out of several computers' answers: dropped the same way, and App takes it down until the one driven is read (mixedAt). */
+  subscribeMixed(() => {
+    computerChanged()
+    set({ mixedAt: Date.now() })
+  })
   /*
    * The roll call is re-taken by the write gate now, not only here, so its
    * answer has to reach the screen from wherever it was taken. Without this the

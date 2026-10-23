@@ -1663,6 +1663,23 @@ export default function App() {
    */
   const liveRef = useRef(false)
   /*
+   * WHEN A ROLL CALL LAST FOUND THE SCREEN BUILT OUT OF SEVERAL COMPUTERS'
+   * ANSWERS (link.mixedAt, remote.js subscribeMixed): the MacBook's FM3 in
+   * the bar over a Pi's "no device". The unit comes off the screen then,
+   * Looking… in the bar, and a read that was out when it happened puts none
+   * of what it brings up; the read after the roll call, of the one driven,
+   * does (the effect on chosenHost, below). The phone's Play the same
+   * (rig.startClean, header and all).
+   */
+  const mixedRef = useRef(0)
+  useEffect(() => {
+    if (!link.mixedAt || link.mixedAt === mixedRef.current) return
+    mixedRef.current = link.mixedAt
+    setDevice(null)
+    setStatus('idle')
+    setError(null)
+  }, [link.mixedAt])
+  /*
    * Whether a read is already in flight, for the timed check below to stand
    * clear of. In a ref rather than the dependency list: the check is a loop
    * that schedules itself, and restarting that loop every time a button goes
@@ -1688,6 +1705,8 @@ export default function App() {
    */
   const read = useCallback(async (opts) => {
     const settling = opts?.settling === true
+    /* A mix of computers' answers found while this read was out: what it brings is not put up (mixedRef). */
+    const mixAt = mixedRef.current
     setBusy(true)
     setError(null)
     let fresh = null
@@ -1736,6 +1755,7 @@ export default function App() {
         },
         ...(settling ? { least: SETTLING_TRIES, gap: SETTLING_MS } : {})
       })
+      if (mixedRef.current !== mixAt) return null
       setAsks(asked)
       setDevice(info)
       if (!info?.connected) {
@@ -1754,6 +1774,7 @@ export default function App() {
       unitRead(currentDeviceSlug(), { demo: isDemo(), since: unitAt })
       doneReading = beginChainRead()
       const [p, b] = await Promise.all([currentPreset(), presetBlocks()])
+      if (mixedRef.current !== mixAt) return null
       setPreset(p)
       followUnitName(p)
       /*

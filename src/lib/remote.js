@@ -299,6 +299,8 @@ async function takeCensus({
   let cut = false
   /* The roll call's own question, kept open to the end of the units' window (a slow pick). */
   let roll = null
+  /* Reads held after a mix on screen with no pick heard, to the end of the count. */
+  let mixHold = null
   /* No proof asked by this count yet (confirmTargeting). */
   proofAnswers = null
   proofFrom = null
@@ -349,7 +351,26 @@ async function takeCensus({
       chosenWhy = 'pick'
     }
     /* The first window is in: reads to the pick it listed if every read so far went to it too (one asked of nobody put another unit's answer up, and a read asked of the pick now would be filed under that unit), as they always went with one computer, or held to the end for a pick that did not answer (holdReads). */
-    readsTo = hosts.length > 1 && chosen && readsOnlyTo(chosen) ? chosen : null
+    /*
+     * A MIX ON SCREEN: two or more heard, and a read already answered by
+     * whoever was first (the phone's relay.js says what it looked like).
+     * Whoever subscribed (subscribeMixed) is told, and link.js takes the
+     * screen down until the one driven is read; from here reads go to the
+     * pick by name where it was heard, and wait for the end of the count
+     * where it was not.
+     */
+    const mixed = hosts.length > 1 && !proved && Array.isArray(readsAsked) && readsAsked.includes('')
+    if (mixed) {
+      for (const fn of [...mixedWatchers]) {
+        try {
+          fn()
+        } catch {
+          // The count goes on, whatever the screen made of it.
+        }
+      }
+      if (!chosen) mixHold = holdReads()
+    }
+    readsTo = hosts.length > 1 && chosen && (mixed || readsOnlyTo(chosen)) ? chosen : null
     if (held && (hosts.length < 2 || chosen)) held.open()
     /* A slow pick is still the pick: one not heard in the first window, with two or more that were, is asked by name while their units are read, and its answer to the roll call still heard until then (the phone's relay.js says why). */
     const slow = hosts.length > 1 && !chosen && !proved && picked && !hosts.includes(picked) ? askAlone(picked, { windowMs, sleep }) : null
@@ -364,8 +385,9 @@ async function takeCensus({
         if (asked.unit) units = { ...units, [picked]: asked.unit }
         chosen = picked
         chosenWhy = 'pick'
-        readsTo = readsOnlyTo(chosen) ? chosen : null
+        readsTo = mixed || readsOnlyTo(chosen) ? chosen : null
         held?.open()
+        mixHold?.open()
       }
     }
     /* A pick heard late is asked alone over as long as it took, and a little more, three seconds at most (the phone's relay.js). */
@@ -407,6 +429,7 @@ async function takeCensus({
       }
     }
     held?.open()
+    mixHold?.open()
   }
   hostsChanged()
   return hosts
@@ -775,6 +798,13 @@ export async function pickHost(name, { windowMs = 1500, sleep = (ms) => new Prom
   const before = countingLink === session ? counting : null
   if (!before && !hosts.includes(name)) return false
   return whileProving(provePick(name, before, { windowMs, sleep }))
+}
+
+/** Told when a roll call's first window heard two or more after a read went to whoever answered first: see takeCensus. */
+const mixedWatchers = new Set()
+export function subscribeMixed(fn) {
+  mixedWatchers.add(fn)
+  return () => mixedWatchers.delete(fn)
 }
 
 /** The pick that did not answer while another is driven in its place, or null. */
