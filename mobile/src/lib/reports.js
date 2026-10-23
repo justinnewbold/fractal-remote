@@ -23,22 +23,28 @@ import {
   LOGS_ONLY_MESSAGE,
   MAX_MESSAGE,
   SENT_WORDS,
+  SHOT_BUCKET,
   askComputer,
   buildReport,
   carriesLog,
   computerUnaskedWhy,
   contextFrom,
+  inTime,
   lastErrorFrom,
+  logsMessage,
   notSent,
-  pickForReport,
-  trimToBytes
+  reportKey,
+  reportLog,
+  shotsLostWords,
+  uploadShots,
+  withShots
 } from './report-rules'
 import { DEFAULT_PROJECT, remoteRequest, supabaseClient } from './relay'
 import { APP_VERSION } from './version'
 import { formatLine, formatMacDiag, getDebugLog, logDebug } from './debugLog'
 import { linkState, linkVia } from './link'
 
-export { KINDS, MAX_MESSAGE, SENT_WORDS, carriesLog }
+export { KINDS, MAX_MESSAGE, SENT_WORDS, carriesLog, shotsLostWords }
 
 /**
  * What was going on when they wrote it.
@@ -73,13 +79,14 @@ export function context({ deviceName } = {}) {
 /**
  * Exactly the log that would be sent, as text — for showing somebody first.
  *
- * The same two functions the send path calls, in the same order, so what is
- * shown cannot drift from what goes. Empty string for a kind that carries no
- * log, so a caller can show nothing without asking a second question.
+ * The same function the send path calls (shared/report-rules reportLog), with
+ * the same head and runs before, so what is shown cannot drift from what
+ * goes. Empty string for a kind that carries no log, so a caller can show
+ * nothing without asking a second question.
  */
-export function logPreview(kind) {
+export function logPreview(kind, { head = '', before = [] } = {}) {
   if (!carriesLog(kind)) return ''
-  return trimToBytes(pickForReport(getDebugLog()).map(formatLine).join('\n'))
+  return reportLog({ lines: getDebugLog(), format: formatLine, head, before })
 }
 
 /**
@@ -88,8 +95,16 @@ export function logPreview(kind) {
  * Throws with something a person can read. The failure that matters is having
  * no network at all — common on a stage, and it must not lose what they typed,
  * so the caller keeps the text on screen when this rejects.
+ *
+ * `head` is the log's head (lib/logHead logHeader, as lines) and `before` the
+ * runs before this one (lib/logHead runsBefore): both ride with the log and
+ * never without it. `shots` are the screenshots (lib/shots pasteShot), which
+ * go to the bucket first, under the account's id or `anon`, each given
+ * SHOT_WAIT_MS together: one that fails or is late is left out, the report
+ * goes without it, and the answer says how many (`shotsLost`). Never waits
+ * past SEND_WAIT_MS for the row either.
  */
-export async function sendReport({ kind, message, contact, context: ctx = {}, withLog = true, computer = '' }) {
+export async function sendReport({ kind, message, contact, context: ctx = {}, withLog = true, computer = '', head = '', before = [], shots = [] }) {
   const row = buildReport({
     kind,
     message,
@@ -100,7 +115,9 @@ export async function sendReport({ kind, message, contact, context: ctx = {}, wi
     lines: withLog ? getDebugLog() : [],
     format: withLog ? formatLine : null,
     /* The computer's own log, when the caller asked for it (sendLogs). */
-    computer: withLog ? computer : ''
+    computer: withLog ? computer : '',
+    head: withLog ? head : '',
+    before: withLog ? before : []
   })
 
   let c = supabaseClient()
@@ -117,7 +134,22 @@ export async function sendReport({ kind, message, contact, context: ctx = {}, wi
     c = createClient(DEFAULT_PROJECT.url, DEFAULT_PROJECT.anonKey)
   }
 
-  const { error } = await c.from('feedback').insert({ ...row, user_id: userId })
+  /* The pictures first, so they are in the bucket by the time the row's email goes. */
+  const pictures = await uploadShots(shots, {
+    owner: userId || 'anon',
+    key: reportKey(),
+    put: async (path, shot) => {
+      const { error } = await c.storage.from(SHOT_BUCKET).upload(path, shot.body, { contentType: 'image/jpeg', upsert: false })
+      if (error) throw error
+      return true
+    }
+  })
+  if (pictures.lost) logDebug('app', 'screenshots not added to the report', `${pictures.lost} — ${pictures.why}`)
+
+  const answer = await inTime(() => c.from('feedback').insert({ ...row, context: withShots(row.context, pictures), user_id: userId })).catch(
+    (late) => ({ error: late })
+  )
+  const error = answer?.error
 
   /* Nothing was written for a log sent in one tap, so nothing is "still here".
      The database's own words go into the log, never onto the screen. */
@@ -126,7 +158,7 @@ export async function sendReport({ kind, message, contact, context: ctx = {}, wi
     logDebug('app', 'report not sent', err.reason)
     throw err
   }
-  return true
+  return { sent: true, shotsLost: pictures.lost }
 }
 
 /**
@@ -148,7 +180,8 @@ export function computerPart() {
 /**
  * "Send logs to developer", from the log screen: a bug report in one tap.
  *
- * No form. The message is the app's own sentence (LOGS_ONLY_MESSAGE), the
+ * No form. The message is the note when one was typed in the box beside the
+ * button, and the app's own sentence (LOGS_ONLY_MESSAGE) when not; the
  * context is what the Feedback form sends, the log goes, and the computer's
  * own log goes with it when there is a computer to ask. Throws in words a
  * person can read, like sendReport. Whether it went is written into the log
@@ -168,15 +201,20 @@ export function sendLogs(options) {
   return sendingLogs
 }
 
-async function sendLogsNow({ deviceName } = {}) {
+async function sendLogsNow({ deviceName, note = '', shots = [], head = '', before = [] } = {}) {
   const computer = await computerPart()
+  let sent
   try {
-    await sendReport({
+    sent = await sendReport({
       kind: 'bug',
-      message: LOGS_ONLY_MESSAGE,
+      /* The note, when one was typed; the app's own sentence when not, so the one tap still sends. */
+      message: logsMessage(note),
       context: context({ deviceName }),
       withLog: true,
-      computer
+      computer,
+      head,
+      before,
+      shots
     })
   } catch (err) {
     /* A refusal's own words are on the line sendReport wrote just before; anything else's are here. */
@@ -184,5 +222,5 @@ async function sendLogsNow({ deviceName } = {}) {
     throw err
   }
   logDebug('app', 'logs sent to the developer')
-  return true
+  return sent
 }

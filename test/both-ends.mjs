@@ -660,6 +660,25 @@ export const AREAS = [
         why: 'the browser has a colour picker of its own; the phone would need a package with native code for one, which moves the fingerprint and costs a build, and the grid with Lighter and Darker covers it (lib/colourPage freePick says what a free pick goes through, for both)'
       }
     ]
+  },
+  {
+    /*
+     * "Where's the space to enter a message and upload photos?" (22 October
+     * 2026.) The log's send and the Feedback form take screenshots at both
+     * ends, through one component each.
+     */
+    area: 'screenshots for a report',
+    web: ['src/components/Shots.jsx'],
+    phone: ['mobile/src/components/Shots.js'],
+    buttons: [
+      {
+        does: 'add a screenshot to the report',
+        /* Named for how each end gets one: the browser picks a file, and the phone, with no photo picker built into it until the next build (docs/pending/photo-picker.patch), pastes one it has copied. */
+        web: 'Add a screenshot',
+        phone: 'Paste a screenshot'
+      },
+      { does: 'take a screenshot back out before it is sent', web: 'Remove', phone: 'Remove' }
+    ]
   }
 ]
 
