@@ -947,8 +947,9 @@ export default function Stage({
             preset and the unit saying what it is called. The slot is already in
             the line above, so nothing here is a guess. See rig.loadPreset.
           */}
+          {/* And while nothing is read at all (Looking…): no preset is not one named "Untitled". */}
           <Press
-            label={preset?.pending && !preset?.name ? '…' : presetLabel(preset)}
+            label={(preset?.pending && !preset?.name) || (!preset && unitState === 'unknown') ? '…' : presetLabel(preset)}
             sub={onOpenPresets ? 'Tap for all presets' : undefined}
             /* No list picture on the left any more: "take that off of that
                one", and make the name "a little bit bigger". The chevron on

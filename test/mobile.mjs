@@ -3315,7 +3315,7 @@ export function run(test) {
     assert.match(load, /pending: typeof known !== 'string'/, 'nothing marks a preset whose name is not known yet')
     assert.match(
       read('mobile/src/screens/Stage.js'),
-      /preset\?\.pending && !preset\?\.name \? '…' : presetLabel\(preset\)/,
+      /\(preset\?\.pending && !preset\?\.name\) \|\| \(!preset && unitState === 'unknown'\) \? '…' : presetLabel\(preset\)/,
       'the stage screen shows Untitled while it waits to be told the name'
     )
   })

@@ -392,7 +392,14 @@ export function startClean({ header = false } = {}) {
     chainKnown: null,
     bpm: null,
     boost: null,
-    ...(header ? { deviceName: '', unit: 'unknown', error: null, errorLink: false, preset: null, sceneIndex: 0 } : {})
+    /*
+     * And the rest of the other unit with the header: its pedals and what it
+     * says it can do (the slot count, the scene tiles). Left up, Play said
+     * Looking… over the MacBook FM3's chain, lit as it was, eight scene
+     * tiles and "OF 512" while the AM4 was being read, where the browser
+     * shows nothing of it. Play then shows what it shows before a first read.
+     */
+    ...(header ? { deviceName: '', unit: 'unknown', error: null, errorLink: false, preset: null, sceneIndex: 0, blocks: [], allBlocks: [], capabilities: null } : {})
   })
   syncChainBusy()
 }

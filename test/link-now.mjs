@@ -2252,13 +2252,18 @@ export function run(test) {
 
   test('phone: a clean start for a mix on screen takes the header, the card and the preset with it; one for another computer leaves them', async () => {
     const s = await stackOnABench()
-    s.rig.set({ deviceName: 'FM3', unit: 'present', error: 'No Fractal device found on any serial or MIDI port.', errorLink: false, preset: { number: 479, name: 'Nothing Else Matters' }, sceneIndex: 6, sceneNames: ['VERSE'] })
+    const pedals = [{ slug: 'drv', name: 'Drive 1', effectId: 133, bypassed: false }]
+    s.rig.set({ deviceName: 'FM3', unit: 'present', error: 'No Fractal device found on any serial or MIDI port.', errorLink: false, preset: { number: 479, name: 'Nothing Else Matters' }, sceneIndex: 6, sceneNames: ['VERSE'], blocks: pedals, allBlocks: pedals, capabilities: { scenes: 8, presets: { count: 512 } } })
     s.rig.startClean()
     const kept = s.rig.getState()
-    assert.deepEqual([kept.deviceName, kept.unit, kept.preset?.number, kept.sceneIndex, kept.sceneNames], ['FM3', 'present', 479, 6, []])
+    assert.deepEqual([kept.deviceName, kept.unit, kept.preset?.number, kept.sceneIndex, kept.sceneNames, kept.blocks.length, kept.capabilities?.scenes], ['FM3', 'present', 479, 6, [], 1, 8])
     s.rig.startClean({ header: true })
     const gone = s.rig.getState()
     assert.deepEqual([gone.deviceName, gone.unit, gone.error, gone.preset, gone.sceneIndex], ['', 'unknown', null, null, 0])
+    /* And the other unit's pedals, lit as they were, and what it can do (its eight tiles, "OF 512"), as the browser blanks its stage. */
+    assert.deepEqual([gone.blocks, gone.allBlocks, gone.capabilities], [[], [], null], 'Play says Looking… over the other computer’s pedals and slot count')
+    /* And "…" for the preset under Looking…, never "Untitled". */
+    assert.match(read('mobile/src/screens/Stage.js'), /label=\{\(preset\?\.pending && !preset\?\.name\) \|\| \(!preset && unitState === 'unknown'\) \? '…' : presetLabel\(preset\)\}/, 'Play names the preset not read yet "Untitled"')
     /* link.js takes it down so, told by the relay, and the browser takes its own down from the same news. */
     const link = read('mobile/src/lib/link.js')
     assert.match(link, /subscribeMixed\(\(\) => \{\s*computerChanged\(\)\s*startClean\(\{ header: true \}\)\s*\}\)/)
