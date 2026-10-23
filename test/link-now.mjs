@@ -512,6 +512,8 @@ const STACK_SERVICE = `
       if (payload.host && payload.host !== c.name) continue
       const said = forgefx(c, payload)
       const res = said && typeof said === 'object' && 'status' in said ? said : { status: 200, body: JSON.stringify(said) }
+      /* What each computer heard, for a test that asks which of them carried out a write. */
+      ;(c.heard = c.heard || []).push({ at: clock.now(), path: payload.path, host: payload.host || '' })
       clock.setTimeout(() => {
         if (chan.removed || chan.state !== 'joined') return
         chan.handlers['broadcast:res']?.({ payload: { id: payload.id, encoding: 'utf8', ...res } })
@@ -629,6 +631,7 @@ async function stackOnABench({ pick = null } = {}) {
     const relay = await import(at('relay.js'))
     const rig = await import(at('rig.js'))
     const link = await import(at('link.js'))
+    const device = await import(at('device.js'))
     const app = {
       change(status) {
         rn.AppState.currentState = status
@@ -637,7 +640,7 @@ async function stackOnABench({ pick = null } = {}) {
     }
     /* The phone's log as Copy Logs words it, one line each. */
     const lines = () => debug.getDebugLog().map((e) => `[${e.source}] ${e.message}${e.detail ? ` — ${e.detail}` : ''}`)
-    return { link, relay, rig, clock, bench, app, lines }
+    return { link, relay, rig, device, clock, bench, app, lines }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -1980,6 +1983,136 @@ export function run(test) {
     assert.equal(s.rig.getState().deviceName, 'FM3')
   })
 
+  /*
+   * But a join is waited on only while its channel is being joined. Once it
+   * is joined, the join goes on reading the unit for seconds, and a channel
+   * lost under those reads (Android cutting it as the app is put away) is
+   * joined again by the next turn at once, as 1.87.48 did. A turn that
+   * waited on them instead waited out every one of those reads on a channel
+   * that was gone: on the bench, NOT CONNECTED for forty seconds after the
+   * app came back.
+   */
+  const FM3_MAC = { name: 'MacBook Pro SG 566', unit: 'FM3', version: '1.87.47', lag: (p) => (/^\/preset\/(blocks|grid)$/.test(p.path) ? 750 : 150) }
+  const AM4_PI = { name: 'raspberry pi 3', unit: 'AM4', lag: (p) => (/^\/preset\/(blocks|grid)$/.test(p.path) ? 2500 : 320) }
+  /* The socket lost under every channel on it, as Android cuts it when the app is put away: realtime-js says CHANNEL_ERROR. */
+  const loseSocket = (s) => {
+    s.bench.socket = false
+    for (const chan of s.bench.chans.filter((c) => !c.removed)) {
+      chan.state = 'errored'
+      chan.cb?.('CHANNEL_ERROR', new Error('heartbeat timeout'))
+    }
+  }
+  /* And realtime-js joining again, by itself, every channel it lost. */
+  const rejoinSocket = (s) => {
+    s.bench.socket = true
+    for (const chan of s.bench.chans.filter((c) => !c.removed && c.state === 'errored')) {
+      chan.state = 'joined'
+      chan.cb?.('SUBSCRIBED')
+    }
+  }
+
+  test('phone: a channel lost while the launch is still reading the unit is joined again the moment the app is back on screen', async () => {
+    const s = await stackOnABench()
+    s.bench.computers = [{ ...FM3_MAC }]
+    s.link.startLink()
+    await s.clock.advance(1000)
+    assert.equal(s.link.linkState().link, 'connected', 'the bench never connected')
+    s.app.change('background')
+    loseSocket(s)
+    await s.clock.advance(2000)
+    const back = s.clock.now()
+    let up = null
+    s.link.subscribeLink((st) => {
+      if (up === null && st.link === 'connected') up = s.clock.now() - back
+    })
+    s.app.change('active')
+    await s.clock.advance(5000)
+    assert.ok(up !== null && up < 1500, `connected ${up === null ? 'never' : `${up} ms`} after the app came back\n${s.lines().join('\n')}`)
+  })
+
+  /*
+   * And the roll call with it. A channel lost while the launch's roll call
+   * was listening leaves a count that never heard the computers out, and
+   * only a fresh join counts again (relay.js remoteDisconnect). Waited on
+   * instead, the old channel came back by itself with the half-done count
+   * kept for the rest of its life: the pick never proved, every write to
+   * every computer, both units carrying out the tap.
+   */
+  test('phone: two computers, the channel lost under the launch’s roll call, then back on screen and back by itself: a scene reaches the pick alone', async () => {
+    const s = await stackOnABench({ pick: JSON.stringify({ accounts: { u1: { name: 'raspberry pi 3', many: true } } }) })
+    s.bench.computers = [{ ...FM3_MAC }, { ...AM4_PI }]
+    s.link.startLink()
+    await s.clock.advance(2000)
+    s.app.change('background')
+    loseSocket(s)
+    s.clock.setTimeout(() => rejoinSocket(s), 3000)
+    await s.clock.advance(2000)
+    s.app.change('active')
+    await s.clock.advance(20000)
+    const log = s.lines().join('\n')
+    assert.equal(s.link.linkState().link, 'connected', log)
+    const before = s.bench.computers.map((c) => (c.heard || []).length)
+    const wrote = s.device.setScene(2).then(
+      () => null,
+      (e) => e
+    )
+    await s.clock.advance(10000)
+    assert.equal(await wrote, null, `the scene was refused\n${log}`)
+    const heard = s.bench.computers.filter((c, i) => (c.heard || []).slice(before[i]).some((h) => h.path === '/scene')).map((c) => c.name)
+    assert.deepEqual(heard, ['raspberry pi 3'], `the scene was carried out by ${heard.join(' and ')}\n${log}`)
+    assert.equal(s.link.linkState().chosenHost, 'raspberry pi 3')
+    assert.equal(s.rig.getState().deviceName, 'AM4', log)
+  })
+
+  /*
+   * A turn that waited on another's join leaves the rest to that turn: the
+   * reads after it, and the next turn's time. Each scheduled its own, and
+   * the backoff went up twice for one failed join, so a tap on Look again
+   * (or the app back on screen) during a join that failed put the next try
+   * three seconds later than nobody tapping would have.
+   */
+  test('phone: back on screen during a join that fails leaves the next try where it was', async () => {
+    const t = await linkOnABench()
+    t.bench.joinMs = 450
+    t.bench.canJoin = false
+    t.link.startLink()
+    await t.clock.advance(134)
+    t.app.change('active')
+    await t.clock.advance(450 - 134 + 1)
+    assert.equal(t.bench.joins, 1, 'back on screen began a second join')
+    t.bench.canJoin = true
+    /* Failed at 450 ms: tried again three seconds on, as with no tap, and joined 450 ms after that. */
+    await t.clock.advance(3000)
+    assert.equal(t.bench.joins, 2, 'the next try after the failed join came late')
+    await t.clock.advance(1000)
+    assert.equal(t.link.linkState().link, 'connected')
+  })
+
+  /*
+   * App.js stops the link and starts it again when the demo or Bluetooth
+   * flips. Stopped during the first join, that join ends as replaced, and
+   * the turn that was waiting on it belongs to the loop that stopped: it
+   * goes without a word to the loop that started, whose first turn it used
+   * to put three seconds back.
+   */
+  test('phone: the link stopped and started again during the launch’s join joins at once, and stays joined', async () => {
+    const s = await stackOnABench()
+    s.bench.computers = [{ ...FM3_MAC }]
+    s.link.startLink()
+    await s.clock.advance(100)
+    s.link.stopLink()
+    s.link.startLink()
+    const restarted = s.clock.now()
+    const told = []
+    s.link.subscribeLink((st) => told.push({ at: s.clock.now() - restarted, link: st.link, down: st.down }))
+    await s.clock.advance(20000)
+    const log = s.lines().join('\n')
+    const up = told.find((x) => x.link === 'connected')
+    assert.ok(up && up.at < 1500, `connected ${up ? `${up.at} ms` : 'never'} after the restart\n${log}`)
+    assert.ok(!told.some((x) => x.at > up.at && (x.link !== 'connected' || x.down)), `the link dropped after it was up\n${log}`)
+    assert.equal(s.bench.disconnects, 0, `the phone closed the socket\n${log}`)
+  })
+
   /* ------------------------------------------------------------------ */
   /* The browser's link, run: down, and only when it is                  */
   /* ------------------------------------------------------------------ */
@@ -3272,9 +3405,9 @@ export function run(test) {
     }
     /* The phone's loop: in its turn and its join, never awaited, started again by every drop. */
     const phone = read('mobile/src/lib/link.js')
-    const turn = phone.slice(phone.indexOf('async function turn()'), phone.indexOf('async function join()'))
+    const turn = phone.slice(phone.indexOf('async function turn(gen)'), phone.indexOf('async function join(gen)'))
     assert.match(turn, /\n {2}if \(running\) quietMeters\(\)\n/, 'the phone’s loop never says it again')
-    const join = phone.slice(phone.indexOf('async function join()'), phone.indexOf('async function countHosts()'))
+    const join = phone.slice(phone.indexOf('async function join(gen)'), phone.indexOf('async function countHosts()'))
     assert.ok(join.indexOf('quietMeters()') > join.indexOf('await hostResponds()') && join.indexOf('quietMeters()') < join.indexOf('countHosts()'), 'the phone says it after the roll call has begun holding writes, or not at join at all')
     /*
      * And the roll call begins before the computer's name is read on an account that may have two: a tap made while

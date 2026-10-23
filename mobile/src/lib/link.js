@@ -356,9 +356,18 @@ export const joiningNow = () => turns > 0 && state.link !== 'connected'
 export const linkVia = () => (isDemo() ? 'demo' : bluetoothOn() ? 'bluetooth' : 'computer')
 export const lastHeardAt = () => lastAnswerAt()
 
+/*
+ * WHICH RUN OF THE LOOP A TURN BELONGS TO. App.js stops the link and starts
+ * it again when the demo or Bluetooth flips, and a turn of the loop that
+ * stopped can still be out on the network when the new one begins: that
+ * turn ends without touching the new loop, whose first turn it used to put
+ * three seconds back with a schedule of its own. Moved by startLink.
+ */
+let generation = 0
+
 function tick() {
   turns += 1
-  return turn().finally(() => {
+  return turn(generation).finally(() => {
     turns -= 1
   })
 }
@@ -371,27 +380,35 @@ function tick() {
  *   - answering          → a keepalive only if nothing has been heard for a
  *     while; ordinary traffic is proof enough and costs nothing extra
  */
-async function turn() {
-  if (!running) return
+async function turn(gen) {
+  /* This loop's turn, and only while it runs: see generation. Asked again after every wait on the network. */
+  const ours = () => running && gen === generation
+  if (!ours()) return
   /* A real loop has no business running under the demo. See startLink. */
   if (isDemo()) return enterDemo()
 
   if (!remoteActive()) {
-    await join()
+    /* Waited on another turn's join: that turn carries on from it, and says when the next one is (see join). */
+    const shared = await join(gen)
+    if (!ours() || shared) return
   } else if (!remoteHostSeen()) {
     await hostResponds()
+    if (!ours()) return
     refresh()
     if (remoteHostSeen()) await readMacName()
   } else if (Date.now() - lastAnswerAt() > KEEPALIVE) {
     await hostResponds()
+    if (!ours()) return
     refresh()
   }
+  if (!ours()) return
 
   /* A link where no roll call was taken: counted now (countIfDue). */
   countIfDue()
   // A computer that was updated while this phone watched says so within a
   // couple of minutes, rather than at the next join.
   if (running && state.link === 'connected' && Date.now() - namedAt > NAME_AGAIN) await readMacName()
+  if (!ours()) return
   // And the computer hears that a phone is using it, so it does not go to sleep under the song.
   if (running) tellComputer()
   // And that nobody here is looking at the unit's level readings, so it stops asking the unit for them.
@@ -419,28 +436,51 @@ async function turn() {
  * the socket both were on. The link dropped twelve seconds after launch, for
  * sixteen, under a Which unit tap. The browser has always had this guard
  * (src/lib/link.js, `if (joining) return`).
+ *
+ * WHILE ITS CHANNEL IS BEING JOINED, AND NO LONGER. Joined, a join goes on
+ * reading the unit and taking the roll call for seconds, and a channel lost
+ * under those reads (Android cutting it as the app is put away) is joined
+ * again by the next turn at once, as 1.87.48 did, with a fresh roll call.
+ * Waited on instead, the app back on screen sat out every one of those reads
+ * on a channel that was gone, NOT CONNECTED for up to forty seconds, and a
+ * roll call cut short by the drop was kept for the rest of the link: writes
+ * to both computers.
+ *
+ * True when this turn waited on a join that another turn of its own run of
+ * the loop began: that turn carries on from it, the reads after it and the
+ * next turn's time, so one failed join puts the backoff up once. A turn of
+ * a loop started since carries on itself, because the turn that began the
+ * join ends without a word to the new loop (generation).
  */
-async function join() {
-  if (joinRun) return joinRun
+async function join(gen) {
+  const now = joinRun
+  if (now && now.connecting) {
+    await now.done
+    return now.gen === gen
+  }
+  const run = { gen, connecting: true, done: null }
+  joinRun = run
   joinBusy = true
-  joinRun = joinOnce().finally(() => {
+  /* Two can overlap once the first is past its channel: only the newer one's end clears these. */
+  run.done = joinOnce(run).finally(() => {
+    if (joinRun !== run) return
     joinBusy = false
     joinRun = null
   })
-  return joinRun
+  await run.done
+  return false
 }
 
 /* Inside join, which takes the roll call itself: countIfDue leaves it to it. */
 let joinBusy = false
-/* The join under way, which a second turn waits on rather than starting its own. */
+/* The join under way, { gen, connecting, done }: a second turn waits on it while its channel is being joined (see join). */
 let joinRun = null
 
-async function joinOnce() {
+async function joinOnce(run) {
   set({ link: 'joining' })
   const began = Date.now()
   try {
     await remoteConnect()
-    if (!running) return
   } catch (err) {
     /*
      * Replaced, not failed: its channel was taken down for a newer join's
@@ -458,7 +498,11 @@ async function joinOnce() {
     logDebug('link', `join failed after ${Math.round((Date.now() - began) / 100) / 10}s`, err?.message || String(err))
     refresh()
     return
+  } finally {
+    /* Joined or not, its channel is no longer being joined: a turn from here on joins again rather than wait on what follows (see join). */
+    run.connecting = false
   }
+  if (!running) return
   listen()
   refresh()
 
@@ -801,6 +845,8 @@ export function startLink() {
     return stopLink
   }
   running = true
+  /* A new run of the loop: a turn of the one before that is still out ends without touching this one (see generation). */
+  generation += 1
   delay = 0
   /*
    * The loop starting is a fresh start too: a link left 'off' by a sign-out,

@@ -8381,7 +8381,7 @@ export function run(test) {
     assert.ok(stop.indexOf('set({ ...initial })') < stop.indexOf('await remoteDisconnect()'), 'stopLink resets the link after the wait again, over the demo’s connected')
     assert.match(link, /if \(isDemo\(\)\) return enterDemo\(\)/, 'a real loop can run on under the demo')
     assert.match(link, /if \(!running\) return\s+delay = state\.link === 'connected'/, 'a turn stopped mid-wait schedules another anyway')
-    assert.match(link, /await remoteConnect\(\)\s+if \(!running\) return/, 'a join finishing after stopLink carries on as if running')
+    assert.match(link, /await remoteConnect\(\)\s+\} catch \(err\) \{[\s\S]*?\} finally \{[^}]*\}\s+if \(!running\) return\s+listen\(\)/, 'a join finishing after stopLink carries on as if running')
     const app = read('mobile/App.js')
     assert.match(app, /demo \|\| link\.link === 'connected' \? \(\) => setScreen\('presets'\) : null/, 'the demo’s preset list waits on a real link')
   })
@@ -10136,7 +10136,7 @@ export function run(test) {
   test('the rule reads the rig as it is: joins under way counted at both links, and the rig while away kept', () => {
     const link = withoutComments(read('mobile/src/lib/link.js')).replace(/\s+/g, ' ')
     assert.match(link, /export const joiningNow = \(\) => turns > 0 && state\.link !== 'connected'/)
-    assert.match(link, /function tick\(\) \{ turns \+= 1 return turn\(\)\.finally\(\(\) => \{ turns -= 1 \}\) \}/, 'a turn of the loop is not counted while it is out')
+    assert.match(link, /function tick\(\) \{ turns \+= 1 return turn\(generation\)\.finally\(\(\) => \{ turns -= 1 \}\) \}/, 'a turn of the loop is not counted while it is out')
     assert.match(link, /timer = setTimeout\(tick, ms\)/, 'the loop turns without being counted')
     assert.match(withoutComments(read('mobile/src/lib/bleLink.js')), /export const bluetoothJoining = \(\) => inFlight/)
     assert.match(withoutComments(read('mobile/src/lib/bluetooth.js')), /export const bluetoothPhase = \(\) => now\.phase/)
@@ -10148,7 +10148,7 @@ export function run(test) {
     assert.match(link, /if \(bluetoothOn\(\) && !isDemo\(\)\) \{ running = false startBluetoothLink\(set\)/, 'startLink no longer puts the demo before Bluetooth, and linkVia says the other')
     const relay = withoutComments(read('mobile/src/lib/relay.js')).replace(/\s+/g, ' ')
     assert.match(relay, /function seen\(v\) \{ const now = !!v if \(now\) answeredAt = Date\.now\(\)/, 'an answer from the computer no longer moves lastAnswerAt')
-    assert.match(link, /\} else if \(Date\.now\(\) - lastAnswerAt\(\) > KEEPALIVE\) \{ await hostResponds\(\) refresh\(\) \}/, 'a link that says connected is no longer asked every eight seconds, so a word left from a freeze looks like a link')
+    assert.match(link, /\} else if \(Date\.now\(\) - lastAnswerAt\(\) > KEEPALIVE\) \{ await hostResponds\(\) if \(!ours\(\)\) return refresh\(\) \}/, 'a link that says connected is no longer asked every eight seconds, so a word left from a freeze looks like a link')
     assert.match(updates, /if \(rig\.link === 'connected' \|\| rig\.bluetooth === 'connected'\) leftWith = \{ \.\.\.leftWith, link: 'connected', at: Date\.now\(\) \}/, 'a rig reached while away is forgotten, or its eight hours count from when the phone went away')
     assert.match(updates, /const offLink = subscribeLink\(heardWhileAway\) const offBluetooth = subscribeBluetooth\(heardWhileAway\)/)
     /* And the reason a switch outside a song is safe, said where the rule is. */
