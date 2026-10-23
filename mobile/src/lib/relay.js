@@ -107,6 +107,33 @@ let rollCallAsked = null
 /** Whether a roll call has been started on this link, and whether one has finished with anybody in it. */
 let countTried = false
 let countedOnLink = false
+/*
+ * A ROLL CALL THE CHANNEL DROPPED UNDER IS NOT A ROLL CALL. realtime-js
+ * rejoins the same channel after a drop, so the link this module sees never
+ * ends: a count whose questions went into the drop (the pick's proof among
+ * them, unanswered) was kept as the one count of the link, the pick never
+ * proved, and from then on every read went to whoever answered first and
+ * every write to every computer, for the rest of the link. `drops` counts
+ * this link's drops, so a count or a proof can tell one happened under it;
+ * `recountOwed` is a count cut short that way, taken again when the channel
+ * is back (remoteCountDue), with writes waiting for it meanwhile (countDone).
+ * Only on an account that has two computers or may have (takeCensus): one
+ * computer goes on exactly as before.
+ */
+let drops = 0
+let recountOwed = false
+/** Writes waiting for that count to begin: opened the moment one does, or the link goes (owedOver). */
+let owedGate = null
+/*
+ * THE PICK THAT DID NOT ANSWER, while another is driven in its place: Play
+ * says so, with Keep this one and the list (shared relay-rules
+ * missingPickCard), and Which unit lists it grayed with Forget. Null when
+ * the pick is driven, nothing was picked, or one computer answered.
+ */
+let missingPick = null
+/** How many answered the last pick's proof: 0 is no answer, never a computer app too old (rollCallLine). And the drops before it was asked (cutShort). */
+let proofAnswers = null
+let proofFrom = null
 
 /* ------------------------------------------------------------------ */
 /* Signing in                                                          */
@@ -410,6 +437,14 @@ export function remoteCountDue() {
 }
 
 /**
+ * Whether the count of this link was cut short by a drop and is owed
+ * (recountOwed): link.js takes it the moment the computer answers again,
+ * even while the join that took the one cut short is still reading the
+ * unit, since writes wait for it.
+ */
+export const remoteCountOwed = () => recountOwed
+
+/**
  * Whether this account's record says it may have two computers (shared
  * relay-rules mayBeTwo): its last count heard two, or it has a 1.87.47 pick
  * not counted since. link.js keeps 1.87.47's order at join for every other
@@ -651,6 +686,8 @@ async function joinChannel() {
       if (status === 'SUBSCRIBED') {
         if (settled && channel !== chan) logDebug('relay', 'channel back')
         channel = chan
+        /* Back with a count owed: the reads it holds wait for that count from here, before any waiting for the channel goes (keepHeld). */
+        if (settled && recountOwed) keepHeld()
         chan.track({ at: Date.now() }).catch(() => {})
         if (!settled) {
           /* A fresh link, on an account of two with a pick: no read goes to whoever answers first (holdReads). Before anybody hears it is up. */
@@ -664,6 +701,8 @@ async function joinChannel() {
       }
 
       if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        /* A roll call or a proof this went under is cut short: see recountOwed. */
+        drops += 1
         if (channel === chan || !settled) logDebug('relay', `channel ${status.toLowerCase().replace('_', ' ')}`, err?.message)
         if (channel === chan) {
           channel = null
@@ -724,6 +763,10 @@ export async function remoteDisconnect() {
   /* And the next link counts again from the start (remoteCountDue). */
   countTried = false
   countedOnLink = false
+  recountOwed = false
+  proofAnswers = null
+  missingPick = null
+  owedOver()
   failWaiting('Disconnected.')
   announce()
 
@@ -764,6 +807,14 @@ async function takeCensus({
   if (!channel || !isJoined(channel)) return hosts
   const link = session
   countTried = true
+  /* A drop under it from here cuts it short (recountOwed). */
+  const dropsAt = drops
+  let cut = false
+  /* The roll call's own question, kept open to the end of the units' window (a slow pick). */
+  let roll = null
+  /* No proof asked by this count yet (confirmTargeting). */
+  proofAnswers = null
+  proofFrom = null
   /*
    * Reads while it counts: on to the pick already proved, held for this
    * account's pick when its last roll call heard two or more, or as they
@@ -778,6 +829,8 @@ async function takeCensus({
   const known = pickOf()
   /* Held only while every read on this link has waited: once one has gone to nobody in particular, what is on screen is read again anyway (remoteReadsAskedOf). */
   if (!proved && holdsFor(known) && readsOnlyTo(known.name)) holdReads()
+  /* The hold a count cut short kept for this one (oweCount) is this count's from now (keepHeld). */
+  keepHeld()
   readsTo = proved ? chosen : null
   if (!readsAsked) readsAsked = []
   try {
@@ -791,23 +844,33 @@ async function takeCensus({
      * (censusHosts), not from the end of the window.
      */
     let answered = 0
+    /* When each answered, after the question went: a pick heard late is proved over as long (confirmTargeting below). */
+    const heardAfter = new Map()
+    let askedAt = 0
     const heard = (payload) => {
       if (++answered > 1 && session === link) countFree = false
+      const after = Date.now() - askedAt
       if (proved) return
       namesFrom([payload], decode).then(
         ([name]) => {
+          if (!heardAfter.has(name)) heardAfter.set(name, after)
           const held = readsHeld
           const record = pickOf()
-          if (!held || session !== link || !holdsFor(record) || name !== record.name) return
-          if (readsOnlyTo(name)) readsTo = name
+          /* Let go only to be asked of it: where a read has gone to nobody in particular, they wait for the first window, which takes the mix down first. */
+          if (!held || session !== link || !holdsFor(record) || name !== record.name || !readsOnlyTo(name)) return
+          readsTo = name
           held.open()
         },
         () => {}
       )
     }
     // A read every host allows and every host answers differently: its own name,
-    // written into its store by the launcher on that Mac.
-    const answers = await collectAnswers({ path: '/store/config/host.name', windowMs, sleep, heard })
+    // written into its store by the launcher on that Mac. Kept open while the
+    // units are read, for a pick that answers late (below).
+    askedAt = Date.now()
+    roll = shout({ path: '/store/config/host.name', heard })
+    if (await roll.sent) await sleep(windowMs)
+    const answers = roll.answers.slice()
     /* A link that went while it counted: what it heard is not the next link's. */
     if (session !== link) return hosts
     hosts = await namesFrom(answers, decode)
@@ -845,8 +908,41 @@ async function takeCensus({
      * pick that did not answer: they wait for the end of the count, which
      * says where they go.
      */
-    readsTo = hosts.length > 1 && chosen && readsOnlyTo(chosen) ? chosen : null
+    /*
+     * A MIX ON SCREEN. Two or more heard, and a read already answered by
+     * whoever was first: the screen may be holding several computers'
+     * answers. Justin's launch of 22 October 2026 put the MacBook's FM3 in
+     * the header and its scene 7 lit, beside a Pi's "No Fractal device
+     * found" card and blank pedals, for three and a half seconds. Whoever
+     * subscribed (subscribeMixed) is told now, and link.js takes it all down
+     * to Looking… (rig.startClean, header and all), so it is read again
+     * off the one driven once the count has said which. From here on reads
+     * go to the pick by name where it was heard (nothing from before is
+     * filed under it now), and wait for the end of the count where it was not.
+     */
+    const mixed = hosts.length > 1 && !proved && Array.isArray(readsAsked) && readsAsked.includes('')
+    if (mixed) {
+      for (const fn of [...mixedWatchers]) {
+        try {
+          fn()
+        } catch {
+          // The count goes on, whatever the screen made of it.
+        }
+      }
+      if (!chosen) holdReads()
+    }
+    readsTo = hosts.length > 1 && chosen && (mixed || readsOnlyTo(chosen)) ? chosen : null
     if (readsHeld && (hosts.length < 2 || chosen)) readsHeld.open()
+    /*
+     * A SLOW PICK IS STILL THE PICK. One that did not answer inside the first
+     * window, with two or more that did: asked by name while their units are
+     * read, in the same window, and its answer to the roll call itself still
+     * heard until then. Left at the first window, a Pi 3 two seconds slow was
+     * "did not answer", and the taps went to the first computer with a unit:
+     * a switch on a timeout, which nothing else does. One computer heard asks
+     * nothing more.
+     */
+    const slow = hosts.length > 1 && !chosen && !proved && pick && !hosts.includes(pick) ? askAlone(pick, { windowMs, sleep }) : null
     units = hosts.length > 1 ? await readUnits({ windowMs, sleep }) : {}
     if (session !== link) return hosts
     /* The record, in while the units were read: its pick is driven as if it had been in at the first window. */
@@ -857,10 +953,32 @@ async function takeCensus({
       if (!chosen && hosts.includes(pick)) {
         chosen = pick
         chosenWhy = 'pick'
-        readsTo = readsOnlyTo(chosen) ? chosen : null
+        readsTo = mixed || readsOnlyTo(chosen) ? chosen : null
         readsHeld?.open()
       }
     }
+    /* The pick, late to the roll call or answering its name alone while the units were read: it is the pick, and is driven. */
+    if (hosts.length > 1 && !chosen && pick && !hosts.includes(pick)) {
+      const asked = slow ? await slow : { names: [], unit: null }
+      const heardLate = await namesFrom(roll.answers.slice(answers.length), decode)
+      if (session !== link) return hosts
+      if (heardLate.includes(pick) || asked.names.includes(pick)) {
+        hosts = [...hosts, pick]
+        if (asked.unit) units = { ...units, [pick]: asked.unit }
+        chosen = pick
+        chosenWhy = 'pick'
+        readsTo = mixed || readsOnlyTo(chosen) ? chosen : null
+        readsHeld?.open()
+      }
+    }
+    /*
+     * A pick heard after the first window answers that slowly: asked alone
+     * in the ordinary window, its one answer came after it, and a slow pick
+     * driven unproved is a write to every computer. So it is asked over as
+     * long as it took, and a little more, and no longer than three seconds.
+     */
+    const late = chosen && chosenWhy === 'pick' ? heardAfter.get(chosen) ?? 0 : 0
+    const proofMs = late > windowMs ? Math.min(2 * windowMs, late + windowMs / 3) : windowMs
     /*
      * Nobody said which: drive one rather than all of them (firstUnitHost).
      * A pick is never left for another, not even for one with a unit when the
@@ -869,10 +987,28 @@ async function takeCensus({
     if (hosts.length > 1 && !chosen) chosenWhy = 'first'
     if (hosts.length > 1 && !chosen) chosen = firstUnitHost(hosts, units)
     targeted = false
-    if (hosts.length > 1 && chosen) await confirmTargeting({ windowMs, sleep })
+    if (hosts.length > 1 && chosen) await confirmTargeting({ windowMs: proofMs, sleep })
+    /*
+     * CUT SHORT: the channel dropped under it (recountOwed). Questions that
+     * went into the drop were never answered, so what it found is not the
+     * answer: it is not this link's count, and it is taken again when the
+     * channel is back. A drop before the proof was asked (the names, or the
+     * units the first with a unit is chosen by), or under a proof that then
+     * had no answer, or two. Not one that came after the proof's one answer:
+     * that proof is as good as any. On an account with two or more heard, or
+     * whose record says it may have two (a drop can take the second answer
+     * with it); one computer's count is kept as it always was.
+     */
+    if (session === link && cutShort(dropsAt) && (hosts.length > 1 || mayBeTwo(pickOf()))) {
+      cut = true
+      logDebug('link', rollCallLine({ hosts, units, cut: true }))
+      return hosts
+    }
     /* Said once, so a log shows which computer the phone drives and why (rollCallLine). */
     const missing = !proved && pick && !hosts.includes(pick) && (hosts.length > 1 || record?.many === true) ? pick : null
-    if (hosts.length > 1 || missing) logDebug('link', rollCallLine({ hosts, units, chosen, why: chosenWhy, addressed: targeted, missing }))
+    if (hosts.length > 1 || missing) logDebug('link', rollCallLine({ hosts, units, chosen, why: chosenWhy, addressed: targeted, missing, proof: proofAnswers }))
+    /* And on Play, while another is driven in its place (missingPickCard). */
+    if (session === link) missingPick = missing && hosts.length > 1 && chosen && chosen !== missing ? missing : null
     /* Counted on this link; and whether it heard two or more, which the next fresh link goes by (holdsFor, remoteMayBeTwo). */
     if (session === link && hosts.length) {
       countedOnLink = true
@@ -880,15 +1016,97 @@ async function takeCensus({
     }
     return hosts
   } finally {
+    roll?.close()
     /* A link that went while it counted is not this one's to tidy: the next has its own (holdForPick). */
     if (session === link) {
-      readsTo = null
-      rollCallAsked = readsAsked
-      readsAsked = null
-      /* And whatever held reads for it, the join's own hold too, is over: the count has said where they go. */
-      readsHeld?.open()
+      if (cut) oweCount()
+      else {
+        readsTo = null
+        rollCallAsked = readsAsked
+        readsAsked = null
+        /* A count owed is taken: writes go by what it found. */
+        recountOwed = false
+        owedOver()
+        /* And whatever held reads for it, the join's own hold too, is over: the count has said where they go. One cut short has not (oweCount). */
+        readsHeld?.open()
+      }
     }
   }
+}
+
+/*
+ * A COUNT CUT SHORT, OWED (recountOwed). What it heard stays, so writes know
+ * two answered and wait (countDone, owedNow), but nothing is decided by it:
+ * no computer is driven, and none proved. A choice made by it alone (the
+ * first with a unit, from units it may not have finished reading) is no
+ * choice, and the pick is chosen again by the count that is owed, so the
+ * screen is read again for it then (link.js afterCount). Meanwhile reads go
+ * to the pick by name, where the count had heard it and every read so far
+ * went to it; who they went to is still written down, for that count to go
+ * by (remoteReadsAskedOf).
+ *
+ * AND WHERE IT HAD NOT HEARD THE PICK, THEY STAY HELD, on an account whose
+ * reads wait for its pick (holdsFor): the drop took the pick's answer, or
+ * the pick is slow. Let go here, every read made while the link was down or
+ * coming back went to whoever answered first, and the mix the launch no
+ * longer shows (the MacBook's FM3 over a Pi's "No Fractal device found")
+ * came back after the drop. They wait for the count owed, as at a launch:
+ * the pick's answer to it lets them go, asked of it, or its first window
+ * says where they go. Held COUNT_WAIT_MS from here at most, as any hold is.
+ */
+function oweCount() {
+  /* Asked of the pick already (after a mix on screen, or with every read so far its own): it goes on being. */
+  readsTo = chosenWhy === 'pick' && chosen && (readsTo === chosen || readsOnlyTo(chosen)) ? chosen : null
+  chosen = null
+  chosenWhy = null
+  targeted = false
+  rollCallAsked = null
+  countTried = false
+  countedOnLink = false
+  recountOwed = true
+  if (readsTo || !holdsFor(pickOf())) readsHeld?.open()
+  else {
+    const held = holdReads()
+    held.until = Math.max(held.until, Date.now() + COUNT_WAIT_MS)
+    held.kept = true
+  }
+}
+
+/*
+ * AND THE HOLD A COUNT CUT SHORT KEPT RUNS SIX SECONDS FROM THE CHANNEL'S
+ * RETURN, and again from when the count owed begins, as a launch's runs
+ * from its join: the channel can be back long after the drop. Run from the
+ * drop alone, it was over by the time a channel down seven seconds or more
+ * came back, and the reads that had waited for the channel went to whoever
+ * answered first, the MacBook's FM3 in the header over the Pi's "No Fractal
+ * device found".
+ */
+function keepHeld() {
+  if (readsHeld?.kept) readsHeld.until = Math.max(readsHeld.until, Date.now() + COUNT_WAIT_MS)
+}
+
+/** Whether a drop since `from` cut a count (or a proof) short: one before its proof was asked, or under a proof it left with no answer or two. See takeCensus. */
+const cutShort = (from) =>
+  proofFrom === null ? drops !== from || !isJoined(channel) : proofFrom !== from || ((drops !== proofFrom || !isJoined(channel)) && proofAnswers !== 1)
+
+/** Whether a write waits for a count owed: one is, and no computer is proved to be driven alone (see recountOwed). */
+const owedNow = () => recountOwed && !(hosts.length > 1 && chosen && targeted)
+
+/** The gate a write waits on while a count is owed and none has begun. */
+function owedWait() {
+  if (!owedGate) {
+    let go = null
+    const gate = new Promise((open) => (go = open))
+    owedGate = { gate, go }
+  }
+  return owedGate.gate
+}
+
+/** A count has begun, or the link went: whatever waited for one goes on (countDone looks again). */
+function owedOver() {
+  const was = owedGate
+  owedGate = null
+  was?.go()
 }
 
 /** Whether every read on this link so far was asked of `name` (none at all counts): see takeCensus. */
@@ -920,9 +1138,11 @@ function within(promise, ms, value = null) {
  * count, which then says where they go; a first window that hears one
  * computer lets them go as they always went. A read waits no longer than
  * COUNT_WAIT_MS from when it was made, and no hold outlasts COUNT_WAIT_MS
- * from when it was made: a link where no count comes reads as it always did,
- * and what was read that way is counted as asked of nobody, so it is read
- * again once the count has picked (remoteReadsAskedOf).
+ * from when it was made (or, kept by a count a drop cut short, from the
+ * drop or the channel's return: oweCount, keepHeld): a link where no count
+ * comes reads as it always did, and what was read that way is counted as
+ * asked of nobody, so it is read again once the count has picked
+ * (remoteReadsAskedOf).
  *
  * A tap waits the same way on a link where no roll call has finished yet
  * (countDone), and is dropped at its deadline rather than sent to both
@@ -997,7 +1217,16 @@ async function readsWait(deadline) {
   for (;;) {
     const held = readsHeld
     if (!held) return
-    const end = Math.min(held.until, most, Number.isFinite(deadline) ? deadline : Infinity)
+    /*
+     * Six seconds from when it was made, or, under a hold a count cut short
+     * kept (oweCount), to that hold's end: six seconds from the drop, or
+     * from the channel's return (keepHeld). A read
+     * made before the drop had spent its own six on the drop, and let go then
+     * it went to whoever answered first a moment before the pick's answer to
+     * the count owed (a Pi 3 two seconds slow), the other computer's FM3 in
+     * the header over a "No Fractal device found".
+     */
+    const end = Math.min(held.until, held.kept ? held.until : most, Number.isFinite(deadline) ? deadline : Infinity)
     if (Date.now() >= end) return
     let timer = null
     await Promise.race([held.gate, new Promise((go) => (timer = setTimeout(go, end - Date.now())))])
@@ -1048,7 +1277,8 @@ const writesWaitOn = () => (counting && !countFree ? counting : null)
 export function censusHosts(options = {}) {
   /* Only one on this link: a count left running by a link that has gone is nothing to wait for. */
   const before = counting && countingLink === session ? counting : null
-  const free = !before && options?.late === true && !mayBeTwo(pickOf())
+  /* Never for a count owed: the one cut short heard two, or the record says it may have (takeCensus). */
+  const free = !before && options?.late === true && !mayBeTwo(pickOf()) && !recountOwed
   const run = before
     ? before
         .catch(() => {})
@@ -1061,6 +1291,8 @@ export function censusHosts(options = {}) {
   countingLink = session
   countingSince = Date.now()
   countFree = free
+  /* A count owed has begun: what waited for one waits for it now (countDone). */
+  owedOver()
   run.finally(() => {
     if (counting !== run) return
     counting = null
@@ -1094,13 +1326,15 @@ async function countDone(deadline) {
   for (;;) {
     const run = writesWaitOn()
     const held = run ? null : pickHeld(deadline)
-    if (!run && !held) return
+    /* A count cut short by a drop, owed and not begun: waited for as one running is (recountOwed). */
+    const owed = run || held || !owedNow() ? null : owedWait()
+    if (!run && !held && !owed) return
     const most = Math.min(cap, (run ? Math.max(made, countingSince) : made) + COUNT_WAIT_MS)
     const end = held ? Math.min(most, held.until) : most
     const left = end - Date.now()
     if (left <= 0) return
     let timer = null
-    await Promise.race([run ? run.catch(() => {}) : held.gate, new Promise((go) => (timer = setTimeout(go, left)))])
+    await Promise.race([run ? run.catch(() => {}) : held ? held.gate : owed, new Promise((go) => (timer = setTimeout(go, left)))])
     clearTimeout(timer)
   }
 }
@@ -1110,22 +1344,57 @@ const pickHeld = (deadline) => (Number.isFinite(deadline) && !countedOnLink && r
 
 /** Shout one read and keep every answer, rather than the first; `heard` hears each as it comes. */
 async function collectAnswers({ path, host = null, windowMs, sleep, heard = null }) {
-  const id = `census-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-  const answers = []
-  if (heard) answers.heard = heard
-  censuses.set(id, answers)
+  const asked = shout({ path, host, heard })
   try {
-    const payload = { id, method: 'GET', path, body: null }
-    if (host) payload.host = host
-    await channel.send({ type: 'broadcast', event: 'req', payload })
-    await sleep(windowMs)
+    if (await asked.sent) await sleep(windowMs)
   } catch {
     // A question that could not be asked tells us nothing, which is what the
     // empty answer list already says.
   } finally {
-    censuses.delete(id)
+    asked.close()
   }
-  return answers
+  return asked.answers
+}
+
+/**
+ * The same question, kept open until `close()`: every answer to it is kept
+ * meanwhile. `sent` is false for one that could not be asked, which tells
+ * nothing, as the empty list already says.
+ */
+function shout({ path, host = null, heard = null }) {
+  const id = `census-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+  const answers = []
+  if (heard) answers.heard = heard
+  censuses.set(id, answers)
+  const payload = { id, method: 'GET', path, body: null }
+  if (host) payload.host = host
+  let sent
+  try {
+    sent = Promise.resolve(channel.send({ type: 'broadcast', event: 'req', payload })).then(
+      () => true,
+      () => false
+    )
+  } catch {
+    sent = Promise.resolve(false)
+  }
+  return {
+    answers,
+    sent,
+    close: () => {
+      censuses.delete(id)
+      return answers
+    }
+  }
+}
+
+/** A pick not heard in the roll call's first window, asked its name alone, and its unit: see takeCensus. */
+async function askAlone(name, { windowMs, sleep }) {
+  const [named, health, device] = await Promise.all([
+    collectAnswers({ path: '/store/config/host.name', host: name, windowMs, sleep }),
+    collectAnswers({ path: '/healthz', host: name, windowMs, sleep }),
+    collectAnswers({ path: '/device', host: name, windowMs, sleep })
+  ])
+  return { names: await namesFrom(named, decode), unit: await unitFrom(health, decode, device) }
 }
 
 /**
@@ -1152,6 +1421,29 @@ async function readUnits({ windowMs, sleep }) {
 }
 
 /**
+ * WHICH UNIT EACH COMPUTER HAS, ASKED AGAIN: the roll call's own addressed
+ * /healthz and /device to each, and nothing else (readUnits). For Play's card
+ * that says the unit is on another computer (shared relay-rules
+ * unitElsewhere): asked when it comes up and every ELSEWHERE_WATCH_MS while
+ * it is up (link.js watchUnits), so a unit plugged in, or taken away, on any
+ * of them is said within seconds. Reads only, and no tap waits for them;
+ * not while a roll call or a proof is running, which reads its own; and
+ * only with two or more computers, so one computer is never asked anything
+ * more. A computer that does not answer keeps what it said last.
+ */
+export async function refreshUnits({ windowMs = 1500, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  if (hosts.length < 2 || !channel || !isJoined(channel) || counting) return units
+  const link = session
+  const asked = hosts
+  const found = await readUnits({ windowMs, sleep })
+  if (session !== link || counting || hosts !== asked) return units
+  const next = { ...units, ...found }
+  /* The same object while nothing changed, so nobody redraws for it. */
+  if (JSON.stringify(next) !== JSON.stringify(units)) units = next
+  return units
+}
+
+/**
  * Prove that addressing a request to one Mac actually leaves the others out.
  *
  * The host end of this only exists in a new enough ForgeFX; an older one has
@@ -1162,12 +1454,15 @@ async function readUnits({ windowMs, sleep }) {
  */
 async function confirmTargeting({ windowMs, sleep }) {
   if (!chosen) return false
+  /* When it was asked, for whether a drop cut it short (cutShort). */
+  proofFrom = drops
   const answers = await collectAnswers({
     path: '/store/config/host.name',
     host: chosen,
     windowMs,
     sleep
   })
+  proofAnswers = answers.length
   targeted = answers.length === 1
   return targeted
 }
@@ -1201,6 +1496,42 @@ export async function pickHost(
   return whileProving(provePick(name, before, { windowMs, sleep }))
 }
 
+/** The pick that did not answer while another is driven in its place, or null: see missingPick. */
+export const remoteMissingPick = () => missingPick
+
+/**
+ * KEEP THIS ONE, on Play's card for a pick that never answers: the computer
+ * driven in its place becomes the pick, and the card is not shown again. It
+ * was proved by the roll call that drove it, so nothing is asked of it.
+ */
+export function keepDriven() {
+  if (!missingPick || !chosen || hosts.length < 2) return false
+  missingPick = null
+  chosenWhy = 'pick'
+  rememberHost(chosen).catch(() => {})
+  return true
+}
+
+/**
+ * FORGET, beside a pick that does not answer under Which unit: nothing is
+ * picked from now on, so the next roll call drives the first computer with
+ * a unit, as with nothing ever picked (firstUnitHost), and says nothing.
+ */
+export function forgetMissingPick() {
+  const name = missingPick
+  if (!name) return false
+  missingPick = null
+  dropName(name).catch(() => {})
+  return true
+}
+
+/** Told when a roll call's first window heard two or more after a read went to whoever answered first: see takeCensus. */
+const mixedWatchers = new Set()
+export function subscribeMixed(fn) {
+  mixedWatchers.add(fn)
+  return () => mixedWatchers.delete(fn)
+}
+
 /** Told when Which unit moves to another computer, before a read is asked of it: see pickHost. */
 const switchWatchers = new Set()
 export function subscribeSwitching(fn) {
@@ -1229,10 +1560,30 @@ async function provePick(name, before, { windowMs, sleep }) {
   chosen = name
   chosenWhy = 'pick'
   targeted = false
+  /* Picked: the one that did not answer is no longer the pick. */
+  missingPick = null
   if (hosts.length > 1) readsTo = name
   /* Written down, not waited for: a disk that does not answer never holds the proof, nor every write behind it. */
   rememberHost(name).catch(() => {})
+  const link = session
+  const dropsAt = drops
+  proofFrom = null
   if (hosts.length > 1) await confirmTargeting({ windowMs, sleep })
+  /*
+   * A PROOF THE CHANNEL DROPPED UNDER PROVES NOTHING, unless its one answer
+   * was in: its question went into the drop, and no answer is not a
+   * computer app too old to be asked alone. Taken again with the count,
+   * when the channel is back (see recountOwed): the pick is this one,
+   * written down, and it stays the one reads are asked of meanwhile. A
+   * write waits for it (owedNow).
+   */
+  if (hosts.length > 1 && session === link && cutShort(dropsAt)) {
+    logDebug('link', `the link dropped while ${name}, picked under Which unit, was asked alone: the computers are counted again when it is back`)
+    targeted = false
+    countTried = false
+    countedOnLink = false
+    recountOwed = true
+  }
   return targeted
 }
 
@@ -1248,11 +1599,13 @@ function whileProving(run) {
   countingLink = session
   countingSince = Date.now()
   countFree = false
+  owedOver()
   run
     .finally(() => {
       if (counting !== run) return
       counting = null
-      readsTo = null
+      /* A proof cut short leaves reads with the pick, until the count owed (provePick). */
+      if (!recountOwed) readsTo = null
     })
     .catch(() => {})
   return run
@@ -1343,6 +1696,17 @@ const rememberHost = async (name) => {
   pickRecord = record
   const kept = await loadBook()
   kept.accounts[uid] = { name, many: record.many }
+  await saveBook()
+}
+
+/** The account's pick let go, when it is still `name`: what it last counted is kept. */
+async function dropName(name) {
+  const uid = userId
+  const record = pickOf()
+  if (!uid || record?.name !== name) return
+  pickRecord = { uid, name: null, many: record.many }
+  const kept = await loadBook()
+  kept.accounts[uid] = { name: null, many: record.many }
   await saveBook()
 }
 
@@ -1471,7 +1835,7 @@ export async function remoteRequest(path, options = {}) {
    * there to stop. A count that has finished is never mistaken for one still
    * running: censusHosts lets go of `counting` before countDone's wait ends.
    */
-  if (Number.isFinite(options.deadline) && ((method !== 'GET' && (writesWaitOn() || pickHeld(options.deadline))) || pastDeadline(options.deadline, Date.now()))) {
+  if (Number.isFinite(options.deadline) && ((method !== 'GET' && (writesWaitOn() || pickHeld(options.deadline) || owedNow())) || pastDeadline(options.deadline, Date.now()))) {
     logDebug('wire', `${method} ${path} not sent — past its deadline while the computers were counted`)
     /* With a newer press of its control held too, that one's business: see requestOnce's end. */
     const over = presses.overtaken(path, options.body, options.deadline)
@@ -1483,7 +1847,8 @@ export async function remoteRequest(path, options = {}) {
    * pick's proof that is still running, one that hangs, is refused rather
    * than sent to both units.
    */
-  if (method !== 'GET' && writesWaitOn() && hosts.length > 1 && !(chosen && targeted)) {
+  /* Nor while a count cut short by a drop is owed and has not been taken: see recountOwed. */
+  if (method !== 'GET' && ((writesWaitOn() && hosts.length > 1 && !(chosen && targeted)) || owedNow())) {
     logDebug('wire', `${method} ${path} not sent — two computers answer, and the one driven is not proved yet`)
     throw notSentError({ late: linkLooksUp() })
   }
@@ -1770,9 +2135,18 @@ async function relaySend(method, path, options, trip = { went: false }) {
    * The deadline is not in it. Computer app 1.87.4 reads these four fields
    * and the host and nothing else, and has no clock in common with this
    * phone to read a deadline by.
+   *
+   * AND A PROOF WITH NO ANSWER IS STILL ASKED BY NAME. A computer app too
+   * old to know names answers every name, so it gives the proof two
+   * answers; none is an answer lost or a computer slower than the window
+   * (Justin's Pi 3, its name asked alone answered in 2.2 s against a proof
+   * of 2.1). Sent to nobody in particular, every tap after it went to all
+   * three computers, the FM3 and the AM4 changing scene together. Asked of
+   * the one driven by name, it reaches that one alone, or that one and an
+   * app too old to tell, which nothing sent can keep out.
    */
   const ask = { id, method, path, body: options.body ?? null }
-  if (hosts.length > 1 && chosen && targeted) ask.host = chosen
+  if (hosts.length > 1 && chosen && (targeted || proofAnswers === 0)) ask.host = chosen
   /* A read while the pick is still being proved: asked of it already (holdReads). A write never is. */
   else if (method === 'GET' && readsTo) ask.host = readsTo
   /* Who the roll call's reads were asked of, for link.js (remoteReadsAskedOf). */

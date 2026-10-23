@@ -76,6 +76,8 @@ export default function Press({
   tone = 'plain',
   on = false,
   disabled = false,
+  /* Working on its press (ComputerCard's Switching…): said busy to a screen reader, and drawn in full. */
+  busy = false,
   grow = false,
   height = TAP,
   /* The label's size, for the one button whose label is the headline: the
@@ -102,7 +104,7 @@ export default function Press({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ selected: on, disabled }}
+      accessibilityState={{ selected: on, disabled, busy }}
       accessibilityLabel={accessibilityLabel || [caption, label, sub].filter(Boolean).join(', ')}
       accessibilityHint={accessibilityHint}
       disabled={disabled}

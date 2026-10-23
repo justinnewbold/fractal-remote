@@ -20,7 +20,7 @@ import { logDebug } from './debugLog'
 import { bluetoothOn } from './bleSwitch'
 import { pokeBluetooth, startBluetoothLink, stopBluetoothLink } from './bleLink'
 import { setLinkAway, setLinkDown } from './tapGate'
-import { LINK_DOWN_HOLD_MS, linkDownAt, METERS_OFF_PATH, metersOffBody, metersRefused, timeToQuietMeters } from './relay-rules'
+import { ELSEWHERE_WATCH_MS, LINK_DOWN_HOLD_MS, linkDownAt, METERS_OFF_PATH, metersOffBody, metersRefused, timeToQuietMeters } from './relay-rules'
 
 import {
   censusHosts,
@@ -32,16 +32,22 @@ import {
   remoteConnect,
   remoteDisconnect,
   remoteCountDue,
+  remoteCountOwed,
   remoteMayBeTwo,
+  remoteMissingPick,
   remoteHostSeen,
   remoteHosts,
   remoteReadsAskedOf,
   remoteRequest,
   remoteUnits,
   pickHost,
+  refreshUnits,
+  keepDriven,
+  forgetMissingPick,
   restoreSession,
   subscribeHostSeen,
   subscribeSwitching,
+  subscribeMixed,
   subscribeRemoteState
 } from './relay'
 import { computerChanged, listen, refreshAll, reset as resetRig, startClean, unitReadSince, watchUnit, stopWatching } from './rig'
@@ -85,6 +91,8 @@ const initial = {
   hosts: [],
   units: {},
   chosenHost: null,
+  /* A pick under Which unit that did not answer while another is driven in its place (relay.js remoteMissingPick): Play says so. */
+  missingPick: null,
   clash: null,
   /*
    * WHETHER THE LINK IS DOWN, as Play says it: NOT CONNECTED over dimmed
@@ -198,6 +206,7 @@ const set = (patch) => {
     next.hostVersion === state.hostVersion &&
     next.clash === state.clash &&
     next.chosenHost === state.chosenHost &&
+    next.missingPick === state.missingPick &&
     next.hosts.length === state.hosts.length &&
     next.units === state.units
   ) {
@@ -504,6 +513,8 @@ async function joinOnce(run) {
   }
   if (!running) return
   listen()
+  /* When this link came up: a count owed on it goes by every read since (countIfDue). */
+  joinedAt = Date.now()
   refresh()
 
   /* Not answered yet: the roll call is taken when it does (countIfDue, from the loop and from the first answer). */
@@ -560,13 +571,20 @@ async function countHosts() {
   await afterCount(remoteChosenHost(), censusHosts())
 }
 
-/** What a roll call found, put to use: `run` is the count, `was` the computer driven as it began. */
-async function afterCount(was, run) {
-  const began = Date.now()
+/** When the link now up was joined: see countIfDue. */
+let joinedAt = 0
+
+/** What a roll call found, put to use: `run` is the count, `was` the computer driven as it began, `began` when the reads it goes by began. */
+async function afterCount(was, run, began = Date.now()) {
   try {
     let before = was
     await run
     heardHosts()
+    /* Cut short by a drop, and owed: taken again now if the computer is answering, else when it does (countIfDue), asked at once (askIfOwed). Nothing it found is put to use. */
+    if (remoteCountOwed()) {
+      askIfOwed()
+      return countIfDue()
+    }
     /* The roll call picked a computer: that one is told about the level readings, whatever answered first before (see metersAgain). */
     if (remoteChosenHost() !== before) {
       metersAgain()
@@ -599,6 +617,20 @@ async function afterCount(was, run) {
 }
 
 /*
+ * A COUNT OWED (relay.js recountOwed) IS ASKED FOR AT ONCE, on a channel that
+ * is up with nothing heard on it yet, whatever turn of the loop is out: the
+ * reads that would have heard the computer are held for that count, the
+ * join's own among them, and the count is taken on the computer's first
+ * answer (countIfDue). Both moments: the channel coming back with one owed,
+ * and a count coming owed on a channel already back (afterCount), where the
+ * turn out is the join, waiting on those held reads, and Play said NOT
+ * CONNECTED until they ran out. /healthz is never held.
+ */
+function askIfOwed() {
+  if (remoteActive() && !remoteHostSeen() && remoteCountOwed()) hostResponds()
+}
+
+/*
  * THE ROLL CALL IS TAKEN WHEN THE COMPUTER FIRST ANSWERS, whenever that is.
  * Join takes it once the first /healthz is answered; a join whose first
  * /healthz went unanswered (the Pis still starting) returned without one,
@@ -612,8 +644,17 @@ async function afterCount(was, run) {
  * demo or over Bluetooth, and never inside join, which takes its own.
  */
 function countIfDue() {
-  if (!running || joinBusy || isDemo() || bluetoothOn() || !remoteHostSeen() || !remoteCountDue()) return
-  afterCount(remoteChosenHost(), censusHosts({ late: true }))
+  /*
+   * AND A COUNT CUT SHORT BY A DROP IS TAKEN AGAIN the moment the computer
+   * answers on the channel that came back (relay.js recountOwed), the
+   * join that took it still reading the unit or not: every write waits for
+   * it. What it goes by is every read since the link came up, which the one
+   * cut short kept asking of the pick: a unit read off it then is not read
+   * again (afterCount).
+   */
+  const owed = remoteCountOwed()
+  if (!running || (joinBusy && !owed) || isDemo() || bluetoothOn() || !remoteHostSeen() || !remoteCountDue()) return
+  afterCount(remoteChosenHost(), censusHosts({ late: true }), owed ? joinedAt : Date.now())
 }
 
 /*
@@ -629,7 +670,53 @@ function switchedComputer() {
 }
 
 /** What the roll call found, into the link's state, for Settings and Which unit. */
-const heardHosts = () => set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+const heardHosts = () =>
+  set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), missingPick: remoteMissingPick(), clash: hostConflict() })
+
+/*
+ * THE UNITS ASKED AGAIN WHILE PLAY SAYS THE UNIT IS ON ANOTHER COMPUTER
+ * (Stage's card, shared relay-rules unitElsewhere): at once, and every
+ * ELSEWHERE_WATCH_MS until the card goes, so a unit plugged in or taken away
+ * on any computer is said within seconds. Reads only (relay.js
+ * refreshUnits). The driven computer's own unit coming back is the unit
+ * watch's to find (rig.watchUnit), and the card goes with it. Returns the
+ * way to stop.
+ */
+export function watchUnits() {
+  let stopped = false
+  let timer = null
+  const again = async () => {
+    timer = null
+    if (stopped) return
+    try {
+      await refreshUnits()
+    } catch {
+      // Asked again in a moment.
+    }
+    if (stopped) return
+    heardHosts()
+    timer = setTimeout(again, ELSEWHERE_WATCH_MS)
+  }
+  again()
+  return () => {
+    stopped = true
+    if (timer) clearTimeout(timer)
+  }
+}
+
+/** Keep this one, on Play's card for a pick that never answers: the computer driven becomes the pick (relay.js keepDriven). */
+export function keepThisOne() {
+  const kept = keepDriven()
+  heardHosts()
+  return kept
+}
+
+/** Forget, beside a pick that does not answer under Which unit (relay.js forgetMissingPick). */
+export function forgetMissing() {
+  const gone = forgetMissingPick()
+  heardHosts()
+  return gone
+}
 
 /**
  * Drive this unit and no other: the Which unit buttons.
@@ -650,12 +737,17 @@ const heardHosts = () => set({ hosts: remoteHosts(), units: remoteUnits(), chose
  * of the new one and filed under the unit on screen, the old one's. Only a
  * computer actually switched to starts clean: a tap that found nothing to
  * switch (the name not listed) leaves the screen as it is.
+ *
+ * A proof the link dropped under, its answer lost, proved nothing: the
+ * computers are counted again (relay.js provePick), now if the computer is
+ * answering and as soon as it does if not (countIfDue).
  */
 export async function chooseHost(name) {
   const ok = await pickHost(name)
   const moved = switchOwed
   switchOwed = false
   heardHosts()
+  if (remoteCountOwed()) countIfDue()
   metersAgain()
   quietMeters()
   if (moved) startClean()
@@ -867,6 +959,8 @@ export function startLink() {
       refresh()
       /* Back, and nothing heard on it yet: ask now rather than at the next turn. See doubt. */
       if (up && !remoteHostSeen()) doubt()
+      /* And with a count owed, asked at once whatever turn is out (askIfOwed). */
+      if (up) askIfOwed()
     }),
     subscribeHostSeen((seen) => {
       if (!seen) metersAgain()
@@ -878,6 +972,15 @@ export function startLink() {
     }),
     /* Which unit moving to another computer, before a read is asked of it (switchedComputer). */
     subscribeSwitching(switchedComputer),
+    /*
+     * A mix of computers' answers on screen (relay.js takeCensus): the header,
+     * the card and the preset with the rest, so Play says Looking… until the
+     * one driven is read, and nothing on its way from before is filed.
+     */
+    subscribeMixed(() => {
+      computerChanged()
+      startClean({ header: true })
+    }),
     AppState.addEventListener('change', (status) => {
       /*
        * Said in the log, because without it a paste reads as a link that

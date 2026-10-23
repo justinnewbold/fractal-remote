@@ -396,6 +396,14 @@ async function linkOnABench() {
       export const remoteReadsAskedOf = () => bench.askedOf ?? null
       /* Whether a roll call is due (relay.js remoteCountDue): \`bench.countDue\`, false unless a test says. */
       export const remoteCountDue = () => (typeof bench.countDue === 'function' ? bench.countDue() : bench.countDue === true)
+      /* Whether a count cut short by a drop is owed (relay.js recountOwed): \`bench.countOwed\`, false unless a test says. */
+      export const remoteCountOwed = () => bench.countOwed === true
+      /* A pick that did not answer while another is driven (relay.js remoteMissingPick): \`bench.missing\`; Keep this one and Forget clear it. */
+      export const remoteMissingPick = () => bench.missing ?? null
+      export const keepDriven = () => { const had = !!bench.missing; bench.missing = null; bench.kept = (bench.kept || 0) + 1; return had }
+      /* Which unit each computer has, asked again (relay.js refreshUnits): counted in \`bench.unitsAsked\`. */
+      export const refreshUnits = async () => { bench.unitsAsked = (bench.unitsAsked || 0) + 1; return bench.units || {} }
+      export const forgetMissingPick = () => { const had = !!bench.missing; bench.missing = null; bench.forgot = (bench.forgot || 0) + 1; return had }
       /* Whether the account's record says it may have two (relay.js remoteMayBeTwo): \`bench.many\` true, which a test says. */
       export const remoteMayBeTwo = () => bench.many === true
       /* Which unit (relay.js pickHost): \`bench.pick\` runs inside it; \`bench.switched(name)\` tells link.js it moved, as relay.js does before the proof. */
@@ -403,6 +411,10 @@ async function linkOnABench() {
       const switchWatchers = new Set()
       export const subscribeSwitching = (fn) => (switchWatchers.add(fn), () => switchWatchers.delete(fn))
       bench.switched = (name) => [...switchWatchers].forEach((fn) => fn(name))
+      /* A mix of computers' answers on screen (relay.js subscribeMixed): \`bench.mixed()\` tells link.js. */
+      const mixedWatchers = new Set()
+      export const subscribeMixed = (fn) => (mixedWatchers.add(fn), () => mixedWatchers.delete(fn))
+      bench.mixed = () => [...mixedWatchers].forEach((fn) => fn())
       export const restoreSession = async () => 'u1'
       /* A computer older than 7 September refuses the level-readings route (refuseMeters); one that never answers holds it (holdMeters). */
       export async function remoteRequest(path, options = {}) {
@@ -751,9 +763,15 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       export const remoteChosenHost = () => null
       export const remoteReadsAskedOf = () => null
       export const remoteCountDue = () => (typeof bench.countDue === 'function' ? bench.countDue() : false)
+      export const remoteCountOwed = () => bench.countOwed === true
+      export const remoteMissingPick = () => bench.missing ?? null
+      export const keepDriven = () => { const had = !!bench.missing; bench.missing = null; return had }
+      export const refreshUnits = async () => ({})
+      export const forgetMissingPick = () => { const had = !!bench.missing; bench.missing = null; return had }
       /* Which unit (remote.js pickHost): \`bench.pick\` runs inside it. */
       export const pickHost = async (name) => (bench.pick ? bench.pick(name) : false)
       export const subscribeSwitching = () => () => {}
+      export const subscribeMixed = () => () => {}
     `,
     /* The unit store, which a computer change starts clean (deviceState.computerChanged): counted in \`bench.changed\`. */
     'deviceState.mjs': "import { bench } from './bench.mjs'\nexport const computerChanged = () => { bench.changed = (bench.changed || 0) + 1 }\n"
@@ -2062,6 +2080,270 @@ export function run(test) {
     assert.deepEqual(heard, ['raspberry pi 3'], `the scene was carried out by ${heard.join(' and ')}\n${log}`)
     assert.equal(s.link.linkState().chosenHost, 'raspberry pi 3')
     assert.equal(s.rig.getState().deviceName, 'AM4', log)
+  })
+
+  /*
+   * And with the app on screen, the channel joined again by realtime-js
+   * itself (the same channel, so the link never ends): Justin's three
+   * computers, the AM4's Pi picked. The count the drop cut short was kept
+   * as the link's one count, its proof unanswered and logged as a computer
+   * app too old, and from then on every read went to whoever answered first
+   * (the header FM3 over the AM4) and a scene to all three computers. The
+   * bench of the join review: ONSCREEN=1 WRITE=1 dropmid.mjs 2000 30000 2000.
+   */
+  test('phone: three computers, the channel lost under the launch’s roll call with the app on screen and joined again by itself: counted again, and a scene reaches the pick alone', async () => {
+    const s = await stackOnABench({ pick: JSON.stringify({ accounts: { u1: { name: 'raspberry pi 3', many: true } } }) })
+    s.bench.computers = [{ ...FM3_MAC }, { name: 'raspberry pi 5', unit: null, lag: () => 170 }, { ...AM4_PI }]
+    s.link.startLink()
+    await s.clock.advance(2000)
+    loseSocket(s)
+    s.clock.setTimeout(() => rejoinSocket(s), 2000)
+    await s.clock.advance(28000)
+    const log = s.lines().join('\n')
+    assert.equal(s.link.linkState().link, 'connected', log)
+    assert.equal(s.bench.chans.length, 1, `the bench joined a second channel: this does not test realtime-js's own rejoin\n${log}`)
+    assert.match(log, /the link dropped before the count was done: counted again when the link is back/, log)
+    assert.match(log, /three computers answered: MacBook Pro SG 566 \(FM3\), raspberry pi 5 \(no unit plugged in\), raspberry pi 3 \(AM4\); driving raspberry pi 3, the one picked under Which unit, addressed/, log)
+    assert.ok(!/too old to be asked alone/.test(log), `a proof lost to the drop was logged as an old computer app\n${log}`)
+    /* Every read since the link came up was asked of the pick, the drop and the count after it included: the header is the AM4's. */
+    for (const c of s.bench.computers.filter((x) => x.name !== 'raspberry pi 3')) {
+      const units = (c.heard || []).filter((h) => !['/healthz', '/store/config/host.name', '/telemetry/meters', '/device'].includes(h.path))
+      assert.deepEqual(units.map((h) => h.path), [], `${c.name} was asked the unit's reads\n${log}`)
+    }
+    assert.equal(s.rig.getState().deviceName, 'AM4', log)
+    const before = s.bench.computers.map((c) => (c.heard || []).length)
+    const wrote = s.device.setScene(2).then(
+      () => null,
+      (e) => e
+    )
+    await s.clock.advance(10000)
+    assert.equal(await wrote, null, `the scene was refused\n${log}`)
+    const heard = s.bench.computers.filter((c, i) => (c.heard || []).slice(before[i]).some((h) => h.path === '/scene')).map((c) => c.name)
+    assert.deepEqual(heard, ['raspberry pi 3'], `the scene was carried out by ${heard.join(' and ')}\n${log}`)
+  })
+
+  /*
+   * The same drop, early enough to take the pick's own answer to the roll
+   * call: the count it cut short had not heard the pick, so it let the reads
+   * go, and every read made while the link was down or coming back went to
+   * whoever answered first. The MacBook's FM3 went up in the header over the
+   * Pi 5's "No Fractal device found", the mix the launch no longer shows,
+   * until the count owed took it down. Now they wait for that count, and it
+   * is taken as the channel is back: the reads that would have heard the
+   * computer are the ones held, so /healthz is asked at once.
+   */
+  test('phone: three computers, the channel lost under the roll call before the pick answered: no read reaches another computer, the header is never another unit, and the count owed is taken as the channel is back', async () => {
+    const s = await stackOnABench({ pick: JSON.stringify({ accounts: { u1: { name: 'raspberry pi 3', many: true } } }) })
+    s.bench.computers = [{ ...FM3_MAC }, { name: 'raspberry pi 5', unit: null, lag: () => 170 }, { ...AM4_PI }]
+    s.link.startLink()
+    await s.clock.advance(800)
+    const lost = s.clock.now()
+    loseSocket(s)
+    s.clock.setTimeout(() => rejoinSocket(s), 2000)
+    const headers = []
+    let driven = null
+    for (let i = 0; i < 200; i++) {
+      await s.clock.advance(50)
+      const named = s.rig.getState().deviceName
+      if (named && headers[headers.length - 1] !== named) headers.push(named)
+      if (!driven && s.link.linkState().chosenHost === 'raspberry pi 3') driven = s.clock.now() - lost
+    }
+    const log = s.lines().join('\n')
+    assert.match(log, /two computers answered: MacBook Pro SG 566 \(unit not known\), raspberry pi 5 \(unit not known\); the link dropped before the count was done/, `the drop did not take the pick's answer: this does not test it\n${log}`)
+    assert.deepEqual(headers, ['AM4'], `another computer's unit went up in the header\n${log}`)
+    for (const c of s.bench.computers.filter((x) => x.name !== 'raspberry pi 3')) {
+      const reads = (c.heard || []).filter((h) => h.at >= lost && !h.host && !['/healthz', '/store/config/host.name', '/telemetry/meters'].includes(h.path))
+      assert.deepEqual(reads.map((h) => h.path), [], `${c.name} answered the unit's reads after the drop\n${log}`)
+    }
+    assert.ok(driven !== null && driven < 7000, `the count owed was driven ${driven} ms after the drop: more than its own four and a half seconds after the channel was back\n${log}`)
+  })
+
+  /*
+   * And a count cut short that only comes owed once the channel is back:
+   * the pick renamed (on no computer now), a short drop under the launch's
+   * roll call, the channel back in 0.3 s and the count ending owed seconds
+   * later. Nothing asked whether the computer was there: the turn out was
+   * the join, stuck on reads held for the count owed, and /healthz went only
+   * when that hold ran out, so Play said NOT CONNECTED and dropped every tap
+   * until about 11 s from launch (5.25 s in 1.87.50). The count coming owed
+   * asks it at once.
+   */
+  test('phone: three computers, a count that comes owed after the channel is back asks for the computer at once, and Play is connected as soon as in 1.87.50', async () => {
+    const s = await stackOnABench({ pick: JSON.stringify({ accounts: { u1: { name: 'fractalpi', many: true } } }) })
+    s.bench.computers = [{ ...FM3_MAC }, { name: 'raspberry pi 5', unit: null, lag: () => 170 }, { ...AM4_PI }]
+    s.link.startLink()
+    await s.clock.advance(1600)
+    loseSocket(s)
+    s.clock.setTimeout(() => rejoinSocket(s), 300)
+    await s.clock.advance(300)
+    const back = s.clock.now()
+    let up = null
+    for (let i = 0; i < 300 && up === null; i++) {
+      await s.clock.advance(50)
+      if (s.link.linkState().link === 'connected') up = s.clock.now() - back
+    }
+    const log = s.lines().join('\n')
+    assert.match(log, /the link dropped before the count was done: counted again when the link is back/, `the drop did not cut the count short: this does not test it\n${log}`)
+    assert.ok(up !== null && up <= 3500, `Play was connected ${up} ms after the channel was back (1.87.50: 3350)\n${log}`)
+  })
+
+  /*
+   * Justin's screen of 22 October 2026: the pick, raspberry pi 3, with
+   * nothing plugged in, driven at every launch, and the raw "No Fractal
+   * device found" card on Play with nothing saying the FM3 was on the
+   * MacBook. Now the card says so, the button is Which unit's own pick, and
+   * nothing moves until it is pressed.
+   */
+  test('phone: the pick with no unit, the FM3 on another computer: Play says where it is, nothing moves until the button, and the button is a proved pick', async () => {
+    const s = await stackOnABench({ pick: JSON.stringify({ accounts: { u1: { name: 'raspberry pi 3', many: true } } }) })
+    const r = await import('../shared/relay-rules.mjs')
+    s.bench.computers = [{ ...FM3_MAC }, { name: 'raspberry pi 5', unit: null, lag: () => 170 }, { name: 'raspberry pi 3', unit: null, lag: () => 320 }]
+    s.link.startLink()
+    await s.clock.advance(12000)
+    const log = () => s.lines().join('\n')
+    const card = () => r.unitElsewhereCard({ hosts: s.link.linkState().hosts, units: s.link.linkState().units, chosen: s.link.linkState().chosenHost, unitState: s.rig.getState().unit })
+    assert.equal(s.link.linkState().chosenHost, 'raspberry pi 3', log())
+    assert.equal(s.rig.getState().unit, 'missing', log())
+    assert.equal(card()?.words, 'raspberry pi 3 has no unit plugged in. Your FM3 is on MacBook Pro SG 566.', log())
+    assert.deepEqual(card().buttons.map((b) => b.label), ['Use the FM3 on MacBook Pro SG 566'])
+    /* Never a switch on its own, however long the card is up. */
+    await s.clock.advance(30000)
+    assert.equal(s.link.linkState().chosenHost, 'raspberry pi 3', 'the phone moved to the computer with the unit by itself')
+    const mac = s.bench.computers[0]
+    assert.ok(!(mac.heard || []).some((h) => h.path === '/device/detect' || h.path === '/preset'), 'the MacBook was asked the unit’s reads before the button')
+    /* The button: Which unit's own pick. A scene tapped during its proof waits for it and reaches the MacBook alone. */
+    const before = s.bench.computers.map((c) => (c.heard || []).length)
+    const picked = s.link.chooseHost(card().buttons[0].name)
+    await s.clock.advance(200)
+    const wrote = s.device.setScene(2).then(
+      () => null,
+      (e) => e
+    )
+    await s.clock.advance(12000)
+    assert.equal(await picked, true, log())
+    assert.equal(await wrote, null, log())
+    const heard = s.bench.computers.filter((c, i) => (c.heard || []).slice(before[i]).some((h) => h.path === '/scene' && h.host)).map((c) => c.name)
+    assert.deepEqual(heard, ['MacBook Pro SG 566'], `the scene was carried out by ${heard.join(' and ')}\n${log()}`)
+    assert.ok(!s.bench.computers.some((c, i) => (c.heard || []).slice(before[i]).some((h) => h.path === '/scene' && !h.host)), 'a scene went asked of nobody during the proof')
+    assert.equal(s.link.linkState().chosenHost, 'MacBook Pro SG 566')
+    assert.equal(s.rig.getState().deviceName, 'FM3', log())
+    assert.equal(card(), null, 'the card stayed up over the FM3')
+  })
+
+  /*
+   * NEVER ONE COMPUTER'S UNIT IN THE HEADER OVER ANOTHER'S CARD. Justin's
+   * screenshot: the MacBook's FM3 in the header, its scene 7 lit, a Pi's "No
+   * Fractal device found" card and blank pedals, three and a half seconds
+   * of it, on the launch whose record held nothing (the 1.87.47 pick never
+   * counted since). Now the roll call's first window takes that down to
+   * Looking… and the screen waits for the one driven; and with a record
+   * that holds, it never appears at all.
+   */
+  test('phone: three computers at launch, Play shows a mix of two computers no longer than the roll call’s first window, then Looking… until the one driven answers', async () => {
+    for (const pick of ['raspberry pi 3', JSON.stringify({ accounts: { u1: { name: 'raspberry pi 3', many: true } } })]) {
+      const s = await stackOnABench({ pick })
+      const dump = (p) => /^\/preset\/(blocks|grid)$/.test(p.path)
+      s.bench.computers = [
+        { name: 'MacBook Pro SG 566', unit: 'FM3', lag: (p) => (dump(p) ? 750 : 150) },
+        { name: 'raspberry pi 5', unit: null, lag: () => 170 },
+        { name: 'raspberry pi 3', unit: null, lag: () => 320 }
+      ]
+      const t0 = s.clock.now()
+      /* Play opening as the launch gate lets go: its own reload (Stage.js reload({ arriving: true })). */
+      let mounted = false
+      s.link.subscribeLink((st) => {
+        if (mounted || st.link !== 'connected') return
+        mounted = true
+        s.clock.setTimeout(() => s.rig.arrivedCurrent().then((cur) => (cur ? null : s.rig.refreshAll())).catch(() => {}), 150)
+      })
+      s.link.startLink()
+      const seen = []
+      for (let i = 0; i < 40; i++) {
+        await s.clock.advance(250)
+        const r = s.rig.getState()
+        seen.push({ at: s.clock.now() - t0, header: r.deviceName, unit: r.unit, card: r.error ? String(r.error) : '', driving: s.link.linkState().chosenHost })
+      }
+      const log = `${seen.map((x) => `+${x.at} ${x.header || 'Looking…'} ${x.unit} ${x.card.slice(0, 20)} ${x.driving || ''}`).join('\n')}\n${s.lines().join('\n')}`
+      /* The roll call began when the computer answered, and its first window is a second and a half. */
+      const counted = s.lines().findIndex((l) => /no-answer → connected/.test(l))
+      assert.ok(counted !== -1, log)
+      const mixed = seen.filter((x) => x.header === 'FM3' && /No Fractal device found/.test(x.card))
+      const legacy = pick === 'raspberry pi 3'
+      if (!legacy) assert.deepEqual(mixed, [], `a record that holds showed the FM3 over a Pi's card\n${log}`)
+      else assert.ok(mixed.every((x) => x.at <= 2250), `the FM3 stayed in the header over a Pi's card past the first window\n${log}`)
+      /* Never the FM3 in the header once the count has said which: Looking…, then the one driven, which has none. */
+      assert.ok(!seen.some((x) => x.at > 2250 && x.header === 'FM3'), `the FM3 was in the header while another computer was driven\n${log}`)
+      const end = seen.at(-1)
+      assert.equal(end.driving, 'raspberry pi 3', log)
+      assert.equal(end.unit, 'missing', log)
+    }
+  })
+
+  test('phone: a clean start for a mix on screen takes the header, the card and the preset with it; one for another computer leaves them', async () => {
+    const s = await stackOnABench()
+    const pedals = [{ slug: 'drv', name: 'Drive 1', effectId: 133, bypassed: false }]
+    s.rig.set({ deviceName: 'FM3', unit: 'present', error: 'No Fractal device found on any serial or MIDI port.', errorLink: false, preset: { number: 479, name: 'Nothing Else Matters' }, sceneIndex: 6, sceneNames: ['VERSE'], blocks: pedals, allBlocks: pedals, capabilities: { scenes: 8, presets: { count: 512 } } })
+    s.rig.startClean()
+    const kept = s.rig.getState()
+    assert.deepEqual([kept.deviceName, kept.unit, kept.preset?.number, kept.sceneIndex, kept.sceneNames, kept.blocks.length, kept.capabilities?.scenes], ['FM3', 'present', 479, 6, [], 1, 8])
+    s.rig.startClean({ header: true })
+    const gone = s.rig.getState()
+    assert.deepEqual([gone.deviceName, gone.unit, gone.error, gone.preset, gone.sceneIndex], ['', 'unknown', null, null, 0])
+    /* And the other unit's pedals, lit as they were, and what it can do (its eight tiles, "OF 512"), as the browser blanks its stage. */
+    assert.deepEqual([gone.blocks, gone.allBlocks, gone.capabilities], [[], [], null], 'Play says Looking… over the other computer’s pedals and slot count')
+    /* And "…" for the preset under Looking…, never "Untitled". */
+    assert.match(read('mobile/src/screens/Stage.js'), /label=\{\(preset\?\.pending && !preset\?\.name\) \|\| \(!preset && unitState === 'unknown'\) \? '…' : presetLabel\(preset\)\}/, 'Play names the preset not read yet "Untitled"')
+    /* link.js takes it down so, told by the relay, and the browser takes its own down from the same news. */
+    const link = read('mobile/src/lib/link.js')
+    assert.match(link, /subscribeMixed\(\(\) => \{\s*computerChanged\(\)\s*startClean\(\{ header: true \}\)\s*\}\)/)
+    const web = read('src/lib/link.js')
+    assert.match(web, /subscribeMixed\(\(\) => \{\s*computerChanged\(\)\s*set\(\{ mixedAt: Date\.now\(\) \}\)\s*\}\)/)
+    const app = read('src/App.jsx')
+    assert.match(app, /mixedRef\.current = link\.mixedAt\s*mixReadOwed\.current = true\s*setDevice\(null\)\s*setStatus\('idle'\)\s*setError\(null\)/)
+    /* And read again once the count is in, whatever it chose. */
+    assert.match(app, /if \(!mixReadOwed\.current \|\| !link\.countedAt \|\| link\.role !== 'remote'\) return\s*mixReadOwed\.current = false\s*read\(\)/)
+    /* And a read that was out when the mix was found puts nothing up. */
+    assert.equal(app.match(/if \(mixedRef\.current !== mixAt\) return null/g)?.length, 2)
+  })
+
+  test('phone: the units are asked again at once and every ten seconds while the card is up, and not after', async () => {
+    const t = await linkOnABench()
+    const stop = t.link.watchUnits()
+    await t.clock.advance(25000)
+    assert.equal(t.bench.unitsAsked, 3, 'the units were not asked again at once and every ten seconds')
+    stop()
+    await t.clock.advance(30000)
+    assert.equal(t.bench.unitsAsked, 3, 'the units were asked after the card went')
+  })
+
+  /*
+   * The count owed is taken the moment the computer answers on the channel
+   * that came back, even with the join that took the one cut short still
+   * reading the unit: writes wait for it. Left to the end of the join (a Pi
+   * 3's chain dumps, ten seconds on the bench), every tap in between was
+   * dropped.
+   */
+  test('phone: a count cut short by a drop is taken again at once, inside the join that took it, and the unit read off the pick then is not read again', async () => {
+    const t = await linkOnABench()
+    t.bench.many = true
+    let counts = 0
+    t.bench.census = async () => {
+      counts += 1
+      t.bench.countOwed = counts === 1
+      t.bench.hosts = ['MacBook Pro SG 566', 'raspberry pi 3']
+      t.bench.chosen = counts === 1 ? null : 'raspberry pi 3'
+      t.bench.askedOf = counts === 1 ? null : 'raspberry pi 3'
+    }
+    t.bench.countDue = () => t.bench.countOwed === true
+    t.link.startLink()
+    await t.clock.advance(5000)
+    const order = t.bench.order.filter((x) => ['census', 'refreshAll', 'startClean'].includes(x))
+    assert.equal(counts, 2, 'the count cut short was not taken again')
+    assert.deepEqual(t.bench.censusOptions, [null, { late: true }])
+    assert.deepEqual(order.slice(0, 2), ['census', 'census'], `the count owed waited for the join to finish reading: ${order.join(', ')}`)
+    /* Every read was the pick's, and the unit was read off it: not read again from a clean start for the count owed. */
+    assert.equal(order.filter((x) => x === 'refreshAll').length, 1, order.join(', '))
+    assert.ok(!order.includes('startClean'), order.join(', '))
   })
 
   /*
@@ -3905,24 +4187,50 @@ export function run(test) {
       assert.equal(keptFor(two.store, end)?.many, true)
     })
 
-    test(`${end}: a read made after the first window, with no hold, is not asked of the pick while those before it went to nobody`, async () => {
+    /*
+     * 1.87.51: A MIX ON SCREEN IS TAKEN DOWN, AND THEN THE PICK IS ASKED. In
+     * 1.87.48 a read after the first window went on to whoever answered
+     * first, because the unit on screen had come off the other computer and
+     * a read of the pick would be filed under it. The screen then stayed a
+     * mix to the end of the count: the MacBook's FM3 in the header over a
+     * Pi's "No Fractal device found", Justin's screenshot. Now the first
+     * window that hears two after such a read tells whoever subscribed
+     * (subscribeMixed: link.js takes the screen down, header and all, so
+     * nothing is filed under the other unit), and the reads after it go to
+     * the pick. What was read off the other computer is still never kept as
+     * the pick's (remoteReadsAskedOf).
+     */
+    test(`${end}: a read made after the first window, those before it gone to nobody, comes after the mix on screen is told, and is asked of the pick`, async () => {
       /* Justin's first launch after the update: the pick 1.87.47 kept, never counted on this version, so nothing is held. */
       const t = await relayOnABench(end, { picked: 'raspberry pi 3', legacy: true })
       const { bench, clock, relay, watch } = t
       bench.computers = [PI5(), PI3()]
+      let told = 0
+      relay.subscribeMixed(() => (told += 1))
       watch(relay.remoteRequest('/device/detect'))
       await clock.advance(0)
       assert.deepEqual(sentOf(bench, '/device/detect'), [''], 'the bench held a read: this does not test the window')
       const census = counted(t)
-      await clock.advance(1600)
+      await clock.advance(1400)
+      assert.equal(told, 0, 'the mix was told before two had answered')
+      await clock.advance(200)
       assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', 'the first window did not find the pick')
-      /* The FM3's computer answered the unit read first: a names read asked of the pick now is the AM4's names under the FM3's slot. */
+      assert.equal(told, 1, 'a screen built out of two computers’ answers was not told at the first window')
       watch(relay.remoteRequest('/presets/53/scenes'))
       await clock.advance(0)
-      assert.deepEqual(sentOf(bench, '/presets/53/scenes'), [''], 'a read was asked of the pick while the unit on screen came off the other computer')
+      assert.deepEqual(sentOf(bench, '/presets/53/scenes'), ['raspberry pi 3'], 'a read after the mix was taken down went to whoever answers first')
       await clock.advance(5000)
       assert.equal(census.done, true)
+      assert.equal(told, 1)
       assert.equal(relay.remoteReadsAskedOf(), null, 'what was read off the other computer was kept as the pick’s')
+      /* No read to nobody before the count: nothing is told. */
+      const quiet = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      quiet.bench.computers = [PI5(), PI3()]
+      let heard = 0
+      quiet.relay.subscribeMixed(() => (heard += 1))
+      counted(quiet)
+      await quiet.clock.advance(6000)
+      assert.equal(heard, 0, 'a screen read off the pick alone was told it was a mix')
     })
 
     test(`${end}: Which unit is told before a read goes to the new computer, waits for a count in a fresh link's first window, and a read is never taken for the wrong one's`, async () => {
@@ -4052,6 +4360,511 @@ export function run(test) {
       assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', 'the count’s own choice landed over the pick made after it began')
       assert.equal(saved.done && !saved.error, true, saved.error?.message)
       assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']], 'the write did not go to the pick alone')
+    })
+
+    /*
+     * A ROLL CALL THE CHANNEL DROPPED UNDER IS NOT A ROLL CALL. realtime-js
+     * rejoins the same channel, so the link never ends, and the count whose
+     * questions went into the drop was kept as the link's one count: the
+     * pick never proved, reads to whoever answered first and every write to
+     * every computer for the rest of the link. Now it is owed: no write goes
+     * while it is, and it is taken again once the channel is back.
+     */
+    test(`${end}: a roll call the channel dropped under is owed: no write goes to both computers, and it is taken again when the channel is back`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch, tap, service, store } = t
+      bench.computers = [PI5(), PI3()]
+      const census = counted(t)
+      /* Both heard in the first window (40 and 300 ms); then the channel drops under it, and the units and the proof go into the drop. */
+      await clock.advance(1000)
+      service.drop()
+      await clock.advance(2000)
+      assert.equal(census.done, true)
+      const log = () => store.logged.join('\n')
+      assert.equal(relay.remoteCountOwed(), true, `the count the channel dropped under was kept\n${log()}`)
+      assert.match(log(), /two computers answered: fractalpi \(unit not known\), raspberry pi 3 \(unit not known\); the link dropped before the count was done: counted again when the link is back/)
+      assert.ok(!/too old to be asked alone/.test(log()), `a proof lost to the drop was logged as an old computer app\n${log()}`)
+      assert.equal(relay.remoteChosenHost(), null, 'a computer was driven on a count cut short')
+      service.back()
+      /* Asked of the pick by name, as every read is while the count is owed: the Pi 3 answers at 300 ms. */
+      const back = watch(relay.hostResponds())
+      await clock.advance(400)
+      assert.equal(back.value, true)
+      assert.equal(relay.remoteCountDue(), true, 'the count cut short is not taken again with the channel back')
+      /* A tap and an edit before it is: neither goes, and the tap is dropped at its deadline rather than sent to both. */
+      bench.sent.length = 0
+      const pressed = watch(tap())
+      const saved = watch(relay.remoteRequest('/scene', { method: 'POST', body: JSON.stringify({ index: 1 }) }))
+      const read = watch(relay.remoteRequest('/preset'))
+      await clock.advance(1600)
+      assert.deepEqual(writes(bench), [], 'a write went while the count was owed: to both computers')
+      assert.equal(pressed.done && pressed.error?.notSent, true, `the tap made while the count was owed was not dropped: ${pressed.error?.message}`)
+      assert.deepEqual(sentOf(bench, '/preset'), ['raspberry pi 3'], 'a read while the count was owed went to whoever answers first')
+      const again = counted(t)
+      await clock.advance(6000)
+      assert.equal(again.done, true)
+      assert.equal(relay.remoteCountOwed(), false)
+      assert.equal(relay.remoteCountDue(), false)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+      assert.equal(saved.done && !saved.error, true, saved.error?.message)
+      assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']], 'the edit did not go to the pick alone once it was counted again')
+      assert.equal(read.done && !read.error, true)
+    })
+
+    test(`${end}: a channel dropped before any answer to the roll call, on an account that may have two, is owed too; with one computer it is kept as it always was`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      t.bench.computers = [PI5({ lag: 400 }), PI3({ lag: 400 })]
+      const census = counted(t)
+      await t.clock.advance(100)
+      t.service.drop()
+      await t.clock.advance(5000)
+      assert.equal(census.done, true)
+      assert.equal(t.relay.remoteCountOwed(), true, 'a count that heard nobody because of the drop was kept, on an account of two')
+      /* One computer, nothing picked: the same drop changes nothing, and a tap after it goes at once. */
+      const one = await relayOnABench(end)
+      one.bench.computers = [computer('Studio', 'FM3')]
+      const count = counted(one)
+      await one.clock.advance(500)
+      one.service.drop()
+      await one.clock.advance(1500)
+      one.service.back()
+      await one.clock.advance(100)
+      assert.equal(count.done, true)
+      assert.equal(one.relay.remoteCountOwed(), false, 'one computer’s count was taken again')
+      assert.equal(one.relay.remoteCountDue(), false)
+      const hostSeen = one.watch(one.relay.hostResponds())
+      await one.clock.advance(100)
+      assert.equal(hostSeen.value, true)
+      const made = one.clock.now()
+      const pressed = one.watch(one.tap())
+      await one.clock.advance(200)
+      assert.equal(pressed.done && !pressed.error, true, pressed.error?.message)
+      assert.equal(one.bench.sent.find((s) => s.msg.payload.method === 'POST')?.at, made, 'one computer’s tap waited')
+    })
+
+    /*
+     * THE ONE PLACE ONE COMPUTER'S TIMING MOVES, AND ONLY ON A RECORD THAT
+     * SAYS IT MAY HAVE TWO: its last count heard two (many: true), or a
+     * 1.87.47 pick never counted since (relay-rules mayBeTwo). One computer
+     * answered, and a drop under the count may have taken the second one's
+     * answer with it; kept, every write after it went to nobody in
+     * particular, both units if the second was there. So it is owed, as an
+     * account of two's is, and a tap waits for the count owed (dropped at
+     * its deadline). Every other record goes exactly as in 1.87.50: no
+     * record, nothing picked, or a count that heard one.
+     */
+    test(`${end}: one computer answering a count the channel dropped under is counted again only where the record says it may have two; every other record keeps it, its taps at once`, async () => {
+      const oneUnder = async (opts) => {
+        const t = await relayOnABench(end, opts)
+        t.bench.computers = [computer('Studio', 'FM3')]
+        const count = counted(t)
+        await t.clock.advance(400)
+        t.service.drop()
+        await t.clock.advance(1500)
+        t.service.back()
+        await t.clock.advance(100)
+        assert.equal(count.done, true)
+        const seen = t.watch(t.relay.hostResponds())
+        await t.clock.advance(100)
+        assert.equal(seen.value, true)
+        t.bench.sent.length = 0
+        const made = t.clock.now()
+        const pressed = t.watch(t.tap())
+        await t.clock.advance(2000)
+        return { t, owed: t.relay.remoteCountOwed(), pressed, sentAt: t.bench.sent.find((s) => s.msg.payload.method === 'POST')?.at ?? null, made }
+      }
+      for (const opts of [{ picked: 'Studio', many: true }, { picked: 'Studio', legacy: true }]) {
+        const { t, owed, pressed, sentAt } = await oneUnder(opts)
+        assert.equal(owed, true, `${JSON.stringify(opts)}: a count a drop may have taken the second answer from was kept`)
+        assert.equal(sentAt, null, `${JSON.stringify(opts)}: a tap went while the count was owed, to nobody in particular`)
+        assert.equal(pressed.done && pressed.error?.notSent, true, pressed.error?.message)
+        /* Counted again: one computer, and its taps go at once from there. */
+        const again = counted(t)
+        await t.clock.advance(2000)
+        assert.equal(again.done, true)
+        assert.equal(t.relay.remoteCountOwed(), false)
+        t.bench.sent.length = 0
+        const made = t.clock.now()
+        const next = t.watch(t.tap())
+        await t.clock.advance(200)
+        assert.equal(next.done && !next.error, true, next.error?.message)
+        assert.equal(t.bench.sent.find((s) => s.msg.payload.method === 'POST')?.at, made)
+      }
+      for (const opts of [{}, { picked: null, many: false }, { picked: 'Studio', many: false }]) {
+        const { owed, pressed, sentAt, made } = await oneUnder(opts)
+        assert.equal(owed, false, `${JSON.stringify(opts)}: one computer's count was taken again`)
+        assert.equal(pressed.done && !pressed.error, true, pressed.error?.message)
+        assert.equal(sentAt, made, `${JSON.stringify(opts)}: one computer's tap waited`)
+      }
+    })
+
+    test(`${end}: a pick's proof the channel dropped under, its answer lost, is never taken for an old computer app: the computers are counted again`, async () => {
+      const t = await relayOnABench(end)
+      const { bench, clock, relay, watch, service, store } = t
+      const pi3 = PI3()
+      const answers = pi3.reply
+      let lost = false
+      pi3.reply = (p) => (lost && p.path === '/store/config/host.name' ? 'silent' : answers(p))
+      bench.computers = [PI5(), pi3]
+      const sleep = (ms) => new Promise((go) => clock.setTimeout(go, ms))
+      relay.censusHosts({ windowMs: 1500, sleep })
+      await clock.advance(6000)
+      assert.equal(relay.remoteChosenHost(), 'fractalpi')
+      store.logged.length = 0
+      /* Which unit tapped; the channel drops at once, and the proof's answer goes with it. */
+      lost = true
+      const picking = watch(relay.pickHost('raspberry pi 3', { windowMs: 1500, sleep }))
+      await clock.advance(100)
+      service.drop()
+      await clock.advance(100)
+      service.back()
+      lost = false
+      await clock.advance(2000)
+      assert.equal(picking.done && picking.value, false)
+      const log = store.logged.join('\n')
+      assert.equal(relay.remoteCountOwed(), true, `the proof lost to the drop was kept\n${log}`)
+      assert.match(log, /the link dropped while raspberry pi 3, picked under Which unit, was asked alone: the computers are counted again when it is back/)
+      assert.ok(!/too old/.test(log), log)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', 'the pick tapped was let go')
+      bench.sent.length = 0
+      const seen = watch(relay.hostResponds())
+      await clock.advance(400)
+      assert.equal(seen.value, true)
+      const saved = watch(relay.remoteRequest('/scene', { method: 'POST', body: JSON.stringify({ index: 1 }) }))
+      await clock.advance(500)
+      assert.deepEqual(writes(bench), [], 'a write went while the proof was owed: to both computers')
+      relay.censusHosts({ windowMs: 1500, sleep })
+      await clock.advance(6000)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+      assert.equal(saved.done && !saved.error, true, saved.error?.message)
+      assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']])
+      /* A drop that comes after the proof's one answer leaves it proved, as a proof with no drop. */
+      store.logged.length = 0
+      const proved = watch(relay.pickHost('fractalpi', { windowMs: 1500, sleep }))
+      await clock.advance(500)
+      service.drop()
+      await clock.advance(100)
+      service.back()
+      await clock.advance(2000)
+      assert.equal(proved.done && proved.value, true, store.logged.join('\n'))
+      assert.equal(relay.remoteCountOwed(), false)
+    })
+
+    /*
+     * A SLOW PICK IS STILL THE PICK. Justin's Pi 3 can be two seconds on
+     * answering; the roll call's first window is a second and a half. It was
+     * "did not answer", and the taps went to the first computer with a unit:
+     * the switch on a timeout that nothing else does.
+     */
+    test(`${end}: a pick slower than the roll call's first window is still the pick: driven, and proved over its own time`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch, tap, store } = t
+      bench.computers = [PI5(), computer('raspberry pi 5', 'FM3', { plugged: false, lag: 60 }), PI3({ lag: 2000 })]
+      const census = counted(t)
+      await clock.advance(9000)
+      assert.equal(census.done, true)
+      const log = store.logged.join('\n')
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', `the slow pick was left for the first computer with a unit\n${log}`)
+      assert.ok(relay.remoteHosts().includes('raspberry pi 3'))
+      assert.match(log, /driving raspberry pi 3, the one picked under Which unit, addressed/, log)
+      assert.ok(!/did not answer/.test(log), log)
+      assert.equal(relay.remoteMissingPick(), null)
+      bench.sent.length = 0
+      const pressed = watch(tap())
+      await clock.advance(3000)
+      assert.equal(pressed.done && !pressed.error, true, pressed.error?.message)
+      assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']], 'the tap did not go to the slow pick alone')
+    })
+
+    /*
+     * A PICK THAT NEVER ANSWERS (renamed, switched off) leaves the first
+     * computer with a unit driven, as 1.87.47 did, and now Play says so:
+     * Keep this one makes the one driven the pick, and Forget under Which
+     * unit leaves nothing picked.
+     */
+    test(`${end}: a pick that never answers is said with the computer driven instead; Keep this one makes that one the pick, and Forget leaves nothing picked`, async () => {
+      const t = await relayOnABench(end, { picked: 'fractalpi', many: true })
+      const { bench, clock, relay, rules, store } = t
+      const gone = PI5()
+      gone.reply = () => 'silent'
+      bench.computers = [gone, computer('MacBook Pro SG 566', 'FM3', { lag: 60 }), PI3()]
+      counted(t)
+      await clock.advance(9000)
+      assert.equal(relay.remoteChosenHost(), 'MacBook Pro SG 566')
+      assert.equal(relay.remoteMissingPick(), 'fractalpi')
+      const card = rules.missingPickCard({ missing: relay.remoteMissingPick(), driving: relay.remoteChosenHost(), hosts: relay.remoteHosts(), units: relay.remoteUnits() })
+      assert.equal(card.words, 'fractalpi, picked under Which unit, isn’t answering. Playing the FM3 on MacBook Pro SG 566.')
+      assert.deepEqual([card.keep, card.list], ['Keep this one', 'Which unit…'])
+      assert.equal(relay.keepDriven(), true)
+      await clock.advance(0)
+      assert.equal(relay.remoteMissingPick(), null, 'the card stays up after Keep this one')
+      assert.equal(keptFor(store, end)?.name, 'MacBook Pro SG 566', 'Keep this one did not make the one driven the pick')
+      /* The next launch drives it as the pick, and says nothing. */
+      await newLink(t)
+      store.logged.length = 0
+      counted(t)
+      await clock.advance(9000)
+      assert.equal(relay.remoteChosenHost(), 'MacBook Pro SG 566')
+      assert.equal(relay.remoteMissingPick(), null)
+      assert.match(store.logged.join('\n'), /driving MacBook Pro SG 566, the one picked under Which unit, addressed/)
+      /* Forget: nothing picked, so the next count drives the first with a unit and has nothing to say. */
+      const other = await relayOnABench(end, { picked: 'fractalpi', many: true })
+      other.bench.computers = [gone, computer('MacBook Pro SG 566', 'FM3', { lag: 60 }), PI3()]
+      counted(other)
+      await other.clock.advance(9000)
+      assert.equal(other.relay.remoteMissingPick(), 'fractalpi')
+      assert.equal(other.relay.forgetMissingPick(), true)
+      await other.clock.advance(0)
+      assert.equal(other.relay.remoteMissingPick(), null)
+      assert.equal(keptFor(other.store, end)?.name ?? null, null, 'Forget left the pick that does not answer picked')
+      assert.equal(keptFor(other.store, end)?.many, true, 'Forget lost what the last count heard')
+      await newLink(other)
+      counted(other)
+      await other.clock.advance(9000)
+      assert.equal(other.relay.remoteMissingPick(), null)
+      /* One computer heard: nothing said, whatever was picked. */
+      const one = await relayOnABench(end, { picked: 'fractalpi', many: true })
+      one.bench.computers = [gone, PI3()]
+      counted(one)
+      await one.clock.advance(9000)
+      assert.equal(one.relay.remoteMissingPick(), null, 'a pick missing with one computer heard is said on Play')
+    })
+
+    test(`${end}: the units are asked again for Play's card, reads only and nothing held, and one computer is asked nothing more`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch, tap } = t
+      const pi3 = PI3({ plugged: false })
+      bench.computers = [PI5(), pi3]
+      counted(t)
+      await clock.advance(9000)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+      assert.deepEqual(relay.remoteUnits()['raspberry pi 3'], { model: 'FM3', plugged: false })
+      /* The AM4 plugged into the pick: asked again, it says so. */
+      bench.computers[1] = PI3()
+      bench.sent.length = 0
+      const asked = watch(relay.refreshUnits({ windowMs: 1500, sleep: (ms) => new Promise((go) => clock.setTimeout(go, ms)) }))
+      const made = clock.now()
+      const pressed = watch(tap())
+      await clock.advance(400)
+      assert.equal(pressed.done && !pressed.error, true, pressed.error?.message)
+      assert.equal(bench.sent.find((x) => x.msg.payload.method === 'POST')?.at, made, 'a tap waited for the units to be read')
+      assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']])
+      await clock.advance(2000)
+      assert.equal(asked.done, true)
+      assert.deepEqual(relay.remoteUnits()['raspberry pi 3'], { model: 'AM4', plugged: true })
+      assert.deepEqual(bench.sent.filter((x) => x.msg.payload.method === 'GET').map((x) => `${x.msg.payload.path} ${x.msg.payload.host}`).sort(), ['/device fractalpi', '/device raspberry pi 3', '/healthz fractalpi', '/healthz raspberry pi 3'], 'the units were asked something else, or of nobody in particular')
+      /* Nothing changed: the same object, so nobody redraws for it. */
+      const before = relay.remoteUnits()
+      relay.refreshUnits({ windowMs: 1500, sleep: (ms) => new Promise((go) => clock.setTimeout(go, ms)) })
+      await clock.advance(2000)
+      assert.equal(relay.remoteUnits(), before)
+      /* One computer: nothing asked. */
+      const one = await relayOnABench(end)
+      one.bench.computers = [computer('Studio', 'FM3')]
+      counted(one)
+      await one.clock.advance(3000)
+      one.bench.sent.length = 0
+      await one.relay.refreshUnits()
+      assert.equal(one.bench.sent.length, 0, 'one computer was asked which unit it has')
+    })
+
+    test(`${end}: a pick that does not answer when asked alone is logged so, never as a computer app too old`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const pi3 = PI3()
+      const answers = pi3.reply
+      /* Answers the roll call, and nothing asked of it by name: a name it does not hear as its own. */
+      pi3.reply = (p) => (p.host && p.path === '/store/config/host.name' ? 'silent' : answers(p))
+      t.bench.computers = [PI5(), pi3]
+      const census = counted(t)
+      await t.clock.advance(6000)
+      assert.equal(census.done, true)
+      const log = t.store.logged.join('\n')
+      assert.match(log, /driving raspberry pi 3, the one picked under Which unit, addressed, not proved: it did not answer when asked alone/, log)
+      assert.ok(!/too old/.test(log), log)
+      /* No drop: the count is this link's, as it always was. */
+      assert.equal(t.relay.remoteCountOwed(), false)
+    })
+
+    /*
+     * A PROOF WITH NO ANSWER NEVER SENDS ANYTHING TO EVERY COMPUTER. A
+     * computer app too old to know names answers every name, so it gives
+     * two answers; none is an answer lost or a computer slow. Justin's Pi 3
+     * answers the roll call in 1.6 s and its name, asked alone, in 2.2 s: the
+     * proof waited 2.1 s, and every tap after it went to all three computers,
+     * the FM3 and the AM4 changing scene together. Now the one driven is
+     * asked by name all the same. And the same for a pick heard in the
+     * first window whose proof's answer is late, and for Which unit.
+     */
+    test(`${end}: a pick whose answer when asked alone comes after the proof's window is still asked by name: no write reaches two computers, and no read is answered by another`, async () => {
+      for (const [roll, proof] of [
+        [1600, 2200],
+        [300, 1700]
+      ]) {
+        const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+        const { bench, clock, relay, watch, tap, store } = t
+        const mac = computer('MacBook Pro SG 566', 'FM3', { lag: 150 })
+        const pi3 = computer('raspberry pi 3', 'AM4', { lag: (p) => (p.path === '/store/config/host.name' ? (p.host ? proof : roll) : 400) })
+        bench.computers = [mac, computer('raspberry pi 5', 'FM3', { plugged: false, lag: 170 }), pi3]
+        const early = watch(relay.remoteRequest('/device/detect'))
+        const census = counted(t)
+        await clock.advance(9000)
+        assert.equal(census.done, true)
+        const log = store.logged.join('\n')
+        assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', log)
+        assert.match(log, /driving raspberry pi 3, the one picked under Which unit, addressed, not proved: it did not answer when asked alone/, log)
+        assert.ok(!/too old/.test(log), log)
+        assert.equal(early.done && !early.error, true)
+        assert.deepEqual(sentOf(bench, '/device/detect'), ['raspberry pi 3'], `${roll}/${proof}: a read at launch went to whoever answers first`)
+        bench.sent.length = 0
+        const pressed = watch(tap())
+        const saved = watch(relay.remoteRequest('/store/config/scene-names-fm3%3A479', { method: 'PUT', body: '{}' }))
+        const read = watch(relay.remoteRequest('/preset'))
+        await clock.advance(3000)
+        assert.equal(pressed.done && !pressed.error, true, pressed.error?.message)
+        assert.equal(saved.done && !saved.error, true, saved.error?.message)
+        assert.equal(read.done && !read.error, true, read.error?.message)
+        assert.deepEqual(writes(bench).sort(), [['/scene', 'raspberry pi 3'], ['/store/config/scene-names-fm3%3A479', 'raspberry pi 3']], `${roll}/${proof}: a write after a proof with no answer went to every computer`)
+        assert.deepEqual(sentOf(bench, '/preset'), ['raspberry pi 3'], `${roll}/${proof}: a read after a proof with no answer went to whoever answers first`)
+        /* Which unit, its proof's answer late the same way: the MacBook is asked by name, and nobody else hears the tap. */
+        mac.lag = (p) => (p.path === '/store/config/host.name' && p.host ? 2000 : 150)
+        const sleep = (ms) => new Promise((go) => clock.setTimeout(go, ms))
+        const picking = watch(relay.pickHost('MacBook Pro SG 566', { windowMs: 1500, sleep }))
+        await clock.advance(3000)
+        assert.equal(picking.done && picking.value, false)
+        bench.sent.length = 0
+        const moved = watch(tap())
+        await clock.advance(1000)
+        assert.equal(moved.done && !moved.error, true, moved.error?.message)
+        assert.deepEqual(writes(bench), [['/scene', 'MacBook Pro SG 566']], `${roll}/${proof}: a tap after Which unit's proof had no answer went to every computer`)
+      }
+    })
+
+    /*
+     * A COUNT CUT SHORT WITH THE PICK'S ANSWER IN THE DROP KEEPS ITS READS
+     * HELD. It kept them with the pick only when it had heard the pick; when
+     * the drop took the pick's answer, the hold was let go, and every read
+     * made while the link was down or coming back went to whoever answered
+     * first: the MacBook's FM3 in the header over the Pi 5's "No Fractal
+     * device found", the mix 1.87.51 takes out of the launch, back after a
+     * drop. Now they wait for the count owed, as at a launch.
+     */
+    test(`${end}: a count cut short by a drop that took the pick's answer keeps its reads held, and none goes to whoever answers first before the count owed says where`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch, service } = t
+      let lost = true
+      const pi3 = computer('raspberry pi 3', 'AM4', { lag: 320 })
+      const answers = pi3.reply
+      pi3.reply = (p) => (lost ? 'silent' : answers(p))
+      bench.computers = [computer('MacBook Pro SG 566', 'FM3', { lag: 150 }), computer('raspberry pi 5', 'FM3', { plugged: false, lag: 170 }), pi3]
+      const census = counted(t)
+      await clock.advance(250)
+      service.drop()
+      const reads = []
+      await clock.advance(750)
+      reads.push(watch(relay.remoteRequest('/scene')))
+      await clock.advance(1100)
+      reads.push(watch(relay.remoteRequest('/scene')))
+      await clock.advance(400)
+      assert.equal(census.done, true)
+      assert.equal(relay.remoteCountOwed(), true, 'the count the drop took the pick’s answer from was kept')
+      lost = false
+      service.back()
+      const seen = watch(relay.hostResponds())
+      await clock.advance(20)
+      reads.push(watch(relay.remoteRequest('/scene')))
+      await clock.advance(200)
+      assert.equal(seen.value, true)
+      assert.deepEqual(sentOf(bench, '/scene'), [], 'a read went before the count owed had begun')
+      const again = counted(t)
+      await clock.advance(8000)
+      assert.equal(again.done, true)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+      assert.deepEqual(sentOf(bench, '/scene'), ['raspberry pi 3', 'raspberry pi 3', 'raspberry pi 3'], 'a read made while the count was owed went to whoever answers first')
+      for (const read of reads) assert.equal(read.done && !read.error && read.value?.from, 'raspberry pi 3', read.error?.message)
+      /* The pick heard before the drop: reads go on to it by name, and nothing waits. */
+      const heard = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      heard.bench.computers = [computer('MacBook Pro SG 566', 'FM3', { lag: 150 }), computer('raspberry pi 5', 'FM3', { plugged: false, lag: 170 }), computer('raspberry pi 3', 'AM4', { lag: 320 })]
+      counted(heard)
+      await heard.clock.advance(1600)
+      heard.service.drop()
+      await heard.clock.advance(4000)
+      assert.equal(heard.relay.remoteCountOwed(), true)
+      heard.service.back()
+      await heard.clock.advance(20)
+      const after = heard.watch(heard.relay.remoteRequest('/scene'))
+      await heard.clock.advance(400)
+      assert.equal(after.done && after.value?.from, 'raspberry pi 3', 'a read with the pick heard waited, or went to another')
+      assert.deepEqual(sentOf(heard.bench, '/scene'), ['raspberry pi 3'])
+      /*
+       * A pick two seconds slow, and a read made before the drop: its own six
+       * seconds run out a moment before the pick answers the count owed. It
+       * waits for that answer, to the end of the hold the count cut short
+       * kept, rather than going to whoever answers first.
+       */
+      /* And with the channel down long enough that the hold kept at the drop would end first: the count owed holds for its own six seconds from when it begins, as at a launch. */
+      for (const down of [2400, 6400]) {
+        const slow = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+        let away = true
+        const pi3s = computer('raspberry pi 3', 'AM4', { lag: 2000 })
+        const said = pi3s.reply
+        pi3s.reply = (p) => (away ? 'silent' : said(p))
+        slow.bench.computers = [computer('MacBook Pro SG 566', 'FM3', { lag: 150 }), computer('raspberry pi 5', 'FM3', { plugged: false, lag: 170 }), pi3s]
+        counted(slow)
+        const early = slow.watch(slow.relay.remoteRequest('/scene'))
+        await slow.clock.advance(1600)
+        slow.service.drop()
+        await slow.clock.advance(down)
+        assert.equal(slow.relay.remoteCountOwed(), true)
+        away = false
+        slow.service.back()
+        await slow.clock.advance(150)
+        counted(slow)
+        await slow.clock.advance(8000)
+        assert.equal(slow.relay.remoteChosenHost(), 'raspberry pi 3')
+        assert.deepEqual(sentOf(slow.bench, '/scene'), ['raspberry pi 3'], `down ${down} ms: a read made before the drop went to whoever answers first, its hold over a moment before the slow pick answered`)
+        assert.equal(early.done && early.value?.from, 'raspberry pi 3', early.error?.message)
+      }
+    })
+
+    /*
+     * AND A CHANNEL DOWN LONGER THAN THAT HOLD. Kept six seconds from the end
+     * of the count cut short, it was over when a channel down seven seconds
+     * or more came back: the reads that had waited for the channel went to
+     * whoever answered first, and the pick's answer to the count owed let
+     * the rest go to nobody in particular after them. The MacBook's FM3 in
+     * the header, then over the Pi's "No Fractal device found", until the
+     * first window took it down. Now the hold runs from the channel's
+     * return, and the pick's answer lets reads go only to be asked of it.
+     */
+    test(`${end}: a channel down longer than the hold a count cut short keeps: no read goes to whoever answers first when it is back, nor at the pick's answer`, async () => {
+      for (const down of [9000, 14000]) {
+        const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+        const { bench, clock, relay, watch, service } = t
+        let lost = true
+        const pi3 = computer('raspberry pi 3', 'AM4', { lag: 320 })
+        const answers = pi3.reply
+        pi3.reply = (p) => (lost ? 'silent' : answers(p))
+        bench.computers = [computer('MacBook Pro SG 566', 'FM3', { lag: 150 }), computer('raspberry pi 5', 'FM3', { plugged: false, lag: 170 }), pi3]
+        counted(t)
+        const reads = [watch(relay.remoteRequest('/scene'))]
+        await clock.advance(250)
+        service.drop()
+        await clock.advance(down)
+        assert.equal(relay.remoteCountOwed(), true, 'the count the drop took the pick’s answer from was kept')
+        lost = false
+        service.back()
+        await clock.advance(20)
+        reads.push(watch(relay.remoteRequest('/scene')))
+        await clock.advance(200)
+        assert.deepEqual(sentOf(bench, '/scene'), [], `down ${down} ms: a read went to whoever answers first as the channel was back`)
+        counted(t)
+        await clock.advance(100)
+        reads.push(watch(relay.remoteRequest('/scene')))
+        await clock.advance(8000)
+        assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+        assert.ok(sentOf(bench, '/scene').every((host) => host === 'raspberry pi 3'), `down ${down} ms: a read went to nobody in particular: ${sentOf(bench, '/scene')}`)
+        for (const read of reads) if (read.done && !read.error) assert.equal(read.value?.from, 'raspberry pi 3', `down ${down} ms: a read was answered by another computer`)
+      }
     })
   }
 
@@ -4216,6 +5029,214 @@ export function run(test) {
     assert.deepEqual(t.bench.order.filter((x) => ['computerChanged', 'proved', 'startClean', 'refreshAll'].includes(x)), ['computerChanged', 'proved', 'startClean', 'refreshAll'])
   })
 
+  test('both ends: Play says where the unit is when the computer driven has none and another has one, judged by plugged, never the model', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    /* Justin's three, as the roll call read them: a computer with nothing plugged in still says FM3. */
+    const hosts = ['MacBook Pro SG 566', 'raspberry pi 5', 'raspberry pi 3']
+    const units = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true }, 'raspberry pi 5': { model: 'FM3', plugged: false }, 'raspberry pi 3': { model: 'FM3', plugged: false } }
+    const card = r.unitElsewhereCard({ hosts, units, chosen: 'raspberry pi 3', unitState: 'missing' })
+    assert.equal(card.words, 'raspberry pi 3 has no unit plugged in. Your FM3 is on MacBook Pro SG 566.')
+    assert.deepEqual(card.buttons, [{ name: 'MacBook Pro SG 566', label: 'Use the FM3 on MacBook Pro SG 566', short: 'Use the FM3', sub: 'on MacBook Pro SG 566' }])
+    assert.equal(card.title, 'Your unit is on another computer')
+    /* The roll call's plugged false is enough before the rig has read the unit; the rig saying it answers is never overruled. */
+    assert.ok(r.unitElsewhereCard({ hosts, units, chosen: 'raspberry pi 3', unitState: 'unknown' }))
+    assert.equal(r.unitElsewhereCard({ hosts, units, chosen: 'raspberry pi 3', unitState: 'present' }), null)
+    /* An AM4 on a fourth, and both offered. */
+    const four = [...hosts, 'studio']
+    const more = r.unitElsewhereCard({ hosts: four, units: { ...units, studio: { model: 'AM4', plugged: true } }, chosen: 'raspberry pi 3', unitState: 'missing' })
+    assert.equal(more.words, 'raspberry pi 3 has no unit plugged in. Your FM3 is on MacBook Pro SG 566, and your AM4 is on studio.')
+    assert.deepEqual(more.buttons.map((b) => b.label), ['Use the FM3 on MacBook Pro SG 566', 'Use the AM4 on studio'])
+    /* Never: with one computer; with the one driven having a unit; with the other only saying FM3 with nothing plugged in; with the other unit's computer sharing a name it cannot be asked apart by. */
+    assert.equal(r.unitElsewhereCard({ hosts: ['raspberry pi 3'], units, chosen: 'raspberry pi 3', unitState: 'missing' }), null)
+    assert.equal(r.unitElsewhereCard({ hosts, units, chosen: 'MacBook Pro SG 566', unitState: 'present' }), null)
+    assert.equal(r.unitElsewhereCard({ hosts: ['raspberry pi 5', 'raspberry pi 3'], units, chosen: 'raspberry pi 3', unitState: 'missing' }), null, 'a computer with nothing plugged in was offered for its model')
+    assert.equal(r.unitElsewhereCard({ hosts: ['raspberrypi', 'raspberrypi', 'raspberry pi 3'], units: { raspberrypi: { model: 'FM3', plugged: true }, 'raspberry pi 3': { model: 'FM3', plugged: false } }, chosen: 'raspberry pi 3', unitState: 'missing' }), null)
+    /* Nothing driven, or a unit the computer says is there but not answering, says nothing. */
+    assert.equal(r.unitElsewhereCard({ hosts, units, chosen: null, unitState: 'missing' }), null)
+    assert.equal(r.unitElsewhereCard({ hosts, units, chosen: 'raspberry pi 3', unitState: 'silent' }), null)
+    for (const words of [card.words, more.words, card.title, ...more.buttons.map((b) => b.label)]) assert.ok(!/this phone/i.test(words), words)
+    /* The phone: in place of the raw card, with each button Which unit's own pick, and the units asked again while it is up. */
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /unitElsewhereCard\(\{ hosts: computers\?\.hosts, units: computers\?\.units, chosen: computers\?\.chosenHost, unitState \}\)/)
+    assert.match(stage, /const fault = noDevice\(useRig\(ofError\), whereCard \|\| missingCard\)/, 'the raw "No Fractal device found" card is still up under the one that says where the unit is')
+    assert.match(stage, /const noDevice = \(fault, where\) => \(where && NO_DEVICE\.test\(String\(fault\)\) \? null : fault\)/)
+    /* The unit over the computer: the phone's button label is one line (Press), and the computer's name, the reason the button is there, was cut off at 320 wide. Its line under is two. */
+    assert.match(stage, /buttons=\{whereCard\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.short, sub: b\.sub, onPress: \(\) => chooseHost\(b\.name\) \}\)\)\}/, 'the phone puts the computer’s name on the button’s one line, where a narrow phone cuts it off')
+    const card2 = read('mobile/src/components/ComputerCard.js')
+    assert.match(card2, /<Press\s+key=\{b\.key \|\| b\.label\}\s+label=\{busy === i \? 'Switching…' : b\.label\}\s+sub=\{b\.sub\}/)
+    const press = read('mobile/src/components/Press.js')
+    assert.match(press, /<Text\s+numberOfLines=\{1\}[\s\S]{0,240}\{label\}/, 'Press’s label is no longer one line: say so here')
+    assert.match(press, /\{sub \? \(\s*<Text\s+numberOfLines=\{2\}/, 'the line under a Press is no longer two lines: the computer’s name may be cut')
+    /* Spoken by VoiceOver as the fault it stands in for was (the Toast): VoiceOver does not read a live region. Both cards are this one component. */
+    assert.match(card2, /useEffect\(\(\) => \{\s*if \(words && Platform\.OS === 'ios'\) AccessibilityInfo\.announceForAccessibility\(words\)\s*\}, \[words\]\)/, 'the card comes up in silence under VoiceOver')
+    assert.match(card2, /accessibilityLiveRegion="polite"/, 'TalkBack no longer hears the card')
+    assert.equal(stage.match(/<ComputerCard\b/g)?.length, 2, 'a card on Play that is not ComputerCard is not said aloud')
+    assert.match(stage, /useEffect\(\(\) => \(watchingUnits \? watchUnits\(\) : undefined\), \[watchingUnits\]\)/)
+    /* The browser: in the notice that stands where Play would be, the same words and buttons. */
+    const app = read('src/App.jsx')
+    assert.match(app, /unitElsewhereCard\(\{ hosts: link\.hosts, units: link\.units, chosen: link\.chosenHost, unitState: 'missing' \}\)/)
+    assert.match(app, /<h2>\{elsewhere \? elsewhere\.title : missingHere\?\.title \|\| fault\.title\}<\/h2>\s*\{missingHere \? <p>[\s\S]{0,700}\) : null\}\s*\{\/\*[^*]*\*\/\}\s*\{unitAway && !elsewhere \? null : <p>\{elsewhere \? elsewhere\.words : fault\.body\}<\/p>\}/)
+    /* Through the card's own buttons, which say Switching… on the one pressed and wait while its pick is proved: App's busy never moved for it, so a press looked like nothing. */
+    assert.match(app, /\{elsewhere \? <CardButtons buttons=\{elsewhere\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.label, onClick: \(\) => chooseHost\(b\.name\) \}\)\)\} \/> : null\}/, 'the notice’s buttons give no sign while the pick is proved')
+    const webCard = read('src/components/ComputerCard.jsx')
+    assert.match(webCard, /export function CardButtons[\s\S]{0,600}disabled=\{busy !== null && busy !== i\}[\s\S]{0,200}setBusy\(i\)\s*try \{\s*await b\.onClick\?\.\(\)\s*\} finally \{\s*setBusy\(null\)[\s\S]{0,120}\{busy === i \? 'Switching…' : b\.label\}/)
+    assert.match(webCard, /<CardButtons buttons=\{buttons\} \/>/, 'the card on Play and the notice have different buttons')
+    /* And not "this comes back on its own" under it: the unit does not come back to the one driven by itself. */
+    assert.match(app, /\{unitAway \? null : <p className="notice-note">Still checking every few seconds — this comes back on its own\.<\/p>\}/, 'the notice that says the unit is elsewhere still says it comes back on its own')
+    assert.match(app, /useEffect\(\(\) => \(watchingUnits \? watchUnits\(\) : undefined\), \[watchingUnits\]\)/)
+  })
+
+  test('both ends: Play names a pick that never answers with the one driven, and Which unit lists it grayed with Forget', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const hosts = ['MacBook Pro SG 566', 'raspberry pi 5']
+    const units = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true }, 'raspberry pi 5': { model: 'FM3', plugged: false } }
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units }).words, 'fractalpi, picked under Which unit, isn’t answering. Playing the FM3 on MacBook Pro SG 566.')
+    /* Judged by plugged, never the model: a computer with nothing plugged in still says FM3. */
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'raspberry pi 5', hosts, units }).words, 'fractalpi, picked under Which unit, isn’t answering. Using raspberry pi 5 instead, which has no unit plugged in. Your FM3 is on MacBook Pro SG 566.')
+    /* And the rig saying the unit on the one driven is missing, which the roll call had not seen: said the same. A computer whose unit is not known says neither. */
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units, unitState: 'missing' }).words, 'fractalpi, picked under Which unit, isn’t answering. Using MacBook Pro SG 566 instead, which has no unit plugged in.')
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units: {} }).words, 'fractalpi, picked under Which unit, isn’t answering. Using MacBook Pro SG 566 instead.')
+    /* Nothing to say: one computer, the pick driven, the pick listed after all, or nothing driven. */
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts: ['MacBook Pro SG 566'], units }), null)
+    assert.equal(r.missingPickCard({ missing: 'MacBook Pro SG 566', driving: 'MacBook Pro SG 566', hosts, units }), null)
+    assert.equal(r.missingPickCard({ missing: 'raspberry pi 5', driving: 'MacBook Pro SG 566', hosts, units }), null)
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: null, hosts, units }), null)
+    assert.deepEqual(r.missingPickRow('fractalpi'), { name: 'fractalpi', label: 'fractalpi — not answering', forget: 'Forget' })
+    assert.equal(r.missingPickRow(null), null)
+    /* The phone: on Play, its two buttons Keep this one and the list off the unit's name; under Which unit, grayed with Forget, in Settings and the sheet. */
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /missingPickCard\(\{ missing: computers\?\.missingPick, driving: computers\?\.chosenHost, hosts: computers\?\.hosts, units: computers\?\.units, unitState \}\)/)
+    /* And the raw "No Fractal device found" never floats over it, hiding its first sentence: the card says the one driven has no unit. */
+    assert.match(stage, /const fault = noDevice\(useRig\(ofError\), whereCard \|\| missingCard\)/, 'the raw fault floats over the card for a pick that never answers')
+    assert.match(stage, /<ComputerCard\s+words=\{missingCard\.words\}[\s\S]{0,200}label: missingCard\.keep, onPress: \(\) => keepThisOne\(\)[\s\S]{0,400}label: missingCard\.list, onPress: \(\) => onOpenUnits\(\)/)
+    const phoneApp = read('mobile/App.js')
+    assert.match(phoneApp, /computers=\{demo \? null : link\}\s*onOpenUnits=\{\(\) => setPickLive\(true\)\}/)
+    assert.match(phoneApp, /<LiveUnit[\s\S]{0,300}missing=\{link\.missingPick\}/)
+    assert.match(read('mobile/src/components/LiveUnit.js'), /<MissingPick name=\{missing\} onForget=\{\(\) => forgetMissing\(\)\} \/>/)
+    assert.match(read('mobile/src/screens/Settings.js'), /<MissingPick\s+name=\{missing\}\s+onForget=\{\(\) => \{\s*forgetMissing\(\)/)
+    assert.match(read('mobile/src/components/MissingPick.js'), /missingPickRow\(name\)/)
+    /* Grayed, and readable: at least 4.5:1 on the page and on the sheet, in both themes (silkFaint was 3.7:1 in light). */
+    const row = read('mobile/src/components/MissingPick.js').match(/<Text style=\{\{ flex: 1, color: color\.(\w+),/)?.[1]
+    assert.ok(row, 'the not-answering row’s ink moved: say where')
+    const { contrast } = await import('../src/lib/ink.js')
+    const theme = read('mobile/src/lib/theme.js')
+    for (const name of ['DARK', 'LIGHT']) {
+      const block = theme.slice(theme.indexOf(`const ${name} = {`), theme.indexOf('}', theme.indexOf(`const ${name} = {`)))
+      const hex = (key) => block.match(new RegExp(`\\b${key}: '(#[0-9a-f]{6})'`))?.[1]
+      for (const ground of ['chassis', 'panel']) {
+        const ratio = contrast(hex(row), hex(ground))
+        assert.ok(ratio >= 4.5, `${name.toLowerCase()}: the not-answering row is ${ratio?.toFixed(2)}:1 on ${ground}, under 4.5:1`)
+      }
+    }
+    /* The browser: the same card on Play, its list the Which unit sheet; the row in the sheet and on the page. */
+    const app = read('src/App.jsx')
+    assert.match(app, /missingPickCard\(\{ missing: link\.missingPick, driving: link\.chosenHost, hosts: link\.hosts, units: link\.units \}\)/)
+    /* And in the notice that stands in for Play when the one driven has no unit either: its words and its two ways out, said before where any unit is, as on the phone. */
+    assert.match(app, /const missingHere =\s*link\.role === 'remote' && status === 'fault' && device\?\.connected === false\s*\? missingPickCard\(\{ missing: link\.missingPick, driving: link\.chosenHost, hosts: link\.hosts, units: link\.units, unitState: 'missing' \}\)/)
+    assert.match(app, /link\.role === 'remote' && status === 'fault' && device\?\.connected === false && !missingHere\s*\? unitElsewhereCard/)
+    assert.match(app, /\{missingHere \? <p>\{missingHere\.words\}<\/p> : null\}\s*\{missingHere \? \(\s*<CardButtons\s*buttons=\{\[\s*\.\.\.\(missingHere\.keep \? \[\{ label: missingHere\.keep, onClick: \(\) => keepThisOne\(\) \}\] : \[\]\),\s*\.\.\.missingHere\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.label, onClick: \(\) => chooseHost\(b\.name\) \}\)\),\s*\{ label: missingHere\.list, onClick: \(\) => setSheet\('units'\) \}/, 'the browser’s notice never says the pick is not answering')
+    assert.match(app, /card=\{\s*link\.role === 'remote' && missingCard\s*\? \{\s*words: missingCard\.words,[\s\S]{0,120}onClick: \(\) => keepThisOne\(\)[\s\S]{0,300}onClick: \(\) => setSheet\('units'\)/)
+    assert.match(read('src/components/Gig.jsx'), /\{card \? <ComputerCard words=\{card\.words\} buttons=\{card\.buttons\} \/> : null\}/)
+    assert.equal(app.match(/\{missingRow \? <MissingRow row=\{missingRow\} onForget=\{\(\) => forgetMissing\(\)\} \/> : null\}/g)?.length, 2, 'the pick that does not answer is not under both of the website’s Which unit lists')
+    /* Plain words, never "this phone". */
+    for (const words of [r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units }).words, r.missingPickRow('x').label]) assert.ok(!/this phone|\bMac\b/.test(words.replace('MacBook', '')), words)
+  })
+
+  /*
+   * A PICK THAT NEVER ANSWERS, AND THE UNIT ON A THIRD COMPUTER. The FM3
+   * unplugged from the MacBook after the roll call, the AM4 on the Pi 5, and
+   * the picked Pi 3 switched off: the missing pick's card won over the one
+   * that says where the unit is, so neither end said the AM4 was on the
+   * Pi 5, its first button, Keep this one, would have made the computer
+   * with no unit the pick, and the units were not asked again while it was
+   * up. On the browser the notice kept the cable advice and "this comes back
+   * on its own". Now that card says where the unit is too, with its buttons
+   * in place of Keep this one, and is taken as that card for all the rest.
+   */
+  test('both ends: a pick that never answers, the one driven with no unit and the unit on another computer: Play says where it is, with its button and no Keep this one', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const hosts = ['MacBook Pro SG 566', 'raspberry pi 5']
+    const units = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true }, 'raspberry pi 5': { model: 'AM4', plugged: true } }
+    for (const facts of [
+      { units, unitState: 'missing' },
+      { units: { ...units, 'MacBook Pro SG 566': { model: 'FM3', plugged: false } }, unitState: null }
+    ]) {
+      const card = r.missingPickCard({ missing: 'raspberry pi 3', driving: 'MacBook Pro SG 566', hosts, ...facts })
+      assert.equal(card.words, 'raspberry pi 3, picked under Which unit, isn’t answering. Using MacBook Pro SG 566 instead, which has no unit plugged in. Your AM4 is on raspberry pi 5.')
+      assert.equal(card.keep, null, 'Keep this one would make the computer with no unit the pick')
+      assert.deepEqual(card.buttons, [{ name: 'raspberry pi 5', label: 'Use the AM4 on raspberry pi 5', short: 'Use the AM4', sub: 'on raspberry pi 5' }])
+      assert.equal(card.list, 'Which unit…')
+      assert.equal(card.title, 'Your unit is on another computer')
+    }
+    /* Nobody else with a unit: as before, Keep this one and the list. And a unit on the one driven: nothing about where. */
+    const alone = r.missingPickCard({ missing: 'raspberry pi 3', driving: 'MacBook Pro SG 566', hosts, units: { ...units, 'raspberry pi 5': { model: 'FM3', plugged: false } }, unitState: 'missing' })
+    assert.equal(alone.keep, 'Keep this one')
+    assert.deepEqual(alone.buttons, [])
+    assert.deepEqual(r.missingPickCard({ missing: 'raspberry pi 3', driving: 'MacBook Pro SG 566', hosts, units, unitState: 'present' }).buttons, [])
+    /* The phone: its buttons on the card, the unit over the computer, before the list; Keep this one only when offered; and the units asked again while it is up. */
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /\.\.\.\(missingCard\.keep \? \[\{ label: missingCard\.keep, onPress: \(\) => keepThisOne\(\) \}\] : \[\]\),[\s\S]{0,200}\.\.\.missingCard\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.short, sub: b\.sub, onPress: \(\) => chooseHost\(b\.name\) \}\)\),\s*\.\.\.\(onOpenUnits \? \[\{ label: missingCard\.list/, 'the phone’s card for a missing pick has no button for the unit on another computer')
+    assert.match(stage, /const watchingUnits = Boolean\(whereCard \|\| missingCard\?\.buttons\.length\)/, 'the units are not asked again while the missing pick’s card says where the unit is')
+    /* The browser: the notice's heading is the other card's, no cable advice, no "comes back on its own", the units asked again; Play's card the same buttons. */
+    const app = read('src/App.jsx')
+    assert.match(app, /const unitAway = Boolean\(elsewhere \|\| missingHere\?\.buttons\.length\)/)
+    assert.match(app, /const watchingUnits = Boolean\(unitAway \|\| \(link\.role === 'remote' && missingCard\?\.buttons\.length\)\)/)
+    assert.match(app, /\{unitAway && !elsewhere \? null : <p>\{elsewhere \? elsewhere\.words : fault\.body\}<\/p>\}/, 'the cable advice is under a notice that says the unit is on another computer')
+    assert.match(app, /\{faultWhy && !unitAway \? /)
+    assert.match(app, /words: missingCard\.words,\s*buttons: \[\s*\.\.\.\(missingCard\.keep \? \[\{ label: missingCard\.keep, onClick: \(\) => keepThisOne\(\) \}\] : \[\]\),\s*\.\.\.missingCard\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.label, onClick: \(\) => chooseHost\(b\.name\) \}\)\),/)
+    /* Never a button with no words on it. */
+    assert.ok(!/label: missing(Card|Here)\.keep, onClick: \(\) => keepThisOne\(\) \},\s*\{/.test(app), 'Keep this one is offered with no label')
+  })
+
+  /*
+   * SWITCHING… IN FULL INK. The button pressed disabled itself with the
+   * others, and a disabled button is drawn at under half strength: the word
+   * that says the tap took measured 1.7:1 on the phone in daylight and 2.1:1
+   * on the browser's dark page, the same gray as the button not pressed, as
+   * if nothing had happened. Only the others are dimmed now.
+   */
+  test('both ends: the card button pressed says Switching… in full ink, the others are dimmed, and a press meanwhile does nothing', async () => {
+    const { contrast, mix } = await import('../src/lib/ink.js')
+    /* How each end draws a button pressed (busy 0) and one not (busy 0, i 1), off its own expression. */
+    const drawn = (file, attr) => {
+      const src = read(file)
+      const expr = src.match(/disabled=\{(busy !== [^}]*)\}/)?.[1]
+      assert.ok(expr, `${file}: the card buttons' disabled moved: say where`)
+      const off = new Function('busy', 'i', `return ${expr}`)
+      assert.equal(off(0, 1), true, `${file}: the others are not dimmed while one is switching`)
+      assert.equal(off(null, 0), false)
+      assert.ok(src.includes(attr), `${file}: a screen reader is not told the button pressed is busy`)
+      assert.match(src, /async \(\) => \{\s*if \(busy !== null\) return\s*setBusy\(i\)/, `${file}: a second press while one is switching starts another pick`)
+      return off(0, 0)
+    }
+    /* The phone: a disabled Press is silkFaint at 0.45 over the card's panel; one not, silk. */
+    const phoneOff = drawn('mobile/src/components/ComputerCard.js', 'busy={busy === i}')
+    const press = read('mobile/src/components/Press.js')
+    assert.match(press, /const ink = on \? color\.onSignal : disabled \? color\.silkFaint : color\.silk/, 'Press’s ink moved: say where')
+    assert.match(press, /opacity: disabled \? 0\.45 :/, 'Press’s dimming moved: say where')
+    assert.match(press, /accessibilityState=\{\{ selected: on, disabled, busy \}\}/)
+    const theme = read('mobile/src/lib/theme.js')
+    for (const name of ['DARK', 'LIGHT']) {
+      const block = theme.slice(theme.indexOf(`const ${name} = {`), theme.indexOf('}', theme.indexOf(`const ${name} = {`)))
+      const hex = (key) => block.match(new RegExp(`\\b${key}: '(#[0-9a-f]{6})'`))?.[1]
+      const ink = phoneOff ? mix(hex('panel'), hex('silkFaint'), 0.45) : hex('silk')
+      const ratio = contrast(ink, hex('panel'))
+      assert.ok(ratio >= 4.5, `phone, ${name.toLowerCase()}: Switching… is ${ratio?.toFixed(2)}:1 on the card, under 4.5:1`)
+    }
+    /* The browser: a chip is silk-dim on the notice's panel, and button:disabled is at 0.45. */
+    const webOff = drawn('src/components/ComputerCard.jsx', 'aria-busy={busy === i}')
+    const css = read('src/styles.css')
+    assert.match(css, /button:disabled \{\s*opacity: 0\.45;/, 'the browser’s dimming moved: say where')
+    assert.match(css, /button\.chip \{[^}]*color: var\(--silk-dim\);/, 'the chip’s ink moved: say where')
+    for (const [name, at] of [['dark', css.indexOf(':root {')], ['light', css.indexOf("[data-theme='light'] {")]]) {
+      const block = css.slice(at, css.indexOf('}', at))
+      const hex = (key) => block.match(new RegExp(`--${key}: (#[0-9a-f]{6})`))?.[1]
+      const ink = webOff ? mix(hex('panel'), hex('silk-dim'), 0.45) : hex('silk-dim')
+      const ratio = contrast(ink, hex('panel'))
+      assert.ok(ratio >= 4.5, `browser, ${name}: Switching… is ${ratio?.toFixed(2)}:1 on the notice, under 4.5:1`)
+    }
+  })
+
   test('the roll call’s rules: one line in the log, and a pick is never left for another unit', async () => {
     const r = await import('../shared/relay-rules.mjs')
     const units = { fractalpi: { model: 'FM3', plugged: true }, 'raspberry pi 3': { model: 'AM4', plugged: false } }
@@ -4228,6 +5249,10 @@ export function run(test) {
       'two computers answered: fractalpi (FM3), raspberry pi 3 (no unit plugged in); driving raspberry pi 3, the one picked under Which unit, addressed'
     )
     assert.match(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', why: 'first', addressed: false }), /driving fractalpi, the first to answer, not addressed: a computer app on one of them is too old to be asked alone$/)
+    /* A proof nobody answered is not a computer app too old, and a count the link dropped under says so instead of what it found. */
+    assert.match(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', why: 'pick', addressed: false, proof: 0 }), /driving fractalpi, the one picked under Which unit, addressed, not proved: it did not answer when asked alone$/)
+    assert.match(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', why: 'pick', addressed: false, proof: 2 }), /too old to be asked alone$/)
+    assert.equal(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', cut: true }), 'two computers answered: fractalpi (unit not known), raspberry pi 3 (unit not known); the link dropped before the count was done: counted again when the link is back')
     assert.equal(r.rollCallLine({ hosts: ['Studio'], missing: 'Old Mac' }), 'one computer answered: Studio; Old Mac, the one picked under Which unit, did not answer')
     /* Words a person may read: plain, and never "this phone". */
     for (const words of [line, r.rollCallLine({ hosts: both, units, chosen: 'fractalpi', why: 'first' })]) assert.ok(!/this phone|\bMac\b/.test(words), words)
@@ -4253,7 +5278,7 @@ export function run(test) {
     /* Both ends log it from the same rule, once per roll call that found two or missed the pick, and neither hands the pick to another computer. */
     for (const file of ['mobile/src/lib/relay.js', 'src/lib/remote.js']) {
       const src = read(file)
-      assert.match(src, /if \(hosts\.length > 1 \|\| missing\) logDebug\('link', rollCallLine\(\{ hosts, units, chosen, why: chosenWhy, addressed: targeted, missing \}\)\)/, `${file} does not say the roll call`)
+      assert.match(src, /if \(hosts\.length > 1 \|\| missing\) logDebug\('link', rollCallLine\(\{ hosts, units, chosen, why: chosenWhy, addressed: targeted, missing, proof: proofAnswers \}\)\)/, `${file} does not say the roll call`)
       assert.ok(!/hostWithUnit/.test(src), `${file} hands the pick to another unit`)
       /* The pick is kept per account. */
       assert.match(src, /accounts\[uid\] = \{ name, many: /, `${file} keeps one pick for every account`)

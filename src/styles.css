@@ -11642,6 +11642,20 @@ button.setup-row:first-child {
   border-top: 0;
 }
 
+/* A pick under Which unit that does not answer: a row like the others, grayed, with Forget beside it (components/ComputerCard MissingRow). */
+.setup-row-missing {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 60px;
+  padding: var(--s-3) var(--s-4);
+  border-top: 1px solid var(--rule);
+}
+
+.setup-row-missing .setup-row-title {
+  color: var(--silk-faint);
+}
+
 .setup-row-text {
   flex: 1 1 auto;
   min-width: 0;

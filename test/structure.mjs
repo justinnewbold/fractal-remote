@@ -543,7 +543,13 @@ export function run(test) {
        * the app can't work yet: which account this is, and whether a computer
        * on this wifi is on another one. It draws nothing on a working rig.
        */
-      'AccountCheck'
+      'AccountCheck',
+      /*
+       * Inside the same notice when the unit is on another computer: one
+       * button per computer with a unit, the card's own (Switching… while
+       * the pick is proved). Nothing at all on a working rig.
+       */
+      'CardButtons'
     ])
     // The assistant used to be on this list — it sat above every screen at
     // once. It is the Ask tab now, which is what took the chrome down again.
