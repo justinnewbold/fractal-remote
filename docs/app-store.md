@@ -665,6 +665,11 @@ questions, which developers report Siri sometimes asking again; and whether
 Siri speaks the reply when the app comes forward, which Apple promises
 nothing about, so the notes and the page promise only what Play shows. If a
 phrase fails, the fix is another iPhone and Android build pair before Apple.
+And on an iPhone on iOS 27, look at Settings → Siri → App Access → Fractal
+Remote: Apple's iOS 27 guide names no switch there for Siri's requests (the
+privacy page's Use with Siri Requests is in iOS 26's words), so the page
+says "turn its switches off". If the switch is there by that name, the page
+can say so in an update.
 
 ### Notes for App Review, 1.87.11
 

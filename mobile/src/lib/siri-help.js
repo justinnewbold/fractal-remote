@@ -20,9 +20,15 @@
  *   - Android: the links, for Tasker and apps like it. There is no Siri, and
  *     no voice route Google opens to apps like this one yet.
  *
- * Every fact about Apple's settings is from Apple's own pages for iOS 27,
- * read on 23 October 2026, and is said no more firmly than they say it:
+ * Every fact about Apple's settings is from Apple's own pages, read on 23
+ * October 2026, for the version it is said for, and no more firmly than
+ * they say it. The app installs on iOS 16.4, so a path that moved is given
+ * for the older versions too, by Apple's own words for each:
  *
+ *   - Siri's row in Settings: Siri on iOS and iPadOS 27; "Siri (or Apple
+ *     Intelligence & Siri)" on 18 and 26 (an iPhone with Apple
+ *     Intelligence on shows the second); "Siri & Search" on 16 and 17. Each
+ *     version's "Change Siri settings". OLD_SIRI below is the three at once.
  *   - Siri asks to unlock first: the Shortcuts User Guide, "Use Siri to run
  *     shortcuts with your voice" ("When your device is locked and you run a
  *     shortcut that opens an app, Siri asks to unlock your device before
@@ -30,15 +36,27 @@
  *   - Lock Screen access: the iPhone User Guide for iOS 27, "Turn on Lock
  *     Screen features" (Settings → Face ID & Passcode, or Touch ID &
  *     Passcode, → Allow Access When Locked). Its list is not given, so the
- *     page says to look there. iOS 26 and 18 have the switch in Siri's own
- *     settings, as Allow Siri When Locked ("Change Siri settings", 26.0).
+ *     page says to look there. iOS 17, 18 and 26 have the switch in Siri's
+ *     own row, as Allow Siri When Locked ("Change Siri settings").
  *   - Turning Siri off for one app: iOS 27's "Change Siri settings" puts it
- *     at Settings → Siri → App Access → the app, and says the switches there
- *     depend on the app and the version of Siri; Apple's Siri privacy page
- *     (apple.com/legal/privacy/data/en/ask-siri-dictation) names the switch,
- *     Use with Siri Requests, at Settings → Siri → Apps → the app, the iOS 26
- *     words. And Turn Off Siri, for all of it, is iOS 27's own.
- *   - Siri's language: Settings → Siri → Language (iOS 27).
+ *     at Settings → Siri → App Access → the app, and says "the options you
+ *     see may be different depending on the app you select and which version
+ *     of Siri you're using", naming no switch for Siri's requests, so none is
+ *     named for 27. On 18 and 26 the list is Apps ("Turn Siri Suggestions on
+ *     or off": "Tap Siri (or Apple Intelligence & Siri), then tap Apps"), and
+ *     Apple's Siri privacy page (apple.com/legal/privacy/data/en/
+ *     ask-siri-dictation), in those versions' words, names the switch: Use
+ *     with Siri Requests. On 16 and 17 the apps are listed in Siri & Search
+ *     itself ("scroll down and select an app").
+ *   - Turning all of Siri off: on 27, Settings → Siri → Turn Off Siri, at the
+ *     bottom ("Turn on and activate Siri", iOS and iPadOS 27). On 26 and
+ *     earlier there is no such button: Talk to Siri (or Talk & Type to Siri)
+ *     to Off, and Press Side Button for Siri off, or on an iPad Press Top
+ *     Button for Siri (the same page for 26); Listen for, on 16 and 17. An
+ *     iPhone or iPad with a Home button says Press Home for Siri (the privacy
+ *     page, and 17's guide).
+ *   - Siri's language: Settings → Siri → Language (27), and Language in the
+ *     older row.
  *   - The Action button: Settings → Action Button → swipe to Shortcut →
  *     Choose a Shortcut (iPhone User Guide, and the Shortcuts guide's "Run
  *     shortcuts with the Action button": "iPhone 15 Pro or later"). Not on an
@@ -180,9 +198,19 @@ const IPHONE_BUTTONS = [
   }
 ]
 
+/* Siri's row in Settings before version 27, by each version's name for it (see the top). */
+const OLD_SIRI = 'Siri (or Apple Intelligence & Siri, or Siri & Search)'
+
 /* Locked, as Apple says it (see the top). `system` is iOS or iPadOS. */
 const LOCKED = (noun, system) =>
-  `With this ${noun} locked, Siri asks you to unlock it first, because these commands open the app. If Siri won’t listen at all while it’s locked: on ${system} 27, look under Allow Access When Locked in Settings → Face ID & Passcode (or Touch ID & Passcode). On ${system} 26 and earlier, turn on Allow Siri When Locked in Settings → Siri.`
+  `With this ${noun} locked, Siri asks you to unlock it first, because these commands open the app. If Siri won’t listen at all while it’s locked: on ${system} 27, look under Allow Access When Locked in Settings → Face ID & Passcode (or Touch ID & Passcode). On ${system} 26 and earlier, turn on Allow Siri When Locked in Settings → ${OLD_SIRI}.`
+
+/* Turning it off, for the app and for all of Siri, version by version as Apple says it (see the top). */
+const TURN_OFF = (system, iphone) => [
+  `To stop Siri using Fractal Remote, on ${system} 27: Settings → Siri → App Access → Fractal Remote, and turn its switches off. Which switches it has depends on the version of Siri.`,
+  `On ${system} 18 and 26: Settings → Siri (or Apple Intelligence & Siri) → Apps → Fractal Remote, then turn off Use with Siri Requests. On ${system} 17 and earlier: Settings → Siri & Search, then Fractal Remote in the list of apps, and turn its switches off.`,
+  `To turn Siri off altogether, on ${system} 27: Settings → Siri, then Turn Off Siri at the bottom. On ${system} 26 and earlier: in Settings → ${OLD_SIRI}, set Talk to Siri (or Listen for) to Off, then turn off ${iphone ? 'Press Side Button for Siri' : 'Press Top Button for Siri'} (or Press Home for Siri).`
+]
 
 /**
  * The page, as sections in order: each `{ title, note?, phrases?, links?,
@@ -245,7 +273,7 @@ export function siriPage({ os = 'ios', kind = 'phone', native = false, noun = 'p
           : []),
         'In a loud room Siri may not hear you over the rig. Starting Siri with the button, rather than by voice, means it doesn’t have to hear “Siri” first.',
         `While Siri listens, this ${noun}’s own metronome click may stop.`,
-        'The phrases are in English, so Siri’s language has to be English: Settings → Siri → Language.'
+        `The phrases are in English, so Siri’s language has to be English: on ${system} 27, Settings → Siri → Language, and on ${system} 26 and earlier, Language in Settings → ${OLD_SIRI}.`
       ]
     },
     {
@@ -257,13 +285,7 @@ export function siriPage({ os = 'ios', kind = 'phone', native = false, noun = 'p
     },
     ...(iphone ? IPHONE_BUTTONS : []),
     linksSection('A shortcut can also open one of these links, with its Open URLs step. Nothing is said back: Play shows what happened.'),
-    {
-      title: 'Turning it off',
-      lines: [
-        `To stop Siri using Fractal Remote: Settings → Siri → App Access → Fractal Remote, then turn off Use with Siri Requests. On ${system} 26 and earlier, that list is called Apps.`,
-        'To turn Siri off altogether: Settings → Siri → Turn Off Siri.'
-      ]
-    },
+    { title: 'Turning it off', lines: TURN_OFF(system, iphone) },
     {
       title: 'What Siri won’t do, on purpose',
       lines: [

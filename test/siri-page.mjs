@@ -162,14 +162,14 @@ export function run(test) {
     /* No promise of what Siri says back, which Apple makes none of for a command that opens the app. */
     assert.match(words, /Play shows what happened, as it does for a tap, and Siri may say it too\./)
     assert.ok(!/Siri (will )?(says?|tells you) “?(Scene|Tempo|Not sent)/.test(words), 'the page promises what Siri says back')
-    /* Locked, as Apple says it for iOS 27 and for 26. */
+    /* Locked, as Apple says it for iOS 27, and for 26 and earlier by each version's name for Siri's row. */
     assert.match(words, /Siri asks you to unlock it first, because these commands open the app/)
     assert.match(words, /on iOS 27, look under Allow Access When Locked in Settings → Face ID & Passcode/)
-    assert.match(words, /On iOS 26 and earlier, turn on Allow Siri When Locked in Settings → Siri\./)
+    assert.match(words, /On iOS 26 and earlier, turn on Allow Siri When Locked in Settings → Siri \(or Apple Intelligence & Siri, or Siri & Search\)\./)
     assert.match(words, /the watch may answer instead, and these commands don’t run on the watch/)
     assert.match(words, /In a loud room Siri may not hear you over the rig/)
     assert.match(words, new RegExp(`While Siri listens, this ${noun}’s own metronome click may stop\\.`))
-    assert.match(words, /Settings → Siri → Language/)
+    assert.match(words, /on iOS 27, Settings → Siri → Language, and on iOS 26 and earlier, Language in Settings → Siri \(or Apple Intelligence & Siri, or Siri & Search\)\./)
     /* Shortcuts, the Action button and Back Tap, each by the steps Apple's guides give. */
     assert.match(words, /“Song four”[\s\S]*Say “Siri, song four”, with no app name/)
     assert.match(words, /under App Shortcuts → Fractal Remote/)
@@ -178,9 +178,36 @@ export function run(test) {
     assert.match(words, /Settings → Accessibility → Touch → Back Tap, choose Double Tap or Triple Tap/)
     assert.match(words, /Use Triple Tap for anything that changes your sound/)
     assert.match(words, /its Open URLs step/)
-    /* Turning it off: the iOS 27 path, the switch Apple's Siri privacy page names, and all of Siri. Changed only after reading Apple's pages again. */
-    assert.match(words, /Settings → Siri → App Access → Fractal Remote, then turn off Use with Siri Requests\. On iOS 26 and earlier, that list is called Apps\./)
-    assert.match(words, /To turn Siri off altogether: Settings → Siri → Turn Off Siri\./)
+    /*
+     * Turning it off, version by version as Apple's own pages say it: iOS 27's App Access, whose switches
+     * Apple does not name; 18 and 26's Apps and the switch the Siri privacy page names in their words;
+     * 16 and 17's Siri & Search; and all of Siri, by 27's Turn Off Siri and the older Talk to Siri.
+     * Changed only after reading Apple's pages again.
+     */
+    assert.match(words, /on iOS 27: Settings → Siri → App Access → Fractal Remote, and turn its switches off\. Which switches it has depends on the version of Siri\./)
+    assert.match(words, /On iOS 18 and 26: Settings → Siri \(or Apple Intelligence & Siri\) → Apps → Fractal Remote, then turn off Use with Siri Requests\./)
+    assert.match(words, /On iOS 17 and earlier: Settings → Siri & Search, then Fractal Remote in the list of apps/)
+    assert.match(words, /To turn Siri off altogether, on iOS 27: Settings → Siri, then Turn Off Siri at the bottom\./)
+    assert.match(words, /On iOS 26 and earlier: in Settings → Siri \(or Apple Intelligence & Siri, or Siri & Search\), set Talk to Siri \(or Listen for\) to Off, then turn off Press Side Button for Siri \(or Press Home for Siri\)\./)
+    const ipad = help.siriWords({ os: 'ios', kind: 'ipad', native: true, noun: 'iPad' }).join('\n')
+    assert.match(ipad, /On iPadOS 26 and earlier: in Settings → Siri \(or Apple Intelligence & Siri, or Siri & Search\), set Talk to Siri \(or Listen for\) to Off, then turn off Press Top Button for Siri \(or Press Home for Siri\)\./)
+    /*
+     * And every path into Siri's settings says which version it is for: the row is Siri only on 27, and
+     * a bare "Settings → Siri" sent an iOS 26 phone with Apple Intelligence, or an iOS 17 one, to a row it does not have.
+     */
+    for (const [kind, system] of [['phone', 'iOS'], ['ipad', 'iPadOS']]) {
+      for (const native of [true, false]) {
+        const sentences = help.siriWords({ os: 'ios', kind, native, noun: NOUN[kind] }).flatMap((w) => w.split(/(?<=\.)\s+/))
+        for (const sentence of sentences.filter((x) => x.includes('Settings → Siri'))) {
+          /* Each mention, read against the version said last before it. */
+          for (const at of [...sentence.matchAll(/Settings → Siri(?! \(or| & Search)/g)].map((m) => m.index)) {
+            const said = [...sentence.slice(0, at).matchAll(new RegExp(`${system} (\\d+)`, 'g'))].at(-1)?.[1]
+            assert.equal(said, '27', `“${sentence}” gives version 27’s Siri row ${said ? `for ${system} ${said}` : 'without saying for which version'}`)
+          }
+          assert.ok(new RegExp(`${system} \\d+`).test(sentence), `“${sentence}” sends somebody to Siri’s settings without saying for which version`)
+        }
+      }
+    }
     /* And what it won't do, each with its reason. */
     const wont = page.find((s) => s.title === 'What Siri won’t do, on purpose').lines
     for (const what of ['Tap tempo', 'Volume', 'Saving', 'Editing', 'Global settings and the unit’s own click', 'The looper']) {
