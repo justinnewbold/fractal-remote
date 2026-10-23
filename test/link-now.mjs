@@ -2436,6 +2436,34 @@ export function run(test) {
   })
 
   /*
+   * On the phone, the line sits under the Which unit buttons and the pick
+   * that does not answer, in Settings and in the sheet off the unit's name,
+   * dim as each button's own line, and only with two or more computers
+   * listed: one computer has no list to take one off. The app's words, never
+   * the page's. And it keeps nothing: no storage, no new key.
+   */
+  test('phone: how to take a computer off the list is under Which unit, in Settings and the sheet, only with two or more', () => {
+    const detail = "<Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>"
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const settings = read('mobile/src/screens/Settings.js')
+    /* The live one: the demo has a Which unit of its own, for its five pretend units. */
+    const open = settings.indexOf('{hosts.length > 1 ? (')
+    const at = settings.indexOf('<Section>Which unit</Section>', open)
+    assert.ok(open !== -1 && at !== -1 && at - open < 120, 'Which unit is not inside its two-or-more check')
+    const block = settings.slice(open, settings.indexOf(') : null}', at))
+    assert.ok(block.includes(`${detail}{row.detail}</Text>`), 'each button’s own line changed its look: say how')
+    assert.match(block, new RegExp(`<MissingPick[\\s\\S]*?/>\\s*\\{/\\*[^*]*\\*/\\}\\s*${esc(detail)}\\{notUsingOne\\('app'\\)\\}</Text>\\s*</View>\\s*$`), 'the line is not last under Which unit, after the pick that does not answer, dim as a button’s line')
+    assert.match(settings, /import \{ notUsingOne \} from '\.\.\/lib\/relay-rules'/)
+    const sheet = read('mobile/src/components/LiveUnit.js')
+    assert.match(sheet, new RegExp(`<MissingPick name=\\{missing\\} onForget=\\{\\(\\) => forgetMissing\\(\\)\\} />\\s*\\{/\\*[^*]*\\*/\\}\\s*\\{hosts\\.length > 1 \\? ${esc(detail)}\\{notUsingOne\\('app'\\)\\}</Text> : null\\}\\s*</View>\\s*</Sheet>`), 'the sheet off the unit’s name does not end on the line, behind two or more computers')
+    for (const [src, where] of [[settings, 'Settings'], [sheet, 'the sheet']]) {
+      assert.equal(src.match(/notUsingOne\(/g)?.length, 1, `${where} says it more than once, or not at all`)
+      assert.ok(!src.includes("notUsingOne('page')"), `${where} tells a phone to reload a page`)
+    }
+    for (const src of [block, sheet]) assert.ok(!/AsyncStorage|setItem|localStorage/.test(src), 'Which unit keeps something now')
+  })
+
+  /*
    * And under each of two computers with one name, that it is shared: never
    * "Asking it which unit…", which is never going to end.
    */
