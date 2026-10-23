@@ -580,8 +580,11 @@ async function afterCount(was, run, began = Date.now()) {
     let before = was
     await run
     heardHosts()
-    /* Cut short by a drop, and owed: taken again now if the computer is answering, else when it does (countIfDue). Nothing it found is put to use. */
-    if (remoteCountOwed()) return countIfDue()
+    /* Cut short by a drop, and owed: taken again now if the computer is answering, else when it does (countIfDue), asked at once (askIfOwed). Nothing it found is put to use. */
+    if (remoteCountOwed()) {
+      askIfOwed()
+      return countIfDue()
+    }
     /* The roll call picked a computer: that one is told about the level readings, whatever answered first before (see metersAgain). */
     if (remoteChosenHost() !== before) {
       metersAgain()
@@ -611,6 +614,20 @@ async function afterCount(was, run, began = Date.now()) {
   } catch {
     // A roll call that fails is not a reason to distrust the link.
   }
+}
+
+/*
+ * A COUNT OWED (relay.js recountOwed) IS ASKED FOR AT ONCE, on a channel that
+ * is up with nothing heard on it yet, whatever turn of the loop is out: the
+ * reads that would have heard the computer are held for that count, the
+ * join's own among them, and the count is taken on the computer's first
+ * answer (countIfDue). Both moments: the channel coming back with one owed,
+ * and a count coming owed on a channel already back (afterCount), where the
+ * turn out is the join, waiting on those held reads, and Play said NOT
+ * CONNECTED until they ran out. /healthz is never held.
+ */
+function askIfOwed() {
+  if (remoteActive() && !remoteHostSeen() && remoteCountOwed()) hostResponds()
 }
 
 /*
@@ -942,13 +959,8 @@ export function startLink() {
       refresh()
       /* Back, and nothing heard on it yet: ask now rather than at the next turn. See doubt. */
       if (up && !remoteHostSeen()) doubt()
-      /*
-       * And with a count owed (relay.js recountOwed), asked at once whatever
-       * turn is out: the reads that would have heard the computer are held
-       * for that count, the join's own among them, and the count is taken
-       * on the computer's first answer (countIfDue). /healthz is never held.
-       */
-      if (up && !remoteHostSeen() && remoteCountOwed()) hostResponds()
+      /* And with a count owed, asked at once whatever turn is out (askIfOwed). */
+      if (up) askIfOwed()
     }),
     subscribeHostSeen((seen) => {
       if (!seen) metersAgain()

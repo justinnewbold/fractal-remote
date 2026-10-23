@@ -2159,6 +2159,35 @@ export function run(test) {
   })
 
   /*
+   * And a count cut short that only comes owed once the channel is back:
+   * the pick renamed (on no computer now), a short drop under the launch's
+   * roll call, the channel back in 0.3 s and the count ending owed seconds
+   * later. Nothing asked whether the computer was there: the turn out was
+   * the join, stuck on reads held for the count owed, and /healthz went only
+   * when that hold ran out, so Play said NOT CONNECTED and dropped every tap
+   * until about 11 s from launch (5.25 s in 1.87.50). The count coming owed
+   * asks it at once.
+   */
+  test('phone: three computers, a count that comes owed after the channel is back asks for the computer at once, and Play is connected as soon as in 1.87.50', async () => {
+    const s = await stackOnABench({ pick: JSON.stringify({ accounts: { u1: { name: 'fractalpi', many: true } } }) })
+    s.bench.computers = [{ ...FM3_MAC }, { name: 'raspberry pi 5', unit: null, lag: () => 170 }, { ...AM4_PI }]
+    s.link.startLink()
+    await s.clock.advance(1600)
+    loseSocket(s)
+    s.clock.setTimeout(() => rejoinSocket(s), 300)
+    await s.clock.advance(300)
+    const back = s.clock.now()
+    let up = null
+    for (let i = 0; i < 300 && up === null; i++) {
+      await s.clock.advance(50)
+      if (s.link.linkState().link === 'connected') up = s.clock.now() - back
+    }
+    const log = s.lines().join('\n')
+    assert.match(log, /the link dropped before the count was done: counted again when the link is back/, `the drop did not cut the count short: this does not test it\n${log}`)
+    assert.ok(up !== null && up <= 3500, `Play was connected ${up} ms after the channel was back (1.87.50: 3350)\n${log}`)
+  })
+
+  /*
    * Justin's screen of 22 October 2026: the pick, raspberry pi 3, with
    * nothing plugged in, driven at every launch, and the raw "No Fractal
    * device found" card on Play with nothing saying the FM3 was on the
