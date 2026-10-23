@@ -6260,6 +6260,10 @@ console.log('\nSiri: each command carried out on the phone, and the demo the rev
 const { run: siri } = await import('./siri.mjs')
 siri(test)
 
+console.log('\nSettings → Siri: what the page says, held to what the app does')
+const { run: siriPage } = await import('./siri-page.mjs')
+siriPage(test)
+
 test('both file kinds are listed and told apart', async () => {
   // A .syx goes back to the unit verbatim; a design re-validates first. Load
   // treating one as the other would either corrupt or silently no-op.

@@ -3377,7 +3377,9 @@ export function run(test) {
       ['src/lib/whats-live.js', /^Android build$/, 'What is live, a Developer page, Justin’s only'],
       ['src/lib/ways-in.js', /Google Play/, 'the browser’s list of routes; nothing on the phone imports it'],
       /* "A newer version is on Google Play", the store's page and its button: each looked up by the platform passed in. */
-      ['src/lib/store-rule.js', /Google Play|play\.google\.com/, 'storeNote: picked by the platform storeVersion.js passes, Platform.OS']
+      ['src/lib/store-rule.js', /Google Play|play\.google\.com/, 'storeNote: picked by the platform storeVersion.js passes, Platform.OS'],
+      /* Settings → Siri's links page for Android, the os === 'android' page, which Settings asks for with Platform.OS. */
+      ['src/lib/siri-help.js', /^There are no voice commands on Android yet\.|Android cuts the connection while the app is in the background/, 'siriPage: the Android page alone, picked by the os Settings passes, Platform.OS']
     ]
     /*
      * .mjs as well as .js: unit.mjs, fractal-sysex.mjs and decode.mjs go into
@@ -3413,6 +3415,8 @@ export function run(test) {
     assert.match(flat('mobile/src/lib/bluetooth-gear.js'), /export const betaNote = \(os\) => \(os === 'android' \? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE\)/)
     assert.match(flat('mobile/src/lib/storeVersion.js'), /const platform = Platform\.OS === 'ios' \|\| Platform\.OS === 'android' \? Platform\.OS : null/)
     assert.match(flat('mobile/src/lib/store-rule.js'), /title: `A newer version of Fractal Remote is \$\{STORE_WHERE\[platform\]\}`/)
+    assert.match(flat('mobile/src/lib/siri-help.js'), /export function siriPage\(\{ os = 'ios', kind = 'phone', native = false, noun = 'phone' \} = \{\}\) \{ if \(os === 'android'\) \{ return \[ \{ title: 'Links for Tasker', note: 'There are no voice commands on Android yet\./)
+    assert.match(flat('mobile/src/screens/Settings.js'), /<SiriHelp os=\{Platform\.OS\} /)
     /* The Developer pages: only their own tools import admin.js and whats-live.js, and Settings draws each tool for Justin's account alone. */
     const settings = flat('mobile/src/screens/Settings.js')
     for (const file of files) {

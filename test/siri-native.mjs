@@ -37,7 +37,7 @@ const MODULE = 'mobile/modules/fractal-siri/ios/FractalSiriModule.swift'
 const PIPE_JS = 'mobile/src/lib/siriPipe.js'
 
 /* Swift without its comments. Its block comments nest, so the file is first held to having none inside another. */
-function swiftCode(text) {
+export function swiftCode(text) {
   let out = ''
   let depth = 0
   let inString = false
@@ -78,10 +78,10 @@ function swiftCode(text) {
 }
 
 /* Every string literal in Swift code, as written (escapes kept). */
-const swiftStrings = (code) => [...code.matchAll(/"((?:[^"\\\n]|\\.)*)"/g)].map((m) => m[1])
+export const swiftStrings = (code) => [...code.matchAll(/"((?:[^"\\\n]|\\.)*)"/g)].map((m) => m[1])
 
 /* The phrases of each App Shortcut, in order. */
-function shortcuts(code) {
+export function shortcuts(code) {
   const body = code.slice(code.indexOf('static var appShortcuts: [AppShortcut] {'))
   return [...body.matchAll(/AppShortcut\(\s*intent: (\w+)\(\),\s*phrases: \[([\s\S]*?)\]\s*\)/g)].map((m) => ({
     intent: m[1],
@@ -101,7 +101,7 @@ function intents(code) {
 }
 
 /* An enum's cases and raw values, in order. */
-function enumCases(code, name) {
+export function enumCases(code, name) {
   const body = code.slice(code.indexOf(`enum ${name}: String, AppEnum {`), code.indexOf('static let typeDisplayRepresentation', code.indexOf(`enum ${name}:`)))
   return [...body.matchAll(/^\s*case (\w+)(?: = "([^"]*)")?\s*$/gm)].map((m) => ({ name: m[1], raw: m[2] ?? m[1] }))
 }

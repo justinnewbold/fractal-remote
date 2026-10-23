@@ -1062,6 +1062,9 @@ export function run(test) {
         'iPhone only — the watch app comes with the iPhone app and works through it; a browser has no watch, and there is no Android watch app',
       'Bluetooth (beta)':
         'phone only — a browser cannot reach a Bluetooth MIDI adapter; the phone does it through its own native module, and since 11 October 2026 only on Justin’s account (useBluetoothAllowed, mobile/src/lib/bluetooth.js)',
+      /* SIRI_TITLE: "Siri" on an iPhone or iPad, "Links for Tasker" on Android (mobile/src/lib/siri-help.js). */
+      SIRI_TITLE:
+        'phone only — Siri and the fractalremote:// links are the phone app’s: the phrases are in the iPhone app, the links open the installed app, and a browser has neither. Shown only where the links are open (useSiriLinksOpen, mobile/src/lib/siri.js)',
       Footswitches:
         'phone only as a Settings row — the browser shows the same panel, from the same shared/footswitches.mjs, as a section of the Edit sheet, where it has been since it was built',
       'Get it on your phone or tablet': 'browser only — a phone has no use for a way to get itself onto a phone, and it stays on the front page rather than inside About because "somebody who has a rig connected and wants the remote in their pocket is the likeliest buyer there is"'

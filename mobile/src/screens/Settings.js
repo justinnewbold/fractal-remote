@@ -58,6 +58,10 @@ import SendLinkButton from '../components/SendLinkButton'
 import { quitEditor } from '../lib/editors'
 import { isAdmin } from '../lib/admin'
 import { watchHow, watchPaired, watchSupported } from '../lib/watchBridge'
+import { useSiriLinksOpen } from '../lib/siri'
+import { siriRow } from '../lib/siri-help'
+import { siriPresent } from '../lib/siriPipe'
+import SiriHelp from '../components/SiriHelp'
 import { bluetoothSupported, useBluetoothAllowed, useBluetoothOn } from '../lib/bluetooth'
 import { overBluetooth } from '../lib/bleSwitch'
 import BluetoothPage from './Bluetooth'
@@ -96,6 +100,9 @@ import { deviceKind, deviceNoun, pairTitle } from '../lib/device-word'
 /* "Phone & computer", or "iPad & computer" on an iPad (device-word.mjs). Read
    once: App.js says which device this is before this file is loaded. */
 const PAIR_TITLE = pairTitle()
+
+/* "Siri" on an iPhone or iPad, "Links for Tasker" on Android (lib/siri-help): a row's name, as PAIR_TITLE is one. */
+const SIRI_TITLE = siriRow({ os: Platform.OS }).title
 
 const face = Platform.select(mono)
 
@@ -268,6 +275,19 @@ export default function Settings({
    * page, and its Stop button, with it while Bluetooth was still on.
    */
   const bluetoothAllowed = useBluetoothAllowed()
+  /*
+   * SETTINGS → SIRI, where the links are open (lib/siri useSiriLinksOpen):
+   * on an iPhone or iPad whose copy has the Siri phrases, on Android from
+   * the store version after 1.87.11, and on Justin's account anywhere. That
+   * gate is a fact about the copy of the app, never a switch an update can
+   * flip (lib/siri-rule linksOpen), so the page cannot reach customers on a
+   * store version whose review notes do not describe it. Which page is
+   * lib/siri-help's: the phrases where this copy has them (siriPresent),
+   * the links where it does not, and the links for Tasker on Android.
+   */
+  const siriOpen = useSiriLinksOpen()
+  const siriNative = siriPresent()
+  const siriStatus = siriRow({ os: Platform.OS, native: siriNative }).status
   const [looperSaid, setLooperSaid] = useState(null)
   async function stopTheLooper() {
     const looper = findLooper(allBlocks)
@@ -591,6 +611,10 @@ export default function Settings({
                 onPress={() => setPage('watch')}
               />
             ) : null}
+            {/* "Update a section in the app that will say how to manage
+                Siri." The phrases, the one rule, the shortcuts and how to
+                turn it off; on Android, the links for Tasker. */}
+            {siriOpen ? <SetupRow title={SIRI_TITLE} status={siriStatus} onPress={() => setPage('siri')} /> : null}
           </Group>
 
           <Group title="About">
@@ -1470,6 +1494,13 @@ export default function Settings({
               </Text>
             ))}
           </View>
+        </>
+      ) : null}
+
+      {page === 'siri' && siriOpen ? (
+        <>
+          {head(SIRI_TITLE, 'back')}
+          <SiriHelp os={Platform.OS} kind={deviceKind()} native={siriNative} noun={deviceNoun()} />
         </>
       ) : null}
 
