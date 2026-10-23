@@ -942,6 +942,13 @@ export function startLink() {
       refresh()
       /* Back, and nothing heard on it yet: ask now rather than at the next turn. See doubt. */
       if (up && !remoteHostSeen()) doubt()
+      /*
+       * And with a count owed (relay.js recountOwed), asked at once whatever
+       * turn is out: the reads that would have heard the computer are held
+       * for that count, the join's own among them, and the count is taken
+       * on the computer's first answer (countIfDue). /healthz is never held.
+       */
+      if (up && !remoteHostSeen() && remoteCountOwed()) hostResponds()
     }),
     subscribeHostSeen((seen) => {
       if (!seen) metersAgain()

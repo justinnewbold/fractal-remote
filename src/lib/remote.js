@@ -308,7 +308,8 @@ async function takeCensus({
   const record = readPick()
   const picked = record?.name || null
   const proved = Boolean(hosts.length > 1 && chosen && targeted)
-  const held = !proved && holdsFor(record) && readsOnlyTo(picked) ? holdReads() : null
+  /* Or the hold a count cut short kept for the one owed (oweCount): its pick's answer, or its first window, lets the reads go. */
+  const held = !proved && holdsFor(record) && readsOnlyTo(picked) ? holdReads() : recountOwed ? readsHeld : null
   readsTo = proved ? chosen : null
   if (!readsAsked) readsAsked = []
   try {
@@ -428,8 +429,11 @@ async function takeCensus({
         owedOver()
       }
     }
-    held?.open()
-    mixHold?.open()
+    /* Whatever held reads for it is over: the count has said where they go. One cut short has not (oweCount). */
+    if (!cut) {
+      held?.open()
+      mixHold?.open()
+    }
   }
   hostsChanged()
   return hosts
@@ -472,7 +476,11 @@ const readsOnlyTo = (name) => !readsAsked || readsAsked.every((host) => host ===
  * or proved, the pick is chosen again by the count owed (and the unit read
  * again for it, App's effect on chosenHost), and reads meanwhile go to the
  * pick by name where the count had heard it and every read so far went to
- * it, still written down for that count to go by. The phone's relay.js the same.
+ * it, still written down for that count to go by. Where it had not heard
+ * the pick (the drop took its answer, or it is slow), they stay held on an
+ * account whose reads wait for its pick, for the count owed to say where
+ * they go, COUNT_WAIT_MS from here at most: never to whoever answers first
+ * while the link is down or coming back. The phone's relay.js the same.
  */
 function oweCount() {
   /* Asked of the pick already (after a mix on screen, or with every read so far its own): it goes on being. */
@@ -484,6 +492,11 @@ function oweCount() {
   countTried = false
   countedOnLink = false
   recountOwed = true
+  if (readsTo || !holdsFor(readPick())) readsHeld?.open()
+  else {
+    const held = holdReads()
+    held.until = Math.max(held.until, Date.now() + COUNT_WAIT_MS)
+  }
 }
 
 /** Whether a drop since `from` cut a count (or a proof) short: one before its proof was asked, or under a proof it left with no answer or two. See takeCensus. */

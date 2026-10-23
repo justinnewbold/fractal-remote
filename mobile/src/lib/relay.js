@@ -1022,9 +1022,9 @@ async function takeCensus({
         /* A count owed is taken: writes go by what it found. */
         recountOwed = false
         owedOver()
+        /* And whatever held reads for it, the join's own hold too, is over: the count has said where they go. One cut short has not (oweCount). */
+        readsHeld?.open()
       }
-      /* And whatever held reads for it, the join's own hold too, is over: the count has said where they go. */
-      readsHeld?.open()
     }
   }
 }
@@ -1039,6 +1039,15 @@ async function takeCensus({
  * to the pick by name, where the count had heard it and every read so far
  * went to it; who they went to is still written down, for that count to go
  * by (remoteReadsAskedOf).
+ *
+ * AND WHERE IT HAD NOT HEARD THE PICK, THEY STAY HELD, on an account whose
+ * reads wait for its pick (holdsFor): the drop took the pick's answer, or
+ * the pick is slow. Let go here, every read made while the link was down or
+ * coming back went to whoever answered first, and the mix the launch no
+ * longer shows (the MacBook's FM3 over a Pi's "No Fractal device found")
+ * came back after the drop. They wait for the count owed, as at a launch:
+ * the pick's answer to it lets them go, asked of it, or its first window
+ * says where they go. Held COUNT_WAIT_MS from here at most, as any hold is.
  */
 function oweCount() {
   /* Asked of the pick already (after a mix on screen, or with every read so far its own): it goes on being. */
@@ -1050,6 +1059,11 @@ function oweCount() {
   countTried = false
   countedOnLink = false
   recountOwed = true
+  if (readsTo || !holdsFor(pickOf())) readsHeld?.open()
+  else {
+    const held = holdReads()
+    held.until = Math.max(held.until, Date.now() + COUNT_WAIT_MS)
+  }
 }
 
 /** Whether a drop since `from` cut a count (or a proof) short: one before its proof was asked, or under a proof it left with no answer or two. See takeCensus. */

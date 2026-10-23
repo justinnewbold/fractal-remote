@@ -2123,6 +2123,42 @@ export function run(test) {
   })
 
   /*
+   * The same drop, early enough to take the pick's own answer to the roll
+   * call: the count it cut short had not heard the pick, so it let the reads
+   * go, and every read made while the link was down or coming back went to
+   * whoever answered first. The MacBook's FM3 went up in the header over the
+   * Pi 5's "No Fractal device found", the mix the launch no longer shows,
+   * until the count owed took it down. Now they wait for that count, and it
+   * is taken as the channel is back: the reads that would have heard the
+   * computer are the ones held, so /healthz is asked at once.
+   */
+  test('phone: three computers, the channel lost under the roll call before the pick answered: no read reaches another computer, the header is never another unit, and the count owed is taken as the channel is back', async () => {
+    const s = await stackOnABench({ pick: JSON.stringify({ accounts: { u1: { name: 'raspberry pi 3', many: true } } }) })
+    s.bench.computers = [{ ...FM3_MAC }, { name: 'raspberry pi 5', unit: null, lag: () => 170 }, { ...AM4_PI }]
+    s.link.startLink()
+    await s.clock.advance(800)
+    const lost = s.clock.now()
+    loseSocket(s)
+    s.clock.setTimeout(() => rejoinSocket(s), 2000)
+    const headers = []
+    let driven = null
+    for (let i = 0; i < 200; i++) {
+      await s.clock.advance(50)
+      const named = s.rig.getState().deviceName
+      if (named && headers[headers.length - 1] !== named) headers.push(named)
+      if (!driven && s.link.linkState().chosenHost === 'raspberry pi 3') driven = s.clock.now() - lost
+    }
+    const log = s.lines().join('\n')
+    assert.match(log, /two computers answered: MacBook Pro SG 566 \(unit not known\), raspberry pi 5 \(unit not known\); the link dropped before the count was done/, `the drop did not take the pick's answer: this does not test it\n${log}`)
+    assert.deepEqual(headers, ['AM4'], `another computer's unit went up in the header\n${log}`)
+    for (const c of s.bench.computers.filter((x) => x.name !== 'raspberry pi 3')) {
+      const reads = (c.heard || []).filter((h) => h.at >= lost && !h.host && !['/healthz', '/store/config/host.name', '/telemetry/meters'].includes(h.path))
+      assert.deepEqual(reads.map((h) => h.path), [], `${c.name} answered the unit's reads after the drop\n${log}`)
+    }
+    assert.ok(driven !== null && driven < 7000, `the count owed was driven ${driven} ms after the drop: more than its own four and a half seconds after the channel was back\n${log}`)
+  })
+
+  /*
    * Justin's screen of 22 October 2026: the pick, raspberry pi 3, with
    * nothing plugged in, driven at every launch, and the raw "No Fractal
    * device found" card on Play with nothing saying the FM3 was on the
@@ -4611,6 +4647,64 @@ export function run(test) {
         assert.equal(moved.done && !moved.error, true, moved.error?.message)
         assert.deepEqual(writes(bench), [['/scene', 'MacBook Pro SG 566']], `${roll}/${proof}: a tap after Which unit's proof had no answer went to every computer`)
       }
+    })
+
+    /*
+     * A COUNT CUT SHORT WITH THE PICK'S ANSWER IN THE DROP KEEPS ITS READS
+     * HELD. It kept them with the pick only when it had heard the pick; when
+     * the drop took the pick's answer, the hold was let go, and every read
+     * made while the link was down or coming back went to whoever answered
+     * first: the MacBook's FM3 in the header over the Pi 5's "No Fractal
+     * device found", the mix 1.87.51 takes out of the launch, back after a
+     * drop. Now they wait for the count owed, as at a launch.
+     */
+    test(`${end}: a count cut short by a drop that took the pick's answer keeps its reads held, and none goes to whoever answers first before the count owed says where`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch, service } = t
+      let lost = true
+      const pi3 = computer('raspberry pi 3', 'AM4', { lag: 320 })
+      const answers = pi3.reply
+      pi3.reply = (p) => (lost ? 'silent' : answers(p))
+      bench.computers = [computer('MacBook Pro SG 566', 'FM3', { lag: 150 }), computer('raspberry pi 5', 'FM3', { plugged: false, lag: 170 }), pi3]
+      const census = counted(t)
+      await clock.advance(250)
+      service.drop()
+      const reads = []
+      await clock.advance(750)
+      reads.push(watch(relay.remoteRequest('/scene')))
+      await clock.advance(1100)
+      reads.push(watch(relay.remoteRequest('/scene')))
+      await clock.advance(400)
+      assert.equal(census.done, true)
+      assert.equal(relay.remoteCountOwed(), true, 'the count the drop took the pick’s answer from was kept')
+      lost = false
+      service.back()
+      const seen = watch(relay.hostResponds())
+      await clock.advance(20)
+      reads.push(watch(relay.remoteRequest('/scene')))
+      await clock.advance(200)
+      assert.equal(seen.value, true)
+      assert.deepEqual(sentOf(bench, '/scene'), [], 'a read went before the count owed had begun')
+      const again = counted(t)
+      await clock.advance(8000)
+      assert.equal(again.done, true)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+      assert.deepEqual(sentOf(bench, '/scene'), ['raspberry pi 3', 'raspberry pi 3', 'raspberry pi 3'], 'a read made while the count was owed went to whoever answers first')
+      for (const read of reads) assert.equal(read.done && !read.error && read.value?.from, 'raspberry pi 3', read.error?.message)
+      /* The pick heard before the drop: reads go on to it by name, and nothing waits. */
+      const heard = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      heard.bench.computers = [computer('MacBook Pro SG 566', 'FM3', { lag: 150 }), computer('raspberry pi 5', 'FM3', { plugged: false, lag: 170 }), computer('raspberry pi 3', 'AM4', { lag: 320 })]
+      counted(heard)
+      await heard.clock.advance(1600)
+      heard.service.drop()
+      await heard.clock.advance(4000)
+      assert.equal(heard.relay.remoteCountOwed(), true)
+      heard.service.back()
+      await heard.clock.advance(20)
+      const after = heard.watch(heard.relay.remoteRequest('/scene'))
+      await heard.clock.advance(400)
+      assert.equal(after.done && after.value?.from, 'raspberry pi 3', 'a read with the pick heard waited, or went to another')
+      assert.deepEqual(sentOf(heard.bench, '/scene'), ['raspberry pi 3'])
     })
   }
 
