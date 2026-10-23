@@ -971,8 +971,20 @@ export function run(test) {
     assert.equal(pedalName({ slug: 'comp', name: 'Compressor 1' }), 'Compressor')
     assert.equal(pedalName({ slug: 'multicomp', name: 'Multiband Compressor 1' }), 'Multiband Compressor')
     assert.equal(pedalName({ slug: 'amp', name: 'Amp 11' }), 'Amp 11')
-    assert.equal(pedalName({ slug: 'looper' }), 'looper')
+    assert.equal(pedalName({ slug: 'looper', name: 'Looper 1' }), 'Looper')
+    assert.equal(pedalName({ slug: 'drive', name: 'Drive' }), 'Drive')
+    /* No name of its own: none given, only its code word (the AM4 over Bluetooth, bleWire am4Placed), or a code nobody has a name for. Three letters, not "volpan". */
+    assert.equal(pedalName({ slug: 'looper' }), '')
+    for (const slug of ['compressor', 'drive', 'amp', 'volpan', 'reverb', 'geq', 'peq']) {
+      assert.equal(pedalName({ slug, name: slug }), '', `an AM4 ${slug} over Bluetooth spells its code word`)
+    }
+    assert.equal(pedalName({ slug: '0x7e', name: '0x7e' }), '')
+    assert.equal(pedalName({ slug: 'drive', name: '0X7E' }), '')
     assert.equal(pedalName(null), '')
+    /* Exactly as bleWire names an AM4's blocks: by slug, and by code for one it does not know. */
+    const ble = read('mobile/src/lib/bleWire.js')
+    assert.match(ble, /slug: block\.slug,\s*name: block\.slug,/, 'the AM4 over Bluetooth names its blocks some other way now; check pedalName against it')
+    assert.match(ble, /const name = `0x\$\{code\.toString\(16\)\}`/)
     /* Whole: in one or two lines, broken only between words, every word drawn. */
     assert.equal(laidWhole('Drive', [{ text: 'Drive' }]), true)
     assert.equal(laidWhole('Multiband Compressor', [{ text: 'Multiband ' }, { text: 'Compressor' }]), true)

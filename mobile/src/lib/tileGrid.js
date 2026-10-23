@@ -60,10 +60,18 @@ export function bandTop(viewport, cardBottom = 0, gap = 0) {
  * playShape `names`): the unit's own name for the block, less a lone "1".
  * "Drive 1" is Drive and "Delay 2" stays Delay 2, the same rule the three
  * letters keep (shortName shortBlock: DRV, and DLY 2 only for a second
- * one). A block the unit gave no name keeps its own word for itself.
+ * one).
+ *
+ * And no whole name at all ('') for a block with no name of its own: none
+ * given, only its code word ("volpan", "geq": the AM4 over Bluetooth names
+ * every block after it), or a code nobody has a name for ("0x7e"). Those
+ * keep their three letters (VOL, EQ), as they have under 621 points of row,
+ * rather than spelling a code word out in lowercase.
  */
 export function pedalName(block) {
-  const name = String(block?.name || block?.slug || '').trim()
+  const slug = String(block?.slug || '').trim()
+  const name = String(block?.name || '').trim()
+  if (!name || name === slug || /^0x[0-9a-f]+$/i.test(name)) return ''
   return name.replace(/\s+1$/, '')
 }
 
