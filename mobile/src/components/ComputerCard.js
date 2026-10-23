@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Text, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { AccessibilityInfo, Platform, Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
 import Press from './Press'
@@ -18,9 +18,19 @@ import Press from './Press'
  * under the words: thumb-high, one per way out. A button's `sub` is the line
  * under its label, two lines long where the label has one: the computer's
  * name goes there, so a narrow phone or bigger text never cuts it off.
+ *
+ * SAID ALOUD ON AN IPHONE TOO. It stands in for the "No Fractal device
+ * found" fault, which went through the Toast and so was spoken by
+ * VoiceOver; VoiceOver does not read a live region (TalkBack does, which is
+ * what accessibilityLiveRegion is for), so the card came up in silence and a
+ * VoiceOver user who used to hear that something was wrong heard nothing.
+ * Announced as the Toast does, whenever its words come or change.
  */
 export default function ComputerCard({ words, buttons = [] }) {
   const [busy, setBusy] = useState(null)
+  useEffect(() => {
+    if (words && Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(words)
+  }, [words])
   return (
     <View
       accessibilityLiveRegion="polite"

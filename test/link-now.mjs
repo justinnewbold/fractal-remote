@@ -4963,6 +4963,10 @@ export function run(test) {
     const press = read('mobile/src/components/Press.js')
     assert.match(press, /<Text\s+numberOfLines=\{1\}[\s\S]{0,240}\{label\}/, 'Press’s label is no longer one line: say so here')
     assert.match(press, /\{sub \? \(\s*<Text\s+numberOfLines=\{2\}/, 'the line under a Press is no longer two lines: the computer’s name may be cut')
+    /* Spoken by VoiceOver as the fault it stands in for was (the Toast): VoiceOver does not read a live region. Both cards are this one component. */
+    assert.match(card2, /useEffect\(\(\) => \{\s*if \(words && Platform\.OS === 'ios'\) AccessibilityInfo\.announceForAccessibility\(words\)\s*\}, \[words\]\)/, 'the card comes up in silence under VoiceOver')
+    assert.match(card2, /accessibilityLiveRegion="polite"/, 'TalkBack no longer hears the card')
+    assert.equal(stage.match(/<ComputerCard\b/g)?.length, 2, 'a card on Play that is not ComputerCard is not said aloud')
     assert.match(stage, /useEffect\(\(\) => \(watchingUnits \? watchUnits\(\) : undefined\), \[watchingUnits\]\)/)
     /* The browser: in the notice that stands where Play would be, the same words and buttons. */
     const app = read('src/App.jsx')
