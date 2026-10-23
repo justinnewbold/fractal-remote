@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, radius, space } from '../lib/theme'
 import { ANY_WAY_UP, clearSides, firstFrame } from '../lib/screenShape'
-import { SHEET_MAX, pageRow, playLines } from '../lib/gigSize'
+import { SHEET_MAX, pageRow, playLines } from '../lib/playShape'
 
 /* Above a tall sheet: the status bar — this much where the phone does not say — and a strip of glass. */
 const STATUS_AT_LEAST = 20
@@ -69,7 +69,7 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
   const highest = tall ? Math.max(height * 0.8, height - Math.max(top, STATUS_AT_LEAST) - GLASS) : height * 0.8
   /*
    * NO WIDER THAN SHEET_MAX, CENTERED, on a screen where Play opens up
-   * (gigSize playShape): the channel picker and Which unit ran nine hundred
+   * (lib/playShape): the channel picker and Which unit ran nine hundred
    * points edge to edge on an iPad on its side or a Duo opened. By the same
    * line as Play's, from 621 points of row, and off 40 under it, measured on
    * the sheet's own frame (the screen it comes up over) and never the

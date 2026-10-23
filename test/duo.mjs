@@ -24,7 +24,7 @@
  * upright, its width is measured once and never changes again, and a pop-up
  * that is a modal moves nothing wherever it sits.
  *
- * Then the opened-up Play itself (gigSize playShape): from 621 points of row
+ * Then the opened-up Play itself (lib/playShape): from 621 points of row
  * the pedals' whole names and the buttons fixed to the bottom, from 700 four
  * scenes, six pedals and one row of buttons, each line off 40 under where it
  * came on, and under 621 today's Play, which these cases hold exactly.
@@ -68,6 +68,39 @@ async function screenShape() {
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+}
+
+/**
+ * lib/playShape, run, with the lib/gigSize it reads beside it: copies as
+ * modules, since Node wants the extension that Metro does without. `edit`
+ * changes playShape's own text before it is run. The answer is both files'
+ * exports in one, the shared sizes and the phone's own shape, as Play reads
+ * them.
+ */
+async function playRule(edit = (text) => text) {
+  const src = read('mobile/src/lib/playShape.js')
+  const imports = [...src.matchAll(/^import[\s\S]*?from\s+'([^']+)'/gm)].map((m) => m[1])
+  assert.deepEqual(imports, ['./gigSize'], 'lib/playShape imports something this check has no copy of')
+  const dir = mkdtempSync(join(tmpdir(), 'play-shape-'))
+  try {
+    writeFileSync(join(dir, 'package.json'), '{ "type": "module" }')
+    writeFileSync(join(dir, 'gigSize.js'), read('mobile/src/lib/gigSize.js'))
+    writeFileSync(join(dir, 'playShape.js'), edit(src).replace("from './gigSize'", "from './gigSize.js'"))
+    const gig = await import(pathToFileURL(join(dir, 'gigSize.js')).href)
+    const shape = await import(pathToFileURL(join(dir, 'playShape.js')).href)
+    return { ...gig, ...shape }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+/** One function's text from a file, from `export function name(` to the brace that closes it. */
+function functionText(src, name) {
+  const start = src.indexOf(`export function ${name}(`)
+  assert.ok(start >= 0, `${name} is gone; this check reads it`)
+  const end = src.indexOf('\n}\n', start)
+  assert.ok(end > start, `${name} has no closing brace this check can find`)
+  return src.slice(start, end + 2)
 }
 
 /**
@@ -262,7 +295,7 @@ export function run(test) {
   })
 
   test('Play’s first frame, mount after mount: a phone’s is today’s to the fraction, and a window that changed while Play was away is the window’s', async () => {
-    const g = await import('../mobile/src/lib/gigSize.js')
+    const g = await playRule()
     const { firstFrame } = await screenShape()
     /*
      * Stage's own lines from the window to the row, run as React would run
@@ -577,7 +610,7 @@ export function run(test) {
      * own columns, Fit's own four and 96, three letters, and the buttons at
      * the end of the page: what the phone drew before any of this.
      */
-    const g = await import('../mobile/src/lib/gigSize.js')
+    const g = await playRule()
     const today = (step, layout) => ({
       wide: false,
       spread: false,
@@ -607,13 +640,13 @@ export function run(test) {
     for (const width of [320, 375, 390, 393, 402, 412, 430, 440, 466, 600, 652]) {
       assert.equal(g.playShape(g.pageRow(width), 0, 'across', null).wide, false, `a ${width}-point Play opened up`)
     }
-    /* Today's values handed to fitTiles change nothing: its own four and 96 are what it had. */
+    /* Today's values handed to Play's fit (fitWide) change nothing: fitTiles' own four and 96 are what it had. */
     for (const available of [120, 300, 340, 512, 560, 707, 900]) {
       for (const [scenes, blocks] of [[0, 0], [2, 4], [4, 8], [8, 8], [8, 9], [8, 12], [8, 16], [8, 24]]) {
         for (const width of [0, 190, 200, 343, 361, 398, 500]) {
           for (const fxCols of [1, 2, 3, 4]) {
             const args = { available, scenes, blocks, sceneCols: 2, fxCols, gap: 8, width }
-            assert.deepEqual(g.fitTiles({ ...args, most: g.FX_MAX, max: 96 }), g.fitTiles(args), `fitTiles moved under 621 for ${JSON.stringify(args)}`)
+            assert.deepEqual(g.fitWide({ ...args, most: g.FX_MAX, max: 96 }), g.fitTiles(args), `Fit moved under 621 for ${JSON.stringify(args)}`)
           }
         }
       }
@@ -621,7 +654,7 @@ export function run(test) {
   })
 
   test('Play opens up at 621, spreads at 700 and takes two more pedals at 936, at the widths the iPhone Duo, iPads and phones have', async () => {
-    const g = await import('../mobile/src/lib/gigSize.js')
+    const g = await playRule()
     /*
      * As rows (what the lines are measured on), at Smallest with the scenes
      * Across, the default. 637 is the Duo open and held tall (669 less 32),
@@ -686,7 +719,7 @@ export function run(test) {
   })
 
   test('only Smallest and Small, with the scenes Across or Like the unit, spread; the rest gain only the names and the fixed buttons', async () => {
-    const g = await import('../mobile/src/lib/gigSize.js')
+    const g = await playRule()
     for (const row of [712, 820, 1101]) {
       for (let step = 0; step < g.SIZES.length; step += 1) {
         for (const layout of ['across', 'four', 'down', 'mine']) {
@@ -713,7 +746,7 @@ export function run(test) {
   })
 
   test('each line goes off 40 points under where it came on, so a divider dragged across one never flickers', async () => {
-    const g = await import('../mobile/src/lib/gigSize.js')
+    const g = await playRule()
     const flips = (rows) => {
       const out = { wide: [], spread: [], eight: [] }
       let was = null
@@ -748,44 +781,140 @@ export function run(test) {
   })
 
   test('six pedals to a row on a wide row is one named number, and four there is a one-number change', async () => {
-    const src = read('src/lib/gigSize.js')
+    const src = read('mobile/src/lib/playShape.js')
     assert.match(src, /^export const WIDE_PEDALS = 6$/m)
     assert.equal(src.match(/^export const WIDE_PEDALS = /gm).length, 1)
-    /* Nothing else in the rule names a pedal count: the eight is worked out from it. */
-    const rule = src.slice(src.indexOf('THE OPENED-UP PLAY'))
+    /* Nothing else in the rule names a pedal count: the eight is worked out from it. (Fit's twin after it has fitTiles' own numbers, and a test of its own.) */
+    const rule = src.slice(src.indexOf('THE OPENED-UP PLAY'), src.indexOf('FIT, WITH THE FOUR LIFTED'))
+    assert.ok(rule.includes('export function playShape(') && rule.includes('export function foldInset('), 'the rule was not read; this check reads it')
     assert.match(rule, /export const WIDEST_PEDALS = WIDE_PEDALS > FX_MAX \? WIDE_PEDALS \+ 2 : WIDE_PEDALS/)
     assert.doesNotMatch(rule.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' '), /fxCols: [0-9]|\? 6\b|\? 8\b|= 8\b/, 'a pedal count is written into the rule beside WIDE_PEDALS')
     /* The rule run with the one number changed to four: four everywhere, even from 936, and never past four in Fit. */
-    const dir = mkdtempSync(join(tmpdir(), 'wide-pedals-'))
-    try {
-      const file = join(dir, 'gigSize.mjs')
-      writeFileSync(file, src.replace(/^export const WIDE_PEDALS = 6$/m, 'export const WIDE_PEDALS = 4'))
-      const four = await import(pathToFileURL(file).href)
-      for (const row of [700, 820, 951, 1148]) {
-        const s = four.playShape(row, 0, 'across', null)
-        assert.deepEqual([s.spread, s.sceneCols, s.fxCols, s.fxMost], [true, 4, 4, 4], `with four, a ${row}-point row`)
-      }
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
+    const four = await playRule((text) => text.replace(/^export const WIDE_PEDALS = 6$/m, 'export const WIDE_PEDALS = 4'))
+    assert.equal(four.WIDE_PEDALS, 4)
+    for (const row of [700, 820, 951, 1148]) {
+      const s = four.playShape(row, 0, 'across', null)
+      assert.deepEqual([s.spread, s.sceneCols, s.fxCols, s.fxMost], [true, 4, 4, 4], `with four, a ${row}-point row`)
+      assert.equal(four.fitWide({ available: 500, scenes: 8, blocks: 24, sceneCols: s.sceneCols, fxCols: s.fxCols, most: s.fxMost, width: row }).fxCols, 4, `with four, Fit went past four on a ${row}-point row`)
     }
   })
 
-  test('fitTiles takes more than four pedals to a row only when it is asked to, and never fewer than four as its most', async () => {
-    const g = await import('../mobile/src/lib/gigSize.js')
+  test('fitWide takes more than four pedals to a row only when it is asked to, and never fewer than four as its most', async () => {
+    const g = await playRule()
     /* Asked for six, six: the spread layout's start and its most. */
-    assert.equal(g.fitTiles({ available: 500, scenes: 8, blocks: 9, sceneCols: 4, fxCols: 6, most: 6, width: 700 }).fxCols, 6)
-    assert.equal(g.fitTiles({ available: 500, scenes: 8, blocks: 9, sceneCols: 4, fxCols: 8, most: 8, width: 1100 }).fxCols, 8)
-    /* Not asked, six is four, as the browser and every phone have it. */
-    assert.equal(g.fitTiles({ available: 500, scenes: 8, blocks: 9, sceneCols: 4, fxCols: 6, width: 700 }).fxCols, 4)
+    assert.equal(g.fitWide({ available: 500, scenes: 8, blocks: 9, sceneCols: 4, fxCols: 6, most: 6, width: 700 }).fxCols, 6)
+    assert.equal(g.fitWide({ available: 500, scenes: 8, blocks: 9, sceneCols: 4, fxCols: 8, most: 8, width: 1100 }).fxCols, 8)
+    /* Not asked, six is four, as fitTiles has it for the browser and every phone. */
+    assert.equal(g.fitWide({ available: 500, scenes: 8, blocks: 9, sceneCols: 4, fxCols: 6, width: 700 }).fxCols, 4)
     /* A most under four is four. */
-    assert.equal(g.fitTiles({ available: 300, scenes: 8, blocks: 24, fxCols: 4, most: 2, width: 500 }).fxCols, 4)
+    assert.equal(g.fitWide({ available: 300, scenes: 8, blocks: 24, fxCols: 4, most: 2, width: 500 }).fxCols, 4)
     /* The taller ceiling from 621. */
-    assert.equal(g.fitTiles({ available: 900, scenes: 2, blocks: 4, max: 120 }).tile, 120)
-    assert.equal(g.fitTiles({ available: 900, scenes: 2, blocks: 4 }).tile, 96)
+    assert.equal(g.fitWide({ available: 900, scenes: 2, blocks: 4, max: 120 }).tile, 120)
+    assert.equal(g.fitWide({ available: 900, scenes: 2, blocks: 4 }).tile, 96)
+    /* And fitTiles itself, the browser's, is main's: it has no `most`, and six asked is four. */
+    assert.equal(g.fitTiles({ available: 500, scenes: 8, blocks: 9, sceneCols: 4, fxCols: 6, most: 6, width: 700 }).fxCols, 4)
+  })
+
+  test('fitWide is fitTiles with the four lifted and nothing else: the same answer at four over a wide sweep, and the same lines', async () => {
+    /*
+     * Twins, so they cannot drift apart. fitTiles is the browser's and every
+     * phone's under 621 points (lib/gigSize, shared); fitWide is the phone's
+     * own copy with its four read as `most` (lib/playShape), because a line
+     * added to the shared one made every merge a new computer app. At four,
+     * asked for or left out, every answer must be fitTiles'.
+     */
+    const g = await playRule()
+    const differ = []
+    let asked = 0
+    for (const available of [-10, 0, 1, 43, 44, 90, 120, 200, 300, 340, 451, 512, 560, 707, 900, 1300]) {
+      for (const scenes of [0, 1, 2, 3, 4, 5, 8, 12]) {
+        for (const blocks of [0, 1, 3, 4, 5, 7, 8, 9, 12, 16, 24, 40]) {
+          for (const sceneCols of [0, 1, 2, 4]) {
+            for (const fxCols of [0, 1, 2, 3, 4, 6, 8]) {
+              for (const width of [0, 120, 190, 200, 343, 361, 398, 500, 700, 1148]) {
+                for (const [gap, max] of [[8, 96], [8, 120], [12, 96]]) {
+                  const args = { available, scenes, blocks, sceneCols, fxCols, gap, max, width }
+                  const want = g.fitTiles(args)
+                  for (const most of [g.FX_MAX, undefined]) {
+                    const got = g.fitWide(most === undefined ? args : { ...args, most })
+                    asked += 1
+                    if (got.tile !== want.tile || got.fxCols !== want.fxCols || Object.keys(got).length !== 2) {
+                      differ.push(`${JSON.stringify({ ...args, most })}: fitTiles ${JSON.stringify(want)}, fitWide ${JSON.stringify(got)}`)
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    assert.ok(asked > 500000, `the sweep asked only ${asked}`)
+    assert.deepEqual(differ.slice(0, 5), [], `fitWide and fitTiles part company at four (${differ.length} answers)`)
+    /* A most under four, or one that is not a number, is four too, and fitTiles' answer. */
+    for (const most of [0, 1, 2, 3, 3.9, -6, null, NaN, 'four', '4']) {
+      for (const [available, blocks, width] of [[300, 24, 500], [120, 9, 361], [707, 16, 1148], [50, 40, 0]]) {
+        const args = { available, scenes: 8, blocks, fxCols: 4, width }
+        assert.deepEqual(g.fitWide({ ...args, most }), g.fitTiles(args), `a most of ${String(most)} is not fitTiles' four`)
+      }
+    }
+    /*
+     * And line for line: fitWide's text with its `most` taken back out is
+     * fitTiles' text, comments aside. A change to the arithmetic of either
+     * one, made without the other, fails here even where the sweep does not
+     * reach.
+     */
+    const bare = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n').trim()
+    const tiles = functionText(read('mobile/src/lib/gigSize.js'), 'fitTiles')
+    assert.equal(tiles, functionText(read('src/lib/gigSize.js'), 'fitTiles'), 'the phone’s copy of lib/gigSize is not the browser’s')
+    const wide = functionText(read('mobile/src/lib/playShape.js'), 'fitWide')
+    const cap = 'const cap = Math.max(FX_MAX, Math.floor(Number(most)) || FX_MAX)\n'
+    assert.equal(wide.split(cap).length - 1, 1, 'fitWide no longer works its cap out from `most` the one way; this check reads it')
+    assert.ok(/,\n {2}most = FX_MAX\n\} = \{\}\)/.test(wide), 'fitWide’s `most` is no longer its last setting, left out as four; this check reads it')
+    const backToFour = wide
+      .replace('export function fitWide(', 'export function fitTiles(')
+      .replace(/,\n {2}most = FX_MAX\n\} = \{\}\)/, '\n} = {})')
+      .replace(`  ${cap}`, '')
+      .replace(/\bcap\b/g, 'FX_MAX')
+    assert.equal(bare(backToFour), bare(tiles), 'fitWide is no longer fitTiles with its four read as `most`: change both, or neither')
+  })
+
+  test('the opened-up Play is the phone’s alone: nothing of it is in the files the browser and the computer app are made from', async () => {
+    /*
+     * "A new computer version only when its own part changed." The computer
+     * app serves the browser's files, and scripts/computer-fingerprint.mjs
+     * makes a new computer app whenever one of them changes. The shape rule
+     * and Fit's twin are the phone's only, so they live in a phone file the
+     * browser never imports, and the shared lib/gigSize carries none of it.
+     */
+    const shared = read('src/lib/gigSize.js')
+    assert.equal(read('mobile/src/lib/gigSize.js').replace(/^\/\* Generated from[\s\S]*?\*\/\n\n/, ''), shared, 'the phone’s lib/gigSize is not the browser’s, copied')
+    for (const name of ['OPENS_AT', 'SPREADS_AT', 'TWO_MORE_AT', 'LETS_GO', 'WIDE_PEDALS', 'WIDEST_PEDALS', 'WIDE_SCENES', 'WIDE_TILE', 'PAGE_MAX', 'SHEET_MAX', 'pageRow', 'playLines', 'playShape', 'foldInset', 'fitWide', 'most']) {
+      assert.ok(!new RegExp(`\\b${name}\\b`).test(code(shared)), `the shared lib/gigSize has ${name} in it, so every merge is a new computer app`)
+    }
+    const g = await playRule()
+    for (const name of ['OPENS_AT', 'SPREADS_AT', 'TWO_MORE_AT', 'LETS_GO', 'WIDE_PEDALS', 'WIDEST_PEDALS', 'WIDE_SCENES', 'WIDE_TILE', 'PAGE_MAX', 'SHEET_MAX', 'pageRow', 'playLines', 'playShape', 'foldInset', 'fitWide']) {
+      assert.ok(name in g, `lib/playShape has no ${name}`)
+    }
+    /* Not generated, so nothing copies it anywhere and npm run sync:rules never writes over it. */
+    assert.ok(!read('scripts/sync-relay-rules.mjs').includes('playShape'), 'lib/playShape is made a generated copy')
+    assert.ok(!read('mobile/src/lib/playShape.js').startsWith('/* Generated from'))
+    /* And the web app, followed import by import as the fingerprint follows it, never reaches it. */
+    const fp = await import('../scripts/computer-fingerprint.mjs')
+    const root = fileURLToPath(new URL('..', import.meta.url))
+    const bundle = fp.bundleInputs(root)
+    assert.ok(bundle.includes('src/lib/gigSize.js'), 'the walk did not reach lib/gigSize; this check reads it')
+    assert.ok(!bundle.includes('mobile/src/lib/playShape.js'), 'the browser imports lib/playShape, so it is in the computer app')
+    assert.ok(!fp.computerInputs(root).includes('mobile/src/lib/playShape.js'), 'lib/playShape is in the computer fingerprint')
+    /* Its readers are the phone's own: Play and the sheets over it. */
+    const readers = phoneFiles()
+      .filter((f) => /from '\.\.?\/(lib\/)?playShape'/.test(readFileSync(f, 'utf8')))
+      .map((f) => f.replace(/^.*\/mobile\//, 'mobile/'))
+    for (const want of ['mobile/src/screens/Stage.js', 'mobile/src/components/Sheet.js']) assert.ok(readers.includes(want), `${want} does not read lib/playShape`)
   })
 
   test('on the spread layout the side without the Duo’s strip is padded to match, so the middle of every row is the middle of the screen', async () => {
-    const g = await import('../mobile/src/lib/gigSize.js')
+    const g = await playRule()
     assert.deepEqual(g.foldInset(0, 0), { left: 0, right: 0 })
     assert.deepEqual(g.foldInset(0, 44), { left: 44, right: 0 })
     assert.deepEqual(g.foldInset(44, 0), { left: 0, right: 44 })
@@ -847,7 +976,7 @@ export function run(test) {
 
   test('Play’s shape and row, run render by render: a phone keeps today’s, a divider dragged opens and closes Play once each way', () => {
     const g = { playShape: null, pageRow: null }
-    return import('../mobile/src/lib/gigSize.js').then((gig) => {
+    return playRule().then((gig) => {
       g.playShape = gig.playShape
       g.pageRow = gig.pageRow
       const shapeLines = stageLines(
@@ -934,11 +1063,11 @@ export function run(test) {
     assert.match(sheet, /const \{ width: across, height \} = useWindowDimensions\(\)/)
     assert.equal(sheet.match(/\bacross\b/g).length, 3, 'the window’s width is used for more than the frame before the sheet has measured itself')
     assert.doesNotMatch(sheet, /Platform\.isPad|orientation/)
-    assert.match(read('src/lib/gigSize.js'), /^export const SHEET_MAX = 480$/m)
+    assert.match(read('mobile/src/lib/playShape.js'), /^export const SHEET_MAX = 480$/m)
   })
 
   test('a sheet’s first frame is the width it fills: capped from the first frame on an iPad, never capped on a phone, and never the last window’s', async () => {
-    const g = await import('../mobile/src/lib/gigSize.js')
+    const g = await playRule()
     const { firstFrame } = await screenShape()
     const src = read('mobile/src/components/Sheet.js')
     const handler = src.match(/onLayout=\{(\(e\) => setSeen\(\{[^\n]*\}\))\}/)

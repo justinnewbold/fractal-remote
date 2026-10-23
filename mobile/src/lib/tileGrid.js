@@ -56,8 +56,8 @@ export function bandTop(viewport, cardBottom = 0, gap = 0) {
 }
 
 /**
- * A PEDAL'S WHOLE NAME, for a Play wide enough to spell it out (gigSize
- * playShape `names`): the unit's own name for the block, less a lone "1".
+ * A PEDAL'S WHOLE NAME, for a Play wide enough to spell it out
+ * (lib/playShape `names`): the unit's own name for the block, less a lone "1".
  * "Drive 1" is Drive and "Delay 2" stays Delay 2, the same rule the three
  * letters keep (shortName shortBlock: DRV, and DLY 2 only for a second
  * one).

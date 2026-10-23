@@ -25,20 +25,8 @@ import {
 } from '../lib/lists'
 import { sync, useStored } from '../lib/store'
 import { nameOf, useNamesHeard } from '../lib/presetNames'
-import {
-  PAGE_MAX,
-  SIZES,
-  fitTiles,
-  foldInset,
-  loadFit,
-  loadIcons,
-  loadSceneLayout,
-  loadSceneOrder,
-  loadSize,
-  pageRow,
-  playShape,
-  sceneOrderFor
-} from '../lib/gigSize'
+import { SIZES, loadFit, loadIcons, loadSceneLayout, loadSceneOrder, loadSize, sceneOrderFor } from '../lib/gigSize'
+import { PAGE_MAX, fitWide, foldInset, pageRow, playShape } from '../lib/playShape'
 import {
   arrivedCurrent,
   clearError,
@@ -129,7 +117,7 @@ const ofUnit = (s) => s.unit
 /*
  * Play as it was last drawn, kept while the app runs: { width, window, shape },
  * the width Play measured, how wide the window said it was at that moment,
- * and the shape it was drawn in (gigSize playShape `was`, so a line Play was
+ * and the shape it was drawn in (lib/playShape's `was`, so a line Play was
  * inside the gap of is remembered across a return too). Play is drawn afresh
  * every time it comes back (from Setlists, Settings, Edit), and its first
  * frame is drawn before it can be measured: from this while the window is the
@@ -360,7 +348,7 @@ export default function Stage({
      on the Appearance page and only there. See gigSize. */
   const sceneLayout = loadSceneLayout(sync)
   /*
-   * PLAY'S SHAPE, FROM PLAY'S OWN WIDTH (gigSize playShape). Under 621 points
+   * PLAY'S SHAPE, FROM PLAY'S OWN WIDTH (lib/playShape). Under 621 points
    * of row it is today's Play, exactly: the size step's own counts, the
    * scene layout's own columns, Fit's own caps, three letters on the pedals,
    * the buttons at the end of the page. From 621 the pedals spell their
@@ -544,9 +532,12 @@ export default function Stage({
   /* Only once every piece has been measured. Fitting against a chrome of
      zero would hand the grids the whole screen for one frame, which is the
      flash of wrong sizes this screen already learned to avoid. */
+  /* fitWide is fitTiles' phone-only twin (lib/playShape): fitTiles exactly,
+     answer for answer, except that on the spread layout it may go past the
+     phone's four pedals to a row. */
   const fitted =
     fitOn && viewport > 0 && content > 0 && (sceneGrid > 0 || blockGrid > 0)
-      ? fitTiles({
+      ? fitWide({
           available: viewport - chrome - trim,
           scenes: scenes.hasScenes ? scenes.count : 0,
           blocks: fitBlocks,
@@ -1655,7 +1646,7 @@ const tileWidth = (width, n) => tileWidthIn(width, n, space.sm, PixelRatio.get()
  * were; from there in a strip fixed to the bottom, below the page, so on a
  * short preset the spare room gathers above them and Previous, Next and Tap
  * never move from preset to preset (the browser's .gig-foot does the same).
- * On the spread layout (`oneRow`, gigSize playShape `footRow`) they are one
+ * On the spread layout (`oneRow`, lib/playShape `footRow`) they are one
  * row in two halves: the three that change the preset on the left, the tools
  * on the right, so with Play centered on the iPhone Duo's fold the fold runs
  * between Next and Tuner. Tap is the rightmost in every shape: only Tuner

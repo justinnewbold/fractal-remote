@@ -161,12 +161,12 @@ export default function Tile({
   wrap: wraps = false,
   /*
    * A WHOLE NAME TO SHOW IN PLACE OF `label`, where it fits: a pedal's
-   * "Compressor" for CMP on a Play wide enough to spell it out (gigSize
-   * playShape `names`). Two lines, a size down, as a wrapped name always is;
-   * a name that would need a third line, or a word cut in two, keeps
-   * `label` (lib/tileGrid laidWhole), so a tile is never a name with an
-   * ellipsis. Left out, as it is on every phone, the tile is exactly what it
-   * was: nothing about it is measured or drawn.
+   * "Compressor" for CMP on a Play wide enough to spell it out
+   * (lib/playShape `names`). Two lines, a size down, as a wrapped name
+   * always is; a name that would need a third line, or a word cut in two,
+   * keeps `label` (lib/tileGrid laidWhole), so a tile is never a name with
+   * an ellipsis. Left out, as it is on every phone, the tile is exactly what
+   * it was: nothing about it is measured or drawn.
    */
   full,
   fill,
