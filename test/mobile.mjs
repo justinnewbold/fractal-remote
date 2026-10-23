@@ -3070,21 +3070,52 @@ export function run(test) {
      * screen rather than the one it was found on.
      */
     const bad = []
+    /*
+     * Every contentContainerStyle in every file, read as code, and every
+     * style object it can be: one written in place, either side of a
+     * condition (Play's page is one of two, by its shape), or one inside an
+     * array. A pattern over the text read only the first kind, and stopped
+     * reading Play's page without saying so when it became a condition.
+     */
+    const styles = new Map()
+    const objectsIn = (node, out = []) => {
+      if (!node || typeof node !== 'object') return out
+      if (node.type === 'ObjectExpression') out.push(node)
+      else if (node.type === 'ConditionalExpression') [node.consequent, node.alternate].forEach((n) => objectsIn(n, out))
+      else if (node.type === 'LogicalExpression') [node.left, node.right].forEach((n) => objectsIn(n, out))
+      else if (node.type === 'ArrayExpression') node.elements.forEach((n) => objectsIn(n, out))
+      return out
+    }
+    const said = (obj, key) => {
+      const prop = obj.properties.find((p) => p.type === 'ObjectProperty' && (p.key.name || p.key.value) === key)
+      return prop ? prop.value.value : undefined
+    }
     for (const file of [
       ...walk(new URL('../mobile/src/screens/', import.meta.url)),
       ...walk(new URL('../mobile/src/components/', import.meta.url))
     ]) {
-      const text = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ')
-      /* Every contentContainerStyle in the file, brace-balanced enough for a
-         style object one level deep. */
-      for (const m of text.matchAll(/contentContainerStyle=\{\{([^{}]*)\}\}/g)) {
-        const style = m[1].replace(/\s+/g, ' ')
-        if (/flexGrow: 1/.test(style) && /justifyContent: 'center'/.test(style)) {
-          bad.push(`${String(file).split('/mobile/')[1]}: ${style.trim()}`)
+      const name = String(file).split('/mobile/')[1]
+      const src = readFileSync(file, 'utf8')
+      if (!src.includes('contentContainerStyle')) continue
+      traverse(parse(src, { sourceType: 'module', plugins: ['jsx'] }), {
+        JSXAttribute(path) {
+          if (path.node.name.name !== 'contentContainerStyle') return
+          const value = path.node.value?.type === 'JSXExpressionContainer' ? path.node.value.expression : null
+          for (const obj of objectsIn(value)) {
+            styles.set(name, (styles.get(name) || 0) + 1)
+            if (said(obj, 'flexGrow') === 1 && said(obj, 'justifyContent') === 'center') {
+              bad.push(`${name}:${obj.loc.start.line}: flexGrow: 1 with justifyContent: 'center'`)
+            }
+          }
         }
-      }
+      })
     }
     assert.deepEqual(bad, [], `a scroll view centres content that can outgrow it:\n${bad.join('\n')}`)
+    /* And it read what it is for: both of Play's pages, the opened-up one and today's, and every screen's own. */
+    assert.equal(styles.get('src/screens/Stage.js'), 2, 'the check did not read both of Play’s pages')
+    for (const screen of ['src/screens/SignIn.js', 'src/screens/Settings.js', 'src/screens/Edit.js', 'src/screens/Setlists.js']) {
+      assert.ok(styles.get(screen) > 0, `the check did not read ${screen}`)
+    }
 
     /* And the screen it was found on starts at the top, with room under the
        last thing on it for the home indicator. */
