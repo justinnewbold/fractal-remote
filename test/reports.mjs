@@ -1062,13 +1062,16 @@ export function run(test) {
     /* The support page says the same steps. */
     const support = read('public/support.html').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ')
     assert.match(support, /To copy a screenshot on an iPhone or iPad: take a screenshot \(if only a little picture shows in the corner, tap it\), tap the check mark at the top right, then Copy and Delete\. On older versions, tap Done at the top left instead\./)
+    assert.match(support, /For one already in Photos: open it there, tap Share, then Copy Photo\./)
     assert.match(support, /On a Pixel: open the screenshot in Photos, go to Recent apps, hold the picture \(or tap Select, then the picture\) and choose Copy\./)
     assert.match(support, /On a Samsung: open it in Gallery, tap ⋮, then Copy to clipboard\./)
     assert.match(support, /On the website and in the computer app: Settings → Troubleshooting → Debug log has the same button/, 'the support page sends website users to the Debug log by a path that is not there')
     assert.doesNotMatch(support, /Debug log under Settings/)
 
     /* Why a paste brought nothing, in words a person can act on: refused is not empty, and no file formats. */
-    assert.equal(r.pasteWords('empty', 'ios'), 'There’s no picture to paste. Copy a screenshot first.')
+    /* "It said no screenshot to paste": an iPhone's screenshot is in Photos, so an iPhone or iPad is told how to copy one from there. */
+    assert.equal(r.pasteWords('empty', 'ios'), 'There’s no picture to paste. For a screenshot already in Photos: open it there, tap Share, then Copy Photo. Then come back and tap Paste a screenshot.')
+    assert.equal(r.pasteWords('empty', 'android'), 'There’s no picture to paste. Copy a screenshot first.')
     assert.equal(r.pasteWords('refused', 'ios'), 'The app wasn’t allowed to paste it. Tap Paste a screenshot again and choose Allow Paste. If you aren’t asked, go to Settings → Fractal Remote → Paste from Other Apps and choose Allow.')
     assert.equal(r.pasteWords('refused', 'android'), r.PASTE_WORDS.unreadable, 'Android was told about an iPhone setting')
     assert.equal(r.pasteWords('unreadable', 'android'), 'That picture couldn’t be read. Copy the screenshot again and paste it.')
