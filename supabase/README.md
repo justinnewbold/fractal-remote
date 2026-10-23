@@ -4,7 +4,9 @@ Two things live here, both about the same problem: a bug report that reaches the
 table and nobody's attention.
 
 - `functions/feedback-email/` — turns a row in `public.feedback` into an email.
-- `migrations/20260905_feedback_email.sql` — the trigger that calls it.
+- `migrations/20260905_feedback_email.sql` — the trigger that calls it (and
+  `20261022_report_screenshots.sql`, below, which gives it longer and adds the
+  screenshots' bucket).
 
 Both are deployed. The one thing they need that a repository must never hold is
 an API key, so until the four settings below are filled in, the trigger runs,
@@ -142,6 +144,72 @@ Then read `net._http_response` as above. Note that a rolled-back transaction
 sends nothing: `net.http_post` queues its request inside the caller's
 transaction, so a test wrapped in `begin; ... rollback;` proves the INSERT
 survives but never exercises the HTTP call.
+
+## Reports: a note, screenshots, and the whole log in the email
+
+"Is this all the information the logs send? Where's the space to enter a
+message and upload photos? Let's get it all set up if it's not already."
+(22 October 2026.) The email a report made had the kind, the message, the
+context bullets and the row id, and none of the log. Three pieces now:
+
+- `functions/feedback-email/` — the email carries the log's head (which
+  build, unit, computers and which one is driven), the line saying which
+  computer answered and why it is the one driven, the last lines that went
+  wrong, the end of the run before, the top of the computer's own log, and
+  the whole log attached as a `.txt`. Screenshots are read from the bucket
+  with the service key and **attached**, shown in the body by `cid:` (a link
+  that expires is dead by the time a report from a gig is read; one that
+  does not is a public picture). Each is at most 1.5 MB from the app (2 MB
+  in the bucket), so three are about 6 MB encoded, inside Resend's 40 MB and
+  Gmail's 25 MB. A row may only name pictures under its own sender's folder.
+  When nobody typed an address, the reply goes to the account's own email,
+  read from the account service and labeled "(the account's email)". Every
+  request it makes has a ten-second deadline, and a picture or address that
+  cannot be had costs the email one line.
+- `migrations/20261022_report_screenshots.sql` — the private bucket
+  `report-shots` (JPEG only, 2 MB a file), one rule for putting a picture in
+  (`<account id>/<key>-<1..3>.jpg`, or `anon/…` signed out), and nothing for
+  reading, listing, replacing or removing. And `notify_feedback()` again,
+  unchanged but for thirty seconds for the email instead of five. The row's
+  shape does not change: the pictures' places ride in `context.screenshots`.
+- `functions/delete-account/` — Delete account removes the account's
+  screenshots through Storage's own API, before the rows that name them.
+
+### Putting it live, in this order
+
+1. **Apply `20261022_report_screenshots.sql`.** Nothing anybody sees changes:
+   no app sends a picture yet, and the trigger only waits longer.
+2. **Deploy feedback-email**: `supabase functions deploy feedback-email
+   --no-verify-jwt` (the trigger is its caller, as before). Reports from
+   today's apps start carrying the head of the log, the trouble lines and
+   the log attached. Before step 1 the trigger stops waiting for it after
+   five seconds, which a report with pictures can take longer than, and
+   whether the function is cut off then is not something to find out on a
+   real report: so 1 comes first.
+3. **Deploy delete-account**: `supabase functions deploy delete-account`.
+4. **Merge the app.** The note boxes and Add/Paste a screenshot arrive by
+   update (no build: the phone pastes through expo-clipboard, which every
+   copy already has).
+
+Out of order, nothing breaks. An app merged before step 1 has its pictures
+refused; the report goes without them and says "One screenshot couldn't be
+added, so the report went without it." An app older than this one never
+sends a picture, and its rows are the rows it always wrote.
+
+### Checking it
+
+```sql
+select id, public, file_size_limit, allowed_mime_types from storage.buckets where id = 'report-shots';
+select polname, polcmd from pg_policy where polrelid = 'storage.objects'::regclass and polname like 'a report%';
+
+-- the last few reports, and the pictures each names
+select id, created_at, left(message, 60) as message, context->'screenshots' as screenshots,
+       context->>'screenshotsLost' as lost, octet_length(log) as log_bytes
+from public.feedback order by created_at desc limit 5;
+```
+
+The function's answer in `net._http_response` is
+`{"sent":true,"screenshots":n,"log":true}` for a sent email.
 
 ## The setup emails (paid, but no computer yet)
 

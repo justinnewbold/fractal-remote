@@ -3909,13 +3909,15 @@ export function run(test) {
   })
 
   test('phone: the log header names every computer and the one driven only when two answer, and never over Bluetooth', () => {
-    const log = read('mobile/src/screens/Log.js')
-    const header = log.slice(log.indexOf('const throughAdapter = bluetoothOn() && !isDemo()'), log.indexOf('before.length'))
+    /* The head lives in lib/logHead.js, where Copy Logs and a report both take it from. */
+    const log = read('mobile/src/lib/logHead.js')
+    const header = log.slice(log.indexOf('const throughAdapter = bluetoothOn() && !isDemo()'), log.indexOf('export const runsBefore'))
     const adapter = header.slice(header.indexOf('? { link: `Bluetooth (beta)'), header.indexOf(': {'))
     assert.ok(!/computers/.test(adapter), 'the Bluetooth header names computers')
     assert.match(header, /computers: link\.hosts\?\.length > 1 \? `\$\{link\.hosts\.join\(', '\)\}; driving \$\{link\.chosenHost \|\| 'none of them'\}` : undefined/)
-    /* Absent is left out of the header altogether, so one computer's paste is what it was. */
+    /* Absent is left out of the header altogether, so one computer's paste is what it was, and a report's head too. */
     assert.match(read('mobile/src/lib/debugLog.js'), /\.filter\(\(\[, v\]\) => v !== undefined && v !== null && v !== ''\)/)
+    assert.match(read('shared/report-rules.mjs'), /export function headLines[\s\S]{0,120}\.filter\(\(\[, v\]\) => v !== undefined && v !== null && v !== ''\)/)
   })
 
   test('browser: the tempo 0 an AM4’s computer answers for no answer leaves Tap on its last figure', async () => {

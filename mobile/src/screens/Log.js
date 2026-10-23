@@ -1,26 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
-import { AccessibilityInfo, FlatList, Platform, Text, View } from 'react-native'
+import { AccessibilityInfo, FlatList, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
 import { color, font, mono, radius, space } from '../lib/theme'
 import { clearDebugLog, formatDebugLog, formatLine, getDebugLog, onDebugLog } from '../lib/debugLog'
-import { APP_VERSION } from '../lib/version'
-import { linkState } from '../lib/link'
-import { bluetoothOn } from '../lib/bleSwitch'
-import { isDemo } from '../lib/demo'
 import { pastRuns } from '../lib/logKeep'
-import { SENT_WORDS, sendLogs } from '../lib/reports'
+import { ended, logHeader, runsBefore } from '../lib/logHead'
+import { MAX_MESSAGE, NOTE_PLACEHOLDER, headLines } from '../lib/report-rules'
+import { SENT_WORDS, sendLogs, shotsLostWords } from '../lib/reports'
 import { useRig } from '../lib/rig'
 import Note from '../components/Note'
 import Press from '../components/Press'
+import Shots from '../components/Shots'
 
 const face = Platform.select(mono)
 
 const ofDeviceName = (s) => s.deviceName
 const ofPreset = (s) => s.preset
-
-/** When a kept run last reached the disk, as a clock time. */
-const ended = (at) => (at ? new Date(at).toLocaleTimeString() : 'at an unknown time')
 
 /** One line of the log, this run's or a kept one's. Red when it is the bad kind. */
 function Line({ text, hot }) {
@@ -94,6 +90,15 @@ export default function Log({ onBack }) {
    * a failure and nothing at all when it went. A failure's red note is a
    * live region on Android, so that one is spoken here on the iPhone only.
    */
+  /*
+   * A NOTE AND SCREENSHOTS, BEFORE THE ONE TAP. "Where's the space to enter
+   * a message and upload photos?" Both optional: the button sends with the
+   * box empty, as it always has, and a typed note is the message instead of
+   * the app's sentence. They go once the report has, and stay when it has
+   * not, so nothing typed is lost to a dropped connection.
+   */
+  const [note, setNote] = useState('')
+  const [shots, setShots] = useState([])
   const [sending, setSending] = useState(false)
   const [sentSaid, setSentSaid] = useState(null)
   const inFlight = useRef(false)
@@ -103,9 +108,13 @@ export default function Log({ onBack }) {
     setSending(true)
     setSentSaid(null)
     try {
-      await sendLogs({ deviceName })
-      setSentSaid({ ok: true, words: SENT_WORDS })
-      AccessibilityInfo.announceForAccessibility?.(SENT_WORDS)
+      const sent = await sendLogs({ deviceName, note, shots, head: headLines(logHeader({ deviceName, preset })), before: runsBefore(before) })
+      /* A picture that could not go is said in the same line: the report went without it. */
+      const words = [SENT_WORDS, shotsLostWords(sent?.shotsLost)].filter(Boolean).join(' ')
+      setSentSaid({ ok: true, words })
+      AccessibilityInfo.announceForAccessibility?.(words)
+      setNote('')
+      setShots([])
     } catch (err) {
       const words = err?.message || String(err)
       setSentSaid({ ok: false, words })
@@ -140,51 +149,14 @@ export default function Log({ onBack }) {
   }, [said])
 
   const copy = async () => {
-    const link = linkState()
-    /* Over Bluetooth (beta) no computer is in the chain: the far end is the
-       adapter, whose name link.js keeps as macName, and it has no version. */
-    const throughAdapter = bluetoothOn() && !isDemo()
-    const text = formatDebugLog({
-      app: `Fractal Remote (phone) v${APP_VERSION}`,
-      platform: `${Platform.OS} ${Platform.Version}`,
-      unit: deviceName || 'not detected',
-      preset: Number.isInteger(preset?.number) ? `${preset.number} ${preset.name || ''}`.trim() : 'none',
-      ...(throughAdapter
-        ? { link: `Bluetooth (beta), ${link.link}${link.macName && link.link !== 'off' ? `, through ${link.macName}` : ''}` }
-        : {
-            computer: link.macName || 'none',
-            /*
-             * The version at the other end, which is the thing that could not be
-             * answered from a pasted log before: "Does the Mac app need to be updated
-             * to the latest version?" A computer too old to say so is itself the
-             * answer, so that case is named rather than left blank.
-             */
-            'computer app': link.hostVersion || 'did not say (older than 7.205.0, or could not write it)',
-            link: link.link,
-            /*
-             * And with more than one on the account, which answered and which
-             * is driven: "computer: fractalpi" in a log from the AM4's Pi was
-             * whichever answered first. Absent with one computer, as before.
-             */
-            computers: link.hosts?.length > 1 ? `${link.hosts.join(', ')}; driving ${link.chosenHost || 'none of them'}` : undefined
-          })
-    },
     /*
-     * The previous run's tail goes in the same paste, under its own heading.
-     * If this launch is the one AFTER a crash, that block is the crash — and
-     * it is the half somebody actually needs.
+     * The head (lib/logHead logHeader: which build, unit, computer and link),
+     * and the previous runs' tails in the same paste, each under its own
+     * heading. If this launch is the one AFTER a crash, that block is the
+     * crash — and it is the half somebody actually needs. A report sent from
+     * here carries the same two, from the same place.
      */
-    before.length
-      ? before
-          .map((run, i) =>
-            [
-              `${i === 0 ? 'THE RUN BEFORE THIS ONE' : `${i + 1} RUNS AGO`} — ${run.lines.length} lines, oldest first, last written ${ended(run.at)}`,
-              '(if the app crashed or was killed, this is what it said on the way)',
-              ...run.lines
-            ].join('\n')
-          )
-          .join('\n\n')
-      : '')
+    const text = formatDebugLog(logHeader({ deviceName, preset }), runsBefore(before).join('\n\n'))
     try {
       await Clipboard.setStringAsync(text)
       setSaid(`Copied ${lines.length} line${lines.length === 1 ? '' : 's'}. Paste it into the chat.`)
@@ -194,7 +166,12 @@ export default function Log({ onBack }) {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      /* The note box sits at the foot of the screen and the keyboard covers it
+         on iOS. Android resizes the window itself (as the Feedback form says). */
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <View
         style={{
           flexDirection: 'row',
@@ -276,7 +253,13 @@ export default function Log({ onBack }) {
       />
 
       {lines.length ? (
-        <View style={{ padding: space.lg, gap: space.sm }}>
+        /* Its own scroller, capped, so the note, the pictures and the buttons
+           never push the log itself off a small phone. */
+        <ScrollView
+          style={{ flexGrow: 0, maxHeight: '60%' }}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: space.lg, gap: space.sm }}
+        >
           {/*
             Newest first on screen, oldest first in the copy. Reading on a phone
             you want the thing that just happened; reading a paste you want the
@@ -287,6 +270,29 @@ export default function Log({ onBack }) {
               pasted somewhere, from a phone, after the thing that went wrong.
               Copy stays — a log pasted into a message to a bandmate is a real
               use — but this is the one that reaches the person who can fix it. */}
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            editable={!sending}
+            multiline
+            maxLength={MAX_MESSAGE}
+            textAlignVertical="top"
+            placeholder={NOTE_PLACEHOLDER}
+            placeholderTextColor={color.silkFaint}
+            accessibilityLabel="What happened, if you want to say"
+            style={{
+              color: color.silk,
+              fontSize: font.body,
+              backgroundColor: color.panel,
+              borderWidth: 1,
+              borderColor: color.rule,
+              borderRadius: radius.md,
+              padding: space.md,
+              minHeight: 64,
+              lineHeight: 22
+            }}
+          />
+          <Shots shots={shots} onChange={setShots} disabled={sending} />
           <Press
             label={sending ? 'Sending…' : 'Send logs to developer'}
             tone="signal"
@@ -300,8 +306,8 @@ export default function Log({ onBack }) {
           ) : null}
           {/* Not while a send is on its way: it reads the log after the computer has answered. */}
           <Press label="Clear Logs" disabled={sending} onPress={() => { clearDebugLog(); setLines([]) }} />
-        </View>
+        </ScrollView>
       ) : null}
-    </View>
+    </KeyboardAvoidingView>
   )
 }

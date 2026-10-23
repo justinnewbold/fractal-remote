@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { clearDebugLog, formatDebugLog, formatLine, formatMacDiag, getDebugLog, onDebugLog } from '../lib/debugLog'
 import { wireReport } from './Diagnostics'
 import { serverDiag } from '../lib/forgefx'
-import { describeLink } from '../lib/link'
-import { FULL, BUILT_AT } from '../lib/version'
+import { logHeader } from '../lib/logHead'
 import { platform } from '../lib/platform'
-import { SENT_WORDS, context, sendLogs } from '../lib/reports'
-import { askComputer } from '../../shared/report-rules.mjs'
+import { SENT_WORDS, context, sendLogs, shotsLostWords } from '../lib/reports'
+import { forget, pastedImages } from '../lib/shots'
+import { MAX_MESSAGE, NOTE_PLACEHOLDER, askComputer, headLines } from '../../shared/report-rules.mjs'
+import Shots from './Shots'
 
 /**
  * The one log, and the one button.
@@ -62,6 +63,16 @@ export default function DebugLog({ device, link }) {
    * buttons until the panel is closed. Never twice at once: the ref is set
    * before the first await, so a double click is one report.
    */
+  /*
+   * A NOTE AND SCREENSHOTS, BEFORE THE ONE PRESS. "Where's the space to
+   * enter a message and upload photos?" Both optional: the button sends with
+   * the box empty, as it always has, and a typed note is the message in place
+   * of the app's sentence. They go once the report has, and stay when it has
+   * not. A picture pasted into the box is added as a screenshot.
+   */
+  const [note, setNote] = useState('')
+  const [shots, setShots] = useState([])
+  const [pasted, setPasted] = useState(null)
   const [sending, setSending] = useState(false)
   const [sentSaid, setSentSaid] = useState(null)
   const inFlight = useRef(false)
@@ -71,11 +82,17 @@ export default function DebugLog({ device, link }) {
     setSending(true)
     setSentSaid(null)
     try {
-      await sendLogs({
+      const sent = await sendLogs({
         context: context({ device, link, platform: platform(), macVersion: link?.macVersion }),
-        computer: await macReport()
+        computer: await macReport(),
+        note,
+        shots,
+        head: headLines(logHeader({ device, link }))
       })
-      setSentSaid({ ok: true, words: SENT_WORDS })
+      setSentSaid({ ok: true, words: [SENT_WORDS, shotsLostWords(sent?.shotsLost)].filter(Boolean).join(' ') })
+      setNote('')
+      shots.forEach(forget)
+      setShots([])
     } catch (err) {
       setSentSaid({ ok: false, words: err?.message || String(err) })
     } finally {
@@ -84,36 +101,9 @@ export default function DebugLog({ device, link }) {
     }
   }
 
+  /* The head is lib/logHead's, which a report sent from here starts with too. */
   const text = (mac = '') =>
-    formatDebugLog(
-      {
-        app: `${FULL} — built ${BUILT_AT} UTC`,
-        unit: device?.short || device?.name || 'none',
-        model: device?.model,
-        /*
-         * Over the relay the report also says WHICH Mac app answered. The
-         * phone runs today's web build the moment it reloads; the Mac runs
-         * whatever was installed, and a fix that lives in the Mac app is not
-         * on until that app has been restarted into it — which the report
-         * could not show, so "still broken" and "not updated yet" read alike.
-         */
-        link: link?.role
-          ? `${link.role} · ${describeLink(link).note || ''}${
-              link.role === 'remote' && link.link === 'connected'
-                ? ` · computer app ${link.macVersion ? `v${link.macVersion}` : 'older than 7.190.0 (does not say)'}`
-                : ''
-            }`
-          : undefined,
-        /* With more than one computer on the account, which answered and which is driven (the phone's Log.js too). */
-        computers:
-          link?.role === 'remote' && link.hosts?.length > 1 ? `${link.hosts.join(', ')}; driving ${link.chosenHost || 'none of them'}` : undefined,
-        platform: platform(),
-        screen: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : undefined,
-        browser: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
-        at: new Date().toISOString()
-      },
-      [wireReport(), mac].filter(Boolean).join('\n\n')
-    )
+    formatDebugLog({ ...logHeader({ device, link }), at: new Date().toISOString() }, [wireReport(), mac].filter(Boolean).join('\n\n'))
 
   /* The last resort for either button: the text selected in a box, for a
      long-press Copy — the one thing a phone never refuses. */
@@ -202,6 +192,24 @@ export default function DebugLog({ device, link }) {
 
   return (
     <section className="debug-log">
+      <textarea
+        className="feedback-text debug-log-note"
+        value={note}
+        maxLength={MAX_MESSAGE}
+        rows={2}
+        onChange={(e) => setNote(e.target.value)}
+        onPaste={(e) => {
+          const files = pastedImages(e)
+          if (files.length) {
+            e.preventDefault()
+            setPasted({ files })
+          }
+        }}
+        disabled={sending}
+        placeholder={NOTE_PLACEHOLDER}
+        aria-label="What happened, if you want to say"
+      />
+      <Shots shots={shots} onChange={setShots} disabled={sending} adding={pasted} />
       <div className="diag-actions">
         {/*
           Both labels are drawn, one over the other, and the one not wanted is

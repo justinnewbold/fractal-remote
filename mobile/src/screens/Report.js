@@ -1,11 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native'
 
 import { color, font, mono, radius, space } from '../lib/theme'
-import { KINDS, MAX_MESSAGE, carriesLog, context, logPreview, sendReport } from '../lib/reports'
+import { KINDS, MAX_MESSAGE, carriesLog, context, logPreview, sendReport, shotsLostWords } from '../lib/reports'
+import { headLines } from '../lib/report-rules'
+import { logHeader, runsBefore } from '../lib/logHead'
+import { pastRuns } from '../lib/logKeep'
 import { useRig } from '../lib/rig'
 import Note from '../components/Note'
 import Press from '../components/Press'
+import Shots from '../components/Shots'
 import { deviceNoun } from '../lib/device-word'
 
 const face = Platform.select(mono)
@@ -14,6 +18,7 @@ const face = Platform.select(mono)
    it: which unit is attached is a live fact, not something a caller should be
    trusted to have passed the current value of. */
 const ofDeviceName = (s) => s.deviceName
+const ofPreset = (s) => s.preset
 
 /**
  * Telling us something is broken, or asking for something — from the phone.
@@ -37,27 +42,42 @@ const ofDeviceName = (s) => s.deviceName
  */
 export default function Report({ onBack, start = 'bug' }) {
   const deviceName = useRig(ofDeviceName)
+  const preset = useRig(ofPreset)
   const [kind, setKind] = useState(KINDS.includes(start) ? start : 'bug')
   const [message, setMessage] = useState('')
   const [contact, setContact] = useState('')
   const [withLog, setWithLog] = useState(true)
   const [preview, setPreview] = useState(null)
+  const [shots, setShots] = useState([])
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [sent, setSent] = useState(null)
   const [error, setError] = useState(null)
 
+  /* The runs before this one, as the log screen has them: a bug's log carries them (lib/logHead runsBefore). */
+  const [before, setBefore] = useState([])
+  useEffect(() => {
+    let alive = true
+    pastRuns().then((runs) => alive && setBefore(runs))
+    return () => {
+      alive = false
+    }
+  }, [])
+
   const bug = carriesLog(kind)
+  /* What the log carries besides its lines: the same head and runs before as the log screen's send. */
+  const extra = () => ({ head: headLines(logHeader({ deviceName, preset })), before: runsBefore(before) })
 
   const send = async () => {
     setBusy(true)
     setError(null)
     try {
-      await sendReport({ kind, message, contact, context: context({ deviceName }), withLog })
+      const done = await sendReport({ kind, message, contact, context: context({ deviceName }), withLog, ...extra(), shots })
       // The text goes only once it is actually gone.
-      setSent(true)
+      setSent({ lost: shotsLostWords(done?.shotsLost) })
       setMessage('')
       setContact('')
       setPreview(null)
+      setShots([])
     } catch (err) {
       setError(err.message)
     } finally {
@@ -112,8 +132,8 @@ export default function Report({ onBack, start = 'bug' }) {
 
         {sent ? (
           <View style={{ gap: space.md }}>
-            <Note tone="hint">Sent to the developer — thank you.</Note>
-            <Press label="Send another" onPress={() => setSent(false)} />
+            <Note tone="hint">{`Sent to the developer — thank you.${sent.lost ? ` ${sent.lost}` : ''}`}</Note>
+            <Press label="Send another" onPress={() => setSent(null)} />
           </View>
         ) : (
           <>
@@ -188,7 +208,7 @@ export default function Report({ onBack, start = 'bug' }) {
                   label={preview === null ? 'See what that is' : 'Hide it'}
                   height={44}
                   disabled={busy || !withLog}
-                  onPress={() => setPreview(preview === null ? logPreview(kind) : null)}
+                  onPress={() => setPreview(preview === null ? logPreview(kind, extra()) : null)}
                 />
                 {preview !== null ? (
                   /* Its own scroller, capped: the log is long by design and a
@@ -216,6 +236,9 @@ export default function Report({ onBack, start = 'bug' }) {
               <Note tone="hint">No log goes with this one — just what you wrote.</Note>
             )}
 
+            {/* A picture of what went wrong, or of what they want: either kind can carry them. */}
+            <Shots shots={shots} onChange={setShots} disabled={busy} />
+
             {error ? <Note tone="fault">{error}</Note> : null}
 
             <Press
@@ -229,7 +252,8 @@ export default function Report({ onBack, start = 'bug' }) {
             <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>
               Your version, your {deviceNoun()}&rsquo;s OS and which unit you&rsquo;re on are sent too, so it
               can be looked into.
-              {bug && withLog ? ' The log goes as well — you can read it above first.' : ''} Nothing
+              {bug && withLog ? ' The log goes as well — you can read it above first.' : ''}
+              {shots.length ? ' So do the screenshots you added.' : ''} Nothing
               you&rsquo;ve built goes with it. If you&rsquo;re signed in, the report is linked to your account,
               so deleting the account deletes it too.
             </Text>

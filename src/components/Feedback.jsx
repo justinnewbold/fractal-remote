@@ -21,7 +21,11 @@
  *   thing that happens to you rather than a thing you did.
  */
 import { useState } from 'react'
-import { KINDS, MAX_MESSAGE, carriesLog, context, logPreview, sendReport } from '../lib/reports'
+import { KINDS, MAX_MESSAGE, carriesLog, context, logPreview, sendReport, shotsLostWords } from '../lib/reports'
+import { logHeader } from '../lib/logHead'
+import { forget, pastedImages } from '../lib/shots'
+import { headLines } from '../../shared/report-rules.mjs'
+import Shots from './Shots'
 
 export default function Feedback({ device, link, platform, macVersion }) {
   const [kind, setKind] = useState('bug')
@@ -29,28 +33,37 @@ export default function Feedback({ device, link, platform, macVersion }) {
   const [contact, setContact] = useState('')
   const [withLog, setWithLog] = useState(true)
   const [preview, setPreview] = useState(null)
+  /* Screenshots, as the Debug log takes them: picked, or pasted into the box. Either kind can carry them. */
+  const [shots, setShots] = useState([])
+  const [pasted, setPasted] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [sent, setSent] = useState(null)
   const [error, setError] = useState(null)
 
   const logGoes = carriesLog(kind) && withLog
+  /* The log's head, which Copy Logs puts at the top of a paste (lib/logHead). */
+  const head = () => headLines(logHeader({ device, link }))
 
   const send = async () => {
     setBusy(true)
     setError(null)
     try {
-      await sendReport({
+      const done = await sendReport({
         kind,
         message,
         contact,
         context: context({ device, link, platform, macVersion }),
-        withLog
+        withLog,
+        head: head(),
+        shots
       })
       // The text goes only once it is actually gone.
-      setSent(true)
+      setSent({ lost: shotsLostWords(done?.shotsLost) })
       setMessage('')
       setContact('')
       setPreview(null)
+      shots.forEach(forget)
+      setShots([])
     } catch (err) {
       setError(err.message)
     } finally {
@@ -61,13 +74,13 @@ export default function Feedback({ device, link, platform, macVersion }) {
   /* Built on the press rather than kept in step with every keystroke: it is
      the whole log as text, and re-making it on each character typed would be
      work nobody asked for. */
-  const look = () => setPreview(preview === null ? logPreview(kind) : null)
+  const look = () => setPreview(preview === null ? logPreview(kind, { head: head() }) : null)
 
   if (sent) {
     return (
       <div className="feedback feedback-sent">
-        <p>Sent to the developer — thank you.</p>
-        <button className="chip" onClick={() => setSent(false)}>
+        <p>Sent to the developer — thank you.{sent.lost ? ` ${sent.lost}` : ''}</p>
+        <button className="chip" onClick={() => setSent(null)}>
           Send another
         </button>
       </div>
@@ -102,6 +115,13 @@ export default function Feedback({ device, link, platform, macVersion }) {
         maxLength={MAX_MESSAGE}
         rows={4}
         onChange={(e) => setMessage(e.target.value)}
+        onPaste={(e) => {
+          const files = pastedImages(e)
+          if (files.length) {
+            e.preventDefault()
+            setPasted({ files })
+          }
+        }}
         disabled={busy}
         placeholder={
           kind === 'bug'
@@ -149,6 +169,8 @@ export default function Feedback({ device, link, platform, macVersion }) {
         <p className="hint">No log goes with this one — just what you wrote.</p>
       )}
 
+      <Shots shots={shots} onChange={setShots} disabled={busy} adding={pasted} />
+
       {error ? <p className="hint problem">{error}</p> : null}
 
       <div className="feedback-actions">
@@ -157,7 +179,8 @@ export default function Feedback({ device, link, platform, macVersion }) {
         </button>
         <p className="hint">
           Your version and which unit you&rsquo;re on are sent too, so it can be looked into.
-          {logGoes ? ' The log goes as well — you can read it above first.' : ''} Nothing
+          {logGoes ? ' The log goes as well — you can read it above first.' : ''}
+          {shots.length ? ' So do the screenshots you added.' : ''} Nothing
           you&rsquo;ve built goes with it. If you&rsquo;re signed in, the report is linked to your
           account, so deleting the account deletes it too.
         </p>

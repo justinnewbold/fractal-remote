@@ -91,6 +91,63 @@ async function forgetRows(url: string, service: string, who: { id: string; email
   await Promise.all(jobs)
 }
 
+/*
+ * THE SCREENSHOTS A REPORT CARRIED (22 October 2026). They sit in the private
+ * bucket `report-shots`, under the account's id, or under `anon` for a report
+ * sent signed out that gave this address to reply to. Storage keeps its files
+ * apart from the table, so deleting a report row leaves its pictures; they are
+ * deleted here first, through Storage's own API (the database refuses a
+ * delete straight from storage.objects): every picture the reports about to
+ * go name, and anything else in the account's own folder, such as a picture
+ * whose report never arrived. Best effort, like the rows.
+ */
+const SHOT_BUCKET = 'report-shots'
+const SHOT_PATH =
+  /^(anon|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[1-3]\.jpg$/
+
+async function forgetShots(url: string, service: string, who: { id: string; email: string }) {
+  const headers = { apikey: service, Authorization: `Bearer ${service}`, 'Content-Type': 'application/json' }
+  const paths = new Set<string>()
+  const named = async (query: string) => {
+    try {
+      const res = await fetch(`${url}/rest/v1/feedback?select=context&${query}`, { headers })
+      if (!res.ok) return console.error(`delete-account: feedback screenshots answered ${res.status}`)
+      for (const report of await res.json()) {
+        for (const path of Array.isArray(report?.context?.screenshots) ? report.context.screenshots : []) {
+          if (SHOT_PATH.test(String(path))) paths.add(String(path))
+        }
+      }
+    } catch (err) {
+      console.error(`delete-account: feedback screenshots unreachable (${err})`)
+    }
+  }
+  const lookups = [named(`user_id=eq.${who.id}`)]
+  if (who.email) {
+    const like = encodeURIComponent(who.email.replace(/[\\%_]/g, (c) => `\\${c}`))
+    lookups.push(named(`contact=ilike.${like}`))
+  }
+  /* And the account's own folder, whatever is in it. */
+  lookups.push(
+    fetch(`${url}/storage/v1/object/list/${SHOT_BUCKET}`, { method: 'POST', headers, body: JSON.stringify({ prefix: who.id, limit: 1000, offset: 0 }) })
+      .then(async (res) => {
+        if (!res.ok) return console.error(`delete-account: screenshot folder answered ${res.status}`)
+        for (const file of await res.json()) {
+          const path = `${who.id}/${String(file?.name || '')}`
+          if (SHOT_PATH.test(path)) paths.add(path)
+        }
+      })
+      .catch((err) => console.error(`delete-account: screenshot folder unreachable (${err})`))
+  )
+  await Promise.all(lookups)
+  if (!paths.size) return
+  try {
+    const res = await fetch(`${url}/storage/v1/object/${SHOT_BUCKET}`, { method: 'DELETE', headers, body: JSON.stringify({ prefixes: [...paths] }) })
+    if (!res.ok) console.error(`delete-account: screenshots answered ${res.status}`)
+  } catch (err) {
+    console.error(`delete-account: screenshots unreachable (${err})`)
+  }
+}
+
 /* Best effort, and never in the way: an account is deleted whether or not
    RevenueCat answers. */
 async function forgetCustomer(id: string) {
@@ -125,6 +182,8 @@ Deno.serve(async (req) => {
   if (!who) return json({ error: 'Sign in again, then delete the account.' }, 401)
   const id = who.id
 
+  /* The pictures before the rows that name them. */
+  await forgetShots(url, service, who)
   await forgetRows(url, service, who)
 
   const res = await fetch(`${url}/auth/v1/admin/users/${id}`, {
