@@ -7356,8 +7356,9 @@ onTheBench('browser: the AM4’s own tuner is kept up only while the tuner is op
   assert.match(attached, /^  setTuner,\n  renewTuner,$/m, 'the browser store is not handed the renewal')
   assert.match(app, /document\.addEventListener\('visibilitychange', \(\) => storeOnScreen\(document\.visibilityState !== 'hidden'\)\)/)
   const phoneLink = readSrc(new URL('../mobile/src/lib/link.js', import.meta.url), 'utf8')
-  assert.match(phoneLink, /^      rigOnScreen\(status === 'active'\)$/m, 'the phone’s rig is not told when the app goes off screen')
-  assert.match(phoneLink, /^  rigOnScreen\(!asleep\)$/m)
+  /* Control Center or Siri over Play ('inactive') is not put away: the AM4 stays on its tuner (test/link-now.mjs runs it). */
+  assert.match(phoneLink, /^      rigOnScreen\(status === 'active' \|\| status === 'inactive'\)$/m, 'the phone’s rig is not told when the app is put away')
+  assert.match(phoneLink, /^  rigOnScreen\(!asleep \|\| AppState\.currentState === 'inactive'\)$/m)
   assert.match(readSrc(new URL('../mobile/src/lib/device.js', import.meta.url), 'utf8'), /^export const renewTuner = \(opts\) => post\('\/tuner', \{ on: true, keep: true \}, tapOf\(opts\)\)$/m)
   assert.match(readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8'), /request\('\/tuner', \{ method: 'POST', body: JSON\.stringify\(\{ on: true, keep: true \}\), \.\.\.tapOf\(opts\) \}\)/)
 })

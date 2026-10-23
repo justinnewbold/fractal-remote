@@ -627,7 +627,10 @@ as the tuner is open in the app and the app is on screen: the newest
 desktop app sends the AM4's Tuner number again every three seconds, and so
 does Bluetooth (the developer's only). Put the phone away or hide the page
 with the tuner open, and the AM4 goes back to letting go of its tuner by
-itself, within about 35 seconds. While the tuner is open in the app, a
+itself, within about 35 seconds. Control Center or Notification Center
+pulled down over the tuner, Siri listening, or the first peek of the app
+switcher is not putting it away: the AM4 stays on its tuner through those.
+While the tuner is open in the app, a
 tuner left at the AM4 itself comes back within three seconds; Close in the
 app is what closes it. An older desktop app still lets the AM4's tuner go
 after about 15 seconds, and the tuner in the app works the same with

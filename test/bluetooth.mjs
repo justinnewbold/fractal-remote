@@ -730,10 +730,12 @@ async function linkOnABench(t) {
       listeners: new Map(),
       watchers: [],
       said: [],
-      resets: 0
+      resets: 0,
+      app: []
     }
 `,
-    'react-native.js': "export const Platform = { OS: 'android' }\nexport const AppState = { currentState: 'active', addEventListener: () => ({ remove() {} }) }\n",
+    /* The app going to sleep and coming back: `screen(status)` in what the bench returns. */
+    'react-native.js': "import { bench } from './bench.js'\nexport const Platform = { OS: 'android' }\nexport const AppState = { currentState: 'active', addEventListener: (type, fn) => { bench.app.push(fn); return { remove() { bench.app.splice(bench.app.indexOf(fn) >>> 0, 1) } } } }\nbench.AppState = AppState\n",
     'bleSwitch.js': 'export const bluetoothOn = () => true\nexport const setSwitch = () => {}\n',
     'bluetooth.js': `import { bench } from './bench.js'
       export const adapterDevices = () => []
@@ -787,6 +789,10 @@ async function linkOnABench(t) {
     settings(next) {
       bench.settings = { ...bench.settings, ...next }
       return Promise.all(bench.watchers.map((fn) => fn(bench.settings)))
+    },
+    screen(status) {
+      bench.AppState.currentState = status
+      for (const fn of [...bench.app]) fn(status)
     },
     done() {
       link.stopBluetoothLink()
@@ -2866,7 +2872,7 @@ export function run(test) {
     t.wire.close()
     /* And the link tells the wire, both ways, and on a connection made in a pocket. */
     const link = readFileSync(new URL('../mobile/src/lib/bleLink.js', import.meta.url), 'utf8')
-    assert.match(link, /^  wire\?\.stopPolls\(\)\n  \/\*[^\n]*\*\/\n  wire\?\.screenOff\(\)\n\}/m, 'the app going off screen does not reach the wire')
+    assert.match(link, /^  wire\?\.stopPolls\(\)\n  \/\*[\s\S]*?\*\/\n  if \(status !== 'inactive'\) wire\?\.screenOff\(\)\n\}/m, 'the app put away does not reach the wire')
     assert.match(link, /^      wire\.startPolls\(\)\n      wire\.screenOn\(\)$/m)
     assert.match(link, /^  \} else made\.screenOff\(\)$/m, 'a connection made off screen keeps the AM4 on its tuner')
   })
@@ -3285,6 +3291,52 @@ export function run(test) {
       assert.ok(t.logs.includes('the AM4’s own tuner closed as the connection closes: sent'), 'the 0 was not the fallback’s')
       assert.equal(t.unit.state.tunerOpen, false)
       assert.equal(t.unit.state.frozen, false, `the AM4 froze on ${t.unit.state.unknown.map(hex).join(', ')}`)
+    } finally {
+      b.done()
+    }
+  })
+
+  /*
+   * Control Center pulled down, Siri listening, the app switcher's first
+   * peek: iOS says 'inactive', with Play still there under it. The AM4's own
+   * tuner stays kept up through it. Only 'background', the app put away,
+   * stops the keep, and for good for the tuner open now (keepUnitTuner).
+   */
+  test('the link: Control Center or Siri over Play keeps the AM4 on its tuner; putting the app away lets it go', async () => {
+    const t = await onTheLine('am4', { unitTunerCc: 20 })
+    const b = await linkOnABench(t)
+    try {
+      b.link.startBluetoothLink(() => {})
+      await advance(t.clock, 2000)
+      assert.ok(b.bench.current, 'the link did not connect')
+      b.rig.tunerOn = true
+      await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":true}' }))
+      assert.equal(t.unit.state.tunerOpen, true)
+      const opens = () => tunerFrames(t).filter((h) => h === 'B0 14 7F').length
+      b.screen('inactive')
+      t.unit.state.tunerOpen = false
+      let mark = opens()
+      await advance(t.clock, 3000 * 3 + 400)
+      assert.ok(opens() > mark, 'Control Center pulled down over the tuner stopped keeping the AM4 on its tuner')
+      assert.equal(t.unit.state.tunerOpen, true, 'the AM4 was let go of its tuner under Control Center')
+      b.screen('active')
+      mark = opens()
+      await advance(t.clock, 3000 * 2 + 400)
+      assert.ok(opens() > mark, 'not kept up once Control Center closed')
+      /* iOS goes through 'inactive' on the way to 'background', and back the same way. */
+      b.screen('inactive')
+      b.screen('background')
+      t.unit.state.tunerOpen = false
+      mark = opens()
+      await advance(t.clock, 3000 * 4)
+      b.screen('inactive')
+      b.screen('active')
+      await advance(t.clock, 3000 * 4)
+      assert.equal(opens(), mark, 'a 127 went with the app put away, or on the way back before Close could be tapped')
+      assert.equal(t.unit.state.tunerOpen, false, 'the AM4 was put back on its tuner')
+      b.rig.tunerOn = false
+      await drive(t.clock, b.bench.current.request('/tuner', { method: 'POST', body: '{"on":false}' }))
+      assert.equal(tunerFrames(t).at(-1), 'B0 14 00', 'the Close did not send its 0')
     } finally {
       b.done()
     }

@@ -992,7 +992,7 @@ export function startLink() {
   holdAgain()
   asleep = AppState.currentState != null && AppState.currentState !== 'active'
   downAsleep = 0
-  rigOnScreen(!asleep)
+  rigOnScreen(!asleep || AppState.currentState === 'inactive')
 
   unbind = [
     // The channel coming back under us is the app catching up rather than a
@@ -1035,8 +1035,14 @@ export function startLink() {
        * evening's log, none of them a fault, and nothing in it said so.
        */
       logDebug('app', status === 'active' ? 'back on screen' : `put to sleep (${status})`)
-      /* Off screen, the AM4's own tuner is no longer kept up for the tuner open now (rig keepUnitTuner). */
-      rigOnScreen(status === 'active')
+      /*
+       * Put away, the AM4's own tuner is no longer kept up for the tuner open
+       * now (rig keepUnitTuner). 'inactive' is not put away: it is
+       * Control Center pulled down, Siri listening or the app switcher, with
+       * Play still under it, and the AM4 dropping its tuner 15 seconds into
+       * one of those, with the tuner still open on screen, was not asked for.
+       */
+      rigOnScreen(status === 'active' || status === 'inactive')
       /*
        * And Play's two seconds start again on the way back (holdAgain), so
        * the connection Android cut in the pocket is not NOT CONNECTED the
