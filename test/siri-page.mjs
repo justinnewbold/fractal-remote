@@ -217,6 +217,63 @@ export function run(test) {
     assert.equal(help.siriRow({ os: 'android' }).title, 'Links for Tasker')
   })
 
+  test('Siri in the store notes, on the support page and in docs/later.md: what the build does, and no more', async () => {
+    const { help } = await wordsOnABench()
+    const store = read('docs/app-store.md')
+    const at = store.indexOf("**For the next version's notes: Siri, and the links**")
+    assert.ok(at > 0, 'the next version’s notes say nothing of Siri, and 2.3.1(a) wants every new feature described')
+    const para = store.slice(at, store.indexOf('### Notes for App Review, 1.87.11', at))
+    const block = /```\n([\s\S]*?)\n```/.exec(para)?.[1]
+    assert.ok(block, 'the Siri paragraph has no block to paste into Notes for Review')
+    /* Every App Shortcut by its first phrase, as the Swift has it, the scene and the pedal by what they stand for. */
+    for (const s of shortcuts(code)) {
+      const first = s.phrases[0].replaceAll('\\(.applicationName)', 'Fractal Remote').replaceAll('\\(\\.$scene)', '[1-8]').replaceAll('\\(\\.$pedal)', '[pedal]')
+      assert.ok(block.includes(`"${first}"`), `the review notes never name "${first}" (${s.intent})`)
+    }
+    assert.match(block, /They work with the Play screen open; on any other screen the app says to open Play\. Tuner off works from any screen\./)
+    assert.match(block, /start the demo as above, keep the Play screen open, and say "Scene 3 in Fractal Remote"/, 'the notes do not say how to try it without hardware')
+    assert.match(block, /fractalremote:\/\/next, \/previous, \/scene\/1 to \/scene\/8 and \/tuner\/off/)
+    assert.match(block, /The app receives only the command, never the audio\./)
+    assert.ok(!/tuner\/on|official|approved|endorsed|\bFractal\b(?! Remote| Audio)/.test(block), 'the notes offer a Tuner on link, or call the app something it is not')
+    /* One line in the box, and room left in its 4000 bytes for everything else the next version says. */
+    assert.ok(!block.includes('\n'), 'the paragraph is broken across lines, which the Notes box shows as breaks')
+    assert.ok(Buffer.byteLength(block) <= 1100, `the Siri paragraph is ${Buffer.byteLength(block)} bytes of the Notes box's 4000`)
+    const flatPara = para.replace(/\s+/g, ' ')
+    assert.match(flatPara, /What's New gets one line: "Siri: say "Scene 3 in Fractal Remote", "Next song in Fractal Remote" and more, with the Play screen open\. Settings → Siri lists every phrase/)
+    assert.match(flatPara, /Google Play's release notes get one line on the links[^"]*"Links for Tasker and similar apps: fractalremote:\/\/next, previous, scene\/1 to 8 and tuner\/off\. Settings → Links for Tasker says how\."/)
+    assert.match(flatPara, /\*\*The privacy label is unchanged, and so is Google's Data safety\.\*\* Siri does the listening and the recognizing/)
+    assert.match(flatPara, /\*\*Before this version goes to Apple\*\*, try Siri on the TestFlight copy/)
+    /* The two row names the store lines send people to are the app's own. */
+    assert.equal(help.siriRow({ os: 'ios', native: true }).title, 'Siri')
+    assert.equal(help.siriRow({ os: 'android' }).title, 'Links for Tasker')
+
+    /* The support page: the same rule, the same links, and true before the store version is out as after. */
+    const support = read('public/support.html')
+    const siri = support.slice(support.indexOf('<h2 id="siri">'), support.indexOf('<h2>Inside the app</h2>'))
+    assert.ok(siri.length > 400, 'the support page has no Siri section')
+    const text = siri.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+    assert.match(text, /Settings → Siri in the app lists every one/)
+    assert.match(text, /They come with the App Store version after 1\.87\.11: if Settings has no Siri row yet/)
+    assert.match(text, /Everything except Tuner off works only with Play on screen\. Tuner off works from any screen/)
+    assert.match(text, /within a second and a half isn’t sent at all/)
+    assert.match(text, /Siri asks you to unlock first/)
+    assert.match(text, /They come with the Google Play version after 1\.87\.11, and Settings → Links for Tasker says how\. There is no link for Tuner on/)
+    for (const url of ['fractalremote://next', 'fractalremote://previous', 'fractalremote://scene/1', 'fractalremote://scene/8', 'fractalremote://tuner/off']) assert.ok(text.includes(url), `the support page does not give ${url}`)
+    for (const quoted of quotedPhrases(text)) {
+      assert.ok(spokenForms(code).some((f) => f.match.some((r) => r.test(quoted))), `the support page offers “${quoted}”, which Siri does not know`)
+    }
+    assert.ok(!/this phone|tuner\/on|official|approved|endorsed/i.test(text))
+
+    /* docs/later.md: what is built is said as built, and what is parked keeps its reason. */
+    const later = read('docs/later.md')
+    const item = later.slice(later.indexOf('## Siri, the Action button and Back Tap'), later.indexOf('## Blind and low-vision players'))
+    assert.ok(!/Nothing built\./.test(item), 'docs/later.md still says nothing of Siri is built')
+    assert.match(item.replace(/\s+/g, ' '), /\*\*Built, 23 October 2026, for the build pair after 1\.87\.52:\*\* nine built-in phrases/)
+    for (const parked of ['**Songs by name**', '**Amp and pedal channels**', '**Siri on the Apple Watch.**', '**A button in Control Center or on the Lock Screen**', '**Android voice.**']) {
+      assert.ok(item.includes(parked), `docs/later.md lost the parked ${parked}`)
+    }
+  })
+
   test('Siri page: drawn, it shows every word and nothing else, and Settings opens it only where the links are open', async () => {
     const { transformSync } = await import('esbuild')
     const dir = mkdtempSync(join(tmpdir(), 'siri-help-'))

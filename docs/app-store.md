@@ -620,6 +620,52 @@ Boost off, on the Apple Watch too. Turn the amp itself on and off in Edit."
 The Description's "Turn blocks on and off" is still true (Edit does it for
 every block).
 
+**For the next version's notes: Siri, and the links** (23 October 2026).
+"Let's add all of the Siri commands to the build that we can and update a
+section in the app that will say how to manage Siri." The build pair after
+1.87.52 carries nine App Shortcuts in the iPhone app (mobile/targets/watch/
+_shared/SiriShortcuts.swift), each phrase with the app's name and no other
+(2.5.11(ii): no "Fractal" or "FM3" alias), and a Settings → Siri page that
+says every phrase, the one rule, the Shortcuts app, the Action button, Back
+Tap and how to turn it off. The same build opens the fractalremote:// links
+(next, previous, scene/1 to scene/8, tuner/off, never tuner on) to everybody:
+before it they answer Justin's account alone, by update. Both are new
+features, so 2.3.1(a) wants them described in the next *New since 1.87.11*,
+and 2.5.11(iii) allows the two follow-up questions (which number, which
+tempo) because each is needed. For the Notes for Review, one paragraph:
+
+```
+Siri (new in this version). Nine App Shortcuts, each with the app's name: "Scene [1-8] in Fractal Remote", "Next song in Fractal Remote", "Previous song in Fractal Remote", "Load a preset in Fractal Remote" (Siri asks for the number), "Set the tempo in Fractal Remote" (Siri asks for the tempo), "Tuner on in Fractal Remote", "Tuner off in Fractal Remote", "[pedal] on in Fractal Remote" and "[pedal] off in Fractal Remote" (Delay, Drive, Reverb and other pedal kinds). Each opens the app and does what the matching control on the Play screen does. They work with the Play screen open; on any other screen the app says to open Play. Tuner off works from any screen. To try them without hardware, start the demo as above, keep the Play screen open, and say "Scene 3 in Fractal Remote". The same actions are in the Shortcuts app, and the links fractalremote://next, /previous, /scene/1 to /scene/8 and /tuner/off do the same from a shortcut. Settings, then Siri, explains it all. The app receives only the command, never the audio.
+```
+
+What's New gets one line: "Siri: say "Scene 3 in Fractal Remote", "Next song in Fractal Remote" and
+more, with the Play screen open. Settings → Siri lists every phrase, and how
+to use them with Shortcuts, the Action button and Back Tap." Google Play's
+release notes get one line on the links, which are all Android has (Google
+opens no voice route to apps like this one): "Links for Tasker and similar
+apps: fractalremote://next, previous, scene/1 to 8 and tuner/off. Settings →
+Links for Tasker says how."
+
+**The privacy label is unchanged, and so is Google's Data safety.** Siri does
+the listening and the recognizing, under Apple's own privacy policy, and
+hands the app only the command it recognized: which scene, which pedal, a
+number. The app sends that to the computer exactly as it sends the same tap
+from the Play screen, and nothing new leaves the phone. No Siri entitlement
+and no usage string either: Apple's Siri entitlement is for "Intents app
+extensions that handle any Siri requests other than shortcut requests", and
+the usage string is for SiriKit's permission prompt, which nothing here
+calls. Check the build log on the day for any request for one.
+
+**Before this version goes to Apple**, try Siri on the TestFlight copy, since
+nothing before a build can show Siri hearing the phrases, and phrases cannot
+be reworded by an update: each phrase; a scene said as a word ("scene three")
+as well as a number, because the scene list has no spoken synonyms (those are
+iOS 17 only, and the app still installs on iOS 16.4); the two follow-up
+questions, which developers report Siri sometimes asking again; and whether
+Siri speaks the reply when the app comes forward, which Apple promises
+nothing about, so the notes and the page promise only what Play shows. If a
+phrase fails, the fix is another iPhone and Android build pair before Apple.
+
 ### Notes for App Review, 1.87.11
 
 **These are the ones Apple approved with this build,** and the ones the next
