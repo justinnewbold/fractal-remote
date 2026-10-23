@@ -1202,7 +1202,9 @@ export default function App() {
     link.role === 'remote' && status === 'fault' && device?.connected === false && !missingHere
       ? unitElsewhereCard({ hosts: link.hosts, units: link.units, chosen: link.chosenHost, unitState: 'missing' })
       : null
-  const watchingUnits = Boolean(elsewhere)
+  /* Where the unit is, said by the missing pick's card instead (its `buttons`): taken as that notice for the words under it, and the units asked again the same. */
+  const unitAway = Boolean(elsewhere || missingHere?.buttons.length)
+  const watchingUnits = Boolean(unitAway || (link.role === 'remote' && missingCard?.buttons.length))
   useEffect(() => (watchingUnits ? watchUnits() : undefined), [watchingUnits])
   /*
    * What came back, when the notice above has nothing specific to say.
@@ -4442,20 +4444,22 @@ export default function App() {
         />
       ) : status === 'fault' && fault ? (
         <div className="notice" data-kind="fault">
-          <h2>{elsewhere ? elsewhere.title : fault.title}</h2>
+          <h2>{elsewhere ? elsewhere.title : missingHere?.title || fault.title}</h2>
           {missingHere ? <p>{missingHere.words}</p> : null}
           {missingHere ? (
             <CardButtons
               buttons={[
-                { label: missingHere.keep, onClick: () => keepThisOne() },
+                ...(missingHere.keep ? [{ label: missingHere.keep, onClick: () => keepThisOne() }] : []),
+                ...missingHere.buttons.map((b) => ({ key: b.name, label: b.label, onClick: () => chooseHost(b.name) })),
                 { label: missingHere.list, onClick: () => setSheet('units') }
               ]}
             />
           ) : null}
-          <p>{elsewhere ? elsewhere.words : fault.body}</p>
+          {/* No cable advice when the unit is on another computer: the cable is fine. */}
+          {unitAway && !elsewhere ? null : <p>{elsewhere ? elsewhere.words : fault.body}</p>}
           {/* Switching… on the one pressed while its pick is proved, as on the phone's card and the Which unit sheet. */}
           {elsewhere ? <CardButtons buttons={elsewhere.buttons.map((b) => ({ key: b.name, label: b.label, onClick: () => chooseHost(b.name) }))} /> : null}
-          {faultWhy && !elsewhere ? <p className="hint">What came back: {faultWhy}</p> : null}
+          {faultWhy && !unitAway ? <p className="hint">What came back: {faultWhy}</p> : null}
           {/* Which account this is, and whether a computer on this wifi is on
               another one — see AccountCheck. */}
           <AccountCheck link={link} />
@@ -4492,7 +4496,7 @@ export default function App() {
             thing still asking was a thumb.
           */}
           {/* Not over the unit on another computer: it does not come back to this one by itself, and the way out is its button. */}
-          {elsewhere ? null : <p className="notice-note">Still checking every few seconds — this comes back on its own.</p>}
+          {unitAway ? null : <p className="notice-note">Still checking every few seconds — this comes back on its own.</p>}
         </div>
       ) : null}
 
@@ -4757,7 +4761,8 @@ export default function App() {
               ? {
                   words: missingCard.words,
                   buttons: [
-                    { label: missingCard.keep, onClick: () => keepThisOne() },
+                    ...(missingCard.keep ? [{ label: missingCard.keep, onClick: () => keepThisOne() }] : []),
+                    ...missingCard.buttons.map((b) => ({ key: b.name, label: b.label, onClick: () => chooseHost(b.name) })),
                     { label: missingCard.list, onClick: () => setSheet('units') }
                   ]
                 }

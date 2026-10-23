@@ -232,12 +232,13 @@ export default function Stage({
    * button for each, in place of the raw "No Fractal device found" card,
    * which said nothing about where the unit was: that fault is not the card
    * at the top while this is up (`fault`, below). Not over a pick that never
-   * answers, which is said first. The units are asked again while it is up
-   * (link.js watchUnits).
+   * answers, whose card says it too, with these buttons. The units are asked
+   * again while either is up (link.js watchUnits).
    */
   const elsewhereCard = unitElsewhereCard({ hosts: computers?.hosts, units: computers?.units, chosen: computers?.chosenHost, unitState })
   const whereCard = missingCard ? null : elsewhereCard
-  const watchingUnits = Boolean(whereCard)
+  /* Asked again under either card that says where the unit is: that one, or the missing pick's when it says so too. */
+  const watchingUnits = Boolean(whereCard || missingCard?.buttons.length)
   useEffect(() => (watchingUnits ? watchUnits() : undefined), [watchingUnits])
   /* Nor under the card for a pick that never answers: floated over it, the raw words hid its first sentence. That card says the one driven has no unit. */
   const fault = noDevice(useRig(ofError), whereCard || missingCard)
@@ -884,7 +885,9 @@ export default function Stage({
           <ComputerCard
             words={missingCard.words}
             buttons={[
-              { label: missingCard.keep, onPress: () => keepThisOne() },
+              ...(missingCard.keep ? [{ label: missingCard.keep, onPress: () => keepThisOne() }] : []),
+              /* And where the unit is, when the one driven has none and another has one: its buttons, as the card below has them. */
+              ...missingCard.buttons.map((b) => ({ key: b.name, label: b.short, sub: b.sub, onPress: () => chooseHost(b.name) })),
               ...(onOpenUnits ? [{ label: missingCard.list, onPress: () => onOpenUnits() }] : [])
             ]}
           />

@@ -2159,6 +2159,35 @@ export function run(test) {
   })
 
   /*
+   * And a count cut short that only comes owed once the channel is back:
+   * the pick renamed (on no computer now), a short drop under the launch's
+   * roll call, the channel back in 0.3 s and the count ending owed seconds
+   * later. Nothing asked whether the computer was there: the turn out was
+   * the join, stuck on reads held for the count owed, and /healthz went only
+   * when that hold ran out, so Play said NOT CONNECTED and dropped every tap
+   * until about 11 s from launch (5.25 s in 1.87.50). The count coming owed
+   * asks it at once.
+   */
+  test('phone: three computers, a count that comes owed after the channel is back asks for the computer at once, and Play is connected as soon as in 1.87.50', async () => {
+    const s = await stackOnABench({ pick: JSON.stringify({ accounts: { u1: { name: 'fractalpi', many: true } } }) })
+    s.bench.computers = [{ ...FM3_MAC }, { name: 'raspberry pi 5', unit: null, lag: () => 170 }, { ...AM4_PI }]
+    s.link.startLink()
+    await s.clock.advance(1600)
+    loseSocket(s)
+    s.clock.setTimeout(() => rejoinSocket(s), 300)
+    await s.clock.advance(300)
+    const back = s.clock.now()
+    let up = null
+    for (let i = 0; i < 300 && up === null; i++) {
+      await s.clock.advance(50)
+      if (s.link.linkState().link === 'connected') up = s.clock.now() - back
+    }
+    const log = s.lines().join('\n')
+    assert.match(log, /the link dropped before the count was done: counted again when the link is back/, `the drop did not cut the count short: this does not test it\n${log}`)
+    assert.ok(up !== null && up <= 3500, `Play was connected ${up} ms after the channel was back (1.87.50: 3350)\n${log}`)
+  })
+
+  /*
    * Justin's screen of 22 October 2026: the pick, raspberry pi 3, with
    * nothing plugged in, driven at every launch, and the raw "No Fractal
    * device found" card on Play with nothing saying the FM3 was on the
@@ -4796,6 +4825,47 @@ export function run(test) {
         assert.equal(early.done && early.value?.from, 'raspberry pi 3', early.error?.message)
       }
     })
+
+    /*
+     * AND A CHANNEL DOWN LONGER THAN THAT HOLD. Kept six seconds from the end
+     * of the count cut short, it was over when a channel down seven seconds
+     * or more came back: the reads that had waited for the channel went to
+     * whoever answered first, and the pick's answer to the count owed let
+     * the rest go to nobody in particular after them. The MacBook's FM3 in
+     * the header, then over the Pi's "No Fractal device found", until the
+     * first window took it down. Now the hold runs from the channel's
+     * return, and the pick's answer lets reads go only to be asked of it.
+     */
+    test(`${end}: a channel down longer than the hold a count cut short keeps: no read goes to whoever answers first when it is back, nor at the pick's answer`, async () => {
+      for (const down of [9000, 14000]) {
+        const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+        const { bench, clock, relay, watch, service } = t
+        let lost = true
+        const pi3 = computer('raspberry pi 3', 'AM4', { lag: 320 })
+        const answers = pi3.reply
+        pi3.reply = (p) => (lost ? 'silent' : answers(p))
+        bench.computers = [computer('MacBook Pro SG 566', 'FM3', { lag: 150 }), computer('raspberry pi 5', 'FM3', { plugged: false, lag: 170 }), pi3]
+        counted(t)
+        const reads = [watch(relay.remoteRequest('/scene'))]
+        await clock.advance(250)
+        service.drop()
+        await clock.advance(down)
+        assert.equal(relay.remoteCountOwed(), true, 'the count the drop took the pick’s answer from was kept')
+        lost = false
+        service.back()
+        await clock.advance(20)
+        reads.push(watch(relay.remoteRequest('/scene')))
+        await clock.advance(200)
+        assert.deepEqual(sentOf(bench, '/scene'), [], `down ${down} ms: a read went to whoever answers first as the channel was back`)
+        counted(t)
+        await clock.advance(100)
+        reads.push(watch(relay.remoteRequest('/scene')))
+        await clock.advance(8000)
+        assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+        assert.ok(sentOf(bench, '/scene').every((host) => host === 'raspberry pi 3'), `down ${down} ms: a read went to nobody in particular: ${sentOf(bench, '/scene')}`)
+        for (const read of reads) if (read.done && !read.error) assert.equal(read.value?.from, 'raspberry pi 3', `down ${down} ms: a read was answered by another computer`)
+      }
+    })
   }
 
   test('phone: a disk slow to answer, or never answering, holds no read or tap of one computer past a quarter of a second, and never hangs a count or a pick', async () => {
@@ -5005,14 +5075,14 @@ export function run(test) {
     /* The browser: in the notice that stands where Play would be, the same words and buttons. */
     const app = read('src/App.jsx')
     assert.match(app, /unitElsewhereCard\(\{ hosts: link\.hosts, units: link\.units, chosen: link\.chosenHost, unitState: 'missing' \}\)/)
-    assert.match(app, /<h2>\{elsewhere \? elsewhere\.title : fault\.title\}<\/h2>\s*\{missingHere \? <p>[\s\S]{0,400}\) : null\}\s*<p>\{elsewhere \? elsewhere\.words : fault\.body\}<\/p>/)
+    assert.match(app, /<h2>\{elsewhere \? elsewhere\.title : missingHere\?\.title \|\| fault\.title\}<\/h2>\s*\{missingHere \? <p>[\s\S]{0,700}\) : null\}\s*\{\/\*[^*]*\*\/\}\s*\{unitAway && !elsewhere \? null : <p>\{elsewhere \? elsewhere\.words : fault\.body\}<\/p>\}/)
     /* Through the card's own buttons, which say Switching… on the one pressed and wait while its pick is proved: App's busy never moved for it, so a press looked like nothing. */
     assert.match(app, /\{elsewhere \? <CardButtons buttons=\{elsewhere\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.label, onClick: \(\) => chooseHost\(b\.name\) \}\)\)\} \/> : null\}/, 'the notice’s buttons give no sign while the pick is proved')
     const webCard = read('src/components/ComputerCard.jsx')
-    assert.match(webCard, /export function CardButtons[\s\S]{0,400}disabled=\{busy !== null\}[\s\S]{0,120}setBusy\(i\)\s*try \{\s*await b\.onClick\?\.\(\)\s*\} finally \{\s*setBusy\(null\)[\s\S]{0,120}\{busy === i \? 'Switching…' : b\.label\}/)
+    assert.match(webCard, /export function CardButtons[\s\S]{0,600}disabled=\{busy !== null && busy !== i\}[\s\S]{0,200}setBusy\(i\)\s*try \{\s*await b\.onClick\?\.\(\)\s*\} finally \{\s*setBusy\(null\)[\s\S]{0,120}\{busy === i \? 'Switching…' : b\.label\}/)
     assert.match(webCard, /<CardButtons buttons=\{buttons\} \/>/, 'the card on Play and the notice have different buttons')
     /* And not "this comes back on its own" under it: the unit does not come back to the one driven by itself. */
-    assert.match(app, /\{elsewhere \? null : <p className="notice-note">Still checking every few seconds — this comes back on its own\.<\/p>\}/, 'the notice that says the unit is elsewhere still says it comes back on its own')
+    assert.match(app, /\{unitAway \? null : <p className="notice-note">Still checking every few seconds — this comes back on its own\.<\/p>\}/, 'the notice that says the unit is elsewhere still says it comes back on its own')
     assert.match(app, /useEffect\(\(\) => \(watchingUnits \? watchUnits\(\) : undefined\), \[watchingUnits\]\)/)
   })
 
@@ -5022,7 +5092,7 @@ export function run(test) {
     const units = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true }, 'raspberry pi 5': { model: 'FM3', plugged: false } }
     assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units }).words, 'fractalpi, picked under Which unit, isn’t answering. Playing the FM3 on MacBook Pro SG 566.')
     /* Judged by plugged, never the model: a computer with nothing plugged in still says FM3. */
-    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'raspberry pi 5', hosts, units }).words, 'fractalpi, picked under Which unit, isn’t answering. Using raspberry pi 5 instead, which has no unit plugged in.')
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'raspberry pi 5', hosts, units }).words, 'fractalpi, picked under Which unit, isn’t answering. Using raspberry pi 5 instead, which has no unit plugged in. Your FM3 is on MacBook Pro SG 566.')
     /* And the rig saying the unit on the one driven is missing, which the roll call had not seen: said the same. A computer whose unit is not known says neither. */
     assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units, unitState: 'missing' }).words, 'fractalpi, picked under Which unit, isn’t answering. Using MacBook Pro SG 566 instead, which has no unit plugged in.')
     assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units: {} }).words, 'fractalpi, picked under Which unit, isn’t answering. Using MacBook Pro SG 566 instead.')
@@ -5038,7 +5108,7 @@ export function run(test) {
     assert.match(stage, /missingPickCard\(\{ missing: computers\?\.missingPick, driving: computers\?\.chosenHost, hosts: computers\?\.hosts, units: computers\?\.units, unitState \}\)/)
     /* And the raw "No Fractal device found" never floats over it, hiding its first sentence: the card says the one driven has no unit. */
     assert.match(stage, /const fault = noDevice\(useRig\(ofError\), whereCard \|\| missingCard\)/, 'the raw fault floats over the card for a pick that never answers')
-    assert.match(stage, /<ComputerCard\s+words=\{missingCard\.words\}[\s\S]{0,200}label: missingCard\.keep, onPress: \(\) => keepThisOne\(\)[\s\S]{0,200}label: missingCard\.list, onPress: \(\) => onOpenUnits\(\)/)
+    assert.match(stage, /<ComputerCard\s+words=\{missingCard\.words\}[\s\S]{0,200}label: missingCard\.keep, onPress: \(\) => keepThisOne\(\)[\s\S]{0,400}label: missingCard\.list, onPress: \(\) => onOpenUnits\(\)/)
     const phoneApp = read('mobile/App.js')
     assert.match(phoneApp, /computers=\{demo \? null : link\}\s*onOpenUnits=\{\(\) => setPickLive\(true\)\}/)
     assert.match(phoneApp, /<LiveUnit[\s\S]{0,300}missing=\{link\.missingPick\}/)
@@ -5064,12 +5134,107 @@ export function run(test) {
     /* And in the notice that stands in for Play when the one driven has no unit either: its words and its two ways out, said before where any unit is, as on the phone. */
     assert.match(app, /const missingHere =\s*link\.role === 'remote' && status === 'fault' && device\?\.connected === false\s*\? missingPickCard\(\{ missing: link\.missingPick, driving: link\.chosenHost, hosts: link\.hosts, units: link\.units, unitState: 'missing' \}\)/)
     assert.match(app, /link\.role === 'remote' && status === 'fault' && device\?\.connected === false && !missingHere\s*\? unitElsewhereCard/)
-    assert.match(app, /\{missingHere \? <p>\{missingHere\.words\}<\/p> : null\}\s*\{missingHere \? \(\s*<CardButtons\s*buttons=\{\[\s*\{ label: missingHere\.keep, onClick: \(\) => keepThisOne\(\) \},\s*\{ label: missingHere\.list, onClick: \(\) => setSheet\('units'\) \}/, 'the browser’s notice never says the pick is not answering')
-    assert.match(app, /card=\{\s*link\.role === 'remote' && missingCard\s*\? \{\s*words: missingCard\.words,[\s\S]{0,120}onClick: \(\) => keepThisOne\(\)[\s\S]{0,120}onClick: \(\) => setSheet\('units'\)/)
+    assert.match(app, /\{missingHere \? <p>\{missingHere\.words\}<\/p> : null\}\s*\{missingHere \? \(\s*<CardButtons\s*buttons=\{\[\s*\.\.\.\(missingHere\.keep \? \[\{ label: missingHere\.keep, onClick: \(\) => keepThisOne\(\) \}\] : \[\]\),\s*\.\.\.missingHere\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.label, onClick: \(\) => chooseHost\(b\.name\) \}\)\),\s*\{ label: missingHere\.list, onClick: \(\) => setSheet\('units'\) \}/, 'the browser’s notice never says the pick is not answering')
+    assert.match(app, /card=\{\s*link\.role === 'remote' && missingCard\s*\? \{\s*words: missingCard\.words,[\s\S]{0,120}onClick: \(\) => keepThisOne\(\)[\s\S]{0,300}onClick: \(\) => setSheet\('units'\)/)
     assert.match(read('src/components/Gig.jsx'), /\{card \? <ComputerCard words=\{card\.words\} buttons=\{card\.buttons\} \/> : null\}/)
     assert.equal(app.match(/\{missingRow \? <MissingRow row=\{missingRow\} onForget=\{\(\) => forgetMissing\(\)\} \/> : null\}/g)?.length, 2, 'the pick that does not answer is not under both of the website’s Which unit lists')
     /* Plain words, never "this phone". */
     for (const words of [r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units }).words, r.missingPickRow('x').label]) assert.ok(!/this phone|\bMac\b/.test(words.replace('MacBook', '')), words)
+  })
+
+  /*
+   * A PICK THAT NEVER ANSWERS, AND THE UNIT ON A THIRD COMPUTER. The FM3
+   * unplugged from the MacBook after the roll call, the AM4 on the Pi 5, and
+   * the picked Pi 3 switched off: the missing pick's card won over the one
+   * that says where the unit is, so neither end said the AM4 was on the
+   * Pi 5, its first button, Keep this one, would have made the computer
+   * with no unit the pick, and the units were not asked again while it was
+   * up. On the browser the notice kept the cable advice and "this comes back
+   * on its own". Now that card says where the unit is too, with its buttons
+   * in place of Keep this one, and is taken as that card for all the rest.
+   */
+  test('both ends: a pick that never answers, the one driven with no unit and the unit on another computer: Play says where it is, with its button and no Keep this one', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const hosts = ['MacBook Pro SG 566', 'raspberry pi 5']
+    const units = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true }, 'raspberry pi 5': { model: 'AM4', plugged: true } }
+    for (const facts of [
+      { units, unitState: 'missing' },
+      { units: { ...units, 'MacBook Pro SG 566': { model: 'FM3', plugged: false } }, unitState: null }
+    ]) {
+      const card = r.missingPickCard({ missing: 'raspberry pi 3', driving: 'MacBook Pro SG 566', hosts, ...facts })
+      assert.equal(card.words, 'raspberry pi 3, picked under Which unit, isn’t answering. Using MacBook Pro SG 566 instead, which has no unit plugged in. Your AM4 is on raspberry pi 5.')
+      assert.equal(card.keep, null, 'Keep this one would make the computer with no unit the pick')
+      assert.deepEqual(card.buttons, [{ name: 'raspberry pi 5', label: 'Use the AM4 on raspberry pi 5', short: 'Use the AM4', sub: 'on raspberry pi 5' }])
+      assert.equal(card.list, 'Which unit…')
+      assert.equal(card.title, 'Your unit is on another computer')
+    }
+    /* Nobody else with a unit: as before, Keep this one and the list. And a unit on the one driven: nothing about where. */
+    const alone = r.missingPickCard({ missing: 'raspberry pi 3', driving: 'MacBook Pro SG 566', hosts, units: { ...units, 'raspberry pi 5': { model: 'FM3', plugged: false } }, unitState: 'missing' })
+    assert.equal(alone.keep, 'Keep this one')
+    assert.deepEqual(alone.buttons, [])
+    assert.deepEqual(r.missingPickCard({ missing: 'raspberry pi 3', driving: 'MacBook Pro SG 566', hosts, units, unitState: 'present' }).buttons, [])
+    /* The phone: its buttons on the card, the unit over the computer, before the list; Keep this one only when offered; and the units asked again while it is up. */
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /\.\.\.\(missingCard\.keep \? \[\{ label: missingCard\.keep, onPress: \(\) => keepThisOne\(\) \}\] : \[\]\),[\s\S]{0,200}\.\.\.missingCard\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.short, sub: b\.sub, onPress: \(\) => chooseHost\(b\.name\) \}\)\),\s*\.\.\.\(onOpenUnits \? \[\{ label: missingCard\.list/, 'the phone’s card for a missing pick has no button for the unit on another computer')
+    assert.match(stage, /const watchingUnits = Boolean\(whereCard \|\| missingCard\?\.buttons\.length\)/, 'the units are not asked again while the missing pick’s card says where the unit is')
+    /* The browser: the notice's heading is the other card's, no cable advice, no "comes back on its own", the units asked again; Play's card the same buttons. */
+    const app = read('src/App.jsx')
+    assert.match(app, /const unitAway = Boolean\(elsewhere \|\| missingHere\?\.buttons\.length\)/)
+    assert.match(app, /const watchingUnits = Boolean\(unitAway \|\| \(link\.role === 'remote' && missingCard\?\.buttons\.length\)\)/)
+    assert.match(app, /\{unitAway && !elsewhere \? null : <p>\{elsewhere \? elsewhere\.words : fault\.body\}<\/p>\}/, 'the cable advice is under a notice that says the unit is on another computer')
+    assert.match(app, /\{faultWhy && !unitAway \? /)
+    assert.match(app, /words: missingCard\.words,\s*buttons: \[\s*\.\.\.\(missingCard\.keep \? \[\{ label: missingCard\.keep, onClick: \(\) => keepThisOne\(\) \}\] : \[\]\),\s*\.\.\.missingCard\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.label, onClick: \(\) => chooseHost\(b\.name\) \}\)\),/)
+    /* Never a button with no words on it. */
+    assert.ok(!/label: missing(Card|Here)\.keep, onClick: \(\) => keepThisOne\(\) \},\s*\{/.test(app), 'Keep this one is offered with no label')
+  })
+
+  /*
+   * SWITCHING… IN FULL INK. The button pressed disabled itself with the
+   * others, and a disabled button is drawn at under half strength: the word
+   * that says the tap took measured 1.7:1 on the phone in daylight and 2.1:1
+   * on the browser's dark page, the same gray as the button not pressed, as
+   * if nothing had happened. Only the others are dimmed now.
+   */
+  test('both ends: the card button pressed says Switching… in full ink, the others are dimmed, and a press meanwhile does nothing', async () => {
+    const { contrast, mix } = await import('../src/lib/ink.js')
+    /* How each end draws a button pressed (busy 0) and one not (busy 0, i 1), off its own expression. */
+    const drawn = (file, attr) => {
+      const src = read(file)
+      const expr = src.match(/disabled=\{(busy !== [^}]*)\}/)?.[1]
+      assert.ok(expr, `${file}: the card buttons' disabled moved: say where`)
+      const off = new Function('busy', 'i', `return ${expr}`)
+      assert.equal(off(0, 1), true, `${file}: the others are not dimmed while one is switching`)
+      assert.equal(off(null, 0), false)
+      assert.ok(src.includes(attr), `${file}: a screen reader is not told the button pressed is busy`)
+      assert.match(src, /async \(\) => \{\s*if \(busy !== null\) return\s*setBusy\(i\)/, `${file}: a second press while one is switching starts another pick`)
+      return off(0, 0)
+    }
+    /* The phone: a disabled Press is silkFaint at 0.45 over the card's panel; one not, silk. */
+    const phoneOff = drawn('mobile/src/components/ComputerCard.js', 'busy={busy === i}')
+    const press = read('mobile/src/components/Press.js')
+    assert.match(press, /const ink = on \? color\.onSignal : disabled \? color\.silkFaint : color\.silk/, 'Press’s ink moved: say where')
+    assert.match(press, /opacity: disabled \? 0\.45 :/, 'Press’s dimming moved: say where')
+    assert.match(press, /accessibilityState=\{\{ selected: on, disabled, busy \}\}/)
+    const theme = read('mobile/src/lib/theme.js')
+    for (const name of ['DARK', 'LIGHT']) {
+      const block = theme.slice(theme.indexOf(`const ${name} = {`), theme.indexOf('}', theme.indexOf(`const ${name} = {`)))
+      const hex = (key) => block.match(new RegExp(`\\b${key}: '(#[0-9a-f]{6})'`))?.[1]
+      const ink = phoneOff ? mix(hex('panel'), hex('silkFaint'), 0.45) : hex('silk')
+      const ratio = contrast(ink, hex('panel'))
+      assert.ok(ratio >= 4.5, `phone, ${name.toLowerCase()}: Switching… is ${ratio?.toFixed(2)}:1 on the card, under 4.5:1`)
+    }
+    /* The browser: a chip is silk-dim on the notice's panel, and button:disabled is at 0.45. */
+    const webOff = drawn('src/components/ComputerCard.jsx', 'aria-busy={busy === i}')
+    const css = read('src/styles.css')
+    assert.match(css, /button:disabled \{\s*opacity: 0\.45;/, 'the browser’s dimming moved: say where')
+    assert.match(css, /button\.chip \{[^}]*color: var\(--silk-dim\);/, 'the chip’s ink moved: say where')
+    for (const [name, at] of [['dark', css.indexOf(':root {')], ['light', css.indexOf("[data-theme='light'] {")]]) {
+      const block = css.slice(at, css.indexOf('}', at))
+      const hex = (key) => block.match(new RegExp(`--${key}: (#[0-9a-f]{6})`))?.[1]
+      const ink = webOff ? mix(hex('panel'), hex('silk-dim'), 0.45) : hex('silk-dim')
+      const ratio = contrast(ink, hex('panel'))
+      assert.ok(ratio >= 4.5, `browser, ${name}: Switching… is ${ratio?.toFixed(2)}:1 on the notice, under 4.5:1`)
+    }
   })
 
   test('the roll call’s rules: one line in the log, and a pick is never left for another unit', async () => {
