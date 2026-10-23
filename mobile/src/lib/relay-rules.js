@@ -709,22 +709,44 @@ export async function unitFrom(answers, read, deviceAnswers = []) {
   return { model, plugged: health.ok !== false }
 }
 
+/*
+ * A COMPUTER THAT HAS NOT SAID ITS UNIT, ASKED AGAIN WITH LONGER TO ANSWER.
+ *
+ * "raspberry pi 3 — Unit not known. Update the computer app on it to see
+ * which." That Pi 3 had the newest computer app. It answered the roll call,
+ * but a busy Pi 3 takes nearly two seconds to say what is plugged in, and
+ * the roll call listens for one and a half. Nor could the old words ever be
+ * right: a computer app too old to be asked alone answers every computer's
+ * question, so the unknown unit is the OTHER computer's, and the advice
+ * pointed at a computer that was fine. So a computer that has not said is
+ * asked again, alone, with UNIT_ASK_MS to answer, once the count is done and
+ * whenever Which unit opens (link.js askUnknownUnits). Reads only, and only
+ * with two or more computers.
+ */
+export const UNIT_ASK_MS = 4000
+
+/** The line under a computer that has not said which unit: while it is asked again, and after. */
+export function unitNotSaid(asking = false) {
+  return asking ? 'Asking it which unit…' : 'It didn’t say which unit in time.'
+}
+
 /**
  * The buttons under Which unit, one per computer that answered.
  *
  * The unit leads and the computer follows: "FM3", then "on Justin's MacBook
  * Pro". A computer with nothing plugged in still gets a button — it answered,
  * and it is the one somebody plugs a unit into next — but says so, and goes
- * after the ones with a unit on them.
+ * after the ones with a unit on them. `asking` is while one that has not
+ * said is asked again (UNIT_ASK_MS).
  */
-export function unitChoices(hostNames = [], units = {}, chosen = null) {
+export function unitChoices(hostNames = [], units = {}, chosen = null, asking = false) {
   const rows = hostNames.map((name, i) => {
     const unit = units?.[name] || null
     return {
       name,
       key: `${name}-${i}`,
       label: unit ? (unit.plugged ? unit.model : 'No unit plugged in') : name,
-      detail: unit ? `on ${name}` : 'Unit not known. Update the computer app on it to see which.',
+      detail: unit ? `on ${name}` : unitNotSaid(asking),
       plugged: Boolean(unit?.plugged),
       on: name === chosen
     }

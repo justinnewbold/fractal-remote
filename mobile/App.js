@@ -1111,6 +1111,7 @@ export default function App() {
               units={link.units}
               chosen={link.chosenHost}
               missing={link.missingPick}
+              asking={link.unitsAsking}
             />
             {/* Over the top of whatever is on screen, and gone again on a
                 tap. Nothing behind it is being withheld — they came looking

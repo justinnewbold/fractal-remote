@@ -392,7 +392,7 @@ async function linkOnABench() {
       export const hostConflict = () => null
       export const remoteChosenHost = () => bench.chosen ?? null
       export const remoteHosts = () => bench.hosts || []
-      export const remoteUnits = () => ({})
+      export const remoteUnits = () => bench.unitsNow || {}
       export const remoteReadsAskedOf = () => bench.askedOf ?? null
       /* Whether a roll call is due (relay.js remoteCountDue): \`bench.countDue\`, false unless a test says. */
       export const remoteCountDue = () => (typeof bench.countDue === 'function' ? bench.countDue() : bench.countDue === true)
@@ -402,7 +402,7 @@ async function linkOnABench() {
       export const remoteMissingPick = () => bench.missing ?? null
       export const keepDriven = () => { const had = !!bench.missing; bench.missing = null; bench.kept = (bench.kept || 0) + 1; return had }
       /* Which unit each computer has, asked again (relay.js refreshUnits): counted in \`bench.unitsAsked\`. */
-      export const refreshUnits = async () => { bench.unitsAsked = (bench.unitsAsked || 0) + 1; return bench.units || {} }
+      export const refreshUnits = async (options) => { bench.unitsAsked = (bench.unitsAsked || 0) + 1; (bench.unitsAskedWith = bench.unitsAskedWith || []).push(options ?? null); if (bench.unitsTake) await bench.unitsTake(); return bench.units || {} }
       export const forgetMissingPick = () => { const had = !!bench.missing; bench.missing = null; bench.forgot = (bench.forgot || 0) + 1; return had }
       /* Whether the account's record says it may have two (relay.js remoteMayBeTwo): \`bench.many\` true, which a test says. */
       export const remoteMayBeTwo = () => bench.many === true
@@ -758,15 +758,15 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       /* Every roll call, with the options it was taken with (\`late\`: at the first answer, link.js countIfDue). */
       export const censusHosts = async (options) => { bench.censuses = (bench.censuses || 0) + 1; (bench.censusOptions = bench.censusOptions || []).push(options ?? null); return [] }
       export const hostConflict = () => null
-      export const remoteHosts = () => []
-      export const remoteUnits = () => ({})
+      export const remoteHosts = () => bench.hosts || []
+      export const remoteUnits = () => bench.unitsNow || {}
       export const remoteChosenHost = () => null
       export const remoteReadsAskedOf = () => null
       export const remoteCountDue = () => (typeof bench.countDue === 'function' ? bench.countDue() : false)
       export const remoteCountOwed = () => bench.countOwed === true
       export const remoteMissingPick = () => bench.missing ?? null
       export const keepDriven = () => { const had = !!bench.missing; bench.missing = null; return had }
-      export const refreshUnits = async () => ({})
+      export const refreshUnits = async (options) => { bench.unitsAsked = (bench.unitsAsked || 0) + 1; (bench.unitsAskedWith = bench.unitsAskedWith || []).push(options ?? null); if (bench.unitsTake) await bench.unitsTake(); return bench.unitsNow || {} }
       export const forgetMissingPick = () => { const had = !!bench.missing; bench.missing = null; return had }
       /* Which unit (remote.js pickHost): \`bench.pick\` runs inside it. */
       export const pickHost = async (name) => (bench.pick ? bench.pick(name) : false)
@@ -2314,6 +2314,64 @@ export function run(test) {
     stop()
     await t.clock.advance(30000)
     assert.equal(t.bench.unitsAsked, 3, 'the units were asked after the card went')
+  })
+
+  /*
+   * A computer that has not said which unit is asked again, alone, with
+   * UNIT_ASK_MS, once at a time; Which unit says it is asking meanwhile; and
+   * one computer, or every unit known, asks nothing.
+   */
+  for (const end of ['phone', 'browser']) {
+    test(`${end}: a computer that has not said its unit is asked again with longer, one ask at a time`, async () => {
+      const t = end === 'phone' ? await linkOnABench() : await webLinkOnABench()
+      const { UNIT_ASK_MS } = await import('../shared/relay-rules.mjs')
+      t.bench.unitsAsked = 0
+      t.bench.unitsAskedWith = []
+      t.bench.hosts = ['MacBook Pro SG 566', 'raspberry pi 3']
+      t.bench.unitsNow = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true } }
+      let give
+      t.bench.unitsTake = () => new Promise((go) => (give = go))
+      const first = t.link.askUnknownUnits()
+      const again = t.link.askUnknownUnits()
+      await t.clock.advance(0)
+      assert.equal(first, again, 'a second ask went out while the first was out')
+      assert.equal(t.bench.unitsAsked, 1)
+      assert.deepEqual(t.bench.unitsAskedWith[0], { windowMs: UNIT_ASK_MS, only: ['raspberry pi 3'] })
+      assert.equal(t.link.linkState().unitsAsking, true, 'Which unit does not say it is asking')
+      t.bench.unitsNow = { ...t.bench.unitsNow, 'raspberry pi 3': { model: 'AM4', plugged: true } }
+      give()
+      await first
+      assert.equal(t.link.linkState().unitsAsking, false)
+      assert.deepEqual(t.link.linkState().units['raspberry pi 3'], { model: 'AM4', plugged: true }, 'what it said did not reach Which unit')
+      /* Every unit known: nothing asked. One computer: nothing asked. */
+      t.bench.unitsTake = null
+      await t.link.askUnknownUnits()
+      t.bench.hosts = ['raspberry pi 3']
+      t.bench.unitsNow = {}
+      await t.link.askUnknownUnits()
+      assert.equal(t.bench.unitsAsked, 1, 'a computer was asked its unit with nothing to find out')
+      assert.equal(t.link.linkState().unitsAsking, false)
+    })
+  }
+
+  test('a computer that has not said its unit is asked again once the count is done and whenever Which unit opens', () => {
+    const phone = read('mobile/src/lib/link.js')
+    assert.match(phone.slice(phone.indexOf('async function afterCount(')), /await refreshAll\(\)\n\s*\/\*[^*]*\*\/\n\s*askUnknownUnits\(\)\n\s*\} catch/, 'the phone does not ask again after the count')
+    const web = read('src/lib/link.js')
+    assert.match(web.slice(web.indexOf('async function afterCount(')), /quietMeters\(\)\n\s*\}\n\s*\/\*[^*]*\*\/\n\s*askUnknownUnits\(\)\n\s*\} catch/, 'the browser does not ask again after the count')
+    /* Not when the count was cut short: it is taken again, and asks its own. */
+    for (const src of [phone, web]) {
+      const after = src.slice(src.indexOf('async function afterCount('))
+      assert.ok(after.indexOf('return countIfDue()') < after.indexOf('askUnknownUnits()'), 'a count cut short asks the units it never finished')
+    }
+    const sheet = read('mobile/src/components/LiveUnit.js')
+    assert.match(sheet, /useEffect\(\(\) => \{\s*if \(open\) askUnknownUnits\(\)\s*\}, \[open\]\)/)
+    assert.match(read('mobile/App.js'), /<LiveUnit[\s\S]{0,300}asking=\{link\.unitsAsking\}/)
+    const settings = read('mobile/src/screens/Settings.js')
+    assert.match(settings, /if \(page !== 'link' \|\| remoteHosts\(\)\.length < 2\) return undefined[\s\S]{0,300}askUnknownUnits\(\)\.finally\(/)
+    const app = read('src/App.jsx')
+    assert.match(app, /const whichUnitShown = sheet === 'units' \|\| \(sheet === 'settings' && setupPage === 'link'\)\s*useEffect\(\(\) => \{\s*if \(whichUnitShown\) askUnknownUnits\(\)\s*\}, \[whichUnitShown\]\)/)
+    assert.equal(app.match(/unitChoices\(link\.hosts, link\.units, link\.chosenHost, link\.unitsAsking\)/g)?.length, 2, 'a Which unit list on the website does not say it is asking')
   })
 
   /*
@@ -4666,6 +4724,38 @@ export function run(test) {
       one.bench.sent.length = 0
       await one.relay.refreshUnits()
       assert.equal(one.bench.sent.length, 0, 'one computer was asked which unit it has')
+    })
+
+    /*
+     * "raspberry pi 3 — Unit not known. Update the computer app on it to see
+     * which." Justin's Pi 3 was on 1.87.48, the newest: it answered the roll
+     * call, and took nearly two seconds to say its unit (GET /healthz —
+     * 1819ms) against the roll call's one and a half. Asked again alone, with
+     * longer, it says AM4, and nobody else is asked anything.
+     */
+    test(`${end}: a computer slow to say its unit is asked again alone, with longer, and Which unit never tells it to update`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch } = t
+      bench.computers = [PI5(), PI3({ lag: (p) => (p.path === '/healthz' || p.path === '/device' ? 1850 : 300) })]
+      counted(t)
+      await clock.advance(9000)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+      assert.equal(relay.remoteUnits()['raspberry pi 3'], undefined, 'the bench’s Pi 3 said its unit inside the window: this does not test it')
+      const { unitChoices, UNIT_ASK_MS } = await import('../shared/relay-rules.mjs')
+      const row = () => unitChoices(relay.remoteHosts(), relay.remoteUnits(), relay.remoteChosenHost()).find((r) => r.name === 'raspberry pi 3')
+      assert.equal(row().detail, 'It didn’t say which unit in time.')
+      bench.sent.length = 0
+      const asked = watch(relay.refreshUnits({ windowMs: UNIT_ASK_MS, only: ['raspberry pi 3'], sleep: (ms) => new Promise((go) => clock.setTimeout(go, ms)) }))
+      await clock.advance(UNIT_ASK_MS + 500)
+      assert.equal(asked.done, true)
+      assert.deepEqual(relay.remoteUnits()['raspberry pi 3'], { model: 'AM4', plugged: true })
+      assert.deepEqual(relay.remoteUnits().fractalpi, { model: 'FM3', plugged: true }, 'what the other computer said was lost')
+      assert.deepEqual([row().label, row().detail], ['AM4', 'on raspberry pi 3'])
+      assert.deepEqual(
+        bench.sent.map((x) => `${x.msg.payload.method} ${x.msg.payload.path} ${x.msg.payload.host}`).sort(),
+        ['GET /device raspberry pi 3', 'GET /healthz raspberry pi 3'],
+        'more than the one that had not said was asked, or something else was'
+      )
     })
 
     test(`${end}: a pick that does not answer when asked alone is logged so, never as a computer app too old`, async () => {
