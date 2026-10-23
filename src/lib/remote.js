@@ -73,7 +73,9 @@ export {
   /* And Play's words for a pick that never answers, and its row under Which unit; and for a unit on another computer. */
   missingPickCard,
   missingPickRow,
-  unitElsewhereCard
+  unitElsewhereCard,
+  /* And how a computer you don't use comes off Which unit, at that computer. */
+  notUsingOne
 } from '../../shared/relay-rules.mjs'
 import {
   forbiddenRemotely,

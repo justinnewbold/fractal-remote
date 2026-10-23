@@ -2464,6 +2464,34 @@ export function run(test) {
   })
 
   /*
+   * On the website, the same line with a reload for the fresh roll call,
+   * under both of its Which unit lists (the section on Phone & computer and
+   * the sheet off the unit's name), after the rows, and only with two or
+   * more computers listed. The section's own opening is written once in
+   * App.jsx and nowhere else (test/structure.mjs reads the file as text).
+   */
+  test('browser: how to take a computer off the list is under both Which unit lists, only with two or more', () => {
+    const app = read('src/App.jsx')
+    const line = `<p className="hint">{notUsingOne('page')}</p>`
+    const opening = "{link.role === 'remote' && link.hosts.length > 1 ? ("
+    assert.equal(app.split(opening).length - 1, 1, 'the Which unit section’s opening is written twice in App.jsx')
+    const at = app.indexOf(opening)
+    const section = app.slice(at, app.indexOf('</Section>', at) + '</Section>'.length)
+    assert.match(section, /^\{link\.role === 'remote' && link\.hosts\.length > 1 \? \(\s*<Section key="which-unit" title="Which unit"/, 'Which unit is not inside its two-or-more check')
+    assert.ok(section.endsWith(`</div>\n                {/* How one you don't use comes off this list, at that computer: the phone's line, with a reload for a fresh roll call. */}\n                ${line}\n              </Section>`), `the line is not last in the Which unit section, after its rows:\n${section.slice(-400)}`)
+    const sheetAt = app.indexOf("<Sheet open={sheet === 'units'}")
+    assert.ok(sheetAt !== -1, 'the Which unit sheet moved: say where')
+    const sheet = app.slice(sheetAt, app.indexOf('</Sheet>', sheetAt) + '</Sheet>'.length)
+    assert.match(sheet, /<\/div>\s*\{\/\*[^*]*\*\/\}\s*\{link\.hosts\.length > 1 \? <p className="hint">\{notUsingOne\('page'\)\}<\/p> : null\}\s*<\/Sheet>$/, 'the sheet off the unit’s name does not end on the line, behind two or more computers')
+    assert.ok(/setSheet\('units'\)/.test(app) && /if \(!isDemo\(\) && link\.role === 'remote' && link\.hosts\.length > 1\) \{\s*setSheet\('units'\)/.test(app), 'the sheet opens with fewer than two computers')
+    assert.equal(app.match(/notUsingOne\('page'\)/g)?.length, 2, 'the line is not under both lists, or is somewhere else too')
+    assert.ok(!app.includes("notUsingOne('app')"), 'the website tells somebody to swipe a page away')
+    assert.equal(app.match(/unitChoices\(link\.hosts, /g)?.length, 2, 'the website has a third Which unit list, or lost one')
+    assert.match(read('src/lib/remote.js'), /\n  notUsingOne\n\} from '\.\.\/\.\.\/shared\/relay-rules\.mjs'/)
+    for (const src of [section, sheet]) assert.ok(!/localStorage|sessionStorage|setItem/.test(src), 'Which unit keeps something now')
+  })
+
+  /*
    * And under each of two computers with one name, that it is shared: never
    * "Asking it which unit…", which is never going to end.
    */
