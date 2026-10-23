@@ -1955,7 +1955,8 @@ async function relaySend(method, path, options, trip = { went: false }) {
    */
   /* The deadline is not in it: the computer reads these fields and nothing else, and shares no clock with this browser. */
   const ask = { id, method, path, body: options.body ?? null }
-  if (hosts.length > 1 && chosen && targeted) ask.host = chosen
+  /* And after a proof with no answer, which no computer app too old to know names gives (it answers every name): asked of the one driven by name all the same, never of everybody (the phone's relay.js says why). */
+  if (hosts.length > 1 && chosen && (targeted || proofAnswers === 0)) ask.host = chosen
   /* A read while the pick is still being proved: asked of it already (holdReads). A write never is. */
   else if (method === 'GET' && readsTo) ask.host = readsTo
   /* Who the roll call's reads were asked of, for link.js (remoteReadsAskedOf). */

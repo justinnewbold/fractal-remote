@@ -960,10 +960,13 @@ test('nothing is written while two computers are listening', () => {
     'the second answer is dropped before anything counts it'
   )
   // Requests name the Mac they are meant for, but only once there is more than
-  // one to name and only once that has been proved to work.
+  // one to name and only once that has been proved to work, or the proof had
+  // no answer at all: a computer app too old to know names answers every
+  // name, so it gives two, and none is an answer lost (link-now.mjs, the
+  // slow pick), which is never a reason to send to everybody.
   assert.match(
     src,
-    /if \(hosts\.length > 1 && chosen && targeted\) ask\.host = chosen/,
+    /if \(hosts\.length > 1 && chosen && \(targeted \|\| proofAnswers === 0\)\) ask\.host = chosen/,
     'a request is sent to every computer again, or to one that cannot understand being addressed'
   )
   assert.match(

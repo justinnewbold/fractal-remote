@@ -847,7 +847,8 @@ export const missingPickRow = (name) => (name ? { name, label: `${name} — not 
  * two or more is a computer app too old to know names, and NONE IS NOT
  * THAT. An answer lost, or a computer gone quiet, used to be logged as an
  * old computer app, which sent whoever read the log off to update one that
- * was fine. `cut` is a count the link dropped under before it was done
+ * was fine; and the one driven is asked by name all the same (relay.js
+ * remoteRequest), so it is addressed, only not proved. `cut` is a count the link dropped under before it was done
  * (relay.js takeCensus): what it heard is not the answer, and it is taken
  * again when the link is back.
  */
@@ -870,7 +871,7 @@ export function rollCallLine({ hosts = [], units = {}, chosen = null, why = null
     : shared
       ? 'not addressed: two computers share its name'
       : proof === 0
-        ? 'not addressed: it did not answer when asked alone'
+        ? 'addressed, not proved: it did not answer when asked alone'
         : 'not addressed: a computer app on one of them is too old to be asked alone'
   return `${heard}${gone}; driving ${chosen}, ${reason}, ${how}`
 }

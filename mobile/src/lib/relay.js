@@ -2091,9 +2091,18 @@ async function relaySend(method, path, options, trip = { went: false }) {
    * The deadline is not in it. Computer app 1.87.4 reads these four fields
    * and the host and nothing else, and has no clock in common with this
    * phone to read a deadline by.
+   *
+   * AND A PROOF WITH NO ANSWER IS STILL ASKED BY NAME. A computer app too
+   * old to know names answers every name, so it gives the proof two
+   * answers; none is an answer lost or a computer slower than the window
+   * (Justin's Pi 3, its name asked alone answered in 2.2 s against a proof
+   * of 2.1). Sent to nobody in particular, every tap after it went to all
+   * three computers, the FM3 and the AM4 changing scene together. Asked of
+   * the one driven by name, it reaches that one alone, or that one and an
+   * app too old to tell, which nothing sent can keep out.
    */
   const ask = { id, method, path, body: options.body ?? null }
-  if (hosts.length > 1 && chosen && targeted) ask.host = chosen
+  if (hosts.length > 1 && chosen && (targeted || proofAnswers === 0)) ask.host = chosen
   /* A read while the pick is still being proved: asked of it already (holdReads). A write never is. */
   else if (method === 'GET' && readsTo) ask.host = readsTo
   /* Who the roll call's reads were asked of, for link.js (remoteReadsAskedOf). */

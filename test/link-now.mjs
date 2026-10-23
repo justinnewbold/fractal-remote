@@ -4553,10 +4553,64 @@ export function run(test) {
       await t.clock.advance(6000)
       assert.equal(census.done, true)
       const log = t.store.logged.join('\n')
-      assert.match(log, /driving raspberry pi 3, the one picked under Which unit, not addressed: it did not answer when asked alone/, log)
+      assert.match(log, /driving raspberry pi 3, the one picked under Which unit, addressed, not proved: it did not answer when asked alone/, log)
       assert.ok(!/too old/.test(log), log)
       /* No drop: the count is this link's, as it always was. */
       assert.equal(t.relay.remoteCountOwed(), false)
+    })
+
+    /*
+     * A PROOF WITH NO ANSWER NEVER SENDS ANYTHING TO EVERY COMPUTER. A
+     * computer app too old to know names answers every name, so it gives
+     * two answers; none is an answer lost or a computer slow. Justin's Pi 3
+     * answers the roll call in 1.6 s and its name, asked alone, in 2.2 s: the
+     * proof waited 2.1 s, and every tap after it went to all three computers,
+     * the FM3 and the AM4 changing scene together. Now the one driven is
+     * asked by name all the same. And the same for a pick heard in the
+     * first window whose proof's answer is late, and for Which unit.
+     */
+    test(`${end}: a pick whose answer when asked alone comes after the proof's window is still asked by name: no write reaches two computers, and no read is answered by another`, async () => {
+      for (const [roll, proof] of [
+        [1600, 2200],
+        [300, 1700]
+      ]) {
+        const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+        const { bench, clock, relay, watch, tap, store } = t
+        const mac = computer('MacBook Pro SG 566', 'FM3', { lag: 150 })
+        const pi3 = computer('raspberry pi 3', 'AM4', { lag: (p) => (p.path === '/store/config/host.name' ? (p.host ? proof : roll) : 400) })
+        bench.computers = [mac, computer('raspberry pi 5', 'FM3', { plugged: false, lag: 170 }), pi3]
+        const early = watch(relay.remoteRequest('/device/detect'))
+        const census = counted(t)
+        await clock.advance(9000)
+        assert.equal(census.done, true)
+        const log = store.logged.join('\n')
+        assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', log)
+        assert.match(log, /driving raspberry pi 3, the one picked under Which unit, addressed, not proved: it did not answer when asked alone/, log)
+        assert.ok(!/too old/.test(log), log)
+        assert.equal(early.done && !early.error, true)
+        assert.deepEqual(sentOf(bench, '/device/detect'), ['raspberry pi 3'], `${roll}/${proof}: a read at launch went to whoever answers first`)
+        bench.sent.length = 0
+        const pressed = watch(tap())
+        const saved = watch(relay.remoteRequest('/store/config/scene-names-fm3%3A479', { method: 'PUT', body: '{}' }))
+        const read = watch(relay.remoteRequest('/preset'))
+        await clock.advance(3000)
+        assert.equal(pressed.done && !pressed.error, true, pressed.error?.message)
+        assert.equal(saved.done && !saved.error, true, saved.error?.message)
+        assert.equal(read.done && !read.error, true, read.error?.message)
+        assert.deepEqual(writes(bench).sort(), [['/scene', 'raspberry pi 3'], ['/store/config/scene-names-fm3%3A479', 'raspberry pi 3']], `${roll}/${proof}: a write after a proof with no answer went to every computer`)
+        assert.deepEqual(sentOf(bench, '/preset'), ['raspberry pi 3'], `${roll}/${proof}: a read after a proof with no answer went to whoever answers first`)
+        /* Which unit, its proof's answer late the same way: the MacBook is asked by name, and nobody else hears the tap. */
+        mac.lag = (p) => (p.path === '/store/config/host.name' && p.host ? 2000 : 150)
+        const sleep = (ms) => new Promise((go) => clock.setTimeout(go, ms))
+        const picking = watch(relay.pickHost('MacBook Pro SG 566', { windowMs: 1500, sleep }))
+        await clock.advance(3000)
+        assert.equal(picking.done && picking.value, false)
+        bench.sent.length = 0
+        const moved = watch(tap())
+        await clock.advance(1000)
+        assert.equal(moved.done && !moved.error, true, moved.error?.message)
+        assert.deepEqual(writes(bench), [['/scene', 'MacBook Pro SG 566']], `${roll}/${proof}: a tap after Which unit's proof had no answer went to every computer`)
+      }
     })
   }
 
@@ -4809,7 +4863,7 @@ export function run(test) {
     )
     assert.match(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', why: 'first', addressed: false }), /driving fractalpi, the first to answer, not addressed: a computer app on one of them is too old to be asked alone$/)
     /* A proof nobody answered is not a computer app too old, and a count the link dropped under says so instead of what it found. */
-    assert.match(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', why: 'pick', addressed: false, proof: 0 }), /driving fractalpi, the one picked under Which unit, not addressed: it did not answer when asked alone$/)
+    assert.match(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', why: 'pick', addressed: false, proof: 0 }), /driving fractalpi, the one picked under Which unit, addressed, not proved: it did not answer when asked alone$/)
     assert.match(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', why: 'pick', addressed: false, proof: 2 }), /too old to be asked alone$/)
     assert.equal(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', cut: true }), 'two computers answered: fractalpi (unit not known), raspberry pi 3 (unit not known); the link dropped before the count was done: counted again when the link is back')
     assert.equal(r.rollCallLine({ hosts: ['Studio'], missing: 'Old Mac' }), 'one computer answered: Studio; Old Mac, the one picked under Which unit, did not answer')
