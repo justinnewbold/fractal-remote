@@ -406,6 +406,12 @@ export function run(test) {
     assert.ok(why, 'the lock says nothing of the boost tap commit')
     assert.match(why, /a scene or a preset tapped within 0\.6 s of a boost still goes out up to 0\.6 s late/)
     assert.ok(!/nothing on the phone waits for this/.test(why))
+    /* And the copy a write crossed, never kept (ForgeFX 924ecfa): the pin carries it, and the lock and MODIFICATIONS say so. */
+    assert.match(lock.forgefx.tag, /\+am4boosttap\+am4crossedcopy$/, 'the computer app does not carry the server that never keeps a copy a write crossed')
+    assert.equal(lock.forgefx.commit, '924ecfae533f079539eb6f17d3d4227ce775917c')
+    const crossed = lock._why.find((w) => /924ecfa/.test(w))
+    assert.ok(crossed && /write generation/.test(crossed) && /COMPUTER_NEEDED stays/.test(crossed), 'the lock does not say why it moved')
+    assert.match(read('licences/MODIFICATIONS.md'), /\| Never keep the copy of an AM4 preset dump that a write, a scene, a preset select or a channel change landed in the middle of \|/)
     assert.match(read('shared/versions.mjs').replace(/\s*\n\s*\*\s*/g, ' ').replace(/ +/g, ' '), /1\.87\.49 an AM4 amp's boost tap \(its pedal on Play\) goes out like a bypass \(ForgeFX \+am4boosttap\)\. Older, the boost still switches, but the computer holds its MIDI queue up to 0\.6 s after it, so a scene or a preset tapped in that time goes out that much late\. Degrades\./)
     assert.ok(!/same frame, only later/.test(read('shared/am4-boost.mjs')))
   })

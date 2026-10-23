@@ -15697,14 +15697,14 @@ test('the computer app carries the server with the Linux MIDI reader, the AM4’
  */
 test('the computer app carries the server that sends an AM4 amp’s boost tap at once, and nothing is told to update for it', () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
-  assert.match(lock.forgefx.tag, /\+linuxmidi\+am4boosttap$/, 'the computer app holds every scene tapped after a boost for 600 ms')
-  for (const piece of ['gridgen', 'looper', 'am4scenes', 'am4tempo', 'am4fw', 'am4tempoparam', 'am4tunercc', 'meterGate', 'relayheal', 'quietMeters', 'vp4midi', 'am4dumpretry', 'alsaseqin', 'am4structnames', 'linuxmidi']) {
+  assert.match(lock.forgefx.tag, /\+linuxmidi\+am4boosttap(\+|$)/, 'the computer app holds every scene tapped after a boost for 600 ms')
+  for (const piece of ['gridgen', 'looper', 'am4scenes', 'am4tempo', 'am4fw', 'am4tempoparam', 'am4tunercc', 'meterGate', 'relayheal', 'quietMeters', 'vp4midi', 'am4dumpretry', 'alsaseqin', 'am4structnames', 'linuxmidi', 'am4boosttap']) {
     assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
   }
-  assert.equal(lock.forgefx.commit, 'e2bfe70d74cf8ab183abfe025987d15546a82e33')
+  assert.match(lock.forgefx.commit, /^[0-9a-f]{40}$/, 'the pin is not a full commit')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   assert.equal(lock['forgefx-midi'].commit, 'a17eb4a51d6d86985d8d8040966caa8da295f364', 'the codec moved with it')
-  const why = lock._why.at(-1)
+  const why = lock._why.find((w) => /e2bfe70/.test(w)) || ''
   assert.ok(/Out Boost/.test(why) && /setTapSwitch/.test(why) && /600 ms/.test(why) && /e2bfe70/.test(why) && /COMPUTER_NEEDED does not move/.test(why), 'the lock does not say why it moved')
   const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
   assert.match(mods, /Out Boost switch, written from a phone's Play screen, the way a bypass is sent/)
