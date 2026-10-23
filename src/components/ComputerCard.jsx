@@ -10,32 +10,45 @@ import { useState } from 'react'
  * nothing moves until one is pressed.
  */
 export default function ComputerCard({ title = null, words, buttons = [] }) {
-  const [busy, setBusy] = useState(null)
   return (
     <div className="notice computer-card" data-kind="where" role="status">
       {title ? <h2>{title}</h2> : null}
       <p>{words}</p>
-      <p className="host-pick">
-        {buttons.map((b) => (
-          <button
-            key={b.label}
-            type="button"
-            className="chip"
-            disabled={busy !== null}
-            onClick={async () => {
-              setBusy(b.label)
-              try {
-                await b.onClick?.()
-              } finally {
-                setBusy(null)
-              }
-            }}
-          >
-            {busy === b.label ? 'Switching…' : b.label}
-          </button>
-        ))}
-      </p>
+      <CardButtons buttons={buttons} />
     </div>
+  )
+}
+
+/**
+ * The card's buttons, one per way out. The one pressed says Switching… and
+ * all of them wait while its pick is proved, which can take seconds (three
+ * for a slow pick, longer after a drop): with no sign of it, a press looked
+ * like nothing and was pressed again. The fault notice that says the unit is
+ * on another computer has the same buttons, from here.
+ */
+export function CardButtons({ buttons = [] }) {
+  const [busy, setBusy] = useState(null)
+  return (
+    <p className="host-pick">
+      {buttons.map((b, i) => (
+        <button
+          key={b.key || b.label}
+          type="button"
+          className="chip"
+          disabled={busy !== null}
+          onClick={async () => {
+            setBusy(i)
+            try {
+              await b.onClick?.()
+            } finally {
+              setBusy(null)
+            }
+          }}
+        >
+          {busy === i ? 'Switching…' : b.label}
+        </button>
+      ))}
+    </p>
   )
 }
 

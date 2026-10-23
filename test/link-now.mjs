@@ -4972,7 +4972,11 @@ export function run(test) {
     const app = read('src/App.jsx')
     assert.match(app, /unitElsewhereCard\(\{ hosts: link\.hosts, units: link\.units, chosen: link\.chosenHost, unitState: 'missing' \}\)/)
     assert.match(app, /<h2>\{elsewhere \? elsewhere\.title : fault\.title\}<\/h2>\s*<p>\{elsewhere \? elsewhere\.words : fault\.body\}<\/p>/)
-    assert.match(app, /elsewhere\.buttons\.map\(\(b\) => \([\s\S]{0,120}onClick=\{\(\) => chooseHost\(b\.name\)\}/)
+    /* Through the card's own buttons, which say Switching… on the one pressed and wait while its pick is proved: App's busy never moved for it, so a press looked like nothing. */
+    assert.match(app, /\{elsewhere \? <CardButtons buttons=\{elsewhere\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.label, onClick: \(\) => chooseHost\(b\.name\) \}\)\)\} \/> : null\}/, 'the notice’s buttons give no sign while the pick is proved')
+    const webCard = read('src/components/ComputerCard.jsx')
+    assert.match(webCard, /export function CardButtons[\s\S]{0,400}disabled=\{busy !== null\}[\s\S]{0,120}setBusy\(i\)\s*try \{\s*await b\.onClick\?\.\(\)\s*\} finally \{\s*setBusy\(null\)[\s\S]{0,120}\{busy === i \? 'Switching…' : b\.label\}/)
+    assert.match(webCard, /<CardButtons buttons=\{buttons\} \/>/, 'the card on Play and the notice have different buttons')
     /* And not "this comes back on its own" under it: the unit does not come back to the one driven by itself. */
     assert.match(app, /\{elsewhere \? null : <p className="notice-note">Still checking every few seconds — this comes back on its own\.<\/p>\}/, 'the notice that says the unit is elsewhere still says it comes back on its own')
     assert.match(app, /useEffect\(\(\) => \(watchingUnits \? watchUnits\(\) : undefined\), \[watchingUnits\]\)/)

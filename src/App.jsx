@@ -286,7 +286,7 @@ import {
   missingPickRow,
   unitElsewhereCard
 } from './lib/remote'
-import { MissingRow } from './components/ComputerCard'
+import { CardButtons, MissingRow } from './components/ComputerCard'
 import { newEntry, append } from './lib/log'
 import { watchEvery, probeUnit, countQuiet, unitGone } from '../shared/unit-watch.mjs'
 
@@ -4434,15 +4434,8 @@ export default function App() {
         <div className="notice" data-kind="fault">
           <h2>{elsewhere ? elsewhere.title : fault.title}</h2>
           <p>{elsewhere ? elsewhere.words : fault.body}</p>
-          {elsewhere ? (
-            <p className="host-pick">
-              {elsewhere.buttons.map((b) => (
-                <button key={b.name} type="button" className="chip" onClick={() => chooseHost(b.name)} disabled={busy}>
-                  {b.label}
-                </button>
-              ))}
-            </p>
-          ) : null}
+          {/* Switching… on the one pressed while its pick is proved, as on the phone's card and the Which unit sheet. */}
+          {elsewhere ? <CardButtons buttons={elsewhere.buttons.map((b) => ({ key: b.name, label: b.label, onClick: () => chooseHost(b.name) }))} /> : null}
           {faultWhy && !elsewhere ? <p className="hint">What came back: {faultWhy}</p> : null}
           {/* Which account this is, and whether a computer on this wifi is on
               another one — see AccountCheck. */}
