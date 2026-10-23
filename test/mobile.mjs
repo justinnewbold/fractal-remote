@@ -20198,6 +20198,45 @@ export function run(test) {
   })
 
   /*
+   * AND ONLY UNTIL THE UNIT'S BUFFER MAY HAVE CHANGED WITHOUT THIS PHONE. The
+   * tap was believed until the next scene or preset this phone sent, and
+   * nothing else ended it: the same preset loaded again from the Mac window,
+   * AM4-Edit or the unit, a power cycle and the reconnect after it, a
+   * pull-down or Try again. The unit went back to the stored Boost off, the
+   * reads after it never asked the boost, the pedal kept Boost on, and the
+   * next tap sent Boost off to an amp that had it already: a tap that changed
+   * nothing. Now the news, the unit read whole again and Try again each end
+   * the hold, and the read after them says what the unit has.
+   */
+  test('phone: a boost tapped is read again after the unit’s buffer may have changed without this phone', async () => {
+    for (const [what, again] of [
+      ['an announcement', async (rig, clock) => (rig.handleEvent({ type: 'changed', scope: 'preset' }), clock.advance(8000))],
+      ['a reconnect or a pull-down', async (rig, clock) => { const r = rig.refreshAll(); await clock.advance(8000); await r }],
+      ['Try again', async (rig, clock) => { const r = rig.retryChain(); await clock.advance(8000); await r }]
+    ]) {
+      const { rig, clock, unit, asked } = await rigOnTheBench(AM4_BOOST_BENCH())
+      await clock.advance(0)
+      assert.equal(rig.boostNow(), 'off')
+      const tap = rig.tapBoost(58)
+      await clock.advance(1000)
+      assert.equal(await tap, true)
+      assert.equal(unit.boosts.A, 1)
+      assert.equal(rig.boostNow(), 'on')
+      /* The unit's buffer goes back to the stored preset, Boost off, and nothing this phone sent did it. */
+      unit.boosts.A = 0
+      const reads = asked(BOOST_READ)
+      await again(rig, clock)
+      assert.ok(asked(BOOST_READ) > reads, `${what}: the boost was not read again`)
+      assert.equal(rig.boostNow(), 'off', `${what}: the pedal kept the tap’s Boost on over an amp the unit says is off`)
+      const next = rig.tapBoost(58)
+      await clock.advance(1000)
+      assert.equal(await next, true)
+      assert.equal(unit.boosts.A, 1, `${what}: the next tap sent Boost off to an amp that was off already`)
+      assert.equal(rig.boostNow(), 'on')
+    }
+  })
+
+  /*
    * A preset loaded again starts a new load, whose boost is unknown until its
    * own chain read, which waits for the unit to settle; a chain remembered
    * from an earlier visit puts the amp's pedal up at once. A tap in that gap

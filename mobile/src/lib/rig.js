@@ -724,6 +724,8 @@ async function followScene() {
  * name is asked for now, which is small; the chain once, a moment later.
  */
 async function followPresetNews() {
+  /* The buffer may have changed without this phone: a boost tapped is not believed over it (boostHeld). */
+  boostHeld = null
   const run = presetRun
   if (presetLoads) return
   if (await askUnitsPreset(run, { hostForgot: true })) return
@@ -852,6 +854,8 @@ function syncChainBusy() {
  * makes, with the scene names out of the same copy, asked for by somebody.
  */
 export async function retryChain() {
+  /* Somebody asked for it read again: a boost tapped is not believed over the read (boostHeld). */
+  boostHeld = null
   const done = chainWorking()
   try {
     /* The unit not read since the computer driven changed (that read lost): read whole, the chain with it (see watchUnit). */
@@ -1156,6 +1160,8 @@ export async function refreshAll() {
 }
 
 async function readAll() {
+  /* The unit read whole (a reconnect, a unit found again, a pull-down): its buffer may have changed meanwhile, and a boost tapped is not believed over it (boostHeld). */
+  boostHeld = null
   /* A clean start while the unit was being asked (another computer picked meanwhile): this answer may be the one left's, and the read that follows the clean start reads it all. */
   const era = unitEra
   const caps = await device.detect()
@@ -2677,7 +2683,13 @@ let boostEra = 0
  * it: no read of it is asked meanwhile, none answered meanwhile is put over
  * it, and none asked before the tap ever is (`boostPresses`). Held as the
  * very boost the tap put on screen, so whatever replaces that (a failed tap
- * put back, another channel read, another unit) ends it too.
+ * put back, another channel read, another unit) ends it too. And so does
+ * anything that says the unit's buffer may have changed without this phone:
+ * news of the preset (the same one loaded again from the Mac window, AM4-Edit
+ * or the unit, the AM4's own edit watch), another preset found on the unit,
+ * the unit read whole again (a reconnect, a unit found again, a pull-down),
+ * and Try again. The unit can be back on the stored boost by then, and a tap
+ * still believed sent the very boost it had, a tap that changed nothing.
  */
 let boostHeld = null
 let boostPresses = 0
@@ -3643,6 +3655,7 @@ function presetMovedAtUnit(fresh, run, { hostForgot = false } = {}) {
   if (run !== presetRun || presetLoads) return false
   if (!Number.isInteger(number) || number < 0 || !state.preset || number === state.preset.number) return false
   presetRun += 1
+  boostHeld = null
   logDebug('preset', `the unit is on preset ${number} now, changed away from this phone`)
   forgetControls()
   set({ sceneNames: [], chain: 'reading', chainKnown: null })

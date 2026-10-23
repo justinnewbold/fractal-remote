@@ -1862,6 +1862,8 @@ async function followScene() {
 /* ANOTHER CLIENT CHANGED THE PRESET. The name now, which is small; the chain
    once, a moment later. */
 async function followPresetNews() {
+  /* The buffer may have changed without this window: a boost tapped is not believed over it (boostHeld). */
+  boostHeld = null
   const run = presetRun
   if (presetLoads) return
   if (await askUnitsPreset(run, { hostForgot: true })) return
@@ -1921,6 +1923,7 @@ function presetMovedAtUnit(fresh, run, { hostForgot = false } = {}) {
   if (run !== presetRun || presetLoads) return false
   if (!Number.isInteger(number) || number < 0 || !state.preset || number === state.preset.number) return false
   presetRun += 1
+  boostHeld = null
   /* Somebody else moved it; whatever this window last asked for is moot. */
   set({ chainGoing: null, chainKnown: null })
   enterPreset(fresh)
@@ -2154,6 +2157,10 @@ let boostEra = 0
  * dump the tap crossed is answered from it: the boost the unit had before the
  * tap. Held as the very boost the tap put on screen, so whatever replaces it
  * (a failed tap put back, another channel read, another unit) ends it too.
+ * And so does anything that says the unit's buffer may have changed without
+ * this window: news of the preset, another preset found on the unit, and
+ * App's own read (unitRead). The unit can be back on the stored boost by
+ * then, and a tap still believed sent the very boost it had.
  */
 let boostHeld = null
 let boostPresses = 0
@@ -2412,6 +2419,8 @@ export function startClean() {
  * one clean; the read App makes for the new one is.
  */
 export function unitRead(slug, { demo = false, since } = {}) {
+  /* App's own read of the unit (on connect, a reconnect, a unit found again, Try again): its buffer may have changed meanwhile, and a boost tapped is not believed over it (boostHeld). */
+  boostHeld = null
   if (since !== undefined && since !== unitEra) return false
   const both = demo && realDemo
   const moved = (unitMoved(realUnit, slug) && !both) || cleanOwed

@@ -40,6 +40,10 @@
  *            the tap ever is. A copy begun before the tap says the boost the
  *            unit had before it, and a computer app older than 1.87.49 kept
  *            the copy of a dump a write crossed for a moment after it.
+ *            Only until the unit's buffer may have changed without this
+ *            app, too: news of the preset, another preset found on the
+ *            unit, the unit read again whole, or Try again ends the hold,
+ *            and the read after it says what the unit has.
  *   - write: PUT /preset/blocks/58/params/150 { value: 0 or 1, continuous:
  *            false }, which the computer turns into one frame, byte for byte
  *            the codec's own buildSetParam('amp.out_boost', value). Always the

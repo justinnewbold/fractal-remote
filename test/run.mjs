@@ -7139,6 +7139,53 @@ onTheBench('browser: a boost tapped while a chain read is on its way is not put 
   }
 })
 
+/*
+ * A boost tapped is believed until the next scene or preset this window
+ * sends, and ONLY until the unit's buffer may have changed without it: the
+ * same preset loaded again from the phone, AM4-Edit or the unit, a power
+ * cycle and the reconnect after it, Try again. The unit went back to the
+ * stored Boost off, the reads after it never asked the boost, and the next
+ * tap sent Boost off to an amp that had it already. The news, and App's own
+ * read (unitRead, which every one of its reads passes on the way to the
+ * chain), end the hold. The phone's rig.js, the same.
+ */
+onTheBench('browser: a boost tapped is read again after the unit’s buffer may have changed without this window', async () => {
+  for (const [what, again] of [
+    ['an announcement', async (clock) => (ds.handleEvent({ type: 'changed', scope: 'preset' }), clock.advance(8000))],
+    /* App.jsx read(): on connect, a reconnect, a unit found again, Try again. */
+    ['App’s own read', async (clock) => {
+      ds.unitRead('am4', { since: ds.unitEraNow() })
+      const done = ds.beginChainRead()
+      await ds.refreshBlocks()
+      ds.chainWasRead(12)
+      const boost = ds.refreshBoost()
+      await clock.advance(1000)
+      await boost
+      done()
+    }]
+  ]) {
+    const { clock, unit, asked } = am4Window()
+    await ds.refreshBoost()
+    assert.equal(ds.boostNow(), 'off')
+    const tap = ds.tapBoost(58)
+    await clock.advance(1000)
+    await tap
+    assert.equal(unit.boosts.A, 1)
+    assert.equal(ds.boostNow(), 'on')
+    /* The unit's buffer goes back to the stored preset, Boost off, and nothing this window sent did it. */
+    unit.boosts.A = 0
+    const reads = asked(BOOST_READ_LINE)
+    await again(clock)
+    assert.ok(asked(BOOST_READ_LINE) > reads, `${what}: the boost was not read again`)
+    assert.equal(ds.boostNow(), 'off', `${what}: the pedal kept the tap’s Boost on over an amp the unit says is off`)
+    const next = ds.tapBoost(58)
+    await clock.advance(1000)
+    await next
+    assert.equal(unit.boosts.A, 1, `${what}: the next tap sent Boost off to an amp that was off already`)
+    ds.reset()
+  }
+})
+
 onTheBench('browser: an AM4 amp tapped while its preset is still loading reads nothing and sends nothing, and says why', async () => {
   const { clock, unit, asked, heard } = am4Window()
   await ds.refreshBoost()
