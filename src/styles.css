@@ -10973,6 +10973,52 @@ button.view-tab {
   color: var(--silk);
 }
 
+/* The Debug log's note box: the Feedback form's box, two lines tall, above the buttons. */
+.debug-log-note {
+  min-height: 0;
+  margin-bottom: var(--s-2);
+}
+
+/* Screenshots for a report: small pictures, each with its Remove, then Add a screenshot. */
+.report-shots {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.report-shots-list {
+  display: flex;
+  flex-wrap: wrap;
+  /* Each tile its own height (a wide window is short), so none stretches its Remove button. */
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-shots-list li {
+  display: grid;
+  gap: var(--s-1);
+  justify-items: center;
+}
+
+.report-shots-list img {
+  /* Its size is set by Shots.jsx from the picture's own shape (thumbSize); contain shows all of it. */
+  width: 72px;
+  height: auto;
+  object-fit: contain;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+  background: var(--panel);
+}
+
+.report-shots-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
 /* Said while the model was working, and waiting its turn. Dimmer than a turn
    that has been asked, because it has not been asked yet. */
 .turn-queued {

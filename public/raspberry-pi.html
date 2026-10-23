@@ -212,6 +212,7 @@
         <a href="#which">which Pi</a> ·
         <a href="#buy">what to buy</a> ·
         <a href="#setup">setting it up</a> ·
+        <a href="#am4">an AM4 on a Pi 3 or 4</a> ·
         <a href="#trouble">if something goes wrong</a> ·
         <a href="#gigs">for gigs</a>
       </p>
@@ -272,6 +273,10 @@
       <p>
         If it still struggles, slow to answer or dropping out, a Pi 4 or Pi 5 with 2 GB or more is
         the fix, and every step on this page is the same on those.
+      </p>
+      <p>
+        With an AM4, a Pi 3 also needs one setting so the AM4’s scene names come through: see
+        <a href="#am4">An AM4 on a Pi 3 or Pi 4</a>.
       </p>
 
       <h2 id="buy">What to buy</h2>
@@ -417,6 +422,7 @@
             <li>Give it a few minutes, longer on a Pi 3. With nobody there, the Pi starts, the app starts by itself with no window, and your phone finds your unit again.</li>
             <li>That’s it. From now on, switch the Pi on and your phone finds your unit. Whenever you want the Pi’s desktop again, <a href="https://connect.raspberrypi.com/">connect.raspberrypi.com</a> shows it while the Pi is online, from any web browser, your phone’s included.</li>
           </ol>
+          <p>With an AM4 on a Pi 3, Pi 4 or Pi 400, give the Pi one more setting: see <a href="#am4">An AM4 on a Pi 3 or Pi 4</a>.</p>
           <p class="again dim">Setting it up another way? <a href="#how" data-again>Back to the four choices</a></p>
         </section>
 
@@ -477,6 +483,7 @@
             <li>Give it a few minutes, longer on a Pi 3. With nobody there, the Pi starts, the app starts by itself with no window, and your phone finds your unit again.</li>
             <li>That’s it. From now on, switch the Pi on and your phone finds your unit. Whenever you want the Pi’s desktop again, <a href="https://connect.raspberrypi.com/">connect.raspberrypi.com</a> shows it while the Pi is online, from any web browser, your phone’s included.</li>
           </ol>
+          <p>With an AM4 on a Pi 3, Pi 4 or Pi 400, give the Pi one more setting: see <a href="#am4">An AM4 on a Pi 3 or Pi 4</a>.</p>
           <p class="again dim">Setting it up another way? <a href="#how" data-again>Back to the four choices</a></p>
         </section>
 
@@ -539,6 +546,7 @@
             <li>Give it a few minutes, longer on a Pi 3. With nobody there, the Pi starts, the app starts by itself with no window, and your phone finds your unit again.</li>
             <li>That’s it. From now on, switch the Pi on and your phone finds your unit. Whenever you want the Pi’s desktop again, <a href="https://connect.raspberrypi.com/">connect.raspberrypi.com</a> shows it while the Pi is online, from any web browser, your phone’s included.</li>
           </ol>
+          <p>With an AM4 on a Pi 3, Pi 4 or Pi 400, give the Pi one more setting: see <a href="#am4">An AM4 on a Pi 3 or Pi 4</a>.</p>
           <p class="again dim">Setting it up another way? <a href="#how" data-again>Back to the four choices</a></p>
         </section>
 
@@ -618,9 +626,72 @@
             <li>Plug the power back in, with nothing else plugged into the Pi but your unit (and the network cable, if that is how this Pi always reaches the internet). Give it a few minutes, longer on a Pi 3. With nobody there, the Pi starts, the app starts by itself with no window, and your phone finds your unit again.</li>
             <li>That’s it. From now on, switch the Pi on and your phone finds your unit. Whenever you want the Pi’s desktop again, plug the screen, keyboard and mouse back in, or, if you switched Connect on, go to <a href="https://connect.raspberrypi.com/">connect.raspberrypi.com</a> from any web browser.</li>
           </ol>
+          <p>With an AM4 on a Pi 3, Pi 4 or Pi 400, give the Pi one more setting: see <a href="#am4">An AM4 on a Pi 3 or Pi 4</a>.</p>
           <p class="again dim">Setting it up another way? <a href="#how" data-again>Back to the four choices</a></p>
         </section>
       </div>
+
+      <h2 id="am4">An AM4 on a Pi 3 or Pi 4</h2>
+      <p>
+        On a Raspberry Pi 3 or Pi 4, the Pi 400 included, give the Pi one setting for an AM4. The
+        system on those Pis sets aside 4 KB to catch what the AM4 sends, and a whole AM4 preset is
+        about 12 KB. A Pi 3 loses most of it on the way in. A Pi 4 or 400 sets aside the same 4 KB,
+        though nobody has seen one lose any of a preset yet; the setting does it no harm, so give it
+        the setting too. The setting makes that room 64 KB. A Pi 5, 500 or 500+ sets aside 16 KB by
+        itself, room for a whole preset, so it shouldn’t need this; the check below says for sure on
+        any Pi.
+      </p>
+      <p>
+        This setting is new. What it fixes has been seen on a Pi 3, but the setting itself hasn’t
+        yet been seen bringing the scene names back on a real Pi. If it does on yours, or doesn’t,
+        please say so: in the app, Settings → Troubleshooting → Feedback.
+      </p>
+      <p>
+        How you would notice: the scene buttons in the app show numbers, 1 to 4, where your AM4’s
+        scene names should be, and backing up an AM4 preset to a file in the app on the Pi stops
+        with an error. From version 1.87.47 on, the computer app reads the loaded preset’s scene
+        names a smaller way, so you may see the numbers only now and then, but it still reads
+        whole presets at other times, and those need the setting.
+      </p>
+
+      <h3>Give the Pi the setting</h3>
+      <ol>
+        <li>On the Pi’s desktop (through Connect, or with a screen plugged in), open Terminal: Raspberry Pi menu, then <strong>Accessories</strong>, then <strong>Terminal</strong>.</li>
+        <li>Type <code>echo options snd-seq-midi input_buffer_size=65536 | sudo tee /etc/modprobe.d/fractal-remote-midi.conf</code> exactly as it is, spaces and all, and press Enter. (On screen sharing you can paste it instead: copy the line from this page, click <strong>Paste to remote</strong> at the top of the screen sharing window, then right-click in Terminal and choose <strong>Paste</strong>.)</li>
+        <li>If it asks for a password, type the Pi’s own password and press Enter. Nothing shows while you type it. Terminal then prints <code>options snd-seq-midi input_buffer_size=65536</code> back, which means the setting is saved.</li>
+        <li>Restart the Pi: Raspberry Pi menu → <strong>Shutdown</strong> → <strong>Reboot</strong>. The setting comes on as the Pi starts. Give it a few minutes, longer on a Pi 3.</li>
+      </ol>
+      <p>
+        That is once for good: the setting stays through restarts and updates. If you ever write
+        the memory card again, type it again.
+      </p>
+      <p>
+        It goes with the app on the Pi at version 1.87.47 or newer. To see which it has: on your
+        phone, Settings → Phone &amp; computer shows the computer’s name and its version. If it is
+        older, restart the Pi again and give it a few minutes. The app on the Pi puts in its
+        updates as it starts, and it can take two restarts, one to fetch the update and one to put
+        it in.
+      </p>
+
+      <h3>Check it took</h3>
+      <p>
+        With the AM4 plugged in and switched on, open Terminal, type
+        <code>cat /sys/module/snd_seq_midi/parameters/input_buffer_size</code> and press Enter. It
+        only reads, and changes nothing. It answers with a number:
+      </p>
+      <ul>
+        <li><strong>65536</strong>: the setting is on.</li>
+        <li><strong>4096</strong>: it isn’t on yet. Restart the Pi once more. If it still says 4096, type the line above again, then restart.</li>
+        <li><strong>16384</strong>: the room a Pi 5 sets aside by itself, enough for a whole preset, so it doesn’t need the setting.</li>
+        <li><strong>Any other number</strong>: the line went in wrong. Type it again exactly as it is, or paste it, and restart. That writes over the one that went in wrong.</li>
+        <li><strong>No such file or directory</strong>: the Pi hasn’t picked up the AM4 yet. Check its cable and that it is switched on, give it a minute, and type the check again. If it still says this after you gave the Pi the setting, the line went in wrong: type it again exactly as it is, or paste it, and restart.</li>
+      </ul>
+
+      <h3>To undo it</h3>
+      <p>
+        In Terminal, type <code>sudo rm /etc/modprobe.d/fractal-remote-midi.conf</code>, press
+        Enter, and restart the Pi the same way. The check then shows the Pi’s own size again.
+      </p>
 
       <h2 id="trouble">If something goes wrong</h2>
 
@@ -679,6 +750,13 @@
         <li>Use a data cable. A charge-only cable looks the same and carries no data.</li>
         <li>Only one program can use the unit’s USB at a time. Run one copy of Fractal Remote on the Pi: the AppImage, not the .deb as well.</li>
         <li>Turn the unit off and on again with the app running.</li>
+        <li>Went missing right after you gave the Pi the AM4 setting? The line may have gone in wrong. Type the check in <a href="#am4">An AM4 on a Pi 3 or Pi 4</a>, which says what to do, or undo the setting there and restart the Pi.</li>
+      </ul>
+
+      <h3>An AM4’s scene buttons show numbers, not names</h3>
+      <ul>
+        <li>A scene with no name on the AM4 shows only its number. That is normal.</li>
+        <li>On a Pi 3 or Pi 4, give the Pi the one setting in <a href="#am4">An AM4 on a Pi 3 or Pi 4</a>.</li>
       </ul>
       <p>More is on the <a href="/support">support page</a>.</p>
 

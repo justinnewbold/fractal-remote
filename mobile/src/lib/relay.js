@@ -68,6 +68,8 @@ let userId = null
  * link that was seconds from coming back.
  */
 let connecting = false
+/* That join itself, shared by everybody who asks for one while it runs (remoteConnect). */
+let joining = null
 let hostSeen = false
 let answeredAt = 0
 
@@ -527,12 +529,14 @@ export async function remoteConnect() {
   /* This account's pick, off the disk while the link is being joined: see holdReads. */
   if (!pickOf()) readPick()
   if (canReuseChannel(channel, session, supabase())) return userId
+  /* A join already under way is the one this caller waits on: a second would take its channel from it (see joinChannel). */
+  if (joining) return joining
   connecting = true
-  try {
-    return await joinChannel()
-  } finally {
+  joining = joinChannel().finally(() => {
+    joining = null
     connecting = false
-  }
+  })
+  return joining
 }
 
 async function joinChannel() {
@@ -619,6 +623,22 @@ async function joinChannel() {
     }, 12000)
 
     /*
+     * REPLACED, IT ENDS NOW (remoteDisconnect, which every join begins with).
+     * The callback below hears nothing more for a channel already replaced,
+     * so a replaced join used to wait out its twelve seconds and end as a
+     * failure, closing the socket on its way out: the newer channel's
+     * socket. Justin's launch of 22 October 2026 lost the link that way
+     * twelve seconds in, "socket closed: 1000" then "join failed after
+     * 12.2s", for sixteen seconds.
+     */
+    session.replaced = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      reject(Object.assign(new Error('Replaced by a newer join.'), { replaced: true }))
+    }
+
+    /*
      * AND WHY IT DROPPED, IN THE LOG. On 12 October 2026 a phone's channel
      * dropped about five seconds after every rejoin, for minutes, and the log
      * could only show the link flipping: this callback threw away the reason
@@ -659,6 +679,8 @@ async function joinChannel() {
       }
     })
   }).catch(async (err) => {
+    /* Replaced: remoteDisconnect has taken its channel down, and the socket is not this join's to close. */
+    if (err?.replaced) throw err
     // Leave nothing registered on the way out, or the next attempt inherits it.
     if (session?.chan === chan) session = null
     await c.removeChannel(chan).catch(() => {})
@@ -669,9 +691,10 @@ async function joinChannel() {
      * finds it out. Every attempt in between waited its twelve seconds on it
      * and backed off: one log has the link "joining" for two and a half
      * minutes, another for six. Closed here, the next subscribe opens a fresh
-     * socket, which is the one thing a dead one cannot become.
+     * socket, which is the one thing a dead one cannot become. Never under
+     * a newer channel, though: the socket is that one's now.
      */
-    await c.realtime?.disconnect?.().catch?.(() => {})
+    if (!session) await c.realtime?.disconnect?.().catch?.(() => {})
     throw err
   })
 
@@ -681,6 +704,8 @@ async function joinChannel() {
 export async function remoteDisconnect() {
   const going = session
   session = null
+  /* A join still waiting on this channel ends now, as replaced (joinChannel). */
+  going?.replaced?.()
   channel = null
   seen(false)
   // Who answered belongs to the channel that is going away. Carrying it over

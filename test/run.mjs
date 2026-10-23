@@ -2460,7 +2460,9 @@ test('the computer app says which version it is, where the phone already looks',
   assert.equal(gone.wrote, false)
   assert.equal(gone.heard, null)
   assert.equal(host.phonesHearLine(null, '7.295.0'), null)
-  const report = readSrc(new URL('../src/components/DebugLog.jsx', import.meta.url), 'utf8')
+  /* The head Copy Logs and a report share, in lib/logHead.js. */
+  const report = readSrc(new URL('../src/lib/logHead.js', import.meta.url), 'utf8')
+  assert.match(readSrc(new URL('../src/components/DebugLog.jsx', import.meta.url), 'utf8'), /formatDebugLog\(\{ \.\.\.logHeader\(\{ device, link \}\), at: new Date\(\)\.toISOString\(\) \}/, 'Copy Logs does not carry the log’s head')
   assert.match(report, /computer app \$\{link\.macVersion \? `v\$\{link\.macVersion\}` : 'older than 7\.190\.0/, 'the report does not say which computer app answered')
 })
 
@@ -6242,6 +6244,10 @@ server(test)
 console.log('\non an AM4 the amp’s pedal is its boost')
 const { run: am4Boost } = await import('./am4-boost.mjs')
 am4Boost(test)
+
+console.log('\na report with a note, screenshots and the whole log, in the email')
+const { run: reports } = await import('./reports.mjs')
+reports(test)
 
 test('both file kinds are listed and told apart', async () => {
   // A .syx goes back to the unit verbatim; a design re-validates first. Load
@@ -11449,7 +11455,7 @@ test('the computer stays awake while a phone is using it, and for half an hour a
     const phone = readSrc(new URL('../mobile/src/lib/link.js', import.meta.url), 'utf8')
     assert.match(phone, /import \{ PHONE_NOTE_PATH, phoneNote, timeToTell \} from '\.\/phone-note'/)
     /* The loop's body is turn() since 1.87.24; tick() only counts the turns under way, for lib/updates.js. */
-    const tick = phone.slice(phone.indexOf('async function turn()'), phone.indexOf('async function join()'))
+    const tick = phone.slice(phone.indexOf('async function turn(gen)'), phone.indexOf('async function join(gen)'))
     assert.ok(tick.length > 100, 'the phone link has no turn of its loop to read')
     assert.match(tick, /\n {2}if \(running\) tellComputer\(\)\n/, 'the phone app never tells the computer it is using it')
     const tell = phone.slice(phone.indexOf('function tellComputer()'), phone.indexOf('/** Said once'))
