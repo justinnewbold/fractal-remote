@@ -473,6 +473,19 @@ function tunerOff(cmd, say) {
     logDebug('siri', 'tuner off: the first try did not go; trying once more')
     await pause(1500)
     await untilConnected()
+    /*
+     * NOT OVER A NEWER PRESS. The first try is also false when a newer press
+     * of the tuner overtook it (rig.writeTuner), and in the second and a half
+     * since, the player may have tapped Tuner on Play to tune. That press
+     * set tunerOn, which nothing but rig.writeTuner sets, so it is open now
+     * because somebody opened it: a close sent over it would shut the
+     * tuner mid-tune and put the open strings through the PA. A newer close
+     * leaves it false, and then one more close does no harm.
+     */
+    if (getState().tunerOn) {
+      logDebug('siri', 'tuner off: opened again since, so not tried again')
+      return say(SIRI_SAYS.tunerAlready)
+    }
     if (await close()) return say(SIRI_SAYS.tunerOff)
     logDebug('siri', 'tuner off: gave up')
     return say(failedWords())

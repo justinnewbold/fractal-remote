@@ -536,6 +536,42 @@ export function run(test) {
     }
   })
 
+  test('Siri: Tuner off’s second try is never sent over a tuner the player has opened since', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      /* As rig.writeTuner does: the flag goes with the press, and an overtaken or failed one answers false. */
+      let firstClose = true
+      b.rig.answers.tuner = (on) => {
+        b.rig.__set({ tunerOn: on })
+        if (!on && firstClose) {
+          firstClose = false
+          return Promise.resolve(false)
+        }
+        return Promise.resolve(true)
+      }
+      const id = b.say('tunerOff')
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls, [['tuner', false]])
+      /* And before the second try, the player taps Tuner on Play to tune. */
+      await b.clock.advance(500)
+      b.rig.writeTuner(true, b.clock.now())
+      await b.clock.advance(5000)
+      assert.deepEqual(b.rig.calls.map((c) => c.slice(0, 2)), [['tuner', false], ['tuner', true]], 'the second try shut a tuner the player had just opened')
+      assert.equal(b.rig.state.tunerOn, true)
+      assert.deepEqual(b.replyTo(id), ['The tuner is already on. Your rig is muted.'])
+      /* Nobody opened it: the second try goes, as it always did. */
+      firstClose = true
+      b.rig.__set({ tunerOn: false })
+      b.say('tunerOff')
+      await b.clock.advance(5000)
+      assert.deepEqual(b.rig.calls.slice(2).map((c) => c.slice(0, 2)), [['tuner', false], ['tuner', false]])
+      assert.equal(b.replies().at(-1), 'Tuner off.')
+    } finally {
+      done(b)
+    }
+  })
+
   test('Siri: Tuner on needs Play, says the rig is muted, and is not sent twice or to a unit without one', async () => {
     const b = await siriOnTheBench()
     try {
