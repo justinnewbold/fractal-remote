@@ -15688,7 +15688,7 @@ test('the computer app carries the server that keeps the AM4’s own tuner scree
   }
   const why = lock._why.find((w) => /ab7561e/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
-  for (const said of [/every 3 seconds/, /a level/, /the number it went out on/, /No 127 follows a Close/, /COMPUTER_NEEDED stays/, /on top of 5b6e889/, /No capture of the CC on an AM4 proves it/]) {
+  for (const said of [/every 3 seconds/, /a level/, /the number it went out on/, /No 127 follows a Close/, /COMPUTER_NEEDED stays/, /on top of 5b6e889/, /no capture of the CC on an AM4 proves it/]) {
     assert.match(why, said, `the lock's reason leaves out ${said}`)
   }
   assert.match(
