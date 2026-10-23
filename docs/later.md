@@ -181,6 +181,14 @@ October. 5.4-inch outside, 7.6-inch inside, iOS 27.1. Justin is getting one.
 - On his phone, the day it comes: today's store copy as it is, then fold and
   unfold mid-song with the link up, the tempo box with the keyboard, the NOT
   CONNECTED band, the watch.
+- The fold sensor (mobile/modules/fractal-fold) rides that build pair and
+  only reports: the hinge, where the fold runs, what covers the screen, the
+  window and the side bar's edge, as "Fold:" lines in the debug log
+  (mobile/src/lib/foldSensor.js, started from App.js). Nothing draws from it.
+  Its shape is frozen in test/fold-native.mjs, so what reads it can follow by
+  update, once his logs show a real Duo reporting it right. duo.yml fails if
+  its iOS 27.1 code was compiled out (the canImport version number is
+  Expo's, not Apple's). Android has no fold reader yet.
 
 ## From the improvement list of 15 October 2026
 

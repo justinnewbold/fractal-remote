@@ -23,6 +23,14 @@
 # the app through Expo's scene delegate, which nothing else here exercises,
 # and the app must still be running after it.
 #
+# And the fold sensor (mobile/modules/fractal-fold), whose iOS 27.1 code sits
+# behind a guard on UIKit's version that no page of Apple's confirms: a wrong
+# number compiles it out of the build without a word, and the build would
+# ship a sensor that always answers nothing. Launched with -FractalFoldCheck,
+# the app writes "FractalFold check:" lines to its standard error, which
+# simctl puts in a file here, and the run fails unless they say compiledIn=true
+# and, on iOS 27.1, that the sensor read the app's window.
+#
 # By hand only (Actions → duo → Run workflow on the branch): the runner
 # image is a public preview, and a label no runner answers would leave a
 # pull request waiting on a check that never starts.
@@ -131,6 +139,48 @@ jobs:
             xcrun simctl shutdown "$UDID"
             xcrun simctl delete "$UDID"
           done
+
+      # The fold sensor is in the build, and reads the window once the app is
+      # up. Launched with -FractalFoldCheck, and only then, the module writes
+      # "FractalFold check:" lines to the app's standard error. simctl's
+      # --stderr puts them in a file on the runner, written as they happen,
+      # with nothing to filter, redact or wait for. The same lines go to the
+      # system log, which is read too, for the case the file stays empty.
+      - name: The fold sensor is compiled in
+        working-directory: mobile/ios
+        run: |
+          set -e
+          APP=$(find build/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphonesimulator*' | head -n 1)
+          test -n "$APP"
+          RUNTIME=$(xcrun simctl list runtimes -j | python3 -c "import json,sys; r=[x for x in json.load(sys.stdin)['runtimes'] if x.get('platform')=='iOS' and x.get('isAvailable')]; print(sorted(r, key=lambda x: [int(p) for p in x['version'].split('.')])[-1]['identifier'])")
+          TYPE=$(xcrun simctl list devicetypes -j | python3 -c "import json,sys; t=json.load(sys.stdin)['devicetypes']; d=[x for x in t if 'Duo' in x['name']]; p=[x for x in t if x['name'].startswith('iPhone') and 'Duo' not in x['name']]; print((d or p[-1:])[0]['identifier'])")
+          mkdir -p screens
+          OUT="$PWD/screens/fold-check.txt"
+          echo "== $TYPE on $RUNTIME"
+          UDID=$(xcrun simctl create "fold" "$TYPE" "$RUNTIME")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl launch --stderr="$OUT" "$UDID" cloud.newbold.fractalremote -FractalFoldCheck YES
+          sleep 20
+          xcrun simctl spawn "$UDID" log show --last 5m --style compact \
+            --predicate 'eventMessage CONTAINS "FractalFold check:"' > screens/fold-check-log.txt 2>&1 || true
+          xcrun simctl shutdown "$UDID"
+          xcrun simctl delete "$UDID"
+          LINES=$(grep -ho 'FractalFold check: .*' "$OUT" 2>/dev/null || true)
+          if [ -z "$LINES" ]; then
+            echo "Nothing in the app's standard error; the system log instead."
+            LINES=$(grep -ho 'FractalFold check: .*' screens/fold-check-log.txt 2>/dev/null || true)
+          fi
+          echo "$LINES"
+          echo "$LINES" | grep -q 'FractalFold check: compiledIn=true' \
+            || { echo "The fold sensor is not compiled in: the canImport(UIKit, _version:) number in FractalFoldModule.swift does not match the iOS 27.1 SDK, or the module did not start."; exit 1; }
+          if echo "$LINES" | grep -q 'available=true'; then
+            echo "$LINES" | grep -q 'FractalFold check: reading .*"window":{' \
+              || { echo "The fold sensor is in the build but never read the app's window."; exit 1; }
+          else
+            echo "::warning::The simulator's iOS is older than 27.1, so the fold sensor was not seen running."
+          fi
 
       - uses: actions/upload-artifact@v4
         if: always()

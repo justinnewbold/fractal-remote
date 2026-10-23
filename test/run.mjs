@@ -6264,6 +6264,10 @@ console.log('\nSettings → Siri: what the page says, held to what the app does'
 const { run: siriPage } = await import('./siri-page.mjs')
 siriPage(test)
 
+console.log('\nthe fold sensor: the iPhone Duo’s hinge and fold, written to the log and nothing more')
+const { run: foldNative } = await import('./fold-native.mjs')
+foldNative(test)
+
 test('both file kinds are listed and told apart', async () => {
   // A .syx goes back to the unit verbatim; a design re-validates first. Load
   // treating one as the other would either corrupt or silently no-op.

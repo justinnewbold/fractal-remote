@@ -57,6 +57,7 @@ import { shouldAskToPay } from './src/lib/unlock-rule'
 import { deviceNoun } from './src/lib/device-word'
 import { allowSiriLinks, siriElsewhere, startSiri } from './src/lib/siri'
 import { playElsewhereOf } from './src/lib/siri-rule'
+import { logFoldChanges } from './src/lib/foldSensor'
 
 /* The VP4's Scene Select number and MIDI channel live in the phone's store; the device layer reads them from there (lib/vp4-safety). */
 keepVp4SetupIn(sync)
@@ -657,6 +658,14 @@ export default function App() {
    * to go. Nothing at all on a build without the Siri phrases. See lib/siri.
    */
   useEffect(() => startSiri(), [])
+
+  /*
+   * THE FOLD SENSOR, written to the debug log and nothing else: on an iPhone
+   * Duo, a line each time the hinge, the fold or the window changes shape.
+   * Nothing on screen reads it yet. Nothing at all on Android, in the browser
+   * or on a build without it. See lib/foldSensor.
+   */
+  useEffect(() => logFoldChanges(), [])
 
   /* Bluetooth (beta), picked up from last time. First, so that a phone left
      on Bluetooth starts on Bluetooth; one read of the phone's own storage. */
