@@ -25,6 +25,12 @@ import Press from './Press'
  * what accessibilityLiveRegion is for), so the card came up in silence and a
  * VoiceOver user who used to hear that something was wrong heard nothing.
  * Announced as the Toast does, whenever its words come or change.
+ *
+ * SWITCHING… IN FULL INK. The button pressed disabled itself with the
+ * others, and a disabled Press is drawn at under half strength: the word
+ * that says the tap took read 1.7:1 in daylight, as if nothing had happened.
+ * Only the others are dimmed now; the one pressed says busy to a screen
+ * reader, and ignores a second press.
  */
 export default function ComputerCard({ words, buttons = [] }) {
   const [busy, setBusy] = useState(null)
@@ -50,8 +56,11 @@ export default function ComputerCard({ words, buttons = [] }) {
           label={busy === i ? 'Switching…' : b.label}
           sub={b.sub}
           tone={i === 0 ? 'live' : 'plain'}
-          disabled={busy !== null}
+          /* The one pressed keeps its full ink, so Switching… reads on a dark stage; the others are dimmed, and a press meanwhile does nothing. */
+          disabled={busy !== null && busy !== i}
+          busy={busy === i}
           onPress={async () => {
+            if (busy !== null) return
             setBusy(i)
             try {
               await b.onPress?.()

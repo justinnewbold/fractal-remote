@@ -24,7 +24,8 @@ export default function ComputerCard({ title = null, words, buttons = [] }) {
  * all of them wait while its pick is proved, which can take seconds (three
  * for a slow pick, longer after a drop): with no sign of it, a press looked
  * like nothing and was pressed again. The fault notice that says the unit is
- * on another computer has the same buttons, from here.
+ * on another computer has the same buttons, from here. Only the others are
+ * drawn disabled: dimmed with them, Switching… was 2.1:1 on the dark page.
  */
 export function CardButtons({ buttons = [] }) {
   const [busy, setBusy] = useState(null)
@@ -35,8 +36,11 @@ export function CardButtons({ buttons = [] }) {
           key={b.key || b.label}
           type="button"
           className="chip"
-          disabled={busy !== null}
+          /* The one pressed keeps its full ink, so Switching… reads; the others are dimmed, and a press meanwhile does nothing. */
+          disabled={busy !== null && busy !== i}
+          aria-busy={busy === i}
           onClick={async () => {
+            if (busy !== null) return
             setBusy(i)
             try {
               await b.onClick?.()

@@ -5079,7 +5079,7 @@ export function run(test) {
     /* Through the card's own buttons, which say Switching… on the one pressed and wait while its pick is proved: App's busy never moved for it, so a press looked like nothing. */
     assert.match(app, /\{elsewhere \? <CardButtons buttons=\{elsewhere\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.label, onClick: \(\) => chooseHost\(b\.name\) \}\)\)\} \/> : null\}/, 'the notice’s buttons give no sign while the pick is proved')
     const webCard = read('src/components/ComputerCard.jsx')
-    assert.match(webCard, /export function CardButtons[\s\S]{0,400}disabled=\{busy !== null\}[\s\S]{0,120}setBusy\(i\)\s*try \{\s*await b\.onClick\?\.\(\)\s*\} finally \{\s*setBusy\(null\)[\s\S]{0,120}\{busy === i \? 'Switching…' : b\.label\}/)
+    assert.match(webCard, /export function CardButtons[\s\S]{0,600}disabled=\{busy !== null && busy !== i\}[\s\S]{0,200}setBusy\(i\)\s*try \{\s*await b\.onClick\?\.\(\)\s*\} finally \{\s*setBusy\(null\)[\s\S]{0,120}\{busy === i \? 'Switching…' : b\.label\}/)
     assert.match(webCard, /<CardButtons buttons=\{buttons\} \/>/, 'the card on Play and the notice have different buttons')
     /* And not "this comes back on its own" under it: the unit does not come back to the one driven by itself. */
     assert.match(app, /\{unitAway \? null : <p className="notice-note">Still checking every few seconds — this comes back on its own\.<\/p>\}/, 'the notice that says the unit is elsewhere still says it comes back on its own')
@@ -5186,6 +5186,55 @@ export function run(test) {
     assert.match(app, /words: missingCard\.words,\s*buttons: \[\s*\.\.\.\(missingCard\.keep \? \[\{ label: missingCard\.keep, onClick: \(\) => keepThisOne\(\) \}\] : \[\]\),\s*\.\.\.missingCard\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.label, onClick: \(\) => chooseHost\(b\.name\) \}\)\),/)
     /* Never a button with no words on it. */
     assert.ok(!/label: missing(Card|Here)\.keep, onClick: \(\) => keepThisOne\(\) \},\s*\{/.test(app), 'Keep this one is offered with no label')
+  })
+
+  /*
+   * SWITCHING… IN FULL INK. The button pressed disabled itself with the
+   * others, and a disabled button is drawn at under half strength: the word
+   * that says the tap took measured 1.7:1 on the phone in daylight and 2.1:1
+   * on the browser's dark page, the same gray as the button not pressed, as
+   * if nothing had happened. Only the others are dimmed now.
+   */
+  test('both ends: the card button pressed says Switching… in full ink, the others are dimmed, and a press meanwhile does nothing', async () => {
+    const { contrast, mix } = await import('../src/lib/ink.js')
+    /* How each end draws a button pressed (busy 0) and one not (busy 0, i 1), off its own expression. */
+    const drawn = (file, attr) => {
+      const src = read(file)
+      const expr = src.match(/disabled=\{(busy !== [^}]*)\}/)?.[1]
+      assert.ok(expr, `${file}: the card buttons' disabled moved: say where`)
+      const off = new Function('busy', 'i', `return ${expr}`)
+      assert.equal(off(0, 1), true, `${file}: the others are not dimmed while one is switching`)
+      assert.equal(off(null, 0), false)
+      assert.ok(src.includes(attr), `${file}: a screen reader is not told the button pressed is busy`)
+      assert.match(src, /async \(\) => \{\s*if \(busy !== null\) return\s*setBusy\(i\)/, `${file}: a second press while one is switching starts another pick`)
+      return off(0, 0)
+    }
+    /* The phone: a disabled Press is silkFaint at 0.45 over the card's panel; one not, silk. */
+    const phoneOff = drawn('mobile/src/components/ComputerCard.js', 'busy={busy === i}')
+    const press = read('mobile/src/components/Press.js')
+    assert.match(press, /const ink = on \? color\.onSignal : disabled \? color\.silkFaint : color\.silk/, 'Press’s ink moved: say where')
+    assert.match(press, /opacity: disabled \? 0\.45 :/, 'Press’s dimming moved: say where')
+    assert.match(press, /accessibilityState=\{\{ selected: on, disabled, busy \}\}/)
+    const theme = read('mobile/src/lib/theme.js')
+    for (const name of ['DARK', 'LIGHT']) {
+      const block = theme.slice(theme.indexOf(`const ${name} = {`), theme.indexOf('}', theme.indexOf(`const ${name} = {`)))
+      const hex = (key) => block.match(new RegExp(`\\b${key}: '(#[0-9a-f]{6})'`))?.[1]
+      const ink = phoneOff ? mix(hex('panel'), hex('silkFaint'), 0.45) : hex('silk')
+      const ratio = contrast(ink, hex('panel'))
+      assert.ok(ratio >= 4.5, `phone, ${name.toLowerCase()}: Switching… is ${ratio?.toFixed(2)}:1 on the card, under 4.5:1`)
+    }
+    /* The browser: a chip is silk-dim on the notice's panel, and button:disabled is at 0.45. */
+    const webOff = drawn('src/components/ComputerCard.jsx', 'aria-busy={busy === i}')
+    const css = read('src/styles.css')
+    assert.match(css, /button:disabled \{\s*opacity: 0\.45;/, 'the browser’s dimming moved: say where')
+    assert.match(css, /button\.chip \{[^}]*color: var\(--silk-dim\);/, 'the chip’s ink moved: say where')
+    for (const [name, at] of [['dark', css.indexOf(':root {')], ['light', css.indexOf("[data-theme='light'] {")]]) {
+      const block = css.slice(at, css.indexOf('}', at))
+      const hex = (key) => block.match(new RegExp(`--${key}: (#[0-9a-f]{6})`))?.[1]
+      const ink = webOff ? mix(hex('panel'), hex('silk-dim'), 0.45) : hex('silk-dim')
+      const ratio = contrast(ink, hex('panel'))
+      assert.ok(ratio >= 4.5, `browser, ${name}: Switching… is ${ratio?.toFixed(2)}:1 on the notice, under 4.5:1`)
+    }
   })
 
   test('the roll call’s rules: one line in the log, and a pick is never left for another unit', async () => {
