@@ -1,17 +1,19 @@
 import * as Clipboard from 'expo-clipboard'
+import * as ImagePicker from 'expo-image-picker'
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import { toByteArray } from 'base64-js'
 
-import { SHOT_BYTES, SHOT_PHONE_QUALITIES, base64Bytes } from './report-rules'
+import { SHOT_BYTES, SHOT_EDGE, SHOT_PHONE_QUALITIES, SHOT_QUALITIES, base64Bytes } from './report-rules'
 
 /**
  * A screenshot for a report, pasted from the clipboard.
  *
- * WITH NO NEW BUILD. The phone has no photo picker built into it, and adding
- * one is a native change that only a new store build carries (the patch for
- * that waits in docs/pending/photo-picker.patch). What it does have is
- * expo-clipboard, which reads a picture somebody has copied: a screenshot,
- * "Copy and Delete" on an iPhone, Copy on Android. So the report's
- * screenshots come in by Paste.
+ * BY PASTE, AND FROM THE PHONE'S OWN PICKER. Paste came first, with no new
+ * build: expo-clipboard reads a picture somebody has copied ("Copy and
+ * Delete" on an iPhone, Copy on Android). Choose a screenshot opens the
+ * phone's own photo picker (expo-image-picker, pickShots below), which hands
+ * the app only the pictures picked, and expo-image-manipulator draws each
+ * one again at SHOT_EDGE, as the browser does.
  *
  * An iPhone asks "Allow Paste?" when an app reads a picture from the
  * clipboard (iOS 16 on), unless Settings → Fractal Remote → Paste from Other
@@ -56,5 +58,71 @@ export async function pasteShot() {
     return { why: 'tooBig' }
   } catch {
     return { why: 'unreadable' }
+  }
+}
+
+/** The JPEG's bytes as a shot, the shape pasteShot's are in. */
+function shotOf(b64, width, height) {
+  const bytes = toByteArray(b64)
+  return {
+    body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+    uri: `data:image/jpeg;base64,${b64}`,
+    width,
+    height,
+    size: bytes.byteLength
+  }
+}
+
+/**
+ * A picture drawn again at no more than SHOT_EDGE on its long side, as a
+ * JPEG at the best of SHOT_QUALITIES under SHOT_BYTES, or null. A side the
+ * picker did not say (0) is left to the picture's own size.
+ */
+async function shrink(uri, width = 0, height = 0) {
+  const context = ImageManipulator.manipulate(uri)
+  if (Math.max(width, height) > SHOT_EDGE) context.resize(width >= height ? { width: SHOT_EDGE } : { height: SHOT_EDGE })
+  const image = await context.renderAsync()
+  try {
+    for (const compress of SHOT_QUALITIES) {
+      const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress, base64: true })
+      const size = base64Bytes(saved.base64)
+      if (size > 0 && size <= SHOT_BYTES) return shotOf(saved.base64, saved.width, saved.height)
+    }
+    return null
+  } finally {
+    image.release?.()
+    context.release?.()
+  }
+}
+
+/**
+ * Screenshots from the phone's own photo picker, up to `room` of them.
+ *
+ * No permission is asked for: the system picker (iOS 14 on, Android 13 on,
+ * and Google Play's copy of it before that) hands the app only what was
+ * picked. Answers `{ shots }`, with `why` (a key of SHOT_WORDS) when a picked
+ * picture could not be made small enough or opened. Never throws.
+ */
+export async function pickShots(room) {
+  if (!(room > 0)) return { shots: [], why: 'full' }
+  try {
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: room,
+      quality: 1,
+      exif: false
+    })
+    if (picked?.canceled || !picked?.assets?.length) return { shots: [] }
+    const shots = []
+    let why
+    for (const asset of picked.assets.slice(0, room)) {
+      const shot = await shrink(asset.uri, asset.width, asset.height).catch(() => undefined)
+      if (shot) shots.push(shot)
+      else why = shot === null ? 'tooBig' : 'unreadable'
+    }
+    return why ? { shots, why } : { shots }
+  } catch {
+    return { shots: [], why: 'unreadable' }
   }
 }

@@ -8,7 +8,10 @@
 module.exports = {
   type: 'watch',
   name: 'FractalWatch',
-  displayName: 'Fractal',
+  // The name under the icon and in the iPhone's Watch app. "Fractal" alone read as
+  // Fractal Audio's own app (12 October 2026); the phone's watch tips in
+  // mobile/src/screens/Settings.js (WATCH_KEEP) name it too, and move with it.
+  displayName: 'Fractal Remote',
   // Its own icon, on a light ground: Apple refused build 23 (guideline 4) because the
   // phone icon's black background stops a watch icon reading as a circle.
   icon: '../../assets/watch-icon.png',

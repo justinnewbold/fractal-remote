@@ -87,10 +87,45 @@ async function phone(b, use) {
       }
     `,
     'b64.js': "export const toByteArray = (s) => new Uint8Array(Buffer.from(s, 'base64'))\n",
+    /* The phone's own photo picker and the redraw, as their native halves would answer: `picked` (the picker's result) and `saved(compress)` (a base64 JPEG). */
+    'picker.js': `
+      const b = globalThis.__reportsBench
+      export const launchImageLibraryAsync = async (options) => {
+        b.pickerAsked = options
+        if (b.pickerThrows) throw new Error('no picker')
+        return b.picked || { canceled: true, assets: null }
+      }
+    `,
+    'manip.js': `
+      const b = globalThis.__reportsBench
+      export const SaveFormat = { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' }
+      export const ImageManipulator = {
+        manipulate: (uri) => {
+          const context = {
+            resize: (size) => { (b.resized ||= []).push({ uri, size }); return context },
+            renderAsync: async () => ({
+              saveAsync: async ({ format, compress, base64 }) => {
+                ;(b.saves ||= []).push({ uri, format, compress, base64 })
+                const out = b.saved ? b.saved(compress, uri) : null
+                if (out === 'throw') throw new Error('cannot read it')
+                return { uri: 'file:///out.jpg', width: 736, height: 1600, base64: out }
+              },
+              release: () => {}
+            }),
+            release: () => {}
+          }
+          return context
+        }
+      }
+    `,
     'debugLog.js': read('mobile/src/lib/debugLog.js'),
     'report-rules.js': quick(read('mobile/src/lib/report-rules.js')),
     'reports.js': esm(read('mobile/src/lib/reports.js')).replace("from 'react-native'", "from './rn.js'"),
-    'shots.js': esm(read('mobile/src/lib/shots.js')).replace("from 'expo-clipboard'", "from './clip.js'").replace("from 'base64-js'", "from './b64.js'")
+    'shots.js': esm(read('mobile/src/lib/shots.js'))
+      .replace("from 'expo-clipboard'", "from './clip.js'")
+      .replace("from 'base64-js'", "from './b64.js'")
+      .replace("from 'expo-image-picker'", "from './picker.js'")
+      .replace("from 'expo-image-manipulator'", "from './manip.js'")
   }
   try {
     for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
@@ -412,8 +447,48 @@ export function run(test) {
     assert.match(webShots, /if \(blob\.size <= SHOT_BYTES\)/)
     assert.deepEqual(r.SHOT_QUALITIES, [...r.SHOT_QUALITIES].sort((a, b) => b - a), 'the qualities are not best first')
 
+    /* The phone's own picker: as many as there is room for, each drawn again at 1600 and saved as a JPEG under the cap. */
+    const small64 = Buffer.alloc(300_000, 3).toString('base64')
+    await phone(
+      {
+        picked: { canceled: false, assets: [{ uri: 'file:///a.png', width: 1320, height: 2868 }, { uri: 'file:///b.png', width: 0, height: 0 }] },
+        saved: (compress) => (compress === r.SHOT_QUALITIES[0] ? Buffer.alloc(r.SHOT_BYTES + 1).toString('base64') : small64)
+      },
+      async ({ shots, bench }) => {
+        const { shots: got, why } = await shots.pickShots(2)
+        assert.equal(why, undefined)
+        assert.equal(got.length, 2)
+        assert.deepEqual(bench.pickerAsked, { mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: 2, quality: 1, exif: false })
+        assert.deepEqual(bench.resized, [{ uri: 'file:///a.png', size: { height: 1600 } }], 'a tall screenshot was not drawn at 1600, or one of no known size was')
+        assert.deepEqual(bench.saves.filter((x) => x.uri === 'file:///a.png').map((x) => x.compress), [r.SHOT_QUALITIES[0], r.SHOT_QUALITIES[1]], 'the qualities were not tried best first, or past the one that fit')
+        assert.ok(bench.saves.every((x) => x.format === 'jpeg' && x.base64 === true))
+        assert.equal(got[0].size, 300_000)
+        assert.equal(got[0].body.byteLength, 300_000)
+        assert.match(got[0].uri, /^data:image\/jpeg;base64,/)
+      }
+    )
+    await phone({ picked: { canceled: true, assets: null } }, async ({ shots }) => {
+      assert.deepEqual(await shots.pickShots(3), { shots: [] }, 'closing the picker said something')
+    })
+    await phone({ picked: { canceled: false, assets: [{ uri: 'file:///x.heic', width: 4000, height: 3000 }] }, saved: () => 'throw' }, async ({ shots }) => {
+      assert.deepEqual(await shots.pickShots(1), { shots: [], why: 'unreadable' })
+    })
+    await phone({ pickerThrows: true }, async ({ shots }) => {
+      assert.deepEqual(await shots.pickShots(1), { shots: [], why: 'unreadable' })
+    })
+    await phone({}, async ({ shots, bench }) => {
+      assert.deepEqual(await shots.pickShots(0), { shots: [], why: 'full' })
+      assert.equal(bench.pickerAsked, undefined, 'the picker opened with no room left')
+    })
+    /* No camera and no microphone come with it, and the photo library's words never say this phone. */
+    const plugin = JSON.parse(read('mobile/app.json')).expo.plugins.find((p) => Array.isArray(p) && p[0] === 'expo-image-picker')?.[1]
+    assert.ok(plugin, 'the picker’s plugin is not in app.json')
+    assert.equal(plugin.cameraPermission, false)
+    assert.equal(plugin.microphonePermission, false)
+    assert.doesNotMatch(plugin.photosPermission, /this (phone|iphone|device)/i)
+
     /* Both ends stop at three, and say how many are in. */
-    assert.match(flat('mobile/src/components/Shots.js'), /disabled=\{disabled \|\| pasting \|\| full\}/)
+    assert.match(flat('mobile/src/components/Shots.js'), /disabled=\{disabled \|\| pasting \|\| picking \|\| full\}/)
     assert.match(flat('src/components/Shots.jsx'), /disabled=\{disabled \|\| busy \|\| full\}/)
     for (const f of ['mobile/src/components/Shots.js', 'src/components/Shots.jsx']) {
       assert.match(read(f), /withShot\(/, `${f} adds a picture without the cap`)
@@ -1048,23 +1123,22 @@ export function run(test) {
     assert.doesNotMatch(log.slice(log.indexOf('<FlatList')), /\{lines\.length \? \( <>/)
   })
 
-  test('the phone says how to copy a screenshot on an iPhone, a Pixel and a Samsung, and why a paste brought nothing', async () => {
+  test('the phone says where a screenshot comes from on an iPhone and on Android, and why a paste brought nothing', async () => {
     const r = await import('../shared/report-rules.mjs')
     const shotsSrc = read('mobile/src/components/Shots.js')
     const hint = (os) => {
       const m = shotsSrc.match(/export function copyHint\(os = Platform\.OS\) \{\s*return os === 'ios'\s*\? '([^']+)'\s*: '([^']+)'/)
       return os === 'ios' ? m[1] : m[2]
     }
-    /* iOS 26 and 27: the check mark at the top right; on older versions Done, which is at the top LEFT, said with its own corner. */
-    assert.equal(hint('ios'), 'To copy one: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions, tap Done at the top left instead.')
-    /* Android: the Pixel's route said as the Pixel's, and the Samsung's own beside it. */
-    assert.equal(hint('android'), 'To copy one on a Pixel: open the screenshot in Photos, go to Recent apps, hold the picture (or tap Select, then the picture) and choose Copy. On a Samsung: open it in Gallery, tap ⋮, then Copy to clipboard.')
+    /* The photo picker first, on both; on an iPhone the copy route too, with the check mark at the top right (Done only on older versions). */
+    assert.equal(hint('ios'), 'Choose one from your photos, or copy one to paste: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions, tap Done at the top left instead.')
+    /* Android: no maker's copy route to explain any more, because the picker is there. */
+    assert.equal(hint('android'), 'Choose one from your photos (screenshots have a folder of their own), or paste one you have copied.')
     /* The support page says the same steps. */
     const support = read('public/support.html').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ')
+    assert.match(support, /To add up to three screenshots, tap Choose a screenshot and pick them from your photos, or copy one and tap Paste a screenshot\./)
     assert.match(support, /To copy a screenshot on an iPhone or iPad: take a screenshot \(if only a little picture shows in the corner, tap it\), tap the check mark at the top right, then Copy and Delete\. On older versions, tap Done at the top left instead\./)
     assert.match(support, /For one already in Photos: open it there, tap Share, then Copy Photo\./)
-    assert.match(support, /On a Pixel: open the screenshot in Photos, go to Recent apps, hold the picture \(or tap Select, then the picture\) and choose Copy\./)
-    assert.match(support, /On a Samsung: open it in Gallery, tap ⋮, then Copy to clipboard\./)
     assert.match(support, /On the website and in the computer app: Settings → Troubleshooting → Debug log has the same button/, 'the support page sends website users to the Debug log by a path that is not there')
     assert.doesNotMatch(support, /Debug log under Settings/)
 
@@ -1085,6 +1159,9 @@ export function run(test) {
     /* The phone shows the paste's own words, never the browser's file words. */
     assert.match(shotsSrc, /else setSaid\(pasteWords\(why, Platform\.OS\)\)/)
     assert.doesNotMatch(code(shotsSrc), /SHOT_WORDS\[why\]|SHOT_WORDS\.unreadable|emptyWords/)
+    /* And a picked picture that could not be used says so in the picker's words, never a file format. */
+    assert.match(shotsSrc, /if \(why\) setSaid\(why === 'full' \? SHOT_WORDS\.full : PICK_WORDS\[why\] \|\| PICK_WORDS\.unreadable\)/)
+    for (const words of shotsSrc.match(/const PICK_WORDS = \{([\s\S]*?)\}/)[1].match(/'[^']+'/g)) assert.doesNotMatch(words, /PNG|JPEG|\.jpg|\.png/i)
   })
 
   test('the screenshots are said the same way with or without the log, and shown whole, at both ends', async () => {

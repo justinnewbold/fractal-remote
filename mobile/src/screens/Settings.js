@@ -1632,8 +1632,8 @@ const WATCH_SETUP = [
  * help is telling him where they are.
  */
 const WATCH_KEEP = [
-  'On this iPhone, open the Watch app, then General, then Return to Clock. Scroll down, tap Fractal, choose Custom, and set it to After 1 hour. The watch then comes back to Fractal, not the clock, every time you raise your wrist.',
-  'In the same Watch app, under Display & Brightness, turn on Always On. Fractal stays on screen, dimmed, while your wrist is down.',
+  'On this iPhone, open the Watch app, then General, then Return to Clock. Scroll down, tap Fractal Remote, choose Custom, and set it to After 1 hour. The watch then comes back to Fractal Remote, not the clock, every time you raise your wrist.',
+  'In the same Watch app, under Display & Brightness, turn on Always On. Fractal Remote stays on screen, dimmed, while your wrist is down.',
   'Also under Display & Brightness, set Wake Duration to Wake for 70 Seconds, so a tap on the screen keeps it bright for longer.'
 ]
 

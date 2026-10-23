@@ -3,7 +3,7 @@ import { Image, Platform, Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
 import { SHOTS_MAX, SHOT_WORDS, pasteWords, thumbSize, withShot } from '../lib/report-rules'
-import { pasteShot } from '../lib/shots'
+import { pasteShot, pickShots } from '../lib/shots'
 import Note from './Note'
 import Press from './Press'
 
@@ -20,17 +20,20 @@ import Press from './Press'
  * photo library.
  *
  * Android has no Copy on its own screenshot preview, and the way to copy a
- * picture differs by maker. On a Pixel (Android 15 and 16) any picture on
- * screen can be copied from Recent apps: hold it, or on the March 2026 update
- * and later tap Select, then the picture, then Copy. That is the Pixel's own:
- * a Samsung's Recent apps has no Copy, and its Gallery has Copy to clipboard
- * under ⋮ instead. Both are named, as the support page names them. The photo
- * picker in docs/pending makes this one tap, with the next build.
+ * picture differs by maker, so there Choose a screenshot comes first: the
+ * phone's own photo picker, where screenshots are a folder of their own.
+ * Paste stays for a picture already copied.
  */
 export function copyHint(os = Platform.OS) {
   return os === 'ios'
-    ? 'To copy one: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions, tap Done at the top left instead.'
-    : 'To copy one on a Pixel: open the screenshot in Photos, go to Recent apps, hold the picture (or tap Select, then the picture) and choose Copy. On a Samsung: open it in Gallery, tap ⋮, then Copy to clipboard.'
+    ? 'Choose one from your photos, or copy one to paste: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions, tap Done at the top left instead.'
+    : 'Choose one from your photos (screenshots have a folder of their own), or paste one you have copied.'
+}
+
+/* What a picked picture that could not be used says: in the picker's words, never a file format. */
+const PICK_WORDS = {
+  tooBig: 'That picture is too big to send, even made smaller. Choose a screenshot instead.',
+  unreadable: 'That picture couldn’t be opened. Choose another one.'
 }
 
 /**
@@ -53,6 +56,7 @@ export default function Shots({ shots = [], onChange, disabled = false, say }) {
   const setSaid = say || setOwn
   const said = say ? null : own
   const [pasting, setPasting] = useState(false)
+  const [picking, setPicking] = useState(false)
   const busy = useRef(false)
   const full = shots.length >= SHOTS_MAX
 
@@ -72,6 +76,22 @@ export default function Shots({ shots = [], onChange, disabled = false, say }) {
     } finally {
       busy.current = false
       setPasting(false)
+    }
+  }
+
+  /* The phone's own photo picker, for as many as there is room for. */
+  const choose = async () => {
+    if (busy.current || full) return
+    busy.current = true
+    setPicking(true)
+    setSaid(null)
+    try {
+      const { shots: got, why } = await pickShots(SHOTS_MAX - shots.length)
+      if (got.length) onChange((list) => got.reduce((all, shot) => withShot(all, shot), list))
+      if (why) setSaid(why === 'full' ? SHOT_WORDS.full : PICK_WORDS[why] || PICK_WORDS.unreadable)
+    } finally {
+      busy.current = false
+      setPicking(false)
     }
   }
 
@@ -105,14 +125,26 @@ export default function Shots({ shots = [], onChange, disabled = false, say }) {
           ))}
         </View>
       ) : null}
-      <Press
-        label={pasting ? 'Pasting…' : 'Paste a screenshot'}
-        sub={shots.length ? `${shots.length} of ${SHOTS_MAX} added` : SHOT_WORDS.limit}
-        height={48}
-        disabled={disabled || pasting || full}
-        onPress={paste}
-      />
-      {/* What a paste said, straight under the button tapped, when the screen has nowhere better for it. */}
+      <View style={{ flexDirection: 'row', gap: space.sm }}>
+        <Press
+          grow
+          label={picking ? 'Opening…' : 'Choose a screenshot'}
+          height={48}
+          disabled={disabled || pasting || picking || full}
+          onPress={choose}
+        />
+        <Press
+          grow
+          label={pasting ? 'Pasting…' : 'Paste a screenshot'}
+          height={48}
+          disabled={disabled || pasting || picking || full}
+          onPress={paste}
+        />
+      </View>
+      <Text style={{ color: color.silkDim, fontSize: font.micro }}>
+        {shots.length ? `${shots.length} of ${SHOTS_MAX} added` : SHOT_WORDS.limit}
+      </Text>
+      {/* What a paste or a pick said, straight under the buttons tapped, when the screen has nowhere better for it. */}
       {said ? <Note tone="fault">{said}</Note> : null}
       <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>{copyHint()}</Text>
     </View>

@@ -4,10 +4,10 @@ import { requireOptionalNativeModule } from 'expo'
 
 import { blockColor } from './blockColors'
 import { logDebug } from './debugLog'
-import { idOf } from './device'
+import { idOf, sameBlock } from './device'
 import { probeNow, untilConnected } from './link'
 import { shortBlock } from './shortName'
-import { getState, writeBypass, writeScene, writeTuner } from './rig'
+import { getState, writeBypass, writeChannel, writeScene, writeTuner } from './rig'
 import { tapDeadline } from './relay-rules'
 import { createWatchSender, watchCommand, watchState } from './watch-link'
 import { metronome } from './metronome'
@@ -17,7 +17,7 @@ import { boostNow, pedalSlug } from './rig'
 /*
  * THE APPLE WATCH, FROM THE PHONE'S SIDE.
  *
- * The watch draws what the phone tells it and asks for one of four things —
+ * The watch draws what the phone tells it and asks for one of six things —
  * see lib/watch-link (shared/watch-link.mjs) for both halves of that. This is
  * the phone keeping its end: a fresh picture whenever the stage screen's
  * changes, and each request carried out with the same calls the stage
@@ -135,6 +135,21 @@ export function useWatchBridge(picture, step) {
         if (cmd.do === 'scene') return writeScene(cmd.index, receivedAt)
         if (cmd.do === 'pedal') return writeBypass(cmd.id, !cmd.on, receivedAt)
         if (cmd.do === 'preset') return stepRef.current?.(cmd.step, receivedAt)
+        /*
+         * A pedal held on the wrist, and a channel picked: the Play screen's
+         * channel sheet's own write, which turns down the outline and another
+         * preset's chain by itself. And only for a block the chain on screen
+         * still has: a phone woken by the tap checks the request against the
+         * picture it sent before it locked, so this at least refuses an id the
+         * chain no longer has. (An id names a kind of block, Drive 1 or Delay
+         * 2, so a newer preset with the same block still takes it — as a
+         * switch on or off from the wrist does today.) Bound by the deadline
+         * counted from when the phone heard it, like every other tap.
+         */
+        if (cmd.do === 'channel') {
+          const here = getState().blocks.some((b) => sameBlock(b, cmd.id))
+          return here ? writeChannel(cmd.id, cmd.channel, receivedAt) : undefined
+        }
         if (cmd.do === 'tuner' && getState().tunerOn !== cmd.on) return writeTuner(cmd.on, receivedAt)
         return undefined
       }
@@ -200,8 +215,10 @@ export function useWatchBridge(picture, step) {
   /* Every render of the stage screen is a chance the picture moved. */
   useEffect(() => {
     if (!sender.current) return
-    const { chain, ...rest } = picture
-    const pedals = (chain || []).map((b) => ({ id: idOf(b), name: b.name, short: shortBlock(b), on: !b.bypassed, ...blockColor(b.slug) }))
+    const { chain, channels, ...rest } = picture
+    /* Each pedal with its channel and what a hold may switch it to: the
+       stage screen's own list, empty wherever its own hold does nothing. */
+    const pedals = (chain || []).map((b) => ({ id: idOf(b), name: b.name, short: shortBlock(b), on: !b.bypassed, ...blockColor(b.slug), channel: b.channel, channels }))
     /* The metronome's tap, when the watch's switch is on: see lib/metronome. */
     const beat = metronome()
     const state = watchState({ ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm } })

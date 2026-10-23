@@ -671,11 +671,12 @@ export const AREAS = [
     web: ['src/components/Shots.jsx'],
     phone: ['mobile/src/components/Shots.js'],
     buttons: [
+      { does: 'pick a screenshot to add to the report', web: 'Add a screenshot', phone: 'Choose a screenshot' },
       {
-        does: 'add a screenshot to the report',
-        /* Named for how each end gets one: the browser picks a file, and the phone, with no photo picker built into it until the next build (docs/pending/photo-picker.patch), pastes one it has copied. */
-        web: 'Add a screenshot',
-        phone: 'Paste a screenshot'
+        does: 'paste a screenshot that was copied',
+        web: null,
+        phone: 'Paste a screenshot',
+        why: 'the browser takes a pasted picture in the note box itself (lib/shots pastedImages), with no button for it'
       },
       { does: 'take a screenshot back out before it is sent', web: 'Remove', phone: 'Remove' }
     ]

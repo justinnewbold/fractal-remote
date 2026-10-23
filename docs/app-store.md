@@ -307,8 +307,10 @@ Do **not** declare location, contacts, audio, search history, browsing
 history or advertising data. None are collected — and the
 privacy page says so, so a wrong answer here contradicts a published document.
 Photos are declared only for the screenshots somebody adds to a report: the
-app has no access to the photo library (the phone pastes a copied screenshot,
-and asks nothing of the library), which the privacy page says too.
+app reads nothing from the photo library itself (the phone's own picker hands
+it only the pictures picked, and Paste takes a copied one), which the privacy
+page says too. The build carries NSPhotoLibraryUsageDescription for the
+picker; the camera and microphone are switched off in its plugin.
 
 **22 October 2026: two rows to add in App Store Connect → App Privacy**, both
 "used for App Functionality", linked to the user, not used for tracking:
