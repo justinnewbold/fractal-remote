@@ -626,8 +626,8 @@ section in the app that will say how to manage Siri." The build pair after
 1.87.52 carries nine App Shortcuts in the iPhone app (mobile/targets/watch/
 _shared/SiriShortcuts.swift), each phrase with the app's name and no other
 (2.5.11(ii): no "Fractal" or "FM3" alias), and a Settings → Siri page that
-says every phrase, the one rule, the Shortcuts app, the Action button, Back
-Tap and how to turn it off. The same build opens the fractalremote:// links
+says every command by a phrase, the one rule, the Shortcuts app, the Action
+button, Back Tap and how to turn it off. The same build opens the fractalremote:// links
 (next, previous, scene/1 to scene/8, tuner/off, never tuner on) to everybody:
 before it they answer Justin's account alone, by update. Both are new
 features, so 2.3.1(a) wants them described in the next *New since 1.87.11*,
@@ -639,7 +639,7 @@ Siri (new in this version). Nine App Shortcuts, each with the app's name: "Scene
 ```
 
 What's New gets one line: "Siri: say "Scene 3 in Fractal Remote", "Next song in Fractal Remote" and
-more, with the Play screen open. Settings → Siri lists every phrase, and how
+more, with the Play screen open. Settings → Siri lists every command, and how
 to use them with Shortcuts, the Action button and Back Tap." Google Play's
 release notes get one line on the links, which are all Android has (Google
 opens no voice route to apps like this one): "Links for Tasker and similar
