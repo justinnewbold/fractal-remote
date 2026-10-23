@@ -195,18 +195,29 @@ export default function Log({ onBack }) {
       </View>
 
       <View style={{ paddingHorizontal: space.lg, gap: space.sm, paddingBottom: space.sm }}>
-        <Press
-          label="Copy Logs"
-          /*
-            Named on the button, because it is the reason to press it after a
-            crash: the copy carries the end of the previous run as well as this
-            one, and after a crash that block is the crash.
-          */
-          sub={before.length ? `This run and the ${before.length === 1 ? 'one' : before.length} before it` : 'Then paste it into the chat'}
-          tone="signal"
-          onPress={copy}
-          disabled={!lines.length}
-        />
+        {/*
+          Copy and Clear side by side, as the browser's Debug log has them,
+          and far from Send. Clear came up here from the foot of the screen so
+          that the foot holds only Send and what it said, which then always
+          fit on the smallest phone (review, 23 October 2026).
+        */}
+        <View style={{ flexDirection: 'row', gap: space.sm }}>
+          <Press
+            label="Copy Logs"
+            grow
+            /*
+              Named on the button, because it is the reason to press it after a
+              crash: the copy carries the end of the previous run as well as this
+              one, and after a crash that block is the crash.
+            */
+            sub={before.length ? `This run and the ${before.length === 1 ? 'one' : before.length} before it` : 'Then paste it into the chat'}
+            tone="signal"
+            onPress={copy}
+            disabled={!lines.length}
+          />
+          {/* Not while a send is on its way: it reads the log after the computer has answered. */}
+          {lines.length ? <Press label="Clear Logs" disabled={sending} onPress={() => { clearDebugLog(); setLines([]) }} /> : null}
+        </View>
         {said ? <Note>{said}</Note> : null}
         {!lines.length ? (
           <Note>
@@ -217,6 +228,12 @@ export default function Log({ onBack }) {
       </View>
 
       <FlatList
+        /*
+          Its height is only what the rest leaves (flex 1 from nothing), so it
+          is the first to give up room: the note and the pictures shrink only
+          once it has none left, and Send never.
+        */
+        style={{ flex: 1 }}
         data={[...lines].reverse()}
         keyExtractor={(entry, i) => `${entry.at}-${i}`}
         contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl, gap: space.xs }}
@@ -253,60 +270,75 @@ export default function Log({ onBack }) {
       />
 
       {lines.length ? (
-        /* Its own scroller, capped, so the note, the pictures and the buttons
-           never push the log itself off a small phone. */
-        <ScrollView
-          style={{ flexGrow: 0, maxHeight: '60%' }}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ padding: space.lg, gap: space.sm }}
-        >
+        <>
           {/*
-            Newest first on screen, oldest first in the copy. Reading on a phone
-            you want the thing that just happened; reading a paste you want the
-            story in order.
+            THE NOTE AND THE PICTURES, in a scroller of their own: no more than
+            a third of the screen, and smaller still when the log list has no
+            room left to give (a small phone, the keyboard up). Never Send.
+
+            A React Native ScrollView shrinks of its own accord, so Send under
+            it inside the same scroller was pushed below the screen on a small
+            phone, or by one screenshot, or by a long log, and what it said
+            after a send with it: the one tap became a scroll and a tap, and
+            "Sent" could be out of sight, which is the "there was no
+            confirmation" this button was made to answer (review, 23 October
+            2026).
           */}
+          <ScrollView
+            style={{ flexGrow: 0, flexShrink: 1, maxHeight: '35%' }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.md, gap: space.sm }}
+          >
+            {/*
+              Newest first on screen, oldest first in the copy. Reading on a phone
+              you want the thing that just happened; reading a paste you want the
+              story in order.
+            */}
+            <TextInput
+              value={note}
+              onChangeText={setNote}
+              editable={!sending}
+              multiline
+              maxLength={MAX_MESSAGE}
+              textAlignVertical="top"
+              placeholder={NOTE_PLACEHOLDER}
+              placeholderTextColor={color.silkFaint}
+              accessibilityLabel="What happened, if you want to say"
+              style={{
+                color: color.silk,
+                fontSize: font.body,
+                backgroundColor: color.panel,
+                borderWidth: 1,
+                borderColor: color.rule,
+                borderRadius: radius.md,
+                padding: space.md,
+                minHeight: 64,
+                lineHeight: 22
+              }}
+            />
+            <Shots shots={shots} onChange={setShots} disabled={sending} />
+          </ScrollView>
           {/* Sending beats copying, and until now copying was all there was:
               the log went into the clipboard and then had to survive being
               pasted somewhere, from a phone, after the thing that went wrong.
               Copy stays — a log pasted into a message to a bandmate is a real
-              use — but this is the one that reaches the person who can fix it. */}
-          <TextInput
-            value={note}
-            onChangeText={setNote}
-            editable={!sending}
-            multiline
-            maxLength={MAX_MESSAGE}
-            textAlignVertical="top"
-            placeholder={NOTE_PLACEHOLDER}
-            placeholderTextColor={color.silkFaint}
-            accessibilityLabel="What happened, if you want to say"
-            style={{
-              color: color.silk,
-              fontSize: font.body,
-              backgroundColor: color.panel,
-              borderWidth: 1,
-              borderColor: color.rule,
-              borderRadius: radius.md,
-              padding: space.md,
-              minHeight: 64,
-              lineHeight: 22
-            }}
-          />
-          <Shots shots={shots} onChange={setShots} disabled={sending} />
-          <Press
-            label={sending ? 'Sending…' : 'Send logs to developer'}
-            tone="signal"
-            disabled={sending}
-            onPress={send}
-          />
-          {sentSaid ? (
-            <Note tone={sentSaid.ok ? 'hint' : 'fault'} strong size={font.body}>
-              {sentSaid.words}
-            </Note>
-          ) : null}
-          {/* Not while a send is on its way: it reads the log after the computer has answered. */}
-          <Press label="Clear Logs" disabled={sending} onPress={() => { clearDebugLog(); setLines([]) }} />
-        </ScrollView>
+              use — but this is the one that reaches the person who can fix it.
+              Fixed at the foot, never in the scroller: always on screen, and
+              what it said always under it. */}
+          <View style={{ flexShrink: 0, paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.lg, gap: space.sm }}>
+            <Press
+              label={sending ? 'Sending…' : 'Send logs to developer'}
+              tone="signal"
+              disabled={sending}
+              onPress={send}
+            />
+            {sentSaid ? (
+              <Note tone={sentSaid.ok ? 'hint' : 'fault'} strong size={font.body}>
+                {sentSaid.words}
+              </Note>
+            ) : null}
+          </View>
+        </>
       ) : null}
     </KeyboardAvoidingView>
   )

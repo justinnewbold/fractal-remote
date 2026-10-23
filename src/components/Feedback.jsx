@@ -180,7 +180,7 @@ export default function Feedback({ device, link, platform, macVersion }) {
         <p className="hint">
           Your version and which unit you&rsquo;re on are sent too, so it can be looked into.
           {logGoes ? ' The log goes as well — you can read it above first.' : ''}
-          {shots.length ? ' So do the screenshots you added.' : ''} Nothing
+          {shots.length ? ' The screenshots you added go too.' : ''} Nothing
           you&rsquo;ve built goes with it. If you&rsquo;re signed in, the report is linked to your
           account, so deleting the account deletes it too.
         </p>

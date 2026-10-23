@@ -19,9 +19,9 @@ import { SHOT_BYTES, SHOT_PHONE_QUALITIES, base64Bytes } from './report-rules'
  * clipboard is read once per tap, and a second time only for a picture still
  * over SHOT_BYTES (shared/report-rules SHOT_PHONE_QUALITIES).
  *
- * Answers `{ shot }` or `{ why }`, where `why` is 'empty', 'tooBig' or
- * 'unreadable', the keys of SHOT_WORDS (and 'empty' has its own words on the
- * screen, because what to do next depends on the phone). Never throws.
+ * Answers `{ shot }` or `{ why }`, where `why` is 'empty', 'refused',
+ * 'tooBig' or 'unreadable', the keys of PASTE_WORDS (shared/report-rules,
+ * which says what each means and what the screen says for it). Never throws.
  */
 export async function pasteShot() {
   try {
@@ -29,8 +29,13 @@ export async function pasteShot() {
     if (!(await Clipboard.hasImageAsync())) return { why: 'empty' }
     for (const jpegQuality of SHOT_PHONE_QUALITIES) {
       const image = await Clipboard.getImageAsync({ format: 'jpeg', jpegQuality })
-      /* Null when there is none, and when "Don't Allow" was tapped: the phone cannot tell the two apart. */
-      if (!image?.data) return { why: 'empty' }
+      /*
+       * hasImageAsync has just said a picture is there, so nothing back means
+       * it was not handed over: "Don't Allow Paste" on an iPhone, or Paste
+       * from Other Apps set to Deny, which asks nothing. Not "there is no
+       * picture": the person has just copied one.
+       */
+      if (!image?.data) return { why: 'refused' }
       const comma = image.data.indexOf(',')
       const b64 = comma >= 0 ? image.data.slice(comma + 1) : image.data
       const size = base64Bytes(b64)

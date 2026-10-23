@@ -10948,6 +10948,8 @@ button.view-tab {
 .report-shots-list {
   display: flex;
   flex-wrap: wrap;
+  /* Each tile its own height (a wide window is short), so none stretches its Remove button. */
+  align-items: flex-start;
   gap: var(--s-2);
   margin: 0;
   padding: 0;
@@ -10961,9 +10963,10 @@ button.view-tab {
 }
 
 .report-shots-list img {
+  /* Its size is set by Shots.jsx from the picture's own shape (thumbSize); contain shows all of it. */
   width: 72px;
-  height: 96px;
-  object-fit: cover;
+  height: auto;
+  object-fit: contain;
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
   background: var(--panel);

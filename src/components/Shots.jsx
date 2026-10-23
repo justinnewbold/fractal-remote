@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { SHOTS_MAX, SHOT_WORDS, withShot } from '../../shared/report-rules.mjs'
+import { SHOTS_MAX, SHOT_WORDS, thumbSize, withShot } from '../../shared/report-rules.mjs'
 import { forget, shrinkShot } from '../lib/shots'
 
 /**
@@ -59,7 +59,8 @@ export default function Shots({ shots = [], onChange, disabled = false, adding =
         <ul className="report-shots-list" aria-label="Screenshots to send">
           {shots.map((shot, i) => (
             <li key={shot.uri}>
-              <img src={shot.uri} alt={`Screenshot ${i + 1}`} />
+              {/* The whole picture in its own shape, as the phone draws it: a wide window is not a strip from its middle. */}
+              <img src={shot.uri} alt={`Screenshot ${i + 1}`} style={thumbSize(shot.width, shot.height, 72)} />
               <button
                 type="button"
                 className="chip"

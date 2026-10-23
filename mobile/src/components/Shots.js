@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Image, Platform, Text, View } from 'react-native'
 
 import { color, font, radius, space } from '../lib/theme'
-import { SHOTS_MAX, SHOT_WORDS, withShot } from '../lib/report-rules'
+import { SHOTS_MAX, SHOT_WORDS, pasteWords, thumbSize, withShot } from '../lib/report-rules'
 import { pasteShot } from '../lib/shots'
 import Note from './Note'
 import Press from './Press'
@@ -10,29 +10,25 @@ import Press from './Press'
 /**
  * How to copy a screenshot so it can be pasted, for the phone in hand.
  *
- * Checked on 22 October 2026. An iPhone or iPad on iOS 26 or 27 opens a new
- * screenshot full screen, with a check mark at the top; on older versions, or
- * with Full-Screen Previews off, it is a little picture in the corner to tap
- * first, and the button says Done. Either way, Copy and Delete puts it on the
- * clipboard and keeps it out of the photo library.
+ * Checked on 22 and 23 October 2026. An iPhone or iPad on iOS 26 or 27 opens
+ * a new screenshot full screen, with a check mark at the top right; with
+ * Full-Screen Previews off it is a little picture in the corner, and tapping
+ * it opens the same full screen, check mark and all. Before iOS 26 the button
+ * there says Done. Either way, Copy and Delete puts it on the clipboard and
+ * keeps it out of the photo library.
  *
- * Android has no Copy on its own screenshot preview. On a Pixel (Android 15
- * and 16) any picture on screen can be copied from Recent apps: hold it, or
- * on the March 2026 update and later tap Select, then the picture, then Copy.
- * Other phones vary, so the line says what to look for. The photo picker in
- * docs/pending makes this one tap, with the next build.
+ * Android has no Copy on its own screenshot preview, and the way to copy a
+ * picture differs by maker. On a Pixel (Android 15 and 16) any picture on
+ * screen can be copied from Recent apps: hold it, or on the March 2026 update
+ * and later tap Select, then the picture, then Copy. That is the Pixel's own:
+ * a Samsung's Recent apps has no Copy, and its Gallery has Copy to clipboard
+ * under ⋮ instead. Both are named, as the support page names them. The photo
+ * picker in docs/pending makes this one tap, with the next build.
  */
 export function copyHint(os = Platform.OS) {
   return os === 'ios'
-    ? 'To copy one: take a screenshot, tap the check mark at the top (or tap the little picture, then Done), then Copy and Delete.'
-    : 'To copy one: open the screenshot, go to Recent apps, then hold the picture (or tap Select, then the picture) and choose Copy.'
-}
-
-/** What a tap with nothing on the clipboard says. On an iPhone the same nothing comes back when Allow Paste was not chosen. */
-export function emptyWords(os = Platform.OS) {
-  return os === 'ios'
-    ? 'There’s no picture to paste. Copy a screenshot first, and choose Allow Paste if you are asked.'
-    : 'There’s no picture to paste. Copy a screenshot first.'
+    ? 'To copy one: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions the button says Done.'
+    : 'To copy one on a Pixel: open the screenshot in Photos, go to Recent apps, hold the picture (or tap Select, then the picture) and choose Copy. On a Samsung: open it in Gallery, tap ⋮, then Copy to clipboard.'
 }
 
 /**
@@ -62,7 +58,7 @@ export default function Shots({ shots = [], onChange, disabled = false }) {
     try {
       const { shot, why } = await pasteShot()
       if (shot) onChange((list) => withShot(list, shot))
-      else setSaid(why === 'empty' ? emptyWords() : SHOT_WORDS[why] || SHOT_WORDS.unreadable)
+      else setSaid(pasteWords(why, Platform.OS))
     } finally {
       busy.current = false
       setPasting(false)
@@ -78,10 +74,10 @@ export default function Shots({ shots = [], onChange, disabled = false }) {
               <Image
                 source={{ uri: shot.uri }}
                 accessibilityLabel={`Screenshot ${i + 1}`}
-                resizeMode="cover"
+                /* The whole picture, in its own shape (shared/report-rules thumbSize), as the browser shows it. */
+                resizeMode="contain"
                 style={{
-                  width: 64,
-                  height: shot.width && shot.height ? Math.min(128, Math.round((64 * shot.height) / shot.width)) : 96,
+                  ...thumbSize(shot.width, shot.height, 64),
                   borderRadius: radius.sm,
                   borderWidth: 1,
                   borderColor: color.rule,
@@ -106,8 +102,9 @@ export default function Shots({ shots = [], onChange, disabled = false }) {
         disabled={disabled || pasting || full}
         onPress={paste}
       />
-      <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>{copyHint()}</Text>
+      {/* What a paste said, straight under the button tapped, so a short scroller never hides it under the hint. */}
       {said ? <Note tone="fault">{said}</Note> : null}
+      <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>{copyHint()}</Text>
     </View>
   )
 }

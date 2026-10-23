@@ -168,26 +168,52 @@ context bullets and the row id, and none of the log. Three pieces now:
   cannot be had costs the email one line.
 - `migrations/20261022_report_screenshots.sql` — the private bucket
   `report-shots` (JPEG only, 2 MB a file), one rule for putting a picture in
-  (`<account id>/<key>-<1..3>.jpg`, or `anon/…` signed out), and nothing for
-  reading, listing, replacing or removing. And `notify_feedback()` again,
-  unchanged but for thirty seconds for the email instead of five. The row's
+  (`<account id>/<key>-<1..3>.jpg`, or `anon/…` signed out, and only while
+  `report_shots_room()` says there is room: fewer than 30 in the last hour,
+  under 200 MB in all), and nothing for reading, listing, replacing or
+  removing. `report_shots_due()` lists what is to go: older than 7 days, or
+  older than an hour and named by no report. And `notify_feedback()` again,
+  unchanged but for sixty seconds for the email instead of five. The row's
   shape does not change: the pictures' places ride in `context.screenshots`.
+- `migrations/20261022_report_shots_sweep.sql` — once a day (pg_cron), asks
+  the email function to delete what `report_shots_due()` lists. Needs pg_cron
+  turned on; until it is, the same tidy happens whenever a report comes in.
+  Applied only after the new feedback-email is deployed (step 3 below).
 - `functions/delete-account/` — Delete account removes the account's
-  screenshots through Storage's own API, before the rows that name them.
+  screenshots through Storage's own API, before the rows that name them, and
+  only its own (its folder, or anon/ named by a report sent signed out). Then
+  it emails the developer the row ids of the reports that went, so their
+  emails can be found and deleted too: the privacy page promises that.
+
+The email attaches a picture to one email only (a row naming a picture
+another row named gets a line instead), only bytes that start as a JPEG
+does, and goes again without its pictures if Resend refuses it with them.
+
+**Deleting a report row by hand leaves its pictures in the bucket**, because
+Storage keeps its files apart from the table and refuses a SQL delete on
+`storage.objects`. Nothing has to be done: an hour after no row names them,
+the next tidy deletes them. To have them gone at once, delete the paths the
+row's `context.screenshots` names in the dashboard's Storage view (bucket
+`report-shots`), before or after deleting the row.
 
 ### Putting it live, in this order
+
+Project `biznwrqeckviawjuhvyg`. Each step's check is under "Checking it".
 
 1. **Apply `20261022_report_screenshots.sql`.** Nothing anybody sees changes:
    no app sends a picture yet, and the trigger only waits longer.
 2. **Deploy feedback-email**: `supabase functions deploy feedback-email
-   --no-verify-jwt` (the trigger is its caller, as before). Reports from
-   today's apps start carrying the head of the log, the trouble lines and
-   the log attached. Before step 1 the trigger stops waiting for it after
-   five seconds, which a report with pictures can take longer than, and
-   whether the function is cut off then is not something to find out on a
-   real report: so 1 comes first.
-3. **Deploy delete-account**: `supabase functions deploy delete-account`.
-4. **Merge the app.** The note boxes and Add/Paste a screenshot arrive by
+   --no-verify-jwt` (the trigger is its caller, as before). Before step 1 the
+   trigger stops waiting for it after five seconds, which a report with
+   pictures can take longer than, and its tidy has nothing to ask: so 1
+   comes first.
+3. **Apply `20261022_report_shots_sweep.sql`**, only now: the function before
+   step 2 takes the tidy's `{"sweep": true}` for a report and emails a blank
+   one every morning. If pg_cron is refused, turn it on (Integrations → Cron)
+   and run the file again.
+4. **Deploy delete-account**: `supabase functions deploy delete-account`
+   (it checks the caller's sign-in itself, and keeps the JWT check it has).
+5. **Merge the app.** The note boxes and Add/Paste a screenshot arrive by
    update (no build: the phone pastes through expo-clipboard, which every
    copy already has).
 
@@ -201,6 +227,9 @@ sends a picture, and its rows are the rows it always wrote.
 ```sql
 select id, public, file_size_limit, allowed_mime_types from storage.buckets where id = 'report-shots';
 select polname, polcmd from pg_policy where polrelid = 'storage.objects'::regclass and polname like 'a report%';
+select public.report_shots_room();             -- true while there is room
+select count(*) from public.report_shots_due(); -- what the next tidy deletes
+select jobname, schedule from cron.job where jobname = 'report-shots-sweep';
 
 -- the last few reports, and the pictures each names
 select id, created_at, left(message, 60) as message, context->'screenshots' as screenshots,
@@ -209,7 +238,9 @@ from public.feedback order by created_at desc limit 5;
 ```
 
 The function's answer in `net._http_response` is
-`{"sent":true,"screenshots":n,"log":true}` for a sent email.
+`{"sent":true,"screenshots":n,"log":true}` for a sent email (with
+`"withoutScreenshots":true` when Resend refused it with its pictures and it
+went again without them), and `{"swept":n}` for the daily tidy.
 
 ## The setup emails (paid, but no computer yet)
 

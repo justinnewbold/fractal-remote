@@ -256,12 +256,56 @@ export function withShot(shots = [], shot) {
   return [...list, shot]
 }
 
-/** What the screens say about screenshots, at both ends. */
+/** What the screens say about screenshots, at both ends; the browser's words for a picked file. */
 export const SHOT_WORDS = {
   full: `That's ${SHOTS_MAX} screenshots, the most one report can carry. Remove one to add another.`,
-  tooBig: "That picture is too big to send, even made smaller. Try a smaller one.",
-  unreadable: "That picture couldn't be opened. Try a screenshot saved as PNG or JPEG.",
+  tooBig: "That picture is too big to send, even made smaller. Pick a screenshot instead.",
+  unreadable: "That picture couldn't be opened. Pick a screenshot or a photo (a .png or .jpg file).",
   limit: `Up to ${SHOTS_MAX}. They're made smaller before they go.`
+}
+
+/**
+ * The phone's words for a paste. Nobody pasting can choose a file's format,
+ * so these never name one, and say what to do next instead.
+ *
+ *   empty       the clipboard really has no picture
+ *   refused     it has one, and the app was not handed it: "Don't Allow
+ *               Paste" on an iPhone, or Paste from Other Apps set to Deny
+ *               there, which asks nothing at all. iPhone and iPad only; on
+ *               Android a picture that is there and not handed over is one
+ *               that could not be read
+ *   unreadable  the clipboard's picture could not be read
+ *   tooBig      still over SHOT_BYTES at the lower quality, which a
+ *               screenshot never is and a camera photo can be
+ */
+export const PASTE_WORDS = {
+  empty: 'There’s no picture to paste. Copy a screenshot first.',
+  refused:
+    'The app wasn’t allowed to paste it. Tap Paste a screenshot again and choose Allow Paste. If you aren’t asked, go to Settings → Fractal Remote → Paste from Other Apps and choose Allow.',
+  unreadable: 'That picture couldn’t be read. Copy the screenshot again and paste it.',
+  tooBig: 'That picture is too big to send. Paste a screenshot rather than a photo.'
+}
+
+/** What a paste that brought no picture says, by why and on which system. */
+export function pasteWords(why, os) {
+  if (why === 'refused' && os !== 'ios') return PASTE_WORDS.unreadable
+  return PASTE_WORDS[why] || PASTE_WORDS.unreadable
+}
+
+/**
+ * A thumbnail's size, the same at both ends: a fixed width and the picture's
+ * own shape, no taller than THUMB_TALL (a phone's screenshot) and no shorter
+ * than THUMB_LOW (a wide computer window, whole, rather than a strip from its
+ * middle). A picture with no size known is drawn as a phone's.
+ */
+export const THUMB_TALL = 128
+export const THUMB_LOW = 24
+
+export function thumbSize(width, height, across = 64) {
+  const w = Number(width) || 0
+  const h = Number(height) || 0
+  if (!(w > 0 && h > 0)) return { width: across, height: Math.round(across * 1.5) }
+  return { width: across, height: Math.min(THUMB_TALL, Math.max(THUMB_LOW, Math.round((across * h) / w))) }
 }
 
 /** The one line said when pictures did not go, on the screen and in the report. */
@@ -353,6 +397,16 @@ export const SENT_WORDS = 'Sent to the developer — thank you.'
  */
 export function notSentWords(error, { wrote = true } = {}) {
   const said = String(error?.message || error || '')
+  /*
+   * The app's own deadline (inTime), not a dropped connection: the row may
+   * still land after it, and sending again at once would make a second
+   * report and a second email. So it says to wait.
+   */
+  if (/no answer within/i.test(said)) {
+    return wrote
+      ? "The internet didn't answer in time. It may still arrive, so wait a minute before sending it again. What you wrote is still here."
+      : "The internet didn't answer in time. It may still arrive, so wait a minute before sending it again."
+  }
   if (/fetch|network/i.test(said)) {
     return wrote
       ? "Couldn't reach the internet to send that. What you wrote is still here — try again in a moment."

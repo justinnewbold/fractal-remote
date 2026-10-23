@@ -1,5 +1,5 @@
 diff --git a/docs/app-store.md b/docs/app-store.md
-index 46b0f05..b6d18bb 100644
+index 3295ea8..ce080e2 100644
 --- a/docs/app-store.md
 +++ b/docs/app-store.md
 @@ -308,6 +308,8 @@ history or advertising data. None are collected — and the
@@ -91,43 +91,50 @@ index e7910ac..0a9503f 100644
      "expo-keep-awake": "~57.0.2",
      "expo-splash-screen": "~57.0.9",
 diff --git a/mobile/src/components/Shots.js b/mobile/src/components/Shots.js
-index 79eeeaf..ec298e9 100644
+index bf46cbc..69d4176 100644
 --- a/mobile/src/components/Shots.js
 +++ b/mobile/src/components/Shots.js
 @@ -4,5 +4,5 @@ import { Image, Platform, Text, View } from 'react-native'
  import { color, font, radius, space } from '../lib/theme'
- import { SHOTS_MAX, SHOT_WORDS, withShot } from '../lib/report-rules'
+ import { SHOTS_MAX, SHOT_WORDS, pasteWords, thumbSize, withShot } from '../lib/report-rules'
 -import { pasteShot } from '../lib/shots'
 +import { pasteShot, pickShots } from '../lib/shots'
  import Note from './Note'
  import Press from './Press'
-@@ -17,14 +17,12 @@ import Press from './Press'
-  * clipboard and keeps it out of the photo library.
+@@ -19,15 +19,18 @@ import Press from './Press'
   *
-- * Android has no Copy on its own screenshot preview. On a Pixel (Android 15
-- * and 16) any picture on screen can be copied from Recent apps: hold it, or
-- * on the March 2026 update and later tap Select, then the picture, then Copy.
-- * Other phones vary, so the line says what to look for. The photo picker in
-- * docs/pending makes this one tap, with the next build.
-+ * Android has no Copy on its own screenshot preview, so there Choose a
-+ * screenshot comes first: the phone's own photo picker, where screenshots
-+ * are a folder of their own. Paste stays for a picture already copied.
+  * Android has no Copy on its own screenshot preview, and the way to copy a
+- * picture differs by maker. On a Pixel (Android 15 and 16) any picture on
+- * screen can be copied from Recent apps: hold it, or on the March 2026 update
+- * and later tap Select, then the picture, then Copy. That is the Pixel's own:
+- * a Samsung's Recent apps has no Copy, and its Gallery has Copy to clipboard
+- * under ⋮ instead. Both are named, as the support page names them. The photo
+- * picker in docs/pending makes this one tap, with the next build.
++ * picture differs by maker, so there Choose a screenshot comes first: the
++ * phone's own photo picker, where screenshots are a folder of their own.
++ * Paste stays for a picture already copied.
   */
  export function copyHint(os = Platform.OS) {
    return os === 'ios'
--    ? 'To copy one: take a screenshot, tap the check mark at the top (or tap the little picture, then Done), then Copy and Delete.'
--    : 'To copy one: open the screenshot, go to Recent apps, then hold the picture (or tap Select, then the picture) and choose Copy.'
-+    ? 'Choose one from your photos, or copy one to paste: take a screenshot, tap the check mark at the top (or tap the little picture, then Done), then Copy and Delete.'
+-    ? 'To copy one: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions the button says Done.'
+-    : 'To copy one on a Pixel: open the screenshot in Photos, go to Recent apps, hold the picture (or tap Select, then the picture) and choose Copy. On a Samsung: open it in Gallery, tap ⋮, then Copy to clipboard.'
++    ? 'Choose one from your photos, or copy one to paste: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions the button says Done.'
 +    : 'Choose one from your photos (screenshots have a folder of their own), or paste one you have copied.'
++}
++
++/* What a picked picture that could not be used says: in the picker's words, never a file format. */
++const PICK_WORDS = {
++  tooBig: 'That picture is too big to send, even made smaller. Choose a screenshot instead.',
++  unreadable: 'That picture couldn’t be opened. Choose another one.'
  }
  
-@@ -48,4 +46,5 @@ export default function Shots({ shots = [], onChange, disabled = false }) {
+@@ -44,4 +47,5 @@ export default function Shots({ shots = [], onChange, disabled = false }) {
    const [said, setSaid] = useState(null)
    const [pasting, setPasting] = useState(false)
 +  const [picking, setPicking] = useState(false)
    const busy = useRef(false)
    const full = shots.length >= SHOTS_MAX
-@@ -70,4 +69,20 @@ export default function Shots({ shots = [], onChange, disabled = false }) {
+@@ -66,4 +70,20 @@ export default function Shots({ shots = [], onChange, disabled = false }) {
    }
  
 +  /* The phone's own photo picker, for as many as there is room for. */
@@ -139,7 +146,7 @@ index 79eeeaf..ec298e9 100644
 +    try {
 +      const { shots: got, why } = await pickShots(SHOTS_MAX - shots.length)
 +      if (got.length) onChange((list) => got.reduce((all, shot) => withShot(all, shot), list))
-+      if (why) setSaid(SHOT_WORDS[why] || SHOT_WORDS.unreadable)
++      if (why) setSaid(why === 'full' ? SHOT_WORDS.full : PICK_WORDS[why] || PICK_WORDS.unreadable)
 +    } finally {
 +      busy.current = false
 +      setPicking(false)
@@ -148,7 +155,7 @@ index 79eeeaf..ec298e9 100644
 +
    return (
      <View style={{ gap: space.sm }}>
-@@ -100,11 +115,23 @@ export default function Shots({ shots = [], onChange, disabled = false }) {
+@@ -96,12 +116,24 @@ export default function Shots({ shots = [], onChange, disabled = false }) {
          </View>
        ) : null}
 -      <Press
@@ -158,6 +165,7 @@ index 79eeeaf..ec298e9 100644
 -        disabled={disabled || pasting || full}
 -        onPress={paste}
 -      />
+-      {/* What a paste said, straight under the button tapped, so a short scroller never hides it under the hint. */}
 +      <View style={{ flexDirection: 'row', gap: space.sm }}>
 +        <Press
 +          grow
@@ -177,10 +185,11 @@ index 79eeeaf..ec298e9 100644
 +      <Text style={{ color: color.silkDim, fontSize: font.micro }}>
 +        {shots.length ? `${shots.length} of ${SHOTS_MAX} added` : SHOT_WORDS.limit}
 +      </Text>
-       <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>{copyHint()}</Text>
++      {/* What a paste or a pick said, straight under the buttons tapped, so a short scroller never hides it under the hint. */}
        {said ? <Note tone="fault">{said}</Note> : null}
+       <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>{copyHint()}</Text>
 diff --git a/mobile/src/lib/shots.js b/mobile/src/lib/shots.js
-index 5c4d016..92e7d03 100644
+index a87a0e5..a36ad86 100644
 --- a/mobile/src/lib/shots.js
 +++ b/mobile/src/lib/shots.js
 @@ -1,16 +1,18 @@
@@ -209,7 +218,7 @@ index 5c4d016..92e7d03 100644
 + * one again at SHOT_EDGE, as the browser does.
   *
   * An iPhone asks "Allow Paste?" when an app reads a picture from the
-@@ -54,2 +56,68 @@ export async function pasteShot() {
+@@ -59,2 +61,68 @@ export async function pasteShot() {
    }
  }
 +
@@ -279,7 +288,7 @@ index 5c4d016..92e7d03 100644
 +  }
 +}
 diff --git a/public/privacy.html b/public/privacy.html
-index 6725f8c..d552721 100644
+index f26ea53..e5c1f9f 100644
 --- a/public/privacy.html
 +++ b/public/privacy.html
 @@ -187,6 +187,8 @@
@@ -291,9 +300,9 @@ index 6725f8c..d552721 100644
 +        to you and hands the app only the ones you pick, or copy a screenshot and paste it in (the
 +        app reads the clipboard only when you tap Paste a screenshot, and your phone may ask you to
 +        allow that); on the website you pick a file.
-         Each is made smaller before it is sent. They are stored privately with the report, readable
+         Each is made smaller before it is sent. They are stored privately for a week, readable
          by nobody through the app, not even by you, and they go to the person who builds the app
-@@ -230,7 +232,8 @@
+@@ -233,7 +235,8 @@
            The country RevenueCat notes, under <em>Unlocking the full version</em>, is worked out by
            RevenueCat from the internet connection, not from the phone's location.</li>
 -        <li><strong>No contacts, photo library, camera or microphone.</strong> None of them are
@@ -306,24 +315,25 @@ index 6725f8c..d552721 100644
          <li><strong>No audio.</strong> This app sends control messages to your unit. It does not
            record, stream or process sound.</li>
 diff --git a/public/support.html b/public/support.html
-index 2673967..372e311 100644
+index d1380e1..cf05f7b 100644
 --- a/public/support.html
 +++ b/public/support.html
-@@ -134,10 +134,8 @@
-         To send one from the phone app: <strong>Settings → Troubleshooting → Log</strong>, then
-         <strong>Send logs to developer</strong>. You can say what happened in the box beside the
--        button, or leave it empty, and add up to three screenshots. On an iPhone or iPad, take a
--        screenshot, tap the check mark at the top (or tap the little picture, then Done), choose
--        <strong>Copy and Delete</strong>, then tap <strong>Paste a screenshot</strong> in the app.
--        On Android, copy the screenshot first (on a Pixel: open it, go to Recent apps, then hold the
--        picture or tap Select and the picture, and choose Copy), then tap
--        <strong>Paste a screenshot</strong>. On the website and in the computer app, the Debug log under Settings has the same button, and <strong>Add a screenshot</strong> picks
-+        button, or leave it empty, and add up to three screenshots: <strong>Choose a
-+        screenshot</strong> picks them from your photos. Or copy one and tap <strong>Paste a
-+        screenshot</strong>: on an iPhone or iPad, take a screenshot, tap the check mark at the top
-+        (or tap the little picture, then Done), then <strong>Copy and Delete</strong>. On the website and in the computer app, the Debug log under Settings has the same button, and <strong>Add a screenshot</strong> picks
-         a picture file. <strong>Troubleshooting → Feedback</strong> takes a longer message, and
-         screenshots too. If you are signed in and give no email address, the reply goes to your
+@@ -135,13 +135,9 @@
+         <li><strong>In the phone app:</strong> Settings → Troubleshooting → Log, then
+           <strong>Send logs to developer</strong>. Say what happened in the box beside the button,
+-          or leave it empty. To add up to three screenshots, copy one, then tap
+-          <strong>Paste a screenshot</strong>.</li>
++          or leave it empty. To add up to three screenshots, tap <strong>Choose a screenshot</strong>
++          and pick them from your photos, or copy one and tap <strong>Paste a screenshot</strong>.</li>
+         <li><strong>To copy a screenshot on an iPhone or iPad:</strong> take a screenshot (if only a
+           little picture shows in the corner, tap it), tap the check mark at the top right, then
+           <strong>Copy and Delete</strong>. On older versions the button says Done.</li>
+-        <li><strong>On a Pixel:</strong> open the screenshot in Photos, go to Recent apps, hold the
+-          picture (or tap Select, then the picture) and choose <strong>Copy</strong>.</li>
+-        <li><strong>On a Samsung:</strong> open it in Gallery, tap ⋮, then
+-          <strong>Copy to clipboard</strong>.</li>
+         <li><strong>On the website and in the computer app:</strong> Settings → Troubleshooting →
+           Debug log has the same button, and <strong>Add a screenshot</strong> picks a picture
 diff --git a/test/bluetooth.mjs b/test/bluetooth.mjs
 index bbda546..251332a 100644
 --- a/test/bluetooth.mjs
@@ -371,7 +381,7 @@ index 9ab4ebb..f450e07 100644
        },
        { does: 'take a screenshot back out before it is sent', web: 'Remove', phone: 'Remove' }
 diff --git a/test/reports.mjs b/test/reports.mjs
-index 7b882b1..a4b9062 100644
+index 6cd9efa..75ae2c2 100644
 --- a/test/reports.mjs
 +++ b/test/reports.mjs
 @@ -88,8 +88,43 @@ async function phone(b, use) {
@@ -419,7 +429,7 @@ index 7b882b1..a4b9062 100644
 +      .replace("from 'expo-image-manipulator'", "from './manip.js'")
    }
    try {
-@@ -337,6 +372,46 @@ export function run(test) {
+@@ -407,6 +442,46 @@ export function run(test) {
      assert.deepEqual(r.SHOT_QUALITIES, [...r.SHOT_QUALITIES].sort((a, b) => b - a), 'the qualities are not best first')
  
 +    /* The phone's own picker: as many as there is room for, each drawn again at 1600 and saved as a JPEG under the cap. */
@@ -467,3 +477,37 @@ index 7b882b1..a4b9062 100644
 +    assert.match(flat('mobile/src/components/Shots.js'), /disabled=\{disabled \|\| pasting \|\| picking \|\| full\}/)
      assert.match(flat('src/components/Shots.jsx'), /disabled=\{disabled \|\| busy \|\| full\}/)
      for (const f of ['mobile/src/components/Shots.js', 'src/components/Shots.jsx']) {
+@@ -960,5 +1035,5 @@ export function run(test) {
+   })
+ 
+-  test('the phone says how to copy a screenshot on an iPhone, a Pixel and a Samsung, and why a paste brought nothing', async () => {
++  test('the phone says where a screenshot comes from on an iPhone and on Android, and why a paste brought nothing', async () => {
+     const r = await import('../shared/report-rules.mjs')
+     const shotsSrc = read('mobile/src/components/Shots.js')
+@@ -967,13 +1042,12 @@ export function run(test) {
+       return os === 'ios' ? m[1] : m[2]
+     }
+-    /* iOS 26 and 27: the check mark at the top right; Done only on older versions, said as that. */
+-    assert.equal(hint('ios'), 'To copy one: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions the button says Done.')
+-    /* Android: the Pixel's route said as the Pixel's, and the Samsung's own beside it. */
+-    assert.equal(hint('android'), 'To copy one on a Pixel: open the screenshot in Photos, go to Recent apps, hold the picture (or tap Select, then the picture) and choose Copy. On a Samsung: open it in Gallery, tap ⋮, then Copy to clipboard.')
++    /* The photo picker first, on both; on an iPhone the copy route too, with the check mark at the top right (Done only on older versions). */
++    assert.equal(hint('ios'), 'Choose one from your photos, or copy one to paste: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions the button says Done.')
++    /* Android: no maker's copy route to explain any more, because the picker is there. */
++    assert.equal(hint('android'), 'Choose one from your photos (screenshots have a folder of their own), or paste one you have copied.')
+     /* The support page says the same steps. */
+     const support = read('public/support.html').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ')
++    assert.match(support, /To add up to three screenshots, tap Choose a screenshot and pick them from your photos, or copy one and tap Paste a screenshot\./)
+     assert.match(support, /To copy a screenshot on an iPhone or iPad: take a screenshot \(if only a little picture shows in the corner, tap it\), tap the check mark at the top right, then Copy and Delete\. On older versions the button says Done\./)
+-    assert.match(support, /On a Pixel: open the screenshot in Photos, go to Recent apps, hold the picture \(or tap Select, then the picture\) and choose Copy\./)
+-    assert.match(support, /On a Samsung: open it in Gallery, tap ⋮, then Copy to clipboard\./)
+     assert.match(support, /On the website and in the computer app: Settings → Troubleshooting → Debug log has the same button/, 'the support page sends website users to the Debug log by a path that is not there')
+     assert.doesNotMatch(support, /Debug log under Settings/)
+@@ -994,4 +1068,7 @@ export function run(test) {
+     assert.match(shotsSrc, /else setSaid\(pasteWords\(why, Platform\.OS\)\)/)
+     assert.doesNotMatch(code(shotsSrc), /SHOT_WORDS\[why\]|SHOT_WORDS\.unreadable|emptyWords/)
++    /* And a picked picture that could not be used says so in the picker's words, never a file format. */
++    assert.match(shotsSrc, /if \(why\) setSaid\(why === 'full' \? SHOT_WORDS\.full : PICK_WORDS\[why\] \|\| PICK_WORDS\.unreadable\)/)
++    for (const words of shotsSrc.match(/const PICK_WORDS = \{([\s\S]*?)\}/)[1].match(/'[^']+'/g)) assert.doesNotMatch(words, /PNG|JPEG|\.jpg|\.png/i)
+   })
+ 

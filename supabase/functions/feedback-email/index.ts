@@ -54,13 +54,27 @@
  *     encoded, well inside Resend's 40 MB and Gmail's 25 MB. Read from the
  *     private bucket with the service key here, and only from the sender's own
  *     folder (SHOT_PATH and the row's user_id), so a row cannot point this at
- *     somebody else's picture;
+ *     somebody else's picture; only one no other row has named, so a picture
+ *     put in once is mailed, and read out of storage, once (anybody can write
+ *     a row, and a row is a few hundred bytes); and only bytes that are a
+ *     JPEG, because the bucket checks the type the uploader declared and
+ *     never the bytes;
  *   - a reply address: the one they typed, as before, or when there is none
  *     and the report came from an account, that account's email, looked up
  *     here with the service key and labeled "the account's email".
  *
- * Every request this makes has a deadline (WAIT_MS), and a picture or an
- * address that cannot be had costs the email one line, never the email.
+ * Every request this makes has a deadline (WAIT_MS, RESEND_WAIT_MS), the
+ * whole of it stays inside BUDGET_MS (the trigger waits sixty seconds), and a
+ * picture or an address that cannot be had costs the email one line, never
+ * the email. An email Resend refuses with its pictures goes again without
+ * them, saying so, so a picture it will not take cannot cost the report.
+ *
+ * AND IT TIDIES THE BUCKET (review, 23 October 2026). Every time it is
+ * called for a report, and once a day when asked with `{"sweep": true}`
+ * (migrations/20261022_report_shots_sweep.sql), it deletes the pictures that
+ * are due: older than 7 days, or older than an hour and named by no report
+ * (public.report_shots_due). Through Storage's API with the service key,
+ * because the database refuses a delete straight from storage.objects.
  */
 
 const RESEND = 'https://api.resend.com/emails'
@@ -127,8 +141,15 @@ const esc = (s: unknown) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
 
-/** How long any one request here may take. */
+/** How long any one request here may take; Resend's gets longer, for an email of a few MB. */
 const WAIT_MS = 10_000
+const RESEND_WAIT_MS = 15_000
+/**
+ * The whole of one call, inside the trigger's sixty seconds: a cold read of
+ * the secret (10), the pictures, each checked and then read (20, all at once),
+ * the email (15), and a second go without its pictures only in what is left.
+ */
+const BUDGET_MS = 55_000
 
 /*
  * THE SCREENSHOTS' BUCKET, and the only places in it a report may name: the
@@ -160,7 +181,11 @@ export function toBase64(bytes: Uint8Array): string {
 /* The headings a report's log is cut into (shared/report-rules.mjs fitReport). */
 const BEFORE_AT = /\n\n(THE RUN BEFORE THIS ONE|\d+ RUNS AGO) — /
 const COMPUTER_AT = "\n\nCOMPUTER'S DEVICE SERVER"
-const TROUBLE = /\[(error|crash)\]|fail|gave up|refused|timed out|could not/i
+/* A line that went wrong: and a bare "error" (the relay's "channel error — socket closed") and the link going down, the moment a connection dropped. */
+const TROUBLE = /\[(error|crash)\]|\berror\b|\[link\] down\b|fail|gave up|refused|timed out|could not/i
+
+/** A JPEG starts FF D8 FF. Anything else under a .jpg name is not a screenshot the app made. */
+export const isJpeg = (bytes: Uint8Array) => bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
 
 /**
  * The parts of a report's log worth reading in the email itself.
@@ -169,8 +194,12 @@ const TROUBLE = /\[(error|crash)\]|fail|gave up|refused|timed out|could not/i
  *             (their first key is `app`; an older app's log starts with its
  *             first line instead, and has none)
  *   link      the last line saying which computers answered and which one is
- *             driven and why, the last saying what the computer is, and the
- *             last about the unit
+ *             driven and why, then the last saying what the computer is and
+ *             the last about the unit, each only when it came AFTER that
+ *             choice, all in the order they were written. One from before
+ *             is about whichever computer was answering then: "[unit] the
+ *             computer has a unit — AM4" from the Pi, thirty seconds before
+ *             the MacBook with the FM3 was picked, read as the MacBook's.
  *   trouble   the last ten lines of the sender's own that went wrong
  *   before    the run before this one: its heading and its last lines, which
  *             are what it said on the way out
@@ -195,8 +224,15 @@ export function summarize(log: unknown) {
   const before = atBefore >= 0 ? rest.slice(atBefore + 2) : /^(THE RUN BEFORE THIS ONE|\d+ RUNS AGO) — /.test(rest) ? rest : ''
   const own = (atBefore >= 0 ? rest.slice(0, atBefore) : before ? '' : rest).split('\n').filter(Boolean)
 
-  const last = (re: RegExp) => [...own].reverse().find((l) => re.test(l))
-  out.link = [last(/\[link\] .*answered: .*driving /), last(/\[link\] the computer is /), last(/\[unit\] /)].filter(Boolean) as string[]
+  const lastAt = (re: RegExp, from = 0) => {
+    for (let i = own.length - 1; i >= from; i--) if (re.test(own[i])) return i
+    return -1
+  }
+  const chose = lastAt(/\[link\] .*answered: .*driving /)
+  out.link = [chose, lastAt(/\[link\] the computer is /, Math.max(0, chose)), lastAt(/\[unit\] /, Math.max(0, chose))]
+    .filter((i) => i >= 0)
+    .sort((a, b) => a - b)
+    .map((i) => own[i])
   out.trouble = own.filter((l) => TROUBLE.test(l)).slice(-10)
   if (before) {
     const lines = before.split('\n\n')[0].split('\n')
@@ -210,8 +246,8 @@ export function summarize(log: unknown) {
   return out
 }
 
-/** A GET or POST that gives up after WAIT_MS. */
-const within = (url: string, init: RequestInit = {}) => fetch(url, { ...init, signal: AbortSignal.timeout(WAIT_MS) })
+/** A GET or POST that gives up after `ms` (WAIT_MS unless said). */
+const within = (url: string, init: RequestInit = {}, ms = WAIT_MS) => fetch(url, { ...init, signal: AbortSignal.timeout(ms) })
 
 /** The account's own email, read with the service key, or null. Logged by the account id only. */
 async function accountEmail(id: unknown): Promise<string | null> {
@@ -234,46 +270,97 @@ async function accountEmail(id: unknown): Promise<string | null> {
   }
 }
 
+type Picture = { filename: string; content: string; content_id: string }
+
+/**
+ * Whether a row other than this one already names the picture. A picture is
+ * attached to one email only: anybody can write a row naming a picture under
+ * anon/, so without this one upload could be read out of storage and mailed
+ * again for every row that named it. Asked before the picture is read, so a
+ * picture named again costs one small query, not its bytes. Answers 'no',
+ * 'yes', or a reason it could not be told, which leaves the picture out.
+ */
+async function namedElsewhere(url: string, key: string, path: string, id: string): Promise<string> {
+  if (!UUID.test(id)) return 'the report has no id to check it against'
+  const query = `id=neq.${id}&context->screenshots=cs.${encodeURIComponent(JSON.stringify([path]))}&limit=1`
+  try {
+    const res = await within(`${url}/rest/v1/feedback?select=id&${query}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } })
+    if (!res.ok) return `it could not be checked (${res.status})`
+    const rows = await res.json()
+    return Array.isArray(rows) && rows.length ? 'yes' : 'no'
+  } catch (err) {
+    return `it could not be checked (${err})`
+  }
+}
+
 /**
  * The screenshots a row names, read from the bucket: each one that is the
- * sender's own and comes back as a picture, as an inline attachment, and a
- * line for each that does not.
+ * sender's own, named by no other row, and comes back as a JPEG, as an
+ * inline attachment, and a line for each that does not. All at once, so
+ * three pictures take as long as one.
  */
 async function screenshots(row: Record<string, unknown>, ctx: Record<string, unknown>) {
   const named = Array.isArray(ctx.screenshots) ? ctx.screenshots.slice(0, SHOTS_MAX) : []
   const owner = row.user_id ? String(row.user_id) : 'anon'
   const url = Deno.env.get('SUPABASE_URL')
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  const files: { filename: string; content: string; content_id: string }[] = []
-  const missing: string[] = []
-  for (const [i, raw] of named.entries()) {
+  const id = String(row.id ?? '')
+  const one = async (raw: unknown, i: number): Promise<Picture | string> => {
     const path = String(raw ?? '')
     const n = i + 1
-    if (!SHOT_PATH.test(path) || path.split('/')[0] !== owner) {
-      missing.push(`Screenshot ${n} was not the sender's own, so it was left out.`)
-      continue
-    }
-    if (!url || !key) {
-      missing.push(`Screenshot ${n} could not be read: the function has no service key.`)
-      continue
-    }
+    if (!SHOT_PATH.test(path) || path.split('/')[0] !== owner) return `Screenshot ${n} was not the sender's own, so it was left out.`
+    if (!url || !key) return `Screenshot ${n} could not be read: the function has no service key.`
+    const elsewhere = await namedElsewhere(url, key, path, id)
+    if (elsewhere === 'yes') return `Screenshot ${n} was already sent with another report, so it was left out.`
+    if (elsewhere !== 'no') return `Screenshot ${n} was left out: ${elsewhere}.`
     try {
       const res = await within(`${url}/storage/v1/object/${SHOT_BUCKET}/${path}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } })
-      if (!res.ok) {
-        missing.push(`Screenshot ${n} could not be read from storage (${res.status}).`)
-        continue
-      }
+      if (!res.ok) return `Screenshot ${n} could not be read from storage (${res.status}).`
       const bytes = new Uint8Array(await res.arrayBuffer())
-      if (!bytes.length || bytes.length > SHOT_LIMIT) {
-        missing.push(`Screenshot ${n} was ${bytes.length ? 'too big' : 'empty'}, so it was left out.`)
-        continue
-      }
-      files.push({ filename: `screenshot-${n}.jpg`, content: toBase64(bytes), content_id: `shot-${n}` })
+      if (!bytes.length || bytes.length > SHOT_LIMIT) return `Screenshot ${n} was ${bytes.length ? 'too big' : 'empty'}, so it was left out.`
+      if (!isJpeg(bytes)) return `Screenshot ${n} was not a picture, so it was left out.`
+      return { filename: `screenshot-${n}.jpg`, content: toBase64(bytes), content_id: `shot-${n}` }
     } catch (err) {
-      missing.push(`Screenshot ${n} could not be read from storage (${err}).`)
+      return `Screenshot ${n} could not be read from storage (${err}).`
     }
   }
-  return { files, missing }
+  const done = await Promise.all(named.map(one))
+  return {
+    files: done.filter((d): d is Picture => typeof d !== 'string'),
+    missing: done.filter((d): d is string => typeof d === 'string')
+  }
+}
+
+/**
+ * THE TIDY: the pictures that are due, deleted. Asked of the database
+ * (report_shots_due, which only the service key may call) and deleted through
+ * Storage's API, the only way a file there can be deleted. Never throws:
+ * a tidy that cannot be done today is done next time. Answers how many went.
+ */
+async function sweepShots(): Promise<number> {
+  const url = Deno.env.get('SUPABASE_URL')
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!url || !key) return 0
+  const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }
+  try {
+    const res = await within(`${url}/rest/v1/rpc/report_shots_due`, { method: 'POST', headers, body: '{}' })
+    if (!res.ok) {
+      console.error('feedback-email: could not ask which screenshots are due', res.status)
+      return 0
+    }
+    const due = (await res.json()) as unknown
+    const paths = (Array.isArray(due) ? due : []).map((p) => String(p ?? '')).filter((p) => SHOT_PATH.test(p))
+    if (!paths.length) return 0
+    const gone = await within(`${url}/storage/v1/object/${SHOT_BUCKET}`, { method: 'DELETE', headers, body: JSON.stringify({ prefixes: paths }) })
+    if (!gone.ok) {
+      console.error('feedback-email: could not delete the screenshots that are due', gone.status)
+      return 0
+    }
+    return paths.length
+  } catch (err) {
+    console.error('feedback-email: could not tidy the screenshots', String(err))
+    return 0
+  }
 }
 
 const pre = (lines: string[]) =>
@@ -289,7 +376,7 @@ const part = (title: string, lines: string[]) =>
  */
 export function emailFor(
   row: Record<string, unknown>,
-  { account = null, shots = { files: [], missing: [] } }: { account?: string | null; shots?: { files: { filename: string; content: string; content_id: string }[]; missing: string[] } } = {}
+  { account = null, shots = { files: [], missing: [] } }: { account?: string | null; shots?: { files: Picture[]; missing: string[] } } = {}
 ) {
   const kind = row.kind === 'idea' ? 'Idea' : 'Bug'
   const message = String(row.message ?? '').slice(0, 4000)
@@ -341,17 +428,22 @@ export function emailFor(
       ${facts ? `<ul style="margin:12px 0;padding-left:18px;color:#5f6670">${facts}</ul>` : ''}
       ${part('From the top of the log', sum.head)}
       ${part('Which computer, and why', sum.link)}
-      ${part('What went wrong, last first at the bottom', sum.trouble)}
+      ${part('What went wrong (newest at the bottom)', sum.trouble)}
       ${part('How the run before this one ended', sum.before)}
-      ${part("The computer's own account", sum.computer)}
+      ${part('What the computer said', sum.computer)}
       ${log ? `<p style="color:#5f6670;margin:12px 0 0">The whole log is attached: ${esc(logName)} (${Math.max(1, Math.round(logBytes.length / 1024))} KB).</p>` : ''}
       <p style="color:#8b9099;font-size:12px;margin:16px 0 0">Row ${esc(id)}</p>
     </div>`
 
+  /*
+   * Each with its type said, rather than left for Resend to guess from the
+   * name: a picture is a JPEG (the bytes were checked), and the log is UTF-8,
+   * which it has to be said to be, because every log is full of "—", "→" and
+   * "·", and a viewer left to assume Latin-1 shows "â€”" throughout.
+   */
   const attachments: Record<string, string>[] = [
-    ...shots.files.map((f) => ({ filename: f.filename, content: f.content, content_id: f.content_id })),
-    /* Its type is worked out from the .txt by Resend. */
-    ...(log ? [{ filename: logName, content: toBase64(logBytes) }] : [])
+    ...shots.files.map((f) => ({ filename: f.filename, content: f.content, content_id: f.content_id, content_type: 'image/jpeg' })),
+    ...(log ? [{ filename: logName, content: toBase64(logBytes), content_type: 'text/plain; charset=utf-8' }] : [])
   ]
 
   const payload: Record<string, unknown> = {
@@ -372,6 +464,8 @@ export function emailFor(
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
+  /* From here, everything inside BUDGET_MS. */
+  const began = Date.now()
 
   /*
    * The database is the only thing that may call this.
@@ -393,6 +487,19 @@ Deno.serve(async (req: Request) => {
     return new Response('No', { status: 401 })
   }
 
+  let body: Record<string, unknown> = {}
+  try {
+    body = (await req.json()) as Record<string, unknown>
+  } catch {
+    return new Response('Bad JSON', { status: 400 })
+  }
+
+  /* The once-a-day tidy (migrations/20261022_report_shots_sweep.sql): no report, no email, only the bucket. */
+  if (body?.sweep === true) {
+    const swept = await sweepShots()
+    return new Response(JSON.stringify({ swept }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+
   const key = Deno.env.get('RESEND_API_KEY')
   if (!key) {
     // Not an error. See the note at the top: the trigger runs before anyone has
@@ -404,17 +511,13 @@ Deno.serve(async (req: Request) => {
     })
   }
 
-  let row: Record<string, unknown> = {}
-  try {
-    const body = await req.json()
-    // Supabase sends `{ type, table, record, old_record }`; the migration sends
-    // the record on its own. Accept either so the shape of the trigger can
-    // change without this having to.
-    row = (body?.record ?? body) as Record<string, unknown>
-  } catch {
-    return new Response('Bad JSON', { status: 400 })
-  }
+  // Supabase sends `{ type, table, record, old_record }`; the migration sends
+  // the record on its own. Accept either so the shape of the trigger can
+  // change without this having to.
+  const row = (body?.record ?? body) as Record<string, unknown>
 
+  /* The tidy goes on beside the email, so it costs the email no time. */
+  const tidy = sweepShots()
   const ctx = (row.context ?? {}) as Record<string, unknown>
   const contact = String(row.contact ?? '').trim()
   /* The account's email only when they gave no address of their own. */
@@ -422,42 +525,72 @@ Deno.serve(async (req: Request) => {
     ADDRESS.test(contact) || !row.user_id ? Promise.resolve(null) : accountEmail(row.user_id),
     screenshots(row, ctx)
   ])
-  const payload = emailFor(row, { account, shots })
+
+  const send = (payload: Record<string, unknown>, suffix: string, ms: number) =>
+    within(
+      RESEND,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          /* One email per row, however many times this is called for it. */
+          ...(row.id ? { 'Idempotency-Key': `feedback-email/${String(row.id)}${suffix}` } : {})
+        },
+        body: JSON.stringify(payload)
+      },
+      ms
+    )
+  const answer = (value: Record<string, unknown>) =>
+    tidy.then(() => new Response(JSON.stringify(value), { status: 200, headers: { 'Content-Type': 'application/json' } }))
 
   let res: Response
   try {
-    res = await within(RESEND, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-        /* One email per row, however many times this is called for it. */
-        ...(row.id ? { 'Idempotency-Key': `feedback-email/${String(row.id)}` } : {})
-      },
-      body: JSON.stringify(payload)
-    })
+    res = await send(emailFor(row, { account, shots }), '', RESEND_WAIT_MS)
   } catch (err) {
     console.error('feedback-email: Resend did not answer', String(err))
-    return new Response(JSON.stringify({ sent: false, why: 'no answer' }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return answer({ sent: false, why: 'no answer' })
+  }
+
+  /*
+   * REFUSED WITH ITS PICTURES: once more without them. Pictures are the new
+   * way for an email to be refused (their size, or an attachment Resend will
+   * not take), and a refused email is a report nobody hears of. So a refusal
+   * that is about the email (a 4xx, but not 409, the same key again, nor 429,
+   * too many) goes again with the log and no pictures, saying why and where
+   * they are, under a key of its own. Only in the time that is left.
+   */
+  let plain = false
+  let detail = res.ok ? '' : await res.text().catch(() => '')
+  if (!res.ok && shots.files.length && res.status >= 400 && res.status < 500 && res.status !== 409 && res.status !== 429) {
+    const left = BUDGET_MS - (Date.now() - began)
+    console.error('feedback-email: Resend refused the email with its screenshots', res.status, detail)
+    if (left > 2000) {
+      const without = {
+        files: [],
+        missing: [
+          ...shots.missing,
+          `The screenshots couldn't be attached (the mail service said ${res.status}), so this email went without them. They stay in the report-shots bucket for 7 days.`
+        ]
+      }
+      try {
+        res = await send(emailFor(row, { account, shots: without }), '/plain', Math.min(RESEND_WAIT_MS, left))
+        plain = true
+        detail = res.ok ? '' : await res.text().catch(() => '')
+      } catch (err) {
+        console.error('feedback-email: Resend did not answer the second time', String(err))
+        return answer({ sent: false, why: 'no answer' })
+      }
+    }
   }
 
   if (!res.ok) {
-    const detail = await res.text()
     console.error('feedback-email: Resend refused', res.status, detail)
     // 200 on purpose. The row is saved and the person has been thanked; a
     // non-2xx here only makes pg_net record a failure nobody is watching.
     // The log line is the thing that gets read when mail stops arriving.
-    return new Response(JSON.stringify({ sent: false, status: res.status, detail }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return answer({ sent: false, status: res.status, detail })
   }
 
-  return new Response(JSON.stringify({ sent: true, screenshots: shots.files.length, log: Boolean(row.log) }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
-  })
+  return answer({ sent: true, screenshots: plain ? 0 : shots.files.length, log: Boolean(row.log), ...(plain ? { withoutScreenshots: true } : {}) })
 })

@@ -861,7 +861,8 @@ and **not shared**:
 
 - **Photos and videos → Photos.** Optional (only the screenshots somebody
   adds to a bug report, up to three, sent when they press Send). For App
-  functionality. Not processed ephemerally: they are kept with the report.
+  functionality. Not processed ephemerally: they are kept a week in storage
+  (an hour, if their report never arrived), and in the report's email.
 
 Email address, already declared, now also answers a report from the
 account's own address when nobody typed one: keep App functionality and
