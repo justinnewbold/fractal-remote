@@ -3584,14 +3584,20 @@ export function run(test) {
     for (const [, name] of readme.matchAll(/^\| `([^`]+\.patch)` \|/gm)) {
       assert.ok(patches.includes(name), `the README lists ${name}, and it is not there`)
     }
-    /* The watch's channels move only the watch, which is why they could be built without stopping updates. */
-    const channels = readFileSync(new URL('watch-channels.patch', dir), 'utf8')
-    const touched = [...channels.matchAll(/^diff --git a\/(\S+)/gm)].map((m) => m[1])
-    for (const file of touched) {
-      assert.ok(
-        !/expo-target\.config\.js$|^mobile\/modules\/|^mobile\/app\.json$|package(-lock)?\.json$/.test(file),
-        `watch-channels.patch touches ${file}, which moves the phones' fingerprint: a build with it would stop updates reaching the phones already out there`
-      )
+    /*
+     * A patch the table says moves the watch only must touch nothing that
+     * moves the phones' fingerprint, which is why it can be built without
+     * stopping updates. watch-channels.patch was the first (13 October 2026),
+     * applied for the build pair after 1.87.52 and gone from here since.
+     */
+    for (const [, name] of readme.matchAll(/^\| `([^`]+\.patch)` \|.*\| \*\*Watch only\*\*/gm)) {
+      const touched = [...readFileSync(new URL(name, dir), 'utf8').matchAll(/^diff --git a\/(\S+)/gm)].map((m) => m[1])
+      for (const file of touched) {
+        assert.ok(
+          !/expo-target\.config\.js$|^mobile\/modules\/|^mobile\/app\.json$|package(-lock)?\.json$/.test(file),
+          `${name} touches ${file}, which moves the phones' fingerprint: a build with it would stop updates reaching the phones already out there`
+        )
+      }
     }
   })
 
