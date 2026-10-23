@@ -127,9 +127,15 @@ export function run(test) {
     assert.deepEqual({ ...help.SIRI_TEMPO }, { ...UNIT_BPM }, 'the page’s tempo range is not shared/tempo.mjs UNIT_BPM')
     assert.ok(page.includes(`Anything from ${UNIT_BPM.min} to ${UNIT_BPM.max}`), 'the page does not say the tempo range')
 
-    /* Scenes 1 to 8, the Swift's list, and four on an AM4. */
+    /* Scenes 1 to 8, the Swift's list, and every unit with fewer by name: four on an AM4 and on a VP4, as the demo's units have them. */
     assert.deepEqual(enumCases(code, 'SceneNumber').map((c) => c.raw), ['1', '2', '3', '4', '5', '6', '7', '8'])
-    assert.match(page, /Any scene from 1 to 8, or 1 to 4 on an AM4/)
+    assert.match(page, /Any scene from 1 to 8, or 1 to 4 on an AM4 or VP4\./)
+    const { UNITS } = await import('../src/lib/demoUnits.js')
+    const fewer = UNITS.filter((u) => u.scenes < 8)
+    assert.deepEqual(fewer.map((u) => [u.name, u.scenes]), [['AM4', 4], ['VP4', 4]], 'a unit with another number of scenes than the page says')
+    const scenesSaid = help.siriPage({ os: 'ios', kind: 'phone', native: true, noun: 'phone' })[0].phrases[0].does
+    for (const u of fewer) assert.ok(scenesSaid.includes(u.name), `the page offers scenes 5 to 8 on a ${u.name}, which has ${u.scenes}`)
+    assert.ok(help.SIRI_LINKS.some((l) => l.url.includes('/scene/') && /any scene your unit has, 1 to 8/.test(l.does)), 'the scene link promises 1 to 8 on every unit')
 
     /* Each link is one the app answers, and between them they are all four; never Tuner on. */
     const asked = help.SIRI_LINKS.map((l) => rule.parseLink(l.url))

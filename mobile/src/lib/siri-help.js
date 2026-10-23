@@ -106,7 +106,7 @@ export const SIRI_TEMPO = Object.freeze({ min: 24, max: 250 })
 export const SIRI_LINKS = Object.freeze([
   Object.freeze({ url: 'fractalremote://next', does: 'Next song' }),
   Object.freeze({ url: 'fractalremote://previous', does: 'Previous song' }),
-  Object.freeze({ url: 'fractalremote://scene/3', does: 'Scene 3: any scene from 1 to 8' }),
+  Object.freeze({ url: 'fractalremote://scene/3', does: 'Scene 3: any scene your unit has, 1 to 8' }),
   Object.freeze({ url: 'fractalremote://tuner/off', does: 'Tuner off, from any screen' })
 ])
 
@@ -133,7 +133,7 @@ export function siriRow({ os = 'ios', native = false } = {}) {
 const PHRASES = (noun) => [
   {
     say: ['Scene 3 in Fractal Remote'],
-    does: 'Any scene from 1 to 8, or 1 to 4 on an AM4. The same as tapping its tile.'
+    does: 'Any scene from 1 to 8, or 1 to 4 on an AM4 or VP4. The same as tapping its tile.'
   },
   {
     say: ['Next song in Fractal Remote'],
