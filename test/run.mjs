@@ -15753,21 +15753,52 @@ test('the computer app carries the server that opens the AM4’s own tuner scree
  */
 test('the computer app carries the server that keeps the AM4’s own tuner screen up until Close', () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
-  assert.match(lock.forgefx.tag, /\+am4keywrite\+am4tunerkeep$/, 'the computer app does not keep the AM4’s own tuner up')
-  assert.equal(lock.forgefx.commit, 'ab7561ea1c3e7c4d9751046d2d226a6b3e8cbf60')
+  assert.match(lock.forgefx.tag, /\+am4keywrite\+am4tunerkeep(\+|$)/, 'the computer app does not keep the AM4’s own tuner up')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   for (const piece of ['am4tunercc', 'am4boosttap', 'am4crossedcopy', 'am4keywrite', 'linuxmidi', 'vp4midi', 'quietMeters']) {
     assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
   }
   const why = lock._why.find((w) => /ab7561e/.test(w))
   assert.ok(why, 'the lock does not say why it moved')
-  for (const said of [/every 3 seconds/, /a level/, /the number it went out on/, /No 127 follows a Close/, /COMPUTER_NEEDED stays/, /on top of 5b6e889/, /no capture of the CC on an AM4 proves it/]) {
+  for (const said of [/every 3 seconds/, /a level/, /the number it went out on/, /No 127 follows a Close/, /COMPUTER_NEEDED stays/, /on top of 5b6e889/, /no capture of the CC on an AM4 proves it/, /its tuner mute with it/, /Only Justin's AM4 can settle it/]) {
+    assert.match(why, said, `the lock's reason leaves out ${said}`)
+  }
+  const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
+  assert.match(mods, /\| Send an AM4's Tuner CC at 127 again every 3 seconds while the app's tuner is open, after reading the Tuner setting again, and only on the number it went out on \|/)
+  assert.match(mods, /The CC is taken to be a level \(127 opens, 0 closes\)[^|]*no capture on an AM4 proves it/, 'MODIFICATIONS says the CC is a level as if it were proved')
+})
+
+/*
+ * And the keep is a lease (ForgeFX 41a0c1b), so a Close that never reaches
+ * the computer (a phone gone flat or put away, a sign-out, a tab shut) can
+ * no longer hold the AM4 on its tuner, muted, until the computer app is
+ * quit. The phone and the browser renew it while their tuner is on screen,
+ * only to a computer that said keepMs, so an older computer is sent
+ * nothing new and the red update line does not move.
+ */
+test('the computer app carries the server whose keep of the AM4’s own tuner ends by itself when nobody renews it', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+am4tunerkeep\+am4tunerlease$/, 'the computer app carries a keep that only a Close can end')
+  assert.equal(lock.forgefx.commit, '41a0c1b05d6172b057223c70565eec364dff4d67')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  for (const piece of ['am4tunercc', 'am4tunerkeep', 'am4boosttap', 'am4crossedcopy', 'am4keywrite', 'linuxmidi', 'vp4midi', 'quietMeters']) {
+    assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
+  }
+  const why = lock._why.find((w) => /41a0c1b/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/TUNER_KEEP_LEASE_MS \(20 s\)/, /keepMs/, /\{on: true, keep: true\}/, /opens nothing and sends nothing/, /on screen/, /comes back within 3 seconds/, /a new connection/, /9809e37/, /COMPUTER_NEEDED stays/, /two commits on top of ab7561e/]) {
     assert.match(why, said, `the lock's reason leaves out ${said}`)
   }
   assert.match(
     readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8'),
-    /\| Send an AM4's Tuner CC at 127 again every 3 seconds while the app's tuner is open, after reading the Tuner setting again, and only on the number it went out on \|/
+    /\| Keep the AM4's tuner screen up only on a lease, 20 seconds from the open and from each renewal \(POST \/tuner with on and keep both true\), which the app sends only while its tuner is on screen \|/
   )
+  /* And the store notes wait for his AM4, with no version number written in before the merge. */
+  const notes = readSrc(new URL('../docs/app-store.md', import.meta.url), 'utf8')
+  const para = notes.slice(notes.indexOf("**For the next version's notes: the AM4's own tuner stays up**"), notes.indexOf('### Notes for App Review, 1.87.11'))
+  assert.match(para.replace(/\s+/g, ' '), /Waiting: not for a store version until Justin has watched his own AM4 hold its tuner steady past 15 seconds/)
+  assert.ok(!/1\.87\.5\d/.test(para), 'the store notes name a version before the merge has given it one')
+  assert.ok(para.split('\n').every((line) => line.length <= 80), 'a line of the store notes runs past 80 characters')
 })
 
 /*
