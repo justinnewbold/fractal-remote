@@ -34,12 +34,15 @@ import {
   remoteCountDue,
   remoteCountOwed,
   remoteMayBeTwo,
+  remoteMissingPick,
   remoteHostSeen,
   remoteHosts,
   remoteReadsAskedOf,
   remoteRequest,
   remoteUnits,
   pickHost,
+  keepDriven,
+  forgetMissingPick,
   restoreSession,
   subscribeHostSeen,
   subscribeSwitching,
@@ -86,6 +89,8 @@ const initial = {
   hosts: [],
   units: {},
   chosenHost: null,
+  /* A pick under Which unit that did not answer while another is driven in its place (relay.js remoteMissingPick): Play says so. */
+  missingPick: null,
   clash: null,
   /*
    * WHETHER THE LINK IS DOWN, as Play says it: NOT CONNECTED over dimmed
@@ -199,6 +204,7 @@ const set = (patch) => {
     next.hostVersion === state.hostVersion &&
     next.clash === state.clash &&
     next.chosenHost === state.chosenHost &&
+    next.missingPick === state.missingPick &&
     next.hosts.length === state.hosts.length &&
     next.units === state.units
   ) {
@@ -645,7 +651,22 @@ function switchedComputer() {
 }
 
 /** What the roll call found, into the link's state, for Settings and Which unit. */
-const heardHosts = () => set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+const heardHosts = () =>
+  set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), missingPick: remoteMissingPick(), clash: hostConflict() })
+
+/** Keep this one, on Play's card for a pick that never answers: the computer driven becomes the pick (relay.js keepDriven). */
+export function keepThisOne() {
+  const kept = keepDriven()
+  heardHosts()
+  return kept
+}
+
+/** Forget, beside a pick that does not answer under Which unit (relay.js forgetMissingPick). */
+export function forgetMissing() {
+  const gone = forgetMissingPick()
+  heardHosts()
+  return gone
+}
 
 /**
  * Drive this unit and no other: the Which unit buttons.

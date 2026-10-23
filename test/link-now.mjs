@@ -398,6 +398,10 @@ async function linkOnABench() {
       export const remoteCountDue = () => (typeof bench.countDue === 'function' ? bench.countDue() : bench.countDue === true)
       /* Whether a count cut short by a drop is owed (relay.js recountOwed): \`bench.countOwed\`, false unless a test says. */
       export const remoteCountOwed = () => bench.countOwed === true
+      /* A pick that did not answer while another is driven (relay.js remoteMissingPick): \`bench.missing\`; Keep this one and Forget clear it. */
+      export const remoteMissingPick = () => bench.missing ?? null
+      export const keepDriven = () => { const had = !!bench.missing; bench.missing = null; bench.kept = (bench.kept || 0) + 1; return had }
+      export const forgetMissingPick = () => { const had = !!bench.missing; bench.missing = null; bench.forgot = (bench.forgot || 0) + 1; return had }
       /* Whether the account's record says it may have two (relay.js remoteMayBeTwo): \`bench.many\` true, which a test says. */
       export const remoteMayBeTwo = () => bench.many === true
       /* Which unit (relay.js pickHost): \`bench.pick\` runs inside it; \`bench.switched(name)\` tells link.js it moved, as relay.js does before the proof. */
@@ -754,6 +758,9 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       export const remoteReadsAskedOf = () => null
       export const remoteCountDue = () => (typeof bench.countDue === 'function' ? bench.countDue() : false)
       export const remoteCountOwed = () => bench.countOwed === true
+      export const remoteMissingPick = () => bench.missing ?? null
+      export const keepDriven = () => { const had = !!bench.missing; bench.missing = null; return had }
+      export const forgetMissingPick = () => { const had = !!bench.missing; bench.missing = null; return had }
       /* Which unit (remote.js pickHost): \`bench.pick\` runs inside it. */
       export const pickHost = async (name) => (bench.pick ? bench.pick(name) : false)
       export const subscribeSwitching = () => () => {}
@@ -4259,6 +4266,86 @@ export function run(test) {
       assert.equal(relay.remoteCountOwed(), false)
     })
 
+    /*
+     * A SLOW PICK IS STILL THE PICK. Justin's Pi 3 can be two seconds on
+     * answering; the roll call's first window is a second and a half. It was
+     * "did not answer", and the taps went to the first computer with a unit:
+     * the switch on a timeout that nothing else does.
+     */
+    test(`${end}: a pick slower than the roll call's first window is still the pick: driven, and proved over its own time`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch, tap, store } = t
+      bench.computers = [PI5(), computer('raspberry pi 5', 'FM3', { plugged: false, lag: 60 }), PI3({ lag: 2000 })]
+      const census = counted(t)
+      await clock.advance(9000)
+      assert.equal(census.done, true)
+      const log = store.logged.join('\n')
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', `the slow pick was left for the first computer with a unit\n${log}`)
+      assert.ok(relay.remoteHosts().includes('raspberry pi 3'))
+      assert.match(log, /driving raspberry pi 3, the one picked under Which unit, addressed/, log)
+      assert.ok(!/did not answer/.test(log), log)
+      assert.equal(relay.remoteMissingPick(), null)
+      bench.sent.length = 0
+      const pressed = watch(tap())
+      await clock.advance(3000)
+      assert.equal(pressed.done && !pressed.error, true, pressed.error?.message)
+      assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']], 'the tap did not go to the slow pick alone')
+    })
+
+    /*
+     * A PICK THAT NEVER ANSWERS (renamed, switched off) leaves the first
+     * computer with a unit driven, as 1.87.47 did, and now Play says so:
+     * Keep this one makes the one driven the pick, and Forget under Which
+     * unit leaves nothing picked.
+     */
+    test(`${end}: a pick that never answers is said with the computer driven instead; Keep this one makes that one the pick, and Forget leaves nothing picked`, async () => {
+      const t = await relayOnABench(end, { picked: 'fractalpi', many: true })
+      const { bench, clock, relay, rules, store } = t
+      const gone = PI5()
+      gone.reply = () => 'silent'
+      bench.computers = [gone, computer('MacBook Pro SG 566', 'FM3', { lag: 60 }), PI3()]
+      counted(t)
+      await clock.advance(9000)
+      assert.equal(relay.remoteChosenHost(), 'MacBook Pro SG 566')
+      assert.equal(relay.remoteMissingPick(), 'fractalpi')
+      const card = rules.missingPickCard({ missing: relay.remoteMissingPick(), driving: relay.remoteChosenHost(), hosts: relay.remoteHosts(), units: relay.remoteUnits() })
+      assert.equal(card.words, 'fractalpi, picked under Which unit, isn’t answering. Playing the FM3 on MacBook Pro SG 566.')
+      assert.deepEqual([card.keep, card.list], ['Keep this one', 'Which unit…'])
+      assert.equal(relay.keepDriven(), true)
+      await clock.advance(0)
+      assert.equal(relay.remoteMissingPick(), null, 'the card stays up after Keep this one')
+      assert.equal(keptFor(store, end)?.name, 'MacBook Pro SG 566', 'Keep this one did not make the one driven the pick')
+      /* The next launch drives it as the pick, and says nothing. */
+      await newLink(t)
+      store.logged.length = 0
+      counted(t)
+      await clock.advance(9000)
+      assert.equal(relay.remoteChosenHost(), 'MacBook Pro SG 566')
+      assert.equal(relay.remoteMissingPick(), null)
+      assert.match(store.logged.join('\n'), /driving MacBook Pro SG 566, the one picked under Which unit, addressed/)
+      /* Forget: nothing picked, so the next count drives the first with a unit and has nothing to say. */
+      const other = await relayOnABench(end, { picked: 'fractalpi', many: true })
+      other.bench.computers = [gone, computer('MacBook Pro SG 566', 'FM3', { lag: 60 }), PI3()]
+      counted(other)
+      await other.clock.advance(9000)
+      assert.equal(other.relay.remoteMissingPick(), 'fractalpi')
+      assert.equal(other.relay.forgetMissingPick(), true)
+      await other.clock.advance(0)
+      assert.equal(other.relay.remoteMissingPick(), null)
+      assert.equal(keptFor(other.store, end)?.name ?? null, null, 'Forget left the pick that does not answer picked')
+      assert.equal(keptFor(other.store, end)?.many, true, 'Forget lost what the last count heard')
+      await newLink(other)
+      counted(other)
+      await other.clock.advance(9000)
+      assert.equal(other.relay.remoteMissingPick(), null)
+      /* One computer heard: nothing said, whatever was picked. */
+      const one = await relayOnABench(end, { picked: 'fractalpi', many: true })
+      one.bench.computers = [gone, PI3()]
+      counted(one)
+      await one.clock.advance(9000)
+      assert.equal(one.relay.remoteMissingPick(), null, 'a pick missing with one computer heard is said on Play')
+    })
+
     test(`${end}: a pick that does not answer when asked alone is logged so, never as a computer app too old`, async () => {
       const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
       const pi3 = PI3()
@@ -4436,6 +4523,40 @@ export function run(test) {
     t.bench.order.length = 0
     await t.link.chooseHost('raspberry pi 3')
     assert.deepEqual(t.bench.order.filter((x) => ['computerChanged', 'proved', 'startClean', 'refreshAll'].includes(x)), ['computerChanged', 'proved', 'startClean', 'refreshAll'])
+  })
+
+  test('both ends: Play names a pick that never answers with the one driven, and Which unit lists it grayed with Forget', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const hosts = ['MacBook Pro SG 566', 'raspberry pi 5']
+    const units = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true }, 'raspberry pi 5': { model: 'FM3', plugged: false } }
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units }).words, 'fractalpi, picked under Which unit, isn’t answering. Playing the FM3 on MacBook Pro SG 566.')
+    /* Judged by plugged, never the model: a computer with nothing plugged in still says FM3. */
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'raspberry pi 5', hosts, units }).words, 'fractalpi, picked under Which unit, isn’t answering. Using raspberry pi 5 instead.')
+    /* Nothing to say: one computer, the pick driven, the pick listed after all, or nothing driven. */
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts: ['MacBook Pro SG 566'], units }), null)
+    assert.equal(r.missingPickCard({ missing: 'MacBook Pro SG 566', driving: 'MacBook Pro SG 566', hosts, units }), null)
+    assert.equal(r.missingPickCard({ missing: 'raspberry pi 5', driving: 'MacBook Pro SG 566', hosts, units }), null)
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: null, hosts, units }), null)
+    assert.deepEqual(r.missingPickRow('fractalpi'), { name: 'fractalpi', label: 'fractalpi — not answering', forget: 'Forget' })
+    assert.equal(r.missingPickRow(null), null)
+    /* The phone: on Play, its two buttons Keep this one and the list off the unit's name; under Which unit, grayed with Forget, in Settings and the sheet. */
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /missingPickCard\(\{ missing: computers\?\.missingPick, driving: computers\?\.chosenHost, hosts: computers\?\.hosts, units: computers\?\.units \}\)/)
+    assert.match(stage, /<ComputerCard\s+words=\{missingCard\.words\}[\s\S]{0,200}label: missingCard\.keep, onPress: \(\) => keepThisOne\(\)[\s\S]{0,200}label: missingCard\.list, onPress: \(\) => onOpenUnits\(\)/)
+    const phoneApp = read('mobile/App.js')
+    assert.match(phoneApp, /computers=\{demo \? null : link\}\s*onOpenUnits=\{\(\) => setPickLive\(true\)\}/)
+    assert.match(phoneApp, /<LiveUnit[\s\S]{0,300}missing=\{link\.missingPick\}/)
+    assert.match(read('mobile/src/components/LiveUnit.js'), /<MissingPick name=\{missing\} onForget=\{\(\) => forgetMissing\(\)\} \/>/)
+    assert.match(read('mobile/src/screens/Settings.js'), /<MissingPick\s+name=\{missing\}\s+onForget=\{\(\) => \{\s*forgetMissing\(\)/)
+    assert.match(read('mobile/src/components/MissingPick.js'), /missingPickRow\(name\)/)
+    /* The browser: the same card on Play, its list the Which unit sheet; the row in the sheet and on the page. */
+    const app = read('src/App.jsx')
+    assert.match(app, /missingPickCard\(\{ missing: link\.missingPick, driving: link\.chosenHost, hosts: link\.hosts, units: link\.units \}\)/)
+    assert.match(app, /card=\{\s*link\.role === 'remote' && missingCard\s*\? \{\s*words: missingCard\.words,[\s\S]{0,120}onClick: \(\) => keepThisOne\(\)[\s\S]{0,120}onClick: \(\) => setSheet\('units'\)/)
+    assert.match(read('src/components/Gig.jsx'), /\{card \? <ComputerCard words=\{card\.words\} buttons=\{card\.buttons\} \/> : null\}/)
+    assert.equal(app.match(/\{missingRow \? <MissingRow row=\{missingRow\} onForget=\{\(\) => forgetMissing\(\)\} \/> : null\}/g)?.length, 2, 'the pick that does not answer is not under both of the website’s Which unit lists')
+    /* Plain words, never "this phone". */
+    for (const words of [r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units }).words, r.missingPickRow('x').label]) assert.ok(!/this phone|\bMac\b/.test(words.replace('MacBook', '')), words)
   })
 
   test('the roll call’s rules: one line in the log, and a pick is never left for another unit', async () => {

@@ -263,6 +263,8 @@ import {
   signOutHere,
   recheckHosts,
   chooseHost,
+  keepThisOne,
+  forgetMissing,
   faultCopy,
   nextDelay
 } from './lib/link'
@@ -278,8 +280,11 @@ import {
   loadRemoteConfig,
   sendPasswordReset,
   subscribeRemoteState,
-  unitChoices
+  unitChoices,
+  missingPickCard,
+  missingPickRow
 } from './lib/remote'
+import { MissingRow } from './components/ComputerCard'
 import { newEntry, append } from './lib/log'
 import { watchEvery, probeUnit, countQuiet, unitGone } from '../shared/unit-watch.mjs'
 
@@ -1156,6 +1161,9 @@ export default function App() {
    * the demo takes the computer's.
    */
   const linkShowsDown = link.down === true && !isDemo()
+  /* A pick under Which unit that never answers, while another computer is driven in its place (remote.js remoteMissingPick). */
+  const missingCard = missingPickCard({ missing: link.missingPick, driving: link.chosenHost, hosts: link.hosts, units: link.units })
+  const missingRow = missingPickRow(link.missingPick)
   // What the notice says when the unit cannot be read — by role, in one tested
   // place, and nothing at all until the role is known.
   const fault =
@@ -4669,6 +4677,22 @@ export default function App() {
             setSetupPage('colours')
           }}
           onError={setError}
+          /*
+           * A PICK THAT NEVER ANSWERS, named on Play with the computer driven
+           * in its place, and the two ways out: keep the one driven, or the
+           * list. In the phone's words (shared/relay-rules.mjs missingPickCard).
+           */
+          card={
+            link.role === 'remote' && missingCard
+              ? {
+                  words: missingCard.words,
+                  buttons: [
+                    { label: missingCard.keep, onClick: () => keepThisOne() },
+                    { label: missingCard.list, onClick: () => setSheet('units') }
+                  ]
+                }
+              : null
+          }
           /* A VP4's words about a preset picked from the list, for the band over the tiles (vp4Said). */
           said={vp4Said}
           /* A typed tempo, or a burst of taps once it settles and if the
@@ -4892,6 +4916,7 @@ export default function App() {
               }}
             />
           ))}
+          {missingRow ? <MissingRow row={missingRow} onForget={() => forgetMissing()} /> : null}
         </div>
       </Sheet>
 
@@ -5937,6 +5962,7 @@ export default function App() {
                       }}
                     />
                   ))}
+                  {missingRow ? <MissingRow row={missingRow} onForget={() => forgetMissing()} /> : null}
                 </div>
               </Section>
             ) : null}

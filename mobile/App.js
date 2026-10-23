@@ -1110,6 +1110,7 @@ export default function App() {
               hosts={link.hosts}
               units={link.units}
               chosen={link.chosenHost}
+              missing={link.missingPick}
             />
             {/* Over the top of whatever is on screen, and gone again on a
                 tap. Nothing behind it is being withheld — they came looking
@@ -1355,6 +1356,9 @@ export default function App() {
                 lostAway={lostAway}
                 onPutAway={() => setLostAway(true)}
                 onLookAgain={probeNow}
+                /* Which computers answered, and which is driven: Play says when that is not where the unit is (ComputerCard). Never in the demo. */
+                computers={demo ? null : link}
+                onOpenUnits={() => setPickLive(true)}
               />
             )}
             {/* Over the play screen and never in it, where the fault floats,

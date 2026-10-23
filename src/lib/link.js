@@ -52,6 +52,9 @@ import {
   remoteReadsAskedOf,
   remoteCountDue,
   remoteCountOwed,
+  remoteMissingPick,
+  keepDriven,
+  forgetMissingPick,
   pickHost,
   subscribeSwitching,
   signOut,
@@ -493,6 +496,8 @@ let state = {
   units: {},
   /** remote role: which of them requests are addressed to, or null. */
   chosenHost: null,
+  /** remote role: a pick that did not answer while another is driven in its place (remote.js remoteMissingPick): Play says so. */
+  missingPick: null,
   // Why the last pairing from a scanned code failed, for the connect screen.
   pairError: null,
   /*
@@ -679,7 +684,7 @@ async function afterCount(before, run) {
     await run
     /* Cut short by a drop, and owed: taken again now if the computer is answering, else when it does (countIfDue). Nothing it found is put to use. */
     if (remoteCountOwed()) {
-      set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+      set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), missingPick: remoteMissingPick(), clash: hostConflict() })
       return countIfDue()
     }
     /*
@@ -694,7 +699,7 @@ async function afterCount(before, run) {
       if (remoteReadsAskedOf() !== remoteChosenHost()) computerChanged()
       readMacName()
     }
-    set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+    set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), missingPick: remoteMissingPick(), clash: hostConflict() })
     /* The roll call picked a computer: tell that one, whatever answered first before (see metersAgain). */
     if (remoteChosenHost() !== before) {
       metersAgain()
@@ -730,17 +735,30 @@ function countIfDue() {
  * Another computer: another unit, read by App from a clean start
  * (deviceState.computerChanged), told by remote.js the moment it switches,
  * before any read is asked of the new one; and its own name. A proof the
- * link dropped under is counted again with the rest (remote.js provePick),
- * now if the computer is answering (countIfDue).
+ * link dropped under is counted again with the rest (remote.js provePick,
+ * told through subscribeHosts), now if the computer is answering.
  */
 export async function chooseHost(name) {
   await pickHost(name)
   set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
-  if (remoteCountOwed()) countIfDue()
   metersAgain()
   quietMeters()
   readMacName()
   return state.clash
+}
+
+/** Keep this one, on Play's card for a pick that never answers (remote.js keepDriven). */
+export function keepThisOne() {
+  const kept = keepDriven()
+  set({ missingPick: remoteMissingPick() })
+  return kept
+}
+
+/** Forget, beside a pick that does not answer under Which unit (remote.js forgetMissingPick). */
+export function forgetMissing() {
+  const gone = forgetMissingPick()
+  set({ missingPick: remoteMissingPick() })
+  return gone
 }
 
 /**
@@ -1078,7 +1096,11 @@ export async function bootLink() {
    * answer has to reach the screen from wherever it was taken. Without this the
    * notice would still be up over a link the gate had just cleared.
    */
-  subscribeHosts(() => set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() }))
+  subscribeHosts(() => {
+    set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), missingPick: remoteMissingPick(), clash: hostConflict() })
+    /* A count or a pick's proof the link dropped under: counted again, now if the computer is answering (remote.js recountOwed). */
+    if (remoteCountOwed()) countIfDue()
+  })
 
   if (role === 'mac') {
     await readMac()

@@ -82,7 +82,9 @@ import OnlyOnThisPhone from '../components/OnlyOnThisPhone'
 import ColoursNotice from '../components/ColoursNotice'
 import Toast, { useStillNews } from '../components/Toast'
 import { droppedLeft, faultLeft } from '../lib/fault-rule'
-import { NOT_CONNECTED } from '../lib/relay-rules'
+import { NOT_CONNECTED, missingPickCard } from '../lib/relay-rules'
+import { keepThisOne } from '../lib/link'
+import ComputerCard from '../components/ComputerCard'
 import Note from '../components/Note'
 import NoComputerWords from '../components/NoComputer'
 import SendLinkButton from '../components/SendLinkButton'
@@ -140,6 +142,15 @@ export default function Stage({
   onAccount,
   /* Settings → Colors, which the colours' one-time line opens when pressed (components/ColoursNotice). */
   onOpenColours,
+  /*
+   * THE COMPUTERS ON THE ACCOUNT, from App (link.js's own word for them):
+   * every one that answered, the units on them, the one driven, and a pick
+   * that does not answer. With two or more, Play says when the one driven is
+   * not the one picked, or has no unit while another has (ComputerCard).
+   * \`onOpenUnits\` opens Which unit off the unit's name.
+   */
+  computers = null,
+  onOpenUnits,
   /*
    * NO COMPUTER HAS EVER SIGNED IN WITH THIS ACCOUNT, for certain: the email
    * to name, from App (lib/useNoComputer.js), and null for anything less
@@ -443,6 +454,8 @@ export default function Stage({
   const channels = caps?.channelNames
   const slots = slotCount(caps)
   const conflict = hostConflict(remoteHosts(), remoteChosenHost())
+  /* A pick that never answers, named with the computer driven in its place (shared relay-rules missingPickCard). */
+  const missingCard = missingPickCard({ missing: computers?.missingPick, driving: computers?.chosenHost, hosts: computers?.hosts, units: computers?.units })
 
   /*
    * PLAY'S ONE-TIME NOTES TAKE TURNS: ONE AT A TIME, IN THIS ORDER.
@@ -847,6 +860,15 @@ export default function Stage({
         {/* "Match your unit’s colors in Settings", once: last, after every other note. Pressed, it opens Settings → Colors. */}
         <ColoursNotice waiting={notesUp || coach || watchTip} unanswered={coachPending || watchPending} onOpen={onOpenColours} />
         {conflict ? <Note tone="fault">{conflict}</Note> : null}
+        {missingCard ? (
+          <ComputerCard
+            words={missingCard.words}
+            buttons={[
+              { label: missingCard.keep, onPress: () => keepThisOne() },
+              ...(onOpenUnits ? [{ label: missingCard.list, onPress: () => onOpenUnits() }] : [])
+            ]}
+          />
+        ) : null}
 
         {/* ---------------------------------------------------------- preset */}
         <View style={{ gap: space.sm }}>

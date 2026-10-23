@@ -745,6 +745,33 @@ export function firstUnitHost(hostNames = [], units = {}) {
   return once.find((name) => units?.[name]?.plugged) || once[0] || null
 }
 
+/*
+ * A PICK THAT NEVER ANSWERS, SAID ON PLAY. A computer picked under Which
+ * unit that did not answer the roll call at all (renamed, switched off, or
+ * signed out) leaves the phone driving the first computer with a unit, as
+ * 1.87.47 did (firstUnitHost): a renamed Pi would otherwise leave the stage
+ * dead. Nothing on Play said so, and the unit on screen was not the one
+ * picked. Now it is said, with the one driven instead, and two ways out:
+ * keep the one driven as the pick (so it is not said again), or the list.
+ *
+ *   fractalpi, picked under Which unit, isn’t answering. Playing the FM3 on
+ *   MacBook Pro SG 566.
+ *
+ * Only with two or more computers answering, and only while one is driven
+ * that is not the pick (relay.js remoteMissingPick). Both ends, these words.
+ */
+export const KEEP_THIS_ONE = 'Keep this one'
+export const WHICH_UNIT_LIST = 'Which unit…'
+export function missingPickCard({ missing = null, driving = null, hosts = [], units = {} } = {}) {
+  if (!missing || !driving || missing === driving || hosts.length < 2 || hosts.includes(missing) || !hosts.includes(driving)) return null
+  const unit = units?.[driving]
+  const playing = unit?.plugged ? `Playing the ${unit.model} on ${driving}.` : `Using ${driving} instead.`
+  return { words: `${missing}, picked under Which unit, isn’t answering. ${playing}`, keep: KEEP_THIS_ONE, list: WHICH_UNIT_LIST }
+}
+
+/** The same pick under Which unit: listed, grayed, with a way to forget it. */
+export const missingPickRow = (name) => (name ? { name, label: `${name} — not answering`, forget: 'Forget' } : null)
+
 /**
  * THE ROLL CALL, IN ONE LINE OF THE LOG.
  *
