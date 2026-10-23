@@ -532,6 +532,40 @@ export function run(test) {
   })
 
 
+  test('the tempo box’s glass puts the number pad away before it closes, and Set, Cancel and the switch act on the first tap', () => {
+    /*
+     * Inside Play's scrolling page, the page's scroll view took the first tap
+     * anywhere in the box while the number pad was up, and only hid the pad
+     * (React Native ScrollView, keyboardShouldPersistTaps unset): a tap on the
+     * glass beside the box kept "12" in it. Off the page that rule went with
+     * it, so the same tap closed the box and the number was gone. The glass
+     * keeps it by itself now; the box's own buttons act at once, as every
+     * other field's screen in the app has them ("handled").
+     */
+    const box = code(read('mobile/src/components/TempoBox.js'))
+    const line = box.match(/const glass = (\(\) => [^\n]*)\n/)
+    assert.ok(line, 'the tempo box’s glass has no rule of its own for the number pad')
+    const calls = []
+    const run = (up) => {
+      calls.length = 0
+      const Keyboard = { isVisible: () => up, dismiss: () => calls.push('pad away') }
+      // eslint-disable-next-line no-new-func
+      new Function('Keyboard', 'onClose', `return ${line[1]}`)(Keyboard, () => calls.push('closed'))()
+      return [...calls]
+    }
+    assert.deepEqual(run(true), ['pad away'], 'a tap on the glass with the number pad up closed the box and lost what was typed')
+    assert.deepEqual(run(false), ['closed'], 'a tap on the glass with the pad away does not close the box')
+    assert.match(box, /<Pressable accessibilityRole="button" accessibilityLabel="Close" onPress=\{glass\} style=\{\{ flex: 1 \}\}>/)
+    assert.match(box, /import \{[^}]*\bKeyboard\b[^}]*\} from 'react-native'/)
+    /* Its own buttons, one tap each; Android's back button still closes it. */
+    assert.match(box, /<Press grow label="Cancel" onPress=\{onClose\} \/>/)
+    assert.match(box, /<Press grow label="Set" tone="signal" on onPress=\{commit\} \/>/)
+    assert.match(box, /onRequestClose=\{onClose\}/)
+    /* And it is off the page, so nothing above it eats a tap any more. */
+    const stage = code(read('mobile/src/screens/Stage.js'))
+    assert.ok(stage.indexOf('<TempoBox') > stage.indexOf('</ScrollView>'), 'the tempo box is back inside the page')
+  })
+
   /* ------------------------------------------------------------------ */
   /* The opened-up Play                                                  */
   /* ------------------------------------------------------------------ */
