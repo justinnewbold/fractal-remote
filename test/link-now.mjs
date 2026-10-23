@@ -2533,6 +2533,38 @@ export function run(test) {
     for (const args of cases) assert.deepEqual(r.unitChoices(...args), before(...args), JSON.stringify(args))
   })
 
+  /*
+   * Three answering to one name are three, not two, and switching one off
+   * leaves two. Three Pis set up the keyboard-and-screen way, which never
+   * asks for a Hostname, all keep the default. And answers whose name could
+   * not be read are all called 'a computer' (hostNamesFrom): neither computer
+   * is called that, and a new name would not make the answer readable.
+   */
+  test('Which unit says how many share a name, and never calls an unreadable answer a name to change', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    const three = 'Three computers are called raspberrypi, so they can’t be told apart. Switch all but one off, or give the others new names and restart them.'
+    assert.equal(r.sharedName('raspberrypi', 3), three)
+    assert.equal(r.sharedName('raspberrypi', 2), r.sharedName('raspberrypi'))
+    assert.match(r.sharedName('raspberrypi', 4), /^Four computers are called raspberrypi,/)
+    for (const asking of [false, true]) {
+      const rows = r.unitChoices(['raspberrypi', 'MacBook Pro SG 566', 'raspberrypi', 'raspberrypi'], { 'MacBook Pro SG 566': { model: 'FM3', plugged: true } }, null, asking)
+      assert.deepEqual(rows.map((x) => [x.label, x.detail]), [['FM3', 'on MacBook Pro SG 566'], ['raspberrypi', three], ['raspberrypi', three], ['raspberrypi', three]])
+      assert.equal(new Set(rows.map((x) => x.key)).size, rows.length, 'two rows share a key')
+    }
+    /* What hostNamesFrom calls an answer it cannot read, so the two are held to each other. */
+    const unread = await r.hostNamesFrom(['not json', '{"data":{}}', '{"data":{"name":"MacBook Pro"}}'], async (a) => a)
+    assert.deepEqual(unread, [r.NO_NAME, r.NO_NAME, 'MacBook Pro'])
+    for (const asking of [false, true]) {
+      const rows = r.unitChoices(unread, { 'MacBook Pro': { model: 'FM3', plugged: true } }, 'MacBook Pro', asking)
+      assert.deepEqual(rows.map((x) => [x.label, x.detail]), [['FM3', 'on MacBook Pro'], [r.NO_NAME, r.NO_NAME_SAID], [r.NO_NAME, r.NO_NAME_SAID]])
+      for (const x of rows) assert.ok(!/computers are called|new name|Asking it/.test(x.detail), `an answer with no name is told to rename, or is said to be asked: ${x.detail}`)
+    }
+    assert.equal(r.NO_NAME_SAID, 'It answered, but didn’t say its name, so it can’t be asked which unit.')
+    /* One such answer alone is as it was: it is asked, so it says so while it is. */
+    assert.equal(r.unitChoices([r.NO_NAME, 'MacBook Pro'], {}, null, true).find((x) => x.name === r.NO_NAME).detail, r.unitNotSaid(true))
+    for (const words of [three, r.NO_NAME_SAID]) for (const never of [/this phone/i, /official/i, /grey/i, /Inc\./]) assert.ok(!never.test(words), `${never} in: ${words}`)
+  })
+
   test('a computer that has not said its unit is asked again once the count is done and whenever Which unit opens', () => {
     const phone = read('mobile/src/lib/link.js')
     assert.match(phone.slice(phone.indexOf('async function afterCount(')), /await refreshAll\(\)\n\s*\/\*[^*]*\*\/\n\s*askUnknownUnits\(\)\n\s*\} catch/, 'the phone does not ask again after the count')
