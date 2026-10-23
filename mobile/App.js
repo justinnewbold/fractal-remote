@@ -55,7 +55,7 @@ import Paywall from './src/screens/Paywall'
 import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
 import { shouldAskToPay } from './src/lib/unlock-rule'
 import { deviceNoun } from './src/lib/device-word'
-import { siriElsewhere, startSiri } from './src/lib/siri'
+import { allowSiriLinks, siriElsewhere, startSiri } from './src/lib/siri'
 
 /* The VP4's Scene Select number and MIDI channel live in the phone's store; the device layer reads them from there (lib/vp4-safety). */
 keepVp4SetupIn(sync)
@@ -733,6 +733,28 @@ export default function App() {
     let alive = true
     haveSession()
       .then((id) => alive && allowBluetooth(id))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [auth, demo])
+
+  /*
+   * AND THE fractalremote:// LINKS (lib/siri), BY THE SAME SESSION KEPT ON
+   * THE PHONE: Justin's alone on a copy of the app from before them, and
+   * everybody's on the new store version, which lib/siri tells from the copy
+   * itself. Asked at every change of who is signed in, as Bluetooth (beta)
+   * is; a link that started the app waits for this answer.
+   */
+  useEffect(() => {
+    if (auth === 'checking') return undefined
+    if (auth === 'out') {
+      allowSiriLinks(null)
+      return undefined
+    }
+    let alive = true
+    haveSession()
+      .then((id) => alive && allowSiriLinks(id))
       .catch(() => {})
     return () => {
       alive = false

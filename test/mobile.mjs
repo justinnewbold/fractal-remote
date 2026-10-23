@@ -3423,10 +3423,14 @@ export function run(test) {
          * lib/bluetooth.js too, since Bluetooth (beta) went back to Justin's
          * account alone (11 October 2026): it asks isAdmin whose phone this
          * is, as Settings does, and draws none of the pages' words.
+         * And lib/siri.js, whose fractalremote:// links are his account's
+         * alone on a copy of the app from before them (23 October 2026):
+         * the same one question, asked the same way.
          */
         const asksOnlyWho =
           (name === 'src/screens/Settings.js' && /import \{ isAdmin \} from '\.\.\/lib\/admin'/.test(code)) ||
-          (name === 'src/lib/bluetooth.js' && /import \{ isAdmin \} from '\.\/admin'/.test(code))
+          (name === 'src/lib/bluetooth.js' && /import \{ isAdmin \} from '\.\/admin'/.test(code)) ||
+          (name === 'src/lib/siri.js' && /import \{ isAdmin \} from '\.\/admin'/.test(code))
         assert.ok(/^src\/components\/\w+Tool\.js$/.test(name) || asksOnlyWho, `${name} uses the Developer pages' words outside the Developer pages`)
       }
       assert.ok(!/from '(\.\.\/lib|\.)\/ways-in'/.test(code), `${name} imports the browser's routes, which name Google Play`)

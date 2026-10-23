@@ -115,6 +115,21 @@ const LINK = `
   }
 `
 
+/* React Native's Linking: the links that arrive while the app runs, and the one that started it. */
+const LINKING = (launchUrl) => `
+  const urls = []
+  export const Linking = {
+    addEventListener: (event, fn) => { if (event === 'url') urls.push(fn); return { remove: () => urls.splice(urls.indexOf(fn), 1) } },
+    getInitialURL: async () => ${JSON.stringify(launchUrl)},
+    open: (url) => urls.forEach((fn) => fn({ url })),
+    listening: () => urls.length
+  }
+`
+
+/* His account, by its id (shared/admin.mjs), and somebody else's. */
+const JUSTIN = '7dfe6912-e43b-49bf-84e4-b56afbd442b1'
+const CUSTOMER = '0b5f2a8e-4c1d-4e7a-9f3b-2d6c8e1a5f70'
+
 /*
  * THE STAND-IN RIG. `state` is what Play's store holds; each write is
  * written down with its arguments and answered by `answers[name]`, or true.
@@ -162,14 +177,16 @@ const RIG = `
 `
 
 /** lib/siri.js on the bench, with the stand-in rig (or the real one driving the demo: see demoOnTheBench). */
-async function siriOnTheBench({ os = 'ios', device = 'phone', vp4 = false, names = {}, extra = {} } = {}) {
+async function siriOnTheBench({ os = 'ios', device = 'phone', vp4 = false, names = {}, siri = true, installed = '1.87.11', launchUrl = null, extra = {} } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'siri-'))
   const files = {
     'package.json': '{ "type": "module" }',
     'clock.js': CLOCK,
     'react.js': 'export const useEffect = (fn) => fn()\nexport const useRef = (v) => ({ current: v })\nexport const useSyncExternalStore = (sub, get) => get()\n',
-    'react-native.js': `export const AppState = { currentState: 'active' }\nexport const Platform = { OS: ${JSON.stringify(os)} }\n`,
-    'expo.js': EXPO,
+    'react-native.js': `export const AppState = { currentState: 'active' }\nexport const Platform = { OS: ${JSON.stringify(os)} }\n${LINKING(launchUrl)}`,
+    'expo.js': siri ? EXPO : EXPO.replace('export const native = { module: fake }', 'export const native = { module: null }'),
+    /* The version built into this copy of the app (lib/storeVersion), which an update never changes. */
+    'storeVersion.js': `export const installedStoreVersion = () => ${JSON.stringify(installed)}\n`,
     'link.js': LINK,
     'rig.js': RIG,
     'debugLog.js': 'export const said = []\nexport const logDebug = (...a) => said.push(a.join(" "))\n',
@@ -177,7 +194,7 @@ async function siriOnTheBench({ os = 'ios', device = 'phone', vp4 = false, names
     'presetNames.js': `const listed = ${JSON.stringify(names)}\nexport const nameOf = (n) => listed[n]\n`,
     ...extra
   }
-  for (const f of ['siri-rule.js', 'versions.js', 'am4-boost.js', 'chain-view.js', 'device-word.js', 'relay-rules.js', 'tempo.js', 'unit.mjs', 'presetName.js', 'slots.js', 'vp4-safety.js']) {
+  for (const f of ['siri-rule.js', 'versions.js', 'admin.js', 'owner-unlock.js', 'am4-boost.js', 'chain-view.js', 'device-word.js', 'relay-rules.js', 'tempo.js', 'unit.mjs', 'presetName.js', 'slots.js', 'vp4-safety.js']) {
     if (!(f in files)) files[f] = read(`${LIB}/${f}`)
   }
   files['siriPipe.js'] = clocked(esm(read(`${LIB}/siriPipe.js`)))
@@ -226,6 +243,18 @@ async function siriOnTheBench({ os = 'ios', device = 'phone', vp4 = false, names
     rmSync(dir, { recursive: true, force: true })
     throw err
   }
+}
+
+/* lib/siri-rule.js and the version rule it imports, where node takes them for the ES modules they are. */
+let ruleCopy = null
+async function siriRule() {
+  if (ruleCopy) return ruleCopy
+  const dir = mkdtempSync(join(tmpdir(), 'siri-rule-'))
+  writeFileSync(join(dir, 'package.json'), '{ "type": "module" }')
+  for (const f of ['siri-rule.js', 'versions.js']) writeFileSync(join(dir, f), read(`${LIB}/${f}`))
+  ruleCopy = await import(pathToFileURL(join(dir, 'siri-rule.js')).href)
+  rmSync(dir, { recursive: true, force: true })
+  return ruleCopy
 }
 
 const done = (b) => {
@@ -784,7 +813,7 @@ export function run(test) {
   })
 
   test('Siri: every word it is handed is plain, names the device by deviceNoun, and calls nothing official', async () => {
-    const rule = await import('../mobile/src/lib/siri-rule.js')
+    const rule = await siriRule()
     const S = rule.SIRI_SAYS
     const said = [
       S.openPlay('iPad'), S.notSent, S.scene(3, 'LEAD'), S.scene(6, ''), S.noScenes, S.sceneCount(4),
@@ -821,7 +850,7 @@ export function run(test) {
     assert.match(step, /const loading = loadPreset\(next, at\)/)
     assert.match(step, /return loading\s*$/, 'Play’s step does not hand back its load, so Siri cannot say how it went')
     const app = flat('mobile/App.js')
-    assert.match(app, /import \{ siriElsewhere, startSiri \} from '\.\/src\/lib\/siri'/)
+    assert.match(app, /import \{ (allowSiriLinks, )?siriElsewhere, startSiri \} from '\.\/src\/lib\/siri'/)
     assert.match(app, /useEffect\(\(\) => startSiri\(\), \[\]\)/, 'Siri is not listened for from the start, so Tuner off works only on Play')
     assert.match(app, /const playElsewhere = auth === 'in' && seenWalk === true && !independentDue && screen !== 'stage'/)
     assert.match(app, /useEffect\(\(\) => siriElsewhere\(playElsewhere\), \[playElsewhere\]\)/)
@@ -832,8 +861,177 @@ export function run(test) {
     assert.match(read(`${LIB}/siriPipe.js`), /requireOptionalNativeModule\('FractalSiri'\)/)
   })
 
+  test('links: fractalremote://next, previous, scene/1 to 8 and tuner/off are commands, and nothing else is, tuner on least of all', async () => {
+    const { parseLink, LINK_SCHEME } = await siriRule()
+    assert.equal(LINK_SCHEME, JSON.parse(read('mobile/app.json')).expo.scheme, 'the links are not the scheme every store build answers to')
+    assert.deepEqual(parseLink('fractalremote://next'), { command: 'next', value: null })
+    assert.deepEqual(parseLink('fractalremote://previous'), { command: 'previous', value: null })
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) assert.deepEqual(parseLink(`fractalremote://scene/${n}`), { command: 'scene', value: n })
+    assert.deepEqual(parseLink('fractalremote://tuner/off'), { command: 'tunerOff', value: null })
+    /* As Shortcuts and Tasker may write them. */
+    assert.deepEqual(parseLink(' FractalRemote://Scene/3/ '), { command: 'scene', value: 3 })
+    assert.deepEqual(parseLink('fractalremote:///next?from=shortcut#x'), { command: 'next', value: null })
+    for (const url of [
+      'fractalremote://tuner/on', 'fractalremote://tuner', 'fractalremote://tuner/on/off', 'fractalremote://scene/0', 'fractalremote://scene/9',
+      'fractalremote://scene/03', 'fractalremote://scene/3/4', 'fractalremote://scene', 'fractalremote://', 'fractalremote://preset/12',
+      'fractalremote://tempo/120', 'fractalremote://delay/on', 'https://fractal.newbold.cloud/next', 'exp+fractal-remote://expo-development-client', '', null, undefined, 42
+    ]) assert.equal(parseLink(url), null, `${url} was taken for a command`)
+  })
+
+  test('links: open to Justin alone until the copy of the app is itself the new store version, which no update can make it', async () => {
+    const { linksOpen, LINKS_AFTER_STORE } = await siriRule()
+    /* The newest store version made before the links, on both stores, and nothing built since. */
+    assert.equal(LINKS_AFTER_STORE, '1.87.11')
+    assert.match(read('docs/expo-builds.md'), /\| 11 Oct \| 1\.87\.11 \| 1 \| 1 \|/)
+    assert.equal(JSON.parse(read('public/store-versions.json')).ios, LINKS_AFTER_STORE, 'a newer store version is out: LINKS_AFTER_STORE is the one before the links')
+    for (const platform of ['ios', 'android']) {
+      assert.equal(linksOpen({ platform, installed: '1.87.11' }), false, `${platform}: open on 1.87.11, whose review notes say nothing of them`)
+      assert.equal(linksOpen({ platform, installed: '1.87.11', admin: true }), true, `${platform}: shut to his own account`)
+    }
+    /* iPhone and iPad: the Siri piece is in the copy, or not. A version number alone is not it there. */
+    assert.equal(linksOpen({ platform: 'ios', native: true, installed: '1.87.11' }), true)
+    assert.equal(linksOpen({ platform: 'ios', installed: '1.87.60' }), false)
+    /* Android, which has no Siri piece: the version built into the copy. */
+    for (const v of ['1.87.12', '1.87.52', '1.88.0', '2.0.0']) assert.equal(linksOpen({ platform: 'android', installed: v }), true, v)
+    for (const v of ['1.87.1', '1.87.0', '1.86.83', null, '', 'nonsense', '1.87']) assert.equal(linksOpen({ platform: 'android', installed: v }), false, String(v))
+    assert.equal(linksOpen({ platform: 'web', installed: '9.9.9' }), false)
+    assert.equal(linksOpen(), false)
+  })
+
+  test('links: on a copy from before them, a link does nothing but for his account, and opens to everybody on the new store version', async () => {
+    for (const [os, opts, everybody] of [
+      ['ios', { siri: false, installed: '1.87.11' }, false],
+      ['ios', { siri: false, installed: '1.87.55' }, false],
+      ['ios', { siri: true, installed: '1.87.55' }, true],
+      ['android', { siri: false, installed: '1.87.11' }, false],
+      ['android', { siri: false, installed: '1.87.55' }, true]
+    ]) {
+      const b = await siriOnTheBench({ os, ...opts })
+      const where = `${os} ${opts.installed}${opts.siri ? ' with Siri' : ''}`
+      try {
+        b.play()
+        assert.equal(b.siri.siriLinksOpen(), everybody, where)
+        b.rn.Linking.open('fractalremote://scene/3')
+        await b.clock.advance(0)
+        assert.equal(b.rig.calls.length, everybody ? 1 : 0, `${where}: before anybody signed in`)
+        assert.equal(b.siri.allowSiriLinks(CUSTOMER), everybody, where)
+        b.rn.Linking.open('fractalremote://scene/3')
+        await b.clock.advance(0)
+        assert.equal(b.rig.calls.length, everybody ? 2 : 0, `${where}: a customer`)
+        assert.equal(b.siri.allowSiriLinks(JUSTIN), true, where)
+        b.rn.Linking.open('fractalremote://scene/3')
+        await b.clock.advance(0)
+        assert.deepEqual(b.rig.calls.at(-1), ['scene', 2, b.clock.now()], `${where}: his own account`)
+        /* Signed out: shut again. */
+        assert.equal(b.siri.allowSiriLinks(null), everybody, where)
+        const before = b.rig.calls.length
+        b.rn.Linking.open('fractalremote://scene/4')
+        await b.clock.advance(0)
+        assert.equal(b.rig.calls.length, before + (everybody ? 1 : 0), `${where}: signed out`)
+        /* No link ever answers Siri. */
+        assert.equal(b.expo.replies.length, 0)
+      } finally {
+        done(b)
+      }
+    }
+  })
+
+  test('links: the same handler and the same Play rule as Siri, never tuner on, and Tuner off from any screen', async () => {
+    const b = await siriOnTheBench()
+    try {
+      const on = b.play({ step: (by) => (b.rig.__answered(12 + by, true), Promise.resolve(true)) })
+      b.rn.Linking.open('fractalremote://next')
+      b.rn.Linking.open('fractalremote://previous')
+      b.rn.Linking.open('fractalremote://scene/2')
+      await b.clock.advance(0)
+      assert.deepEqual(on.steps, [[1, b.clock.now()], [-1, b.clock.now()]], 'a link’s Next is not Play’s own, counted from when it arrived')
+      assert.deepEqual(b.rig.calls, [['scene', 1, b.clock.now()]])
+      /* Any web page can open a link: none of them mutes the rig. */
+      b.rn.Linking.open('fractalremote://tuner/on')
+      await b.clock.advance(0)
+      assert.equal(b.rig.calls.length, 1, 'a link turned the tuner on')
+      /* Off Play: nothing sent, and nobody to tell. */
+      on.off()
+      b.siri.siriElsewhere(true)
+      b.rn.Linking.open('fractalremote://scene/4')
+      await b.clock.advance(2000)
+      assert.equal(b.rig.calls.length, 1, 'a link’s scene went from another screen')
+      b.rn.Linking.open('fractalremote://tuner/off')
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls.at(-1), ['tuner', false])
+      assert.equal(b.expo.replies.length, 0, 'a link answered Siri')
+      /* While the app is still starting: Play inside the tap rule, or nothing. */
+      b.siri.siriElsewhere(false)
+      b.rn.Linking.open('fractalremote://scene/5')
+      await b.clock.advance(1500)
+      b.play()
+      await b.clock.advance(0)
+      assert.equal(b.rig.calls.filter((c) => c[0] === 'scene').length, 1, 'a link’s scene went seconds after it arrived')
+      assert.equal(b.rig.state.dropped, 'Not sent — it would have landed late', 'Play does not say the link was not sent')
+    } finally {
+      done(b)
+    }
+  })
+
+  test('links: the one that started the app is only ever Tuner off, which waits for the app to know who is signed in', async () => {
+    const next = await siriOnTheBench({ launchUrl: 'fractalremote://next' })
+    try {
+      const on = next.play()
+      next.siri.allowSiriLinks(JUSTIN)
+      await next.clock.advance(3000)
+      assert.equal(on.steps.length, 0, 'the link that started the app stepped the setlist on, seconds after it was tapped, or again after a reload')
+    } finally {
+      done(next)
+    }
+    const off = await siriOnTheBench({ siri: false, launchUrl: 'fractalremote://tuner/off' })
+    try {
+      await off.clock.advance(2000)
+      assert.equal(off.rig.calls.length, 0, 'sent before the app knew whose account it is')
+      off.siri.allowSiriLinks(JUSTIN)
+      await off.clock.advance(0)
+      assert.deepEqual(off.rig.calls, [['tuner', false]])
+    } finally {
+      done(off)
+    }
+    /* Never known: not sent. */
+    const nobody = await siriOnTheBench({ siri: false, launchUrl: 'fractalremote://tuner/off' })
+    try {
+      await nobody.clock.advance(10000)
+      assert.equal(nobody.rig.calls.length, 0)
+    } finally {
+      done(nobody)
+    }
+  })
+
+  test('links: the app listens for them for its life, asks who is signed in by the session kept on the phone, and stops cleanly', async () => {
+    const b = await siriOnTheBench()
+    try {
+      assert.equal(b.rn.Linking.listening(), 1)
+      b.stop()
+      b.stop = null
+      assert.equal(b.rn.Linking.listening(), 0)
+      assert.equal(b.expo.listening(), 0)
+    } finally {
+      done(b)
+    }
+    const app = flat('mobile/App.js')
+    assert.match(app, /import \{ allowSiriLinks, siriElsewhere, startSiri \} from '\.\/src\/lib\/siri'/)
+    assert.match(
+      app,
+      /useEffect\(\(\) => \{ if \(auth === 'checking'\) return undefined if \(auth === 'out'\) \{ allowSiriLinks\(null\) return undefined \} let alive = true haveSession\(\) \.then\(\(id\) => alive && allowSiriLinks\(id\)\) \.catch\(\(\) => \{\}\) return \(\) => \{ alive = false \} \}, \[auth, demo\]\)/,
+      'the links are not told who is signed in at every change, by the session on the phone'
+    )
+    assert.ok(!/currentAccount\(\)[^;]*allowSiriLinks|allowSiriLinks\([^)]*currentAccount/.test(app), 'the links ask the account server, which answers nobody at a gig with no signal')
+    const siri = withoutComments(read(`${LIB}/siri.js`))
+    assert.match(siri, /Linking\.addEventListener\('url'/)
+    assert.match(siri, /Linking\.getInitialURL\(\)/)
+    assert.match(siri, /export const siriLinksOpen = \(\) => linksOpen\(\{ native: siriPresent\(\), platform: Platform\.OS, installed: builtIn\(\), admin: linksAdmin \}\)/)
+    /* Nothing an update can switch: no flag in storage, no answer from a server. */
+    assert.ok(!/AsyncStorage|fetch\(|remoteRequest|supabase/.test(siri))
+  })
+
   test('Siri: on a build without the Siri piece nothing listens, nothing throws, and nothing is said', async () => {
-    const b = await siriOnTheBench({ extra: { 'expo.js': EXPO.replace('export const native = { module: fake }', 'export const native = { module: null }') } })
+    const b = await siriOnTheBench({ siri: false })
     try {
       assert.equal(b.expo.listening(), 0)
       b.play()

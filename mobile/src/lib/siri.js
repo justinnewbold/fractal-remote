@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
-import { AppState } from 'react-native'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { AppState, Linking, Platform } from 'react-native'
 
+import { isAdmin } from './admin'
 import { OTHER_AMP_SAYS, ampPedal, isAm4 } from './am4-boost'
 import { chainActs } from './chain-view'
 import { logDebug } from './debugLog'
@@ -21,8 +22,9 @@ import {
   writeTempo,
   writeTuner
 } from './rig'
-import { SIRI_ANSWER_MS, SIRI_SAYS, pedalMatches, pedalWord, sentWords, spoken } from './siri-rule'
-import { SIRI_PEDALS, answerSiri, onSiriCommand } from './siriPipe'
+import { SIRI_ANSWER_MS, SIRI_SAYS, linksOpen, parseLink, pedalMatches, pedalWord, sentWords, spoken } from './siri-rule'
+import { SIRI_PEDALS, answerSiri, onSiriCommand, siriPresent } from './siriPipe'
+import { installedStoreVersion } from './storeVersion'
 import { tempoRange } from './tempo'
 import { idOf, sceneShape, slotCount, slotLabel } from './unit.mjs'
 import { VP4_NO_TEMPO } from './vp4-safety'
@@ -64,6 +66,14 @@ import { VP4_NO_TEMPO } from './vp4-safety'
  * sent." itself at five seconds, and a command it has already answered that
  * way (`answered`) is only acted on where acting late is safe, which is
  * Tuner off. Every word naming the device in hand is deviceNoun()'s.
+ *
+ * THE LINKS, fractalremote://next, previous, scene/1 to 8 and tuner/off,
+ * come through here too, from Shortcuts' Open URL, the Action button, Back
+ * Tap, or Tasker on Android: the same commands, the same Play rule, the same
+ * tap rule counted from when the link arrived, with nobody to answer, so the
+ * result is Play's alone. Never tuner on (lib/siri-rule parseLink). Open to
+ * Justin's account only, until this copy of the app is itself the new store
+ * version (lib/siri-rule linksOpen says why and how that is told).
  */
 
 /* Play's own Previous and Next, while Play is on screen (useSiriPlay). */
@@ -134,8 +144,9 @@ function answerer(cmd) {
   return (words) => {
     if (said) return
     said = true
-    if (cmd.from !== 'siri' || cmd.answered || !cmd.id) return
     const out = spoken(words)
+    /* A link has nobody to answer: what Siri would have heard goes in the log, and Play shows the rest. */
+    if (cmd.from !== 'siri' || cmd.answered || !cmd.id) return logDebug('siri', `${cmd.command}: ${out}`)
     logDebug('siri', 'said', out)
     answerSiri(cmd.id, out)
   }
@@ -198,6 +209,88 @@ function presetName(number) {
   if (p?.number === number && p.name) return p.name
   const listed = nameOf(number)
   return typeof listed === 'string' ? listed : ''
+}
+
+/*
+ * WHO THE LINKS ARE OPEN TO (lib/siri-rule linksOpen): Justin's account, by
+ * the session kept on the phone as Bluetooth (beta) is told (App.js asks
+ * haveSession(), never the account server, which answers nobody at a gig
+ * with no signal); and everybody once this copy is the new store version,
+ * which is a fact about the copy itself and nothing an update can switch.
+ */
+let linksAdmin = false
+let installed
+const gateWatchers = new Set()
+const builtIn = () => {
+  if (installed === undefined) installed = installedStoreVersion()
+  return installed
+}
+
+/** For App.js, at launch and at every change of who is signed in: the id of the session kept on this phone, or nothing. */
+export function allowSiriLinks(id) {
+  const was = siriLinksOpen()
+  linksAdmin = isAdmin(id)
+  if (siriLinksOpen() !== was) for (const fn of [...gateWatchers]) fn()
+  return siriLinksOpen()
+}
+
+/** Whether a fractalremote:// link is acted on, for this account on this copy of the app. Settings → Siri asks it too. */
+export const siriLinksOpen = () => linksOpen({ native: siriPresent(), platform: Platform.OS, installed: builtIn(), admin: linksAdmin })
+
+const subscribeGate = (fn) => {
+  gateWatchers.add(fn)
+  return () => gateWatchers.delete(fn)
+}
+
+/** The same, redrawn when it changes: for the Settings page that says how to use them. */
+export const useSiriLinksOpen = () => useSyncExternalStore(subscribeGate, siriLinksOpen, siriLinksOpen)
+
+/* The gate open within `ms`, for a link that started the app before who is signed in was known. */
+function openWithin(ms) {
+  if (siriLinksOpen()) return Promise.resolve(true)
+  return new Promise((resolve) => {
+    const opened = () => {
+      if (!siriLinksOpen()) return
+      clearTimeout(timer)
+      gateWatchers.delete(opened)
+      resolve(true)
+    }
+    const timer = setTimeout(() => {
+      gateWatchers.delete(opened)
+      resolve(siriLinksOpen())
+    }, ms)
+    gateWatchers.add(opened)
+  })
+}
+
+/*
+ * HOW LONG A LINK THAT STARTED THE APP WAITS FOR THE APP TO KNOW WHO IS
+ * SIGNED IN: a tuner/off link from a phone whose app had been closed, with
+ * the gate still deciding.
+ */
+export const LAUNCH_GATE_MS = 5000
+
+/**
+ * One fractalremote:// link. `launch` for the link that started the app:
+ * that one is only ever Tuner off. Its tap was made before the app had even
+ * started, so anything else would land seconds late, by the tap rule; and the
+ * phone hands the same launch link over again after the app reloads itself
+ * for an update, which must not step a setlist on by itself. True when it was
+ * taken as a command.
+ */
+export async function carryOutLink(url, { launch = false } = {}) {
+  const asked = parseLink(url)
+  if (!asked) return false
+  if (launch && asked.command !== 'tunerOff') {
+    logDebug('siri', `link ${asked.command}: it started the app, so it is not sent (the tap rule)`)
+    return false
+  }
+  if (!(launch ? await openWithin(LAUNCH_GATE_MS) : siriLinksOpen())) {
+    logDebug('siri', `link ${asked.command}: not open to this account on this copy of the app yet`)
+    return false
+  }
+  carryOut({ ...asked, id: null, at: Date.now(), answered: false, from: 'link' })
+  return true
 }
 
 /** One command, from Siri (`from: 'siri'`) or a link. Exported for the tests; the app reaches it by startSiri. */
@@ -374,12 +467,33 @@ function tunerOff(cmd, say) {
 }
 
 /**
- * For App.js, once: listen for Siri's commands for the life of the app.
- * Returns the way to stop. Nothing at all on a build without the Siri
- * module (lib/siriPipe), on Android and in the browser.
+ * For App.js, once: listen for Siri's commands and the links for the life
+ * of the app. Returns the way to stop. No Siri on a build without the Siri
+ * module (lib/siriPipe), on Android and in the browser; the links on any
+ * build, for whoever they are open to.
  */
 export function startSiri() {
-  return onSiriCommand((cmd) => {
+  const offSiri = onSiriCommand((cmd) => {
     carryOut({ ...cmd, from: 'siri' })
   })
+  let sub = null
+  try {
+    sub = Linking.addEventListener('url', (event) => {
+      carryOutLink(event?.url)
+    })
+  } catch {
+    sub = null
+  }
+  let alive = true
+  Promise.resolve()
+    .then(() => Linking.getInitialURL())
+    .then((url) => {
+      if (alive && url) carryOutLink(url, { launch: true })
+    })
+    .catch(() => {})
+  return () => {
+    alive = false
+    offSiri()
+    sub?.remove?.()
+  }
 }
