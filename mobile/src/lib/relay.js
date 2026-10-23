@@ -955,9 +955,9 @@ async function takeCensus({
     /* The pick, late to the roll call or answering its name alone while the units were read: it is the pick, and is driven. */
     if (hosts.length > 1 && !chosen && pick && !hosts.includes(pick)) {
       const asked = slow ? await slow : { names: [], unit: null }
-      const late = await namesFrom(roll.answers.slice(answers.length), decode)
+      const heardLate = await namesFrom(roll.answers.slice(answers.length), decode)
       if (session !== link) return hosts
-      if (late.includes(pick) || asked.names.includes(pick)) {
+      if (heardLate.includes(pick) || asked.names.includes(pick)) {
         hosts = [...hosts, pick]
         if (asked.unit) units = { ...units, [pick]: asked.unit }
         chosen = pick
@@ -1041,7 +1041,8 @@ async function takeCensus({
  * by (remoteReadsAskedOf).
  */
 function oweCount() {
-  readsTo = chosenWhy === 'pick' && chosen && readsOnlyTo(chosen) ? chosen : null
+  /* Asked of the pick already (after a mix on screen, or with every read so far its own): it goes on being. */
+  readsTo = chosenWhy === 'pick' && chosen && (readsTo === chosen || readsOnlyTo(chosen)) ? chosen : null
   chosen = null
   chosenWhy = null
   targeted = false

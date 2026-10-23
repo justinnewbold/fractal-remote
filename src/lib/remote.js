@@ -378,9 +378,9 @@ async function takeCensus({
     if (session !== link) return hosts
     if (hosts.length > 1 && !chosen && slow) {
       const asked = await slow
-      const late = await hostNamesFrom(roll.answers.slice(answers.length))
+      const heardLate = await hostNamesFrom(roll.answers.slice(answers.length))
       if (session !== link) return hosts
-      if (late.includes(picked) || asked.names.includes(picked)) {
+      if (heardLate.includes(picked) || asked.names.includes(picked)) {
         hosts = [...hosts, picked]
         if (asked.unit) units = { ...units, [picked]: asked.unit }
         chosen = picked
@@ -475,7 +475,8 @@ const readsOnlyTo = (name) => !readsAsked || readsAsked.every((host) => host ===
  * it, still written down for that count to go by. The phone's relay.js the same.
  */
 function oweCount() {
-  readsTo = chosenWhy === 'pick' && chosen && readsOnlyTo(chosen) ? chosen : null
+  /* Asked of the pick already (after a mix on screen, or with every read so far its own): it goes on being. */
+  readsTo = chosenWhy === 'pick' && chosen && (readsTo === chosen || readsOnlyTo(chosen)) ? chosen : null
   chosen = null
   chosenWhy = null
   targeted = false
