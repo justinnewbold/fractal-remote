@@ -8395,7 +8395,7 @@ export function run(test) {
     assert.ok(stop.indexOf('set({ ...initial })') < stop.indexOf('await remoteDisconnect()'), 'stopLink resets the link after the wait again, over the demo’s connected')
     assert.match(link, /if \(isDemo\(\)\) return enterDemo\(\)/, 'a real loop can run on under the demo')
     assert.match(link, /if \(!running\) return\s+delay = state\.link === 'connected'/, 'a turn stopped mid-wait schedules another anyway')
-    assert.match(link, /await remoteConnect\(\)\s+if \(!running\) return/, 'a join finishing after stopLink carries on as if running')
+    assert.match(link, /await remoteConnect\(\)\s+\} catch \(err\) \{[\s\S]*?\} finally \{[^}]*\}\s+if \(!running\) return\s+listen\(\)/, 'a join finishing after stopLink carries on as if running')
     const app = read('mobile/App.js')
     assert.match(app, /demo \|\| link\.link === 'connected' \? \(\) => setScreen\('presets'\) : null/, 'the demo’s preset list waits on a real link')
   })
@@ -8826,9 +8826,11 @@ export function run(test) {
       const preview = src.slice(src.indexOf('export function logPreview'))
       assert.match(
         preview,
-        /trimToBytes\(pickForReport\(getDebugLog\(\)\)\.map\(formatLine\)\.join\('\\n'\)\)/,
+        /return reportLog\(\{ lines: getDebugLog\(\), format: formatLine, head(, before)? \}\)/,
         `${where} previews the log differently from how it sends it`
       )
+      /* And the send builds it with the same function: buildReport calls reportLog (shared/report-rules). */
+      assert.match(send, /head: withLog \? head : ''/, `${where} sends a head with no log, or none with one`)
       assert.match(preview, /if \(!carriesLog\(kind\)\) return ''/, `${where} previews a log for a kind that sends none`)
 
       /* What goes with it, and what must not. The context is built by the
@@ -8853,7 +8855,7 @@ export function run(test) {
     ]) {
       assert.match(src, /carriesLog\(kind\)/, `${where} decides for itself which kinds carry a log`)
       assert.match(src, /No log goes with this one/, `${where} never says that an idea sends no log`)
-      assert.match(src, /logPreview\(kind\)/, `${where} offers no way to see what would be sent`)
+      assert.match(src, /logPreview\(kind(\)|, )/, `${where} offers no way to see what would be sent`)
       /* Switching kinds drops the preview: a log shown beside a form that is
          not sending one is worse than showing nothing. */
       assert.match(src, /setPreview\(null\)/, `${where} keeps a preview across a change of kind`)
@@ -8862,7 +8864,7 @@ export function run(test) {
     /* Setup reaches the form on the phone. The log screen sends by itself
        now (the next test), so it no longer opens the form at all. */
     assert.match(read('mobile/App.js'), /screen === 'report'/, 'the phone cannot open the report screen')
-    assert.match(read('mobile/src/screens/Log.js'), /sendLogs\(\{ deviceName \}\)/, 'the log screen offers no way to send it')
+    assert.match(read('mobile/src/screens/Log.js'), /sendLogs\(\{ deviceName, /, 'the log screen offers no way to send it')
   })
 
   test('Send logs to developer sends from the log screen in one tap, with no form, and says so', () => {
@@ -8885,18 +8887,18 @@ export function run(test) {
     assert.match(read('mobile/src/screens/Settings.js'), /onPress=\{onOpenReport\}/, 'Setup lost its way into the Feedback form')
 
     /* The button sends, says Sending… while it does, and cannot be pressed again meanwhile. */
-    assert.match(log, /import \{ SENT_WORDS, sendLogs \} from '\.\.\/lib\/reports'/)
+    assert.match(log, /import \{ SENT_WORDS, sendLogs, shotsLostWords \} from '\.\.\/lib\/reports'/)
     assert.match(log, /<Press label=\{sending \? 'Sending…' : 'Send logs to developer'\} tone="signal" disabled=\{sending\} onPress=\{send\} \/>/, 'the button does not send, or does not say it is sending')
     /* Never twice in flight: the ref is checked and set before the first await. */
     assert.match(
       log,
-      /const send = async \(\) => \{ if \(inFlight\.current\) return inFlight\.current = true setSending\(true\) setSentSaid\(null\) try \{ await sendLogs\(\{ deviceName \}\)/,
-      'a second tap can start a second report before the first has gone'
+      /const send = async \(\) => \{ if \(inFlight\.current\) return inFlight\.current = true setSending\(true\) setSentSaid\(null\) try \{ const sent = await sendLogs\(\{ deviceName, note, shots, head: headLines\(logHeader\(\{ deviceName, preset \}\)\), before: runsBefore\(before\) \}\)/,
+      'a second tap can start a second report before the first has gone, or it sends without the note, the screenshots, the head or the runs before'
     )
     assert.match(log, /finally \{ inFlight\.current = false setSending\(false\) \}/, 'a failed send leaves the button dead')
 
-    /* Said under the button, in the Feedback form's own words, or the reason it did not go. */
-    assert.match(log, /setSentSaid\(\{ ok: true, words: SENT_WORDS \}\)/)
+    /* Said under the button, in the Feedback form's own words (with a line for any screenshot that could not go), or the reason it did not go. */
+    assert.match(log, /const words = \[SENT_WORDS, shotsLostWords\(sent\?\.shotsLost\)\]\.filter\(Boolean\)\.join\(' '\) setSentSaid\(\{ ok: true, words \}\)/)
     assert.match(log, /const words = err\?\.message \|\| String\(err\) setSentSaid\(\{ ok: false, words \}\)/, 'a failed send says nothing')
     /*
      * "There was no confirmation." Not the gray hint, quieter than the red
@@ -8904,9 +8906,13 @@ export function run(test) {
      * answer to the button just pressed. And said out loud, because a 'hint'
      * note is no live region (a failure's red one is, on Android).
      */
-    assert.match(log, /\{sentSaid \? \( <Note tone=\{sentSaid\.ok \? 'hint' : 'fault'\} strong size=\{font\.body\}> \{sentSaid\.words\} <\/Note> \) : null\}/, 'the sent line is the quiet gray hint')
+    assert.match(log, /\{sentSaid \? \( <Note tone=\{sentSaid\.ok \? 'hint' : 'fault'\} strong=\{!sentSaid\.paste\} size=\{sentSaid\.paste \? undefined : font\.body\}> \{sentSaid\.words\} <\/Note> \) : null\}/, 'the sent line is the quiet gray hint')
+    /* Bold and body-sized for everything Send says: only a paste's own line (test/reports.mjs) shares the place without it. */
+    assert.ok(!/setSentSaid\(\{ ok: (true|false), words, paste/.test(log.slice(log.indexOf('const send = async'), log.indexOf('useEffect(() => onDebugLog'))), 'what Send said is drawn as a paste’s line')
     assert.match(read('mobile/src/components/Note.js'), /accessibilityLiveRegion=\{tone === 'hint' \? 'none' : 'polite'\}/)
-    assert.match(log, /setSentSaid\(\{ ok: true, words: SENT_WORDS \}\) AccessibilityInfo\.announceForAccessibility\?\.\(SENT_WORDS\)/, 'a screen reader is not told it went')
+    assert.match(log, /setSentSaid\(\{ ok: true, words \}\) AccessibilityInfo\.announceForAccessibility\?\.\(words\)/, 'a screen reader is not told it went')
+    /* The note and the pictures go once the report has, and only then. */
+    assert.match(log, /AccessibilityInfo\.announceForAccessibility\?\.\(words\) setNote\(''\) setShots\(\[\]\) \} catch/, 'the note and screenshots stay after they have gone, or go when the send fails')
     assert.match(log, /if \(Platform\.OS === 'ios'\) AccessibilityInfo\.announceForAccessibility\?\.\(words\)/, 'VoiceOver is not told it did not go')
     /* Clear Logs waits while a send is on its way: the send reads the log after the computer answers, and a clear then would empty the report. */
     assert.match(log, /<Press label="Clear Logs" disabled=\{sending\} onPress=/, 'Clear Logs can empty a report on its way')
@@ -9289,7 +9295,7 @@ export function run(test) {
      * send. Read as text for the panel; the browser's lib/reports.js is run.
      */
     const panel = read('src/components/DebugLog.jsx').replace(/\s+/g, ' ')
-    assert.match(panel, /import \{ SENT_WORDS, context, sendLogs \} from '\.\.\/lib\/reports'/, 'the panel does not use the browser’s own report code')
+    assert.match(panel, /import \{ SENT_WORDS, context, sendLogs, shotsLostWords \} from '\.\.\/lib\/reports'/, 'the panel does not use the browser’s own report code')
     assert.match(
       panel,
       /<button className="chip send-logs" onClick=\{sendNow\} disabled=\{sending \|\| !all\.length\}> <span className=\{sending \? 'send-logs-off' : undefined\}>Send logs to developer<\/span> <span className=\{sending \? undefined : 'send-logs-off'\}>Sending…<\/span> <\/button> <button className="chip" onClick=\{shareFile\}>/,
@@ -9309,10 +9315,10 @@ export function run(test) {
     assert.match(panel, /if \(inFlight\.current\) return inFlight\.current = true/, 'a double click sends two reports')
     assert.match(
       panel,
-      /await sendLogs\(\{ context: context\(\{ device, link, platform: platform\(\), macVersion: link\?\.macVersion \}\), computer: await macReport\(\) \}\)/,
-      'the browser’s send does not carry the form’s context, or the computer’s account as Copy Logs builds it'
+      /await sendLogs\(\{ context: context\(\{ device, link, platform: platform\(\), macVersion: link\?\.macVersion \}\), computer: await macReport\(\), note, shots, head: headLines\(logHeader\(\{ device, link \}\)\) \}\)/,
+      'the browser’s send does not carry the form’s context, the computer’s account as Copy Logs builds it, the note, the screenshots or the head'
     )
-    assert.match(panel, /setSentSaid\(\{ ok: true, words: SENT_WORDS \}\)/)
+    assert.match(panel, /setSentSaid\(\{ ok: true, words: \[SENT_WORDS, shotsLostWords\(sent\?\.shotsLost\)\]\.filter\(Boolean\)\.join\(' '\) \}\)/)
     /* Said in the bright ink at body size, not the gray of the help under it, by a status line that is always there. */
     assert.match(panel, /<p className=\{`send-logs-said\$\{sentSaid && !sentSaid\.ok \? ' failed' : ''\}`\} role="status"> \{sentSaid\?\.words \|\| ''\} <\/p>/, 'the panel does not say whether it went, or its status line comes and goes')
     assert.doesNotMatch(panel, /\{sentSaid \? \(/, 'the status line is mounted only once there is something to say')
@@ -10150,7 +10156,7 @@ export function run(test) {
   test('the rule reads the rig as it is: joins under way counted at both links, and the rig while away kept', () => {
     const link = withoutComments(read('mobile/src/lib/link.js')).replace(/\s+/g, ' ')
     assert.match(link, /export const joiningNow = \(\) => turns > 0 && state\.link !== 'connected'/)
-    assert.match(link, /function tick\(\) \{ turns \+= 1 return turn\(\)\.finally\(\(\) => \{ turns -= 1 \}\) \}/, 'a turn of the loop is not counted while it is out')
+    assert.match(link, /function tick\(\) \{ turns \+= 1 return turn\(generation\)\.finally\(\(\) => \{ turns -= 1 \}\) \}/, 'a turn of the loop is not counted while it is out')
     assert.match(link, /timer = setTimeout\(tick, ms\)/, 'the loop turns without being counted')
     assert.match(withoutComments(read('mobile/src/lib/bleLink.js')), /export const bluetoothJoining = \(\) => inFlight/)
     assert.match(withoutComments(read('mobile/src/lib/bluetooth.js')), /export const bluetoothPhase = \(\) => now\.phase/)
@@ -10162,7 +10168,7 @@ export function run(test) {
     assert.match(link, /if \(bluetoothOn\(\) && !isDemo\(\)\) \{ running = false startBluetoothLink\(set\)/, 'startLink no longer puts the demo before Bluetooth, and linkVia says the other')
     const relay = withoutComments(read('mobile/src/lib/relay.js')).replace(/\s+/g, ' ')
     assert.match(relay, /function seen\(v\) \{ const now = !!v if \(now\) answeredAt = Date\.now\(\)/, 'an answer from the computer no longer moves lastAnswerAt')
-    assert.match(link, /\} else if \(Date\.now\(\) - lastAnswerAt\(\) > KEEPALIVE\) \{ await hostResponds\(\) refresh\(\) \}/, 'a link that says connected is no longer asked every eight seconds, so a word left from a freeze looks like a link')
+    assert.match(link, /\} else if \(Date\.now\(\) - lastAnswerAt\(\) > KEEPALIVE\) \{ await hostResponds\(\) if \(!ours\(\)\) return refresh\(\) \}/, 'a link that says connected is no longer asked every eight seconds, so a word left from a freeze looks like a link')
     assert.match(updates, /if \(rig\.link === 'connected' \|\| rig\.bluetooth === 'connected'\) leftWith = \{ \.\.\.leftWith, link: 'connected', at: Date\.now\(\) \}/, 'a rig reached while away is forgotten, or its eight hours count from when the phone went away')
     assert.match(updates, /const offLink = subscribeLink\(heardWhileAway\) const offBluetooth = subscribeBluetooth\(heardWhileAway\)/)
     /* And the reason a switch outside a song is safe, said where the rule is. */
@@ -10609,8 +10615,10 @@ export function run(test) {
     )
 
     /* In the log, because that is the copy that reaches a chat. */
+    /* The head lives in lib/logHead.js now, where Copy Logs and a report both take it from. */
+    assert.match(read('mobile/src/screens/Log.js'), /formatDebugLog\(logHeader\(\{ deviceName, preset \}\)/, 'Copy Logs does not carry the log’s head')
     assert.match(
-      read('mobile/src/screens/Log.js').replace(/\s+/g, ' '),
+      read('mobile/src/lib/logHead.js').replace(/\s+/g, ' '),
       /'computer app': link\.hostVersion \|\| 'did not say \(older than 7\.205\.0, or could not write it\)'/,
       'a pasted log still cannot say what the computer is running'
     )
@@ -10618,8 +10626,8 @@ export function run(test) {
      * And over Bluetooth (beta), where there is no computer: the pasted log
      * said "computer: WIDI Uhost Bluetooth" and "computer app: did not say".
      */
-    const logScreen = read('mobile/src/screens/Log.js').replace(/\s+/g, ' ')
-    assert.match(logScreen, /import \{ bluetoothOn \} from '\.\.\/lib\/bleSwitch'/)
+    const logScreen = read('mobile/src/lib/logHead.js').replace(/\s+/g, ' ')
+    assert.match(logScreen, /import \{ bluetoothOn \} from '\.\/bleSwitch'/)
     assert.match(logScreen, /const throughAdapter = bluetoothOn\(\) && !isDemo\(\)/)
     assert.match(
       logScreen,

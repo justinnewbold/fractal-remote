@@ -133,6 +133,247 @@ const bytesOf = (v) => (typeof TextEncoder === 'undefined' ? v.length : new Text
  */
 export const LOGS_ONLY_MESSAGE = 'Send logs to developer: logs only, no message written.'
 
+/**
+ * A NOTE, IF THEY WANT TO WRITE ONE.
+ *
+ * Justin, 22 October 2026, holding the email the one tap made: "Where's the
+ * space to enter a message and upload photos?" So the log screen and the
+ * Debug log have a box beside the button. It is optional, and the button
+ * never waits for it: the one tap that sends with nothing written stays one
+ * tap (the Feedback form's Send, which waits for words, is the form's own).
+ *
+ * A note typed is the message, in place of the app's sentence. A note of
+ * nothing but spaces is no note.
+ */
+export const NOTE_PLACEHOLDER = 'What happened? (optional)'
+
+/** The message a one-tap send carries: the note, or the app's own sentence when there is none. */
+export function logsMessage(note) {
+  const typed = String(note ?? '').trim()
+  return typed ? typed.slice(0, MAX_MESSAGE) : LOGS_ONLY_MESSAGE
+}
+
+/**
+ * SCREENSHOTS, UP TO THREE.
+ *
+ * A report says what the app did; a screenshot says what the person saw,
+ * which is the half nobody can type. Three, because a fourth is almost
+ * never a different problem and every one is a few hundred kilobytes over a
+ * stage's two bars.
+ *
+ * SHRUNK BEFORE THEY GO. The browser draws each one again at no more than
+ * SHOT_EDGE on its long side and writes it as a JPEG: a phone's screenshot
+ * is about 2900 pixels tall and a Mac's about 2900 wide, and at 1600 the
+ * words on a screen still read, at a third of the bytes. The phone has no
+ * way to redraw a picture without a new build (no image library is built
+ * into it), so it keeps the screenshot's size and asks the clipboard for a
+ * JPEG at SHOT_PHONE_QUALITY, and once more at the lower one only if that is
+ * still over SHOT_BYTES: each read of a pasted picture can make an iPhone
+ * ask "Allow Paste?" again, so it is read as few times as it can be.
+ *
+ * SHOT_BYTES is the app's own cap on one picture, under the bucket's 2 MB
+ * (supabase/migrations/20261022_report_screenshots.sql), so a picture the app
+ * lets through is never one the server turns away. Three at the cap is
+ * 4.5 MB, about 6 MB in the email, well inside both Resend's 40 MB and
+ * Gmail's 25 MB.
+ */
+export const SHOTS_MAX = 3
+export const SHOT_EDGE = 1600
+export const SHOT_BYTES = 1_500_000
+/** The browser's JPEG qualities, best first: the next only when a picture is still over SHOT_BYTES. */
+export const SHOT_QUALITIES = [0.82, 0.6, 0.4]
+/** The phone's: one read of the clipboard, and a second only for a picture still too big. */
+export const SHOT_PHONE_QUALITIES = [0.6, 0.3]
+
+/** Where they go: a private bucket, written to by the sender and read only by the email function. */
+export const SHOT_BUCKET = 'report-shots'
+
+/**
+ * HOW LONG THE PICTURES MAY TAKE, and the row after them.
+ *
+ * All of them go at once and all of them get SHOT_WAIT_MS together; one
+ * still going then is left behind, and the report goes without it, saying
+ * so. The row itself gets SEND_WAIT_MS: a send never sits on "Sending…"
+ * for ever on a connection that has stopped answering.
+ */
+export const SHOT_WAIT_MS = 20_000
+export const SEND_WAIT_MS = 20_000
+
+/**
+ * A screenshot's place in the bucket: the sender's account id (or `anon`
+ * for nobody signed in), then the report's own random key and which of the
+ * three it is. The bucket's insert rule takes nothing else, and the email
+ * function attaches nothing else, so a row cannot point it at somebody
+ * else's picture.
+ */
+export const SHOT_PATH =
+  /^(anon|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[1-3]\.jpg$/
+
+export const shotPath = (owner, key, n) => `${owner || 'anon'}/${key}-${n}.jpg`
+
+/**
+ * A report's own random key. Not a secret (nothing can read the bucket but
+ * the server), only different from every other report's.
+ */
+export function reportKey() {
+  try {
+    const made = globalThis.crypto?.randomUUID?.()
+    if (made) return made
+  } catch {
+    /* Made by hand below. */
+  }
+  const hex = (n) => [...Array(n)].map(() => Math.floor(Math.random() * 16).toString(16)).join('')
+  return `${hex(8)}-${hex(4)}-4${hex(3)}-${'89ab'[Math.floor(Math.random() * 4)]}${hex(3)}-${hex(12)}`
+}
+
+/** The size to draw a picture at: its own, or smaller so its long side is `edge`. Never larger. */
+export function shotSize(width, height, edge = SHOT_EDGE) {
+  const w = Math.max(1, Math.round(Number(width) || 0))
+  const h = Math.max(1, Math.round(Number(height) || 0))
+  const long = Math.max(w, h)
+  if (long <= edge) return { width: w, height: h }
+  const k = edge / long
+  return { width: Math.max(1, Math.round(w * k)), height: Math.max(1, Math.round(h * k)) }
+}
+
+/** Bytes in a base64 string, without decoding it. */
+export function base64Bytes(b64) {
+  const s = String(b64 ?? '').replace(/\s/g, '')
+  if (!s) return 0
+  const pad = s.endsWith('==') ? 2 : s.endsWith('=') ? 1 : 0
+  return Math.floor((s.length * 3) / 4) - pad
+}
+
+/** The screenshots kept, with one more: never past SHOTS_MAX, and never a picture over SHOT_BYTES. */
+export function withShot(shots = [], shot) {
+  const list = Array.isArray(shots) ? shots : []
+  if (!shot || list.length >= SHOTS_MAX) return list
+  if (!(shot.size > 0) || shot.size > SHOT_BYTES) return list
+  return [...list, shot]
+}
+
+/** What the screens say about screenshots, at both ends; the browser's words for a picked file. */
+export const SHOT_WORDS = {
+  full: `That's ${SHOTS_MAX} screenshots, the most one report can carry. Remove one to add another.`,
+  tooBig: "That picture is too big to send, even made smaller. Pick a screenshot instead.",
+  unreadable: "That picture couldn't be opened. Pick a screenshot or a photo (a .png or .jpg file).",
+  limit: `Up to ${SHOTS_MAX}. They're made smaller before they go.`
+}
+
+/**
+ * The phone's words for a paste. Nobody pasting can choose a file's format,
+ * so these never name one, and say what to do next instead.
+ *
+ *   empty       the clipboard really has no picture
+ *   refused     it has one, and the app was not handed it: "Don't Allow
+ *               Paste" on an iPhone, or Paste from Other Apps set to Deny
+ *               there, which asks nothing at all. iPhone and iPad only; on
+ *               Android a picture that is there and not handed over is one
+ *               that could not be read
+ *   unreadable  the clipboard's picture could not be read
+ *   tooBig      still over SHOT_BYTES at the lower quality, which a
+ *               screenshot never is and a camera photo can be
+ */
+export const PASTE_WORDS = {
+  empty: 'There’s no picture to paste. Copy a screenshot first.',
+  refused:
+    'The app wasn’t allowed to paste it. Tap Paste a screenshot again and choose Allow Paste. If you aren’t asked, go to Settings → Fractal Remote → Paste from Other Apps and choose Allow.',
+  unreadable: 'That picture couldn’t be read. Copy the screenshot again and paste it.',
+  tooBig: 'That picture is too big to send. Paste a screenshot rather than a photo.'
+}
+
+/** What a paste that brought no picture says, by why and on which system. */
+export function pasteWords(why, os) {
+  if (why === 'refused' && os !== 'ios') return PASTE_WORDS.unreadable
+  return PASTE_WORDS[why] || PASTE_WORDS.unreadable
+}
+
+/**
+ * A thumbnail's size, the same at both ends: a fixed width and the picture's
+ * own shape, no taller than THUMB_TALL (a phone's screenshot) and no shorter
+ * than THUMB_LOW (a wide computer window, whole, rather than a strip from its
+ * middle). A picture with no size known is drawn as a phone's.
+ */
+export const THUMB_TALL = 128
+export const THUMB_LOW = 24
+
+export function thumbSize(width, height, across = 64) {
+  const w = Number(width) || 0
+  const h = Number(height) || 0
+  if (!(w > 0 && h > 0)) return { width: across, height: Math.round(across * 1.5) }
+  return { width: across, height: Math.min(THUMB_TALL, Math.max(THUMB_LOW, Math.round((across * h) / w))) }
+}
+
+/** The one line said when pictures did not go, on the screen and in the report. */
+export function shotsLostWords(lost) {
+  if (!(lost > 0)) return ''
+  return lost === 1
+    ? "One screenshot couldn't be added, so the report went without it."
+    : `${lost} screenshots couldn't be added, so the report went without them.`
+}
+
+/**
+ * Put the pictures in the bucket, all at once, and say which went.
+ *
+ * `put(path, shot)` is each end's own upload, which throws when it fails.
+ * Never throws itself and never waits past `wait`: a picture that fails or
+ * is late is counted in `lost`, with the first reason in `why`, and the
+ * report goes without it.
+ */
+export async function uploadShots(shots = [], { owner, key = reportKey(), put, wait = SHOT_WAIT_MS } = {}) {
+  const list = (Array.isArray(shots) ? shots : []).slice(0, SHOTS_MAX)
+  if (!list.length || typeof put !== 'function') return { paths: [], lost: 0, why: '' }
+  let timer = null
+  const late = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(NO_ANSWER), wait)
+  })
+  const one = async (shot, i) => {
+    const path = shotPath(owner, key, i + 1)
+    try {
+      const done = await Promise.race([Promise.resolve().then(() => put(path, shot)), late])
+      if (done === NO_ANSWER) return { why: `no answer within ${wait % 1000 ? `${wait} ms` : `${wait / 1000} seconds`}` }
+      return { path }
+    } catch (e) {
+      return { why: e?.message || String(e) }
+    }
+  }
+  try {
+    const done = await Promise.all(list.map(one))
+    const paths = done.map((d) => d.path).filter(Boolean)
+    return { paths, lost: list.length - paths.length, why: done.find((d) => d.why)?.why || '' }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * The report's context with its pictures: where each one that went is, and
+ * a line for any that did not. Inside context rather than a column of its
+ * own, so the row the app inserts is the row it always inserted and no app
+ * older than this one is touched by the change.
+ */
+export function withShots(context = {}, { paths = [], lost = 0, why = '' } = {}) {
+  const out = { ...context }
+  if (paths.length) out.screenshots = paths.slice(0, SHOTS_MAX)
+  if (lost > 0) out.screenshotsLost = `${lost} of ${paths.length + lost} could not be added${why ? ` (${why})` : ''}`
+  return out
+}
+
+/** Waits for `work`, or for `wait`, and throws a network error past it. */
+export async function inTime(work, wait = SEND_WAIT_MS) {
+  let timer = null
+  const late = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(NO_ANSWER), wait)
+  })
+  try {
+    const done = await Promise.race([Promise.resolve().then(work), late])
+    if (done === NO_ANSWER) throw new Error(`network: no answer within ${wait % 1000 ? `${wait} ms` : `${wait / 1000} seconds`}`)
+    return done
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /** What both ends say once a report has gone: the Feedback form's own words. */
 export const SENT_WORDS = 'Sent to the developer — thank you.'
 
@@ -152,6 +393,16 @@ export const SENT_WORDS = 'Sent to the developer — thank you.'
  */
 export function notSentWords(error, { wrote = true } = {}) {
   const said = String(error?.message || error || '')
+  /*
+   * The app's own deadline (inTime), not a dropped connection: the row may
+   * still land after it, and sending again at once would make a second
+   * report and a second email. So it says to wait.
+   */
+  if (/no answer within/i.test(said)) {
+    return wrote
+      ? "The internet didn't answer in time. It may still arrive, so wait a minute before sending it again. What you wrote is still here."
+      : "The internet didn't answer in time. It may still arrive, so wait a minute before sending it again."
+  }
   if (/fetch|network/i.test(said)) {
     return wrote
       ? "Couldn't reach the internet to send that. What you wrote is still here — try again in a moment."
@@ -336,14 +587,121 @@ const sendable = (v) => String(v ?? '').replace(UNSENDABLE, '')
  * then has whatever room is left, which is never less than that share.
  */
 export function fitLog(given, computer = '', cap = LOG_BYTES) {
-  const mine = sendable(given)
-  const theirs = sendable(computer).trim()
-  if (!theirs) return trimToBytes(mine, cap)
+  return fitReport({ mine: given, computer }, cap)
+}
+
+/**
+ * THE HEAD OF A REPORT'S LOG: the lines Copy Logs has always put at the top
+ * (which build, which unit, which computer and which of them is driven, the
+ * versions at both ends), as `key: value` lines.
+ *
+ * "Is this all the information the logs send?" The email had the context and
+ * nothing else, and the row's log began with its first timestamp, so the
+ * header a paste carries was in neither. Now it starts every report's log,
+ * and the email puts it in its body. Its first key is `app`, which is how
+ * the email tells a log with a head from one sent by an older app.
+ */
+export const HEAD_BYTES = 3000
+
+export function headLines(header = {}) {
+  const lines = Object.entries(header || {})
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => `${k}: ${v}`)
+  return trimToBytes(lines.join('\n'), HEAD_BYTES)
+}
+
+/**
+ * THE RUNS BEFORE THIS ONE, labeled.
+ *
+ * The phone keeps the end of its last three runs on disk (mobile/src/lib/
+ * logKeep.js), and Copy Logs has carried them, but a report sent only this
+ * run: and "every time I open the app now…" is a report about the run that
+ * ended. So a report carries them too, under the headings the paste has
+ * always used, newest first, inside the same LOG_BYTES.
+ *
+ * `when` turns a run's time into words; each end says it its own way.
+ */
+export const BEFORE_BYTES = 24_000
+
+export function beforeBlocks(runs = [], when = (at) => (at ? new Date(at).toISOString() : 'at an unknown time')) {
+  return (Array.isArray(runs) ? runs : [])
+    .filter((run) => Array.isArray(run?.lines) && run.lines.length)
+    .map((run, i) =>
+      [
+        `${i === 0 ? 'THE RUN BEFORE THIS ONE' : `${i + 1} RUNS AGO`} — ${run.lines.length} lines, oldest first, last written ${when(run.at)}`,
+        '(if the app crashed or was killed, this is what it said on the way)',
+        ...run.lines.map((l) => String(l ?? ''))
+      ].join('\n')
+    )
+}
+
+/**
+ * The runs before, cut to `cap`. The run before this one comes first and is
+ * the one that matters, so it is kept, losing its OLDEST lines if anything
+ * (its last lines are what it said on the way out) and never its two-line
+ * heading. An older run goes in only whole, and only if it fits.
+ */
+export function fitBefore(blocks = [], cap = BEFORE_BYTES) {
+  const list = (Array.isArray(blocks) ? blocks : [blocks]).map((b) => sendable(b).trim()).filter(Boolean)
+  if (!list.length || cap <= 0) return ''
   const gap = '\n\n'
-  const share = Math.min(bytesOf(theirs), COMPUTER_BYTES)
-  const own = trimToBytes(mine, cap - share - gap.length)
-  if (!own) return trimComputer(theirs, cap)
-  return own + gap + trimComputer(theirs, cap - bytesOf(own) - gap.length)
+  const [first, ...older] = list
+  let out = first
+  if (bytesOf(first) > cap) {
+    const lines = first.split('\n')
+    const heading = lines.slice(0, 2).join('\n')
+    const room = cap - bytesOf(heading) - 1
+    if (room < 200) return ''
+    out = `${heading}\n${trimToBytes(lines.slice(2).join('\n'), room)}`
+  }
+  for (const block of older) {
+    if (bytesOf(out) + gap.length + bytesOf(block) > cap) break
+    out += gap + block
+  }
+  return out
+}
+
+/**
+ * THE WHOLE LOG OF A REPORT, inside LOG_BYTES: the head, the sender's own
+ * lines, the runs before, and the computer's own log, in that order, each
+ * after a blank line.
+ *
+ * The sender's lines come first in the budget as they always have: the head
+ * (at most HEAD_BYTES) is paid for, the computer's share (COMPUTER_BYTES, no
+ * more than it needs) and the runs' share (BEFORE_BYTES, no more than they
+ * need) are kept back, and the sender's lines have the rest, losing their
+ * oldest if anything. The runs before then have at most their share, and the
+ * computer whatever is left, never less than its own. With no head and no
+ * runs before this is exactly what fitLog always was.
+ */
+export function fitReport({ head = '', mine = '', before = [], computer = '' } = {}, cap = LOG_BYTES) {
+  const top = trimToBytes(sendable(head).trim(), HEAD_BYTES)
+  const own0 = sendable(mine)
+  const blocks = (Array.isArray(before) ? before : [before]).map((b) => sendable(b).trim()).filter(Boolean)
+  const theirs = sendable(computer).trim()
+  const gap = '\n\n'
+  if (!top && !blocks.length) {
+    /* fitLog as it always was, byte for byte. */
+    if (!theirs) return trimToBytes(own0, cap)
+    const share = Math.min(bytesOf(theirs), COMPUTER_BYTES)
+    const own = trimToBytes(own0, cap - share - gap.length)
+    if (!own) return trimComputer(theirs, cap)
+    return own + gap + trimComputer(theirs, cap - bytesOf(own) - gap.length)
+  }
+  const parts = []
+  let used = 0
+  const add = (text) => {
+    if (!text) return
+    used += (parts.length ? gap.length : 0) + bytesOf(text)
+    parts.push(text)
+  }
+  add(top)
+  const runsShare = blocks.length ? Math.min(bytesOf(blocks.join(gap)), BEFORE_BYTES) + gap.length : 0
+  const compShare = theirs ? Math.min(bytesOf(theirs), COMPUTER_BYTES) + gap.length : 0
+  add(trimToBytes(own0, Math.max(0, cap - used - gap.length - runsShare - compShare)))
+  if (blocks.length) add(fitBefore(blocks, Math.min(BEFORE_BYTES, cap - used - gap.length - compShare)))
+  if (theirs) add(trimComputer(theirs, cap - used - gap.length))
+  return parts.join(gap)
 }
 
 /**
@@ -405,6 +763,15 @@ export function lastErrorFrom(lines = []) {
 }
 
 /**
+ * A report's log, from the log's own lines: the one function the send and
+ * the Feedback form's preview both call, so what is shown cannot drift from
+ * what goes.
+ */
+export function reportLog({ lines = [], format, head = '', before = [], computer = '' } = {}) {
+  return fitReport({ head, mine: pickForReport(lines).map(format).join('\n'), before, computer })
+}
+
+/**
  * Everything a report sends, assembled once so both apps send the same shape.
  *
  * Returns the log as `null` rather than an empty string when the kind does
@@ -412,18 +779,18 @@ export function lastErrorFrom(lines = []) {
  * holding "" says "a log was sent and it was empty", and those are different
  * answers to the question a reader is actually asking.
  */
-export function buildReport({ kind, message, contact, context = {}, lines = [], format, computer = '' }) {
+export function buildReport({ kind, message, contact, context = {}, lines = [], format, computer = '', head = '', before = [] }) {
   const body = String(message ?? '').trim()
   if (!KINDS.includes(kind)) throw new Error('Say whether this is a bug or an idea.')
   if (!body) throw new Error('Write something first.')
   if (body.length > MAX_MESSAGE) throw new Error('That is longer than this box can send.')
 
   /* The computer's part rides with the log and never without it: no log, no
-     computer log either (see fitLog for how the two share the cap). */
+     computer log either, and no head or runs before (see fitReport for how
+     the four share the cap). */
   let log = null
   if (carriesLog(kind) && typeof format === 'function') {
-    const picked = pickForReport(lines)
-    log = fitLog(picked.map(format).join('\n'), computer)
+    log = reportLog({ lines, format, head, before, computer })
   }
 
   return {

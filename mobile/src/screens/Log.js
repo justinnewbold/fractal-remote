@@ -1,26 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
-import { AccessibilityInfo, FlatList, Platform, Text, View } from 'react-native'
+import { AccessibilityInfo, FlatList, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 
 import { color, font, mono, radius, space } from '../lib/theme'
 import { clearDebugLog, formatDebugLog, formatLine, getDebugLog, onDebugLog } from '../lib/debugLog'
-import { APP_VERSION } from '../lib/version'
-import { linkState } from '../lib/link'
-import { bluetoothOn } from '../lib/bleSwitch'
-import { isDemo } from '../lib/demo'
 import { pastRuns } from '../lib/logKeep'
-import { SENT_WORDS, sendLogs } from '../lib/reports'
+import { ended, logHeader, runsBefore } from '../lib/logHead'
+import { MAX_MESSAGE, NOTE_PLACEHOLDER, headLines } from '../lib/report-rules'
+import { SENT_WORDS, sendLogs, shotsLostWords } from '../lib/reports'
 import { useRig } from '../lib/rig'
 import Note from '../components/Note'
 import Press from '../components/Press'
+import Shots from '../components/Shots'
 
 const face = Platform.select(mono)
 
 const ofDeviceName = (s) => s.deviceName
 const ofPreset = (s) => s.preset
-
-/** When a kept run last reached the disk, as a clock time. */
-const ended = (at) => (at ? new Date(at).toLocaleTimeString() : 'at an unknown time')
 
 /** One line of the log, this run's or a kept one's. Red when it is the bad kind. */
 function Line({ text, hot }) {
@@ -94,8 +90,19 @@ export default function Log({ onBack }) {
    * a failure and nothing at all when it went. A failure's red note is a
    * live region on Android, so that one is spoken here on the iPhone only.
    */
+  /*
+   * A NOTE AND SCREENSHOTS, BEFORE THE ONE TAP. "Where's the space to enter
+   * a message and upload photos?" Both optional: the button sends with the
+   * box empty, as it always has, and a typed note is the message instead of
+   * the app's sentence. They go once the report has, and stay when it has
+   * not, so nothing typed is lost to a dropped connection.
+   */
+  const [note, setNote] = useState('')
+  const [shots, setShots] = useState([])
   const [sending, setSending] = useState(false)
+  /* What Send said, or what a paste said (`paste`): one line in the foot, the latest. */
   const [sentSaid, setSentSaid] = useState(null)
+  const sayPaste = (words) => setSentSaid(words ? { ok: false, words, paste: true } : null)
   const inFlight = useRef(false)
   const send = async () => {
     if (inFlight.current) return
@@ -103,9 +110,13 @@ export default function Log({ onBack }) {
     setSending(true)
     setSentSaid(null)
     try {
-      await sendLogs({ deviceName })
-      setSentSaid({ ok: true, words: SENT_WORDS })
-      AccessibilityInfo.announceForAccessibility?.(SENT_WORDS)
+      const sent = await sendLogs({ deviceName, note, shots, head: headLines(logHeader({ deviceName, preset })), before: runsBefore(before) })
+      /* A picture that could not go is said in the same line: the report went without it. */
+      const words = [SENT_WORDS, shotsLostWords(sent?.shotsLost)].filter(Boolean).join(' ')
+      setSentSaid({ ok: true, words })
+      AccessibilityInfo.announceForAccessibility?.(words)
+      setNote('')
+      setShots([])
     } catch (err) {
       const words = err?.message || String(err)
       setSentSaid({ ok: false, words })
@@ -133,6 +144,15 @@ export default function Log({ onBack }) {
     }
   }, [])
 
+  /*
+   * The note, the pictures and Send stay while there is anything to send:
+   * this run's lines, the runs before (a report carries them, and after a
+   * crash they are the report), or a note or a picture already added. Clear
+   * Logs used to take the note box, the pictures and Send away with the lines
+   * (second review, 23 October 2026).
+   */
+  const sendable = Boolean(lines.length || before.length || note || shots.length)
+
   useEffect(() => {
     if (!said) return undefined
     const t = setTimeout(() => setSaid(null), 3000)
@@ -140,51 +160,14 @@ export default function Log({ onBack }) {
   }, [said])
 
   const copy = async () => {
-    const link = linkState()
-    /* Over Bluetooth (beta) no computer is in the chain: the far end is the
-       adapter, whose name link.js keeps as macName, and it has no version. */
-    const throughAdapter = bluetoothOn() && !isDemo()
-    const text = formatDebugLog({
-      app: `Fractal Remote (phone) v${APP_VERSION}`,
-      platform: `${Platform.OS} ${Platform.Version}`,
-      unit: deviceName || 'not detected',
-      preset: Number.isInteger(preset?.number) ? `${preset.number} ${preset.name || ''}`.trim() : 'none',
-      ...(throughAdapter
-        ? { link: `Bluetooth (beta), ${link.link}${link.macName && link.link !== 'off' ? `, through ${link.macName}` : ''}` }
-        : {
-            computer: link.macName || 'none',
-            /*
-             * The version at the other end, which is the thing that could not be
-             * answered from a pasted log before: "Does the Mac app need to be updated
-             * to the latest version?" A computer too old to say so is itself the
-             * answer, so that case is named rather than left blank.
-             */
-            'computer app': link.hostVersion || 'did not say (older than 7.205.0, or could not write it)',
-            link: link.link,
-            /*
-             * And with more than one on the account, which answered and which
-             * is driven: "computer: fractalpi" in a log from the AM4's Pi was
-             * whichever answered first. Absent with one computer, as before.
-             */
-            computers: link.hosts?.length > 1 ? `${link.hosts.join(', ')}; driving ${link.chosenHost || 'none of them'}` : undefined
-          })
-    },
     /*
-     * The previous run's tail goes in the same paste, under its own heading.
-     * If this launch is the one AFTER a crash, that block is the crash — and
-     * it is the half somebody actually needs.
+     * The head (lib/logHead logHeader: which build, unit, computer and link),
+     * and the previous runs' tails in the same paste, each under its own
+     * heading. If this launch is the one AFTER a crash, that block is the
+     * crash — and it is the half somebody actually needs. A report sent from
+     * here carries the same two, from the same place.
      */
-    before.length
-      ? before
-          .map((run, i) =>
-            [
-              `${i === 0 ? 'THE RUN BEFORE THIS ONE' : `${i + 1} RUNS AGO`} — ${run.lines.length} lines, oldest first, last written ${ended(run.at)}`,
-              '(if the app crashed or was killed, this is what it said on the way)',
-              ...run.lines
-            ].join('\n')
-          )
-          .join('\n\n')
-      : '')
+    const text = formatDebugLog(logHeader({ deviceName, preset }), runsBefore(before).join('\n\n'))
     try {
       await Clipboard.setStringAsync(text)
       setSaid(`Copied ${lines.length} line${lines.length === 1 ? '' : 's'}. Paste it into the chat.`)
@@ -194,7 +177,12 @@ export default function Log({ onBack }) {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      /* The note box sits at the foot of the screen and the keyboard covers it
+         on iOS. Android resizes the window itself (as the Feedback form says). */
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <View
         style={{
           flexDirection: 'row',
@@ -218,18 +206,29 @@ export default function Log({ onBack }) {
       </View>
 
       <View style={{ paddingHorizontal: space.lg, gap: space.sm, paddingBottom: space.sm }}>
-        <Press
-          label="Copy Logs"
-          /*
-            Named on the button, because it is the reason to press it after a
-            crash: the copy carries the end of the previous run as well as this
-            one, and after a crash that block is the crash.
-          */
-          sub={before.length ? `This run and the ${before.length === 1 ? 'one' : before.length} before it` : 'Then paste it into the chat'}
-          tone="signal"
-          onPress={copy}
-          disabled={!lines.length}
-        />
+        {/*
+          Copy and Clear side by side, as the browser's Debug log has them,
+          and far from Send. Clear came up here from the foot of the screen so
+          that the foot holds only Send and what it said, which then always
+          fit on the smallest phone (review, 23 October 2026).
+        */}
+        <View style={{ flexDirection: 'row', gap: space.sm }}>
+          <Press
+            label="Copy Logs"
+            grow
+            /*
+              Named on the button, because it is the reason to press it after a
+              crash: the copy carries the end of the previous run as well as this
+              one, and after a crash that block is the crash.
+            */
+            sub={before.length ? `This run and the ${before.length === 1 ? 'one' : before.length} before it` : 'Then paste it into the chat'}
+            tone="signal"
+            onPress={copy}
+            disabled={!lines.length}
+          />
+          {/* Not while a send is on its way: it reads the log after the computer has answered. */}
+          {lines.length ? <Press label="Clear Logs" disabled={sending} onPress={() => { clearDebugLog(); setLines([]) }} /> : null}
+        </View>
         {said ? <Note>{said}</Note> : null}
         {!lines.length ? (
           <Note>
@@ -240,6 +239,14 @@ export default function Log({ onBack }) {
       </View>
 
       <FlatList
+        /*
+          Its height is only what the rest leaves (flex 1 from nothing), so it
+          is the first to give up room: the note and the pictures shrink only
+          once it has none left, and Send never. So while the foot holds a
+          line, the scroller's cap comes down (below), or a tall line under
+          Send took the whole of it on a small phone.
+        */
+        style={{ flex: 1 }}
         data={[...lines].reverse()}
         keyExtractor={(entry, i) => `${entry.at}-${i}`}
         contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl, gap: space.xs }}
@@ -275,33 +282,82 @@ export default function Log({ onBack }) {
         }
       />
 
-      {lines.length ? (
-        <View style={{ padding: space.lg, gap: space.sm }}>
+      {sendable ? (
+        <>
           {/*
-            Newest first on screen, oldest first in the copy. Reading on a phone
-            you want the thing that just happened; reading a paste you want the
-            story in order.
+            THE NOTE AND THE PICTURES, in a scroller of their own: no more than
+            a third of the screen, and smaller still when the log list has no
+            room left to give (a small phone, the keyboard up). Never Send.
+            A fifth while the foot says something: on a 320 by 568 screen a
+            four-line answer under Send left the log list two points tall,
+            with the scroller still at its full third (second review).
+
+            A React Native ScrollView shrinks of its own accord, so Send under
+            it inside the same scroller was pushed below the screen on a small
+            phone, or by one screenshot, or by a long log, and what it said
+            after a send with it: the one tap became a scroll and a tap, and
+            "Sent" could be out of sight, which is the "there was no
+            confirmation" this button was made to answer (review, 23 October
+            2026).
           */}
+          <ScrollView
+            style={{ flexGrow: 0, flexShrink: 1, maxHeight: sentSaid ? '20%' : '35%' }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.md, gap: space.sm }}
+          >
+            {/*
+              Newest first on screen, oldest first in the copy. Reading on a phone
+              you want the thing that just happened; reading a paste you want the
+              story in order.
+            */}
+            <TextInput
+              value={note}
+              onChangeText={setNote}
+              editable={!sending}
+              multiline
+              maxLength={MAX_MESSAGE}
+              textAlignVertical="top"
+              placeholder={NOTE_PLACEHOLDER}
+              placeholderTextColor={color.silkFaint}
+              accessibilityLabel="What happened, if you want to say"
+              style={{
+                color: color.silk,
+                fontSize: font.body,
+                backgroundColor: color.panel,
+                borderWidth: 1,
+                borderColor: color.rule,
+                borderRadius: radius.md,
+                padding: space.md,
+                minHeight: 64,
+                lineHeight: 22
+              }}
+            />
+            <Shots shots={shots} onChange={setShots} disabled={sending} say={sayPaste} />
+          </ScrollView>
           {/* Sending beats copying, and until now copying was all there was:
               the log went into the clipboard and then had to survive being
               pasted somewhere, from a phone, after the thing that went wrong.
               Copy stays — a log pasted into a message to a bandmate is a real
-              use — but this is the one that reaches the person who can fix it. */}
-          <Press
-            label={sending ? 'Sending…' : 'Send logs to developer'}
-            tone="signal"
-            disabled={sending}
-            onPress={send}
-          />
-          {sentSaid ? (
-            <Note tone={sentSaid.ok ? 'hint' : 'fault'} strong size={font.body}>
-              {sentSaid.words}
-            </Note>
-          ) : null}
-          {/* Not while a send is on its way: it reads the log after the computer has answered. */}
-          <Press label="Clear Logs" disabled={sending} onPress={() => { clearDebugLog(); setLines([]) }} />
-        </View>
+              use — but this is the one that reaches the person who can fix it.
+              Fixed at the foot, never in the scroller: always on screen, and
+              what it said always under it, bright, bold and body-sized. What a
+              paste said goes there too, the latest of the two, in a fault
+              note's own size as under its button. */}
+          <View style={{ flexShrink: 0, paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.lg, gap: space.sm }}>
+            <Press
+              label={sending ? 'Sending…' : 'Send logs to developer'}
+              tone="signal"
+              disabled={sending}
+              onPress={send}
+            />
+            {sentSaid ? (
+              <Note tone={sentSaid.ok ? 'hint' : 'fault'} strong={!sentSaid.paste} size={sentSaid.paste ? undefined : font.body}>
+                {sentSaid.words}
+              </Note>
+            ) : null}
+          </View>
+        </>
       ) : null}
-    </View>
+    </KeyboardAvoidingView>
   )
 }

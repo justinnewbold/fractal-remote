@@ -294,16 +294,27 @@ Tracking Transparency entirely.
 
 | Data type | Collected | Linked to the user | Why |
 |---|---|---|---|
-| Contact Info → **Email Address** | Yes | Yes | Account sign-in, and answering a support message if they leave one |
+| Contact Info → **Email Address** | Yes | Yes | Account sign-in, and answering a support message: the address they leave, or, when they leave none and are signed in, the account's own (22 October 2026) |
 | User Content → **Other User Content** | Yes | Yes | Setlists, so they follow you between devices |
+| User Content → **Photos or Videos** | Yes | Yes | Screenshots somebody chooses to add to a bug report (up to three, pasted on a phone, picked on the website), sent only when they press Send. Added 22 October 2026: **not on the live label yet** |
+| User Content → **Customer Support** | Yes | Yes | What somebody writes in a bug report or suggestion: the Feedback form, and the note beside Send logs to developer. It was true before the note came, and was never on the label; add it with Photos or Videos. **Not on the live label yet** |
 | Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you |
 | Diagnostics → **Other Diagnostic Data** | Yes | Yes | The debug log, and only when somebody presses Send on a bug report |
 | Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices |
 | Diagnostics → **Crash Data** | Yes | No | After a launch that crashed, the phone's update check sends Expo the error message the app stopped on, so a broken update can be found and taken back. The privacy page says so. Added 11 October 2026: the live label does not have it yet, and it can be added any time in App Store Connect → App Privacy, with no build |
 
-Do **not** declare location, contacts, photos, audio, search history, browsing
+Do **not** declare location, contacts, audio, search history, browsing
 history or advertising data. None are collected — and the
 privacy page says so, so a wrong answer here contradicts a published document.
+Photos are declared only for the screenshots somebody adds to a report: the
+app has no access to the photo library (the phone pastes a copied screenshot,
+and asks nothing of the library), which the privacy page says too.
+
+**22 October 2026: two rows to add in App Store Connect → App Privacy**, both
+"used for App Functionality", linked to the user, not used for tracking:
+Photos or Videos, and Customer Support. And one to edit: Email Address's use
+now includes replying from the account's own address. None needs a build.
+Justin makes these; nothing here says they are done until he has.
 
 **Why the log is declared even though it is opt-in:** Apple asks what the app
 is *capable* of sending, not what it usually sends. Declaring it and being able
@@ -862,6 +873,18 @@ Diagnostics. Add these four, each **collected** and **not shared**:
 - **App activity → App interactions.** Optional (only inside a bug report,
   when Send is pressed). For Analytics. The debug log records the buttons
   pressed.
+
+And, from 22 October 2026 (screenshots in reports), one more, **collected**
+and **not shared**:
+
+- **Photos and videos → Photos.** Optional (only the screenshots somebody
+  adds to a bug report, up to three, sent when they press Send). For App
+  functionality. Not processed ephemerally: they are kept a week in storage
+  (an hour, if their report never arrived), and in the report's email.
+
+Email address, already declared, now also answers a report from the
+account's own address when nobody typed one: keep App functionality and
+Account management ticked for it. Nothing else changes.
 
 Keep **No data shared with third parties**: RevenueCat, Supabase, Resend and
 Expo only do their part of the job for the app. In the same form, check the

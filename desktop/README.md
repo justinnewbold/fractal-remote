@@ -216,8 +216,12 @@ What follows is for whoever reads a report from a Pi; the report's
 - **The kernel's buffer.** snd-seq-midi takes a USB-MIDI port's input into
   a buffer one memory page long, 4 KB on a Pi 3 or 4, and drops the rest:
   an AM4 preset is 12,352 bytes. The fix is one line,
-  `options snd-seq-midi input_buffer_size=65536`, in a file under
-  `/etc/modprobe.d/`, and a restart. A Pi 5's pages are 16 KB.
+  `options snd-seq-midi input_buffer_size=65536`, in
+  `/etc/modprobe.d/fractal-remote-midi.conf` (the file ForgeFX's AM4 driver
+  names when it sees the cut), and a restart. A Pi 5's pages are 16 KB. For a
+  player, the Pi guide says it step by step, with the check and the undo:
+  public/raspberry-pi.html, under "An AM4 on a Pi 3 or Pi 4"
+  (fractal.newbold.cloud/raspberry-pi#am4).
 - **ForgeFX's own reader.** From computer app 1.87.47 the unit's replies
   come in through ForgeFX's own ALSA client (a small `python3` reader with
   a 2000-cell queue, where RtMidi's has 200); output stays on RtMidi. It

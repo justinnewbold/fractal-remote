@@ -2354,6 +2354,134 @@ export function run(test) {
   })
 
   /*
+   * AN AM4 ON A PI 3 OR PI 4: ONE SETTING, WHERE A PLAYER WILL FIND IT.
+   *
+   * "The same names are not showing up again at all. on the AM4" (Justin,
+   * 21 October 2026, a Raspberry Pi 3). snd-seq-midi takes a USB-MIDI port's
+   * input into a buffer one memory page long: 4 KB on a Pi 3, 4 or 400, 16 KB
+   * on a Pi 5's own kernel, and an AM4 preset is 12,352 bytes. The fix he ran
+   * is one line and a restart, and it is the one ForgeFX's AM4 driver names
+   * when it sees the cut (am4BufferTooSmall) and desktop/README.md gives
+   * whoever reads a report. The guide says it for a player: which Pis, how he
+   * would notice, the line, the restart, a check that only reads, and the
+   * undo, after the setup and before what to do when something goes wrong,
+   * and every place a Pi owner with missing names looks points to it.
+   *
+   * Only the AM4. ForgeFX's check is the AM4's alone, and the FM3 is on
+   * serial, which this buffer is not on, so the entry names no other unit.
+   * And since 1.87.47 the loaded preset's names come from a small structure
+   * read (the pin's am4structnames), which is why it says "now and then".
+   *
+   * And no more than is known. The cut has been seen, on his Pi 3 (3,095
+   * bytes, then 3,863 twice, the shape the buffer predicts); the cure has
+   * not, and a Pi 4 has the same 4 KB but has never been seen losing any,
+   * so the entry says both plainly. The setting goes with the computer app's
+   * own 2000-cell reader (1.87.47): with 64 KB a whole dump can be in flight
+   * at once, more than RtMidi's 200 cells hold. And a number mistyped can
+   * lose the unit altogether: one that won't parse stops the module loading
+   * (the check then says No such file or directory), and one under 32 or
+   * over 1 MB makes the port refuse to open (rawmidi.c), so the check says
+   * what to do with an answer it doesn't list, and so does the trouble entry
+   * for a unit the app can't find.
+   */
+  test('the Pi guide gives an AM4 on a Pi 3 or Pi 4 its one setting, a check that only reads, and the undo', async () => {
+    const page = read('public/raspberry-pi.html').replace(/<!--[\s\S]*?-->/g, '')
+    const text = (s) =>
+      s
+        .replace(/<\/?(?:strong|em|a|code|span)\b[^>]*>/g, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/\s+/g, ' ')
+        .trim()
+    const HEAD = '<h2 id="am4">An AM4 on a Pi 3 or Pi 4</h2>'
+    const at = page.indexOf(HEAD)
+    const trouble = page.indexOf('<h2 id="trouble">')
+    assert.ok(at > -1, 'the guide has no entry for an AM4 on a Pi 3 or Pi 4')
+    assert.equal(page.split('id="am4"').length - 1, 1, 'two places on the guide answer to #am4')
+    assert.ok(at > page.lastIndexOf('</section>', trouble) && at < trouble, 'the AM4 entry is not after the four ways and before If something goes wrong')
+    const entry = page.slice(at, trouble)
+    const words = text(entry)
+
+    /* The three lines to type, each whole in one box, so nothing is copied in halves. */
+    const LINE = 'echo options snd-seq-midi input_buffer_size=65536 | sudo tee /etc/modprobe.d/fractal-remote-midi.conf'
+    const CHECK = 'cat /sys/module/snd_seq_midi/parameters/input_buffer_size'
+    const UNDO = 'sudo rm /etc/modprobe.d/fractal-remote-midi.conf'
+    for (const cmd of [LINE, CHECK, UNDO]) {
+      assert.equal(entry.split(`<code>${cmd}</code>`).length - 1, 1, `the AM4 entry does not give "${cmd}" to type, once, in one piece`)
+    }
+    /* The same option and file as ForgeFX's fix, as the lock and the computer app's README record it. */
+    assert.match(read('desktop/forgefx.lock.json'), /options snd-seq-midi input_buffer_size=65536/, 'the lock no longer records the fix the guide gives')
+    const readme = read('desktop/README.md')
+    for (const part of ['options snd-seq-midi input_buffer_size=65536', '/etc/modprobe.d/fractal-remote-midi.conf', 'raspberry-pi#am4']) {
+      assert.ok(readme.includes(part), `desktop/README.md no longer says ${part}`)
+    }
+
+    /* Which Pis, and why, in plain words. */
+    assert.match(words, /On a Raspberry Pi 3 or Pi 4, the Pi 400 included, give the Pi one setting for an AM4\./, 'the entry does not say which Pis need it')
+    assert.match(words, /sets aside 4 KB to catch what the AM4 sends, and a whole AM4 preset is about 12 KB\. A Pi 3 loses most of it on the way in\./, 'the entry does not say why')
+    /* What has been seen, and what hasn't: the loss on a Pi 3 only, and the cure nowhere yet. */
+    assert.match(words, /A Pi 4 or 400 sets aside the same 4 KB, though nobody has seen one lose any of a preset yet; the setting does it no harm, so give it the setting too\./, 'the entry says a Pi 4 loses the preset, which nobody has seen')
+    assert.ok(!/so most of it is lost on the way in/.test(words), 'the entry says every Pi 3 and Pi 4 loses most of a preset')
+    assert.match(words, /This setting is new\. What it fixes has been seen on a Pi 3, but the setting itself hasn’t yet been seen bringing the scene names back on a real Pi\. If it does on yours, or doesn’t, please say so: in the app, Settings → Troubleshooting → Feedback\./, 'the entry gives the setting as a known cure, and nobody has seen it work on a Pi yet')
+    assert.match(words, /A Pi 5, 500 or 500\+ sets aside 16 KB by itself, room for a whole preset, so it shouldn’t need this; the check below says for sure on any Pi\./, 'a Pi 5 owner is not told it should not need this')
+    /* How a player would notice, and why only now and then since the structure read. */
+    assert.match(words, /the scene buttons in the app show numbers, 1 to 4, where your AM4’s scene names should be/, 'the entry does not say how a player would notice')
+    assert.match(words, /From version 1\.87\.47 on, the computer app reads the loaded preset’s scene names a smaller way/, 'the entry does not say why the names may be missing only now and then')
+    assert.match(read('desktop/forgefx.lock.json'), /"tag": "[^"]*\+am4structnames\b/, 'the pinned ForgeFX no longer reads the loaded AM4 preset’s scene names off its structure, as the guide says')
+    /* The restart, the check's four answers, and the undo. */
+    assert.match(words, /Restart the Pi: Raspberry Pi menu → Shutdown → Reboot\. The setting comes on as the Pi starts\./, 'the entry does not say the setting needs a restart')
+    assert.match(words, /It only reads, and changes nothing\./, 'the entry does not say the check is safe to type')
+    /* Connect does not hand the clipboard over by itself: it is a button at the top of the window. */
+    assert.match(words, /On screen sharing you can paste it instead: copy the line from this page, click Paste to remote at the top of the screen sharing window, then right-click in Terminal and choose Paste\./, 'a reader on screen sharing is told to paste a line his own computer never handed to the Pi')
+    /* The computer app's own reader, which a whole dump in flight at once needs. */
+    assert.match(words, /It goes with the app on the Pi at version 1\.87\.47 or newer\. To see which it has: on your phone, Settings → Phone & computer shows the computer’s name and its version\./, 'the entry does not say which computer app the setting goes with')
+    assert.match(read('desktop/README.md'), /From computer app 1\.87\.47 the unit's replies\s+come in through ForgeFX's own ALSA client/, 'the computer app’s README no longer says 1.87.47 brought the reader the guide’s version line is about')
+    const { pairTitle } = await import('../shared/device-word.mjs')
+    assert.equal(pairTitle('phone'), 'Phone & computer', 'the phone’s Settings row the guide names was renamed')
+    for (const answer of [
+      '65536: the setting is on.',
+      '4096: it isn’t on yet.',
+      '16384: the room a Pi 5 sets aside by itself',
+      'Any other number: the line went in wrong. Type it again exactly as it is, or paste it, and restart.',
+      'No such file or directory: the Pi hasn’t picked up the AM4 yet.'
+    ]) {
+      assert.ok(words.includes(answer), `the check does not say what "${answer.split(':')[0]}" means`)
+    }
+    assert.match(words, /type the check again\. If it still says this after you gave the Pi the setting, the line went in wrong: type it again exactly as it is, or paste it, and restart\./, 'a value that stopped the module loading is sent to check the cable, and nothing else')
+    assert.match(words, /press Enter, and restart the Pi the same way\. The check then shows the Pi’s own size again\./, 'the undo does not say it needs a restart too')
+
+    /* The AM4 alone, and the device in hand never "this phone". */
+    assert.ok(!/\b(?:FM3|FM9|Axe-Fx|VP4)\b/.test(words), 'the AM4 entry names another unit, and only the AM4’s read is known to be cut')
+    assert.ok(!/this phone/i.test(words), 'the AM4 entry says "this phone"')
+
+    /* Pointed to from the page's own list, the Pi 3 notes, the trouble list and the support page. */
+    const nav = page.slice(page.indexOf('On this page:'), page.indexOf('</p>', page.indexOf('On this page:')))
+    assert.ok(nav.indexOf('href="#setup"') < nav.indexOf('href="#am4"') && nav.indexOf('href="#am4"') < nav.indexOf('href="#trouble"'), 'the page’s own list does not offer the AM4 entry where it sits')
+    const pi3 = page.slice(page.indexOf('<h3 id="pi3">'), page.indexOf('<h2 id="buy">'))
+    assert.match(text(pi3), /With an AM4, a Pi 3 also needs one setting so the AM4’s scene names come through: see An AM4 on a Pi 3 or Pi 4\./, 'a Pi 3 owner reading his own notes is not sent to the AM4 entry')
+    assert.ok(pi3.includes('href="#am4"'))
+    /* Every way ends by pointing to it, so a Pi 4 owner who only followed the setup finds it too. */
+    for (const way of ['mac', 'windows', 'linux', 'screen']) {
+      const at = page.indexOf(`<section class="way" id="${way}"`)
+      const panel = page.slice(at, page.indexOf('</section>', at))
+      const end = panel.slice(panel.lastIndexOf('</ol>'))
+      assert.match(end, /<p>With an AM4 on a Pi 3, Pi 4 or Pi 400, give the Pi one more setting: see <a href="#am4">An AM4 on a Pi 3 or Pi 4<\/a>\.<\/p>/, `the ${way} way ends without sending an AM4 on a Pi 3 or Pi 4 to its setting`)
+    }
+    /* A unit gone after the setting is a line gone in wrong. */
+    const findAt = page.indexOf('<h3>The app can’t find your unit</h3>')
+    const find = page.slice(findAt, page.indexOf('</ul>', findAt))
+    assert.match(text(find), /Went missing right after you gave the Pi the AM4 setting\? The line may have gone in wrong\./, 'a unit lost after the AM4 setting is not traced back to it')
+    assert.ok(find.includes('href="#am4"'))
+    const lostAt = page.indexOf('<h3>An AM4’s scene buttons show numbers, not names</h3>')
+    assert.ok(lostAt > trouble && lostAt < page.indexOf('<h2 id="gigs">'), 'If something goes wrong has nothing for an AM4’s missing scene names')
+    const lost = page.slice(lostAt, page.indexOf('</ul>', lostAt))
+    assert.match(text(lost), /A scene with no name on the AM4 shows only its number\. That is normal\. On a Pi 3 or Pi 4, give the Pi the one setting in An AM4 on a Pi 3 or Pi 4\./)
+    assert.ok(lost.includes('href="#am4"'), 'the trouble entry for missing scene names does not link the AM4 entry')
+    const support = read('public/support.html')
+    assert.match(support, /<h3>I want a Raspberry Pi on my pedalboard<\/h3>[\s\S]{0,700}With an AM4 on a Pi 3 or Pi 4,\s+give the Pi one setting for the AM4’s scene names: <a href="\/raspberry-pi#am4">/, 'the support page’s Pi answer does not send an AM4 owner to the setting')
+  })
+
+  /*
    * A RELEASE IS NOT DONE BECAUSE FOUR JOBS WENT GREEN.
    *
    * Twice in one evening a release shipped with a whole platform missing and

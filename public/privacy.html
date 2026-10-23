@@ -49,7 +49,7 @@
   <body>
     <main>
       <h1>Privacy</h1>
-      <p class="when">Fractal Remote · last updated 21 October 2026</p>
+      <p class="when">Fractal Remote · last updated 22 October 2026</p>
 
       <p class="lead">
         <strong>This app collects as little as it can.</strong> Your phone talks to your
@@ -159,6 +159,7 @@
         <tr><td>Your email, if you typed one</td><td>optional</td><td>optional</td></tr>
         <tr><td>Which account sent it, if you are signed in</td><td>yes</td><td>yes</td></tr>
         <tr><td>App version, your unit, your OS, screen size</td><td>yes</td><td>yes</td></tr>
+        <tr><td>Screenshots, only the ones you add</td><td>up to 3, optional</td><td>up to 3, optional</td></tr>
         <tr><td><strong>The debug log</strong></td><td>yes, and you can turn it off</td><td><strong>never</strong></td></tr>
       </table>
       <p>
@@ -169,15 +170,41 @@
       </p>
       <p>
         <strong>Send logs to developer</strong>, on the log page itself, sends a bug report at once:
-        this session&rsquo;s log, with nothing written. When the app is connected to the Fractal
+        this session&rsquo;s log, with a note if you type one in the box beside the button and
+        nothing written if you don&rsquo;t. When the app is connected to the Fractal
         Remote app on a computer, it also carries the computer&rsquo;s own record of its link to your
         unit — whether its connection to the unit is open, the ports it can see, and the last lines
         it logged — the same record the website&rsquo;s Copy Logs puts in a paste.
       </p>
       <p>
+        A log that goes with a report starts with the same few lines a copied log does: the app&rsquo;s
+        version, your unit (and, from the phone app, the preset), and which computer the app is connected to and its version.
+        On a phone it also carries the end of the last few times the app was open (the app keeps the
+        last 120 lines of each of its last three runs on the phone, so the run that ended in a crash
+        can be read), under its own heading, the same as Copy Logs does.
+      </p>
+      <p>
+        <strong>Screenshots.</strong> You can add up to three pictures to a report, on the log page,
+        the website&rsquo;s Debug log or the Feedback form. Only the ones you choose: on a phone you
+        copy a screenshot and paste it in (the app reads the clipboard only when you tap Paste a
+        screenshot, and your phone may ask you to allow that), and on the website you pick a file.
+        Each is made smaller before it is sent. They are stored privately for a week, readable
+        by nobody through the app, not even by you, and they go to the person who builds the app
+        with the report&rsquo;s email. A screenshot shows whatever was on the screen, so add only
+        ones you are happy for him to see.
+      </p>
+      <p>
         The log holds no preset contents, no audio, no password, and nothing else you have typed
         into the app. A report sent while signed in is linked to that account, so that deleting the
-        account deletes the report too.
+        account deletes the report, and its screenshots, too. A copy of each report, with its log and
+        screenshots, is also emailed to the person who builds the app when it is sent, and deleting a
+        report from the database cannot reach that email: deleting the account tells him which
+        reports went, and he deletes those emails too.
+      </p>
+      <p>
+        <strong>An answer.</strong> If you type an email address into the report, a reply goes
+        there. If you leave it empty and are signed in, a reply goes to the email address of the
+        account that sent it, the one you sign in with. Nothing else is done with it.
       </p>
 
       <h2>What is never collected</h2>
@@ -205,7 +232,9 @@
           Android phones ask for Nearby devices instead, and an iPhone asks only to use Bluetooth.
           The country RevenueCat notes, under <em>Unlocking the full version</em>, is worked out by
           RevenueCat from the internet connection, not from the phone's location.</li>
-        <li><strong>No contacts, photos, camera or microphone.</strong> None of them are used.</li>
+        <li><strong>No contacts, photo library, camera or microphone.</strong> None of them are
+          used. The only pictures the app ever sends are screenshots you choose to add to a report,
+          described above.</li>
         <li><strong>No audio.</strong> This app sends control messages to your unit. It does not
           record, stream or process sound.</li>
         <li><strong>Nothing is sold or shared with anyone</strong> for advertising or any other
@@ -217,8 +246,8 @@
         Purchase records are kept by RevenueCat. Accounts, setlists and reports are stored with
         <a href="https://supabase.com/privacy" rel="noreferrer">Supabase</a>, on servers in the
         United States. Every row is behind rules that tie it to the account that made it. Bug
-        reports can be written by anybody and read back by nobody through the app — only by the
-        person who builds it.
+        reports, and the screenshots added to them, can be written by anybody and read back by
+        nobody through the app — only by the person who builds it.
       </p>
       <p>
         <strong>What the person who builds it can see.</strong> Justin has a few pages in the app,
@@ -243,7 +272,8 @@
           account, which of those two it was, when he marked it, the time of the newest purchase it
           was about, and how many purchases it counted (with any card sale beside it) are
           kept, so it is not shown again unless they pay again.</li>
-        <li><strong>Messages</strong> — the bug reports and suggestions described above.</li>
+        <li><strong>Messages</strong> — the bug reports and suggestions described above, with their
+          screenshots, in his email.</li>
         <li><strong>Paid but no computer yet</strong> — each account with the full version that no
           computer app has signed in with: its email address and whether it is confirmed, how and
           when it got the full version (which store, a test purchase, or given by hand), and which
@@ -262,8 +292,8 @@
       <p>
         Emails this app sends (a link to confirm your address or reset a password, the desktop
         download link you asked for, the one telling a tester they have been given full access, the
-        email about setting up the computer and its one reminder, and bug reports on their way to
-        the person who builds it) go through
+        email about setting up the computer and its one reminder, and bug reports, with their log
+        and screenshots, on their way to the person who builds it) go through
         <a href="https://resend.com/legal/privacy-policy" rel="noreferrer">Resend</a>. RevenueCat,
         Supabase, Resend, <a href="https://expo.dev/privacy" rel="noreferrer">Expo</a> (the phone
         app's update checks) and
@@ -298,14 +328,21 @@
         <li><strong>A sale marked handled</strong> — the mark is kept until you delete the
           account.</li>
         <li><strong>Bug reports</strong> — until the problem is fixed and long enough afterward to
-          be sure, then deleted.</li>
+          be sure, then deleted, and the email of each with them.</li>
+        <li><strong>Screenshots added to a report</strong> — the stored copy is deleted a week after it
+          was sent, or an hour after if its report never arrived. Until the report itself is deleted,
+          the only other copy is in that report&rsquo;s email.</li>
       </ul>
 
       <h2>Deleting your data</h2>
       <p>
         <strong>In the app:</strong> Settings → your account → <strong>Delete account</strong>. It
-        deletes your account, your setlists, bug reports sent from that account, and every other
-        record kept under it, straight away and for good. A full version bought in the App Store or on
+        deletes your account, your setlists, bug reports sent from that account and their
+        screenshots, and every other
+        record kept under it, straight away and for good. Each of those bug reports was also emailed
+        to the person who builds the app when it was sent, with its log and screenshots, and the
+        app cannot reach his inbox: Delete account sends him a note listing them, and he deletes
+        those emails too. A full version bought in the App Store or on
         Google Play stays with your Apple ID or Google account, and Restore a purchase brings it back on
         a new account. One bought on the website or in the computer app, or given to you, belongs to the
         account and is deleted with it.
@@ -316,7 +353,8 @@
       </p>
       <p>
         <strong>Or by email:</strong> email <a href="mailto:justinnewbold@gmail.com">justinnewbold@gmail.com</a> and say what you
-        want removed — your account, your setlists, a report you sent, an address on the testers'
+        want removed — your account, your setlists, a report you sent (and the email of it he
+        received, with its screenshots), an address on the testers'
         waiting list, or all of it. No form and no
         account needed to ask. It will be done and you will get a reply confirming it.
       </p>
