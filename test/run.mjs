@@ -16030,6 +16030,29 @@ test('the computer app carries the server that keeps the AM4’s own tuner scree
 })
 
 /*
+ * And the device server answers only its own callers (ForgeFX 5350623,
+ * e849c58, 93c1530, on top of the tuner lease): Sign out on the computer
+ * signs out the computer only, a web page on the computer or someone on the
+ * Wi-Fi can no longer sign it out, sign it into another account or read its
+ * saved sign-in, and the relay's rule reads the path the router will match.
+ */
+test('the computer app carries the device server that answers only its own callers', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+am4tunerlease\+serverguard$/, 'the computer app carries a device server any web page can sign out')
+  assert.equal(lock.forgefx.commit, '93c153067c06834e9aef6cf06f62e5ed4f093f03')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  const why = lock._why.find((w) => /93c1530/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/scope 'local'/, /FORGEFX_ALLOWED_ORIGINS/, /config collection only/, /x-forgefx-via: relay/, /COMPUTER_NEEDED stays/, /three commits on top of 41a0c1b/]) {
+    assert.match(why, said)
+  }
+  const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
+  for (const row of ['Sign out on the computer with scope `local`', 'Answer only the device server\u2019s own callers'.replace('\u2019', "'"), 'Check the relay\u2019s rule on the path the router will match'.replace('\u2019', "'")]) {
+    assert.ok(mods.includes(row), `licences/MODIFICATIONS.md has no row for: ${row}`)
+  }
+})
+
+/*
  * And the keep is a lease (ForgeFX 41a0c1b), so a Close that never reaches
  * the computer (a phone gone flat or put away, a sign-out, a tab shut) can
  * no longer hold the AM4 on its tuner, muted, until the computer app is
@@ -16039,8 +16062,9 @@ test('the computer app carries the server that keeps the AM4’s own tuner scree
  */
 test('the computer app carries the server whose keep of the AM4’s own tuner ends by itself when nobody renews it', () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
-  assert.match(lock.forgefx.tag, /\+am4tunerkeep\+am4tunerlease$/, 'the computer app carries a keep that only a Close can end')
-  assert.equal(lock.forgefx.commit, '41a0c1b05d6172b057223c70565eec364dff4d67')
+  assert.match(lock.forgefx.tag, /\+am4tunerkeep\+am4tunerlease(\+|$)/, 'the computer app carries a keep that only a Close can end')
+  /* Pinned at 41a0c1b, or at a later commit of the same branch that carries it (the device server's guard, 93c1530, sits on top). */
+  assert.ok(['41a0c1b05d6172b057223c70565eec364dff4d67', '93c153067c06834e9aef6cf06f62e5ed4f093f03'].includes(lock.forgefx.commit), 'the pin moved off the tuner lease')
   assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
   for (const piece of ['am4tunercc', 'am4tunerkeep', 'am4boosttap', 'am4crossedcopy', 'am4keywrite', 'linuxmidi', 'vp4midi', 'quietMeters']) {
     assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
