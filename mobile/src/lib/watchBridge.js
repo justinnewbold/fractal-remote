@@ -123,8 +123,14 @@ export function useWatchBridge(picture, step) {
        * it a second late already. Every write below is bound by the deadline
        * counted from here (relay-rules TAP_DEADLINE_MS), exactly as a tap on
        * the phone's own screen is from the press.
+       *
+       * Heard by the phone's Swift, not by this listener: `at` is when the
+       * FractalWatch module took the request, and one it held while nothing
+       * listened (Play not yet open, or the app launched by the tap) keeps
+       * that time rather than starting a fresh 1.5 seconds up to fifteen
+       * seconds later. A build from before `at` sends none, and then it is now.
        */
-      const receivedAt = Date.now()
+      const receivedAt = Number.isFinite(event?.at) ? Math.min(event.at, Date.now()) : Date.now()
       const asleep = AppState.currentState !== 'active'
       logDebug('watch', cmd.do, `${JSON.stringify(cmd)}${asleep ? ' (woke the phone)' : ''}`)
       if (cmd.do === 'hello') {
