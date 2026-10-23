@@ -347,7 +347,7 @@ async function linkOnABench() {
     'bleLink.mjs': 'export const pokeBluetooth = () => {}\nexport const startBluetoothLink = () => {}\nexport const stopBluetoothLink = () => {}\n',
     'tapGate.mjs': read('mobile/src/lib/tapGate.js'),
     'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
-    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const startClean = () => { bench.order.push('startClean') }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const unitReadSince = () => bench.unitRead !== false\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\nexport const setOnScreen = () => {}\n",
+    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const startClean = () => { bench.order.push('startClean') }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const unitReadSince = () => bench.unitRead !== false\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\nexport const setOnScreen = (on) => { (bench.onScreen = bench.onScreen || []).push(on) }\n",
     'phone-note.mjs': "export const PHONE_NOTE_PATH = '/store/config/phone'\nexport const phoneNote = () => ({})\nexport const timeToTell = () => false\n",
     /* The relay as link.js hears it: the same order of news as relay.js gives it. */
     'relay.mjs': `
@@ -1865,6 +1865,42 @@ export function run(test) {
     assert.ok(first, 'a link that never came back after waking was never said')
     assert.ok(first.at - resumed >= 2000 && first.at - resumed < 2100, `NOT CONNECTED ${first.at - resumed} ms after the screen came on`)
     assert.equal(t.gate.linkIsDown(), true)
+  })
+
+  /*
+   * The AM4's own tuner is kept up while the app is on screen (rig
+   * keepUnitTuner), and the rig is told when it is put away. Put away is
+   * 'background'. iOS's 'inactive' is Control Center pulled down, Siri
+   * listening, the app switcher's first peek: Play is still there under it,
+   * and the tuner open on it was let go 15 seconds into one of those.
+   */
+  test('phone: Control Center or Siri over Play leaves the AM4 on its tuner; putting the app away lets it go', async () => {
+    const t = await linkOnABench()
+    t.link.startLink()
+    await t.clock.advance(1000)
+    assert.deepEqual(t.bench.onScreen, [true], 'the rig is not told the app is on screen at the start')
+    t.app.change('inactive')
+    assert.equal(t.bench.onScreen.at(-1), true, 'Control Center pulled down over Play was taken as the app put away')
+    t.app.change('active')
+    assert.equal(t.bench.onScreen.at(-1), true)
+    /* iOS goes through 'inactive' on the way to 'background', and back the same way. */
+    t.app.change('inactive')
+    t.app.change('background')
+    assert.equal(t.bench.onScreen.at(-1), false, 'the app put away is not said to the rig')
+    t.app.change('inactive')
+    t.app.change('active')
+    assert.equal(t.bench.onScreen.at(-1), true)
+  })
+
+  /* And a loop started with the app already inactive (a launch under Control Center): on screen. Started in the background: not. */
+  test('phone: a link started under Control Center keeps the AM4 on its tuner; one started in the background does not', async () => {
+    for (const [state, on] of [['inactive', true], ['background', false]]) {
+      const t = await linkOnABench()
+      t.app.change(state)
+      t.link.startLink()
+      await t.clock.advance(1000)
+      assert.equal(t.bench.onScreen?.at(-1), on, `a link started with the app ${state} told the rig ${t.bench.onScreen?.at(-1)}`)
+    }
   })
 
   test('phone: NOT CONNECTED before the phone slept is still NOT CONNECTED when it wakes, with no gap', async () => {
