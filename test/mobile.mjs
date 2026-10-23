@@ -658,6 +658,30 @@ export function run(test) {
     assert.match(read('.github/workflows/mobile.yml'), /It's all production now\./, 'mobile.yml no longer says why Android goes straight to production')
   })
 
+  test('the iPhone build fills the iPhone Duo: Xcode 27.1 by its full name, and the scene life cycle on', () => {
+    /*
+     * Only an app built with the iOS 27.1 SDK fills the Duo's inside screen;
+     * one built with the iOS 26 tools sits phone-sized in the middle of it.
+     * EAS's "auto" and "sdk-57" images are Xcode 26.6, and "latest" will move
+     * past 27.1, so the image is pinned by its full name. The iOS 27 SDK also
+     * refuses to launch an app without the scene life cycle (Apple TN3187),
+     * which expo-build-properties' ios.enableSceneSupport turns on: in the
+     * same plugin entry R8 added, never a second one. duo.yml opens the
+     * build on the newest simulator before a build slot is spent.
+     */
+    const eas = JSON.parse(read('mobile/eas.json'))
+    assert.equal(eas.build?.production?.ios?.image, 'macos-tahoe-26.6-xcode-27.1', 'the production iPhone build is not pinned to Xcode 27.1')
+    const plugins = JSON.parse(read('mobile/app.json')).expo.plugins.filter((p) => (Array.isArray(p) ? p[0] : p) === 'expo-build-properties')
+    assert.equal(plugins.length, 1, 'expo-build-properties is listed more than once')
+    assert.equal(plugins[0][1]?.ios?.enableSceneSupport, true, 'the scene life cycle is off: an iOS 27 SDK build would not launch')
+    assert.equal(plugins[0][1]?.android?.enableMinifyInReleaseBuilds, true, 'the scene switch took R8 out of the same entry')
+    const duo = read('.github/workflows/duo.yml')
+    assert.match(duo, /xcode-select -s \/Applications\/Xcode_27\.1\.app/)
+    assert.match(duo, /UIApplicationSceneManifest/)
+    assert.match(duo, /is not running 30 seconds after it was opened/)
+    assert.doesNotMatch(duo, /pull_request:/, 'duo.yml runs on every pull request, on a preview runner that may never start')
+  })
+
   test('the phone and the browser share every rule they must agree on, character for character', async () => {
     /*
      * The web app imports these directly; the phone gets a generated copy,

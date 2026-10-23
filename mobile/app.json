@@ -103,6 +103,9 @@
           "android": {
             "enableMinifyInReleaseBuilds": true,
             "extraProguardRules": "-keep class * extends androidx.room.RoomDatabase { <init>(); }\n-keep interface expo.modules.kotlin.records.Record\n-keep @interface expo.modules.kotlin.records.Field { *; }\n-keepnames class * extends expo.modules.kotlin.exception.CodedException"
+          },
+          "ios": {
+            "enableSceneSupport": true
           }
         }
       ],
