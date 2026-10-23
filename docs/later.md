@@ -192,6 +192,29 @@ scenes. Still on the list, not started:
   presets or sign it out. Found with it: Sign out in the computer app calls
   auth.signOut() with no scope (forgefx server/src/runtime/cloud.ts), which
   defaults to signing out every device on the account, phones included.
+  - **Found again on 23 October:** the device server answers CORS for any
+    origin (forgefx server/src/app.ts registers cors with `origin: true`),
+    and POST /cloud/delete-account and /cloud/logout take no check. So any
+    web page open on that computer, not only someone on the Wi-Fi, could
+    reach them. That is being fixed next in ForgeFX, after the AM4 tuner
+    work, in its own change.
+  - **GET /store/cloud over the relay** hands the computer's saved sign-in
+    (its access and refresh tokens) to any device on the account: the relay
+    refuses only GETs under /cloud and /remote, and the sign-in is kept in
+    the store's 'cloud' collection. Also next, in that same change.
+  - **Two parked items, with why.** Both came up on 23 October from "how
+    can a user remove old units they aren't connected to"; 1.87.53 says
+    under Which unit how to do it at the computer instead.
+    - A server-side "Computers on this account" page, for old sign-ins.
+      Parked because "off" can only be guessed, from 90 minutes with no
+      sign-in refresh (a MacBook asleep in a gig bag looks exactly like a
+      retired one), and removing a computer means deleting its
+      auth.sessions rows directly, which no supported Supabase Auth call
+      does.
+    - A phone-side remote sign-out. Parked because its "in use" check is a
+      guess (every device's first request on a link goes to every
+      computer), it works only on computers already updated to know it,
+      and undoing it means typing the password at that computer.
 - **No signal at the venue:** say "This phone isn't online" and offer the
   computer's page over the same Wi-Fi, with the setlists on it.
 - **A volume for the AM4**, with its four scene levels.
