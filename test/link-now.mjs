@@ -2765,9 +2765,11 @@ export function run(test) {
     assert.match(flat, /\{error && onOpenFix && fixFor\(error\) \? \(/)
     /*
      * Inside the scrolling content `down` only ever sets an opacity: never a
-     * row, never `disabled`. The one exception is handed on, not drawn: the
-     * tuner is a modal over the whole screen, and says it itself (the test
-     * after this one).
+     * row, never `disabled`. The one place it is handed on, not drawn, is the
+     * tuner, a modal over the whole screen that says it itself (the test
+     * after this one); it sits on Play's own frame now, outside the scrolling
+     * content (test/duo.mjs), and is taken out here all the same in case it
+     * ever comes back in.
      */
     const tunerTag = '<Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} down={down} />'
     assert.ok(stage.includes(tunerTag), 'the open tuner is not told the link is down')

@@ -1127,16 +1127,6 @@ export default function Stage({
             the bottom of somebody's phone.
           */}
           <Coach open={coach && !notesUp} stage={coachStage} onTry={tryCoach} onSkip={closeCoach} onDone={closeCoach} />
-          <Sheet open={watchTip && !coach && !notesUp} onClose={() => setWatchTip(false)} title="Your Apple Watch" note="Fractal Remote is on your watch">
-            <View style={{ gap: space.md }}>
-              {watchHow().map((line) => (
-                <Text key={line} style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
-                  {line}
-                </Text>
-              ))}
-              <Press label="Got it" tone="signal" on onPress={() => setWatchTip(false)} />
-            </View>
-          </Sheet>
 
           {/*
             A wrapped grid of coloured tiles, which is the browser's chain and
@@ -1404,56 +1394,77 @@ export default function Stage({
           top already says which unit is being driven and that the link is up,
           which is the part that goes on mattering.
         */}
-
-        {/*
-          The two things that cover the screen rather than sitting in it, drawn
-          last and outside the foot because both are modals.
-
-          The volume is not among them any more: the speaker moved to the bar at
-          the top of the app, which is where the browser keeps it, and the sheet
-          moved with the button that opens it. See components/TopBar.
-        */}
-        {/*
-          The channel picker, over the screen rather than inside it.
-
-          "When holding a block to change channel have it be an overlay on the
-          screen instead of inserting itself into the screen like the web
-          version." It opened underneath the chain, which pushed everything below
-          it down — so the tiles a thumb was aimed at moved while the thumb was on
-          its way, on the one screen where that can happen mid-song.
-        */}
-        {/*
-          Typing a tempo, high on the screen.
-
-          "When holding tap button to manually enter tempo the keyboard blocks the
-          numbers so you can see what your typing." It was in the foot — which is
-          where a thumb rests and therefore exactly where the keyboard opens.
-        */}
-        <TempoBox
-          open={typing}
-          bpm={bpm}
-          range={tempoRange(device, caps?.via)}
-          onSet={writeTempo}
-          onClose={() => setTyping(false)}
-        />
-
-        <ChannelSheet
-          block={chainNow.elsewhere || chainNow.outline ? null : blocks.find((b) => sameBlock(b, picking)) || null}
-          channels={channels}
-          onClose={() => setPicking(null)}
-          onPick={(ch) => {
-            writeChannel(picking, ch)
-            setPicking(null)
-          }}
-        />
-
-        <Sheet open={looping && !!looperHere && !chainNow.elsewhere} onClose={() => setLooping(false)} title="Looper">
-          {looperHere ? <Looper block={looperHere} /> : null}
-        </Sheet>
-
-        {/* Closing the tuner stops it at the unit, which is what the button does. It says NOT CONNECTED itself: nothing here is drawn over it. */}
-        <Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} down={down} />
       </ScrollView>
+
+      {/*
+        WHAT COMES UP OVER PLAY, on Play's own frame and never inside its
+        scrolling page: the tempo box, the channel picker, the Looper, the
+        tuner and the Apple Watch tip. Each is a modal, so where it sits in
+        here moves nothing on the screen; what it sits IN decides what can
+        take it away. Inside the page, anything that ever draws the page
+        again in another shape (the iPhone Duo opened or folded, an iPad's
+        divider dragged, a layout for a wider screen) could take an open
+        picker with it, and a tempo typed half-way into the box. This frame
+        is the one part of Play that every shape of screen keeps, so a resize
+        leaves each one open as it was.
+
+        The volume is not among them any more: the speaker moved to the bar at
+        the top of the app, which is where the browser keeps it, and the sheet
+        moved with the button that opens it. See components/TopBar.
+      */}
+      {/*
+        The channel picker, over the screen rather than inside it.
+
+        "When holding a block to change channel have it be an overlay on the
+        screen instead of inserting itself into the screen like the web
+        version." It opened underneath the chain, which pushed everything below
+        it down — so the tiles a thumb was aimed at moved while the thumb was on
+        its way, on the one screen where that can happen mid-song.
+      */}
+      {/*
+        Typing a tempo, high on the screen.
+
+        "When holding tap button to manually enter tempo the keyboard blocks the
+        numbers so you can see what your typing." It was in the foot — which is
+        where a thumb rests and therefore exactly where the keyboard opens.
+      */}
+      <TempoBox
+        open={typing}
+        bpm={bpm}
+        range={tempoRange(device, caps?.via)}
+        onSet={writeTempo}
+        onClose={() => setTyping(false)}
+      />
+
+      <ChannelSheet
+        block={chainNow.elsewhere || chainNow.outline ? null : blocks.find((b) => sameBlock(b, picking)) || null}
+        channels={channels}
+        onClose={() => setPicking(null)}
+        onPick={(ch) => {
+          writeChannel(picking, ch)
+          setPicking(null)
+        }}
+      />
+
+      <Sheet open={looping && !!looperHere && !chainNow.elsewhere} onClose={() => setLooping(false)} title="Looper">
+        {looperHere ? <Looper block={looperHere} /> : null}
+      </Sheet>
+
+      {/* Closing the tuner stops it at the unit, which is what the button does. It says NOT CONNECTED itself: nothing here is drawn over it. */}
+      <Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} down={down} />
+
+      {/* The Apple Watch's one-time tip, after the channel tip: a sheet like
+          the others, so on the frame with them. */}
+      <Sheet open={watchTip && !coach && !notesUp} onClose={() => setWatchTip(false)} title="Your Apple Watch" note="Fractal Remote is on your watch">
+        <View style={{ gap: space.md }}>
+          {watchHow().map((line) => (
+            <Text key={line} style={{ color: color.silk, fontSize: font.small, lineHeight: 21 }}>
+              {line}
+            </Text>
+          ))}
+          <Press label="Got it" tone="signal" on onPress={() => setWatchTip(false)} />
+        </View>
+      </Sheet>
 
       {/*
         NOT CONNECTED, OVER THE TILES AND NEVER AMONG THEM. "When the link

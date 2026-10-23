@@ -291,4 +291,55 @@ export function run(test) {
     again({ playWidth: 820, chainNow: here, tiles: 9, blockGrid: 140 }, 'held')
     assert.deepEqual(again({ playWidth: 820, chainNow: loading, tiles: 0, blockGrid: 140 }, 'held'), { count: 9, height: 140 })
   })
+
+  test('the tempo box, the channel picker, the Looper, the tuner and the watch tip sit on Play’s own frame, outside its scrolling page', () => {
+    /*
+     * Each is a modal, so where it sits moves nothing on the screen. What it
+     * sits IN decides what can take it away: inside the scrolling page,
+     * anything that draws the page again in another shape (the Duo opened or
+     * folded, an iPad's divider dragged, a wider layout) could take an open
+     * picker with it, and a tempo typed half-way into the box. Play's frame is
+     * the one part every shape keeps.
+     */
+    const ast = jsx(read('mobile/src/screens/Stage.js'))
+    let frame = null
+    traverse(ast, {
+      ExportDefaultDeclaration(path) {
+        path.traverse({
+          ReturnStatement(ret) {
+            if (ret.getFunctionParent()?.node !== path.node.declaration) return
+            const root = ret.node.argument
+            if (root?.type !== 'JSXElement') return
+            if (root.children.some((c) => c.type === 'JSXElement' && c.openingElement.name.name === 'ScrollView')) frame = root
+          }
+        })
+      }
+    })
+    assert.ok(frame, 'Play’s own frame, with its scrolling page in it, was not found; this check reads it')
+    assert.equal(frame.openingElement.name.name, 'View')
+    /* Its own children, drawn as they are and not behind a condition: each
+       opens and closes by its own `open`, so it is there in every shape. */
+    const kids = frame.children.filter((c) => c.type === 'JSXElement')
+    const named = (el) => el.openingElement.name.name
+    const title = (el) => el.openingElement.attributes.find((a) => a.name?.name === 'title')?.value?.value
+    for (const want of ['TempoBox', 'ChannelSheet', 'Tuner']) {
+      assert.ok(kids.some((k) => named(k) === want), `${want} is not on Play’s own frame`)
+    }
+    assert.ok(kids.some((k) => named(k) === 'Sheet' && title(k) === 'Looper'), 'the Looper’s sheet is not on Play’s own frame')
+    /* And the Apple Watch's one-time tip, the one other sheet Play has. */
+    assert.ok(kids.some((k) => named(k) === 'Sheet' && title(k) === 'Your Apple Watch'), 'the Apple Watch tip is not on Play’s own frame')
+    /* And nothing that comes up over the screen is left inside the page. */
+    const page = kids.find((k) => named(k) === 'ScrollView')
+    const inside = []
+    const look = (node) => {
+      if (!node || typeof node !== 'object') return
+      if (Array.isArray(node)) return node.forEach(look)
+      if (node.type === 'JSXOpeningElement' && node.name.type === 'JSXIdentifier') inside.push(node.name.name)
+      for (const [key, value] of Object.entries(node)) if (key !== 'loc' && key !== 'leadingComments' && key !== 'trailingComments') look(value)
+    }
+    look(page)
+    const overlays = ['TempoBox', 'ChannelSheet', 'Tuner', 'Sheet', 'Modal', 'Volume', 'PasswordBox']
+    assert.ok(inside.length > 20, 'the scrolling page was not read; this check reads it')
+    assert.deepEqual(inside.filter((n) => overlays.includes(n)), [], 'something that comes up over the screen is still inside the scrolling page')
+  })
 }

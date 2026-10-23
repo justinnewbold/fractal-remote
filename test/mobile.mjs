@@ -3183,12 +3183,18 @@ export function run(test) {
 
     /* Everything that pops up is drawn AFTER the content, outside the scrolling
        part of the screen — an overlay nested in the flow is an overlay that can
-       still push things around. */
+       still push things around. Outside the page itself, too, on Play's own
+       frame, so a page drawn again in another shape cannot take one with it
+       (test/duo.mjs holds that part); and still on Play, before its frame
+       closes. */
     const scroll = stage.indexOf('</ScrollView>')
+    const frameEnd = stage.indexOf('\n    </View>\n  )\n}\n', scroll)
+    assert.ok(frameEnd > scroll, 'Play’s own frame moved; this check reads it')
     for (const tag of ['<ChannelSheet', '<Tuner']) {
       const at = stage.indexOf(tag)
       assert.ok(at > 0, `${tag} is gone from the stage screen`)
-      assert.ok(at < scroll, `${tag} escaped the screen entirely`)
+      assert.ok(at > scroll, `${tag} is inside the scrolling page`)
+      assert.ok(at < frameEnd, `${tag} escaped the screen entirely`)
     }
     /* The volume is no longer one of them: its speaker moved to the bar at the
        top of the app, and the sheet went with the button that opens it. It is
