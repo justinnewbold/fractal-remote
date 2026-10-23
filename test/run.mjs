@@ -15945,9 +15945,15 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.ok(pages.includes('Text("Hold a pedal for its channels.")'), 'the watch does not say a pedal can be held')
   /* An AM4 amp's word, under its name: the phone's own (shared/am4-boost.mjs
      boostWord), never one the watch works out, and not under a tap still on
-     its way to the phone, where it would say the old boost under the new light. */
+     its way to the phone, where it would say the old boost under the new light,
+     nor beside another channel just picked, whose boost is the new channel's own
+     (the phone's Play tile has no word for it until it is read). */
   assert.match(pages, /Text\(pedal\.short\)[^}]*?\.minimumScaleFactor\(0\.6\)\s*if let word \{\s*Text\(word\)/, 'the watch does not draw an AM4 amp’s word under the pedal’s name')
-  assert.ok(pages.includes('word: pending[pedal.id] == nil ? pedal.wordLine : nil,'), 'the watch says the old boost under a tap still on its way')
+  assert.ok(pages.includes('word: wordNow(pedal),'), 'the watch draws a pedal’s word without asking whether the wrist is ahead of the phone')
+  const wordNow = pages.slice(pages.indexOf('private func wordNow('), pages.indexOf('private func press('))
+  assert.ok(wordNow.includes('guard pending[pedal.id] == nil else { return nil }'), 'the watch says the old boost under a tap still on its way')
+  assert.ok(wordNow.includes('if let picked = pendingChannel[pedal.id], picked != pedal.channel { return nil }'), 'the watch says the old channel’s boost beside a channel just picked')
+  assert.ok(wordNow.includes('return pedal.wordLine'), 'the watch never says an AM4 amp’s word')
   const pagesCode = pages.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
   assert.ok(!/"(Boost on|Boost off|Amp off)"/.test(pagesCode), 'the watch works out a boost word of its own, a second copy of Play’s rule')
   const tips = bridge.slice(bridge.indexOf('export const WATCH_HOW_OPEN'), bridge.indexOf('export function watchWakes'))

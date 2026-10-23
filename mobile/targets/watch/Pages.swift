@@ -88,6 +88,10 @@ struct ScenesPage: View {
  * says which dark it is. Every other pedal has no word and is drawn as
  * before. A tap still lights or darkens it at once, and its word waits for
  * the phone's answer rather than saying the old boost under the new light.
+ * So does a channel picked from the hold: an AM4's boost is the channel's
+ * own, and the phone's Play tile has no word for the new channel until its
+ * boost is read, so the wrist does not keep the old channel's word beside the
+ * new letter. Picked again, the channel it is on keeps its word, as on Play.
  */
 struct PedalsPage: View {
     let state: WatchState
@@ -121,7 +125,7 @@ struct PedalsPage: View {
                             pedal: pedal,
                             on: pending[pedal.id] ?? pedal.on,
                             channel: pendingChannel[pedal.id] ?? pedal.channel,
-                            word: pending[pedal.id] == nil ? pedal.wordLine : nil,
+                            word: wordNow(pedal),
                             press: { press(pedal) },
                             hold: { hold(pedal) },
                             open: { show(pedal.id) }
@@ -158,6 +162,16 @@ struct PedalsPage: View {
             guard link.demo, let id = Int(Launch.value("pick") ?? "") else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { show(id) }
         }
+    }
+
+    /**
+     * Its word, or none while the wrist is ahead of the phone: a tap on its
+     * way, or another channel picked, whose boost the old word is not.
+     */
+    private func wordNow(_ pedal: WatchPedal) -> String? {
+        guard pending[pedal.id] == nil else { return nil }
+        if let picked = pendingChannel[pedal.id], picked != pedal.channel { return nil }
+        return pedal.wordLine
     }
 
     /** A tap: on or off at once on the wrist, and the phone's answer confirms it. */
@@ -223,7 +237,7 @@ private struct PedalTile: View {
     let on: Bool
     /** What the phone said it is on, or the one just picked. */
     let channel: String?
-    /** An AM4 amp's boost in Play's words, under the name; nil for none, and while a tap waits for the phone. */
+    /** An AM4 amp's boost in Play's words, under the name; nil for none, and while a tap or another channel picked waits for the phone. */
     let word: String?
     let press: () -> Void
     let hold: () -> Void
