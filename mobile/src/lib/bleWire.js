@@ -1275,8 +1275,11 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     unitClosing: false,
     unitShapes: new Map(),
     unitKeepAt: 0,
-    unitKeepNote: null
+    unitKeepNote: null,
+    unitKeepAway: null
   }
+  /* The app off screen (screenOff/screenOn, from the link's AppState): the AM4's own tuner is not kept up meanwhile. */
+  let offScreen = false
 
   function reading(event) {
     const word = event.note ? `${event.note}${event.octave ?? ''}` : ''
@@ -1909,7 +1912,17 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * (`unitOpen`), nor on a connection that opened nothing.
    */
   async function keepUnitTuner(run) {
-    const owed = () => tuner.on && tuner.run === run && tuner.unitOpen && !!tuner.unitCc && !tuner.unitClosing
+    /*
+     * And only while the app has stayed on screen through this tuner
+     * (`unitKeepAway`, the run it went off screen in). On an iPhone the code
+     * stops in a pocket and the AM4 lets go; the first tick back found the
+     * keep overdue and put the AM4 back on its tuner, muted, before Close
+     * could be tapped. On Android the ticks go on in a pocket, holding the
+     * AM4 on its tuner against a footswitch. Off screen even once, this tuner
+     * is not kept up again; opening it again starts afresh.
+     */
+    if (offScreen) tuner.unitKeepAway = run
+    const owed = () => tuner.on && tuner.run === run && tuner.unitOpen && !!tuner.unitCc && !tuner.unitClosing && tuner.unitKeepAway !== run
     if (!owed() || time.now() < tuner.unitKeepAt) return false
     const was = tuner.unitCc
     tuner.unitKeepAt = time.now() + AM4_TUNER_KEEP_MS
@@ -2031,6 +2044,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     tuner.run++
     tuner.lastNote = null
     const run = tuner.run
+    /* Opened with the app off screen (a watch, a drop healed in a pocket): not kept up (keepUnitTuner). */
+    if (offScreen) tuner.unitKeepAway = run
     let says = 'unknown'
     try {
       says = await openUnitTuner(run, deadline)
@@ -2275,6 +2290,17 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     polls.run++
     if (polls.timer !== null) time.clearTimeout(polls.timer)
     polls.timer = null
+  }
+
+  /** The app went off screen: the AM4's own tuner open now is not kept up again (keepUnitTuner). */
+  function screenOff() {
+    offScreen = true
+    if (tuner.on) tuner.unitKeepAway = tuner.run
+  }
+
+  /** Back on screen. A tuner that was open while it was away stays not kept up; a new one is. */
+  function screenOn() {
+    offScreen = false
   }
 
   /* ================================================================ */
@@ -2627,6 +2653,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     unitTunerOpen: () => am4 && !closed && (tuner.unitOpen || tuner.unitClosing),
     startPolls,
     stopPolls,
+    screenOff,
+    screenOn,
     check,
     /** How each command is sent now, and what auto has learned. */
     methods: methodsCopy,

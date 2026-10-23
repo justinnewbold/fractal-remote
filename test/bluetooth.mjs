@@ -2826,6 +2826,51 @@ export function run(test) {
     t.wire.close()
   })
 
+  /*
+   * KEPT UP ONLY WHILE THE APP STAYS ON SCREEN. On an iPhone the code stops
+   * in a pocket and the AM4 lets go; the first tick back found the keep
+   * overdue and put the AM4 back on its tuner, muted, before Close could be
+   * tapped. On Android the ticks go on in a pocket, holding the AM4 on its
+   * tuner against a footswitch. Off screen even once, that tuner is not kept
+   * up again; the readings and the Close go on as before, and the next open
+   * is kept up afresh.
+   */
+  test('the AM4’s own tuner is not kept up once the app has gone off screen during it, not even on the way back', async () => {
+    const t = await onTheLine('am4', { unitTunerCc: 20 })
+    await t.post('/tuner', { on: true })
+    await advance(t.clock, 3000 + 400)
+    assert.deepEqual(t.unit.state.tunerHeard.map(hex), ['B0 14 7F', 'B0 14 7F'], 'not kept up on screen')
+    t.wire.screenOff()
+    t.unit.state.tunerOpen = false
+    await advance(t.clock, 3000 * 4)
+    assert.deepEqual(t.unit.state.tunerHeard.map(hex), ['B0 14 7F', 'B0 14 7F'], 'a 127 went with the app off screen')
+    t.wire.screenOn()
+    await advance(t.clock, 3000 * 4)
+    assert.deepEqual(t.unit.state.tunerHeard.map(hex), ['B0 14 7F', 'B0 14 7F'], 'a 127 went on the way back, before Close could be tapped')
+    assert.equal(t.unit.state.tunerOpen, false, 'the AM4 was put back on its tuner')
+    assert.ok(readingsOf(t).length > 50, 'the readings stopped')
+    assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true, unitTuner: 'closed' })
+    assert.equal(hex(t.unit.state.tunerHeard.at(-1)), 'B0 14 00', 'the Close did not send its 0')
+    /* Opened again, on screen: kept up again. Opened while off screen: not. */
+    await t.post('/tuner', { on: true })
+    await advance(t.clock, 3000 + 400)
+    assert.deepEqual(t.unit.state.tunerHeard.slice(3).map(hex), ['B0 14 7F', 'B0 14 7F'], 'a tuner opened again was not kept up')
+    await t.post('/tuner', { on: false })
+    t.wire.screenOff()
+    const before = t.unit.state.tunerHeard.length
+    await t.post('/tuner', { on: true })
+    t.wire.screenOn()
+    await advance(t.clock, 3000 * 3)
+    assert.equal(t.unit.state.tunerHeard.length, before + 1, 'a tuner opened off screen was kept up once back')
+    await t.post('/tuner', { on: false })
+    t.wire.close()
+    /* And the link tells the wire, both ways, and on a connection made in a pocket. */
+    const link = readFileSync(new URL('../mobile/src/lib/bleLink.js', import.meta.url), 'utf8')
+    assert.match(link, /^  wire\?\.stopPolls\(\)\n  \/\*[^\n]*\*\/\n  wire\?\.screenOff\(\)\n\}/m, 'the app going off screen does not reach the wire')
+    assert.match(link, /^      wire\.startPolls\(\)\n      wire\.screenOn\(\)$/m)
+    assert.match(link, /^  \} else made\.screenOff\(\)$/m, 'a connection made off screen keeps the AM4 on its tuner')
+  })
+
   test('the FM3’s tuner is left exactly as it was: nothing new at three seconds', async () => {
     const t = await onTheLine('fm3')
     await t.post('/tuner', { on: true })
