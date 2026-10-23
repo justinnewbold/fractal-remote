@@ -727,22 +727,65 @@ export function unitNotSaid(asking = false) {
 }
 
 /**
+ * THE NAMES THAT ONLY ONE COMPUTER ANSWERS TO, in the order they answered.
+ * A name two computers share cannot be asked of one of them: asked by it,
+ * both answer. So it is never asked its unit (relay.js and remote.js
+ * readUnits, link.js askUnknownUnits), never chosen for nobody
+ * (firstUnitHost), and never offered as where a unit is (unitElsewhere).
+ */
+export const onceNames = (hosts = []) => hosts.filter((name, i) => hosts.indexOf(name) === i && hosts.lastIndexOf(name) === i)
+
+/*
+ * TWO COMPUTERS ANSWERING TO ONE NAME. Raspberry Pi Imager fills in the last
+ * Hostname it was given, so a new Pi 5 can arrive named like the old one.
+ * Neither can be asked its unit, so "Asking it which unit…" under each was
+ * never going to end in an answer. Said instead under each of them. A name is
+ * the computer's own (desktop/lib/host.mjs prettyHostname, the system's
+ * hostname): Fractal Remote has no rename of its own, and the computer app
+ * reads the new one when it starts again.
+ */
+export const sharedName = (name) => `Two computers are called ${name}, so they can’t be told apart. Switch one off, or give one a new name and restart it.`
+
+/**
+ * HOW A COMPUTER YOU DON'T USE COMES OFF THE LIST. "How can a user remove old
+ * units they aren't connected to": the list is a roll call, never kept, and a
+ * computer only leaves it by not answering. Nothing here can make it stop
+ * (a hide that still let it carry out writes, or still asked it its unit,
+ * would be worse than none), so the line says what does, at that computer:
+ * Turn off in its Phone remote fold, which it keeps through a restart
+ * (desktop/lib/host.mjs remote.host wanted:false), or switching it off. The
+ * roll call is taken once per link (relay.js remoteCountDue), so the list
+ * changes on a fresh one: the app closed all the way and opened again, or
+ * the page reloaded. A computer this end picked stays, as not answering,
+ * with Forget (missingPickRow).
+ *
+ * `where` is 'app' (the phone app) or 'page' (the website), said by the
+ * caller and never read off the device kind: Safari on an iPad is the page.
+ */
+export function notUsingOne(where) {
+  const fresh = where === 'page' ? 'Then reload this page' : 'Then close Fractal Remote here all the way (swipe it away) and open it again'
+  return `Not using one of these? On that computer, open Fractal Remote, go to Settings → Phone & computer → Phone remote and press Turn off, or switch that computer off. ${fresh}: it’s gone from this list. If you had picked it, it says not answering: press Forget. Turn off lasts until someone presses Turn on there.`
+}
+
+/**
  * The buttons under Which unit, one per computer that answered.
  *
  * The unit leads and the computer follows: "FM3", then "on Justin's MacBook
  * Pro". A computer with nothing plugged in still gets a button — it answered,
  * and it is the one somebody plugs a unit into next — but says so, and goes
  * after the ones with a unit on them. `asking` is while one that has not
- * said is asked again (UNIT_ASK_MS).
+ * said is asked again (UNIT_ASK_MS). A name two computers answer to says so
+ * (sharedName): it is never asked, so it never says.
  */
 export function unitChoices(hostNames = [], units = {}, chosen = null, asking = false) {
+  const once = onceNames(hostNames)
   const rows = hostNames.map((name, i) => {
     const unit = units?.[name] || null
     return {
       name,
       key: `${name}-${i}`,
       label: unit ? (unit.plugged ? unit.model : 'No unit plugged in') : name,
-      detail: unit ? `on ${name}` : unitNotSaid(asking),
+      detail: !once.includes(name) ? sharedName(name) : unit ? `on ${name}` : unitNotSaid(asking),
       plugged: Boolean(unit?.plugged),
       on: name === chosen
     }
@@ -763,7 +806,7 @@ export function unitChoices(hostNames = [], units = {}, chosen = null, asking = 
  * remembered — a choice somebody makes under Which unit is, and outranks it.
  */
 export function firstUnitHost(hostNames = [], units = {}) {
-  const once = hostNames.filter((name, i) => hostNames.indexOf(name) === i && hostNames.lastIndexOf(name) === i)
+  const once = onceNames(hostNames)
   return once.find((name) => units?.[name]?.plugged) || once[0] || null
 }
 
@@ -810,8 +853,7 @@ export function unitElsewhere({ hosts = [], units = {}, chosen = null, unitState
   if (!Array.isArray(hosts) || hosts.length < 2 || !chosen || !hosts.includes(chosen)) return null
   if (unitState === 'present' || unitState === 'silent') return null
   if (unitState !== 'missing' && units?.[chosen]?.plugged !== false) return null
-  const once = hosts.filter((name, i) => hosts.indexOf(name) === i && hosts.lastIndexOf(name) === i)
-  const others = once.filter((name) => name !== chosen && units?.[name]?.plugged === true).map((name) => ({ name, model: units[name].model }))
+  const others = onceNames(hosts).filter((name) => name !== chosen && units?.[name]?.plugged === true).map((name) => ({ name, model: units[name].model }))
   return others.length ? { here: chosen, others } : null
 }
 

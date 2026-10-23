@@ -72,7 +72,7 @@ import { computerChanged } from './deviceState.js'
  * a code, and nothing makes one any more.
  */
 import { isPairAccount } from '../../shared/pairing.mjs'
-import { ELSEWHERE_WATCH_MS, LINK_DOWN_HOLD_MS, linkDownAt, metersRefused, timeToQuietMeters, UNIT_ASK_MS } from '../../shared/relay-rules.mjs'
+import { ELSEWHERE_WATCH_MS, LINK_DOWN_HOLD_MS, linkDownAt, metersRefused, onceNames, timeToQuietMeters, UNIT_ASK_MS } from '../../shared/relay-rules.mjs'
 import { setLinkAway, setLinkDown, setTapsRelayed } from './tapGate.js'
 import { PHONE_NOTE_ID, phoneNote, timeToTell } from '../../shared/phone-note.mjs'
 import { holders } from '../../shared/editors.mjs'
@@ -801,7 +801,8 @@ export function askUnknownUnits() {
   if (askingUnits) return askingUnits
   const hosts = remoteHosts()
   const known = remoteUnits()
-  const unknown = hosts.filter((name) => !known[name])
+  /* Only a name one computer answers to: a shared one is never asked (readUnits), so it is never said to be asked again either. */
+  const unknown = onceNames(hosts).filter((name) => !known[name])
   if (hosts.length < 2 || !unknown.length) return Promise.resolve(known)
   set({ unitsAsking: true })
   askingUnits = (async () => {
