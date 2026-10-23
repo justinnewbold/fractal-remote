@@ -32,7 +32,7 @@
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parse } from '@babel/parser'
 import babelTraverse from '@babel/traverse'
@@ -43,6 +43,15 @@ const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 /* Comments out, so a check reads the code and not its explanation. */
 const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ')
 const jsx = (src) => parse(src, { sourceType: 'module', plugins: ['jsx'] })
+
+/*
+ * A file's path from the repository, with / between folders on every
+ * computer. The suite runs on Windows too (desktop.yml), where a path off
+ * the disk says mobile\src\screens\Stage.js, and a check that compares it
+ * with 'mobile/src/screens/Stage.js' fails there and nowhere else.
+ */
+const REPO = fileURLToPath(new URL('..', import.meta.url))
+const fromRepo = (file) => relative(REPO, file).split(sep).join('/')
 
 /** Every .js the phone app is made of: App.js and everything under src. */
 function phoneFiles() {
@@ -126,7 +135,7 @@ function everyUse(tag, prop) {
         const attr = path.node.attributes.find((a) => a.type === 'JSXAttribute' && a.name.name === prop)
         const value = attr?.value?.type === 'JSXExpressionContainer' ? attr.value.expression : null
         const name = value?.type === 'Identifier' ? value.name : null
-        found.push({ file: file.replace(/^.*\/mobile\//, 'mobile/'), line: path.node.loc.start.line, name, imported: !!name && fromShape.has(name) })
+        found.push({ file: fromRepo(file), line: path.node.loc.start.line, name, imported: !!name && fromShape.has(name) })
       }
     })
   }
@@ -1074,7 +1083,7 @@ export function run(test) {
     /* Its readers are the phone's own: Play and the sheets over it. */
     const readers = phoneFiles()
       .filter((f) => /from '\.\.?\/(lib\/)?playShape'/.test(readFileSync(f, 'utf8')))
-      .map((f) => f.replace(/^.*\/mobile\//, 'mobile/'))
+      .map(fromRepo)
     for (const want of ['mobile/src/screens/Stage.js', 'mobile/src/components/Sheet.js']) assert.ok(readers.includes(want), `${want} does not read lib/playShape`)
   })
 
