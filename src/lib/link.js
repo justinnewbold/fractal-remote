@@ -51,8 +51,14 @@ import {
   remoteChosenHost,
   remoteReadsAskedOf,
   remoteCountDue,
+  remoteCountOwed,
+  remoteMissingPick,
+  refreshUnits,
+  keepDriven,
+  forgetMissingPick,
   pickHost,
   subscribeSwitching,
+  subscribeMixed,
   signOut,
   remoteSignUp
 } from './remote.js'
@@ -66,7 +72,7 @@ import { computerChanged } from './deviceState.js'
  * a code, and nothing makes one any more.
  */
 import { isPairAccount } from '../../shared/pairing.mjs'
-import { LINK_DOWN_HOLD_MS, linkDownAt, metersRefused, timeToQuietMeters } from '../../shared/relay-rules.mjs'
+import { ELSEWHERE_WATCH_MS, LINK_DOWN_HOLD_MS, linkDownAt, metersRefused, timeToQuietMeters } from '../../shared/relay-rules.mjs'
 import { setLinkAway, setLinkDown, setTapsRelayed } from './tapGate.js'
 import { PHONE_NOTE_ID, phoneNote, timeToTell } from '../../shared/phone-note.mjs'
 import { holders } from '../../shared/editors.mjs'
@@ -492,6 +498,16 @@ let state = {
   units: {},
   /** remote role: which of them requests are addressed to, or null. */
   chosenHost: null,
+  /** remote role: a pick that did not answer while another is driven in its place (remote.js remoteMissingPick): Play says so. */
+  missingPick: null,
+  /**
+   * remote role: when a roll call last found the screen built out of several
+   * computers' answers (remote.js subscribeMixed), or 0. App takes the unit
+   * off the screen then, Looking… in the bar, until the one driven is read.
+   */
+  mixedAt: 0,
+  /** remote role: when the last roll call's findings came in, or 0 (afterCount). */
+  countedAt: 0,
   // Why the last pairing from a scanned code failed, for the connect screen.
   pairError: null,
   /*
@@ -676,6 +692,11 @@ async function countHosts() {
 async function afterCount(before, run) {
   try {
     await run
+    /* Cut short by a drop, and owed: taken again now if the computer is answering, else when it does (countIfDue). Nothing it found is put to use. */
+    if (remoteCountOwed()) {
+      set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), missingPick: remoteMissingPick(), clash: hostConflict() })
+      return countIfDue()
+    }
     /*
      * One of two picked: its name, read again now that it is asked of that
      * computer alone, and what was read while the roll call listened goes
@@ -688,7 +709,8 @@ async function afterCount(before, run) {
       if (remoteReadsAskedOf() !== remoteChosenHost()) computerChanged()
       readMacName()
     }
-    set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+    set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), missingPick: remoteMissingPick(), clash: hostConflict(), countedAt: Date.now() })
+    /* (`countedAt`: a count is in, for App to read the unit again after a mix on screen whatever it chose: mixedAt.) */
     /* The roll call picked a computer: tell that one, whatever answered first before (see metersAgain). */
     if (remoteChosenHost() !== before) {
       metersAgain()
@@ -709,7 +731,8 @@ async function afterCount(before, run) {
  * on the web app.
  */
 function countIfDue() {
-  if (state.role !== 'remote' || !state.account || joining || !remoteHostSeen() || !remoteCountDue()) return
+  /* A count cut short by a drop is taken again the moment the computer answers on the channel that came back, a join under way or not (remote.js recountOwed). */
+  if (state.role !== 'remote' || !state.account || (joining && !remoteCountOwed()) || !remoteHostSeen() || !remoteCountDue()) return
   afterCount(remoteChosenHost(), censusHosts({ late: true }))
 }
 
@@ -722,7 +745,9 @@ function countIfDue() {
  *
  * Another computer: another unit, read by App from a clean start
  * (deviceState.computerChanged), told by remote.js the moment it switches,
- * before any read is asked of the new one; and its own name.
+ * before any read is asked of the new one; and its own name. A proof the
+ * link dropped under is counted again with the rest (remote.js provePick,
+ * told through subscribeHosts), now if the computer is answering.
  */
 export async function chooseHost(name) {
   await pickHost(name)
@@ -731,6 +756,48 @@ export async function chooseHost(name) {
   quietMeters()
   readMacName()
   return state.clash
+}
+
+/*
+ * The units asked again while the page says the unit is on another computer
+ * (App's notice, shared/relay-rules.mjs unitElsewhere): at once and every
+ * ELSEWHERE_WATCH_MS until it goes, reads only (remote.js refreshUnits). The
+ * phone's link.js watchUnits, the same. Returns the way to stop.
+ */
+export function watchUnits() {
+  let stopped = false
+  let timer = null
+  const again = async () => {
+    timer = null
+    if (stopped) return
+    try {
+      await refreshUnits()
+    } catch {
+      // Asked again in a moment.
+    }
+    if (stopped) return
+    set({ units: remoteUnits() })
+    timer = setTimeout(again, ELSEWHERE_WATCH_MS)
+  }
+  again()
+  return () => {
+    stopped = true
+    if (timer) clearTimeout(timer)
+  }
+}
+
+/** Keep this one, on Play's card for a pick that never answers (remote.js keepDriven). */
+export function keepThisOne() {
+  const kept = keepDriven()
+  set({ missingPick: remoteMissingPick() })
+  return kept
+}
+
+/** Forget, beside a pick that does not answer under Which unit (remote.js forgetMissingPick). */
+export function forgetMissing() {
+  const gone = forgetMissingPick()
+  set({ missingPick: remoteMissingPick() })
+  return gone
 }
 
 /**
@@ -1063,12 +1130,21 @@ export async function bootLink() {
   })
   /* Which unit moving to another computer, before a read is asked of it: the unit's reads from the one left are dropped (deviceState.computerChanged). */
   subscribeSwitching(() => computerChanged())
+  /* A screen built out of several computers' answers: dropped the same way, and App takes it down until the one driven is read (mixedAt). */
+  subscribeMixed(() => {
+    computerChanged()
+    set({ mixedAt: Date.now() })
+  })
   /*
    * The roll call is re-taken by the write gate now, not only here, so its
    * answer has to reach the screen from wherever it was taken. Without this the
    * notice would still be up over a link the gate had just cleared.
    */
-  subscribeHosts(() => set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() }))
+  subscribeHosts(() => {
+    set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), missingPick: remoteMissingPick(), clash: hostConflict() })
+    /* A count or a pick's proof the link dropped under: counted again, now if the computer is answering (remote.js recountOwed). */
+    if (remoteCountOwed()) countIfDue()
+  })
 
   if (role === 'mac') {
     await readMac()

@@ -263,6 +263,9 @@ import {
   signOutHere,
   recheckHosts,
   chooseHost,
+  keepThisOne,
+  forgetMissing,
+  watchUnits,
   faultCopy,
   nextDelay
 } from './lib/link'
@@ -278,8 +281,12 @@ import {
   loadRemoteConfig,
   sendPasswordReset,
   subscribeRemoteState,
-  unitChoices
+  unitChoices,
+  missingPickCard,
+  missingPickRow,
+  unitElsewhereCard
 } from './lib/remote'
+import { CardButtons, MissingRow } from './components/ComputerCard'
 import { newEntry, append } from './lib/log'
 import { watchEvery, probeUnit, countQuiet, unitGone } from '../shared/unit-watch.mjs'
 
@@ -1156,6 +1163,9 @@ export default function App() {
    * the demo takes the computer's.
    */
   const linkShowsDown = link.down === true && !isDemo()
+  /* A pick under Which unit that never answers, while another computer is driven in its place (remote.js remoteMissingPick). */
+  const missingCard = missingPickCard({ missing: link.missingPick, driving: link.chosenHost, hosts: link.hosts, units: link.units })
+  const missingRow = missingPickRow(link.missingPick)
   // What the notice says when the unit cannot be read — by role, in one tested
   // place, and nothing at all until the role is known.
   const fault =
@@ -1169,6 +1179,31 @@ export default function App() {
           userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : ''
         })
       : null
+  /*
+   * THE UNIT IS ON ANOTHER COMPUTER: the one driven answered with no unit,
+   * and another computer on the account has one (shared/relay-rules.mjs
+   * unitElsewhere, judged by plugged, never the model). The notice says
+   * both, with a button for each computer with a unit, Which unit's own
+   * proved pick, in place of "the computer can't see your unit", which sent
+   * him to check a cable that was fine. The units are asked again while it
+   * is up (link.js watchUnits). The phone's Play says it in the same words.
+   */
+  /*
+   * And A PICK THAT NEVER ANSWERS, the one driven in its place with no unit
+   * either: named in that notice, with its two ways out, as on the phone's
+   * Play, where it is said before where any unit is. The Gig card that says
+   * it otherwise is only on Play, which this notice stands in for.
+   */
+  const missingHere =
+    link.role === 'remote' && status === 'fault' && device?.connected === false
+      ? missingPickCard({ missing: link.missingPick, driving: link.chosenHost, hosts: link.hosts, units: link.units, unitState: 'missing' })
+      : null
+  const elsewhere =
+    link.role === 'remote' && status === 'fault' && device?.connected === false && !missingHere
+      ? unitElsewhereCard({ hosts: link.hosts, units: link.units, chosen: link.chosenHost, unitState: 'missing' })
+      : null
+  const watchingUnits = Boolean(elsewhere)
+  useEffect(() => (watchingUnits ? watchUnits() : undefined), [watchingUnits])
   /*
    * What came back, when the notice above has nothing specific to say.
    *
@@ -1638,6 +1673,26 @@ export default function App() {
    */
   const liveRef = useRef(false)
   /*
+   * WHEN A ROLL CALL LAST FOUND THE SCREEN BUILT OUT OF SEVERAL COMPUTERS'
+   * ANSWERS (link.mixedAt, remote.js subscribeMixed): the MacBook's FM3 in
+   * the bar over a Pi's "no device". The unit comes off the screen then,
+   * Looking… in the bar, and a read that was out when it happened puts none
+   * of what it brings up; the read after the roll call, of the one driven,
+   * does (the effect on chosenHost, below). The phone's Play the same
+   * (rig.startClean, header and all).
+   */
+  const mixedRef = useRef(0)
+  /* Whether the unit is still to be read again for that mix: by any read begun after it (the effect on chosenHost's), or once the count is in. */
+  const mixReadOwed = useRef(false)
+  useEffect(() => {
+    if (!link.mixedAt || link.mixedAt === mixedRef.current) return
+    mixedRef.current = link.mixedAt
+    mixReadOwed.current = true
+    setDevice(null)
+    setStatus('idle')
+    setError(null)
+  }, [link.mixedAt])
+  /*
    * Whether a read is already in flight, for the timed check below to stand
    * clear of. In a ref rather than the dependency list: the check is a loop
    * that schedules itself, and restarting that loop every time a button goes
@@ -1663,6 +1718,9 @@ export default function App() {
    */
   const read = useCallback(async (opts) => {
     const settling = opts?.settling === true
+    /* A mix of computers' answers found while this read was out: what it brings is not put up (mixedRef). One begun after it is the read it was owed. */
+    const mixAt = mixedRef.current
+    mixReadOwed.current = false
     setBusy(true)
     setError(null)
     let fresh = null
@@ -1711,6 +1769,7 @@ export default function App() {
         },
         ...(settling ? { least: SETTLING_TRIES, gap: SETTLING_MS } : {})
       })
+      if (mixedRef.current !== mixAt) return null
       setAsks(asked)
       setDevice(info)
       if (!info?.connected) {
@@ -1729,6 +1788,7 @@ export default function App() {
       unitRead(currentDeviceSlug(), { demo: isDemo(), since: unitAt })
       doneReading = beginChainRead()
       const [p, b] = await Promise.all([currentPreset(), presetBlocks()])
+      if (mixedRef.current !== mixAt) return null
       setPreset(p)
       followUnitName(p)
       /*
@@ -1871,6 +1931,12 @@ export default function App() {
     if (remoteReadsAskedOf() === link.chosenHost) return
     if (link.role === 'remote' && link.chosenHost) read()
   }, [link.chosenHost, link.role, read])
+  /* And after a mix on screen, the unit is read again once the count is in, whichever computer it chose: the screen was taken down for it (mixedAt). */
+  useEffect(() => {
+    if (!mixReadOwed.current || !link.countedAt || link.role !== 'remote') return
+    mixReadOwed.current = false
+    read()
+  }, [link.countedAt, link.role, read])
 
   /*
    * Below read(), and that is not a matter of taste.
@@ -4376,9 +4442,20 @@ export default function App() {
         />
       ) : status === 'fault' && fault ? (
         <div className="notice" data-kind="fault">
-          <h2>{fault.title}</h2>
-          <p>{fault.body}</p>
-          {faultWhy ? <p className="hint">What came back: {faultWhy}</p> : null}
+          <h2>{elsewhere ? elsewhere.title : fault.title}</h2>
+          {missingHere ? <p>{missingHere.words}</p> : null}
+          {missingHere ? (
+            <CardButtons
+              buttons={[
+                { label: missingHere.keep, onClick: () => keepThisOne() },
+                { label: missingHere.list, onClick: () => setSheet('units') }
+              ]}
+            />
+          ) : null}
+          <p>{elsewhere ? elsewhere.words : fault.body}</p>
+          {/* Switching… on the one pressed while its pick is proved, as on the phone's card and the Which unit sheet. */}
+          {elsewhere ? <CardButtons buttons={elsewhere.buttons.map((b) => ({ key: b.name, label: b.label, onClick: () => chooseHost(b.name) }))} /> : null}
+          {faultWhy && !elsewhere ? <p className="hint">What came back: {faultWhy}</p> : null}
           {/* Which account this is, and whether a computer on this wifi is on
               another one — see AccountCheck. */}
           <AccountCheck link={link} />
@@ -4414,7 +4491,8 @@ export default function App() {
             line it looks like the same dead red notice it was when the only
             thing still asking was a thumb.
           */}
-          <p className="notice-note">Still checking every few seconds — this comes back on its own.</p>
+          {/* Not over the unit on another computer: it does not come back to this one by itself, and the way out is its button. */}
+          {elsewhere ? null : <p className="notice-note">Still checking every few seconds — this comes back on its own.</p>}
         </div>
       ) : null}
 
@@ -4669,6 +4747,22 @@ export default function App() {
             setSetupPage('colours')
           }}
           onError={setError}
+          /*
+           * A PICK THAT NEVER ANSWERS, named on Play with the computer driven
+           * in its place, and the two ways out: keep the one driven, or the
+           * list. In the phone's words (shared/relay-rules.mjs missingPickCard).
+           */
+          card={
+            link.role === 'remote' && missingCard
+              ? {
+                  words: missingCard.words,
+                  buttons: [
+                    { label: missingCard.keep, onClick: () => keepThisOne() },
+                    { label: missingCard.list, onClick: () => setSheet('units') }
+                  ]
+                }
+              : null
+          }
           /* A VP4's words about a preset picked from the list, for the band over the tiles (vp4Said). */
           said={vp4Said}
           /* A typed tempo, or a burst of taps once it settles and if the
@@ -4892,6 +4986,7 @@ export default function App() {
               }}
             />
           ))}
+          {missingRow ? <MissingRow row={missingRow} onForget={() => forgetMissing()} /> : null}
         </div>
       </Sheet>
 
@@ -5937,6 +6032,7 @@ export default function App() {
                       }}
                     />
                   ))}
+                  {missingRow ? <MissingRow row={missingRow} onForget={() => forgetMissing()} /> : null}
                 </div>
               </Section>
             ) : null}

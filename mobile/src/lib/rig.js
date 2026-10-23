@@ -354,7 +354,14 @@ export function computerChanged() {
   syncChainBusy()
 }
 
-export function startClean() {
+/*
+ * `header`: what the bar and the card at the top say goes too, the unit's
+ * name, whether it is there, the fault and the preset, for a screen built
+ * out of several computers' answers (link.js, relay.js subscribeMixed): Play
+ * says Looking… until the computer driven has been read, rather than one
+ * computer's unit over another's card.
+ */
+export function startClean({ header = false } = {}) {
   unitEra += 1
   unitSettled = false
   changedAt = 0
@@ -378,7 +385,22 @@ export function startClean() {
   taps = []
   unitBpm = null
   boostEra += 1
-  set({ sceneNames: [], chain: 'idle', chainFor: null, chainKnown: null, bpm: null, boost: null })
+  set({
+    sceneNames: [],
+    chain: 'idle',
+    chainFor: null,
+    chainKnown: null,
+    bpm: null,
+    boost: null,
+    /*
+     * And the rest of the other unit with the header: its pedals and what it
+     * says it can do (the slot count, the scene tiles). Left up, Play said
+     * Looking… over the MacBook FM3's chain, lit as it was, eight scene
+     * tiles and "OF 512" while the AM4 was being read, where the browser
+     * shows nothing of it. Play then shows what it shows before a first read.
+     */
+    ...(header ? { deviceName: '', unit: 'unknown', error: null, errorLink: false, preset: null, sceneIndex: 0, blocks: [], allBlocks: [], capabilities: null } : {})
+  })
   syncChainBusy()
 }
 

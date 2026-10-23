@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { Text, View } from 'react-native'
 
 import { unitChoices } from '../lib/relay'
-import { chooseHost } from '../lib/link'
+import { chooseHost, forgetMissing } from '../lib/link'
 import { color, font, space } from '../lib/theme'
 import Press from './Press'
 import Sheet from './Sheet'
+import MissingPick from './MissingPick'
 
 /**
  * Which unit, one tap from the name in the corner, when more than one is on.
@@ -21,7 +22,7 @@ import Sheet from './Sheet'
  * once the new unit has been read: the screen behind it is now a different
  * rig, which is the thing worth looking at.
  */
-export default function LiveUnit({ open, onClose, hosts = [], units = {}, chosen = null }) {
+export default function LiveUnit({ open, onClose, hosts = [], units = {}, chosen = null, missing = null }) {
   const [busy, setBusy] = useState(null)
 
   return (
@@ -48,6 +49,8 @@ export default function LiveUnit({ open, onClose, hosts = [], units = {}, chosen
             <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{row.detail}</Text>
           </View>
         ))}
+        {/* The pick that does not answer, grayed, with Forget. */}
+        <MissingPick name={missing} onForget={() => forgetMissing()} />
       </View>
     </Sheet>
   )

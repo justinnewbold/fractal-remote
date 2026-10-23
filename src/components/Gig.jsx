@@ -33,6 +33,7 @@ import {
   songWouldLandLate,
   tapDeadline
 } from '../lib/remote'
+import ComputerCard from './ComputerCard'
 import { linkAwayMs } from '../lib/tapGate'
 import { downBandTop } from '../lib/downBand'
 import { STAGE_HIDDEN } from '../lib/guardrails'
@@ -134,6 +135,13 @@ export default function Gig({
   /* Settings → Colors, which the colours' one-time line opens when pressed. */
   onOpenColours,
   onError: raiseInPage,
+  /*
+   * Which computer this is on, when that is the question (App: a pick under
+   * Which unit that never answers, the one driven in its place): its words
+   * and its buttons, { words, buttons }, at the top of the screen. Null
+   * otherwise, and always with one computer. See components/ComputerCard.
+   */
+  card = null,
   /* A VP4's words App was handed — a preset picked from the list — for the band below: { words, at }. */
   said = null,
   onChanged,
@@ -937,6 +945,7 @@ export default function Gig({
           : {})
       }}
     >
+      {card ? <ComputerCard words={card.words} buttons={card.buttons} /> : null}
       {/*
         The name, big, and only the name.
         The unit and the slot are in the bar above this, at every moment, on

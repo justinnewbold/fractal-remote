@@ -82,7 +82,9 @@ import OnlyOnThisPhone from '../components/OnlyOnThisPhone'
 import ColoursNotice from '../components/ColoursNotice'
 import Toast, { useStillNews } from '../components/Toast'
 import { droppedLeft, faultLeft } from '../lib/fault-rule'
-import { NOT_CONNECTED } from '../lib/relay-rules'
+import { NOT_CONNECTED, missingPickCard, unitElsewhereCard } from '../lib/relay-rules'
+import { chooseHost, keepThisOne, watchUnits } from '../lib/link'
+import ComputerCard from '../components/ComputerCard'
 import Note from '../components/Note'
 import NoComputerWords from '../components/NoComputer'
 import SendLinkButton from '../components/SendLinkButton'
@@ -118,6 +120,11 @@ const ofFaultAt = (s) => s.faultAt
 const ofSlug = (s) => s.deviceSlug
 const ofBoost = (s) => s.boost
 const ofLastUnit = (s) => s.lastUnit
+const ofUnit = (s) => s.unit
+/* The raw words a computer with nothing plugged in answers every unit read with (ForgeFX, registryCore). */
+const NO_DEVICE = /no fractal device found/i
+/* The fault for the card at the top, but not those words while Play says where the unit is instead. */
+const noDevice = (fault, where) => (where && NO_DEVICE.test(String(fault)) ? null : fault)
 
 /**
  * The stand, not the bench.
@@ -140,6 +147,15 @@ export default function Stage({
   onAccount,
   /* Settings → Colors, which the colours' one-time line opens when pressed (components/ColoursNotice). */
   onOpenColours,
+  /*
+   * THE COMPUTERS ON THE ACCOUNT, from App (link.js's own word for them):
+   * every one that answered, the units on them, the one driven, and a pick
+   * that does not answer. With two or more, Play says when the one driven is
+   * not the one picked, or has no unit while another has (ComputerCard).
+   * \`onOpenUnits\` opens Which unit off the unit's name.
+   */
+  computers = null,
+  onOpenUnits,
   /*
    * NO COMPUTER HAS EVER SIGNED IN WITH THIS ACCOUNT, for certain: the email
    * to name, from App (lib/useNoComputer.js), and null for anything less
@@ -207,7 +223,24 @@ export default function Stage({
    * its state out here is how the keyboard came to be covering it.
    */
   const [typing, setTyping] = useState(false)
-  const fault = useRig(ofError)
+  const unitState = useRig(ofUnit)
+  /* A pick that never answers, named with the computer driven in its place, and whether that one has a unit (shared relay-rules missingPickCard). */
+  const missingCard = missingPickCard({ missing: computers?.missingPick, driving: computers?.chosenHost, hosts: computers?.hosts, units: computers?.units, unitState })
+  /*
+   * THE UNIT IS ON ANOTHER COMPUTER (shared relay-rules unitElsewhere): the
+   * one driven has none, and another on the account has one. Said with a
+   * button for each, in place of the raw "No Fractal device found" card,
+   * which said nothing about where the unit was: that fault is not the card
+   * at the top while this is up (`fault`, below). Not over a pick that never
+   * answers, which is said first. The units are asked again while it is up
+   * (link.js watchUnits).
+   */
+  const elsewhereCard = unitElsewhereCard({ hosts: computers?.hosts, units: computers?.units, chosen: computers?.chosenHost, unitState })
+  const whereCard = missingCard ? null : elsewhereCard
+  const watchingUnits = Boolean(whereCard)
+  useEffect(() => (watchingUnits ? watchUnits() : undefined), [watchingUnits])
+  /* Nor under the card for a pick that never answers: floated over it, the raw words hid its first sentence. That card says the one driven has no unit. */
+  const fault = noDevice(useRig(ofError), whereCard || missingCard)
   const faultLink = useRig(ofErrorLink)
   const faultAt = useRig(ofFaultAt)
   const dropped = useRig(ofDropped)
@@ -847,6 +880,18 @@ export default function Stage({
         {/* "Match your unit’s colors in Settings", once: last, after every other note. Pressed, it opens Settings → Colors. */}
         <ColoursNotice waiting={notesUp || coach || watchTip} unanswered={coachPending || watchPending} onOpen={onOpenColours} />
         {conflict ? <Note tone="fault">{conflict}</Note> : null}
+        {missingCard ? (
+          <ComputerCard
+            words={missingCard.words}
+            buttons={[
+              { label: missingCard.keep, onPress: () => keepThisOne() },
+              ...(onOpenUnits ? [{ label: missingCard.list, onPress: () => onOpenUnits() }] : [])
+            ]}
+          />
+        ) : null}
+        {/* Each button is Which unit's own proved pick: nothing switches until it is pressed. */}
+        {/* The unit over the computer, as Which unit has them: one line cut the computer's name on a narrow phone. */}
+        {whereCard ? <ComputerCard words={whereCard.words} buttons={whereCard.buttons.map((b) => ({ key: b.name, label: b.short, sub: b.sub, onPress: () => chooseHost(b.name) }))} /> : null}
 
         {/* ---------------------------------------------------------- preset */}
         <View style={{ gap: space.sm }}>
@@ -903,8 +948,9 @@ export default function Stage({
             preset and the unit saying what it is called. The slot is already in
             the line above, so nothing here is a guess. See rig.loadPreset.
           */}
+          {/* And while nothing is read at all (Looking…): no preset is not one named "Untitled". */}
           <Press
-            label={preset?.pending && !preset?.name ? '…' : presetLabel(preset)}
+            label={(preset?.pending && !preset?.name) || (!preset && unitState === 'unknown') ? '…' : presetLabel(preset)}
             sub={onOpenPresets ? 'Tap for all presets' : undefined}
             /* No list picture on the left any more: "take that off of that
                one", and make the name "a little bit bigger". The chevron on

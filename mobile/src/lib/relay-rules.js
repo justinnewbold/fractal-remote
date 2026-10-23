@@ -749,6 +749,97 @@ export function firstUnitHost(hostNames = [], units = {}) {
   return once.find((name) => units?.[name]?.plugged) || once[0] || null
 }
 
+/*
+ * A PICK THAT NEVER ANSWERS, SAID ON PLAY. A computer picked under Which
+ * unit that did not answer the roll call at all (renamed, switched off, or
+ * signed out) leaves the phone driving the first computer with a unit, as
+ * 1.87.47 did (firstUnitHost): a renamed Pi would otherwise leave the stage
+ * dead. Nothing on Play said so, and the unit on screen was not the one
+ * picked. Now it is said, with the one driven instead, and two ways out:
+ * keep the one driven as the pick (so it is not said again), or the list.
+ *
+ *   fractalpi, picked under Which unit, isn’t answering. Playing the FM3 on
+ *   MacBook Pro SG 566.
+ *
+ * Only with two or more computers answering, and only while one is driven
+ * that is not the pick (relay.js remoteMissingPick). Both ends, these words.
+ */
+/*
+ * THE UNIT IS ON ANOTHER COMPUTER. "Every time I open the app now, it shows
+ * this": Play driving raspberry pi 3, the computer picked under Which unit,
+ * with nothing plugged into it, and the raw "No Fractal device found on any
+ * serial or MIDI port" card, while his FM3 was on the MacBook. Nothing on
+ * Play said where the unit was; only Settings did, two pages in. So when
+ * the computer driven has no unit and another computer on the account has
+ * one, Play says both, and offers each computer with a unit as a button:
+ *
+ *   raspberry pi 3 has no unit plugged in. Your FM3 is on MacBook Pro SG 566.
+ *   [Use the FM3 on MacBook Pro SG 566]
+ *
+ * The button is Which unit's own proved pick (link chooseHost): nothing
+ * moves until it is pressed, and then nothing is written before the new
+ * computer is proved to be asked alone.
+ *
+ * BY `plugged`, NEVER BY THE MODEL. A computer with nothing plugged in still
+ * reports a model, FM3, ForgeFX's default profile (registryCore deviceInfo),
+ * so a model alone says nothing about whether a unit is there. The one
+ * driven has none when the rig says so (`unitState` 'missing', its own
+ * detect) or the roll call did (`plugged` false), and never while the rig
+ * says one is answering. Only with two or more computers, and only those with
+ * a name of their own: two answering to one name cannot be asked apart.
+ */
+export function unitElsewhere({ hosts = [], units = {}, chosen = null, unitState = null } = {}) {
+  if (!Array.isArray(hosts) || hosts.length < 2 || !chosen || !hosts.includes(chosen)) return null
+  if (unitState === 'present' || unitState === 'silent') return null
+  if (unitState !== 'missing' && units?.[chosen]?.plugged !== false) return null
+  const once = hosts.filter((name, i) => hosts.indexOf(name) === i && hosts.lastIndexOf(name) === i)
+  const others = once.filter((name) => name !== chosen && units?.[name]?.plugged === true).map((name) => ({ name, model: units[name].model }))
+  return others.length ? { here: chosen, others } : null
+}
+
+/**
+ * Play's words for it, and one button per computer with a unit: "Use the FM3
+ * on MacBook Pro SG 566". Also in two halves, for a button whose label is
+ * one line (the phone's Press): "Use the FM3" over "on MacBook Pro SG 566",
+ * as Which unit puts the unit over the computer. On one line a 320-wide
+ * phone cut the computer's name, the reason the button is there.
+ */
+export function unitElsewhereCard(facts = {}) {
+  const found = unitElsewhere(facts)
+  if (!found) return null
+  const where = found.others.map(({ name, model }, i) => `${i === 0 ? 'Your' : 'your'} ${model} is on ${name}`)
+  const list = where.length < 3 ? where.join(', and ') : `${where.slice(0, -1).join(', ')}, and ${where[where.length - 1]}`
+  return {
+    /* For a notice with a heading of its own (the browser's, where Play cannot open without a unit). */
+    title: found.others.length > 1 ? 'Your units are on other computers' : 'Your unit is on another computer',
+    words: `${found.here} has no unit plugged in. ${list}.`,
+    buttons: found.others.map(({ name, model }) => ({ name, label: `Use the ${model} on ${name}`, short: `Use the ${model}`, sub: `on ${name}` }))
+  }
+}
+
+/** How often the units are asked again while that card is up: as often as the unit watch asks a missing unit (rig MISSING_WATCH_MS). */
+export const ELSEWHERE_WATCH_MS = 10000
+
+export const KEEP_THIS_ONE = 'Keep this one'
+export const WHICH_UNIT_LIST = 'Which unit…'
+/**
+ * Play's words for a pick that never answers, with the computer driven in
+ * its place. `unitState` is the rig's word for the unit on it: 'missing'
+ * is said too ("which has no unit plugged in"), as the roll call's plugged
+ * false is, since this card then stands in for the raw "No Fractal device
+ * found" fault, which floated over its first sentence and hid it.
+ */
+export function missingPickCard({ missing = null, driving = null, hosts = [], units = {}, unitState = null } = {}) {
+  if (!missing || !driving || missing === driving || hosts.length < 2 || hosts.includes(missing) || !hosts.includes(driving)) return null
+  const unit = units?.[driving]
+  const none = unitState === 'missing' || unit?.plugged === false
+  const playing = unit?.plugged && !none ? `Playing the ${unit.model} on ${driving}.` : none ? `Using ${driving} instead, which has no unit plugged in.` : `Using ${driving} instead.`
+  return { words: `${missing}, picked under Which unit, isn’t answering. ${playing}`, keep: KEEP_THIS_ONE, list: WHICH_UNIT_LIST }
+}
+
+/** The same pick under Which unit: listed, grayed, with a way to forget it. */
+export const missingPickRow = (name) => (name ? { name, label: `${name} — not answering`, forget: 'Forget' } : null)
+
 /**
  * THE ROLL CALL, IN ONE LINE OF THE LOG.
  *
@@ -764,8 +855,18 @@ export function firstUnitHost(hostNames = [], units = {}) {
  * `why` is how the one driven was chosen: 'pick' (picked under Which unit)
  * or 'first' (nobody picked: firstUnitHost). `missing` is a pick that did
  * not answer.
+ *
+ * `proof` is how many answered when the one driven was asked alone (the
+ * proof that asking it by name leaves the others out): one is addressed,
+ * two or more is a computer app too old to know names, and NONE IS NOT
+ * THAT. An answer lost, or a computer gone quiet, used to be logged as an
+ * old computer app, which sent whoever read the log off to update one that
+ * was fine; and the one driven is asked by name all the same (relay.js
+ * remoteRequest), so it is addressed, only not proved. `cut` is a count the
+ * link dropped under before it was done (relay.js takeCensus): what it heard
+ * is not the answer, and it is taken again when the link is back.
  */
-export function rollCallLine({ hosts = [], units = {}, chosen = null, why = null, addressed = false, missing = null } = {}) {
+export function rollCallLine({ hosts = [], units = {}, chosen = null, why = null, addressed = false, missing = null, proof = null, cut = false } = {}) {
   const count = ['no computers', 'one computer', 'two computers', 'three computers'][hosts.length] || `${hosts.length} computers`
   const unitOf = (name) => {
     const unit = units?.[name]
@@ -774,11 +875,18 @@ export function rollCallLine({ hosts = [], units = {}, chosen = null, why = null
   }
   const heard = `${count} answered${hosts.length ? `: ${hosts.map((name) => `${name}${unitOf(name)}`).join(', ')}` : ''}`
   const gone = missing ? `; ${missing}, the one picked under Which unit, did not answer` : ''
+  if (cut) return `${heard}; the link dropped before the count was done: counted again when the link is back`
   if (hosts.length < 2 || !chosen) return `${heard}${gone}${hosts.length > 1 ? '; driving none of them: two share a name' : ''}`
   const reason = why === 'pick' ? 'the one picked under Which unit' : units?.[chosen]?.plugged ? 'the first with a unit plugged in' : 'the first to answer'
   /* Two answering to the one name (two Pis left at "raspberrypi"): asked by it, both answer, and no computer app is to blame. */
   const shared = hosts.filter((name) => name === chosen).length > 1
-  const how = addressed ? 'addressed' : shared ? 'not addressed: two computers share its name' : 'not addressed: a computer app on one of them is too old to be asked alone'
+  const how = addressed
+    ? 'addressed'
+    : shared
+      ? 'not addressed: two computers share its name'
+      : proof === 0
+        ? 'addressed, not proved: it did not answer when asked alone'
+        : 'not addressed: a computer app on one of them is too old to be asked alone'
   return `${heard}${gone}; driving ${chosen}, ${reason}, ${how}`
 }
 

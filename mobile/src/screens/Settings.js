@@ -19,11 +19,13 @@ import {
   hostConflict,
   remoteChosenHost,
   remoteHosts,
+  remoteMissingPick,
   remoteUnits,
   sendPasswordReset,
   unitChoices
 } from '../lib/relay'
-import { chooseHost } from '../lib/link'
+import { chooseHost, forgetMissing } from '../lib/link'
+import MissingPick from '../components/MissingPick'
 import { useRig } from '../lib/rig'
 import { setFlashTiming, setMetronome, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
 import { FLASH_NUDGE, clicks, flashTimingNote, metronomeNote, nudgeFloor, placeLit, placesFor, unitClick } from '../lib/metronome-rules'
@@ -166,6 +168,7 @@ export default function Settings({
   const [hosts, setHosts] = useState(remoteHosts())
   const [chosen, setChosen] = useState(remoteChosenHost())
   const [units, setUnits] = useState(remoteUnits())
+  const [missing, setMissing] = useState(remoteMissingPick())
   /*
    * The account line opens a small sheet of the things done about once —
    * change the password, or have a reset link sent. "Change it to where the
@@ -215,6 +218,7 @@ export default function Settings({
     setHosts(remoteHosts())
     setChosen(remoteChosenHost())
     setUnits(remoteUnits())
+    setMissing(remoteMissingPick())
   }, [link, page])
 
   const conflict = hostConflict(hosts, chosen)
@@ -1124,11 +1128,20 @@ export default function Settings({
                       await chooseHost(row.name)
                       setChosen(remoteChosenHost())
                       setUnits(remoteUnits())
+                      setMissing(remoteMissingPick())
                     }}
                   />
                   <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{row.detail}</Text>
                 </View>
               ))}
+              {/* The pick that does not answer, grayed, with Forget. */}
+              <MissingPick
+                name={missing}
+                onForget={() => {
+                  forgetMissing()
+                  setMissing(remoteMissingPick())
+                }}
+              />
             </View>
           ) : null}
 
