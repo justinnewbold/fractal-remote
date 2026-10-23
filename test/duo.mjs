@@ -342,4 +342,249 @@ export function run(test) {
     assert.ok(inside.length > 20, 'the scrolling page was not read; this check reads it')
     assert.deepEqual(inside.filter((n) => overlays.includes(n)), [], 'something that comes up over the screen is still inside the scrolling page')
   })
+
+
+  /* ------------------------------------------------------------------ */
+  /* The opened-up Play                                                  */
+  /* ------------------------------------------------------------------ */
+
+  test('under 621 points of row Play is today’s Play exactly, at every size, every scene layout and every width', async () => {
+    /*
+     * Every phone, the Duo closed, and half of the Duo open beside another
+     * app. The shape there is the size step's own counts, the scene layout's
+     * own columns, Fit's own four and 96, three letters, and the buttons at
+     * the end of the page: what the phone drew before any of this.
+     */
+    const g = await import('../mobile/src/lib/gigSize.js')
+    const today = (step, layout) => ({
+      wide: false,
+      spread: false,
+      sceneCols: g.sceneColsFor(g.SIZES[step], layout),
+      fxCols: g.SIZES[step].fx,
+      fxMost: g.FX_MAX,
+      tileMax: 96,
+      names: false,
+      footFixed: false,
+      footRow: false,
+      foldPad: false
+    })
+    const bare = ({ lines, ...rest }) => rest
+    for (let step = 0; step < g.SIZES.length; step += 1) {
+      for (const layout of ['across', 'down', 'four', 'mine']) {
+        let was = null
+        for (let row = 0; row < g.OPENS_AT; row += 1) {
+          const fresh = g.playShape(row, step, layout, null)
+          assert.deepEqual(bare(fresh), today(step, layout), `${g.SIZES[step].name}, ${layout}, ${row}: not today’s Play`)
+          /* And the same with the memory of the row before it, as a phone that only ever measured under the line has. */
+          was = g.playShape(row, step, layout, was)
+          assert.deepEqual(bare(was), today(step, layout), `${g.SIZES[step].name}, ${layout}, ${row} after ${row - 1}: not today’s Play`)
+        }
+      }
+    }
+    /* The phone's own widths, as Play measures them (its width less its 16 a side). */
+    for (const width of [320, 375, 390, 393, 402, 412, 430, 440, 466, 600, 652]) {
+      assert.equal(g.playShape(g.pageRow(width), 0, 'across', null).wide, false, `a ${width}-point Play opened up`)
+    }
+    /* Today's values handed to fitTiles change nothing: its own four and 96 are what it had. */
+    for (const available of [120, 300, 340, 512, 560, 707, 900]) {
+      for (const [scenes, blocks] of [[0, 0], [2, 4], [4, 8], [8, 8], [8, 9], [8, 12], [8, 16], [8, 24]]) {
+        for (const width of [0, 190, 200, 343, 361, 398, 500]) {
+          for (const fxCols of [1, 2, 3, 4]) {
+            const args = { available, scenes, blocks, sceneCols: 2, fxCols, gap: 8, width }
+            assert.deepEqual(g.fitTiles({ ...args, most: g.FX_MAX, max: 96 }), g.fitTiles(args), `fitTiles moved under 621 for ${JSON.stringify(args)}`)
+          }
+        }
+      }
+    }
+  })
+
+  test('Play opens up at 621, spreads at 700 and takes two more pedals at 936, at the widths the iPhone Duo, iPads and phones have', async () => {
+    const g = await import('../mobile/src/lib/gigSize.js')
+    /*
+     * As rows (what the lines are measured on), at Smallest with the scenes
+     * Across, the default. 637 is the Duo open and held tall (669 less 32),
+     * 712 an iPad mini upright (744 less 32).
+     */
+    const asRow = {
+      375: [false, false, 2, 4],
+      393: [false, false, 2, 4],
+      440: [false, false, 2, 4],
+      466: [false, false, 2, 4],
+      637: [true, false, 2, 4],
+      669: [true, false, 2, 4],
+      712: [true, true, 4, 6],
+      744: [true, true, 4, 6],
+      820: [true, true, 4, 6],
+      880: [true, true, 4, 6],
+      951: [true, true, 4, 8],
+      1133: [true, true, 4, 8],
+      1366: [true, true, 4, 8]
+    }
+    for (const [row, [wide, spread, sceneCols, fxCols]] of Object.entries(asRow)) {
+      const s = g.playShape(Number(row), 0, 'across', null)
+      assert.deepEqual([s.wide, s.spread, s.sceneCols, s.fxCols], [wide, spread, sceneCols, fxCols], `a ${row}-point row`)
+      assert.equal(s.names, wide)
+      assert.equal(s.footFixed, wide)
+      assert.equal(s.tileMax, wide ? g.WIDE_TILE : 96)
+      assert.equal(s.footRow, spread)
+      assert.equal(s.foldPad, spread)
+      assert.equal(s.fxMost, spread ? fxCols : g.FX_MAX, `a ${row}-point row: Fit may go past the count it starts from`)
+    }
+    /*
+     * And the same numbers as Play's own width, which is what Play measures:
+     * the row is the width less 16 a side, and never more than the 1180 page.
+     */
+    assert.equal(g.pageRow(1366), g.PAGE_MAX - 32, 'the page is wider than 1180')
+    assert.equal(g.pageRow(951), 919)
+    const asWidth = {
+      375: [false, false, 4],
+      393: [false, false, 4],
+      440: [false, false, 4],
+      466: [false, false, 4], // the Duo closed
+      637: [false, false, 4],
+      669: [true, false, 4], // the Duo open, held tall: names and the fixed buttons
+      712: [true, false, 4],
+      744: [true, true, 6], // an iPad mini upright
+      820: [true, true, 6],
+      880: [true, true, 6],
+      951: [true, true, 6], // the Duo open like a book
+      1133: [true, true, 8], // an iPad on its side
+      1366: [true, true, 8]
+    }
+    for (const [width, [wide, spread, fxCols]] of Object.entries(asWidth)) {
+      const s = g.playShape(g.pageRow(Number(width)), 0, 'across', null)
+      assert.deepEqual([s.wide, s.spread, s.fxCols], [wide, spread, fxCols], `a ${width}-point Play`)
+    }
+    /* Six pedals at the narrowest spread row are each still wider than a pedal on an iPhone today (four in 361 points). */
+    const { tileWidth } = await import('../mobile/src/lib/tileGrid.js')
+    assert.ok(tileWidth(g.SPREADS_AT, g.WIDE_PEDALS, 8) > tileWidth(361, 4, 8), 'six pedals across are narrower than four on an iPhone')
+    assert.ok(tileWidth(g.TWO_MORE_AT, g.WIDEST_PEDALS, 8) > tileWidth(361, 4, 8))
+    /* And four scenes stay wider than six pedals, his "scenes wider" rule. */
+    assert.ok(tileWidth(g.SPREADS_AT, g.WIDE_SCENES, 8) > tileWidth(g.SPREADS_AT, g.WIDE_PEDALS, 8))
+  })
+
+  test('only Smallest and Small, with the scenes Across or Like the unit, spread; the rest gain only the names and the fixed buttons', async () => {
+    const g = await import('../mobile/src/lib/gigSize.js')
+    for (const row of [712, 820, 1101]) {
+      for (let step = 0; step < g.SIZES.length; step += 1) {
+        for (const layout of ['across', 'four', 'down', 'mine']) {
+          const s = g.playShape(row, step, layout, null)
+          const spreads = step <= 1 && (layout === 'across' || layout === 'four')
+          assert.equal(s.spread, spreads, `${g.SIZES[step].name}, ${layout}, ${row}`)
+          assert.equal(s.wide, true)
+          assert.equal(s.names, true)
+          assert.equal(s.footFixed, true)
+          if (!spreads) {
+            /* Their own counts: Down and My own order two scene columns, each size its own pedals, and the buttons in two rows. */
+            assert.equal(s.sceneCols, g.sceneColsFor(g.SIZES[step], layout), `${g.SIZES[step].name}, ${layout}: the scenes moved`)
+            assert.equal(s.fxCols, g.SIZES[step].fx, `${g.SIZES[step].name}, ${layout}: the pedals moved`)
+            assert.equal(s.fxMost, g.FX_MAX)
+            assert.equal(s.footRow, false)
+            assert.equal(s.foldPad, false)
+          }
+        }
+      }
+    }
+    assert.equal(g.playShape(820, 0, 'down', null).sceneCols, 2, 'Down is no longer two columns')
+    assert.equal(g.playShape(820, 1, 'mine', null).sceneCols, 2, 'My own order is no longer two columns')
+    assert.equal(g.playShape(820, 1, 'four', null).sceneCols, 4)
+  })
+
+  test('each line goes off 40 points under where it came on, so a divider dragged across one never flickers', async () => {
+    const g = await import('../mobile/src/lib/gigSize.js')
+    const flips = (rows) => {
+      const out = { wide: [], spread: [], eight: [] }
+      let was = null
+      let last = null
+      for (const row of rows) {
+        was = g.playShape(row, 0, 'across', was)
+        const now = { wide: was.wide, spread: was.spread, eight: was.fxCols === g.WIDEST_PEDALS }
+        if (last) for (const k of Object.keys(out)) if (now[k] !== last[k]) out[k].push([row, now[k]])
+        last = now
+      }
+      return out
+    }
+    const up = Array.from({ length: 1101 }, (_, i) => 300 + i)
+    const down = [...up].reverse()
+    assert.deepEqual(flips(up), { wide: [[621, true]], spread: [[700, true]], eight: [[936, true]] }, 'a row widening point by point did not switch each line on once, at its number')
+    assert.deepEqual(flips(down), { wide: [[580, false]], spread: [[659, false]], eight: [[895, false]] }, 'a row narrowing point by point did not switch each line off once, 40 under it')
+    /* Jiggled either side of a line, a point or two at a time or up to 39, it stays as it was. */
+    for (const line of [g.OPENS_AT, g.SPREADS_AT, g.TWO_MORE_AT]) {
+      const wobble = [line - 100, line + 5]
+      for (let i = 0; i < 40; i += 1) wobble.push(line + (i % 2 ? 3 : -(i % 39)))
+      const f = flips(wobble)
+      const flipped = Object.values(f).flat()
+      assert.ok(flipped.length <= 2 && flipped.every(([, on]) => on), `wobbling round ${line} flipped Play back and forth: ${JSON.stringify(f)}`)
+    }
+    assert.equal(g.LETS_GO, 40)
+    /* A change of size or scene layout keeps the memory of where the row is: back at Smallest inside the gap, it spreads again. */
+    let was = g.playShape(720, 0, 'across', null)
+    was = g.playShape(690, 2, 'across', was)
+    assert.equal(was.spread, false)
+    was = g.playShape(690, 0, 'across', was)
+    assert.equal(was.spread, true, 'the line forgot the row was past it when the size changed')
+  })
+
+  test('six pedals to a row on a wide row is one named number, and four there is a one-number change', async () => {
+    const src = read('src/lib/gigSize.js')
+    assert.match(src, /^export const WIDE_PEDALS = 6$/m)
+    assert.equal(src.match(/^export const WIDE_PEDALS = /gm).length, 1)
+    /* Nothing else in the rule names a pedal count: the eight is worked out from it. */
+    const rule = src.slice(src.indexOf('THE OPENED-UP PLAY'))
+    assert.match(rule, /export const WIDEST_PEDALS = WIDE_PEDALS > FX_MAX \? WIDE_PEDALS \+ 2 : WIDE_PEDALS/)
+    assert.doesNotMatch(rule.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' '), /fxCols: [0-9]|\? 6\b|\? 8\b|= 8\b/, 'a pedal count is written into the rule beside WIDE_PEDALS')
+    /* The rule run with the one number changed to four: four everywhere, even from 936, and never past four in Fit. */
+    const dir = mkdtempSync(join(tmpdir(), 'wide-pedals-'))
+    try {
+      const file = join(dir, 'gigSize.mjs')
+      writeFileSync(file, src.replace(/^export const WIDE_PEDALS = 6$/m, 'export const WIDE_PEDALS = 4'))
+      const four = await import(pathToFileURL(file).href)
+      for (const row of [700, 820, 951, 1148]) {
+        const s = four.playShape(row, 0, 'across', null)
+        assert.deepEqual([s.spread, s.sceneCols, s.fxCols, s.fxMost], [true, 4, 4, 4], `with four, a ${row}-point row`)
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test('fitTiles takes more than four pedals to a row only when it is asked to, and never fewer than four as its most', async () => {
+    const g = await import('../mobile/src/lib/gigSize.js')
+    /* Asked for six, six: the spread layout's start and its most. */
+    assert.equal(g.fitTiles({ available: 500, scenes: 8, blocks: 9, sceneCols: 4, fxCols: 6, most: 6, width: 700 }).fxCols, 6)
+    assert.equal(g.fitTiles({ available: 500, scenes: 8, blocks: 9, sceneCols: 4, fxCols: 8, most: 8, width: 1100 }).fxCols, 8)
+    /* Not asked, six is four, as the browser and every phone have it. */
+    assert.equal(g.fitTiles({ available: 500, scenes: 8, blocks: 9, sceneCols: 4, fxCols: 6, width: 700 }).fxCols, 4)
+    /* A most under four is four. */
+    assert.equal(g.fitTiles({ available: 300, scenes: 8, blocks: 24, fxCols: 4, most: 2, width: 500 }).fxCols, 4)
+    /* The taller ceiling from 621. */
+    assert.equal(g.fitTiles({ available: 900, scenes: 2, blocks: 4, max: 120 }).tile, 120)
+    assert.equal(g.fitTiles({ available: 900, scenes: 2, blocks: 4 }).tile, 96)
+  })
+
+  test('on the spread layout the side without the Duo’s strip is padded to match, so the middle of every row is the middle of the screen', async () => {
+    const g = await import('../mobile/src/lib/gigSize.js')
+    assert.deepEqual(g.foldInset(0, 0), { left: 0, right: 0 })
+    assert.deepEqual(g.foldInset(0, 44), { left: 44, right: 0 })
+    assert.deepEqual(g.foldInset(44, 0), { left: 0, right: 44 })
+    assert.deepEqual(g.foldInset(20, 44), { left: 24, right: 0 })
+    assert.deepEqual(g.foldInset(undefined, null), { left: 0, right: 0 })
+    /*
+     * Worked through for a screen W wide with the strip on either side: the
+     * app keeps clear of both insets, Play's page is 16 plus the fold's
+     * padding on each side, and the middle of its row is W / 2 — under the
+     * page's 1180 and over it.
+     */
+    for (const W of [951, 1133, 1366]) {
+      for (const [l, r] of [[0, 0], [0, 44], [44, 0], [20, 44], [59, 0]]) {
+        const play = W - l - r
+        const page = Math.min(play, g.PAGE_MAX)
+        const pageLeft = l + (play - page) / 2
+        const f = g.foldInset(l, r)
+        const rowLeft = pageLeft + 16 + f.left
+        const rowRight = pageLeft + page - 16 - f.right
+        assert.equal((rowLeft + rowRight) / 2, W / 2, `a ${W}-point screen with ${l} and ${r} down its sides is not centered on its fold`)
+      }
+    }
+  })
 }
