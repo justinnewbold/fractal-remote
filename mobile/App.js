@@ -55,6 +55,7 @@ import Paywall from './src/screens/Paywall'
 import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
 import { shouldAskToPay } from './src/lib/unlock-rule'
 import { deviceNoun } from './src/lib/device-word'
+import { siriElsewhere, startSiri } from './src/lib/siri'
 
 /* The VP4's Scene Select number and MIDI channel live in the phone's store; the device layer reads them from there (lib/vp4-safety). */
 keepVp4SetupIn(sync)
@@ -425,6 +426,13 @@ export default function App() {
   /* The play screen itself is up: not the waiting screen standing in for it. */
   const playOnScreen = screen === 'stage' && !settling
   /*
+   * AND ANOTHER SCREEN OF THE APP IS UP IN ITS PLACE, for Siri (lib/siri): a
+   * command said there is answered with "Open Play" at once, while one said
+   * as the app is still starting waits for Play inside its tap rule.
+   */
+  const playElsewhere = auth === 'in' && seenWalk === true && !independentDue && screen !== 'stage'
+  useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
+  /*
    * And the new-version note only floats over it while the phone is off the
    * rig. Over a connected rig a download can land mid-song, and the note's
    * Restart now would come up where the preset button is, under a thumb on
@@ -638,6 +646,13 @@ export default function App() {
   /* And whether the copy on this phone is older than the store's, asked of
      the website at most once a day — see lib/storeVersion. */
   useEffect(() => watchStoreVersion(), [])
+
+  /*
+   * SIRI, for the life of the app and not only Play's: Tuner off works from
+   * any screen, and any other command said off Play is answered with where
+   * to go. Nothing at all on a build without the Siri phrases. See lib/siri.
+   */
+  useEffect(() => startSiri(), [])
 
   /* Bluetooth (beta), picked up from last time. First, so that a phone left
      on Bluetooth starts on Bluetooth; one read of the phone's own storage. */

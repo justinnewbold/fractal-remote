@@ -1,0 +1,846 @@
+/**
+ * SIRI'S COMMANDS, CARRIED OUT ON THE PHONE (mobile/src/lib/siri.js).
+ *
+ * "Let's add all of the Siri commands to the build that we can." (Justin,
+ * 23 October 2026.) test/siri-native.mjs reads the Swift and runs the hand-off
+ * (lib/siriPipe). This runs what the JavaScript does with each command, on a
+ * bench: lib/siri.js and lib/siri-rule.js as they are, the real pipe beside a
+ * stand-in Siri module, and a clock the test turns by hand, so "a second and
+ * a half later" costs nothing.
+ *
+ * Two rigs. A stand-in, which writes down every write it is asked for and
+ * answers as the test says, for the rules: Play on screen, the 1.5-second tap
+ * rule counted from when the Swift took the command, a phone that slept,
+ * Tuner off from anywhere and its second try, exactly one pedal of a kind,
+ * the tempo range, an AM4's four scenes and its boost, a VP4's limits, and
+ * every word. And the phone's real rig store driving the demo's simulated
+ * unit, which is what Apple's reviewer has.
+ */
+import assert from 'node:assert/strict'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8')
+const flat = (rel) => read(rel).replace(/\s+/g, ' ')
+const withoutComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+
+const LIB = 'mobile/src/lib'
+const DATA = pathToFileURL(new URL('../mobile/src/data/', import.meta.url).pathname).href
+
+/* Node wants the extension Metro does without, and the bench's own stand-ins for the packages. */
+const esm = (src) =>
+  src
+    .replace(/from 'react'/g, "from './react.js'")
+    .replace(/from 'react-native'/g, "from './react-native.js'")
+    .replace(/from 'expo'/g, "from './expo.js'")
+    .replace(/from '\.\/([\w.-]+)'/g, (whole, name) => (/\.m?js$/.test(name) ? whole : `from './${name}.js'`))
+/* And the clock the test turns. */
+const clocked = (src) =>
+  "import * as __clock from './clock.js'\n" +
+  src
+    .replace(/\bDate\.now\(\)/g, '__clock.now()')
+    .replace(/\bsetTimeout\(/g, '__clock.setTimeout(')
+    .replace(/\bclearTimeout\(/g, '__clock.clearTimeout(')
+    .replace(/\bsetInterval\(/g, '__clock.setInterval(')
+    .replace(/\bclearInterval\(/g, '__clock.clearInterval(')
+
+const CLOCK = `
+  let t = 1000000
+  let seq = 0
+  const timers = new Map()
+  export const now = () => t
+  export function setTimeout(fn, ms = 0, ...args) {
+    const id = ++seq
+    timers.set(id, { id, at: t + Math.max(0, Number(ms) || 0), fn, args })
+    return id
+  }
+  export function clearTimeout(id) { timers.delete(id) }
+  export const setInterval = () => 0
+  export const clearInterval = () => {}
+  const flush = async () => { for (let i = 0; i < 12; i++) await new Promise((r) => globalThis.setImmediate(r)) }
+  export async function advance(ms) {
+    const end = t + ms
+    await flush()
+    for (;;) {
+      let next = null
+      for (const x of timers.values()) if (x.at <= end && (!next || x.at < next.at || (x.at === next.at && x.id < next.id))) next = x
+      if (!next) break
+      timers.delete(next.id)
+      t = next.at
+      next.fn(...next.args)
+      await flush()
+    }
+    t = end
+    await flush()
+  }
+`
+
+/* A stand-in FractalSiri module: what the JavaScript hears, and what it says back. */
+const EXPO = `
+  const listeners = []
+  export const replies = []
+  export const fake = {
+    addListener: (event, fn) => { listeners.push({ event, fn }); return { remove: () => listeners.splice(listeners.findIndex((l) => l.fn === fn), 1) } },
+    reply: (id, words) => replies.push([id, words])
+  }
+  export const native = { module: fake }
+  export const emit = (body) => listeners.filter((l) => l.event === 'onCommand').forEach((l) => l.fn(body))
+  export const listening = () => listeners.length
+  export const requireOptionalNativeModule = (name) => (name === 'FractalSiri' ? native.module : null)
+`
+
+/* The phone's link, as the handler reads it: the word, a probe, and a wait for 'connected' the test ends. */
+const LINK = `
+  import * as clock from './clock.js'
+  export const state = { link: 'connected' }
+  export let probes = 0
+  export const linkState = () => state
+  export const probeNow = () => { probes++ }
+  const waiting = new Set()
+  export function untilConnected(ms = 8000) {
+    if (state.link === 'connected') return Promise.resolve(true)
+    probeNow()
+    return new Promise((resolve) => {
+      const w = { resolve }
+      w.timer = clock.setTimeout(() => { waiting.delete(w); resolve(false) }, ms)
+      waiting.add(w)
+    })
+  }
+  export function __set(link) {
+    state.link = link
+    if (link !== 'connected') return
+    for (const w of [...waiting]) { clock.clearTimeout(w.timer); waiting.delete(w); w.resolve(true) }
+  }
+`
+
+/*
+ * THE STAND-IN RIG. `state` is what Play's store holds; each write is
+ * written down with its arguments and answered by `answers[name]`, or true.
+ * `view` is the chain view (lib/chain-view): 'ready' unless the test says.
+ */
+const RIG = `
+  export let state = {
+    capabilities: { sceneCount: 8, presets: { count: 512 } },
+    deviceSlug: 'fm3',
+    preset: { number: 12, name: 'SONG 12' },
+    sceneIndex: 0,
+    sceneNames: ['VERSE', 'CHORUS', 'LEAD', '', '', '', '', ''],
+    blocks: [
+      { slug: 'drive', name: 'Drive 1', effectId: 133, bypassed: true },
+      { slug: 'amp', name: 'Amp 1', effectId: 58, bypassed: false },
+      { slug: 'delay', name: 'Delay 1', effectId: 70, bypassed: false },
+      { slug: 'reverb', name: 'Reverb', effectId: 66, bypassed: false }
+    ],
+    tunerOn: false,
+    view: 'ready',
+    dropped: null,
+    error: null
+  }
+  export const __set = (patch) => { state = { ...state, ...patch } }
+  export const getState = () => state
+  export const chainViewOf = (s) => s.view
+  export const pedalSlug = () => state.deviceSlug
+  export const calls = []
+  export const answers = {}
+  const write = (name) => (...args) => { calls.push([name, ...args]); return answers[name] ? answers[name](...args) : Promise.resolve(true) }
+  export const writeScene = write('scene')
+  export const writeBypass = write('bypass')
+  export const writeTempo = write('tempo')
+  export const writeTuner = write('tuner')
+  export const loadPreset = write('preset')
+  export const notes = []
+  export function notSentNow(what, { late = true } = {}) {
+    notes.push({ what, late })
+    state = { ...state, dropped: late ? 'Not sent — it would have landed late' : 'Not sent — not connected' }
+  }
+  const watchers = new Set()
+  export function onPresetAnswered(fn) { watchers.add(fn); return () => watchers.delete(fn) }
+  export const __answered = (number, ok, words = null) => [...watchers].forEach((fn) => fn({ number, ok, words }))
+  export const __watching = () => watchers.size
+`
+
+/** lib/siri.js on the bench, with the stand-in rig (or the real one driving the demo: see demoOnTheBench). */
+async function siriOnTheBench({ os = 'ios', device = 'phone', vp4 = false, names = {}, extra = {} } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'siri-'))
+  const files = {
+    'package.json': '{ "type": "module" }',
+    'clock.js': CLOCK,
+    'react.js': 'export const useEffect = (fn) => fn()\nexport const useRef = (v) => ({ current: v })\nexport const useSyncExternalStore = (sub, get) => get()\n',
+    'react-native.js': `export const AppState = { currentState: 'active' }\nexport const Platform = { OS: ${JSON.stringify(os)} }\n`,
+    'expo.js': EXPO,
+    'link.js': LINK,
+    'rig.js': RIG,
+    'debugLog.js': 'export const said = []\nexport const logDebug = (...a) => said.push(a.join(" "))\n',
+    'device.js': `export const vp4Here = () => ${vp4 ? 'true' : 'false'}\n`,
+    'presetNames.js': `const listed = ${JSON.stringify(names)}\nexport const nameOf = (n) => listed[n]\n`,
+    ...extra
+  }
+  for (const f of ['siri-rule.js', 'versions.js', 'am4-boost.js', 'chain-view.js', 'device-word.js', 'relay-rules.js', 'tempo.js', 'unit.mjs', 'presetName.js', 'slots.js', 'vp4-safety.js']) {
+    if (!(f in files)) files[f] = read(`${LIB}/${f}`)
+  }
+  files['siriPipe.js'] = clocked(esm(read(`${LIB}/siriPipe.js`)))
+  files['siri.js'] = clocked(esm(read(`${LIB}/siri.js`)))
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+  const at = (f) => pathToFileURL(join(dir, f)).href
+  try {
+    const clock = await import(at('clock.js'))
+    const words = await import(at('device-word.js'))
+    words.setDevice(device)
+    const b = {
+      dir,
+      clock,
+      expo: await import(at('expo.js')),
+      link: await import(at('link.js')),
+      rn: await import(at('react-native.js')),
+      rig: await import(at('rig.js')),
+      log: await import(at('debugLog.js')),
+      rule: await import(at('siri-rule.js')),
+      siri: await import(at('siri.js'))
+    }
+    b.stop = b.siri.startSiri()
+    let n = 0
+    /* One command from Siri, `ago` milliseconds after the Swift took it. */
+    b.say = (command, value, { ago = 100, answered = false, id = `c${++n}` } = {}) => {
+      b.expo.emit({ id, at: clock.now() - ago, command, ...(value === undefined ? {} : { value }), answered })
+      return id
+    }
+    b.replies = () => b.expo.replies.map(([, w]) => w)
+    b.replyTo = (id) => b.expo.replies.filter(([who]) => who === id).map(([, w]) => w)
+    /* Play on screen, with its own Previous and Next (Stage's step, landing and stuck). */
+    b.play = ({ landing = (by) => 12 + by, stuck = () => null, step } = {}) => {
+      const steps = []
+      const off = b.siri.showPlay({
+        landing,
+        stuck,
+        step: (by, when) => {
+          steps.push([by, when])
+          return step ? step(by, when) : Promise.resolve(true)
+        }
+      })
+      return { steps, off }
+    }
+    return b
+  } catch (err) {
+    rmSync(dir, { recursive: true, force: true })
+    throw err
+  }
+}
+
+const done = (b) => {
+  b.stop?.()
+  rmSync(b.dir, { recursive: true, force: true })
+}
+
+/*
+ * THE DEMO, ON THE PHONE'S OWN RIG STORE. rig.js and device.js as they are,
+ * with the demo switch on and the simulated unit (lib/mockDevice) answering
+ * every request at the same door a real computer does (lib/demoWire), so a
+ * scene from Siri is the scene the reviewer sees land.
+ */
+async function demoOnTheBench(unit = 'fm3') {
+  const lib = (f) => read(`${LIB}/${f}`)
+  const extra = {
+    'relay.js':
+      'export async function remoteRequest() { throw new Error("no computer in the demo") }\n' +
+      'export const subscribeRemoteEvents = () => () => {}\nexport const subscribeRemoteState = () => () => {}\nexport const subscribeHostSeen = () => () => {}\n',
+    'demo.js': `import { createMockDevice } from './mockDevice.js'\nconst mock = createMockDevice(${JSON.stringify(unit)})\nexport const isDemo = () => true\nexport const demoDevice = () => mock\nexport const demoUnit = () => ${JSON.stringify(unit)}\n`,
+    'demoWire.js': lib('demoWire.js'),
+    'mockDevice.js': lib('mockDevice.js').replace(/'\.\.\/data\//g, `'${DATA}`),
+    'factoryPresets.js': lib('factoryPresets.js').replace(/'\.\.\/data\//g, `'${DATA}`),
+    'bleSwitch.js': "export const bluetoothWire = () => null\nexport const bluetoothOn = () => false\nexport const overBluetooth = (caps) => caps?.via === 'bluetooth'\n",
+    'lineage.js': 'export const withLineage = (x) => x\n',
+    'presetNames.js': 'export const adopt = async () => 0\nexport const forget = () => {}\nexport const learn = () => {}\nexport const nameOf = () => undefined\n',
+    'paramIndex.js': 'export const forget = () => {}\n',
+    'sceneNameCache.js':
+      'export const forgetSceneNames = () => true\nexport const recallSceneNames = async () => []\nexport const rememberSceneNames = () => true\nexport const sceneNamesKnown = async () => false\n',
+    'blockCatalog.js': `export const blockCatalog = ${read('mobile/src/data/blocks.json')}\n`
+  }
+  for (const f of ['demoUnits.js', 'scale.js', 'sceneState.js', 'demoMemory.js', 'tunerStream.js', 'own-echo.js', 'chain-outline.js', 'firmware.js', 'fault-rule.js', 'unit-watch.js', 'device-slug.js', 'grid-plan.js', 'encoding.js', 'param-fixes.js', 'metronome-rules.js', 'unsupported.js', 'tapGate.js', 'looks.js', 'blockPalettes.js', 'ink.js']) {
+    extra[f] = esm(lib(f))
+  }
+  extra['device.js'] = clocked(esm(lib('device.js')))
+  extra['rig.js'] = clocked(esm(lib('rig.js')))
+  const b = await siriOnTheBench({ extra })
+  await b.rig.refreshAll()
+  await b.clock.advance(5000)
+  return b
+}
+
+export function run(test) {
+  test('Siri: a scene goes with the time the Swift took it, as a tap on Play would, and Siri hears its name', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      const id = b.say('scene', 2, { ago: 300 })
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls, [['scene', 1, b.clock.now() - 300]], 'not the scene asked for, or not bound by the moment the Swift took it')
+      assert.deepEqual(b.replyTo(id), ['Scene 2, CHORUS.'])
+      /* Siri said "3": scene 3, which the tiles call 3 and the rig 2. */
+      b.say('scene', 3)
+      await b.clock.advance(0)
+      assert.equal(b.rig.calls[1][1], 2)
+      assert.deepEqual(b.replies().at(-1), 'Scene 3, LEAD.')
+      /* A scene with no name is its number. */
+      b.say('scene', 6)
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'Scene 6.')
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: an AM4 has four scenes, and a unit with none has none, and nothing is sent for one it lacks', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      b.rig.__set({ deviceSlug: 'am4', capabilities: { sceneCount: 4, presets: { count: 104, addressing: 'bankLetter' } } })
+      for (const n of [5, 6, 7, 8]) {
+        b.say('scene', n)
+        await b.clock.advance(0)
+        assert.equal(b.replies().at(-1), 'This unit has 4 scenes.')
+      }
+      assert.equal(b.rig.calls.length, 0, 'a fifth scene was sent to an AM4')
+      b.say('scene', 4)
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls.map((c) => c.slice(0, 2)), [['scene', 3]])
+      b.rig.__set({ capabilities: { hasScenes: false } })
+      b.say('scene', 1)
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'This unit has no scenes.')
+      assert.equal(b.rig.calls.length, 1)
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: every command but Tuner off needs Play on screen; elsewhere it says to open Play on this device, by its own name', async () => {
+    for (const [device, noun] of [['phone', 'phone'], ['ipad', 'iPad'], ['tablet', 'tablet']]) {
+      const b = await siriOnTheBench({ device })
+      try {
+        b.siri.siriElsewhere(true)
+        for (const [command, value] of [['scene', 3], ['next'], ['previous'], ['tunerOn'], ['tempo', 120], ['preset', 5], ['pedalOn', 'delay'], ['pedalOff', 'drive']]) {
+          const id = b.say(command, value)
+          await b.clock.advance(0)
+          assert.deepEqual(b.replyTo(id), [`Open Play on this ${noun}, then say it again.`], `${command} off Play`)
+        }
+        assert.equal(b.rig.calls.length, 0, 'a command went from another screen')
+        assert.equal(b.rig.notes.length, 0, 'Not sent was put on Play for a command said on another screen')
+        /* And Tuner off goes from there. */
+        b.say('tunerOff')
+        await b.clock.advance(0)
+        assert.deepEqual(b.rig.calls, [['tuner', false]])
+        assert.equal(b.replies().at(-1), 'Tuner off.')
+      } finally {
+        done(b)
+      }
+    }
+  })
+
+  test('Siri: a command that arrives while the app is still starting waits for Play inside its 1.5 seconds, and is not sent after', async () => {
+    const b = await siriOnTheBench()
+    try {
+      /* Play comes up 900 ms after the Swift took it: in time. */
+      const early = b.say('scene', 2, { ago: 0 })
+      await b.clock.advance(900)
+      assert.equal(b.rig.calls.length, 0, 'sent before Play was up')
+      const on = b.play()
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls.map((c) => c.slice(0, 2)), [['scene', 1]])
+      assert.deepEqual(b.replyTo(early), ['Scene 2, CHORUS.'])
+      on.off()
+      /* Play not up by 1.5 s: never sent, and said on Play as a late tap is, and to Siri. */
+      const late = b.say('scene', 3, { ago: 0 })
+      await b.clock.advance(1500)
+      b.play()
+      await b.clock.advance(1000)
+      assert.equal(b.rig.calls.length, 1, 'a scene went seconds after it was said')
+      assert.deepEqual(b.rig.notes.map((n) => n.late), [true])
+      assert.deepEqual(b.replyTo(late), ['Not sent, it would have landed late.'])
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: the 1.5 seconds count from when the Swift took the command, not from when it reached the JavaScript', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      /* Held 1.6 s while the app started (the module holds commands up to 15 s): already late. */
+      const held = b.say('scene', 2, { ago: 1600 })
+      await b.clock.advance(0)
+      assert.equal(b.rig.calls.length, 0, 'a command held past its deadline was given a fresh second and a half')
+      assert.deepEqual(b.replyTo(held), ['Not sent, it would have landed late.'])
+      assert.equal(b.rig.state.dropped, 'Not sent — it would have landed late', 'Play does not say Not sent the way it does for a late tap')
+      /* One second old: it goes, with that second already spent (the rig drops it at the same deadline). */
+      b.say('pedalOff', 'delay', { ago: 1000 })
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls, [['bypass', 70, true, b.clock.now() - 1000]])
+      /* A clock ahead of the JavaScript's is now, never a later deadline. */
+      b.say('tempo', 120, { ago: -60000 })
+      await b.clock.advance(0)
+      assert.equal(b.rig.calls[1][2], b.clock.now())
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: one the Swift already answered with Not sent is not acted on, except Tuner off, and is not answered twice', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      b.say('scene', 2, { answered: true, ago: 5200 })
+      /* Whatever its clock says: answered is answered. */
+      b.say('next', undefined, { answered: true, ago: 100 })
+      await b.clock.advance(0)
+      assert.equal(b.rig.calls.length, 0, 'a command Siri was told was not sent went anyway')
+      assert.equal(b.rig.notes.length, 2, 'Play does not say they were not sent')
+      b.say('tunerOff', undefined, { answered: true, ago: 6000 })
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls, [['tuner', false]], 'a late Tuner off was dropped, and the rig left muted')
+      assert.equal(b.expo.replies.length, 0, 'Siri was answered again after the Swift answered it')
+      /* The same command handed over twice is carried out once. */
+      b.say('scene', 4, { id: 'twice' })
+      b.say('scene', 4, { id: 'twice' })
+      await b.clock.advance(0)
+      assert.equal(b.rig.calls.filter((c) => c[0] === 'scene').length, 1)
+      assert.equal(b.replyTo('twice').length, 1)
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: on a phone that slept, the link is waited for inside the tap rule and no longer; Siri’s own panel over a connected Play is not a sleep', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      /* Siri's panel up over Play: the app is inactive, the link is up, and it goes at once. */
+      b.rn.AppState.currentState = 'inactive'
+      b.say('scene', 2)
+      await b.clock.advance(0)
+      assert.equal(b.rig.calls.length, 1, 'Siri’s panel was taken for a sleeping phone')
+      assert.equal(b.link.probes, 0, 'a connected link was asked again')
+      /* Woken from a sleep, the link rejoining: back in 800 ms, inside the 1.5 s, so it goes. */
+      b.rn.AppState.currentState = 'background'
+      b.link.__set('joining')
+      b.say('scene', 3, { ago: 200 })
+      await b.clock.advance(800)
+      assert.equal(b.rig.calls.length, 1, 'sent into a link still rejoining')
+      b.link.__set('connected')
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls[1].slice(0, 2), ['scene', 2])
+      /* Not back inside the 1.5 s: not sent, not connected, said on Play and to Siri. */
+      b.link.__set('joining')
+      const lost = b.say('scene', 4, { ago: 200 })
+      await b.clock.advance(1300)
+      b.link.__set('connected')
+      await b.clock.advance(1000)
+      assert.equal(b.rig.calls.length, 2, 'a scene went after its deadline because the link came back')
+      assert.deepEqual(b.replyTo(lost), ['Not sent, not connected.'])
+      assert.equal(b.rig.notes.at(-1).late, false)
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: Tuner off works from any screen, is answered before it waits for the link, and is tried once more', async () => {
+    const b = await siriOnTheBench()
+    try {
+      /* No Play, the app starting, the link asleep. */
+      b.rn.AppState.currentState = 'background'
+      b.link.__set('joining')
+      let tries = 0
+      b.rig.answers.tuner = () => Promise.resolve(++tries > 1)
+      const id = b.say('tunerOff')
+      await b.clock.advance(0)
+      assert.deepEqual(b.replyTo(id), ['Closing the tuner as soon as the connection is back.'], 'Siri waits on a link that may take seconds')
+      assert.equal(b.rig.calls.length, 0, 'sent into a link that is asleep')
+      await b.clock.advance(400)
+      b.link.__set('connected')
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls, [['tuner', false]])
+      /* The first did not go: once more, a second and a half on. */
+      await b.clock.advance(1500)
+      assert.deepEqual(b.rig.calls, [['tuner', false], ['tuner', false]], 'a Tuner off that failed was not tried again, and the rig is left muted')
+      await b.clock.advance(5000)
+      assert.equal(b.rig.calls.length, 2, 'tried more than twice')
+      /* With the link up, on Play or not: at once, and Siri told when it is done. */
+      b.rn.AppState.currentState = 'active'
+      b.rig.answers.tuner = () => Promise.resolve(true)
+      const now = b.say('tunerOff')
+      await b.clock.advance(0)
+      assert.deepEqual(b.replyTo(now), ['Tuner off.'])
+      /* Sent whatever the app thinks the tuner is doing: after a cold start it knows nothing. */
+      assert.equal(b.rig.state.tunerOn, false)
+      assert.equal(b.rig.calls.length, 3)
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: Tuner on needs Play, says the rig is muted, and is not sent twice or to a unit without one', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      b.say('tunerOn', undefined, { ago: 200 })
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls, [['tuner', true, b.clock.now() - 200]], 'the tuner opening is not bound by the tap rule')
+      assert.equal(b.replies().at(-1), 'Tuner on. Your rig is muted.')
+      b.rig.__set({ tunerOn: true })
+      b.say('tunerOn')
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'The tuner is already on. Your rig is muted.')
+      b.rig.__set({ tunerOn: false, capabilities: { ...b.rig.state.capabilities, tuner: false } })
+      b.say('tunerOn')
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'This unit has no tuner the app can open.')
+      assert.equal(b.rig.calls.length, 1)
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: a pedal by kind is exactly one in Play’s own chain, set on or off as asked, and never a guess', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      b.say('pedalOn', 'drive')
+      b.say('pedalOff', 'reverb')
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls.map((c) => c.slice(0, 3)), [['bypass', 133, false], ['bypass', 66, true]])
+      assert.deepEqual(b.replies(), ['Drive on.', 'Reverb off.'])
+      /* None of the kind. */
+      b.say('pedalOn', 'wah')
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'This preset has no wah.')
+      /* Two delays, by any name a delay goes by: use the screen. */
+      b.rig.__set({ blocks: [...b.rig.state.blocks, { slug: 'plex', name: 'Plex Delay', effectId: 72, bypassed: true }] })
+      b.say('pedalOn', 'delay')
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'This preset has more than one delay, so use the screen.')
+      /* One Plex Delay alone is the delay. */
+      b.rig.__set({ blocks: [{ slug: 'plex', name: 'Plex Delay', effectId: 72, bypassed: true }, { slug: 'multicomp', name: 'Multiband Comp', effectId: 48, bypassed: true }] })
+      b.say('pedalOn', 'delay')
+      b.say('pedalOn', 'compressor')
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls.slice(2).map((c) => c.slice(0, 3)), [['bypass', 72, false], ['bypass', 48, false]])
+      /* Never on the outline, another preset's chain still up, or a chain whose read failed. */
+      for (const view of ['outline', 'loading', 'failed']) {
+        b.rig.__set({ view })
+        b.say('pedalOff', 'delay')
+        await b.clock.advance(0)
+        assert.equal(b.replies().at(-1), 'This preset’s pedals aren’t read yet. Try again in a moment.', `a pedal was switched on a chain that is ${view}`)
+      }
+      assert.equal(b.rig.calls.length, 4)
+      /* And a chain being read again is still this preset's own. */
+      b.rig.__set({ view: 'updating' })
+      b.say('pedalOff', 'delay')
+      await b.clock.advance(0)
+      assert.equal(b.rig.calls.length, 5)
+      /* Every kind the Swift can name is a kind here, and boost is the AM4's. */
+      const { SIRI_PEDALS } = await import(pathToFileURL(join(b.dir, 'siriPipe.js')).href)
+      assert.deepEqual(Object.keys(b.rule.PEDAL_SLUGS), [...SIRI_PEDALS])
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: Boost on is an AM4 amp’s boost, sent as the boost and never on another unit', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      b.say('pedalOn', 'boost')
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'Only an AM4’s amp has a boost the app can switch.')
+      b.rig.__set({ deviceSlug: 'am4', capabilities: { sceneCount: 4, presets: { count: 104, addressing: 'bankLetter' } } })
+      b.say('pedalOn', 'boost')
+      b.say('pedalOff', 'boost')
+      await b.clock.advance(0)
+      /* writeBypass with the amp is rig.tapBoost with the boost asked for: on is bypassed false. */
+      assert.deepEqual(b.rig.calls.map((c) => c.slice(0, 3)), [['bypass', 58, false], ['bypass', 58, true]])
+      assert.deepEqual(b.replies().slice(-2), ['Boost on.', 'Boost off.'])
+      /* The boost refused by the rig (the unit still being found): its own words. */
+      b.rig.answers.bypass = () => {
+        b.rig.__set({ error: 'The unit is still being found, so the boost wasn’t sent. Try it again in a moment.' })
+        return Promise.resolve(false)
+      }
+      b.say('pedalOn', 'boost')
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'The unit is still being found, so the boost wasn’t sent. Try it again in a moment.')
+      /* An amp at another code: the app cannot switch its boost. No amp: said. */
+      b.rig.__set({ blocks: [{ slug: 'amp', name: 'Amp 2', effectId: 59, bypassed: false }] })
+      b.say('pedalOn', 'boost')
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'The app can’t switch this amp’s boost yet.')
+      b.rig.__set({ blocks: [{ slug: 'drive', name: 'Drive 1', effectId: 133, bypassed: true }] })
+      b.say('pedalOn', 'boost')
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'This preset has no amp.')
+      assert.equal(b.rig.calls.length, 3)
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: a tempo is held to the unit’s own range, and a VP4, which has none the app can set, says so', async () => {
+    const { tempoRange } = await import('../shared/tempo.mjs')
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      for (const slug of ['am4', 'fm3', 'fm9', 'axefxiii']) {
+        const range = tempoRange(slug)
+        b.rig.__set({ deviceSlug: slug })
+        for (const [bpm, goes] of [[range.min, true], [range.max, true], [range.max + 1, false], [range.min - 1, false]]) {
+          const before = b.rig.calls.length
+          b.say('tempo', bpm)
+          await b.clock.advance(0)
+          assert.equal(b.rig.calls.length - before, goes ? 1 : 0, `${slug} tempo ${bpm}`)
+          assert.equal(b.replies().at(-1), goes ? `Tempo ${bpm}.` : `This unit takes a tempo from ${range.min} to ${range.max}.`)
+        }
+      }
+    } finally {
+      done(b)
+    }
+    const vp4 = await siriOnTheBench({ vp4: true })
+    try {
+      vp4.play()
+      vp4.say('tempo', 120)
+      await vp4.clock.advance(0)
+      assert.equal(vp4.rig.calls.length, 0)
+      assert.equal(vp4.replies().at(-1), 'The app can’t set a VP4’s tempo yet. Tap tempo on the VP4 itself for now.')
+    } finally {
+      done(vp4)
+    }
+  })
+
+  test('Siri: a preset by the number Play prints, named back as soon as the unit takes it, with an AM4’s bank', async () => {
+    const b = await siriOnTheBench({ names: { 12: 'Clean', 40: 'Schism' } })
+    try {
+      b.play()
+      b.rig.__set({ deviceSlug: 'am4', capabilities: { sceneCount: 4, presets: { count: 104, addressing: 'bankLetter' } }, preset: { number: 3, name: 'Old' } })
+      /* The load goes on reading for seconds; Siri is answered when the select is. */
+      let landed
+      b.rig.answers.preset = () => new Promise((r) => (landed = r))
+      const id = b.say('preset', 12, { ago: 100 })
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls, [['preset', 12, b.clock.now() - 100]])
+      assert.equal(b.replyTo(id).length, 0, 'answered before the unit took it')
+      b.rig.__answered(12, true)
+      await b.clock.advance(0)
+      assert.deepEqual(b.replyTo(id), ['Preset 012 D01, Clean.'])
+      landed(true)
+      await b.clock.advance(0)
+      assert.equal(b.replyTo(id).length, 1)
+      assert.equal(b.rig.__watching(), 0, 'still listening for a select already answered')
+      /* Past the unit's last slot: said, nothing sent. The one on screen: not loaded again (that throws unsaved changes away). */
+      b.rig.__set({ preset: { number: 12, name: 'Clean' } })
+      b.say('preset', 104)
+      b.say('preset', 12)
+      await b.clock.advance(0)
+      assert.deepEqual(b.replies().slice(-2), ['This unit’s presets go from 0 to 103.', 'Already on preset 012 D01.'])
+      assert.equal(b.rig.calls.length, 1)
+      /* Refused: Play's own words. A VP4 that took it and showed no change: the rig's words for that. */
+      b.rig.answers.preset = () => {
+        b.rig.__set({ error: 'The unit refused that preset.' })
+        b.rig.__answered(40, false)
+        return Promise.resolve(false)
+      }
+      b.say('preset', 40)
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'The unit refused that preset.')
+      b.rig.answers.preset = () => (b.rig.__answered(41, false, 'Sent, but the app couldn’t confirm the VP4 changed preset.'), new Promise(() => {}))
+      b.say('preset', 41)
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'Sent, but the app couldn’t confirm the VP4 changed preset.')
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: Next and Previous are Play’s own buttons, with the moment the Swift took them, and say where they went', async () => {
+    const b = await siriOnTheBench({ names: { 13: 'Schism' } })
+    try {
+      const on = b.play({ step: (by) => (b.rig.__answered(12 + by, true), Promise.resolve(true)) })
+      b.say('next', undefined, { ago: 250 })
+      b.say('previous')
+      await b.clock.advance(0)
+      assert.deepEqual(on.steps, [[1, b.clock.now() - 250], [-1, b.clock.now() - 100]], 'not Play’s step, or not with the moment Siri handed it over')
+      assert.deepEqual(b.replies(), ['Next: Schism, preset 013.', 'Previous: preset 011.'])
+      assert.equal(b.rig.calls.length, 0, 'Next loaded a preset itself rather than through Play, which knows the setlist')
+      on.off()
+      /* The end of the slots: nothing to step to, and nothing pressed. */
+      const end = b.play({ landing: () => null })
+      b.say('next')
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'There’s no next preset.')
+      assert.equal(end.steps.length, 0)
+      end.off()
+      /* A VP4 slot by slot: Play's own button says why on screen, and Siri says the same. */
+      const stuck = b.play({ landing: () => null, stuck: () => 'On a VP4, Previous and Next work in a setlist or your starred presets.' })
+      b.say('previous')
+      await b.clock.advance(0)
+      assert.equal(stuck.steps.length, 1)
+      assert.equal(b.replies().at(-1), 'On a VP4, Previous and Next work in a setlist or your starred presets.')
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: a write that did not go is answered with Play’s own words; one still out when Siri must be answered is said as sent', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      b.rig.answers.scene = () => {
+        b.rig.__set({ dropped: 'Not sent — not connected' })
+        return Promise.resolve(false)
+      }
+      b.say('scene', 2)
+      await b.clock.advance(0)
+      assert.equal(b.replies().at(-1), 'Not sent, not connected.')
+      /* On the wire past its deadline and not answered yet, a second before the Swift would say Not sent. */
+      b.rig.answers.scene = () => new Promise(() => {})
+      const id = b.say('scene', 3, { ago: 0 })
+      await b.clock.advance(b.rule.SIRI_ANSWER_MS - 1)
+      assert.equal(b.replyTo(id).length, 0)
+      await b.clock.advance(1)
+      assert.deepEqual(b.replyTo(id), ['Sent: Scene 3. The unit hasn’t answered yet.'])
+      const { SIRI_REPLY_MS } = await import(pathToFileURL(join(b.dir, 'siriPipe.js')).href)
+      assert.ok(b.rule.SIRI_ANSWER_MS <= SIRI_REPLY_MS - 500, 'the JavaScript answers too close to the Swift’s own Not sent')
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: in the demo, which is what Apple’s reviewer has, the commands land on the simulated unit', async () => {
+    const b = await demoOnTheBench('fm3')
+    try {
+      const { rig } = b
+      assert.equal(rig.getState().deviceSlug, 'fm3', 'the demo did not come up')
+      b.play({ step: (by, when) => rig.loadPreset(rig.getState().preset.number + by, when), landing: (by) => rig.getState().preset.number + by })
+      b.say('scene', 3)
+      await b.clock.advance(2000)
+      assert.equal(rig.getState().sceneIndex, 2, 'the demo did not go to scene 3')
+      assert.match(b.replies().at(-1), /^Scene 3[.,]/)
+      b.say('tempo', 132)
+      await b.clock.advance(2000)
+      assert.equal(rig.getState().bpm, 132)
+      assert.equal(b.replies().at(-1), 'Tempo 132.')
+      const was = rig.getState().preset.number
+      b.say('next')
+      await b.clock.advance(8000)
+      assert.equal(rig.getState().preset.number, was + 1)
+      assert.match(b.replies().at(-1), /^Next: .*preset \d{3}\.$/)
+      /* A pedal the demo preset has exactly one of. */
+      const blocks = rig.getState().blocks
+      const kind = Object.entries(b.rule.PEDAL_SLUGS).find(([k, slugs]) => k !== 'boost' && blocks.filter((x) => slugs.includes(x.slug)).length === 1)?.[0]
+      assert.ok(kind, 'the demo preset has no pedal of a kind Siri names, once')
+      const block = blocks.find((x) => b.rule.PEDAL_SLUGS[kind].includes(x.slug))
+      const wanted = block.bypassed === true
+      b.say(wanted ? 'pedalOn' : 'pedalOff', kind)
+      await b.clock.advance(2000)
+      assert.equal(rig.getState().blocks.find((x) => x.effectId === block.effectId).bypassed, !wanted, `${kind} was not switched in the demo`)
+      assert.equal(b.replies().at(-1), `${b.rule.pedalWord(kind)} ${wanted ? 'on' : 'off'}.`)
+      b.say('tunerOn')
+      await b.clock.advance(2000)
+      assert.equal(rig.getState().tunerOn, true)
+      b.siri.siriElsewhere(true)
+      b.say('tunerOff')
+      await b.clock.advance(2000)
+      assert.equal(rig.getState().tunerOn, false)
+      assert.equal(b.replies().at(-1), 'Tuner off.')
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: the rig says Not sent for a command from outside the screen, and when a preset’s select is answered', async () => {
+    const b = await demoOnTheBench('am4')
+    try {
+      const { rig } = b
+      rig.notSentNow('siri scene')
+      assert.equal(rig.getState().dropped, 'Not sent — it would have landed late')
+      assert.ok(rig.getState().droppedAt > 0, 'Play would not show it: no time on it')
+      rig.notSentNow('siri scene', { late: false })
+      assert.equal(rig.getState().dropped, 'Not sent — not connected')
+      const heard = []
+      const off = rig.onPresetAnswered((e) => heard.push(e))
+      const loading = rig.loadPreset(20)
+      await b.clock.advance(0)
+      assert.deepEqual(heard, [{ number: 20, ok: true, words: null }], 'the select was not said as answered before the reads behind it')
+      let finished = false
+      loading.then(() => (finished = true))
+      await b.clock.advance(0)
+      assert.equal(finished, false, 'nothing was read after the select, or the test proves nothing')
+      await b.clock.advance(8000)
+      assert.equal(await loading, true)
+      off()
+      rig.loadPreset(21)
+      await b.clock.advance(8000)
+      assert.equal(heard.length, 1, 'still told after it stopped listening')
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: every word it is handed is plain, names the device by deviceNoun, and calls nothing official', async () => {
+    const rule = await import('../mobile/src/lib/siri-rule.js')
+    const S = rule.SIRI_SAYS
+    const said = [
+      S.openPlay('iPad'), S.notSent, S.scene(3, 'LEAD'), S.scene(6, ''), S.noScenes, S.sceneCount(4),
+      S.step(1, '013', 'Schism'), S.step(-1, '011', ''), S.end(1), S.end(-1), S.preset('012 D01', 'Clean'), S.preset('012', ''),
+      S.presetSame('012'), S.presetRange(104), S.presetRange(null), S.tempo(120), S.tempoRange(24, 250),
+      S.tunerOn, S.tunerAlready, S.noTuner, S.tunerOff, S.tunerOffSoon,
+      ...Object.keys(rule.PEDAL_SLUGS).flatMap((k) => [S.pedal(k, true), S.pedal(k, false), S.noPedal(k), S.manyPedals(k)]),
+      S.notRead, S.noAmp, S.boostNotHere
+    ]
+    /* Every one of them, so a new sentence cannot skip this. */
+    assert.equal(Object.keys(S).length, 23, 'a sentence was added to SIRI_SAYS and not to this test')
+    said.push(rule.sentWords('Scene 3'))
+    for (const w of said) {
+      assert.ok(!/this phone/i.test(w), `“${w}” says “this phone”`)
+      assert.ok(!/\b(official|certified|approved|endorsed|authori[sz]ed)\b/i.test(w), `“${w}”`)
+      assert.ok(!/colour|favourite|grey\b|fractal audio/i.test(w), `“${w}”`)
+      assert.ok(!/undefined|null|NaN|\[object/.test(w), `“${w}”`)
+    }
+    /* The one sentence that names the device takes it from deviceNoun, as it is shown. */
+    const code = withoutComments(read(`${LIB}/siri.js`))
+    assert.match(code, /SIRI_SAYS\.openPlay\(deviceNoun\(\)\)/)
+    assert.ok(!/['`"][^'`"]*this phone/i.test(code), 'lib/siri says “this phone”')
+    /* Play's own notes, as Siri says them. */
+    assert.equal(rule.spoken('Not sent — not connected'), 'Not sent, not connected.')
+    assert.equal(rule.spoken('Scene 3.'), 'Scene 3.')
+    assert.equal(rule.spoken(`a\n${'x'.repeat(400)}`).length, 300)
+  })
+
+  test('Siri: Play hands over its own step, the app listens for its life, and nothing asks whether it is the demo', () => {
+    const stage = withoutComments(read('mobile/src/screens/Stage.js'))
+    assert.match(stage, /import \{ useSiriPlay \} from '\.\.\/lib\/siri'/)
+    assert.match(stage, /useSiriPlay\(\{ step, landing, stuck: \(\) => \(!order && noSlotSteps \? vp4StepWords\(caps\) : null\) \}\)/, 'Siri’s Next is not Play’s own step')
+    const step = stage.slice(stage.indexOf('const step = async (by, at = Date.now()) => {'), stage.indexOf('\n  }\n', stage.indexOf('const step = async (by, at = Date.now()) => {')))
+    assert.match(step, /const loading = loadPreset\(next, at\)/)
+    assert.match(step, /return loading\s*$/, 'Play’s step does not hand back its load, so Siri cannot say how it went')
+    const app = flat('mobile/App.js')
+    assert.match(app, /import \{ siriElsewhere, startSiri \} from '\.\/src\/lib\/siri'/)
+    assert.match(app, /useEffect\(\(\) => startSiri\(\), \[\]\)/, 'Siri is not listened for from the start, so Tuner off works only on Play')
+    assert.match(app, /const playElsewhere = auth === 'in' && seenWalk === true && !independentDue && screen !== 'stage'/)
+    assert.match(app, /useEffect\(\(\) => siriElsewhere\(playElsewhere\), \[playElsewhere\]\)/)
+    const siri = withoutComments(read(`${LIB}/siri.js`))
+    assert.ok(!/isDemo|from '\.\/demo'/.test(siri), 'Siri takes another road in the demo than on a rig, so the reviewer would try something customers do not have')
+    /* The handler is the JavaScript's alone: it loads the native piece only through the pipe, which is null on every older build. */
+    assert.ok(!/requireOptionalNativeModule|requireNativeModule|NativeModules/.test(siri))
+    assert.match(read(`${LIB}/siriPipe.js`), /requireOptionalNativeModule\('FractalSiri'\)/)
+  })
+
+  test('Siri: on a build without the Siri piece nothing listens, nothing throws, and nothing is said', async () => {
+    const b = await siriOnTheBench({ extra: { 'expo.js': EXPO.replace('export const native = { module: fake }', 'export const native = { module: null }') } })
+    try {
+      assert.equal(b.expo.listening(), 0)
+      b.play()
+      b.stop()
+      assert.equal(b.rig.calls.length, 0)
+    } finally {
+      done(b)
+    }
+  })
+}
