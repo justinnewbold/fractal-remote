@@ -20,7 +20,7 @@ import { logDebug } from './debugLog'
 import { bluetoothOn } from './bleSwitch'
 import { pokeBluetooth, startBluetoothLink, stopBluetoothLink } from './bleLink'
 import { setLinkAway, setLinkDown } from './tapGate'
-import { ELSEWHERE_WATCH_MS, LINK_DOWN_HOLD_MS, linkDownAt, METERS_OFF_PATH, metersOffBody, metersRefused, timeToQuietMeters } from './relay-rules'
+import { ELSEWHERE_WATCH_MS, LINK_DOWN_HOLD_MS, linkDownAt, METERS_OFF_PATH, metersOffBody, metersRefused, timeToQuietMeters, UNIT_ASK_MS } from './relay-rules'
 
 import {
   censusHosts,
@@ -90,6 +90,8 @@ const initial = {
   hostVersion: null,
   hosts: [],
   units: {},
+  /* While a computer that has not said its unit is asked again (askUnknownUnits): Which unit says so. */
+  unitsAsking: false,
   chosenHost: null,
   /* A pick under Which unit that did not answer while another is driven in its place (relay.js remoteMissingPick): Play says so. */
   missingPick: null,
@@ -208,7 +210,8 @@ const set = (patch) => {
     next.chosenHost === state.chosenHost &&
     next.missingPick === state.missingPick &&
     next.hosts.length === state.hosts.length &&
-    next.units === state.units
+    next.units === state.units &&
+    next.unitsAsking === state.unitsAsking
   ) {
     return
   }
@@ -611,6 +614,8 @@ async function afterCount(was, run, began = Date.now()) {
     /* The roll call picked one of two (firstUnitHost): what was read while it
        listened came from whichever answered first, so read it again. */
     if (remoteHosts().length > 1 && remoteChosenHost() !== before) await refreshAll()
+    /* A computer that did not say its unit in the count's window, asked again with longer (askUnknownUnits). */
+    askUnknownUnits()
   } catch {
     // A roll call that fails is not a reason to distrust the link.
   }
@@ -702,6 +707,43 @@ export function watchUnits() {
     stopped = true
     if (timer) clearTimeout(timer)
   }
+}
+
+/*
+ * A COMPUTER THAT HAS NOT SAID WHICH UNIT, ASKED AGAIN (relay-rules
+ * UNIT_ASK_MS): "raspberry pi 3 — Unit not known. Update the computer app on
+ * it to see which", of a Pi 3 on the newest computer app, too busy to say in
+ * the count's window. Once the count is done (afterCount) and when Which unit
+ * opens, those that have not said are asked alone, with longer. Reads only,
+ * one ask at a time, and only with two or more computers; while it runs,
+ * Which unit says it is asking (`unitsAsking`).
+ */
+let askingUnits = null
+export function askUnknownUnits() {
+  if (askingUnits) return askingUnits
+  const hosts = remoteHosts()
+  const known = remoteUnits()
+  const unknown = hosts.filter((name) => !known[name])
+  if (hosts.length < 2 || !unknown.length) return Promise.resolve(known)
+  set({ unitsAsking: true })
+  askingUnits = (async () => {
+    try {
+      const found = await refreshUnits({ windowMs: UNIT_ASK_MS, only: unknown })
+      /* In the log, for the next "which unit is it?" read off a report. */
+      for (const name of unknown) {
+        const unit = found?.[name]
+        logDebug('link', unit ? `${name} said its unit when asked again — ${unit.plugged ? unit.model : 'no unit plugged in'}` : `${name} did not say its unit, asked again for ${UNIT_ASK_MS / 1000} s`)
+      }
+      return found
+    } catch {
+      return remoteUnits()
+    } finally {
+      askingUnits = null
+      set({ unitsAsking: false })
+      heardHosts()
+    }
+  })()
+  return askingUnits
 }
 
 /** Keep this one, on Play's card for a pick that never answers: the computer driven becomes the pick (relay.js keepDriven). */

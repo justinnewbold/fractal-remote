@@ -72,7 +72,7 @@ import { computerChanged } from './deviceState.js'
  * a code, and nothing makes one any more.
  */
 import { isPairAccount } from '../../shared/pairing.mjs'
-import { ELSEWHERE_WATCH_MS, LINK_DOWN_HOLD_MS, linkDownAt, metersRefused, timeToQuietMeters } from '../../shared/relay-rules.mjs'
+import { ELSEWHERE_WATCH_MS, LINK_DOWN_HOLD_MS, linkDownAt, metersRefused, timeToQuietMeters, UNIT_ASK_MS } from '../../shared/relay-rules.mjs'
 import { setLinkAway, setLinkDown, setTapsRelayed } from './tapGate.js'
 import { PHONE_NOTE_ID, phoneNote, timeToTell } from '../../shared/phone-note.mjs'
 import { holders } from '../../shared/editors.mjs'
@@ -496,6 +496,8 @@ let state = {
   hosts: [],
   /** remote role: which unit each of them has, by name (see unitFrom). */
   units: {},
+  /** remote role: while one that has not said its unit is asked again (askUnknownUnits): Which unit says so. */
+  unitsAsking: false,
   /** remote role: which of them requests are addressed to, or null. */
   chosenHost: null,
   /** remote role: a pick that did not answer while another is driven in its place (remote.js remoteMissingPick): Play says so. */
@@ -716,6 +718,8 @@ async function afterCount(before, run) {
       metersAgain()
       quietMeters()
     }
+    /* A computer that did not say its unit in the count's window, asked again with longer (askUnknownUnits). */
+    askUnknownUnits()
   } catch {
     // A roll call that fails is not a reason to distrust the link.
   }
@@ -784,6 +788,33 @@ export function watchUnits() {
     stopped = true
     if (timer) clearTimeout(timer)
   }
+}
+
+/*
+ * A computer that has not said which unit, asked again alone with longer
+ * (shared/relay-rules.mjs UNIT_ASK_MS): once the count is done and when
+ * Which unit opens, reads only, one ask at a time, `unitsAsking` meanwhile.
+ * The phone's link.js askUnknownUnits, the same.
+ */
+let askingUnits = null
+export function askUnknownUnits() {
+  if (askingUnits) return askingUnits
+  const hosts = remoteHosts()
+  const known = remoteUnits()
+  const unknown = hosts.filter((name) => !known[name])
+  if (hosts.length < 2 || !unknown.length) return Promise.resolve(known)
+  set({ unitsAsking: true })
+  askingUnits = (async () => {
+    try {
+      return await refreshUnits({ windowMs: UNIT_ASK_MS, only: unknown })
+    } catch {
+      return remoteUnits()
+    } finally {
+      askingUnits = null
+      set({ unitsAsking: false, units: remoteUnits() })
+    }
+  })()
+  return askingUnits
 }
 
 /** Keep this one, on Play's card for a pick that never answers (remote.js keepDriven). */
@@ -1444,6 +1475,6 @@ export function _resetLink() {
   downTimer = null
   pageAway = false
   downAway = 0
-  state = { role: 'unknown', link: 'off', account: null, hostOn: false, macName: null, macVersion: null, since: Date.now(), cloud: null, clash: null, hosts: [], units: {}, chosenHost: null, pairError: null }
+  state = { role: 'unknown', link: 'off', account: null, hostOn: false, macName: null, macVersion: null, since: Date.now(), cloud: null, clash: null, hosts: [], units: {}, unitsAsking: false, chosenHost: null, pairError: null }
   watchers.clear()
 }

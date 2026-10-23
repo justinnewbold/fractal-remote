@@ -4835,8 +4835,12 @@ export function run(test) {
     assert.deepEqual(rows.map((r) => [r.label, r.detail, r.on]), [
       ['AM4', 'on Studio iMac', false],
       ['FM3', 'on MacBook Pro', true],
-      ['Old Mac', 'Unit not known. Update the computer app on it to see which.', false]
+      ['Old Mac', 'It didn’t say which unit in time.', false]
     ])
+    /* While it is asked again (link.js askUnknownUnits), said so; and never sent off to update a computer app that may be fine. */
+    assert.equal(unitChoices(['Old Mac', 'MacBook Pro'], { 'MacBook Pro': { model: 'FM3', plugged: true } }, null, true).find((r) => r.name === 'Old Mac').detail, 'Asking it which unit…')
+    const { unitNotSaid } = await import('../shared/relay-rules.mjs')
+    assert.ok(![unitNotSaid(false), unitNotSaid(true)].some((words) => /update/i.test(words)), 'Which unit still tells a slow computer to update')
     /* Nothing plugged in still answers, and goes last. */
     const empty = unitChoices(['A', 'B'], { A: { model: 'FM3', plugged: false }, B: { model: 'AM4', plugged: true } })
     assert.deepEqual(empty.map((r) => r.label), ['AM4', 'No unit plugged in'])
@@ -4850,21 +4854,21 @@ export function run(test) {
     const link = read('mobile/src/lib/link.js')
     assert.match(link, /export async function chooseHost\(name\) \{\s*const ok = await pickHost\(name\)[\s\S]{0,200}await refreshAll\(\)/, 'the phone switches unit but keeps the old one on screen')
     const settings = read('mobile/src/screens/Settings.js')
-    assert.match(settings, /<Section>Which unit<\/Section>[\s\S]{0,300}unitChoices\(hosts, units, chosen\)/)
+    assert.match(settings, /<Section>Which unit<\/Section>[\s\S]{0,300}unitChoices\(hosts, units, chosen, unitsAsking\)/)
     assert.ok(!settings.includes('<Section>Which computer</Section>'), 'the phone still says Which computer')
     const app = read('src/App.jsx')
-    assert.match(app, /title="Which unit"[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost\)[\s\S]{0,500}await chooseHost\(row\.name\)/, 'the website switches unit but does not read the new one')
+    assert.match(app, /title="Which unit"[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost, link\.unitsAsking\)[\s\S]{0,500}await chooseHost\(row\.name\)/, 'the website switches unit but does not read the new one')
   })
 
   test('a live unit name opens Which unit when two units are on, like the demo', () => {
     const app = read('mobile/App.js')
     assert.match(app, /<LiveUnit\s+open=\{pickLive && !demo\}[\s\S]{0,200}hosts=\{link\.hosts\}\s+units=\{link\.units\}\s+chosen=\{link\.chosenHost\}/)
     const sheet = read('mobile/src/components/LiveUnit.js')
-    assert.match(sheet, /unitChoices\(hosts, units, chosen\)/)
+    assert.match(sheet, /unitChoices\(hosts, units, chosen, asking\)/)
     assert.match(sheet, /await chooseHost\(row\.name\)[\s\S]{0,160}onClose\(\)/, 'the sheet closes before the new unit is read')
     const web = read('src/App.jsx')
     assert.match(web, /if \(!isDemo\(\) && link\.role === 'remote' && link\.hosts\.length > 1\) \{\s*setSheet\('units'\)/)
-    assert.match(web, /open=\{sheet === 'units'\}[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost\)[\s\S]{0,600}await chooseHost\(row\.name\)/)
+    assert.match(web, /open=\{sheet === 'units'\}[\s\S]{0,400}unitChoices\(link\.hosts, link\.units, link\.chosenHost, link\.unitsAsking\)[\s\S]{0,600}await chooseHost\(row\.name\)/)
   })
 
   /*

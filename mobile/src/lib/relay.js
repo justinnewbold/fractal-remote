@@ -1406,8 +1406,8 @@ async function askAlone(name, { windowMs, sleep }) {
  * addressed to one of them, so it is not asked; see unitFrom for why an
  * answer that does not come back alone is not believed either.
  */
-async function readUnits({ windowMs, sleep }) {
-  const once = hosts.filter((name, i) => hosts.indexOf(name) === i && hosts.lastIndexOf(name) === i)
+async function readUnits({ windowMs, sleep, only = null }) {
+  const once = hosts.filter((name, i) => hosts.indexOf(name) === i && hosts.lastIndexOf(name) === i && (!only || only.includes(name)))
   const found = await Promise.all(
     once.map(async (name) => {
       const [health, device] = await Promise.all([
@@ -1429,13 +1429,15 @@ async function readUnits({ windowMs, sleep }) {
  * of them is said within seconds. Reads only, and no tap waits for them;
  * not while a roll call or a proof is running, which reads its own; and
  * only with two or more computers, so one computer is never asked anything
- * more. A computer that does not answer keeps what it said last.
+ * more. A computer that does not answer keeps what it said last. `only`
+ * asks just those names: the ones that have not said, given longer
+ * (link.js askUnknownUnits, relay-rules UNIT_ASK_MS).
  */
-export async function refreshUnits({ windowMs = 1500, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+export async function refreshUnits({ windowMs = 1500, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), only = null } = {}) {
   if (hosts.length < 2 || !channel || !isJoined(channel) || counting) return units
   const link = session
   const asked = hosts
-  const found = await readUnits({ windowMs, sleep })
+  const found = await readUnits({ windowMs, sleep, only })
   if (session !== link || counting || hosts !== asked) return units
   const next = { ...units, ...found }
   /* The same object while nothing changed, so nobody redraws for it. */

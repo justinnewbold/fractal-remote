@@ -266,6 +266,7 @@ import {
   keepThisOne,
   forgetMissing,
   watchUnits,
+  askUnknownUnits,
   faultCopy,
   nextDelay
 } from './lib/link'
@@ -1456,6 +1457,15 @@ export default function App() {
     []
   )
   const [setupPage, setSetupPage] = useState(null)
+  /*
+   * Which unit on screen (the sheet off the corner, or Phone & computer): a
+   * computer that has not said its unit is asked again, with longer
+   * (link.js askUnknownUnits). Named, not written as the page's own test.
+   */
+  const whichUnitShown = sheet === 'units' || (sheet === 'settings' && setupPage === 'link')
+  useEffect(() => {
+    if (whichUnitShown) askUnknownUnits()
+  }, [whichUnitShown])
   /* The Colours row's line names the look and the unit's colours, so it is
      redrawn when either changes (lib/useLooks). */
   useLooks()
@@ -4975,7 +4985,7 @@ export default function App() {
       */}
       <Sheet open={sheet === 'units'} onClose={() => setSheet(null)} title="Which unit" note="Each computer on this account">
         <div className="setup-rows">
-          {unitChoices(link.hosts, link.units, link.chosenHost).map((row) => (
+          {unitChoices(link.hosts, link.units, link.chosenHost, link.unitsAsking).map((row) => (
             <SetupRow
               key={row.key}
               title={row.on ? `${row.label} ✓` : row.label}
@@ -6022,7 +6032,7 @@ export default function App() {
             {link.role === 'remote' && link.hosts.length > 1 ? (
               <Section key="which-unit" title="Which unit" note="Each computer on this account, by the unit plugged into it">
                 <div className="setup-rows">
-                  {unitChoices(link.hosts, link.units, link.chosenHost).map((row) => (
+                  {unitChoices(link.hosts, link.units, link.chosenHost, link.unitsAsking).map((row) => (
                     <SetupRow
                       key={row.key}
                       title={row.on ? `${row.label} ✓` : row.label}
