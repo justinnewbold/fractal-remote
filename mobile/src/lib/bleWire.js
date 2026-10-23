@@ -181,6 +181,12 @@ export const STRUCTURE_FRESH_MS = 400
  */
 export const POLL_MS = { scene: 1000, preset: 2000, tempo: 4000, am4: 2000 }
 export const TUNER_MS = 150
+/*
+ * How often the AM4's own tuner is opened again while the phone's tuner is
+ * open, so it stays up until Close (keepUnitTuner). The same three seconds
+ * as the computer's (ForgeFX AM4_TUNER_KEEP_MS).
+ */
+export const AM4_TUNER_KEEP_MS = 3000
 
 /* ------------------------------------------------------------------ */
 /* How each command is sent                                            */
@@ -1248,6 +1254,8 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
    * this connection. `unitSays` what the last open found; `unitClosing` that
    * a close is reading the setting before its 0 can go; `unitShapes` the
    * AM4's raw answers already put in the log on this connection.
+   * `unitKeepAt` when the 127 is next sent again (keepUnitTuner), and
+   * `unitKeepNote` why the last time it was not, said once.
    */
   const tuner = {
     on: false,
@@ -1265,7 +1273,9 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     unitChannel: null,
     unitSays: null,
     unitClosing: false,
-    unitShapes: new Map()
+    unitShapes: new Map(),
+    unitKeepAt: 0,
+    unitKeepNote: null
   }
 
   function reading(event) {
@@ -1690,6 +1700,13 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
         }
       }
     }
+    if (tuner.on && tuner.run === run) {
+      try {
+        await keepUnitTuner(run)
+      } catch {
+        /* The adapter went, or the 127 was refused: the readings go on, and the next one is tried in its time. */
+      }
+    }
     tunerLater(run, TUNER_MS, () => am4TunerTick(run))
   }
 
@@ -1832,14 +1849,20 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     say(`the AM4 answered about ${what}: ${shape}`)
   }
 
-  /* The CC as a write: ahead of the polls, and held behind a stored preset coming back rather than sent into it. */
-  const sendUnitTuner = (on, setting, deadline) =>
-    ex(buildAm4TunerCc(on, setting), {
+  /*
+   * The CC as a write: ahead of the polls, and held behind a stored preset
+   * coming back rather than sent into it. A 127 puts the next keepUnitTuner
+   * AM4_TUNER_KEEP_MS off; `again` is that one's own, which the log says.
+   */
+  const sendUnitTuner = (on, setting, deadline, again = false) => {
+    if (on) tuner.unitKeepAt = time.now() + AM4_TUNER_KEEP_MS
+    return ex(buildAm4TunerCc(on, setting), {
       ms: WAIT.am4Settle,
-      what: `the AM4’s own tuner ${on ? 'open' : 'closed'} (CC ${setting.cc} at ${on ? 127 : 0}, channel ${setting.channel})`,
+      what: `the AM4’s own tuner ${on ? (again ? 'kept open' : 'open') : 'closed'} (CC ${setting.cc} at ${on ? 127 : 0}, channel ${setting.channel})`,
       priority: 'write',
       deadline
     })
+  }
 
   async function openUnitTuner(run, deadline) {
     const setting = await readUnitTuner(deadline)
@@ -1857,6 +1880,56 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       throw err
     }
     return 'opened'
+  }
+
+  /*
+   * KEPT UP UNTIL CLOSE. "On the AM4 when turning on the tuner it stays on
+   * for about 15 seconds on the unit and then turns off. On the phone it
+   * stays on until you hit close. We want it to stay on until the user hits
+   * close." (23 October 2026) Nothing sent is timed from the open: the
+   * readings and the footswitch watch go far more often, and the screen
+   * outlasts them. So the AM4 lets go of a tuner its CC opened, and while
+   * the phone's tuner is open its 127 goes again every AM4_TUNER_KEEP_MS,
+   * from the readings' own ticks, as the computer does (ForgeFX keepTuner).
+   * A screen the AM4 let go of is back within that; one still up stays up.
+   *
+   * Safe because the CC is a level, not a toggle (closeUnitTuner): a 127 to
+   * a tuner already open leaves it open. And each time the setting is read
+   * again first, the number and then the channel, the two reads an open
+   * makes, without changing what the open and the close go by (`unitAsk`,
+   * `unitCc`'s number): the 127 goes only when the AM4 still names the
+   * number it went out on, on the channel it names now or the one it went
+   * out on. A number moved on the AM4 may be Output Volume now, where a 127
+   * is full volume. Anything else sends nothing, and says why once.
+   *
+   * Never once the tuner is closing: the close takes `tuner.on` and
+   * `tuner.run` the moment its turn comes, and they are asked before the
+   * reads, after each, and just before the 127, which then goes into the
+   * line ahead of the close's own reads and its 0. Nor once the 0 has gone
+   * (`unitOpen`), nor on a connection that opened nothing.
+   */
+  async function keepUnitTuner(run) {
+    const owed = () => tuner.on && tuner.run === run && tuner.unitOpen && !!tuner.unitCc && !tuner.unitClosing
+    if (!owed() || time.now() < tuner.unitKeepAt) return false
+    const was = tuner.unitCc
+    tuner.unitKeepAt = time.now() + AM4_TUNER_KEEP_MS
+    const a = await ask(buildAm4TunerCcRead(), (f) => parseAm4GlobalLong(f, AM4.TUNER_CC), WAIT.am4Tempo, 'the AM4’s Tuner setting')
+    if (!owed() || tuner.unitCc !== was) return false
+    const heard = !!a && !rejected(a)
+    const named = heard ? am4TunerCcNamed(a) : null
+    if (named !== was.cc) {
+      const why = `the AM4’s own tuner is not opened again: its Tuner setting ${heard ? `reads “${a.text ?? ''}”` : 'did not answer'}, not plainly CC ${was.cc}, which it was opened on`
+      if (tuner.unitKeepNote !== why) say(why)
+      tuner.unitKeepNote = why
+      return false
+    }
+    const c = await askChannel()
+    if (!owed() || tuner.unitCc !== was) return false
+    tuner.unitKeepNote = null
+    const setting = c.said !== null && c.said !== was.channel ? { cc: was.cc, channel: c.said } : was
+    tuner.unitCc = setting
+    await sendUnitTuner(true, setting, null, true)
+    return true
   }
 
   /*
