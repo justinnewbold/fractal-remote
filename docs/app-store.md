@@ -612,6 +612,20 @@ now switches the amp's boost, and says Boost on or Boost off. Turn the amp
 itself on and off in Edit." The Description's "Turn blocks on and off" is
 still true (Edit does it for every block).
 
+**For the next version's notes: the AM4's own tuner stays up** (23 October
+2026). "On the AM4 when turning on the tuner it stays on for about 15
+seconds on the unit and then turns off. On the phone it stays on until you
+hit close. We want it to stay on until the user hits close." Since 1.87.52,
+with an AM4 whose Tuner setting has a MIDI number, the tuner on the AM4
+itself stays up until Close is tapped in the app: the newest desktop app
+sends the AM4's Tuner number again every three seconds while the app's
+tuner is open, and so does Bluetooth (the developer's only). An older
+desktop app still lets the AM4's tuner go after about 15 seconds, and the
+phone's tuner works the same with either. It makes a reviewed feature do
+what its words already say, so the review notes need nothing new. What's New gets one line: "With an AM4, the tuner on the
+AM4 itself now stays up until you close the tuner in the app. Needs the
+newest desktop app."
+
 ### Notes for App Review, 1.87.11
 
 **These are the ones Apple approved with this build,** and the ones the next
