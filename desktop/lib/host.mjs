@@ -13,7 +13,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { networkInterfaces, hostname as osHostname } from 'node:os'
-import { DEFAULT_PROJECT } from './project.mjs'
+import { DEFAULT_PROJECT, HOSTED_ORIGIN } from './project.mjs'
 
 export const DEFAULT_PORT = 5056
 export const DEFAULT_NAME = 'fractal'
@@ -117,12 +117,23 @@ export function addresses({ port = DEFAULT_PORT, name = DEFAULT_NAME, ip } = {})
  * An operator's own values still win, for a second project or a rotated key;
  * and ForgeFX's own `.env` cannot override these, because Node's loader does
  * not replace a variable that is already in the environment.
+ *
+ * FORGEFX_ALLOWED_ORIGINS is who else may use the device server from a web
+ * page. Its guard (ForgeFX server/src/guard.ts) answers the computer's own
+ * window and the Wi-Fi page it served by itself, and a page from any other
+ * address only when this names it exactly. The public site, opened in a
+ * browser on the computer from the tray, is the one: it is the computer's own
+ * page there, and signs it in. A developer's own page (Vite, at
+ * http://localhost:5173) is added by setting the variable, comma-separated;
+ * set to an empty string, nothing else is let in. A device server older than
+ * the guard reads nothing from it.
  */
 export function serverEnv({
   env = process.env,
   port = DEFAULT_PORT,
   dist,
   project = DEFAULT_PROJECT,
+  hosted = HOSTED_ORIGIN,
   asNode = false
 }) {
   /* Not passed on: see PYTHON, below. */
@@ -163,7 +174,8 @@ export function serverEnv({
     FORGEFX_STATIC: dist,
     AXIS_CLOUD: env.AXIS_CLOUD ?? '1',
     SUPABASE_URL: env.SUPABASE_URL ?? project.url,
-    SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY ?? project.anonKey
+    SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY ?? project.anonKey,
+    FORGEFX_ALLOWED_ORIGINS: env.FORGEFX_ALLOWED_ORIGINS ?? hosted
   }
 }
 

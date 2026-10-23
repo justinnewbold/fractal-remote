@@ -1685,6 +1685,103 @@ test('the web app and the launchers name the same project', async () => {
   assert.equal(remote.DEFAULT_PROJECT, DEFAULT_PROJECT, 'remote.js carries its own copy of the project again')
 })
 
+test('the device server lets the public site in, and nothing else unless somebody says so', async () => {
+  /*
+   * Since its guard (23 October 2026) ForgeFX answers a page from another
+   * address only when FORGEFX_ALLOWED_ORIGINS names it. The public site,
+   * opened on the computer from the tray, is the computer's own page there:
+   * it signs the computer in and turns the phone remote on. Without this it
+   * would quietly fall back to being a remote.
+   */
+  const { HOSTED_ORIGIN } = await import('../shared/pairing.mjs')
+  const project = await import('../desktop/lib/project.mjs')
+  assert.equal(project.HOSTED_ORIGIN, HOSTED_ORIGIN, 'desktop/lib/project.mjs names a different site from shared/pairing.mjs')
+  assert.equal(host.serverEnv({ env: { PATH: '/bin' }, port: 5056, dist: '/d' }).FORGEFX_ALLOWED_ORIGINS, HOSTED_ORIGIN)
+  assert.equal(host.serverEnv({ env: {}, port: 5056, dist: '/d', asNode: true }).FORGEFX_ALLOWED_ORIGINS, HOSTED_ORIGIN, 'the packaged app starts its device server without the site')
+  // A developer's own page, added by hand, is passed through as written.
+  const dev = `${HOSTED_ORIGIN},http://localhost:5173`
+  assert.equal(host.serverEnv({ env: { FORGEFX_ALLOWED_ORIGINS: dev }, port: 5056, dist: '/d' }).FORGEFX_ALLOWED_ORIGINS, dev)
+  // And an empty one stays empty: somebody turning the site off is not overruled.
+  assert.equal(host.serverEnv({ env: { FORGEFX_ALLOWED_ORIGINS: '' }, port: 5056, dist: '/d' }).FORGEFX_ALLOWED_ORIGINS, '')
+  // The launch passes it on: both launchers start the server with serverEnv.
+  assert.match(readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8'), /serverEnv\(\{ port, dist: distPath\(\), asNode: true \}\)/)
+  assert.match(readSrc(new URL('../scripts/serve.mjs', import.meta.url), 'utf8'), /serverEnv\(/)
+})
+
+/*
+ * ForgeFX's guard, steps 1 and 2 (server/src/guard.ts splitHost, hostAccepted,
+ * selfNames and the Origin classes in decide), transcribed so the addresses
+ * this app hands out are held to what the server answers. The CI step "Every
+ * address the computer hands out is answered" asks the real server the same
+ * question on every Linux build.
+ */
+const guardHost = {
+  split(hostHeader) {
+    const m = /^(\[[0-9a-f:.]+\]|[a-z0-9._-]+)(?::(\d{1,5}))?$/i.exec(hostHeader)
+    return m ? { name: m[1].toLowerCase(), port: m[2] ?? null } : null
+  },
+  own(hostname) {
+    const h = hostname.trim().toLowerCase().replace(/\.$/, '')
+    if (!h) return new Set()
+    const bare = h.replace(/\.local$/, '')
+    return new Set([bare, `${bare}.local`])
+  },
+  accepted(name, own) {
+    return name === 'localhost' || /^\d{1,3}(\.\d{1,3}){3}$/.test(name) || /^\[[0-9a-f.]*:[0-9a-f:.]*\]$/.test(name) || /^[a-z0-9-]+\.local$/.test(name) || own.has(name)
+  },
+  /* What a same-origin page at `url` is, as the server's step 2 sorts its Origin, with the server bound to `bound`. */
+  originClass(url, bound, hostname) {
+    const u = new URL(url)
+    const h = guardHost.split(u.host)
+    if (!h || !guardHost.accepted(h.name, guardHost.own(hostname))) return 'refused host'
+    const o = u.origin.toLowerCase()
+    const self = `http://${h.name}${h.port ? `:${h.port}` : ''}`
+    if (o === `http://localhost:${bound}` || o === `http://127.0.0.1:${bound}` || o === `http://[::1]:${bound}`) return 'loopback'
+    if (o === self) return h.name === 'localhost' || h.name === '[::1]' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h.name) ? 'loopback' : 'lan'
+    return 'refused origin'
+  }
+}
+
+test('every address the computer hands out is one its device server answers, the window’s own first', () => {
+  /*
+   * The guard refuses a Host it does not know (a page handed this computer's
+   * address under its own name), and a bug there would take the window down
+   * with everything else. So every address the tray lists and the QR code
+   * carries is held to it, for machines with odd names, at the usual port
+   * and at a port the system picked, and each one's own page sorts as the
+   * server's own (loopback for the window, lan for the Wi-Fi page) and never
+   * as a stranger.
+   */
+  const machines = ['Justins-MacBook-Pro.local', 'Justin’s MacBook Pro', 'raspberrypi', 'pi.home.arpa', 'DESKTOP-4F2K9QZ', 'MacBook Air (2)', 'x'.repeat(70), '', '.local', 'Åsa']
+  for (const machine of machines) {
+    const name = host.mdnsName(machine)
+    assert.match(name, /^[a-z0-9-]+$/, `${JSON.stringify(machine)} makes a .local name the network cannot carry: ${name}`)
+    for (const port of [5056, 49731]) {
+      for (const ip of ['192.168.1.20', '10.0.0.7', null]) {
+        const at = host.addresses({ port, name, ip })
+        const handed = [...at.all, at.forPhone].filter(Boolean)
+        assert.ok(handed.includes(`http://localhost:${port}`), 'the window’s own address is not among them')
+        for (const url of handed) {
+          const cls = guardHost.originClass(url, port, machine)
+          assert.ok(cls === 'loopback' || cls === 'lan', `${url} (on ${JSON.stringify(machine)}) is ${cls} to the device server`)
+          if (new URL(url).hostname === 'localhost') assert.equal(cls, 'loopback', 'the window is not the server’s own page')
+        }
+      }
+    }
+  }
+  // 127.0.0.1, which the window can be pointed at, and the computer's own name as the system says it.
+  assert.equal(guardHost.originClass('http://127.0.0.1:5056', 5056, 'raspberrypi'), 'loopback')
+  assert.equal(guardHost.originClass('http://raspberrypi.local:5056', 5056, 'raspberrypi'), 'lan')
+  assert.equal(guardHost.originClass('http://raspberrypi:5056', 5056, 'raspberrypi'), 'lan')
+  assert.equal(guardHost.originClass('http://pi.home.arpa:5056', 5056, 'pi.home.arpa'), 'lan')
+  // At a port the server fell back to, the page there is its own and the usual port's is not.
+  assert.equal(guardHost.originClass('http://localhost:49731', 49731, 'x'), 'loopback')
+  assert.equal(new URL('http://localhost:5056').origin === `http://localhost:${49731}`, false)
+  // What it refuses, said so the list stays honest: names the app never shows, which a person may type.
+  for (const typed of ['http://raspberrypi.lan:5056', 'http://studio.fritz.box:5056', 'http://pi.tail1234.ts.net:5056', 'http://evil.example:5056'])
+    assert.equal(guardHost.originClass(typed, 5056, 'raspberrypi'), 'refused host', `${typed} is answered`)
+})
+
 test('a hostname reads like a name', () => {
   assert.equal(host.prettyHostname('Justins-MacBook-Pro.local'), 'Justins MacBook Pro')
   assert.equal(host.prettyHostname('studio_mac'), 'studio mac')
