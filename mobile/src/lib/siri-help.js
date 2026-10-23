@@ -112,8 +112,9 @@ export const SIRI_LINKS = Object.freeze([
 
 const list = (words) => `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`
 
-/* The pedals that are on every unit: everything but Boost, which is the AM4 amp's. */
-const PEDALS_SAID = list(SIRI_PEDAL_WORDS.filter((w) => w !== 'Boost'))
+/* The pedal the phrases show, and the others on every unit: everything else but Boost, which is the AM4 amp's. */
+const PEDAL_SHOWN = 'Delay'
+const PEDALS_SAID = list(SIRI_PEDAL_WORDS.filter((w) => w !== 'Boost' && w !== PEDAL_SHOWN))
 
 /**
  * The row on Settings: its title and its one line. A row's line is one line
@@ -152,7 +153,7 @@ const PHRASES = (noun) => [
     does: `Siri asks for the tempo. Anything from ${SIRI_TEMPO.min} to ${SIRI_TEMPO.max}. A VP4 has no tempo the app can set.`
   },
   {
-    say: ['Delay on in Fractal Remote', 'Delay off in Fractal Remote'],
+    say: [`${PEDAL_SHOWN} on in Fractal Remote`, `${PEDAL_SHOWN} off in Fractal Remote`],
     does: `Also ${PEDALS_SAID}. On an AM4, Boost is the amp’s boost. Only when the preset has exactly one pedal of that kind: with two delays, use the screen.`
   },
   {

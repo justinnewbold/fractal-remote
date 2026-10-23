@@ -121,6 +121,12 @@ export function run(test) {
     const page = help.siriWords({ os: 'ios', kind: 'phone', native: true, noun: 'phone' }).join('\n')
     for (const w of help.SIRI_PEDAL_WORDS.filter((p) => p !== 'Boost')) assert.ok(page.includes(w), `the page never names ${w}`)
     assert.match(page, /On an AM4, Boost is the amp’s boost/)
+    /* And the "Also" list under a pedal's phrases is the others: not the one the phrases just showed. */
+    const pedalLine = help.siriPage({ os: 'ios', kind: 'phone', native: true, noun: 'phone' })[0].phrases.find((p) => /^Also /.test(p.does))
+    const shown = pedalLine.say.map((p) => p.split(' ')[0])
+    const also = /^Also ([^.]*)\./.exec(pedalLine.does)[1].split(/, | and /)
+    assert.deepEqual(also.filter((w) => shown.includes(w)), [], `the page shows “${pedalLine.say[0]}” and then “Also ${also.join(', ')}”`)
+    assert.deepEqual([...shown.slice(0, 1), ...also].sort(), help.SIRI_PEDAL_WORDS.filter((w) => w !== 'Boost').sort(), 'a pedal Siri knows is missing from the page, or one it does not is on it')
 
     /* The tempo Siri takes is the units' own (and the Swift's, which test/siri-native holds to it). */
     const { UNIT_BPM } = await import('../shared/tempo.mjs')
