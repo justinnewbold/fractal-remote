@@ -15,7 +15,9 @@ import Press from './Press'
  * missingPickCard).
  *
  * In the Note's register, bordered rather than filled, and with its buttons
- * under the words: thumb-high, one per way out.
+ * under the words: thumb-high, one per way out. A button's `sub` is the line
+ * under its label, two lines long where the label has one: the computer's
+ * name goes there, so a narrow phone or bigger text never cuts it off.
  */
 export default function ComputerCard({ words, buttons = [] }) {
   const [busy, setBusy] = useState(null)
@@ -35,11 +37,12 @@ export default function ComputerCard({ words, buttons = [] }) {
       {buttons.map((b, i) => (
         <Press
           key={b.key || b.label}
-          label={busy === b.label ? 'Switching…' : b.label}
+          label={busy === i ? 'Switching…' : b.label}
+          sub={b.sub}
           tone={i === 0 ? 'live' : 'plain'}
           disabled={busy !== null}
           onPress={async () => {
-            setBusy(b.label)
+            setBusy(i)
             try {
               await b.onPress?.()
             } finally {

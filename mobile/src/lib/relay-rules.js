@@ -797,7 +797,13 @@ export function unitElsewhere({ hosts = [], units = {}, chosen = null, unitState
   return others.length ? { here: chosen, others } : null
 }
 
-/** Play's words for it, and one button per computer with a unit: "Use the FM3 on MacBook Pro SG 566". */
+/**
+ * Play's words for it, and one button per computer with a unit: "Use the FM3
+ * on MacBook Pro SG 566". Also in two halves, for a button whose label is
+ * one line (the phone's Press): "Use the FM3" over "on MacBook Pro SG 566",
+ * as Which unit puts the unit over the computer. On one line a 320-wide
+ * phone cut the computer's name, the reason the button is there.
+ */
 export function unitElsewhereCard(facts = {}) {
   const found = unitElsewhere(facts)
   if (!found) return null
@@ -807,7 +813,7 @@ export function unitElsewhereCard(facts = {}) {
     /* For a notice with a heading of its own (the browser's, where Play cannot open without a unit). */
     title: found.others.length > 1 ? 'Your units are on other computers' : 'Your unit is on another computer',
     words: `${found.here} has no unit plugged in. ${list}.`,
-    buttons: found.others.map(({ name, model }) => ({ name, label: `Use the ${model} on ${name}` }))
+    buttons: found.others.map(({ name, model }) => ({ name, label: `Use the ${model} on ${name}`, short: `Use the ${model}`, sub: `on ${name}` }))
   }
 }
 
@@ -848,9 +854,9 @@ export const missingPickRow = (name) => (name ? { name, label: `${name} — not 
  * THAT. An answer lost, or a computer gone quiet, used to be logged as an
  * old computer app, which sent whoever read the log off to update one that
  * was fine; and the one driven is asked by name all the same (relay.js
- * remoteRequest), so it is addressed, only not proved. `cut` is a count the link dropped under before it was done
- * (relay.js takeCensus): what it heard is not the answer, and it is taken
- * again when the link is back.
+ * remoteRequest), so it is addressed, only not proved. `cut` is a count the
+ * link dropped under before it was done (relay.js takeCensus): what it heard
+ * is not the answer, and it is taken again when the link is back.
  */
 export function rollCallLine({ hosts = [], units = {}, chosen = null, why = null, addressed = false, missing = null, proof = null, cut = false } = {}) {
   const count = ['no computers', 'one computer', 'two computers', 'three computers'][hosts.length] || `${hosts.length} computers`

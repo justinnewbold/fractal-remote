@@ -4932,7 +4932,7 @@ export function run(test) {
     const units = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true }, 'raspberry pi 5': { model: 'FM3', plugged: false }, 'raspberry pi 3': { model: 'FM3', plugged: false } }
     const card = r.unitElsewhereCard({ hosts, units, chosen: 'raspberry pi 3', unitState: 'missing' })
     assert.equal(card.words, 'raspberry pi 3 has no unit plugged in. Your FM3 is on MacBook Pro SG 566.')
-    assert.deepEqual(card.buttons, [{ name: 'MacBook Pro SG 566', label: 'Use the FM3 on MacBook Pro SG 566' }])
+    assert.deepEqual(card.buttons, [{ name: 'MacBook Pro SG 566', label: 'Use the FM3 on MacBook Pro SG 566', short: 'Use the FM3', sub: 'on MacBook Pro SG 566' }])
     assert.equal(card.title, 'Your unit is on another computer')
     /* The roll call's plugged false is enough before the rig has read the unit; the rig saying it answers is never overruled. */
     assert.ok(r.unitElsewhereCard({ hosts, units, chosen: 'raspberry pi 3', unitState: 'unknown' }))
@@ -4956,7 +4956,13 @@ export function run(test) {
     assert.match(stage, /unitElsewhereCard\(\{ hosts: computers\?\.hosts, units: computers\?\.units, chosen: computers\?\.chosenHost, unitState \}\)/)
     assert.match(stage, /const fault = noDevice\(useRig\(ofError\), whereCard\)/, 'the raw "No Fractal device found" card is still up under the one that says where the unit is')
     assert.match(stage, /const noDevice = \(fault, where\) => \(where && NO_DEVICE\.test\(String\(fault\)\) \? null : fault\)/)
-    assert.match(stage, /buttons=\{whereCard\.buttons\.map\(\(b\) => \(\{ label: b\.label, onPress: \(\) => chooseHost\(b\.name\) \}\)\)\}/)
+    /* The unit over the computer: the phone's button label is one line (Press), and the computer's name, the reason the button is there, was cut off at 320 wide. Its line under is two. */
+    assert.match(stage, /buttons=\{whereCard\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.short, sub: b\.sub, onPress: \(\) => chooseHost\(b\.name\) \}\)\)\}/, 'the phone puts the computer’s name on the button’s one line, where a narrow phone cuts it off')
+    const card2 = read('mobile/src/components/ComputerCard.js')
+    assert.match(card2, /<Press\s+key=\{b\.key \|\| b\.label\}\s+label=\{busy === i \? 'Switching…' : b\.label\}\s+sub=\{b\.sub\}/)
+    const press = read('mobile/src/components/Press.js')
+    assert.match(press, /<Text\s+numberOfLines=\{1\}[\s\S]{0,240}\{label\}/, 'Press’s label is no longer one line: say so here')
+    assert.match(press, /\{sub \? \(\s*<Text\s+numberOfLines=\{2\}/, 'the line under a Press is no longer two lines: the computer’s name may be cut')
     assert.match(stage, /useEffect\(\(\) => \(watchingUnits \? watchUnits\(\) : undefined\), \[watchingUnits\]\)/)
     /* The browser: in the notice that stands where Play would be, the same words and buttons. */
     const app = read('src/App.jsx')

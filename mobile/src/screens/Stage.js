@@ -889,7 +889,8 @@ export default function Stage({
           />
         ) : null}
         {/* Each button is Which unit's own proved pick: nothing switches until it is pressed. */}
-        {whereCard ? <ComputerCard words={whereCard.words} buttons={whereCard.buttons.map((b) => ({ label: b.label, onPress: () => chooseHost(b.name) }))} /> : null}
+        {/* The unit over the computer, as Which unit has them: one line cut the computer's name on a narrow phone. */}
+        {whereCard ? <ComputerCard words={whereCard.words} buttons={whereCard.buttons.map((b) => ({ key: b.name, label: b.short, sub: b.sub, onPress: () => chooseHost(b.name) }))} /> : null}
 
         {/* ---------------------------------------------------------- preset */}
         <View style={{ gap: space.sm }}>
