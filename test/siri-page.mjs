@@ -152,7 +152,10 @@ export function run(test) {
       const words = help.siriWords({ ...args, noun: NOUN[args.kind] }).join('\n')
       assert.ok(!/tuner\/on/i.test(words), 'a page offers a link that would mute the rig')
       assert.match(words, /There’s no link for Tuner on/, `the ${args.os} ${args.kind} page does not say why there is no Tuner on link`)
+      /* A link that starts the app is dropped with nothing on Play (lib/siri carryOutLink), and every link page says so. */
+      assert.match(words, /If the app has to start up first, the link only opens it: nothing is sent, and Play shows nothing about it\. Run it again once Play is up\. Tuner off is the exception/, `the ${args.os} ${args.kind} page promises Play shows what a link that started the app did`)
     }
+    assert.match(read(`${LIB}/siri.js`), /if \(launch && asked\.command !== 'tunerOff'\) \{\s*logDebug\('siri', `link \$\{asked\.command\}: it started the app, so it is not sent \(the tap rule\)`\)\s*return false/, 'a link that starts the app is no longer dropped: the page says it is')
   })
 
   test('Siri page: the one rule, the speed, the locked phone, the watch, a loud room, the click, and what Siri won’t do', async () => {

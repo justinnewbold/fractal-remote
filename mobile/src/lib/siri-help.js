@@ -182,9 +182,17 @@ const HOW_FAST = [
   'And the same rule as a tap: a change that can’t reach your unit within a second and a half isn’t sent at all, so nothing lands late in the middle of a verse. Play then shows Not sent. Say it again.'
 ]
 
+/*
+ * The links' own rules. The third is lib/siri carryOutLink's: a link that
+ * had to start the app is dropped, by the tap rule and because the phone
+ * hands it over again after an update restarts the app, with nothing on
+ * Play to say so. So the page says it here, rather than promise that Play
+ * shows what every link did. Tuner off is the one taken from a start.
+ */
 const LINKS_RULE = [
   'There’s no link for Tuner on, so a link on a web page or in a message can never mute your rig.',
-  'Use one link per shortcut: a shortcut doesn’t wait for one link to land before it opens the next.'
+  'Use one link per shortcut: a shortcut doesn’t wait for one link to land before it opens the next.',
+  'If the app has to start up first, the link only opens it: nothing is sent, and Play shows nothing about it. Run it again once Play is up. Tuner off is the exception, and goes as soon as the app is ready.'
 ]
 
 /* The Action button and Back Tap: an iPhone's, never an iPad's. */
