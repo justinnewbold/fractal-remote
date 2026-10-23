@@ -791,6 +791,94 @@ jobs:
             console.log('serial and MIDI both load under Electron-as-Node');
           "
 
+      # THE APP'S OWN PROCESS SENDS NO ORIGIN, measured in Electron's MAIN
+      # process, which is where it turns the phone remote on.
+      #
+      # ForgeFX's guard (23 October 2026) keeps the computer's account routes,
+      # /cloud/status and /remote/enable among them, for a caller on this
+      # computer that names no Origin, or this computer's own page. The app's
+      # main process is one: armHost and checkRelay (desktop/lib/host.mjs) call
+      # them with the main process's own fetch. Measured with Node 22 and with
+      # Electron 33.4.11 on a Linux box, it sends neither an Origin nor a
+      # Sec-Fetch-Site. If a future Electron sent either, the guard would
+      # refuse those calls and the phone remote would never come on at launch,
+      # with nothing on screen to say why. So it is asked here, on every Linux
+      # build, of the Electron the app ships with: armHost itself, run in the
+      # main process (not ELECTRON_RUN_AS_NODE, which is the device server's
+      # side, and a different fetch), against a tiny server that writes down
+      # every header. Red if armHost sends no GET, PUT or POST, if it does not
+      # get as far as turning the remote on, or if any request carries either
+      # header. Before Package, so on main a red result here keeps the
+      # release back rather than reporting on one already out.
+      - name: The app's own process sends no Origin
+        working-directory: desktop
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          if ! command -v xvfb-run >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y xvfb
+          fi
+          ELECTRON="$(node -p 'require("electron")')"
+          mkdir -p "$RUNNER_TEMP/main-fetch"
+          cat > "$RUNNER_TEMP/main-fetch/main.js" <<'SCRIPT'
+          // Electron's MAIN process (never ELECTRON_RUN_AS_NODE): desktop/lib/host.mjs armHost, the very
+          // function the app turns the phone remote on with, run against a tiny server that writes down the
+          // headers of every request. ForgeFX's guard keeps its account routes for a caller with no Origin and
+          // no Sec-Fetch-Site; if either ever arrives from here, the phone remote never comes on at launch.
+          const { app } = require('electron')
+          if (typeof app?.whenReady !== 'function') {
+            console.log("FAIL: this is not Electron's main process (ELECTRON_RUN_AS_NODE, or plain Node)")
+            process.exit(1)
+          }
+          const http = require('node:http')
+          const { pathToFileURL } = require('node:url')
+
+          const answers = {
+            '/cloud/status': { enabled: true, user: { email: 'probe@example.invalid' } },
+            '/remote/status': { enabled: false, connected: false, state: 'off' },
+            '/remote/enable': { enabled: true, connected: true, state: 'connected' }
+          }
+          const seen = []
+          const server = http.createServer((req, res) => {
+            req.resume()
+            req.on('end', () => {
+              seen.push({ method: req.method, url: req.url, origin: req.headers.origin, site: req.headers['sec-fetch-site'] })
+              res.setHeader('content-type', 'application/json')
+              res.end(JSON.stringify(answers[req.url.split('?')[0]] ?? {}))
+            })
+          })
+          const fail = (why) => {
+            console.log(`FAIL: ${why}`)
+            app.exit(1)
+          }
+          app.whenReady().then(() =>
+            server.listen(0, async () => {
+              try {
+                if (process.type !== 'browser') return fail(`this ran as ${process.type}, not Electron's main process`)
+                if (process.env.ELECTRON_RUN_AS_NODE) return fail('ELECTRON_RUN_AS_NODE is set, so this is Electron as Node, not its main process')
+                const { armHost } = await import(pathToFileURL(process.env.HOST_MJS).href)
+                const said = []
+                const result = await armHost({ port: server.address().port, sleep: async () => {}, attempts: 3, log: (l) => said.push(l) })
+                console.log(`Electron ${process.versions.electron} (Node ${process.versions.node}), main process`)
+                for (const s of seen) console.log(`  ${s.method} ${s.url}  Origin: ${s.origin ?? '(none)'}  Sec-Fetch-Site: ${s.site ?? '(none)'}`)
+                console.log(`  armHost: ${JSON.stringify(result)} ${said.join(' ')}`)
+                const methods = new Set(seen.map((s) => s.method))
+                for (const m of ['GET', 'PUT', 'POST']) if (!methods.has(m)) return fail(`armHost sent no ${m}, so this proved nothing about it`)
+                if (!result?.on) return fail('armHost did not get as far as turning the remote on')
+                const bad = seen.filter((s) => s.origin !== undefined || s.site !== undefined)
+                if (bad.length) return fail(`${bad.length} request(s) from the main process carried an Origin or a Sec-Fetch-Site`)
+                console.log('no Origin and no Sec-Fetch-Site on any request from the main process')
+                server.close()
+                app.exit(0)
+              } catch (err) {
+                fail(err?.stack || String(err))
+              }
+            })
+          )
+          SCRIPT
+          HOST_MJS="$PWD/lib/host.mjs" xvfb-run -a "$ELECTRON" --no-sandbox "$RUNNER_TEMP/main-fetch/main.js"
+
       # ON ARM ONLY, AND THE REASON IS A BINARY THAT DOES NOT EXIST.
       #
       # electron-builder does not build a .deb itself — it downloads fpm and
@@ -876,6 +964,9 @@ jobs:
       # What it proves:
       #
       #   - with --hidden it serves: the device server answers /healthz;
+      #   - the app's own process is answered (its phone-remote line), every
+      #     address it hands out is answered, and nothing the app asks, its
+      #     window's page included, is refused by the device server's guard;
       #   - with --hidden it opens no window;
       #   - a second launch steps aside by itself, cleanly, and the server
       #     the first copy started is still answering after it (before the
@@ -942,6 +1033,40 @@ jobs:
           [ "$up" = 1 ] || fail "the device server did not answer /healthz within 90 seconds"
           echo "the device server answers"
 
+          # The app's own process got past the device server's guard: armHost
+          # asks GET /cloud/status from Electron's main process, and with
+          # nobody signed in the answer is this line. "No account support", or
+          # no line at all, is the guard refusing the app itself, and the
+          # phone remote never coming on at launch.
+          said=0
+          for _ in $(seq 1 60); do
+            if grep -q '\[phone\] Phone remote:' "$log"; then said=1; break; fi
+            kill -0 "$first" 2>/dev/null || fail "the app quit before it said anything about the phone remote"
+            sleep 1
+          done
+          [ "$said" = 1 ] || fail "the app never said whether the phone remote is on"
+          grep -q 'Phone remote: sign in once in the app to turn it on\.' "$log" || { grep '\[phone\]' "$log" || true; fail "the app's own call to the device server was not answered as a signed-out computer's"; }
+          echo "the app's own process was answered: $(grep -m 1 '\[phone\] Phone remote:' "$log")"
+
+          # EVERY ADDRESS THE COMPUTER HANDS OUT IS ANSWERED, as the page there
+          # would ask it: the page itself, a read, and a write naming its own
+          # address as its Origin. The tray lists localhost, the Wi-Fi number
+          # and the .local name, and the QR code carries the number; the
+          # window can be pointed at 127.0.0.1. The guard refuses a name it
+          # does not know, and these are the ones it must always know. Asked
+          # of 127.0.0.1 with each Host, because a runner's own Wi-Fi name is
+          # not resolvable.
+          addr() { node -e "import(require('url').pathToFileURL(process.argv[1]).href).then((h) => console.log($1))" "$GITHUB_WORKSPACE/desktop/lib/host.mjs"; }
+          lan="$(addr "h.lanAddress() || ''")"
+          mdns="$(addr "h.mdnsName()").local"
+          for at in "localhost:5056" "127.0.0.1:5056" "$mdns:5056" ${lan:+"$lan:5056"}; do
+            curl -fsS --max-time 5 -o /dev/null -H "Host: $at" http://127.0.0.1:5056/ || fail "the page at http://$at/ is not answered"
+            curl -fsS --max-time 5 -o /dev/null -H "Host: $at" http://127.0.0.1:5056/healthz || fail "a read from the page at http://$at/ is not answered"
+            curl -fsS --max-time 5 -o /dev/null -X PUT -H "Host: $at" -H "Origin: http://$at" -H 'Content-Type: application/json' \
+              --data '{"data":{"probe":true},"origin":"ci"}' http://127.0.0.1:5056/store/config/ci-probe || fail "a write from the page at http://$at/ is not answered"
+            echo "answered at http://$at/"
+          done
+
           # Watched, not glanced at. The app decides about its window only
           # once its first look for updates is over, which asks GitHub and can
           # take longer than any fixed wait — so this watches for a window
@@ -975,6 +1100,16 @@ jobs:
           done
           [ "$shown" = 1 ] || fail "the second launch did not bring the first copy's window up"
           echo "the first copy opened its window"
+
+          # And nothing it asked was refused: the window's page, loaded and
+          # making its own calls, the launch's, and the addresses above. The
+          # guard writes one line for every refusal.
+          sleep 10
+          if grep -q '\[forgefx\]\[guard\] refused' "$log"; then
+            grep '\[forgefx\]\[guard\] refused' "$log"
+            fail "the device server refused something the app itself asked"
+          fi
+          echo "the device server refused nothing the app asked"
 
           kill -TERM "$first"
           gone=0

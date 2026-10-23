@@ -982,6 +982,44 @@ export function run(test) {
     )
   })
 
+  test('every Linux build asks the app’s own process, and the packaged app, past the device server’s guard', () => {
+    /*
+     * ForgeFX's guard (23 October 2026) keeps the computer's account routes
+     * for a caller that names no Origin. The app's main process is that
+     * caller when it turns the phone remote on (armHost), and only a real
+     * Electron main process can say what its fetch sends: ELECTRON_RUN_AS_NODE
+     * is the device server's side, and a different fetch. Measured once by
+     * hand on Electron 33.4.11; held on every build by these two steps.
+     */
+    const wf = read('.github/workflows/desktop.yml')
+    const at = wf.indexOf('\n  linux:\n')
+    assert.notEqual(at, -1, 'the linux job is gone')
+    const next = wf.slice(at + 1).search(/\n {2}[a-z][a-z0-9-]*:\n/)
+    const linuxJob = next === -1 ? wf.slice(at) : wf.slice(at, at + 1 + next)
+    const step = (name) => {
+      const from = linuxJob.indexOf(`- name: ${name}`)
+      assert.notEqual(from, -1, `the step "${name}" is gone`)
+      const rest = linuxJob.slice(from + 1)
+      const to = rest.search(/\n {6}- (name|uses):/)
+      return to === -1 ? rest : rest.slice(0, to)
+    }
+
+    const probe = step("The app's own process sends no Origin")
+    assert.ok(linuxJob.indexOf("- name: The app's own process sends no Origin") < linuxJob.indexOf('- name: Package'), 'the probe runs after the release is made, so it cannot keep one back')
+    assert.match(probe, /xvfb-run -a "\$ELECTRON" --no-sandbox "\$RUNNER_TEMP\/main-fetch\/main\.js"/, 'the probe is not run as Electron itself')
+    assert.doesNotMatch(probe, /ELECTRON_RUN_AS_NODE=|ELECTRON_RUN_AS_NODE: /, 'the probe runs Electron as Node, which is not where the app turns the phone remote on')
+    assert.match(probe, /process\.type !== 'browser'/, 'the probe does not check it is the main process')
+    assert.match(probe, /const \{ armHost \} = await import\(pathToFileURL\(process\.env\.HOST_MJS\)\.href\)/, 'the probe no longer runs armHost itself')
+    assert.match(probe, /s\.origin !== undefined \|\| s\.site !== undefined/, 'the probe stopped failing on an Origin or a Sec-Fetch-Site')
+    assert.match(probe, /for \(const m of \['GET', 'PUT', 'POST'\]\)/, 'the probe stopped insisting armHost used every method it uses')
+
+    const hidden = step('The app starts with no window, once, and stops when told')
+    assert.match(hidden, /grep -q 'Phone remote: sign in once in the app to turn it on\\\.' "\$log"/, 'the packaged app is no longer held to being answered as a signed-out computer')
+    assert.match(hidden, /for at in "localhost:5056" "127\.0\.0\.1:5056" "\$mdns:5056" \$\{lan:\+"\$lan:5056"\}; do/, 'an address the computer hands out is no longer asked')
+    assert.match(hidden, /-X PUT -H "Host: \$at" -H "Origin: http:\/\/\$at"/, 'the write each address’s page makes is no longer asked')
+    assert.match(hidden, /grep -q '\\\[forgefx\\\]\\\[guard\\\] refused' "\$log"/, 'a refusal of something the app asked no longer turns the build red')
+  })
+
   test('every gear photograph says why we may use it, and names who took it', async () => {
     /*
      * "All the amp/cabs/drive photos have been uploaded to GitHub so you can
