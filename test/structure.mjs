@@ -2993,7 +2993,7 @@ export function run(test) {
     // surface, and it carries one subject.
     assert.match(main, /contextIsolation: true/, 'context isolation was turned off to do this')
     assert.match(main, /nodeIntegration: false/, 'node was let into the page to do this')
-    assert.match(main, /ipcMain\.handle\('updates:check'/, 'nothing can ask for a check')
+    assert.match(main, /answerOwnPage\('updates:check'/, 'nothing can ask for a check')
     assert.match(main, /win\.webContents\.send\('updates:state'/, 'the window is never told anything')
 
     /*
@@ -3032,7 +3032,7 @@ export function run(test) {
      */
     const main = readFileSync(new URL('../desktop/main.js', import.meta.url), 'utf8')
     const preload = readFileSync(new URL('../desktop/preload.js', import.meta.url), 'utf8')
-    assert.match(main, /ipcMain\.handle\('host:wifi'/, 'the app never answers the page about its address')
+    assert.match(main, /answerOwnPage\('host:wifi'/, 'the app never answers the page about its address')
     assert.match(main, /addresses\(\{ \.\.\.hostAt, ip: lanAddress\(\) \}\)/, 'the address is not asked afresh, so a laptop that moved networks shows a dead code')
     assert.match(preload, /wifi: \(\) => ipcRenderer\.invoke\('host:wifi'\)/, 'the page cannot ask for the address')
     const qr = readFileSync(new URL('../src/components/WifiQr.jsx', import.meta.url), 'utf8')
