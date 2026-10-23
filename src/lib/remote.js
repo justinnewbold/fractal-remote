@@ -70,9 +70,10 @@ export {
   /* And whether a setlist song's scene and tempo would land late after a load the link held up. */
   songNotSent,
   songWouldLandLate,
-  /* And Play's words for a pick that never answers, and its row under Which unit. */
+  /* And Play's words for a pick that never answers, and its row under Which unit; and for a unit on another computer. */
   missingPickCard,
-  missingPickRow
+  missingPickRow,
+  unitElsewhereCard
 } from '../../shared/relay-rules.mjs'
 import {
   forbiddenRemotely,
@@ -704,6 +705,29 @@ async function readUnits({ windowMs, sleep }) {
     })
   )
   return Object.fromEntries(found.filter(([, unit]) => unit))
+}
+
+/**
+ * WHICH UNIT EACH COMPUTER HAS, ASKED AGAIN: the roll call's own addressed
+ * /healthz and /device to each, and nothing else (readUnits). For Play's card
+ * that says the unit is on another computer (shared relay-rules
+ * unitElsewhere): asked when it comes up and every ELSEWHERE_WATCH_MS while
+ * it is up (link.js watchUnits), so a unit plugged in, or taken away, on any
+ * of them is said within seconds. Reads only, and no tap waits for them;
+ * not while a roll call or a proof is running, which reads its own; and
+ * only with two or more computers, so one computer is never asked anything
+ * more. A computer that does not answer keeps what it said last.
+ */
+export async function refreshUnits({ windowMs = 1500, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  if (hosts.length < 2 || !channel || !isJoined(channel) || counting) return units
+  const link = session
+  const asked = hosts
+  const found = await readUnits({ windowMs, sleep })
+  if (session !== link || counting || hosts !== asked) return units
+  const next = { ...units, ...found }
+  /* The same object while nothing changed, so nobody redraws for it. */
+  if (JSON.stringify(next) !== JSON.stringify(units)) units = next
+  return units
 }
 
 /**

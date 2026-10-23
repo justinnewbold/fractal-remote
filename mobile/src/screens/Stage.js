@@ -82,8 +82,8 @@ import OnlyOnThisPhone from '../components/OnlyOnThisPhone'
 import ColoursNotice from '../components/ColoursNotice'
 import Toast, { useStillNews } from '../components/Toast'
 import { droppedLeft, faultLeft } from '../lib/fault-rule'
-import { NOT_CONNECTED, missingPickCard } from '../lib/relay-rules'
-import { keepThisOne } from '../lib/link'
+import { NOT_CONNECTED, missingPickCard, unitElsewhereCard } from '../lib/relay-rules'
+import { chooseHost, keepThisOne, watchUnits } from '../lib/link'
 import ComputerCard from '../components/ComputerCard'
 import Note from '../components/Note'
 import NoComputerWords from '../components/NoComputer'
@@ -120,6 +120,11 @@ const ofFaultAt = (s) => s.faultAt
 const ofSlug = (s) => s.deviceSlug
 const ofBoost = (s) => s.boost
 const ofLastUnit = (s) => s.lastUnit
+const ofUnit = (s) => s.unit
+/* The raw words a computer with nothing plugged in answers every unit read with (ForgeFX, registryCore). */
+const NO_DEVICE = /no fractal device found/i
+/* The fault for the card at the top, but not those words while Play says where the unit is instead. */
+const noDevice = (fault, where) => (where && NO_DEVICE.test(String(fault)) ? null : fault)
 
 /**
  * The stand, not the bench.
@@ -218,7 +223,23 @@ export default function Stage({
    * its state out here is how the keyboard came to be covering it.
    */
   const [typing, setTyping] = useState(false)
-  const fault = useRig(ofError)
+  /* A pick that never answers, named with the computer driven in its place (shared relay-rules missingPickCard). */
+  const missingCard = missingPickCard({ missing: computers?.missingPick, driving: computers?.chosenHost, hosts: computers?.hosts, units: computers?.units })
+  /*
+   * THE UNIT IS ON ANOTHER COMPUTER (shared relay-rules unitElsewhere): the
+   * one driven has none, and another on the account has one. Said with a
+   * button for each, in place of the raw "No Fractal device found" card,
+   * which said nothing about where the unit was: that fault is not the card
+   * at the top while this is up (`fault`, below). Not over a pick that never
+   * answers, which is said first. The units are asked again while it is up
+   * (link.js watchUnits).
+   */
+  const unitState = useRig(ofUnit)
+  const elsewhereCard = unitElsewhereCard({ hosts: computers?.hosts, units: computers?.units, chosen: computers?.chosenHost, unitState })
+  const whereCard = missingCard ? null : elsewhereCard
+  const watchingUnits = Boolean(whereCard)
+  useEffect(() => (watchingUnits ? watchUnits() : undefined), [watchingUnits])
+  const fault = noDevice(useRig(ofError), whereCard)
   const faultLink = useRig(ofErrorLink)
   const faultAt = useRig(ofFaultAt)
   const dropped = useRig(ofDropped)
@@ -454,8 +475,6 @@ export default function Stage({
   const channels = caps?.channelNames
   const slots = slotCount(caps)
   const conflict = hostConflict(remoteHosts(), remoteChosenHost())
-  /* A pick that never answers, named with the computer driven in its place (shared relay-rules missingPickCard). */
-  const missingCard = missingPickCard({ missing: computers?.missingPick, driving: computers?.chosenHost, hosts: computers?.hosts, units: computers?.units })
 
   /*
    * PLAY'S ONE-TIME NOTES TAKE TURNS: ONE AT A TIME, IN THIS ORDER.
@@ -869,6 +888,8 @@ export default function Stage({
             ]}
           />
         ) : null}
+        {/* Each button is Which unit's own proved pick: nothing switches until it is pressed. */}
+        {whereCard ? <ComputerCard words={whereCard.words} buttons={whereCard.buttons.map((b) => ({ label: b.label, onPress: () => chooseHost(b.name) }))} /> : null}
 
         {/* ---------------------------------------------------------- preset */}
         <View style={{ gap: space.sm }}>

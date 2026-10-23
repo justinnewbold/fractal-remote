@@ -1353,6 +1353,29 @@ async function readUnits({ windowMs, sleep }) {
 }
 
 /**
+ * WHICH UNIT EACH COMPUTER HAS, ASKED AGAIN: the roll call's own addressed
+ * /healthz and /device to each, and nothing else (readUnits). For Play's card
+ * that says the unit is on another computer (shared relay-rules
+ * unitElsewhere): asked when it comes up and every ELSEWHERE_WATCH_MS while
+ * it is up (link.js watchUnits), so a unit plugged in, or taken away, on any
+ * of them is said within seconds. Reads only, and no tap waits for them;
+ * not while a roll call or a proof is running, which reads its own; and
+ * only with two or more computers, so one computer is never asked anything
+ * more. A computer that does not answer keeps what it said last.
+ */
+export async function refreshUnits({ windowMs = 1500, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  if (hosts.length < 2 || !channel || !isJoined(channel) || counting) return units
+  const link = session
+  const asked = hosts
+  const found = await readUnits({ windowMs, sleep })
+  if (session !== link || counting || hosts !== asked) return units
+  const next = { ...units, ...found }
+  /* The same object while nothing changed, so nobody redraws for it. */
+  if (JSON.stringify(next) !== JSON.stringify(units)) units = next
+  return units
+}
+
+/**
  * Prove that addressing a request to one Mac actually leaves the others out.
  *
  * The host end of this only exists in a new enough ForgeFX; an older one has

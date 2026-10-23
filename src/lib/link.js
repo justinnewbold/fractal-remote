@@ -53,6 +53,7 @@ import {
   remoteCountDue,
   remoteCountOwed,
   remoteMissingPick,
+  refreshUnits,
   keepDriven,
   forgetMissingPick,
   pickHost,
@@ -70,7 +71,7 @@ import { computerChanged } from './deviceState.js'
  * a code, and nothing makes one any more.
  */
 import { isPairAccount } from '../../shared/pairing.mjs'
-import { LINK_DOWN_HOLD_MS, linkDownAt, metersRefused, timeToQuietMeters } from '../../shared/relay-rules.mjs'
+import { ELSEWHERE_WATCH_MS, LINK_DOWN_HOLD_MS, linkDownAt, metersRefused, timeToQuietMeters } from '../../shared/relay-rules.mjs'
 import { setLinkAway, setLinkDown, setTapsRelayed } from './tapGate.js'
 import { PHONE_NOTE_ID, phoneNote, timeToTell } from '../../shared/phone-note.mjs'
 import { holders } from '../../shared/editors.mjs'
@@ -745,6 +746,34 @@ export async function chooseHost(name) {
   quietMeters()
   readMacName()
   return state.clash
+}
+
+/*
+ * The units asked again while the page says the unit is on another computer
+ * (App's notice, shared/relay-rules.mjs unitElsewhere): at once and every
+ * ELSEWHERE_WATCH_MS until it goes, reads only (remote.js refreshUnits). The
+ * phone's link.js watchUnits, the same. Returns the way to stop.
+ */
+export function watchUnits() {
+  let stopped = false
+  let timer = null
+  const again = async () => {
+    timer = null
+    if (stopped) return
+    try {
+      await refreshUnits()
+    } catch {
+      // Asked again in a moment.
+    }
+    if (stopped) return
+    set({ units: remoteUnits() })
+    timer = setTimeout(again, ELSEWHERE_WATCH_MS)
+  }
+  again()
+  return () => {
+    stopped = true
+    if (timer) clearTimeout(timer)
+  }
 }
 
 /** Keep this one, on Play's card for a pick that never answers (remote.js keepDriven). */

@@ -760,6 +760,56 @@ export function firstUnitHost(hostNames = [], units = {}) {
  * Only with two or more computers answering, and only while one is driven
  * that is not the pick (relay.js remoteMissingPick). Both ends, these words.
  */
+/*
+ * THE UNIT IS ON ANOTHER COMPUTER. "Every time I open the app now, it shows
+ * this": Play driving raspberry pi 3, the computer picked under Which unit,
+ * with nothing plugged into it, and the raw "No Fractal device found on any
+ * serial or MIDI port" card, while his FM3 was on the MacBook. Nothing on
+ * Play said where the unit was; only Settings did, two pages in. So when
+ * the computer driven has no unit and another computer on the account has
+ * one, Play says both, and offers each computer with a unit as a button:
+ *
+ *   raspberry pi 3 has no unit plugged in. Your FM3 is on MacBook Pro SG 566.
+ *   [Use the FM3 on MacBook Pro SG 566]
+ *
+ * The button is Which unit's own proved pick (link chooseHost): nothing
+ * moves until it is pressed, and then nothing is written before the new
+ * computer is proved to be asked alone.
+ *
+ * BY `plugged`, NEVER BY THE MODEL. A computer with nothing plugged in still
+ * reports a model, FM3, ForgeFX's default profile (registryCore deviceInfo),
+ * so a model alone says nothing about whether a unit is there. The one
+ * driven has none when the rig says so (`unitState` 'missing', its own
+ * detect) or the roll call did (`plugged` false), and never while the rig
+ * says one is answering. Only with two or more computers, and only those with
+ * a name of their own: two answering to one name cannot be asked apart.
+ */
+export function unitElsewhere({ hosts = [], units = {}, chosen = null, unitState = null } = {}) {
+  if (!Array.isArray(hosts) || hosts.length < 2 || !chosen || !hosts.includes(chosen)) return null
+  if (unitState === 'present' || unitState === 'silent') return null
+  if (unitState !== 'missing' && units?.[chosen]?.plugged !== false) return null
+  const once = hosts.filter((name, i) => hosts.indexOf(name) === i && hosts.lastIndexOf(name) === i)
+  const others = once.filter((name) => name !== chosen && units?.[name]?.plugged === true).map((name) => ({ name, model: units[name].model }))
+  return others.length ? { here: chosen, others } : null
+}
+
+/** Play's words for it, and one button per computer with a unit: "Use the FM3 on MacBook Pro SG 566". */
+export function unitElsewhereCard(facts = {}) {
+  const found = unitElsewhere(facts)
+  if (!found) return null
+  const where = found.others.map(({ name, model }, i) => `${i === 0 ? 'Your' : 'your'} ${model} is on ${name}`)
+  const list = where.length < 3 ? where.join(', and ') : `${where.slice(0, -1).join(', ')}, and ${where[where.length - 1]}`
+  return {
+    /* For a notice with a heading of its own (the browser's, where Play cannot open without a unit). */
+    title: found.others.length > 1 ? 'Your units are on other computers' : 'Your unit is on another computer',
+    words: `${found.here} has no unit plugged in. ${list}.`,
+    buttons: found.others.map(({ name, model }) => ({ name, label: `Use the ${model} on ${name}` }))
+  }
+}
+
+/** How often the units are asked again while that card is up: as often as the unit watch asks a missing unit (rig MISSING_WATCH_MS). */
+export const ELSEWHERE_WATCH_MS = 10000
+
 export const KEEP_THIS_ONE = 'Keep this one'
 export const WHICH_UNIT_LIST = 'Which unit…'
 export function missingPickCard({ missing = null, driving = null, hosts = [], units = {} } = {}) {

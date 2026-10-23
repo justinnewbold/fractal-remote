@@ -265,6 +265,7 @@ import {
   chooseHost,
   keepThisOne,
   forgetMissing,
+  watchUnits,
   faultCopy,
   nextDelay
 } from './lib/link'
@@ -282,7 +283,8 @@ import {
   subscribeRemoteState,
   unitChoices,
   missingPickCard,
-  missingPickRow
+  missingPickRow,
+  unitElsewhereCard
 } from './lib/remote'
 import { MissingRow } from './components/ComputerCard'
 import { newEntry, append } from './lib/log'
@@ -1177,6 +1179,21 @@ export default function App() {
           userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : ''
         })
       : null
+  /*
+   * THE UNIT IS ON ANOTHER COMPUTER: the one driven answered with no unit,
+   * and another computer on the account has one (shared/relay-rules.mjs
+   * unitElsewhere, judged by plugged, never the model). The notice says
+   * both, with a button for each computer with a unit, Which unit's own
+   * proved pick, in place of "the computer can't see your unit", which sent
+   * him to check a cable that was fine. The units are asked again while it
+   * is up (link.js watchUnits). The phone's Play says it in the same words.
+   */
+  const elsewhere =
+    link.role === 'remote' && status === 'fault' && device?.connected === false
+      ? unitElsewhereCard({ hosts: link.hosts, units: link.units, chosen: link.chosenHost, unitState: 'missing' })
+      : null
+  const watchingUnits = Boolean(elsewhere)
+  useEffect(() => (watchingUnits ? watchUnits() : undefined), [watchingUnits])
   /*
    * What came back, when the notice above has nothing specific to say.
    *
@@ -4384,9 +4401,18 @@ export default function App() {
         />
       ) : status === 'fault' && fault ? (
         <div className="notice" data-kind="fault">
-          <h2>{fault.title}</h2>
-          <p>{fault.body}</p>
-          {faultWhy ? <p className="hint">What came back: {faultWhy}</p> : null}
+          <h2>{elsewhere ? elsewhere.title : fault.title}</h2>
+          <p>{elsewhere ? elsewhere.words : fault.body}</p>
+          {elsewhere ? (
+            <p className="host-pick">
+              {elsewhere.buttons.map((b) => (
+                <button key={b.name} type="button" className="chip" onClick={() => chooseHost(b.name)} disabled={busy}>
+                  {b.label}
+                </button>
+              ))}
+            </p>
+          ) : null}
+          {faultWhy && !elsewhere ? <p className="hint">What came back: {faultWhy}</p> : null}
           {/* Which account this is, and whether a computer on this wifi is on
               another one — see AccountCheck. */}
           <AccountCheck link={link} />

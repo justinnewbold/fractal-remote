@@ -20,7 +20,7 @@ import { logDebug } from './debugLog'
 import { bluetoothOn } from './bleSwitch'
 import { pokeBluetooth, startBluetoothLink, stopBluetoothLink } from './bleLink'
 import { setLinkAway, setLinkDown } from './tapGate'
-import { LINK_DOWN_HOLD_MS, linkDownAt, METERS_OFF_PATH, metersOffBody, metersRefused, timeToQuietMeters } from './relay-rules'
+import { ELSEWHERE_WATCH_MS, LINK_DOWN_HOLD_MS, linkDownAt, METERS_OFF_PATH, metersOffBody, metersRefused, timeToQuietMeters } from './relay-rules'
 
 import {
   censusHosts,
@@ -41,6 +41,7 @@ import {
   remoteRequest,
   remoteUnits,
   pickHost,
+  refreshUnits,
   keepDriven,
   forgetMissingPick,
   restoreSession,
@@ -653,6 +654,37 @@ function switchedComputer() {
 /** What the roll call found, into the link's state, for Settings and Which unit. */
 const heardHosts = () =>
   set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), missingPick: remoteMissingPick(), clash: hostConflict() })
+
+/*
+ * THE UNITS ASKED AGAIN WHILE PLAY SAYS THE UNIT IS ON ANOTHER COMPUTER
+ * (Stage's card, shared relay-rules unitElsewhere): at once, and every
+ * ELSEWHERE_WATCH_MS until the card goes, so a unit plugged in or taken away
+ * on any computer is said within seconds. Reads only (relay.js
+ * refreshUnits). The driven computer's own unit coming back is the unit
+ * watch's to find (rig.watchUnit), and the card goes with it. Returns the
+ * way to stop.
+ */
+export function watchUnits() {
+  let stopped = false
+  let timer = null
+  const again = async () => {
+    timer = null
+    if (stopped) return
+    try {
+      await refreshUnits()
+    } catch {
+      // Asked again in a moment.
+    }
+    if (stopped) return
+    heardHosts()
+    timer = setTimeout(again, ELSEWHERE_WATCH_MS)
+  }
+  again()
+  return () => {
+    stopped = true
+    if (timer) clearTimeout(timer)
+  }
+}
 
 /** Keep this one, on Play's card for a pick that never answers: the computer driven becomes the pick (relay.js keepDriven). */
 export function keepThisOne() {

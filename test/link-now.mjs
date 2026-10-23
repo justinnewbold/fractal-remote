@@ -401,6 +401,8 @@ async function linkOnABench() {
       /* A pick that did not answer while another is driven (relay.js remoteMissingPick): \`bench.missing\`; Keep this one and Forget clear it. */
       export const remoteMissingPick = () => bench.missing ?? null
       export const keepDriven = () => { const had = !!bench.missing; bench.missing = null; bench.kept = (bench.kept || 0) + 1; return had }
+      /* Which unit each computer has, asked again (relay.js refreshUnits): counted in \`bench.unitsAsked\`. */
+      export const refreshUnits = async () => { bench.unitsAsked = (bench.unitsAsked || 0) + 1; return bench.units || {} }
       export const forgetMissingPick = () => { const had = !!bench.missing; bench.missing = null; bench.forgot = (bench.forgot || 0) + 1; return had }
       /* Whether the account's record says it may have two (relay.js remoteMayBeTwo): \`bench.many\` true, which a test says. */
       export const remoteMayBeTwo = () => bench.many === true
@@ -760,6 +762,7 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       export const remoteCountOwed = () => bench.countOwed === true
       export const remoteMissingPick = () => bench.missing ?? null
       export const keepDriven = () => { const had = !!bench.missing; bench.missing = null; return had }
+      export const refreshUnits = async () => ({})
       export const forgetMissingPick = () => { const had = !!bench.missing; bench.missing = null; return had }
       /* Which unit (remote.js pickHost): \`bench.pick\` runs inside it. */
       export const pickHost = async (name) => (bench.pick ? bench.pick(name) : false)
@@ -2112,6 +2115,59 @@ export function run(test) {
     assert.equal(await wrote, null, `the scene was refused\n${log}`)
     const heard = s.bench.computers.filter((c, i) => (c.heard || []).slice(before[i]).some((h) => h.path === '/scene')).map((c) => c.name)
     assert.deepEqual(heard, ['raspberry pi 3'], `the scene was carried out by ${heard.join(' and ')}\n${log}`)
+  })
+
+  /*
+   * Justin's screen of 22 October 2026: the pick, raspberry pi 3, with
+   * nothing plugged in, driven at every launch, and the raw "No Fractal
+   * device found" card on Play with nothing saying the FM3 was on the
+   * MacBook. Now the card says so, the button is Which unit's own pick, and
+   * nothing moves until it is pressed.
+   */
+  test('phone: the pick with no unit, the FM3 on another computer: Play says where it is, nothing moves until the button, and the button is a proved pick', async () => {
+    const s = await stackOnABench({ pick: JSON.stringify({ accounts: { u1: { name: 'raspberry pi 3', many: true } } }) })
+    const r = await import('../shared/relay-rules.mjs')
+    s.bench.computers = [{ ...FM3_MAC }, { name: 'raspberry pi 5', unit: null, lag: () => 170 }, { name: 'raspberry pi 3', unit: null, lag: () => 320 }]
+    s.link.startLink()
+    await s.clock.advance(12000)
+    const log = () => s.lines().join('\n')
+    const card = () => r.unitElsewhereCard({ hosts: s.link.linkState().hosts, units: s.link.linkState().units, chosen: s.link.linkState().chosenHost, unitState: s.rig.getState().unit })
+    assert.equal(s.link.linkState().chosenHost, 'raspberry pi 3', log())
+    assert.equal(s.rig.getState().unit, 'missing', log())
+    assert.equal(card()?.words, 'raspberry pi 3 has no unit plugged in. Your FM3 is on MacBook Pro SG 566.', log())
+    assert.deepEqual(card().buttons.map((b) => b.label), ['Use the FM3 on MacBook Pro SG 566'])
+    /* Never a switch on its own, however long the card is up. */
+    await s.clock.advance(30000)
+    assert.equal(s.link.linkState().chosenHost, 'raspberry pi 3', 'the phone moved to the computer with the unit by itself')
+    const mac = s.bench.computers[0]
+    assert.ok(!(mac.heard || []).some((h) => h.path === '/device/detect' || h.path === '/preset'), 'the MacBook was asked the unit’s reads before the button')
+    /* The button: Which unit's own pick. A scene tapped during its proof waits for it and reaches the MacBook alone. */
+    const before = s.bench.computers.map((c) => (c.heard || []).length)
+    const picked = s.link.chooseHost(card().buttons[0].name)
+    await s.clock.advance(200)
+    const wrote = s.device.setScene(2).then(
+      () => null,
+      (e) => e
+    )
+    await s.clock.advance(12000)
+    assert.equal(await picked, true, log())
+    assert.equal(await wrote, null, log())
+    const heard = s.bench.computers.filter((c, i) => (c.heard || []).slice(before[i]).some((h) => h.path === '/scene' && h.host)).map((c) => c.name)
+    assert.deepEqual(heard, ['MacBook Pro SG 566'], `the scene was carried out by ${heard.join(' and ')}\n${log()}`)
+    assert.ok(!s.bench.computers.some((c, i) => (c.heard || []).slice(before[i]).some((h) => h.path === '/scene' && !h.host)), 'a scene went asked of nobody during the proof')
+    assert.equal(s.link.linkState().chosenHost, 'MacBook Pro SG 566')
+    assert.equal(s.rig.getState().deviceName, 'FM3', log())
+    assert.equal(card(), null, 'the card stayed up over the FM3')
+  })
+
+  test('phone: the units are asked again at once and every ten seconds while the card is up, and not after', async () => {
+    const t = await linkOnABench()
+    const stop = t.link.watchUnits()
+    await t.clock.advance(25000)
+    assert.equal(t.bench.unitsAsked, 3, 'the units were not asked again at once and every ten seconds')
+    stop()
+    await t.clock.advance(30000)
+    assert.equal(t.bench.unitsAsked, 3, 'the units were asked after the card went')
   })
 
   /*
@@ -4346,6 +4402,44 @@ export function run(test) {
       assert.equal(one.relay.remoteMissingPick(), null, 'a pick missing with one computer heard is said on Play')
     })
 
+    test(`${end}: the units are asked again for Play's card, reads only and nothing held, and one computer is asked nothing more`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch, tap } = t
+      const pi3 = PI3({ plugged: false })
+      bench.computers = [PI5(), pi3]
+      counted(t)
+      await clock.advance(9000)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+      assert.deepEqual(relay.remoteUnits()['raspberry pi 3'], { model: 'FM3', plugged: false })
+      /* The AM4 plugged into the pick: asked again, it says so. */
+      bench.computers[1] = PI3()
+      bench.sent.length = 0
+      const asked = watch(relay.refreshUnits({ windowMs: 1500, sleep: (ms) => new Promise((go) => clock.setTimeout(go, ms)) }))
+      const made = clock.now()
+      const pressed = watch(tap())
+      await clock.advance(400)
+      assert.equal(pressed.done && !pressed.error, true, pressed.error?.message)
+      assert.equal(bench.sent.find((x) => x.msg.payload.method === 'POST')?.at, made, 'a tap waited for the units to be read')
+      assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']])
+      await clock.advance(2000)
+      assert.equal(asked.done, true)
+      assert.deepEqual(relay.remoteUnits()['raspberry pi 3'], { model: 'AM4', plugged: true })
+      assert.deepEqual(bench.sent.filter((x) => x.msg.payload.method === 'GET').map((x) => `${x.msg.payload.path} ${x.msg.payload.host}`).sort(), ['/device fractalpi', '/device raspberry pi 3', '/healthz fractalpi', '/healthz raspberry pi 3'], 'the units were asked something else, or of nobody in particular')
+      /* Nothing changed: the same object, so nobody redraws for it. */
+      const before = relay.remoteUnits()
+      relay.refreshUnits({ windowMs: 1500, sleep: (ms) => new Promise((go) => clock.setTimeout(go, ms)) })
+      await clock.advance(2000)
+      assert.equal(relay.remoteUnits(), before)
+      /* One computer: nothing asked. */
+      const one = await relayOnABench(end)
+      one.bench.computers = [computer('Studio', 'FM3')]
+      counted(one)
+      await one.clock.advance(3000)
+      one.bench.sent.length = 0
+      await one.relay.refreshUnits()
+      assert.equal(one.bench.sent.length, 0, 'one computer was asked which unit it has')
+    })
+
     test(`${end}: a pick that does not answer when asked alone is logged so, never as a computer app too old`, async () => {
       const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
       const pi3 = PI3()
@@ -4523,6 +4617,47 @@ export function run(test) {
     t.bench.order.length = 0
     await t.link.chooseHost('raspberry pi 3')
     assert.deepEqual(t.bench.order.filter((x) => ['computerChanged', 'proved', 'startClean', 'refreshAll'].includes(x)), ['computerChanged', 'proved', 'startClean', 'refreshAll'])
+  })
+
+  test('both ends: Play says where the unit is when the computer driven has none and another has one, judged by plugged, never the model', async () => {
+    const r = await import('../shared/relay-rules.mjs')
+    /* Justin's three, as the roll call read them: a computer with nothing plugged in still says FM3. */
+    const hosts = ['MacBook Pro SG 566', 'raspberry pi 5', 'raspberry pi 3']
+    const units = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true }, 'raspberry pi 5': { model: 'FM3', plugged: false }, 'raspberry pi 3': { model: 'FM3', plugged: false } }
+    const card = r.unitElsewhereCard({ hosts, units, chosen: 'raspberry pi 3', unitState: 'missing' })
+    assert.equal(card.words, 'raspberry pi 3 has no unit plugged in. Your FM3 is on MacBook Pro SG 566.')
+    assert.deepEqual(card.buttons, [{ name: 'MacBook Pro SG 566', label: 'Use the FM3 on MacBook Pro SG 566' }])
+    assert.equal(card.title, 'Your unit is on another computer')
+    /* The roll call's plugged false is enough before the rig has read the unit; the rig saying it answers is never overruled. */
+    assert.ok(r.unitElsewhereCard({ hosts, units, chosen: 'raspberry pi 3', unitState: 'unknown' }))
+    assert.equal(r.unitElsewhereCard({ hosts, units, chosen: 'raspberry pi 3', unitState: 'present' }), null)
+    /* An AM4 on a fourth, and both offered. */
+    const four = [...hosts, 'studio']
+    const more = r.unitElsewhereCard({ hosts: four, units: { ...units, studio: { model: 'AM4', plugged: true } }, chosen: 'raspberry pi 3', unitState: 'missing' })
+    assert.equal(more.words, 'raspberry pi 3 has no unit plugged in. Your FM3 is on MacBook Pro SG 566, and your AM4 is on studio.')
+    assert.deepEqual(more.buttons.map((b) => b.label), ['Use the FM3 on MacBook Pro SG 566', 'Use the AM4 on studio'])
+    /* Never: with one computer; with the one driven having a unit; with the other only saying FM3 with nothing plugged in; with the other unit's computer sharing a name it cannot be asked apart by. */
+    assert.equal(r.unitElsewhereCard({ hosts: ['raspberry pi 3'], units, chosen: 'raspberry pi 3', unitState: 'missing' }), null)
+    assert.equal(r.unitElsewhereCard({ hosts, units, chosen: 'MacBook Pro SG 566', unitState: 'present' }), null)
+    assert.equal(r.unitElsewhereCard({ hosts: ['raspberry pi 5', 'raspberry pi 3'], units, chosen: 'raspberry pi 3', unitState: 'missing' }), null, 'a computer with nothing plugged in was offered for its model')
+    assert.equal(r.unitElsewhereCard({ hosts: ['raspberrypi', 'raspberrypi', 'raspberry pi 3'], units: { raspberrypi: { model: 'FM3', plugged: true }, 'raspberry pi 3': { model: 'FM3', plugged: false } }, chosen: 'raspberry pi 3', unitState: 'missing' }), null)
+    /* Nothing driven, or a unit the computer says is there but not answering, says nothing. */
+    assert.equal(r.unitElsewhereCard({ hosts, units, chosen: null, unitState: 'missing' }), null)
+    assert.equal(r.unitElsewhereCard({ hosts, units, chosen: 'raspberry pi 3', unitState: 'silent' }), null)
+    for (const words of [card.words, more.words, card.title, ...more.buttons.map((b) => b.label)]) assert.ok(!/this phone/i.test(words), words)
+    /* The phone: in place of the raw card, with each button Which unit's own pick, and the units asked again while it is up. */
+    const stage = read('mobile/src/screens/Stage.js')
+    assert.match(stage, /unitElsewhereCard\(\{ hosts: computers\?\.hosts, units: computers\?\.units, chosen: computers\?\.chosenHost, unitState \}\)/)
+    assert.match(stage, /const fault = noDevice\(useRig\(ofError\), whereCard\)/, 'the raw "No Fractal device found" card is still up under the one that says where the unit is')
+    assert.match(stage, /const noDevice = \(fault, where\) => \(where && NO_DEVICE\.test\(String\(fault\)\) \? null : fault\)/)
+    assert.match(stage, /buttons=\{whereCard\.buttons\.map\(\(b\) => \(\{ label: b\.label, onPress: \(\) => chooseHost\(b\.name\) \}\)\)\}/)
+    assert.match(stage, /useEffect\(\(\) => \(watchingUnits \? watchUnits\(\) : undefined\), \[watchingUnits\]\)/)
+    /* The browser: in the notice that stands where Play would be, the same words and buttons. */
+    const app = read('src/App.jsx')
+    assert.match(app, /unitElsewhereCard\(\{ hosts: link\.hosts, units: link\.units, chosen: link\.chosenHost, unitState: 'missing' \}\)/)
+    assert.match(app, /<h2>\{elsewhere \? elsewhere\.title : fault\.title\}<\/h2>\s*<p>\{elsewhere \? elsewhere\.words : fault\.body\}<\/p>/)
+    assert.match(app, /elsewhere\.buttons\.map\(\(b\) => \([\s\S]{0,120}onClick=\{\(\) => chooseHost\(b\.name\)\}/)
+    assert.match(app, /useEffect\(\(\) => \(watchingUnits \? watchUnits\(\) : undefined\), \[watchingUnits\]\)/)
   })
 
   test('both ends: Play names a pick that never answers with the one driven, and Which unit lists it grayed with Forget', async () => {
