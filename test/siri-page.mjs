@@ -179,6 +179,8 @@ export function run(test) {
     assert.match(words, /on iOS 27, look under Allow Access When Locked in Settings → Face ID & Passcode/)
     assert.match(words, /On iOS 26 and earlier, turn on Allow Siri When Locked in Settings → Siri \(or Apple Intelligence & Siri, or Siri & Search\)\./)
     assert.match(words, /the watch may answer instead, and these commands don’t run on the watch/)
+    /* Siri's button on the iPhone: the side button, or the Home button on an iPhone with one (an iPhone SE's side button is power off). */
+    assert.match(words, /hold its side button \(the Home button, on an iPhone with one\) to talk to Siri on the iPhone/)
     assert.match(words, /In a loud room Siri may not hear you over the rig/)
     assert.match(words, new RegExp(`While Siri listens, this ${noun}’s own metronome click may stop\\.`))
     assert.match(words, /on iOS 27, Settings → Siri → Language, and on iOS 26 and earlier, Language in Settings → Siri \(or Apple Intelligence & Siri, or Siri & Search\)\./)

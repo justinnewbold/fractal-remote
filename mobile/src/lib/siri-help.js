@@ -64,6 +64,10 @@
  *   - Back Tap: Settings → Accessibility → Touch → Back Tap → Double Tap or
  *     Triple Tap → a shortcut (both guides). An iPhone feature, on every
  *     iPhone the app installs on (iOS 16.4: iPhone 8 and later).
+ *   - Siri by a button: "Press and hold the side button (on an iPhone with
+ *     Face ID or iPhone Duo) or press and hold the Home button (on iPhone
+ *     SE)" (27's "Turn on and activate Siri"). The app installs on iPhones
+ *     with a Home button, whose side button holds up the power-off screen.
  *   - The watch answering instead: Apple's "How Siri works with multiple
  *     devices" (HT208472): the device that heard best, or was raised or used
  *     last, answers; raise or press the button of the one you mean.
@@ -270,7 +274,7 @@ export function siriPage({ os = 'ios', kind = 'phone', native = false, noun = 'p
       lines: [
         LOCKED(noun, system),
         ...(iphone
-          ? ['If you wear an Apple Watch, the watch may answer instead, and these commands don’t run on the watch. Raise the iPhone first, or hold its side button to talk to Siri on the iPhone.']
+          ? ['If you wear an Apple Watch, the watch may answer instead, and these commands don’t run on the watch. Raise the iPhone first, or hold its side button (the Home button, on an iPhone with one) to talk to Siri on the iPhone.']
           : []),
         'In a loud room Siri may not hear you over the rig. Starting Siri with the button, rather than by voice, means it doesn’t have to hear “Siri” first.',
         `While Siri listens, this ${noun}’s own metronome click may stop.`,
