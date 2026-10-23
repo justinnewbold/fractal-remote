@@ -95,6 +95,30 @@ function everyUse(tag, prop) {
   return found
 }
 
+/**
+ * A run of Stage.js's own lines, as a function of the names it reads, with
+ * React's useRef stood in for: the same ref object on every "render", by the
+ * order the refs are asked for, as React keeps them.
+ */
+function stageLines(from, to, names) {
+  const stage = read('mobile/src/screens/Stage.js')
+  const start = stage.indexOf(from)
+  assert.ok(start > 0, `Stage.js no longer has ${from.trim()}; this check reads it`)
+  const end = stage.indexOf(to, start)
+  assert.ok(end > start, `Stage.js no longer has ${to.trim()} after ${from.trim()}; this check reads it`)
+  const body = stage.slice(start, end + to.length)
+  const refs = []
+  return (values, result) => {
+    let at = 0
+    const useRef = (initial) => {
+      if (!refs[at]) refs[at] = { current: initial }
+      return refs[at++]
+    }
+    // eslint-disable-next-line no-new-func
+    return new Function('useRef', ...names, `${body}\nreturn ${result}`)(useRef, ...names.map((n) => values[n]))
+  }
+}
+
 export function run(test) {
   test('the app’s frame and Add songs keep clear of the phone’s own on every side, not only the top and the bottom', async () => {
     /*
@@ -163,5 +187,108 @@ export function run(test) {
     /* What it comes to, by the phone's own bottom edge: today's 32 everywhere up to 32. */
     const foot = (bottom) => Math.max(bottom, 32)
     assert.deepEqual([0, 20, 21, 24, 32, 34, 48].map(foot), [32, 32, 32, 32, 32, 34, 48])
+  })
+
+  test('Play’s width is measured on Play, in the same moment as its height, and never read from the window', () => {
+    const stage = code(read('mobile/src/screens/Stage.js'))
+    assert.match(
+      stage,
+      /onLayout=\{\(e\) => \{\s*setViewport\(e\.nativeEvent\.layout\.height\)\s*setPlayWidth\(Math\.round\(e\.nativeEvent\.layout\.width\)\)\s*\}\}/,
+      'Play’s width is not measured with its height, so the two can change in different moments'
+    )
+    assert.equal(stage.match(/setPlayWidth\(/g).length, 1, 'Play’s width is set from something other than its own measurement')
+    assert.match(stage, /const \[playWidth, setPlayWidth\] = useState\(0\)/)
+    /* The window is read once, for the first frame's tile width only, as it always was. */
+    assert.equal(stage.match(/useWindowDimensions\(\)/g).length, 1)
+    assert.equal(stage.match(/\bscreen\b/g).length, 2, 'the window’s width is used for more than the first frame')
+    assert.match(stage, /const row = grid \|\| Math\.max\(0, screen - space\.lg \* 2\)/)
+    assert.doesNotMatch(stage, /Platform\.isPad|isTablet|orientation/, 'Play decides something by the kind of device or which way up it is')
+  })
+
+  test('Play’s fit throws its correction away when Play only changes width, and keeps it while nothing changes', () => {
+    /*
+     * The trim is an overflow measured at one size, and it only ever grows.
+     * Its key held the height and not the width, so an iPad's divider dragged
+     * wider, or a Duo opened sideways, kept the narrow screen's correction:
+     * every tile smaller than it had room for until the next preset.
+     */
+    const fit = stageLines(
+      '  const fitKey = `',
+      '    if (trim !== 0) setTrim(0)\n  }\n',
+      ['viewport', 'playWidth', 'scenes', 'fitBlocks', 'fitOn', 'sceneCols', 'chainNow', 'trim', 'setTrim']
+    )
+    const resets = []
+    const at = (viewport, playWidth, trim) =>
+      fit(
+        {
+          viewport,
+          playWidth,
+          scenes: { hasScenes: true, count: 8 },
+          fitBlocks: 9,
+          fitOn: true,
+          sceneCols: 2,
+          chainNow: { late: false },
+          trim,
+          setTrim: (n) => resets.push(n)
+        },
+        'fitKey'
+      )
+    /* A phone held upright: measured once, then the correction is kept, render after render. */
+    at(0, 0, 0)
+    at(707, 393, 0)
+    for (let i = 0; i < 50; i += 1) at(707, 393, 18)
+    assert.deepEqual(resets, [], 'a phone held upright lost its fit correction with nothing changed')
+    /* Only wider: thrown away. */
+    at(707, 820, 18)
+    assert.deepEqual(resets, [0], 'a screen that only got wider kept the narrow screen’s correction')
+    /* And kept again at the new width, until the next change. */
+    at(707, 820, 6)
+    at(707, 820, 6)
+    assert.deepEqual(resets, [0])
+    /* Only narrower, then only taller, as before. */
+    at(707, 466, 6)
+    at(951, 466, 6)
+    assert.deepEqual(resets, [0, 0, 0])
+    /* The key tells widths apart and nothing else changed in it. */
+    assert.notEqual(at(707, 393, 0), at(707, 394, 0))
+  })
+
+  test('the room kept for the pedals while a preset loads is forgotten when Play changes width, and kept while it does not', () => {
+    /*
+     * While the next preset loads, grey cards stand where its pedals will be,
+     * in the last chain's height, so nothing under them jumps. That height was
+     * measured at one width: an iPad's divider dragged, or a Duo folded, while
+     * a preset loaded drew the cards at the old screen's height and the fit
+     * counted it until the chain landed.
+     */
+    const held = stageLines(
+      '  const heldGrid = useRef(',
+      '  const held = chainNow.elsewhere && heldGrid.current.height > 0 ? heldGrid.current : null\n',
+      ['playWidth', 'chainNow', 'tiles', 'blockGrid']
+    )
+    const here = { elsewhere: false }
+    const loading = { elsewhere: true }
+    /* Mounted, then measured: nothing kept yet, nothing to forget. */
+    assert.equal(held({ playWidth: 0, chainNow: here, tiles: 9, blockGrid: 0 }, 'held'), null)
+    assert.equal(held({ playWidth: 393, chainNow: here, tiles: 9, blockGrid: 212 }, 'held'), null)
+    /* A phone held upright: Next pressed, and the room is kept exactly, as it always was. */
+    assert.deepEqual(held({ playWidth: 393, chainNow: loading, tiles: 0, blockGrid: 212 }, 'held'), { count: 9, height: 212 })
+    assert.deepEqual(held({ playWidth: 393, chainNow: loading, tiles: 0, blockGrid: 212 }, 'held'), { count: 9, height: 212 })
+    /* Folded or dragged while it loads: the old screen's room is forgotten. */
+    assert.equal(held({ playWidth: 669, chainNow: loading, tiles: 0, blockGrid: 212 }, 'held'), null, 'the grey cards kept the old screen’s height')
+    assert.equal(held({ playWidth: 669, chainNow: loading, tiles: 0, blockGrid: 180 }, 'held'), null)
+    /* The chain lands at the new width, and its room is kept from then on. */
+    assert.equal(held({ playWidth: 669, chainNow: here, tiles: 7, blockGrid: 140 }, 'held'), null)
+    assert.deepEqual(held({ playWidth: 669, chainNow: loading, tiles: 0, blockGrid: 140 }, 'held'), { count: 7, height: 140 })
+
+    /* Changed width while the chain is up: measured again at once, from the grid as it now stands. */
+    const again = stageLines(
+      '  const heldGrid = useRef(',
+      '  const held = chainNow.elsewhere && heldGrid.current.height > 0 ? heldGrid.current : null\n',
+      ['playWidth', 'chainNow', 'tiles', 'blockGrid']
+    )
+    again({ playWidth: 393, chainNow: here, tiles: 9, blockGrid: 212 }, 'held')
+    again({ playWidth: 820, chainNow: here, tiles: 9, blockGrid: 140 }, 'held')
+    assert.deepEqual(again({ playWidth: 820, chainNow: loading, tiles: 0, blockGrid: 140 }, 'held'), { count: 9, height: 140 })
   })
 }

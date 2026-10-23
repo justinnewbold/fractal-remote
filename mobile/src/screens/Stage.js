@@ -308,6 +308,18 @@ export default function Stage({
   const { width: screen } = useWindowDimensions()
   const row = grid || Math.max(0, screen - space.lg * 2)
   /*
+   * HOW WIDE PLAY ITSELF IS, measured on the page that fills it, with the
+   * height the fit already measures there: never the window's width, and
+   * never which kind of device this is or which way up it is held. An iPad
+   * beside another app, a Galaxy Fold opened, and the iPhone Duo opened or
+   * closed each change it while a song plays, and a measurement of Play
+   * itself hears every one of them, whatever the window's own size says.
+   * Rounded, so a fraction of a point of layout is not a new width. On a
+   * phone held upright it is measured once, in the same moment as the
+   * height, and never changes again.
+   */
+  const [playWidth, setPlayWidth] = useState(0)
+  /*
    * How big the tiles are, chosen in Setup and kept under the browser's own
    * key. Read here rather than passed down, because `useStored` above already
    * re-renders this screen on every write to storage.
@@ -423,13 +435,32 @@ export default function Stage({
   const looperState = typeof looperHere?.bypassed === 'boolean' ? (looperHere.bypassed ? 'Off' : 'On') : '\u00a0'
   const tiles = blocks.length + (looperTile ? 1 : 0)
   const heldGrid = useRef({ count: 0, height: 0 })
+  /*
+   * AND FORGOTTEN WHEN PLAY CHANGES WIDTH. The room is a height measured at
+   * one width, and a chain of nine is two rows on one screen and three on a
+   * narrower one: an iPad's divider dragged, or a Duo folded, while the next
+   * preset loads drew the grey cards at the old screen's height, and the fit
+   * counted that height until the chain landed. So a new width drops it, and
+   * the wait is drawn as it is on a first load, with no room to keep. The
+   * first measurement is not a change: there was nothing kept before it.
+   */
+  const heldAt = useRef(playWidth)
+  if (heldAt.current !== playWidth) {
+    if (heldAt.current > 0) heldGrid.current = { count: 0, height: 0 }
+    heldAt.current = playWidth
+  }
   if (!chainNow.elsewhere && tiles > 0 && blockGrid > 0) heldGrid.current = { count: tiles, height: blockGrid }
   const held = chainNow.elsewhere && heldGrid.current.height > 0 ? heldGrid.current : null
   const fitBlocks = held ? held.count : tiles
   /* The "Updating…" line stands in for a moment and goes: a trim measured
      over it is not the grid's, and is dropped with it. The grey cards no
-     longer count — they hold the grid's own height. */
-  const fitKey = `${viewport}:${scenes.hasScenes ? scenes.count : 0}:${fitBlocks}:${fitOn}:${sceneCols}:${chainNow.late}`
+     longer count — they hold the grid's own height.
+     And Play's width beside its height: the trim is an overflow measured at
+     one size, and only ever grows, so a screen that only got WIDER (an iPad's
+     divider dragged, a Duo opened sideways) kept the narrow screen's
+     correction and drew every tile smaller than it had room for until the
+     next preset. */
+  const fitKey = `${viewport}:${playWidth}:${scenes.hasScenes ? scenes.count : 0}:${fitBlocks}:${fitOn}:${sceneCols}:${chainNow.late}`
   const lastKey = useRef(fitKey)
   if (lastKey.current !== fitKey) {
     lastKey.current = fitKey
@@ -857,8 +888,12 @@ export default function Stage({
       <ScrollView
         style={{ flex: 1 }}
         /* The viewport, and everything in it: fit is the difference between
-           the two, less the grids. */
-        onLayout={(e) => setViewport(e.nativeEvent.layout.height)}
+           the two, less the grids. And how wide Play is, from the same
+           measurement, so the two always change together. */
+        onLayout={(e) => {
+          setViewport(e.nativeEvent.layout.height)
+          setPlayWidth(Math.round(e.nativeEvent.layout.width))
+        }}
         onContentSizeChange={(_w, h) => setContent(h)}
         contentContainerStyle={{
           padding: space.lg,

@@ -13576,10 +13576,11 @@ export function run(test) {
     assert.match(stage, /setTrim\(\(was\) => was \+ over\)/, 'the overflow is measured and then not used')
     assert.match(stage, /if \(over > 2\)/, 'a rounding pixel starts another fitting pass')
     /* Reset when what is being fitted changes, or a preset with fewer blocks
-       inherits the trim from a bigger one and draws tiny tiles. */
+       inherits the trim from a bigger one and draws tiny tiles. And when Play
+       only gets wider or narrower (test/duo.mjs runs that part). */
     assert.match(
       stage,
-      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{fitBlocks\}:\$\{fitOn\}:\$\{sceneCols\}:\$\{chainNow\.late\}`/,
+      /const fitKey = `\$\{viewport\}:\$\{playWidth\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{fitBlocks\}:\$\{fitOn\}:\$\{sceneCols\}:\$\{chainNow\.late\}`/,
       'the trim is not thrown away when the rig or the screen changes'
     )
     assert.match(stage, /if \(trim !== 0\) setTrim\(0\)/, 'the trim survives a change of preset, so a smaller rig gets a smaller tile')
