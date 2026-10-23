@@ -198,6 +198,21 @@ let rollCallAsked = null
 /** Whether a roll call has been started on this link, and whether one has finished with anybody in it. */
 let countTried = false
 let countedOnLink = false
+/*
+ * A roll call the channel dropped under is not a roll call: realtime-js
+ * rejoins the same channel, and a count whose questions went into the drop
+ * was kept as the link's one count, its pick never proved, every write to
+ * every computer for the rest of the link. `drops` counts this link's drops;
+ * `recountOwed` is a count cut short, taken again when the channel is back,
+ * with writes waiting for it (the phone's relay.js says more). Only on an
+ * account with two, or that may have: one computer goes on as before.
+ */
+let drops = 0
+let recountOwed = false
+let owedGate = null
+/** How many answered the last pick's proof: 0 is no answer, never a computer app too old (rollCallLine). And the drops before it was asked (cutShort). */
+let proofAnswers = null
+let proofFrom = null
 
 /**
  * Which Macs are answering for this account.
@@ -273,6 +288,12 @@ async function takeCensus({
   if (!channel || !isJoined(channel)) return hosts
   const link = session
   countTried = true
+  /* A drop under it from here cuts it short (recountOwed). */
+  const dropsAt = drops
+  let cut = false
+  /* No proof asked by this count yet (confirmTargeting). */
+  proofAnswers = null
+  proofFrom = null
   /* Reads while it counts: on to the pick already proved, held for this account's pick when its last roll call heard two or more, or as they always went (holdReads). Held only while every read on this link has waited (the phone's relay.js says why). */
   const record = readPick()
   const picked = record?.name || null
@@ -321,19 +342,31 @@ async function takeCensus({
     targeted = false
     if (hosts.length > 1 && chosen) await confirmTargeting({ windowMs, sleep })
     countedAt = Date.now()
-    /* Said once, so a log shows which computer this browser drives and why (rollCallLine). */
-    const missing = !proved && picked && !hosts.includes(picked) && (hosts.length > 1 || record?.many === true) ? picked : null
-    if (hosts.length > 1 || missing) logDebug('link', rollCallLine({ hosts, units, chosen, why: chosenWhy, addressed: targeted, missing }))
-    /* Counted on this link; and whether it heard two or more, which the next fresh link's first reads go by (holdsFor). */
-    if (session === link && hosts.length) {
-      countedOnLink = true
-      noteCount(hosts.length > 1)
+    /* Cut short by a drop before its proof, or under a proof left with no answer or two: not this link's count, and taken again when the channel is back (the phone's relay.js says why). One computer's is kept as it always was. */
+    if (session === link && cutShort(dropsAt) && (hosts.length > 1 || mayBeTwo(readPick()))) {
+      cut = true
+      logDebug('link', rollCallLine({ hosts, units, cut: true }))
+    } else {
+      /* Said once, so a log shows which computer this browser drives and why (rollCallLine). */
+      const missing = !proved && picked && !hosts.includes(picked) && (hosts.length > 1 || record?.many === true) ? picked : null
+      if (hosts.length > 1 || missing) logDebug('link', rollCallLine({ hosts, units, chosen, why: chosenWhy, addressed: targeted, missing, proof: proofAnswers }))
+      /* Counted on this link; and whether it heard two or more, which the next fresh link's first reads go by (holdsFor). */
+      if (session === link && hosts.length) {
+        countedOnLink = true
+        noteCount(hosts.length > 1)
+      }
     }
   } finally {
     if (session === link) {
-      readsTo = null
-      rollCallAsked = readsAsked
-      readsAsked = null
+      if (cut) oweCount()
+      else {
+        readsTo = null
+        rollCallAsked = readsAsked
+        readsAsked = null
+        /* A count owed is taken: writes go by what it found. */
+        recountOwed = false
+        owedOver()
+      }
     }
     held?.open()
   }
@@ -371,6 +404,49 @@ function holdReads() {
 
 /** Whether every read on this link so far was asked of `name` (none at all counts): see takeCensus. */
 const readsOnlyTo = (name) => !readsAsked || readsAsked.every((host) => host === name)
+
+/*
+ * A count cut short, owed (recountOwed): what it heard stays, so writes know
+ * two answered and wait, but nothing is decided by it. No computer is driven
+ * or proved, the pick is chosen again by the count owed (and the unit read
+ * again for it, App's effect on chosenHost), and reads meanwhile go to the
+ * pick by name where the count had heard it and every read so far went to
+ * it, still written down for that count to go by. The phone's relay.js the same.
+ */
+function oweCount() {
+  readsTo = chosenWhy === 'pick' && chosen && readsOnlyTo(chosen) ? chosen : null
+  chosen = null
+  chosenWhy = null
+  targeted = false
+  rollCallAsked = null
+  countTried = false
+  countedOnLink = false
+  recountOwed = true
+}
+
+/** Whether a drop since `from` cut a count (or a proof) short: one before its proof was asked, or under a proof it left with no answer or two. See takeCensus. */
+const cutShort = (from) =>
+  proofFrom === null ? drops !== from || !isJoined(channel) : proofFrom !== from || ((drops !== proofFrom || !isJoined(channel)) && proofAnswers !== 1)
+
+/** Whether a write waits for a count owed: one is, and no computer is proved to be driven alone (see recountOwed). */
+const owedNow = () => recountOwed && !(hosts.length > 1 && chosen && targeted)
+
+/** The gate a write waits on while a count is owed and none has begun. */
+function owedWait() {
+  if (!owedGate) {
+    let go = null
+    const gate = new Promise((open) => (go = open))
+    owedGate = { gate, go }
+  }
+  return owedGate.gate
+}
+
+/** A count has begun, or the link went: whatever waited for one goes on (countDone looks again). */
+function owedOver() {
+  const was = owedGate
+  owedGate = null
+  was?.go()
+}
 
 /* On a fresh link, before anybody hears it is up: held when this account's pick holds reads, and who each read is asked of written down from here (remoteReadsAskedOf). */
 function holdForPick() {
@@ -414,6 +490,9 @@ export function remoteCountDue() {
   return Boolean(channel && isJoined(channel) && hostSeen && !counting && !countTried)
 }
 
+/** Whether the count of this link was cut short by a drop and is owed (recountOwed): link.js takes it the moment the computer answers again. */
+export const remoteCountOwed = () => recountOwed
+
 /*
  * A WRITE WAITS FOR THE ROLL CALL, so it lands on one unit and not two.
  *
@@ -446,7 +525,8 @@ const writesWaitOn = () => (counting && !countFree ? counting : null)
 export function censusHosts(options = {}) {
   /* Only one on this link: a count left running by a link that has gone is nothing to wait for. */
   const before = counting && countingLink === session ? counting : null
-  const free = !before && options?.late === true && !mayBeTwo(readPick())
+  /* Never for a count owed: the one cut short heard two, or the record says it may have (takeCensus). */
+  const free = !before && options?.late === true && !mayBeTwo(readPick()) && !recountOwed
   const run = before
     ? before
         .catch(() => {})
@@ -459,6 +539,8 @@ export function censusHosts(options = {}) {
   countingLink = session
   countingSince = Date.now()
   countFree = free
+  /* A count owed has begun: what waited for one waits for it now (countDone). */
+  owedOver()
   run.finally(() => {
     if (counting !== run) return
     counting = null
@@ -482,13 +564,15 @@ async function countDone(deadline) {
   for (;;) {
     const run = writesWaitOn()
     const held = run ? null : pickHeld(deadline)
-    if (!run && !held) return
+    /* A count cut short by a drop, owed and not begun: waited for as one running is (recountOwed). */
+    const owed = run || held || !owedNow() ? null : owedWait()
+    if (!run && !held && !owed) return
     const most = Math.min(cap, (run ? Math.max(made, countingSince) : made) + COUNT_WAIT_MS)
     const end = held ? Math.min(most, held.until) : most
     const left = end - Date.now()
     if (left <= 0) return
     let timer = null
-    await Promise.race([run ? run.catch(() => {}) : held.gate, new Promise((go) => (timer = setTimeout(go, left)))])
+    await Promise.race([run ? run.catch(() => {}) : held ? held.gate : owed, new Promise((go) => (timer = setTimeout(go, left)))])
     clearTimeout(timer)
   }
 }
@@ -571,12 +655,15 @@ async function readUnits({ windowMs, sleep }) {
  */
 async function confirmTargeting({ windowMs, sleep }) {
   if (!chosen) return false
+  /* When it was asked, for whether a drop cut it short (cutShort). */
+  proofFrom = drops
   const answers = await collectAnswers({
     path: '/store/config/host.name',
     host: chosen,
     windowMs,
     sleep
   })
+  proofAnswers = answers.length
   targeted = answers.length === 1
   return targeted
 }
@@ -626,7 +713,18 @@ async function provePick(name, before, { windowMs, sleep }) {
   targeted = false
   if (hosts.length > 1) readsTo = name
   rememberHost(name)
+  const link = session
+  const dropsAt = drops
+  proofFrom = null
   if (hosts.length > 1) await confirmTargeting({ windowMs, sleep })
+  /* A proof the channel dropped under, its one answer not in, proves nothing: counted again with the rest when the channel is back, the pick still this one and reads still asked of it (the phone's relay.js). */
+  if (hosts.length > 1 && session === link && cutShort(dropsAt)) {
+    logDebug('link', `the link dropped while ${name}, picked under Which unit, was asked alone: the computers are counted again when it is back`)
+    targeted = false
+    countTried = false
+    countedOnLink = false
+    recountOwed = true
+  }
   return targeted
 }
 
@@ -641,11 +739,13 @@ function whileProving(run) {
   countingLink = session
   countingSince = Date.now()
   countFree = false
+  owedOver()
   run
     .finally(() => {
       if (counting !== run) return
       counting = null
-      readsTo = null
+      /* A proof cut short leaves reads with the pick, until the count owed (provePick). */
+      if (!recountOwed) readsTo = null
     })
     .catch(() => {})
   return run
@@ -1361,6 +1461,8 @@ async function joinChannel() {
       }
 
       if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        /* A roll call or a proof this went under is cut short: see recountOwed. */
+        drops += 1
         if (channel === chan) {
           channel = null
           seen(false)
@@ -1405,6 +1507,9 @@ export async function remoteDisconnect() {
   /* And the next link counts again from the start (remoteCountDue). */
   countTried = false
   countedOnLink = false
+  recountOwed = false
+  proofAnswers = null
+  owedOver()
   failWaiting('Disconnected.')
   announce()
 
@@ -1477,13 +1582,14 @@ export async function remoteRequest(path, options = {}) {
    * goes off a millisecond early let a tap through mid-count, addressed to
    * nobody, and computer app 1.87.4 carries that out on every computer).
    */
-  if (Number.isFinite(options.deadline) && ((method !== 'GET' && (writesWaitOn() || pickHeld(options.deadline))) || pastDeadline(options.deadline, Date.now()))) {
+  if (Number.isFinite(options.deadline) && ((method !== 'GET' && (writesWaitOn() || pickHeld(options.deadline) || owedNow())) || pastDeadline(options.deadline, Date.now()))) {
     /* With a newer press of its control held too, that one's business: see the end of this function. */
     const over = presses.overtaken(path, options.body, options.deadline)
     throw notSentError({ late: over || linkLooksUp(), overtaken: over })
   }
   /* Never asked of nobody while two answer and the one driven is not proved: an edit that waited out a count or a proof that hangs is refused, not sent to both (the phone's relay.js). */
-  if (method !== 'GET' && writesWaitOn() && hosts.length > 1 && !(chosen && targeted)) throw notSentError({ late: linkLooksUp() })
+  /* Nor while a count cut short by a drop is owed and has not been taken (recountOwed). */
+  if (method !== 'GET' && ((writesWaitOn() && hosts.length > 1 && !(chosen && targeted)) || owedNow())) throw notSentError({ late: linkLooksUp() })
 
   /*
    * Nothing is changed while two Macs are listening.

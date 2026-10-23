@@ -396,6 +396,8 @@ async function linkOnABench() {
       export const remoteReadsAskedOf = () => bench.askedOf ?? null
       /* Whether a roll call is due (relay.js remoteCountDue): \`bench.countDue\`, false unless a test says. */
       export const remoteCountDue = () => (typeof bench.countDue === 'function' ? bench.countDue() : bench.countDue === true)
+      /* Whether a count cut short by a drop is owed (relay.js recountOwed): \`bench.countOwed\`, false unless a test says. */
+      export const remoteCountOwed = () => bench.countOwed === true
       /* Whether the account's record says it may have two (relay.js remoteMayBeTwo): \`bench.many\` true, which a test says. */
       export const remoteMayBeTwo = () => bench.many === true
       /* Which unit (relay.js pickHost): \`bench.pick\` runs inside it; \`bench.switched(name)\` tells link.js it moved, as relay.js does before the proof. */
@@ -751,6 +753,7 @@ async function webLinkOnABench({ role = 'remote', demo = false } = {}) {
       export const remoteChosenHost = () => null
       export const remoteReadsAskedOf = () => null
       export const remoteCountDue = () => (typeof bench.countDue === 'function' ? bench.countDue() : false)
+      export const remoteCountOwed = () => bench.countOwed === true
       /* Which unit (remote.js pickHost): \`bench.pick\` runs inside it. */
       export const pickHost = async (name) => (bench.pick ? bench.pick(name) : false)
       export const subscribeSwitching = () => () => {}
@@ -2062,6 +2065,76 @@ export function run(test) {
     assert.deepEqual(heard, ['raspberry pi 3'], `the scene was carried out by ${heard.join(' and ')}\n${log}`)
     assert.equal(s.link.linkState().chosenHost, 'raspberry pi 3')
     assert.equal(s.rig.getState().deviceName, 'AM4', log)
+  })
+
+  /*
+   * And with the app on screen, the channel joined again by realtime-js
+   * itself (the same channel, so the link never ends): Justin's three
+   * computers, the AM4's Pi picked. The count the drop cut short was kept
+   * as the link's one count, its proof unanswered and logged as a computer
+   * app too old, and from then on every read went to whoever answered first
+   * (the header FM3 over the AM4) and a scene to all three computers. The
+   * bench of the join review: ONSCREEN=1 WRITE=1 dropmid.mjs 2000 30000 2000.
+   */
+  test('phone: three computers, the channel lost under the launch’s roll call with the app on screen and joined again by itself: counted again, and a scene reaches the pick alone', async () => {
+    const s = await stackOnABench({ pick: JSON.stringify({ accounts: { u1: { name: 'raspberry pi 3', many: true } } }) })
+    s.bench.computers = [{ ...FM3_MAC }, { name: 'raspberry pi 5', unit: null, lag: () => 170 }, { ...AM4_PI }]
+    s.link.startLink()
+    await s.clock.advance(2000)
+    loseSocket(s)
+    s.clock.setTimeout(() => rejoinSocket(s), 2000)
+    await s.clock.advance(28000)
+    const log = s.lines().join('\n')
+    assert.equal(s.link.linkState().link, 'connected', log)
+    assert.equal(s.bench.chans.length, 1, `the bench joined a second channel: this does not test realtime-js's own rejoin\n${log}`)
+    assert.match(log, /the link dropped before the count was done: counted again when the link is back/, log)
+    assert.match(log, /three computers answered: MacBook Pro SG 566 \(FM3\), raspberry pi 5 \(no unit plugged in\), raspberry pi 3 \(AM4\); driving raspberry pi 3, the one picked under Which unit, addressed/, log)
+    assert.ok(!/too old to be asked alone/.test(log), `a proof lost to the drop was logged as an old computer app\n${log}`)
+    /* Every read since the link came up was asked of the pick, the drop and the count after it included: the header is the AM4's. */
+    for (const c of s.bench.computers.filter((x) => x.name !== 'raspberry pi 3')) {
+      const units = (c.heard || []).filter((h) => !['/healthz', '/store/config/host.name', '/telemetry/meters', '/device'].includes(h.path))
+      assert.deepEqual(units.map((h) => h.path), [], `${c.name} was asked the unit's reads\n${log}`)
+    }
+    assert.equal(s.rig.getState().deviceName, 'AM4', log)
+    const before = s.bench.computers.map((c) => (c.heard || []).length)
+    const wrote = s.device.setScene(2).then(
+      () => null,
+      (e) => e
+    )
+    await s.clock.advance(10000)
+    assert.equal(await wrote, null, `the scene was refused\n${log}`)
+    const heard = s.bench.computers.filter((c, i) => (c.heard || []).slice(before[i]).some((h) => h.path === '/scene')).map((c) => c.name)
+    assert.deepEqual(heard, ['raspberry pi 3'], `the scene was carried out by ${heard.join(' and ')}\n${log}`)
+  })
+
+  /*
+   * The count owed is taken the moment the computer answers on the channel
+   * that came back, even with the join that took the one cut short still
+   * reading the unit: writes wait for it. Left to the end of the join (a Pi
+   * 3's chain dumps, ten seconds on the bench), every tap in between was
+   * dropped.
+   */
+  test('phone: a count cut short by a drop is taken again at once, inside the join that took it, and the unit read off the pick then is not read again', async () => {
+    const t = await linkOnABench()
+    t.bench.many = true
+    let counts = 0
+    t.bench.census = async () => {
+      counts += 1
+      t.bench.countOwed = counts === 1
+      t.bench.hosts = ['MacBook Pro SG 566', 'raspberry pi 3']
+      t.bench.chosen = counts === 1 ? null : 'raspberry pi 3'
+      t.bench.askedOf = counts === 1 ? null : 'raspberry pi 3'
+    }
+    t.bench.countDue = () => t.bench.countOwed === true
+    t.link.startLink()
+    await t.clock.advance(5000)
+    const order = t.bench.order.filter((x) => ['census', 'refreshAll', 'startClean'].includes(x))
+    assert.equal(counts, 2, 'the count cut short was not taken again')
+    assert.deepEqual(t.bench.censusOptions, [null, { late: true }])
+    assert.deepEqual(order.slice(0, 2), ['census', 'census'], `the count owed waited for the join to finish reading: ${order.join(', ')}`)
+    /* Every read was the pick's, and the unit was read off it: not read again from a clean start for the count owed. */
+    assert.equal(order.filter((x) => x === 'refreshAll').length, 1, order.join(', '))
+    assert.ok(!order.includes('startClean'), order.join(', '))
   })
 
   /*
@@ -4053,6 +4126,155 @@ export function run(test) {
       assert.equal(saved.done && !saved.error, true, saved.error?.message)
       assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']], 'the write did not go to the pick alone')
     })
+
+    /*
+     * A ROLL CALL THE CHANNEL DROPPED UNDER IS NOT A ROLL CALL. realtime-js
+     * rejoins the same channel, so the link never ends, and the count whose
+     * questions went into the drop was kept as the link's one count: the
+     * pick never proved, reads to whoever answered first and every write to
+     * every computer for the rest of the link. Now it is owed: no write goes
+     * while it is, and it is taken again once the channel is back.
+     */
+    test(`${end}: a roll call the channel dropped under is owed: no write goes to both computers, and it is taken again when the channel is back`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const { bench, clock, relay, watch, tap, service, store } = t
+      bench.computers = [PI5(), PI3()]
+      const census = counted(t)
+      /* Both heard in the first window (40 and 300 ms); then the channel drops under it, and the units and the proof go into the drop. */
+      await clock.advance(1000)
+      service.drop()
+      await clock.advance(2000)
+      assert.equal(census.done, true)
+      const log = () => store.logged.join('\n')
+      assert.equal(relay.remoteCountOwed(), true, `the count the channel dropped under was kept\n${log()}`)
+      assert.match(log(), /two computers answered: fractalpi \(unit not known\), raspberry pi 3 \(unit not known\); the link dropped before the count was done: counted again when the link is back/)
+      assert.ok(!/too old to be asked alone/.test(log()), `a proof lost to the drop was logged as an old computer app\n${log()}`)
+      assert.equal(relay.remoteChosenHost(), null, 'a computer was driven on a count cut short')
+      service.back()
+      /* Asked of the pick by name, as every read is while the count is owed: the Pi 3 answers at 300 ms. */
+      const back = watch(relay.hostResponds())
+      await clock.advance(400)
+      assert.equal(back.value, true)
+      assert.equal(relay.remoteCountDue(), true, 'the count cut short is not taken again with the channel back')
+      /* A tap and an edit before it is: neither goes, and the tap is dropped at its deadline rather than sent to both. */
+      bench.sent.length = 0
+      const pressed = watch(tap())
+      const saved = watch(relay.remoteRequest('/scene', { method: 'POST', body: JSON.stringify({ index: 1 }) }))
+      const read = watch(relay.remoteRequest('/preset'))
+      await clock.advance(1600)
+      assert.deepEqual(writes(bench), [], 'a write went while the count was owed: to both computers')
+      assert.equal(pressed.done && pressed.error?.notSent, true, `the tap made while the count was owed was not dropped: ${pressed.error?.message}`)
+      assert.deepEqual(sentOf(bench, '/preset'), ['raspberry pi 3'], 'a read while the count was owed went to whoever answers first')
+      const again = counted(t)
+      await clock.advance(6000)
+      assert.equal(again.done, true)
+      assert.equal(relay.remoteCountOwed(), false)
+      assert.equal(relay.remoteCountDue(), false)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+      assert.equal(saved.done && !saved.error, true, saved.error?.message)
+      assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']], 'the edit did not go to the pick alone once it was counted again')
+      assert.equal(read.done && !read.error, true)
+    })
+
+    test(`${end}: a channel dropped before any answer to the roll call, on an account that may have two, is owed too; with one computer it is kept as it always was`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      t.bench.computers = [PI5({ lag: 400 }), PI3({ lag: 400 })]
+      const census = counted(t)
+      await t.clock.advance(100)
+      t.service.drop()
+      await t.clock.advance(5000)
+      assert.equal(census.done, true)
+      assert.equal(t.relay.remoteCountOwed(), true, 'a count that heard nobody because of the drop was kept, on an account of two')
+      /* One computer, nothing picked: the same drop changes nothing, and a tap after it goes at once. */
+      const one = await relayOnABench(end)
+      one.bench.computers = [computer('Studio', 'FM3')]
+      const count = counted(one)
+      await one.clock.advance(500)
+      one.service.drop()
+      await one.clock.advance(1500)
+      one.service.back()
+      await one.clock.advance(100)
+      assert.equal(count.done, true)
+      assert.equal(one.relay.remoteCountOwed(), false, 'one computer’s count was taken again')
+      assert.equal(one.relay.remoteCountDue(), false)
+      const hostSeen = one.watch(one.relay.hostResponds())
+      await one.clock.advance(100)
+      assert.equal(hostSeen.value, true)
+      const made = one.clock.now()
+      const pressed = one.watch(one.tap())
+      await one.clock.advance(200)
+      assert.equal(pressed.done && !pressed.error, true, pressed.error?.message)
+      assert.equal(one.bench.sent.find((s) => s.msg.payload.method === 'POST')?.at, made, 'one computer’s tap waited')
+    })
+
+    test(`${end}: a pick's proof the channel dropped under, its answer lost, is never taken for an old computer app: the computers are counted again`, async () => {
+      const t = await relayOnABench(end)
+      const { bench, clock, relay, watch, service, store } = t
+      const pi3 = PI3()
+      const answers = pi3.reply
+      let lost = false
+      pi3.reply = (p) => (lost && p.path === '/store/config/host.name' ? 'silent' : answers(p))
+      bench.computers = [PI5(), pi3]
+      const sleep = (ms) => new Promise((go) => clock.setTimeout(go, ms))
+      relay.censusHosts({ windowMs: 1500, sleep })
+      await clock.advance(6000)
+      assert.equal(relay.remoteChosenHost(), 'fractalpi')
+      store.logged.length = 0
+      /* Which unit tapped; the channel drops at once, and the proof's answer goes with it. */
+      lost = true
+      const picking = watch(relay.pickHost('raspberry pi 3', { windowMs: 1500, sleep }))
+      await clock.advance(100)
+      service.drop()
+      await clock.advance(100)
+      service.back()
+      lost = false
+      await clock.advance(2000)
+      assert.equal(picking.done && picking.value, false)
+      const log = store.logged.join('\n')
+      assert.equal(relay.remoteCountOwed(), true, `the proof lost to the drop was kept\n${log}`)
+      assert.match(log, /the link dropped while raspberry pi 3, picked under Which unit, was asked alone: the computers are counted again when it is back/)
+      assert.ok(!/too old/.test(log), log)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3', 'the pick tapped was let go')
+      bench.sent.length = 0
+      const seen = watch(relay.hostResponds())
+      await clock.advance(400)
+      assert.equal(seen.value, true)
+      const saved = watch(relay.remoteRequest('/scene', { method: 'POST', body: JSON.stringify({ index: 1 }) }))
+      await clock.advance(500)
+      assert.deepEqual(writes(bench), [], 'a write went while the proof was owed: to both computers')
+      relay.censusHosts({ windowMs: 1500, sleep })
+      await clock.advance(6000)
+      assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+      assert.equal(saved.done && !saved.error, true, saved.error?.message)
+      assert.deepEqual(writes(bench), [['/scene', 'raspberry pi 3']])
+      /* A drop that comes after the proof's one answer leaves it proved, as a proof with no drop. */
+      store.logged.length = 0
+      const proved = watch(relay.pickHost('fractalpi', { windowMs: 1500, sleep }))
+      await clock.advance(500)
+      service.drop()
+      await clock.advance(100)
+      service.back()
+      await clock.advance(2000)
+      assert.equal(proved.done && proved.value, true, store.logged.join('\n'))
+      assert.equal(relay.remoteCountOwed(), false)
+    })
+
+    test(`${end}: a pick that does not answer when asked alone is logged so, never as a computer app too old`, async () => {
+      const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+      const pi3 = PI3()
+      const answers = pi3.reply
+      /* Answers the roll call, and nothing asked of it by name: a name it does not hear as its own. */
+      pi3.reply = (p) => (p.host && p.path === '/store/config/host.name' ? 'silent' : answers(p))
+      t.bench.computers = [PI5(), pi3]
+      const census = counted(t)
+      await t.clock.advance(6000)
+      assert.equal(census.done, true)
+      const log = t.store.logged.join('\n')
+      assert.match(log, /driving raspberry pi 3, the one picked under Which unit, not addressed: it did not answer when asked alone/, log)
+      assert.ok(!/too old/.test(log), log)
+      /* No drop: the count is this link's, as it always was. */
+      assert.equal(t.relay.remoteCountOwed(), false)
+    })
   }
 
   test('phone: a disk slow to answer, or never answering, holds no read or tap of one computer past a quarter of a second, and never hangs a count or a pick', async () => {
@@ -4228,6 +4450,10 @@ export function run(test) {
       'two computers answered: fractalpi (FM3), raspberry pi 3 (no unit plugged in); driving raspberry pi 3, the one picked under Which unit, addressed'
     )
     assert.match(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', why: 'first', addressed: false }), /driving fractalpi, the first to answer, not addressed: a computer app on one of them is too old to be asked alone$/)
+    /* A proof nobody answered is not a computer app too old, and a count the link dropped under says so instead of what it found. */
+    assert.match(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', why: 'pick', addressed: false, proof: 0 }), /driving fractalpi, the one picked under Which unit, not addressed: it did not answer when asked alone$/)
+    assert.match(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', why: 'pick', addressed: false, proof: 2 }), /too old to be asked alone$/)
+    assert.equal(r.rollCallLine({ hosts: both, units: {}, chosen: 'fractalpi', cut: true }), 'two computers answered: fractalpi (unit not known), raspberry pi 3 (unit not known); the link dropped before the count was done: counted again when the link is back')
     assert.equal(r.rollCallLine({ hosts: ['Studio'], missing: 'Old Mac' }), 'one computer answered: Studio; Old Mac, the one picked under Which unit, did not answer')
     /* Words a person may read: plain, and never "this phone". */
     for (const words of [line, r.rollCallLine({ hosts: both, units, chosen: 'fractalpi', why: 'first' })]) assert.ok(!/this phone|\bMac\b/.test(words), words)
@@ -4253,7 +4479,7 @@ export function run(test) {
     /* Both ends log it from the same rule, once per roll call that found two or missed the pick, and neither hands the pick to another computer. */
     for (const file of ['mobile/src/lib/relay.js', 'src/lib/remote.js']) {
       const src = read(file)
-      assert.match(src, /if \(hosts\.length > 1 \|\| missing\) logDebug\('link', rollCallLine\(\{ hosts, units, chosen, why: chosenWhy, addressed: targeted, missing \}\)\)/, `${file} does not say the roll call`)
+      assert.match(src, /if \(hosts\.length > 1 \|\| missing\) logDebug\('link', rollCallLine\(\{ hosts, units, chosen, why: chosenWhy, addressed: targeted, missing, proof: proofAnswers \}\)\)/, `${file} does not say the roll call`)
       assert.ok(!/hostWithUnit/.test(src), `${file} hands the pick to another unit`)
       /* The pick is kept per account. */
       assert.match(src, /accounts\[uid\] = \{ name, many: /, `${file} keeps one pick for every account`)

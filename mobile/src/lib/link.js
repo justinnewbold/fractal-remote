@@ -32,6 +32,7 @@ import {
   remoteConnect,
   remoteDisconnect,
   remoteCountDue,
+  remoteCountOwed,
   remoteMayBeTwo,
   remoteHostSeen,
   remoteHosts,
@@ -504,6 +505,8 @@ async function joinOnce(run) {
   }
   if (!running) return
   listen()
+  /* When this link came up: a count owed on it goes by every read since (countIfDue). */
+  joinedAt = Date.now()
   refresh()
 
   /* Not answered yet: the roll call is taken when it does (countIfDue, from the loop and from the first answer). */
@@ -560,13 +563,17 @@ async function countHosts() {
   await afterCount(remoteChosenHost(), censusHosts())
 }
 
-/** What a roll call found, put to use: `run` is the count, `was` the computer driven as it began. */
-async function afterCount(was, run) {
-  const began = Date.now()
+/** When the link now up was joined: see countIfDue. */
+let joinedAt = 0
+
+/** What a roll call found, put to use: `run` is the count, `was` the computer driven as it began, `began` when the reads it goes by began. */
+async function afterCount(was, run, began = Date.now()) {
   try {
     let before = was
     await run
     heardHosts()
+    /* Cut short by a drop, and owed: taken again now if the computer is answering, else when it does (countIfDue). Nothing it found is put to use. */
+    if (remoteCountOwed()) return countIfDue()
     /* The roll call picked a computer: that one is told about the level readings, whatever answered first before (see metersAgain). */
     if (remoteChosenHost() !== before) {
       metersAgain()
@@ -612,8 +619,17 @@ async function afterCount(was, run) {
  * demo or over Bluetooth, and never inside join, which takes its own.
  */
 function countIfDue() {
-  if (!running || joinBusy || isDemo() || bluetoothOn() || !remoteHostSeen() || !remoteCountDue()) return
-  afterCount(remoteChosenHost(), censusHosts({ late: true }))
+  /*
+   * AND A COUNT CUT SHORT BY A DROP IS TAKEN AGAIN the moment the computer
+   * answers on the channel that came back (relay.js recountOwed), the
+   * join that took it still reading the unit or not: every write waits for
+   * it. What it goes by is every read since the link came up, which the one
+   * cut short kept asking of the pick: a unit read off it then is not read
+   * again (afterCount).
+   */
+  const owed = remoteCountOwed()
+  if (!running || (joinBusy && !owed) || isDemo() || bluetoothOn() || !remoteHostSeen() || !remoteCountDue()) return
+  afterCount(remoteChosenHost(), censusHosts({ late: true }), owed ? joinedAt : Date.now())
 }
 
 /*
@@ -650,12 +666,17 @@ const heardHosts = () => set({ hosts: remoteHosts(), units: remoteUnits(), chose
  * of the new one and filed under the unit on screen, the old one's. Only a
  * computer actually switched to starts clean: a tap that found nothing to
  * switch (the name not listed) leaves the screen as it is.
+ *
+ * A proof the link dropped under, its answer lost, proved nothing: the
+ * computers are counted again (relay.js provePick), now if the computer is
+ * answering and as soon as it does if not (countIfDue).
  */
 export async function chooseHost(name) {
   const ok = await pickHost(name)
   const moved = switchOwed
   switchOwed = false
   heardHosts()
+  if (remoteCountOwed()) countIfDue()
   metersAgain()
   quietMeters()
   if (moved) startClean()

@@ -51,6 +51,7 @@ import {
   remoteChosenHost,
   remoteReadsAskedOf,
   remoteCountDue,
+  remoteCountOwed,
   pickHost,
   subscribeSwitching,
   signOut,
@@ -676,6 +677,11 @@ async function countHosts() {
 async function afterCount(before, run) {
   try {
     await run
+    /* Cut short by a drop, and owed: taken again now if the computer is answering, else when it does (countIfDue). Nothing it found is put to use. */
+    if (remoteCountOwed()) {
+      set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+      return countIfDue()
+    }
     /*
      * One of two picked: its name, read again now that it is asked of that
      * computer alone, and what was read while the roll call listened goes
@@ -709,7 +715,8 @@ async function afterCount(before, run) {
  * on the web app.
  */
 function countIfDue() {
-  if (state.role !== 'remote' || !state.account || joining || !remoteHostSeen() || !remoteCountDue()) return
+  /* A count cut short by a drop is taken again the moment the computer answers on the channel that came back, a join under way or not (remote.js recountOwed). */
+  if (state.role !== 'remote' || !state.account || (joining && !remoteCountOwed()) || !remoteHostSeen() || !remoteCountDue()) return
   afterCount(remoteChosenHost(), censusHosts({ late: true }))
 }
 
@@ -722,11 +729,14 @@ function countIfDue() {
  *
  * Another computer: another unit, read by App from a clean start
  * (deviceState.computerChanged), told by remote.js the moment it switches,
- * before any read is asked of the new one; and its own name.
+ * before any read is asked of the new one; and its own name. A proof the
+ * link dropped under is counted again with the rest (remote.js provePick),
+ * now if the computer is answering (countIfDue).
  */
 export async function chooseHost(name) {
   await pickHost(name)
   set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), clash: hostConflict() })
+  if (remoteCountOwed()) countIfDue()
   metersAgain()
   quietMeters()
   readMacName()

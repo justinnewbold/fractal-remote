@@ -764,8 +764,17 @@ export function firstUnitHost(hostNames = [], units = {}) {
  * `why` is how the one driven was chosen: 'pick' (picked under Which unit)
  * or 'first' (nobody picked: firstUnitHost). `missing` is a pick that did
  * not answer.
+ *
+ * `proof` is how many answered when the one driven was asked alone (the
+ * proof that asking it by name leaves the others out): one is addressed,
+ * two or more is a computer app too old to know names, and NONE IS NOT
+ * THAT. An answer lost, or a computer gone quiet, used to be logged as an
+ * old computer app, which sent whoever read the log off to update one that
+ * was fine. `cut` is a count the link dropped under before it was done
+ * (relay.js takeCensus): what it heard is not the answer, and it is taken
+ * again when the link is back.
  */
-export function rollCallLine({ hosts = [], units = {}, chosen = null, why = null, addressed = false, missing = null } = {}) {
+export function rollCallLine({ hosts = [], units = {}, chosen = null, why = null, addressed = false, missing = null, proof = null, cut = false } = {}) {
   const count = ['no computers', 'one computer', 'two computers', 'three computers'][hosts.length] || `${hosts.length} computers`
   const unitOf = (name) => {
     const unit = units?.[name]
@@ -774,11 +783,18 @@ export function rollCallLine({ hosts = [], units = {}, chosen = null, why = null
   }
   const heard = `${count} answered${hosts.length ? `: ${hosts.map((name) => `${name}${unitOf(name)}`).join(', ')}` : ''}`
   const gone = missing ? `; ${missing}, the one picked under Which unit, did not answer` : ''
+  if (cut) return `${heard}; the link dropped before the count was done: counted again when the link is back`
   if (hosts.length < 2 || !chosen) return `${heard}${gone}${hosts.length > 1 ? '; driving none of them: two share a name' : ''}`
   const reason = why === 'pick' ? 'the one picked under Which unit' : units?.[chosen]?.plugged ? 'the first with a unit plugged in' : 'the first to answer'
   /* Two answering to the one name (two Pis left at "raspberrypi"): asked by it, both answer, and no computer app is to blame. */
   const shared = hosts.filter((name) => name === chosen).length > 1
-  const how = addressed ? 'addressed' : shared ? 'not addressed: two computers share its name' : 'not addressed: a computer app on one of them is too old to be asked alone'
+  const how = addressed
+    ? 'addressed'
+    : shared
+      ? 'not addressed: two computers share its name'
+      : proof === 0
+        ? 'not addressed: it did not answer when asked alone'
+        : 'not addressed: a computer app on one of them is too old to be asked alone'
   return `${heard}${gone}; driving ${chosen}, ${reason}, ${how}`
 }
 
