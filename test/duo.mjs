@@ -460,6 +460,171 @@ export function run(test) {
     assert.deepEqual(resets, [], 'a fraction of a point of layout threw the fit’s correction away')
   })
 
+  test('Play’s fit looks again once its new answer is laid out, so a Galaxy Fold folded shut on Play ends with a page that fits', async () => {
+    /*
+     * The overflow check ran only when the page's height changed. A trim
+     * that moved Fit's answer without moving anything drawn (the pedals at
+     * their 44 floor, the scene tiles as tall as their words) left that
+     * height where it was, so the check never ran again and Play stayed
+     * overflowing. A Galaxy Fold folded shut while Play is open does exactly
+     * that: the cover screen's first layout still has the opened-up Play's
+     * strip of buttons, the next has them back in the page, the trim is
+     * thrown away between the two while the page is shorter than the screen,
+     * and Fit's first guess then comes out 11 points too tall with nothing
+     * it can shrink. This runs Stage's own lines, render after render, with
+     * a page that grows as Play's grids do, and lays out every view Play
+     * sizes by Fit's answer the way the screen would.
+     */
+    const g = await playRule()
+    const stage = read('mobile/src/screens/Stage.js')
+    const from = '  const [viewport, setViewport] = useState(0)\n'
+    const to = '  const fxCols = fitted ? fitted.fxCols : shape.fxCols\n'
+    const start = stage.indexOf(from)
+    const end = stage.indexOf(to, start)
+    assert.ok(start > 0 && end > start, 'Play’s fit moved; this check reads it')
+    /* Every view on Play laid out at Fit's answer: an onLayout, and a style read from `fitted`. */
+    const sized = []
+    traverse(jsx(stage), {
+      JSXOpeningElement(path) {
+        const attr = (name) => path.node.attributes.find((a) => a.type === 'JSXAttribute' && a.name.name === name)?.value?.expression
+        const onLayout = attr('onLayout')
+        const style = attr('style')
+        if (!onLayout || !style) return
+        const styleText = stage.slice(style.start, style.end)
+        if (/\bfitted\b/.test(styleText)) sized.push(`{ style: ${styleText}, onLayout: ${stage.slice(onLayout.start, onLayout.end)} }`)
+      }
+    })
+    const names = ['useState', 'useRef', 'useEffect', 'loadFit', 'sync', 'findLooper', 'allBlocks', 'chainNow', 'blockColor', 'vp4Here', 'blocks', 'playWidth', 'scenes', 'sceneCols', 'fitWide', 'shape', 'space', 'row', 'size']
+    // eslint-disable-next-line no-new-func
+    const lines = new Function(
+      ...names,
+      `${stage.slice(start, end + to.length)}\nreturn { fitted, tileH, fxCols, setViewport, setContent, setSceneGrid, setBlockGrid, sized: fitted ? [${sized.join(', ')}] : [] }`
+    )
+    /* Large, 8 scenes Across, and the page's row and shape as Play works them out at each width. */
+    const step = g.SIZES.findIndex((s) => s.name === 'Large')
+    /*
+     * One mounted Play: hooks kept by the order they are asked for, a state
+     * set during a render drawn again before anything is laid out, an effect
+     * run when one of its dependencies changed, and then the layout: the page
+     * and every view sized by Fit's answer reporting what changed, all in
+     * one pass, as the screen sends them.
+     */
+    const mount = (width) => {
+      const row = g.pageRow(width)
+      const shape = g.playShape(row, step, 'across', null)
+      assert.equal(shape.wide, false, `${width} points is not a phone’s Play`)
+      let pedals = 7
+      const states = []
+      const refs = []
+      const deps = []
+      const reported = new Map()
+      let dirty = false
+      let out = null
+      const render = () => {
+        let s = 0
+        let r = 0
+        let e = 0
+        const effects = []
+        const useState = (initial) => {
+          const at = s++
+          if (!states[at]) states[at] = { value: typeof initial === 'function' ? initial() : initial }
+          const set = (v) => {
+            const next = typeof v === 'function' ? v(states[at].value) : v
+            if (!Object.is(next, states[at].value)) dirty = true
+            states[at].value = next
+          }
+          return [states[at].value, set]
+        }
+        const useRef = (initial) => {
+          if (!refs[r]) refs[r] = { current: initial }
+          return refs[r++]
+        }
+        const useEffect = (f, list) => {
+          const at = e++
+          const was = deps[at]
+          if (!was || !list || list.some((d, i) => !Object.is(d, was[i]))) effects.push(f)
+          deps[at] = list
+        }
+        dirty = false
+        out = lines(useState, useRef, useEffect, (_s, fallback) => fallback, {}, () => null, [], { elsewhere: false, late: false }, () => '#888', () => false, Array(pedals).fill({}), width, { hasScenes: true, count: 8 }, shape.sceneCols, g.fitWide, shape, { sm: 8, lg: 16 }, row, g.SIZES[step])
+        return effects
+      }
+      /* Draw until nothing more is set, running each render's effects as React does. */
+      const draw = () => {
+        for (let i = 0; i < 200; i += 1) {
+          const effects = render()
+          if (dirty) continue
+          for (const f of effects) f()
+          if (!dirty) return
+        }
+        assert.fail('Play went round and round without settling')
+      }
+      /* The page as Play draws it: a scene never shorter than its words (58), a pedal never shorter than 44, 8 between rows. */
+      const page = (chrome) => {
+        const sceneRow = Math.max(out.tileH, 58)
+        const pedalRow = Math.max(out.fitted ? 44 : 56, out.tileH - 12)
+        const sceneRows = Math.ceil(8 / shape.sceneCols)
+        const pedalRows = Math.ceil(pedals / out.fxCols)
+        const scenesTall = sceneRows * sceneRow + (sceneRows - 1) * 8
+        const pedalsTall = pedalRows * pedalRow + (pedalRows - 1) * 8
+        return { scenesTall, pedalsTall, content: chrome + scenesTall + pedalsTall }
+      }
+      const report = (key, value, send) => {
+        if (reported.get(key) === value) return false
+        reported.set(key, value)
+        send()
+        return true
+      }
+      /* Laid out, as many passes as it takes for nothing to change. */
+      const settle = (viewport, chrome, count = pedals) => {
+        pedals = count
+        draw()
+        for (let pass = 0; pass < 200; pass += 1) {
+          const now = page(chrome)
+          const changed = [
+            report('viewport', viewport, () => out.setViewport(viewport)),
+            report('scenes', now.scenesTall, () => out.setSceneGrid(now.scenesTall)),
+            report('pedals', now.pedalsTall, () => out.setBlockGrid(now.pedalsTall)),
+            report('content', now.content, () => out.setContent(now.content)),
+            ...out.sized.map((v, i) => {
+              const box = { x: 0, y: 0, width: v.style.width, height: v.style.height }
+              return report(`sized${i}`, `${box.width}:${box.height}`, () => v.onLayout({ nativeEvent: { layout: box } }))
+            })
+          ].some(Boolean)
+          if (!changed) return { ...page(chrome), viewport, fitted: out.fitted }
+          draw()
+        }
+        assert.fail('Play was laid out again and again without settling')
+      }
+      return settle
+    }
+    /*
+     * Folded shut on Play: first the cover screen with the strip's room still
+     * taken (580 tall, the buttons not in the page), then the strip gone and
+     * the buttons back in the page (740 tall, 152 more of it that is not tiles).
+     */
+    /* The cover screen of a Galaxy Z Fold 4: 316.95 points wide. */
+    const live = mount(316.95)
+    live(579.81, 195.05)
+    const folded = live(740.19, 347.05)
+    assert.ok(folded.content <= folded.viewport + 2, `folded shut on Play, the cover screen still scrolls: the page is ${(folded.content - folded.viewport).toFixed(1)} taller than the screen, ${folded.fitted.fxCols} pedals to a row`)
+    /* And it ends as Play opened on the cover screen does: the same pedals to a row and the same page. */
+    const fresh = mount(316.95)(740.19, 347.05)
+    assert.equal(folded.fitted.fxCols, fresh.fitted.fxCols)
+    assert.equal(folded.content, fresh.content)
+    /* A rig that fits nowhere stops at 44 and the widest row, once, rather than going round for ever. */
+    const nowhere = mount(316.95)(500, 347.05)
+    assert.deepEqual(nowhere.fitted, { tile: 44, fxCols: 4 })
+    assert.ok(nowhere.content > nowhere.viewport)
+    /* And a phone held upright, where the page fits, settles on one answer however often it is laid out. */
+    for (const [viewport, chrome] of [[707, 300], [599, 230], [790, 330]]) {
+      const phone = mount(393)
+      const a = phone(viewport, chrome)
+      assert.ok(a.content <= viewport + 2, `a ${viewport}-tall phone’s Play does not fit`)
+      assert.deepEqual(phone(viewport, chrome), a)
+    }
+  })
+
   test('the room kept for the pedals while a preset loads keeps its count and forgets its height when Play changes width', () => {
     /*
      * While the next preset loads, grey cards stand where its pedals will be,

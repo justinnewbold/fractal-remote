@@ -448,6 +448,21 @@ export default function Stage({
    */
   const [trim, setTrim] = useState(0)
   /*
+   * AND LOOKED AT AGAIN ONCE FIT'S NEW ANSWER IS ON THE SCREEN. A trim that
+   * moves Fit's answer without moving anything drawn (the pedals already at
+   * their 44 floor, the scene tiles as tall as their words) left the page's
+   * height where it was, so the check below never ran again and Play stayed
+   * overflowing: a Galaxy Fold folded shut on Play left the cover screen
+   * scrolling, with fewer pedals to a row than it had room for. So an unseen
+   * box the size of Fit's answer is laid out beside the page, and its size is
+   * one more thing the check waits on: it looks again in the same layout pass
+   * as the page's own new height, and keeps adding until Fit takes more
+   * pedals to a row and the page fits. It stops when the answer stops
+   * changing (44 tall, the widest row), so a rig that fits nowhere does not
+   * go round for ever.
+   */
+  const [laid, setLaid] = useState('')
+  /*
    * THE PEDALS' ROOM IS KEPT WHILE THE NEXT PRESET LOADS.
    *
    * "When changing presets using previous or Next it shrinks the screen down
@@ -528,7 +543,7 @@ export default function Stage({
     const over = content - viewport
     /* A pixel or two is rounding, not an overflow worth another pass. */
     if (over > 2) setTrim((was) => was + over)
-  }, [fitOn, content, viewport])
+  }, [fitOn, content, viewport, laid])
   /* Only once every piece has been measured. Fitting against a chrome of
      zero would hand the grids the whole screen for one frame, which is the
      flash of wrong sizes this screen already learned to avoid. */
@@ -971,6 +986,18 @@ export default function Stage({
 
   return (
     <View style={{ flex: 1 }}>
+      {fitted ? (
+        <View
+          /* Fit's answer, laid out unseen and untouchable: its size changing
+             is what lets the overflow check look again (`laid`, above). */
+          pointerEvents="none"
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          collapsable={false}
+          onLayout={(e) => setLaid(`${e.nativeEvent.layout.width}:${e.nativeEvent.layout.height}`)}
+          style={{ position: 'absolute', left: 0, top: 0, width: fitted.fxCols, height: fitted.tile, opacity: 0 }}
+        />
+      ) : null}
       <ScrollView
         style={{ flex: 1 }}
         /* The viewport, and everything in it: fit is the difference between
