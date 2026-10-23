@@ -15745,7 +15745,7 @@ test('the computer app carries the server with the Linux MIDI reader, the AM4’
 test('the computer app carries the server that sends an AM4 amp’s boost tap at once, and nothing is told to update for it', () => {
   const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
   assert.match(lock.forgefx.tag, /\+linuxmidi\+am4boosttap(\+|$)/, 'the computer app holds every scene tapped after a boost for 600 ms')
-  for (const piece of ['gridgen', 'looper', 'am4scenes', 'am4tempo', 'am4fw', 'am4tempoparam', 'am4tunercc', 'meterGate', 'relayheal', 'quietMeters', 'vp4midi', 'am4dumpretry', 'alsaseqin', 'am4structnames', 'linuxmidi', 'am4boosttap']) {
+  for (const piece of ['gridgen', 'looper', 'am4scenes', 'am4tempo', 'am4fw', 'am4tempoparam', 'am4tunercc', 'meterGate', 'relayheal', 'quietMeters', 'vp4midi', 'am4dumpretry', 'alsaseqin', 'am4structnames', 'linuxmidi', 'am4boosttap', 'am4crossedcopy']) {
     assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
   }
   assert.match(lock.forgefx.commit, /^[0-9a-f]{40}$/, 'the pin is not a full commit')

@@ -407,8 +407,13 @@ export function run(test) {
     assert.match(why, /a scene or a preset tapped within 0\.6 s of a boost still goes out up to 0\.6 s late/)
     assert.ok(!/nothing on the phone waits for this/.test(why))
     /* And the copy a write crossed, never kept (ForgeFX 924ecfa): the pin carries it, and the lock and MODIFICATIONS say so. */
-    assert.match(lock.forgefx.tag, /\+am4boosttap\+am4crossedcopy$/, 'the computer app does not carry the server that never keeps a copy a write crossed')
-    assert.equal(lock.forgefx.commit, '924ecfae533f079539eb6f17d3d4227ce775917c')
+    assert.match(lock.forgefx.tag, /\+am4boosttap\+am4crossedcopy(\+|$)/, 'the computer app does not carry the server that never keeps a copy a write crossed')
+    /* And on top of it, every AM4 write drops the copy, a write by key and the probe tempo among them (ForgeFX 5b6e889). */
+    assert.match(lock.forgefx.tag, /\+am4crossedcopy\+am4keywrite$/, 'the computer app carries a server whose write by key keeps the copy from before it')
+    assert.equal(lock.forgefx.commit, '5b6e889e9d526ac5e4dbf1b9e9517128797a6471')
+    const keyWrite = lock._why.find((w) => /5b6e889/.test(w))
+    assert.ok(keyWrite && /setParamByKey/.test(keyWrite) && /probeSetTempo/.test(keyWrite) && /#invalidate\(\)/.test(keyWrite) && /COMPUTER_NEEDED stays/.test(keyWrite) && /on top of 924ecfa/.test(keyWrite), 'the lock does not say why it moved again')
+    assert.match(read('licences/MODIFICATIONS.md'), /\| Drop the copy of the preset after an AM4 write by catalog key and after the probe tempo, as after every other write \|/)
     const crossed = lock._why.find((w) => /924ecfa/.test(w))
     assert.ok(crossed && /write generation/.test(crossed) && /COMPUTER_NEEDED stays/.test(crossed), 'the lock does not say why it moved')
     assert.match(read('licences/MODIFICATIONS.md'), /\| Never keep the copy of an AM4 preset dump that a write, a scene, a preset select or a channel change landed in the middle of \|/)
