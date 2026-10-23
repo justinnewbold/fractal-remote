@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Image, PixelRatio, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 
 import { color, font, isDark, radius, space, TAP } from '../lib/theme'
 import { at, inkOn, lighter, vivid } from '../lib/vivid'
@@ -54,6 +54,15 @@ const SHEEN = 'rgba(255,255,255,0.10)'
 const SHADE = 'rgba(0,0,0,0.10)'
 /* Two pixels, because the edge is doing real work when the tile is off. An absolute child's offsets are taken inside it. */
 const BORDER = 2
+/*
+ * Whether a whole name fits, as its twin last laid it out: by the name, the
+ * tile's width and the phone's text size. Kept here rather than only in the
+ * tile, because the pedals are drawn again from nothing at every preset step
+ * (the grey cards stand in while the chain loads) and every return to Play,
+ * and a tile that had to wait for its twin drew its three letters for a
+ * frame and then the name, at the moment the player looks at them.
+ */
+const WHOLE = new Map()
 
 export default function Tile({
   label: given,
@@ -186,10 +195,15 @@ export default function Tile({
    * name too long for the tile is never drawn cut short for a frame. The
    * name drawn, said and logged is then `label`, and a whole name wraps as a
    * wrapped name does. With no `full`, both are exactly what was given.
+   * A tile drawn again shows at once what a twin said last for that name at
+   * that width and text size (WHOLE); a name or a width never laid out
+   * before still waits for its own twin.
    */
   const [whole, setWhole] = useState(null)
   const wholeAt = full ? `${full}|${StyleSheet.flatten(style)?.width}` : null
-  const named = !!full && whole?.at === wholeAt && whole.fits
+  const wholeKey = full ? `${wholeAt}|${PixelRatio.getFontScale()}` : null
+  const wholeFits = whole?.at === wholeAt ? whole.fits : WHOLE.get(wholeKey)
+  const named = !!full && wholeFits === true
   const label = named ? full : given
   const wrap = wraps || named
   /*
@@ -573,6 +587,7 @@ export default function Tile({
           importantForAccessibility="no-hide-descendants"
           onTextLayout={(e) => {
             const fits = laidWhole(full, e.nativeEvent.lines)
+            WHOLE.set(wholeKey, fits)
             setWhole((was) => (was?.at === wholeAt && was.fits === fits ? was : { at: wholeAt, fits }))
           }}
           style={{

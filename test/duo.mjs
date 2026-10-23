@@ -1329,10 +1329,88 @@ export function run(test) {
     const tile = code(read('mobile/src/components/Tile.js'))
     assert.match(tile, /export default function Tile\(\{\s*label: given,/)
     assert.match(tile, /wrap: wraps = false,/)
-    assert.match(tile, /const named = !!full && whole\?\.at === wholeAt && whole\.fits\n\s*const label = named \? full : given\n\s*const wrap = wraps \|\| named\n/)
+    assert.match(
+      tile,
+      /const wholeKey = full \? `\$\{wholeAt\}\|\$\{PixelRatio\.getFontScale\(\)\}` : null\n\s*const wholeFits = whole\?\.at === wholeAt \? whole\.fits : WHOLE\.get\(wholeKey\)\n\s*const named = !!full && wholeFits === true\n\s*const label = named \? full : given\n\s*const wrap = wraps \|\| named\n/
+    )
     assert.match(tile, /const wholeAt = full \? `\$\{full\}\|\$\{StyleSheet\.flatten\(style\)\?\.width\}` : null/, 'a whole name measured at one width is shown at another')
     assert.match(tile, /\{full \? \(\s*<Text[\s\S]{0,400}onTextLayout=\{\(e\) => \{\s*const fits = laidWhole\(full, e\.nativeEvent\.lines\)/, 'the whole name is not measured, or is measured when there is none')
     assert.match(tile, /opacity: 0,\s*fontSize: font\.small,\s*fontWeight: '700',\s*letterSpacing: 0\.5,\s*textAlign: 'center'/, 'the twin is not laid out in the face the name is drawn in')
     assert.match(tile, /numberOfLines=\{wrap \? 2 : 1\}/)
+  })
+  test('a pedal drawn again, at the next preset or back on Play, shows its whole name from its first frame where it was laid out whole before', async () => {
+    /*
+     * The pedals are drawn again from nothing at every preset step (the grey
+     * cards stand in while the chain loads) and at every return to Play. The
+     * answer to "does the name fit" lived only in each tile, so every one of
+     * them drew its three letters for a frame (CMP, DRV) and then the name,
+     * on an iPad or an opened Duo at the moment the player looks at them.
+     * This runs Tile's own lines and its twin's own onTextLayout, mount after
+     * mount, as the module they live in.
+     */
+    const { laidWhole } = await import('../mobile/src/lib/tileGrid.js')
+    const src = read('mobile/src/components/Tile.js')
+    const from = '  const [whole, setWhole] = useState(null)\n'
+    const to = '  const wrap = wraps || named\n'
+    const start = src.indexOf(from)
+    const end = src.indexOf(to, start)
+    assert.ok(start > 0 && end > start, 'the tile’s whole name moved; this check reads it')
+    let twin = null
+    traverse(jsx(src), {
+      JSXAttribute(path) {
+        if (path.node.name.name === 'onTextLayout') twin = src.slice(path.node.value.expression.start, path.node.value.expression.end)
+      }
+    })
+    assert.ok(twin, 'the whole name’s twin is gone; this check reads it')
+    /* What the module keeps for every tile, made once, as the module is. */
+    const kept = [...code(src).matchAll(/^const \w+ = new Map\(\)$/gm)].map((m) => m[0]).join('\n')
+    let scale = 1
+    // eslint-disable-next-line no-new-func
+    const tileModule = new Function(
+      'StyleSheet',
+      'PixelRatio',
+      'laidWhole',
+      `${kept}\nreturn (useState, { label: given, full, style, wrap: wraps = false }) => {\n${src.slice(start, end + to.length)}\nreturn { label, named, wrap, onTextLayout: ${twin} }\n}`
+    )
+    const lines = tileModule({ flatten: (s) => s }, { getFontScale: () => scale }, laidWhole)
+    /* One tile, from nothing: its first frame, and a frame after each time its twin lays the name out. */
+    const mount = (props) => {
+      const states = []
+      const draw = () => {
+        let at = 0
+        const useState = (initial) => {
+          const i = at++
+          if (!states[i]) states[i] = { value: initial }
+          return [states[i].value, (v) => { states[i].value = typeof v === 'function' ? v(states[i].value) : v }]
+        }
+        return lines(useState, props)
+      }
+      const first = draw()
+      return { first, laid: (text) => { draw().onTextLayout({ nativeEvent: { lines: text } }); return draw() } }
+    }
+    const comp = { label: 'CMP', full: 'Compressor', style: { width: 120 } }
+    /* Never laid out: the three letters, so a name is never drawn cut short. */
+    const one = mount(comp)
+    assert.equal(one.first.label, 'CMP')
+    assert.equal(one.laid([{ text: 'Compressor' }]).label, 'Compressor')
+    /* Drawn again, the next preset's pedal or Play come back: the name from the first frame. */
+    const again = mount(comp)
+    assert.equal(again.first.label, 'Compressor', 'a pedal drawn again showed its three letters for a frame before its name')
+    assert.equal(again.first.wrap, true)
+    /* But not at a width, or a text size, it was never laid out at. */
+    assert.equal(mount({ ...comp, style: { width: 90 } }).first.label, 'CMP', 'a name laid out whole at one width was shown at another')
+    scale = 1.35
+    assert.equal(mount(comp).first.label, 'CMP', 'a name laid out whole at one text size was shown at a bigger one')
+    scale = 1
+    /* A name laid out as not whole stays the label, drawn again or not. */
+    const long = { label: 'MBC', full: 'Multiband Compressor', style: { width: 120 } }
+    assert.equal(mount(long).laid([{ text: 'Multiband ' }, { text: 'Compres' }, { text: 'sor' }]).label, 'MBC')
+    assert.equal(mount(long).first.label, 'MBC')
+    /* And the last word is the twin's: a name it no longer lays out whole is the label at the next mount. */
+    assert.equal(mount(comp).laid([{ text: 'Compres' }, { text: 'sor' }]).label, 'CMP')
+    assert.equal(mount(comp).first.label, 'CMP')
+    /* No whole name, as on every phone: exactly what was given, on every frame. */
+    const plain = mount({ label: 'DRV', style: { width: 120 } })
+    assert.deepEqual([plain.first.label, plain.first.named, plain.first.wrap], ['DRV', false, false])
   })
 }
