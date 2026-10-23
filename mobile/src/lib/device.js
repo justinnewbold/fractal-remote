@@ -735,6 +735,13 @@ export const looperTelemetry = (eid) => remoteRequest(`/preset/looper?eid=${eid}
 export const setTuner = (on, opts) => post('/tuner', { on }, tapOf(opts))
 
 /**
+ * Keep the AM4's own tuner up a while longer, on a computer whose open said
+ * it would (`keepMs`; see rig.keepUnitTuner). It opens nothing: with the
+ * tuner closed, that computer answers {ok: false} and does nothing.
+ */
+export const renewTuner = (opts) => post('/tuner', { on: true, keep: true }, tapOf(opts))
+
+/**
  * The demo's tuner readings, for the phone to drive itself.
  *
  * Null on a real rig, where the readings arrive off the relay and a second

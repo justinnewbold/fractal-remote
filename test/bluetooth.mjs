@@ -2740,6 +2740,149 @@ export function run(test) {
     assert.equal(t.unit.state.frozen, false)
   })
 
+  /*
+   * KEPT OPEN UNTIL CLOSE. "On the AM4 when turning on the tuner it stays on
+   * for about 15 seconds on the unit and then turns off. On the phone it
+   * stays on until you hit close. We want it to stay on until the user hits
+   * close." (23 October 2026) While the phone's tuner is open, the AM4's
+   * own tuner is opened again every three seconds, after the same two reads
+   * an open makes, on the number it went out on. The pretend AM4 here is a
+   * level, as the real one is taken to be: a 127 opens, a 0 closes.
+   */
+  test('the AM4’s own tuner stays open until Close: its 127 again every three seconds after the two reads, and the 0 last', async () => {
+    const { AM4_TUNER_KEEP_MS } = await import(WIRE)
+    assert.equal(AM4_TUNER_KEEP_MS, 3000, 'the same three seconds as the computer’s')
+    const t = await onTheLine('am4', { unitTunerCc: 20, unitChannel: 3 })
+    assert.deepEqual(await t.post('/tuner', { on: true }), { ok: true, unitTuner: 'opened' })
+    await advance(t.clock, AM4_TUNER_KEEP_MS - 300)
+    assert.deepEqual(besidesReadings(t), [READ_TUNER_CC, READ_CHANNEL, 'B2 14 7F'], 'opened again before it was due')
+    await advance(t.clock, 700)
+    assert.deepEqual(besidesReadings(t), [READ_TUNER_CC, READ_CHANNEL, 'B2 14 7F', READ_TUNER_CC, READ_CHANNEL, 'B2 14 7F'], 'not opened again once due, or not after the two reads')
+    /* The AM4 lets go of it, about fifteen seconds in: back within three, the readings going on throughout. */
+    await advance(t.clock, 11_000)
+    t.unit.state.tunerOpen = false
+    await advance(t.clock, AM4_TUNER_KEEP_MS + 400)
+    assert.equal(t.unit.state.tunerOpen, true, 'the AM4 let go of its own tuner and it was not opened again')
+    assert.ok(t.unit.state.tunerHeard.length >= 6 && t.unit.state.tunerHeard.every((b) => hex(b) === 'B2 14 7F'), `heard ${t.unit.state.tunerHeard.map(hex).join(', ')}`)
+    assert.ok(readingsOf(t).length > 50, `only ${readingsOf(t).length} readings in eighteen seconds`)
+    assert.ok(t.logs.some((l) => l.startsWith('sent the AM4’s own tuner kept open (CC 20 at 127, channel 3)')), 'the log does not say it was kept open')
+    /* The close: the setting read again and the 0, the last thing sent, and nothing at all after it. */
+    const shut = t.sent.length
+    assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true, unitTuner: 'closed' })
+    assert.deepEqual(besidesReadings(t, shut), [READ_TUNER_CC, READ_CHANNEL, 'B2 14 00'])
+    assert.equal(hex(t.frames().at(-1)), 'B2 14 00', 'the 0 was not the last thing sent')
+    const closed = t.sent.length
+    await advance(t.clock, AM4_TUNER_KEEP_MS * 4)
+    assert.equal(t.sent.length, closed, 'something went after Close')
+    assert.equal(t.unit.state.tunerOpen, false)
+    assert.equal(t.unit.state.frozen, false, `the AM4 froze on ${t.unit.state.unknown.map(hex).join(', ')}`)
+    /* And the channel the AM4 names now, when it names another: the 127 and then the 0 go there. */
+    const c = await onTheLine('am4', { unitTunerCc: 20, unitChannel: 3 })
+    await c.post('/tuner', { on: true })
+    c.unit.state.midiChannel = 5
+    await advance(c.clock, AM4_TUNER_KEEP_MS + 400)
+    await c.post('/tuner', { on: false })
+    assert.deepEqual(c.unit.state.tunerHeard.map(hex), ['B2 14 7F', 'B4 14 7F', 'B4 14 00'])
+    c.wire.close()
+    t.wire.close()
+  })
+
+  test('the AM4’s own tuner is not opened again on a number the AM4 no longer names, nothing is forgotten, and why is said once', async () => {
+    for (const [change, why] of [
+      [(u) => (u.state.tunerCc = 30), 'another number'],
+      [(u) => (u.state.tunerCc = 'none'), 'NONE'],
+      [(u) => (u.opt.unitTunerAnswer = 'silent'), 'no answer'],
+      [(u) => (u.opt.unitTunerAnswer = { whole: 20, float: 20, text: 'Tuner 20' }), 'other words around it'],
+      [(u) => (u.opt.unitTunerAnswer = { whole: 0, float: 121, text: 'CC #121' }), 'a number its tuner may not be sent']
+    ]) {
+      const t = await onTheLine('am4', { unitTunerCc: 20 })
+      await t.post('/tuner', { on: true })
+      const opened = t.sent.length
+      change(t.unit)
+      await advance(t.clock, 3000 * 2 + 400)
+      assert.deepEqual(besidesReadings(t, opened), [READ_TUNER_CC, READ_TUNER_CC], `${why}: more than the Tuner setting’s read`)
+      assert.equal(t.logs.filter((l) => l.startsWith('the AM4’s own tuner is not opened again: its Tuner setting ')).length, 1, `${why}: not said once`)
+      /* Back on 20: opened again in its time, and the close sends its 0 there, as it always did. */
+      t.unit.state.tunerCc = 20
+      delete t.unit.opt.unitTunerAnswer
+      await advance(t.clock, 3000 + 400)
+      assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true, unitTuner: 'closed' }, why)
+      assert.deepEqual(t.unit.state.tunerHeard.map(hex), ['B0 14 7F', 'B0 14 7F', 'B0 14 00'], why)
+      assert.equal(t.unit.state.frozen, false, `${why}: the AM4 froze`)
+      t.wire.close()
+    }
+  })
+
+  test('a Close pressed while the AM4’s own tuner is being opened again gets no 127 after it', async () => {
+    const t = await onTheLine('am4', { unitTunerCc: 20, slowSettings: 400 })
+    await t.post('/tuner', { on: true })
+    await advance(t.clock, 3000 + 250)
+    assert.deepEqual(besidesReadings(t), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F', READ_TUNER_CC], 'the read before the 127 was not out')
+    assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true, unitTuner: 'closed' })
+    await advance(t.clock, 3000 * 3)
+    assert.deepEqual(besidesReadings(t), [READ_TUNER_CC, READ_CHANNEL, 'B0 14 7F', READ_TUNER_CC, READ_TUNER_CC, READ_CHANNEL, 'B0 14 00'])
+    assert.deepEqual(t.unit.state.tunerHeard.map(hex), ['B0 14 7F', 'B0 14 00'], 'a 127 went after the Close')
+    assert.equal(t.unit.state.tunerOpen, false)
+    t.wire.close()
+  })
+
+  /*
+   * KEPT UP ONLY WHILE THE APP STAYS ON SCREEN. On an iPhone the code stops
+   * in a pocket and the AM4 lets go; the first tick back found the keep
+   * overdue and put the AM4 back on its tuner, muted, before Close could be
+   * tapped. On Android the ticks go on in a pocket, holding the AM4 on its
+   * tuner against a footswitch. Off screen even once, that tuner is not kept
+   * up again; the readings and the Close go on as before, and the next open
+   * is kept up afresh.
+   */
+  test('the AM4’s own tuner is not kept up once the app has gone off screen during it, not even on the way back', async () => {
+    const t = await onTheLine('am4', { unitTunerCc: 20 })
+    await t.post('/tuner', { on: true })
+    await advance(t.clock, 3000 + 400)
+    assert.deepEqual(t.unit.state.tunerHeard.map(hex), ['B0 14 7F', 'B0 14 7F'], 'not kept up on screen')
+    t.wire.screenOff()
+    t.unit.state.tunerOpen = false
+    await advance(t.clock, 3000 * 4)
+    assert.deepEqual(t.unit.state.tunerHeard.map(hex), ['B0 14 7F', 'B0 14 7F'], 'a 127 went with the app off screen')
+    t.wire.screenOn()
+    await advance(t.clock, 3000 * 4)
+    assert.deepEqual(t.unit.state.tunerHeard.map(hex), ['B0 14 7F', 'B0 14 7F'], 'a 127 went on the way back, before Close could be tapped')
+    assert.equal(t.unit.state.tunerOpen, false, 'the AM4 was put back on its tuner')
+    assert.ok(readingsOf(t).length > 50, 'the readings stopped')
+    assert.deepEqual(await t.post('/tuner', { on: false }), { ok: true, unitTuner: 'closed' })
+    assert.equal(hex(t.unit.state.tunerHeard.at(-1)), 'B0 14 00', 'the Close did not send its 0')
+    /* Opened again, on screen: kept up again. Opened while off screen: not. */
+    await t.post('/tuner', { on: true })
+    await advance(t.clock, 3000 + 400)
+    assert.deepEqual(t.unit.state.tunerHeard.slice(3).map(hex), ['B0 14 7F', 'B0 14 7F'], 'a tuner opened again was not kept up')
+    await t.post('/tuner', { on: false })
+    t.wire.screenOff()
+    const before = t.unit.state.tunerHeard.length
+    await t.post('/tuner', { on: true })
+    t.wire.screenOn()
+    await advance(t.clock, 3000 * 3)
+    assert.equal(t.unit.state.tunerHeard.length, before + 1, 'a tuner opened off screen was kept up once back')
+    await t.post('/tuner', { on: false })
+    t.wire.close()
+    /* And the link tells the wire, both ways, and on a connection made in a pocket. */
+    const link = readFileSync(new URL('../mobile/src/lib/bleLink.js', import.meta.url), 'utf8')
+    assert.match(link, /^  wire\?\.stopPolls\(\)\n  \/\*[^\n]*\*\/\n  wire\?\.screenOff\(\)\n\}/m, 'the app going off screen does not reach the wire')
+    assert.match(link, /^      wire\.startPolls\(\)\n      wire\.screenOn\(\)$/m)
+    assert.match(link, /^  \} else made\.screenOff\(\)$/m, 'a connection made off screen keeps the AM4 on its tuner')
+  })
+
+  test('the FM3’s tuner is left exactly as it was: nothing new at three seconds', async () => {
+    const t = await onTheLine('fm3')
+    await t.post('/tuner', { on: true })
+    await advance(t.clock, 2500)
+    const early = new Set(t.frames().map(hex))
+    const from = t.sent.length
+    await advance(t.clock, 7000)
+    assert.ok(t.frames().slice(from).every((f) => early.has(hex(f))), 'the FM3 was sent something new while its tuner was open')
+    await t.post('/tuner', { on: false })
+    t.wire.close()
+  })
+
   test('the AM4 left on its own tuner by a drop is closed from the next connection, and opened again by it', async () => {
     const t = await onTheLine('am4', { unitTunerCc: 20 })
     await t.post('/tuner', { on: true })
