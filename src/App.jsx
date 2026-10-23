@@ -77,6 +77,7 @@ import {
   writeBypass,
   refreshBoost,
   writeTuner,
+  setOnScreen as storeOnScreen,
   onConfigDoc,
   presetSaved,
   chainChanged,
@@ -139,6 +140,7 @@ import {
   tapTempo,
   setBypass,
   setTuner,
+  renewTuner,
   subscribeEvents,
   cachedPresetNames,
   knowsName,
@@ -285,7 +287,8 @@ import {
   unitChoices,
   missingPickCard,
   missingPickRow,
-  unitElsewhereCard
+  unitElsewhereCard,
+  notUsingOne
 } from './lib/remote'
 import { CardButtons, MissingRow } from './components/ComputerCard'
 import { newEntry, append } from './lib/log'
@@ -336,6 +339,7 @@ attachDriver({
   tapTempo,
   setBypass,
   setTuner,
+  renewTuner,
   readSceneNames,
   presetCopy,
   hostKeepsCopy,
@@ -360,6 +364,12 @@ attachDriver({
   blockParams,
   setAmpBoost
 })
+
+/* Whether the page is in view, for the AM4's own tuner, kept up only while it is (deviceState keepUnitTuner). */
+if (typeof document !== 'undefined') {
+  storeOnScreen(document.visibilityState !== 'hidden')
+  document.addEventListener('visibilitychange', () => storeOnScreen(document.visibilityState !== 'hidden'))
+}
 
 /* Hoisted so each is one function for the life of the module: a selector
    rebuilt every render makes useSyncExternalStore re-read on every notify. */
@@ -5003,6 +5013,8 @@ export default function App() {
           ))}
           {missingRow ? <MissingRow row={missingRow} onForget={() => forgetMissing()} /> : null}
         </div>
+        {/* How one you don't use comes off this list: at that computer (shared/relay-rules.mjs notUsingOne). Only with two or more listed, as on the page. */}
+        {link.hosts.length > 1 ? <p className="hint">{notUsingOne('page')}</p> : null}
       </Sheet>
 
       <Sheet
@@ -6049,6 +6061,8 @@ export default function App() {
                   ))}
                   {missingRow ? <MissingRow row={missingRow} onForget={() => forgetMissing()} /> : null}
                 </div>
+                {/* How one you don't use comes off this list, at that computer: the phone's line, with a reload for a fresh roll call. */}
+                <p className="hint">{notUsingOne('page')}</p>
               </Section>
             ) : null}
             {/*

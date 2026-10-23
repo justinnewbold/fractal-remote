@@ -37,6 +37,7 @@ import {
   hostConflict as conflictBetween,
   hostNamesFrom as namesFrom,
   firstUnitHost,
+  onceNames,
   rollCallLine,
   unitChoices,
   unitFrom,
@@ -1407,7 +1408,7 @@ async function askAlone(name, { windowMs, sleep }) {
  * answer that does not come back alone is not believed either.
  */
 async function readUnits({ windowMs, sleep, only = null }) {
-  const once = hosts.filter((name, i) => hosts.indexOf(name) === i && hosts.lastIndexOf(name) === i && (!only || only.includes(name)))
+  const once = onceNames(hosts).filter((name) => !only || only.includes(name))
   const found = await Promise.all(
     once.map(async (name) => {
       const [health, device] = await Promise.all([

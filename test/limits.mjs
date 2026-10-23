@@ -2395,6 +2395,64 @@ export function run(test) {
   })
 
   /*
+   * RETIRING AN OLD PI. "How can a user remove old units they aren't
+   * connected to": a Pi leaves Which unit only by not answering, so the
+   * guide says how at the Pi, in the computer app's own words, and the two
+   * things a Pi 5 swap trips on: a card given away still signed in, and
+   * Imager filling in the old Pi's Hostname for the new one.
+   */
+  test('the Pi guide says how to retire an old Pi, in the computer app’s own words', () => {
+    const page = read('public/raspberry-pi.html').replace(/<!--[\s\S]*?-->/g, '')
+    const text = (s) =>
+      s
+        .replace(/<\/?(?:strong|em|a|code|span)\b[^>]*>/g, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/\s+/g, ' ')
+        .trim()
+    const HEAD = '<h2 id="retire">Retiring an old Pi</h2>'
+    const at = page.indexOf(HEAD)
+    assert.ok(at > -1, 'the guide has no section for retiring an old Pi')
+    assert.equal(page.split('id="retire"').length - 1, 1, 'two places on the guide answer to #retire')
+    assert.ok(at > page.indexOf('<h2 id="gigs">') && at < page.indexOf('<footer>'), 'Retiring an old Pi is not the last section, after For gigs')
+    assert.match(page, /<a href="#gigs">for gigs<\/a> ·\s*<a href="#retire">retiring an old Pi<\/a>\s*<\/p>/, 'the list at the top of the guide does not lead to it')
+    const words = text(page.slice(at, page.indexOf('<footer>')))
+    for (const said of [
+      'still shows under Which unit while it is switched on',
+      'open Fractal Remote from Downloads, which brings up its window',
+      'Open Settings (the gear ⚙ at the top right), choose Phone & computer, open Phone remote, and click Turn off.',
+      'It stays off through restarts, until someone clicks Turn on there.',
+      'choose About and untick Start when this computer turns on',
+      'the menu of the Fractal Remote icon',
+      'Then shut the Pi down and unplug it, as in For gigs.',
+      'close Fractal Remote all the way and open it again (in a web browser, reload the page): the old Pi is gone from Which unit.',
+      /* A pick stays, as not answering, with Forget (relay.js and remote.js missingPick, missingPickRow), so the guide says so, or the steps look as if they did not work. */
+      'If you had picked it there, it shows as not answering instead: press Forget beside it.',
+      'First erase the card with Raspberry Pi Imager: choose Erase on its OS screen. The app on that card is still signed in to your Fractal Remote account.',
+      'Give the new one a different Hostname in Imager. Imager fills in the name you gave last time'
+    ]) {
+      assert.ok(words.includes(said), `Retiring an old Pi no longer says "${said}": ${words}`)
+    }
+    for (const never of [/this phone/i, /sign out/i, /official/i, /grey/i, /Inc\./]) assert.ok(!never.test(words), `${never} in Retiring an old Pi`)
+    /* The words are the computer app's: read from it, so a rename there fails here. */
+    const app = read('src/App.jsx')
+    assert.match(app, /link: 'Phone & computer',/)
+    assert.match(app, /\babout: 'About',/)
+    assert.match(app, /<Section key="phone-remote" title="Phone remote"/)
+    assert.match(read('src/components/PhoneRemote.jsx'), /onAction\('mac-off'\)[^>]*>\s*Turn off\s*</)
+    assert.match(read('src/components/PhoneRemote.jsx'), /onAction\('mac-on'\)[^>]*>\s*Turn on\s*</)
+    assert.match(read('src/components/StartAtBoot.jsx'), /<input type="checkbox"[^\n]*\/>\s*<span>\s*Start when this computer turns on/, 'the switch under About is no longer a tick box called Start when this computer turns on')
+    assert.match(read('desktop/main.js'), /label: 'Start when this computer turns on',\s*type: 'checkbox'/, 'the tray menu’s switch was renamed; read the guide against it again')
+    assert.match(read('desktop/lib/host.mjs'), /wanted\.wanted === false\) \{\s*log\('Phone remote: off — it was turned off in the app\.'\)/, 'Turn off no longer lasts through a restart, as the guide says')
+    /* Not answering and Forget are the app's own words for a pick that no longer answers. */
+    const row = read('shared/relay-rules.mjs').match(/export const missingPickRow = [^\n]+/)?.[0] || ''
+    assert.ok(row.includes('— not answering`') && row.includes("forget: 'Forget'"), `the row for a pick that does not answer no longer says not answering, with Forget: ${row}`)
+    /* The guide's own Imager words, from its earlier steps: Hostname, filled in last time, and the OS screen. */
+    assert.ok(page.includes('<li><strong>Hostname</strong>: type a name for the Pi') && page.includes('Imager fills in the name you gave last time'), 'the guide’s Imager steps no longer say Hostname, or that Imager fills it in')
+    assert.ok(page.includes('On the <strong>OS</strong> screen, choose'), 'the guide’s Imager steps no longer call it the OS screen')
+  })
+
+  /*
    * AN AM4 ON A PI 3 OR PI 4: ONE SETTING, WHERE A PLAYER WILL FIND IT.
    *
    * "The same names are not showing up again at all. on the AM4" (Justin,

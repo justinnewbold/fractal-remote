@@ -260,7 +260,7 @@ async function connected(e) {
   if (AppState.currentState !== 'background') {
     watchUnit()
     made.startPolls()
-  }
+  } else made.screenOff()
 }
 
 /*
@@ -421,6 +421,7 @@ function screen(status) {
     if (wire) {
       watchUnit()
       wire.startPolls()
+      wire.screenOn()
     } else if (!held) {
       delay = 0
       clearTimer()
@@ -431,6 +432,8 @@ function screen(status) {
   /* A phone in a pocket has no screen to be wrong on: nothing is asked until it is back. */
   stopWatching()
   wire?.stopPolls()
+  /* Nor is the AM4 held on its own tuner from a pocket, or put back on it the moment the app is back (bleWire keepUnitTuner). */
+  wire?.screenOff()
 }
 
 /** True while an attempt to connect to the adapter is under way: the Bluetooth half of link.js's joiningNow. */

@@ -7290,6 +7290,79 @@ const onTheBench = (name, body) =>
   })
 
 /*
+ * THE AM4'S OWN TUNER, KEPT UP ON A LEASE THE BROWSER RENEWS, as the phone
+ * does (test/link-now.mjs). A computer that keeps it up says keepMs in the
+ * open's answer and stops by itself once nobody renews it, so a tab shut, a
+ * page reloaded or a link gone mid-tuner no longer holds the AM4 on its
+ * tuner, muted, until the computer is quit. The page renews it a few times a
+ * lease while the tuner is open and the page is in view; once it has been
+ * hidden during that tuner, never again for it. Never to a computer whose
+ * open said no keepMs, where a renewal would be an open.
+ */
+onTheBench('browser: the AM4’s own tuner is kept up only while the tuner is open and the page in view, never after a Close, a reset or to an older computer', async () => {
+  const clock = handClock()
+  const calls = []
+  let keepMs = 20000
+  ds.reset()
+  ds.attachClock(clock)
+  ds.attachDriver({
+    setTuner: async (on) => (calls.push(['open', on]), on ? { ok: true, screen: 'opened', ...(keepMs ? { keepMs } : {}) } : { ok: true, screen: 'closed' }),
+    renewTuner: async (opts) => (calls.push(['renew', Number.isFinite(opts?.deadline)]), { ok: true, keepMs: 20000 })
+  })
+  const renewals = () => calls.filter((c) => c[0] === 'renew').length
+  try {
+    ds.setOnScreen(true)
+    await ds.writeTuner(true)
+    await clock.advance(60_000)
+    assert.ok(renewals() >= 11 && renewals() <= 12, `renewed every five seconds while open and in view (${renewals()})`)
+    assert.ok(calls.filter((c) => c[0] === 'renew').every((c) => c[1] === true), 'a renewal went with no deadline: it could land late')
+    ds.setOnScreen(false)
+    const away = renewals()
+    await clock.advance(60_000)
+    assert.equal(renewals(), away, 'renewed with the page hidden')
+    ds.setOnScreen(true)
+    await clock.advance(60_000)
+    assert.equal(renewals(), away, 'renewed again once back in view, which would put the AM4 back on its tuner, muted')
+    await ds.writeTuner(false)
+    await clock.advance(30_000)
+    assert.deepEqual(calls.at(-1), ['open', false], 'something went after the close')
+    await ds.writeTuner(true)
+    await clock.advance(20_000)
+    assert.ok(renewals() > away, 'not kept again once opened again')
+    ds.reset()
+    const left = calls.length
+    await clock.advance(60_000)
+    assert.equal(calls.length, left, 'renewed after the store was reset')
+    /* An older computer: its open says no keepMs. And a page hidden at the open: nothing either. */
+    keepMs = 0
+    ds.attachClock(clock)
+    const older = renewals()
+    await ds.writeTuner(true)
+    await clock.advance(60_000)
+    assert.equal(renewals(), older, 'a renewal sent to a computer that never said keepMs')
+    await ds.writeTuner(false)
+    keepMs = 20000
+    ds.setOnScreen(false)
+    await ds.writeTuner(true)
+    await clock.advance(60_000)
+    assert.equal(renewals(), older, 'renewed for a tuner opened with the page hidden')
+    await ds.writeTuner(false)
+  } finally {
+    ds.setOnScreen(true)
+  }
+  /* And the page and the phone are wired to it: the renewal handed to the store, and whether each is on screen. */
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const attached = app.slice(app.indexOf('attachDriver({'), app.indexOf('})', app.indexOf('attachDriver({')))
+  assert.match(attached, /^  setTuner,\n  renewTuner,$/m, 'the browser store is not handed the renewal')
+  assert.match(app, /document\.addEventListener\('visibilitychange', \(\) => storeOnScreen\(document\.visibilityState !== 'hidden'\)\)/)
+  const phoneLink = readSrc(new URL('../mobile/src/lib/link.js', import.meta.url), 'utf8')
+  assert.match(phoneLink, /^      rigOnScreen\(status === 'active'\)$/m, 'the phone’s rig is not told when the app goes off screen')
+  assert.match(phoneLink, /^  rigOnScreen\(!asleep\)$/m)
+  assert.match(readSrc(new URL('../mobile/src/lib/device.js', import.meta.url), 'utf8'), /^export const renewTuner = \(opts\) => post\('\/tuner', \{ on: true, keep: true \}, tapOf\(opts\)\)$/m)
+  assert.match(readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8'), /request\('\/tuner', \{ method: 'POST', body: JSON\.stringify\(\{ on: true, keep: true \}\), \.\.\.tapOf\(opts\) \}\)/)
+})
+
+/*
  * THE PRESETS EITHER SIDE. "The amp pedal names are blank for about half a
  * second... preload the previous preset and preload the next preset with
  * those names so it instantly changes." Play says where Previous and Next
@@ -15928,6 +16001,65 @@ test('the computer app carries the server that opens the AM4’s own tuner scree
     assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
   }
   assert.ok(lock._why.some((line) => /AM4's own tuner screen/.test(line) && /never sends its 0 on a number the AM4 no longer names/.test(line)), 'the lock does not say why it moved')
+})
+
+/*
+ * "On the AM4 when turning on the tuner it stays on for about 15 seconds on
+ * the unit and then turns off. On the phone it stays on until you hit close.
+ * We want it to stay on until the user hits close." (23 October 2026) The
+ * server the computer carries sends the AM4's Tuner CC at 127 again every
+ * three seconds while the app's tuner is open (ForgeFX ab7561e), as the
+ * phone's own Bluetooth wire does. Nothing on the phone or in the browser
+ * needs it, so the red update line does not move for it.
+ */
+test('the computer app carries the server that keeps the AM4’s own tuner screen up until Close', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+am4keywrite\+am4tunerkeep(\+|$)/, 'the computer app does not keep the AM4’s own tuner up')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  for (const piece of ['am4tunercc', 'am4boosttap', 'am4crossedcopy', 'am4keywrite', 'linuxmidi', 'vp4midi', 'quietMeters']) {
+    assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
+  }
+  const why = lock._why.find((w) => /ab7561e/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/every 3 seconds/, /a level/, /the number it went out on/, /No 127 follows a Close/, /COMPUTER_NEEDED stays/, /on top of 5b6e889/, /no capture of the CC on an AM4 proves it/, /its tuner mute with it/, /Only Justin's AM4 can settle it/]) {
+    assert.match(why, said, `the lock's reason leaves out ${said}`)
+  }
+  const mods = readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8')
+  assert.match(mods, /\| Send an AM4's Tuner CC at 127 again every 3 seconds while the app's tuner is open, after reading the Tuner setting again, and only on the number it went out on \|/)
+  assert.match(mods, /The CC is taken to be a level \(127 opens, 0 closes\)[^|]*no capture on an AM4 proves it/, 'MODIFICATIONS says the CC is a level as if it were proved')
+})
+
+/*
+ * And the keep is a lease (ForgeFX 41a0c1b), so a Close that never reaches
+ * the computer (a phone gone flat or put away, a sign-out, a tab shut) can
+ * no longer hold the AM4 on its tuner, muted, until the computer app is
+ * quit. The phone and the browser renew it while their tuner is on screen,
+ * only to a computer that said keepMs, so an older computer is sent
+ * nothing new and the red update line does not move.
+ */
+test('the computer app carries the server whose keep of the AM4’s own tuner ends by itself when nobody renews it', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+am4tunerkeep\+am4tunerlease$/, 'the computer app carries a keep that only a Close can end')
+  assert.equal(lock.forgefx.commit, '41a0c1b05d6172b057223c70565eec364dff4d67')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  for (const piece of ['am4tunercc', 'am4tunerkeep', 'am4boosttap', 'am4crossedcopy', 'am4keywrite', 'linuxmidi', 'vp4midi', 'quietMeters']) {
+    assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
+  }
+  const why = lock._why.find((w) => /41a0c1b/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/TUNER_KEEP_LEASE_MS \(20 s\)/, /keepMs/, /\{on: true, keep: true\}/, /opens nothing and sends nothing/, /on screen/, /comes back within 3 seconds/, /a new connection/, /9809e37/, /COMPUTER_NEEDED stays/, /two commits on top of ab7561e/]) {
+    assert.match(why, said, `the lock's reason leaves out ${said}`)
+  }
+  assert.match(
+    readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8'),
+    /\| Keep the AM4's tuner screen up only on a lease, 20 seconds from the open and from each renewal \(POST \/tuner with on and keep both true\), which the app sends only while its tuner is on screen \|/
+  )
+  /* And the store notes wait for his AM4, with no version number written in before the merge. */
+  const notes = readSrc(new URL('../docs/app-store.md', import.meta.url), 'utf8')
+  const para = notes.slice(notes.indexOf("**For the next version's notes: the AM4's own tuner stays up**"), notes.indexOf('### Notes for App Review, 1.87.11'))
+  assert.match(para.replace(/\s+/g, ' '), /Waiting: not for a store version until Justin has watched his own AM4 hold its tuner steady past 15 seconds/)
+  assert.ok(!/1\.87\.5\d/.test(para), 'the store notes name a version before the merge has given it one')
+  assert.ok(para.split('\n').every((line) => line.length <= 80), 'a line of the store notes runs past 80 characters')
 })
 
 /*

@@ -14,6 +14,9 @@ When the build is agreed:
     npm test
 
 then bump the version, delete the patch file in the same change, and build.
+test/mobile.mjs tries every patch alone against the tree and all of them one
+after another in the table's order (in a copy), so a patch remade for one of
+those must still pass the other.
 
 | Patch | What it does | Moves |
 |---|---|---|

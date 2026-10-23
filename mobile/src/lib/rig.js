@@ -229,6 +229,8 @@ export const chainViewOf = (s) =>
  * would leave it at -1 for good.
  */
 export function reset() {
+  /* The AM4's own tuner is no longer kept up for a tuner that is going (see keepUnitTuner). */
+  stopTunerKeep()
   clearTimeout(settleTimer)
   settleTimer = null
   for (const done of settleWaiting.splice(0)) done()
@@ -3114,6 +3116,56 @@ const unitTunerOf = (res) => {
 /* Which press of the tuner this is, so a slow answer to an earlier one is not shown under a later one. */
 let tunerPress = 0
 
+/*
+ * THE AM4'S OWN TUNER, KEPT UP ONLY WHILE THIS TUNER IS ON SCREEN.
+ *
+ * A computer that keeps the AM4's own tuner up until Close does it on a
+ * lease, and says how long in the open's answer (`keepMs`): with nobody
+ * renewing it, it stops by itself, and the AM4 lets go of its tuner about
+ * 15 seconds later, as it always did. Without that, a Close that never
+ * arrived (the battery gone flat, the app swiped away, the link gone, a
+ * sign-out, which resets this tuner with no close sent) held the AM4 on its
+ * tuner, muted, for as long as the computer ran.
+ *
+ * So this renews it, a few times a lease, for as long as the tuner it was
+ * opened for is open and the app has stayed on screen. Once the app goes
+ * off screen during it, that is the end for this tuner: a phone in a pocket
+ * stops holding the AM4 on its tuner, and coming back does not put the AM4
+ * back on its tuner, muted, before Close can be tapped. Opening the tuner
+ * again starts it again.
+ *
+ * Never over Bluetooth, which keeps the AM4's tuner itself, nor to an older
+ * computer, whose answer has no `keepMs`: there a renewal would be an open.
+ * Each renewal is a tap, so it is dropped rather than sent late, and a Close
+ * made after it goes after it. What it answers is not shown.
+ */
+let tunerKeep = null
+let appOnScreen = true
+function stopTunerKeep() {
+  if (tunerKeep) clearTimeout(tunerKeep.timer)
+  tunerKeep = null
+}
+function keepUnitTuner(press, keepMs) {
+  stopTunerKeep()
+  if (!appOnScreen || !Number.isFinite(keepMs) || keepMs <= 0) return
+  const every = Math.max(1000, Math.floor(keepMs / 4))
+  const keep = { timer: null }
+  const renew = () => {
+    if (tunerKeep !== keep) return
+    if (press !== tunerPress || !state.tunerOn) return stopTunerKeep()
+    device.renewTuner({ deadline: tapDeadline() }).catch(() => {})
+    keep.timer = setTimeout(renew, every)
+  }
+  keep.timer = setTimeout(renew, every)
+  tunerKeep = keep
+}
+
+/** Whether the app is on screen, as the link hears it from the phone: gone off it, the tuner's keep stops for good. */
+export function setOnScreen(on) {
+  appOnScreen = on !== false
+  if (!appOnScreen) stopTunerKeep()
+}
+
 /**
  * Turn the tuner on or off.
  *
@@ -3130,12 +3182,16 @@ export async function writeTuner(on, at = Date.now()) {
   pressed()
   const press = ++tunerPress
   const card = linkCard()
+  stopTunerKeep()
   set({ tunerOn: on, tuning: on ? state.tuning : null, unitTuner: null, error: null, errorLink: false, dropped: null })
   if (!on) stopDemoTuner()
   try {
     const res = await device.setTuner(on, on ? { deadline: tapDeadline(at) } : undefined)
-    /* Kept only while it is still the open tuner it is about. */
-    if (on && press === tunerPress && state.tunerOn) set({ unitTuner: unitTunerOf(res) })
+    /* Kept only while it is still the open tuner it is about, and so is the keep of the AM4's own. */
+    if (on && press === tunerPress && state.tunerOn) {
+      set({ unitTuner: unitTunerOf(res) })
+      keepUnitTuner(press, res?.keepMs)
+    }
     /* Only once the unit has agreed, and only in the demo — on a real rig the
        readings come off the relay and a second source would fight them. */
     if (on) startDemoTuner()
