@@ -2235,8 +2235,6 @@ async function readBlocks(quiet) {
   /* A chain up from memory is this preset's already; the read confirms it quietly. */
   if (!quiet && state.chainKnown !== state.preset?.number) set({ chain: 'reading' })
   const key = chainKey()
-  /* Which boost taps this read was asked after: see refreshBoost. */
-  const pressed = boostPresses
   /* Which preset these are, for the screens: see chainViewOf. */
   const number = state.preset?.number
   /* Which preset tap this read went out under: see vp4ReadFresh. */
@@ -2292,11 +2290,11 @@ async function readBlocks(quiet) {
     set(patch)
     /*
      * And an AM4 amp's boost, straight after: the computer answers it out of
-     * the copy this read was made from. That copy is as old as this read's
-     * ask, so a boost tapped since says more than it does (refreshBoost).
-     * Not while another preset picked since is still loading (loadWaits).
+     * the copy this read was made from. Not while another preset picked
+     * since is still loading (loadWaits), and not over a boost tapped since
+     * the last scene or preset sent (refreshBoost).
      */
-    if (!held) refreshBoost(pressed).catch(() => {})
+    if (!held) refreshBoost().catch(() => {})
     return true
   } catch (err) {
     // The last chain stays on screen. It is the best thing anyone knows, and a
@@ -2414,6 +2412,8 @@ export function writeScene(index, at = Date.now()) {
   const air = { control: 'scene', before: { sceneIndex: was }, shows: () => state.sceneIndex === index, undo: same }
   return optimistic({ sceneIndex: index }, { sceneIndex: was }, async () => {
     try {
+      /* A scene sent after a boost tap: the boost may be read again (boostHeld). */
+      boostHeld = null
       await device.setScene(index, { deadline })
       restamp(token)
     } catch (err) {
@@ -2665,14 +2665,23 @@ let boostAgain = false
 /* Moved by a clean start, a reset and another computer: a read from before any of them lands on nothing. */
 let boostEra = 0
 /*
- * Moved by every boost press. A read asked before a press, and answered
- * after it, says what the unit had before the press (the computer answers it
- * out of its copy until the write lands): it is dropped, never put over the
- * press on the tile.
+ * A BOOST TAPPED IS BELIEVED until the next scene or preset sent after it.
+ * The computer answers a boost read out of its copy of the preset, and a copy
+ * begun before the tap says the boost the unit had before it: a computer app
+ * older than this release keeps the copy of a dump a write crossed, for a
+ * moment after it (ForgeFX before 924ecfa), and on any computer a read whose
+ * own dump the tap crossed is answered from it. So tap the solo scene, tap
+ * Boost during that scene's chain read, and the read after it put Boost off
+ * back over a boosted amp. Now, for the load and the channel it was tapped
+ * on, a boost tapped is what is shown until a scene or a preset is sent after
+ * it: no read of it is asked meanwhile, none answered meanwhile is put over
+ * it, and none asked before the tap ever is (`boostPresses`). Held as the
+ * very boost the tap put on screen, so whatever replaces that (a failed tap
+ * put back, another channel read, another unit) ends it too.
  */
+let boostHeld = null
 let boostPresses = 0
-/* Boost writes on their way. A read asked while one is may be answered out of the copy from before it: it is not asked. */
-let boostWriting = 0
+const heldFor = (at, channel) => boostHeld !== null && state.boost === boostHeld && boostHeld.at === at && boostHeld.channel === channel
 /*
  * A preset picked a moment ago, whose chain read has not been asked yet: the
  * unit may still be loading it, and the computer threw its copy away with the
@@ -2682,40 +2691,27 @@ let boostWriting = 0
  * that read to be over, landed or not (presetBusy, tapBoost).
  */
 const loadWaits = () => presetLoads > 0 || settleTimer !== null
-/* The oldest press count the one more read owes its answer to (refreshBoost). */
-let boostAgainSince = null
 
 /*
  * Read the AM4 amp's boost for the load and channel on screen; one read at a
- * time, and one more if asked meanwhile.
- *
- * `since` is how many boost taps there had been when what this read rides on
- * was asked: a chain read hands in its own. The computer answers this out of
- * the copy that chain read was made from, and a copy begun before a tap says
- * the boost the unit had before it, kept by the computer for a second or
- * three after the tap's write (a dump on its way when the write is answered
- * keeps its copy when it is done). The 1.87.49 computer answers the write at
- * once, and an older one on a slow read answers it before the dump is done,
- * so a boost tapped during a scene's chain read was put back to the word it
- * had before. So nothing is believed for a chain read asked before a tap.
+ * time, and one more if asked meanwhile. Not over a boost tapped since the
+ * last scene or preset sent (boostHeld).
  */
-export async function refreshBoost(since = boostPresses) {
+export async function refreshBoost() {
   if (!readsBoost() || !boostAmp() || loadWaits()) return undefined
+  if (heldFor(boostAtNow(), boostAmp()?.channel ?? null)) return undefined
   if (boostInFlight) {
     boostAgain = true
-    boostAgainSince = Math.min(boostAgainSince ?? since, since)
     return boostInFlight
   }
-  boostInFlight = readBoost(since)
+  boostInFlight = readBoost()
   try {
     return await boostInFlight
   } finally {
     boostInFlight = null
     if (boostAgain) {
-      const owed = boostAgainSince
       boostAgain = false
-      boostAgainSince = null
-      refreshBoost(owed ?? boostPresses).catch(() => {})
+      refreshBoost().catch(() => {})
     }
   }
 }
@@ -2723,22 +2719,18 @@ export async function refreshBoost(since = boostPresses) {
 /*
  * true or false, kept for this load and channel; undefined, with nothing
  * kept, when nothing came back, or what came back is for a load or a channel
- * left since, or a boost was pressed while it was asked, or it has no Out
- * Boost in it that can be shown. That last is what the computer answers when
- * its read of the preset failed (named and enums both empty, a unit still
- * busy): kept as read, it refused every tap of that load for good. Nothing
- * kept, the next tap reads it again.
+ * left since, or a boost was tapped since it was asked, or one tapped is
+ * still believed (boostHeld), or it has no Out Boost in it that can be shown.
+ * That last is what the computer answers when its read of the preset failed
+ * (named and enums both empty, a unit still busy): kept as read, it refused
+ * every tap of that load for good. Nothing kept, the next tap reads it again.
  */
-async function readBoost(presses = boostPresses) {
-  if (boostWriting > 0) return undefined
-  if (presses !== boostPresses) {
-    logDebug('chain', 'the amp’s boost was tapped after this chain read was asked, so the copy it came from is older than the tap: not read')
-    return undefined
-  }
+async function readBoost() {
   const amp = boostAmp()
   const at = boostAtNow()
   const channel = amp?.channel ?? null
   const era = boostEra
+  const presses = boostPresses
   let on
   try {
     on = boostOf(await device.readAmpBoost(boostReadPath()))
@@ -2747,8 +2739,8 @@ async function readBoost(presses = boostPresses) {
     return undefined
   }
   if (era !== boostEra || boostAtNow() !== at || (boostAmp()?.channel ?? null) !== channel) return undefined
-  if (presses !== boostPresses) {
-    logDebug('chain', 'the amp’s boost read was asked before a tap of it, and is not shown over the tap')
+  if (presses !== boostPresses || heldFor(at, channel)) {
+    logDebug('chain', 'the amp’s boost was tapped since the last scene or preset, or while this read was on its way: the tap is shown, not the read')
     return undefined
   }
   if (on === null) {
@@ -2860,13 +2852,10 @@ export async function tapBoost(id, at = Date.now(), want) {
     shows: () => state.boost?.on === on && state.boost?.at === where && state.boost?.channel === channel,
     undo: (before) => before
   }
+  /* Believed until the next scene or preset sent (boostHeld). */
+  boostHeld = press
   boostPresses += 1
-  boostWriting += 1
-  try {
-    return await optimistic({ boost: press }, { boost: was }, () => device.setAmpBoost(boostRequest(on), { deadline }), air)
-  } finally {
-    boostWriting -= 1
-  }
+  return optimistic({ boost: press }, { boost: was }, () => device.setAmpBoost(boostRequest(on), { deadline }), air)
 }
 
 /**
@@ -3278,6 +3267,8 @@ export async function loadPreset(number, at = Date.now()) {
   let vp4Code = null
   try {
     try {
+      /* A preset sent after a boost tap: the boost may be read again (boostHeld). */
+      boostHeld = null
       /* A select in the air, for the reads that cross it: see vp4ReadFresh. */
       vp4Era += 1
       vp4Selecting.add(run)

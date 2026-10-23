@@ -20050,21 +20050,30 @@ export function run(test) {
    * read is answered out of it while it is kept. A write throws it away when
    * the write is answered: at once from a 1.87.49 computer, 600 ms later from
    * an older one. A dump already on its way keeps its copy when it is done,
-   * whatever was written meanwhile. And on an AM4 the computer has no status
-   * read (501), so a scene costs a chain read.
+   * whatever was written meanwhile, on a computer older than 1.87.49
+   * (`crossed`); the 1.87.49 computer (ForgeFX 924ecfa) keeps it only if
+   * nothing was written while it was made. And on an AM4 the computer has no
+   * status read (501), so a scene costs a chain read.
    */
-  const computerCopy = (unit, clock, { dumpMs = 400, putMs = 20, ttl = 1200 } = {}) => {
+  const computerCopy = (unit, clock, { dumpMs = 400, putMs = 20, ttl = 1200, crossed = true } = {}) => {
     let copy = null
+    let written = 0
     const kept = () => copy && clock.now() - copy.at < ttl
     unit.status = () => {
       throw Object.assign(new Error('unsupported'), { status: 501 })
     }
     unit.lag = (line) => {
-      if (line === 'POST /scene' || line === 'POST /preset/select') copy = null
+      if (line === 'POST /scene' || line === 'POST /preset/select') {
+        copy = null
+        written += 1
+      }
       if (line === BOOST_PUT) return putMs
       if (line !== 'GET /preset/blocks' || kept()) return 0
       const boosts = { ...unit.boosts }
-      clock.setTimeout(() => (copy = { boosts, at: clock.now() }), dumpMs)
+      const since = written
+      clock.setTimeout(() => {
+        if (crossed || since === written) copy = { boosts, at: clock.now() }
+      }, dumpMs)
       return dumpMs
     }
     const params = unit.params
@@ -20077,6 +20086,7 @@ export function run(test) {
     const put = unit.put
     unit.put = function (path, body) {
       copy = null
+      written += 1
       return put.call(this, path, body)
     }
   }
@@ -20113,6 +20123,77 @@ export function run(test) {
       await clock.advance(1000)
       assert.equal(await off, true)
       assert.equal(unit.boosts.A, 0, `${what}: the next tap sent Boost on again`)
+    }
+  })
+
+  /*
+   * THE TAP IS BELIEVED UNTIL THE NEXT SCENE OR PRESET SENT AFTER IT. A
+   * computer older than 1.87.49 keeps the copy of a dump a write crossed, so
+   * a chain read asked AFTER the tap (here one more read asked while the
+   * scene's is on its way, which waits for it) was answered from the copy
+   * made before the tap, and its boost read put Boost off back over a
+   * boosted amp: noting the taps as each chain read is asked does not catch
+   * one asked after the tap. Now nothing reads the boost over a tap until a
+   * scene or a preset is sent after it; then it is read again. And on a
+   * 1.87.49 computer, which keeps no copy a write crossed, scene, Boost,
+   * scene inside one dump ends on the boost the unit has.
+   */
+  test('phone: a boost tapped is believed over a chain read answered from a copy made before the tap, until the next scene sent after it', async () => {
+    const { rig, clock, unit, asked } = await rigOnTheBench(AM4_BOOST_BENCH())
+    await clock.advance(0)
+    assert.equal(rig.boostNow(), 'off')
+    computerCopy(unit, clock, { dumpMs: 1500, putMs: 20 })
+    const scene = rig.writeScene(1)
+    await clock.advance(50)
+    const tap = rig.tapBoost(58)
+    await clock.advance(250)
+    const again = rig.refreshBlocks({ quiet: true })
+    await clock.advance(5000)
+    assert.equal(await scene, true)
+    assert.equal(await tap, true)
+    await again
+    assert.equal(unit.boosts.A, 1)
+    assert.equal(rig.boostNow(), 'on', 'a read answered from the copy made before the tap put Boost off back over a boosted amp')
+    /* The next scene sent after it: the boost is read again, out of a copy made after the tap. */
+    const reads = asked(BOOST_READ)
+    const next = rig.writeScene(2)
+    await clock.advance(5000)
+    assert.equal(await next, true)
+    assert.ok(asked(BOOST_READ) > reads, 'the boost was never read again after the next scene')
+    assert.equal(rig.boostNow(), 'on')
+    /* And a tap that did not land is not believed: the next read is. */
+    const put = unit.put
+    unit.put = () => {
+      throw Object.assign(new Error('The unit refused it.'), { status: 409 })
+    }
+    const refused = rig.tapBoost(58)
+    await clock.advance(1000)
+    assert.equal(await refused, false)
+    unit.put = put
+    assert.equal(rig.boostNow(), 'on', 'a refused boost stayed on screen')
+    const after = asked(BOOST_READ)
+    const read = rig.refreshBoost()
+    await clock.advance(2000)
+    await read
+    assert.equal(asked(BOOST_READ), after + 1, 'a tap that was put back still holds the boost read off')
+  })
+
+  test('phone: on a 1.87.49 computer, scene, Boost, scene inside one chain read ends on the boost the unit has', async () => {
+    for (const [dumpMs, at] of [[800, 300], [1500, 300], [2500, 300], [1500, 1000]]) {
+      const { rig, clock, unit } = await rigOnTheBench(AM4_BOOST_BENCH())
+      await clock.advance(0)
+      computerCopy(unit, clock, { dumpMs, putMs: 20, crossed: false })
+      const first = rig.writeScene(1)
+      await clock.advance(at)
+      const tap = rig.tapBoost(58)
+      await clock.advance(200)
+      const second = rig.writeScene(2)
+      await clock.advance(12000)
+      assert.equal(await first, true)
+      assert.equal(await tap, true)
+      assert.equal(await second, true)
+      assert.equal(unit.boosts.A, 1)
+      assert.equal(rig.boostNow(), 'on', `dump ${dumpMs} ms, Boost at ${at} ms: the pedal says Boost off over a boosted amp`)
     }
   })
 

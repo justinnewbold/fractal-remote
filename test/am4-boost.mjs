@@ -692,35 +692,33 @@ export function run(test) {
 
   /*
    * App's own chain read (on connecting and reconnecting, a lost unit found
-   * again, the timed check, Try again) read the boost after it with the tap
-   * count of the moment it landed, not of the moment it was asked: a boost
-   * tapped while it was on its way was answered out of the copy that read
-   * was made from, taken before the tap, and Boost off went back over a
-   * boosted amp, the very flip the store's own reads were fixed for. App
-   * notes the count as it asks, as refreshBlocks does. Driven here the way
-   * App.jsx drives it, and App.jsx held to that.
+   * again, the timed check, Try again) reads the boost after it, and a boost
+   * tapped while it was on its way was answered out of the copy that read was
+   * made from, taken before the tap: Boost off went back over a boosted amp.
+   * A boost tapped is believed until the next scene or preset sent after it,
+   * so App's read reads nothing over it. Driven here the way App.jsx drives
+   * it, and App.jsx held to that.
    */
   test('browser: a boost tapped while App’s own chain read is on its way is not put back by the copy that read was made from', async () => {
     const app = flat('src/App.jsx')
-    assert.match(app, /const pressed = boostPressCount\(\)((?!await)[^])*?doneReading = beginChainRead\(\) const \[p, b\] = await Promise\.all\(\[currentPreset\(\), presetBlocks\(\)\]\)/, 'App’s chain read does not note the boost taps as it is asked')
-    assert.match(app, /chainWasRead\(p\?\.number\) \/\*[^]*?\*\/ refreshBoost\(pressed\)\.catch\(\(\) => \{\}\)/, 'App’s boost read believes a copy from before a tap')
+    assert.match(app, /chainWasRead\(p\?\.number\) \/\*[^]*?\*\/ refreshBoost\(\)\.catch\(\(\) => \{\}\)/, 'App’s own chain read does not read the boost after it')
+    assert.ok(!/boostPressCount/.test(app), 'App still counts the boost taps itself')
     const { unit, driver } = am4()
     await ds.refreshBlocks()
     await settled()
     assert.equal(ds.boostNow(), 'off')
-    /* App.jsx read(): the count, the chain asked (slow to come back), and a tap meanwhile. */
+    /* App.jsx read(): the chain asked (slow to come back), and a tap meanwhile. */
     let land
     const slow = new Promise((go) => (land = go))
     const chain = driver.presetBlocks
     driver.presetBlocks = async () => (await slow, chain())
-    const pressed = ds.boostPressCount()
     const done = ds.beginChainRead()
     const reading = (async () => {
       const b = await driver.presetBlocks()
       ds.chainWasRead(12)
       /* The computer answers out of the copy that dump began with: Boost off. */
       unit.lag = Promise.resolve(0)
-      await ds.refreshBoost(pressed)
+      await ds.refreshBoost()
       done()
       return b
     })()
@@ -731,6 +729,49 @@ export function run(test) {
     await settled()
     assert.equal(ds.boostNow(), 'on', 'the copy App’s read was made from put Boost off back over a boosted amp')
     unit.lag = null
+  })
+
+  /*
+   * THE TAP IS BELIEVED UNTIL THE NEXT SCENE OR PRESET SENT AFTER IT. A
+   * computer app older than this release kept the copy of a dump a write
+   * crossed, for a moment after it, so a chain read asked AFTER the tap (one
+   * waiting behind the dump the tap crossed, or asked within that moment) was
+   * answered from the copy made before it, and its boost read put Boost off
+   * back over a boosted amp. Noting the taps as each chain read is asked does
+   * not catch that one: it was asked after the tap. Now nothing reads the
+   * boost over a tap until a scene or a preset is sent after it; then it is
+   * read again, out of a copy made after the tap.
+   */
+  test('browser: a boost tapped is believed over a chain read answered from a copy made before the tap, until the next scene sent after it', async () => {
+    const { unit, driver } = am4()
+    driver.setScene = async () => ({ ok: true })
+    await ds.refreshBlocks()
+    await settled()
+    assert.equal(ds.boostNow(), 'off')
+    await ds.tapBoost(58)
+    assert.equal(unit.boosts.A, 1)
+    /* Another chain read, asked after the tap, answered out of the copy a dump the tap crossed made: Boost off. */
+    const reads = unit.reads
+    unit.lag = Promise.resolve(0)
+    await ds.refreshBlocks()
+    await settled()
+    assert.equal(ds.boostNow(), 'on', 'a read answered from the copy made before the tap put Boost off back over a boosted amp')
+    assert.equal(unit.reads, reads, 'the boost was read while its tap is believed')
+    unit.lag = null
+    /* The next scene sent after it: the boost is read again, and says what the unit has. */
+    await ds.writeScene(1)
+    await ds.refreshBlocks()
+    await settled()
+    assert.ok(unit.reads > reads, 'the boost was never read again after the next scene')
+    assert.equal(ds.boostNow(), 'on')
+    /* And a tap that did not land is not believed: the next read is. */
+    unit.refuse = true
+    await assert.rejects(ds.tapBoost(58), /refused/)
+    unit.refuse = false
+    assert.equal(ds.boostNow(), 'on', 'a refused boost stayed on screen')
+    const after = unit.reads
+    await ds.refreshBoost()
+    assert.equal(unit.reads, after + 1, 'a tap that was put back still holds the boost read off')
   })
 
   test('browser: a tap whose read first lands on another preset or channel sends nothing there', async () => {
@@ -838,7 +879,7 @@ export function run(test) {
     const app = flat('src/App.jsx')
     assert.match(app, /<p className="play-hint"> \{\/\*[^]*?\*\/\} <span> \{PLAY_HINT_HOLD\} \{playHintTap\(currentDeviceSlug\(\)\)\} <\/span>/, 'the hold tip promises an AM4 player that a tap on the amp turns it off')
     /* And App's own first read of the chain reads the boost after it, or Play opened on an unread amp. */
-    assert.match(app, /chainWasRead\(p\?\.number\) \/\*[^]*?\*\/ refreshBoost\(pressed\)\.catch\(\(\) => \{\}\)/)
+    assert.match(app, /chainWasRead\(p\?\.number\) \/\*[^]*?\*\/ refreshBoost\(\)\.catch\(\(\) => \{\}\)/)
   })
 
   /* ------------------------------------------------------------------- the demo -- */

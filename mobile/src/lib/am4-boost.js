@@ -37,10 +37,13 @@
  *            dumps after a channel swap glitch an AM4's sound). The boost is
  *            unknown for the new channel until the next chain read or a tap.
  *            Never asked while a preset is still loading, before its own
- *            chain read (BOOST_LOADING), for the same reason. And never
- *            believed out of a chain read asked before a boost tap: that copy
- *            was begun before the tap, and the computer keeps it after the
- *            tap's write, so it says the boost the unit had before.
+ *            chain read (BOOST_LOADING), for the same reason. And a boost
+ *            tapped is believed, for its load and channel, until the next
+ *            scene or preset sent after it: no read of it is asked meanwhile,
+ *            none answered meanwhile is put over it, and none asked before
+ *            the tap ever is. A copy begun before the tap says the boost the
+ *            unit had before it, and a computer app older than 1.87.49 kept
+ *            the copy of a dump a write crossed for a moment after it.
  *   - write: PUT /preset/blocks/58/params/150 { value: 0 or 1, continuous:
  *            false }, which the computer turns into one frame, byte for byte
  *            the codec's own buildSetParam('amp.out_boost', value). Always the
