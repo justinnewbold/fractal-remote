@@ -33,6 +33,11 @@ xcrun simctl io "$UDID" screenshot "screens/tuner-on.png"
 shoot -page 1 -pick 50
 sleep 3
 xcrun simctl io "$UDID" screenshot "screens/channels.png"
+# An AM4's amp saying its boost under its name, dark with "Boost off", as the
+# phone sends it for an AM4 (the demo is an FM3, which has no words). For
+# looking at a pull request only, like the channels.
+shoot -page 1 -boostDemo YES
+xcrun simctl io "$UDID" screenshot "screens/boost.png"
 # And with no phone: what it says when the iPhone app is not open.
 xcrun simctl launch --terminate-running-process "$UDID" "$ID" -demo NO
 sleep 5

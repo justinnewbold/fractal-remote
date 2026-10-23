@@ -24,7 +24,7 @@ final class WatchModelTests: XCTestCase {
         XCTAssertEqual(state.scenes[3], "Scene 4")
         XCTAssertTrue(state.canPrevious)
         XCTAssertFalse(state.canNext)
-        XCTAssertEqual(state.pedals.map(\.short), ["DRV", "DLY"])
+        XCTAssertEqual(state.pedals.map(\.short), ["DRV", "DLY", "AMP"])
         XCTAssertEqual(state.pedals[1].fill, "#7d8591", "a colour the phone could not read is sent as grey")
         XCTAssertTrue(state.tuner.on)
         XCTAssertEqual(state.tuner.note, "E")
@@ -38,6 +38,10 @@ final class WatchModelTests: XCTestCase {
         XCTAssertEqual(state.pedals[1].channel, "A")
         XCTAssertEqual(state.pedals[1].channels, [])
         XCTAssertFalse(state.pedals[1].canPickChannel, "one channel was offered as a choice")
+        /* An AM4's amp says its boost in Play's words; every other pedal says nothing. */
+        XCTAssertEqual(state.pedals.map(\.word), ["", "", "Boost off"])
+        XCTAssertEqual(state.pedals.map(\.wordLine), [nil, nil, "Boost off"], "an empty word was drawn")
+        XCTAssertFalse(state.pedals[2].on, "Boost off was lit")
     }
 
     func testAPhoneWithNoMetronomeIsReadAsOff() throws {
@@ -70,10 +74,29 @@ final class WatchModelTests: XCTestCase {
             }
         }
         let state = try XCTUnwrap(WatchState.decode(raw), "a picture with no channels was not drawn at all")
-        XCTAssertEqual(state.pedals.count, 2)
+        XCTAssertEqual(state.pedals.count, 3)
         XCTAssertNil(state.pedals[0].channel)
         XCTAssertNil(state.pedals[0].channels)
         XCTAssertFalse(state.pedals[0].canPickChannel)
+    }
+
+    /*
+     * A phone that has not had the update that sends an AM4 amp's word: every
+     * pedal is still drawn, with no word under any, as before this build.
+     */
+    func testAPhoneWithNoWordIsDrawnAsBefore() throws {
+        let raw = try picture { p in
+            p["pedals"] = (p["pedals"] as? [[String: Any]] ?? []).map { (pedal: [String: Any]) -> [String: Any] in
+                var bare = pedal
+                bare.removeValue(forKey: "word")
+                return bare
+            }
+        }
+        let state = try XCTUnwrap(WatchState.decode(raw), "a picture with no words was not drawn at all")
+        XCTAssertEqual(state.pedals.count, 3)
+        XCTAssertNil(state.pedals[2].word)
+        XCTAssertNil(state.pedals[2].wordLine)
+        XCTAssertEqual(state.pedals[0].channel, "B", "a picture with no words lost its channels")
     }
 
     /* What lets the phone send more, by an update, than a watch already on a wrist knows to read. */
@@ -135,5 +158,11 @@ final class WatchModelTests: XCTestCase {
         XCTAssertEqual(s.answering(.channel(id: 99, channel: "C")), s, "a pedal that is not there")
         XCTAssertEqual(drive(s.answering(.pedal(id: 50, on: false)))?.channels, drive(s)?.channels, "switching a pedal lost its channels")
         XCTAssertEqual(drive(s.answering(.pedal(id: 50, on: false)))?.channel, "B")
+        /* The demo is an FM3, with no words; CI's boost picture gives its amp the one an AM4's phone sends. */
+        XCTAssertTrue(s.pedals.allSatisfy { $0.wordLine == nil })
+        let boosted = s.boostDemo
+        XCTAssertEqual(boosted.pedals.first { $0.id == 58 }?.wordLine, "Boost off")
+        XCTAssertEqual(boosted.pedals.first { $0.id == 58 }?.on, false)
+        XCTAssertEqual(boosted.pedals.filter { $0.wordLine != nil }.count, 1, "a pedal other than the amp was given a word")
     }
 }

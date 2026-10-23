@@ -36,9 +36,24 @@ struct WatchPedal: Codable, Equatable, Identifiable {
      */
     var channel: String? = nil
     var channels: [String]? = nil
+    /*
+     * What Play's tile says for it, drawn under its name: on an AM4's amp,
+     * "Boost on", "Boost off" or "Amp off" (shared/am4-boost.mjs boostWord),
+     * and "" for every other pedal and for a boost the unit has not said.
+     * The phone's own word, never worked out here. Optional, like the
+     * channels: a phone that has not had the update that sends it sends
+     * none, and the pedal is drawn as it always was.
+     */
+    var word: String? = nil
 
     /** Whether a hold offers a choice: two channels or more, as on the phone. */
     var canPickChannel: Bool { (channels?.count ?? 0) > 1 }
+
+    /** The word to draw under the name, or nil for none: "" is none, as the channel's is. */
+    var wordLine: String? {
+        guard let word, !word.isEmpty else { return nil }
+        return word
+    }
 }
 
 struct WatchTuner: Codable, Equatable {
@@ -167,6 +182,26 @@ func rgb(hex: String) -> (r: Double, g: Double, b: Double)? {
  * phone in reach: each request is answered here, the way the phone would.
  */
 extension WatchState {
+    /*
+     * CI's picture of an AM4's amp saying its boost (screens.sh: -boostDemo
+     * YES): the sample with its AMP pedal dark and "Boost off" under its
+     * name, as the phone sends it for an AM4. For looking at a pull request
+     * only. The demo's answers below never change a word: the word is the
+     * phone's.
+     */
+    var boostDemo: WatchState {
+        var next = self
+        next.pedals = pedals.map { p in
+            var q = p
+            if q.id == 58 {
+                q.on = false
+                q.word = "Boost off"
+            }
+            return q
+        }
+        return next
+    }
+
     func answering(_ command: WatchCommand) -> WatchState {
         var next = self
         switch command {

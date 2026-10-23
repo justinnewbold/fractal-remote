@@ -113,7 +113,15 @@ export function watchState({
         /* What a hold may switch it to; [] and a hold does nothing. A watch
            older than this reads neither field, and is none the worse: the
            link's version stays 1, because nothing it knows changed meaning. */
-        channels: channelChoices(p.channels)
+        channels: channelChoices(p.channels),
+        /* The word under its name, as Play's tile says it: on an AM4's amp,
+           Boost on, Boost off or Amp off (shared/am4-boost.mjs boostPedals
+           puts it there, by Play's own boostWord); '' for every other pedal,
+           and for a boost the unit has not said. Passed on as it came, never
+           worked out here. A watch from before the build that draws it reads
+           no such field and shows the pedal lit or dark as it did, so the
+           version stays 1 for this too. */
+        word: text(p.word, 12)
       })),
     tuner: {
       on: !!tunerOn,

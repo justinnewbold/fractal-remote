@@ -262,18 +262,26 @@ export function boostTitle(state, holds) {
 }
 
 /**
- * The stage's pedals for a picture that knows only on and off, the Apple
- * Watch's: an AM4's boost pedal is lit for Boost on and dark otherwise (`shown`
- * is what Play shows for it, rig.boostNow), so the wrist shows what Play
- * shows; an amp whose boost cannot be switched is dark. Everything else is
- * passed through untouched.
+ * The stage's pedals for the Apple Watch's picture: an AM4's boost pedal is
+ * lit for Boost on and dark otherwise (`shown` is what Play shows for it,
+ * rig.boostNow), so the wrist shows what Play shows; an amp whose boost cannot
+ * be switched is dark.
+ *
+ * And each of the two carries `word`, what Play's tile says for it, by
+ * boostWord: Boost on, Boost off, Amp off, or '' where Play has no word (a
+ * boost not read yet, an amp whose boost cannot be switched). The watch draws
+ * it under the pedal's name, so a dark AMP on the wrist says which of those
+ * it is. A watch app from before the build that draws it reads no `word`, and
+ * shows the pedal lit or dark as it always did. Everything else is passed
+ * through untouched, with no word: every other block, and every block of
+ * every other unit.
  */
 export function boostPedals(chain, { slug, shown } = {}) {
   if (!isAm4(slug) || !Array.isArray(chain)) return chain
   return chain.map((b) => {
     const pedal = ampPedal(slug, b)
-    if (pedal === 'boost') return { ...b, bypassed: shown !== BOOST.on }
-    if (pedal === 'other') return { ...b, bypassed: true }
+    if (pedal === 'boost') return { ...b, bypassed: shown !== BOOST.on, word: boostWord(shown) || '' }
+    if (pedal === 'other') return { ...b, bypassed: true, word: boostWord(BOOST.other) || '' }
     return b
   })
 }

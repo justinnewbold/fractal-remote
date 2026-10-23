@@ -34,7 +34,8 @@
         "B",
         "C",
         "D"
-      ]
+      ],
+      "word": ""
     },
     {
       "id": 70,
@@ -44,7 +45,24 @@
       "fill": "#7d8591",
       "ink": "#ffffff",
       "channel": "A",
-      "channels": []
+      "channels": [],
+      "word": ""
+    },
+    {
+      "id": 58,
+      "short": "AMP",
+      "name": "Amp 1",
+      "on": false,
+      "fill": "#7d8591",
+      "ink": "#ffffff",
+      "channel": "A",
+      "channels": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "word": "Boost off"
     }
   ],
   "tuner": {

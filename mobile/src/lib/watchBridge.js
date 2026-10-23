@@ -89,10 +89,11 @@ export function watchPaired() {
 export function useWatchBridge(picture, step) {
   /*
    * ON AN AM4 THE AMP'S PEDAL IS ITS BOOST, on the wrist as on Play (lib/
-   * am4-boost): lit for Boost on, what Play shows (rig.boostNow), and a tap
-   * asks for the boost the wrist shows it will turn to, which rig.writeBypass
-   * sends as it is and never as a bypass: the same message twice is the same
-   * boost twice.
+   * am4-boost): lit for Boost on, what Play shows (rig.boostNow), with Play's
+   * own word for it under its name (Boost on, Boost off, Amp off, or none
+   * until the unit has said), and a tap asks for the boost the wrist shows it
+   * will turn to, which rig.writeBypass sends as it is and never as a bypass:
+   * the same message twice is the same boost twice.
    */
   picture = { ...picture, chain: boostPedals(picture?.chain, { slug: pedalSlug(), shown: boostNow() }) }
   const sender = useRef(null)
@@ -217,8 +218,10 @@ export function useWatchBridge(picture, step) {
     if (!sender.current) return
     const { chain, channels, ...rest } = picture
     /* Each pedal with its channel and what a hold may switch it to: the
-       stage screen's own list, empty wherever its own hold does nothing. */
-    const pedals = (chain || []).map((b) => ({ id: idOf(b), name: b.name, short: shortBlock(b), on: !b.bypassed, ...blockColor(b.slug), channel: b.channel, channels }))
+       stage screen's own list, empty wherever its own hold does nothing.
+       And its word: an AM4 amp's Boost on, Boost off or Amp off, as Play's
+       tile says it, put on it above by boostPedals; none on any other. */
+    const pedals = (chain || []).map((b) => ({ id: idOf(b), name: b.name, short: shortBlock(b), on: !b.bypassed, ...blockColor(b.slug), channel: b.channel, channels, word: b.word }))
     /* The metronome's tap, when the watch's switch is on: see lib/metronome. */
     const beat = metronome()
     const state = watchState({ ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm } })

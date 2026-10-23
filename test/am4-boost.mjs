@@ -141,7 +141,7 @@ export function run(test) {
     assert.ok(read('mobile/src/lib/bleWire.js').includes(`badInput('${b.OTHER_AMP_SAYS}')`), 'Bluetooth says another amp’s refusal in other words')
   })
 
-  test('the watch’s AM4 amp pedal is lit for Boost on, as on Play, and nothing else on the wrist changes', async () => {
+  test('the watch’s AM4 amp pedal is lit for Boost on and says Play’s word under its name, and nothing else on the wrist changes', async () => {
     const b = await import('../shared/am4-boost.mjs')
     const chain = [
       { slug: 'drive', effectId: 118, channel: 'A', bypassed: false },
@@ -156,10 +156,25 @@ export function run(test) {
     assert.equal(b.boostPedals(chain, { slug: 'fm3', shown: 'off' }), chain, 'another unit’s pedals were touched')
     /* An amp whose boost cannot be switched is dark on the wrist, as it is on Play. */
     assert.deepEqual(b.boostPedals([{ slug: 'amp', effectId: 59, bypassed: false }], { slug: 'am4', shown: 'on' }).map((p) => p.bypassed), [true])
+    /*
+     * And Play's word under the amp's name (23 October 2026, for the build
+     * pair after 1.87.52): the same boostWord Play's tile says, so a dark AMP
+     * on the wrist says whether it is Boost off, the amp off, or not read.
+     * '' where Play has no word; no word at all on any other pedal.
+     */
+    for (const [shown, word] of [['on', 'Boost on'], ['off', 'Boost off'], ['amp-off', 'Amp off'], ['unknown', '']]) {
+      const pedals = b.boostPedals(chain, { slug: 'am4', shown })
+      assert.equal(pedals[1].word, word, `the wrist’s amp does not say what Play says for ${shown}`)
+      assert.equal(pedals[1].word, b.boostWord(shown) || '', 'the wrist’s word is not Play’s own')
+      assert.ok(!('word' in pedals[0]), 'a pedal other than the AM4 amp was given a word')
+    }
+    assert.equal(b.boostPedals([{ slug: 'amp', effectId: 59, bypassed: false }], { slug: 'am4', shown: 'on' })[0].word, '', 'an amp whose boost cannot be switched says a boost on the wrist')
+    assert.ok(b.boostPedals(chain, { slug: 'fm3', shown: 'on' }).every((p) => !('word' in p)), 'another unit’s amp was given a word')
     /* The phone's end: the picture is mapped from what Play shows before it is sent, and a wrist tap is still rig.writeBypass, which sends the boost the wrist asked for there. */
     const bridge = flat('mobile/src/lib/watchBridge.js')
     assert.match(bridge, /import \{ boostPedals \} from '\.\/am4-boost' import \{ boostNow, pedalSlug \} from '\.\/rig'/)
     assert.match(bridge, /picture = \{ \.\.\.picture, chain: boostPedals\(picture\?\.chain, \{ slug: pedalSlug\(\), shown: boostNow\(\) \}\) \}/)
+    assert.match(bridge, /channels, word: b\.word \}\)\)/, 'the word boostPedals puts on the amp never reaches the watch')
     assert.match(bridge, /if \(cmd\.do === 'pedal'\) return writeBypass\(cmd\.id, !cmd\.on, receivedAt\)/)
     const rig = flat('mobile/src/lib/rig.js')
     assert.match(rig, /export function writeBypass\(id, bypassed, at = Date\.now\(\)\) \{ if \(ampPedal\(pedalSlug\(\), blockNow\(id\)\)\) return tapBoost\(id, at, bypassed === true \|\| bypassed === false \? !bypassed : undefined\)/, 'a pedal tap on an AM4 amp can bypass it, or a wrist tap is a toggle')
@@ -391,16 +406,23 @@ export function run(test) {
 
   /*
    * What the notes say about this change, where a reader acts on them. The
-   * notes for the App Store's next review said the watch's pedal shows the
-   * words, which it does not; the lock said an older computer sends "the
-   * same frame, only later", leaving out the scene that waits behind it.
+   * notes for the App Store's next review once said the watch's pedal shows
+   * the words, when no watch app could draw them; the lock said an older
+   * computer sends "the same frame, only later", leaving out the scene that
+   * waits behind it. The words reach the wrist with the build pair after
+   * 1.87.52 (23 October 2026), and the notes say so for that version, and
+   * that 1.87.11's watch app has only lit and dark.
    */
   test('the notes say what the watch shows and what an older computer does after a boost', () => {
     const store = read('docs/app-store.md')
     const para = store.slice(store.indexOf("**For the next version's notes: the AM4's amp pedal is its boost**"), store.indexOf('### Notes for App Review, 1.87.11'))
     assert.ok(para.length > 200, 'the next version’s boost paragraph is gone')
-    assert.match(para.replace(/\s+/g, ' '), /The watch shows no words: its AMP pedal is lit for Boost on and dark otherwise/)
-    assert.ok(!/the watch and the browser, switches the amp's Out Boost and says Boost on/.test(para.replace(/\s+/g, ' ')), 'the review notes promise words on the watch')
+    const flatPara = para.replace(/\s+/g, ' ')
+    assert.match(flatPara, /The watch says the same words from this version on \(23 October 2026, the build pair after 1\.87\.52\): under the AMP pedal's name, Boost on, Boost off or Amp off, and nothing until the unit has said/)
+    assert.match(flatPara, /The watch app in 1\.87\.11 has no words to draw, so there the AMP pedal is only lit or dark\./, 'the notes promise words on a watch app that cannot draw them')
+    assert.match(flatPara, /What's New gets one line: "On an AM4, the amp's pedal on Play now switches the amp's boost, and says Boost on or Boost off, on the Apple Watch too\. Turn the amp itself on and off in Edit\."/)
+    /* And the watch's half is in this tree, so the promise is kept: the phone sends the word, the watch draws it. */
+    assert.ok(read('mobile/targets/watch/Model.swift').includes('var word: String? = nil') && read('mobile/targets/watch/Pages.swift').includes('if let word {'), 'the notes promise words on the watch, and the watch app draws none')
     const lock = JSON.parse(read('desktop/forgefx.lock.json'))
     const why = lock._why.find((w) => /e2bfe70/.test(w))
     assert.ok(why, 'the lock says nothing of the boost tap commit')

@@ -15779,12 +15779,19 @@ test('the computer app carries the server that sends an AM4 amp’s boost tap at
  * watch's fixture was written again from this input; nothing that was there
  * before moved.
  */
+/*
+ * And on 23 October 2026, for the build pair after 1.87.52: each pedal
+ * carries `word`, an AM4 amp's Boost on, Boost off or Amp off as Play says
+ * it, '' for every other pedal. The fixture got a third pedal, an AM4's amp
+ * at Boost off, written again from this input; nothing else in it moved.
+ */
 test('the watch is sent the stage as one small picture, and may ask for only six things', async () => {
   const { watchState, watchCommand, sameWatchState, WATCH_PEDALS_MAX } = await import('../shared/watch-link.mjs')
   const fixture = JSON.parse(readSrc(new URL('../mobile/watch-ci/Tests/WatchModelTests/state.json', import.meta.url), 'utf8'))
   const again = watchState({ at: 1759363200000, linked: true, preset: { number: 12, name: 'Crunch Rhythm' }, label: '012', scene: 1,
     sceneNames: ['Clean', 'Crunch', 'Lead'], sceneCount: 8, canPrevious: true, canNext: false,
-    pedals: [{ id: 50, name: 'Drive 1', short: 'DRV', on: true, fill: '#c0392b', ink: '#ffffff', channel: 'B', channels: ['A', 'B', 'C', 'D'] }, { id: 70, name: 'Delay 1', short: 'DLY', on: false, fill: 'nope', ink: '#ffffff', channel: 'A', channels: ['A'] }],
+    pedals: [{ id: 50, name: 'Drive 1', short: 'DRV', on: true, fill: '#c0392b', ink: '#ffffff', channel: 'B', channels: ['A', 'B', 'C', 'D'] }, { id: 70, name: 'Delay 1', short: 'DLY', on: false, fill: 'nope', ink: '#ffffff', channel: 'A', channels: ['A'] },
+      { id: 58, name: 'Amp 1', short: 'AMP', on: false, fill: '#7d8591', ink: '#ffffff', channel: 'A', channels: ['A', 'B', 'C', 'D'], word: 'Boost off' }],
     tunerOn: true, tuning: { note: 'E', octave: 2, cents: -2.4 }, metronome: { on: true, bpm: 120 } })
   assert.deepEqual(again, fixture, 'the watch’s test fixture is not what the phone sends any more — write it again')
 
@@ -15825,7 +15832,7 @@ test('the watch is sent the stage as one small picture, and may ask for only six
 
   /* A pedal held: only a channel that pedal was offered in the last picture,
      which is none where the Play screen's own hold does nothing. */
-  assert.deepEqual(fixture.pedals.map((p) => p.channels), [['A', 'B', 'C', 'D'], []], 'one channel was offered as a choice')
+  assert.deepEqual(fixture.pedals.map((p) => p.channels), [['A', 'B', 'C', 'D'], [], ['A', 'B', 'C', 'D']], 'one channel was offered as a choice')
   const held = watchState({ pedals: [{ id: 50, name: 'Drive', channel: 'A', channels: ['A', 'B', 'C', 'D'] }, { id: 70, name: 'Delay', channel: 'B', channels: [] }] })
   assert.deepEqual(watchCommand({ do: 'channel', id: 50, channel: 'C' }, held), { do: 'channel', id: 50, channel: 'C' })
   assert.equal(watchCommand({ do: 'channel', id: 70, channel: 'A' }, held), null, 'a channel was switched where the phone’s own hold does nothing')
@@ -15840,6 +15847,13 @@ test('the watch is sent the stage as one small picture, and may ask for only six
   for (const channel of [null, undefined, 'b', 'AB', 3]) assert.equal(one({ channel }).channel, '', String(channel))
   assert.deepEqual(one({}).channels, [], 'a pedal with no channels went without the field, for the watch to guess at')
   assert.deepEqual(one({ channels: 'ABCD' }).channels, [])
+  /* The word under a pedal's name: Play's own, passed on as it came, short, and '' for none, never missing. */
+  assert.deepEqual(fixture.pedals.map((p) => p.word), ['', '', 'Boost off'], 'a pedal other than the AM4 amp was sent a word')
+  assert.equal(one({ word: 'Boost on' }).word, 'Boost on')
+  assert.equal(one({ word: 'Amp off' }).word, 'Amp off')
+  for (const word of [null, undefined, 3, true]) assert.equal(one({ word }).word, '', String(word))
+  assert.equal(one({}).word, '', 'a pedal with no word went without the field, for the watch to guess at')
+  assert.ok(one({ word: 'x'.repeat(40) }).word.length <= 12, 'a word too long for a tile was sent whole')
 
   /* The watch's own words for them are these same six. */
   for (const [msg] of [[{ do: 'hello' }], [{ do: 'scene', index: 2 }], [{ do: 'pedal', id: 50, on: false }], [{ do: 'channel', id: 50, channel: 'B' }], [{ do: 'preset', step: -1 }], [{ do: 'tuner', on: true }]]) {
@@ -15910,7 +15924,7 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   /* A channel from the wrist: the Play screen's channel sheet's own write, for
      a block on the screen now, offered only where the tile's own hold works. */
   assert.match(bridge, /if \(cmd\.do === 'channel'\) \{ const here = getState\(\)\.blocks\.some\(\(b\) => sameBlock\(b, cmd\.id\)\) return here \? writeChannel\(cmd\.id, cmd\.channel, receivedAt\) : undefined \}/, 'a channel from the watch lands on a block that is not on the screen')
-  assert.match(bridge, /channel: b\.channel, channels \}\)\)/, 'the watch is not told each pedal’s channel')
+  assert.match(bridge, /channel: b\.channel, channels, word: b\.word \}\)\)/, 'the watch is not told each pedal’s channel, or an AM4 amp’s word')
   assert.match(stage, /chain: chainNow\.elsewhere \? \[\] : blocks, \/\*[^*]*\*\/ channels: channels\?\.length > 1 && !chainNow\.outline && !chainNow\.elsewhere \? channels : \[\],/, 'the watch offers a channel the Play screen would not')
   /* Wake on tap: a tap that woke the phone rejoins the computer before it is
      sent, and the phone holds the app up long enough to send it. */
@@ -15929,6 +15943,13 @@ test('the stage screen keeps the watch, which is inert until the watch is built 
   assert.match(pages, /LongPressGesture\(minimumDuration: 0\.45\)/, 'the watch’s hold is not the phone’s 450 ms')
   assert.match(pages, /including: pedal\.canPickChannel \? \.all : \.subviews/, 'a pedal with nothing to choose can be held')
   assert.ok(pages.includes('Text("Hold a pedal for its channels.")'), 'the watch does not say a pedal can be held')
+  /* An AM4 amp's word, under its name: the phone's own (shared/am4-boost.mjs
+     boostWord), never one the watch works out, and not under a tap still on
+     its way to the phone, where it would say the old boost under the new light. */
+  assert.match(pages, /Text\(pedal\.short\)[^}]*?\.minimumScaleFactor\(0\.6\)\s*if let word \{\s*Text\(word\)/, 'the watch does not draw an AM4 amp’s word under the pedal’s name')
+  assert.ok(pages.includes('word: pending[pedal.id] == nil ? pedal.wordLine : nil,'), 'the watch says the old boost under a tap still on its way')
+  const pagesCode = pages.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+  assert.ok(!/"(Boost on|Boost off|Amp off)"/.test(pagesCode), 'the watch works out a boost word of its own, a second copy of Play’s rule')
   const tips = bridge.slice(bridge.indexOf('export const WATCH_HOW_OPEN'), bridge.indexOf('export function watchWakes'))
   assert.ok(tips.length > 100 && !/\bhold/i.test(tips), 'the phone’s watch tips promise a hold that a watch from before this build cannot do')
   const wf = readSrc(new URL('../.github/workflows/watch.yml', import.meta.url), 'utf8')

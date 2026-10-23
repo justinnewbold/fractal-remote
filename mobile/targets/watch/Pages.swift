@@ -80,6 +80,14 @@ struct ScenesPage: View {
  * watch tips: the phone's words reach every phone by an update, and a watch
  * from before this build cannot do it. This line is only ever on a watch
  * that can.
+ *
+ * AN AM4'S AMP SAYS ITS BOOST under its name, in Play's own words: Boost on,
+ * Boost off, or Amp off when the amp itself is off in that scene, and nothing
+ * until the unit has said (the word is the phone's, WatchPedal.word). Its
+ * tile is lit for Boost on and dark otherwise, as it already was; the word
+ * says which dark it is. Every other pedal has no word and is drawn as
+ * before. A tap still lights or darkens it at once, and its word waits for
+ * the phone's answer rather than saying the old boost under the new light.
  */
 struct PedalsPage: View {
     let state: WatchState
@@ -113,6 +121,7 @@ struct PedalsPage: View {
                             pedal: pedal,
                             on: pending[pedal.id] ?? pedal.on,
                             channel: pendingChannel[pedal.id] ?? pedal.channel,
+                            word: pending[pedal.id] == nil ? pedal.wordLine : nil,
                             press: { press(pedal) },
                             hold: { hold(pedal) },
                             open: { show(pedal.id) }
@@ -214,6 +223,8 @@ private struct PedalTile: View {
     let on: Bool
     /** What the phone said it is on, or the one just picked. */
     let channel: String?
+    /** An AM4 amp's boost in Play's words, under the name; nil for none, and while a tap waits for the phone. */
+    let word: String?
     let press: () -> Void
     let hold: () -> Void
     let open: () -> Void
@@ -224,9 +235,9 @@ private struct PedalTile: View {
         return channel
     }
 
-    /** What VoiceOver says: "Drive 1, on, channel B". */
+    /** What VoiceOver says: "Drive 1, on, channel B", and for an AM4's amp its word: "Amp 1, Boost off, channel A". */
     private var said: String {
-        let base = "\(pedal.name), \(on ? "on" : "off")"
+        let base = "\(pedal.name), \(word ?? (on ? "on" : "off"))"
         guard let letter else { return base }
         return "\(base), channel \(letter)"
     }
@@ -235,23 +246,32 @@ private struct PedalTile: View {
         let hue = Color(hex: pedal.fill, fallback: .gray)
         let ink = on ? Color(hex: pedal.ink, fallback: .white) : hue
         Button(action: press) {
-            Text(pedal.short)
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .frame(maxWidth: .infinity, minHeight: 40)
-                .foregroundStyle(ink)
-                .background(on ? hue : Color.clear, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(hue, lineWidth: on ? 0 : 2))
-                .overlay(alignment: .topTrailing) {
-                    if let letter {
-                        Text(letter)
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(ink)
-                            .padding(.top, 3)
-                            .padding(.trailing, 5)
-                    }
+            VStack(spacing: 1) {
+                Text(pedal.short)
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                if let word {
+                    Text(word)
+                        .font(.system(size: 10, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.horizontal, 3)
                 }
+            }
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .foregroundStyle(ink)
+            .background(on ? hue : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(hue, lineWidth: on ? 0 : 2))
+            .overlay(alignment: .topTrailing) {
+                if let letter {
+                    Text(letter)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(ink)
+                        .padding(.top, 3)
+                        .padding(.trailing, 5)
+                }
+            }
         }
         .buttonStyle(.plain)
         .simultaneousGesture(
