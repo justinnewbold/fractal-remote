@@ -508,6 +508,34 @@ export function run(test) {
     }
   })
 
+  test('Siri: Tuner off over a connected Play, with Siri’s own panel up, goes at once and is said done; one still out at four seconds is said as sent', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      /* Siri's panel over Play: 'inactive', the link up. The most common way Tuner off is said, and no sleep. */
+      b.rn.AppState.currentState = 'inactive'
+      const id = b.say('tunerOff')
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls, [['tuner', false]], 'the close waited, as if the phone had slept')
+      assert.deepEqual(b.replyTo(id), ['Tuner off.'], 'Siri was told the connection was down when it was up')
+      assert.equal(b.link.probes, 0, 'a connected link was asked again')
+      /* A slow computer: the close still out when Siri must be answered is said as sent, not as a connection that is down. */
+      b.rig.answers.tuner = () => new Promise(() => {})
+      const slow = b.say('tunerOff', undefined, { ago: 100 })
+      await b.clock.advance(3900)
+      assert.deepEqual(b.replyTo(slow), [b.rule.sentWords('Tuner off')])
+      /* And one whose link went down while it was out is said as waiting for it. */
+      const lost = b.say('tunerOff', undefined, { ago: 100 })
+      await b.clock.advance(2000)
+      b.link.__set('joining')
+      await b.clock.advance(1900)
+      assert.deepEqual(b.replyTo(lost), ['Closing the tuner as soon as the connection is back.'])
+      assert.equal(b.link.probes, 0)
+    } finally {
+      done(b)
+    }
+  })
+
   test('Siri: Tuner on needs Play, says the rig is muted, and is not sent twice or to a unit without one', async () => {
     const b = await siriOnTheBench()
     try {

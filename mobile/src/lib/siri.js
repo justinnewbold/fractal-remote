@@ -446,17 +446,30 @@ function command(cmd, say) {
  * way one that did not go is tried once more. Sent whatever the app thinks
  * the tuner is doing: after a cold start it knows nothing, and the rig may
  * still be muted on the unit's tuner.
+ *
+ * UP OR ASLEEP IS THE LINK'S WORD, NOT AppState's, as it is for onPlay:
+ * Siri's own panel over the app makes it 'inactive' with the link up, which
+ * is the most common way this is said (Play open, rig connected), and taking
+ * that for a sleep told the player the connection was down when it was not,
+ * and spent Siri's one answer on it. A link that only looks up after a sleep
+ * is the second try's to catch. And a close still out when Siri must be
+ * answered is said as sent, unless the link has gone in the meantime.
  */
 function tunerOff(cmd, say) {
-  const ready = AppState.currentState === 'active' && linkState().link === 'connected'
-  if (ready) setTimeout(() => say(SIRI_SAYS.tunerOffSoon), Math.max(0, cmd.at + SIRI_ANSWER_MS - Date.now()))
+  const up = () => linkState().link === 'connected'
+  const ready = up()
+  let timer = null
+  if (ready) timer = setTimeout(() => say(up() ? sentWords('Tuner off') : SIRI_SAYS.tunerOffSoon), Math.max(0, cmd.at + SIRI_ANSWER_MS - Date.now()))
   else say(SIRI_SAYS.tunerOffSoon)
   const close = () => writeTuner(false)
   const first = ready
     ? close()
     : (probeNow(), pause(400).then(() => untilConnected()).then(close))
   return Promise.resolve(first).then(async (ok) => {
-    if (ok) return say(SIRI_SAYS.tunerOff)
+    if (ok) {
+      clearTimeout(timer)
+      return say(SIRI_SAYS.tunerOff)
+    }
     logDebug('siri', 'tuner off: the first try did not go; trying once more')
     await pause(1500)
     await untilConnected()
