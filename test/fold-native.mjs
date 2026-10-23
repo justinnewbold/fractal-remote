@@ -309,7 +309,10 @@ export function run(test) {
     /* Into the window again when it may have changed. */
     assert.match(code, /for name in \[UIScene\.didActivateNotification, UIWindow\.didBecomeKeyNotification\]/)
     assert.match(block(code, '    OnAppBecomesActive {'), /self\.attachSoon\(\)/)
-    assert.match(block(code, '    OnStartObserving("onFold") {'), /self\.sensor\.listen\(true\)\s*self\.attachSoon\(\)/)
+    /* Listening first, then on the main queue (where every reading is taken, so in order with them) the latest once more: one taken between the JavaScript's now() and listen(true) is otherwise never sent. */
+    assert.match(block(code, '    OnStartObserving("onFold") {'), /self\.sensor\.listen\(true\)\s*let sensor = self\.sensor\s*Task \{ @MainActor in\s*sensor\.attach\(\)\s*sensor\.resend\(\)\s*\}\s*\}$/, 'a reading taken before the module hears the JavaScript listen is never sent')
+    assert.match(code, /@MainActor\n  func resend\(\) \{/, 'the reading is sent again off the main queue, out of order with the readings taken on it')
+    assert.match(block(code, '  func resend() {'), /lock\.lock\(\)\s*let reading = latest\s*let tell = listening && reading\.window != nil \? onChange : nil\s*lock\.unlock\(\)\s*tell\?\(reading\.body\)/, 'the reading sent again is not the latest, or is sent with no window or to nobody')
     assert.match(code, /if let current = self\.probe, current\.window === window \{\s*return\s*\}/, 'the probe is put into a window it is already in')
   })
 
@@ -471,6 +474,10 @@ export function run(test) {
       assert.equal(said()[0], 'Fold sensor: on')
       assert.equal(said()[1], 'Fold: hinge fullyOpen at 180°; fold runs down at x 476, 0 wide, inactive; window 951×669; side bar trailing; 1 covered area, 1 active')
       assert.ok(bench.lines.every((l) => l[0] === 'fold'))
+      /* The Swift sends the latest reading once more as the listener starts: the same shape again writes nothing, and holds nothing. */
+      fake.emit(reading())
+      assert.equal(said().length, 2, 'the reading sent again as the listener starts was written twice')
+      assert.equal(time.pending(), 0, 'the reading sent again was held for a second line')
       /* The hinge moving a few degrees is not a change of shape. */
       time.pass(5000)
       fake.emit(reading({ hinge: { status: 'fullyOpen', angle: 176 } }))

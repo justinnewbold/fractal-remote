@@ -55,8 +55,8 @@ import UIKit
  *
  * And from long before: requiresConstraintBasedLayout, updateConstraints()
  * (which iOS 18 and later also track the traits read in: "Automatic trait
- * tracking"), setNeedsUpdateConstraints(), layoutSubviews() and
- * UIScene.didActivateNotification.
+ * tracking"), setNeedsUpdateConstraints(), layoutSubviews(),
+ * UIWindow.windowLevel (.normal) and UIScene.didActivateNotification.
  *
  * NOT ON APPLE'S PAGES: the version number in the canImport guard below,
  * 9127.0.85. It is the number Expo's own expo-hinge 58.0.0 uses for "iOS
@@ -78,8 +78,9 @@ import UIKit
  *   now()      The latest reading, below. Empty when not available, and
  *              before the app has a window.
  *   Event      "onFold", the same reading, each time any of it changes, and
- *              only while the JavaScript listens. Never sent when not
- *              available.
+ *              only while the JavaScript listens; and once as it starts to
+ *              listen, when there is a window, so the JavaScript may hear a
+ *              reading it already has. Never sent when not available.
  *
  *   A reading:
  *     hinge            { status, angle } or null. status is UIHinge.Status
@@ -249,6 +250,23 @@ final class FoldSensor: @unchecked Sendable {
     lock.lock()
     listening = on
     lock.unlock()
+  }
+
+  /*
+   * The latest reading sent once more, as the JavaScript starts to listen.
+   * Its listener is in place before the module hears of it (startObserving
+   * runs later, on Expo's queue for async calls), so a reading taken between
+   * the JavaScript's now() and listen(true) was kept and never sent. On the
+   * main queue, where every reading is taken, so it lands in order with them.
+   * A repeat is nothing: the JavaScript writes a shape once.
+   */
+  @MainActor
+  func resend() {
+    lock.lock()
+    let reading = latest
+    let tell = listening && reading.window != nil ? onChange : nil
+    lock.unlock()
+    tell?(reading.body)
   }
 
   /* The hinge last read, for a new probe to start from. */
@@ -526,9 +544,14 @@ public class FractalFoldModule: Module {
       Task { @MainActor in sensor.detach() }
     }
 
+    /* Listening first, then on the main queue the latest reading once more, for one taken before it. */
     OnStartObserving("onFold") {
       self.sensor.listen(true)
-      self.attachSoon()
+      let sensor = self.sensor
+      Task { @MainActor in
+        sensor.attach()
+        sensor.resend()
+      }
     }
 
     OnStopObserving("onFold") {
