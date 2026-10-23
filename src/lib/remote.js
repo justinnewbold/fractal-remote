@@ -327,8 +327,9 @@ async function takeCensus({
         ([name]) => {
           if (!heardAfter.has(name)) heardAfter.set(name, after)
           if (!held || !picked) return
-          if (name !== picked || readsHeld !== held || session !== link) return
-          if (readsOnlyTo(picked)) readsTo = picked
+          /* Let go only to be asked of it: where a read has gone to nobody in particular, they wait for the first window, which takes the mix down first. */
+          if (name !== picked || readsHeld !== held || session !== link || !readsOnlyTo(picked)) return
+          readsTo = picked
           held.open()
         },
         () => {}
@@ -1631,6 +1632,8 @@ async function joinChannel() {
 
       if (status === 'SUBSCRIBED') {
         channel = chan
+        /* Back with a count owed (a hidden tab's own rejoin): the reads it holds wait for that count from here, before any waiting for the channel goes. The phone's relay.js keepHeld says why. */
+        if (settled && recountOwed && readsHeld?.kept) readsHeld.until = Math.max(readsHeld.until, Date.now() + COUNT_WAIT_MS)
         chan.track({ at: Date.now() }).catch(() => {})
         if (!settled) {
           /* A fresh link, on an account of two with a pick: no read goes to whoever answers first (holdReads). Before anybody hears it is up. */

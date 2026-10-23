@@ -686,6 +686,8 @@ async function joinChannel() {
       if (status === 'SUBSCRIBED') {
         if (settled && channel !== chan) logDebug('relay', 'channel back')
         channel = chan
+        /* Back with a count owed: the reads it holds wait for that count from here, before any waiting for the channel goes (keepHeld). */
+        if (settled && recountOwed) keepHeld()
         chan.track({ at: Date.now() }).catch(() => {})
         if (!settled) {
           /* A fresh link, on an account of two with a pick: no read goes to whoever answers first (holdReads). Before anybody hears it is up. */
@@ -827,8 +829,8 @@ async function takeCensus({
   const known = pickOf()
   /* Held only while every read on this link has waited: once one has gone to nobody in particular, what is on screen is read again anyway (remoteReadsAskedOf). */
   if (!proved && holdsFor(known) && readsOnlyTo(known.name)) holdReads()
-  /* The hold a count cut short kept for this one (oweCount) is this count's from now, six seconds as at a launch: the channel can be back long after the drop. */
-  if (readsHeld?.kept) readsHeld.until = Math.max(readsHeld.until, Date.now() + COUNT_WAIT_MS)
+  /* The hold a count cut short kept for this one (oweCount) is this count's from now (keepHeld). */
+  keepHeld()
   readsTo = proved ? chosen : null
   if (!readsAsked) readsAsked = []
   try {
@@ -854,8 +856,9 @@ async function takeCensus({
           if (!heardAfter.has(name)) heardAfter.set(name, after)
           const held = readsHeld
           const record = pickOf()
-          if (!held || session !== link || !holdsFor(record) || name !== record.name) return
-          if (readsOnlyTo(name)) readsTo = name
+          /* Let go only to be asked of it: where a read has gone to nobody in particular, they wait for the first window, which takes the mix down first. */
+          if (!held || session !== link || !holdsFor(record) || name !== record.name || !readsOnlyTo(name)) return
+          readsTo = name
           held.open()
         },
         () => {}
@@ -1069,6 +1072,19 @@ function oweCount() {
   }
 }
 
+/*
+ * AND THE HOLD A COUNT CUT SHORT KEPT RUNS SIX SECONDS FROM THE CHANNEL'S
+ * RETURN, and again from when the count owed begins, as a launch's runs
+ * from its join: the channel can be back long after the drop. Run from the
+ * drop alone, it was over by the time a channel down seven seconds or more
+ * came back, and the reads that had waited for the channel went to whoever
+ * answered first, the MacBook's FM3 in the header over the Pi's "No Fractal
+ * device found".
+ */
+function keepHeld() {
+  if (readsHeld?.kept) readsHeld.until = Math.max(readsHeld.until, Date.now() + COUNT_WAIT_MS)
+}
+
 /** Whether a drop since `from` cut a count (or a proof) short: one before its proof was asked, or under a proof it left with no answer or two. See takeCensus. */
 const cutShort = (from) =>
   proofFrom === null ? drops !== from || !isJoined(channel) : proofFrom !== from || ((drops !== proofFrom || !isJoined(channel)) && proofAnswers !== 1)
@@ -1123,9 +1139,10 @@ function within(promise, ms, value = null) {
  * computer lets them go as they always went. A read waits no longer than
  * COUNT_WAIT_MS from when it was made, and no hold outlasts COUNT_WAIT_MS
  * from when it was made (or, kept by a count a drop cut short, from the
- * drop: oweCount): a link where no count comes reads as it always did,
- * and what was read that way is counted as asked of nobody, so it is read
- * again once the count has picked (remoteReadsAskedOf).
+ * drop or the channel's return: oweCount, keepHeld): a link where no count
+ * comes reads as it always did, and what was read that way is counted as
+ * asked of nobody, so it is read again once the count has picked
+ * (remoteReadsAskedOf).
  *
  * A tap waits the same way on a link where no roll call has finished yet
  * (countDone), and is dropped at its deadline rather than sent to both
@@ -1202,7 +1219,8 @@ async function readsWait(deadline) {
     if (!held) return
     /*
      * Six seconds from when it was made, or, under a hold a count cut short
-     * kept (oweCount), to that hold's end: six seconds from the drop. A read
+     * kept (oweCount), to that hold's end: six seconds from the drop, or
+     * from the channel's return (keepHeld). A read
      * made before the drop had spent its own six on the drop, and let go then
      * it went to whoever answered first a moment before the pick's answer to
      * the count owed (a Pi 3 two seconds slow), the other computer's FM3 in

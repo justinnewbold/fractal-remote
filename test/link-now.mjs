@@ -4825,6 +4825,47 @@ export function run(test) {
         assert.equal(early.done && early.value?.from, 'raspberry pi 3', early.error?.message)
       }
     })
+
+    /*
+     * AND A CHANNEL DOWN LONGER THAN THAT HOLD. Kept six seconds from the end
+     * of the count cut short, it was over when a channel down seven seconds
+     * or more came back: the reads that had waited for the channel went to
+     * whoever answered first, and the pick's answer to the count owed let
+     * the rest go to nobody in particular after them. The MacBook's FM3 in
+     * the header, then over the Pi's "No Fractal device found", until the
+     * first window took it down. Now the hold runs from the channel's
+     * return, and the pick's answer lets reads go only to be asked of it.
+     */
+    test(`${end}: a channel down longer than the hold a count cut short keeps: no read goes to whoever answers first when it is back, nor at the pick's answer`, async () => {
+      for (const down of [9000, 14000]) {
+        const t = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+        const { bench, clock, relay, watch, service } = t
+        let lost = true
+        const pi3 = computer('raspberry pi 3', 'AM4', { lag: 320 })
+        const answers = pi3.reply
+        pi3.reply = (p) => (lost ? 'silent' : answers(p))
+        bench.computers = [computer('MacBook Pro SG 566', 'FM3', { lag: 150 }), computer('raspberry pi 5', 'FM3', { plugged: false, lag: 170 }), pi3]
+        counted(t)
+        const reads = [watch(relay.remoteRequest('/scene'))]
+        await clock.advance(250)
+        service.drop()
+        await clock.advance(down)
+        assert.equal(relay.remoteCountOwed(), true, 'the count the drop took the pick’s answer from was kept')
+        lost = false
+        service.back()
+        await clock.advance(20)
+        reads.push(watch(relay.remoteRequest('/scene')))
+        await clock.advance(200)
+        assert.deepEqual(sentOf(bench, '/scene'), [], `down ${down} ms: a read went to whoever answers first as the channel was back`)
+        counted(t)
+        await clock.advance(100)
+        reads.push(watch(relay.remoteRequest('/scene')))
+        await clock.advance(8000)
+        assert.equal(relay.remoteChosenHost(), 'raspberry pi 3')
+        assert.ok(sentOf(bench, '/scene').every((host) => host === 'raspberry pi 3'), `down ${down} ms: a read went to nobody in particular: ${sentOf(bench, '/scene')}`)
+        for (const read of reads) if (read.done && !read.error) assert.equal(read.value?.from, 'raspberry pi 3', `down ${down} ms: a read was answered by another computer`)
+      }
+    })
   }
 
   test('phone: a disk slow to answer, or never answering, holds no read or tap of one computer past a quarter of a second, and never hangs a count or a pick', async () => {
