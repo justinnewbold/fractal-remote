@@ -412,6 +412,12 @@ export function run(test) {
     const crossed = lock._why.find((w) => /924ecfa/.test(w))
     assert.ok(crossed && /write generation/.test(crossed) && /COMPUTER_NEEDED stays/.test(crossed), 'the lock does not say why it moved')
     assert.match(read('licences/MODIFICATIONS.md'), /\| Never keep the copy of an AM4 preset dump that a write, a scene, a preset select or a channel change landed in the middle of \|/)
+    /* Not "nothing new is sent": a read asked after a crossed dump makes its own, one more whole dump on an AM4. */
+    const row = read('licences/MODIFICATIONS.md').split('\n').find((l) => l.startsWith('| Never keep the copy of an AM4 preset dump'))
+    for (const [where, words] of [['the lock', crossed], ['MODIFICATIONS.md', row]]) {
+      assert.ok(!/nothing new (is sent|goes) to the unit/i.test(words), `${where} says the crossed copy sends nothing new to the unit`)
+      assert.match(words, /a pedal tapped during a scene's (chain )?read can cost one more whole-preset dump, for the boost read/, `${where} leaves out the one more dump a crossed copy can cost`)
+    }
     assert.match(read('shared/versions.mjs').replace(/\s*\n\s*\*\s*/g, ' ').replace(/ +/g, ' '), /1\.87\.49 an AM4 amp's boost tap \(its pedal on Play\) goes out like a bypass \(ForgeFX \+am4boosttap\)\. Older, the boost still switches, but the computer holds its MIDI queue up to 0\.6 s after it, so a scene or a preset tapped in that time goes out that much late\. Degrades\./)
     assert.ok(!/same frame, only later/.test(read('shared/am4-boost.mjs')))
   })
