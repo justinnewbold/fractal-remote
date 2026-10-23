@@ -3,6 +3,7 @@ import { Modal, PanResponder, Platform, Pressable, Text, View, useWindowDimensio
 import { BlurView } from 'expo-blur'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { ANY_WAY_UP } from '../lib/screenShape'
 import Note from './Note'
 import { blockParams, idOf, setParam, setParamConfirmed } from '../lib/device'
 import { noteEdited } from '../lib/rig'
@@ -300,7 +301,7 @@ export default function Volume({ blocks, open, onClose, onError }) {
   const panel = Math.min(width0 - space.xl * 2, 460)
 
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent supportedOrientations={ANY_WAY_UP}>
       <Pressable accessibilityRole="button" accessibilityLabel="Close the volume" onPress={onClose} style={{ flex: 1 }}>
         <BlurView
           intensity={70}

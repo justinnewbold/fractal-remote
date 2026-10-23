@@ -3,10 +3,20 @@ import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, radius, space } from '../lib/theme'
+import { ANY_WAY_UP } from '../lib/screenShape'
 
 /* Above a tall sheet: the status bar — this much where the phone does not say — and a strip of glass. */
 const STATUS_AT_LEAST = 20
 const GLASS = 8
+/*
+ * And under the last row: the phone's own bottom edge by its own measure
+ * (the home bar, Android's buttons, an iPad's or a turned screen's), and
+ * never less than the 32 every sheet had when this was a fixed number. So no
+ * sheet comes up shorter at its foot than it did, on any phone, and on a
+ * screen whose bottom edge is taller than 32 (Android's three buttons, which
+ * a sheet is drawn behind) the last row now clears it.
+ */
+const FOOT_AT_LEAST = space.xxl
 
 /**
  * Something that comes up over the screen rather than into it.
@@ -45,12 +55,12 @@ const GLASS = 8
  */
 export default function Sheet({ open, onClose, title, note, head, foot, tall = false, children }) {
   const { height } = useWindowDimensions()
-  const { top } = useSafeAreaInsets()
+  const { top, bottom } = useSafeAreaInsets()
   /* Tall: everything but the status bar and a strip of glass to tap out on. */
   const highest = tall ? Math.max(height * 0.8, height - Math.max(top, STATUS_AT_LEAST) - GLASS) : height * 0.8
 
   return (
-    <Modal visible={!!open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={!!open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent supportedOrientations={ANY_WAY_UP}>
       {/* The glass, and the way out. */}
       <Pressable
         accessibilityRole="button"
@@ -75,7 +85,7 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
               borderTopRightRadius: radius.lg * 2,
               borderTopWidth: 1,
               borderColor: 'rgba(255,255,255,0.14)',
-              paddingBottom: space.xxl
+              paddingBottom: Math.max(bottom, FOOT_AT_LEAST)
             }}
           >
             {/* The grab handle. It does not drag — it says which way this came

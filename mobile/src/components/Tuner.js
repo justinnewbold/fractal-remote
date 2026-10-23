@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur'
 import { at as tint } from '../lib/vivid'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { ANY_WAY_UP } from '../lib/screenShape'
 import Note from './Note'
 import Press from './Press'
 import { useBluetoothOn } from '../lib/bluetooth'
@@ -86,7 +87,7 @@ export default function Tuner({ reading, on, onClose, down = false }) {
   const dial = Math.min(width - space.xl * 2, 420)
 
   return (
-    <Modal visible={on} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={on} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent supportedOrientations={ANY_WAY_UP}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Close the tuner"

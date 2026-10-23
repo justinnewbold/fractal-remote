@@ -3,6 +3,7 @@ import { Modal, Pressable, Text, TextInput, View, useWindowDimensions } from 're
 import { BlurView } from 'expo-blur'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
+import { ANY_WAY_UP } from '../lib/screenShape'
 import Note from './Note'
 import Press from './Press'
 
@@ -73,7 +74,7 @@ export default function PasswordBox({ open, onChange, onClose }) {
   })
 
   return (
-    <Modal visible={!!open} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={!!open} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent supportedOrientations={ANY_WAY_UP}>
       <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={{ flex: 1 }}>
         <BlurView
           intensity={70}

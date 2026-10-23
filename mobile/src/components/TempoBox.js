@@ -3,6 +3,7 @@ import { Modal, Platform, Pressable, Text, TextInput, View, useWindowDimensions 
 import { BlurView } from 'expo-blur'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { ANY_WAY_UP } from '../lib/screenShape'
 import { ANY_BPM, checkBpm } from '../lib/tempo'
 import { freshField, heldSelection, selectedByHand, selectionMoved, shownText, typedInto } from '../lib/tempo-field'
 import MetronomeSwitch from './MetronomeSwitch'
@@ -135,7 +136,7 @@ export default function TempoBox({ open, bpm, range = ANY_BPM, onSet, onClose })
   }
 
   return (
-    <Modal visible={!!open} transparent animationType="fade" onRequestClose={onClose} onShow={shown} statusBarTranslucent>
+    <Modal visible={!!open} transparent animationType="fade" onRequestClose={onClose} onShow={shown} statusBarTranslucent supportedOrientations={ANY_WAY_UP}>
       <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={{ flex: 1 }}>
         <BlurView
           intensity={70}

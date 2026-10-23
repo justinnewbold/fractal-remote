@@ -6252,6 +6252,10 @@ console.log('\na report with a note, screenshots and the whole log, in the email
 const { run: reports } = await import('./reports.mjs')
 reports(test)
 
+console.log('\nPlay on a screen of any shape: the groundwork, and a phone held upright as it was')
+const { run: duo } = await import('./duo.mjs')
+duo(test)
+
 test('both file kinds are listed and told apart', async () => {
   // A .syx goes back to the unit verbatim; a design re-validates first. Load
   // treating one as the other would either corrupt or silently no-op.
