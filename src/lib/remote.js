@@ -310,6 +310,8 @@ async function takeCensus({
   const proved = Boolean(hosts.length > 1 && chosen && targeted)
   /* Or the hold a count cut short kept for the one owed (oweCount): its pick's answer, or its first window, lets the reads go. */
   const held = !proved && holdsFor(record) && readsOnlyTo(picked) ? holdReads() : recountOwed ? readsHeld : null
+  /* That kept hold is this count's from now, six seconds as at a launch: the channel can be back long after the drop. */
+  if (held?.kept) held.until = Math.max(held.until, Date.now() + COUNT_WAIT_MS)
   readsTo = proved ? chosen : null
   if (!readsAsked) readsAsked = []
   try {
@@ -447,7 +449,8 @@ async function takeCensus({
  * lets it go, asked of the pick by name; a pick not heard in the first window
  * holds it to the end of the count, and one computer heard lets it go as it
  * always went. No read waits past COUNT_WAIT_MS from when it was made, nor
- * any hold past COUNT_WAIT_MS from when it was made. A tap waits the same way
+ * any hold past COUNT_WAIT_MS from when it was made (or, kept by a count a
+ * drop cut short, from the drop: oweCount). A tap waits the same way
  * on a link where no roll call has finished yet (countDone). One computer is
  * never held: an account that never picked, or whose last roll call heard
  * one, waits for nothing, as in 1.87.47. /healthz and the computer's own name
@@ -496,6 +499,7 @@ function oweCount() {
   else {
     const held = holdReads()
     held.until = Math.max(held.until, Date.now() + COUNT_WAIT_MS)
+    held.kept = true
   }
 }
 
@@ -537,7 +541,15 @@ async function readsWait(deadline) {
   for (;;) {
     const held = readsHeld
     if (!held) return
-    const end = Math.min(held.until, most, Number.isFinite(deadline) ? deadline : Infinity)
+    /*
+     * Six seconds from when it was made, or, under a hold a count cut short
+     * kept (oweCount), to that hold's end: six seconds from the drop. A read
+     * made before the drop had spent its own six on the drop, and let go then
+     * it went to whoever answered first a moment before the pick's answer to
+     * the count owed (a Pi 3 two seconds slow), the other computer's FM3 in
+     * the header over a "No Fractal device found".
+     */
+    const end = Math.min(held.until, held.kept ? held.until : most, Number.isFinite(deadline) ? deadline : Infinity)
     if (Date.now() >= end) return
     let timer = null
     await Promise.race([held.gate, new Promise((go) => (timer = setTimeout(go, end - Date.now())))])

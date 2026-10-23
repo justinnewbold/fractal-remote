@@ -4766,6 +4766,35 @@ export function run(test) {
       await heard.clock.advance(400)
       assert.equal(after.done && after.value?.from, 'raspberry pi 3', 'a read with the pick heard waited, or went to another')
       assert.deepEqual(sentOf(heard.bench, '/scene'), ['raspberry pi 3'])
+      /*
+       * A pick two seconds slow, and a read made before the drop: its own six
+       * seconds run out a moment before the pick answers the count owed. It
+       * waits for that answer, to the end of the hold the count cut short
+       * kept, rather than going to whoever answers first.
+       */
+      /* And with the channel down long enough that the hold kept at the drop would end first: the count owed holds for its own six seconds from when it begins, as at a launch. */
+      for (const down of [2400, 6400]) {
+        const slow = await relayOnABench(end, { picked: 'raspberry pi 3', many: true })
+        let away = true
+        const pi3s = computer('raspberry pi 3', 'AM4', { lag: 2000 })
+        const said = pi3s.reply
+        pi3s.reply = (p) => (away ? 'silent' : said(p))
+        slow.bench.computers = [computer('MacBook Pro SG 566', 'FM3', { lag: 150 }), computer('raspberry pi 5', 'FM3', { plugged: false, lag: 170 }), pi3s]
+        counted(slow)
+        const early = slow.watch(slow.relay.remoteRequest('/scene'))
+        await slow.clock.advance(1600)
+        slow.service.drop()
+        await slow.clock.advance(down)
+        assert.equal(slow.relay.remoteCountOwed(), true)
+        away = false
+        slow.service.back()
+        await slow.clock.advance(150)
+        counted(slow)
+        await slow.clock.advance(8000)
+        assert.equal(slow.relay.remoteChosenHost(), 'raspberry pi 3')
+        assert.deepEqual(sentOf(slow.bench, '/scene'), ['raspberry pi 3'], `down ${down} ms: a read made before the drop went to whoever answers first, its hold over a moment before the slow pick answered`)
+        assert.equal(early.done && early.value?.from, 'raspberry pi 3', early.error?.message)
+      }
     })
   }
 
