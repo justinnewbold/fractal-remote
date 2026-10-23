@@ -264,7 +264,11 @@ export const SHOT_WORDS = {
  * The phone's words for a paste. Nobody pasting can choose a file's format,
  * so these never name one, and say what to do next instead.
  *
- *   empty       the clipboard really has no picture
+ *   empty       the clipboard really has no picture. On an iPhone or iPad
+ *               (inPhotos) it says how to copy one already in Photos: "I
+ *               tried to paste this … it said no screenshot to paste." A
+ *               screenshot goes to Photos, not to copy and paste, and the
+ *               copy hint under the button only covers taking a new one
  *   refused     it has one, and the app was not handed it: "Don't Allow
  *               Paste" on an iPhone, or Paste from Other Apps set to Deny
  *               there, which asks nothing at all. iPhone and iPad only; on
@@ -276,6 +280,7 @@ export const SHOT_WORDS = {
  */
 export const PASTE_WORDS = {
   empty: 'There’s no picture to paste. Copy a screenshot first.',
+  inPhotos: 'There’s no picture to paste. For a screenshot already in Photos: open it there, tap Share, then Copy Photo. Then come back and tap Paste a screenshot.',
   refused:
     'The app wasn’t allowed to paste it. Tap Paste a screenshot again and choose Allow Paste. If you aren’t asked, go to Settings → Fractal Remote → Paste from Other Apps and choose Allow.',
   unreadable: 'That picture couldn’t be read. Copy the screenshot again and paste it.',
@@ -285,6 +290,7 @@ export const PASTE_WORDS = {
 /** What a paste that brought no picture says, by why and on which system. */
 export function pasteWords(why, os) {
   if (why === 'refused' && os !== 'ios') return PASTE_WORDS.unreadable
+  if (why === 'empty' && os === 'ios') return PASTE_WORDS.inPhotos
   return PASTE_WORDS[why] || PASTE_WORDS.unreadable
 }
 

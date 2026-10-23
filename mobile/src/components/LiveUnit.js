@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
 
 import { unitChoices } from '../lib/relay'
-import { chooseHost, forgetMissing } from '../lib/link'
+import { askUnknownUnits, chooseHost, forgetMissing } from '../lib/link'
 import { color, font, space } from '../lib/theme'
 import Press from './Press'
 import Sheet from './Sheet'
@@ -22,13 +22,17 @@ import MissingPick from './MissingPick'
  * once the new unit has been read: the screen behind it is now a different
  * rig, which is the thing worth looking at.
  */
-export default function LiveUnit({ open, onClose, hosts = [], units = {}, chosen = null, missing = null }) {
+export default function LiveUnit({ open, onClose, hosts = [], units = {}, chosen = null, missing = null, asking = false }) {
   const [busy, setBusy] = useState(null)
+  /* Opened: a computer that has not said its unit is asked again, with longer (link.js askUnknownUnits). */
+  useEffect(() => {
+    if (open) askUnknownUnits()
+  }, [open])
 
   return (
     <Sheet open={open} onClose={onClose} title="Which unit" note="Each computer on this account">
       <View style={{ gap: space.md }}>
-        {unitChoices(hosts, units, chosen).map((row) => (
+        {unitChoices(hosts, units, chosen, asking).map((row) => (
           <View key={row.key} style={{ gap: space.xs }}>
             <Press
               label={busy === row.name ? 'Switching…' : row.label}

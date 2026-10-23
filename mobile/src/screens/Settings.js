@@ -24,7 +24,7 @@ import {
   sendPasswordReset,
   unitChoices
 } from '../lib/relay'
-import { chooseHost, forgetMissing } from '../lib/link'
+import { askUnknownUnits, chooseHost, forgetMissing } from '../lib/link'
 import MissingPick from '../components/MissingPick'
 import { useRig } from '../lib/rig'
 import { setFlashTiming, setMetronome, useFlashTiming, useMetronome, useUnitHeardOn } from '../lib/metronome'
@@ -168,6 +168,8 @@ export default function Settings({
   const [hosts, setHosts] = useState(remoteHosts())
   const [chosen, setChosen] = useState(remoteChosenHost())
   const [units, setUnits] = useState(remoteUnits())
+  /* While a computer that has not said its unit is asked again (link.js askUnknownUnits). */
+  const [unitsAsking, setUnitsAsking] = useState(false)
   const [missing, setMissing] = useState(remoteMissingPick())
   /*
    * The account line opens a small sheet of the things done about once —
@@ -219,6 +221,22 @@ export default function Settings({
     setChosen(remoteChosenHost())
     setUnits(remoteUnits())
     setMissing(remoteMissingPick())
+  }, [link, page])
+
+  /* Which unit on screen: a computer that has not said its unit is asked again, with longer. */
+  useEffect(() => {
+    if (page !== 'link' || remoteHosts().length < 2) return undefined
+    let alive = true
+    const unknown = remoteHosts().some((name) => !remoteUnits()[name])
+    if (unknown) setUnitsAsking(true)
+    askUnknownUnits().finally(() => {
+      if (!alive) return
+      setUnitsAsking(false)
+      setUnits(remoteUnits())
+    })
+    return () => {
+      alive = false
+    }
   }, [link, page])
 
   const conflict = hostConflict(hosts, chosen)
@@ -1118,7 +1136,7 @@ export default function Settings({
             <View style={{ gap: space.md }}>
               <Section>Which unit</Section>
               {conflict ? <Note tone="fault">{conflict}</Note> : null}
-              {unitChoices(hosts, units, chosen).map((row) => (
+              {unitChoices(hosts, units, chosen, unitsAsking).map((row) => (
                 <View key={row.key} style={{ gap: space.xs }}>
                   <Press
                     label={row.label}
