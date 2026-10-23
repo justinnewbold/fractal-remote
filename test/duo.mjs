@@ -829,15 +829,78 @@ export function run(test) {
 
   test('a sheet is no wider than 480, centered, from Play’s own line, measured on the sheet’s own frame, and full width under it', () => {
     const sheet = code(read('mobile/src/components/Sheet.js'))
-    assert.match(sheet, /onLayout=\{\(e\) => setFrame\(Math\.round\(e\.nativeEvent\.layout\.width\)\)\}/, 'the sheet does not measure the screen it comes up over')
+    assert.match(sheet, /onLayout=\{\(e\) => setSeen\(\{ width: e\.nativeEvent\.layout\.width, window: across \}\)\}/, 'the sheet does not measure the screen it comes up over, with the window it measured it in')
+    assert.match(sheet, /const frame = firstFrame\(across, \[seen, lastFrame\]\)\.width\n/, 'the sheet’s first frame is not lib/screenShape’s')
     assert.match(sheet, /const lines = playLines\(pageRow\(frame, space\.lg\), linesWere\.current\)/, 'the sheet’s line is not Play’s')
     assert.match(sheet, /const capped = lines\.opens\n/)
     assert.match(sheet, /\.\.\.\(capped \? \{ width: '100%', maxWidth: SHEET_MAX, alignSelf: 'center', borderLeftWidth: 1, borderRightWidth: 1 \} : null\),/)
     assert.equal(sheet.match(/\bcapped\b/g).length, 2, 'the cap does something under the line')
-    /* The window is still read for the height only, as it always was. */
-    assert.match(sheet, /const \{ height \} = useWindowDimensions\(\)/)
-    assert.doesNotMatch(sheet, /\{ width[^}]*\} = useWindowDimensions|Platform\.isPad|orientation/)
+    /* The window is read for the height, and for the width only as firstFrame's window. */
+    assert.match(sheet, /const \{ width: across, height \} = useWindowDimensions\(\)/)
+    assert.equal(sheet.match(/\bacross\b/g).length, 3, 'the window’s width is used for more than the frame before the sheet has measured itself')
+    assert.doesNotMatch(sheet, /Platform\.isPad|orientation/)
     assert.match(read('src/lib/gigSize.js'), /^export const SHEET_MAX = 480$/m)
+  })
+
+  test('a sheet’s first frame is the width it fills: capped from the first frame on an iPad, never capped on a phone, and never the last window’s', async () => {
+    const g = await import('../mobile/src/lib/gigSize.js')
+    const { firstFrame } = await screenShape()
+    const src = read('mobile/src/components/Sheet.js')
+    const handler = src.match(/onLayout=\{(\(e\) => setSeen\(\{[^\n]*\}\))\}/)
+    assert.ok(handler, 'the sheet’s onLayout was not found; this check reads it')
+    /* One sheet, kept drawn while it is shut, as each of Play's is; `lastFrame` the app's. */
+    let kept = null
+    const one = () => {
+      const lines = mountLines(
+        'mobile/src/components/Sheet.js',
+        '  const { width: across, height } = useWindowDimensions()\n',
+        '  const capped = lines.opens\n',
+        ['useWindowDimensions', 'useSafeAreaInsets', 'firstFrame', 'lastFrame', 'playLines', 'pageRow', 'space', 'tall', 'STATUS_AT_LEAST', 'GLASS'],
+        '{ capped, frame, setSeen, across, kept: () => lastFrame }'
+      )
+      return (window) => {
+        const out = lines({
+          useWindowDimensions: () => ({ width: window, height: 800 }),
+          useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+          firstFrame,
+          lastFrame: kept,
+          playLines: g.playLines,
+          pageRow: g.pageRow,
+          space: { lg: 16 },
+          tall: false,
+          STATUS_AT_LEAST: 20,
+          GLASS: 8
+        })
+        kept = out.kept()
+        return out
+      }
+    }
+    // eslint-disable-next-line no-new-func
+    const measure = (out, width) => new Function('setSeen', 'across', `return ${handler[1]}`)(out.setSeen, out.across)({ nativeEvent: { layout: { x: 0, y: 0, width, height: 800 } } })
+    const draw = one()
+    /* The first sheet of a run on an iPad on its side: 480 from its first frame, not edge to edge and then snapped half way up. */
+    const ipad = draw(1133)
+    assert.equal(ipad.capped, true, 'the first sheet on an iPad slid up full width')
+    measure(ipad, 1133)
+    assert.equal(draw(1133).capped, true)
+    /* The same sheet, shut, the window now a phone's (a Fold folded): full width from its first frame, never capped with side edges on a narrow screen. */
+    assert.equal(draw(393).capped, false, 'a sheet last open on a wide screen came up capped on a phone-sized one')
+    /* And another sheet, never opened, on the Duo folded then opened: what the other one measured is not the window it opens in. */
+    const other = one()
+    const folded = other(466)
+    assert.equal(folded.capped, false)
+    measure(folded, 466)
+    assert.equal(other(951).capped, true, 'a sheet last measured folded opened full width on the Duo opened')
+    /* A phone held upright, sheet after sheet: never capped, on any frame. */
+    kept = null
+    for (const window of [320, 375, 393, 1080 / 2.625, 440]) {
+      const phone = one()
+      for (let i = 0; i < 3; i += 1) {
+        const out = phone(window)
+        assert.equal(out.capped, false, `a ${window}-point phone’s sheet was capped`)
+        measure(out, window)
+      }
+    }
   })
 
   test('a pedal’s whole name is the unit’s own, less a lone 1, and it is shown only where it was laid out whole', async () => {

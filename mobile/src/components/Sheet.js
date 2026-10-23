@@ -4,7 +4,7 @@ import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, radius, space } from '../lib/theme'
-import { ANY_WAY_UP } from '../lib/screenShape'
+import { ANY_WAY_UP, firstFrame } from '../lib/screenShape'
 import { SHEET_MAX, pageRow, playLines } from '../lib/gigSize'
 
 /* Above a tall sheet: the status bar — this much where the phone does not say — and a strip of glass. */
@@ -20,11 +20,12 @@ const GLASS = 8
  */
 const FOOT_AT_LEAST = space.xxl
 /*
- * How wide the last sheet found the screen it came up over, kept while the
- * app runs, so the next one opens at its width from the first frame rather
- * than edge to edge for a frame on an iPad. 0 until a sheet has been shown.
+ * How wide the last sheet found the screen it came up over, and how wide the
+ * window was then ({ width, window }), kept while the app runs: a sheet
+ * opening in a window that width starts from it (lib/screenShape
+ * firstFrame). null until a sheet has been shown.
  */
-let lastFrame = 0
+let lastFrame = null
 
 /**
  * Something that comes up over the screen rather than into it.
@@ -62,7 +63,7 @@ let lastFrame = 0
  * clear of the clock. Every other sheet keeps the four fifths.
  */
 export default function Sheet({ open, onClose, title, note, head, foot, tall = false, children }) {
-  const { height } = useWindowDimensions()
+  const { width: across, height } = useWindowDimensions()
   const { top, bottom } = useSafeAreaInsets()
   /* Tall: everything but the status bar and a strip of glass to tap out on. */
   const highest = tall ? Math.max(height * 0.8, height - Math.max(top, STATUS_AT_LEAST) - GLASS) : height * 0.8
@@ -74,11 +75,20 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
    * the sheet's own frame (the screen it comes up over) and never the
    * window's size or the kind of device. Under the line, as on every phone,
    * the sheet is the full width it always was.
+   *
+   * Until it has measured itself in this window, it is drawn at what a sheet
+   * last measured in a window this wide, or else at the window's own width,
+   * which is what a sheet fills: so the first sheet on an iPad slides up
+   * 480 wide rather than snapping to it half way, and one last opened on a
+   * Duo folded does not open full width on the Duo opened, nor capped on a
+   * phone-sized window after a wide one. Each sheet stays drawn while it is
+   * shut, so what it measured is kept with the window it measured it in.
    */
-  const [frame, setFrame] = useState(lastFrame)
+  const [seen, setSeen] = useState(null)
   useEffect(() => {
-    if (frame > 0) lastFrame = frame
-  }, [frame])
+    if (seen) lastFrame = seen
+  }, [seen])
+  const frame = firstFrame(across, [seen, lastFrame]).width
   const linesWere = useRef(null)
   const lines = playLines(pageRow(frame, space.lg), linesWere.current)
   linesWere.current = lines
@@ -91,7 +101,7 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
         accessibilityRole="button"
         accessibilityLabel={`Close ${title || 'this'}`}
         onPress={onClose}
-        onLayout={(e) => setFrame(Math.round(e.nativeEvent.layout.width))}
+        onLayout={(e) => setSeen({ width: e.nativeEvent.layout.width, window: across })}
         style={{ flex: 1 }}
       >
         <BlurView
