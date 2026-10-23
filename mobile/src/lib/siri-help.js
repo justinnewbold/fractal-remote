@@ -292,7 +292,7 @@ export function siriPage({ os = 'ios', kind = 'phone', native = false, noun = 'p
     {
       title: 'Your own shortcuts',
       lines: [
-        'Every command is also in Apple’s Shortcuts app, under App Shortcuts → Fractal Remote, and can be a step in a shortcut of your own. For example, a shortcut called “Song four” that loads preset 4, then goes to scene 2, then sets the tempo to 120. Say “Siri, song four”, with no app name. Each step waits for the one before it to finish.',
+        'Every command is also in Apple’s Shortcuts app, under App Shortcuts → Fractal Remote, and can be a step in a shortcut of your own. For example, a shortcut called “Song four” that loads preset 4, then goes to scene 2, then sets the tempo to 120. Say “Siri, song four”, with no app name. Each step waits for the one before it to answer, but one that answers Not sent doesn’t stop the rest: the scene and the tempo would still change the song already loaded. So run it with Play already on screen, and if a step says Not sent, check Play.',
         'Give it a name of its own: a shortcut named like one of Siri’s own commands, such as “next song”, runs instead of that command.'
       ]
     },

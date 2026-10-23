@@ -189,6 +189,13 @@ export function run(test) {
     assert.match(words, /on iOS 27, Settings → Siri → Language, and on iOS 26 and earlier, Language in Settings → Siri \(or Apple Intelligence & Siri, or Siri & Search\)\./)
     /* Shortcuts, the Action button and Back Tap, each by the steps Apple's guides give. */
     assert.match(words, /“Song four”[\s\S]*Say “Siri, song four”, with no app name/)
+    /* A step answered Not sent is a step done to the Shortcuts app (each command answers with words, never an error), so the rest still run. */
+    assert.ok(!/Each step waits for the one before it to finish\./.test(words), 'the page says a chain stops where a step was not sent')
+    assert.match(words, /one that answers Not sent doesn’t stop the rest[^.]*\. So run it with Play already on screen, and if a step says Not sent, check Play\./)
+    const swift = read('mobile/targets/watch/_shared/SiriShortcuts.swift')
+    const performs = [...swift.matchAll(/func perform\(\)[^{]*\{([\s\S]*?)\n  \}/g)].map((m) => m[1])
+    assert.equal(performs.length, shortcuts(code).length, 'the Swift’s commands are not all read here')
+    assert.ok(performs.every((body) => /return \.result\(dialog: dialog\)/.test(body)), 'a command now ends a chain when it is not sent: the page says the rest still run')
     assert.match(words, /under App Shortcuts → Fractal Remote/)
     assert.match(words, /Settings → Action Button, swipe to Shortcut, tap Choose a Shortcut/)
     assert.match(words, /\(iPhone 15 Pro and later\)/)
