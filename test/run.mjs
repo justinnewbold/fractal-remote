@@ -15670,6 +15670,34 @@ test('the computer app carries the server that opens the AM4’s own tuner scree
 })
 
 /*
+ * "On the AM4 when turning on the tuner it stays on for about 15 seconds on
+ * the unit and then turns off. On the phone it stays on until you hit close.
+ * We want it to stay on until the user hits close." (23 October 2026) The
+ * server the computer carries sends the AM4's Tuner CC at 127 again every
+ * three seconds while the app's tuner is open (ForgeFX ab7561e), as the
+ * phone's own Bluetooth wire does. Nothing on the phone or in the browser
+ * needs it, so the red update line does not move for it.
+ */
+test('the computer app carries the server that keeps the AM4’s own tuner screen up until Close', () => {
+  const lock = JSON.parse(readSrc(new URL('../desktop/forgefx.lock.json', import.meta.url), 'utf8'))
+  assert.match(lock.forgefx.tag, /\+am4keywrite\+am4tunerkeep$/, 'the computer app does not keep the AM4’s own tuner up')
+  assert.equal(lock.forgefx.commit, 'ab7561ea1c3e7c4d9751046d2d226a6b3e8cbf60')
+  assert.equal(lock.forgefx.branch, 'claude/fractal-remote-continue-ljfqcd')
+  for (const piece of ['am4tunercc', 'am4boosttap', 'am4crossedcopy', 'am4keywrite', 'linuxmidi', 'vp4midi', 'quietMeters']) {
+    assert.match(lock.forgefx.tag, new RegExp(`\\+${piece}(\\+|$)`), `re-pinning dropped ${piece}`)
+  }
+  const why = lock._why.find((w) => /ab7561e/.test(w))
+  assert.ok(why, 'the lock does not say why it moved')
+  for (const said of [/every 3 seconds/, /a level/, /the number it went out on/, /No 127 follows a Close/, /COMPUTER_NEEDED stays/, /on top of 5b6e889/, /No capture of the CC on an AM4 proves it/]) {
+    assert.match(why, said, `the lock's reason leaves out ${said}`)
+  }
+  assert.match(
+    readSrc(new URL('../licences/MODIFICATIONS.md', import.meta.url), 'utf8'),
+    /\| Send an AM4's Tuner CC at 127 again every 3 seconds while the app's tuner is open, after reading the Tuner setting again, and only on the number it went out on \|/
+  )
+})
+
+/*
  * "Stop the computer asking the unit for level readings nobody is looking
  * at." The server the computer carries starts with the output-level reads
  * off, keeps the scene and channel watch a footswitch needs, and lets an on
