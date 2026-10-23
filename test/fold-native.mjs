@@ -274,7 +274,13 @@ export function run(test) {
       assert.ok(attach.includes(`fresh.${edge}Anchor.constraint(equalTo: window.${edge}Anchor)`), `the probe is not pinned to the window’s ${edge} edge`)
     }
     assert.match(attach, /NSLayoutConstraint\.activate\(\[/)
-    assert.match(attach, /guard let window = SceneGeometry\.keyWindow\(\) else \{/)
+    /* The app's own window only: a React Native alert is a window of its own, raised and made key while it shows. */
+    assert.match(attach, /guard let window = SceneGeometry\.keyWindow\(\), window\.windowLevel == \.normal else \{\s*return\s*\}/, 'an alert’s window, made key over the app’s, takes the probe out of it')
+    /* A new probe starts from the hinge the last one read, before it is in a window: never "no hinge" on a Duo. */
+    assert.ok(attach.indexOf('fresh.seed(lastHinge())') > attach.indexOf('let fresh = FoldProbe(frame: window.bounds)'), 'a new probe does not start from the last hinge')
+    assert.ok(attach.indexOf('fresh.seed(lastHinge())') < attach.indexOf('window.addSubview(fresh)'), 'the probe is seeded after it is in a window, where it has already read')
+    assert.match(block(code, '  private func lastHinge() -> FoldHinge? {'), /lock\.lock\(\)\s*defer \{ lock\.unlock\(\) \}\s*return latest\.hinge/)
+    assert.match(block(probe, '  func seed(_ last: FoldHinge?) {'), /if hinge == nil \{\s*hinge = last\s*\}/, 'the seed overwrites a hinge the probe’s own handler gave it')
     /* updateConstraints reads, changes nothing, asks for no second pass, and calls super last. */
     const update = block(probe, '  override func updateConstraints() {')
     assert.match(update, /\{\s*readNow\(\)\s*super\.updateConstraints\(\)\s*\}$/, 'updateConstraints does not read the regions and then call super last')

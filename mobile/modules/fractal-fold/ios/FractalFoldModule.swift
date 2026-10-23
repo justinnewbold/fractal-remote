@@ -110,7 +110,9 @@ import UIKit
  * no touches and VoiceOver does not see it. It goes into the key window when
  * the module starts, and again whenever a scene activates, a window becomes
  * key or the app comes back, because the window may not exist yet when the
- * module is made, and a scene that reconnects replaces it.
+ * module is made, and a scene that reconnects replaces it. Only the app's own
+ * window, at the normal level: an alert's window, made key while it shows,
+ * never takes the probe. A new probe starts from the hinge the last one read.
  *
  * DUO.YML'S CHECK. Launched with -FractalFoldCheck, and only then, the
  * module writes lines beginning "FractalFold check:" to the app's standard
@@ -249,13 +251,25 @@ final class FoldSensor: @unchecked Sendable {
     lock.unlock()
   }
 
+  /* The hinge last read, for a new probe to start from. */
+  private func lastHinge() -> FoldHinge? {
+    lock.lock()
+    defer { lock.unlock() }
+    return latest.hinge
+  }
+
   /* The first of duo.yml's lines, as the module starts. */
   func selfCheck() {
     let os = ProcessInfo.processInfo.operatingSystemVersion
     report("compiledIn=\(FoldSensor.compiledIn) available=\(FoldSensor.available) ios=\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)")
   }
 
-  /* Into the key window, unless the probe is in it already. */
+  /*
+   * Into the app's own key window, unless the probe is in it already. Only a
+   * window at the normal level: every React Native alert is a window of its
+   * own, raised over the app's and made key while it shows, and the probe
+   * stays where it is rather than following it there and back.
+   */
   @MainActor
   func attach() {
     #if canImport(UIKit, _version: 9127.0.85) // iOS 27.1 SDK
@@ -263,7 +277,7 @@ final class FoldSensor: @unchecked Sendable {
       return
     }
     watchWindows()
-    guard let window = SceneGeometry.keyWindow() else {
+    guard let window = SceneGeometry.keyWindow(), window.windowLevel == .normal else {
       return
     }
     if let current = self.probe, current.window === window {
@@ -271,6 +285,7 @@ final class FoldSensor: @unchecked Sendable {
     }
     detach()
     let fresh = FoldProbe(frame: window.bounds)
+    fresh.seed(lastHinge())
     fresh.onReading = { [weak self] reading in
       self?.take(reading)
     }
@@ -379,6 +394,18 @@ final class FoldProbe: UIView {
 
   required init?(coder: NSCoder) {
     fatalError("init(coder:) has not been implemented")
+  }
+
+  /*
+   * Before it goes into a window: the hinge the last probe read, kept until
+   * this one's own handler says, so a probe moving to a new window never
+   * reads "no hinge" on a Duo. Apple does not say that the handler runs
+   * before didMoveToWindow().
+   */
+  func seed(_ last: FoldHinge?) {
+    if hinge == nil {
+      hinge = last
+    }
   }
 
   override func didMoveToWindow() {
