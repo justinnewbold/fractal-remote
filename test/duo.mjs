@@ -427,43 +427,57 @@ export function run(test) {
     assert.deepEqual(resets, [], 'a fraction of a point of layout threw the fit’s correction away')
   })
 
-  test('the room kept for the pedals while a preset loads is forgotten when Play changes width, and kept while it does not', () => {
+  test('the room kept for the pedals while a preset loads keeps its count and forgets its height when Play changes width', () => {
     /*
      * While the next preset loads, grey cards stand where its pedals will be,
      * in the last chain's height, so nothing under them jumps. That height was
      * measured at one width: an iPad's divider dragged, or a Duo folded, while
      * a preset loaded drew the cards at the old screen's height and the fit
-     * counted it until the chain landed.
+     * counted it until the chain landed. The count is still the chain's: so
+     * the wait is that many cards at the new width, in the rows the chain will
+     * take there, and never four cards and a sentence, which moved the
+     * buttons under it up and back down when the chain landed.
      */
-    const held = stageLines(
-      '  const heldGrid = useRef(',
-      '  const held = chainNow.elsewhere && heldGrid.current.height > 0 ? heldGrid.current : null\n',
-      ['playWidth', 'chainNow', 'tiles', 'blockGrid']
-    )
+    const end = '  const held = chainNow.elsewhere && heldGrid.current.count > 0 ? heldGrid.current : null\n'
+    const held = stageLines('  const heldGrid = useRef(', end, ['playWidth', 'chainNow', 'tiles', 'blockGrid'])
     const here = { elsewhere: false }
     const loading = { elsewhere: true }
-    /* Mounted, then measured: nothing kept yet, nothing to forget. */
+    /* Mounted, then measured: nothing kept yet, nothing to forget, and the first load's four cards. */
     assert.equal(held({ playWidth: 0, chainNow: here, tiles: 9, blockGrid: 0 }, 'held'), null)
     assert.equal(held({ playWidth: 393, chainNow: here, tiles: 9, blockGrid: 212 }, 'held'), null)
     /* A phone held upright: Next pressed, and the room is kept exactly, as it always was. */
     assert.deepEqual(held({ playWidth: 393, chainNow: loading, tiles: 0, blockGrid: 212 }, 'held'), { count: 9, height: 212 })
     assert.deepEqual(held({ playWidth: 393, chainNow: loading, tiles: 0, blockGrid: 212 }, 'held'), { count: 9, height: 212 })
-    /* Folded or dragged while it loads: the old screen's room is forgotten. */
-    assert.equal(held({ playWidth: 669, chainNow: loading, tiles: 0, blockGrid: 212 }, 'held'), null, 'the grey cards kept the old screen’s height')
-    assert.equal(held({ playWidth: 669, chainNow: loading, tiles: 0, blockGrid: 180 }, 'held'), null)
+    /* And a fraction of a point of layout is not a new width. */
+    assert.deepEqual(held({ playWidth: 393.4, chainNow: loading, tiles: 0, blockGrid: 212 }, 'held'), { count: 9, height: 212 })
+    /* Folded or dragged while it loads: the old screen's height is forgotten, its nine pedals are not. */
+    assert.deepEqual(held({ playWidth: 669, chainNow: loading, tiles: 0, blockGrid: 212 }, 'held'), { count: 9, height: 0 }, 'the grey cards kept the old screen’s height, or forgot how many pedals are coming')
+    assert.deepEqual(held({ playWidth: 669, chainNow: loading, tiles: 0, blockGrid: 180 }, 'held'), { count: 9, height: 0 })
     /* The chain lands at the new width, and its room is kept from then on. */
     assert.equal(held({ playWidth: 669, chainNow: here, tiles: 7, blockGrid: 140 }, 'held'), null)
     assert.deepEqual(held({ playWidth: 669, chainNow: loading, tiles: 0, blockGrid: 140 }, 'held'), { count: 7, height: 140 })
 
     /* Changed width while the chain is up: measured again at once, from the grid as it now stands. */
-    const again = stageLines(
-      '  const heldGrid = useRef(',
-      '  const held = chainNow.elsewhere && heldGrid.current.height > 0 ? heldGrid.current : null\n',
-      ['playWidth', 'chainNow', 'tiles', 'blockGrid']
-    )
+    const again = stageLines('  const heldGrid = useRef(', end, ['playWidth', 'chainNow', 'tiles', 'blockGrid'])
     again({ playWidth: 393, chainNow: here, tiles: 9, blockGrid: 212 }, 'held')
     again({ playWidth: 820, chainNow: here, tiles: 9, blockGrid: 140 }, 'held')
     assert.deepEqual(again({ playWidth: 820, chainNow: loading, tiles: 0, blockGrid: 140 }, 'held'), { count: 9, height: 140 })
+
+    /*
+     * And what the wait is drawn as: the kept count of cards, each as wide and
+     * as tall as a pedal at this width, the sentence over them; held to the
+     * kept height only while there is one, and otherwise as tall as its rows.
+     */
+    const stage = code(read('mobile/src/screens/Stage.js'))
+    assert.match(stage, /<View style=\{\{ width: '100%', height: held\?\.height \|\| undefined, overflow: 'hidden' \}\}>\s*<ChainWait/, 'a kept count with no height is clipped to nothing, or the old height is held')
+    const wait = stage.slice(stage.indexOf('<ChainWait'), stage.indexOf('/>', stage.indexOf('<ChainWait')))
+    assert.match(wait, /height=\{Math\.max\(tight \|\| fitted \? 44 : TAP, tileH - 12\)\}/)
+    assert.match(wait, /cards=\{held \? held\.count : 4\}/)
+    assert.match(wait, /width=\{held \? tileWidth\(row, fxCols\) : 84\}/)
+    assert.match(wait, /overlay=\{!!held\}/)
+    /* The cards are the pedals' own height, so their rows are the chain's. */
+    assert.ok(stage.split('height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}').length - 1 >= 2, 'the grey cards are not the pedals’ height')
+    assert.match(stage, /const fitBlocks = held \? held\.count : tiles\n/)
   })
 
   test('the tempo box, the channel picker, the Looper, the tuner and the watch tip sit on Play’s own frame, outside its scrolling page', () => {

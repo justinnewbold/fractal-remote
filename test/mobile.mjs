@@ -17814,7 +17814,8 @@ export function run(test) {
 
   test('the phone’s Stage and Edit draw another preset’s chain as a wait, not as tiles', () => {
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(stage, /\{chainNow\.elsewhere \? \(\s*<View style=\{\{ width: '100%', height: held \? held\.height : undefined, overflow: 'hidden' \}\}>\s*<ChainWait\s+chain=\{chainNow\}/, 'the stage draws the last song’s tiles under this song’s name')
+    assert.match(stage, /\{chainNow\.elsewhere \? \(\s*<View style=\{\{ width: '100%', height: held\?\.height \|\| undefined, overflow: 'hidden' \}\}>\s*<ChainWait\s+chain=\{chainNow\}/, 'the stage draws the last song’s tiles under this song’s name')
+    /* Held to the last chain's height while it was measured at this width; at a new one (an iPad's divider, a Duo folded), its count of cards in their own rows (test/duo.mjs). */
     /* "It shrinks the screen down for about a half a second." The wait keeps
        the last chain's room — as many cards, as wide, as high — and the fit
        keeps counting those blocks, so nothing below the pedals jumps. */

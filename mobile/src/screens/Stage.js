@@ -499,23 +499,27 @@ export default function Stage({
   const tiles = blocks.length + (looperTile ? 1 : 0)
   const heldGrid = useRef({ count: 0, height: 0 })
   /*
-   * AND FORGOTTEN WHEN PLAY CHANGES WIDTH. The room is a height measured at
-   * one width, and a chain of nine is two rows on one screen and three on a
-   * narrower one: an iPad's divider dragged, or a Duo folded, while the next
-   * preset loads drew the grey cards at the old screen's height, and the fit
-   * counted that height until the chain landed. So a new width drops it, and
-   * the wait is drawn as it is on a first load, with no room to keep. The
-   * first measurement is not a change: there was nothing kept before it.
+   * AND ITS HEIGHT FORGOTTEN WHEN PLAY CHANGES WIDTH. The room is a height
+   * measured at one width, and a chain of nine is two rows on one screen and
+   * three on a narrower one: an iPad's divider dragged, or a Duo folded,
+   * while the next preset loads drew the grey cards at the old screen's
+   * height, and the fit counted that height until the chain landed. So a new
+   * width drops the height and keeps the count: the wait is that many cards
+   * at the new width, in as many rows as the chain will take there, with no
+   * height held over them. Not four cards and a sentence, which is the wait
+   * of a first load with nothing known, and moved everything under it up
+   * and back down when the chain landed. The first measurement is not a
+   * change: there was nothing kept before it.
    */
   /* Play's width to the point: what tells one width from another, so a fraction of a point of layout is never a new width. */
   const widthKey = Math.round(playWidth)
   const heldAt = useRef(widthKey)
   if (heldAt.current !== widthKey) {
-    if (heldAt.current > 0) heldGrid.current = { count: 0, height: 0 }
+    if (heldAt.current > 0) heldGrid.current = { count: heldGrid.current.count, height: 0 }
     heldAt.current = widthKey
   }
   if (!chainNow.elsewhere && tiles > 0 && blockGrid > 0) heldGrid.current = { count: tiles, height: blockGrid }
-  const held = chainNow.elsewhere && heldGrid.current.height > 0 ? heldGrid.current : null
+  const held = chainNow.elsewhere && heldGrid.current.count > 0 ? heldGrid.current : null
   const fitBlocks = held ? held.count : tiles
   /* The "Updating…" line stands in for a moment and goes: a trim measured
      over it is not the grid's, and is dropped with it. The grey cards no
@@ -1267,7 +1271,7 @@ export default function Stage({
             style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, opacity: dim ?? (chainNow.late ? 0.55 : chainNow.outline ? 0.72 : 1) }}
           >
             {chainNow.elsewhere ? (
-              <View style={{ width: '100%', height: held ? held.height : undefined, overflow: 'hidden' }}>
+              <View style={{ width: '100%', height: held?.height || undefined, overflow: 'hidden' }}>
                 <ChainWait
                   chain={chainNow}
                   height={Math.max(tight || fitted ? 44 : TAP, tileH - 12)}
