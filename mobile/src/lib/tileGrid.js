@@ -54,3 +54,30 @@ export function bandTop(viewport, cardBottom = 0, gap = 0) {
   if (!(viewport > 0)) return clear > 0 ? clear : `${Math.round(BAND_AT * 100)}%`
   return Math.max(Math.round(viewport * BAND_AT), clear)
 }
+
+/**
+ * A PEDAL'S WHOLE NAME, for a Play wide enough to spell it out (gigSize
+ * playShape `names`): the unit's own name for the block, less a lone "1".
+ * "Drive 1" is Drive and "Delay 2" stays Delay 2, the same rule the three
+ * letters keep (shortName shortBlock: DRV, and DLY 2 only for a second
+ * one). A block the unit gave no name keeps its own word for itself.
+ */
+export function pedalName(block) {
+  const name = String(block?.name || block?.slug || '').trim()
+  return name.replace(/\s+1$/, '')
+}
+
+/**
+ * Whether a whole name was laid out whole: in at most `most` lines, and
+ * broken only between words. `lines` is what React Native's onTextLayout
+ * says it drew, a line at a time. A name that needed a third line, or had
+ * a word cut in two to fit ("Multiplex" over "er"), does not fit, and the
+ * tile shows its three letters instead.
+ */
+export function laidWhole(name, lines, most = 2) {
+  const words = String(name || '').trim().split(/\s+/).filter(Boolean)
+  if (!words.length || !Array.isArray(lines) || !lines.length || lines.length > most) return false
+  /* The lines put back together, a line break as a space: a word cut in two comes back as two words, an ellipsis as a word that is not the name's. */
+  const again = lines.map((l) => String(l?.text ?? '')).join(' ').trim().split(/\s+/).filter(Boolean)
+  return again.length === words.length && again.every((w, i) => w === words[i])
+}

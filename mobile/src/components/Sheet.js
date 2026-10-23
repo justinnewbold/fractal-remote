@@ -1,9 +1,11 @@
+import { useEffect, useRef, useState } from 'react'
 import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native'
 import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, radius, space } from '../lib/theme'
 import { ANY_WAY_UP } from '../lib/screenShape'
+import { SHEET_MAX, pageRow, playLines } from '../lib/gigSize'
 
 /* Above a tall sheet: the status bar — this much where the phone does not say — and a strip of glass. */
 const STATUS_AT_LEAST = 20
@@ -17,6 +19,12 @@ const GLASS = 8
  * a sheet is drawn behind) the last row now clears it.
  */
 const FOOT_AT_LEAST = space.xxl
+/*
+ * How wide the last sheet found the screen it came up over, kept while the
+ * app runs, so the next one opens at its width from the first frame rather
+ * than edge to edge for a frame on an iPad. 0 until a sheet has been shown.
+ */
+let lastFrame = 0
 
 /**
  * Something that comes up over the screen rather than into it.
@@ -58,6 +66,23 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
   const { top, bottom } = useSafeAreaInsets()
   /* Tall: everything but the status bar and a strip of glass to tap out on. */
   const highest = tall ? Math.max(height * 0.8, height - Math.max(top, STATUS_AT_LEAST) - GLASS) : height * 0.8
+  /*
+   * NO WIDER THAN SHEET_MAX, CENTERED, on a screen where Play opens up
+   * (gigSize playShape): the channel picker and Which unit ran nine hundred
+   * points edge to edge on an iPad on its side or a Duo opened. By the same
+   * line as Play's, from 621 points of row, and off 40 under it, measured on
+   * the sheet's own frame (the screen it comes up over) and never the
+   * window's size or the kind of device. Under the line, as on every phone,
+   * the sheet is the full width it always was.
+   */
+  const [frame, setFrame] = useState(lastFrame)
+  useEffect(() => {
+    if (frame > 0) lastFrame = frame
+  }, [frame])
+  const linesWere = useRef(null)
+  const lines = playLines(pageRow(frame, space.lg), linesWere.current)
+  linesWere.current = lines
+  const capped = lines.opens
 
   return (
     <Modal visible={!!open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent supportedOrientations={ANY_WAY_UP}>
@@ -66,6 +91,7 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
         accessibilityRole="button"
         accessibilityLabel={`Close ${title || 'this'}`}
         onPress={onClose}
+        onLayout={(e) => setFrame(Math.round(e.nativeEvent.layout.width))}
         style={{ flex: 1 }}
       >
         <BlurView
@@ -79,6 +105,8 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
                are reaching for. */
             onPress={() => {}}
             style={{
+              /* Its sides edged like its top, since it no longer meets the screen's. */
+              ...(capped ? { width: '100%', maxWidth: SHEET_MAX, alignSelf: 'center', borderLeftWidth: 1, borderRightWidth: 1 } : null),
               maxHeight: highest,
               backgroundColor: color.chassis,
               borderTopLeftRadius: radius.lg * 2,

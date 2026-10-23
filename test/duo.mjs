@@ -23,6 +23,11 @@
  * it has nothing down its sides, it cannot turn while the app is locked
  * upright, its width is measured once and never changes again, and a pop-up
  * that is a modal moves nothing wherever it sits.
+ *
+ * Then the opened-up Play itself (gigSize playShape): from 621 points of row
+ * the pedals' whole names and the buttons fixed to the bottom, from 700 four
+ * scenes, six pedals and one row of buttons, each line off 40 under where it
+ * came on, and under 621 today's Play, which these cases hold exactly.
  */
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -197,11 +202,14 @@ export function run(test) {
       'Play’s width is not measured with its height, so the two can change in different moments'
     )
     assert.equal(stage.match(/setPlayWidth\(/g).length, 1, 'Play’s width is set from something other than its own measurement')
-    assert.match(stage, /const \[playWidth, setPlayWidth\] = useState\(0\)/)
-    /* The window is read once, for the first frame's tile width only, as it always was. */
+    /* Its first frame, before it can be measured, is the width it was last measured at, kept while the app runs, and only ever its own. */
+    assert.match(stage, /const \[playWidth, setPlayWidth\] = useState\(lastPlayWidth\)/)
+    assert.match(stage, /^let lastPlayWidth = 0$/m)
+    assert.deepEqual(stage.match(/lastPlayWidth = [^\n]*/g), ['lastPlayWidth = 0', 'lastPlayWidth = playWidth'], 'the kept width is taken from something other than Play’s own measurement')
+    /* The window is read once, for the first frame's tile width only, and only before Play has ever been measured. */
     assert.equal(stage.match(/useWindowDimensions\(\)/g).length, 1)
     assert.equal(stage.match(/\bscreen\b/g).length, 2, 'the window’s width is used for more than the first frame')
-    assert.match(stage, /const row = grid \|\| Math\.max\(0, screen - space\.lg \* 2\)/)
+    assert.match(stage, /const row = grid \|\| \(playWidth > 0 \? Math\.max\(0, pageRow\(playWidth, space\.lg\) - fold\.left - fold\.right\) : Math\.max\(0, screen - space\.lg \* 2\)\)/)
     assert.doesNotMatch(stage, /Platform\.isPad|isTablet|orientation/, 'Play decides something by the kind of device or which way up it is')
   })
 
@@ -586,5 +594,115 @@ export function run(test) {
         assert.equal((rowLeft + rowRight) / 2, W / 2, `a ${W}-point screen with ${l} and ${r} down its sides is not centered on its fold`)
       }
     }
+  })
+
+  test('Play draws its shape from its own width: today’s page and buttons under 621, the strip, names and the fold only from there', () => {
+    const stage = code(read('mobile/src/screens/Stage.js'))
+    /* The shape from Play's own measured width, remembered render to render for the 40-point gap, and its counts used everywhere they were. */
+    assert.match(stage, /const shape = playShape\(pageRow\(playWidth, space\.lg\), SIZES\.indexOf\(size\), sceneLayout, shapeWas\.current\)/)
+    assert.equal(stage.match(/playShape\(/g).length, 1)
+    assert.match(stage, /const sceneCols = shape\.sceneCols\n/)
+    assert.match(stage, /fxCols: shape\.fxCols,\s*most: shape\.fxMost,\s*max: shape\.tileMax,/, 'Fit is not handed the shape’s counts and ceiling')
+    assert.match(stage, /const fxCols = fitted \? fitted\.fxCols : shape\.fxCols/)
+    /* The page: today's padding object, word for word, under the line. */
+    assert.match(
+      stage,
+      /contentContainerStyle=\{\s*shape\.wide\s*\?\s*\{[^}]*maxWidth: PAGE_MAX,[^}]*\}\s*:\s*\{\s*padding: space\.lg,\s*gap: tight \? space\.md : space\.lg,\s*paddingBottom: tight \? space\.lg : space\.xxl\s*\}\s*\}/,
+      'under the line the page is not today’s'
+    )
+    /* The six buttons: at the end of the page under the line, in the fixed strip from it, never both. */
+    assert.match(stage, /\{shape\.footFixed \? null : <PlayFoot \{\.\.\.footing\} \/>\}\s*(\{\s*\}\s*)*<\/ScrollView>/, 'the buttons are not at the end of the page under the line')
+    assert.match(stage, /<\/ScrollView>\s*(\{\s*\}\s*)*\{shape\.footFixed \? \(\s*<View[\s\S]{0,700}?<PlayFoot \{\.\.\.footing\} \/>/, 'the buttons are not in a strip under the page from the line')
+    assert.equal(stage.match(/<PlayFoot /g).length, 2)
+    /* The whole names only from the line, and the fold only on the spread layout. */
+    assert.equal(stage.match(/full=\{shape\.names \? pedalName\((block|looperHere)\) : undefined\}/g).length, 2)
+    assert.equal(stage.match(/\bfull=/g).length, 2)
+    assert.match(stage, /const fold = shape\.foldPad \? foldInset\(insets\.left, insets\.right\) : NO_FOLD/)
+    assert.match(read('mobile/src/screens/Stage.js'), /const NO_FOLD = \{ left: 0, right: 0 \}/)
+    /* The buttons themselves: today's two rows of three under the line, one row of two halves on the spread layout, Tap last in both. */
+    const foot = stage.slice(stage.indexOf('function PlayFoot('), stage.indexOf('const FOOT_HALF'))
+    assert.match(foot, /<View style=\{oneRow \? FOOT_ONE_ROW : \{ gap: space\.sm \}\}>/)
+    assert.equal(foot.match(/<View style=\{oneRow \? FOOT_HALF : \{ flexDirection: 'row', gap: space\.sm \}\}>/g).length, 2)
+    const order = ['label="Previous"', 'caption="Setlists"', 'label="Next"', "label={tunerOn ? 'Stop tuner' : 'Tuner'}", 'label="Edit"', 'label="Tap"'].map((l) => foot.indexOf(l))
+    assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), 'the six buttons are not Previous, Setlists, Next, Tuner, Edit, Tap')
+    assert.match(stage, /const FOOT_ONE_ROW = \{ flexDirection: 'row', gap: space\.sm \}/)
+    assert.match(stage, /const FOOT_HALF = \{ flex: 1, flexDirection: 'row', gap: space\.sm \}/)
+    /* Still nothing from the kind of device or which way up it is. */
+    assert.doesNotMatch(stage, /Platform\.isPad|isTablet|orientation|Dimensions\.get/)
+  })
+
+  test('Play’s shape and row, run render by render: a phone keeps today’s, a divider dragged opens and closes Play once each way', () => {
+    const g = { playShape: null, pageRow: null }
+    return import('../mobile/src/lib/gigSize.js').then((gig) => {
+      g.playShape = gig.playShape
+      g.pageRow = gig.pageRow
+      const shapeLines = stageLines(
+        '  const shapeWas = useRef(',
+        '  const sceneCols = shape.sceneCols\n',
+        ['playShape', 'pageRow', 'playWidth', 'space', 'SIZES', 'size', 'sceneLayout', 'lastShape', 'useEffect']
+      )
+      const at = (playWidth, step = 0, layout = 'across') =>
+        shapeLines(
+          { playShape: g.playShape, pageRow: g.pageRow, playWidth, space: { lg: 16 }, SIZES: gig.SIZES, size: gig.SIZES[step], sceneLayout: layout, lastShape: null, useEffect: () => {} },
+          'shape'
+        )
+      /* A phone held upright: today's, render after render. */
+      for (const w of [0, 393, 393, 393]) {
+        const s = at(w)
+        assert.deepEqual([s.wide, s.spread, s.sceneCols, s.fxCols, s.footFixed, s.names], [false, false, 2, 4, false, false])
+      }
+      /* A divider dragged out across both lines and back: on at its number, off 40 under, each once. */
+      const seen = []
+      for (const w of [600, 640, 652, 653, 700, 731, 732, 760, 700, 692, 691, 640, 613, 612, 600]) {
+        const s = at(w)
+        seen.push(`${w}:${s.wide ? 'W' : '-'}${s.spread ? 'S' : '-'}`)
+      }
+      assert.deepEqual(seen, ['600:--', '640:--', '652:--', '653:W-', '700:W-', '731:W-', '732:WS', '760:WS', '700:WS', '692:WS', '691:W-', '640:W-', '613:W-', '612:--', '600:--'])
+    })
+  })
+
+  test('a sheet is no wider than 480, centered, from Play’s own line, measured on the sheet’s own frame, and full width under it', () => {
+    const sheet = code(read('mobile/src/components/Sheet.js'))
+    assert.match(sheet, /onLayout=\{\(e\) => setFrame\(Math\.round\(e\.nativeEvent\.layout\.width\)\)\}/, 'the sheet does not measure the screen it comes up over')
+    assert.match(sheet, /const lines = playLines\(pageRow\(frame, space\.lg\), linesWere\.current\)/, 'the sheet’s line is not Play’s')
+    assert.match(sheet, /const capped = lines\.opens\n/)
+    assert.match(sheet, /\.\.\.\(capped \? \{ width: '100%', maxWidth: SHEET_MAX, alignSelf: 'center', borderLeftWidth: 1, borderRightWidth: 1 \} : null\),/)
+    assert.equal(sheet.match(/\bcapped\b/g).length, 2, 'the cap does something under the line')
+    /* The window is still read for the height only, as it always was. */
+    assert.match(sheet, /const \{ height \} = useWindowDimensions\(\)/)
+    assert.doesNotMatch(sheet, /\{ width[^}]*\} = useWindowDimensions|Platform\.isPad|orientation/)
+    assert.match(read('src/lib/gigSize.js'), /^export const SHEET_MAX = 480$/m)
+  })
+
+  test('a pedal’s whole name is the unit’s own, less a lone 1, and it is shown only where it was laid out whole', async () => {
+    const { pedalName, laidWhole } = await import('../mobile/src/lib/tileGrid.js')
+    assert.equal(pedalName({ slug: 'drive', name: 'Drive 1' }), 'Drive')
+    assert.equal(pedalName({ slug: 'delay', name: 'Delay 2' }), 'Delay 2')
+    assert.equal(pedalName({ slug: 'comp', name: 'Compressor 1' }), 'Compressor')
+    assert.equal(pedalName({ slug: 'multicomp', name: 'Multiband Compressor 1' }), 'Multiband Compressor')
+    assert.equal(pedalName({ slug: 'amp', name: 'Amp 11' }), 'Amp 11')
+    assert.equal(pedalName({ slug: 'looper' }), 'looper')
+    assert.equal(pedalName(null), '')
+    /* Whole: in one or two lines, broken only between words, every word drawn. */
+    assert.equal(laidWhole('Drive', [{ text: 'Drive' }]), true)
+    assert.equal(laidWhole('Multiband Compressor', [{ text: 'Multiband ' }, { text: 'Compressor' }]), true)
+    assert.equal(laidWhole('Multiband Compressor', [{ text: 'Multiband' }, { text: ' Compressor' }]), true)
+    /* Not whole: a third line, a word cut in two, a word missing, or nothing laid out. */
+    assert.equal(laidWhole('Multi Band Comp Two', [{ text: 'Multi ' }, { text: 'Band ' }, { text: 'Comp Two' }]), false)
+    assert.equal(laidWhole('Multiplexer', [{ text: 'Multiplex' }, { text: 'er' }]), false)
+    assert.equal(laidWhole('Multiband Compressor', [{ text: 'Multiband ' }, { text: 'Compres…' }]), false)
+    assert.equal(laidWhole('Drive', []), false)
+    assert.equal(laidWhole('Drive', undefined), false)
+    assert.equal(laidWhole('', [{ text: '' }]), false)
+
+    /* And the tile: with no whole name, as on every phone, it is exactly the tile it was. */
+    const tile = code(read('mobile/src/components/Tile.js'))
+    assert.match(tile, /export default function Tile\(\{\s*label: given,/)
+    assert.match(tile, /wrap: wraps = false,/)
+    assert.match(tile, /const named = !!full && whole\?\.at === wholeAt && whole\.fits\n\s*const label = named \? full : given\n\s*const wrap = wraps \|\| named\n/)
+    assert.match(tile, /const wholeAt = full \? `\$\{full\}\|\$\{StyleSheet\.flatten\(style\)\?\.width\}` : null/, 'a whole name measured at one width is shown at another')
+    assert.match(tile, /\{full \? \(\s*<Text[\s\S]{0,400}onTextLayout=\{\(e\) => \{\s*const fits = laidWhole\(full, e\.nativeEvent\.lines\)/, 'the whole name is not measured, or is measured when there is none')
+    assert.match(tile, /opacity: 0,\s*fontSize: font\.small,\s*fontWeight: '700',\s*letterSpacing: 0\.5,\s*textAlign: 'center'/, 'the twin is not laid out in the face the name is drawn in')
+    assert.match(tile, /numberOfLines=\{wrap \? 2 : 1\}/)
   })
 }

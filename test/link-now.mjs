@@ -2773,8 +2773,10 @@ export function run(test) {
      */
     const tunerTag = '<Tuner on={tunerOn} reading={tuning} onClose={() => writeTuner(false)} down={down} />'
     assert.ok(stage.includes(tunerTag), 'the open tuner is not told the link is down')
-    const inside = stage
-      .slice(stage.indexOf('<ScrollView'), stage.indexOf('</ScrollView>'))
+    /* The page, and the six buttons, which are drawn in it under 621 points of row and in their strip under it from there (PlayFoot). */
+    const footAt = stage.indexOf('function PlayFoot(')
+    assert.ok(footAt > 0, 'the six buttons moved; this check reads them')
+    const inside = (stage.slice(stage.indexOf('<ScrollView'), stage.indexOf('</ScrollView>')) + stage.slice(footAt, stage.indexOf('\n}\n', footAt)))
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(tunerTag, '')
     assert.ok(!/\{\s*down\b|\bdown\s*\?|\bdown\s*&&/.test(inside), 'the scrolling content draws something of its own for the link being down')

@@ -2554,7 +2554,9 @@ export function run(test) {
     /* Blocks take their column count from `fxCols`, which is the setting's
        own `fx` until fit is measuring — fit widens the rows rather than let a
        tile drop under a thumb. Either way it comes from the setting. */
-    assert.match(stage, /const fxCols = fitted \? fitted\.fxCols : size\.fx/, 'the chain column count is no longer the chosen one')
+    /* Play's shape's, which is the setting's own `fx` under 621 points of row (gigSize playShape; test/duo.mjs holds it). */
+    assert.match(stage, /const fxCols = fitted \? fitted\.fxCols : shape\.fxCols/, 'the chain column count is no longer the chosen one')
+    assert.match(stage, /fxCols: shape\.fxCols,/, 'Fit starts the chain from something other than the chosen count')
     assert.match(stage, /width: tileWidth\(row, fxCols\)/, 'the chain is a fixed number across whatever the setting says')
     /*
      * And `row` is not the raw measurement, which is zero on the first frame of
@@ -2567,9 +2569,10 @@ export function run(test) {
      * the same answer the measurement gives, and `onLayout` still wins the
      * moment it lands.
      */
+    /* Or, from the second time Play is drawn in a run of the app, the width it was last measured at, by the same rule (test/duo.mjs). */
     assert.match(
       stage,
-      /const row = grid \|\| Math\.max\(0, screen - space\.lg \* 2\)/,
+      /const row = grid \|\| \(playWidth > 0 \? Math\.max\(0, pageRow\(playWidth, space\.lg\) - fold\.left - fold\.right\) : Math\.max\(0, screen - space\.lg \* 2\)\)/,
       'the tiles are drawn from a width that is zero until the screen has been measured'
     )
     assert.match(stage, /setGrid\(e\.nativeEvent\.layout\.width\)/, 'nothing measures the row any more, so an unusual screen stays guessed at')
@@ -8034,7 +8037,8 @@ export function run(test) {
     assert.ok(four.tile > two.tile, 'Fit did not give the saved rows back to the tiles')
 
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(stage, /const sceneLayout = loadSceneLayout\(sync\)\n\s+const sceneCols = sceneColsFor\(size, sceneLayout\)/, 'the phone ignores the choice')
+    /* Through Play's shape (gigSize playShape), which is the layout's own sceneColsFor under 621 points of row: test/duo.mjs holds that. */
+    assert.match(stage, /const sceneLayout = loadSceneLayout\(sync\)\n[\s\S]{0,1200}const shape = playShape\(pageRow\(playWidth, space\.lg\), SIZES\.indexOf\(size\), sceneLayout, shapeWas\.current\)\n[\s\S]{0,80}const sceneCols = shape\.sceneCols\n/, 'the phone ignores the choice')
     assert.match(stage, /sceneOrderFor\(sceneLayout, scenes\.count, loadSceneOrder\(sync\)\)\.map\(\(i\) => \{/, 'the phone draws the scenes in their own order whatever was chosen')
     assert.match(stage, /caption=\{String\(i \+ 1\)\}[\s\S]{0,600}onPress=\{\(\) => writeScene\(i\)\}/, 'a moved tile no longer picks its own scene')
     assert.match(stage, /tileWidth\(row, sceneCols\)/, 'the phone draws scenes at the size step’s width regardless')

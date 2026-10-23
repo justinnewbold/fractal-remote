@@ -9,6 +9,7 @@ import { OFF_GREY, liftedLook } from '../lib/colourPage'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
 import { cornerFit, mustSayFit } from '../lib/tile-corners'
+import { laidWhole } from '../lib/tileGrid'
 
 /**
  * A coloured tile, for the two things on this screen that have an identity.
@@ -55,7 +56,7 @@ const SHADE = 'rgba(0,0,0,0.10)'
 const BORDER = 2
 
 export default function Tile({
-  label,
+  label: given,
   sub,
   caption,
   /*
@@ -157,7 +158,17 @@ export default function Tile({
    * "Scene names cut short." A scene name is the thing a player thinks in, so
    * every scene tile wraps now, at every width.
    */
-  wrap = false,
+  wrap: wraps = false,
+  /*
+   * A WHOLE NAME TO SHOW IN PLACE OF `label`, where it fits: a pedal's
+   * "Compressor" for CMP on a Play wide enough to spell it out (gigSize
+   * playShape `names`). Two lines, a size down, as a wrapped name always is;
+   * a name that would need a third line, or a word cut in two, keeps
+   * `label` (lib/tileGrid laidWhole), so a tile is never a name with an
+   * ellipsis. Left out, as it is on every phone, the tile is exactly what it
+   * was: nothing about it is measured or drawn.
+   */
+  full,
   fill,
   ink,
   on = false,
@@ -167,6 +178,20 @@ export default function Tile({
   haptic = tick,
   style
 }) {
+  /*
+   * THE WHOLE NAME, OR THE THREE LETTERS (`full`). Measured on a twin of the
+   * whole name laid out unseen at the tile's own width, and only ever taken
+   * at the width it was measured at: until the twin has said, and at a new
+   * width until it says again, the tile shows the label it was given, so a
+   * name too long for the tile is never drawn cut short for a frame. The
+   * name drawn, said and logged is then `label`, and a whole name wraps as a
+   * wrapped name does. With no `full`, both are exactly what was given.
+   */
+  const [whole, setWhole] = useState(null)
+  const wholeAt = full ? `${full}|${StyleSheet.flatten(style)?.width}` : null
+  const named = !!full && whole?.at === wholeAt && whole.fits
+  const label = named ? full : given
+  const wrap = wraps || named
   /*
    * THE COLOUR AS IT IS AUTHORED — EXCEPT IN THE ONE LOOK THAT WAS LIFTED.
    *
@@ -537,6 +562,33 @@ export default function Tile({
             {topLeft || ''}
           </Text>
         </View>
+      ) : null}
+      {full ? (
+        <Text
+          /* The whole name's twin, unseen and untouchable, at the width the
+             name would be drawn at (the tile's padding in from its border):
+             what it lays out decides whether the name is drawn. */
+          pointerEvents="none"
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          onTextLayout={(e) => {
+            const fits = laidWhole(full, e.nativeEvent.lines)
+            setWhole((was) => (was?.at === wholeAt && was.fits === fits ? was : { at: wholeAt, fits }))
+          }}
+          style={{
+            position: 'absolute',
+            left: space.sm,
+            right: space.sm,
+            top: 0,
+            opacity: 0,
+            fontSize: font.small,
+            fontWeight: '700',
+            letterSpacing: 0.5,
+            textAlign: 'center'
+          }}
+        >
+          {full}
+        </Text>
       ) : null}
       <View
         /* The picture is this column's first child, so its top is the
