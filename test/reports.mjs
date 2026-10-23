@@ -146,6 +146,7 @@ const shot = (n, size = 1000) => ({ body: new ArrayBuffer(size), uri: `data:imag
  * Storage and Resend would:
  *
  *   users     account id → its email (anything else: 404)
+ *   userFail  the account lookup failing instead: a status, or 'timeout'
  *   stored    a path in the bucket → its bytes (anything else: 404)
  *   named     paths another row already names (the attach-once check)
  *   due       what report_shots_due answers (the tidy), or `dueStatus` for a refusal
@@ -158,7 +159,7 @@ const PROJECT = 'https://project.test'
 const SERVICE = 'the-service-role-key'
 let fnRuns = 0
 
-async function feedbackEmail({ row, users = {}, stored = {}, named = [], due = [], dueStatus = 200, resend = [], hold = 0, resendKey = 're_key', given = 'the-hook-secret' } = {}) {
+async function feedbackEmail({ row, users = {}, userFail = null, stored = {}, named = [], due = [], dueStatus = 200, resend = [], hold = 0, resendKey = 're_key', given = 'the-hook-secret' } = {}) {
   const calls = []
   const logged = []
   const reads = { now: 0, most: 0 }
@@ -178,6 +179,8 @@ async function feedbackEmail({ row, users = {}, stored = {}, named = [], due = [
       return answer(200, asked.some((p) => named.includes(p)) ? [{ id: 'another-row' }] : [])
     }
     const user = call.url.match(/\/auth\/v1\/admin\/users\/([^/?]+)$/)?.[1]
+    if (user && userFail === 'timeout') throw new DOMException('The signal has been aborted', 'TimeoutError')
+    if (user && userFail) return answer(userFail, { msg: 'upstream' })
     if (user) return users[user] ? answer(200, { id: user, email: users[user] }) : answer(404, { msg: 'User not found' })
     if (call.url === `${PROJECT}/storage/v1/object/report-shots` && call.method === 'DELETE') return answer(200, [])
     const path = call.url.startsWith(`${PROJECT}/storage/v1/object/report-shots/`) ? call.url.slice(`${PROJECT}/storage/v1/object/report-shots/`.length) : null
@@ -223,7 +226,7 @@ async function feedbackEmail({ row, users = {}, stored = {}, named = [], due = [
 const DEL = new URL('../supabase/functions/delete-account/index.ts', import.meta.url).href
 let delRuns = 0
 
-async function deleteAccount({ reports = [], folder = [], resendKey = 're_key', email = 'player@example.com' } = {}) {
+async function deleteAccount({ reports = [], folder = [], resendKey = 're_key', email = 'player@example.com', authStatus = 200, lookupStatus = {} } = {}) {
   const calls = []
   const logged = []
   const was = { fetch: globalThis.fetch, Deno: globalThis.Deno, log: console.log, error: console.error }
@@ -237,9 +240,12 @@ async function deleteAccount({ reports = [], folder = [], resendKey = 're_key', 
     if (call.url === `${PROJECT}/auth/v1/user`) return answer(200, { id: USER, email })
     if (call.url.startsWith(`${PROJECT}/rest/v1/feedback?select=id,user_id,context&`)) {
       const byId = call.url.includes(`user_id=eq.${USER}`)
+      const status = lookupStatus[byId ? 'byId' : 'byAddress'] || 200
+      if (status !== 200) return answer(status, { message: 'upstream timeout' })
       return answer(200, reports.filter((r) => (byId ? r.user_id === USER : r.user_id !== USER)))
     }
     if (call.url === `${PROJECT}/storage/v1/object/list/report-shots`) return answer(200, folder.map((name) => ({ name })))
+    if (call.url === `${PROJECT}/auth/v1/admin/users/${USER}` && call.method === 'DELETE') return answer(authStatus, authStatus === 200 ? {} : { msg: 'Database error deleting user' })
     return answer(200, {})
   }
   console.log = (...a) => logged.push(a.join(' '))
@@ -600,6 +606,10 @@ export function run(test) {
     assert.deepEqual([...Buffer.from(pics[0].content, 'base64')], [...jpeg])
     assert.match(html, /<img src="cid:shot-1"/)
     assert.match(html, /Screenshot 2 could not be read from storage \(404\)\./)
+    /* What is read at a glance comes first, the pictures after it: three tall screenshots above the facts put them screens down. The line about a picture that could not come stays near the top. */
+    const place = (s) => html.indexOf(s)
+    assert.ok(place('What the computer said') < place('>Screenshots<') && place('>Screenshots<') < place('<img src="cid:shot-1"'), 'the pictures come before the facts and the log’s parts')
+    assert.ok(place('Screenshot 2 could not be read') < place('<b>unit</b>'), 'the line about a picture that could not come went down with the pictures')
     assert.match(html, /Screenshot 3 was not the sender&#39;s own|Screenshot 3 was not the sender's own/)
     const asked = run.calls.filter((c) => c.url.includes('/storage/v1/object/')).map((c) => c.url.split('/report-shots/')[1])
     assert.deepEqual(asked, [shotA, shotB], 'the function read a picture outside the sender’s folder')
@@ -659,13 +669,28 @@ export function run(test) {
     assert.equal(name.sent[0].reply_to, 'account@example.com')
     assert.match(name.sent[0].html, /they also wrote "Thomas"/)
 
-    /* An account the service cannot find, or nobody signed in: no reply address, and it says so. */
-    for (const row of [{ ...base, user_id: OTHER }, { ...base, user_id: null }, { ...base, user_id: 'not-an-id' }]) {
+    /* Nobody signed in: no reply address, and it says so. */
+    for (const row of [{ ...base, user_id: null }, { ...base, user_id: 'not-an-id' }]) {
       const run = await feedbackEmail({ row, users: {} })
-      assert.equal(run.sent.length, 1, 'no email went when the account could not be read')
+      assert.equal(run.sent.length, 1)
       assert.equal(run.sent[0].reply_to, undefined)
       assert.match(run.sent[0].html, /no reply address given/)
     }
+    /*
+     * Signed in, and the account's email could not be read (not found, a
+     * refusal, the lookup timing out): the email still goes, and says it came
+     * from an account, with the account to find it by, never as if sent
+     * signed out (second review).
+     */
+    for (const [why, opts] of [['not found', { users: {} }], ['refused', { userFail: 503 }], ['timed out', { userFail: 'timeout' }]]) {
+      const run = await feedbackEmail({ row: { ...base, contact: null, user_id: OTHER }, ...opts })
+      assert.equal(run.sent.length, 1, `no email went when the account lookup ${why}`)
+      assert.equal(run.sent[0].reply_to, undefined)
+      assert.match(run.sent[0].html, new RegExp(`<b>Bug</b> — sent signed in, but the account(&#39;|')s email couldn(&#39;|')t be read \\(account ${OTHER}\\)<`), `a report whose account lookup ${why} reads as one sent signed out`)
+      assert.doesNotMatch(run.sent[0].html, /no reply address given/)
+    }
+    const words = await feedbackEmail({ row: { ...base, contact: 'Thomas', user_id: OTHER }, userFail: 'timeout' })
+    assert.match(words.sent[0].html, /they wrote "Thomas", which is not an address to reply to; sent signed in, but the account(&#39;|')s email couldn(&#39;|')t be read \(account /)
     const nobody = await feedbackEmail({ row: { ...base, user_id: null } })
     assert.ok(!nobody.calls.some((c) => /admin\/users/.test(c.url)), 'an account was looked up for a report with none')
     /* The address is never written to the function's log. */
@@ -735,20 +760,32 @@ export function run(test) {
   test('the bucket takes only so much, and keeps nothing past its week', async () => {
     const sql = read('supabase/migrations/20261022_report_screenshots.sql')
     const q = sql.replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ')
-    const fnBody = (name) => q.slice(q.indexOf(`create or replace function public.${name}()`), q.indexOf('$$;', q.indexOf(`create or replace function public.${name}()`)))
+    const fnBody = (name) => q.slice(q.indexOf(`create or replace function public.${name}(`), q.indexOf('$$;', q.indexOf(`create or replace function public.${name}(`)))
 
-    /* The rule asks for room before it lets a picture in. */
-    assert.match(q, /\(storage\.foldername\(name\)\)\[1\] = \(select auth\.uid\(\)\)::text \) and \(select public\.report_shots_room\(\)\) \);/, 'a picture goes in however full the bucket is')
-    /* Room: fewer than 30 in the last hour, from everybody, and under 200 MB in all; counted by the owner, answering only yes or no. */
+    /* The rule asks for room in the folder the picture goes to before it lets it in. */
+    assert.match(q, /\(storage\.foldername\(name\)\)\[1\] = \(select auth\.uid\(\)\)::text \) and public\.report_shots_room\(\(storage\.foldername\(name\)\)\[1\]\) \);/, 'a picture goes in however full its folder or the bucket is')
+    /*
+     * Room, a share each (second review): fewer than 15 an hour into any one
+     * folder, an account's or anon/; anon/ under 100 MB; the bucket under
+     * 200 MB. One count for everybody let a stranger with the app's key hold
+     * every sender's screenshots shut. Counted by the owner, answering only yes or no.
+     */
     const room = fnBody('report_shots_room')
-    assert.match(room, /returns boolean language sql stable security definer set search_path = ''/)
-    assert.match(room, /from storage\.objects o where o\.bucket_id = 'report-shots' and o\.created_at > now\(\) - interval '1 hour'\) < 30/, 'nothing limits how many go in an hour')
+    assert.match(room, /^create or replace function public\.report_shots_room\(folder text\) returns boolean language sql stable security definer set search_path = ''/)
+    assert.match(room, /from storage\.objects o where o\.bucket_id = 'report-shots' and split_part\(o\.name, '\/', 1\) = folder and o\.created_at > now\(\) - interval '1 hour'\) < 15/, 'the hour is counted for everybody together, so one sender can use up everybody’s')
     assert.match(room, /coalesce\(sum\(\(o\.metadata ->> 'size'\)::bigint\), 0\) from storage\.objects o where o\.bucket_id = 'report-shots'\) < 200 \* 1024 \* 1024/, 'nothing limits how much the bucket holds')
-    assert.match(q, /revoke all on function public\.report_shots_room\(\) from public; grant execute on function public\.report_shots_room\(\) to anon, authenticated;/)
-    /* Due: past its week, or past an hour with no report naming it. Only the service key may ask. */
+    assert.match(room, /\(folder <> 'anon' or \(select coalesce\(sum\(\(o\.metadata ->> 'size'\)::bigint\), 0\) from storage\.objects o where o\.bucket_id = 'report-shots' and split_part\(o\.name, '\/', 1\) = 'anon'\) < 100 \* 1024 \* 1024\)/, 'signed out, a stranger can fill the whole bucket and shut out every account')
+    assert.match(q, /revoke all on function public\.report_shots_room\(text\) from public; grant execute on function public\.report_shots_room\(text\) to anon, authenticated;/)
+    /*
+     * Due: past its week, or past an hour with no report OF ITS OWN naming
+     * it: a row from the folder's own sender, among the first three it names
+     * (all the app writes, all the email reads). One row from a stranger
+     * listing a hundred pictures kept all hundred for the week.
+     */
     const due = fnBody('report_shots_due')
     assert.match(due, /returns setof text language sql stable security definer set search_path = ''/)
-    assert.match(due, /o\.created_at < now\(\) - interval '7 days' or \( o\.created_at < now\(\) - interval '1 hour' and not exists \( select 1 from public\.feedback f where f\.context -> 'screenshots' \? o\.name \) \)/, 'a picture can stay for good')
+    assert.match(due, /o\.created_at < now\(\) - interval '7 days' or \( o\.created_at < now\(\) - interval '1 hour' and not exists \( select 1 from public\.feedback f where coalesce\(f\.user_id::text, 'anon'\) = split_part\(o\.name, '\/', 1\) and o\.name in \(f\.context -> 'screenshots' ->> 0, f\.context -> 'screenshots' ->> 1, f\.context -> 'screenshots' ->> 2\) \) \)/, 'a picture is kept by a row that is not its sender’s, or by a row naming more than the three a report carries')
+    assert.doesNotMatch(due, /\? o\.name|jsonb_array_length/, 'kept by any row that names it, or by a count that fails on a row whose screenshots are not a list')
     assert.match(q, /revoke all on function public\.report_shots_due\(\) from public, anon, authenticated; grant execute on function public\.report_shots_due\(\) to service_role;/)
     /* The hour the rule counts is never emptied under it: the tidy takes nothing younger, and the email deletes nothing it sends. */
     assert.doesNotMatch(due, /interval '(\d+ minutes?|[0-9.]+ seconds?)'/)
@@ -919,7 +956,7 @@ export function run(test) {
     assert.deepEqual([...run.removed].sort(), [mine, anonB, `${USER}/${KEY}-3.jpg`].sort(), 'Delete account removed a picture that was not the account’s, or left one that was')
     assert.ok(!run.removed.includes(theirs), 'another account’s picture was deleted')
 
-    /* The note: one email, to the developer, after the account has gone, by row id only. */
+    /* The note: one email, to the developer, once the rows have gone, by row id only. */
     assert.equal(run.notes.length, 1)
     const note = run.notes[0].body
     assert.deepEqual(note.to, ['justinnewbold@gmail.com'])
@@ -928,7 +965,29 @@ export function run(test) {
     assert.doesNotMatch(note.text, /player@example\.com/, 'the deleted account’s address went into a new email')
     assert.equal(run.notes[0].headers['Idempotency-Key'], `delete-account/${USER}`)
     const at = (pred) => run.calls.findIndex(pred)
-    assert.ok(at((c) => c.method === 'DELETE' && c.url === `${PROJECT}/auth/v1/admin/users/${USER}`) < at((c) => c.url === 'https://api.resend.com/emails'), 'the developer was told before the account was deleted')
+    assert.ok(at((c) => c.method === 'DELETE' && c.url.startsWith(`${PROJECT}/rest/v1/feedback?`)) < at((c) => c.url === 'https://api.resend.com/emails'), 'the developer was told before the rows had gone')
+
+    /*
+     * The account's own delete refused AFTER the rows went (second review):
+     * the note still goes, because a try again finds no rows to list, and the
+     * try again sends no second one.
+     */
+    const refused = await deleteAccount({ reports, authStatus: 500 })
+    assert.equal(refused.status, 502)
+    assert.ok(refused.calls.some((c) => c.method === 'DELETE' && c.url === `${PROJECT}/rest/v1/feedback?user_id=eq.${USER}`), 'the rows did not go')
+    assert.equal(refused.notes.length, 1, 'the rows went and the developer was never told which emails to delete')
+    assert.equal(refused.notes[0].body.subject, 'Account deleted: delete its 3 report emails')
+    const again = await deleteAccount({ reports: [] })
+    assert.deepEqual(again.said, { deleted: true })
+    assert.equal(again.notes.length, 0)
+
+    /* A lookup that could not be done: nothing deleted, no note, try again. Never a row gone that no note listed. */
+    for (const lookupStatus of [{ byId: 503 }, { byAddress: 500 }]) {
+      const blind = await deleteAccount({ reports, lookupStatus })
+      assert.equal(blind.status, 502, `a ${JSON.stringify(lookupStatus)} lookup went on to delete`)
+      assert.ok(!blind.calls.some((c) => c.method === 'DELETE'), 'something was deleted without knowing which reports went')
+      assert.equal(blind.notes.length, 0)
+    }
     const single = await deleteAccount({ reports: reports.slice(0, 1) })
     assert.equal(single.notes[0].body.subject, 'Account deleted: delete its 1 report email')
     assert.match(single.notes[0].body.text, /One report it sent was emailed here, with its log and screenshots\./)
@@ -949,9 +1008,14 @@ export function run(test) {
     /* The scroller holds the note and the pictures, and nothing else: never Send, never what Send said. */
     const scroller = log.slice(log.indexOf('<ScrollView'), log.indexOf('</ScrollView>'))
     assert.ok(scroller.includes('<TextInput') && scroller.includes('<Shots shots={shots}'), 'the note or the pictures left the scroller')
-    assert.doesNotMatch(scroller, /Send logs to developer|sentSaid|Clear Logs/, 'Send, or what it said, is inside a scroller that shrinks, so a small phone puts it below the screen')
-    /* Capped, and the one that gives way after the log list, never Send. */
-    assert.match(scroller, /<ScrollView style=\{\{ flexGrow: 0, flexShrink: 1, maxHeight: '35%' \}\}/)
+    assert.doesNotMatch(scroller, /Send logs to developer|sentSaid\.words|Clear Logs/, 'Send, or what it said, is inside a scroller that shrinks, so a small phone puts it below the screen')
+    /*
+     * Capped, and the one that gives way after the log list, never Send; and
+     * capped lower while the foot says something, or on a 320 by 568 screen a
+     * four-line answer under Send left the log list two points tall (second
+     * review; rendered: 2 before, 84 after, and 106 for "Couldn't reach").
+     */
+    assert.match(scroller, /<ScrollView style=\{\{ flexGrow: 0, flexShrink: 1, maxHeight: sentSaid \? '20%' : '35%' \}\}/, 'the scroller keeps its whole third while a tall answer under Send takes the log list’s room')
     const foot = log.slice(log.indexOf('</ScrollView>'))
     assert.match(foot, /^<\/ScrollView> (\{ \} )?<View style=\{\{ flexShrink: 0, [^}]*\}\}> <Press label=\{sending \? 'Sending…' : 'Send logs to developer'\}[^>]*\/> \{sentSaid \? \(/, 'Send and what it said are not fixed straight under the scroller')
     /* The log list takes only what is left (flex 1 from nothing), so it is the first to give up room. */
@@ -959,9 +1023,29 @@ export function run(test) {
     /* Clear Logs beside Copy Logs, as in the browser, and still waiting while a send is on its way. */
     const top = log.slice(log.indexOf("<Press label=\"Copy Logs\""), log.indexOf('<FlatList'))
     assert.match(top, /<Press label="Clear Logs" disabled=\{sending\} onPress=/, 'Clear Logs is not beside Copy Logs')
-    /* What a paste said sits straight under the button, above the hint, so the short scroller shows it. */
+    /*
+     * What a paste said, on the log screen, goes to the foot under Send, in
+     * the same one place as Send's answer (the latest of the two), never into
+     * the scroller, whose edge cut off the Settings path (second review).
+     * Elsewhere (the Feedback form) it stays straight under its button.
+     */
+    assert.match(scroller, /<Shots shots=\{shots\} onChange=\{setShots\} disabled=\{sending\} say=\{sayPaste\} \/>/, 'what a paste says is left inside the short scroller')
+    assert.match(log, /const sayPaste = \(words\) => setSentSaid\(words \? \{ ok: false, words, paste: true \} : null\)/)
+    assert.match(foot, /<Note tone=\{sentSaid\.ok \? 'hint' : 'fault'\} strong=\{!sentSaid\.paste\} size=\{sentSaid\.paste \? undefined : font\.body\}>/)
     const shots = code(read('mobile/src/components/Shots.js')).replace(/\s+/g, ' ')
+    assert.match(shots, /export default function Shots\(\{ shots = \[\], onChange, disabled = false, say \}\) \{ const \[own, setOwn\] = useState\(null\) const setSaid = say \|\| setOwn const said = say \? null : own/, 'a screen that takes what a paste says gets it said twice, or not at all')
     assert.ok(shots.indexOf('{said ? <Note tone="fault">{said}</Note> : null}') < shots.indexOf('{copyHint()}'), 'what a paste said is under the hint, where a short scroller hides it')
+    assert.doesNotMatch(code(read('mobile/src/screens/Report.js')), /<Shots[^>]*\bsay=/, 'the Feedback form lost the message under its Paste button')
+
+    /*
+     * The note, the pictures and Send stay while there is anything to send:
+     * Clear Logs took them away with the lines, a note typed and pictures
+     * pasted out of sight, and the run before (which a report carries) could
+     * not be sent at all (second review).
+     */
+    assert.match(log, /const sendable = Boolean\(lines\.length \|\| before\.length \|\| note \|\| shots\.length\)/)
+    assert.match(log, /\{sendable \? \( <> (\{ \} )?<ScrollView/, 'the note box, the pictures and Send go when the log is cleared')
+    assert.doesNotMatch(log.slice(log.indexOf('<FlatList')), /\{lines\.length \? \( <>/)
   })
 
   test('the phone says how to copy a screenshot on an iPhone, a Pixel and a Samsung, and why a paste brought nothing', async () => {
@@ -971,13 +1055,13 @@ export function run(test) {
       const m = shotsSrc.match(/export function copyHint\(os = Platform\.OS\) \{\s*return os === 'ios'\s*\? '([^']+)'\s*: '([^']+)'/)
       return os === 'ios' ? m[1] : m[2]
     }
-    /* iOS 26 and 27: the check mark at the top right; Done only on older versions, said as that. */
-    assert.equal(hint('ios'), 'To copy one: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions the button says Done.')
+    /* iOS 26 and 27: the check mark at the top right; on older versions Done, which is at the top LEFT, said with its own corner. */
+    assert.equal(hint('ios'), 'To copy one: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions, tap Done at the top left instead.')
     /* Android: the Pixel's route said as the Pixel's, and the Samsung's own beside it. */
     assert.equal(hint('android'), 'To copy one on a Pixel: open the screenshot in Photos, go to Recent apps, hold the picture (or tap Select, then the picture) and choose Copy. On a Samsung: open it in Gallery, tap ⋮, then Copy to clipboard.')
     /* The support page says the same steps. */
     const support = read('public/support.html').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ')
-    assert.match(support, /To copy a screenshot on an iPhone or iPad: take a screenshot \(if only a little picture shows in the corner, tap it\), tap the check mark at the top right, then Copy and Delete\. On older versions the button says Done\./)
+    assert.match(support, /To copy a screenshot on an iPhone or iPad: take a screenshot \(if only a little picture shows in the corner, tap it\), tap the check mark at the top right, then Copy and Delete\. On older versions, tap Done at the top left instead\./)
     assert.match(support, /On a Pixel: open the screenshot in Photos, go to Recent apps, hold the picture \(or tap Select, then the picture\) and choose Copy\./)
     assert.match(support, /On a Samsung: open it in Gallery, tap ⋮, then Copy to clipboard\./)
     assert.match(support, /On the website and in the computer app: Settings → Troubleshooting → Debug log has the same button/, 'the support page sends website users to the Debug log by a path that is not there')

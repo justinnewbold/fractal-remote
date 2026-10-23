@@ -100,7 +100,9 @@ export default function Log({ onBack }) {
   const [note, setNote] = useState('')
   const [shots, setShots] = useState([])
   const [sending, setSending] = useState(false)
+  /* What Send said, or what a paste said (`paste`): one line in the foot, the latest. */
   const [sentSaid, setSentSaid] = useState(null)
+  const sayPaste = (words) => setSentSaid(words ? { ok: false, words, paste: true } : null)
   const inFlight = useRef(false)
   const send = async () => {
     if (inFlight.current) return
@@ -141,6 +143,15 @@ export default function Log({ onBack }) {
       alive = false
     }
   }, [])
+
+  /*
+   * The note, the pictures and Send stay while there is anything to send:
+   * this run's lines, the runs before (a report carries them, and after a
+   * crash they are the report), or a note or a picture already added. Clear
+   * Logs used to take the note box, the pictures and Send away with the lines
+   * (second review, 23 October 2026).
+   */
+  const sendable = Boolean(lines.length || before.length || note || shots.length)
 
   useEffect(() => {
     if (!said) return undefined
@@ -231,7 +242,9 @@ export default function Log({ onBack }) {
         /*
           Its height is only what the rest leaves (flex 1 from nothing), so it
           is the first to give up room: the note and the pictures shrink only
-          once it has none left, and Send never.
+          once it has none left, and Send never. So while the foot holds a
+          line, the scroller's cap comes down (below), or a tall line under
+          Send took the whole of it on a small phone.
         */
         style={{ flex: 1 }}
         data={[...lines].reverse()}
@@ -269,12 +282,15 @@ export default function Log({ onBack }) {
         }
       />
 
-      {lines.length ? (
+      {sendable ? (
         <>
           {/*
             THE NOTE AND THE PICTURES, in a scroller of their own: no more than
             a third of the screen, and smaller still when the log list has no
             room left to give (a small phone, the keyboard up). Never Send.
+            A fifth while the foot says something: on a 320 by 568 screen a
+            four-line answer under Send left the log list two points tall,
+            with the scroller still at its full third (second review).
 
             A React Native ScrollView shrinks of its own accord, so Send under
             it inside the same scroller was pushed below the screen on a small
@@ -285,7 +301,7 @@ export default function Log({ onBack }) {
             2026).
           */}
           <ScrollView
-            style={{ flexGrow: 0, flexShrink: 1, maxHeight: '35%' }}
+            style={{ flexGrow: 0, flexShrink: 1, maxHeight: sentSaid ? '20%' : '35%' }}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.md, gap: space.sm }}
           >
@@ -316,7 +332,7 @@ export default function Log({ onBack }) {
                 lineHeight: 22
               }}
             />
-            <Shots shots={shots} onChange={setShots} disabled={sending} />
+            <Shots shots={shots} onChange={setShots} disabled={sending} say={sayPaste} />
           </ScrollView>
           {/* Sending beats copying, and until now copying was all there was:
               the log went into the clipboard and then had to survive being
@@ -324,7 +340,9 @@ export default function Log({ onBack }) {
               Copy stays — a log pasted into a message to a bandmate is a real
               use — but this is the one that reaches the person who can fix it.
               Fixed at the foot, never in the scroller: always on screen, and
-              what it said always under it. */}
+              what it said always under it, bright, bold and body-sized. What a
+              paste said goes there too, the latest of the two, in a fault
+              note's own size as under its button. */}
           <View style={{ flexShrink: 0, paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.lg, gap: space.sm }}>
             <Press
               label={sending ? 'Sending…' : 'Send logs to developer'}
@@ -333,7 +351,7 @@ export default function Log({ onBack }) {
               onPress={send}
             />
             {sentSaid ? (
-              <Note tone={sentSaid.ok ? 'hint' : 'fault'} strong size={font.body}>
+              <Note tone={sentSaid.ok ? 'hint' : 'fault'} strong={!sentSaid.paste} size={sentSaid.paste ? undefined : font.body}>
                 {sentSaid.words}
               </Note>
             ) : null}

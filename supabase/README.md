@@ -169,10 +169,13 @@ context bullets and the row id, and none of the log. Three pieces now:
 - `migrations/20261022_report_screenshots.sql` — the private bucket
   `report-shots` (JPEG only, 2 MB a file), one rule for putting a picture in
   (`<account id>/<key>-<1..3>.jpg`, or `anon/…` signed out, and only while
-  `report_shots_room()` says there is room: fewer than 30 in the last hour,
-  under 200 MB in all), and nothing for reading, listing, replacing or
-  removing. `report_shots_due()` lists what is to go: older than 7 days, or
-  older than an hour and named by no report. And `notify_feedback()` again,
+  `report_shots_room(folder)` says there is room: fewer than 15 in the last
+  hour in that folder, an account's or anon/, anon/ under 100 MB, and the
+  bucket under 200 MB, so a stranger signed out can never shut an account's
+  pictures out), and nothing for reading, listing, replacing or removing.
+  `report_shots_due()` lists what is to go: older than 7 days, or older than
+  an hour and named by no report of its own (a row from the folder's own
+  sender, among its first three). And `notify_feedback()` again,
   unchanged but for sixty seconds for the email instead of five. The row's
   shape does not change: the pictures' places ride in `context.screenshots`.
 - `migrations/20261022_report_shots_sweep.sql` — once a day (pg_cron), asks
@@ -183,7 +186,11 @@ context bullets and the row id, and none of the log. Three pieces now:
   screenshots through Storage's own API, before the rows that name them, and
   only its own (its folder, or anon/ named by a report sent signed out). Then
   it emails the developer the row ids of the reports that went, so their
-  emails can be found and deleted too: the privacy page promises that.
+  emails can be found and deleted too: the privacy page promises that. The
+  note goes as soon as the rows have gone, even when the account's own
+  delete is then refused (a try again finds no rows to list), and when the
+  reports cannot be looked up, nothing is deleted and the person is asked to
+  try again in a minute.
 
 The email attaches a picture to one email only (a row naming a picture
 another row named gets a line instead), only bytes that start as a JPEG
@@ -227,7 +234,7 @@ sends a picture, and its rows are the rows it always wrote.
 ```sql
 select id, public, file_size_limit, allowed_mime_types from storage.buckets where id = 'report-shots';
 select polname, polcmd from pg_policy where polrelid = 'storage.objects'::regclass and polname like 'a report%';
-select public.report_shots_room();             -- true while there is room
+select public.report_shots_room('anon');       -- true while there is room for a signed-out sender
 select count(*) from public.report_shots_due(); -- what the next tidy deletes
 select jobname, schedule from cron.job where jobname = 'report-shots-sweep';
 

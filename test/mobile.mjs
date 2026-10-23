@@ -8892,7 +8892,9 @@ export function run(test) {
      * answer to the button just pressed. And said out loud, because a 'hint'
      * note is no live region (a failure's red one is, on Android).
      */
-    assert.match(log, /\{sentSaid \? \( <Note tone=\{sentSaid\.ok \? 'hint' : 'fault'\} strong size=\{font\.body\}> \{sentSaid\.words\} <\/Note> \) : null\}/, 'the sent line is the quiet gray hint')
+    assert.match(log, /\{sentSaid \? \( <Note tone=\{sentSaid\.ok \? 'hint' : 'fault'\} strong=\{!sentSaid\.paste\} size=\{sentSaid\.paste \? undefined : font\.body\}> \{sentSaid\.words\} <\/Note> \) : null\}/, 'the sent line is the quiet gray hint')
+    /* Bold and body-sized for everything Send says: only a paste's own line (test/reports.mjs) shares the place without it. */
+    assert.ok(!/setSentSaid\(\{ ok: (true|false), words, paste/.test(log.slice(log.indexOf('const send = async'), log.indexOf('useEffect(() => onDebugLog'))), 'what Send said is drawn as a paste’s line')
     assert.match(read('mobile/src/components/Note.js'), /accessibilityLiveRegion=\{tone === 'hint' \? 'none' : 'polite'\}/)
     assert.match(log, /setSentSaid\(\{ ok: true, words \}\) AccessibilityInfo\.announceForAccessibility\?\.\(words\)/, 'a screen reader is not told it went')
     /* The note and the pictures go once the report has, and only then. */

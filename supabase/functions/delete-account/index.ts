@@ -95,19 +95,29 @@ async function forgetRows(url: string, service: string, who: { id: string; email
  * THE REPORTS IT SENT, read before they go: their ids, who sent each, and the
  * screenshots each names. The rows matched are the ones forgetRows deletes:
  * sent while signed in to this account, or giving its address to reply to.
+ *
+ * Null when either lookup could not be done, and then nothing is deleted
+ * (second review, 23 October 2026): forgetRows deletes by the same match
+ * whether or not it was read, so a row it took that no lookup listed was a
+ * report whose email the developer was never told about.
  */
 type Report = { id: string; user_id: string | null; context: Record<string, unknown> | null }
 
-async function reportsOf(url: string, service: string, who: { id: string; email: string }): Promise<Report[]> {
+async function reportsOf(url: string, service: string, who: { id: string; email: string }): Promise<Report[] | null> {
   const headers = { apikey: service, Authorization: `Bearer ${service}` }
   const found = new Map<string, Report>()
   const look = async (query: string) => {
     try {
       const res = await fetch(`${url}/rest/v1/feedback?select=id,user_id,context&${query}`, { headers })
-      if (!res.ok) return console.error(`delete-account: feedback lookup answered ${res.status}`)
+      if (!res.ok) {
+        console.error(`delete-account: feedback lookup answered ${res.status}`)
+        return false
+      }
       for (const report of await res.json()) if (report?.id) found.set(String(report.id), report)
+      return true
     } catch (err) {
       console.error(`delete-account: feedback lookup unreachable (${err})`)
+      return false
     }
   }
   const lookups = [look(`user_id=eq.${who.id}`)]
@@ -115,8 +125,8 @@ async function reportsOf(url: string, service: string, who: { id: string; email:
     const like = encodeURIComponent(who.email.replace(/[\\%_]/g, (c) => `\\${c}`))
     lookups.push(look(`contact=ilike.${like}`))
   }
-  await Promise.all(lookups)
-  return [...found.values()]
+  const done = await Promise.all(lookups)
+  return done.every(Boolean) ? [...found.values()] : null
 }
 
 /*
@@ -254,8 +264,15 @@ Deno.serve(async (req) => {
 
   /* The reports first, to know what they name; then the pictures, before the rows that name them. */
   const reports = await reportsOf(url, service, who)
+  if (!reports) return json({ error: 'The account could not be deleted. Try again in a minute.' }, 502)
   await forgetShots(url, service, who, reports)
   await forgetRows(url, service, who)
+  /*
+   * The emailed copies of its reports are the developer's to delete; he is
+   * told which, as soon as the rows have gone and whatever the account's own
+   * delete then answers: a try again after a refusal finds no rows to list.
+   */
+  await tellDeveloper(reports.map((r) => r.id), id)
 
   const res = await fetch(`${url}/auth/v1/admin/users/${id}`, {
     method: 'DELETE',
@@ -267,8 +284,6 @@ Deno.serve(async (req) => {
   }
 
   await forgetCustomer(id)
-  /* The emailed copies of its reports are the developer's to delete; he is told which. */
-  await tellDeveloper(reports.map((r) => r.id), id)
   console.log(`delete-account: deleted ${id}`)
   return json({ deleted: true })
 })

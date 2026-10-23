@@ -398,16 +398,24 @@ export function emailFor(
     .map(([k, v]) => `<li><b>${esc(k)}</b>: ${esc(v)}</li>`)
     .join('')
 
-  /* Who to answer: the address they typed, or the account's own. */
+  /*
+   * Who to answer: the address they typed, or the account's own. A report
+   * from an account whose email could not be read (a lookup that timed out
+   * or was refused) says so, with the account's id to find it by, rather
+   * than reading exactly like one sent signed out (second review).
+   */
   const typed = ADDRESS.test(contact) ? contact : ''
   const replyTo = typed || account || ''
+  const unread = !account && UUID.test(String(row.user_id ?? '')) ? `sent signed in, but the account's email couldn't be read (account ${esc(row.user_id)})` : ''
   const from = typed
     ? ` from ${esc(typed)}`
     : account
       ? ` from ${esc(account)} (the account's email)${contact ? `; they also wrote "${esc(contact)}"` : ''}`
       : contact
-        ? ` — they wrote "${esc(contact)}", which is not an address to reply to`
-        : ' — no reply address given'
+        ? ` — they wrote "${esc(contact)}", which is not an address to reply to${unread ? `; ${unread}` : ''}`
+        : unread
+          ? ` — ${unread}`
+          : ' — no reply address given'
 
   const sum = summarize(log)
   const pictures = shots.files
@@ -417,13 +425,18 @@ export function emailFor(
   const logBytes = new TextEncoder().encode(log)
 
   const subject = `${kind}: ${message.split('\n')[0].slice(0, 70) || '(no message)'}`
+  /*
+   * What is read at a glance first: who, the note, any picture that could
+   * not come, the facts and the log's parts. The pictures after them, full
+   * width: three phone screenshots above the facts put them screens down
+   * (second review, 23 October 2026). Each is attached at full size too.
+   */
   const html = `
     <div style="font:14px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1d21">
       <p style="margin:0 0 4px"><b>${esc(kind)}</b>${from}</p>
       <pre style="white-space:pre-wrap;word-break:break-word;font:inherit;background:#f4f2ee;border-radius:6px;padding:12px;margin:12px 0">${esc(
         message
       )}</pre>
-      ${pictures ? `<p style="margin:12px 0 0;font-weight:600">Screenshots</p>${pictures}` : ''}
       ${shots.missing.length ? `<p style="color:#a03a2c;margin:8px 0">${shots.missing.map(esc).join('<br>')}</p>` : ''}
       ${facts ? `<ul style="margin:12px 0;padding-left:18px;color:#5f6670">${facts}</ul>` : ''}
       ${part('From the top of the log', sum.head)}
@@ -431,6 +444,7 @@ export function emailFor(
       ${part('What went wrong (newest at the bottom)', sum.trouble)}
       ${part('How the run before this one ended', sum.before)}
       ${part('What the computer said', sum.computer)}
+      ${pictures ? `<p style="margin:12px 0 0;font-weight:600">Screenshots</p>${pictures}` : ''}
       ${log ? `<p style="color:#5f6670;margin:12px 0 0">The whole log is attached: ${esc(logName)} (${Math.max(1, Math.round(logBytes.length / 1024))} KB).</p>` : ''}
       <p style="color:#8b9099;font-size:12px;margin:16px 0 0">Row ${esc(id)}</p>
     </div>`

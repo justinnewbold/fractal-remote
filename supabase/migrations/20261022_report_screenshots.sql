@@ -28,7 +28,8 @@
 --     into anon/ (a report whose account could not be read at that moment goes
 --     as an anonymous one, as its row does);
 --   - nobody signed in may write only into anon/;
---   - and only while the bucket has room (report_shots_room, below).
+--   - and only while there is room, in its folder's share and in the bucket
+--     (report_shots_room, below).
 --
 -- No select rule, so nothing can be read or listed back through the app's key,
 -- not even by the person who put it there. No update or delete rule, so a
@@ -43,13 +44,23 @@
 -- in minutes, and a project over its quota can be restricted, which would take
 -- sign-in, the relay and purchases down with it. So:
 --
---   - at most 30 pictures go in in any hour, from everybody together (ten
---     reports with three each; the busiest hour so far had two reports), and
---     none once the bucket holds 200 MB. Past either, a picture is refused,
---     and the report goes without it, saying so, as for any refused picture;
+--   - at most 15 pictures go into any one folder in an hour (five reports
+--     with three each; the busiest hour so far had two reports): an
+--     account's own, or anon/, which everybody signed out shares; anon/
+--     never holds more than 100 MB, and the bucket never more than 200 MB.
+--     Past any of those, a picture is refused, and the report goes without
+--     it, saying so, as for any refused picture. A share each (second
+--     review, 23 October 2026), because one count for everybody let a
+--     stranger with the app's key hold it shut: thirty tiny pictures an
+--     hour, or the bucket kept full, and nobody's screenshot went. Signed
+--     out, a stranger can now fill only anon/'s share, never an account's;
 --   - each picture is deleted 7 days after it went in, and one that no report
---     names (its report never arrived, or the report was deleted) an hour
---     after (report_shots_due, below). The email function asks for that list
+--     of its own names an hour after (report_shots_due, below): named by a
+--     row from its own folder's sender, among the first three that row
+--     names, which are all the app writes and all the email reads. So one
+--     row listing a hundred pictures keeps three, not a hundred, and the
+--     week's keep costs a stranger a report, and an email to the developer,
+--     for every three pictures. The email function asks for that list
 --     and deletes it through Storage's own API (the database refuses a delete
 --     straight from storage.objects) every time a report comes in, and
 --     20261022_report_shots_sweep.sql asks it to once a day besides;
@@ -88,12 +99,13 @@ on conflict (id) do update
 
 drop policy if exists "a report's screenshots, put in by whoever sends it" on storage.objects;
 
--- Whether one more picture may go in: fewer than 30 in the last hour, and less
--- than 200 MB in the bucket. Security definer because nobody who uploads can
--- read storage.objects, and the count has to see everybody's; it answers only
--- yes or no. Empty search_path and every name qualified, as in the first
--- feedback migration.
-create or replace function public.report_shots_room()
+-- Whether one more picture may go into `folder` (an account's id, or anon):
+-- fewer than 15 in that folder in the last hour, less than 100 MB in anon/
+-- when it is anon/, and less than 200 MB in the bucket. Security definer
+-- because nobody who uploads can read storage.objects, and the count has to
+-- see everybody's; it answers only yes or no. Empty search_path and every
+-- name qualified, as in the first feedback migration.
+create or replace function public.report_shots_room(folder text)
 returns boolean
 language sql
 stable
@@ -103,14 +115,18 @@ as $$
   select
     (select count(*) from storage.objects o
       where o.bucket_id = 'report-shots'
-        and o.created_at > now() - interval '1 hour') < 30
+        and split_part(o.name, '/', 1) = folder
+        and o.created_at > now() - interval '1 hour') < 15
     and (select coalesce(sum((o.metadata ->> 'size')::bigint), 0) from storage.objects o
-      where o.bucket_id = 'report-shots') < 200 * 1024 * 1024;
+      where o.bucket_id = 'report-shots') < 200 * 1024 * 1024
+    and (folder <> 'anon' or (select coalesce(sum((o.metadata ->> 'size')::bigint), 0) from storage.objects o
+      where o.bucket_id = 'report-shots'
+        and split_part(o.name, '/', 1) = 'anon') < 100 * 1024 * 1024);
 $$;
 
-revoke all on function public.report_shots_room() from public;
+revoke all on function public.report_shots_room(text) from public;
 -- The rule below runs it as whoever is uploading, so they need to be able to.
-grant execute on function public.report_shots_room() to anon, authenticated;
+grant execute on function public.report_shots_room(text) to anon, authenticated;
 
 create policy "a report's screenshots, put in by whoever sends it"
   on storage.objects
@@ -123,13 +139,16 @@ create policy "a report's screenshots, put in by whoever sends it"
       (storage.foldername(name))[1] = 'anon'
       or (storage.foldername(name))[1] = (select auth.uid())::text
     )
-    and (select public.report_shots_room())
+    and public.report_shots_room((storage.foldername(name))[1])
   );
 
 -- The pictures due to go: every one older than 7 days, and every one older
--- than an hour that no report names. The email function deletes them through
--- Storage's API; only the service key may ask. A couple of hundred at a time,
--- oldest first, which is more than the guard above lets in in a day.
+-- than an hour that no report of its own names, which is a row from the
+-- folder's own sender (its account, or nobody signed in for anon/) naming it
+-- among its first three. `->> n` is null for anything that is not a list, so
+-- a row whose screenshots are something else keeps nothing and breaks
+-- nothing. The email function deletes them through Storage's API; only the
+-- service key may ask. A couple of hundred at a time, oldest first.
 create or replace function public.report_shots_due()
 returns setof text
 language sql
@@ -146,7 +165,8 @@ as $$
         o.created_at < now() - interval '1 hour'
         and not exists (
           select 1 from public.feedback f
-          where f.context -> 'screenshots' ? o.name
+          where coalesce(f.user_id::text, 'anon') = split_part(o.name, '/', 1)
+            and o.name in (f.context -> 'screenshots' ->> 0, f.context -> 'screenshots' ->> 1, f.context -> 'screenshots' ->> 2)
         )
       )
     )

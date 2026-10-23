@@ -14,8 +14,10 @@ import Press from './Press'
  * a new screenshot full screen, with a check mark at the top right; with
  * Full-Screen Previews off it is a little picture in the corner, and tapping
  * it opens the same full screen, check mark and all. Before iOS 26 the button
- * there says Done. Either way, Copy and Delete puts it on the clipboard and
- * keeps it out of the photo library.
+ * there says Done, and it is at the top LEFT (the top right holds share and
+ * delete), so the words say which corner for each (second review). Either
+ * way, Copy and Delete puts it on the clipboard and keeps it out of the
+ * photo library.
  *
  * Android has no Copy on its own screenshot preview, and the way to copy a
  * picture differs by maker. On a Pixel (Android 15 and 16) any picture on
@@ -27,7 +29,7 @@ import Press from './Press'
  */
 export function copyHint(os = Platform.OS) {
   return os === 'ios'
-    ? 'To copy one: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions the button says Done.'
+    ? 'To copy one: take a screenshot (if only a little picture shows in the corner, tap it), tap the check mark at the top right, then Copy and Delete. On older versions, tap Done at the top left instead.'
     : 'To copy one on a Pixel: open the screenshot in Photos, go to Recent apps, hold the picture (or tap Select, then the picture) and choose Copy. On a Samsung: open it in Gallery, tap ⋮, then Copy to clipboard.'
 }
 
@@ -39,9 +41,17 @@ export function copyHint(os = Platform.OS) {
  * setter), so a paste that lands after a Remove adds to the list as it is
  * then. Up to SHOTS_MAX. Nothing here sends anything; the screen's own Send
  * hands the list to lib/reports.
+ *
+ * What a paste says goes under its button, or to `say` when the screen
+ * gives one: the log screen does, so it is said in the fixed foot under
+ * Send, where nothing scrolls it out of sight. In the log screen's short
+ * scroller it was cut off below the edge, the Settings path with it, the one
+ * way back once the iPhone stops asking (second review, 23 October 2026).
  */
-export default function Shots({ shots = [], onChange, disabled = false }) {
-  const [said, setSaid] = useState(null)
+export default function Shots({ shots = [], onChange, disabled = false, say }) {
+  const [own, setOwn] = useState(null)
+  const setSaid = say || setOwn
+  const said = say ? null : own
   const [pasting, setPasting] = useState(false)
   const busy = useRef(false)
   const full = shots.length >= SHOTS_MAX
@@ -102,7 +112,7 @@ export default function Shots({ shots = [], onChange, disabled = false }) {
         disabled={disabled || pasting || full}
         onPress={paste}
       />
-      {/* What a paste said, straight under the button tapped, so a short scroller never hides it under the hint. */}
+      {/* What a paste said, straight under the button tapped, when the screen has nowhere better for it. */}
       {said ? <Note tone="fault">{said}</Note> : null}
       <Text style={{ color: color.silkFaint, fontSize: font.micro, lineHeight: 18 }}>{copyHint()}</Text>
     </View>
