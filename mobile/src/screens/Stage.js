@@ -456,10 +456,11 @@ export default function Stage({
    * scrolling, with fewer pedals to a row than it had room for. So an unseen
    * box the size of Fit's answer is laid out beside the page, and its size is
    * one more thing the check waits on: it looks again in the same layout pass
-   * as the page's own new height, and keeps adding until Fit takes more
-   * pedals to a row and the page fits. It stops when the answer stops
-   * changing (44 tall, the widest row), so a rig that fits nowhere does not
-   * go round for ever.
+   * as the page's own new height, so a trim that only moved Fit's answer is
+   * followed by another, until Fit takes more pedals to a row and the page
+   * fits. It stops when the answer stops changing (44 tall and the widest
+   * row, or a trim too small to move the tile a whole point), so a rig that
+   * fits nowhere does not go round for ever.
    */
   const [laid, setLaid] = useState('')
   /*
