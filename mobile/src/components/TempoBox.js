@@ -140,7 +140,7 @@ export default function TempoBox({ open, bpm, range = ANY_BPM, onSet, onClose })
   /*
    * THE GLASS PUTS THE NUMBER PAD AWAY FIRST, and closes the box the next
    * time. A tap beside the box while typing is as likely a slip as a choice,
-   * and closing on it threw the typed number away. Before 1.87.55 that rule
+   * and closing on it threw the typed number away. Before 1.87.57 that rule
    * came from where the box was drawn: inside Play's scrolling page, whose
    * scroll view takes the first tap anywhere while a keyboard is up (React
    * Native's ScrollView, keyboardShouldPersistTaps unset) and only hides the

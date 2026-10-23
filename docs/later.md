@@ -188,10 +188,58 @@ the Handled button on Paid twice; the VP4's honest words and its presets and
 scenes. Still on the list, not started:
 
 - **Lock the computer's page to your own phone.** Anyone on the same Wi-Fi
-  can open the computer's page (ForgeFX listens on 0.0.0.0) and change
-  presets or sign it out. Found with it: Sign out in the computer app calls
-  auth.signOut() with no scope (forgefx server/src/runtime/cloud.ts), which
-  defaults to signing out every device on the account, phones included.
+  can open the computer's page (ForgeFX listens on 0.0.0.0) and do whatever
+  that page does: change sounds, store to a slot, restore a backup, send the
+  unit raw messages, pick another port. Still parked. What it would take: a
+  pairing step, so the page answers only a phone or tablet that was shown a
+  code on the computer once. The "key" design weighed on 23 October is the
+  start of it (the computer's window is given its key by the app itself, so
+  a page it has kept from before still works). Until then, at a venue, put
+  the computer on your phone's hotspot rather than the venue's Wi-Fi.
+  - ~~Sign out in the computer app signed out every device on the account,
+    phones included (auth.signOut() with no scope, which means all of
+    them).~~ **Done, computer app 1.87.55:** it signs out the computer only
+    (scope 'local'), the way the phone and the browser always have.
+  - ~~**Found again on 23 October:** the device server answered CORS for
+    any origin, and POST /cloud/delete-account and /cloud/logout took no
+    check, so any web page open on that computer could reach them.~~
+    **Done, computer app 1.87.55:** the device server answers only its own
+    callers (forgefx server/src/guard.ts): the computer's window, the Wi-Fi
+    page it served itself, the app's own process, the relay, and the public
+    site opened on the computer (named in FORGEFX_ALLOWED_ORIGINS, which
+    the app sets). A web page in a browser on the computer, or someone on
+    the Wi-Fi, can no longer sign it out, sign it into another account,
+    turn its phone remote on, or read its saved sign-in. Signing in, out
+    and the phone remote's switch answer only the computer itself. POST
+    /cloud/delete-account is closed (nothing ever called it: the apps
+    delete an account through the account service). A name the computer is
+    not known by (a router's name like raspberrypi.lan, a Tailscale name)
+    is answered with one line saying which address to open instead.
+  - ~~**GET /store/cloud over the relay** handed the computer's saved
+    sign-in to any device on the account.~~ **Done, 1.87.55:** closed three
+    ways: the device server answers the store's `config` collection only,
+    the relay refuses every other collection and /local, and both apps'
+    copy of the rule says so (shared/relay-rules.mjs).
+  - **Left open on purpose, with why.** The public site opened on the
+    computer keeps the computer's account buttons, because it is the
+    tray's "fractal.newbold.cloud" and it sets the computer up. So a fault
+    in that site, opened on the computer, could still reach them. A
+    Content-Security-Policy on the site (vercel.json) is the next step that
+    narrows it. And names outside the list above stay refused unless a
+    customer actually reports one.
+  - **Two parked items, with why.** Both came up on 23 October from "how
+    can a user remove old units they aren't connected to"; 1.87.53 says
+    under Which unit how to do it at the computer instead.
+    - A server-side "Computers on this account" page, for old sign-ins.
+      Parked because "off" can only be guessed, from 90 minutes with no
+      sign-in refresh (a MacBook asleep in a gig bag looks exactly like a
+      retired one), and removing a computer means deleting its
+      auth.sessions rows directly, which no supported Supabase Auth call
+      does.
+    - A phone-side remote sign-out. Parked because its "in use" check is a
+      guess (every device's first request on a link goes to every
+      computer), it works only on computers already updated to know it,
+      and undoing it means typing the password at that computer.
 - **No signal at the venue:** say "This phone isn't online" and offer the
   computer's page over the same Wi-Fi, with the setlists on it.
 - **A volume for the AM4**, with its four scene levels.

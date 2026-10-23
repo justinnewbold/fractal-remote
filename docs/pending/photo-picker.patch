@@ -38,8 +38,7 @@ diff --git a/mobile/package-lock.json b/mobile/package-lock.json
 index a6b2fb6..eb2298e 100644
 --- a/mobile/package-lock.json
 +++ b/mobile/package-lock.json
-@@ -19,6 +19,8 @@
-         "expo-blur": "~57.0.3",
+@@ -20,5 +20,7 @@
          "expo-clipboard": "~57.0.2",
          "expo-haptics": "~57.0.3",
 +        "expo-image-manipulator": "~57.0.21",
@@ -91,8 +90,7 @@ diff --git a/mobile/package.json b/mobile/package.json
 index e7910ac..0a9503f 100644
 --- a/mobile/package.json
 +++ b/mobile/package.json
-@@ -21,6 +21,8 @@
-     "expo-blur": "~57.0.3",
+@@ -22,5 +22,7 @@
      "expo-clipboard": "~57.0.2",
      "expo-haptics": "~57.0.3",
 +    "expo-image-manipulator": "~57.0.21",

@@ -555,7 +555,7 @@ const vendored = () =>
 
 async function start() {
   const {
-    mdnsName,
+    advertisedName,
     DEFAULT_PORT,
     MISSING_FORGEFX,
     addresses,
@@ -578,9 +578,10 @@ async function start() {
 
   const port = Number(process.env.PORT || DEFAULT_PORT)
   // Per machine, not a constant: two Macs both asking for `fractal.local`
-  // means one of them silently has no name while still offering it. See
-  // mdnsName in lib/host.mjs.
-  const name = process.env.FRACTAL_MDNS_NAME || mdnsName()
+  // means one of them silently has no name while still offering it. And an
+  // override in FRACTAL_MDNS_NAME is made into a name the device server
+  // answers to. See mdnsName and advertisedName in lib/host.mjs.
+  const name = advertisedName()
 
   /*
    * Nothing else may already be on the port. ForgeFX moves itself when the port
@@ -1122,6 +1123,50 @@ function buildTray() {
  * still serves the unit, which is the whole job.
  */
 /*
+ * WHO MAY ASK: the window's own page, and nothing else.
+ *
+ * The bridge in preload.js is given to whatever the window, or a window it
+ * opens, has loaded, and a link with target=_blank opens one: a privacy page,
+ * a store page, a photo. None of those is this app, so none of them may read
+ * the Wi-Fi address, switch the start at power-on, or install an update. The
+ * question is the frame that asked, as Electron saw it (event.senderFrame),
+ * against the address the window loads (`where.local`, the device server's
+ * own page at http://localhost:<port>); before that address is known nobody
+ * is answered, and a frame that has gone or navigated away (no senderFrame)
+ * is not either.
+ *
+ * Invisible to anybody using the app: the window's own page is always that
+ * address. The page treats a refusal as nothing to say (src/lib/desktop.js).
+ */
+function askedByOwnPage(event) {
+  const local = where?.local
+  if (!local) return false
+  const frame = event?.senderFrame
+  if (!frame) return false
+  let own
+  try {
+    own = new URL(local).origin
+  } catch {
+    return false
+  }
+  return frame.origin === own
+}
+
+const refusedAsks = new Set()
+/* ipcMain.handle, for the window's own page only. A refusal is said once a channel and page. */
+function answerOwnPage(channel, fn) {
+  ipcMain.handle(channel, (event, ...args) => {
+    if (askedByOwnPage(event)) return fn(event, ...args)
+    const who = event?.senderFrame?.origin || 'a page that has gone'
+    if (!refusedAsks.has(`${channel} ${who}`)) {
+      if (refusedAsks.size < 50) refusedAsks.add(`${channel} ${who}`)
+      console.error(`[window] refused ${channel}: asked by ${who}, not this app's own page`)
+    }
+    throw new Error('Only the Fractal Remote window on this computer can ask that.')
+  })
+}
+
+/*
  * What the page may ask, and the only two things it may ask for.
  *
  * Registered once, whether or not the updater ever loads — a page asking in a
@@ -1139,16 +1184,16 @@ function wireUpdateChannel() {
    * launch has a different address and the old one would be a code that
    * opens nothing.
    */
-  ipcMain.handle('host:wifi', async () => {
+  answerOwnPage('host:wifi', async () => {
     if (!hostAt) return { lan: null, mdns: null }
     const { addresses, lanAddress } = await host()
     const now = addresses({ ...hostAt, ip: lanAddress() })
     return { lan: now.lan, mdns: now.mdns }
   })
-  ipcMain.handle('updates:state', () =>
+  answerOwnPage('updates:state', () =>
     update ? { ...update, line: updateLine(update) } : { kind: 'idle', line: null }
   )
-  ipcMain.handle('updates:check', async () => {
+  answerOwnPage('updates:check', async () => {
     if (!updates) return { ok: false, reason: 'no-updater' }
     await lookNow()
     return { ok: true }
@@ -1173,21 +1218,21 @@ function wireUpdateChannel() {
    * by the time electron-updater asks the app to quit there is nothing left to
    * wait for and the quit is a formality.
    */
-  ipcMain.handle('updates:releases', async () => {
+  answerOwnPage('updates:releases', async () => {
     await shell.openExternal(RELEASES_URL)
     return { ok: true }
   })
-  ipcMain.handle('updates:move', async () => ({ ok: moveToApplications() }))
+  answerOwnPage('updates:move', async () => ({ ok: moveToApplications() }))
 
-  ipcMain.handle('updates:install', async () => installNow())
+  answerOwnPage('updates:install', async () => installNow())
 
   /*
    * "Start when this computer turns on", for the switch in Settings. The
    * page asks whether this computer can do it at all — only the Linux app
    * can, see startAtBootState — and draws nothing when it cannot.
    */
-  ipcMain.handle('login:get', () => startAtBootState())
-  ipcMain.handle('login:set', (_event, on) => setStartAtBoot(on === true))
+  answerOwnPage('login:get', () => startAtBootState())
+  answerOwnPage('login:set', (_event, on) => setStartAtBoot(on === true))
 }
 
 /*

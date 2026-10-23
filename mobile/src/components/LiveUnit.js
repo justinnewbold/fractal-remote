@@ -7,6 +7,7 @@ import { color, font, space } from '../lib/theme'
 import Press from './Press'
 import Sheet from './Sheet'
 import MissingPick from './MissingPick'
+import { notUsingOne } from '../lib/relay-rules'
 
 /**
  * Which unit, one tap from the name in the corner, when more than one is on.
@@ -55,6 +56,8 @@ export default function LiveUnit({ open, onClose, hosts = [], units = {}, chosen
         ))}
         {/* The pick that does not answer, grayed, with Forget. */}
         <MissingPick name={missing} onForget={() => forgetMissing()} />
+        {/* How one you don't use comes off this list: at that computer (relay-rules notUsingOne). Only with two or more listed, as in Settings. */}
+        {hosts.length > 1 ? <Text style={{ color: color.silkDim, fontSize: font.small, paddingHorizontal: space.sm }}>{notUsingOne('app')}</Text> : null}
       </View>
     </Sheet>
   )

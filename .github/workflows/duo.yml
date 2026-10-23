@@ -1,0 +1,146 @@
+# Open the next build on Apple's newest software, for free, before an EAS
+# build slot is spent on it.
+#
+# The build pair made from main after the iPhone Duo work is made with Xcode
+# 27.1 (mobile/eas.json pins macos-tahoe-26.6-xcode-27.1): only an app built
+# with the iOS 27.1 SDK fills the Duo's screens. That SDK also refuses to
+# launch an app without the scene life cycle (Apple TN3187), which
+# expo-build-properties' ios.enableSceneSupport turns on. A compile proves
+# neither: an app with no scene support compiles and is killed at launch. So
+# this builds the iPhone app the way EAS does, with Xcode 27.1, opens it on
+# the newest iOS simulator, and checks it is still running a while later,
+# with a picture of the first screen kept as the "duo-screens" artifact. An
+# iPhone Duo simulator is used when the image has one.
+#
+# And the Siri phrases (mobile/targets/watch/_shared/SiriShortcuts.swift),
+# which are first compiled for the store on this Xcode. Apple reads App
+# Intents only from what Xcode extracts at build time into the app's own
+# Metadata.appintents folder, so the built app is checked for that folder and
+# for all nine commands in it: a phrase file left out of the app target, or
+# extracted by nobody, compiles cleanly and gives Siri nothing to hear. Then a
+# fractalremote://scene/3 link is opened on the running app, the way a
+# shortcut's Open URLs step does: with the scene life cycle on, a link reaches
+# the app through Expo's scene delegate, which nothing else here exercises,
+# and the app must still be running after it.
+#
+# By hand only (Actions → duo → Run workflow on the branch): the runner
+# image is a public preview, and a label no runner answers would leave a
+# pull request waiting on a check that never starts.
+#
+# It is on main only so that it can be started at all: GitHub offers Run
+# workflow only for a workflow the default branch has. Main itself has none
+# of the three yet (the Xcode 27.1 pin, scene support, the Siri phrases) and
+# stops at the first; it is run on the branch that carries the build work.
+name: duo
+
+on:
+  workflow_dispatch:
+
+jobs:
+  launch:
+    runs-on: xcode-27
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The image defaults to Xcode 27.0, which does not fill the Duo.
+      - name: Xcode 27.1
+        run: |
+          ls -d /Applications/Xcode*.app
+          sudo xcode-select -s /Applications/Xcode_27.1.app
+          xcodebuild -version
+
+      - name: Install
+        working-directory: mobile
+        run: npm ci
+
+      - name: The iPhone project, as EAS makes it
+        working-directory: mobile
+        run: npx expo prebuild -p ios --no-install
+
+      - name: Scene support is in it
+        working-directory: mobile/ios
+        run: |
+          grep -q UIApplicationSceneManifest FractalRemote/Info.plist
+          grep -q EXExpoAppSceneDelegate FractalRemote/Info.plist
+
+      - name: Pods
+        working-directory: mobile/ios
+        run: pod install
+
+      - name: The app builds with Xcode 27.1
+        working-directory: mobile/ios
+        run: |
+          set -o pipefail
+          xcodebuild -workspace FractalRemote.xcworkspace -scheme FractalRemote \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
+            || { grep -n -B2 -A12 -E 'error:|error |failed with exit' build.log | head -n 200; exit 1; }
+          tail -n 20 build.log
+
+      # The phrase list Xcode extracted, with every command in it.
+      - name: The Siri phrases are in the app
+        working-directory: mobile/ios
+        run: |
+          set -e
+          APP=$(find build/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphonesimulator*' | head -n 1)
+          test -n "$APP"
+          test -d "$APP/Metadata.appintents" \
+            || { echo "FractalRemote.app has no Metadata.appintents: Siri would have no phrases."; exit 1; }
+          ls -la "$APP/Metadata.appintents"
+          for INTENT in GoToSceneIntent NextSongIntent PreviousSongIntent TunerOnIntent TunerOffIntent SetTempoIntent LoadPresetIntent PedalOnIntent PedalOffIntent; do
+            grep -rqa "$INTENT" "$APP/Metadata.appintents" \
+              || { echo "$INTENT is not in Metadata.appintents."; exit 1; }
+          done
+          # The phrases themselves: "Close the tuner in" is in a phrase and in no title.
+          grep -rqa 'Close the tuner in' "$APP/Metadata.appintents" \
+            || { echo "The Siri phrases are not in Metadata.appintents."; exit 1; }
+
+      # Opened, then asked again 30 seconds later whether it is still running:
+      # an app the scene rule refuses is gone by then.
+      - name: It opens, and stays open
+        working-directory: mobile/ios
+        run: |
+          set -e
+          APP=$(find build/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphonesimulator*' | head -n 1)
+          test -n "$APP"
+          RUNTIME=$(xcrun simctl list runtimes -j | python3 -c "import json,sys; r=[x for x in json.load(sys.stdin)['runtimes'] if x.get('platform')=='iOS' and x.get('isAvailable')]; print(sorted(r, key=lambda x: [int(p) for p in x['version'].split('.')])[-1]['identifier'])")
+          TYPES=$(xcrun simctl list devicetypes -j)
+          DUO=$(echo "$TYPES" | python3 -c "import json,sys; t=[x for x in json.load(sys.stdin)['devicetypes'] if 'Duo' in x['name']]; print(t[0]['identifier'] if t else '')")
+          PHONE=$(echo "$TYPES" | python3 -c "import json,sys; t=[x for x in json.load(sys.stdin)['devicetypes'] if x['name'].startswith('iPhone') and 'Duo' not in x['name']]; print(t[-1]['identifier'])")
+          mkdir -p screens
+          for TYPE in $DUO $PHONE; do
+            echo "== $TYPE on $RUNTIME"
+            UDID=$(xcrun simctl create "check" "$TYPE" "$RUNTIME")
+            xcrun simctl boot "$UDID"
+            xcrun simctl bootstatus "$UDID" -b
+            xcrun simctl install "$UDID" "$APP"
+            xcrun simctl launch "$UDID" cloud.newbold.fractalremote
+            sleep 30
+            NAME=$(echo "$TYPE" | sed 's/.*SimDeviceType\.//')
+            xcrun simctl io "$UDID" screenshot "screens/$NAME.png"
+            xcrun simctl spawn "$UDID" launchctl list | grep -q 'cloud.newbold.fractalremote' \
+              || { echo "The app is not running 30 seconds after it was opened on $NAME."; exit 1; }
+            # A link, as a shortcut's Open URLs step sends it, through the scene delegate.
+            xcrun simctl openurl "$UDID" fractalremote://scene/3
+            sleep 10
+            xcrun simctl io "$UDID" screenshot "screens/$NAME-link.png"
+            xcrun simctl spawn "$UDID" launchctl list | grep -q 'cloud.newbold.fractalremote' \
+              || { echo "The app is not running 10 seconds after fractalremote://scene/3 was opened on $NAME."; exit 1; }
+            xcrun simctl shutdown "$UDID"
+            xcrun simctl delete "$UDID"
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: duo-screens
+          path: mobile/ios/screens
+          if-no-files-found: ignore
+          retention-days: 7

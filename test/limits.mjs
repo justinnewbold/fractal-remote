@@ -982,6 +982,47 @@ export function run(test) {
     )
   })
 
+  test('every Linux build asks the app’s own process, and the packaged app, past the device server’s guard', () => {
+    /*
+     * ForgeFX's guard (23 October 2026) keeps the computer's account routes
+     * for a caller that names no Origin. The app's main process is that
+     * caller when it turns the phone remote on (armHost), and only a real
+     * Electron main process can say what its fetch sends: ELECTRON_RUN_AS_NODE
+     * is the device server's side, and a different fetch. Measured once by
+     * hand on Electron 33.4.11; held on every build by these two steps.
+     */
+    const wf = read('.github/workflows/desktop.yml')
+    const at = wf.indexOf('\n  linux:\n')
+    assert.notEqual(at, -1, 'the linux job is gone')
+    const next = wf.slice(at + 1).search(/\n {2}[a-z][a-z0-9-]*:\n/)
+    const linuxJob = next === -1 ? wf.slice(at) : wf.slice(at, at + 1 + next)
+    const step = (name) => {
+      const from = linuxJob.indexOf(`- name: ${name}`)
+      assert.notEqual(from, -1, `the step "${name}" is gone`)
+      const rest = linuxJob.slice(from + 1)
+      const to = rest.search(/\n {6}- (name|uses):/)
+      return to === -1 ? rest : rest.slice(0, to)
+    }
+
+    const probe = step("The app's own process sends no Origin")
+    assert.ok(linuxJob.indexOf("- name: The app's own process sends no Origin") < linuxJob.indexOf('- name: Package'), 'the probe runs after the release is made, so it cannot keep one back')
+    assert.match(probe, /xvfb-run -a "\$ELECTRON" --no-sandbox "\$RUNNER_TEMP\/main-fetch\/main\.js"/, 'the probe is not run as Electron itself')
+    assert.doesNotMatch(probe, /ELECTRON_RUN_AS_NODE=|ELECTRON_RUN_AS_NODE: /, 'the probe runs Electron as Node, which is not where the app turns the phone remote on')
+    assert.match(probe, /process\.type !== 'browser'/, 'the probe does not check it is the main process')
+    assert.match(probe, /const \{ armHost \} = await import\(pathToFileURL\(process\.env\.HOST_MJS\)\.href\)/, 'the probe no longer runs armHost itself')
+    assert.match(probe, /s\.origin !== undefined \|\| s\.site !== undefined/, 'the probe stopped failing on an Origin or a Sec-Fetch-Site')
+    assert.match(probe, /for \(const m of \['GET', 'PUT', 'POST'\]\)/, 'the probe stopped insisting armHost used every method it uses')
+
+    const hidden = step('The app starts with no window, once, and stops when told')
+    assert.match(hidden, /grep -q 'Phone remote: sign in once in the app to turn it on\\\.' "\$log"/, 'the packaged app is no longer held to being answered as a signed-out computer')
+    assert.match(hidden, /for at in "localhost:5056" "127\.0\.0\.1:5056" "\$mdns:5056" "\$named:5056" \$\{lan:\+"\$lan:5056"\}; do/, 'an address the computer hands out is no longer asked')
+    // The .local names are made the way both launchers make theirs, and one from an override.
+    assert.match(hidden, /mdns="\$\(addr "h\.advertisedName\(\)"\)\.local"/, 'the .local name asked is not the one the app advertises')
+    assert.match(hidden, /named="\$\(addr "h\.advertisedName\(\{ env: \{ FRACTAL_MDNS_NAME: 'pedal_board' \} \}\)"\)\.local"/, 'the name made from a FRACTAL_MDNS_NAME override is no longer asked')
+    assert.match(hidden, /-X PUT -H "Host: \$at" -H "Origin: http:\/\/\$at"/, 'the write each address’s page makes is no longer asked')
+    assert.match(hidden, /grep -q '\\\[forgefx\\\]\\\[guard\\\] refused' "\$log"/, 'a refusal of something the app asked no longer turns the build red')
+  })
+
   test('every gear photograph says why we may use it, and names who took it', async () => {
     /*
      * "All the amp/cabs/drive photos have been uploaded to GitHub so you can
@@ -2351,6 +2392,64 @@ export function run(test) {
     assert.equal(browser({}).root.getAttribute('data-theme'), 'dark', 'a browser that never chose sees the guide light, when the app it came from starts dark')
     assert.equal(browser({ stored: 'sepia' }).root.getAttribute('data-theme'), 'dark', 'a value the app never writes is taken as a choice')
     assert.equal(browser({ refuse: true }).root.getAttribute('data-theme'), 'dark', 'storage that refuses gives the guide a theme the app would not show')
+  })
+
+  /*
+   * RETIRING AN OLD PI. "How can a user remove old units they aren't
+   * connected to": a Pi leaves Which unit only by not answering, so the
+   * guide says how at the Pi, in the computer app's own words, and the two
+   * things a Pi 5 swap trips on: a card given away still signed in, and
+   * Imager filling in the old Pi's Hostname for the new one.
+   */
+  test('the Pi guide says how to retire an old Pi, in the computer app’s own words', () => {
+    const page = read('public/raspberry-pi.html').replace(/<!--[\s\S]*?-->/g, '')
+    const text = (s) =>
+      s
+        .replace(/<\/?(?:strong|em|a|code|span)\b[^>]*>/g, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/\s+/g, ' ')
+        .trim()
+    const HEAD = '<h2 id="retire">Retiring an old Pi</h2>'
+    const at = page.indexOf(HEAD)
+    assert.ok(at > -1, 'the guide has no section for retiring an old Pi')
+    assert.equal(page.split('id="retire"').length - 1, 1, 'two places on the guide answer to #retire')
+    assert.ok(at > page.indexOf('<h2 id="gigs">') && at < page.indexOf('<footer>'), 'Retiring an old Pi is not the last section, after For gigs')
+    assert.match(page, /<a href="#gigs">for gigs<\/a> ·\s*<a href="#retire">retiring an old Pi<\/a>\s*<\/p>/, 'the list at the top of the guide does not lead to it')
+    const words = text(page.slice(at, page.indexOf('<footer>')))
+    for (const said of [
+      'still shows under Which unit while it is switched on',
+      'open Fractal Remote from Downloads, which brings up its window',
+      'Open Settings (the gear ⚙ at the top right), choose Phone & computer, open Phone remote, and click Turn off.',
+      'It stays off through restarts, until someone clicks Turn on there.',
+      'choose About and untick Start when this computer turns on',
+      'the menu of the Fractal Remote icon',
+      'Then shut the Pi down and unplug it, as in For gigs.',
+      'close Fractal Remote all the way and open it again (in a web browser, reload the page): the old Pi is gone from Which unit.',
+      /* A pick stays, as not answering, with Forget (relay.js and remote.js missingPick, missingPickRow), so the guide says so, or the steps look as if they did not work. */
+      'If you had picked it there, it shows as not answering instead: press Forget beside it.',
+      'First erase the card with Raspberry Pi Imager: choose Erase on its OS screen. The app on that card is still signed in to your Fractal Remote account.',
+      'Give the new one a different Hostname in Imager. Imager fills in the name you gave last time'
+    ]) {
+      assert.ok(words.includes(said), `Retiring an old Pi no longer says "${said}": ${words}`)
+    }
+    for (const never of [/this phone/i, /sign out/i, /official/i, /grey/i, /Inc\./]) assert.ok(!never.test(words), `${never} in Retiring an old Pi`)
+    /* The words are the computer app's: read from it, so a rename there fails here. */
+    const app = read('src/App.jsx')
+    assert.match(app, /link: 'Phone & computer',/)
+    assert.match(app, /\babout: 'About',/)
+    assert.match(app, /<Section key="phone-remote" title="Phone remote"/)
+    assert.match(read('src/components/PhoneRemote.jsx'), /onAction\('mac-off'\)[^>]*>\s*Turn off\s*</)
+    assert.match(read('src/components/PhoneRemote.jsx'), /onAction\('mac-on'\)[^>]*>\s*Turn on\s*</)
+    assert.match(read('src/components/StartAtBoot.jsx'), /<input type="checkbox"[^\n]*\/>\s*<span>\s*Start when this computer turns on/, 'the switch under About is no longer a tick box called Start when this computer turns on')
+    assert.match(read('desktop/main.js'), /label: 'Start when this computer turns on',\s*type: 'checkbox'/, 'the tray menu’s switch was renamed; read the guide against it again')
+    assert.match(read('desktop/lib/host.mjs'), /wanted\.wanted === false\) \{\s*log\('Phone remote: off — it was turned off in the app\.'\)/, 'Turn off no longer lasts through a restart, as the guide says')
+    /* Not answering and Forget are the app's own words for a pick that no longer answers. */
+    const row = read('shared/relay-rules.mjs').match(/export const missingPickRow = [^\n]+/)?.[0] || ''
+    assert.ok(row.includes('— not answering`') && row.includes("forget: 'Forget'"), `the row for a pick that does not answer no longer says not answering, with Forget: ${row}`)
+    /* The guide's own Imager words, from its earlier steps: Hostname, filled in last time, and the OS screen. */
+    assert.ok(page.includes('<li><strong>Hostname</strong>: type a name for the Pi') && page.includes('Imager fills in the name you gave last time'), 'the guide’s Imager steps no longer say Hostname, or that Imager fills it in')
+    assert.ok(page.includes('On the <strong>OS</strong> screen, choose'), 'the guide’s Imager steps no longer call it the OS screen')
   })
 
   /*

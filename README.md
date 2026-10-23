@@ -81,6 +81,20 @@ ForgeFX needs its sibling codec repo checked out next to it — clone
 `sKuhLight/forgefx-midi` alongside `ForgeFX` and run `npm install && npm run build`
 in it first, or the server won't start.
 
+The Vite page at `http://localhost:5173` calls ForgeFX at `http://localhost:5056`,
+which is another address, and the device server answers a page from another
+address only when `FORGEFX_ALLOWED_ORIGINS` names it (its guard, in
+`server/src/guard.ts`, since 23 October 2026). So start ForgeFX with it:
+
+```bash
+FORGEFX_ALLOWED_ORIGINS=http://localhost:5173 npm run dev   # in ForgeFX/server
+```
+
+Without it every call from the dev page is refused, and the server's log says
+`[forgefx][guard] refused origin`. The computer app sets the variable to the
+public site only; a page ForgeFX serves itself (`npm run serve`, the computer
+app, `FORGEFX_STATIC` below) is its own and needs nothing.
+
 Quit FM3-Edit before starting. Only one program can hold the USB port.
 
 ## Roadmap
