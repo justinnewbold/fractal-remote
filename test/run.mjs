@@ -1519,7 +1519,7 @@ test('an update never depends on the quit working', () => {
   assert.match(updates, /install: \(\) => \{/, 'the updater cannot be told to install')
   assert.match(updates, /updater\.quitAndInstall\(\)/, 'installing does not install')
   assert.match(preload, /install: \(\) => ipcRenderer\.invoke\('updates:install'\)/, 'the page cannot ask')
-  assert.match(main, /ipcMain\.handle\('updates:install'/, 'nothing answers the page')
+  assert.match(main, /answerOwnPage\('updates:install'/, 'nothing answers the page')
   assert.match(ui, /bridge\.updates\.install\(\)/, 'the notice never offers it')
 
   // And only for an update that is actually sitting there, so this cannot
@@ -10111,7 +10111,7 @@ test('an install that did not take is said so, with why', async () => {
    * power-on goes through exactly the same steps as the button, and this
    * reads installNow itself — and checks the button still goes through it.
    */
-  assert.match(main, /ipcMain\.handle\('updates:install', async \(\) => installNow\(\)\)/, 'the button no longer goes through the one install path')
+  assert.match(main, /answerOwnPage\('updates:install', async \(\) => installNow\(\)\)/, 'the button no longer goes through the one install path')
   const install = main.slice(main.indexOf('async function installNow('), main.indexOf('updates.install()'))
   assert.ok(install.length > 0, 'there is no installNow to read')
   assert.match(install, /writeMarker\(\{ version: update\.version/, 'nothing records which version the install was meant to reach')
@@ -10595,6 +10595,8 @@ function loadDesktopMain({
   }
 
   const events = {}
+  // What the page may ask the app, by channel: ipcMain.handle's handlers.
+  const handlers = {}
   const menus = []
   const windows = []
   const dialogs = []
@@ -10663,7 +10665,11 @@ function loadDesktopMain({
       showMessageBox: async (options) => dialogs.push(options?.message),
       showMessageBoxSync: (options) => dialogs.push(options?.message)
     },
-    ipcMain: { handle() {} },
+    ipcMain: {
+      handle: (channel, fn) => {
+        handlers[channel] = fn
+      }
+    },
     autoUpdater: {},
     powerMonitor: {
       on: (event, fn) => {
@@ -10710,9 +10716,41 @@ function loadDesktopMain({
     'setInterval',
     `${src}\n;return (__code, __given) => eval(__code)`
   )((id) => stand[id] || real(id), '/opt/Fractal Remote/resources/app.asar', proc, quiet, timer, () => {}, timer)
-  return { run, disk, dirs, events, menus, windows, dialogs, exits, logs, timers, listeners, power, awake, process: proc }
+  return { run, disk, dirs, events, handlers, menus, windows, dialogs, exits, logs, timers, listeners, power, awake, process: proc }
 }
 const ENTRY = '/home/pi/.config/autostart/fractal-remote.desktop'
+
+test('only the window’s own page may ask the app anything: not a page it opened, and not before it knows its own address', async () => {
+  /*
+   * The bridge in preload.js is handed to whatever a window has loaded, and a
+   * link with target=_blank opens a window of its own: the privacy page, a
+   * store page, the public site. None of those may read the Wi-Fi address,
+   * switch the start at power-on, or install an update. main.js's own
+   * handlers, run: the frame that asked is held to `where.local`.
+   */
+  const main = loadDesktopMain()
+  main.run('wireUpdateChannel()')
+  const channels = Object.keys(main.handlers).sort()
+  assert.deepEqual(channels, ['host:wifi', 'login:get', 'login:set', 'updates:check', 'updates:install', 'updates:move', 'updates:releases', 'updates:state'], 'a channel was added or dropped: hold it here too')
+  const ask = (channel, origin, ...args) => main.handlers[channel](origin === undefined ? {} : { senderFrame: origin === null ? null : { origin } }, ...args)
+  const refused = /Only the Fractal Remote window on this computer can ask that/
+
+  // Before the app knows its own address, nobody, its own page included.
+  for (const channel of channels) await assert.rejects(async () => ask(channel, 'http://localhost:5056', true), refused, `${channel} answered before the address was known`)
+
+  main.run("where = { local: 'http://localhost:5056', lan: 'http://192.168.1.20:5056', mdns: 'http://fractal-pi.local:5056', all: [] }")
+  const strangers = ['http://192.168.1.20:5056', 'http://fractal-pi.local:5056', 'http://127.0.0.1:5056', 'http://localhost:5057', 'https://fractal.newbold.cloud', 'https://evil.example', 'http://localhost:5173', 'null', '', null, undefined]
+  for (const channel of channels)
+    for (const who of strangers) await assert.rejects(async () => ask(channel, who, true), refused, `${channel} answered ${JSON.stringify(who)}`)
+  // Said in the log, once a channel and page, not once a call.
+  assert.equal(main.logs.filter((l) => l.includes('[window] refused updates:install: asked by https://evil.example')).length, 1)
+
+  // Its own page is answered as before: these three change nothing.
+  assert.deepEqual(await ask('updates:state', 'http://localhost:5056'), { kind: 'idle', line: null })
+  assert.deepEqual(await ask('host:wifi', 'http://localhost:5056'), { lan: null, mdns: null })
+  assert.equal(typeof (await ask('login:get', 'http://localhost:5056')).supported, 'boolean')
+})
+
 const trayItem = (menu, label) => (menu || []).find((item) => typeof item.label === 'string' && item.label.startsWith(label))
 
 test('the tray says whose app this is not, greyed, just above Quit, and asks nobody anything', async () => {
@@ -11418,7 +11456,7 @@ test('every computer looks for updates by itself: six hours on, sooner while it 
   {
     const src = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
     assert.equal((src.match(/updates\??\.check\(/g) || []).length, 3, 'a look for updates is taken somewhere other than the first look, the loop and lookNow, and leaves the next look where it was')
-    assert.match(src, /ipcMain\.handle\('updates:check', async \(\) => \{[\s\S]{0,120}await lookNow\(\)/, "the window's Check for updates does not set the next look")
+    assert.match(src, /answerOwnPage\('updates:check', async \(\) => \{[\s\S]{0,120}await lookNow\(\)/, "the window's Check for updates does not set the next look")
     assert.match(src.slice(src.indexOf('function retryUpdateCheck()'), src.indexOf('function networkIsUp()')), /lookNow\(\)/)
     assert.match(src.slice(src.indexOf('function networkIsUp()')), /^\s*if \(startHidden && update\?\.kind === 'trouble' && updates\) lookNow\(\)$/m)
   }
@@ -11707,8 +11745,8 @@ test('the switch is in Settings and the tray, and the page reaches it only throu
   const appSrc = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
   const builder = readSrc(new URL('../desktop/electron-builder.yml', import.meta.url), 'utf8')
 
-  assert.match(main, /ipcMain\.handle\('login:get', \(\) => startAtBootState\(\)\)/)
-  assert.match(main, /ipcMain\.handle\('login:set', \(_event, on\) => setStartAtBoot\(on === true\)\)/, 'anything but true turns it on')
+  assert.match(main, /answerOwnPage\('login:get', \(\) => startAtBootState\(\)\)/)
+  assert.match(main, /answerOwnPage\('login:set', \(_event, on\) => setStartAtBoot\(on === true\)\)/, 'anything but true turns it on')
   // Registered with the others, once.
   const channel = main.slice(main.indexOf('function wireUpdateChannel()'), main.indexOf('async function installNow('))
   assert.ok(channel.includes("'login:get'") && channel.includes("'login:set'"), 'the switch is answered from somewhere other than the one channel')
