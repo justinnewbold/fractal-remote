@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Modal, PanResponder, Platform, Pressable, Text, View, useWindowDimensions } from 'react-native'
 import { BlurView } from 'expo-blur'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
-import { ANY_WAY_UP } from '../lib/screenShape'
+import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import Note from './Note'
 import { blockParams, idOf, setParam, setParamConfirmed } from '../lib/device'
 import { noteEdited } from '../lib/rig'
@@ -112,6 +113,7 @@ export default function Volume({ blocks, open, onClose, onError }) {
   const [width, setWidth] = useState(0)
   /* And the window, for how wide the panel itself should be. */
   const { width: width0 } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
 
   const live = useRef({ param: null, value: null, width: 0, eid: null })
   useEffect(() => {
@@ -298,7 +300,9 @@ export default function Volume({ blocks, open, onClose, onError }) {
   }
 
   const pct = volumePercent(value, param)
-  const panel = Math.min(width0 - space.xl * 2, 460)
+  /* Its margin from the phone's own down each side, where it has any (lib/screenShape clearSides: the Duo's strip), not from under it. */
+  const sides = clearSides(insets, space.xl)
+  const panel = Math.min(width0 - sides.paddingLeft - sides.paddingRight, 460)
 
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent supportedOrientations={ANY_WAY_UP}>
@@ -319,6 +323,7 @@ export default function Volume({ blocks, open, onClose, onError }) {
             alignItems: 'center',
             justifyContent: 'center',
             padding: space.xl,
+            ...sides,
             backgroundColor: tint(color.chassis, 0.94)
           }}
         >

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Modal, Pressable, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { BlurView } from 'expo-blur'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
-import { ANY_WAY_UP } from '../lib/screenShape'
+import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import Note from './Note'
 import Press from './Press'
 
@@ -28,6 +29,7 @@ export default function PasswordBox({ open, onChange, onClose }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const { height } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
   const field = useRef(null)
   const second = useRef(null)
 
@@ -85,7 +87,8 @@ export default function PasswordBox({ open, onChange, onClose }) {
             alignItems: 'center',
             /* High, so the keyboard cannot reach it. See components/TempoBox. */
             paddingTop: Math.max(space.xxl, height * 0.1),
-            paddingHorizontal: space.xl
+            /* Its margin from the phone's own down each side, not under it (lib/screenShape clearSides). */
+            ...clearSides(insets, space.xl)
           }}
         >
           <Pressable

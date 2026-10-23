@@ -71,3 +71,24 @@ export function firstFrame(window, kept = [], insets = null) {
   if (!same) return { width: guess, window: across, shape: null }
   return Math.abs(same.width - guess) < 1 ? { ...same, width: guess } : same
 }
+
+/**
+ * A POP-UP'S SIDES, clear of the phone's own. Each pop-up (a React Native
+ * Modal) is a screen of its own over the app, outside the app's frame, so
+ * the frame keeping clear of every side (SAFE_EDGES) does nothing for it:
+ * on the iPhone Duo closed, a sheet's ✕ and the tempo box's right edge sat
+ * under the strip down the side where it keeps its clock and camera, and an
+ * Android tablet's camera on its side did the same. So each pop-up's own
+ * margin `pad` is taken from the strip rather than from the glass's edge:
+ * `pad` plus what the phone keeps down that side, as the app's own pages are
+ * 16 in from it.
+ *
+ * A phone held upright has nothing down its sides, so its pop-ups have
+ * exactly the margin they always had. null when there is nothing to add.
+ */
+export function clearSides(insets, pad = 0) {
+  const side = (n) => Math.max(0, Number(n) || 0)
+  const left = pad + side(insets?.left)
+  const right = pad + side(insets?.right)
+  return left || right ? { paddingLeft: left, paddingRight: right } : null
+}

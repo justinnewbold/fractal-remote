@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import { Modal, Platform, Pressable, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { BlurView } from 'expo-blur'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
-import { ANY_WAY_UP } from '../lib/screenShape'
+import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import { ANY_BPM, checkBpm } from '../lib/tempo'
 import { freshField, heldSelection, selectedByHand, selectionMoved, shownText, typedInto } from '../lib/tempo-field'
 import MetronomeSwitch from './MetronomeSwitch'
@@ -64,6 +65,7 @@ export default function TempoBox({ open, bpm, range = ANY_BPM, onSet, onClose })
   const [error, setError] = useState(null)
   const [wasOpen, setWasOpen] = useState(false)
   const { height } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
   const input = useRef(null)
   /*
    * A small phone: tighter spacing, and the metronome's words held to two
@@ -145,7 +147,8 @@ export default function TempoBox({ open, bpm, range = ANY_BPM, onSet, onClose })
           style={{
             flex: 1,
             alignItems: 'center',
-            paddingHorizontal: tight ? space.lg : space.xl
+            /* Its margin from the phone's own down each side, not under it (lib/screenShape clearSides). */
+            ...clearSides(insets, tight ? space.lg : space.xl)
           }}
         >
           {/*

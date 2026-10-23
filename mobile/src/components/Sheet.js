@@ -4,7 +4,7 @@ import { BlurView } from 'expo-blur'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { color, font, radius, space } from '../lib/theme'
-import { ANY_WAY_UP, firstFrame } from '../lib/screenShape'
+import { ANY_WAY_UP, clearSides, firstFrame } from '../lib/screenShape'
 import { SHEET_MAX, pageRow, playLines } from '../lib/gigSize'
 
 /* Above a tall sheet: the status bar — this much where the phone does not say — and a strip of glass. */
@@ -64,7 +64,7 @@ let lastFrame = null
  */
 export default function Sheet({ open, onClose, title, note, head, foot, tall = false, children }) {
   const { width: across, height } = useWindowDimensions()
-  const { top, bottom } = useSafeAreaInsets()
+  const { top, bottom, left, right } = useSafeAreaInsets()
   /* Tall: everything but the status bar and a strip of glass to tap out on. */
   const highest = tall ? Math.max(height * 0.8, height - Math.max(top, STATUS_AT_LEAST) - GLASS) : height * 0.8
   /*
@@ -115,8 +115,11 @@ export default function Sheet({ open, onClose, title, note, head, foot, tall = f
                are reaching for. */
             onPress={() => {}}
             style={{
-              /* Its sides edged like its top, since it no longer meets the screen's. */
-              ...(capped ? { width: '100%', maxWidth: SHEET_MAX, alignSelf: 'center', borderLeftWidth: 1, borderRightWidth: 1 } : null),
+              /* Its sides edged like its top, since it no longer meets the screen's;
+                 or, edge to edge, everything on it kept clear of the phone's own
+                 down its sides (lib/screenShape clearSides: the Duo's strip). A
+                 sheet capped in the middle of a wide screen is already clear. */
+              ...(capped ? { width: '100%', maxWidth: SHEET_MAX, alignSelf: 'center', borderLeftWidth: 1, borderRightWidth: 1 } : clearSides({ left, right })),
               maxHeight: highest,
               backgroundColor: color.chassis,
               borderTopLeftRadius: radius.lg * 2,

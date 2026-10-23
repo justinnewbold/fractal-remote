@@ -227,7 +227,7 @@ export function run(test) {
      * than that adds to it.
      */
     const sheet = code(read('mobile/src/components/Sheet.js'))
-    assert.match(sheet, /const \{ top, bottom \} = useSafeAreaInsets\(\)/, 'the sheet does not ask the phone where its bottom edge is')
+    assert.match(sheet, /const \{ top, bottom, left, right \} = useSafeAreaInsets\(\)/, 'the sheet does not ask the phone where its bottom edge is')
     assert.match(sheet, /const FOOT_AT_LEAST = space\.xxl\b/, 'the floor is not the 32 every sheet had')
     assert.match(sheet, /paddingBottom: Math\.max\(bottom, FOOT_AT_LEAST\)/, 'the foot is not the bottom edge with the floor under it')
     assert.doesNotMatch(sheet, /paddingBottom: space\.xxl/, 'the fixed 32 is still there')
@@ -841,13 +841,60 @@ export function run(test) {
     })
   })
 
+  test('every pop-up keeps clear of the phone’s own down its sides, and a phone held upright keeps the margins it had', async () => {
+    /*
+     * A pop-up is a screen of its own over the app, outside the app's frame,
+     * so the frame keeping clear of every side does nothing for it. On the
+     * Duo closed (about 466 wide, its clock and camera in a strip down the
+     * right), the sheet's ✕, the tempo box and the tuner's dial reached under
+     * the strip. Each pop-up's margin is now taken from the strip.
+     */
+    const { clearSides } = await screenShape()
+    /* A phone held upright: nothing down its sides, so the margin it always had, and a sheet nothing added at all. */
+    assert.deepEqual(clearSides({ top: 59, bottom: 34, left: 0, right: 0 }, 24), { paddingLeft: 24, paddingRight: 24 })
+    assert.deepEqual(clearSides({ top: 59, bottom: 34, left: 0, right: 0 }, 16), { paddingLeft: 16, paddingRight: 16 })
+    assert.equal(clearSides({ left: 0, right: 0 }), null)
+    assert.equal(clearSides(undefined), null)
+    /* The Duo closed, its strip 44 down the right: the margin from the strip, as the app's own pages are. */
+    assert.deepEqual(clearSides({ left: 0, right: 44 }, 24), { paddingLeft: 24, paddingRight: 68 })
+    assert.deepEqual(clearSides({ left: 0, right: 44 }), { paddingLeft: 0, paddingRight: 44 })
+    assert.deepEqual(clearSides({ left: 48, right: 0 }, 16), { paddingLeft: 64, paddingRight: 16 })
+    /* So on the Duo closed the tempo box (420 at most) and the tuner's dial end 24 short of the strip, not under it. */
+    const tempoRight = (W, r) => {
+      const s = clearSides({ left: 0, right: r }, 24)
+      const room = W - s.paddingLeft - s.paddingRight
+      return s.paddingLeft + (room - Math.min(room, 420)) / 2 + Math.min(room, 420)
+    }
+    assert.ok(tempoRight(466, 44) <= 466 - 44 - 24, 'the tempo box reaches under the Duo’s strip')
+    assert.equal(tempoRight(393, 0), 393 - 24, 'the tempo box moved on a phone held upright')
+
+    /* Every pop-up in the phone app but Add songs (whose own frame keeps clear of every side, SAFE_EDGES) takes its sides from clearSides, with the phone's own insets. */
+    const popups = everyUse('Modal', 'supportedOrientations').map((p) => p.file).sort()
+    for (const file of popups) {
+      if (file === 'mobile/src/components/SongPicker.js') continue
+      const src = code(read(file))
+      assert.match(src, /import \{[^}]*\bclearSides\b[^}]*\} from '\.\.\/lib\/screenShape'/, `${file} does not keep clear of the phone’s own sides`)
+      assert.match(src, /useSafeAreaInsets\(\)/, `${file} does not ask the phone what it keeps down its sides`)
+      assert.doesNotMatch(src, /paddingHorizontal: (tight \? space\.lg : )?space\.xl\b/, `${file} still has a margin from the glass’s edge`)
+    }
+    assert.match(code(read('mobile/src/components/SongPicker.js')), /edges=\{SAFE_EDGES\}/)
+    const tuner = code(read('mobile/src/components/Tuner.js'))
+    assert.match(tuner, /const sides = clearSides\(insets, space\.xl\)\n\s*const dial = Math\.min\(width - sides\.paddingLeft - sides\.paddingRight, 420\)/, 'the tuner’s dial is as wide as the window, strip and all')
+    assert.match(tuner, /padding: space\.xl,\s*\.\.\.sides,/)
+    const volume = code(read('mobile/src/components/Volume.js'))
+    assert.match(volume, /const sides = clearSides\(insets, space\.xl\)\n\s*const panel = Math\.min\(width0 - sides\.paddingLeft - sides\.paddingRight, 460\)/, 'the volume’s panel is as wide as the window, strip and all')
+    assert.match(volume, /padding: space\.xl,\s*\.\.\.sides,/)
+    assert.match(code(read('mobile/src/components/TempoBox.js')), /\.\.\.clearSides\(insets, tight \? space\.lg : space\.xl\)/)
+    assert.match(code(read('mobile/src/components/PasswordBox.js')), /\.\.\.clearSides\(insets, space\.xl\)/)
+  })
+
   test('a sheet is no wider than 480, centered, from Play’s own line, measured on the sheet’s own frame, and full width under it', () => {
     const sheet = code(read('mobile/src/components/Sheet.js'))
     assert.match(sheet, /onLayout=\{\(e\) => setSeen\(\{ width: e\.nativeEvent\.layout\.width, window: across \}\)\}/, 'the sheet does not measure the screen it comes up over, with the window it measured it in')
     assert.match(sheet, /const frame = firstFrame\(across, \[seen, lastFrame\]\)\.width\n/, 'the sheet’s first frame is not lib/screenShape’s')
     assert.match(sheet, /const lines = playLines\(pageRow\(frame, space\.lg\), linesWere\.current\)/, 'the sheet’s line is not Play’s')
     assert.match(sheet, /const capped = lines\.opens\n/)
-    assert.match(sheet, /\.\.\.\(capped \? \{ width: '100%', maxWidth: SHEET_MAX, alignSelf: 'center', borderLeftWidth: 1, borderRightWidth: 1 \} : null\),/)
+    assert.match(sheet, /\.\.\.\(capped \? \{ width: '100%', maxWidth: SHEET_MAX, alignSelf: 'center', borderLeftWidth: 1, borderRightWidth: 1 \} : clearSides\(\{ left, right \}\)\),/)
     assert.equal(sheet.match(/\bcapped\b/g).length, 2, 'the cap does something under the line')
     /* The window is read for the height, and for the width only as firstFrame's window. */
     assert.match(sheet, /const \{ width: across, height \} = useWindowDimensions\(\)/)
