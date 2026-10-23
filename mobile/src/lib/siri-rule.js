@@ -86,6 +86,27 @@ export const SIRI_SAYS = Object.freeze({
   boostNotHere: 'Only an AM4’s amp has a boost the app can switch.'
 })
 
+/*
+ * WHETHER ANOTHER SCREEN IS UP IN PLAY'S PLACE, from App.js's own state, for
+ * lib/siri's one rule. Then a command is answered "Open Play" at once, as the
+ * review notes promise for any screen but Play. Only while the app is still
+ * starting (its two stored answers loading, or an account being checked
+ * after a sign-in) can Play come by itself, and only then does a command
+ * wait for it inside its tap rule. Everywhere else it will not: the startup
+ * card, the walkthrough, the sign-in and the paywall each wait for a tap,
+ * and so do the app's own other screens. Before this, the first four waited
+ * the second and a half and answered "Not sent, it would have landed late",
+ * which was a reason nothing had.
+ *
+ * Play's place, signed in and past the card, is Play, and is not elsewhere
+ * even while the waiting screen stands in for it (Finding your computer):
+ * that one can turn into Play by itself.
+ */
+export function playElsewhereOf({ auth = 'checking', seenWalk = null, independentDue = false, screen = 'stage' } = {}) {
+  if (auth === 'checking' || seenWalk === null || seenWalk === undefined) return false
+  return !(auth === 'in' && seenWalk === true && independentDue !== true && screen === 'stage')
+}
+
 /** A write that went and has not been answered when Siri must be: `what` is the command, as "Scene 3". */
 export const sentWords = (what) => `Sent: ${what}. The unit hasn’t answered yet.`
 

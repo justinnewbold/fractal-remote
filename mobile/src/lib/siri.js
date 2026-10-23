@@ -42,9 +42,12 @@ import { VP4_NO_TEMPO } from './vp4-safety'
  * up, because Play is where its result and a "Not sent" are shown, where the
  * setlist stepping lives (Stage.step, which Play hands over by useSiriPlay),
  * and where the tuner's Stop button is. Anywhere else in the app Siri is told
- * to open Play on this device. While the app is still starting (the card,
- * the sign-in, Finding your computer) a command waits for Play for as long as
- * its tap rule lasts, and is not sent after that.
+ * to open Play on this device, and so is it on the startup card, the
+ * walkthrough, the sign-in and the paywall, from none of which Play comes by
+ * itself (lib/siri-rule playElsewhereOf). While the app is still starting
+ * (its stored answers loading, an account being checked after a sign-in,
+ * Finding your computer) a command waits for Play for as long as its tap
+ * rule lasts, and is not sent after that.
  *
  * THE 1.5-SECOND TAP RULE, counted from `at`: when the Swift took the
  * command, not when it reached this side. A command held while the app
@@ -115,7 +118,7 @@ export function showPlay(here) {
   }
 }
 
-/** For App.js: true while a screen of the app other than Play is up (Settings, Presets, Setlists, Edit…). */
+/** For App.js: true while a screen other than Play is up in its place (Settings, Presets, Setlists, Edit…, and the card, the walkthrough, the sign-in, the paywall). */
 export function siriElsewhere(on) {
   elsewhere = on === true
 }

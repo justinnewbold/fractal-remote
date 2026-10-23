@@ -367,6 +367,46 @@ export function run(test) {
     }
   })
 
+  test('Siri: the startup card, the walkthrough, the sign-in and the paywall say to open Play at once; only a starting app waits for it', async () => {
+    const { playElsewhereOf } = await siriRule()
+    /* Play does not come by itself from any of these: each waits for a tap. */
+    for (const [where, state] of [
+      ['the startup card', { auth: 'out', seenWalk: false, independentDue: true, screen: 'stage' }],
+      ['the startup card, signed in', { auth: 'in', seenWalk: true, independentDue: true, screen: 'stage' }],
+      ['the walkthrough on a fresh install', { auth: 'out', seenWalk: false, independentDue: false, screen: 'stage' }],
+      ['the walkthrough, shown again', { auth: 'in', seenWalk: false, independentDue: false, screen: 'stage' }],
+      ['the sign-in', { auth: 'out', seenWalk: true, independentDue: false, screen: 'stage' }],
+      ['the paywall', { auth: 'paywall', seenWalk: true, independentDue: false, screen: 'stage' }],
+      ['Settings', { auth: 'in', seenWalk: true, independentDue: false, screen: 'settings' }],
+      ['Setlists', { auth: 'in', seenWalk: true, independentDue: false, screen: 'setlists' }]
+    ]) {
+      assert.equal(playElsewhereOf(state), true, `${where} waits a second and a half for a Play that is not coming`)
+    }
+    /* Still starting, or Play's own place (the waiting screen there can turn into Play by itself). */
+    for (const [where, state] of [
+      ['the stored answers loading', { auth: 'checking', seenWalk: null, independentDue: false, screen: 'stage' }],
+      ['the walkthrough answer loading', { auth: 'in', seenWalk: null, independentDue: false, screen: 'stage' }],
+      ['an account being checked after a sign-in', { auth: 'checking', seenWalk: true, independentDue: false, screen: 'stage' }],
+      ['Play', { auth: 'in', seenWalk: true, independentDue: false, screen: 'stage' }]
+    ]) {
+      assert.equal(playElsewhereOf(state), false, `${where} is told to open Play`)
+    }
+    /* On the bench: said on the walkthrough, it is answered at once, in the words the review notes promise, and nothing is put on Play. */
+    const b = await siriOnTheBench()
+    try {
+      b.siri.siriElsewhere(playElsewhereOf({ auth: 'out', seenWalk: false, independentDue: false, screen: 'stage' }))
+      const id = b.say('scene', 3)
+      await b.clock.advance(0)
+      assert.deepEqual(b.replyTo(id), ['Open Play on this phone, then say it again.'])
+      await b.clock.advance(2000)
+      assert.deepEqual(b.replyTo(id), ['Open Play on this phone, then say it again.'], 'answered again, late')
+      assert.equal(b.rig.notes.length, 0, 'Not sent was put on a Play that was never asked for')
+      assert.ok(!b.replies().some((w) => /landed late/.test(w)), 'a command on the walkthrough was said to have been late')
+    } finally {
+      done(b)
+    }
+  })
+
   test('Siri: a command that arrives while the app is still starting waits for Play inside its 1.5 seconds, and is not sent after', async () => {
     const b = await siriOnTheBench()
     try {
@@ -916,7 +956,8 @@ export function run(test) {
     const app = flat('mobile/App.js')
     assert.match(app, /import \{ (allowSiriLinks, )?siriElsewhere, startSiri \} from '\.\/src\/lib\/siri'/)
     assert.match(app, /useEffect\(\(\) => startSiri\(\), \[\]\)/, 'Siri is not listened for from the start, so Tuner off works only on Play')
-    assert.match(app, /const playElsewhere = auth === 'in' && seenWalk === true && !independentDue && screen !== 'stage'/)
+    assert.match(app, /import \{ playElsewhereOf \} from '\.\/src\/lib\/siri-rule'/)
+    assert.match(app, /const playElsewhere = playElsewhereOf\(\{ auth, seenWalk, independentDue, screen \}\)/)
     assert.match(app, /useEffect\(\(\) => siriElsewhere\(playElsewhere\), \[playElsewhere\]\)/)
     const siri = withoutComments(read(`${LIB}/siri.js`))
     assert.ok(!/isDemo|from '\.\/demo'/.test(siri), 'Siri takes another road in the demo than on a rig, so the reviewer would try something customers do not have')

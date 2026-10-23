@@ -56,6 +56,7 @@ import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurcha
 import { shouldAskToPay } from './src/lib/unlock-rule'
 import { deviceNoun } from './src/lib/device-word'
 import { allowSiriLinks, siriElsewhere, startSiri } from './src/lib/siri'
+import { playElsewhereOf } from './src/lib/siri-rule'
 
 /* The VP4's Scene Select number and MIDI channel live in the phone's store; the device layer reads them from there (lib/vp4-safety). */
 keepVp4SetupIn(sync)
@@ -426,11 +427,14 @@ export default function App() {
   /* The play screen itself is up: not the waiting screen standing in for it. */
   const playOnScreen = screen === 'stage' && !settling
   /*
-   * AND ANOTHER SCREEN OF THE APP IS UP IN ITS PLACE, for Siri (lib/siri): a
-   * command said there is answered with "Open Play" at once, while one said
-   * as the app is still starting waits for Play inside its tap rule.
+   * AND ANOTHER SCREEN IS UP IN ITS PLACE, for Siri (lib/siri): a command
+   * said there is answered with "Open Play" at once, while one said as the
+   * app is still starting waits for Play inside its tap rule. The startup
+   * card, the walkthrough, the sign-in and the paywall are elsewhere too:
+   * Play does not come by itself from any of them (lib/siri-rule
+   * playElsewhereOf says which is which).
    */
-  const playElsewhere = auth === 'in' && seenWalk === true && !independentDue && screen !== 'stage'
+  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen })
   useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
   /*
    * And the new-version note only floats over it while the phone is off the
