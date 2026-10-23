@@ -26,9 +26,30 @@
  * phone on a dark stage should not be able to overwrite slot 67 or move
  * firmware around. Naming the rule here lets both apps say so plainly instead
  * of surfacing a status code halfway through a song.
+ *
+ * THE READS THAT DO NOT TRAVEL, since the guard on the computer's device
+ * server (23 October 2026): the account (/cloud, /remote), the library folder
+ * on the computer (/local: where it is and what is in it), the shared unit
+ * check (/device/cache/cloud, an account call), and every store collection but
+ * `config`. The `cloud` collection is where the computer keeps its own
+ * sign-in, refresh token and all, and it used to be readable from any device
+ * on the account. Nothing in either app reads anything but config.
+ *
+ * The host checks its rule on the path as its router will read it, with the
+ * percent-escapes undone, and refuses outright a path with a backslash or an
+ * escaped slash in it (ForgeFX remote.ts relayPath). Every path these apps
+ * send is plain, and test/run.mjs holds every config name they build to that.
  */
 export function hostAllows(method, p) {
-  if (method === 'GET') return !p.startsWith('/cloud') && !p.startsWith('/remote') && p !== '/debug/raw'
+  if (method === 'GET')
+    return (
+      !p.startsWith('/cloud') &&
+      !p.startsWith('/remote') &&
+      !p.startsWith('/local') &&
+      !p.startsWith('/device/cache/cloud') &&
+      p !== '/debug/raw' &&
+      !/^\/store\/(?!config(\/[^/]+)?$)/.test(p)
+    )
   if (method === 'PUT')
     return (
       /^\/preset\/blocks\/\d+\/params(\/\d+)?$/.test(p) ||
@@ -100,6 +121,8 @@ export const REMOTE_FORBIDDEN = [
   { match: (m, p) => p.startsWith('/backup'), why: 'back up the device' },
   { match: (m, p) => p.startsWith('/version'), why: 'load or restore a version' },
   { match: (m, p) => p.startsWith('/local'), why: 'reach the library on your computer' },
+  /* The store's other collections: the computer's own sign-in, and where its library folder is. */
+  { match: (m, p) => p.startsWith('/store/') && !/^\/store\/config(\/|$)/.test(p), why: 'reach the sign-in and settings the computer keeps for itself' },
   { match: (m, p) => m !== 'GET' && p.startsWith('/ports'), why: 'change which port is used' },
   { match: (m, p) => p.startsWith('/firmware'), why: 'touch firmware' },
   { match: (m, p) => p.startsWith('/debug/raw'), why: 'send raw SysEx' }

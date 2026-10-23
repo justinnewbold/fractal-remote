@@ -3579,7 +3579,12 @@ test('live performance edits travel fine', () => {
   // backup and port lists on the phone, and these assertions encoded that bug.
   assert.equal(forbiddenRemotely('GET', '/backups'), null)
   assert.equal(forbiddenRemotely('GET', '/ports'), null)
-  assert.equal(forbiddenRemotely('GET', '/local/presets'), null)
+  /*
+   * But not the library folder on the computer, since the device server's
+   * guard (23 October 2026): where it is and what is in it are the
+   * computer's own. Nothing on a phone asks for either.
+   */
+  assert.equal(forbiddenRemotely('GET', '/local/presets'), 'reach the library on your computer')
   // Trailing slashes and query strings must not sneak past the check.
   assert.ok(forbiddenRemotely('POST', '/preset/store/'))
   assert.ok(forbiddenRemotely('POST', '/preset/backup?x=1'))
@@ -3595,7 +3600,14 @@ test('the mirror agrees with the host about every route this app calls', () => {
    */
   const hostAllows = (method, p) => {
     if (method === 'GET')
-      return !p.startsWith('/cloud') && !p.startsWith('/remote') && p !== '/debug/raw'
+      return (
+        !p.startsWith('/cloud') &&
+        !p.startsWith('/remote') &&
+        !p.startsWith('/local') &&
+        !p.startsWith('/device/cache/cloud') &&
+        p !== '/debug/raw' &&
+        !/^\/store\/(?!config(\/[^/]+)?$)/.test(p)
+      )
     if (method === 'PUT')
       return (
         /^\/preset\/blocks\/\d+\/params(\/\d+)?$/.test(p) ||
@@ -3641,6 +3653,22 @@ test('the mirror agrees with the host about every route this app calls', () => {
   const calls = [
     ['DELETE', '/device/cache'],
     ['DELETE', '/store/config/x'],
+    // The reads the guard of 23 October 2026 took off the relay, and the ones it left.
+    ['GET', '/cloud/status'],
+    ['GET', '/remote/status'],
+    ['GET', '/local/config'],
+    ['GET', '/local/presets'],
+    ['GET', '/device/cache/cloud'],
+    ['GET', '/store/cloud'],
+    ['GET', '/store/cloud/sb-x-auth-token'],
+    ['GET', '/store/Cloud'],
+    ['GET', '/store/local'],
+    ['GET', '/store/config'],
+    ['GET', '/store/config/host.name'],
+    ['GET', '/store/config/scene-names-fm3%3A12'],
+    ['GET', '/presets/3/scenes'],
+    ['GET', '/diag'],
+    ['GET', '/device/cache'],
     ['GET', '/backups'],
     ['GET', '/blocks'],
     ['GET', '/device/detect'],
@@ -3687,6 +3715,83 @@ test('the mirror agrees with the host about every route this app calls', () => {
       `${m} ${p}: mirror says ${mirror ? 'allowed' : 'blocked'}, host says the opposite`
     )
   }
+})
+
+test('the computer’s own sign-in never travels the relay, and the store’s settings still do', () => {
+  /*
+   * GET /store/cloud returned the computer's saved sign-in, refresh token and
+   * all, to any device on the account: the host allowed every GET outside
+   * /cloud and /remote, and this mirror said the same. The guard on the
+   * device server (23 October 2026) closes the store's other collections to
+   * everybody, and the relay rule refuses them on both ends. `config` is the
+   * one collection either app reads or writes.
+   */
+  const words = 'reach the sign-in and settings the computer keeps for itself'
+  for (const path of ['/store/cloud', '/store/cloud/sb-x-auth-token', '/store/Cloud', '/store/local', '/store/cloud?x=1', '/store/cloud/'])
+    assert.equal(forbiddenRemotely('GET', path), words, `GET ${path} still travels`)
+  assert.equal(forbiddenRemotely('PUT', '/store/cloud/sb-x-auth-token'), words)
+  assert.equal(forbiddenRemotely('GET', '/device/cache/cloud'), 'do that')
+  for (const path of ['/store/config', '/store/config/x', '/store/config/host.name', '/store/config/scene-names-fm3%3A12'])
+    assert.equal(forbiddenRemotely('GET', path), null, `GET ${path} is refused`)
+  assert.equal(forbiddenRemotely('PUT', '/store/config/x'), null)
+})
+
+test('every settings name either app keeps on the computer travels the relay as the host reads it', async () => {
+  /*
+   * The host now checks the relay's rule on the path as its router reads it:
+   * one leading slash, no backslash, no escaped slash or backslash at all,
+   * resolved against a host that is nobody's, then decoded (ForgeFX
+   * server/src/remote.ts relayPath, transcribed here). A settings name with a
+   * '/' in it would now be refused for its write and its read alike, so
+   * every name the browser and the phone build is held to the plain shape,
+   * for every unit, through encodeURIComponent exactly as both ends send it.
+   */
+  const relayPath = (path) => {
+    if (typeof path !== 'string' || !path.startsWith('/') || path.startsWith('//') || path.includes('\\')) return null
+    if (/%2f|%5c/i.test(path)) return null
+    let u
+    try {
+      u = new URL(path, 'http://relay.invalid')
+    } catch {
+      return null
+    }
+    if (u.origin !== 'http://relay.invalid') return null
+    try {
+      return { url: u.pathname + u.search, rule: decodeURIComponent(u.pathname) }
+    } catch {
+      return null
+    }
+  }
+  const { hostAllows } = await import('../shared/relay-rules.mjs')
+  const { deviceSlug } = await import('../shared/device-slug.mjs')
+  const { PHONE_NOTE_ID } = await import('../shared/phone-note.mjs')
+  const save = await import('../shared/save-wait.mjs')
+  const restore = await import('../src/lib/restoreViaComputer.js')
+
+  // Every way a unit is named, the odd ones included: a slug is what the names are built from.
+  const slugs = ['FM3', 'FM3 Mk II', 'FM9', 'Axe-Fx III', 'AM4', 'VP4', '', 'a/b\\c%2F', { short: 'Axe-Fx III Mk II' }, null].map((u) => deviceSlug(u))
+  const ids = ['host.name', 'remote.host', PHONE_NOTE_ID]
+  for (const slug of slugs) {
+    ids.push(`preset-names-${slug}`, `fractal.pendingName.${slug}.97`)
+    for (const n of [1, 8, 486]) ids.push(`scene-names-${slug}:${n}`)
+    for (const make of [save.pendingSaveDoc, save.saveResultDoc, save.saveProgressDoc, restore.pendingRestoreDoc, restore.restoreResultDoc, restore.restoreProgressDoc]) ids.push(make(slug))
+  }
+  for (const id of ids) {
+    assert.ok(!id.includes('/') && !id.includes('\\'), `the settings name ${id} has a slash in it`)
+    const path = `/store/config/${encodeURIComponent(id)}`
+    const at = relayPath(path)
+    assert.ok(at, `the host refuses ${path} before reading its rule`)
+    assert.equal(at.url, path, `the host injects ${at.url} for ${path}: the name would change on the way`)
+    for (const method of ['GET', 'PUT']) {
+      assert.ok(hostAllows(method, at.rule), `the host refuses ${method} ${at.rule}`)
+      assert.equal(forbiddenRemotely(method, path), null, `this end refuses ${method} ${path}`)
+    }
+  }
+  // And the shapes the host now refuses before its rule, which neither app sends.
+  for (const path of ['http://x/cloud/status', '/\\evil.com/cloud/status', '//cloud/status', '/store/config/a%2Fb', '/store/config/a%5cb'])
+    assert.equal(relayPath(path), null, `${path} reaches the rule`)
+  for (const path of ['/%63loud/status', '/x/../cloud/status', '/x/%2e%2e/cloud/status', '/store/%63loud'])
+    assert.equal(hostAllows('GET', relayPath(path).rule), false, `${path} reaches the account or the sign-in`)
 })
 
 test('an unconfirmed account is not reported as a bad password', () => {
