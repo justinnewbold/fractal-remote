@@ -5016,6 +5016,19 @@ export function run(test) {
     assert.match(read('mobile/src/components/LiveUnit.js'), /<MissingPick name=\{missing\} onForget=\{\(\) => forgetMissing\(\)\} \/>/)
     assert.match(read('mobile/src/screens/Settings.js'), /<MissingPick\s+name=\{missing\}\s+onForget=\{\(\) => \{\s*forgetMissing\(\)/)
     assert.match(read('mobile/src/components/MissingPick.js'), /missingPickRow\(name\)/)
+    /* Grayed, and readable: at least 4.5:1 on the page and on the sheet, in both themes (silkFaint was 3.7:1 in light). */
+    const row = read('mobile/src/components/MissingPick.js').match(/<Text style=\{\{ flex: 1, color: color\.(\w+),/)?.[1]
+    assert.ok(row, 'the not-answering row’s ink moved: say where')
+    const { contrast } = await import('../src/lib/ink.js')
+    const theme = read('mobile/src/lib/theme.js')
+    for (const name of ['DARK', 'LIGHT']) {
+      const block = theme.slice(theme.indexOf(`const ${name} = {`), theme.indexOf('}', theme.indexOf(`const ${name} = {`)))
+      const hex = (key) => block.match(new RegExp(`\\b${key}: '(#[0-9a-f]{6})'`))?.[1]
+      for (const ground of ['chassis', 'panel']) {
+        const ratio = contrast(hex(row), hex(ground))
+        assert.ok(ratio >= 4.5, `${name.toLowerCase()}: the not-answering row is ${ratio?.toFixed(2)}:1 on ${ground}, under 4.5:1`)
+      }
+    }
     /* The browser: the same card on Play, its list the Which unit sheet; the row in the sheet and on the page. */
     const app = read('src/App.jsx')
     assert.match(app, /missingPickCard\(\{ missing: link\.missingPick, driving: link\.chosenHost, hosts: link\.hosts, units: link\.units \}\)/)
