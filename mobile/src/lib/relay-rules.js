@@ -813,6 +813,8 @@ export function unitElsewhereCard(facts = {}) {
     /* For a notice with a heading of its own (the browser's, where Play cannot open without a unit). */
     title: found.others.length > 1 ? 'Your units are on other computers' : 'Your unit is on another computer',
     words: `${found.here} has no unit plugged in. ${list}.`,
+    /* Where they are, alone, for the card of a pick that never answers (missingPickCard). */
+    where: `${list}.`,
     buttons: found.others.map(({ name, model }) => ({ name, label: `Use the ${model} on ${name}`, short: `Use the ${model}`, sub: `on ${name}` }))
   }
 }
@@ -828,13 +830,33 @@ export const WHICH_UNIT_LIST = 'Which unit…'
  * is said too ("which has no unit plugged in"), as the roll call's plugged
  * false is, since this card then stands in for the raw "No Fractal device
  * found" fault, which floated over its first sentence and hid it.
+ *
+ * AND WHERE THE UNIT IS, when the one driven has none and another computer
+ * has one (unitElsewhere): its sentence, and its buttons ("Use the AM4 on
+ * raspberry pi 5") in place of Keep this one, which would have made the
+ * computer with no unit the pick. This card stands in for the one that says
+ * where the unit is, and without them neither end said it:
+ *
+ *   raspberry pi 3, picked under Which unit, isn’t answering. Using MacBook
+ *   Pro SG 566 instead, which has no unit plugged in. Your AM4 is on
+ *   raspberry pi 5.   [Use the AM4 on raspberry pi 5] [Which unit…]
+ *
+ * `buttons` are those (none otherwise), `keep` is null with them, and
+ * `title` is the other card's, for the browser's notice.
  */
 export function missingPickCard({ missing = null, driving = null, hosts = [], units = {}, unitState = null } = {}) {
   if (!missing || !driving || missing === driving || hosts.length < 2 || hosts.includes(missing) || !hosts.includes(driving)) return null
   const unit = units?.[driving]
   const none = unitState === 'missing' || unit?.plugged === false
   const playing = unit?.plugged && !none ? `Playing the ${unit.model} on ${driving}.` : none ? `Using ${driving} instead, which has no unit plugged in.` : `Using ${driving} instead.`
-  return { words: `${missing}, picked under Which unit, isn’t answering. ${playing}`, keep: KEEP_THIS_ONE, list: WHICH_UNIT_LIST }
+  const away = none ? unitElsewhereCard({ hosts, units, chosen: driving, unitState }) : null
+  return {
+    words: `${missing}, picked under Which unit, isn’t answering. ${playing}${away ? ` ${away.where}` : ''}`,
+    keep: away ? null : KEEP_THIS_ONE,
+    list: WHICH_UNIT_LIST,
+    buttons: away ? away.buttons : [],
+    title: away ? away.title : null
+  }
 }
 
 /** The same pick under Which unit: listed, grayed, with a way to forget it. */
