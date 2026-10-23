@@ -200,7 +200,7 @@ export function run(test) {
     const tile = flat('mobile/src/components/Tile.js')
     assert.match(tile, /accessibilityLabel=\{\[label, saysLeft \?\? topLeft, topRight, sub, caption\]\.filter\(\(part\) => !!String\(part \?\? ''\)\.trim\(\)\)\.join\(', '\)\}/)
     assert.equal(String('\u00a0').trim(), '', 'a no-break space is not taken for blank')
-    assert.match(tile, /borderStyle: unread \? 'dashed' : 'solid'/)
+    assert.match(tile, /\.\.\.\(unread \? \{ borderStyle: 'dashed' \} : null\)/)
     const gig = flat('src/components/Gig.jsx')
     assert.match(gig, /aria-pressed=\{door \|\| unknown \? undefined : !dark\}/)
     assert.match(gig, /\[block\.name \|\| block\.slug, boost \? boostLabel\(boost\) : unknown \? null : block\.bypassed \? 'Off' : 'On', block\.channel\]\.filter\(Boolean\)\.join\(', '\)/)
@@ -234,7 +234,7 @@ export function run(test) {
     /* Over the picture's own box, across the tile's whole inside, only for a word too wide for its row; and the picture kept in its place, unseen, whenever the word has moved. */
     assert.match(tile, /position: 'absolute', left: 0, right: 0, top: picture \? Math\.max\(0, \(laid\.top \?\? BORDER\) - BORDER\) : 3, height: picture \|\| undefined/)
     assert.match(tile, /opacity: middle \? 1 : 0 \}\}/)
-    assert.match(tile, /tintColor: quiet \? foreground : pictureTint, opacity: cleared \? 0 : 1/)
+    assert.match(tile, /tintColor: quiet \? foreground : pictureTint, \.\.\.\(cleared \? \{ opacity: 0 \} : null\)/)
     const gig = flat('src/components/Gig.jsx')
     assert.match(gig, /import \{ cornerFit, mustSayFit \} from '\.\.\/\.\.\/shared\/tile-corners\.mjs'/)
     assert.match(gig, /const say = mustSayFit\(corners, \{ moved: whole\(word\), movedTop: top \+ Math\.max\(0, \(height - tall\) \/ 2\), lift \}\)/, 'the browser’s word is not placed by the shared rule')
@@ -325,15 +325,67 @@ export function run(test) {
   })
 
   /*
-   * A corner word the rule does not draw keeps its width out of the row. On
-   * the phone it stayed in the row, unseen, and on a 320 phone with pictures
-   * off "Boost off" was cut to "Boost…" beside a hidden channel letter's 8pt.
-   * The browser's [data-crowded] word already gave its room away.
+   * THE PHONE'S CORNER ROW, AS EVERY PEDAL BUT THE BOOST HAD IT IN 1.87.48.
+   *
+   * 1.87.49 had taken a word the rule does not draw out of the row, on every
+   * pedal of every unit. But what a drawn word measures can depend on whether
+   * its unseen neighbour is beside it (it does wherever a word can be
+   * squeezed: the browser the phone is drawn in to be measured), and the rule
+   * reads that measurement, so its answer moved the word that moved its
+   * answer: at a large text size on a 320 phone the channel letter of every
+   * effect pedal blinked, frame after frame, and the looper's Rec and Play
+   * hidden together had left the row with no height at all. Now every pedal
+   * but an AM4 amp's boost draws its corners with 1.87.48's own two words,
+   * which differ from one answer to the next in their opacity alone, so the
+   * row, and what is measured in it, cannot move with the answer. The boost
+   * pedal, placed by a width no corner word changes (laid.middle), has its
+   * own: its words never shrink, and only its word moved across the tile
+   * leaves the row, while the channel letter is drawn, so the row always
+   * keeps a line.
+   *
+   * Run on the code itself: the corner words are evaluated out of Tile.js for
+   * an FM3 effect pedal (On over its channel), a drive with a channel, and
+   * the looper's Rec and Play, at every answer the rule can give.
    */
-  test('a corner word that is not drawn gives its room to the one that is, on the phone as in the browser', () => {
+  test('every pedal but an AM4 amp’s boost draws its corner row as 1.87.48 did, whatever the rule answers; the boost’s own words never shrink', () => {
     const tile = flat('mobile/src/components/Tile.js')
-    assert.match(tile, /const leftWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '600', opacity: leftShown \? 1 : 0, \.\.\.\(leftOut \? \{ position: 'absolute', left: 0 \} : null\) \}/, 'a hidden word on the left keeps its room in the row')
-    assert.match(tile, /const rightWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '700', marginLeft: 'auto', opacity: rightShown \? 1 : 0, \.\.\.\(rightOut \? \{ position: 'absolute', right: 0 \} : null\) \}/, 'a hidden channel keeps its room in the row, or the channel leaves its corner')
+    /* The word that must be seen is the boost's alone: for every other pedal there is no `say`, and the rule's answer is cornerFit's. */
+    assert.match(tile, /const say = mustSay && cornered && /)
+    const src = read('mobile/src/components/Tile.js')
+    const from = src.indexOf('  const leftShown = ')
+    const to = src.indexOf('\n', src.indexOf('  const rightWord = '))
+    assert.ok(from > 0 && to > from, 'the corner words moved')
+    const words = new Function('say', 'shows', 'mustSay', 'topLeft', 'topRight', 'quiet', 'grey', 'foreground', 'on', 'lit', 'quietWords', 'font', `${src.slice(from, to)}\nreturn { leftWord, rightWord }`)
+    const font = { micro: 11 }
+    const ink = '#abc'
+    /* 1.87.48's (a7f02ed's Tile.js), word for word. */
+    const was = (shows) => ({
+      leftWord: { color: ink, fontSize: font.micro, fontWeight: '600', opacity: shows.left ? 1 : 0 },
+      rightWord: { color: ink, fontSize: font.micro, fontWeight: '700', opacity: shows.right ? 1 : 0 }
+    })
+    const answers = [{ left: true, right: true }, { left: true, right: false }, { left: false, right: true }, { left: false, right: false }]
+    const unopaque = ({ opacity, ...rest }) => rest
+    for (const [what, topLeft, topRight] of [['an FM3 effect pedal', 'On', 'A'], ['a drive with a channel', 'Off', 'B'], ['the looper', 'Rec', 'Play']]) {
+      const drawn = answers.map((shows) => words(null, shows, false, topLeft, topRight, false, false, '#fff', false, '#000', ink, font))
+      answers.forEach((shows, i) => assert.deepEqual(drawn[i], was(shows), `${what}: not 1.87.48’s corner row for ${JSON.stringify(shows)}`))
+      for (const d of drawn) {
+        assert.deepEqual(unopaque(d.leftWord), unopaque(drawn[0].leftWord), `${what}: the rule’s answer moves its top-left word`)
+        assert.deepEqual(unopaque(d.rightWord), unopaque(drawn[0].rightWord), `${what}: the rule’s answer moves its top-right word`)
+      }
+    }
+    /* The boost: its words never shrink, its channel letter always stays in the row, and its word leaves the row only when moved across with the letter drawn. */
+    for (const say of [{ left: false, right: true, at: 'across' }, { left: false, right: false, at: 'across' }, { left: false, right: true, at: 'corner' }, { left: false, right: false, at: 'corner' }, { left: true, right: true, at: null }, null]) {
+      for (const shows of answers) {
+        const { leftWord, rightWord } = words(say, shows, true, 'Boost off', 'C', false, false, '#fff', false, '#000', ink, font)
+        assert.equal(leftWord.flexShrink, 0, 'the boost’s word can be squeezed by its unseen neighbour')
+        assert.equal(rightWord.flexShrink, 0, 'the boost’s channel letter can be squeezed by its unseen neighbour')
+        assert.ok(!('position' in rightWord), 'the boost’s channel letter leaves the row')
+        const leftShown = say ? say.at !== 'across' : shows.left
+        const rightShown = say ? say.right : shows.right
+        assert.equal(leftWord.position === 'absolute', !leftShown && rightShown, `the boost’s word left the row wrongly for ${JSON.stringify(say)}`)
+      }
+    }
+    assert.match(tile, /keep\('band', y \+ tall\)/, 'the band is not the corner row’s own bottom')
     assert.match(read('src/styles.css'), /\.gig-block-state \[data-crowded\] \{\s*visibility: hidden;\s*min-width: 0;/)
   })
 
@@ -710,24 +762,6 @@ export function run(test) {
     }
     /* And a preset that would not load still has its help. */
     assert.equal(shared('The unit didn’t load that preset.'), 'preset')
-  })
-
-  /*
-   * The phone's corner row is the band the picture is judged against, and
-   * its height is the line of the word in it. A word the rule does not draw
-   * gives its room to the one that is, out of the row; with both out (the
-   * looper's Rec and Play hidden together, at 320 and 360 on Smallest and
-   * Small) the row had no height at all, the band fell from 15 to 3, the
-   * picture was below it, so the words were drawn, so the row came back:
-   * round every frame, Rec and Play on the picture every other one. A word
-   * leaves the row only while the other one is drawn.
-   */
-  test('the phone’s corner row keeps its height whichever words are drawn, so the looper’s hidden Rec and Play stay hidden', () => {
-    const tile = flat('mobile/src/components/Tile.js')
-    assert.match(tile, /const leftOut = !leftShown && rightShown && !!String\(topRight \|\| ''\)\.trim\(\)/, 'a hidden top-left word leaves the row with nothing drawn beside it')
-    assert.match(tile, /const rightOut = !rightShown && leftShown && !!String\(topLeft \|\| ''\)\.trim\(\)/, 'a hidden channel or Play leaves the row with nothing drawn beside it')
-    assert.match(tile, /keep\('band', y \+ tall\)/, 'the band is not the corner row’s own bottom')
-    assert.ok(!/\.\.\.\((leftShown|rightShown) \? null : \{ position: 'absolute'/.test(tile), 'a word the rule hides always leaves the row, and two hidden words leave it empty')
   })
 
   /*

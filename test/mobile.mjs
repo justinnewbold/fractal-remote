@@ -7856,7 +7856,7 @@ export function run(test) {
     assert.match(tile, /const leftShown = say \? say\.at !== 'across' : shows\.left/, 'a top-left word with no room is still drawn')
     assert.match(tile, /const rightShown = say \? say\.right : shows\.right/, 'a top-right word with no room is still drawn')
     assert.match(tile, /opacity: leftShown \? 1 : 0/, 'a top-left word with no room is still drawn')
-    assert.match(tile, /const rightWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '700', marginLeft: 'auto', opacity: rightShown \? 1 : 0,/, 'a top-right word with no room is still drawn')
+    assert.match(tile, /const rightWord = \{ color: cornerInk, fontSize: font\.micro, fontWeight: '700', opacity: rightShown \? 1 : 0,/, 'a top-right word with no room is still drawn')
     assert.match(tile, /\? mustSayFit\(\s*\{[^}]*picture,[^}]*left: laid\.middle,[^}]*\},\s*\{ moved: laid\.middle, movedTop: picture \? laid\.top : 0 \}\s*\)/, 'the channel is drawn over a word that must be seen')
     assert.match(tile, /onLayout=\{\(e\) => keep\('left', e\.nativeEvent\.layout\.width\)\}/, 'the top-left word is not measured')
     assert.match(tile, /onLayout=\{\(e\) => keep\('right', e\.nativeEvent\.layout\.width\)\}/, 'the top-right word is not measured')

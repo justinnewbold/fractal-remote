@@ -362,25 +362,23 @@ export default function Tile({
   const rightShown = say ? say.right : shows.right
   const cornerInk = quiet || grey ? foreground : on ? lit : quietWords
   /*
-   * A corner word that is not drawn gives its room to the one that is, as the
-   * browser's does (styles.css [data-crowded]): out of the row, where it is
-   * still laid out and measured whole, but takes no width. Kept in the row
-   * unseen, a hidden C still took its 8pt, and on a 320 phone with pictures
-   * off "Boost off" was cut to "Boost…" beside it. The channel keeps to the
-   * right by its own margin either way.
+   * Every pedal but the one whose word must be seen keeps 1.87.48's corner
+   * row exactly: a word the rule does not draw stays in the row, unseen, so
+   * the row, and what is measured in it, never move with the rule's answer.
    *
-   * Only while the other word is drawn, though: the row's height is the
-   * bottom of the corner band (keep('band')), and with both words out of it
-   * the row had no height at all. The looper's Rec and Play, hidden
-   * together, took the band from 15 to 3, which put the picture below the
-   * row, which drew the words, which put the row back, and round again, the
-   * words on the picture every other frame. A word that is drawn keeps one
-   * line of the corner face in the row, so the band never moves.
+   * The pedal whose word must be seen (`mustSay`, an AM4 amp's boost) is the
+   * one exception, and it is placed by laid.middle, a width no corner word
+   * changes. Its word moved across the tile leaves the row while the channel
+   * letter is drawn, so the letter keeps to its own corner rather than being
+   * pushed past it by the unseen word (`marginLeft: 'auto'` holds it right
+   * on its own). And neither of its words ever shrinks, as on a phone, where
+   * Yoga shrinks no word: drawn in a browser to be measured, a word squeezed
+   * by its unseen neighbour measured narrower, which moved the answer, which
+   * moved the word, every frame.
    */
-  const leftOut = !leftShown && rightShown && !!String(topRight || '').trim()
-  const rightOut = !rightShown && leftShown && !!String(topLeft || '').trim()
-  const leftWord = { color: cornerInk, fontSize: font.micro, fontWeight: '600', opacity: leftShown ? 1 : 0, ...(leftOut ? { position: 'absolute', left: 0 } : null) }
-  const rightWord = { color: cornerInk, fontSize: font.micro, fontWeight: '700', marginLeft: 'auto', opacity: rightShown ? 1 : 0, ...(rightOut ? { position: 'absolute', right: 0 } : null) }
+  const leftOut = mustSay && !leftShown && rightShown && !!String(topRight || '').trim()
+  const leftWord = { color: cornerInk, fontSize: font.micro, fontWeight: '600', opacity: leftShown ? 1 : 0, ...(mustSay ? { flexShrink: 0 } : null), ...(leftOut ? { position: 'absolute', left: 0 } : null) }
+  const rightWord = { color: cornerInk, fontSize: font.micro, fontWeight: '700', opacity: rightShown ? 1 : 0, ...(mustSay ? { flexShrink: 0, marginLeft: 'auto' } : null) }
 
   /*
    * THE EDGE, which on an unlit tile is the only thing still naming the block.
@@ -452,7 +450,7 @@ export default function Tile({
              off — it is the only thing still naming the block. */
           borderWidth: BORDER,
           borderColor: edge,
-          borderStyle: unread ? 'dashed' : 'solid',
+          ...(unread ? { borderStyle: 'dashed' } : null),
           backgroundColor: background,
           opacity: pressed ? 0.7 : 1,
           ...glow
@@ -554,7 +552,7 @@ export default function Tile({
                make every tile read itself out twice. */
             accessible={false}
             /* Clear, keeping its box, while a word that must be seen is in its place or over it (`mustSay`). */
-            style={{ width: picture, height: picture, marginBottom: 2, tintColor: quiet ? foreground : pictureTint, opacity: cleared ? 0 : 1 }}
+            style={{ width: picture, height: picture, marginBottom: 2, tintColor: quiet ? foreground : pictureTint, ...(cleared ? { opacity: 0 } : null) }}
             resizeMode="contain"
           />
         ) : null}
