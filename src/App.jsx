@@ -1672,9 +1672,12 @@ export default function App() {
    * (rig.startClean, header and all).
    */
   const mixedRef = useRef(0)
+  /* Whether the unit is still to be read again for that mix: by any read begun after it (the effect on chosenHost's), or once the count is in. */
+  const mixReadOwed = useRef(false)
   useEffect(() => {
     if (!link.mixedAt || link.mixedAt === mixedRef.current) return
     mixedRef.current = link.mixedAt
+    mixReadOwed.current = true
     setDevice(null)
     setStatus('idle')
     setError(null)
@@ -1705,8 +1708,9 @@ export default function App() {
    */
   const read = useCallback(async (opts) => {
     const settling = opts?.settling === true
-    /* A mix of computers' answers found while this read was out: what it brings is not put up (mixedRef). */
+    /* A mix of computers' answers found while this read was out: what it brings is not put up (mixedRef). One begun after it is the read it was owed. */
     const mixAt = mixedRef.current
+    mixReadOwed.current = false
     setBusy(true)
     setError(null)
     let fresh = null
@@ -1917,6 +1921,12 @@ export default function App() {
     if (remoteReadsAskedOf() === link.chosenHost) return
     if (link.role === 'remote' && link.chosenHost) read()
   }, [link.chosenHost, link.role, read])
+  /* And after a mix on screen, the unit is read again once the count is in, whichever computer it chose: the screen was taken down for it (mixedAt). */
+  useEffect(() => {
+    if (!mixReadOwed.current || !link.countedAt || link.role !== 'remote') return
+    mixReadOwed.current = false
+    read()
+  }, [link.countedAt, link.role, read])
 
   /*
    * Below read(), and that is not a matter of taste.

@@ -506,6 +506,8 @@ let state = {
    * off the screen then, Looking… in the bar, until the one driven is read.
    */
   mixedAt: 0,
+  /** remote role: when the last roll call's findings came in, or 0 (afterCount). */
+  countedAt: 0,
   // Why the last pairing from a scanned code failed, for the connect screen.
   pairError: null,
   /*
@@ -707,7 +709,8 @@ async function afterCount(before, run) {
       if (remoteReadsAskedOf() !== remoteChosenHost()) computerChanged()
       readMacName()
     }
-    set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), missingPick: remoteMissingPick(), clash: hostConflict() })
+    set({ hosts: remoteHosts(), units: remoteUnits(), chosenHost: remoteChosenHost(), missingPick: remoteMissingPick(), clash: hostConflict(), countedAt: Date.now() })
+    /* (`countedAt`: a count is in, for App to read the unit again after a mix on screen whatever it chose: mixedAt.) */
     /* The roll call picked a computer: tell that one, whatever answered first before (see metersAgain). */
     if (remoteChosenHost() !== before) {
       metersAgain()

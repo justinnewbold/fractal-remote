@@ -2229,7 +2229,9 @@ export function run(test) {
     const web = read('src/lib/link.js')
     assert.match(web, /subscribeMixed\(\(\) => \{\s*computerChanged\(\)\s*set\(\{ mixedAt: Date\.now\(\) \}\)\s*\}\)/)
     const app = read('src/App.jsx')
-    assert.match(app, /mixedRef\.current = link\.mixedAt\s*setDevice\(null\)\s*setStatus\('idle'\)\s*setError\(null\)/)
+    assert.match(app, /mixedRef\.current = link\.mixedAt\s*mixReadOwed\.current = true\s*setDevice\(null\)\s*setStatus\('idle'\)\s*setError\(null\)/)
+    /* And read again once the count is in, whatever it chose. */
+    assert.match(app, /if \(!mixReadOwed\.current \|\| !link\.countedAt \|\| link\.role !== 'remote'\) return\s*mixReadOwed\.current = false\s*read\(\)/)
     /* And a read that was out when the mix was found puts nothing up. */
     assert.equal(app.match(/if \(mixedRef\.current !== mixAt\) return null/g)?.length, 2)
   })
