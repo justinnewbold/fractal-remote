@@ -4959,7 +4959,7 @@ export function run(test) {
     /* The phone: in place of the raw card, with each button Which unit's own pick, and the units asked again while it is up. */
     const stage = read('mobile/src/screens/Stage.js')
     assert.match(stage, /unitElsewhereCard\(\{ hosts: computers\?\.hosts, units: computers\?\.units, chosen: computers\?\.chosenHost, unitState \}\)/)
-    assert.match(stage, /const fault = noDevice\(useRig\(ofError\), whereCard\)/, 'the raw "No Fractal device found" card is still up under the one that says where the unit is')
+    assert.match(stage, /const fault = noDevice\(useRig\(ofError\), whereCard \|\| missingCard\)/, 'the raw "No Fractal device found" card is still up under the one that says where the unit is')
     assert.match(stage, /const noDevice = \(fault, where\) => \(where && NO_DEVICE\.test\(String\(fault\)\) \? null : fault\)/)
     /* The unit over the computer: the phone's button label is one line (Press), and the computer's name, the reason the button is there, was cut off at 320 wide. Its line under is two. */
     assert.match(stage, /buttons=\{whereCard\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.short, sub: b\.sub, onPress: \(\) => chooseHost\(b\.name\) \}\)\)\}/, 'the phone puts the computer’s name on the button’s one line, where a narrow phone cuts it off')
@@ -4976,7 +4976,7 @@ export function run(test) {
     /* The browser: in the notice that stands where Play would be, the same words and buttons. */
     const app = read('src/App.jsx')
     assert.match(app, /unitElsewhereCard\(\{ hosts: link\.hosts, units: link\.units, chosen: link\.chosenHost, unitState: 'missing' \}\)/)
-    assert.match(app, /<h2>\{elsewhere \? elsewhere\.title : fault\.title\}<\/h2>\s*<p>\{elsewhere \? elsewhere\.words : fault\.body\}<\/p>/)
+    assert.match(app, /<h2>\{elsewhere \? elsewhere\.title : fault\.title\}<\/h2>\s*\{missingHere \? <p>[\s\S]{0,400}\) : null\}\s*<p>\{elsewhere \? elsewhere\.words : fault\.body\}<\/p>/)
     /* Through the card's own buttons, which say Switching… on the one pressed and wait while its pick is proved: App's busy never moved for it, so a press looked like nothing. */
     assert.match(app, /\{elsewhere \? <CardButtons buttons=\{elsewhere\.buttons\.map\(\(b\) => \(\{ key: b\.name, label: b\.label, onClick: \(\) => chooseHost\(b\.name\) \}\)\)\} \/> : null\}/, 'the notice’s buttons give no sign while the pick is proved')
     const webCard = read('src/components/ComputerCard.jsx')
@@ -4993,7 +4993,10 @@ export function run(test) {
     const units = { 'MacBook Pro SG 566': { model: 'FM3', plugged: true }, 'raspberry pi 5': { model: 'FM3', plugged: false } }
     assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units }).words, 'fractalpi, picked under Which unit, isn’t answering. Playing the FM3 on MacBook Pro SG 566.')
     /* Judged by plugged, never the model: a computer with nothing plugged in still says FM3. */
-    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'raspberry pi 5', hosts, units }).words, 'fractalpi, picked under Which unit, isn’t answering. Using raspberry pi 5 instead.')
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'raspberry pi 5', hosts, units }).words, 'fractalpi, picked under Which unit, isn’t answering. Using raspberry pi 5 instead, which has no unit plugged in.')
+    /* And the rig saying the unit on the one driven is missing, which the roll call had not seen: said the same. A computer whose unit is not known says neither. */
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units, unitState: 'missing' }).words, 'fractalpi, picked under Which unit, isn’t answering. Using MacBook Pro SG 566 instead, which has no unit plugged in.')
+    assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts, units: {} }).words, 'fractalpi, picked under Which unit, isn’t answering. Using MacBook Pro SG 566 instead.')
     /* Nothing to say: one computer, the pick driven, the pick listed after all, or nothing driven. */
     assert.equal(r.missingPickCard({ missing: 'fractalpi', driving: 'MacBook Pro SG 566', hosts: ['MacBook Pro SG 566'], units }), null)
     assert.equal(r.missingPickCard({ missing: 'MacBook Pro SG 566', driving: 'MacBook Pro SG 566', hosts, units }), null)
@@ -5003,7 +5006,9 @@ export function run(test) {
     assert.equal(r.missingPickRow(null), null)
     /* The phone: on Play, its two buttons Keep this one and the list off the unit's name; under Which unit, grayed with Forget, in Settings and the sheet. */
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(stage, /missingPickCard\(\{ missing: computers\?\.missingPick, driving: computers\?\.chosenHost, hosts: computers\?\.hosts, units: computers\?\.units \}\)/)
+    assert.match(stage, /missingPickCard\(\{ missing: computers\?\.missingPick, driving: computers\?\.chosenHost, hosts: computers\?\.hosts, units: computers\?\.units, unitState \}\)/)
+    /* And the raw "No Fractal device found" never floats over it, hiding its first sentence: the card says the one driven has no unit. */
+    assert.match(stage, /const fault = noDevice\(useRig\(ofError\), whereCard \|\| missingCard\)/, 'the raw fault floats over the card for a pick that never answers')
     assert.match(stage, /<ComputerCard\s+words=\{missingCard\.words\}[\s\S]{0,200}label: missingCard\.keep, onPress: \(\) => keepThisOne\(\)[\s\S]{0,200}label: missingCard\.list, onPress: \(\) => onOpenUnits\(\)/)
     const phoneApp = read('mobile/App.js')
     assert.match(phoneApp, /computers=\{demo \? null : link\}\s*onOpenUnits=\{\(\) => setPickLive\(true\)\}/)
@@ -5014,6 +5019,10 @@ export function run(test) {
     /* The browser: the same card on Play, its list the Which unit sheet; the row in the sheet and on the page. */
     const app = read('src/App.jsx')
     assert.match(app, /missingPickCard\(\{ missing: link\.missingPick, driving: link\.chosenHost, hosts: link\.hosts, units: link\.units \}\)/)
+    /* And in the notice that stands in for Play when the one driven has no unit either: its words and its two ways out, said before where any unit is, as on the phone. */
+    assert.match(app, /const missingHere =\s*link\.role === 'remote' && status === 'fault' && device\?\.connected === false\s*\? missingPickCard\(\{ missing: link\.missingPick, driving: link\.chosenHost, hosts: link\.hosts, units: link\.units, unitState: 'missing' \}\)/)
+    assert.match(app, /link\.role === 'remote' && status === 'fault' && device\?\.connected === false && !missingHere\s*\? unitElsewhereCard/)
+    assert.match(app, /\{missingHere \? <p>\{missingHere\.words\}<\/p> : null\}\s*\{missingHere \? \(\s*<CardButtons\s*buttons=\{\[\s*\{ label: missingHere\.keep, onClick: \(\) => keepThisOne\(\) \},\s*\{ label: missingHere\.list, onClick: \(\) => setSheet\('units'\) \}/, 'the browser’s notice never says the pick is not answering')
     assert.match(app, /card=\{\s*link\.role === 'remote' && missingCard\s*\? \{\s*words: missingCard\.words,[\s\S]{0,120}onClick: \(\) => keepThisOne\(\)[\s\S]{0,120}onClick: \(\) => setSheet\('units'\)/)
     assert.match(read('src/components/Gig.jsx'), /\{card \? <ComputerCard words=\{card\.words\} buttons=\{card\.buttons\} \/> : null\}/)
     assert.equal(app.match(/\{missingRow \? <MissingRow row=\{missingRow\} onForget=\{\(\) => forgetMissing\(\)\} \/> : null\}/g)?.length, 2, 'the pick that does not answer is not under both of the website’s Which unit lists')

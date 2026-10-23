@@ -1188,8 +1188,18 @@ export default function App() {
    * him to check a cable that was fine. The units are asked again while it
    * is up (link.js watchUnits). The phone's Play says it in the same words.
    */
-  const elsewhere =
+  /*
+   * And A PICK THAT NEVER ANSWERS, the one driven in its place with no unit
+   * either: named in that notice, with its two ways out, as on the phone's
+   * Play, where it is said before where any unit is. The Gig card that says
+   * it otherwise is only on Play, which this notice stands in for.
+   */
+  const missingHere =
     link.role === 'remote' && status === 'fault' && device?.connected === false
+      ? missingPickCard({ missing: link.missingPick, driving: link.chosenHost, hosts: link.hosts, units: link.units, unitState: 'missing' })
+      : null
+  const elsewhere =
+    link.role === 'remote' && status === 'fault' && device?.connected === false && !missingHere
       ? unitElsewhereCard({ hosts: link.hosts, units: link.units, chosen: link.chosenHost, unitState: 'missing' })
       : null
   const watchingUnits = Boolean(elsewhere)
@@ -4433,6 +4443,15 @@ export default function App() {
       ) : status === 'fault' && fault ? (
         <div className="notice" data-kind="fault">
           <h2>{elsewhere ? elsewhere.title : fault.title}</h2>
+          {missingHere ? <p>{missingHere.words}</p> : null}
+          {missingHere ? (
+            <CardButtons
+              buttons={[
+                { label: missingHere.keep, onClick: () => keepThisOne() },
+                { label: missingHere.list, onClick: () => setSheet('units') }
+              ]}
+            />
+          ) : null}
           <p>{elsewhere ? elsewhere.words : fault.body}</p>
           {/* Switching… on the one pressed while its pick is proved, as on the phone's card and the Which unit sheet. */}
           {elsewhere ? <CardButtons buttons={elsewhere.buttons.map((b) => ({ key: b.name, label: b.label, onClick: () => chooseHost(b.name) }))} /> : null}

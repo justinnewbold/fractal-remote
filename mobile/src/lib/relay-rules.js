@@ -822,10 +822,18 @@ export const ELSEWHERE_WATCH_MS = 10000
 
 export const KEEP_THIS_ONE = 'Keep this one'
 export const WHICH_UNIT_LIST = 'Which unit…'
-export function missingPickCard({ missing = null, driving = null, hosts = [], units = {} } = {}) {
+/**
+ * Play's words for a pick that never answers, with the computer driven in
+ * its place. `unitState` is the rig's word for the unit on it: 'missing'
+ * is said too ("which has no unit plugged in"), as the roll call's plugged
+ * false is, since this card then stands in for the raw "No Fractal device
+ * found" fault, which floated over its first sentence and hid it.
+ */
+export function missingPickCard({ missing = null, driving = null, hosts = [], units = {}, unitState = null } = {}) {
   if (!missing || !driving || missing === driving || hosts.length < 2 || hosts.includes(missing) || !hosts.includes(driving)) return null
   const unit = units?.[driving]
-  const playing = unit?.plugged ? `Playing the ${unit.model} on ${driving}.` : `Using ${driving} instead.`
+  const none = unitState === 'missing' || unit?.plugged === false
+  const playing = unit?.plugged && !none ? `Playing the ${unit.model} on ${driving}.` : none ? `Using ${driving} instead, which has no unit plugged in.` : `Using ${driving} instead.`
   return { words: `${missing}, picked under Which unit, isn’t answering. ${playing}`, keep: KEEP_THIS_ONE, list: WHICH_UNIT_LIST }
 }
 

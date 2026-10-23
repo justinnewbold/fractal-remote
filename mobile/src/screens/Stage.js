@@ -223,8 +223,9 @@ export default function Stage({
    * its state out here is how the keyboard came to be covering it.
    */
   const [typing, setTyping] = useState(false)
-  /* A pick that never answers, named with the computer driven in its place (shared relay-rules missingPickCard). */
-  const missingCard = missingPickCard({ missing: computers?.missingPick, driving: computers?.chosenHost, hosts: computers?.hosts, units: computers?.units })
+  const unitState = useRig(ofUnit)
+  /* A pick that never answers, named with the computer driven in its place, and whether that one has a unit (shared relay-rules missingPickCard). */
+  const missingCard = missingPickCard({ missing: computers?.missingPick, driving: computers?.chosenHost, hosts: computers?.hosts, units: computers?.units, unitState })
   /*
    * THE UNIT IS ON ANOTHER COMPUTER (shared relay-rules unitElsewhere): the
    * one driven has none, and another on the account has one. Said with a
@@ -234,12 +235,12 @@ export default function Stage({
    * answers, which is said first. The units are asked again while it is up
    * (link.js watchUnits).
    */
-  const unitState = useRig(ofUnit)
   const elsewhereCard = unitElsewhereCard({ hosts: computers?.hosts, units: computers?.units, chosen: computers?.chosenHost, unitState })
   const whereCard = missingCard ? null : elsewhereCard
   const watchingUnits = Boolean(whereCard)
   useEffect(() => (watchingUnits ? watchUnits() : undefined), [watchingUnits])
-  const fault = noDevice(useRig(ofError), whereCard)
+  /* Nor under the card for a pick that never answers: floated over it, the raw words hid its first sentence. That card says the one driven has no unit. */
+  const fault = noDevice(useRig(ofError), whereCard || missingCard)
   const faultLink = useRig(ofErrorLink)
   const faultAt = useRig(ofFaultAt)
   const dropped = useRig(ofDropped)
