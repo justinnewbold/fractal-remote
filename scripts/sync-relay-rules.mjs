@@ -238,6 +238,13 @@ export const FILES = [
    * an AM4. See shared/vp4-safety.mjs.
    */
   { source: '../shared/vp4-safety.mjs', target: '../mobile/src/lib/vp4-safety.js' },
+  /*
+   * On an AM4 the amp's pedal is its boost: which pedal that is, how its
+   * switch is read and written, and what the tile says. The phone's Play,
+   * the watch and the browser's stage switch the same thing with the same
+   * words, or one of them turns the amp off. See shared/am4-boost.mjs.
+   */
+  { source: '../shared/am4-boost.mjs', target: '../mobile/src/lib/am4-boost.js' },
   /* The metronome: where it clicks, and the number that switches each unit's. */
   { source: '../shared/metronome.mjs', target: '../mobile/src/lib/metronome-rules.js' },
   /*

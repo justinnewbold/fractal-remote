@@ -11,6 +11,8 @@ import { getState, writeBypass, writeScene, writeTuner } from './rig'
 import { tapDeadline } from './relay-rules'
 import { createWatchSender, watchCommand, watchState } from './watch-link'
 import { metronome } from './metronome'
+import { boostPedals } from './am4-boost'
+import { boostNow, pedalSlug } from './rig'
 
 /*
  * THE APPLE WATCH, FROM THE PHONE'S SIDE.
@@ -85,6 +87,14 @@ export function watchPaired() {
  * setlist and the ends of the list.
  */
 export function useWatchBridge(picture, step) {
+  /*
+   * ON AN AM4 THE AMP'S PEDAL IS ITS BOOST, on the wrist as on Play (lib/
+   * am4-boost): lit for Boost on, what Play shows (rig.boostNow), and a tap
+   * asks for the boost the wrist shows it will turn to, which rig.writeBypass
+   * sends as it is and never as a bypass: the same message twice is the same
+   * boost twice.
+   */
+  picture = { ...picture, chain: boostPedals(picture?.chain, { slug: pedalSlug(), shown: boostNow() }) }
   const sender = useRef(null)
   const last = useRef(null)
   const stepRef = useRef(step)

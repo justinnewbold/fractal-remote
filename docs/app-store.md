@@ -583,6 +583,24 @@ says what a real one does not do. What's New gets one line: "On a VP4, the
 app changes presets, and scenes once you set one number on the VP4." The
 Description above already says it.
 
+**For the next version's notes: the AM4's amp pedal is its boost** (22
+October 2026). "On the AM4 the amp on off button should do an amp boost
+instead of turning the amp completely off. It should say Boost on, Boost off
+when they tap it." Since 1.87.49, by update, on an AM4 the amp's pedal on
+Play, on the phone, the watch and the browser, switches the amp's Out Boost
+and never turns the amp off. On the phone and in the browser it says Boost
+on or Boost off; Amp off when the amp itself is off in that scene; no word,
+with a dashed edge, until the unit has said. The watch shows no words: its
+AMP pedal is lit for Boost on and dark otherwise, and the words on the wrist
+come with the next build (docs/later.md). The amp's own on and off is where
+a block is edited: Edit, the amp, Engaged / Bypassed.
+That is a change to what a control in the reviewed app does, so 2.3.1(a)
+wants it in the next *New since 1.87.11*: one paragraph, saying the demo's
+AM4 shows it. What's New gets one line: "On an AM4, the amp's pedal on Play
+now switches the amp's boost, and says Boost on or Boost off. Turn the amp
+itself on and off in Edit." The Description's "Turn blocks on and off" is
+still true (Edit does it for every block).
+
 ### Notes for App Review, 1.87.11
 
 **These are the ones Apple approved with this build,** and the ones the next

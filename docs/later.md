@@ -49,6 +49,15 @@ a real one yet — a friend of Justin's is the first tester. After that:
 
 ## The watch
 
+- **Say Boost on and Boost off on the wrist (AM4).** Since 1.87.49 an AM4's
+  amp pedal on Play is its boost, and the watch's Pedals page shows the amp
+  lit for Boost on and dark otherwise, as it shows every pedal: so a dark
+  AMP on the wrist can be Boost off, a boost not read yet, or the amp itself
+  turned off in Edit. Play says which in words; the wrist cannot until the
+  watch app has words to draw, which is native code, so it comes with the
+  next build pair. What it would take: the phone sends each pedal's word
+  with it (the watch picture already carries a name per pedal), and the
+  watch draws it under the name. Nothing changes on the phone for an update.
 - **Straight to the computer over Wi-Fi, with no phone.** Justin asked on 4
   October whether the watch could skip the phone and talk to the computer on
   the same Wi-Fi. Wake on tap went first instead (1.86.83: the phone stays

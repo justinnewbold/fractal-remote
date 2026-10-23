@@ -79,3 +79,46 @@ export function cornerFit({ width, picture, pictureTop, bandBottom, inset, left,
   if (pair && !(l && r)) return { left: false, right: false }
   return { left: l, right: r }
 }
+
+/**
+ * WHERE A WORD THAT MUST BE SEEN GOES: an AM4 amp's Boost on, Boost off or
+ * Amp off (shared/am4-boost.mjs), which is the whole of what its tap does,
+ * so it is never hidden the way cornerFit hides a word with no room. One
+ * rule for the phone's tile and the browser's, so the two place it alike.
+ *
+ *   - Beside the picture, in its corner, where it fits there: cornerFit's
+ *     answer, `at` null.
+ *   - Otherwise in its own corner with the picture cleared from under it
+ *     (the picture keeps its box, unseen, so nothing measured moves), `at`
+ *     'corner': the row then holds no picture, and the channel shows beside
+ *     the word wherever the two fit it. Where they do not (a 320 phone),
+ *     the word stays and the channel goes, cornerFit's own choice for every
+ *     tile. 1.87.49's first build drew it in the middle of the tile, where
+ *     it crowded out a channel letter that the row had room for.
+ *   - Only a word wider than its row even then (a large system text size)
+ *     goes across the tile in the picture's place, `at` 'across', the
+ *     channel shown only where it clears the word.
+ *
+ * `corners` is what cornerFit takes for the corner as drawn. `moved` is the
+ * word's width as drawn once it is moved, and `movedTop` where its box
+ * starts when it is across the tile. `lift` is how much lower and further
+ * in the corner row sits on this tile when it is unlit (the browser's unlit
+ * tile has a 2px edge, its lit one 1px; the phone's edge never changes): the
+ * rule is taken on the unlit tile's row whether it is lit or not, so a tap
+ * changes the word and the lighting and nothing else. Measured as drawn,
+ * the picture was in the row when unlit and under it when lit, and every
+ * tap of the browser's amp moved the word, the picture and the channel.
+ */
+export function mustSayFit(corners, { moved, movedTop, lift = 0 } = {}) {
+  const unlit = {
+    ...corners,
+    bandBottom: Number.isFinite(corners.bandBottom) ? corners.bandBottom + lift : corners.bandBottom,
+    inset: Number.isFinite(corners.inset) ? corners.inset + lift : corners.inset
+  }
+  const beside = cornerFit(unlit)
+  if (beside.left) return { left: true, right: beside.right, at: null }
+  const bare = cornerFit({ ...unlit, picture: 0, left: moved })
+  if (bare.left) return { left: false, right: bare.right, at: 'corner' }
+  const across = cornerFit({ ...unlit, picture: Number.isFinite(moved) ? moved : unlit.width, pictureTop: movedTop, left: null })
+  return { left: false, right: across.right, at: 'across' }
+}

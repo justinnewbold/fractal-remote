@@ -1414,11 +1414,12 @@ export function run(test) {
 
   test('a VP4’s pedals say nothing until tapped, at both ends, and say why once', () => {
     const stage = flat('mobile/src/screens/Stage.js')
-    assert.match(stage, /const unknown = \(chainNow\.outline \|\| vp4Here\(\)\) && typeof block\.bypassed !== 'boolean'/, 'the phone’s VP4 pedals say On over an on/off nobody read')
+    /* (An AM4's amp pedal is its boost first, which no VP4 has: lib/am4-boost.) */
+    assert.match(stage, /const unknown = boost \? unread : \(chainNow\.outline \|\| vp4Here\(\)\) && typeof block\.bypassed !== 'boolean'/, 'the phone’s VP4 pedals say On over an on/off nobody read')
     assert.match(stage, /if \(chainNow\.outline && typeof block\.bypassed !== 'boolean'\) return/, 'a VP4 pedal’s tap no longer goes, or an outline’s does')
     assert.match(stage, /\{vp4Here\(\) && blocks\.length && !chainNow\.elsewhere \? \( <Text[^>]*>\{VP4_ON_OFF_UNKNOWN\}<\/Text>/)
     const gig = flat('src/components/Gig.jsx')
-    assert.match(gig, /const unknown = !rec && \(outline \|\| vp4Here\(\)\) && typeof block\.bypassed !== 'boolean'/, 'the browser’s VP4 pedals say On over an on/off nobody read')
+    assert.match(gig, /const unknown = boost \? boost === BOOST\.unknown \|\| boost === BOOST\.other : !rec && \(outline \|\| vp4Here\(\)\) && typeof block\.bypassed !== 'boolean'/, 'the browser’s VP4 pedals say On over an on/off nobody read')
     assert.match(gig, /\{!shown\.elsewhere && blocks\.length && vp4Here\(\) \? <p className="gig-note">\{VP4_ON_OFF_UNKNOWN\}<\/p> : null\}/)
     /* The edit screens: no On, no Engaged, no channel A. */
     const edit = flat('mobile/src/screens/Edit.js')
@@ -1434,7 +1435,7 @@ export function run(test) {
      * — `engaged` and `wanted` are both !block.bypassed, true for a null.
      */
     assert.match(edit, /const engaged = !block\.bypassed \/\* [^*]*\*\/ const unsure = vp4Here\(\) && typeof block\.bypassed !== 'boolean'/, 'the phone’s block panel judges a VP4’s on/off another way')
-    assert.match(edit, /<Press label=\{unsure \? 'Turn it off' : engaged \? 'Engaged' : 'Bypassed'\} tone="signal" on=\{engaged && !unsure\} onPress=\{\(\) => writeBypass\(eid, engaged\)\} \/>/, 'the phone’s block panel says or lights a VP4’s unread on/off')
+    assert.match(edit, /<Press label=\{unsure \? 'Turn it off' : engaged \? 'Engaged' : 'Bypassed'\} tone="signal" on=\{engaged && !unsure\} onPress=\{\(\) => writeBlockBypass\(eid, engaged\)\} \/>/, 'the phone’s block panel says or lights a VP4’s unread on/off')
     assert.match(strip, /const unsure = vp4Here\(\) && typeof block\?\.bypassed !== 'boolean'/, 'the browser’s block panel does not know a VP4’s on/off is unread')
     assert.match(strip, /className=\{`bypass-btn \$\{block\.bypassed \|\| unsure \? 'off' : ''\}`\} onClick=\{async \(\) => \{ const wanted = !block\.bypassed/, 'the browser’s block panel lights a VP4’s unread on/off, or sends something else')
     assert.match(strip, /\{unsure \? 'Turn it off' : block\.bypassed \? 'Bypassed' : 'Engaged'\}/, 'the browser’s block panel says “Engaged” over a VP4’s unread on/off')
@@ -1586,7 +1587,8 @@ export function run(test) {
    */
   test('the browser draws a VP4 pedal nobody has tapped unlike an Off one, at any width', () => {
     const gig = flat('src/components/Gig.jsx')
-    assert.match(gig, /className=\{`gig-block \$\{unknown \|\| block\.bypassed \? 'off' : 'on'\}`\} (\/\*[^*]*(\*(?!\/)[^*]*)*\*\/ )?data-unknown=\{unknown && vp4Here\(\) \? 'yes' : undefined\}/, 'a VP4’s untapped pedal is not marked apart from an Off one')
+    assert.match(gig, /const dark = boost \? boost !== BOOST\.on : unknown \|\| block\.bypassed/, 'a VP4’s untapped pedal is lit')
+    assert.match(gig, /className=\{`gig-block \$\{dark \? 'off' : 'on'\}`\} (\/\*[^*]*(\*(?!\/)[^*]*)*\*\/ )?data-unknown=\{unknown && \(vp4Here\(\) \|\| boost\) \? 'yes' : undefined\}/, 'a VP4’s untapped pedal is not marked apart from an Off one')
     assert.match(flat('src/styles.css'), /button\.gig-block\.off\[data-unknown='yes'\] \{ border-style: dashed; \}/, 'the mark draws nothing')
   })
 
@@ -2137,9 +2139,9 @@ export function run(test) {
     assert.match(stage, /onPress=\{\(\) => setLooping\(true\)\}/)
     const gig = flat('src/components/Gig.jsx')
     assert.match(gig, /const rec = door && !vp4Here\(\)/)
-    assert.match(gig, /const unknown = !rec && \(outline \|\| vp4Here\(\)\) && typeof block\.bypassed !== 'boolean'/, 'the browser’s VP4 looper pedal is lit for an on/off nobody read')
-    assert.match(gig, /className=\{`gig-block \$\{unknown \|\| block\.bypassed \? 'off' : 'on'\}`\}/)
-    assert.match(gig, /\{rec \? LOOPER_LABEL\.record : unknown \? '\\u00a0' : block\.bypassed \? 'Off' : 'On'\}/, 'the browser’s VP4 looper pedal says Rec')
+    assert.match(gig, /const unknown = boost \? boost === BOOST\.unknown \|\| boost === BOOST\.other : !rec && \(outline \|\| vp4Here\(\)\) && typeof block\.bypassed !== 'boolean'/, 'the browser’s VP4 looper pedal is lit for an on/off nobody read')
+    assert.match(gig, /className=\{`gig-block \$\{dark \? 'off' : 'on'\}`\}/)
+    assert.match(gig, /\{rec \? LOOPER_LABEL\.record : boost \? boostWord\(boost\) \|\| '\\u00a0' : unknown \? '\\u00a0' : block\.bypassed \? 'Off' : 'On'\}/, 'the browser’s VP4 looper pedal says Rec')
     assert.match(gig, /\{rec \? \( <span className="gig-block-word gig-block-word-end"/, 'the browser’s VP4 looper pedal says Play')
     assert.match(gig, /rec \? 'Looper — open Record, Play and Stop'/)
     /* Settings at both ends: no Stop the looper on a real VP4. */

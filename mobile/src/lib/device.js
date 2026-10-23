@@ -822,6 +822,36 @@ export async function readUnitMetronome(slug) {
 export const setEnum = (eid, paramId, ordinal) =>
   told(`block ${eid} param ${paramId} → ${ordinal}`, put(`/preset/blocks/${eid}/params/${paramId}`, { value: ordinal, continuous: false }))
 
+/*
+ * THE AM4 AMP'S OUT BOOST, for its pedal on Play (lib/am4-boost, which says
+ * which route and which body; rig.js hands them in).
+ *
+ * The read is the amp's own params read, which the computer answers out of
+ * the copy of the preset it made for the chain read just before: asked
+ * straight after one, nothing goes to the unit.
+ */
+export const readAmpBoost = (path) => remoteRequest(path)
+
+/*
+ * The write is a tap, so it carries the press's deadline, which a knob's PUT
+ * never does. One absolute value. And the AM4 answers ok:false to writes that
+ * landed (it never confirms one over USB: the lock's _why), so that answer is
+ * logged as sent, never as refused.
+ */
+export const setAmpBoost = (ask, opts) => {
+  const what = `amp boost ${ask?.body?.value === 1 ? 'on' : 'off'}`
+  return remoteRequest(ask.path, { method: ask.method, body: JSON.stringify(ask.body), ...(tapOf(opts) || {}) }).then(
+    (r) => {
+      logDebug('write', what, r?.ok === true ? 'ok' : 'sent (the AM4 does not confirm it)')
+      return r
+    },
+    (err) => {
+      logDebug('write', what, `failed — ${err?.message || err}`)
+      throw err
+    }
+  )
+}
+
 /**
  * Every model a block family offers, with what each one is modelled on.
  *

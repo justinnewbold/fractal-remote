@@ -75,6 +75,7 @@ import {
   SETTLING_TRIES,
   SETTLING_MS,
   writeBypass,
+  refreshBoost,
   writeTuner,
   onConfigDoc,
   presetSaved,
@@ -219,10 +220,12 @@ import {
   vp4Here,
   vp4PresetName,
   vp4SceneNames,
-  vp4Setup
+  vp4Setup,
+  setAmpBoost
 } from './lib/forgefx'
 import Vp4Setup from './components/Vp4Setup'
 import { MIDI_SETUP_TITLE, VP4_NO_EDITS, VP4_NO_KNOBS, VP4_NO_RENAME, vp4ComputerLacks, vp4SetupStatus } from '../shared/vp4-safety.mjs'
+import { PLAY_HINT_HOLD, playHintTap } from '../shared/am4-boost.mjs'
 /* What a VP4 gets from the app, on the unlock page: the phone paywall's line, word for word. */
 import { VP4_SO_FAR } from '../shared/vp4-safety.mjs'
 import ConnectScreen, { AccountCheck } from './components/ConnectScreen'
@@ -343,7 +346,11 @@ attachDriver({
   /* Which unit a remembered chain belongs to: see deviceState.knownChain. */
   unitKey: () => `${isDemo() ? `demo:${demoUnit()}` : remoteActive() ? 'away' : 'rig'}:${currentDeviceSlug()}`,
   /* The tempos this unit takes: a read back outside them, 0 among them, is no answer (shared/tempo heardTempo). */
-  tempoRange: () => tempoRange(currentDeviceSlug())
+  tempoRange: () => tempoRange(currentDeviceSlug()),
+  /* An AM4's amp pedal is its boost: which unit, the read and the write (shared/am4-boost.mjs, deviceState.tapBoost). */
+  unitSlug: () => currentDeviceSlug(),
+  blockParams,
+  setAmpBoost
 })
 
 /* Hoisted so each is one function for the life of the module: a selector
@@ -1742,6 +1749,8 @@ export default function App() {
       if (vp4Here()) takeVp4Record(p?.number ?? null)
       /* So a screen that appears next does not read the same chain again. */
       chainWasRead(p?.number)
+      /* And an AM4 amp's boost, which its pedal on Play shows: out of the copy this chain was just read from (shared/am4-boost.mjs). Every later chain read asks it itself; this first one is App's own, and asked nothing, so Play opened with the pedal unread. A boost tapped since the last scene or preset sent is believed over it (deviceState.refreshBoost). */
+      refreshBoost().catch(() => {})
       setFaultReason(null)
       setStatus('live')
       // The unit answered, so whatever was lost is back.
@@ -4623,9 +4632,9 @@ export default function App() {
             waits until the demo's has been put away. */}
         {!holdNoteSeen && holdOpensChannels && !(isDemo() && status === 'live' && !demoNoteSeen) ? (
           <p className="play-hint">
+            {/* On an AM4 the amp's tap is its boost, and the note names the amp: there it says so, and where the amp's own on and off is (shared/am4-boost.mjs). */}
             <span>
-              Hold a block &mdash; the amp, the drive, any of them &mdash; to bring up its channels
-              and pick the one this scene plays. A tap just switches it on and off.
+              {PLAY_HINT_HOLD} {playHintTap(currentDeviceSlug())}
             </span>
             <button className="chip" onClick={dismissHoldNote}>
               Got it

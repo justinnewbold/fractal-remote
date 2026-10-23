@@ -468,6 +468,8 @@ export const AM4 = {
   NAME: 0x000b,
   SCENE: 0x000d,
   BYPASS: 0x0003,
+  /* The amp's Out Boost switch, 0 OFF and 1 ON: on an AM4 the amp's pedal is its boost (lib/am4-boost). */
+  OUT_BOOST: 0x0096,
   CHANNEL_READ: 0x07dd,
   CHANNEL_WRITE: 0x07d2,
   TEMPO_LOW: 0x0002,
@@ -590,6 +592,16 @@ export const buildAm4Preset = (n) =>
   am4Frame({ pidLow: AM4.PRESET_REG, pidHigh: AM4.PRESET, action: AM4.SET, hdr4: 4, payload: am4Float(location(n)) })
 export const buildAm4Bypass = (code, bypassed) =>
   am4Frame({ pidLow: am4Code(code), pidHigh: AM4.BYPASS, action: AM4.SET, hdr4: 4, payload: am4Float(bypassed ? 1 : 0) })
+/*
+ * The amp's Out Boost, on or off: byte for byte the codec's own
+ * buildSetParam('amp.out_boost', 1 or 0), the frame AM4-Edit sends for its
+ * Out Boost switch and the one the computer app sends the same AM4 for the
+ * same tap. The amp's own code only, and the value as a whole number.
+ */
+export function buildAm4AmpBoost(on) {
+  if (typeof on !== 'boolean') throw new Error('the boost is set on or off, never toggled')
+  return am4Frame({ pidLow: AM4_BLOCKS.amp, pidHigh: AM4.OUT_BOOST, action: AM4.SET, hdr4: 4, payload: am4Float(on ? 1 : 0) })
+}
 /** Always at the block's BASE code: a channel written to a second copy's code lands nowhere. */
 export function buildAm4Channel(code, channel) {
   const c = channelIndex(channel)
@@ -615,7 +627,8 @@ export const buildAm4Tempo = (bpm) =>
  * block's base code only, for the one write that must go there.
  *
  * Deliberately NOT here, ever, over Bluetooth: fn 0x1F, saving (action
- * 0x1B), renaming, placing blocks, any other parameter write, the identify
+ * 0x1B), renaming, placing blocks, any other parameter write (the amp's Out
+ * Boost is the one setting written, for its pedal on Play), the identify
  * broadcast, the firmware question, and the gen-3 probes.
  *
  * And one frame that is not a parameter frame at all, held to its own rule
@@ -652,6 +665,13 @@ export const AM4_ALLOWED = [
   { name: 'preset change', fn: 0x01, pidLow: 0x00ce, pidHigh: 0x000a, action: 0x0001, hdr4: 4, size: 23, value: { float: [0, 103], whole: true } },
   { name: 'block on/off', fn: 0x01, pidLow: 'block', pidHigh: 0x0003, action: 0x0001, hdr4: 4, size: 23, value: { float: [0, 1], whole: true } },
   { name: 'block channel', fn: 0x01, pidLow: 'base', pidHigh: 0x07d2, action: 0x0001, hdr4: 4, size: 23, value: { float: [0, 3], whole: true } },
+  /*
+   * "On the AM4 the amp on off button should do an amp boost instead." The
+   * amp's Out Boost, written: the codec's verified frame for it, at the amp's
+   * own code and nowhere else, 0 or 1. Only ever written over Bluetooth, never
+   * read: the AM4's answer to that read has never been seen.
+   */
+  { name: 'amp out boost', fn: 0x01, pidLow: 0x003a, pidHigh: 0x0096, action: 0x0001, hdr4: 4, size: 23, value: { float: [0, 1], whole: true } },
   { name: 'tempo change', fn: 0x01, pidLow: 0x0002, pidHigh: 0x001c, action: 0x0002, hdr4: 4, size: 23, value: { float: [0, 1] } }
 ]
 

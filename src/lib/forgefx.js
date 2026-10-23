@@ -939,6 +939,19 @@ export const setEnum = (eid, paramId, ordinal) => {
   })
 }
 
+/*
+ * THE AM4 AMP'S OUT BOOST, for its pedal on Play (shared/am4-boost.mjs, which
+ * says which route and which body; deviceState hands them in). A tap, so it
+ * carries the press's deadline, which setEnum never does. One absolute
+ * value, on the discrete path. The AM4 answers ok:false to writes that
+ * landed, so the answer is handed back and never taken for a no.
+ */
+export const setAmpBoost = (ask, opts) => {
+  recordWire({ eid: ask.eid, paramId: ask.paramId, name: 'Out Boost', wanted: ask.body.value, sent: ask.body.value, enum: true, continuous: false, range: null })
+  if (mock) return tick().then(() => mock.setEnum(ask.eid, ask.paramId, ask.body.value))
+  return request(ask.path, { method: ask.method, body: JSON.stringify(ask.body), ...tapOf(opts) })
+}
+
 /** Cab block state for the IR picker: mode, per-slot bank and IR selection. */
 export const cabState = (eid) =>
   mock ? tick().then(() => mock.cabState(eid)) : request(`/preset/blocks/${eid}/cab`)

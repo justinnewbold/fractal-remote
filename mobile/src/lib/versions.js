@@ -76,5 +76,10 @@ export function isOlder(a, b) {
  *   1.86.28  the last route a phone sends that the computer must allow (the
  *            looper's buttons). The allowlist has not changed since.
  *   1.87.24 to 1.87.28 need nothing from the computer.
+ *   1.87.49  an AM4 amp's boost tap (its pedal on Play) goes out like a
+ *            bypass (ForgeFX +am4boosttap). Older, the boost still switches,
+ *            but the computer holds its MIDI queue up to 0.6 s after it, so a
+ *            scene or a preset tapped in that time goes out that much late.
+ *            Degrades.
  */
 export const COMPUTER_NEEDED = '1.87.23'

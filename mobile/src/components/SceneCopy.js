@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Alert, Text, View } from 'react-native'
 import { color, font, space } from '../lib/theme'
-import { orStop, refreshSceneState, useRig, writeBypass, writeChannel, writeScene } from '../lib/rig'
+import { orStop, refreshSceneState, useRig, writeBlockBypass, writeChannel, writeScene } from '../lib/rig'
 import { sceneState, vp4Here } from '../lib/device'
 import { VP4_CANT_YET } from '../lib/vp4-safety'
 import { copyScene } from '../lib/copy-tools'
@@ -34,10 +34,11 @@ export default function SceneCopy({ count = 8 }) {
     setSaid(null)
     try {
       /* Each write stops the copy if it did not go (rig orStop): a dropped first switch would read the wrong scene and copy that. */
+      /* The blocks themselves on and off, an AM4's amp included: a scene is what is on in it, not its boost (lib/am4-boost). */
       const res = await copyScene({
         from: source,
         to,
-        wire: { setScene: orStop(writeScene), sceneState, setBypass: orStop(writeBypass), setChannel: orStop(writeChannel) }
+        wire: { setScene: orStop(writeScene), sceneState, setBypass: orStop(writeBlockBypass), setChannel: orStop(writeChannel) }
       })
       await refreshSceneState()
       setSaid(

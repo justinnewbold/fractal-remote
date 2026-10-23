@@ -117,6 +117,14 @@ export function fixFor(message) {
    * been saved, the very thing the app warns about where presets are picked.
    */
   if (/\bvp4\b/.test(said)) return null
+  /*
+   * NOR FOR AN AM4 AMP'S BOOST (shared/am4-boost.mjs): each of its sentences
+   * says what to do already, and "The preset is still loading, so the boost
+   * wasn't sent. Try it again in a moment." sent the player to "A preset will
+   * not load": pick it again, which loads it again and throws away what has
+   * not been saved, when all it needed was a moment.
+   */
+  if (/\bboost\b/.test(said)) return null
   if (computer) return 'connect'
   if (/not connected|no unit|cannot find|no device|disconnected|gone/.test(said)) return 'connect'
   if (quiet) return 'frozen'
