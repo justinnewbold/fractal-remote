@@ -1015,7 +1015,10 @@ export function run(test) {
 
     const hidden = step('The app starts with no window, once, and stops when told')
     assert.match(hidden, /grep -q 'Phone remote: sign in once in the app to turn it on\\\.' "\$log"/, 'the packaged app is no longer held to being answered as a signed-out computer')
-    assert.match(hidden, /for at in "localhost:5056" "127\.0\.0\.1:5056" "\$mdns:5056" \$\{lan:\+"\$lan:5056"\}; do/, 'an address the computer hands out is no longer asked')
+    assert.match(hidden, /for at in "localhost:5056" "127\.0\.0\.1:5056" "\$mdns:5056" "\$named:5056" \$\{lan:\+"\$lan:5056"\}; do/, 'an address the computer hands out is no longer asked')
+    // The .local names are made the way both launchers make theirs, and one from an override.
+    assert.match(hidden, /mdns="\$\(addr "h\.advertisedName\(\)"\)\.local"/, 'the .local name asked is not the one the app advertises')
+    assert.match(hidden, /named="\$\(addr "h\.advertisedName\(\{ env: \{ FRACTAL_MDNS_NAME: 'pedal_board' \} \}\)"\)\.local"/, 'the name made from a FRACTAL_MDNS_NAME override is no longer asked')
     assert.match(hidden, /-X PUT -H "Host: \$at" -H "Origin: http:\/\/\$at"/, 'the write each address’s page makes is no longer asked')
     assert.match(hidden, /grep -q '\\\[forgefx\\\]\\\[guard\\\] refused' "\$log"/, 'a refusal of something the app asked no longer turns the build red')
   })

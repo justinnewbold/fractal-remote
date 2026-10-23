@@ -1006,8 +1006,25 @@ test('each computer advertises itself under its own name', async () => {
   // Nothing to go on is the one case where the old constant is still right.
   assert.equal(host.mdnsName(''), 'fractal')
 
-  const main = readSrc(new URL('../desktop/main.js', import.meta.url), 'utf8')
-  assert.match(main, /FRACTAL_MDNS_NAME \|\| mdnsName\(\)/, 'the computer app still advertises a constant')
+  // Both launchers take the name from the one function, and neither reads the override itself:
+  // a raw FRACTAL_MDNS_NAME went out exactly as written, and the device server refused it.
+  for (const file of ['../desktop/main.js', '../scripts/serve.mjs']) {
+    const src = readSrc(new URL(file, import.meta.url), 'utf8')
+    assert.match(src, /const name = advertisedName\(\)/, `${file} does not advertise the name advertisedName makes`)
+    assert.doesNotMatch(src, /process\.env\.FRACTAL_MDNS_NAME/, `${file} reads FRACTAL_MDNS_NAME itself, past advertisedName`)
+  }
+  // With no override, it is this machine's own name.
+  assert.equal(host.advertisedName({ env: {}, machine: 'Studio Mac' }), 'fractal-studio-mac')
+  // An override is the whole name, as one label the network and the device server can carry.
+  const over = (v) => host.advertisedName({ env: { FRACTAL_MDNS_NAME: v }, machine: 'Studio Mac' })
+  assert.equal(over('pedal_board'), 'pedal-board')
+  assert.equal(over('Studio.Rig'), 'studio-rig')
+  assert.equal(over('pedalboard.local'), 'pedalboard', 'an override that names .local itself is advertised as .local.local')
+  assert.equal(over('  Pedal Board!  '), 'pedal-board')
+  assert.ok(over('x'.repeat(80)).length <= 63, 'an override longer than one DNS label is advertised whole')
+  // One with nothing usable in it is no override at all.
+  assert.equal(over('___'), 'fractal-studio-mac')
+  assert.equal(over(''), 'fractal-studio-mac')
 })
 
 test('a model roster with no lineage on it gets one', () => {
@@ -1753,9 +1770,13 @@ test('every address the computer hands out is one its device server answers, the
    * as a stranger.
    */
   const machines = ['Justins-MacBook-Pro.local', 'Justin’s MacBook Pro', 'raspberrypi', 'pi.home.arpa', 'DESKTOP-4F2K9QZ', 'MacBook Air (2)', 'x'.repeat(70), '', '.local', 'Åsa']
-  for (const machine of machines) {
-    const name = host.mdnsName(machine)
-    assert.match(name, /^[a-z0-9-]+$/, `${JSON.stringify(machine)} makes a .local name the network cannot carry: ${name}`)
+  // And FRACTAL_MDNS_NAME, which both launchers advertise and list in place of the machine's own
+  // name: an underscore, a dot, a '.local' of its own, a space, a letter no DNS label carries.
+  const overrides = [undefined, 'pedal_board', 'Studio.Rig', 'pedalboard.local', 'Pedal Board', 'pédal+board', '___', 'y'.repeat(80)]
+  const runs = machines.flatMap((machine) => overrides.map((o) => ({ machine, env: o === undefined ? {} : { FRACTAL_MDNS_NAME: o } })))
+  for (const { machine, env } of runs) {
+    const name = host.advertisedName({ env, machine })
+    assert.match(name, /^[a-z0-9-]+$/, `${JSON.stringify(machine)} with ${JSON.stringify(env)} makes a .local name the network cannot carry: ${name}`)
     for (const port of [5056, 49731]) {
       for (const ip of ['192.168.1.20', '10.0.0.7', null]) {
         const at = host.addresses({ port, name, ip })
@@ -1763,7 +1784,7 @@ test('every address the computer hands out is one its device server answers, the
         assert.ok(handed.includes(`http://localhost:${port}`), 'the window’s own address is not among them')
         for (const url of handed) {
           const cls = guardHost.originClass(url, port, machine)
-          assert.ok(cls === 'loopback' || cls === 'lan', `${url} (on ${JSON.stringify(machine)}) is ${cls} to the device server`)
+          assert.ok(cls === 'loopback' || cls === 'lan', `${url} (on ${JSON.stringify(machine)}, ${JSON.stringify(env)}) is ${cls} to the device server`)
           if (new URL(url).hostname === 'localhost') assert.equal(cls, 'loopback', 'the window is not the server’s own page')
         }
       }

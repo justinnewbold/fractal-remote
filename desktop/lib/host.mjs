@@ -36,15 +36,39 @@ export const DEFAULT_NAME = 'fractal'
  * whole name on a Mac whose hostname tells us nothing.
  */
 export function mdnsName(machine = osHostname()) {
-  const slug = String(machine || '')
-    .replace(/\.local$/i, '')
+  const slug = dnsLabel(machine, 40)
+  return slug ? `${DEFAULT_NAME}-${slug}` : DEFAULT_NAME
+}
+
+/** A name as one DNS label: no '.local', lowercase, and anything a label may
+ *  not carry turned into the one separator it may. Empty when nothing is left. */
+function dnsLabel(raw, max) {
+  return String(raw || '')
+    .trim()
+    .replace(/\.local\.?$/i, '')
     .toLowerCase()
-    // Anything a DNS label may not carry becomes the one separator it may.
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
+    .slice(0, max)
     .replace(/-+$/, '')
-  return slug ? `${DEFAULT_NAME}-${slug}` : DEFAULT_NAME
+}
+
+/**
+ * The name both launchers advertise and list: FRACTAL_MDNS_NAME when it is
+ * set, this machine's own mdnsName otherwise.
+ *
+ * The override went out exactly as written, and a name the network or the
+ * device server cannot carry went out with it: `pedal_board` was advertised
+ * and listed in the menu as http://pedal_board.local:5056, which the device
+ * server's guard (ForgeFX server/src/guard.ts) answers with "This computer
+ * does not answer to that name", because it knows a .local name only as
+ * letters, digits and hyphens. A dot made two labels it refuses the same way,
+ * and `pedalboard.local` made pedalboard.local.local. So the override is
+ * turned into one label the same way the machine's name is (`pedal-board`),
+ * and one with nothing usable in it is no override at all.
+ */
+export function advertisedName({ env = process.env, machine = osHostname() } = {}) {
+  return dnsLabel(env.FRACTAL_MDNS_NAME, 63) || mdnsName(machine)
 }
 
 /**

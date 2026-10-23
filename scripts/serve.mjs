@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url'
 import { Bonjour } from 'bonjour-service'
 import QRCode from 'qrcode'
 import {
-  mdnsName,
+  advertisedName,
   DEFAULT_PORT,
   MISSING_FORGEFX,
   addresses,
@@ -36,7 +36,7 @@ import {
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const port = Number(process.env.PORT || DEFAULT_PORT)
-const name = process.env.FRACTAL_MDNS_NAME || mdnsName()
+const name = advertisedName()
 
 /* npmSpawn is what makes this work on Windows, where npm is a batch file Node
    will not launch on its own. See desktop/lib/host.mjs. */

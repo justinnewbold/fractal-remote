@@ -1055,11 +1055,14 @@ jobs:
           # window can be pointed at 127.0.0.1. The guard refuses a name it
           # does not know, and these are the ones it must always know. Asked
           # of 127.0.0.1 with each Host, because a runner's own Wi-Fi name is
-          # not resolvable.
+          # not resolvable. The .local name is made as the app makes it, and
+          # once more as it makes one from a FRACTAL_MDNS_NAME override with
+          # an underscore in it, which went out as written and was refused.
           addr() { node -e "import(require('url').pathToFileURL(process.argv[1]).href).then((h) => console.log($1))" "$GITHUB_WORKSPACE/desktop/lib/host.mjs"; }
           lan="$(addr "h.lanAddress() || ''")"
-          mdns="$(addr "h.mdnsName()").local"
-          for at in "localhost:5056" "127.0.0.1:5056" "$mdns:5056" ${lan:+"$lan:5056"}; do
+          mdns="$(addr "h.advertisedName()").local"
+          named="$(addr "h.advertisedName({ env: { FRACTAL_MDNS_NAME: 'pedal_board' } })").local"
+          for at in "localhost:5056" "127.0.0.1:5056" "$mdns:5056" "$named:5056" ${lan:+"$lan:5056"}; do
             curl -fsS --max-time 5 -o /dev/null -H "Host: $at" http://127.0.0.1:5056/ || fail "the page at http://$at/ is not answered"
             curl -fsS --max-time 5 -o /dev/null -H "Host: $at" http://127.0.0.1:5056/healthz || fail "a read from the page at http://$at/ is not answered"
             curl -fsS --max-time 5 -o /dev/null -X PUT -H "Host: $at" -H "Origin: http://$at" -H 'Content-Type: application/json' \
