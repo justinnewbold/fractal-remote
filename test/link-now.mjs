@@ -4408,6 +4408,62 @@ export function run(test) {
       assert.equal(one.bench.sent.find((s) => s.msg.payload.method === 'POST')?.at, made, 'one computer’s tap waited')
     })
 
+    /*
+     * THE ONE PLACE ONE COMPUTER'S TIMING MOVES, AND ONLY ON A RECORD THAT
+     * SAYS IT MAY HAVE TWO: its last count heard two (many: true), or a
+     * 1.87.47 pick never counted since (relay-rules mayBeTwo). One computer
+     * answered, and a drop under the count may have taken the second one's
+     * answer with it; kept, every write after it went to nobody in
+     * particular, both units if the second was there. So it is owed, as an
+     * account of two's is, and a tap waits for the count owed (dropped at
+     * its deadline). Every other record goes exactly as in 1.87.50: no
+     * record, nothing picked, or a count that heard one.
+     */
+    test(`${end}: one computer answering a count the channel dropped under is counted again only where the record says it may have two; every other record keeps it, its taps at once`, async () => {
+      const oneUnder = async (opts) => {
+        const t = await relayOnABench(end, opts)
+        t.bench.computers = [computer('Studio', 'FM3')]
+        const count = counted(t)
+        await t.clock.advance(400)
+        t.service.drop()
+        await t.clock.advance(1500)
+        t.service.back()
+        await t.clock.advance(100)
+        assert.equal(count.done, true)
+        const seen = t.watch(t.relay.hostResponds())
+        await t.clock.advance(100)
+        assert.equal(seen.value, true)
+        t.bench.sent.length = 0
+        const made = t.clock.now()
+        const pressed = t.watch(t.tap())
+        await t.clock.advance(2000)
+        return { t, owed: t.relay.remoteCountOwed(), pressed, sentAt: t.bench.sent.find((s) => s.msg.payload.method === 'POST')?.at ?? null, made }
+      }
+      for (const opts of [{ picked: 'Studio', many: true }, { picked: 'Studio', legacy: true }]) {
+        const { t, owed, pressed, sentAt } = await oneUnder(opts)
+        assert.equal(owed, true, `${JSON.stringify(opts)}: a count a drop may have taken the second answer from was kept`)
+        assert.equal(sentAt, null, `${JSON.stringify(opts)}: a tap went while the count was owed, to nobody in particular`)
+        assert.equal(pressed.done && pressed.error?.notSent, true, pressed.error?.message)
+        /* Counted again: one computer, and its taps go at once from there. */
+        const again = counted(t)
+        await t.clock.advance(2000)
+        assert.equal(again.done, true)
+        assert.equal(t.relay.remoteCountOwed(), false)
+        t.bench.sent.length = 0
+        const made = t.clock.now()
+        const next = t.watch(t.tap())
+        await t.clock.advance(200)
+        assert.equal(next.done && !next.error, true, next.error?.message)
+        assert.equal(t.bench.sent.find((s) => s.msg.payload.method === 'POST')?.at, made)
+      }
+      for (const opts of [{}, { picked: null, many: false }, { picked: 'Studio', many: false }]) {
+        const { owed, pressed, sentAt, made } = await oneUnder(opts)
+        assert.equal(owed, false, `${JSON.stringify(opts)}: one computer's count was taken again`)
+        assert.equal(pressed.done && !pressed.error, true, pressed.error?.message)
+        assert.equal(sentAt, made, `${JSON.stringify(opts)}: one computer's tap waited`)
+      }
+    })
+
     test(`${end}: a pick's proof the channel dropped under, its answer lost, is never taken for an old computer app: the computers are counted again`, async () => {
       const t = await relayOnABench(end)
       const { bench, clock, relay, watch, service, store } = t
