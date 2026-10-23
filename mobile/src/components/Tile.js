@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Image, PixelRatio, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 
 import { color, font, isDark, radius, space, TAP } from '../lib/theme'
 import { at, inkOn, lighter, vivid } from '../lib/vivid'
@@ -9,6 +9,7 @@ import { OFF_GREY, liftedLook } from '../lib/colourPage'
 import { tick } from '../lib/feedback'
 import { fire, said } from '../lib/tapped'
 import { cornerFit, mustSayFit } from '../lib/tile-corners'
+import { laidWhole } from '../lib/tileGrid'
 
 /**
  * A coloured tile, for the two things on this screen that have an identity.
@@ -53,9 +54,18 @@ const SHEEN = 'rgba(255,255,255,0.10)'
 const SHADE = 'rgba(0,0,0,0.10)'
 /* Two pixels, because the edge is doing real work when the tile is off. An absolute child's offsets are taken inside it. */
 const BORDER = 2
+/*
+ * Whether a whole name fits, as its twin last laid it out: by the name, the
+ * tile's width and the phone's text size. Kept here rather than only in the
+ * tile, because the pedals are drawn again from nothing at every preset step
+ * (the grey cards stand in while the chain loads) and every return to Play,
+ * and a tile that had to wait for its twin drew its three letters for a
+ * frame and then the name, at the moment the player looks at them.
+ */
+const WHOLE = new Map()
 
 export default function Tile({
-  label,
+  label: given,
   sub,
   caption,
   /*
@@ -157,7 +167,17 @@ export default function Tile({
    * "Scene names cut short." A scene name is the thing a player thinks in, so
    * every scene tile wraps now, at every width.
    */
-  wrap = false,
+  wrap: wraps = false,
+  /*
+   * A WHOLE NAME TO SHOW IN PLACE OF `label`, where it fits: a pedal's
+   * "Compressor" for CMP on a Play wide enough to spell it out
+   * (lib/playShape `names`). Two lines, a size down, as a wrapped name
+   * always is; a name that would need a third line, or a word cut in two,
+   * keeps `label` (lib/tileGrid laidWhole), so a tile is never a name with
+   * an ellipsis. Left out, as it is on every phone, the tile is exactly what
+   * it was: nothing about it is measured or drawn.
+   */
+  full,
   fill,
   ink,
   on = false,
@@ -167,6 +187,25 @@ export default function Tile({
   haptic = tick,
   style
 }) {
+  /*
+   * THE WHOLE NAME, OR THE THREE LETTERS (`full`). Measured on a twin of the
+   * whole name laid out unseen at the tile's own width, and only ever taken
+   * at the width it was measured at: until the twin has said, and at a new
+   * width until it says again, the tile shows the label it was given, so a
+   * name too long for the tile is never drawn cut short for a frame. The
+   * name drawn, said and logged is then `label`, and a whole name wraps as a
+   * wrapped name does. With no `full`, both are exactly what was given.
+   * A tile drawn again shows at once what a twin said last for that name at
+   * that width and text size (WHOLE); a name or a width never laid out
+   * before still waits for its own twin.
+   */
+  const [whole, setWhole] = useState(null)
+  const wholeAt = full ? `${full}|${StyleSheet.flatten(style)?.width}` : null
+  const wholeKey = full ? `${wholeAt}|${PixelRatio.getFontScale()}` : null
+  const wholeFits = whole?.at === wholeAt ? whole.fits : WHOLE.get(wholeKey)
+  const named = !!full && wholeFits === true
+  const label = named ? full : given
+  const wrap = wraps || named
   /*
    * THE COLOUR AS IT IS AUTHORED — EXCEPT IN THE ONE LOOK THAT WAS LIFTED.
    *
@@ -537,6 +576,34 @@ export default function Tile({
             {topLeft || ''}
           </Text>
         </View>
+      ) : null}
+      {full ? (
+        <Text
+          /* The whole name's twin, unseen and untouchable, at the width the
+             name would be drawn at (the tile's padding in from its border):
+             what it lays out decides whether the name is drawn. */
+          pointerEvents="none"
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+          onTextLayout={(e) => {
+            const fits = laidWhole(full, e.nativeEvent.lines)
+            WHOLE.set(wholeKey, fits)
+            setWhole((was) => (was?.at === wholeAt && was.fits === fits ? was : { at: wholeAt, fits }))
+          }}
+          style={{
+            position: 'absolute',
+            left: space.sm,
+            right: space.sm,
+            top: 0,
+            opacity: 0,
+            fontSize: font.small,
+            fontWeight: '700',
+            letterSpacing: 0.5,
+            textAlign: 'center'
+          }}
+        >
+          {full}
+        </Text>
       ) : null}
       <View
         /* The picture is this column's first child, so its top is the

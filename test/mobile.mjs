@@ -2554,7 +2554,9 @@ export function run(test) {
     /* Blocks take their column count from `fxCols`, which is the setting's
        own `fx` until fit is measuring — fit widens the rows rather than let a
        tile drop under a thumb. Either way it comes from the setting. */
-    assert.match(stage, /const fxCols = fitted \? fitted\.fxCols : size\.fx/, 'the chain column count is no longer the chosen one')
+    /* Play's shape's, which is the setting's own `fx` under 621 points of row (lib/playShape; test/duo.mjs holds it). */
+    assert.match(stage, /const fxCols = fitted \? fitted\.fxCols : shape\.fxCols/, 'the chain column count is no longer the chosen one')
+    assert.match(stage, /fxCols: shape\.fxCols,/, 'Fit starts the chain from something other than the chosen count')
     assert.match(stage, /width: tileWidth\(row, fxCols\)/, 'the chain is a fixed number across whatever the setting says')
     /*
      * And `row` is not the raw measurement, which is zero on the first frame of
@@ -2567,9 +2569,10 @@ export function run(test) {
      * the same answer the measurement gives, and `onLayout` still wins the
      * moment it lands.
      */
+    /* Play's own width less its padding: on its first frame the window's less the phone's own down its sides, or, back to a window the same width, the width it was last measured at (lib/screenShape firstFrame; test/duo.mjs runs it, mount after mount). */
     assert.match(
       stage,
-      /const row = grid \|\| Math\.max\(0, screen - space\.lg \* 2\)/,
+      /const row = grid \|\| Math\.max\(0, pageRow\(playWidth, space\.lg\) - fold\.left - fold\.right\)\n/,
       'the tiles are drawn from a width that is zero until the screen has been measured'
     )
     assert.match(stage, /setGrid\(e\.nativeEvent\.layout\.width\)/, 'nothing measures the row any more, so an unusual screen stays guessed at')
@@ -3067,21 +3070,52 @@ export function run(test) {
      * screen rather than the one it was found on.
      */
     const bad = []
+    /*
+     * Every contentContainerStyle in every file, read as code, and every
+     * style object it can be: one written in place, either side of a
+     * condition (Play's page is one of two, by its shape), or one inside an
+     * array. A pattern over the text read only the first kind, and stopped
+     * reading Play's page without saying so when it became a condition.
+     */
+    const styles = new Map()
+    const objectsIn = (node, out = []) => {
+      if (!node || typeof node !== 'object') return out
+      if (node.type === 'ObjectExpression') out.push(node)
+      else if (node.type === 'ConditionalExpression') [node.consequent, node.alternate].forEach((n) => objectsIn(n, out))
+      else if (node.type === 'LogicalExpression') [node.left, node.right].forEach((n) => objectsIn(n, out))
+      else if (node.type === 'ArrayExpression') node.elements.forEach((n) => objectsIn(n, out))
+      return out
+    }
+    const said = (obj, key) => {
+      const prop = obj.properties.find((p) => p.type === 'ObjectProperty' && (p.key.name || p.key.value) === key)
+      return prop ? prop.value.value : undefined
+    }
     for (const file of [
       ...walk(new URL('../mobile/src/screens/', import.meta.url)),
       ...walk(new URL('../mobile/src/components/', import.meta.url))
     ]) {
-      const text = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ')
-      /* Every contentContainerStyle in the file, brace-balanced enough for a
-         style object one level deep. */
-      for (const m of text.matchAll(/contentContainerStyle=\{\{([^{}]*)\}\}/g)) {
-        const style = m[1].replace(/\s+/g, ' ')
-        if (/flexGrow: 1/.test(style) && /justifyContent: 'center'/.test(style)) {
-          bad.push(`${String(file).split('/mobile/')[1]}: ${style.trim()}`)
+      const name = String(file).split('/mobile/')[1]
+      const src = readFileSync(file, 'utf8')
+      if (!src.includes('contentContainerStyle')) continue
+      traverse(parse(src, { sourceType: 'module', plugins: ['jsx'] }), {
+        JSXAttribute(path) {
+          if (path.node.name.name !== 'contentContainerStyle') return
+          const value = path.node.value?.type === 'JSXExpressionContainer' ? path.node.value.expression : null
+          for (const obj of objectsIn(value)) {
+            styles.set(name, (styles.get(name) || 0) + 1)
+            if (said(obj, 'flexGrow') === 1 && said(obj, 'justifyContent') === 'center') {
+              bad.push(`${name}:${obj.loc.start.line}: flexGrow: 1 with justifyContent: 'center'`)
+            }
+          }
         }
-      }
+      })
     }
     assert.deepEqual(bad, [], `a scroll view centres content that can outgrow it:\n${bad.join('\n')}`)
+    /* And it read what it is for: both of Play's pages, the opened-up one and today's, and every screen's own. */
+    assert.equal(styles.get('src/screens/Stage.js'), 2, 'the check did not read both of Play’s pages')
+    for (const screen of ['src/screens/SignIn.js', 'src/screens/Settings.js', 'src/screens/Edit.js', 'src/screens/Setlists.js']) {
+      assert.ok(styles.get(screen) > 0, `the check did not read ${screen}`)
+    }
 
     /* And the screen it was found on starts at the top, with room under the
        last thing on it for the home indicator. */
@@ -3183,12 +3217,18 @@ export function run(test) {
 
     /* Everything that pops up is drawn AFTER the content, outside the scrolling
        part of the screen — an overlay nested in the flow is an overlay that can
-       still push things around. */
+       still push things around. Outside the page itself, too, on Play's own
+       frame, so a page drawn again in another shape cannot take one with it
+       (test/duo.mjs holds that part); and still on Play, before its frame
+       closes. */
     const scroll = stage.indexOf('</ScrollView>')
+    const frameEnd = stage.indexOf('\n    </View>\n  )\n}\n', scroll)
+    assert.ok(frameEnd > scroll, 'Play’s own frame moved; this check reads it')
     for (const tag of ['<ChannelSheet', '<Tuner']) {
       const at = stage.indexOf(tag)
       assert.ok(at > 0, `${tag} is gone from the stage screen`)
-      assert.ok(at < scroll, `${tag} escaped the screen entirely`)
+      assert.ok(at > scroll, `${tag} is inside the scrolling page`)
+      assert.ok(at < frameEnd, `${tag} escaped the screen entirely`)
     }
     /* The volume is no longer one of them: its speaker moved to the bar at the
        top of the app, and the sheet went with the button that opens it. It is
@@ -8069,7 +8109,8 @@ export function run(test) {
     assert.ok(four.tile > two.tile, 'Fit did not give the saved rows back to the tiles')
 
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(stage, /const sceneLayout = loadSceneLayout\(sync\)\n\s+const sceneCols = sceneColsFor\(size, sceneLayout\)/, 'the phone ignores the choice')
+    /* Through Play's shape (lib/playShape), which is the layout's own sceneColsFor under 621 points of row: test/duo.mjs holds that. */
+    assert.match(stage, /const sceneLayout = loadSceneLayout\(sync\)\n[\s\S]{0,1200}const shape = playShape\(pageRow\(playWidth, space\.lg\), SIZES\.indexOf\(size\), sceneLayout, shapeWas\.current\)\n[\s\S]{0,600}const sceneCols = shape\.sceneCols\n/, 'the phone ignores the choice')
     assert.match(stage, /sceneOrderFor\(sceneLayout, scenes\.count, loadSceneOrder\(sync\)\)\.map\(\(i\) => \{/, 'the phone draws the scenes in their own order whatever was chosen')
     assert.match(stage, /caption=\{String\(i \+ 1\)\}[\s\S]{0,600}onPress=\{\(\) => writeScene\(i\)\}/, 'a moved tile no longer picks its own scene')
     assert.match(stage, /tileWidth\(row, sceneCols\)/, 'the phone draws scenes at the size step’s width regardless')
@@ -13617,10 +13658,11 @@ export function run(test) {
     assert.match(stage, /setTrim\(\(was\) => was \+ over\)/, 'the overflow is measured and then not used')
     assert.match(stage, /if \(over > 2\)/, 'a rounding pixel starts another fitting pass')
     /* Reset when what is being fitted changes, or a preset with fewer blocks
-       inherits the trim from a bigger one and draws tiny tiles. */
+       inherits the trim from a bigger one and draws tiny tiles. And when Play
+       only gets wider or narrower (test/duo.mjs runs that part). */
     assert.match(
       stage,
-      /const fitKey = `\$\{viewport\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{fitBlocks\}:\$\{fitOn\}:\$\{sceneCols\}:\$\{chainNow\.late\}`/,
+      /const fitKey = `\$\{viewport\}:\$\{widthKey\}:\$\{scenes\.hasScenes \? scenes\.count : 0\}:\$\{fitBlocks\}:\$\{fitOn\}:\$\{sceneCols\}:\$\{chainNow\.late\}`/,
       'the trim is not thrown away when the rig or the screen changes'
     )
     assert.match(stage, /if \(trim !== 0\) setTrim\(0\)/, 'the trim survives a change of preset, so a smaller rig gets a smaller tile')
@@ -17844,7 +17886,8 @@ export function run(test) {
 
   test('the phone’s Stage and Edit draw another preset’s chain as a wait, not as tiles', () => {
     const stage = read('mobile/src/screens/Stage.js')
-    assert.match(stage, /\{chainNow\.elsewhere \? \(\s*<View style=\{\{ width: '100%', height: held \? held\.height : undefined, overflow: 'hidden' \}\}>\s*<ChainWait\s+chain=\{chainNow\}/, 'the stage draws the last song’s tiles under this song’s name')
+    assert.match(stage, /\{chainNow\.elsewhere \? \(\s*<View style=\{\{ width: '100%', height: held\?\.height \|\| undefined, overflow: 'hidden' \}\}>\s*<ChainWait\s+chain=\{chainNow\}/, 'the stage draws the last song’s tiles under this song’s name')
+    /* Held to the last chain's height while it was measured at this width; at a new one (an iPad's divider, a Duo folded), its count of cards in their own rows (test/duo.mjs). */
     /* "It shrinks the screen down for about a half a second." The wait keeps
        the last chain's room — as many cards, as wide, as high — and the fit
        keeps counting those blocks, so nothing below the pedals jumps. */

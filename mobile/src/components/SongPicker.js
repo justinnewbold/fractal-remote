@@ -3,6 +3,7 @@ import { FlatList, Modal, Pressable, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { color, font, radius, space, TAP } from '../lib/theme'
+import { ANY_WAY_UP, SAFE_EDGES } from '../lib/screenShape'
 import { slotCount, slotLabel, vp4Here } from '../lib/device'
 import { VP4_NO_NAMES, VP4_UPDATE_COMPUTER, vp4ComputerCan } from '../lib/vp4-safety'
 import { jumpsFor } from '../lib/presetJumps'
@@ -81,8 +82,9 @@ export default function SongPicker({ open, listName, already = [], onAdd, onClos
   const count = picked.length
 
   return (
-    <Modal visible={!!open} animationType="slide" onRequestClose={close} presentationStyle="fullScreen">
-      <SafeAreaView style={{ flex: 1, backgroundColor: color.chassis }} edges={['top', 'bottom']}>
+    <Modal visible={!!open} animationType="slide" onRequestClose={close} presentationStyle="fullScreen" supportedOrientations={ANY_WAY_UP}>
+      {/* Every side, as the app's own frame is (App.js, lib/screenShape). */}
+      <SafeAreaView style={{ flex: 1, backgroundColor: color.chassis }} edges={SAFE_EDGES}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, paddingBottom: space.sm }}>
           <View style={{ flex: 1 }}>
             <Text accessibilityRole="header" style={{ color: color.silk, fontSize: font.title, fontWeight: '700' }}>

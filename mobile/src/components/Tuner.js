@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Modal, Platform, Pressable, Text, View, useWindowDimensions } from 'react-native'
 import { BlurView } from 'expo-blur'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { at as tint } from '../lib/vivid'
 
 import { color, font, mono, radius, space, TAP } from '../lib/theme'
+import { ANY_WAY_UP, clearSides } from '../lib/screenShape'
 import Note from './Note'
 import Press from './Press'
 import { useBluetoothOn } from '../lib/bluetooth'
@@ -55,6 +57,7 @@ export default function Tuner({ reading, on, onClose, down = false }) {
   const unitTuner = useRig(ofUnitTuner)
   const lastAt = useRef(0)
   const { width } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
 
   useEffect(() => {
     if (!reading) return
@@ -82,11 +85,14 @@ export default function Tuner({ reading, on, onClose, down = false }) {
   const ink = inTune ? color.ok : color.signal
 
   /* The dial is as wide as the phone allows, less a comfortable margin. Read
-     from the window rather than measured, because this covers the window. */
-  const dial = Math.min(width - space.xl * 2, 420)
+     from the window rather than measured, because this covers the window.
+     The margin is taken from the phone's own down each side, where it has
+     any (lib/screenShape clearSides: the Duo's strip), not from under it. */
+  const sides = clearSides(insets, space.xl)
+  const dial = Math.min(width - sides.paddingLeft - sides.paddingRight, 420)
 
   return (
-    <Modal visible={on} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={on} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent supportedOrientations={ANY_WAY_UP}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Close the tuner"
@@ -114,6 +120,7 @@ export default function Tuner({ reading, on, onClose, down = false }) {
             alignItems: 'center',
             justifyContent: 'center',
             padding: space.xl,
+            ...sides,
             backgroundColor: tint(color.chassis, 0.94)
           }}
         >

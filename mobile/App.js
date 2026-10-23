@@ -6,6 +6,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 
 import { color, font, space, isDark, loadMode, setSystemDark, themeVersion, watchTheme } from './src/lib/theme'
+import { SAFE_EDGES } from './src/lib/screenShape'
 import { loadLooks, looksVersion, watchLooks } from './src/lib/looks'
 import { haveSession, linkState, probeNow, startLink, stopLink, subscribeLink } from './src/lib/link'
 import { currentAccount, signOut } from './src/lib/relay'
@@ -823,7 +824,11 @@ export default function App() {
       {/* The clock and the battery, which have to be readable against whatever
           is behind them: light ink on the dark palette, dark on the light one. */}
       <StatusBar style={isDark() ? 'light' : 'dark'} />
-      <SafeAreaView style={{ flex: 1, backgroundColor: color.chassis }} edges={['top', 'bottom']}>
+      {/* Clear of the phone's own on every side, not only the top and the
+          bottom: the strip down the side where the iPhone Duo keeps its clock
+          and camera, a tablet's camera on its side. A phone held upright has
+          nothing down its sides, so nothing on it moves (lib/screenShape). */}
+      <SafeAreaView style={{ flex: 1, backgroundColor: color.chassis }} edges={SAFE_EDGES}>
         {/* Not until BOTH answers are in: which screen opens depends on the
             two of them together, and acting on the first to arrive is what
             flashed a sign-in form at somebody's first launch. */}
