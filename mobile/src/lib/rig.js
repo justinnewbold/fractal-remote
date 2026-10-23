@@ -645,6 +645,8 @@ export function handleEvent(event) {
    */
   const kind = announcementKind(event)
   if (!kind) return
+  /* Preset news folded into a chain write's one read below still ends a boost tapped, as followPresetNews does. */
+  if (chainWrites && kind === 'preset') boostHeld = null
   if (ownEcho(kind, kind === 'scene' ? event.index : undefined)) return
   if (chainWrites) {
     chainAsked = true

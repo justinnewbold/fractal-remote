@@ -20212,7 +20212,14 @@ export function run(test) {
     for (const [what, again] of [
       ['an announcement', async (rig, clock) => (rig.handleEvent({ type: 'changed', scope: 'preset' }), clock.advance(8000))],
       ['a reconnect or a pull-down', async (rig, clock) => { const r = rig.refreshAll(); await clock.advance(8000); await r }],
-      ['Try again', async (rig, clock) => { const r = rig.retryChain(); await clock.advance(8000); await r }]
+      ['Try again', async (rig, clock) => { const r = rig.retryChain(); await clock.advance(8000); await r }],
+      ['an announcement while the chain is being written', async (rig, clock) => {
+        rig.beginChainWrite()
+        rig.handleEvent({ type: 'changed', scope: 'preset' })
+        await clock.advance(200)
+        rig.endChainWrite()
+        await clock.advance(8000)
+      }]
     ]) {
       const { rig, clock, unit, asked } = await rigOnTheBench(AM4_BOOST_BENCH())
       await clock.advance(0)
