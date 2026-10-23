@@ -12,6 +12,17 @@
 # with a picture of the first screen kept as the "duo-screens" artifact. An
 # iPhone Duo simulator is used when the image has one.
 #
+# And the Siri phrases (mobile/targets/watch/_shared/SiriShortcuts.swift),
+# which are first compiled for the store on this Xcode. Apple reads App
+# Intents only from what Xcode extracts at build time into the app's own
+# Metadata.appintents folder, so the built app is checked for that folder and
+# for all nine commands in it: a phrase file left out of the app target, or
+# extracted by nobody, compiles cleanly and gives Siri nothing to hear. Then a
+# fractalremote://scene/3 link is opened on the running app, the way a
+# shortcut's Open URLs step does: with the scene life cycle on, a link reaches
+# the app through Expo's scene delegate, which nothing else here exercises,
+# and the app must still be running after it.
+#
 # By hand only (Actions → duo → Run workflow on the branch): the runner
 # image is a public preview, and a label no runner answers would leave a
 # pull request waiting on a check that never starts.
@@ -68,6 +79,24 @@ jobs:
             || { grep -n -B2 -A12 -E 'error:|error |failed with exit' build.log | head -n 200; exit 1; }
           tail -n 20 build.log
 
+      # The phrase list Xcode extracted, with every command in it.
+      - name: The Siri phrases are in the app
+        working-directory: mobile/ios
+        run: |
+          set -e
+          APP=$(find build/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphonesimulator*' | head -n 1)
+          test -n "$APP"
+          test -d "$APP/Metadata.appintents" \
+            || { echo "FractalRemote.app has no Metadata.appintents: Siri would have no phrases."; exit 1; }
+          ls -la "$APP/Metadata.appintents"
+          for INTENT in GoToSceneIntent NextSongIntent PreviousSongIntent TunerOnIntent TunerOffIntent SetTempoIntent LoadPresetIntent PedalOnIntent PedalOffIntent; do
+            grep -rqa "$INTENT" "$APP/Metadata.appintents" \
+              || { echo "$INTENT is not in Metadata.appintents."; exit 1; }
+          done
+          # The phrases themselves: "Close the tuner in" is in a phrase and in no title.
+          grep -rqa 'Close the tuner in' "$APP/Metadata.appintents" \
+            || { echo "The Siri phrases are not in Metadata.appintents."; exit 1; }
+
       # Opened, then asked again 30 seconds later whether it is still running:
       # an app the scene rule refuses is gone by then.
       - name: It opens, and stays open
@@ -93,6 +122,12 @@ jobs:
             xcrun simctl io "$UDID" screenshot "screens/$NAME.png"
             xcrun simctl spawn "$UDID" launchctl list | grep -q 'cloud.newbold.fractalremote' \
               || { echo "The app is not running 30 seconds after it was opened on $NAME."; exit 1; }
+            # A link, as a shortcut's Open URLs step sends it, through the scene delegate.
+            xcrun simctl openurl "$UDID" fractalremote://scene/3
+            sleep 10
+            xcrun simctl io "$UDID" screenshot "screens/$NAME-link.png"
+            xcrun simctl spawn "$UDID" launchctl list | grep -q 'cloud.newbold.fractalremote' \
+              || { echo "The app is not running 10 seconds after fractalremote://scene/3 was opened on $NAME."; exit 1; }
             xcrun simctl shutdown "$UDID"
             xcrun simctl delete "$UDID"
           done

@@ -382,4 +382,36 @@ export function run(test) {
     assert.ok(!('NSSiriUsageDescription' in (app.ios.infoPlist || {})), 'a Siri usage string App Shortcuts do not need')
     assert.ok(!/INPreferences|requestSiriAuthorization/.test(code + moduleCode))
   })
+
+  test('duo.yml, on the Xcode EAS uses, checks the built app carries every phrase, and takes a link without falling over', () => {
+    /*
+     * A phrase file left out of the iPhone app's target, or never extracted,
+     * compiles cleanly and gives Siri nothing to hear; only the built app's
+     * Metadata.appintents shows it. And a link reaches an app with the scene
+     * life cycle through Expo's scene delegate, which only an app opened on a
+     * simulator exercises. Both on duo.yml, which builds with Xcode 27.1 as
+     * the store build does (test/mobile.mjs holds that half).
+     */
+    const duo = read('.github/workflows/duo.yml')
+    const step = duo.slice(duo.indexOf('- name: The Siri phrases are in the app'), duo.indexOf('- name: It opens, and stays open'))
+    assert.ok(step.length > 100, 'duo.yml no longer checks the built app for the Siri phrases')
+    assert.ok(duo.indexOf('- name: The Siri phrases are in the app') > duo.indexOf('- name: The app builds with Xcode 27.1'), 'the phrases are looked for before the app is built')
+    assert.match(step, /test -d "\$APP\/Metadata\.appintents"/)
+    const listed = /for INTENT in ([\w ]+); do/.exec(step)?.[1].trim().split(/\s+/) || []
+    assert.deepEqual(listed.sort(), shortcuts(code).map((s) => s.intent).sort(), 'duo.yml looks for other commands than the App Shortcuts the Swift has')
+    assert.match(step, /grep -rqa "\$INTENT" "\$APP\/Metadata\.appintents"/)
+    /* A phrase, as the Swift writes it, that is in no title. */
+    const phrase = /grep -rqa '([^']+)' "\$APP\/Metadata\.appintents"/.exec(step)?.[1]
+    assert.ok(phrase && shortcuts(code).some((s) => s.phrases.some((p) => p.startsWith(phrase))), 'duo.yml looks for a phrase the Swift does not have')
+    const titles = [...code.matchAll(/(?:title|description)(?:: LocalizedStringResource)? = (?:IntentDescription\()?"([^"]*)"/g)].map((m) => m[1])
+    assert.ok(titles.length >= 9, 'the intents’ titles were not found to check against')
+    assert.ok(!titles.some((t) => t.includes(phrase)), 'the phrase duo.yml looks for is also a title, so finding it proves nothing')
+    /* The link, then still running, on every simulator it opens. */
+    const launch = duo.slice(duo.indexOf('- name: It opens, and stays open'))
+    const opened = launch.indexOf('xcrun simctl openurl "$UDID" fractalremote://scene/3')
+    assert.ok(opened > launch.indexOf('xcrun simctl launch'), 'duo.yml never opens a fractalremote:// link on the running app')
+    assert.ok(opened < launch.indexOf('done'), 'the link is opened outside the loop over simulators')
+    assert.match(launch.slice(opened), /^[^\n]*\n\s*sleep \d+\n[\s\S]*?launchctl list \| grep -q 'cloud\.newbold\.fractalremote' \\\n\s*\|\| \{ echo "The app is not running 10 seconds after fractalremote:\/\/scene\/3 was opened/)
+    assert.doesNotMatch(duo, /pull_request:/, 'duo.yml runs on every pull request, on a preview runner that may never start')
+  })
 }
