@@ -50,7 +50,7 @@ import {
   subscribeMixed,
   subscribeRemoteState
 } from './relay'
-import { computerChanged, listen, refreshAll, reset as resetRig, startClean, unitReadSince, watchUnit, stopWatching } from './rig'
+import { computerChanged, listen, setOnScreen as rigOnScreen, refreshAll, reset as resetRig, startClean, unitReadSince, watchUnit, stopWatching } from './rig'
 import { PHONE_NOTE_PATH, phoneNote, timeToTell } from './phone-note'
 
 export const PROBE_FIRST = 3000
@@ -949,6 +949,7 @@ export function startLink() {
   holdAgain()
   asleep = AppState.currentState != null && AppState.currentState !== 'active'
   downAsleep = 0
+  rigOnScreen(!asleep)
 
   unbind = [
     // The channel coming back under us is the app catching up rather than a
@@ -991,6 +992,8 @@ export function startLink() {
        * evening's log, none of them a fault, and nothing in it said so.
        */
       logDebug('app', status === 'active' ? 'back on screen' : `put to sleep (${status})`)
+      /* Off screen, the AM4's own tuner is no longer kept up for the tuner open now (rig keepUnitTuner). */
+      rigOnScreen(status === 'active')
       /*
        * And Play's two seconds start again on the way back (holdAgain), so
        * the connection Android cut in the pocket is not NOT CONNECTED the

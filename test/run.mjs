@@ -7067,6 +7067,79 @@ const onTheBench = (name, body) =>
   })
 
 /*
+ * THE AM4'S OWN TUNER, KEPT UP ON A LEASE THE BROWSER RENEWS, as the phone
+ * does (test/link-now.mjs). A computer that keeps it up says keepMs in the
+ * open's answer and stops by itself once nobody renews it, so a tab shut, a
+ * page reloaded or a link gone mid-tuner no longer holds the AM4 on its
+ * tuner, muted, until the computer is quit. The page renews it a few times a
+ * lease while the tuner is open and the page is in view; once it has been
+ * hidden during that tuner, never again for it. Never to a computer whose
+ * open said no keepMs, where a renewal would be an open.
+ */
+onTheBench('browser: the AM4’s own tuner is kept up only while the tuner is open and the page in view, never after a Close, a reset or to an older computer', async () => {
+  const clock = handClock()
+  const calls = []
+  let keepMs = 20000
+  ds.reset()
+  ds.attachClock(clock)
+  ds.attachDriver({
+    setTuner: async (on) => (calls.push(['open', on]), on ? { ok: true, screen: 'opened', ...(keepMs ? { keepMs } : {}) } : { ok: true, screen: 'closed' }),
+    renewTuner: async (opts) => (calls.push(['renew', Number.isFinite(opts?.deadline)]), { ok: true, keepMs: 20000 })
+  })
+  const renewals = () => calls.filter((c) => c[0] === 'renew').length
+  try {
+    ds.setOnScreen(true)
+    await ds.writeTuner(true)
+    await clock.advance(60_000)
+    assert.ok(renewals() >= 11 && renewals() <= 12, `renewed every five seconds while open and in view (${renewals()})`)
+    assert.ok(calls.filter((c) => c[0] === 'renew').every((c) => c[1] === true), 'a renewal went with no deadline: it could land late')
+    ds.setOnScreen(false)
+    const away = renewals()
+    await clock.advance(60_000)
+    assert.equal(renewals(), away, 'renewed with the page hidden')
+    ds.setOnScreen(true)
+    await clock.advance(60_000)
+    assert.equal(renewals(), away, 'renewed again once back in view, which would put the AM4 back on its tuner, muted')
+    await ds.writeTuner(false)
+    await clock.advance(30_000)
+    assert.deepEqual(calls.at(-1), ['open', false], 'something went after the close')
+    await ds.writeTuner(true)
+    await clock.advance(20_000)
+    assert.ok(renewals() > away, 'not kept again once opened again')
+    ds.reset()
+    const left = calls.length
+    await clock.advance(60_000)
+    assert.equal(calls.length, left, 'renewed after the store was reset')
+    /* An older computer: its open says no keepMs. And a page hidden at the open: nothing either. */
+    keepMs = 0
+    ds.attachClock(clock)
+    const older = renewals()
+    await ds.writeTuner(true)
+    await clock.advance(60_000)
+    assert.equal(renewals(), older, 'a renewal sent to a computer that never said keepMs')
+    await ds.writeTuner(false)
+    keepMs = 20000
+    ds.setOnScreen(false)
+    await ds.writeTuner(true)
+    await clock.advance(60_000)
+    assert.equal(renewals(), older, 'renewed for a tuner opened with the page hidden')
+    await ds.writeTuner(false)
+  } finally {
+    ds.setOnScreen(true)
+  }
+  /* And the page and the phone are wired to it: the renewal handed to the store, and whether each is on screen. */
+  const app = readSrc(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  const attached = app.slice(app.indexOf('attachDriver({'), app.indexOf('})', app.indexOf('attachDriver({')))
+  assert.match(attached, /^  setTuner,\n  renewTuner,$/m, 'the browser store is not handed the renewal')
+  assert.match(app, /document\.addEventListener\('visibilitychange', \(\) => storeOnScreen\(document\.visibilityState !== 'hidden'\)\)/)
+  const phoneLink = readSrc(new URL('../mobile/src/lib/link.js', import.meta.url), 'utf8')
+  assert.match(phoneLink, /^      rigOnScreen\(status === 'active'\)$/m, 'the phone’s rig is not told when the app goes off screen')
+  assert.match(phoneLink, /^  rigOnScreen\(!asleep\)$/m)
+  assert.match(readSrc(new URL('../mobile/src/lib/device.js', import.meta.url), 'utf8'), /^export const renewTuner = \(opts\) => post\('\/tuner', \{ on: true, keep: true \}, tapOf\(opts\)\)$/m)
+  assert.match(readSrc(new URL('../src/lib/forgefx.js', import.meta.url), 'utf8'), /request\('\/tuner', \{ method: 'POST', body: JSON\.stringify\(\{ on: true, keep: true \}\), \.\.\.tapOf\(opts\) \}\)/)
+})
+
+/*
  * THE PRESETS EITHER SIDE. "The amp pedal names are blank for about half a
  * second... preload the previous preset and preload the next preset with
  * those names so it instantly changes." Play says where Previous and Next

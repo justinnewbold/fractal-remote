@@ -77,6 +77,7 @@ import {
   writeBypass,
   refreshBoost,
   writeTuner,
+  setOnScreen as storeOnScreen,
   onConfigDoc,
   presetSaved,
   chainChanged,
@@ -139,6 +140,7 @@ import {
   tapTempo,
   setBypass,
   setTuner,
+  renewTuner,
   subscribeEvents,
   cachedPresetNames,
   knowsName,
@@ -335,6 +337,7 @@ attachDriver({
   tapTempo,
   setBypass,
   setTuner,
+  renewTuner,
   readSceneNames,
   presetCopy,
   hostKeepsCopy,
@@ -359,6 +362,12 @@ attachDriver({
   blockParams,
   setAmpBoost
 })
+
+/* Whether the page is in view, for the AM4's own tuner, kept up only while it is (deviceState keepUnitTuner). */
+if (typeof document !== 'undefined') {
+  storeOnScreen(document.visibilityState !== 'hidden')
+  document.addEventListener('visibilitychange', () => storeOnScreen(document.visibilityState !== 'hidden'))
+}
 
 /* Hoisted so each is one function for the life of the module: a selector
    rebuilt every render makes useSyncExternalStore re-read on every notify. */

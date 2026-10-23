@@ -346,7 +346,7 @@ async function linkOnABench() {
     'bleLink.mjs': 'export const pokeBluetooth = () => {}\nexport const startBluetoothLink = () => {}\nexport const stopBluetoothLink = () => {}\n',
     'tapGate.mjs': read('mobile/src/lib/tapGate.js'),
     'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
-    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const startClean = () => { bench.order.push('startClean') }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const unitReadSince = () => bench.unitRead !== false\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\n",
+    'rig.mjs': "import { bench } from './bench.mjs'\nexport const listen = () => {}\nexport const refreshAll = async () => { bench.order.push('refreshAll') }\nexport const reset = () => {}\nexport const startClean = () => { bench.order.push('startClean') }\nexport const computerChanged = () => { bench.order.push('computerChanged') }\nexport const unitReadSince = () => bench.unitRead !== false\nexport const watchUnit = () => {}\nexport const stopWatching = () => {}\nexport const setOnScreen = () => {}\n",
     'phone-note.mjs': "export const PHONE_NOTE_PATH = '/store/config/phone'\nexport const phoneNote = () => ({})\nexport const timeToTell = () => false\n",
     /* The relay as link.js hears it: the same order of news as relay.js gives it. */
     'relay.mjs': `
@@ -509,6 +509,8 @@ const STACK_SERVICE = `
     if (path.startsWith('/store/config/')) return p.method === 'GET' ? { data: null } : { ok: true }
     if (path === '/telemetry/meters') return { ok: true }
     if (!c.unit) return { status: 503, body: JSON.stringify({ error: NO_UNIT }) }
+    /* \`c.tuner(body)\`: what this computer answers about the tuner, the AM4's own kept up or not. */
+    if (path === '/tuner' && c.tuner) return c.tuner(JSON.parse(p.body || '{}'))
     if (path === '/preset') return c.unit === 'FM3' ? { number: 479, name: 'Nothing Else Matters' } : { number: 53, name: 'AM4 53' }
     if (path === '/scene') return { index: c.unit === 'FM3' ? 6 : 1 }
     if (path === '/tempo') return { bpm: c.unit === 'FM3' ? 120 : 0 }
@@ -2046,6 +2048,84 @@ export function run(test) {
     s.app.change('active')
     await s.clock.advance(5000)
     assert.ok(up !== null && up < 1500, `connected ${up === null ? 'never' : `${up} ms`} after the app came back\n${s.lines().join('\n')}`)
+  })
+
+  /*
+   * THE AM4'S OWN TUNER, KEPT UP ON A LEASE THE PHONE RENEWS. A computer
+   * that keeps the AM4's own tuner up says how long in the open's answer
+   * (keepMs), and stops by itself once nobody renews it: a Close that never
+   * arrives (a battery gone, the app swiped away or put away, a sign-out)
+   * then costs that lease and the AM4's own 15 seconds, not the rest of the
+   * gig on a muted tuner. The phone renews it a few times a lease while its
+   * tuner is open and the app is on screen; once it has gone off screen
+   * during that tuner, never again for it, so coming back does not put the
+   * AM4 back on its tuner before Close can be tapped. Never to a computer
+   * that did not say keepMs: there a renewal would be an open.
+   */
+  test('phone: the AM4’s own tuner is kept up only while the tuner is open and on screen, never after a Close, a sign-out or to an older computer', async () => {
+    const s = await stackOnABench()
+    const am4 = {
+      ...AM4_PI,
+      lag: () => 150,
+      old: false,
+      tuners: [],
+      tuner(body) {
+        this.tuners.push({ at: s.clock.now(), ...body })
+        if (body.keep) return this.old ? { ok: true, screen: 'opened' } : { ok: true, keepMs: 20000 }
+        return body.on ? { ok: true, screen: 'opened', ...(this.old ? {} : { keepMs: 20000 }) } : { ok: true, screen: 'closed' }
+      }
+    }
+    s.bench.computers = [am4]
+    s.link.startLink()
+    await s.clock.advance(6000)
+    assert.equal(s.link.linkState().link, 'connected', 'the bench never connected')
+    const renewals = () => am4.tuners.filter((t) => t.keep === true).length
+    const opened = s.rig.writeTuner(true)
+    await s.clock.advance(1000)
+    assert.equal(await opened, true, 'the tuner opened')
+    assert.deepEqual(am4.tuners.map((t) => JSON.stringify(t.keep ? { on: t.on, keep: t.keep } : { on: t.on })), ['{"on":true}'], 'the open, as it always was')
+    await s.clock.advance(60_000)
+    assert.ok(renewals() >= 10 && renewals() <= 13, `renewed every five seconds or so while open and on screen (${renewals()})`)
+    assert.ok(am4.tuners.every((t) => t.on === true), 'every renewal says on, with keep')
+    /* Put away: no more, however long, and not on the way back either. */
+    s.app.change('background')
+    const away = renewals()
+    await s.clock.advance(60_000)
+    assert.equal(renewals(), away, 'renewed with the app off screen')
+    s.app.change('active')
+    await s.clock.advance(60_000)
+    assert.equal(renewals(), away, 'renewed again on the way back, which would put the AM4 back on its tuner, muted')
+    /* Closed: the 0 goes, and nothing after it. */
+    const closed = s.rig.writeTuner(false)
+    await s.clock.advance(1000)
+    await closed
+    assert.equal(am4.tuners.at(-1).on, false, 'the close')
+    await s.clock.advance(30_000)
+    assert.equal(am4.tuners.at(-1).on, false, 'something went after the close')
+    /* Opened again, on screen: kept again. Then a sign-out (the rig reset, no close sent): no more. */
+    const again = s.rig.writeTuner(true)
+    await s.clock.advance(20_000)
+    await again
+    assert.ok(renewals() > away, 'not kept again once opened again')
+    const stopped = s.link.stopLink()
+    await s.clock.advance(1000)
+    await stopped
+    const out = am4.tuners.length
+    await s.clock.advance(60_000)
+    assert.equal(am4.tuners.length, out, 'renewed after the link stopped and the tuner was reset')
+    /* An older computer, whose open says no keepMs: never a renewal, which it would take for an open. */
+    am4.old = true
+    s.link.startLink()
+    await s.clock.advance(6000)
+    const older = s.rig.writeTuner(true)
+    await s.clock.advance(1000)
+    await older
+    const before = renewals()
+    await s.clock.advance(60_000)
+    assert.equal(renewals(), before, 'a renewal sent to a computer that never said keepMs')
+    const last = s.rig.writeTuner(false)
+    await s.clock.advance(1000)
+    await last
   })
 
   /*
