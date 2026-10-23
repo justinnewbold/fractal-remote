@@ -4479,7 +4479,8 @@ export default function App() {
             line it looks like the same dead red notice it was when the only
             thing still asking was a thumb.
           */}
-          <p className="notice-note">Still checking every few seconds — this comes back on its own.</p>
+          {/* Not over the unit on another computer: it does not come back to this one by itself, and the way out is its button. */}
+          {elsewhere ? null : <p className="notice-note">Still checking every few seconds — this comes back on its own.</p>}
         </div>
       ) : null}
 

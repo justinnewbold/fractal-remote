@@ -4973,6 +4973,8 @@ export function run(test) {
     assert.match(app, /unitElsewhereCard\(\{ hosts: link\.hosts, units: link\.units, chosen: link\.chosenHost, unitState: 'missing' \}\)/)
     assert.match(app, /<h2>\{elsewhere \? elsewhere\.title : fault\.title\}<\/h2>\s*<p>\{elsewhere \? elsewhere\.words : fault\.body\}<\/p>/)
     assert.match(app, /elsewhere\.buttons\.map\(\(b\) => \([\s\S]{0,120}onClick=\{\(\) => chooseHost\(b\.name\)\}/)
+    /* And not "this comes back on its own" under it: the unit does not come back to the one driven by itself. */
+    assert.match(app, /\{elsewhere \? null : <p className="notice-note">Still checking every few seconds — this comes back on its own\.<\/p>\}/, 'the notice that says the unit is elsewhere still says it comes back on its own')
     assert.match(app, /useEffect\(\(\) => \(watchingUnits \? watchUnits\(\) : undefined\), \[watchingUnits\]\)/)
   })
 
