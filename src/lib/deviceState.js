@@ -2280,6 +2280,51 @@ export async function tapBoost(effectId, at = Date.now()) {
  * exactly like a tuner warming up, forever.
  */
 /*
+ * THE AM4'S OWN TUNER, KEPT UP ONLY WHILE THIS TUNER IS ON SCREEN, as on the
+ * phone (rig.js keepUnitTuner). A computer that keeps it up until Close does
+ * so on a lease, and says how long in the open's answer (`keepMs`): nobody
+ * renewing it, it stops by itself, and the AM4 lets go of its tuner about 15
+ * seconds later, as it always did. So a tab shut, a page reloaded or a link
+ * gone with the tuner open no longer holds the AM4 on its tuner, muted, for
+ * as long as the computer runs. This renews it a few times a lease while the
+ * tuner it was opened for is open and the page has stayed in view; once the
+ * page is hidden during it, never again for that tuner, so coming back does
+ * not put the AM4 back on its tuner before Close can be clicked. Only to a
+ * computer that said keepMs (to an older one a renewal would be an open).
+ * Each renewal is a tap, dropped rather than late; what it answers is not
+ * shown.
+ */
+let tunerPress = 0
+let tunerKeep = null
+let pageOnScreen = true
+function stopTunerKeep() {
+  if (tunerKeep) clock.clearTimeout(tunerKeep.timer)
+  tunerKeep = null
+}
+function keepUnitTuner(press, keepMs) {
+  stopTunerKeep()
+  if (!pageOnScreen || !Number.isFinite(keepMs) || keepMs <= 0 || !driver?.renewTuner) return
+  const every = Math.max(1000, Math.floor(keepMs / 4))
+  const keep = { timer: null }
+  const renew = () => {
+    if (tunerKeep !== keep) return
+    if (press !== tunerPress || !state.tunerOn) return stopTunerKeep()
+    Promise.resolve()
+      .then(() => driver.renewTuner({ deadline: tapDeadline(clock.now()) }))
+      .catch(() => {})
+    keep.timer = clock.setTimeout(renew, every)
+  }
+  keep.timer = clock.setTimeout(renew, every)
+  tunerKeep = keep
+}
+
+/** Whether the page is in view (App's visibilitychange): hidden, the tuner's keep stops for good. */
+export function setOnScreen(on) {
+  pageOnScreen = on !== false
+  if (!pageOnScreen) stopTunerKeep()
+}
+
+/*
  * Opening is a tap; closing never is. A close is never refused and never
  * given a deadline: the tuner mutes the unit, and a dropped close would leave
  * it muted on its tuner screen.
@@ -2287,6 +2332,8 @@ export async function tapBoost(effectId, at = Date.now()) {
 export async function writeTuner(on, at = Date.now()) {
   if (on) tapRefused()
   const before = state.tunerOn
+  const press = ++tunerPress
+  stopTunerKeep()
   set({ tunerOn: on, tuning: on ? state.tuning : null })
   try {
     const res = await driver.setTuner(on, on ? { deadline: tapDeadline(at) } : undefined)
@@ -2294,6 +2341,7 @@ export async function writeTuner(on, at = Date.now()) {
       set({ tunerOn: false, tuning: null })
       return res
     }
+    if (on && press === tunerPress && state.tunerOn) keepUnitTuner(press, res?.keepMs)
     return res
   } catch (err) {
     /* An opening taken over by a newer one leaves the tuner that one opened (shared/relay-rules newestPresses). */
@@ -2312,6 +2360,8 @@ export function put(patch) {
 /** Back to blank. Tests use it; so does losing the device. */
 export function reset() {
   revOwed = false
+  /* The AM4's own tuner is no longer kept up for a tuner that is going (see keepUnitTuner). */
+  stopTunerKeep()
   recent.clear()
   echoes.clear()
   lastReadFailure = null

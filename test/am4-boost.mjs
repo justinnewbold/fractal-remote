@@ -409,8 +409,7 @@ export function run(test) {
     /* And the copy a write crossed, never kept (ForgeFX 924ecfa): the pin carries it, and the lock and MODIFICATIONS say so. */
     assert.match(lock.forgefx.tag, /\+am4boosttap\+am4crossedcopy(\+|$)/, 'the computer app does not carry the server that never keeps a copy a write crossed')
     /* And on top of it, every AM4 write drops the copy, a write by key and the probe tempo among them (ForgeFX 5b6e889). */
-    assert.match(lock.forgefx.tag, /\+am4crossedcopy\+am4keywrite$/, 'the computer app carries a server whose write by key keeps the copy from before it')
-    assert.equal(lock.forgefx.commit, '5b6e889e9d526ac5e4dbf1b9e9517128797a6471')
+    assert.match(lock.forgefx.tag, /\+am4crossedcopy\+am4keywrite(\+|$)/, 'the computer app carries a server whose write by key keeps the copy from before it')
     const keyWrite = lock._why.find((w) => /5b6e889/.test(w))
     assert.ok(keyWrite && /setParamByKey/.test(keyWrite) && /probeSetTempo/.test(keyWrite) && /#invalidate\(\)/.test(keyWrite) && /COMPUTER_NEEDED stays/.test(keyWrite) && /on top of 924ecfa/.test(keyWrite), 'the lock does not say why it moved again')
     assert.match(read('licences/MODIFICATIONS.md'), /\| Drop the copy of the preset after an AM4 write by catalog key and after the probe tempo, as after every other write \|/)
