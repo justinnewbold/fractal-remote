@@ -3117,6 +3117,32 @@ const unitTunerOf = (res) => {
 let tunerPress = 0
 
 /*
+ * OPENS OF THE TUNER NOT YET ANSWERED. tunerOn goes up as an open is
+ * pressed, long before the unit has it: pressed is not landed, and an open
+ * dropped at its deadline, refused or failed puts it back down. So every
+ * open is counted from its press until its answer (writeTuner), and a
+ * request that has to wait for the link before it can press, as a watch
+ * tap that woke the phone does, from the moment it arrives. A close tried
+ * a second time waits until none is left, then goes only over a tuner
+ * that is not open (lib/watchBridge): never over an open that landed, nor
+ * first to the link ahead of one still on its way, and never kept back by
+ * one that opened nothing.
+ */
+let tunerWaiting = 0
+/** An open of the tuner is on its way: call what this returns once it has its answer, or never will press. */
+export function tunerAskWaits() {
+  tunerWaiting++
+  let open = true
+  return () => {
+    if (!open) return
+    open = false
+    tunerWaiting--
+  }
+}
+/** How many opens of the tuner are on their way, unanswered. */
+export const tunerAsksWaiting = () => tunerWaiting
+
+/*
  * THE AM4'S OWN TUNER, KEPT UP ONLY WHILE THIS TUNER IS ON SCREEN.
  *
  * A computer that keeps the AM4's own tuner up until Close does it on a
@@ -3185,6 +3211,8 @@ export async function writeTuner(on, at = Date.now()) {
   stopTunerKeep()
   set({ tunerOn: on, tuning: on ? state.tuning : null, unitTuner: null, error: null, errorLink: false, dropped: null })
   if (!on) stopDemoTuner()
+  /* An open is on its way until its answer, whatever tunerOn says meanwhile (tunerAskWaits). */
+  const answered = on ? tunerAskWaits() : () => {}
   try {
     const res = await device.setTuner(on, on ? { deadline: tapDeadline(at) } : undefined)
     /* Kept only while it is still the open tuner it is about, and so is the keep of the AM4's own. */
@@ -3197,11 +3225,26 @@ export async function writeTuner(on, at = Date.now()) {
     if (on) startDemoTuner()
     return true
   } catch (err) {
-    /* An opening taken over by a newer one (relay-rules newestPresses): the tuner that one opened stays open. */
-    if (err?.overtaken) return false
+    /*
+     * An older press's failure is not said over a newer one, which is the
+     * tuner now and says its own. An opening a newer one took over
+     * (relay-rules newestPresses) leaves the tuner that one opened; and a
+     * close that failed 20 seconds late used to put the flag down over an
+     * open made since and landed, so the screens said off over a tuner on,
+     * and the watch's second close then shut it mid-tune.
+     *
+     * Taken over while it is still the newest press, though, an opening can
+     * only have been overtaken by a close pressed before it and handed to
+     * the relay after (a close has no deadline, so it is stamped as it is
+     * sent): the unit is closed, so the flag goes down here too, with the
+     * open said as not sent.
+     */
+    if (press !== tunerPress) return false
     stopDemoTuner()
     set({ tunerOn: false, tuning: null, ...faultFrom(err), ...keptOver(err, card) })
     return false
+  } finally {
+    answered()
   }
 }
 

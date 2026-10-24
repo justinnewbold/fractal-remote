@@ -16761,6 +16761,70 @@ export function run(test) {
     holds[4].go({ ok: true })
     assert.equal(await again, true)
     await rig.writeTuner(false)
+    /*
+     * A close that failed late, under an open made since that landed: the
+     * open is the tuner now. Its flag stays up and the close's failure is
+     * not said over it. The flag going down there made the screens say off
+     * over a tuner on, and the watch's second close, which reads it, then
+     * shut the tuner mid-tune (lib/watchBridge).
+     */
+    unit.tunerAnswer = () => new Promise((go, no) => holds.push({ go, no }))
+    const shut = rig.writeTuner(false)
+    await clock.advance(10)
+    const reopen = rig.writeTuner(true)
+    await clock.advance(10)
+    holds[6].go({ ok: true })
+    assert.equal(await reopen, true)
+    holds[5].no(new Error('Your computer didn’t answer.'))
+    assert.equal(await shut, false)
+    assert.equal(rig.getState().tunerOn, true, 'a close that failed late put the flag down over an open made since')
+    assert.equal(rig.getState().error, null, 'a close that failed late was said over the open made since')
+    /* The newest press's own failure is still said, and puts the flag down. */
+    const last = rig.writeTuner(false)
+    await clock.advance(10)
+    holds[7].no(new Error('Your computer didn’t answer.'))
+    assert.equal(await last, false)
+    assert.equal(rig.getState().tunerOn, false)
+    assert.ok(rig.getState().error, 'the newest press’s failure was not said')
+    /*
+     * An open overtaken while it is still the newest press: what overtook it
+     * can only be a close pressed before it and handed to the relay after,
+     * stamped as sent. The unit is closed, so the flag goes down, and the
+     * open is said as not sent.
+     */
+    const lone = rig.writeTuner(true)
+    await clock.advance(10)
+    holds[8].no(overtaken())
+    assert.equal(await lone, false)
+    assert.equal(rig.getState().tunerOn, false, 'an open a close overtook left the screens saying on over a closed unit')
+    assert.ok(rig.getState().dropped, 'an open a close overtook was not said as not sent')
+    unit.tunerAnswer = () => ({ ok: true })
+    await rig.writeTuner(false)
+    /* And a request waiting for the link is counted until it is let go of, once, however often it says so. */
+    assert.equal(rig.tunerAsksWaiting(), 0)
+    const one = rig.tunerAskWaits()
+    const two = rig.tunerAskWaits()
+    assert.equal(rig.tunerAsksWaiting(), 2)
+    one()
+    one()
+    assert.equal(rig.tunerAsksWaiting(), 1, 'a request let go of twice was counted off twice')
+    two()
+    assert.equal(rig.tunerAsksWaiting(), 0)
+    /* And every open counts itself, from its press until its answer, whichever answer: pressed is not landed. */
+    unit.tunerAnswer = (body) => (body.on ? new Promise((go, no) => holds.push({ go, no })) : { ok: true })
+    const flight = rig.writeTuner(true)
+    await clock.advance(10)
+    assert.equal(rig.tunerAsksWaiting(), 1, 'an open on its way is not counted')
+    holds[9].no(new Error('Your computer didn’t answer.'))
+    assert.equal(await flight, false)
+    assert.equal(rig.tunerAsksWaiting(), 0, 'an open that failed is still counted')
+    const landed = rig.writeTuner(true)
+    await clock.advance(10)
+    holds[10].go({ ok: true })
+    assert.equal(await landed, true)
+    assert.equal(rig.tunerAsksWaiting(), 0, 'an open that landed is still counted')
+    await rig.writeTuner(false)
+    assert.equal(rig.tunerAsksWaiting(), 0, 'a close counted itself as an open')
     /* And a typed tempo over a tapped one still on its way: the typed one stays on the button. */
     const rigSrc = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
     assert.match(rigSrc, /\(err\) => \{ \/\*[^*]*\*\/ if \(err\?\.overtaken\) return if \(err\?\.notSent && unitBpm != null\) set\(\{ bpm: unitBpm \}\)/, 'a tapped tempo a newer one took over puts the button back')

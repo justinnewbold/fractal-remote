@@ -981,6 +981,111 @@ async function tapTempoOnABench() {
   }
 }
 
+/*
+ * THE WATCH'S REQUESTS ON A BENCH: lib/watchBridge.js itself, run rather
+ * than read, on the hand-turned clock. The hook's first effect (the one
+ * listener for the life of the screen) is run once; the rig, the link and
+ * the log are stand-ins that record. `send(msg)` is a request arriving from
+ * the wrist, `app(status)` the phone's AppState, `bench.answers` what each
+ * writeTuner answers in turn (true when it is empty; a promise holds it),
+ * `bench.onTuner` a hook run as each one is asked, so a test can play the
+ * player opening the tuner in between, and `bench.gate`, when set, a link
+ * that is down: untilConnected waits for the test to settle it, or for its
+ * own time to run out, as link.js's does.
+ */
+async function watchOnABench() {
+  const dir = mkdtempSync(join(tmpdir(), 'watch-bridge-'))
+  const stub = (names) => names.map((n) => `export const ${n}`).join('\n') + '\n'
+  const files = {
+    'package.json': '{ "type": "module" }',
+    'clock.mjs': CLOCK,
+    'bench.mjs': 'export const bench = { rig: { tunerOn: false }, tuner: [], answers: [], onTuner: null, log: [], probes: 0, listener: null, effects: 0, waiting: 0, press: 0, gate: null }\n',
+    'react.mjs': "import { bench } from './bench.mjs'\nexport const useEffect = (fn) => { if (bench.effects++ === 0) fn() }\nexport const useRef = (v) => ({ current: v })\n",
+    'react-native.mjs': "import { bench } from './bench.mjs'\nexport const AppState = { currentState: 'active' }\nbench.AppState = AppState\n",
+    'expo.mjs': "import { bench } from './bench.mjs'\nexport const requireOptionalNativeModule = () => ({ addListener: (name, fn) => { if (name === 'onCommand') bench.listener = fn; return { remove() {} } }, sendState() {} })\n",
+    /* sameBlock and writeChannel are docs/pending/watch-channels.patch's, so this bench still runs once it is applied. */
+    'stub.mjs': stub(['blockColor = () => ({})', 'idOf = (b) => b?.id', 'sameBlock = () => false', 'shortBlock = () => ""', 'metronome = () => ({ on: false })', 'boostPedals = (chain) => chain || []']),
+    'debugLog.mjs': "import { bench } from './bench.mjs'\nexport const logDebug = (...a) => { bench.log.push(a.join(' ')) }\n",
+    /* untilConnected as link.js's: true at once while the link is up, else when it comes back, or false once `ms` (8 s if not said) is up. */
+    'link.mjs': "import * as clock from './clock.mjs'\nimport { bench } from './bench.mjs'\nexport const probeNow = () => { bench.probes++ }\nexport const untilConnected = (ms = 8000) => (bench.gate ? Promise.race([bench.gate.promise, new Promise((r) => clock.setTimeout(() => r(false), ms))]) : Promise.resolve(true))\n",
+    'rig.mjs': `import { bench } from './bench.mjs'
+      export const getState = () => bench.rig
+      export const writeScene = () => true
+      export const writeBypass = () => true
+      export const boostNow = () => null
+      export const pedalSlug = () => null
+      export const writeChannel = () => true
+      export function tunerAskWaits() {
+        bench.waiting++
+        let open = true
+        return () => {
+          if (open) bench.waiting--
+          open = false
+        }
+      }
+      export const tunerAsksWaiting = () => bench.waiting
+      /* As rig.writeTuner: the flag goes as pressed, an open counts as on its way until answered, and only the newest press's failure puts the flag down. */
+      export async function writeTuner(on) {
+        bench.tuner.push(on)
+        const press = ++bench.press
+        bench.rig.tunerOn = on
+        const answered = on ? tunerAskWaits() : () => {}
+        bench.onTuner?.(bench.tuner.length)
+        try {
+          const ok = await (bench.answers.length ? bench.answers.shift() : true)
+          if (!ok && press === bench.press) bench.rig.tunerOn = false
+          return ok
+        } finally {
+          answered()
+        }
+      }
+`,
+    'relay-rules.mjs': clocked(read('shared/relay-rules.mjs')),
+    'watch-link.mjs': clocked(read('shared/watch-link.mjs'))
+  }
+  let src = read('mobile/src/lib/watchBridge.js')
+  for (const [from, to] of [
+    ["from 'react'", "from './react.mjs'"],
+    ["from 'react-native'", "from './react-native.mjs'"],
+    ["from 'expo'", "from './expo.mjs'"],
+    ["from './blockColors'", "from './stub.mjs'"],
+    ["from './debugLog'", "from './debugLog.mjs'"],
+    ["from './device'", "from './stub.mjs'"],
+    ["from './link'", "from './link.mjs'"],
+    ["from './shortName'", "from './stub.mjs'"],
+    ["from './relay-rules'", "from './relay-rules.mjs'"],
+    ["from './watch-link'", "from './watch-link.mjs'"],
+    ["from './metronome'", "from './stub.mjs'"],
+    ["from './am4-boost'", "from './stub.mjs'"]
+  ]) {
+    assert.ok(src.includes(from), `lib/watchBridge no longer imports ${from}: the bench needs telling`)
+    src = src.replace(from, to)
+  }
+  src = src.replaceAll("from './rig'", "from './rig.mjs'")
+  const left = [...src.matchAll(/^import[\s\S]*?from\s+'([^']+)'/gm)].map((m) => m[1]).filter((m) => !m.endsWith('.mjs'))
+  assert.deepEqual(left, [], 'lib/watchBridge imports something the bench has no stand-in for')
+  files['watchBridge.mjs'] = clocked(src)
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text)
+  const at = (f) => pathToFileURL(join(dir, f)).href
+  try {
+    const { bench } = await import(at('bench.mjs'))
+    const clock = await import(at('clock.mjs'))
+    const bridge = await import(at('watchBridge.mjs'))
+    const rig = await import(at('rig.mjs'))
+    bridge.useWatchBridge({ chain: [] }, () => {})
+    assert.ok(bench.listener, 'the bench never heard the bridge listen for the watch')
+    return {
+      bench,
+      clock,
+      rig,
+      app: (status) => (bench.AppState.currentState = status),
+      send: (msg) => bench.listener({ json: JSON.stringify(msg) })
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 export function run(test) {
   /* ------------------------------------------------------------------ */
   /* The rule itself                                                      */
@@ -3405,11 +3510,11 @@ export function run(test) {
     const bridge = read('mobile/src/lib/watchBridge.js')
     const flat = bridge.replace(/\s+/g, ' ')
     assert.match(flat, /const receivedAt = Date\.now\(\)/)
-    assert.match(flat, /const deadline = tapDeadline\(receivedAt\) probeNow\(\) untilConnected\(Math\.max\(0, deadline - Date\.now\(\)\)\) \.then\(\(up\) => \{ if \(!up \|\| Date\.now\(\) >= deadline\) \{/, 'a woken watch tap waits past its deadline')
+    assert.match(flat, /const deadline = tapDeadline\(receivedAt\) \/\*[^*]*\*\/ const waiting = cmd\.do === 'tuner' \? tunerAskWaits\(\) : \(\) => \{\} probeNow\(\) untilConnected\(Math\.max\(0, deadline - Date\.now\(\)\)\) \.then\(\(up\) => \{ try \{ if \(!up \|\| Date\.now\(\) >= deadline\) \{/, 'a woken watch tap waits past its deadline')
     /* The second try after a pause is only for the tuner closing. */
     const tapPath = flat.slice(flat.indexOf('const deadline = tapDeadline(receivedAt)'))
     assert.ok(!/pause\(1500\)/.test(tapPath.slice(0, tapPath.indexOf('return () =>'))), 'a woken watch tap is tried a second time, later still')
-    assert.match(flat, /if \(cmd\.do === 'tuner' && !cmd\.on\) \{ probeNow\(\) pause\(400\)/, 'the tuner closing from a woken phone can be dropped')
+    assert.match(flat, /if \(cmd\.do === 'tuner' && !cmd\.on\) \{ const close = \(\) => writeTuner\(false, receivedAt\) const left = \(\) => Math\.max\(0, receivedAt \+ WATCH_CLOSE_WINDOW_MS - Date\.now\(\)\) probeNow\(\) pause\(400\)/, 'the tuner closing from a woken phone can be dropped')
     /* And the watch shows its own "not connected" page while Play says NOT CONNECTED — but never while it is tuning, see the next test. */
     assert.match(read('mobile/src/screens/Stage.js'), /linked: Number\.isInteger\(preset\?\.number\) && \(!down \|\| tunerOn\),/)
   })
@@ -3434,6 +3539,179 @@ export function run(test) {
     assert.match(read('mobile/src/lib/rig.js'), /export function writeScene\(index, at = Date\.now\(\)\) \{\n  if \(refusedNow\(/)
     /* A tuner-off the watch sends as its page goes, with the phone's tuner already off, does nothing. */
     assert.match(bridge, /if \(cmd\.do === 'tuner' && getState\(\)\.tunerOn !== cmd\.on\) return writeTuner\(cmd\.on, receivedAt\)/)
+  })
+
+  /*
+   * TUNER OFF FROM THE WRIST, WITH THE PHONE WOKEN BY IT. The tuner mutes the
+   * unit, so this close is never dropped: it waits for the link and is tried
+   * once more. rig.writeTuner never throws (a close that did not go answers
+   * false), so a retry kept behind a .catch could never run. And a phone
+   * started afresh by the request knows nothing of the tuner: the close goes
+   * whatever the app thinks. Awake, the phone knows, and a close over a
+   * tuner already off still does nothing (the test above).
+   */
+  test('watch: Tuner off from a woken phone is sent even when the app thinks the tuner is off, and tried once more when it did not go', async () => {
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [false], 'a phone started afresh by the watch left the unit muted on its tuner')
+    }
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.rig.tunerOn = true
+      t.bench.answers = [false]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(1000)
+      assert.deepEqual(t.bench.tuner, [false])
+      await t.clock.advance(4000)
+      assert.deepEqual(t.bench.tuner, [false, false], 'a close that did not go was not tried again')
+      assert.ok(t.bench.log.some((l) => /tuner off: the first try did not go; trying once more/.test(l)))
+    }
+    /* Twice not gone: said, and left there. */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.answers = [false, false]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(10000)
+      assert.deepEqual(t.bench.tuner, [false, false], 'tried more than twice')
+      assert.ok(t.bench.log.some((l) => /tuner off: gave up/.test(l)))
+    }
+    /* Opened again on the phone between the two tries: never closed over it. */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.answers = [false]
+      /* The open on Play, a newer press, made while the first close is out. */
+      t.bench.onTuner = (n) => {
+        if (n !== 1) return
+        t.bench.press++
+        t.bench.rig.tunerOn = true
+      }
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(10000)
+      assert.deepEqual(t.bench.tuner, [false], 'the second try shut a tuner the player had opened since')
+      assert.ok(t.bench.log.some((l) => /tuner off: opened again since, so not tried again/.test(l)))
+    }
+    /*
+     * Tuner on from the watch while the second try waits for the link: it
+     * woke the phone too, and waits for the same link, pressing nothing yet.
+     * The second try is first to hear the link back, and finds the tuner
+     * off; only the request still waiting says an open is coming. Sent, the
+     * close would be the newer press and take the open's place before it
+     * landed. So the second try waits for it, then finds the tuner open.
+     */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.answers = [false]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(1000)
+      assert.deepEqual(t.bench.tuner, [false])
+      let up = null
+      t.bench.gate = { promise: new Promise((r) => (up = r)) }
+      await t.clock.advance(1000)
+      t.send({ do: 'tuner', on: true })
+      await t.clock.advance(100)
+      assert.deepEqual(t.bench.tuner, [false], 'the open went before the link was back')
+      t.bench.gate = null
+      up(true)
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [false, true], 'the second try went ahead of an open still waiting for the link')
+      assert.ok(t.bench.log.some((l) => /tuner off: opened again since, so not tried again/.test(l)))
+      assert.equal(t.bench.waiting, 0, 'the open is still counted as waiting after it pressed')
+    }
+    /*
+     * A Tuner on that never opened anything keeps nothing back. Dropped at
+     * its deadline with the link still down, it is let go of, and the second
+     * try, the link back, closes the tuner the first try never reached.
+     */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.answers = [false]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(1000)
+      let up = null
+      t.bench.gate = { promise: new Promise((r) => (up = r)) }
+      t.send({ do: 'tuner', on: true })
+      await t.clock.advance(2000)
+      assert.equal(t.bench.waiting, 0, 'an open dropped at its deadline is still counted as waiting')
+      assert.ok(t.bench.log.some((l) => /tuner not sent: the phone could not reach the rig in time after waking/.test(l)))
+      t.bench.gate = null
+      up(true)
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [false, false], 'a dropped open kept the second try back: the rig stays muted, the screens say off')
+    }
+    /*
+     * And one that pressed and then never went: dropped at the computer, or
+     * refused, after the flag had gone up. Pressed is not landed, so the
+     * second try waits for its answer, not its press, then closes the tuner
+     * neither close reached.
+     */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      let no = null
+      t.bench.answers = [false, new Promise((r) => (no = r))]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(1000)
+      t.send({ do: 'tuner', on: true })
+      await t.clock.advance(100)
+      assert.deepEqual(t.bench.tuner, [false, true])
+      assert.equal(t.bench.rig.tunerOn, true)
+      await t.clock.advance(1500)
+      assert.deepEqual(t.bench.tuner, [false, true], 'the second try went over an open still waiting for its answer')
+      no(false)
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [false, true, false], 'an open that pressed and failed kept the second try back: the rig stays muted, the screens say off')
+      assert.equal(t.bench.waiting, 0)
+    }
+    /*
+     * Never late. The link not back inside WATCH_CLOSE_WINDOW_MS of the
+     * request, the second try is let go of, not left to go at the next
+     * launch over whatever tuner is up by then.
+     */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.answers = [false]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(1000)
+      let up = null
+      t.bench.gate = { promise: new Promise((r) => (up = r)) }
+      await t.clock.advance(30000)
+      t.bench.gate = null
+      up(true)
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [false], 'a second try went after its window')
+      assert.ok(t.bench.log.some((l) => /tuner off: too late to try again/.test(l)))
+    }
+    /* And a Close tapped on Play between the tries: one more close after it does no harm, and closes are never held back. */
+    {
+      const t = await watchOnABench()
+      t.app('background')
+      t.bench.answers = [false]
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(1000)
+      await t.rig.writeTuner(false)
+      await t.clock.advance(10000)
+      assert.deepEqual(t.bench.tuner, [false, false, false])
+    }
+    /* Awake: as before, a close over a tuner already off does nothing, and one over an open tuner goes once. */
+    {
+      const t = await watchOnABench()
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [], 'a phone awake closed a tuner it knows is off')
+      t.bench.rig.tunerOn = true
+      t.send({ do: 'tuner', on: false })
+      await t.clock.advance(5000)
+      assert.deepEqual(t.bench.tuner, [false])
+    }
   })
 
   test('a song’s scene and tempo go only after its preset landed', () => {
