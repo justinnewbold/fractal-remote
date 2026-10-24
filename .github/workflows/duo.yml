@@ -113,31 +113,41 @@ jobs:
 
       # Opened, then asked again 30 seconds later whether it is still running:
       # an app the scene rule refuses is gone by then.
-      # Which simulators to open it on: the newest iOS the image has, and of
-      # the iPhones THAT iOS says it supports, an iPhone Duo if there is one
-      # and the newest other iPhone. A device type the runtime does not
-      # support is refused by simctl create (exit 22, its "invalid argument"),
-      # which is how the first run on this image stopped. What was picked is
-      # written as a notice, so the run says it without its log.
+      # Which simulators to open it on: an iPhone Duo, and the newest other
+      # iPhone, each on the newest iOS the image has that says it runs it. A
+      # device type the runtime does not support is refused by simctl create
+      # (exit 22, its "invalid argument"), which is how the first run on this
+      # image stopped, and the second found iOS 27.1 listing no ordinary
+      # iPhone, so one runtime cannot be taken for both. Every runtime's list,
+      # and what was picked, is written as a notice, so the run says it
+      # without its log.
       - name: Pick the simulators
         run: |
           set -e
           python3 - <<'PY' >> "$GITHUB_ENV"
-          import json, subprocess
+          import json, subprocess, sys
           runtimes = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'runtimes', '-j']))['runtimes']
           ios = [r for r in runtimes if r.get('platform') == 'iOS' and r.get('isAvailable')]
           ios.sort(key=lambda r: [int(p) for p in r['version'].split('.')])
-          print('::notice::iOS runtimes on this image: ' + ', '.join(r['name'] for r in ios), file=__import__('sys').stderr)
-          runtime = ios[-1]
-          supported = runtime.get('supportedDeviceTypes') or json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devicetypes', '-j']))['devicetypes']
-          duo = [d for d in supported if 'Duo' in d['name']]
-          phones = [d for d in supported if d['name'].startswith('iPhone') and 'Duo' not in d['name']]
-          if not phones:
-              raise SystemExit('::error::' + runtime['name'] + ' supports no iPhone simulator')
-          print('RUNTIME=' + runtime['identifier'])
+          note = lambda m: print('::notice::' + m, file=sys.stderr)
+          note('iOS runtimes on this image: ' + ', '.join(r['name'] for r in ios))
+          for r in ios:
+              note(r['name'] + ' runs: ' + ', '.join(d['name'] for d in r.get('supportedDeviceTypes') or []))
+          def newest(match):
+              for r in reversed(ios):
+                  found = [d for d in r.get('supportedDeviceTypes') or [] if match(d['name'])]
+                  if found:
+                      return r, found
+              return None, []
+          duo_rt, duo = newest(lambda n: 'Duo' in n)
+          phone_rt, phones = newest(lambda n: n.startswith('iPhone') and 'Duo' not in n)
+          if not phones and not duo:
+              raise SystemExit('::error::No iOS runtime on this image runs an iPhone simulator')
           print('DUO=' + (duo[0]['identifier'] if duo else ''))
-          print('PHONE=' + phones[-1]['identifier'])
-          print('::notice::Picked ' + runtime['name'] + ', ' + (duo[0]['name'] if duo else 'no iPhone Duo') + ' and ' + phones[-1]['name'], file=__import__('sys').stderr)
+          print('DUO_RUNTIME=' + (duo_rt['identifier'] if duo else ''))
+          print('PHONE=' + (phones[-1]['identifier'] if phones else ''))
+          print('PHONE_RUNTIME=' + (phone_rt['identifier'] if phones else ''))
+          note('Picked ' + (duo[0]['name'] + ' on ' + duo_rt['name'] if duo else 'no iPhone Duo') + ', and ' + (phones[-1]['name'] + ' on ' + phone_rt['name'] if phones else 'no other iPhone'))
           PY
 
       - name: It opens, and stays open
@@ -149,7 +159,10 @@ jobs:
           APP=$(find build/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphonesimulator*' | head -n 1)
           test -n "$APP"
           mkdir -p screens
-          for TYPE in $DUO $PHONE; do
+          for PAIR in "$DUO:$DUO_RUNTIME" "$PHONE:$PHONE_RUNTIME"; do
+            TYPE=${PAIR%%:*}
+            RUNTIME=${PAIR#*:}
+            [ -n "$TYPE" ] || continue
             echo "== $TYPE on $RUNTIME"
             UDID=$(xcrun simctl create "check" "$TYPE" "$RUNTIME")
             xcrun simctl boot "$UDID"
@@ -185,6 +198,8 @@ jobs:
           APP=$(find build/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphonesimulator*' | head -n 1)
           test -n "$APP"
           TYPE=${DUO:-$PHONE}
+          RUNTIME=${DUO:+$DUO_RUNTIME}
+          RUNTIME=${RUNTIME:-$PHONE_RUNTIME}
           mkdir -p screens
           OUT="$PWD/screens/fold-check.txt"
           echo "== $TYPE on $RUNTIME"
