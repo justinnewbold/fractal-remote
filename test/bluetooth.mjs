@@ -4859,13 +4859,22 @@ export function run(test) {
      * five-year-old could connect it." The units used to stay on the page
      * while it was on, greyed, with "To change the unit, tap Stop first."
      * under them. Now step 1 is only drawn while it is off, inside the off
-     * half of the one ternary that draws Stop in its on half; the status
-     * line names the unit while it is on. disabled={b.on} stays, so a tap in
+     * half of the one ternary that draws Stop in its on half; a line over
+     * Stop names the unit while it is on. disabled={b.on} stays, so a tap in
      * the moment it turns on still goes nowhere.
+     *
+     * Each half read on its own: the whole ternary in one slice let a second
+     * copy of the chips under Stop pass, since only the first copy was
+     * looked at.
      */
-    const off = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('{/* Not under a trouble line'))
-    assert.ok(off.includes('<Press label="Stop using Bluetooth"'), 'Stop is not in the same ternary as the units')
-    assert.ok(off.indexOf('<Press label="Stop using Bluetooth"') < off.indexOf('{BLE_UNITS.map('), 'the units are drawn while it is on')
+    const ternary = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('{/* Not under a trouble line'))
+    const cut = ternary.indexOf(') : ( <View style={{ gap: space.lg }}>')
+    assert.ok(cut > 0, 'the on/off ternary could not be split; this read is probably broken')
+    const [onPart, offPart] = [ternary.slice(0, cut), ternary.slice(cut)]
+    assert.ok(onPart.includes('<Press label="Stop using Bluetooth"'), 'Stop is not in the on half')
+    assert.ok(!onPart.includes('BLE_UNITS.map('), 'the units are drawn while it is on')
+    assert.ok(offPart.includes('BLE_UNITS.map('), 'the units are not drawn while it is off')
+    assert.equal((page.match(/BLE_UNITS\.map\(/g) || []).length, 1, 'the unit chips are drawn in more than one place')
     assert.ok(!page.includes('To change the unit, tap Stop first.'), 'a hint for units that are no longer drawn while it is on')
     /* What stopped the search shows with the switch off too; and the wrong unit answering says what to do. */
     const status = page.slice(page.indexOf('function status('), page.indexOf('const TONES'))
@@ -5013,16 +5022,19 @@ export function run(test) {
       assert.deepEqual(got.asked, [], `Apple’s screen opened on iOS 27 in a build without the fix (${typeof fixed === 'function' ? 'a module that throws' : fixed})`)
       assert.equal(got.said, PAIR_SCREEN_IOS27, 'nothing says why Connect did nothing')
       assert.equal(got.pick ?? null, null)
+      assert.equal(got.adapter ?? null, null)
     }
     /* An adapter iOS already has connected is used, as after Apple's screen, and no warning stays up over it. */
     const one = await press({ version: '27.0.1', devices: [{ id: 'a:b', name: 'WIDI Uhost Bluetooth' }] })
     assert.deepEqual(one.asked, [])
-    assert.equal(one.pick?.id, 'a:b', 'the one adapter already connected is not chosen')
+    assert.equal(one.pick?.id, 'a:b', 'the one adapter already connected is not handed back')
+    assert.equal(one.adapter?.id, 'a:b', 'the one adapter already connected is not chosen')
     assert.equal(one.said, null, 'the warning stays up over an adapter it chose')
     /* Two to pick from: the list asks, and the note says why the screen did not open. */
     const two = await press({ version: '27.1', devices: [{ id: 'a', name: 'One' }, { id: 'b', name: 'Two' }] })
     assert.deepEqual(two.asked, [])
     assert.equal(two.pick ?? null, null)
+    assert.equal(two.adapter ?? null, null, 'one of two adapters was chosen without a tap')
     assert.equal(two.said, PAIR_SCREEN_IOS27)
     /*
      * And tapping one of them ends the note: it is about the search, and left
@@ -5519,12 +5531,18 @@ export function run(test) {
      */
     const uses = page.match(/\{b\.trouble === 'permission' \? <OpenSettings \/> : null\}/g) || []
     assert.equal(uses.length, 1, 'Open Settings is drawn somewhere other than under its line')
+    /* Counted however it is written: an && or a bare <OpenSettings /> is a second button too. */
+    const pageBody = page.slice(page.indexOf('return ( <View style={{ gap: space.xl }}>'), page.indexOf('const openLink ='))
+    assert.equal((pageBody.match(/<OpenSettings \/>/g) || []).length, 1, 'Open Settings is drawn in more than one place')
     assert.match(page, /\{said\.line\} <\/Text> \{b\.trouble === 'permission' \? <OpenSettings \/> : null\}/, 'the button is not under the status line that says what to allow')
     assert.ok(!/\{!b\.on && b\.trouble \?/.test(page), 'the trouble is said twice while it is off: once at the top and again under Connect')
     /* The status line comes before anything else a person can press, on or off: nothing to scroll past to read it. */
     const body = page.slice(page.indexOf('return ( <View style={{ gap: space.xl }}>'))
     assert.ok(body.indexOf('{said.line}') > 0 && body.indexOf('{said.line}') < body.indexOf('<Press'), 'something is drawn above the line that says where it stands')
     assert.ok(!/\{b\.on \? \([^]*\{said\.line\}[^]*\) : \(/.test(body.slice(0, body.indexOf('Pick your unit'))), 'the status line is only drawn while it is on')
+    /* And drawn whatever the state: nothing between the page's start and the line can hide it (Connected, and the wrong unit answering, are only ever said there). */
+    const head = body.slice(0, body.indexOf('{said.line}')).replace(/\{\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/\}/g, '')
+    assert.ok(!/\?|&&/.test(head), 'the status line is drawn only on some condition')
     /* And the status line it sits under is the allow line whenever the trouble is 'permission', on or off. */
     const status = page.slice(page.indexOf('function status('), page.indexOf('const TONES'))
     assert.ok(status.indexOf("b.trouble === 'permission'") < status.indexOf("if (!b.on) return { line: 'Not connected'"), 'with Bluetooth on, the line above the button says something else')
@@ -5836,8 +5854,15 @@ export function run(test) {
     ]
     const places = order.map(at)
     for (let i = 1; i < places.length; i++) assert.ok(places[i - 1] < places[i], `${order[i - 1]} is no longer before ${order[i]}`)
-    for (const reading of ['partsFor(', 'hookupFor(', '{FIRST_TIME}', '{POWER_LINE}', '{GEAR_IN_SHORT}', 'DIFFERENT.map(']) {
-      const i = drawn.indexOf(reading)
+    /*
+     * Where the page draws the rows' contents, not where their functions
+     * are written: PlugIn and Buy's own bodies come after the page's, so
+     * they always sat "below Connect" in the text whatever the page did.
+     */
+    const pageOnly = drawn.slice(0, drawn.indexOf('const openLink ='))
+    for (const used of ['<PlugIn ', '<Buy ']) assert.equal((pageOnly.match(new RegExp(used, 'g')) || []).length, 1, `${used.trim()}> is drawn more than once, or not at all`)
+    for (const reading of ['<PlugIn ', '<Buy ', 'partsFor(', 'hookupFor(', '{FIRST_TIME}', '{POWER_LINE}', '{GEAR_IN_SHORT}', 'DIFFERENT.map(']) {
+      const i = pageOnly.indexOf(reading)
       assert.ok(i < 0 || i > at('<Heading>2 · Connect</Heading>'), `${reading} is drawn above Connect`)
     }
     assert.ok(!drawn.includes('What you need'), 'the old What you need heading is back over Connect')
@@ -5856,6 +5881,7 @@ export function run(test) {
     assert.match(page, /const \[plug, setPlug\] = useState\(!b\.adapter\) const \[buy, setBuy\] = useState\(false\) const \[about, setAbout\] = useState\(false\)/)
     assert.match(page, /<Fold title="How to plug it in" open=\{plug\} onToggle=\{\(\) => setPlug\(!plug\)\}> <PlugIn unit=\{b\.unit\} \/> <\/Fold>/)
     assert.match(page, /<Fold title="What to buy" open=\{buy\} onToggle=\{\(\) => setBuy\(!buy\)\}> <Buy unit=\{b\.unit\} \/> <\/Fold>/)
+    assert.match(page, /<Fold title="What it can and can’t do" open=\{about\} onToggle=\{\(\) => setAbout\(!about\)\}>/, 'What it can and can’t do opens with something other than its own tap')
     /* The list's heading says how many there are: one row is not "More than one". */
     assert.match(page, /b\.looking \? 'Found so far\. Tap yours:' : b\.devices\.length > 1 \? 'More than one is here\. Tap yours:' : 'Tap your adapter:'/, 'a single row is headed More than one is here')
     /* While it is on the unit chips are gone, and Connecting… names no unit: a line over Stop says which, and how to change it. */
@@ -5888,7 +5914,9 @@ export function run(test) {
     assert.match(plug, /const steps = hookupFor\(unit\) \|\| \[\]/)
     assert.match(plug, /\{untried \? <Note tone="warn">\{untried\}<\/Note> : null\}/, 'an untried unit is not told so')
     /* What it can and can't do: the paragraph that used to open the page, and the list of what is different from USB. */
-    const about = drawn.slice(at('<Fold title="What it can and can’t do"'), at('<Press label="Full setup guide"'))
+    /* To that row's own close, so a list moved out after it, always drawn, is not counted as in it. */
+    const aboutAt = at('<Fold title="What it can and can’t do"')
+    const about = drawn.slice(aboutAt, drawn.indexOf('</Fold>', aboutAt))
     assert.ok(about.includes('No editing or saving, and the computer isn’t used.'))
     assert.ok(about.includes('<Heading>What’s different from USB</Heading> {DIFFERENT.map('))
     /* The usual reason a connected adapter hears nothing, with these parts: the plugs swapped. */

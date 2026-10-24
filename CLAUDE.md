@@ -102,6 +102,13 @@ other: its testers keep a store copy that the next update no longer
 matches, and nobody notices until they ask why nothing has changed. That
 happened after the watch build, to the Play closed testers on 1.86.8.
 
+The one exception is a change that moves only one platform's fingerprint,
+and only when he asks for that platform's build. On 24 October 2026 Apple's
+iOS 27 fix for the Bluetooth pairing screen moved the iPhone's and nothing
+else, and he said "do the iPhone build now": an Android build would have
+been the 1.88.0 already in Google's review, and Android kept taking updates
+on it. `npm run fingerprint` says which platforms moved.
+
 **Native work that is finished but waiting for a build lives in docs/pending/**,
 as patches against main, so it is on GitHub rather than only in a container.
 When a build is agreed, apply them first (docs/pending/README.md says how) so

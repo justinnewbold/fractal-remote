@@ -7,6 +7,11 @@ built together.
 Add a row every time a build is started, including one that fails after
 being queued: it still used a slot.
 
+The one exception so far: 1.88.3 on 24 October 2026, iPhone only, because
+only the iPhone's fingerprint moved and Justin asked for "the iPhone
+build". When Android's fingerprint has not moved, an Android build would be
+the same as the one already in the store, and Android keeps taking updates.
+
 **And on the day a build goes live in a store, move its number in
 `public/store-versions.json`** (`ios` for the App Store, `android` for Google
 Play), in its own pull request, that day and not before: live means
@@ -30,7 +35,7 @@ needs, with nothing telling them. It says 1.87.11 for both since 13 October
 | 8 Oct | 1.87.0 | 1 (TestFlight, build 25) | 1 (errored on Expo's side: "temporary network issue", CREDENTIALS_TEMPORARY_NETWORK_ERROR, a minute in; counted, as every started build is) | Bluetooth (beta), a TEST build: made from branch claude/fractal-remote-continue-ljfqcd (draft PR #671, never merged; the work now waits in docs/pending/bluetooth-beta.patch), never sent as an update, takes none of main's. Not the store build: the cells say so in words, so the What's live page keeps 1.86.83 as the store copy |
 | 10 Oct | 1.87.1 | 1 | 1 | Bluetooth (beta) for everyone who has unlocked the app ("If Bluetooth is ready, let's get it submitted"): the native Bluetooth MIDI module, the beta note, What you need and the setup guide, the iPhone Bluetooth permission check, Auto appearance on iPhone, three unused Android permissions dropped. iOS to TestFlight, Android straight to Google Play production. Started from main right after PR #680 merged |
 | 11 Oct | 1.87.11 | 1 | 1 | The App Store's iPhones get every fix since 1.86.83: the pay-once fix (nobody is sold the full version twice), account help (the Confirm button, and look-in-Spam lines), the metronome on and off in the volume pop-up with its flash and click on the same beat, the AM4's own tuner, and Bluetooth (beta) kept to the developer's account. And the 1.87.1 builds' first-launch BLUETOOTH (BETA) card is gone, because this build carries the hidden version inside it. iOS to TestFlight (then the App Store submission, in place of build 26), Android straight to Google Play production. Started from main 3e7ffbf, mobile.yml run 38162666072 ("Yes spend the builds") |
-
 | 24 Oct | 1.88.0 | 1 | 1 | The build pair after 1.87.11: Siri (nine App Shortcuts and Settings → Siri), the wider Play on iPad and an opened iPhone Duo with the fold sensor, screenshots picked from Photos in reports (the camera never used, and blocked on Android), the watch's hold-for-channel and Boost words and its name Fractal Remote, R8 code shrinking for Google Play, the fractalremote:// links for everyone, and the startup card built in, which closes the 1.87.11 first-launch gap. iOS to TestFlight (build 28), Android straight to Google Play production (version code 12). Started from main 8e6042d, mobile.yml run 40109325503 ("Go ahead and do the iPhone build and android build"). Phones on 1.87.11 and 1.87.1 keep 1.87.60, the last update made for them (main 45f9927), until they take 1.88.0 from the store |
+| 24 Oct | 1.88.3 | 1 | — | iPhone only, TestFlight build 29: Apple's own fix for its Bluetooth MIDI pairing screen, which crashes the app on iOS 27 (TestFlight 1.88.0 (28) on iOS 27.0.1; developer.apple.com/forums/thread/850584), and Bluetooth (beta)'s page with Connect at the top. The one time the two phones were not built together, and why: only the iPhone's fingerprint moved (ios e56f74b8…; Android 5205f144… and the watch stayed where 1.88.0 left them), so an Android build would have been 1.88.0 again, and Android's 1.88.0 (version code 12, in Google's review) keeps taking updates. Started from main fc9ed4e, mobile.yml run 40117469824 ("Yeah, go ahead and do the iPhone build now"); Expo build 56246296, submitted to TestFlight. Phones on 1.88.0 (28) keep the last update made for it (main d58abf0, which keeps Apple's screen shut on iOS 27 so it cannot crash) until they take build 29 |
 
-**Left this month: 8 iOS, 8 Android.**
+**Left this month: 7 iOS, 8 Android.** The count starts again on 1 November.

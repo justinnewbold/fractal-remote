@@ -4713,9 +4713,10 @@ export function run(test) {
     assert.match(read('mobile/src/components/TopBar.js'), /computer: link\?\.macName/, 'the notes say the top bar names the computer, and it does not')
     /* What's New for 1.88.0 and Google's release notes, within each store's box, with no Bluetooth line and no AM4 tuner line until Justin has seen it. */
     const pastedUnder = (h) => { const i = store.indexOf(h); const o = store.indexOf('```', i); return store.slice(o + 3, store.indexOf('```', o + 3)).trim() }
-    const whatsNew = pastedUnder("### What's New in This Version, 1.88.0")
+    /* The iPhone goes to Apple as 1.88.3 (build 29, Apple's iOS 27 fix for the Bluetooth screen); Android stays 1.88.0. */
+    const whatsNew = pastedUnder("### What's New in This Version, 1.88.3")
     const playNotes = pastedUnder('### Google Play release notes, 1.88.0')
-    assert.ok(whatsNew.length > 0 && whatsNew.length <= 4000, `What's New for 1.88.0 is ${whatsNew.length} characters; Apple takes 4000`)
+    assert.ok(whatsNew.length > 0 && whatsNew.length <= 4000, `What's New for 1.88.3 is ${whatsNew.length} characters; Apple takes 4000`)
     assert.ok(playNotes.length > 0 && playNotes.length <= 500, `Google's release notes for 1.88.0 are ${playNotes.length} characters; Play takes 500`)
     for (const t of [whatsNew, playNotes]) {
       assert.doesNotMatch(t, /bluetooth|tuner on the AM4 itself now stays up/i, 'a store text announces something customers cannot use, or the AM4 tuner line before Justin has seen it')
