@@ -77,6 +77,21 @@ jobs:
           grep -q UIApplicationSceneManifest FractalRemote/Info.plist
           grep -q EXExpoAppSceneDelegate FractalRemote/Info.plist
 
+      # The photo picker's two Info.plist sentences, and its iOS 27.1 fix.
+      # Its code asks about the camera, so the camera's sentence has to be
+      # there or Apple's upload check refuses the binary (ITMS-90683); and
+      # 57.0.20 crashes picking a picture on iOS 27.1 unless mobile/patches
+      # was applied by the install (test/reports.mjs says both).
+      - name: The photo picker is ready for Apple
+        working-directory: mobile
+        run: |
+          grep -q NSPhotoLibraryUsageDescription ios/FractalRemote/Info.plist \
+            || { echo "::error::Info.plist has no NSPhotoLibraryUsageDescription."; exit 1; }
+          grep -q NSCameraUsageDescription ios/FractalRemote/Info.plist \
+            || { echo "::error::Info.plist has no NSCameraUsageDescription, and the picker's code asks about the camera."; exit 1; }
+          grep -q 'hasItemConformingToTypeIdentifier(UTType.livePhoto.identifier)' node_modules/expo-image-picker/ios/MediaHandler.swift \
+            || { echo "::error::The picker's iOS 27.1 fix is not in node_modules: mobile/patches was not applied."; exit 1; }
+
       - name: Pods
         working-directory: mobile/ios
         run: pod install
@@ -90,7 +105,7 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
-            || { grep -n -B2 -A12 -E 'error:|error |failed with exit' build.log | head -n 200; exit 1; }
+            || { grep -n -B2 -A12 -E 'error:|error |failed with exit' build.log | head -n 200; grep -m 10 -E 'error:' build.log | sed 's/^/::error::/'; exit 1; }
           tail -n 20 build.log
 
       # The phrase list Xcode extracted, with every command in it.
@@ -267,6 +282,30 @@ jobs:
           else
             echo "::warning::The simulator's iOS is older than 27.1, so the fold sensor was not seen running."
           fi
+
+      # And for a real iPhone, the way EAS archives it: every step above is
+      # the simulator's SDK. This is the iOS 27.1 device SDK, and the watch
+      # app inside it for a real watch, which nothing else builds on this
+      # Xcode (watch.yml's device build is on the Mac image's Xcode 26).
+      # Unsigned, so nothing here can be sent anywhere. Last, so the launch
+      # checks above report first.
+      - name: It builds for a real iPhone and watch with Xcode 27.1
+        working-directory: mobile/ios
+        run: |
+          set -o pipefail
+          xcodebuild -workspace FractalRemote.xcworkspace -scheme FractalRemote \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build-device \
+            CODE_SIGNING_ALLOWED=NO build > build-device.log 2>&1 \
+            || { grep -n -B2 -A12 -E 'error:|error |failed with exit' build-device.log | head -n 200; grep -m 10 -E 'error:' build-device.log | sed 's/^/::error::/'; exit 1; }
+          tail -n 20 build-device.log
+          APP=$(find build-device/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphoneos*' | head -n 1)
+          test -n "$APP" || { echo "::error::No FractalRemote.app for iphoneos was built."; exit 1; }
+          # Embed Watch Content puts it in the app's Watch folder.
+          WATCH=$(find "$APP" -mindepth 2 -maxdepth 3 -name '*.app' 2>/dev/null | head -n 1)
+          test -n "$WATCH" || { echo "::error::The device build has no watch app inside it: $(ls "$APP" | tr '\n' ' ' | cut -c1-600)"; exit 1; }
+          echo "::notice::Built for a real iPhone: $(lipo -archs "$APP/FractalRemote"); the watch app: $(lipo -archs "$WATCH/$(defaults read "$PWD/$WATCH/Info" CFBundleExecutable)")"
 
       - uses: actions/upload-artifact@v4
         if: always()
