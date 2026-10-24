@@ -734,6 +734,15 @@ review notes need nothing new. What's New gets one line: "With an AM4, the
 tuner on the AM4 itself now stays up until you close the tuner in the app.
 Needs the newest desktop app."
 
+**For the next version's notes: the top bar** (24 October 2026). "Can we
+list the computer and device it's connected to like this instead of the
+word connected? Also have that be the button that can switch what unit it's
+connected to?" Since 1.87.60, by update, Play's top bar says the state, the
+unit and, under them, the computer ("Live ● AM4 / on raspberry pi 3"), and
+tapping it opens the demo's units, Which unit with two computers, or Phone &
+computer. It is in the 1.88.0 build and the notes have one line for it; the
+startup card and Colors lines were cut to make the room.
+
 ### Notes for App Review, the next version
 
 **Written on 24 October 2026 for the next build pair, to paste when it goes
@@ -767,11 +776,13 @@ New since 1.87.11:
 
 Siri. Nine App Shortcuts, each phrase with the app's name, such as "Scene 3 in Fractal Remote". Settings, then Siri, lists them all. Try them with the demo's Play screen open: elsewhere the app says to open Play, but Tuner off works from any screen. The links fractalremote://next, /previous, /scene/1 to /scene/8 and /tuner/off do the same from a shortcut. The app receives only the command, never the audio.
 
-Startup card. The app opens once on a card saying it is independent of Fractal Audio.
+Startup card. Step 1 above; it shows once.
 
-Colors. Settings, then Colors, has six looks for the tiles. A first launch is in the app's own colors, and Dark.
+Colors. Settings, then Colors, has six looks for the tiles.
 
 Bigger screens. On iPad and an opened iPhone Duo, Play spreads across the wider screen.
+
+Top bar. Play's top bar says which unit, on which computer; tap it to change unit.
 
 AM4. The amp's pedal on Play now switches the amp's boost, saying Boost on or Boost off, on the watch too. The demo's AM4 shows it.
 
@@ -801,6 +812,54 @@ Videos:
 1. FM3 hardware: [FM3 video link]
 2. Presets: [presets video link]
 3. Deleting an account: [account deletion video link]
+```
+
+### What's New in This Version, 1.88.0
+
+App Store Connect → the 1.88.0 version → What's New in This Version. Plain
+words, one change a line, everything since 1.87.11, the version on the App
+Store before it, written on 24 October 2026 from the *For the next version's
+notes* paragraphs above and the changes since. Apple takes 4000 characters,
+and all of it fits. No Bluetooth line (it is still the developer's alone),
+and no line for the AM4's tuner staying up until Justin has seen it on his
+own AM4 (that paragraph's wait, above).
+
+```
+• Siri: say "Scene 3 in Fractal Remote", "Next song in Fractal Remote" and more, with the Play screen open. Settings → Siri lists every command, and how to use them with Shortcuts, the Action button and Back Tap.
+• Play's top bar now names your unit and the computer it goes through. Tap it to switch units, or to see Phone & computer.
+• On iPad and an opened iPhone Duo, Play spreads across the wider screen.
+• New: Settings → Colors, with six looks for the tiles and scenes: Fractal Remote (the app's own colors, which a first launch wears), Match my unit (the colors of your Fractal unit), Footswitch lights, Color-blind safe, Sunlight and Stompbox.
+• The app starts in Dark appearance; Settings, under Play screen, has Auto, Light and Dark.
+• On an AM4, the amp's pedal on Play now switches the amp's boost, and says Boost on or Boost off, on the Apple Watch too. Turn the amp itself on and off in Edit.
+• On a VP4, the app changes presets, and scenes once you set one number on the VP4.
+• Apple Watch: hold a pedal to choose its channel. The watch app is now called Fractal Remote.
+• Feedback and Log (Settings → Troubleshooting) can add up to three screenshots, picked from your photos or pasted.
+• The app opens once on a card saying it is independent of Fractal Audio.
+• Next and Previous now show the name of what each will load.
+• The tempo box opens with the tempo selected, and has the metronome switch in it.
+• Two computers on one account? Which unit shows the unit on each, and switches between them.
+• A new account can be confirmed with the code in its email.
+• Play says NOT CONNECTED as soon as the link drops, and a tap that can't get through is dropped instead of landing late.
+• No unit on the computer you picked? Play says where your unit is, with one tap to switch.
+• No computer signed in yet? The app says so, and where to get the computer app.
+• The looper's Rec and Play no longer sit under its picture.
+```
+
+### Google Play release notes, 1.88.0
+
+Play Console → Test and release → Production → the 1.88.0 release → Edit
+release → Release notes (en-US). Play takes 500 characters. The build
+reaches Play with none, because EAS cannot send them; if Play will not let
+the release be edited while it is in review, leave it, as with 1.87.11.
+Android has no Siri, so its line is the links instead.
+
+```
+• Play's top bar names your unit and the computer it goes through. Tap it to switch units.
+• Feedback and Log can add up to three screenshots from your photos.
+• Links for Tasker and similar apps: fractalremote://next, previous, scene/1 to 8 and tuner/off. Settings → Links for Tasker says how.
+• Settings → Colors: six looks. The app starts in its own colors, and Dark.
+• On an AM4, the amp's pedal switches its boost.
+• Tablets and opened foldables get a wider Play screen.
 ```
 
 ### Notes for App Review, 1.87.11
@@ -1082,7 +1141,8 @@ and **not shared**:
 
 Email address, already declared, now also answers a report from the
 account's own address when nobody typed one: keep App functionality and
-Account management ticked for it. Nothing else changes.
+Account management ticked for it (tick App functionality: on 24 October
+2026 Google's page showed only Account management). Nothing else changes.
 
 Keep **No data shared with third parties**: RevenueCat, Supabase, Resend and
 Expo only do their part of the job for the app. In the same form, check the
@@ -1106,10 +1166,11 @@ that this build does not have) with this:
 This account has the full version.
 
 No hardware? The app has a full demo that needs no account and no gear:
-  1. Tap "Get started"
-  2. Tap "Got it"
-  3. Tap "Start free demo"
-  4. Choose any unit, then tap "Play with ..."
+  1. Tap "OK" on the card that says the app is independent
+  2. Tap "Get started"
+  3. Tap "Got it"
+  4. Tap "Start free demo"
+  5. Choose any unit, then tap "Play with ..."
 
 Delete account: Settings (the gear, top right) → the account card at the top → Delete account → "Delete my account". Please try it on a new account, not this one.
 
@@ -1122,7 +1183,7 @@ If the box will not take all of it, drop the last paragraph first. If it is
 still too long, use this short version instead:
 
 ```
-This account has the full version. No hardware? Demo, no account needed: Get started → Got it → Start free demo → any unit → Play with ...
+This account has the full version. No hardware? Demo, no account needed: OK on the independent-app card → Get started → Got it → Start free demo → any unit → Play with ...
 
 This build has Bluetooth MIDI code for a feature switched on only for the developer's own account while it is tested; this account never sees it. It is why Nearby devices (Location on Android 11 and older) is declared. They are asked for only after Connect on the Bluetooth page, which this account can't open.
 ```

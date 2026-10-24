@@ -4696,6 +4696,7 @@ export function run(test) {
       [/^Startup card\./m, 'the startup card'],
       [/^Colors\. Settings, then Colors, has six looks/m, 'Settings → Colors'],
       [/^Bigger screens\. On iPad and an opened iPhone Duo/m, 'the wider Play'],
+      [/^Top bar\. Play's top bar says which unit, on which computer; tap it to change unit\./m, 'the top bar'],
       [/^AM4\. The amp's pedal on Play now switches the amp's boost/m, 'the AM4 boost'],
       [/^VP4\. The app changes a VP4's presets/m, 'the VP4'],
       [/^Apple Watch\. Hold a pedal on the watch to choose its channel\. The watch app is now named Fractal Remote\./m, 'the watch channels and the watch name'],
@@ -4706,6 +4707,18 @@ export function run(test) {
     assert.match(read('mobile/targets/watch/expo-target.config.js'), /displayName: 'Fractal Remote'/, 'the notes say the watch app is named Fractal Remote, and it is not')
     assert.match(pasted, /open Fractal Remote on the watch/, 'the notes send the reviewer to the watch app by its old name')
     assert.match(read('mobile/src/components/Shots.js'), /'Choose a screenshot'/, 'the notes say screenshots are picked, and the button is gone')
+    assert.match(read('mobile/src/components/TopBar.js'), /computer: link\?\.macName/, 'the notes say the top bar names the computer, and it does not')
+    /* What's New for 1.88.0 and Google's release notes, within each store's box, with no Bluetooth line and no AM4 tuner line until Justin has seen it. */
+    const pastedUnder = (h) => { const i = store.indexOf(h); const o = store.indexOf('```', i); return store.slice(o + 3, store.indexOf('```', o + 3)).trim() }
+    const whatsNew = pastedUnder("### What's New in This Version, 1.88.0")
+    const playNotes = pastedUnder('### Google Play release notes, 1.88.0')
+    assert.ok(whatsNew.length > 0 && whatsNew.length <= 4000, `What's New for 1.88.0 is ${whatsNew.length} characters; Apple takes 4000`)
+    assert.ok(playNotes.length > 0 && playNotes.length <= 500, `Google's release notes for 1.88.0 are ${playNotes.length} characters; Play takes 500`)
+    for (const t of [whatsNew, playNotes]) {
+      assert.doesNotMatch(t, /bluetooth|tuner on the AM4 itself now stays up/i, 'a store text announces something customers cannot use, or the AM4 tuner line before Justin has seen it')
+      assert.doesNotMatch(t, /\b(official|approved by|endorsed|certified|sponsored)\b/i)
+    }
+    assert.doesNotMatch(playNotes, /Siri/, 'Google is told about Siri, which Android does not have')
 
     /* The 2.5.19 pair, said whole: the Bluetooth code and the Developer pages. */
     assert.match(pasted, /This build contains Bluetooth MIDI code for a feature that lets the phone reach the guitar unit through a Bluetooth MIDI adapter instead of a computer\. While it is tested, it is switched on only for the developer's own account\. Customers and the review account don't see it in this build, and the app doesn't ask them for Bluetooth permission\./)
