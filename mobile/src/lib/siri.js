@@ -366,8 +366,14 @@ async function onPlay(cmd, say) {
     if (cmd.answered) return notSent(cmd, say)
     if (!play) {
       if (elsewhere) return say(SIRI_SAYS.openPlay(deviceNoun()))
-      /* Still starting: Play may be up inside the tap rule, and if not, the command would land late. */
-      if (!(await playWithin(deadline - Date.now()))) return notSent(cmd, say)
+      /*
+       * Still starting: Play may be up inside the tap rule, and if not, the
+       * command would land late. Unless there is no computer to land on: with
+       * the link not up (signed in with no computer yet, or one that does not
+       * answer, which is the waiting screen in Play's place), it is Not sent
+       * because nothing is connected, as Play says it.
+       */
+      if (!(await playWithin(deadline - Date.now()))) return notSent(cmd, say, { late: linkState().link === 'connected' })
     }
     if (Date.now() >= deadline) return notSent(cmd, say)
     /*

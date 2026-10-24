@@ -483,11 +483,23 @@ export function run(test) {
       /* Play not up by 1.5 s: never sent, and said on Play as a late tap is, and to Siri. */
       const late = b.say('scene', 3, { ago: 0 })
       await b.clock.advance(1500)
-      b.play()
+      const after = b.play()
       await b.clock.advance(1000)
       assert.equal(b.rig.calls.length, 1, 'a scene went seconds after it was said')
       assert.deepEqual(b.rig.notes.map((n) => n.late), [true])
       assert.deepEqual(b.replyTo(late), ['Not sent, it would have landed late.'])
+      /*
+       * Signed in with no computer, or one that does not answer: the waiting
+       * screen stands in Play's place and Play never comes. Nothing was
+       * there to land on, so it is Not sent because nothing is connected.
+       */
+      after.off()
+      b.link.__set('no-answer')
+      const nobody = b.say('scene', 4, { ago: 0 })
+      await b.clock.advance(1500)
+      assert.equal(b.rig.calls.length, 1, 'sent with no computer')
+      assert.deepEqual(b.rig.notes.map((n) => n.late), [true, false])
+      assert.deepEqual(b.replyTo(nobody), ['Not sent, not connected.'])
     } finally {
       done(b)
     }
