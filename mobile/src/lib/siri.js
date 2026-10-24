@@ -61,8 +61,9 @@ import { VP4_NO_TEMPO } from './vp4-safety'
  * TUNER OFF FROM ANYWHERE, AND NEVER DROPPED: the tuner mutes the rig, so a
  * close that could not go would leave it muted. It waits for the link and is
  * tried once more, by the watch's own rule (lib/watchBridge): never over a
- * tuner opened since, nor ahead of a Tuner on still on its way, and never
- * after SIRI_CLOSE_WINDOW_MS. Siri is answered before any of that wait.
+ * tuner opened since, nor ahead of a Tuner on still on its way, and, once
+ * the app has gone into the background, never after SIRI_CLOSE_WINDOW_MS.
+ * Siri is answered before any of that wait.
  *
  * THE DEMO: nothing here asks whether it is the demo. The rig answers the
  * demo's simulated unit at the same door as a real one, so Apple's reviewer,
@@ -93,22 +94,32 @@ const seen = []
 const pause = (ms) => new Promise((go) => setTimeout(go, ms))
 
 /*
- * HOW LONG AFTER `at` A TUNER OFF MAY STILL GO, either try. Every Siri
- * command brings the app to the front (SiriShortcuts.swift: openAppWhenRun,
- * and supportedModes .foreground(.immediate)), and so does every link, so
- * the close starts with the app on screen. But "Tuner off" is said to put
- * the phone away and play, and the moment Siri has answered, the player may
- * lock it or go back to another app: nothing holds the app up then (the Siri
- * module takes no background time, unlike the watch's 25-second wake), so
- * the phone stops it within seconds, timers and all, and they go on where
- * they stopped at the next launch, minutes or hours later. A close still
- * waiting would go then, over a tuner opened on the unit or another device
- * since, which this app knows nothing of. So it goes inside this window or
- * not at all: as long as the watch's (WATCH_CLOSE_WINDOW_MS), and past
- * everything the chain waits for when nothing stops it (the first try's
- * 0.4 + 8 seconds for the link, the pause and the second try's link wait),
- * so only an app that was stopped, or a link that never came back, meets it.
- * The clock runs on while the app is stopped, which is what says so.
+ * HOW LONG AFTER `at` A TUNER OFF MAY STILL GO, either try, ONCE THE APP HAS
+ * GONE INTO THE BACKGROUND. Every Siri command brings the app to the front
+ * (SiriShortcuts.swift: openAppWhenRun, and supportedModes
+ * .foreground(.immediate)), and so does every link, so the close starts
+ * with the app on screen. But "Tuner off" is said to put the phone away and
+ * play, and the moment Siri has answered, the player may lock it or go back
+ * to another app: nothing holds the app up then (the Siri module takes no
+ * background time, unlike the watch's 25-second wake), so the phone stops
+ * it within seconds, timers and all, and they go on where they stopped at
+ * the next launch, minutes or hours later. A close still waiting would go
+ * then, over a tuner opened on the unit or another device since, which this
+ * app knows nothing of. So once the app has gone into the background
+ * (AppState 'background', which iOS says before it stops the app), it goes
+ * inside this window or not at all: as long as the watch's
+ * (WATCH_CLOSE_WINDOW_MS). The clock runs on while the app is stopped,
+ * which is what says so.
+ *
+ * NOT WHILE THE APP STAYS ON SCREEN, because there the chain can run well
+ * past it with nothing wrong: besides the first try's 0.4 + 8 seconds for
+ * the link, the pause and the second try's link wait, a close is a request
+ * to the relay, which can wait up to RELAY_GRACE (8 s) for a channel that
+ * is down, and then up to timeoutFor('POST', '/tuner') (20 s) for a
+ * computer gone with the channel still joined. The first try alone can use
+ * the whole window, and a window kept then would only drop the second try,
+ * with the rig muted under a Play that says the tuner is off. With Play
+ * still up, nothing stops the app, so every wait the chain ever had stands.
  */
 export const SIRI_CLOSE_WINDOW_MS = 20000
 
@@ -497,6 +508,8 @@ function command(cmd, say) {
  * and spent Siri's one answer on it. A link that only looks up after a sleep
  * is the second try's to catch. And a close still out when Siri must be
  * answered is said as sent, unless the link has gone in the meantime.
+ * AppState says one thing here only: whether the app has gone into the
+ * background, after which the window holds (SIRI_CLOSE_WINDOW_MS).
  */
 function tunerOff(cmd, say) {
   const up = () => linkState().link === 'connected'
@@ -507,6 +520,23 @@ function tunerOff(cmd, say) {
   const close = () => writeTuner(false)
   /* What is left of SIRI_CLOSE_WINDOW_MS, by the clock, which runs on while the app is stopped. */
   const left = () => Math.max(0, cmd.at + SIRI_CLOSE_WINDOW_MS - Date.now())
+  /*
+   * AWAY: the app has gone into the background since this began, or was
+   * there as it began. iOS says so before it stops the app, so a chain that
+   * goes on at the next launch has heard it. Only then is the window kept:
+   * with the app still on screen nothing stops it, and the close itself can
+   * take most of the window (SIRI_CLOSE_WINDOW_MS says how).
+   */
+  let away = AppState.currentState === 'background'
+  let sub = null
+  try {
+    sub = AppState.addEventListener('change', (s) => {
+      if (s === 'background') away = true
+    })
+  } catch {
+    sub = null
+  }
+  const late = () => away && left() <= 0
   const tooLate = () => {
     logDebug('siri', 'tuner off: too late to try again')
     clearTimeout(timer)
@@ -516,7 +546,7 @@ function tunerOff(cmd, say) {
   /* With the link asleep, the first try too: the app may have been stopped while it waited. */
   const first = ready
     ? close()
-    : (probeNow(), pause(400).then(() => untilConnected()).then(() => (left() > 0 ? close() : tooLate())))
+    : (probeNow(), pause(400).then(() => untilConnected()).then(() => (late() ? tooLate() : close())))
   return Promise.resolve(first).then(async (ok) => {
     if (ok === null) return undefined
     if (ok) {
@@ -525,17 +555,19 @@ function tunerOff(cmd, say) {
     }
     logDebug('siri', 'tuner off: the first try did not go; trying once more')
     await pause(1500)
-    await untilConnected(left())
+    /* On screen, the link's own wait, as it always was; away, no longer than the window. */
+    await untilConnected(away ? left() : 8000)
     /*
      * NOT AHEAD OF A TUNER ON STILL ON ITS WAY (rig tunerAskWaits): one
      * waiting for the same link, or for Play, which has pressed nothing yet,
      * and one pressed and not yet answered, which tunerOn already shows as
-     * open though nothing has opened. Each is waited for, inside the window:
-     * one that lands is the tuner now, and one dropped, refused or failed
-     * opened nothing, so the rig still wants its close.
+     * open though nothing has opened. Each is waited for (inside the window,
+     * once the app is away): one that lands is the tuner now, and one
+     * dropped, refused or failed opened nothing, so the rig still wants its
+     * close.
      */
-    while (tunerAsksWaiting() > 0 && left() > 0) await pause(100)
-    if (left() <= 0) return tooLate()
+    while (tunerAsksWaiting() > 0 && !late()) await pause(100)
+    if (late()) return tooLate()
     /*
      * NOT OVER A NEWER PRESS. The first try is also false when a newer press
      * of the tuner overtook it (rig.writeTuner), and in the second and a half
@@ -553,7 +585,7 @@ function tunerOff(cmd, say) {
     if (await close()) return say(SIRI_SAYS.tunerOff)
     logDebug('siri', 'tuner off: gave up')
     return say(failedWords())
-  })
+  }).finally(() => sub?.remove?.())
 }
 
 /**

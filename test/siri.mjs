@@ -128,6 +128,28 @@ const LINKING = (launchUrl) => `
   }
 `
 
+/*
+ * React Native's AppState: what the app is now, which a test may set as it
+ * likes, and a change of it, heard as the phone says it (__change). Locked,
+ * or another app opened, is 'background', which iOS says before it stops
+ * the app; Siri's own panel over the app is only 'inactive'.
+ */
+const APP_STATE = `
+  const heard = new Set()
+  export const AppState = {
+    currentState: 'active',
+    addEventListener: (event, fn) => {
+      if (event === 'change') heard.add(fn)
+      return { remove: () => heard.delete(fn) }
+    },
+    __change: (to) => {
+      AppState.currentState = to
+      ;[...heard].forEach((fn) => fn(to))
+    },
+    __listening: () => heard.size
+  }
+`
+
 /* His account, by its id (shared/admin.mjs), and somebody else's. */
 const JUSTIN = '7dfe6912-e43b-49bf-84e4-b56afbd442b1'
 const CUSTOMER = '0b5f2a8e-4c1d-4e7a-9f3b-2d6c8e1a5f70'
@@ -203,7 +225,7 @@ async function siriOnTheBench({ os = 'ios', device = 'phone', vp4 = false, names
     'package.json': '{ "type": "module" }',
     'clock.js': CLOCK,
     'react.js': 'export const useEffect = (fn) => fn()\nexport const useRef = (v) => ({ current: v })\nexport const useSyncExternalStore = (sub, get) => get()\n',
-    'react-native.js': `export const AppState = { currentState: 'active' }\nexport const Platform = { OS: ${JSON.stringify(os)} }\n${LINKING(launchUrl)}`,
+    'react-native.js': `${APP_STATE}\nexport const Platform = { OS: ${JSON.stringify(os)} }\n${LINKING(launchUrl)}`,
     'expo.js': siri ? EXPO : EXPO.replace('export const native = { module: fake }', 'export const native = { module: null }'),
     /* The version built into this copy of the app (lib/storeVersion), which an update never changes. */
     'storeVersion.js': `export const installedStoreVersion = () => ${JSON.stringify(installed)}\n`,
@@ -761,11 +783,13 @@ export function run(test) {
    * phone away the moment Siri has answered, and nothing holds the app up
    * then (the Siri module takes no background time, unlike the watch's
    * 25-second wake): the phone stops it within seconds, timers and all, and
-   * they go on where they stopped at the next launch. So Tuner off goes
-   * inside SIRI_CLOSE_WINDOW_MS of `at` or not at all.
+   * they go on where they stopped at the next launch. So once the app has
+   * gone into the background (AppState 'background', which iOS says before
+   * it stops the app), Tuner off goes inside SIRI_CLOSE_WINDOW_MS of `at` or
+   * not at all. Each of these is an app in the background.
    */
   test('Siri: Tuner off goes only inside its window, never at the next launch over whatever tuner is up by then', async () => {
-    /* The link never back inside the window: the second try is let go of. */
+    /* The app in the background from the start, and the link never back inside the window: the second try is let go of. */
     {
       const b = await siriOnTheBench()
       try {
@@ -796,6 +820,8 @@ export function run(test) {
         b.say('tunerOff')
         await b.clock.advance(0)
         assert.deepEqual(b.rig.calls.map((c) => c[1]), [false])
+        b.rn.AppState.__change('inactive')
+        b.rn.AppState.__change('background')
         b.clock.jump(10 * 60000)
         await b.clock.advance(5000)
         assert.deepEqual(b.rig.calls.map((c) => c[1]), [false], 'a second try stopped with the app went at the next launch')
@@ -834,6 +860,92 @@ export function run(test) {
         await b.clock.advance(5000)
         assert.deepEqual(b.rig.calls.map((c) => c[1]), [false, false])
         assert.equal(b.replies().length, 1)
+      } finally {
+        done(b)
+      }
+    }
+  })
+
+  /*
+   * BUT NOT WHILE THE APP STAYS ON SCREEN. A close is a request to the relay,
+   * and it can take most of the window by itself: up to RELAY_GRACE (8 s)
+   * waiting for a channel that is down, and up to timeoutFor('POST',
+   * '/tuner') (20 s) for a computer that has gone with the channel still
+   * joined. With Play still up, nothing stops the app, and the window would
+   * only drop the close, with the rig muted under a Play that says the tuner
+   * is off. There every wait the chain ever had still stands.
+   */
+  test('Siri: Tuner off with the app still on screen is not cut off by its window, however long the close itself takes', async () => {
+    /* The link asleep from the start, the first close spending the relay's 8 s grace, and the link back at 22 seconds. */
+    const slowFirst = (b, ms) => {
+      let closes = 0
+      return (on) => {
+        b.rig.__set({ tunerOn: on })
+        if (on || ++closes > 1) return Promise.resolve(true)
+        return new Promise((r) => b.clock.setTimeout(() => r(false), ms))
+      }
+    }
+    {
+      const b = await siriOnTheBench()
+      try {
+        b.play()
+        b.rig.answers.tuner = slowFirst(b, 8000)
+        b.link.__set('joining')
+        const id = b.say('tunerOff')
+        await b.clock.advance(0)
+        assert.deepEqual(b.replyTo(id), ['Closing the tuner as soon as the connection is back.'])
+        await b.clock.advance(21800)
+        assert.deepEqual(b.rig.calls.map((c) => c[1]), [false])
+        b.link.__set('connected')
+        await b.clock.advance(5000)
+        assert.deepEqual(b.rig.calls.map((c) => c[1]), [false, false], 'the second try was cut off by the window with Play still on screen: the rig stays muted, Play says the tuner is off')
+        assert.ok(!b.log.said.some((l) => /too late/.test(l)))
+        assert.equal(b.replies().length, 1)
+        assert.equal(b.rn.AppState.__listening(), 0, 'Tuner off is still listening for the app going away after it was done')
+      } finally {
+        done(b)
+      }
+    }
+    /* The link up, under Siri's own panel, and the computer gone with the channel still joined: the first close goes unanswered for 20 seconds. */
+    {
+      const b = await siriOnTheBench()
+      try {
+        b.play()
+        b.rig.answers.tuner = slowFirst(b, 20000)
+        b.rn.AppState.currentState = 'inactive'
+        b.say('tunerOff')
+        await b.clock.advance(0)
+        assert.deepEqual(b.rig.calls.map((c) => c[1]), [false])
+        b.rn.AppState.__change('active')
+        await b.clock.advance(2000)
+        b.link.__set('joining')
+        await b.clock.advance(10000)
+        b.link.__set('connected')
+        await b.clock.advance(15000)
+        assert.deepEqual(b.rig.calls.map((c) => c[1]), [false, false], 'the first try alone used the whole window, so the second try never ran')
+        assert.ok(!b.log.said.some((l) => /too late/.test(l)))
+        assert.equal(b.rn.AppState.__listening(), 0)
+      } finally {
+        done(b)
+      }
+    }
+    /* As the first, but the phone put away in the meantime: then the window holds, and the late close is let go of. */
+    {
+      const b = await siriOnTheBench()
+      try {
+        b.play()
+        b.rig.answers.tuner = slowFirst(b, 8000)
+        b.link.__set('joining')
+        b.say('tunerOff')
+        await b.clock.advance(10000)
+        b.rn.AppState.__change('inactive')
+        b.rn.AppState.__change('background')
+        await b.clock.advance(11800)
+        b.link.__set('connected')
+        await b.clock.advance(5000)
+        assert.deepEqual(b.rig.calls.map((c) => c[1]), [false], 'a close went after its window from an app put away')
+        assert.ok(b.log.said.some((l) => /tuner off: too late to try again/.test(l)))
+        assert.equal(b.rn.AppState.__listening(), 0)
       } finally {
         done(b)
       }
