@@ -68,13 +68,15 @@ const CLOCK = `
       for (const x of timers.values()) if (x.at <= end && (!next || x.at < next.at || (x.at === next.at && x.id < next.id))) next = x
       if (!next) break
       timers.delete(next.id)
-      t = next.at
+      t = Math.max(t, next.at)
       next.fn(...next.args)
       await flush()
     }
     t = end
     await flush()
   }
+  /* The app put away and stopped by the phone: the clock runs on and no timer fires, until the next advance, when every one overdue fires at once. */
+  export function jump(ms) { t += ms }
 `
 
 /* A stand-in FractalSiri module: what the JavaScript hears, and what it says back. */
@@ -163,8 +165,26 @@ const RIG = `
   export const writeScene = write('scene')
   export const writeBypass = write('bypass')
   export const writeTempo = write('tempo')
-  export const writeTuner = write('tuner')
   export const loadPreset = write('preset')
+  /* As rig.writeTuner does: an open is on its way from its press until its answer (tunerAskWaits), whoever asked for it. */
+  let asks = 0
+  export function tunerAskWaits() {
+    asks++
+    let open = true
+    return () => {
+      if (!open) return
+      open = false
+      asks--
+    }
+  }
+  export const tunerAsksWaiting = () => asks
+  const tunerWrite = write('tuner')
+  export function writeTuner(on, ...rest) {
+    const answered = on ? tunerAskWaits() : () => {}
+    const out = tunerWrite(on, ...rest)
+    Promise.resolve(out).then(answered, answered)
+    return out
+  }
   export const notes = []
   export function notSentNow(what, { late = true } = {}) {
     notes.push({ what, late })
@@ -260,6 +280,25 @@ async function siriRule() {
 const done = (b) => {
   b.stop?.()
   rmSync(b.dir, { recursive: true, force: true })
+}
+
+/*
+ * THE TUNER'S FLAG AS rig.writeTuner KEEPS IT, for the stand-in rig: up or
+ * down with the press, and down again when the newest press did not go.
+ * Each close is answered by `closes` in turn and each open by `opens`
+ * (true, or a promise the test settles), true once they run out.
+ */
+function tunerLike(b, { closes = [], opens = [] } = {}) {
+  let press = 0
+  return (on) => {
+    const mine = ++press
+    b.rig.__set({ tunerOn: on })
+    const answer = (on ? opens : closes).shift() ?? true
+    return Promise.resolve(answer).then((ok) => {
+      if (!ok && mine === press) b.rig.__set({ tunerOn: false })
+      return ok
+    })
+  }
 }
 
 /*
@@ -612,6 +651,195 @@ export function run(test) {
     }
   })
 
+  /*
+   * TUNER OFF'S SECOND TRY AND A TUNER ON ON ITS WAY: the watch's rule
+   * (1.87.58, test/link-now.mjs). An open counts as on its way from the
+   * moment it arrives (rig tunerAskWaits), while it waits for Play or for
+   * the link after a sleep, and from its press until the unit answers it.
+   * The second try waits while any open is on its way, then goes only over a
+   * tuner that is not open. A close sent first would take the open's place:
+   * it is stamped as it is sent, later than the open's own `at`, so the
+   * relay keeps it as the newer of the two and the open never lands.
+   */
+  test('Siri: a Tuner on waiting for the same link as Tuner off’s second try is waited for, and the close never takes its place', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      b.rig.answers.tuner = tunerLike(b, { closes: [false] })
+      /* Tuner off from a phone that slept: the first try goes once the link is back, and does not go. */
+      b.rn.AppState.currentState = 'background'
+      b.link.__set('joining')
+      b.say('tunerOff')
+      await b.clock.advance(500)
+      b.link.__set('connected')
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls, [['tuner', false]])
+      /* The link drops again, so the second try waits for it, and then Tuner on is said and waits for it too. */
+      b.link.__set('joining')
+      await b.clock.advance(1600)
+      const on = b.say('tunerOn', undefined, { ago: 100 })
+      await b.clock.advance(100)
+      assert.deepEqual(b.rig.calls, [['tuner', false]], 'the open went before the link was back')
+      assert.equal(b.rig.tunerAsksWaiting(), 1, 'a Tuner on waiting for the link is not counted as on its way')
+      /* The link back: the second try hears it first, and must not close ahead of the open. */
+      b.link.__set('connected')
+      await b.clock.advance(5000)
+      assert.deepEqual(b.rig.calls.map((c) => c[1]), [false, true], 'the second try went ahead of a Tuner on still waiting for the link')
+      assert.equal(b.rig.state.tunerOn, true)
+      assert.ok(b.log.said.some((l) => /tuner off: opened again since, so not tried again/.test(l)))
+      assert.deepEqual(b.replyTo(on), ['Tuner on. Your rig is muted.'])
+      assert.equal(b.rig.tunerAsksWaiting(), 0, 'the open is still counted as on its way after it was answered')
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: a Tuner on that pressed keeps Tuner off’s second try back until it is answered, and one that then failed lets the close go', async () => {
+    const b = await siriOnTheBench()
+    try {
+      b.play()
+      let no = null
+      b.rig.answers.tuner = tunerLike(b, { closes: [false], opens: [new Promise((r) => (no = r))] })
+      b.rn.AppState.currentState = 'background'
+      b.link.__set('joining')
+      b.say('tunerOff')
+      await b.clock.advance(500)
+      b.link.__set('connected')
+      await b.clock.advance(500)
+      /* Play in front again, the link up: Tuner on presses at once, and the unit has not answered yet. */
+      b.rn.AppState.currentState = 'active'
+      b.say('tunerOn', undefined, { ago: 100 })
+      await b.clock.advance(0)
+      assert.deepEqual(b.rig.calls.map((c) => c[1]), [false, true])
+      assert.equal(b.rig.state.tunerOn, true)
+      /* The second try's time comes, with the open pressed and not answered: pressed is not landed. */
+      await b.clock.advance(1500)
+      assert.deepEqual(b.rig.calls.map((c) => c[1]), [false, true], 'the second try went over an open still waiting for its answer')
+      /* It did not go: nothing opened, and the rig still wants its close. */
+      no(false)
+      await b.clock.advance(5000)
+      assert.deepEqual(b.rig.calls.map((c) => c[1]), [false, true, false], 'an open that pressed and failed kept the second try back: the rig stays muted, the screens say off')
+      assert.equal(b.rig.state.tunerOn, false)
+      assert.equal(b.rig.tunerAsksWaiting(), 0)
+    } finally {
+      done(b)
+    }
+  })
+
+  test('Siri: a Tuner on dropped at its deadline keeps nothing back, and Tuner off’s second try then closes the tuner', async () => {
+    const b = await siriOnTheBench()
+    try {
+      /* The app still starting, Play not up yet, and nothing else in its place. */
+      b.rig.answers.tuner = tunerLike(b, { closes: [false] })
+      b.rn.AppState.currentState = 'background'
+      b.link.__set('joining')
+      b.say('tunerOff')
+      await b.clock.advance(500)
+      b.link.__set('connected')
+      await b.clock.advance(500)
+      /* Tuner on waits for Play inside its 1.5 seconds, and Play does not come. */
+      const on = b.say('tunerOn', undefined, { ago: 100 })
+      await b.clock.advance(0)
+      assert.equal(b.rig.tunerAsksWaiting(), 1, 'a Tuner on waiting for Play is not counted as on its way')
+      /* The second try's time comes while it still waits: held back, as it may yet press. */
+      await b.clock.advance(1200)
+      assert.deepEqual(b.rig.calls.map((c) => c[1]), [false], 'the second try went ahead of a Tuner on that could still press')
+      /* Its deadline passes: not sent, let go of, and the close goes. */
+      await b.clock.advance(2000)
+      assert.deepEqual(b.replyTo(on), ['Not sent, it would have landed late.'])
+      assert.equal(b.rig.tunerAsksWaiting(), 0, 'an open dropped at its deadline is still counted as on its way')
+      assert.deepEqual(b.rig.calls.map((c) => c[1]), [false, false], 'a dropped open kept the second try back: the rig stays muted')
+      assert.equal(b.replies().length, 2)
+    } finally {
+      done(b)
+    }
+  })
+
+  /*
+   * NEVER LATE. Every Siri command, and every link, brings the app to the
+   * front, so the chain starts with the app on screen; but the player puts the
+   * phone away the moment Siri has answered, and nothing holds the app up
+   * then (the Siri module takes no background time, unlike the watch's
+   * 25-second wake): the phone stops it within seconds, timers and all, and
+   * they go on where they stopped at the next launch. So Tuner off goes
+   * inside SIRI_CLOSE_WINDOW_MS of `at` or not at all.
+   */
+  test('Siri: Tuner off goes only inside its window, never at the next launch over whatever tuner is up by then', async () => {
+    /* The link never back inside the window: the second try is let go of. */
+    {
+      const b = await siriOnTheBench()
+      try {
+        assert.equal(b.siri.SIRI_CLOSE_WINDOW_MS, 20000)
+        b.rig.answers.tuner = tunerLike(b, { closes: [false] })
+        b.rn.AppState.currentState = 'background'
+        b.link.__set('joining')
+        b.say('tunerOff')
+        await b.clock.advance(500)
+        b.link.__set('connected')
+        await b.clock.advance(0)
+        b.link.__set('joining')
+        await b.clock.advance(30000)
+        b.link.__set('connected')
+        await b.clock.advance(5000)
+        assert.deepEqual(b.rig.calls.map((c) => c[1]), [false], 'a second try went after its window')
+        assert.ok(b.log.said.some((l) => /tuner off: too late to try again/.test(l)))
+      } finally {
+        done(b)
+      }
+    }
+    /* Put away and stopped between the tries, over a connected Play: ten minutes on, nothing goes. */
+    {
+      const b = await siriOnTheBench()
+      try {
+        b.play()
+        b.rig.answers.tuner = tunerLike(b, { closes: [false] })
+        b.say('tunerOff')
+        await b.clock.advance(0)
+        assert.deepEqual(b.rig.calls.map((c) => c[1]), [false])
+        b.clock.jump(10 * 60000)
+        await b.clock.advance(5000)
+        assert.deepEqual(b.rig.calls.map((c) => c[1]), [false], 'a second try stopped with the app went at the next launch')
+        assert.ok(b.log.said.some((l) => /tuner off: too late to try again/.test(l)))
+      } finally {
+        done(b)
+      }
+    }
+    /* And stopped while the first try waited for the link after a sleep: nothing goes when the link is back. */
+    {
+      const b = await siriOnTheBench()
+      try {
+        b.rn.AppState.currentState = 'background'
+        b.link.__set('joining')
+        b.say('tunerOff')
+        await b.clock.advance(500)
+        b.clock.jump(10 * 60000)
+        b.link.__set('connected')
+        await b.clock.advance(5000)
+        assert.deepEqual(b.rig.calls, [], 'a first try stopped with the app went at the next launch')
+        assert.ok(b.log.said.some((l) => /tuner off: too late to try again/.test(l)))
+      } finally {
+        done(b)
+      }
+    }
+    /* Inside it, as before: a link back after six seconds still gets its close, and its second try. */
+    {
+      const b = await siriOnTheBench()
+      try {
+        b.rig.answers.tuner = tunerLike(b, { closes: [false] })
+        b.rn.AppState.currentState = 'background'
+        b.link.__set('joining')
+        b.say('tunerOff')
+        await b.clock.advance(6000)
+        b.link.__set('connected')
+        await b.clock.advance(5000)
+        assert.deepEqual(b.rig.calls.map((c) => c[1]), [false, false])
+        assert.equal(b.replies().length, 1)
+      } finally {
+        done(b)
+      }
+    }
+  })
+
   test('Siri: Tuner on needs Play, says the rig is muted, and is not sent twice or to a unit without one', async () => {
     const b = await siriOnTheBench()
     try {
@@ -629,6 +857,8 @@ export function run(test) {
       await b.clock.advance(0)
       assert.equal(b.replies().at(-1), 'This unit has no tuner the app can open.')
       assert.equal(b.rig.calls.length, 1)
+      /* None of them is left counted as on its way, the one that pressed nor the two that never would. */
+      assert.equal(b.rig.tunerAsksWaiting(), 0, 'a Tuner on that never pressed is still counted as on its way')
     } finally {
       done(b)
     }

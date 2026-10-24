@@ -17,6 +17,8 @@ import {
   notSentNow,
   onPresetAnswered,
   pedalSlug,
+  tunerAskWaits,
+  tunerAsksWaiting,
   writeBypass,
   writeScene,
   writeTempo,
@@ -58,8 +60,9 @@ import { VP4_NO_TEMPO } from './vp4-safety'
  *
  * TUNER OFF FROM ANYWHERE, AND NEVER DROPPED: the tuner mutes the rig, so a
  * close that could not go would leave it muted. It waits for the link and is
- * tried once more, as the watch's close does, and Siri is answered before
- * any of that wait.
+ * tried once more, by the watch's own rule (lib/watchBridge): never over a
+ * tuner opened since, nor ahead of a Tuner on still on its way, and never
+ * after SIRI_CLOSE_WINDOW_MS. Siri is answered before any of that wait.
  *
  * THE DEMO: nothing here asks whether it is the demo. The rig answers the
  * demo's simulated unit at the same door as a real one, so Apple's reviewer,
@@ -88,6 +91,26 @@ let elsewhere = false
 const seen = []
 
 const pause = (ms) => new Promise((go) => setTimeout(go, ms))
+
+/*
+ * HOW LONG AFTER `at` A TUNER OFF MAY STILL GO, either try. Every Siri
+ * command brings the app to the front (SiriShortcuts.swift: openAppWhenRun,
+ * and supportedModes .foreground(.immediate)), and so does every link, so
+ * the close starts with the app on screen. But "Tuner off" is said to put
+ * the phone away and play, and the moment Siri has answered, the player may
+ * lock it or go back to another app: nothing holds the app up then (the Siri
+ * module takes no background time, unlike the watch's 25-second wake), so
+ * the phone stops it within seconds, timers and all, and they go on where
+ * they stopped at the next launch, minutes or hours later. A close still
+ * waiting would go then, over a tuner opened on the unit or another device
+ * since, which this app knows nothing of. So it goes inside this window or
+ * not at all: as long as the watch's (WATCH_CLOSE_WINDOW_MS), and past
+ * everything the chain waits for when nothing stops it (the first try's
+ * 0.4 + 8 seconds for the link, the pause and the second try's link wait),
+ * so only an app that was stopped, or a link that never came back, meets it.
+ * The clock runs on while the app is stopped, which is what says so.
+ */
+export const SIRI_CLOSE_WINDOW_MS = 20000
 
 /**
  * For Stage: Play's Previous and Next (`step(by, at)`, which returns its
@@ -314,28 +337,45 @@ export function carryOut(cmd) {
 
 /* Every command but Tuner off: Play, the tap rule from `at`, the link after a sleep, then the command. */
 async function onPlay(cmd, say) {
-  const deadline = tapDeadline(cmd.at)
-  /* Siri was told "Not sent." already, and it would be late now anyway. */
-  if (cmd.answered) return notSent(cmd, say)
-  if (!play) {
-    if (elsewhere) return say(SIRI_SAYS.openPlay(deviceNoun()))
-    /* Still starting: Play may be up inside the tap rule, and if not, the command would land late. */
-    if (!(await playWithin(deadline - Date.now()))) return notSent(cmd, say)
-  }
-  if (Date.now() >= deadline) return notSent(cmd, say)
   /*
-   * NOT ON SCREEN YET: Siri's panel over the app, or the app coming forward
-   * from a sleep. A link that is up goes at once; one that slept with the
-   * app is waited for, inside the tap rule and no longer, as a watch tap
-   * that woke the phone is.
+   * A TUNER ON IS ON ITS WAY FROM HERE (rig tunerAskWaits), before any wait:
+   * for Play while the app starts, or for the link after a sleep. A Tuner
+   * off's second try, Siri's or the watch's, waits while one is, and then
+   * goes only over a tuner that is not open. Without it, a close first to
+   * hear the link back would go ahead of this open, and be stamped as it is
+   * sent, later than this open's `at`: the relay would keep the close as the
+   * newer of the two, and the tuner asked for would never open. Let go of
+   * once it has pressed, when rig.writeTuner counts the open itself until
+   * the unit answers, or as soon as it never will press.
    */
-  if (AppState.currentState !== 'active') {
-    const up = await untilConnected(Math.max(0, deadline - Date.now()))
-    if (!up) return notSent(cmd, say, { late: false })
+  const waiting = cmd.command === 'tunerOn' ? tunerAskWaits() : () => {}
+  try {
+    const deadline = tapDeadline(cmd.at)
+    /* Siri was told "Not sent." already, and it would be late now anyway. */
+    if (cmd.answered) return notSent(cmd, say)
+    if (!play) {
+      if (elsewhere) return say(SIRI_SAYS.openPlay(deviceNoun()))
+      /* Still starting: Play may be up inside the tap rule, and if not, the command would land late. */
+      if (!(await playWithin(deadline - Date.now()))) return notSent(cmd, say)
+    }
     if (Date.now() >= deadline) return notSent(cmd, say)
+    /*
+     * NOT ON SCREEN YET: Siri's panel over the app, or the app coming forward
+     * from a sleep. A link that is up goes at once; one that slept with the
+     * app is waited for, inside the tap rule and no longer, as a watch tap
+     * that woke the phone is.
+     */
+    if (AppState.currentState !== 'active') {
+      const up = await untilConnected(Math.max(0, deadline - Date.now()))
+      if (!up) return notSent(cmd, say, { late: false })
+      if (Date.now() >= deadline) return notSent(cmd, say)
+    }
+    if (!play) return say(SIRI_SAYS.openPlay(deviceNoun()))
+    /* Pressed as this returns, if it presses at all: the answer is not waited for here. */
+    return command(cmd, say)
+  } finally {
+    waiting()
   }
-  if (!play) return say(SIRI_SAYS.openPlay(deviceNoun()))
-  return command(cmd, say)
 }
 
 function command(cmd, say) {
@@ -465,25 +505,46 @@ function tunerOff(cmd, say) {
   if (ready) timer = setTimeout(() => say(up() ? sentWords('Tuner off') : SIRI_SAYS.tunerOffSoon), Math.max(0, cmd.at + SIRI_ANSWER_MS - Date.now()))
   else say(SIRI_SAYS.tunerOffSoon)
   const close = () => writeTuner(false)
+  /* What is left of SIRI_CLOSE_WINDOW_MS, by the clock, which runs on while the app is stopped. */
+  const left = () => Math.max(0, cmd.at + SIRI_CLOSE_WINDOW_MS - Date.now())
+  const tooLate = () => {
+    logDebug('siri', 'tuner off: too late to try again')
+    clearTimeout(timer)
+    say(SIRI_SAYS.notSent)
+    return null
+  }
+  /* With the link asleep, the first try too: the app may have been stopped while it waited. */
   const first = ready
     ? close()
-    : (probeNow(), pause(400).then(() => untilConnected()).then(close))
+    : (probeNow(), pause(400).then(() => untilConnected()).then(() => (left() > 0 ? close() : tooLate())))
   return Promise.resolve(first).then(async (ok) => {
+    if (ok === null) return undefined
     if (ok) {
       clearTimeout(timer)
       return say(SIRI_SAYS.tunerOff)
     }
     logDebug('siri', 'tuner off: the first try did not go; trying once more')
     await pause(1500)
-    await untilConnected()
+    await untilConnected(left())
+    /*
+     * NOT AHEAD OF A TUNER ON STILL ON ITS WAY (rig tunerAskWaits): one
+     * waiting for the same link, or for Play, which has pressed nothing yet,
+     * and one pressed and not yet answered, which tunerOn already shows as
+     * open though nothing has opened. Each is waited for, inside the window:
+     * one that lands is the tuner now, and one dropped, refused or failed
+     * opened nothing, so the rig still wants its close.
+     */
+    while (tunerAsksWaiting() > 0 && left() > 0) await pause(100)
+    if (left() <= 0) return tooLate()
     /*
      * NOT OVER A NEWER PRESS. The first try is also false when a newer press
      * of the tuner overtook it (rig.writeTuner), and in the second and a half
-     * since, the player may have tapped Tuner on Play to tune. That press
-     * set tunerOn, which nothing but rig.writeTuner sets, so it is open now
-     * because somebody opened it: a close sent over it would shut the
-     * tuner mid-tune and put the open strings through the PA. A newer close
-     * leaves it false, and then one more close does no harm.
+     * since, the player may have tapped Tuner on Play to tune, or said it.
+     * That press set tunerOn, which nothing but rig.writeTuner sets, and it
+     * has been answered, so it is open now because somebody opened it: a
+     * close sent over it would shut the tuner mid-tune and put the open
+     * strings through the PA. A newer close leaves it false, and then one
+     * more close does no harm.
      */
     if (getState().tunerOn) {
       logDebug('siri', 'tuner off: opened again since, so not tried again')
