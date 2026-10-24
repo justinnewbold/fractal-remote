@@ -7,7 +7,7 @@ import { BLE_UNITS, CHECK_STEPS, createBleWire, settleMethods } from './bleWire'
 import { createJoiner } from './fractal-sysex.mjs'
 import { blockCatalog } from './blockCatalog'
 import { setSwitch } from './bleSwitch'
-import { isAdapter, pickAdapter } from './bleAdapters'
+import { isAdapter, pickAdapter, pairScreenCrashes, PAIR_SCREEN_IOS27 } from './bleAdapters'
 import { logDebug } from './debugLog'
 import { isAdmin } from './admin'
 import { accountId } from './owner-unlock'
@@ -557,6 +557,24 @@ function listenForList() {
  * on an iPhone the promise resolves to it; otherwise to nothing, and the list
  * on the page asks.
  */
+/**
+ * Whether Connect keeps Apple's Bluetooth screen shut on this iPhone
+ * (bleAdapters pairScreenCrashes): iOS 27, in a build without Apple's fix.
+ * The build is asked if it can say, as authorization is, and no answer is a
+ * build without the fix. The page reads it for its hints, so they never
+ * send anybody to a screen that will not open.
+ */
+export function pairScreenShut() {
+  if (Platform.OS !== 'ios') return false
+  let fixed = false
+  try {
+    fixed = ble()?.pairsOnIOS27?.() === true
+  } catch {
+    fixed = false
+  }
+  return pairScreenCrashes({ os: Platform.OS, version: Platform.Version, fixed })
+}
+
 export async function findAdapters() {
   const mod = ble()
   if (!mod) return
@@ -588,6 +606,24 @@ export async function findAdapters() {
     if (access === 'denied' || access === 'restricted') {
       logDebug('ble', `Bluetooth is not allowed for Fractal Remote (${access}): Apple’s screen not opened`)
       return noteBluetooth({ trouble: access === 'restricted' ? 'restricted' : 'permission' })
+    }
+    /*
+     * NOT OPENED WHERE IT CRASHES (pairScreenShut): on iOS 27 in a build
+     * without Apple's fix, the list as it stands instead. An adapter already
+     * connected to the iPhone is chosen as after Apple's screen; with none,
+     * or more than one to pick from, the page says why the screen stayed
+     * shut. Not with one chosen: it goes on to connect, and a warning left
+     * over "Connected" would be about nothing.
+     */
+    if (pairScreenShut()) {
+      logDebug('ble', `Apple’s Bluetooth screen not opened: it crashes on iOS ${Platform.Version} in a build without Apple’s fix`)
+      fresh = new Set()
+      const list = adapterDevices()
+      showList(list)
+      const pick = pickAdapter(list, fresh)
+      if (pick) chooseAdapter(pick)
+      else noteBluetooth({ said: PAIR_SCREEN_IOS27 })
+      return pick
     }
     const before = new Set(adapterDevices().map((d) => d.id))
     try {

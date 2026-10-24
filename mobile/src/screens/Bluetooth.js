@@ -14,6 +14,7 @@ import {
   findAdapters,
   forgetAdapter,
   methodsFor,
+  pairScreenShut,
   runCheck,
   setBluetooth,
   setBluetoothUnit,
@@ -44,6 +45,16 @@ import Press from '../components/Press'
  * The phone talking straight to the unit, through a Bluetooth MIDI adapter
  * plugged into the unit's MIDI In and Out, with no computer anywhere.
  *
+ * CONNECT FIRST, AND THE READING FOLDED UNDER IT. "Will you move the connect
+ * button up closer to the top? There's a lot of scrolling to figure out
+ * what's going on there ... it's very messy and confusing right now. It would
+ * be cool if, like, a five-year-old could connect it." (24 October 2026.)
+ * The beta note and a paragraph came first, then the unit, then What you
+ * need, open for a first setup, so Connect sat under a shopping list. Now the
+ * page opens on one big line saying where it stands, then the unit and
+ * Connect (Stop, once it is on), all on the first screen; what is read once
+ * is in rows under it that open when tapped.
+ *
  * TWO STEPS AND ONE BUTTON. "Setting up the Bluetooth is kind of weird. A lot
  * of different buttons to press. Maybe we can make it a little easier. It was
  * very confusing for me, but I did figure it out finally." The first version
@@ -55,16 +66,16 @@ import Press from '../components/Press'
  * The list only appears when there is a real choice to make. Once it is on,
  * the one button is Stop, which hands the phone back to the computer.
  *
- * WHAT YOU NEED sits between the two, where somebody setting up reads it
- * before Connect: the parts, each with where to buy it, and how they plug
- * together for the unit picked in step 1 (lib/bluetooth-gear, from
+ * HOW TO PLUG IT IN, WHAT TO BUY, AND WHAT IT CAN AND CAN'T DO, each a row
+ * under Connect, for the unit picked in step 1 (lib/bluetooth-gear, from
  * shared/bluetooth-gear.mjs, which the website's guide is held to as well).
- * Folded away once an adapter has been used, so coming back to Connect is
- * still two steps and one button.
+ * How to plug it in is open until an adapter has been used, because nothing
+ * connects until it is plugged in; the other two wait to be tapped.
  *
- * A BETA, and it says so first. "Let's just say that Bluetooth is beta
- * though in the app and give like a disclaimer saying that Bluetooth might
- * not function correctly." It was a public beta for one day; since 11
+ * A BETA, and it says so: in the head (Bluetooth (beta)), and in the note
+ * under the rows, always drawn and never folded. "Let's just say that
+ * Bluetooth is beta though in the app and give like a disclaimer saying that
+ * Bluetooth might not function correctly." It was a public beta for one day; since 11
  * October 2026 it is Justin's account's alone ("I just feel like it's not
  * ready to have public"), and Settings draws this page for nobody else
  * (useBluetoothAllowed, lib/bluetooth.js). It has been tried on one AM4.
@@ -76,8 +87,8 @@ import Press from '../components/Press'
  * reviewer to on the day Bluetooth goes to customers. (The 1.87.11 notes
  * Apple approved say only the developer's account sees it.)
  *
- * What it cannot do comes after, and the check, for finding out what a real
- * unit does, is folded away under Testing tools.
+ * The check, for finding out what a real unit does, is folded away under
+ * Testing tools, last.
  *
  * THE CHECK IS FOR TESTING, and says so. Nobody here has every unit to try
  * it on, so where a unit might ignore a command both ways of sending it are
@@ -142,7 +153,7 @@ function status(b, unitState) {
   if (b.trouble === 'bluetooth-off') return { line: 'Turn on Bluetooth in the phone’s settings', tone: 'fault' }
   if (b.trouble === 'permission') return { line: ALLOW_WORDS, tone: 'fault' }
   if (b.trouble === 'restricted') return { line: RESTRICTED_WORDS, tone: 'fault' }
-  if (!b.on) return { line: 'Off', tone: 'dim' }
+  if (!b.on) return { line: 'Not connected', tone: 'dim' }
   if (b.phase === 'locked') return { line: 'Unlock the app to connect to your unit', tone: 'fault' }
   if (!b.unit || b.phase === 'no-unit') return { line: 'Pick your unit', tone: 'dim' }
   if (!b.adapter || b.phase === 'no-adapter') return { line: 'No adapter yet. Tap Stop, then Connect.', tone: 'dim' }
@@ -233,6 +244,8 @@ export default function BluetoothPage({ purchase, admin = false }) {
   }, [wanted, b.adapter?.id, b.unit, b.on, purchase])
 
   const canStart = !!b.unit && mayDrive(purchase)
+  /* Apple's screen kept shut (iOS 27, before the build with Apple's fix): no hint sends anybody to it. */
+  const shut = pairScreenShut()
   const find = async () => {
     setMissed(false)
     setWanted(true)
@@ -271,125 +284,110 @@ export default function BluetoothPage({ purchase, admin = false }) {
   /* The list is only for a real choice: no adapter chosen yet, and some to choose from. */
   const showList = !b.on && !b.adapter && b.devices.length > 0
   const [tools, setTools] = useState(false)
-  /* What you need: open for the first setting up, folded once an adapter has been used here. */
-  const [gear, setGear] = useState(!b.adapter)
+  /* How to plug it in: open for the first setting up, folded once an adapter has been used here. The other two wait to be tapped. */
+  const [plug, setPlug] = useState(!b.adapter)
+  const [buy, setBuy] = useState(false)
+  const [about, setAbout] = useState(false)
 
   return (
     <View style={{ gap: space.xl }}>
-      {/* The beta, said before anything else on the page: what it is, where it has been tried, and the way back. */}
-      <Note tone="warn">{BETA_NOTE}</Note>
-      <Text style={{ color: color.silk, fontSize: font.body + 1, lineHeight: 24 }}>
-        The phone talks straight to your unit through a Bluetooth MIDI adapter plugged into its MIDI In and MIDI Out.
-        Presets, scenes, names, effects on and off, channels, tempo and the tuner. No editing or saving, and the
-        computer isn’t used.
-      </Text>
-
       {/*
-        STEP 1. Not while it is on: a tap here while connected would send the
-        new unit's messages straight away to whatever is on the adapter, and
-        one mis-tap is enough; the AM4 has frozen on messages it did not
-        expect. With it off nothing is connected to send to.
+        THE FIRST SCREEN: where it stands, which unit, and the one button.
+        Everything a person does on this page is in this block, so nobody
+        scrolls to find Connect.
       */}
-      <View style={{ gap: space.sm }}>
-        <Heading>1 · Which unit is the adapter plugged into?</Heading>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-          {BLE_UNITS.map((u) => (
-            <Press
-              key={u.key}
-              label={u.name}
-              tone="signal"
-              on={u.key === b.unit}
-              disabled={b.on}
-              height={44}
-              style={{ paddingHorizontal: space.md }}
-              onPress={() => setBluetoothUnit(u.key)}
-            />
-          ))}
+      <View style={{ gap: space.lg }}>
+        {/*
+          WHERE IT STANDS, in one big line, on or off: Not connected,
+          Connected, or what is wrong. NOT ALLOWED, AND THE WAY TO ALLOW IT,
+          one tap away directly under it, the one place Open Settings is
+          drawn. Not for 'restricted', whose line says the block is somewhere
+          the app's own page cannot reach.
+        */}
+        <View style={{ gap: space.sm }}>
+          <Text accessibilityLiveRegion="polite" style={{ color: TONES[said.tone](), fontSize: font.lead, fontWeight: '700', lineHeight: 26 }}>
+            {said.line}
+          </Text>
+          {b.trouble === 'permission' ? <OpenSettings /> : null}
         </View>
-        {b.on ? <Hint>To change the unit, tap Stop first.</Hint> : null}
-      </View>
 
-      {/*
-        WHAT YOU NEED, AND HOW IT PLUGS IN. "We need to provide as much
-        instructions as possible on how to connect it and hook it up… Maybe
-        we could add these with the Amazon links on how to buy them?" After
-        the unit, because the parts and the plugs differ by unit (the AM4's
-        jacks are small 3.5 mm ones and need the adapters), and before
-        Connect, because none of it works until it is plugged in. Before a
-        unit is picked, the whole of it in a few words. The rest, from the
-        lights on the Uhost to what to do when nothing answers, is on the
-        website's guide, one tap away.
-      */}
-      <View style={{ gap: space.sm }}>
-        <Heading>What you need</Heading>
-        {gear && b.unit ? <Gear unit={b.unit} /> : null}
-        {gear && !b.unit ? <Hint>{GEAR_IN_SHORT}</Hint> : null}
-        {gear ? null : <Press label="Show the parts and how they plug in" height={44} onPress={() => setGear(true)} />}
-        <Press label="Full setup guide" height={44} onPress={() => openLink(GUIDE_URL)} />
-      </View>
-
-      {/* STEP 2. One button: Connect, or Stop once it is on. */}
-      <View style={{ gap: space.sm }}>
-        <Heading>2 · Connect</Heading>
         {b.on ? (
           <View style={{ gap: space.sm }}>
-            <Text accessibilityLiveRegion="polite" style={{ color: TONES[said.tone](), fontSize: font.body + 1, lineHeight: 24 }}>
-              {said.line}
-            </Text>
-            {/* Allowing it can be lost while on (Android, from its settings): the way back, under the line that says so. */}
-            {b.trouble === 'permission' ? <OpenSettings /> : null}
             {/* The usual reasons a connected adapter hears nothing back: the two plugs swapped, or an adapter that only carries one way. */}
-            {b.on && b.phase === 'connected' && !b.answeredAs && (unitState === 'missing' || unitState === 'silent') ? (
+            {b.phase === 'connected' && !b.answeredAs && (unitState === 'missing' || unitState === 'silent') ? (
               <Hint>
                 {`${PLUGS_CHECK} The adapter has to carry MIDI both ways. One with a single plug, in one MIDI jack, only carries one way: use one with two plugs, in the unit’s MIDI In and MIDI Out.`}
               </Hint>
             ) : null}
-            {b.on && b.phase === 'connecting' ? (
+            {b.phase === 'connecting' ? (
               <Hint>
-                {ios
-                  ? 'If this stays here, tap Stop, then Connect, and connect the adapter again in Apple’s screen.'
-                  : 'If this stays here, check the phone’s Bluetooth is on, and that the adapter is plugged in and lit.'}
+                {shut
+                  ? 'If this stays here, tap Stop, check the adapter is plugged in and lit, then tap Connect.'
+                  : ios
+                    ? 'If this stays here, tap Stop, then Connect, and connect the adapter again in Apple’s screen.'
+                    : 'If this stays here, check the phone’s Bluetooth is on, and that the adapter is plugged in and lit.'}
               </Hint>
             ) : null}
             <Press label="Stop using Bluetooth" onPress={() => setBluetooth(false)} />
             <Hint>While Bluetooth is on, the phone does not use the computer at all. Stop goes back to the computer.</Hint>
           </View>
         ) : (
-          <View style={{ gap: space.sm }}>
-            <Press
-              label={b.looking ? 'Looking…' : b.adapter ? `Connect to ${b.adapter.name || 'the adapter'}` : 'Connect'}
-              tone="live"
-              disabled={!canStart || b.looking}
-              onPress={start}
-            />
-            <Hint>
-              {!b.unit
-                ? 'Pick your unit first, just above.'
-                : b.adapter
-                  ? 'Uses the adapter from last time.'
-                  : ios
-                    ? 'Apple’s Bluetooth screen opens. Tap your adapter, wait until it says Connected, then tap Done. The phone does the rest.'
-                    : 'The phone looks for the adapter for ten seconds, then connects to it. If Android asks to pair with it, accept.'}
-            </Hint>
-            {b.adapter ? <Press label="Use a different adapter" height={44} disabled={!canStart || b.looking} onPress={another} /> : null}
+          <View style={{ gap: space.lg }}>
+            {/*
+              STEP 1. Only drawn while it is off: a tap here while connected
+              would send the new unit's messages straight away to whatever is
+              on the adapter, and the AM4 has frozen on messages it did not
+              expect. While it is on, the line above names the unit, and Stop
+              comes first.
+            */}
+            <View style={{ gap: space.sm }}>
+              <Heading>1 · Pick your unit</Heading>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+                {BLE_UNITS.map((u) => (
+                  <Press
+                    key={u.key}
+                    label={u.name}
+                    tone="signal"
+                    on={u.key === b.unit}
+                    disabled={b.on}
+                    height={44}
+                    style={{ paddingHorizontal: space.md }}
+                    onPress={() => setBluetoothUnit(u.key)}
+                  />
+                ))}
+              </View>
+            </View>
+
+            {/* STEP 2. One button. */}
+            <View style={{ gap: space.sm }}>
+              <Heading>2 · Connect</Heading>
+              <Press
+                label={b.looking ? 'Looking…' : b.adapter ? `Connect to ${b.adapter.name || 'the adapter'}` : 'Connect'}
+                tone="live"
+                disabled={!canStart || b.looking}
+                onPress={start}
+              />
+              {/* Not on iOS 27 once Connect has been tapped: the note under it then says the same, and says it louder. */}
+              {shut && b.said ? null : (
+                <Hint>
+                  {!b.unit
+                    ? 'Pick your unit first, just above.'
+                    : b.adapter
+                      ? 'Uses the adapter from last time.'
+                      : shut
+                        ? 'On iOS 27, Apple’s Bluetooth screen stays closed until the next build of the app. Connect uses an adapter that is already connected to the iPhone.'
+                        : ios
+                          ? 'Apple’s Bluetooth screen opens. Tap your adapter, wait until it says Connected, then tap Done. The phone does the rest.'
+                          : 'The phone looks for the adapter for ten seconds, then connects to it. If Android asks to pair with it, accept.'}
+                </Hint>
+              )}
+              {b.adapter ? <Press label="Use a different adapter" height={44} disabled={!canStart || b.looking} onPress={another} /> : null}
+            </View>
           </View>
         )}
-        {/*
-          NOT ALLOWED, AND THE WAY TO ALLOW IT, one tap away, directly under
-          the line that says what to change: never on its own, and never
-          while Bluetooth is on, when this line is not drawn (the one at the
-          top of the step says it then, with its own button). Not for
-          'restricted' either, whose line says the block is somewhere the
-          app's own page cannot reach.
-        */}
-        {!b.on && b.trouble ? (
-          <View style={{ gap: space.sm }}>
-            <Text style={{ color: color.fault, fontSize: font.body, lineHeight: 22 }}>{said.line}</Text>
-            {b.trouble === 'permission' ? <OpenSettings /> : null}
-          </View>
-        ) : null}
-        {/* Not under the line above it, which already says what is wrong. */}
-        {!b.on && missed && !b.adapter && !b.trouble ? (
+
+        {/* Not under a trouble line or a note, which already say what is wrong: on iOS 27 the note says Apple's screen stayed shut, and this line would send him to it. */}
+        {!b.on && missed && !b.adapter && !b.trouble && !b.said ? (
           <Text style={{ color: color.fault, fontSize: font.body, lineHeight: 22 }}>
             No adapter was connected. Check Bluetooth is on, and allowed for Fractal Remote in the iPhone’s Settings. Then
             tap Connect again, and in Apple’s screen tap your adapter and wait for Connected before Done.
@@ -416,15 +414,41 @@ export default function BluetoothPage({ purchase, admin = false }) {
         ) : null}
       </View>
 
+      {/*
+        WHAT IS READ ONCE, under the button rather than over it, each in a
+        row that opens when tapped. "We need to provide as much instructions
+        as possible on how to connect it and hook it up… Maybe we could add
+        these with the Amazon links on how to buy them?" All of it is still
+        here, for the unit picked in step 1, and the rest, from the lights on
+        the Uhost to what to do when nothing answers, is on the website's
+        guide, one tap away.
+      */}
       <View style={{ gap: space.sm }}>
-        <Heading>What’s different from USB</Heading>
-        {DIFFERENT.map((line) => (
-          <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
-            <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22 }}>•</Text>
-            <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
-          </View>
-        ))}
+        <Fold title="How to plug it in" open={plug} onToggle={() => setPlug(!plug)}>
+          <PlugIn unit={b.unit} />
+        </Fold>
+        <Fold title="What to buy" open={buy} onToggle={() => setBuy(!buy)}>
+          <Buy unit={b.unit} />
+        </Fold>
+        <Fold title="What it can and can’t do" open={about} onToggle={() => setAbout(!about)}>
+          <Text style={{ color: color.silk, fontSize: font.body, lineHeight: 22 }}>
+            The phone talks straight to your unit through a Bluetooth MIDI adapter plugged into its MIDI In and MIDI Out.
+            Presets, scenes, names, effects on and off, channels, tempo and the tuner. No editing or saving, and the
+            computer isn’t used.
+          </Text>
+          <Heading>What’s different from USB</Heading>
+          {DIFFERENT.map((line) => (
+            <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
+              <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22 }}>•</Text>
+              <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
+            </View>
+          ))}
+        </Fold>
+        <Press label="Full setup guide" height={44} onPress={() => openLink(GUIDE_URL)} />
       </View>
+
+      {/* The beta, on every visit and never folded: what it is, where it has been tried, and the way back. */}
+      <Note tone="warn">{BETA_NOTE}</Note>
 
       {/* For finding out what a real unit does: Justin's account only, and out of the way until asked for. */}
       {admin && b.unit ? (
@@ -546,23 +570,42 @@ function OpenSettings() {
 }
 
 /*
- * The parts for one unit, each with where to buy it, then the Uhost's
- * first-time update, then how they plug together, in the gear file's own
- * words. A unit nobody has tried it on yet says so under the steps rather
- * than being promised to work.
+ * How it plugs together, for one unit: the Uhost's first-time update, then
+ * the steps, in the gear file's own words. A unit nobody has tried it on yet
+ * says so under the steps rather than being promised to work. The FM3 gets
+ * its warning instead: what happened when the parts went straight in, and
+ * what owners do.
  */
-function Gear({ unit }) {
+function PlugIn({ unit }) {
+  if (!unit) return <Hint>Pick your unit above to see how it plugs in.</Hint>
+  const warning = warningFor(unit)
+  if (warning) return <Note tone="fault">{warning}</Note>
   const steps = hookupFor(unit) || []
   const untried = untriedLine(unit)
-  /* The FM3: what happened when the parts went straight in, and what owners do, in place of a list to buy. */
+  return (
+    <View style={{ gap: space.sm }}>
+      {/* Once, before any of the plugging in: the Uhost's firmware, which the steps take for granted. */}
+      <Hint>{FIRST_TIME}</Hint>
+      {steps.map((line, i) => (
+        <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
+          <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22, minWidth: 18 }}>{`${i + 1}.`}</Text>
+          <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
+        </View>
+      ))}
+      {untried ? <Note tone="warn">{untried}</Note> : null}
+    </View>
+  )
+}
+
+/*
+ * The parts for one unit, each with what it is for and where to buy it, and
+ * the charger that is not on the list. Before a unit is picked, the whole of
+ * it in a few words; for the FM3, its warning in place of a list to buy.
+ */
+function Buy({ unit }) {
+  if (!unit) return <Hint>{GEAR_IN_SHORT}</Hint>
   const warning = warningFor(unit)
-  if (warning) {
-    return (
-      <View style={{ gap: space.md }}>
-        <Note tone="fault">{warning}</Note>
-      </View>
-    )
-  }
+  if (warning) return <Note tone="fault">{warning}</Note>
   return (
     <View style={{ gap: space.md }}>
       {partsFor(unit).map((p) => (
@@ -578,16 +621,20 @@ function Gear({ unit }) {
         </View>
       ))}
       <Hint>{POWER_LINE}</Hint>
-      {/* Once, before any of the plugging in: the Uhost's firmware, which the steps below take for granted. */}
-      <Hint>{FIRST_TIME}</Hint>
-      <Heading>How it plugs in</Heading>
-      {steps.map((line, i) => (
-        <View key={line} style={{ flexDirection: 'row', gap: space.sm }}>
-          <Text style={{ color: color.silkDim, fontSize: font.body, lineHeight: 22, minWidth: 18 }}>{`${i + 1}.`}</Text>
-          <Text style={{ flex: 1, color: color.silk, fontSize: font.body, lineHeight: 22 }}>{line}</Text>
-        </View>
-      ))}
-      {untried ? <Note tone="warn">{untried}</Note> : null}
+    </View>
+  )
+}
+
+/*
+ * A row that opens what is under it, and closes it again: its name, and
+ * under the name what a tap does. A Press like every other button here, so
+ * it is in the tap log and has the haptic.
+ */
+function Fold({ title, open, onToggle, children }) {
+  return (
+    <View style={{ gap: space.md }}>
+      <Press label={title} sub={open ? 'Tap to hide' : 'Tap to show'} height={52} onPress={onToggle} />
+      {open ? <View style={{ gap: space.md, paddingHorizontal: space.xs, paddingBottom: space.sm }}>{children}</View> : null}
     </View>
   )
 }
