@@ -20,14 +20,15 @@ those must still pass the other.
 
 | Patch | What it does | Moves |
 |---|---|---|
-| `ble-pair-ios27.patch` | Apple's Bluetooth MIDI screen opens on iOS 27 instead of crashing the app (Apple's own workaround), and says so to the JavaScript | **iPhone only**: Android's fingerprint stays |
 
-The four that were here before it (watch-name, r8, watch-channels and
-photo-picker) were applied on 23 October 2026 for the build pair after
-1.87.52 (1.88.0), and their files deleted in the same change; what each one
-carried, and what goes with it that was not in it, is in its section below.
+Nothing is waiting. ble-pair-ios27 was applied on 24 October 2026 for the
+iPhone build after 1.88.0 (1.88.3), and its file deleted in the same change.
+The four before it (watch-name, r8, watch-channels and photo-picker) were
+applied on 23 October 2026 for the build pair after 1.87.52 (1.88.0). What
+each one carried, and what goes with it that was not in it, is in its
+section below.
 
-**ble-pair-ios27.patch, and why it waits.** Justin, 24 October 2026, with a
+**ble-pair-ios27.patch, and why it waited** (applied for 1.88.3). Justin, 24 October 2026, with a
 TestFlight crash report from 1.88.0 (28) on iOS 27.0.1: "iPhone App crashed
 when trying to enable Bluetooth." The crash is inside Apple's screen, not
 ours: `-[CABTMIDICentralViewController loadView]` builds its list from the

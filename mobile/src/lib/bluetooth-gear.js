@@ -105,8 +105,10 @@ export const TESTED = ['am4']
  * guideline 2.3.10: "don't include names, icons, or imagery of other mobile
  * platforms or alternative app marketplaces in your app or metadata", and
  * "Your app includes references to Android" is one of the commonest
- * rejections there is. This note is the first thing on the Bluetooth page,
- * and the version that opens Bluetooth to customers will have review notes
+ * rejections there is. This note is on the Bluetooth page, always drawn and
+ * never folded, under Connect and the rows that open (since 24 October
+ * 2026; before, it was the first thing on it), and the version that opens
+ * Bluetooth to customers will have review notes
  * that send Apple's reviewer to exactly that page. (The 1.87.1 notes that
  * would have done it never reached Apple: build 26 stayed on TestFlight, and
  * the 1.87.11 notes Apple approved say only the developer's account sees

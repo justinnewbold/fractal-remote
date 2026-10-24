@@ -31,6 +31,11 @@ import CoreAudioKit
  *                          GarageBand uses. An app cannot find or pair an
  *                          adapter any other way on iOS; once it is connected
  *                          there, it turns up in CoreMIDI like any other port.
+ *   pairsOnIOS27()       — iPhone only: true, this build opens Apple's
+ *                          screen on iOS 27 without crashing (see pair). A
+ *                          build without it crashes there, so the JavaScript
+ *                          keeps the screen shut on iOS 27 when the answer is
+ *                          missing.
  *   scan(seconds)        — nothing to scan for (Apple's screen does that); it
  *                          only says whether any port is listed.
  *   devices()            — every two-way MIDI port: an id made of its two
@@ -118,6 +123,12 @@ public class FractalBleMidiModule: Module {
       @unknown default:
         return "notDetermined"
       }
+    }
+
+    /* Asked before pair on iOS 27: builds before this one have no such
+       function, and their pair() crashes there. */
+    Function("pairsOnIOS27") { () -> Bool in
+      true
     }
 
     /* UIKit, so the main queue. */
@@ -224,6 +235,26 @@ public class FractalBleMidiModule: Module {
     /* Made now so the adapter's arrival is heard while the screen is up. */
     ensure()
     let central = CABTMIDICentralViewController()
+    /*
+     * iOS 27 BROKE APPLE'S OWN SCREEN, IN EVERY APP. Its loadView sizes the
+     * list from the status bar's height, which iOS 27 no longer answers
+     * ("-[UIApplication statusBarHeightForOrientation:] API has been
+     * deprecated and is a no-op on 27.0 and later"), and makes a table NaN
+     * points tall: CALayerInvalidGeometry, "CALayer bounds contains NaN",
+     * and the app gone the moment Connect is tapped (TestFlight 1.88.0 (28),
+     * iOS 27.0.1, 24 October 2026). However it is presented: a sheet, full
+     * screen, SwiftUI or UIKit. Apple's own workaround, tested by Apple with
+     * a Bluetooth LE MIDI adapter and shipped by others since
+     * (developer.apple.com/forums/thread/850584, FB25301268): hand it a table
+     * first, so loadView never runs, then run viewDidLoad once by hand,
+     * which is what starts the search. A table alone opened the screen and
+     * never found anything. Done goes on after it, as it always has after
+     * the screen's setup; nothing here depends on that order.
+     */
+    if #available(iOS 27, *) {
+      central.tableView = UITableView(frame: .zero, style: .grouped)
+      central.viewDidLoad()
+    }
     let sheet = UINavigationController(rootViewController: central)
     sheet.modalPresentationStyle = .formSheet
     let done = UIAction { [weak self, weak sheet] _ in

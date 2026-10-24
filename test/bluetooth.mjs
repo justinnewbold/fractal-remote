@@ -5024,6 +5024,24 @@ export function run(test) {
     assert.deepEqual(two.asked, [])
     assert.equal(two.pick ?? null, null)
     assert.equal(two.said, PAIR_SCREEN_IOS27)
+    /*
+     * And tapping one of them ends the note: it is about the search, and left
+     * up it sat under "Connected" for the rest of the session.
+     */
+    {
+      const { mod } = iphoneModule('allowedAlways')
+      mod.devices = () => [{ id: 'a', name: 'One' }, { id: 'b', name: 'Two' }]
+      const bench = await bluetoothOnABench({ version: '27.0.1', mod })
+      try {
+        await bench.ble.findAdapters()
+        assert.equal(bench.ble.useBluetooth().said, PAIR_SCREEN_IOS27)
+        bench.ble.chooseAdapter({ id: 'b', name: 'Two' })
+        assert.equal(bench.ble.useBluetooth().adapter?.id, 'b')
+        assert.equal(bench.ble.useBluetooth().said, null, 'the search’s note stays up after an adapter was chosen')
+      } finally {
+        bench.done()
+      }
+    }
     /* The next build, with Apple's fix, says so, and the screen opens; iOS 26, where it never crashed, opens it as before. */
     for (const [version, fixed] of [['27.0.1', true], ['26.6.2', undefined], ['18.5', false]]) {
       const got = await press({ version, fixed })
@@ -5694,11 +5712,14 @@ export function run(test) {
     assert.match(gear.FM3_WARNING, /Yamaha MD-BT01/, 'the warning leaves the Yamaha looking like the way round it')
     assert.ok(BLE_UNITS.some((u) => u.key === 'fm3'), 'the FM3 can no longer be picked, so an owner with the adapter is shut out')
     const page = readFileSync(new URL('../mobile/src/screens/Bluetooth.js', import.meta.url), 'utf8').replace(/\s+/g, ' ')
-    /* In both rows that would show parts or steps, How to plug it in and What to buy, the warning comes before either. */
-    for (const fn of ['function PlugIn(', 'function Buy(']) {
-      assert.ok(page.includes(fn), `${fn} is gone`)
-      assert.match(page.slice(page.indexOf(fn)), /^function \w+\(\{ unit \}\) \{ if \(!unit\) return <Hint>[^<]+<\/Hint> const warning = warningFor\(unit\) if \(warning\) return <Note tone="fault">\{warning\}<\/Note>/, `${fn} shows the FM3 its parts or steps`)
-    }
+    /*
+     * How to plug it in shows the FM3 the warning in place of its steps, and
+     * What to buy shows it nothing to buy, pointing at that warning rather
+     * than drawing the same red box a second time (both rows can be open).
+     */
+    assert.match(page.slice(page.indexOf('function PlugIn(')), /^function PlugIn\(\{ unit \}\) \{ if \(!unit\) return <Hint>[^<]+<\/Hint> const warning = warningFor\(unit\) if \(warning\) return <Note tone="fault">\{warning\}<\/Note>/, 'How to plug it in shows the FM3 its steps')
+    assert.match(page.slice(page.indexOf('function Buy(')), /^function Buy\(\{ unit \}\) \{ if \(!unit\) return <Hint>\{GEAR_IN_SHORT\}<\/Hint> if \(warningFor\(unit\)\) return <Hint>Not for the FM3 as it is\. How to plug it in, above, says why and what FM3 owners do\.<\/Hint>/, 'What to buy shows the FM3 a list to buy, or the warning twice')
+    assert.equal((page.match(/<Note tone="fault">\{warning\}<\/Note>/g) || []).length, 1, 'the FM3 warning is drawn in two places')
     assert.match(gear.PARTS.adapters.does, /Type A/)
     for (const p of Object.values(gear.PARTS)) assert.ok(p.name && p.does, 'a part with no name or no line saying what it is for')
 
@@ -5835,6 +5856,12 @@ export function run(test) {
     assert.match(page, /const \[plug, setPlug\] = useState\(!b\.adapter\) const \[buy, setBuy\] = useState\(false\) const \[about, setAbout\] = useState\(false\)/)
     assert.match(page, /<Fold title="How to plug it in" open=\{plug\} onToggle=\{\(\) => setPlug\(!plug\)\}> <PlugIn unit=\{b\.unit\} \/> <\/Fold>/)
     assert.match(page, /<Fold title="What to buy" open=\{buy\} onToggle=\{\(\) => setBuy\(!buy\)\}> <Buy unit=\{b\.unit\} \/> <\/Fold>/)
+    /* The list's heading says how many there are: one row is not "More than one". */
+    assert.match(page, /b\.looking \? 'Found so far\. Tap yours:' : b\.devices\.length > 1 \? 'More than one is here\. Tap yours:' : 'Tap your adapter:'/, 'a single row is headed More than one is here')
+    /* While it is on the unit chips are gone, and Connecting… names no unit: a line over Stop says which, and how to change it. */
+    const onHalf = page.slice(page.indexOf('{b.on ? ( <View'), page.indexOf('<Press label="Stop using Bluetooth"'))
+    assert.match(onHalf, /\{b\.unit \? <Hint>\{`Unit: \$\{unitName\(b\.unit\)\}\. To change it, tap Stop first\.`\}<\/Hint> : null\}/, 'nothing names the unit while it is on')
+
     /* A row is a Press like every other button, so it is in the tap log and has the haptic; and it says what a tap does. */
     const fold = page.slice(page.indexOf('function Fold('), page.indexOf('function Row('))
     assert.match(fold, /<Press label=\{title\} sub=\{open \? 'Tap to hide' : 'Tap to show'\} height=\{52\} onPress=\{onToggle\} \/> \{open \? <View/)
