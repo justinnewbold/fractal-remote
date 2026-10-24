@@ -500,6 +500,13 @@ export function run(test) {
       assert.equal(b.rig.calls.length, 1, 'sent with no computer')
       assert.deepEqual(b.rig.notes.map((n) => n.late), [true, false])
       assert.deepEqual(b.replyTo(nobody), ['Not sent, not connected.'])
+      /* And before the link has started (the app still reading who is signed in, the demo's start included): nothing is known about a computer, so it was late. */
+      b.link.__set('off')
+      const starting = b.say('scene', 5, { ago: 0 })
+      await b.clock.advance(1500)
+      assert.equal(b.rig.calls.length, 1, 'sent while the app was still starting')
+      assert.deepEqual(b.rig.notes.map((n) => n.late), [true, false, true])
+      assert.deepEqual(b.replyTo(starting), ['Not sent, it would have landed late.'])
     } finally {
       done(b)
     }

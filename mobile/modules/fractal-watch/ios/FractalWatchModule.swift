@@ -41,6 +41,7 @@ public class FractalWatchModule: Module {
   private var held: [(json: String, at: Date)] = []
   private var awake: UIBackgroundTaskIdentifier = .invalid
   private var sleepAt: DispatchWorkItem?
+  private var gone = false
   private static let WAKE_SECONDS: Double = 25
   private static let HOLD_SECONDS: Double = 15
 
@@ -75,15 +76,17 @@ public class FractalWatchModule: Module {
      * that would have ended the background task: the timer and the
      * expiration handler both hold this module weakly. A task never ended has
      * iOS close the app the next time it goes to the background. So it is
-     * ended here, by its number, on whatever thread the module is let go on
-     * (endBackgroundTask and cancel may be called from any).
+     * ended here. The module is let go on the JavaScript's thread, and
+     * everything else that touches the task is on the main queue, so this
+     * goes there too: the block holds the module until it has run, and
+     * `gone` stops a watch request still queued from starting a task that
+     * nothing would end.
      */
     OnDestroy {
-      let task = self.awake
-      self.awake = .invalid
-      self.sleepAt?.cancel()
-      self.sleepAt = nil
-      if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
+      DispatchQueue.main.async {
+        self.gone = true
+        self.sleep()
+      }
     }
 
     Function("sendState") { (json: String, urgent: Bool) in
@@ -113,6 +116,7 @@ public class FractalWatchModule: Module {
   }
 
   private func stayAwake() {
+    guard !gone else { return }
     if awake == .invalid {
       awake = UIApplication.shared.beginBackgroundTask(withName: "watch tap") { [weak self] in self?.sleep() }
     }

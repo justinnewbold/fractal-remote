@@ -369,11 +369,16 @@ async function onPlay(cmd, say) {
       /*
        * Still starting: Play may be up inside the tap rule, and if not, the
        * command would land late. Unless there is no computer to land on: with
-       * the link not up (signed in with no computer yet, or one that does not
-       * answer, which is the waiting screen in Play's place), it is Not sent
-       * because nothing is connected, as Play says it.
+       * the link started and not up ('joining' or 'no-answer': signed in
+       * with no computer yet, or one that does not answer, which is the
+       * waiting screen in Play's place), it is Not sent because nothing is
+       * connected, as Play says it. A link not started yet ('off', the app
+       * still reading who is signed in, the demo included, whose link is
+       * 'connected' once it starts) has said nothing about the computer, so
+       * that stays late.
        */
-      if (!(await playWithin(deadline - Date.now()))) return notSent(cmd, say, { late: linkState().link === 'connected' })
+      const nobody = ['joining', 'no-answer'].includes(linkState().link)
+      if (!(await playWithin(deadline - Date.now()))) return notSent(cmd, say, { late: !nobody })
     }
     if (Date.now() >= deadline) return notSent(cmd, say)
     /*

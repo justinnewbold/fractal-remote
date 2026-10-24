@@ -105,7 +105,7 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
-            || { grep -n -B2 -A12 -E 'error:|error |failed with exit' build.log | head -n 200; grep -m 10 -E 'error:' build.log | sed 's/^/::error::/'; exit 1; }
+            || { grep -m 10 -E 'error:' build.log | sed 's/^/::error::/' || true; grep -n -B2 -A12 -E 'error:|error |failed with exit' build.log | head -n 200 || true; exit 1; }
           tail -n 20 build.log
 
       # The phrase list Xcode extracted, with every command in it.
@@ -298,7 +298,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -derivedDataPath build-device \
             CODE_SIGNING_ALLOWED=NO build > build-device.log 2>&1 \
-            || { grep -n -B2 -A12 -E 'error:|error |failed with exit' build-device.log | head -n 200; grep -m 10 -E 'error:' build-device.log | sed 's/^/::error::/'; exit 1; }
+            || { grep -m 10 -E 'error:' build-device.log | sed 's/^/::error::/' || true; grep -n -B2 -A12 -E 'error:|error |failed with exit' build-device.log | head -n 200 || true; exit 1; }
           tail -n 20 build-device.log
           APP=$(find build-device/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphoneos*' | head -n 1)
           test -n "$APP" || { echo "::error::No FractalRemote.app for iphoneos was built."; exit 1; }
