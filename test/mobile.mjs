@@ -658,6 +658,30 @@ export function run(test) {
     assert.match(read('.github/workflows/mobile.yml'), /It's all production now\./, 'mobile.yml no longer says why Android goes straight to production')
   })
 
+  test('the iPhone build fills the iPhone Duo: Xcode 27.1 by its full name, and the scene life cycle on', () => {
+    /*
+     * Only an app built with the iOS 27.1 SDK fills the Duo's inside screen;
+     * one built with the iOS 26 tools sits phone-sized in the middle of it.
+     * EAS's "auto" and "sdk-57" images are Xcode 26.6, and "latest" will move
+     * past 27.1, so the image is pinned by its full name. The iOS 27 SDK also
+     * refuses to launch an app without the scene life cycle (Apple TN3187),
+     * which expo-build-properties' ios.enableSceneSupport turns on: in the
+     * same plugin entry R8 added, never a second one. duo.yml opens the
+     * build on the newest simulator before a build slot is spent.
+     */
+    const eas = JSON.parse(read('mobile/eas.json'))
+    assert.equal(eas.build?.production?.ios?.image, 'macos-tahoe-26.6-xcode-27.1', 'the production iPhone build is not pinned to Xcode 27.1')
+    const plugins = JSON.parse(read('mobile/app.json')).expo.plugins.filter((p) => (Array.isArray(p) ? p[0] : p) === 'expo-build-properties')
+    assert.equal(plugins.length, 1, 'expo-build-properties is listed more than once')
+    assert.equal(plugins[0][1]?.ios?.enableSceneSupport, true, 'the scene life cycle is off: an iOS 27 SDK build would not launch')
+    assert.equal(plugins[0][1]?.android?.enableMinifyInReleaseBuilds, true, 'the scene switch took R8 out of the same entry')
+    const duo = read('.github/workflows/duo.yml')
+    assert.match(duo, /xcode-select -s \/Applications\/Xcode_27\.1\.app/)
+    assert.match(duo, /UIApplicationSceneManifest/)
+    assert.match(duo, /is not running 30 seconds after it was opened/)
+    assert.doesNotMatch(duo, /pull_request:/, 'duo.yml runs on every pull request, on a preview runner that may never start')
+  })
+
   test('the phone and the browser share every rule they must agree on, character for character', async () => {
     /*
      * The web app imports these directly; the phone gets a generated copy,
@@ -3393,7 +3417,9 @@ export function run(test) {
       ['src/lib/whats-live.js', /^Android build$/, 'What is live, a Developer page, Justin’s only'],
       ['src/lib/ways-in.js', /Google Play/, 'the browser’s list of routes; nothing on the phone imports it'],
       /* "A newer version is on Google Play", the store's page and its button: each looked up by the platform passed in. */
-      ['src/lib/store-rule.js', /Google Play|play\.google\.com/, 'storeNote: picked by the platform storeVersion.js passes, Platform.OS']
+      ['src/lib/store-rule.js', /Google Play|play\.google\.com/, 'storeNote: picked by the platform storeVersion.js passes, Platform.OS'],
+      /* Settings → Siri's links page for Android, the os === 'android' page, which Settings asks for with Platform.OS. */
+      ['src/lib/siri-help.js', /^There are no voice commands on Android yet\.|Android cuts the connection while the app is in the background/, 'siriPage: the Android page alone, picked by the os Settings passes, Platform.OS']
     ]
     /*
      * .mjs as well as .js: unit.mjs, fractal-sysex.mjs and decode.mjs go into
@@ -3429,6 +3455,8 @@ export function run(test) {
     assert.match(flat('mobile/src/lib/bluetooth-gear.js'), /export const betaNote = \(os\) => \(os === 'android' \? BETA_NOTE_ANDROID : BETA_NOTE_IPHONE\)/)
     assert.match(flat('mobile/src/lib/storeVersion.js'), /const platform = Platform\.OS === 'ios' \|\| Platform\.OS === 'android' \? Platform\.OS : null/)
     assert.match(flat('mobile/src/lib/store-rule.js'), /title: `A newer version of Fractal Remote is \$\{STORE_WHERE\[platform\]\}`/)
+    assert.match(flat('mobile/src/lib/siri-help.js'), /export function siriPage\(\{ os = 'ios', kind = 'phone', native = false, noun = 'phone' \} = \{\}\) \{ if \(os === 'android'\) \{ return \[ \{ title: 'Links for Tasker', note: 'There are no voice commands on Android yet\./)
+    assert.match(flat('mobile/src/screens/Settings.js'), /<SiriHelp os=\{Platform\.OS\} /)
     /* The Developer pages: only their own tools import admin.js and whats-live.js, and Settings draws each tool for Justin's account alone. */
     const settings = flat('mobile/src/screens/Settings.js')
     for (const file of files) {
@@ -3439,10 +3467,14 @@ export function run(test) {
          * lib/bluetooth.js too, since Bluetooth (beta) went back to Justin's
          * account alone (11 October 2026): it asks isAdmin whose phone this
          * is, as Settings does, and draws none of the pages' words.
+         * And lib/siri.js, whose fractalremote:// links are his account's
+         * alone on a copy of the app from before them (23 October 2026):
+         * the same one question, asked the same way.
          */
         const asksOnlyWho =
           (name === 'src/screens/Settings.js' && /import \{ isAdmin \} from '\.\.\/lib\/admin'/.test(code)) ||
-          (name === 'src/lib/bluetooth.js' && /import \{ isAdmin \} from '\.\/admin'/.test(code))
+          (name === 'src/lib/bluetooth.js' && /import \{ isAdmin \} from '\.\/admin'/.test(code)) ||
+          (name === 'src/lib/siri.js' && /import \{ isAdmin \} from '\.\/admin'/.test(code))
         assert.ok(/^src\/components\/\w+Tool\.js$/.test(name) || asksOnlyWho, `${name} uses the Developer pages' words outside the Developer pages`)
       }
       assert.ok(!/from '(\.\.\/lib|\.)\/ways-in'/.test(code), `${name} imports the browser's routes, which name Google Play`)
@@ -3624,14 +3656,20 @@ export function run(test) {
     for (const [, name] of readme.matchAll(/^\| `([^`]+\.patch)` \|/gm)) {
       assert.ok(patches.includes(name), `the README lists ${name}, and it is not there`)
     }
-    /* The watch's channels move only the watch, which is why they could be built without stopping updates. */
-    const channels = readFileSync(new URL('watch-channels.patch', dir), 'utf8')
-    const touched = [...channels.matchAll(/^diff --git a\/(\S+)/gm)].map((m) => m[1])
-    for (const file of touched) {
-      assert.ok(
-        !/expo-target\.config\.js$|^mobile\/modules\/|^mobile\/app\.json$|package(-lock)?\.json$/.test(file),
-        `watch-channels.patch touches ${file}, which moves the phones' fingerprint: a build with it would stop updates reaching the phones already out there`
-      )
+    /*
+     * A patch the table says moves the watch only must touch nothing that
+     * moves the phones' fingerprint, which is why it can be built without
+     * stopping updates. watch-channels.patch was the first (13 October 2026),
+     * applied for the build pair after 1.87.52 and gone from here since.
+     */
+    for (const [, name] of readme.matchAll(/^\| `([^`]+\.patch)` \|.*\| \*\*Watch only\*\*/gm)) {
+      const touched = [...readFileSync(new URL(name, dir), 'utf8').matchAll(/^diff --git a\/(\S+)/gm)].map((m) => m[1])
+      for (const file of touched) {
+        assert.ok(
+          !/expo-target\.config\.js$|^mobile\/modules\/|^mobile\/app\.json$|package(-lock)?\.json$/.test(file),
+          `${name} touches ${file}, which moves the phones' fingerprint: a build with it would stop updates reaching the phones already out there`
+        )
+      }
     }
   })
 
@@ -3648,7 +3686,14 @@ export function run(test) {
     const root = fileURLToPath(new URL('../', import.meta.url))
     const readme = readFileSync(join(root, 'docs/pending/README.md'), 'utf8')
     const order = [...readme.matchAll(/^\| `([^`]+\.patch)` \|/gm)].map((m) => m[1])
-    assert.ok(order.length > 1, 'the README’s table lists fewer than two patches: nothing to try in order')
+    /*
+     * With one patch waiting, or none, there is no order to try: each alone is
+     * tried above. That is the branch carrying the build pair after 1.87.52,
+     * which applied all four and deleted their files.
+     */
+    const listed = readdirSync(join(root, 'docs/pending')).filter((f) => f.endsWith('.patch'))
+    assert.deepEqual([...order].sort(), [...listed].sort(), 'the README’s table and the patches in docs/pending are not the same list')
+    if (order.length < 2) return
     const copy = mkdtempSync(join(tmpdir(), 'pending-'))
     try {
       for (const name of order) {

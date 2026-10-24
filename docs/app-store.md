@@ -263,6 +263,13 @@ tablet support off is the alternative and would be a worse app.
 Up to 10 each; 3–5 is plenty. Take them **in the demo**, so every screen is
 full of real-looking presets rather than "no computer".
 
+**iPhone Duo screenshots: optional now, required from April 2027.** Apple's
+post of 5 October 2026 ("Prepare and submit your apps for iPhone Duo"): the
+Duo went on sale on 23 October 2026, its screenshots put a badge on the
+product page, and "starting April 2027, all submitted apps and games must
+include iPhone Duo screenshots". So the first submission from April 2027
+needs a set taken on a Duo, opened up, in the demo, with Play's wide layout.
+
 Worth showing, in this order:
 
 1. The stage screen with a preset up and scenes along the bottom
@@ -296,21 +303,31 @@ Tracking Transparency entirely.
 |---|---|---|---|
 | Contact Info → **Email Address** | Yes | Yes | Account sign-in, and answering a support message: the address they leave, or, when they leave none and are signed in, the account's own (22 October 2026) |
 | User Content → **Other User Content** | Yes | Yes | Setlists, so they follow you between devices |
-| User Content → **Photos or Videos** | Yes | Yes | Screenshots somebody chooses to add to a bug report (up to three, pasted on a phone, picked on the website), sent only when they press Send. Added 22 October 2026: **not on the live label yet** |
+| User Content → **Photos or Videos** | Yes | Yes | Screenshots somebody chooses to add to a bug report (up to three, pasted or picked on a phone, picked on the website), sent only when they press Send. Added 22 October 2026: **not on the live label yet** |
 | User Content → **Customer Support** | Yes | Yes | What somebody writes in a bug report or suggestion: the Feedback form, and the note beside Send logs to developer. It was true before the note came, and was never on the label; add it with Photos or Videos. **Not on the live label yet** |
 | Identifiers → **User ID** | Yes | Yes | The account id that ties your setlists to you |
 | Diagnostics → **Other Diagnostic Data** | Yes | Yes | The debug log, and only when somebody presses Send on a bug report |
 | Purchases → **Purchase History** | Yes | Yes | The unlock. RevenueCat keeps the purchase record so it follows the account to other devices |
-| Diagnostics → **Crash Data** | Yes | No | After a launch that crashed, the phone's update check sends Expo the error message the app stopped on, so a broken update can be found and taken back. The privacy page says so. Added 11 October 2026: the live label does not have it yet, and it can be added any time in App Store Connect → App Privacy, with no build |
+| Diagnostics → **Crash Data** | Yes | No | After a launch that crashed, the phone's update check sends Expo the error message the app stopped on, so a broken update can be found and taken back. The privacy page says so. Added 11 October 2026, and on the live label by 24 October 2026 (apps.apple.com shows Crash Data under Not Linked) |
 
 Do **not** declare location, contacts, audio, search history, browsing
 history or advertising data. None are collected — and the
 privacy page says so, so a wrong answer here contradicts a published document.
 Photos are declared only for the screenshots somebody adds to a report: the
-app has no access to the photo library (the phone pastes a copied screenshot,
-and asks nothing of the library), which the privacy page says too.
+app reads nothing from the photo library itself (the phone's own picker hands
+it only the pictures picked, and Paste takes a copied one), which the privacy
+page says too. The build carries NSPhotoLibraryUsageDescription for the
+picker, and a camera sentence that says the camera is never used: the
+picker's own code asks about the camera, and Apple's upload check refuses a
+binary with no purpose string for an API its code reaches (ITMS-90683), so
+switching the sentence off would have cost the build. The app never opens
+the camera, so nobody is ever shown it. On Android the camera is blocked,
+and the microphone is off on both.
 
-**22 October 2026: two rows to add in App Store Connect → App Privacy**, both
+**Before the next version is sent to Apple** (still not on the live label
+on 24 October 2026, which shows Purchase History, Email Address, Other User
+Content, User ID, Other Diagnostic Data and Crash Data). **22 October 2026:
+two rows to add in App Store Connect → App Privacy**, both
 "used for App Functionality", linked to the user, not used for tracking:
 Photos or Videos, and Customer Support. And one to edit: Email Address's use
 now includes replying from the account's own address. None needs a build.
@@ -519,8 +536,9 @@ the native Bluetooth MIDI module in them. On 11 October Justin took it back:
 phone? I just feel like it's not ready to have public." So it is switched on
 for his account alone, by an update, and the code stays in the binary (taking
 it out is a new build, and the iPhone's Bluetooth permission text has to stay
-with the module or the build is refused). 2.3.1(a) says "Don't include any
-hidden, dormant, or undocumented features in your app", so the notes below
+with the module or the build is refused). 2.3.1(a) said, and 2.5.19 says
+since 16 October 2026, "Don't include any hidden, dormant, or undocumented
+features in your app", so the notes below
 say in one paragraph that the code is there, whom it is for, and that in
 that build nobody else is shown it or asked for Bluetooth. The same guideline also wants new features "accessible for review", and this
 one is described rather than reachable. That was the one place Apple could
@@ -528,6 +546,26 @@ have pushed back, and with 1.87.11 it did not: the build was approved with the
 paragraph below as it stands. A later review could still ask. If one does, the
 choice is Justin's: show it to the review account too, with a video of it
 working, or a build without the module.
+
+**Apple's guidelines of 16 October 2026, read on 24 October** (the page says
+"Last Updated: October 16, 2026"). The sentence quoted above left 2.3.1 for
+a guideline of its own, word for word: 2.5.19, which Apple's post of the
+same day says "clarifies long-standing policy" and aims at "bait-and-switch"
+apps that add features after approval. The rule is the same, so the answer
+is too: the next notes keep the Bluetooth paragraph, saying the code is
+there and whose it is, and this file names 2.5.19 for it from now on. The
+two things the app keeps for the developer's account alone are both said in
+the next notes: Bluetooth (beta) and the Developer pages (below, no longer
+left out). Nothing is ever opened
+to customers by an update (CLAUDE.md's Bluetooth rule is this guideline),
+and the fractalremote:// links, Justin's alone by update until now, open to
+everybody in the next build, which is the version whose notes say so.
+The same update added 2.3.14 on creative assets (the new product page
+headers and search result pictures): the app uses none, and any made later
+carry no Fractal logo or artwork, no price and no claim that cannot be
+checked. 1.2, 3.1.1(a) and section 5 changed in ways that do not touch the
+app. 2.5.11, Siri and Shortcuts, did not change; the Siri paragraph below
+was checked against it.
 
 **For the next version's notes: Dark by default** (18 October 2026). "Can
 we make the default dark mode on the app?" Settings → Play screen still has
@@ -601,16 +639,73 @@ when they tap it." Since 1.87.49, by update, on an AM4 the amp's pedal on
 Play, on the phone, the watch and the browser, switches the amp's Out Boost
 and never turns the amp off. On the phone and in the browser it says Boost
 on or Boost off; Amp off when the amp itself is off in that scene; no word,
-with a dashed edge, until the unit has said. The watch shows no words: its
-AMP pedal is lit for Boost on and dark otherwise, and the words on the wrist
-come with the next build (docs/later.md). The amp's own on and off is where
-a block is edited: Edit, the amp, Engaged / Bypassed.
+with a dashed edge, until the unit has said. The watch says the same words
+from this version on (23 October 2026, the build pair after 1.87.52): under
+the AMP pedal's name, Boost on, Boost off or Amp off, and nothing until the
+unit has said, sent by the phone with the pedal in Play's own words; the
+pedal is lit for Boost on and dark otherwise, as it already was. The watch
+app in 1.87.11 has no words to draw, so there the AMP pedal is only lit or
+dark. The amp's own on and off is where a block is edited: Edit, the amp,
+Engaged / Bypassed.
 That is a change to what a control in the reviewed app does, so 2.3.1(a)
 wants it in the next *New since 1.87.11*: one paragraph, saying the demo's
-AM4 shows it. What's New gets one line: "On an AM4, the amp's pedal on Play
-now switches the amp's boost, and says Boost on or Boost off. Turn the amp
-itself on and off in Edit." The Description's "Turn blocks on and off" is
-still true (Edit does it for every block).
+AM4 shows it, and that on the Apple Watch the amp's pedal says Boost on,
+Boost off or Amp off under its name. What's New gets one line: "On an AM4,
+the amp's pedal on Play now switches the amp's boost, and says Boost on or
+Boost off, on the Apple Watch too. Turn the amp itself on and off in Edit."
+The Description's "Turn blocks on and off" is still true (Edit does it for
+every block).
+
+**For the next version's notes: Siri, and the links** (23 October 2026).
+"Let's add all of the Siri commands to the build that we can and update a
+section in the app that will say how to manage Siri." The build pair after
+1.87.52 carries nine App Shortcuts in the iPhone app (mobile/targets/watch/
+_shared/SiriShortcuts.swift), each phrase with the app's name and no other
+(2.5.11(ii): no "Fractal" or "FM3" alias), and a Settings → Siri page that
+says every command by a phrase, the one rule, the Shortcuts app, the Action
+button, Back Tap and how to turn it off. The same build opens the fractalremote:// links
+(next, previous, scene/1 to scene/8, tuner/off, never tuner on) to everybody:
+before it they answer Justin's account alone, by update. Both are new
+features, so 2.3.1(a) wants them described in the next *New since 1.87.11*,
+and 2.5.11(iii) allows the two follow-up questions (which number, which
+tempo) because each is needed. For the Notes for Review, one paragraph:
+
+```
+Siri (new in this version). Nine App Shortcuts, each with the app's name: "Scene [1-8] in Fractal Remote", "Next song in Fractal Remote", "Previous song in Fractal Remote", "Load a preset in Fractal Remote" (Siri asks for the number), "Set the tempo in Fractal Remote" (Siri asks for the tempo), "Tuner on in Fractal Remote", "Tuner off in Fractal Remote", "[pedal] on in Fractal Remote" and "[pedal] off in Fractal Remote" (Delay, Drive, Reverb and other pedal kinds). Each opens the app and does what the matching control on the Play screen does. They work with the Play screen open; on any other screen the app says to open Play. Tuner off works from any screen. To try them without hardware, start the demo as above, keep the Play screen open, and say "Scene 3 in Fractal Remote". The same actions are in the Shortcuts app, and the links fractalremote://next, /previous, /scene/1 to /scene/8 and /tuner/off do the same from a shortcut. Settings, then Siri, explains it all. The app receives only the command, never the audio.
+```
+
+What's New gets one line: "Siri: say "Scene 3 in Fractal Remote", "Next song in Fractal Remote" and
+more, with the Play screen open. Settings → Siri lists every command, and how
+to use them with Shortcuts, the Action button and Back Tap." Google Play's
+release notes get one line on the links, which are all Android has (Google
+opens no voice route to apps like this one): "Links for Tasker and similar
+apps: fractalremote://next, previous, scene/1 to 8 and tuner/off. Settings →
+Links for Tasker says how."
+
+**The privacy label is unchanged, and so is Google's Data safety.** Siri does
+the listening and the recognizing, under Apple's own privacy policy, and
+hands the app only the command it recognized: which scene, which pedal, a
+number. The app sends that to the computer exactly as it sends the same tap
+from the Play screen, and nothing new leaves the phone. No Siri entitlement
+and no usage string either: Apple's Siri entitlement is for "Intents app
+extensions that handle any Siri requests other than shortcut requests", and
+the usage string is for SiriKit's permission prompt, which nothing here
+calls. Check the build log on the day for any request for one.
+
+**Before this version goes to Apple**, try Siri on the TestFlight copy, since
+nothing before a build can show Siri hearing the phrases, and phrases cannot
+be reworded by an update: each phrase; a scene said as a word ("scene three")
+as well as a number, because the scene list has no spoken synonyms (those are
+iOS 17 only, and the app still installs on iOS 16.4); the two follow-up
+questions, which developers report Siri sometimes asking again; and whether
+Siri speaks the reply when the app comes forward, which Apple promises
+nothing about, so the notes and the page promise only what Play shows. If a
+phrase fails, the fix is another iPhone and Android build pair before Apple.
+And on an iPhone on iOS 27, look at Settings → Siri → App Access → Fractal
+Remote: Apple's iOS 27 guide names no switch there for Siri's requests (the
+privacy page's Use with Siri Requests is in iOS 26's words), so the page
+says "turn its switches off". If the switch is there by that name, the page
+can say so in an update.
 
 **For the next version's notes: the AM4's own tuner stays up** (23 October
 2026). Waiting: not for a store version until Justin has watched his own
@@ -638,6 +733,75 @@ either. It makes a reviewed feature do what its words already say, so the
 review notes need nothing new. What's New gets one line: "With an AM4, the
 tuner on the AM4 itself now stays up until you close the tuner in the app.
 Needs the newest desktop app."
+
+### Notes for App Review, the next version
+
+**Written on 24 October 2026 for the next build pair, to paste when it goes
+to Apple.** It starts from the 1.87.11 block below, with the five
+*New since 1.86.83* paragraphs out (Apple has seen them) and one paragraph
+for each *For the next version's notes* above, cut to fit: every one
+together came to about 5300 bytes, and Apple's box takes 4000. The longer
+words for each stay in their paragraphs above, and the Siri page in the app
+says the rest, so the notes point at it rather than listing every phrase.
+The 2.5.19 pair is in it whole: the Bluetooth code, and the Developer pages.
+test/limits.mjs holds it under 3950 bytes with the brackets filled the way
+it holds the 1.87.11 block, and to the facts below. The four things to do
+every time a block is pasted (under the 1.87.11 block) apply to this one
+too, and so does the AM4 tuner paragraph's wait: until Justin has seen it on
+his own AM4, What's New leaves that line out.
+
+```
+This app is a remote control for Fractal Audio guitar units, through a computer the unit is plugged into by USB.
+
+Without that hardware, use the demo. It needs no account:
+
+1. Tap "OK" on the card that says the app is independent
+2. Tap "Get started"
+3. Tap "Got it"
+4. Tap "Start free demo"
+5. Choose any unit, then tap "Play with ..."
+
+Every screen works in the demo, and nothing in it reaches real hardware. The in-app purchase: in the demo, tap Unlock at the top of the Play screen; Restore a purchase is under the price. For the signed-in screens, use the demo account in App Review Information. It has the full version.
+
+New since 1.87.11:
+
+Siri. Nine App Shortcuts, each phrase with the app's name, such as "Scene 3 in Fractal Remote". Settings, then Siri, lists them all. Try them with the demo's Play screen open: elsewhere the app says to open Play, but Tuner off works from any screen. The links fractalremote://next, /previous, /scene/1 to /scene/8 and /tuner/off do the same from a shortcut. The app receives only the command, never the audio.
+
+Startup card. The app opens once on a card saying it is independent of Fractal Audio.
+
+Colors. Settings, then Colors, has six looks for the tiles. A first launch is in the app's own colors, and Dark.
+
+Bigger screens. On iPad and an opened iPhone Duo, Play spreads across the wider screen.
+
+AM4. The amp's pedal on Play now switches the amp's boost, saying Boost on or Boost off, on the watch too. The demo's AM4 shows it.
+
+VP4. The app changes a VP4's presets, and its scenes once a number is set on the VP4 (Settings, VP4 scenes & presets, shown only with a real VP4).
+
+Apple Watch. Hold a pedal on the watch to choose its channel. The watch app is now named Fractal Remote.
+
+Screenshots. Feedback and Log (Settings, Troubleshooting) can add up to three screenshots, picked in the system photo picker or pasted. Only those are sent; the camera is never used.
+
+Bluetooth MIDI code, switched on only for the developer. This build contains Bluetooth MIDI code for a feature that lets the phone reach the guitar unit through a Bluetooth MIDI adapter instead of a computer. While it is tested, it is switched on only for the developer's own account. Customers and the review account don't see it in this build, and the app doesn't ask them for Bluetooth permission.
+
+Settings also has Developer pages (accounts, sales, messages) that open only for the developer's own account; the server checks which account is asking.
+
+Deleting an account (Guideline 5.1.1(v), video 3 below): tap the gear at the top right for Settings, the account card at the top, Delete account, then "Delete my account". It deletes the account and everything stored under it at once. An account that has not bought the full version opens on the purchase page instead of Settings, and Delete account is at the foot of that page. Please try it on a new account, not the demo account.
+
+Hardware (Guideline 2.1): a video filmed on an iPhone with a real FM3 on screen, from the first pairing through the whole workflow, is video 1 below.
+
+Apple Watch (it comes with the iPhone app): keep the demo's Play screen open on the iPhone, open Fractal Remote on the watch, and swipe up or down between Scenes, Pedals, Presets and Tuner.
+
+Tested on: iPhone 17 Pro Max, iOS [version]; Apple Watch [model], watchOS [version].
+
+Services the app uses: Supabase (accounts, setlists, the phone-to-computer link), RevenueCat with Apple in-app purchase, Resend (emails), Expo (updates).
+
+Regions: the app works the same in every country.
+
+Videos:
+1. FM3 hardware: [FM3 video link]
+2. Presets: [presets video link]
+3. Deleting an account: [account deletion video link]
+```
 
 ### Notes for App Review, 1.87.11
 
@@ -757,7 +921,7 @@ in a new store version whose review notes describe it, the way this
 section's notes did on 10 October (they are in this file's history), with
 the video and the setup guide. Turning
 it on for everybody over the air instead, after Apple has reviewed a build
-that hides it, is the hidden feature 2.3.1(a) forbids, and a change to what
+that hides it, is the hidden feature 2.5.19 forbids, and a change to what
 the app does that Apple's licence (3.3.1(C)) and Google's rule on features
 activated remotely both keep for reviewed versions. **And while a version is in review,** nothing is merged that changes what its
 notes describe (the purchase page, Bluetooth, Delete account): from its second
@@ -767,14 +931,18 @@ launch, the reviewer's copy runs whatever is on main. Apple has finished with
 updates from main the same way, so keep the same care until Play Console shows
 1.87.11 out in production.
 
-**Left out on purpose: the Developer pages.** Justin's own account also has
-Settings → Developer (accounts, sales, messages, account help with its
-Confirm button, What's live). No other account is shown it, the review
-account included, and the server checks which account is asking. They were
-already there when Apple approved 1.86.83 with nothing said about them, and
-nobody but Justin can reach them. If Apple asks, they are the developer's
-own support tools. Google's App access note does name them, in one line,
-because Google asks for an app to be what you see is what you get.
+**The Developer pages: left out of 1.87.11's notes, in the next ones.**
+Justin's own account also has Settings → Developer (accounts, sales,
+messages, account help with its Confirm button, What's live). No other
+account is shown it, the review account included, and the server checks
+which account is asking. They were already there when Apple approved
+1.86.83 with nothing said about them, and nobody but Justin can reach them,
+so 1.87.11's notes left them out. Since 16 October 2026 2.5.19 says an
+app's functionality "should be clear to end users and App Review", so the
+next notes say them in the one line Google's App access note already has:
+"Settings also has Developer pages (accounts, sales, messages) that open
+only for the developer's own account; the server checks which account is
+asking." If Apple asks, they are the developer's own support tools.
 
 **Four things every time that block is pasted** (done for 1.87.11; the
 brackets here are still empty, so the next version needs them again):
@@ -882,8 +1050,11 @@ sitting: Google can hold back any update over them, 1.87.11 included, and
 whether Google had finished reviewing 1.87.11 was not known on 12 October
 2026.
 
-**1. Data safety** (App content → Data safety → Manage). **Still not done on
-11 October 2026:** Google Play's public Data safety page for the app lists
+**1. Data safety** (App content → Data safety → Manage). **The four below
+are done:** on 24 October 2026 Google Play's public page shows User IDs,
+Purchase history, Device or other IDs and App interactions. What is left is
+Photos and the Email address purpose, further down. As it was, **still not
+done on 11 October 2026:** Google Play's public Data safety page for the app lists
 only Email address, Other user-generated content, Crash logs and
 Diagnostics. Add these four, each **collected** and **not shared**:
 

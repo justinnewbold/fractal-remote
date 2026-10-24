@@ -27,7 +27,15 @@
       "name": "Drive 1",
       "on": true,
       "fill": "#c0392b",
-      "ink": "#ffffff"
+      "ink": "#ffffff",
+      "channel": "B",
+      "channels": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "word": ""
     },
     {
       "id": 70,
@@ -35,7 +43,26 @@
       "name": "Delay 1",
       "on": false,
       "fill": "#7d8591",
-      "ink": "#ffffff"
+      "ink": "#ffffff",
+      "channel": "A",
+      "channels": [],
+      "word": ""
+    },
+    {
+      "id": 58,
+      "short": "AMP",
+      "name": "Amp 1",
+      "on": false,
+      "fill": "#7d8591",
+      "ink": "#ffffff",
+      "channel": "A",
+      "channels": [
+        "A",
+        "B",
+        "C",
+        "D"
+      ],
+      "word": "Boost off"
     }
   ],
   "tuner": {

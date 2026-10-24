@@ -3515,7 +3515,13 @@ export function run(test) {
   test('a watch tap that woke the phone waits only for its deadline, and is not tried again', () => {
     const bridge = read('mobile/src/lib/watchBridge.js')
     const flat = bridge.replace(/\s+/g, ' ')
-    assert.match(flat, /const receivedAt = Date\.now\(\)/)
+    /* Counted from when the phone's Swift took the request, which a request held until Play listened keeps (FractalWatchModule `at`). */
+    assert.match(flat, /const receivedAt = Number\.isFinite\(event\?\.at\) \? Math\.min\(event\.at, Date\.now\(\)\) : Date\.now\(\)/, 'a watch request held until Play listened gets a fresh deadline')
+    const watchSwift = read('mobile/modules/fractal-watch/ios/FractalWatchModule.swift').replace(/\s+/g, ' ')
+    assert.match(watchSwift, /let at = Date\(\) DispatchQueue\.main\.async \{ self\?\.arrived\(json, at\) \}/, 'the time a watch request arrived is taken after waiting for the main queue')
+    assert.match(watchSwift, /sendEvent\("onCommand", \["json": json, "at": at\.timeIntervalSince1970 \* 1000\]\)/, 'a watch request handed over at once carries no time')
+    assert.match(watchSwift, /held\.append\(\(json, at\)\)/)
+    assert.match(watchSwift, /sendEvent\("onCommand", \["json": item\.json, "at": item\.at\.timeIntervalSince1970 \* 1000\]\)/, 'a held watch request loses the time it arrived')
     assert.match(flat, /const deadline = tapDeadline\(receivedAt\) \/\*[^*]*\*\/ const waiting = cmd\.do === 'tuner' \? tunerAskWaits\(\) : \(\) => \{\} probeNow\(\) untilConnected\(Math\.max\(0, deadline - Date\.now\(\)\)\) \.then\(\(up\) => \{ try \{ if \(!up \|\| Date\.now\(\) >= deadline\) \{/, 'a woken watch tap waits past its deadline')
     /* The second try after a pause is only for the tuner closing. */
     const tapPath = flat.slice(flat.indexOf('const deadline = tapDeadline(receivedAt)'))

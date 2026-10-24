@@ -56,6 +56,9 @@ import Paywall from './src/screens/Paywall'
 import { checkOwner, linkAccount, linkNewAccount, poseAsNewCustomer, startPurchases, unlinkAccount, usePurchase } from './src/lib/purchases'
 import { shouldAskToPay } from './src/lib/unlock-rule'
 import { deviceNoun } from './src/lib/device-word'
+import { allowSiriLinks, siriElsewhere, startSiri } from './src/lib/siri'
+import { playElsewhereOf } from './src/lib/siri-rule'
+import { logFoldChanges } from './src/lib/foldSensor'
 
 /* The VP4's Scene Select number and MIDI channel live in the phone's store; the device layer reads them from there (lib/vp4-safety). */
 keepVp4SetupIn(sync)
@@ -426,6 +429,16 @@ export default function App() {
   /* The play screen itself is up: not the waiting screen standing in for it. */
   const playOnScreen = screen === 'stage' && !settling
   /*
+   * AND ANOTHER SCREEN IS UP IN ITS PLACE, for Siri (lib/siri): a command
+   * said there is answered with "Open Play" at once, while one said as the
+   * app is still starting waits for Play inside its tap rule. The startup
+   * card, the walkthrough, the sign-in and the paywall are elsewhere too:
+   * Play does not come by itself from any of them (lib/siri-rule
+   * playElsewhereOf says which is which).
+   */
+  const playElsewhere = playElsewhereOf({ auth, seenWalk, independentDue, screen })
+  useEffect(() => siriElsewhere(playElsewhere), [playElsewhere])
+  /*
    * And the new-version note only floats over it while the phone is off the
    * rig. Over a connected rig a download can land mid-song, and the note's
    * Restart now would come up where the preset button is, under a thumb on
@@ -648,6 +661,21 @@ export default function App() {
      the website at most once a day — see lib/storeVersion. */
   useEffect(() => watchStoreVersion(), [])
 
+  /*
+   * SIRI, for the life of the app and not only Play's: Tuner off works from
+   * any screen, and any other command said off Play is answered with where
+   * to go. Nothing at all on a build without the Siri phrases. See lib/siri.
+   */
+  useEffect(() => startSiri(), [])
+
+  /*
+   * THE FOLD SENSOR, written to the debug log and nothing else: on an iPhone
+   * Duo, a line each time the hinge, the fold or the window changes shape.
+   * Nothing on screen reads it yet. Nothing at all on Android, in the browser
+   * or on a build without it. See lib/foldSensor.
+   */
+  useEffect(() => logFoldChanges(), [])
+
   /* Bluetooth (beta), picked up from last time. First, so that a phone left
      on Bluetooth starts on Bluetooth; one read of the phone's own storage. */
   useEffect(() => {
@@ -727,6 +755,28 @@ export default function App() {
     let alive = true
     haveSession()
       .then((id) => alive && allowBluetooth(id))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [auth, demo])
+
+  /*
+   * AND THE fractalremote:// LINKS (lib/siri), BY THE SAME SESSION KEPT ON
+   * THE PHONE: Justin's alone on a copy of the app from before them, and
+   * everybody's on the new store version, which lib/siri tells from the copy
+   * itself. Asked at every change of who is signed in, as Bluetooth (beta)
+   * is; a link that started the app waits for this answer.
+   */
+  useEffect(() => {
+    if (auth === 'checking') return undefined
+    if (auth === 'out') {
+      allowSiriLinks(null)
+      return undefined
+    }
+    let alive = true
+    haveSession()
+      .then((id) => alive && allowSiriLinks(id))
       .catch(() => {})
     return () => {
       alive = false

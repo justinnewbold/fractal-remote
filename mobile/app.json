@@ -3,7 +3,7 @@
     "name": "Fractal Remote",
     "slug": "fractal-remote",
     "owner": "justinnewbold",
-    "version": "1.87.60",
+    "version": "1.88.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "fractalremote",
@@ -73,11 +73,20 @@
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA"
       ]
     },
     "plugins": [
       "expo-status-bar",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Fractal Remote opens your photos only when you choose a screenshot to add to a bug report, and sends only the ones you pick.",
+          "cameraPermission": "Fractal Remote never uses the camera. Screenshots for a bug report come only from photos you choose.",
+          "microphonePermission": false
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -88,7 +97,20 @@
         }
       ],
       "@bacons/apple-targets",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "extraProguardRules": "-keep class * extends androidx.room.RoomDatabase { <init>(); }\n-keep interface expo.modules.kotlin.records.Record\n-keep @interface expo.modules.kotlin.records.Field { *; }\n-keepnames class * extends expo.modules.kotlin.exception.CodedException"
+          },
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
+      "./plugins/withR8Optimize"
     ],
     "extra": {
       "eas": {

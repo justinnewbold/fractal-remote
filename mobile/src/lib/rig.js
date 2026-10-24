@@ -545,6 +545,18 @@ export function songLate(song, awayAtNext) {
   return true
 }
 
+/*
+ * A COMMAND FROM OUTSIDE THE SCREEN THAT COULD NOT GO IN TIME: Siri, or a
+ * fractalremote:// link (lib/siri), held past its tap's deadline while the
+ * app started, or while the link came back after a sleep. Said on Play the
+ * way a dropped tap is, briefly and in its own field, and nothing is sent.
+ * `late` false for one that could not reach the rig at all.
+ */
+export function notSentNow(what, { late = true } = {}) {
+  logDebug('write', what, late ? 'not sent — it would have landed late' : 'not sent — not connected')
+  set(faultFrom(notSentError({ late })))
+}
+
 /* A failure that may have reached the unit, for readBackUnsure. */
 const mayHaveLanded = (err) => Boolean(err?.aboutLink) && !err?.notSent
 
@@ -3261,6 +3273,30 @@ export async function writeTuner(on, at = Date.now()) {
   }
 }
 
+/*
+ * WHEN A PRESET'S SELECT IS ANSWERED, for whoever has to say so before the
+ * reads behind it are done: Siri (lib/siri), which must be answered within
+ * seconds, while loadPreset goes on to read the preset, its scene and its
+ * chain. Told the slot and how it went: `ok` true when the unit took it,
+ * false when it did not (the words are then the store's, as for any tap, or
+ * `words` for a VP4 that took it and showed no change), null when a newer
+ * press overtook it at the computer.
+ */
+const presetWatchers = new Set()
+export function onPresetAnswered(fn) {
+  presetWatchers.add(fn)
+  return () => presetWatchers.delete(fn)
+}
+function presetAnswered(number, ok, words = null) {
+  for (const fn of [...presetWatchers]) {
+    try {
+      fn({ number, ok, words })
+    } catch {
+      /* One that throws is not the rig's problem. */
+    }
+  }
+}
+
 /**
  * Load another slot.
  *
@@ -3470,10 +3506,12 @@ export async function loadPreset(number, at = Date.now()) {
         if (settleWaiting.length) readPresetSoon(OWN_SETTLE_MS)
         else if (hadStale && Number.isInteger(was?.number)) copyWasStale(was.number)
       }
+      presetAnswered(number, false)
       return false
     }
     inTheAir.landed(press)
     restamp(token)
+    presetAnswered(number, unseen ? false : overtaken ? null : true, unseen)
     /*
      * AND THE PLACE IT WAS SENT TO IS NOT PUT UP AS THE PLACE IT IS ON. The
      * tap put up "PRESET 004 B1 OF 104", and an unseen one left it there with

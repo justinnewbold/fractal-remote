@@ -49,15 +49,6 @@ a real one yet — a friend of Justin's is the first tester. After that:
 
 ## The watch
 
-- **Say Boost on and Boost off on the wrist (AM4).** Since 1.87.49 an AM4's
-  amp pedal on Play is its boost, and the watch's Pedals page shows the amp
-  lit for Boost on and dark otherwise, as it shows every pedal: so a dark
-  AMP on the wrist can be Boost off, a boost not read yet, or the amp itself
-  turned off in Edit. Play says which in words; the wrist cannot until the
-  watch app has words to draw, which is native code, so it comes with the
-  next build pair. What it would take: the phone sends each pedal's word
-  with it (the watch picture already carries a name per pedal), and the
-  watch draws it under the name. Nothing changes on the phone for an update.
 - **Straight to the computer over Wi-Fi, with no phone.** Justin asked on 4
   October whether the watch could skip the phone and talk to the computer on
   the same Wi-Fi. Wake on tap went first instead (1.86.83: the phone stays
@@ -113,28 +104,40 @@ setting).
 
 ## Siri, the Action button and Back Tap
 
-Researched 15 October 2026. Nothing built.
+**Built, 23 October 2026, for the build pair after 1.87.52:** nine built-in
+phrases in the iPhone app ("Scene 3 in Fractal Remote", Next song, Previous
+song, Load a preset, Set the tempo, Tuner on, Tuner off, a pedal on, and a
+pedal off, with Boost among the pedals on an AM4), the fractalremote://
+links (next, previous, scene/1 to 8, tuner/off), and Settings → Siri, which
+says how to use them, with the Shortcuts app, the Action button and Back
+Tap, and how to turn it off. All of it needs Play on screen except Tuner
+off. The links answer Justin's account alone until that build is in the
+stores. docs/app-store.md has the review notes paragraph and what is to be
+tried on the TestFlight copy first.
 
-- **A free first step.** mobile/app.json has had `"scheme": "fractalremote"`
-  since 5 September, so every store build already answers fractalremote://
-  links, and nothing listens. A listener for next, previous, scene 1-8 and
-  tuner off is JavaScript only. A player makes a Shortcut ("Fractal next")
-  and Siri, the Action button or Back Tap runs it. The phone has to be
-  unlocked and the app comes to the front. Apple wants a new feature named in
-  the review notes, so the ready-made shortcuts go public with a store
-  version.
-- **Built-in phrases** ("Scene 3 in Fractal Remote", "Next song in Fractal
-  Remote") are App Intents, Swift, so a build. Apple requires the app's name
-  in every phrase, which is a safety on stage. Expo's own expo-app-intents is
-  alpha and needs SDK 58, so it would be built by hand, copying the watch
-  bridge (mobile/modules/fractal-watch).
-- **Limits.** Siri takes about 1-3 seconds, so it suits a change between
-  songs, not the downbeat. It is reliable only with Play on screen (Play keeps
-  the phone awake); from a locked phone in a pocket most commands would miss
-  the 1.5-second tap deadline and be dropped. A tempo cannot be said in one
-  phrase.
-- Android: the same links work from Samsung Routines or Tasker; Gemini's
-  equivalent is not open to apps like this.
+Parked, each for its reason:
+
+- **Songs by name** ("Play Schism in Fractal Remote"). The app knows a
+  preset's name only once it has read it from the unit, so the list Siri
+  would hear has gaps, and it has to be handed to Siri again whenever it
+  changes. Developers also report phrases like this misfiring. One of Apple's
+  ten phrase slots is kept free for it, once the scene phrase has proven
+  itself on his iPhone.
+- **Amp and pedal channels** (A, B, C, D) by voice. A phrase holds one choice
+  from a list, and this needs two (which block, which channel). It could come
+  as an amp-only phrase later.
+- **Siri on the Apple Watch.** The iPhone's phrases do not run on the watch;
+  the watch app would need its own, said word for word (the watch has no
+  flexible matching), and more Swift in the watch. Later, if wanted.
+- **A button in Control Center or on the Lock Screen** (Apple's Controls). It
+  needs a separate widget piece in the app, and Apple's forums report trouble
+  getting its button to run the app's own code. The Action button already
+  does the job through Shortcuts. Worth another look once the phrases have
+  worked on his iPhone.
+- **Android voice.** App Actions went with Google Assistant, and Gemini's way
+  in for apps (AppFunctions) is experimental and open only to invited testers
+  (Google's page, 19 October 2026). The links work from Tasker and apps like
+  it. Look again when Google opens AppFunctions to everybody.
 
 ## Blind and low-vision players
 
@@ -178,6 +181,14 @@ October. 5.4-inch outside, 7.6-inch inside, iOS 27.1. Justin is getting one.
 - On his phone, the day it comes: today's store copy as it is, then fold and
   unfold mid-song with the link up, the tempo box with the keyboard, the NOT
   CONNECTED band, the watch.
+- The fold sensor (mobile/modules/fractal-fold) rides that build pair and
+  only reports: the hinge, where the fold runs, what covers the screen, the
+  window and the side bar's edge, as "Fold:" lines in the debug log
+  (mobile/src/lib/foldSensor.js, started from App.js). Nothing draws from it.
+  Its shape is frozen in test/fold-native.mjs, so what reads it can follow by
+  update, once his logs show a real Duo reporting it right. duo.yml fails if
+  its iOS 27.1 code was compiled out (the canImport version number is
+  Expo's, not Apple's). Android has no fold reader yet.
 
 ## From the improvement list of 15 October 2026
 

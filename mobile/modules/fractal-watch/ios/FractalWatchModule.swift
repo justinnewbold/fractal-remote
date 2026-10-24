@@ -28,6 +28,12 @@ import WatchConnectivity
  * tap itself) is held and handed over when it starts listening, rather than
  * dropped. `wakes` tells the JavaScript this build does all that, so its help
  * text can say the phone may be locked.
+ *
+ * WHEN IT ARRIVED. Each onCommand also carries `at`, the moment this end took
+ * the request from the watch, in milliseconds since 1970 (the clock Date.now()
+ * reads). A request held while nothing listened keeps that time, so the
+ * JavaScript counts its 1.5-second tap deadline from the wrist, not from when
+ * Play came to listen up to HOLD_SECONDS later.
  */
 public class FractalWatchModule: Module {
   private var link: WatchSessionLink?
@@ -35,6 +41,7 @@ public class FractalWatchModule: Module {
   private var held: [(json: String, at: Date)] = []
   private var awake: UIBackgroundTaskIdentifier = .invalid
   private var sleepAt: DispatchWorkItem?
+  private var gone = false
   private static let WAKE_SECONDS: Double = 25
   private static let HOLD_SECONDS: Double = 15
 
@@ -45,7 +52,8 @@ public class FractalWatchModule: Module {
 
     OnCreate {
       self.link = WatchSessionLink { [weak self] json in
-        DispatchQueue.main.async { self?.arrived(json) }
+        let at = Date()
+        DispatchQueue.main.async { self?.arrived(json, at) }
       }
     }
 
@@ -54,12 +62,31 @@ public class FractalWatchModule: Module {
         self.listening = true
         let fresh = self.held.filter { Date().timeIntervalSince($0.at) < Self.HOLD_SECONDS }
         self.held = []
-        for item in fresh { self.sendEvent("onCommand", ["json": item.json]) }
+        for item in fresh { self.sendEvent("onCommand", ["json": item.json, "at": item.at.timeIntervalSince1970 * 1000]) }
       }
     }
 
     OnStopObserving {
       DispatchQueue.main.async { self.listening = false }
+    }
+
+    /*
+     * A RELOAD WHILE THE PHONE IS KEPT AWAKE. Putting an update in starts the
+     * JavaScript again and lets this module go, and with it the only things
+     * that would have ended the background task: the timer and the
+     * expiration handler both hold this module weakly. A task never ended has
+     * iOS close the app the next time it goes to the background. So it is
+     * ended here. The module is let go on the JavaScript's thread, and
+     * everything else that touches the task is on the main queue, so this
+     * goes there too: the block holds the module until it has run, and
+     * `gone` stops a watch request still queued from starting a task that
+     * nothing would end.
+     */
+    OnDestroy {
+      DispatchQueue.main.async {
+        self.gone = true
+        self.sleep()
+      }
     }
 
     Function("sendState") { (json: String, urgent: Bool) in
@@ -78,17 +105,18 @@ public class FractalWatchModule: Module {
 
   /* On the main queue: a request from the watch. Keep the app up long enough
      to carry it out, then pass it on, or hold it for a moment. */
-  private func arrived(_ json: String) {
+  private func arrived(_ json: String, _ at: Date) {
     stayAwake()
     if listening {
-      sendEvent("onCommand", ["json": json])
+      sendEvent("onCommand", ["json": json, "at": at.timeIntervalSince1970 * 1000])
     } else {
-      held.append((json, Date()))
+      held.append((json, at))
       if held.count > 8 { held.removeFirst(held.count - 8) }
     }
   }
 
   private func stayAwake() {
+    guard !gone else { return }
     if awake == .invalid {
       awake = UIApplication.shared.beginBackgroundTask(withName: "watch tap") { [weak self] in self?.sleep() }
     }

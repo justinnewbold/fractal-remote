@@ -23,14 +23,23 @@
 # the app through Expo's scene delegate, which nothing else here exercises,
 # and the app must still be running after it.
 #
+# And the fold sensor (mobile/modules/fractal-fold), whose iOS 27.1 code sits
+# behind a guard on UIKit's version that no page of Apple's confirms: a wrong
+# number compiles it out of the build without a word, and the build would
+# ship a sensor that always answers nothing. Launched with -FractalFoldCheck,
+# the app writes "FractalFold check:" lines to its standard error, which
+# simctl puts in a file here, and the run fails unless they say compiledIn=true
+# and, on iOS 27.1, that the sensor read the app's window.
+#
 # By hand only (Actions → duo → Run workflow on the branch): the runner
 # image is a public preview, and a label no runner answers would leave a
 # pull request waiting on a check that never starts.
 #
-# It is on main only so that it can be started at all: GitHub offers Run
-# workflow only for a workflow the default branch has. Main itself has none
-# of the three yet (the Xcode 27.1 pin, scene support, the Siri phrases) and
-# stops at the first; it is run on the branch that carries the build work.
+# It is kept on main so that it can be started at all: GitHub offers Run
+# workflow only for a workflow the default branch has. Until the build pull
+# request lands, main has none of the three (the Xcode 27.1 pin, scene
+# support, the Siri phrases) and stops at the first; it is run on the branch
+# that carries the build work.
 name: duo
 
 on:
@@ -68,6 +77,21 @@ jobs:
           grep -q UIApplicationSceneManifest FractalRemote/Info.plist
           grep -q EXExpoAppSceneDelegate FractalRemote/Info.plist
 
+      # The photo picker's two Info.plist sentences, and its iOS 27.1 fix.
+      # Its code asks about the camera, so the camera's sentence has to be
+      # there or Apple's upload check refuses the binary (ITMS-90683); and
+      # 57.0.20 crashes picking a picture on iOS 27.1 unless mobile/patches
+      # was applied by the install (test/reports.mjs says both).
+      - name: The photo picker is ready for Apple
+        working-directory: mobile
+        run: |
+          grep -q NSPhotoLibraryUsageDescription ios/FractalRemote/Info.plist \
+            || { echo "::error::Info.plist has no NSPhotoLibraryUsageDescription."; exit 1; }
+          grep -q NSCameraUsageDescription ios/FractalRemote/Info.plist \
+            || { echo "::error::Info.plist has no NSCameraUsageDescription, and the picker's code asks about the camera."; exit 1; }
+          grep -q 'hasItemConformingToTypeIdentifier(UTType.livePhoto.identifier)' node_modules/expo-image-picker/ios/MediaHandler.swift \
+            || { echo "::error::The picker's iOS 27.1 fix is not in node_modules: mobile/patches was not applied."; exit 1; }
+
       - name: Pods
         working-directory: mobile/ios
         run: pod install
@@ -81,7 +105,7 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 \
-            || { grep -n -B2 -A12 -E 'error:|error |failed with exit' build.log | head -n 200; exit 1; }
+            || { grep -m 10 -E 'error:' build.log | sed 's/^/::error::/' || true; grep -n -B2 -A12 -E 'error:|error |failed with exit' build.log | head -n 200 || true; exit 1; }
           tail -n 20 build.log
 
       # The phrase list Xcode extracted, with every command in it.
@@ -104,18 +128,95 @@ jobs:
 
       # Opened, then asked again 30 seconds later whether it is still running:
       # an app the scene rule refuses is gone by then.
+      # Which simulators to open it on: an iPhone Duo, and the newest other
+      # iPhone, each on the newest iOS the image has that says it runs it. A
+      # device type the runtime does not support is refused by simctl create
+      # (exit 22, its "invalid argument"), which is how the first run on this
+      # image stopped, and the second found iOS 27.1 listing no ordinary
+      # iPhone, so one runtime cannot be taken for both. Every runtime's list,
+      # and what was picked, is written as a notice, so the run says it
+      # without its log.
+      - name: Pick the simulators
+        run: |
+          set -e
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json, re, subprocess, sys
+          runtimes = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'runtimes', '-j']))['runtimes']
+          ios = [r for r in runtimes if r.get('platform') == 'iOS' and r.get('isAvailable')]
+          ios.sort(key=lambda r: [int(p) for p in r['version'].split('.')])
+          note = lambda m: print('::notice::' + m, file=sys.stderr)
+          note('iOS runtimes on this image: ' + ', '.join(r['name'] for r in ios))
+          for r in ios:
+              note(r['name'] + ' runs: ' + ', '.join(d['name'] for d in r.get('supportedDeviceTypes') or []))
+          def newest(match):
+              for r in reversed(ios):
+                  found = [d for d in r.get('supportedDeviceTypes') or [] if match(d['name'])]
+                  if found:
+                      return r, found
+              return None, []
+          duo_rt, duo = newest(lambda n: 'Duo' in n)
+          phone_rt, phones = newest(lambda n: n.startswith('iPhone') and 'Duo' not in n)
+          # The newest iPhone by its model number (iPhone18,2), from the device
+          # types' own list; the runtime's list is in no promised order.
+          types = {t['identifier']: t for t in json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devicetypes', '-j']))['devicetypes']}
+          def model(d):
+              m = re.match(r'iPhone(\d+),(\d+)$', types.get(d['identifier'], {}).get('modelIdentifier') or '')
+              return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+          phones.sort(key=model, reverse=True)
+          if not phones and not duo:
+              raise SystemExit('::error::No iOS runtime on this image runs an iPhone simulator')
+          print('DUO=' + (duo[0]['identifier'] if duo else ''))
+          print('DUO_RUNTIME=' + (duo_rt['identifier'] if duo else ''))
+          print('PHONE=' + (phones[0]['identifier'] if phones else ''))
+          print('PHONE_RUNTIME=' + (phone_rt['identifier'] if phones else ''))
+          note('Picked ' + (duo[0]['name'] + ' on ' + duo_rt['name'] if duo else 'no iPhone Duo') + ', and ' + (phones[0]['name'] + ' on ' + phone_rt['name'] if phones else 'no other iPhone'))
+          PY
+
       - name: It opens, and stays open
         working-directory: mobile/ios
         run: |
-          set -e
+          set -eE
+          # Whatever fails says so where the run's summary shows it.
+          trap 'c=$?; echo "::error::$BASH_COMMAND failed with exit code $c"' ERR
           APP=$(find build/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphonesimulator*' | head -n 1)
           test -n "$APP"
-          RUNTIME=$(xcrun simctl list runtimes -j | python3 -c "import json,sys; r=[x for x in json.load(sys.stdin)['runtimes'] if x.get('platform')=='iOS' and x.get('isAvailable')]; print(sorted(r, key=lambda x: [int(p) for p in x['version'].split('.')])[-1]['identifier'])")
-          TYPES=$(xcrun simctl list devicetypes -j)
-          DUO=$(echo "$TYPES" | python3 -c "import json,sys; t=[x for x in json.load(sys.stdin)['devicetypes'] if 'Duo' in x['name']]; print(t[0]['identifier'] if t else '')")
-          PHONE=$(echo "$TYPES" | python3 -c "import json,sys; t=[x for x in json.load(sys.stdin)['devicetypes'] if x['name'].startswith('iPhone') and 'Duo' not in x['name']]; print(t[-1]['identifier'])")
           mkdir -p screens
-          for TYPE in $DUO $PHONE; do
+          # A picture is for looking at, not the check: one simctl will not
+          # take (the third run's first picture answered exit 22) is tried on
+          # each named display, then said with the displays the simulator has,
+          # and the run goes on to ask whether the app is running.
+          shot() {
+            xcrun simctl io "$UDID" screenshot "$1" 2>/dev/null && return 0
+            for D in internal external; do
+              xcrun simctl io "$UDID" screenshot --display="$D" "$1" 2>/dev/null && return 0
+            done
+            echo "::warning::No picture of $NAME: simctl io screenshot refused it. Its displays: $(xcrun simctl io "$UDID" enumerate 2>&1 | tr -s ' \n' ' ' | cut -c1-700)"
+          }
+          # Why the app is gone, from the newest crash report the simulator
+          # left on the runner: its exception, termination and the reason the
+          # system gave, each as an error line in the run's summary.
+          crashed() {
+            python3 - <<'PY' || true
+          import glob, json, os
+          found = sorted(glob.glob(os.path.expanduser('~/Library/Logs/DiagnosticReports/FractalRemote*')), key=os.path.getmtime)
+          if not found:
+              print('::error::No crash report for FractalRemote on the runner.')
+          else:
+              text = open(found[-1], errors='replace').read()
+              head, _, body = text.partition('\n')
+              try:
+                  report = json.loads(body)
+                  for key in ('exception', 'termination', 'asi', 'crashedThread'):
+                      if key in report:
+                          print('::error::' + os.path.basename(found[-1]) + ' ' + key + ': ' + json.dumps(report[key])[:600])
+              except ValueError:
+                  print('::error::' + os.path.basename(found[-1]) + ': ' + ' '.join(text.split())[:700])
+          PY
+          }
+          for PAIR in "$DUO:$DUO_RUNTIME" "$PHONE:$PHONE_RUNTIME"; do
+            TYPE=${PAIR%%:*}
+            RUNTIME=${PAIR#*:}
+            [ -n "$TYPE" ] || continue
             echo "== $TYPE on $RUNTIME"
             UDID=$(xcrun simctl create "check" "$TYPE" "$RUNTIME")
             xcrun simctl boot "$UDID"
@@ -124,18 +225,87 @@ jobs:
             xcrun simctl launch "$UDID" cloud.newbold.fractalremote
             sleep 30
             NAME=$(echo "$TYPE" | sed 's/.*SimDeviceType\.//')
-            xcrun simctl io "$UDID" screenshot "screens/$NAME.png"
+            shot "screens/$NAME.png"
             xcrun simctl spawn "$UDID" launchctl list | grep -q 'cloud.newbold.fractalremote' \
-              || { echo "The app is not running 30 seconds after it was opened on $NAME."; exit 1; }
+              || { echo "::error::The app is not running 30 seconds after it was opened on $NAME."; crashed; exit 1; }
             # A link, as a shortcut's Open URLs step sends it, through the scene delegate.
             xcrun simctl openurl "$UDID" fractalremote://scene/3
             sleep 10
-            xcrun simctl io "$UDID" screenshot "screens/$NAME-link.png"
+            shot "screens/$NAME-link.png"
             xcrun simctl spawn "$UDID" launchctl list | grep -q 'cloud.newbold.fractalremote' \
-              || { echo "The app is not running 10 seconds after fractalremote://scene/3 was opened on $NAME."; exit 1; }
+              || { echo "::error::The app is not running 10 seconds after fractalremote://scene/3 was opened on $NAME."; crashed; exit 1; }
+            echo "::notice::$NAME on $RUNTIME: opened, still running after 30 seconds, and after the fractalremote://scene/3 link."
             xcrun simctl shutdown "$UDID"
             xcrun simctl delete "$UDID"
           done
+
+      # The fold sensor is in the build, and reads the window once the app is
+      # up. Launched with -FractalFoldCheck, and only then, the module writes
+      # "FractalFold check:" lines to the app's standard error. simctl's
+      # --stderr puts them in a file on the runner, written as they happen,
+      # with nothing to filter, redact or wait for. The same lines go to the
+      # system log, which is read too, for the case the file stays empty.
+      - name: The fold sensor is compiled in
+        working-directory: mobile/ios
+        run: |
+          set -eE
+          trap 'c=$?; echo "::error::$BASH_COMMAND failed with exit code $c"' ERR
+          APP=$(find build/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphonesimulator*' | head -n 1)
+          test -n "$APP"
+          TYPE=${DUO:-$PHONE}
+          RUNTIME=${DUO:+$DUO_RUNTIME}
+          RUNTIME=${RUNTIME:-$PHONE_RUNTIME}
+          mkdir -p screens
+          OUT="$PWD/screens/fold-check.txt"
+          echo "== $TYPE on $RUNTIME"
+          UDID=$(xcrun simctl create "fold" "$TYPE" "$RUNTIME")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl launch --stderr="$OUT" "$UDID" cloud.newbold.fractalremote -FractalFoldCheck YES
+          sleep 20
+          xcrun simctl spawn "$UDID" log show --last 5m --style compact \
+            --predicate 'eventMessage CONTAINS "FractalFold check:"' > screens/fold-check-log.txt 2>&1 || true
+          xcrun simctl shutdown "$UDID"
+          xcrun simctl delete "$UDID"
+          LINES=$(grep -ho 'FractalFold check: .*' "$OUT" 2>/dev/null || true)
+          if [ -z "$LINES" ]; then
+            echo "Nothing in the app's standard error; the system log instead."
+            LINES=$(grep -ho 'FractalFold check: .*' screens/fold-check-log.txt 2>/dev/null || true)
+          fi
+          echo "$LINES"
+          echo "$LINES" | grep -q 'FractalFold check: compiledIn=true' \
+            || { echo "The fold sensor is not compiled in: the canImport(UIKit, _version:) number in FractalFoldModule.swift does not match the iOS 27.1 SDK, or the module did not start."; exit 1; }
+          if echo "$LINES" | grep -q 'available=true'; then
+            echo "$LINES" | grep -q 'FractalFold check: reading .*"window":{' \
+              || { echo "The fold sensor is in the build but never read the app's window."; exit 1; }
+          else
+            echo "::warning::The simulator's iOS is older than 27.1, so the fold sensor was not seen running."
+          fi
+
+      # And for a real iPhone, the way EAS archives it: every step above is
+      # the simulator's SDK. This is the iOS 27.1 device SDK, and the watch
+      # app inside it for a real watch, which nothing else builds on this
+      # Xcode (watch.yml's device build is on the Mac image's Xcode 26).
+      # Unsigned, so nothing here can be sent anywhere. Last, so the launch
+      # checks above report first.
+      - name: It builds for a real iPhone and watch with Xcode 27.1
+        working-directory: mobile/ios
+        run: |
+          set -o pipefail
+          xcodebuild -workspace FractalRemote.xcworkspace -scheme FractalRemote \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build-device \
+            CODE_SIGNING_ALLOWED=NO build > build-device.log 2>&1 \
+            || { grep -m 10 -E 'error:' build-device.log | sed 's/^/::error::/' || true; grep -n -B2 -A12 -E 'error:|error |failed with exit' build-device.log | head -n 200 || true; exit 1; }
+          tail -n 20 build-device.log
+          APP=$(find build-device/Build/Products -maxdepth 2 -name 'FractalRemote.app' -path '*iphoneos*' | head -n 1)
+          test -n "$APP" || { echo "::error::No FractalRemote.app for iphoneos was built."; exit 1; }
+          # Embed Watch Content puts it in the app's Watch folder.
+          WATCH=$(find "$APP" -mindepth 2 -maxdepth 3 -name '*.app' 2>/dev/null | head -n 1)
+          test -n "$WATCH" || { echo "::error::The device build has no watch app inside it: $(ls "$APP" | tr '\n' ' ' | cut -c1-600)"; exit 1; }
+          echo "::notice::Built for a real iPhone: $(lipo -archs "$APP/FractalRemote"); the watch app: $(lipo -archs "$WATCH/$(defaults read "$PWD/$WATCH/Info" CFBundleExecutable)")"
 
       - uses: actions/upload-artifact@v4
         if: always()

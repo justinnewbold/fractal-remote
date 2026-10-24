@@ -4,10 +4,10 @@ import { requireOptionalNativeModule } from 'expo'
 
 import { blockColor } from './blockColors'
 import { logDebug } from './debugLog'
-import { idOf } from './device'
+import { idOf, sameBlock } from './device'
 import { probeNow, untilConnected } from './link'
 import { shortBlock } from './shortName'
-import { getState, tunerAskWaits, tunerAsksWaiting, writeBypass, writeScene, writeTuner } from './rig'
+import { getState, tunerAskWaits, tunerAsksWaiting, writeBypass, writeChannel, writeScene, writeTuner } from './rig'
 import { tapDeadline } from './relay-rules'
 import { createWatchSender, watchCommand, watchState } from './watch-link'
 import { metronome } from './metronome'
@@ -17,7 +17,7 @@ import { boostNow, pedalSlug } from './rig'
 /*
  * THE APPLE WATCH, FROM THE PHONE'S SIDE.
  *
- * The watch draws what the phone tells it and asks for one of four things —
+ * The watch draws what the phone tells it and asks for one of six things —
  * see lib/watch-link (shared/watch-link.mjs) for both halves of that. This is
  * the phone keeping its end: a fresh picture whenever the stage screen's
  * changes, and each request carried out with the same calls the stage
@@ -97,10 +97,11 @@ export function watchPaired() {
 export function useWatchBridge(picture, step) {
   /*
    * ON AN AM4 THE AMP'S PEDAL IS ITS BOOST, on the wrist as on Play (lib/
-   * am4-boost): lit for Boost on, what Play shows (rig.boostNow), and a tap
-   * asks for the boost the wrist shows it will turn to, which rig.writeBypass
-   * sends as it is and never as a bypass: the same message twice is the same
-   * boost twice.
+   * am4-boost): lit for Boost on, what Play shows (rig.boostNow), with Play's
+   * own word for it under its name (Boost on, Boost off, Amp off, or none
+   * until the unit has said), and a tap asks for the boost the wrist shows it
+   * will turn to, which rig.writeBypass sends as it is and never as a bypass:
+   * the same message twice is the same boost twice.
    */
   picture = { ...picture, chain: boostPedals(picture?.chain, { slug: pedalSlug(), shown: boostNow() }) }
   const sender = useRef(null)
@@ -130,8 +131,14 @@ export function useWatchBridge(picture, step) {
        * it a second late already. Every write below is bound by the deadline
        * counted from here (relay-rules TAP_DEADLINE_MS), exactly as a tap on
        * the phone's own screen is from the press.
+       *
+       * Heard by the phone's Swift, not by this listener: `at` is when the
+       * FractalWatch module took the request, and one it held while nothing
+       * listened (Play not yet open, or the app launched by the tap) keeps
+       * that time rather than starting a fresh 1.5 seconds up to fifteen
+       * seconds later. A build from before `at` sends none, and then it is now.
        */
-      const receivedAt = Date.now()
+      const receivedAt = Number.isFinite(event?.at) ? Math.min(event.at, Date.now()) : Date.now()
       const asleep = AppState.currentState !== 'active'
       logDebug('watch', cmd.do, `${JSON.stringify(cmd)}${asleep ? ' (woke the phone)' : ''}`)
       if (cmd.do === 'hello') {
@@ -143,6 +150,21 @@ export function useWatchBridge(picture, step) {
         if (cmd.do === 'scene') return writeScene(cmd.index, receivedAt)
         if (cmd.do === 'pedal') return writeBypass(cmd.id, !cmd.on, receivedAt)
         if (cmd.do === 'preset') return stepRef.current?.(cmd.step, receivedAt)
+        /*
+         * A pedal held on the wrist, and a channel picked: the Play screen's
+         * channel sheet's own write, which turns down the outline and another
+         * preset's chain by itself. And only for a block the chain on screen
+         * still has: a phone woken by the tap checks the request against the
+         * picture it sent before it locked, so this at least refuses an id the
+         * chain no longer has. (An id names a kind of block, Drive 1 or Delay
+         * 2, so a newer preset with the same block still takes it — as a
+         * switch on or off from the wrist does today.) Bound by the deadline
+         * counted from when the phone heard it, like every other tap.
+         */
+        if (cmd.do === 'channel') {
+          const here = getState().blocks.some((b) => sameBlock(b, cmd.id))
+          return here ? writeChannel(cmd.id, cmd.channel, receivedAt) : undefined
+        }
         if (cmd.do === 'tuner' && getState().tunerOn !== cmd.on) return writeTuner(cmd.on, receivedAt)
         return undefined
       }
@@ -255,8 +277,12 @@ export function useWatchBridge(picture, step) {
   /* Every render of the stage screen is a chance the picture moved. */
   useEffect(() => {
     if (!sender.current) return
-    const { chain, ...rest } = picture
-    const pedals = (chain || []).map((b) => ({ id: idOf(b), name: b.name, short: shortBlock(b), on: !b.bypassed, ...blockColor(b.slug) }))
+    const { chain, channels, ...rest } = picture
+    /* Each pedal with its channel and what a hold may switch it to: the
+       stage screen's own list, empty wherever its own hold does nothing.
+       And its word: an AM4 amp's Boost on, Boost off or Amp off, as Play's
+       tile says it, put on it above by boostPedals; none on any other. */
+    const pedals = (chain || []).map((b) => ({ id: idOf(b), name: b.name, short: shortBlock(b), on: !b.bypassed, ...blockColor(b.slug), channel: b.channel, channels, word: b.word }))
     /* The metronome's tap, when the watch's switch is on: see lib/metronome. */
     const beat = metronome()
     const state = watchState({ ...rest, pedals, metronome: { on: beat.on && beat.watch, bpm: getState().bpm } })

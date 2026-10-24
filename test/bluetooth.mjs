@@ -5476,7 +5476,7 @@ export function run(test) {
      * is to block them"), which writes tools:node="remove" into the app's.
      */
     const app = JSON.parse(src('mobile/app.json')).expo
-    const BLOCKED = ['android.permission.SYSTEM_ALERT_WINDOW', 'android.permission.READ_EXTERNAL_STORAGE', 'android.permission.WRITE_EXTERNAL_STORAGE']
+    const BLOCKED = ['android.permission.SYSTEM_ALERT_WINDOW', 'android.permission.READ_EXTERNAL_STORAGE', 'android.permission.WRITE_EXTERNAL_STORAGE', 'android.permission.CAMERA']
     assert.deepEqual(app.android.blockedPermissions, BLOCKED)
     /* VIBRATE is expo-haptics', and nothing Bluetooth needs is on the list. */
     for (const kept of ['android.permission.VIBRATE', 'android.permission.BLUETOOTH', 'android.permission.BLUETOOTH_SCAN', 'android.permission.BLUETOOTH_CONNECT', 'android.permission.ACCESS_FINE_LOCATION']) {
@@ -5499,8 +5499,24 @@ export function run(test) {
       assert.ok(!/SYSTEM_ALERT_WINDOW|EXTERNAL_STORAGE|PermissionsAndroid|expo-file-system|expo-media-library|expo-document-picker/.test(text), `${file.split('/mobile/')[1]} uses what is blocked`)
     }
     const pkg = JSON.parse(src('mobile/package.json'))
-    for (const name of ['expo-file-system', 'expo-media-library', 'expo-document-picker', 'expo-image-picker']) {
+    for (const name of ['expo-file-system', 'expo-media-library', 'expo-document-picker']) {
       assert.ok(!(name in pkg.dependencies), `${name} is a package of the app's own now: check what it needs before blocking its permissions`)
+    }
+    /*
+     * expo-image-picker is, for a report's screenshots (docs/pending
+     * photo-picker.patch), and was checked: its own manifest adds CAMERA, and
+     * READ and WRITE_EXTERNAL_STORAGE up to Android 12. The storage two stay
+     * blocked here, because the picker it opens is the system's own (Android's
+     * photo picker, or Google Play's copy of it on older phones, which the
+     * manifest's photopicker_activity line asks for), which needs neither.
+     * RECORD_AUDIO is blocked by its plugin. CAMERA is blocked in the list
+     * above: the plugin blocks it only when cameraPermission is false, and
+     * that is not possible here (test/reports.mjs says why).
+     */
+    const picker = app.plugins.find((p) => Array.isArray(p) && p[0] === 'expo-image-picker')?.[1]
+    if ('expo-image-picker' in pkg.dependencies) {
+      assert.ok(app.android.blockedPermissions.includes('android.permission.CAMERA'), 'the photo picker brings the camera with it')
+      assert.equal(picker?.microphonePermission, false, 'the photo picker brings the microphone with it')
     }
   })
 

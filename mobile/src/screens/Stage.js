@@ -68,6 +68,7 @@ import { presetTag } from '../lib/colourPage'
 import { tagEdge } from '../components/PresetTag'
 import { shortBlock } from '../lib/shortName'
 import { useWatchBridge, watchHow, watchPaired } from '../lib/watchBridge'
+import { useSiriPlay } from '../lib/siri'
 import { findLooper } from '../lib/looper'
 import UnlockOffer from '../components/UnlockOffer'
 import Vp4DemoNote from '../components/Vp4DemoNote'
@@ -882,6 +883,8 @@ export default function Stage({
         )
         .catch(() => {})
     }
+    /* The load itself, for a caller that has to say how it went: Siri (lib/siri). The buttons and the watch ignore it. */
+    return loading
   }
 
   /*
@@ -964,6 +967,10 @@ export default function Stage({
       sceneCount: scenes.hasScenes ? scenes.count : 0,
       /* Not another preset's: a tap would switch whatever shares the id. */
       chain: chainNow.elsewhere ? [] : blocks,
+      /* What holding a pedal offers on the wrist: what holding its tile does
+         here, so none on the outline (see the tiles' onLongPress) and none
+         while another preset's chain is up. */
+      channels: channels?.length > 1 && !chainNow.outline && !chainNow.elsewhere ? channels : [],
       tunerOn,
       tuning,
       /*
@@ -984,6 +991,14 @@ export default function Stage({
     },
     step
   )
+
+  /*
+   * And Siri's Next song and Previous song, which are these buttons: the same
+   * step, the same landing, and the same reason a VP4 cannot step slot by
+   * slot. Every Siri command but Tuner off works only while this is on
+   * screen, which is what this says. See lib/siri.
+   */
+  useSiriPlay({ step, landing, stuck: () => (!order && noSlotSteps ? vp4StepWords(caps) : null) })
 
   return (
     <View style={{ flex: 1 }}>

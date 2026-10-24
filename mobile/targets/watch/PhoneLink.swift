@@ -60,6 +60,7 @@ final class PhoneLink: NSObject, ObservableObject {
         if demo {
             var sample = WatchState.sample
             if Launch.flag("tunerDemo") { sample = sample.answering(.tuner(on: true)) }
+            if Launch.flag("boostDemo") { sample = sample.boostDemo }
             state = sample
             reachable = true
             return

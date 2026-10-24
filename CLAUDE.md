@@ -275,9 +275,9 @@ the build refused), and an update hides it from everybody but him:
   bluetooth-guide.html, linked only from the app's own Bluetooth page.
 
 **It is switched on for customers only in a new store version whose review
-notes say so, never by an over-the-air update.** Apple's guideline 2.3.1(a)
-bans hidden features and wants every new one described in the Notes for
-Review, its licence (3.3.1(C)) keeps a change to what an app does for a
+notes say so, never by an over-the-air update.** Apple's guideline 2.5.19
+(part of 2.3.1(a) until 16 October 2026) bans hidden features, 2.3.1(a)
+wants every new one described in the Notes for Review, its licence (3.3.1(C)) keeps a change to what an app does for a
 version it has reviewed, and Google forbids features activated remotely
 after review. An update is exactly that: opening the gate on main would
 reach every 1.87.1 and 1.87.11 phone (the two builds share one fingerprint),

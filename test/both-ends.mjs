@@ -671,11 +671,12 @@ export const AREAS = [
     web: ['src/components/Shots.jsx'],
     phone: ['mobile/src/components/Shots.js'],
     buttons: [
+      { does: 'pick a screenshot to add to the report', web: 'Add a screenshot', phone: 'Choose a screenshot' },
       {
-        does: 'add a screenshot to the report',
-        /* Named for how each end gets one: the browser picks a file, and the phone, with no photo picker built into it until the next build (docs/pending/photo-picker.patch), pastes one it has copied. */
-        web: 'Add a screenshot',
-        phone: 'Paste a screenshot'
+        does: 'paste a screenshot that was copied',
+        web: null,
+        phone: 'Paste a screenshot',
+        why: 'the browser takes a pasted picture in the note box itself (lib/shots pastedImages), with no button for it'
       },
       { does: 'take a screenshot back out before it is sent', web: 'Remove', phone: 'Remove' }
     ]
@@ -1061,6 +1062,9 @@ export function run(test) {
         'iPhone only — the watch app comes with the iPhone app and works through it; a browser has no watch, and there is no Android watch app',
       'Bluetooth (beta)':
         'phone only — a browser cannot reach a Bluetooth MIDI adapter; the phone does it through its own native module, and since 11 October 2026 only on Justin’s account (useBluetoothAllowed, mobile/src/lib/bluetooth.js)',
+      /* SIRI_TITLE: "Siri" on an iPhone or iPad, "Links for Tasker" on Android (mobile/src/lib/siri-help.js). */
+      SIRI_TITLE:
+        'phone only — Siri and the fractalremote:// links are the phone app’s: the phrases are in the iPhone app, the links open the installed app, and a browser has neither. Shown only where the links are open (useSiriLinksOpen, mobile/src/lib/siri.js)',
       Footswitches:
         'phone only as a Settings row — the browser shows the same panel, from the same shared/footswitches.mjs, as a section of the Edit sheet, where it has been since it was built',
       'Get it on your phone or tablet': 'browser only — a phone has no use for a way to get itself onto a phone, and it stays on the front page rather than inside About because "somebody who has a rig connected and wants the remote in their pocket is the likeliest buyer there is"'
