@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Alert, Image, Platform, Pressable, Text, View } from 'react-native'
 import { BlurView } from 'expo-blur'
 
 import { color, font, mono, radius, space, isDark } from '../lib/theme'
 import { at } from '../lib/vivid'
 import { tick } from '../lib/feedback'
-import { linkTone, linkWord, toneOfRemote, unitWord } from '../lib/link-word'
+import { toneOfRemote, unitWord } from '../lib/link-word'
+import { pillWords } from '../lib/pill-words'
 import { APP_VERSION } from '../lib/version'
 import { useRig } from '../lib/rig'
 import { setDemo, useDemo } from '../lib/demo'
@@ -17,11 +18,9 @@ import { setBluetooth, useBluetoothOn } from '../lib/bluetooth'
 import { idOf } from '../lib/device'
 import Lamp from './Lamp'
 import Volume from './Volume'
-import { probeNow } from '../lib/link'
 import { fire } from '../lib/tapped'
 import { useSaveToSlot } from './SaveToSlot'
 import { SAVE_LATE_WORDS, SAVE_WORKING_WORDS } from '../lib/save-wait'
-import { deviceNoun } from '../lib/device-word'
 
 const face = Platform.select(mono)
 
@@ -34,27 +33,28 @@ const face = Platform.select(mono)
  * two sheets away under Setup, and the speaker and the gear were down in the
  * slot row competing with Edit for a corner of the stage screen.
  *
- * Left to right, the same five things and in the same order as the browser: the
- * lamp, the unit's short name, the version, the state of the link in one word,
- * the volume, and setup. Every one of them is a fact somebody checks BEFORE
- * playing — what am I plugged into, what am I running, is it live — and none of
- * them belongs on a screen you have to go and find.
+ * Left to right: the version, the pill (the state in a word, the lamp, the
+ * unit, and the computer under them), the volume, and setup. Every one of them
+ * is a fact somebody checks BEFORE playing — what am I plugged into, through
+ * what, what am I running, is it live — and none of them belongs on a screen
+ * you have to go and find.
  *
- * WHAT IT NO LONGER SAYS is which Mac. That sentence was the whole of the old
- * bar and it is the one fact here nobody needs mid-song: there is normally one
- * Mac, and when there is more than one the setup screen is where you choose
- * between them. The name is still there, under the gear.
+ * AND WHICH COMPUTER AGAIN, since 24 October 2026. The bar had left the
+ * computer out ("there is normally one Mac"), until Justin asked for his
+ * other app's pill: "Live ● AM4" over "on Raspberry Pi", and for it to be the
+ * way to switch units. With two computers on one account the computer is half
+ * of which unit you are driving, so it is on the bar again, under the unit.
  *
  * The words come from shared/link-word.mjs rather than from here, so the two
  * apps cannot drift into saying different things about the same link.
  */
-export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, saveHere: saveWanted = true }) {
+export default function TopBar({ link, onOpenSettings, onOpenUnit, unitGoes, onUnlock, saveHere: saveWanted = true }) {
   const unit = useRig(ofDeviceName)
   const unitState = useRig(ofUnitState)
   const blocks = useRig(ofAllBlocks)
   const [volume, setVolume] = useState(false)
   const [failed, setFailed] = useState(null)
-  /* Whether the note under CONNECTED is open: which computer, as the browser says. */
+  /* Whether the note under the pill is open: over Bluetooth only, with Turn off Bluetooth in it. */
   const [saying, setSaying] = useState(false)
   /*
    * SAVE, HERE, AS SOON AS THERE IS SOMETHING TO SAVE.
@@ -82,11 +82,11 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
     ])
   const purchase = usePurchase()
   /*
-   * The demo says DEMO, not CONNECTED.
+   * The demo says Demo, and "simulated" where a computer would be.
    *
    * It reads as a connected link everywhere else on purpose — the questions do
    * get answered — but the bar is the one place somebody looks to know what
-   * they are driving, and a simulated FM3 wearing the same green CONNECTED as a
+   * they are driving, and a simulated FM3 wearing the same green Live as a
    * real one is the app telling a lie in the one spot that exists to prevent
    * that. "It does sound connected, even in demo."
    */
@@ -101,9 +101,13 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
    * is reaching nothing.
    */
   const bluetooth = useBluetoothOn() && !demo
+  /* The note under the pill is Bluetooth's alone: put away when Bluetooth goes, so it is not open on its own when Bluetooth next comes on. */
+  useEffect(() => {
+    if (!bluetooth) setSaying(false)
+  }, [bluetooth])
 
   /*
-   * Named once, because the word and the pill below must agree about it.
+   * Named once, for the unlock pill below.
    *
    * BELOW `demo`, and that is not tidiness. It sat ABOVE it and read `demo`
    * from the line under itself — a const, so the read lands in the temporal
@@ -146,38 +150,24 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
   const canLeave = demo && purchase.unlocked
   const connected = link?.link === 'connected'
   const tone = toneOfRemote(link?.link)
-  const mark = demo ? 'wait' : linkTone(tone)
   /*
-   * In the demo the word IS the way out, so it says so.
-   *
-   * "Change this word demo to Unlock and bring up the unlock page when it's
-   * tapped. This is obviously only on the demo version where it would show
-   * this. Make sure it doesn't change how this button functions on unlocked
-   * versions when connected to an actual unit."
-   *
-   * DEMO described the state and named no way out of it. UNLOCK names the
-   * errand, which is the whole point: it is the word an eye lands on in this
-   * bar, and it was spending itself saying something the rest of the screen
-   * already makes obvious.
-   *
-   * `canBuy` rather than `demo` is what gates it, and that is the carve-out
-   * he asked for plus one he did not have to: outside the demo the word is
-   * CONNECTED or FINDING and is untouched, and INSIDE the demo somebody who
-   * has already paid still reads DEMO — offering an unlock to a person who
-   * owns it sends them to a paywall that bounces them straight back out.
+   * THE UNLOCK SAYS ITS OWN NAME NOW. "Change this word demo to Unlock and
+   * bring up the unlock page when it's tapped." The word in the demo said
+   * UNLOCK and the pill beside it carried the price, reading UNLOCK $9.99
+   * across the two. The word became the pill that switches units, so the
+   * unlock pill says the whole of it, Unlock $9.99, and is there even before
+   * the store has said the price. Only while there is something to buy:
+   * somebody who has paid gets Exit demo instead.
    */
-  /* Over Bluetooth there is no computer to be missing: the link that is down is the adapter's. */
-  const linkSays = linkWord(tone, 'remote')
-  const word = canBuy ? 'unlock' : demo ? 'demo' : bluetooth && linkSays === 'no computer' ? 'not connected' : linkSays
 
   /*
-   * TWO SPOTS, EACH TELLING ITS OWN TRUTH. The word on the right is the
-   * computer: CONNECTED means the phone can reach the Mac, and nothing more.
-   * The lamp and name on the left are the unit: green with its name while it
-   * answers, red with NOT ANSWERING when the Mac has a unit that has gone
-   * quiet, red with NO UNIT when the Mac has none. See unitWord. Before this
-   * the left showed the name and the right showed the link, and a frozen FM3
-   * looked exactly like a working one.
+   * TWO TRUTHS, ONE PILL. The computer and the unit used to be two spots,
+   * CONNECTED on the right and the lamp and the name on the left; a frozen
+   * FM3 under a green lamp is what that split was for. They share the pill
+   * now, and still do not share a verdict: the lamp is green only while the
+   * unit answers, red with No unit or Not answering when the computer has
+   * none or one gone quiet (unitWord), and red too when the computer itself
+   * is out of reach.
    */
   const unitSaid = demo ? null : unitWord(tone, unitState)
   /* Green when connected to the unit, red when not — including when the
@@ -186,14 +176,33 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
   const unitLamp = demo ? 'idle' : connected && unitState === 'present' ? 'good' : !connected || unitSaid ? 'fault' : 'idle'
 
   /*
-   * The unit's short name, and a dash rather than a guess.
-   *
-   * 'FM3' comes back from the unit itself, so until it has answered there is
-   * nothing true to write here. The browser draws "Looking…" in the same spot;
-   * on a bar this narrow that is most of the width, and the lamp beside it is
-   * already saying the same thing in a shape you can read at a glance.
+   * The pill's words: the state, the unit, the computer (shared/pill-words.mjs
+   * pillWords). A dash or "Looking…" used to stand in for a unit not yet
+   * heard; the pill says Looking and leaves the name out until the unit has
+   * said it, since 'FM3' comes back from the unit itself.
    */
-  const named = unitSaid ? `${unit ? `${unit} · ` : ''}${unitSaid}`.toUpperCase() : unit || (connected ? 'Looking…' : '—')
+  const pill = pillWords({ tone, unitState, unit, computer: link?.macName, demo, bluetooth })
+  /*
+   * Blue rather than green over Bluetooth, as the word was. Looking and No
+   * computer in silkDim, not the faint grey the word had: on the pill's fill
+   * that grey was under 4.5:1 in Light mode, and these are the words read
+   * under stage light to see whether the rig is ready.
+   */
+  const pillHue =
+    pill.mark === 'ok' ? (bluetooth ? color.ble : color.ok) : pill.mark === 'no' ? color.fault : pill.mark === 'wait' ? color.signal : color.silkDim
+  /*
+   * And where the pill goes, in words, for a screen reader: App.js decides it
+   * (unitGoes) and the tap goes there, so the two cannot disagree. "Switch
+   * unit" on a pill that opened Phone & computer named a page with nothing
+   * to switch to.
+   */
+  const pillGoes = demo
+    ? 'Change the demo unit'
+    : bluetooth
+      ? 'Which adapter'
+      : unitGoes === 'which'
+        ? 'Which unit'
+        : 'Phone and computer'
 
   /*
    * Only where there is an output block to move, the same rule the browser
@@ -258,35 +267,6 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
         zIndex: 3
       }}
     >
-      {bluetooth ? <BluetoothMark state={unitLamp} /> : <Lamp state={unitLamp} />}
-
-      {/*
-        The name is pressed, not just read. "If you tap the top left button
-        where it shows the current device in the demo mode, that it'll bring
-        up that same list where you can change which one you're on."
-
-        It goes to Setup, which is where both answers already live: the five
-        units under Which unit while the demo is on, and what this rig is and
-        what it is connected through when it is not. The browser can open Setup
-        already standing on the right page and this cannot — Setup is one
-        screen here, not a stack — so the phone lands at the top of it, with
-        the demo block first on the screen when the demo is what is running.
-      */}
-      <Pressable
-        onPress={onOpenUnit || onOpenSettings}
-        accessibilityRole="button"
-        /* Named for where it goes: Setup, not a page about the unit. */
-        accessibilityLabel={demo ? 'Demo Unit' : 'Settings'}
-        hitSlop={8}
-      >
-        <Text
-          numberOfLines={1}
-          style={{ color: unitSaid ? color.fault : color.silk, fontSize: font.small, fontWeight: '700', letterSpacing: 1.5 }}
-        >
-          {named}
-        </Text>
-      </Pressable>
-
       {/*
         The version, where it can be read without opening anything.
 
@@ -296,8 +276,9 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
         behind Setup — which is the screen you cannot reach when the thing that
         looks wrong is the link.
 
-        `flex: 1` so it takes the slack: the bar has a fixed left and a fixed
-        right, and the gap between them is the one thing that can give.
+        On the left now, where Axiom has its own: the unit's name went into
+        the pill. `flex: 1` so it takes the slack: it is the one thing in the
+        row that can give.
       */}
       {/* Out of the way while Save needs the room; it is in Settings too. */}
       {canSave ? (
@@ -318,72 +299,75 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
       )}
 
       {/*
-        The word carries the state as well as saying it — and in the demo it
-        carries the way out too.
+        THE PILL: WHICH UNIT, ON WHICH COMPUTER, AND THE WAY TO ANOTHER.
 
-        "On the main screen, make it so demo can be clicked to bring up the
-        unlock page." The Unlock pill beside it says what it does in a word,
-        which is what makes it findable; DEMO is the thing an eye actually
-        lands on. Both go to the same place now, which costs nothing and
-        forgives a thumb.
+        "This is from my other app axiom. Can we list the computer and device
+        it's connected to like this instead of the word connected? Also have
+        that be the button that can switch what unit it's connected to?"
+        Axiom's bar says "Live ● AM4" over "on Raspberry Pi". This is the
+        same: the state in a word, the lamp, the unit, and under them the
+        computer, by the name it gives itself. It takes the place of two
+        things that were at either end of the bar, the unit's name and the
+        word CONNECTED, and does what the name did: in the demo it opens the
+        five demo units, with two or more computers Which unit, and with one,
+        or with the link down, Phone & computer (App.js unitGoes). Over Bluetooth there is one
+        adapter and nothing to switch to, so it opens the note with Turn off
+        Bluetooth, as the word did.
 
-        Only while there is something to buy. Outside the demo this is
-        CONNECTED or FINDING and means nothing of the sort, so it stays a
-        plain label rather than a control that would do nothing.
+        The words come from shared/pill-words.mjs pillWords, so the lamp and
+        the word cannot drift apart: NO UNIT and NOT ANSWERING in red, a frozen
+        unit never Live. `flexShrink` so that on a narrow phone it gives way,
+        a line at a time, after the version has.
       */}
-      {/*
-        AND OUTSIDE THE DEMO IT SAYS WHICH COMPUTER.
-
-        "On the web app, when I tap connected, it shows me what computer is
-        connected to. It's supposed to do that on all platforms." The
-        browser's CONNECTED opens a small note, "Connected to MacBook Pro";
-        this one was only a label. Now it opens the same note under the bar,
-        with Try now when the computer has stopped answering.
-      */}
-      <Text
-        numberOfLines={1}
-        {...(canBuy
-          ? {
-              accessibilityRole: 'button',
-              accessibilityLabel: 'Unlock the full version',
-              suppressHighlighting: true,
-              onPress: () => {
-                tick()
-                onUnlock()
-              }
-            }
-          : demo
-            ? null
-            : {
-                accessibilityRole: 'button',
-                /* The mark is a picture, so the words carry the Bluetooth for a screen reader. */
-                accessibilityLabel: bluetooth
-                  ? `${connected ? 'Connected' : 'Not connected'} over Bluetooth. Which adapter`
-                  : `Which computer this ${deviceNoun()} is connected to`,
-                suppressHighlighting: true,
-                onPress: () => {
-                  tick()
-                  setSaying((open) => !open)
-                }
-              })}
-        style={{
-          color:
-            mark === 'ok'
-              ? bluetooth
-                ? color.ble
-                : color.ok
-              : mark === 'no'
-                ? color.fault
-                : mark === 'wait'
-                  ? color.signal
-                  : color.silkFaint,
-          fontSize: font.micro,
-          fontWeight: '700',
-          letterSpacing: 1.5
+      <Pressable
+        onPress={() => {
+          tick()
+          if (bluetooth) {
+            setSaying((open) => !open)
+            return
+          }
+          ;(onOpenUnit || onOpenSettings)?.()
         }}
+        accessibilityRole="button"
+        accessibilityLabel={`${[pill.status, pill.unit, pill.where].filter(Boolean).join(', ')}. ${pillGoes}`}
+        hitSlop={6}
+        style={({ pressed }) => ({
+          flexShrink: 1,
+          minWidth: 0,
+          alignItems: 'center',
+          /* space.sm, not md: in the demo on a 360-wide phone the unit's name was what paid for the wider edge. */
+          paddingHorizontal: space.sm,
+          paddingVertical: 3,
+          borderRadius: radius.lg,
+          borderWidth: 1,
+          borderColor: color.rule,
+          /*
+           * The panel's own colour, which is lighter than the bar in Light
+           * mode and darker in Dark: the text on it reads at 4.5:1 or better
+           * in both (panelHi under it took Connecting and Demo below that in
+           * Light). The border is what draws the pill.
+           */
+          backgroundColor: pressed ? color.panelHi : at(color.panel, 0.6)
+        })}
       >
-        {word.toUpperCase()}
-      </Text>
+        {/* Held inside the pill on a narrow phone: the unit's name gives way (an ellipsis), never the edge of the pill. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minWidth: 0, maxWidth: '100%', flexShrink: 1 }}>
+          <Text numberOfLines={1} style={{ flexShrink: 0, color: pillHue, fontSize: font.small, fontFamily: face, fontWeight: '700' }}>
+            {pill.status}
+          </Text>
+          {/* Not in the demo: its lamp is always grey there and says nothing, and on a narrow phone its room is the version's. */}
+          {demo ? null : bluetooth ? <BluetoothMark state={unitLamp} /> : <Lamp state={unitLamp} size={8} />}
+          {pill.unit ? (
+            <Text numberOfLines={1} style={{ flexShrink: 1, color: color.silk, fontSize: font.small, fontFamily: face, fontWeight: '700' }}>
+              {pill.unit}
+            </Text>
+          ) : null}
+        </View>
+        {/* Always two lines, so the bar is one height whatever has been heard: a space where there is nothing to say (No computer). */}
+        <Text numberOfLines={1} style={{ maxWidth: '100%', color: color.silkDim, fontSize: font.micro }}>
+          {pill.where || '\u00a0'}
+        </Text>
+      </Pressable>
 
       {/*
        * THE WAY OUT OF THE DEMO AND INTO THE PAID APP, and until now there
@@ -397,7 +381,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
        *
        * It was not buried. It was not there.
        *
-       * So it sits next to the word DEMO, which is the one part of this bar
+       * So it sits next to the pill that says Demo, the one part of this bar
        * that is already saying "this is not your real rig". Amber, because
        * every other amber thing in this app is the signal path and this is
        * the one exception worth making: it has to be findable by somebody who
@@ -443,7 +427,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
         </Pressable>
       ) : null}
 
-      {canBuy && purchase.price ? (
+      {canBuy ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Unlock the full version"
@@ -456,30 +440,29 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
              chrome in a bar that is mostly lamps and labels; this is the only
              thing on the screen anybody is being asked to DO. */
           style={({ pressed }) => ({
+            alignItems: 'center',
             paddingHorizontal: space.md,
             paddingVertical: 4,
-            borderRadius: radius.pill,
+            borderRadius: radius.lg,
             backgroundColor: pressed ? color.signalWash : color.signal
           })}
         >
-          <Text
-            style={{
-              color: color.onSignal,
-              fontSize: font.micro,
-              fontWeight: '700',
-              letterSpacing: 0.6
-            }}
-          >
-            {/* The price belongs on the button. "Unlock" asks somebody to
-                tap to find out what it costs, which is the tap most people
-                will not make.
+          {/* The price belongs on the button. "Unlock" alone asks somebody
+              to tap to find out what it costs, which is the tap most people
+              will not make; but before the store has said the price,
+              "Unlock" alone is still the way in.
 
-                The verb has moved left onto the word itself, so this carries
-                the price and nothing else — UNLOCK $9.99 reading across the
-                two. Saying "Unlock" here as well would be the same word twice
-                in half an inch. */}
-            {purchase.price}
-          </Text>
+              The verb is back on it: it had moved onto the word beside it,
+              UNLOCK $9.99 reading across the two, and that word is the
+              pill now. Over the price rather than beside it, as the pill
+              has the computer under the unit: "Unlock $9.99" in one line
+              took the demo unit's name off a 360-wide phone. */}
+          <Text style={{ color: color.onSignal, fontSize: font.micro, fontWeight: '700', letterSpacing: 0.6 }}>Unlock</Text>
+          {purchase.price ? (
+            <Text numberOfLines={1} style={{ color: color.onSignal, fontSize: font.micro, fontWeight: '700', letterSpacing: 0.6 }}>
+              {purchase.price}
+            </Text>
+          ) : null}
         </Pressable>
       ) : null}
 
@@ -565,7 +548,7 @@ export default function TopBar({ link, onOpenSettings, onOpenUnit, onUnlock, sav
       */}
       <Volume blocks={blocks} open={volume} onClose={() => setVolume(false)} onError={setFailed} />
       {failed ? <Reported said={failed} onClear={() => setFailed(null)} /> : null}
-      {saying && !demo ? <Which link={link} bluetooth={bluetooth} onClose={() => setSaying(false)} /> : null}
+      {saying && bluetooth ? <Which link={link} onClose={() => setSaying(false)} /> : null}
       {saveTo.said && saveHere ? <Saved said={saveTo.said} onClear={saveTo.dismiss} /> : null}
       {/*
         A save from Play runs late the same as one from Edit, and Play has no
@@ -605,86 +588,30 @@ const ofUnitState = (s) => s.unit
 const ofAllBlocks = (s) => s.allBlocks
 
 /**
- * Which computer this phone is talking to, under the bar: the browser's
- * note from its CONNECTED, in the same words. A tap on it puts it away.
+ * Over Bluetooth, under the pill: which adapter, and Turn off Bluetooth. A tap
+ * on it puts it away.
+ *
+ * It used to say which computer too, from the word CONNECTED ("Connected to
+ * MacBook Pro", with Try now when it had stopped answering). The pill says the
+ * computer on its second line now and opens Which unit or Phone & computer
+ * instead, where Look for the computer again is. Over Bluetooth there is one
+ * adapter and nothing to switch to, so this note, and the switch back to the
+ * computer, stay one tap from the bar.
  */
-function Which({ link, bluetooth = false, onClose }) {
-  /* Over Bluetooth the far end is the adapter, and the link carries its name. */
-  if (bluetooth) {
-    const adapter = link?.macName || 'the adapter'
-    const said =
-      link?.link === 'connected'
-        ? `Connected over Bluetooth, through ${adapter}.`
-        : link?.link === 'joining'
-          ? `Finding ${adapter}…`
-          : 'Not connected to the Bluetooth adapter.'
-    return (
-      <Pressable
-        /* Not one element to a screen reader, or VoiceOver reads the note as
-           a single button and never reaches Turn off Bluetooth inside it. The
-           word above closes it again. */
-        accessible={false}
-        onPress={onClose}
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: '100%',
-          zIndex: 3,
-          gap: space.md,
-          padding: space.lg,
-          borderBottomWidth: 1,
-          borderBottomColor: color.rule,
-          backgroundColor: color.panelHi
-        }}
-      >
-        <Text style={{ color: color.silk, fontSize: font.body }}>{said}</Text>
-        {/*
-          TURN OFF BLUETOOTH, from the word that says it is on. "Make it so you
-          can click the connected button at the top of the screen and have a
-          button that pop up that says turn off Bluetooth." The same switch as
-          the page's Stop and the waiting screen's Use the computer instead,
-          in every state of the link: the phone goes looking for the computer
-          the moment it is off (App.js).
-        */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Turn off Bluetooth"
-          accessibilityHint="The phone goes back to using the computer"
-          onPress={() => {
-            tick()
-            fire('press Turn off Bluetooth', () => setBluetooth(false))
-            onClose()
-          }}
-          style={({ pressed }) => ({
-            alignSelf: 'flex-start',
-            minHeight: 44,
-            justifyContent: 'center',
-            paddingHorizontal: space.lg,
-            borderRadius: radius.md,
-            borderWidth: 1,
-            borderColor: color.rule,
-            backgroundColor: pressed ? color.panel : color.chassis
-          })}
-        >
-          <Text style={{ color: color.silk, fontSize: font.body }}>Turn off Bluetooth</Text>
-        </Pressable>
-      </Pressable>
-    )
-  }
-  const where = link?.macName || 'your computer'
+function Which({ link, onClose }) {
+  const adapter = link?.macName || 'the adapter'
   const said =
     link?.link === 'connected'
-      ? `Connected to ${where}.`
+      ? `Connected over Bluetooth, through ${adapter}.`
       : link?.link === 'joining'
-        ? `Finding ${where}…`
-        : link?.link === 'no-answer'
-          ? `${where === 'your computer' ? 'Your computer' : where} isn’t answering.`
-          : 'Not connected to a computer.'
+        ? `Finding ${adapter}…`
+        : 'Not connected to the Bluetooth adapter.'
   return (
     <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${said} Tap to close.`}
+      /* Not one element to a screen reader, or VoiceOver reads the note as
+         a single button and never reaches Turn off Bluetooth inside it. The
+         pill above closes it again. */
+      accessible={false}
       onPress={onClose}
       style={{
         position: 'absolute',
@@ -700,30 +627,39 @@ function Which({ link, bluetooth = false, onClose }) {
       }}
     >
       <Text style={{ color: color.silk, fontSize: font.body }}>{said}</Text>
-      {link?.link === 'no-answer' ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            tick()
-            probeNow()
-            onClose()
-          }}
-          style={({ pressed }) => ({
-            alignSelf: 'flex-start',
-            minHeight: 44,
-            justifyContent: 'center',
-            paddingHorizontal: space.lg,
-            borderRadius: radius.md,
-            borderWidth: 1,
-            borderColor: color.rule,
-            backgroundColor: pressed ? color.panel : color.chassis
-          })}
-        >
-          <Text style={{ color: color.silk, fontSize: font.body }}>Try now</Text>
-        </Pressable>
-      ) : null}
+      {/*
+        TURN OFF BLUETOOTH, from the pill that says it is on. "Make it so you
+        can click the connected button at the top of the screen and have a
+        button that pop up that says turn off Bluetooth." The same switch as
+        the page's Stop and the waiting screen's Use the computer instead,
+        in every state of the link: the phone goes looking for the computer
+        the moment it is off (App.js).
+      */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Turn off Bluetooth"
+        accessibilityHint="The phone goes back to using the computer"
+        onPress={() => {
+          tick()
+          fire('press Turn off Bluetooth', () => setBluetooth(false))
+          onClose()
+        }}
+        style={({ pressed }) => ({
+          alignSelf: 'flex-start',
+          minHeight: 44,
+          justifyContent: 'center',
+          paddingHorizontal: space.lg,
+          borderRadius: radius.md,
+          borderWidth: 1,
+          borderColor: color.rule,
+          backgroundColor: pressed ? color.panel : color.chassis
+        })}
+      >
+        <Text style={{ color: color.silk, fontSize: font.body }}>Turn off Bluetooth</Text>
+      </Pressable>
     </Pressable>
   )
+
 }
 
 /** What a save from the bar came to, under the bar; a tap puts it away. */

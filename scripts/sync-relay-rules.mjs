@@ -117,6 +117,15 @@ export const FILES = [
    */
   { source: '../shared/link-word.mjs', target: '../mobile/src/lib/link-word.js' },
   /*
+   * And Play's pill, the unit and the computer where CONNECTED was (24
+   * October 2026), on the phone alone; see the file for why it is its own.
+   */
+  {
+    source: '../shared/pill-words.mjs',
+    target: '../mobile/src/lib/pill-words.js',
+    render: (text) => banner('../shared/pill-words.mjs') + text.replace("from './link-word.mjs'", "from './link-word.js'")
+  },
+  /*
    * What to call the thing in the player's hand: phone, iPad, tablet, or on
    * the computer "phone or tablet". The shared sentences that say it ask this,
    * so it travels with them. Every copy that imports it is pointed at the

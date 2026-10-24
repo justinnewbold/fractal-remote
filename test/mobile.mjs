@@ -4183,13 +4183,17 @@ export function run(test) {
      * the unit is, what version this is, and whether the link is live. The
      * speaker and Setup were down in the slot row, fighting Edit for a corner.
      *
-     * Five things, left to right, the same order as the browser: lamp, unit,
-     * version, the state in one word, volume, setup.
+     * Left to right: the version, then the pill (the state in a word, the
+     * lamp, the unit, and the computer under them), volume, setup. Changed on
+     * purpose, 24 October 2026: "This is from my other app axiom. Can we list
+     * the computer and device it's connected to like this instead of the word
+     * connected?" The unit's name and the word were at either end of the bar;
+     * they are one pill now, Axiom's "Live ● AM4" over "on Raspberry Pi".
      */
     const bar = read('mobile/src/components/TopBar.js')
     const flat = bar.replace(/\s+/g, ' ')
 
-    const order = ['<Lamp state=', '{named}', 'v${APP_VERSION}', '{word.toUpperCase()}', 'accessibilityLabel="Volume"', 'accessibilityLabel="Connection and setup"']
+    const order = ['v${APP_VERSION}', '{pill.status}', '<Lamp state=', '{pill.unit}', '{pill.where ||', 'accessibilityLabel="Volume"', 'accessibilityLabel="Connection and setup"']
     let last = -1
     for (const piece of order) {
       const at = bar.indexOf(piece)
@@ -4216,9 +4220,10 @@ export function run(test) {
     assert.match(bar, /const ofDeviceName = \(s\) => s\.deviceName/, 'the header does not say what the unit is')
     /* The version, off the build rather than typed. */
     assert.match(bar, /from '\.\.\/lib\/version'/, 'the version on the bar is not the one that was built')
-    /* And the word is the shared one, so the two apps cannot drift. */
+    /* And the words are the shared ones, so the two apps cannot drift. */
     assert.match(bar, /from '\.\.\/lib\/link-word'/, 'the phone decides the word for itself')
-    assert.match(flat, /linkWord\(tone, 'remote'\)/, 'the phone is not using the shared word')
+    assert.match(bar, /import \{ pillWords \} from '\.\.\/lib\/pill-words'/, 'the phone decides the pill for itself')
+    assert.match(flat, /pillWords\(\{ tone, unitState, unit, computer: link\?\.macName, demo, bluetooth \}\)/, 'the phone is not using the shared words')
 
     /* The old bar is gone rather than stacked above the new one. */
     const app = read('mobile/App.js').replace(/\s+/g, ' ')
@@ -4933,7 +4938,7 @@ export function run(test) {
     }
     /* Picking a unit on the phone reads it again, start to finish. */
     const link = read('mobile/src/lib/link.js')
-    assert.match(link, /export async function chooseHost\(name\) \{\s*const ok = await pickHost\(name\)[\s\S]{0,200}await refreshAll\(\)/, 'the phone switches unit but keeps the old one on screen')
+    assert.match(link, /export async function chooseHost\(name\) \{\s*const ok = await pickHost\(name\)[\s\S]{0,900}await refreshAll\(\)/, 'the phone switches unit but keeps the old one on screen')
     const settings = read('mobile/src/screens/Settings.js')
     assert.match(settings, /<Section>Which unit<\/Section>[\s\S]{0,300}unitChoices\(hosts, units, chosen, unitsAsking\)/)
     assert.ok(!settings.includes('<Section>Which computer</Section>'), 'the phone still says Which computer')
@@ -8303,8 +8308,10 @@ export function run(test) {
     assert.ok(!/canLeave = demo && !canBuy/.test(flat), 'a phone that merely cannot buy is treated as one that has paid')
 
     /* The two pills never appear together: one is for somebody who has paid
-       and the other only shows when there is something to sell. */
-    const buy = flat.indexOf('{canBuy && purchase.price ?')
+       and the other only shows when there is something to sell. (The unlock
+       shows before the store has said the price too, since 24 October 2026:
+       the word UNLOCK beside it became the pill that switches units.) */
+    const buy = flat.indexOf('{canBuy ? (')
     const leave = flat.indexOf('{canLeave ?')
     assert.ok(buy > 0 && leave > 0, 'one of the two pills is gone')
     assert.ok(leave < buy, 'the way out is drawn after the price, so a paid phone reads second')
@@ -12587,7 +12594,7 @@ export function run(test) {
     )
   })
 
-  test('the bar says DEMO rather than wearing a real rig’s green', () => {
+  test('the bar says DEMO rather than wearing a real rig’s green', async () => {
     /*
      * "It does sound connected, even in demo."
      *
@@ -12599,15 +12606,14 @@ export function run(test) {
      */
     const bar = read('mobile/src/components/TopBar.js').replace(/\s+/g, ' ')
     assert.match(bar, /const demo = useDemo\(\)/, 'the bar cannot tell whether it is in the demo')
-    /* `canBuy` is now the first rung — the word says UNLOCK where there is
-       one to sell. What this test is about is the rung after it: the demo
-       must never wear CONNECTED. */
-    assert.match(
-      bar,
-      /const linkSays = linkWord\(tone, 'remote'\)\s+const word = canBuy \? 'unlock' : demo \? 'demo' : bluetooth && linkSays === 'no computer' \? 'not connected' : linkSays/,
-      'the bar still says CONNECTED in the demo'
-    )
-    assert.match(bar, /const mark = demo \? 'wait' : linkTone\(tone\)/, 'the demo word is drawn in the colour a real connection gets')
+    /* Since 24 October 2026 the word is the pill's first word (Axiom's
+       "Live ● AM4"), and the demo must never wear Live: it says Demo, in
+       amber, and "simulated" where a computer would be named. */
+    assert.match(bar, /pillWords\(\{ tone, unitState, unit, computer: link\?\.macName, demo, bluetooth \}\)/, 'the pill is not told it is the demo')
+    const { pillWords } = await import('../shared/pill-words.mjs')
+    const demoPill = pillWords({ tone: 'good', unitState: 'present', unit: 'FM3', computer: 'the demo', demo: true })
+    assert.deepEqual(demoPill, { status: 'Demo', mark: 'wait', unit: 'FM3', where: 'simulated' }, 'the bar still says Live in the demo')
+    assert.match(bar, /pill\.mark === 'wait' \? color\.signal/, 'the demo word is drawn in the colour a real connection gets')
   })
 
   test('the bar has two spots, and each tells its own truth', async () => {
@@ -12629,16 +12635,61 @@ export function run(test) {
     assert.equal(phone.unitWord('good', 'silent'), words.unitWord('good', 'silent'), 'the two apps disagree about the unit word')
     const bar = read('mobile/src/components/TopBar.js').replace(/\s+/g, ' ')
     assert.match(bar, /const unitSaid = demo \? null : unitWord\(tone, unitState\)/, 'the bar does not ask about the unit')
-    assert.match(bar, /<Lamp state=\{unitLamp\} \/>/, 'the lamp is about the link, not the unit')
+    assert.match(bar, /<Lamp state=\{unitLamp\} size=\{8\} \/>/, 'the lamp is about the link, not the unit')
     assert.match(bar, /const unitLamp = demo \? 'idle' : connected && unitState === 'present' \? 'good' : !connected \|\| unitSaid \? 'fault' : 'idle'/, 'the unit lamp is not green when the unit answers and red when it does not')
     assert.match(read('mobile/src/components/Lamp.js'), /state === 'good' \? color\.ok/, 'the lamp has no green')
-    assert.match(bar, /const named = unitSaid \? `\$\{unit \? `\$\{unit\} · ` : ''\}\$\{unitSaid\}`\.toUpperCase\(\) : unit \|\| \(connected \? 'Looking…' : '—'\)/, 'the unit spot does not say the unit is silent')
-    assert.match(bar, /color: unitSaid \? color\.fault : color\.silk/, 'a silent unit is not drawn in red')
+    /*
+     * The two spots are one pill since 24 October 2026 (Axiom's "Live ● AM4"
+     * over "on Raspberry Pi"), and the two truths still are not one verdict:
+     * a good link over a silent unit says Not answering, in red, and never
+     * Live; over no unit it says No unit; only a unit that answers is Live.
+     */
+    const pill = await import('../shared/pill-words.mjs')
+    assert.deepEqual(pill.pillWords({ tone: 'good', unitState: 'silent', unit: 'FM3', computer: 'Studio Mac' }), { status: 'Not answering', mark: 'no', unit: 'FM3', where: 'on Studio Mac' }, 'the pill does not say the unit is silent')
+    assert.deepEqual(pill.pillWords({ tone: 'good', unitState: 'missing', unit: 'FM3', computer: 'Studio Mac' }), { status: 'No unit', mark: 'no', unit: '', where: 'on Studio Mac' })
+    assert.deepEqual(pill.pillWords({ tone: 'good', unitState: 'present', unit: 'AM4', computer: 'raspberry pi 3' }), { status: 'Live', mark: 'ok', unit: 'AM4', where: 'on raspberry pi 3' })
+    assert.equal(pill.pillWords({ tone: 'good', unitState: 'unknown', unit: '', computer: 'Studio Mac' }).status, 'Looking', 'a unit not yet heard is called Live')
+    const phonePill = await import('../mobile/src/lib/pill-words.js')
+    assert.equal(phonePill.pillWords({ tone: 'good', unitState: 'silent', unit: 'FM3' }).status, pill.pillWords({ tone: 'good', unitState: 'silent', unit: 'FM3' }).status, 'the two copies disagree about the pill')
+    /* The pill's words are the phone's alone, so the computer's fingerprint does not move for them: nothing the web app imports carries them. */
+    assert.ok(!/pillWords/.test(read('shared/link-word.mjs')), 'the pill moved into a file the computer app serves, and every change to it makes a computer release')
+    assert.match(bar, /pill\.mark === 'no' \? color\.fault/, 'a silent unit is not drawn in red')
     const rig = read('mobile/src/lib/rig.js').replace(/\s+/g, ' ')
     assert.match(rig, /const unit = caps\?\.connected === false \? 'missing' : 'present'/, 'a Mac with no unit is not noticed')
     assert.match(rig, /fresh\?\.number === -1 \? \{ unit: 'silent' \}/, 'a unit that stops answering its name is not noticed')
     const settings = read('mobile/src/screens/Settings.js').replace(/\s+/g, ' ')
     assert.match(settings, /unitState === 'silent' \? `Computer connected · \$\{deviceName \|\| 'unit'\} not answering`/, 'Setup still says connected over a silent unit')
+  })
+
+  /*
+   * The pill's first review (24 October 2026): one height whatever has been
+   * heard, words that read in Light mode, a tap that goes where the label
+   * says, and the demo unit's name whole on a 360-wide phone.
+   */
+  test('the pill keeps one height, reads in both themes, goes where it says, and leaves room for the demo unit', async () => {
+    const bar = read('mobile/src/components/TopBar.js')
+    const flat = bar.replace(/\s+/g, ' ')
+    /* Always two lines: the computer's name landing late moved Play down under a thumb. */
+    assert.match(bar, /\{pill\.where \|\| '\\u00a0'\}/, 'the pill is one line until the computer has said its name')
+    assert.ok(!/\{pill\.where \? \(/.test(bar), 'the second line is drawn only once the name is known')
+    const { pillWords } = await import('../shared/pill-words.mjs')
+    assert.equal(pillWords({ tone: 'good', unitState: 'present', unit: 'FM3' }).where, 'on your computer', 'a computer not yet named leaves the second line empty')
+    assert.equal(pillWords({ tone: 'busy' }).where, 'on your computer')
+    assert.equal(pillWords({ tone: 'bad', unit: 'FM3' }).where, 'on your computer')
+    assert.equal(pillWords({ tone: 'dim' }).where, null, 'No computer is said to be on a computer')
+    /* Light mode: the panel's own fill and silkDim keep every word at 4.5:1. */
+    assert.match(flat, /backgroundColor: pressed \? color\.panelHi : at\(color\.panel, 0\.6\)/, 'the pill’s fill takes its words under 4.5:1 in Light mode')
+    assert.match(flat, /pill\.mark === 'wait' \? color\.signal : color\.silkDim/, 'Looking and No computer are drawn in the faint grey')
+    /* Where it goes, named once in App.js: Which unit only over a link that is up. */
+    const app = read('mobile/App.js')
+    assert.match(app, /const unitGoes = demo \? 'demo' : link\.hosts\?\.length > 1 && link\.link === 'connected' \? 'which' : 'link'/, 'a pill tapped over a dropped link opens Which unit, with no way to look again')
+    assert.match(flat, /export default function TopBar\(\{ link, onOpenSettings, onOpenUnit, unitGoes,/, 'the bar is not told where its pill goes')
+    assert.match(flat, /const pillGoes = demo \? 'Change the demo unit' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/, 'a screen reader is told Switch unit for a page with nothing to switch')
+    assert.match(flat, /accessibilityLabel=\{`\$\{\[pill\.status, pill\.unit, pill\.where\]\.filter\(Boolean\)\.join\(', '\)\}\. \$\{pillGoes\}`\}/)
+    assert.ok(!/'Switch unit'/.test(bar), 'the pill still says Switch unit')
+    /* The demo on a 360-wide phone: Unlock over the price, and the pill's edge at space.sm. */
+    assert.match(bar, />Unlock<\/Text>\s*\{purchase\.price \? \(/, 'Unlock $9.99 on one line takes the demo unit’s name off a narrow phone')
+    assert.match(flat, /paddingHorizontal: space\.sm, paddingVertical: 3, borderRadius: radius\.lg, borderWidth: 1/, 'the pill’s wide edge is paid for by the unit’s name')
   })
 
   test('somebody asks whether the unit is still there, rather than waiting to be told', async () => {
@@ -13105,7 +13156,7 @@ export function run(test) {
     const app = read('mobile/App.js')
     assert.match(
       app,
-      /onOpenUnit=\{\(\) => \(demo \? setPickUnit\(true\) : link\.hosts\?\.length > 1 \? setPickLive\(true\) : openSettings\('link'\)\)\}/,
+      /onOpenUnit=\{\(\) => \(unitGoes === 'demo' \? setPickUnit\(true\) : unitGoes === 'which' \? setPickLive\(true\) : openSettings\('link'\)\)\}\s*unitGoes=\{unitGoes\}/,
       'the unit name opens Setup in the demo again, with the five units two doors further in'
     )
     assert.match(app, /<DemoUnit open=\{pickUnit\} onClose=\{\(\) => setPickUnit\(false\)\}/, 'the picker is never drawn')
@@ -13117,9 +13168,10 @@ export function run(test) {
     assert.match(web, /aria-label=\{demo \? 'Demo Unit' : 'Phone & computer'\}/, 'the browser’s unit name stopped being two destinations')
     /* Each end's name says where it goes. "About this unit" opened Phone &
        computer in the browser and Setup on the phone. */
+    /* On the phone the name is in the pill since 24 October 2026, and the pill says where it goes: the demo units, Which unit, or Phone & computer (App.js unitGoes). */
     assert.match(
-      read('mobile/src/components/TopBar.js'),
-      /accessibilityLabel=\{demo \? 'Demo Unit' : 'Settings'\}/,
+      read('mobile/src/components/TopBar.js').replace(/\s+/g, ' '),
+      /demo \? 'Change the demo unit' : bluetooth \? 'Which adapter' : unitGoes === 'which' \? 'Which unit' : 'Phone and computer'/,
       'the phone’s unit name is labelled for a page it does not open'
     )
     assert.ok(!/About this unit/.test(web + read('mobile/src/components/TopBar.js')), 'the unit name still promises a page that is not there')
@@ -14504,22 +14556,23 @@ export function run(test) {
     )
     assert.match(bar, /Unlock the full version/, 'the Unlock button has no accessible name')
 
-    /* And the word DEMO itself, which is the thing an eye lands on. Both it
-       and the pill are gated on ONE named condition, so they cannot drift
-       into disagreeing about whether there is anything to sell. */
+    /* One named condition, so nothing on the bar can disagree about whether
+       there is anything to sell. The word DEMO beside the pill was the other
+       way in until 24 October 2026, when it became the pill that switches
+       units (Axiom's "Live ● AM4"); the unlock pill says Unlock itself now. */
     assert.match(
       bar,
       /const canBuy = Boolean\(onUnlock\) && shouldOffer\(\{ demo \}\)/,
-      'the word and the pill no longer share one condition'
+      'the unlock no longer has one condition'
     )
-    assert.match(bar, /\{\.\.\.\(canBuy\s*\?\s*\{/, 'the word is not a way into the unlock page')
-    /* Comments stripped: the block above `word` explains the rule by naming
+    assert.match(bar, /\{canBuy \? \(/, 'the unlock is not offered in the demo')
+    /* Comments stripped: the block above the pill explains the rule by naming
        canBuy, and counting prose as a use is how this number goes wrong. */
     const code = bar.replace(/\/\*[\s\S]*?\*\//g, ' ')
     assert.equal(
       (code.match(/canBuy/g) || []).length,
-      4,
-      'the condition is declared and used three times — the word, its press, and the pill'
+      2,
+      'the condition is declared and used once — the unlock pill'
     )
 
     /*
@@ -14543,20 +14596,22 @@ export function run(test) {
     )
 
     /*
-     * THE WORD ITSELF SAYS UNLOCK, and only where there is one to sell.
+     * THE UNLOCK SAYS UNLOCK, and only where there is one to sell.
      *
      * "Change this word demo to Unlock and bring up the unlock page when it's
      * tapped... Make sure it doesn't change how this button functions on
      * unlocked versions when connected to an actual unit."
      *
-     * So the ladder is canBuy, then demo, then the link word — a real unit is
-     * untouched, and somebody who already owns it still reads DEMO rather
-     * than being sold a thing they have.
+     * The word that said UNLOCK became the pill (24 October 2026), so the
+     * unlock pill carries the verb with the price, and says Unlock alone
+     * before the store has said the price: a real unit is untouched, and
+     * somebody who already owns it reads Exit demo rather than being sold a
+     * thing they have.
      */
     assert.match(
       bar,
-      /const linkSays = linkWord\(tone, 'remote'\)\s+const word = canBuy \? 'unlock' : demo \? 'demo' : bluetooth && linkSays === 'no computer' \? 'not connected' : linkSays/,
-      'the word no longer says UNLOCK in the demo, or says it outside one'
+      />Unlock<\/Text>\s*\{purchase\.price \? \(\s*<Text numberOfLines=\{1\}[^>]*>\s*\{purchase\.price\}/,
+      'the unlock pill no longer says Unlock, or hides until the store has said the price'
     )
 
     /* Settings carries it too — for reading before tapping, and for restoring
@@ -14722,9 +14777,11 @@ export function run(test) {
     assert.match(walk, /onUnlocked=\{\(\) => \{[\s\S]{0,200}setAuth\('out'\)/, 'a purchase made in the walkthrough is left unattached to an account')
     assert.match(read('mobile/src/screens/Onboarding.js'), /onPress=\{\(\) => agreed && onUnlock\?\.\(\)\}/, 'the Unlock card still advances the walkthrough instead of selling')
 
-    /* The fourth is the word DEMO itself, inside the bar. */
+    /* The fourth is the bar's own unlock pill (the word DEMO beside it was
+       a way in too, until it became the pill that switches units on 24
+       October 2026). */
     const bar = read('mobile/src/components/TopBar.js')
-    assert.match(bar, /\{\.\.\.\(canBuy\s*\?\s*\{/, 'the word DEMO is no longer a way in')
+    assert.match(bar.replace(/\s+/g, ' '), /\{canBuy \? \( <Pressable accessibilityRole="button" accessibilityLabel="Unlock the full version" onPress=\{\(\) => \{ tick\(\) onUnlock\(\) \}\}/, 'the bar is no longer a way in')
 
     /* The price goes ON the buttons. Asking somebody to tap to find out what
        it costs is asking for the tap most people will not make. */
@@ -14735,18 +14792,13 @@ export function run(test) {
       'the stage offer does not show the price on the button'
     )
     /*
-     * The bar is the exception, and only because the verb moved next to it.
-     * The word itself now reads UNLOCK, so the pill beside it carries the
-     * price alone — "Unlock" in both would be the same word twice in half an
-     * inch. Which also means the pill must not draw at all before a price
-     * arrives, or it is an empty amber blob.
+     * The bar's says it the same way since 24 October 2026. It was the
+     * exception while the word beside it read UNLOCK (the pill carried the
+     * price alone, and drew nothing before a price arrived); that word is the
+     * pill that switches units now, so the unlock carries its own verb, over
+     * the price, and says Unlock alone rather than drawing an empty amber blob.
      */
-    assert.match(bar, /\{purchase\.price\}/, 'the bar does not show the price on the button')
-    assert.match(
-      bar,
-      /\{canBuy && purchase\.price \? \(/,
-      'the bar draws an empty pill while the store has no price yet'
-    )
+    assert.match(bar, />Unlock<\/Text>\s*\{purchase\.price \? \(\s*<Text numberOfLines=\{1\}[^>]*>\s*\{purchase\.price\}/, 'the bar does not show the price on the button')
 
     /* And it can be put away, or it is an advertisement rather than an offer —
        on a screen that is open on a dark stage between songs. */

@@ -482,6 +482,14 @@ export default function App() {
    * unanswered until the computer is back (useHeldLink, below).
    */
   const shownLink = useHeldLink(link, looking, bluetooth ? 'adapter' : 'computer')
+  /*
+   * Where the pill on the bar goes, named once, so the tap and what a screen
+   * reader says it does cannot disagree (TopBar unitGoes). Which unit only
+   * while the link is up: over a link that is down its rows switch to
+   * computers nobody can reach, and Phone & computer has Look for the
+   * computer again, the retry the word DISCONNECTED used to open.
+   */
+  const unitGoes = demo ? 'demo' : link.hosts?.length > 1 && link.link === 'connected' ? 'which' : 'link'
   /* Whether the stage is already saying the computer is on another account
      (WrongAccount): then "make sure the computer is awake" would be the wrong
      advice, and Waking keeps the same order. */
@@ -1104,7 +1112,8 @@ export default function App() {
               link={shownLink}
               onOpenSettings={() => openSettings()}
               onUnlock={() => setBuying(true)}
-              onOpenUnit={() => (demo ? setPickUnit(true) : link.hosts?.length > 1 ? setPickLive(true) : openSettings('link'))}
+              onOpenUnit={() => (unitGoes === 'demo' ? setPickUnit(true) : unitGoes === 'which' ? setPickLive(true) : openSettings('link'))}
+              unitGoes={unitGoes}
               /* Edit has its own Save; two on one screen would be one too many. */
               saveHere={screen !== 'edit'}
             />
