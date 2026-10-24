@@ -814,9 +814,16 @@ Videos:
 3. Deleting an account: [account deletion video link]
 ```
 
-### What's New in This Version, 1.88.0
+### What's New in This Version, 1.88.3
 
-App Store Connect → the 1.88.0 version → What's New in This Version. Plain
+App Store Connect → the 1.88.3 version → What's New in This Version.
+Written for 1.88.0 and the same for 1.88.3: the iPhone that goes to Apple is
+1.88.3 (build 29, 24 October 2026), which is 1.88.0 with Apple's iOS 27 fix
+for the Bluetooth pairing screen, and Bluetooth is still the developer's
+alone, so nothing a customer sees changed. Build 28 (1.88.0) was never sent
+for review, and no 1.88.0 version page was made in App Store Connect, so the
+version page is made as 1.88.3. Android stays 1.88.0 (version code 12), whose
+notes are below. Plain
 words, one change a line, everything since 1.87.11, the version on the App
 Store before it, written on 24 October 2026 from the *For the next version's
 notes* paragraphs above and the changes since. Apple takes 4000 characters,
