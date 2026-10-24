@@ -530,8 +530,9 @@ export default function Settings({
               through a Bluetooth MIDI adapter on its MIDI In and Out, with no
               computer. Behind the unlock, and only in a build that carries
               the Bluetooth code on a phone that can do it: anybody else never
-              sees it. The page it opens starts with the beta note, the
-              iPhone's or Android's own (betaNote).
+              sees it. The page it opens carries the beta note, the
+              iPhone's or Android's own (betaNote), always shown under
+              Connect and the rows that open.
 
               AND ONLY ON JUSTIN'S ACCOUNT. "Is there any way to just get the
               Bluetooth on the developers mode for my own phone? I just feel

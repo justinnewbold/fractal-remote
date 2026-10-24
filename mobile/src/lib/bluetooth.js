@@ -487,7 +487,13 @@ export function chooseAdapter(dev) {
   saved = { ...saved, adapter: { id: dev.id, name: typeof dev.name === 'string' ? dev.name : '' } }
   logDebug('ble', `adapter chosen: ${dev.name || dev.id}`)
   keep()
-  announce()
+  /*
+   * A note from the search is about the search (it did not start, Apple's
+   * screen stayed shut), and an adapter chosen is the end of it: left up,
+   * it sat under "Connected" for the rest of the session.
+   */
+  if (now.said) noteBluetooth({ said: null })
+  else announce()
 }
 
 /** Forget the adapter. bleLink hears it and lets go. */
@@ -546,18 +552,6 @@ function listenForList() {
 }
 
 /**
- * Look for the adapter.
- *
- * iPhone: Apple's own Bluetooth MIDI screen, the only way an app can pair
- * one. What is listed after Done that was not there before is the adapter
- * just paired, and goes first. Android: ask for "Nearby devices", then scan
- * for ten seconds; what is found arrives while it looks.
- *
- * When only one adapter could be meant it is chosen here (pickAdapter), and
- * on an iPhone the promise resolves to it; otherwise to nothing, and the list
- * on the page asks.
- */
-/**
  * Whether Connect keeps Apple's Bluetooth screen shut on this iPhone
  * (bleAdapters pairScreenCrashes): iOS 27, in a build without Apple's fix.
  * The build is asked if it can say, as authorization is, and no answer is a
@@ -575,6 +569,18 @@ export function pairScreenShut() {
   return pairScreenCrashes({ os: Platform.OS, version: Platform.Version, fixed })
 }
 
+/**
+ * Look for the adapter.
+ *
+ * iPhone: Apple's own Bluetooth MIDI screen, the only way an app can pair
+ * one. What is listed after Done that was not there before is the adapter
+ * just paired, and goes first. Android: ask for "Nearby devices", then scan
+ * for ten seconds; what is found arrives while it looks.
+ *
+ * When only one adapter could be meant it is chosen here (pickAdapter), and
+ * on an iPhone the promise resolves to it; otherwise to nothing, and the list
+ * on the page asks.
+ */
 export async function findAdapters() {
   const mod = ble()
   if (!mod) return

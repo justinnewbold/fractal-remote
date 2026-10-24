@@ -328,6 +328,8 @@ export default function BluetoothPage({ purchase, admin = false }) {
                     : 'If this stays here, check the phone’s Bluetooth is on, and that the adapter is plugged in and lit.'}
               </Hint>
             ) : null}
+            {/* The unit chips are not drawn while it is on, and Connecting… or Disconnected names no unit: which one was picked, and how to change it. */}
+            {b.unit ? <Hint>{`Unit: ${unitName(b.unit)}. To change it, tap Stop first.`}</Hint> : null}
             <Press label="Stop using Bluetooth" onPress={() => setBluetooth(false)} />
             <Hint>While Bluetooth is on, the phone does not use the computer at all. Stop goes back to the computer.</Hint>
           </View>
@@ -337,8 +339,8 @@ export default function BluetoothPage({ purchase, admin = false }) {
               STEP 1. Only drawn while it is off: a tap here while connected
               would send the new unit's messages straight away to whatever is
               on the adapter, and the AM4 has frozen on messages it did not
-              expect. While it is on, the line above names the unit, and Stop
-              comes first.
+              expect. While it is on, a line over Stop names the unit, and
+              says Stop comes first.
             */}
             <View style={{ gap: space.sm }}>
               <Heading>1 · Pick your unit</Heading>
@@ -397,7 +399,8 @@ export default function BluetoothPage({ purchase, admin = false }) {
 
         {showList ? (
           <View style={{ gap: space.sm }}>
-            <Hint>{b.looking ? 'Found so far. Tap yours:' : 'More than one is here. Tap yours:'}</Hint>
+            {/* Said by how many there are: one row under "More than one is here" read as a mistake. */}
+            <Hint>{b.looking ? 'Found so far. Tap yours:' : b.devices.length > 1 ? 'More than one is here. Tap yours:' : 'Tap your adapter:'}</Hint>
             {b.devices.map((d) => {
               const detail = ios ? (d.offline ? 'not connected to this phone' : d.fresh ? 'just connected' : '') : signal(d.rssi)
               return (
@@ -600,12 +603,12 @@ function PlugIn({ unit }) {
 /*
  * The parts for one unit, each with what it is for and where to buy it, and
  * the charger that is not on the list. Before a unit is picked, the whole of
- * it in a few words; for the FM3, its warning in place of a list to buy.
+ * it in a few words. For the FM3, nothing to buy, and a pointer to the
+ * warning in How to plug it in rather than the same red box twice.
  */
 function Buy({ unit }) {
   if (!unit) return <Hint>{GEAR_IN_SHORT}</Hint>
-  const warning = warningFor(unit)
-  if (warning) return <Note tone="fault">{warning}</Note>
+  if (warningFor(unit)) return <Hint>Not for the FM3 as it is. How to plug it in, above, says why and what FM3 owners do.</Hint>
   return (
     <View style={{ gap: space.md }}>
       {partsFor(unit).map((p) => (
