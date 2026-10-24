@@ -413,7 +413,7 @@ export function run(test) {
           if (entry !== 'node_modules') walk(full)
         } else if (/\.(jsx?|mjs)$/.test(entry)) {
           const text = readFileSync(full, 'utf8')
-          if (/foldSensor|FractalFold/.test(text)) users.push(full.split('/mobile/')[1])
+          if (/foldSensor|FractalFold/.test(text)) users.push(full.replace(/\\/g, '/').split('/mobile/')[1])
         }
       }
     }

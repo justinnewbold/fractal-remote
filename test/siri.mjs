@@ -27,7 +27,8 @@ const flat = (rel) => read(rel).replace(/\s+/g, ' ')
 const withoutComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
 
 const LIB = 'mobile/src/lib'
-const DATA = pathToFileURL(new URL('../mobile/src/data/', import.meta.url).pathname).href
+/* Already a file URL: through .pathname and back, Windows read the drive twice (D:\D:\a\…). */
+const DATA = new URL('../mobile/src/data/', import.meta.url).href
 
 /* Node wants the extension Metro does without, and the bench's own stand-ins for the packages. */
 const esm = (src) =>
