@@ -1334,22 +1334,23 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     tunerLater(run, TUNER_MS, () => gen3TunerTick(run))
   }
 
-  async function startAsking(run) {
+  /* `deadline` is an open's (see gen3TunerOpen); the fall-back to asking, from a timer, has none. */
+  async function startAsking(run, deadline = null) {
     tuner.way = 'poll'
     if (!tuner.pageOpen) {
       tuner.pageOpen = true
-      await fire(buildTunerPage(model, true), 'the tuner page')
+      await fire(buildTunerPage(model, true), 'the tuner page', { deadline })
     }
     if (tuner.on && tuner.run === run) gen3TunerTick(run)
   }
 
-  async function gen3TunerOn() {
+  async function gen3TunerOn(deadline) {
     const run = tuner.run
     const way = wayFor('tuner') || 'poll'
     if (way === 'push') {
       tuner.way = 'push'
       tuner.pushSent = true
-      await fire(buildTuner(model, true), 'the tuner')
+      await fire(buildTuner(model, true), 'the tuner', { deadline })
       const seen = pushes
       tunerLater(run, WAIT.push, () => {
         if (pushes !== seen) return
@@ -1358,7 +1359,7 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
       })
       return
     }
-    await startAsking(run)
+    await startAsking(run, deadline)
   }
 
   async function gen3TunerOff() {
@@ -1366,6 +1367,65 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
     if (tuner.pageOpen) await fire(buildTunerPage(model, false), 'the tuner page closed')
     tuner.pushSent = false
     tuner.pageOpen = false
+  }
+
+  /*
+   * THE OPEN IS A TAP, AND ITS TURN CAN COME LATE (gen3TunerInTurn), long
+   * after request() let go of the tap's deadline: so the deadline is taken
+   * by name (writeTuner) and goes with its one message, which is dropped
+   * past it, as am4TunerOpen's 127 is. An open whose message did not go
+   * (dropped, or not taken by the adapter) puts back what the unit was on
+   * before it: a page it marked open and never opened would have the next
+   * open skip the page, and ask one that is shut.
+   */
+  async function gen3TunerOpen(deadline) {
+    if (tuner.on) return { ok: true }
+    const was = { pushSent: tuner.pushSent, pageOpen: tuner.pageOpen }
+    tuner.on = true
+    tuner.run++
+    tuner.lastNote = null
+    try {
+      await gen3TunerOn(deadline)
+    } catch (err) {
+      tuner.on = false
+      tuner.run++
+      tuner.pushSent = was.pushSent
+      tuner.pageOpen = was.pageOpen
+      throw err
+    }
+    return { ok: true }
+  }
+
+  /*
+   * A CLOSE WHOSE MESSAGE DID NOT GO IS STILL OWED. The phone's tuner is
+   * down by then, so the next Close (the player's again, the watch's retry)
+   * goes by what the unit was left on, not by that.
+   */
+  async function gen3TunerClose() {
+    if (!tuner.on && !tuner.pushSent && !tuner.pageOpen) return { ok: true }
+    tuner.on = false
+    tuner.run++
+    if (tuner.timer !== null) time.clearTimeout(tuner.timer)
+    tuner.timer = null
+    await gen3TunerOff()
+    return { ok: true }
+  }
+
+  /*
+   * ONE AFTER ANOTHER, as the AM4's are (am4TunerInTurn). A Close and then a
+   * Tuner pressed without waiting ran side by side: the close's off went,
+   * the open's on after it, and only then did the close put down what it
+   * believed the unit had open, over the open's, so the next Close sent
+   * nothing and the unit stayed on its tuner, muted. On the asked-for way
+   * the open found the page still marked open by the close not yet done,
+   * never opened it, and asked a page the close then shut. In turn, each
+   * starts from what the one before it left.
+   */
+  let gen3TunerTurns = Promise.resolve()
+  function gen3TunerInTurn(on, deadline) {
+    const turn = gen3TunerTurns.then(() => (on ? gen3TunerOpen(deadline) : gen3TunerClose()))
+    gen3TunerTurns = turn.catch(() => {})
+    return turn
   }
 
   /* ================================================================ */
@@ -2099,32 +2159,12 @@ export function createBleWire({ send, unit, catalog = [], methods, clock, log, r
   /* The routes                                                        */
   /* ================================================================ */
 
-  /* The AM4 in turn, on and off alike (see am4TunerInTurn); the gen-3 units open their tuner page. */
+  /* In turn, on and off alike, on every unit (see am4TunerInTurn and gen3TunerInTurn). */
   async function writeTuner(on) {
-    /* An open's deadline, taken now: its turn comes after request() has let go of it (see am4TunerOpen). */
+    /* An open's deadline, taken now: its turn comes after request() has let go of it (see am4TunerOpen and gen3TunerOpen). */
     const deadline = on === true ? tapUntil : null
     if (am4) return am4TunerInTurn(on === true, deadline)
-    if (on === true) {
-      if (tuner.on) return { ok: true }
-      tuner.on = true
-      tuner.run++
-      tuner.lastNote = null
-      try {
-        await gen3TunerOn()
-      } catch (err) {
-        tuner.on = false
-        tuner.run++
-        throw err
-      }
-      return { ok: true }
-    }
-    if (!tuner.on) return { ok: true }
-    tuner.on = false
-    tuner.run++
-    if (tuner.timer !== null) time.clearTimeout(tuner.timer)
-    tuner.timer = null
-    await gen3TunerOff()
-    return { ok: true }
+    return gen3TunerInTurn(on === true, deadline)
   }
 
   const isNum = (s) => /^\d+$/.test(String(s ?? ''))
