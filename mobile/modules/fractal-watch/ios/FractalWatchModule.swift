@@ -69,6 +69,23 @@ public class FractalWatchModule: Module {
       DispatchQueue.main.async { self.listening = false }
     }
 
+    /*
+     * A RELOAD WHILE THE PHONE IS KEPT AWAKE. Putting an update in starts the
+     * JavaScript again and lets this module go, and with it the only things
+     * that would have ended the background task: the timer and the
+     * expiration handler both hold this module weakly. A task never ended has
+     * iOS close the app the next time it goes to the background. So it is
+     * ended here, by its number, on whatever thread the module is let go on
+     * (endBackgroundTask and cancel may be called from any).
+     */
+    OnDestroy {
+      let task = self.awake
+      self.awake = .invalid
+      self.sleepAt?.cancel()
+      self.sleepAt = nil
+      if task != .invalid { UIApplication.shared.endBackgroundTask(task) }
+    }
+
     Function("sendState") { (json: String, urgent: Bool) in
       self.link?.send(json, urgent: urgent)
     }
